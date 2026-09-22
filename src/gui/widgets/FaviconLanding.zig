@@ -1,7 +1,7 @@
 //! One landed lookup: the workspace it answers and its image, or null when
 //! the lookup found nothing usable.
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
-const ImageType = @import("telar-client").FaviconImage;
+const core = @import("telar-core");
+const client = @import("telar-client");
 
-workspace: WorkspaceIdType,
-image: ?*ImageType,
+workspace: core.WorkspaceId,
+image: ?*client.FaviconImage,

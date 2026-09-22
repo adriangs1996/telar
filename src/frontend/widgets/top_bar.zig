@@ -5,34 +5,20 @@
 //! The list collapses to `active +N` on user request or when the row cannot
 //! fit it; the TLS badge remains while interception or system trust is on.
 
-const SlotType = @import("telar-client").Slot;
+const client = @import("telar-client");
+const core = @import("telar-core");
 const ContextType = @import("Context.zig");
 const TopBarInput = @import("TopBarInput.zig");
-const StyleType = @import("telar-core").Style;
-const RectType = @import("telar-core").Rect;
 const status_bar = @import("status_bar.zig");
 const bar_content = @import("bar_content.zig");
 const ListInput = @import("ListInput.zig");
 const std = @import("std");
-const measure_module = @import("telar-core").measure;
 const WorkspaceDraw = @import("WorkspaceDraw.zig");
-const max_name_bytes_module = @import("telar-client").max_name_bytes;
 const widget = @import("context_support.zig");
-const max_workspace_name_bytes_module = @import("telar-core").max_workspace_name_bytes;
 const WorkspaceNames = @import("WorkspaceNames.zig");
-const WorkspaceListSnapshot = @import("telar-client").WorkspaceListSnapshot;
-const truncateName_module = @import("telar-client").truncateName;
-const TabLocationType = @import("telar-core").TabLocation;
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
-const raw_module = @import("telar-core").raw;
-const EntryInputType = @import("telar-client").EntryInput;
-const BufferType = @import("telar-core").Buffer;
-const theme_support = @import("telar-client").theme_support;
 const PlanType = @import("../ui/Plan.zig");
-const IconType = @import("telar-client").Icon;
-const ContentType = @import("telar-client").Content;
 
-pub const empty_right: SlotType = .empty;
+pub const empty_right: client.Slot = .empty;
 
 pub fn render(context: *ContextType, input: TopBarInput) void {
     const area = input.area;
@@ -41,7 +27,7 @@ pub fn render(context: *ContextType, input: TopBarInput) void {
         return;
     }
 
-    const bar_style: StyleType = .{
+    const bar_style: core.Style = .{
         .fg = context.palette.text,
         .bg = context.palette.panel_bg,
     };
@@ -51,7 +37,7 @@ pub fn render(context: *ContextType, input: TopBarInput) void {
     // and closes the sidebar, and dims while the sidebar is hidden. Collapsing
     // the list is a keyboard action, or the counter shown while collapsed.
     // The mark spans two cells so its square can grow to the row's height.
-    const logo: RectType = .{
+    const logo: core.Rect = .{
         .x = area.x,
         .y = area.y,
         .w = @min(area.w, 4),
@@ -60,7 +46,7 @@ pub fn render(context: *ContextType, input: TopBarInput) void {
 
     context.hits.add(logo, .toggle_sidebar);
 
-    const logo_style: StyleType =
+    const logo_style: core.Style =
         if (context.isHovered(.toggle_sidebar))
             .{
                 .fg = context.palette.accent,
@@ -114,13 +100,13 @@ pub fn render(context: *ContextType, input: TopBarInput) void {
     }, input);
 
     if (badge_visible) {
-        const badge: RectType = .{
+        const badge: core.Rect = .{
             .x = area.x + area.w - badge_width,
             .y = area.y,
             .w = badge_width,
             .h = 1,
         };
-        const badge_style: StyleType = .{
+        const badge_style: core.Style = .{
             .fg = if (!input.proxy_tls_active)
                 context.palette.yellow
             else if (input.proxy_tls_scope == .wildcard)
@@ -150,7 +136,7 @@ fn rightDesiredWidth(input: TopBarInput) u16 {
     };
 }
 
-fn renderRight(context: *ContextType, area: RectType, input: TopBarInput) void {
+fn renderRight(context: *ContextType, area: core.Rect, input: TopBarInput) void {
     switch (input.right.*) {
         .content => |*content| bar_content.render(context, area, .{
             .content = content,
@@ -187,8 +173,8 @@ fn renderList(context: *ContextType, input: TopBarInput, list: ListInput) void {
             const counter = std.fmt.bufPrint(&counter_buffer, " +{d} ", .{
                 snapshot.count - 1,
             }) catch " + ";
-            const width = @min(measure_module(counter), row_end -| x);
-            const rect: RectType = .{ .x = x, .y = list.area.y, .w = width, .h = 1 };
+            const width = @min(core.measure(counter), row_end -| x);
+            const rect: core.Rect = .{ .x = x, .y = list.area.y, .w = width, .h = 1 };
             context.hits.add(rect, .toggle_workspace_list);
             _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = x, .y = list.area.y }, .text = counter, .max_width = width, .style = .{
                 .fg = if (context.isHovered(.toggle_workspace_list))
@@ -216,7 +202,7 @@ fn renderList(context: *ContextType, input: TopBarInput, list: ListInput) void {
 }
 
 fn drawWorkspace(context: *ContextType, draw: WorkspaceDraw) u16 {
-    var label_buffer: [max_name_bytes_module + 4]u8 = undefined;
+    var label_buffer: [client.max_name_bytes + 4]u8 = undefined;
     const label = std.fmt.bufPrint(&label_buffer, " {s} ", .{
         workspaceNameAt(.{
             .snapshot = draw.snapshot,
@@ -224,12 +210,12 @@ fn drawWorkspace(context: *ContextType, draw: WorkspaceDraw) u16 {
             .active_name = draw.active_name,
         }, draw.index),
     }) catch " workspace ";
-    const width = @min(measure_module(label), draw.area.w);
+    const width = @min(core.measure(label), draw.area.w);
     if (width == 0) {
         return draw.area.x;
     }
 
-    const rect: RectType = .{ .x = draw.area.x, .y = draw.area.y, .w = width, .h = 1 };
+    const rect: core.Rect = .{ .x = draw.area.x, .y = draw.area.y, .w = width, .h = 1 };
     const is_active = draw.active_index != null and draw.active_index.? == draw.index;
     const action: widget.Action = if (is_active)
         .active_workspace
@@ -237,7 +223,7 @@ fn drawWorkspace(context: *ContextType, draw: WorkspaceDraw) u16 {
         .{ .select_workspace = draw.snapshot.workspaceAt(draw.index) };
     context.hits.add(rect, action);
 
-    const style: StyleType = if (is_active)
+    const style: core.Style = if (is_active)
         .{
             .fg = context.palette.text,
             .bg = if (context.isHovered(action))
@@ -257,18 +243,18 @@ fn drawWorkspace(context: *ContextType, draw: WorkspaceDraw) u16 {
     return draw.area.x + width;
 }
 
-fn renderFallback(context: *ContextType, input: TopBarInput, area: RectType) void {
-    var workspace_buffer: [max_workspace_name_bytes_module + 16]u8 = undefined;
+fn renderFallback(context: *ContextType, input: TopBarInput, area: core.Rect) void {
+    var workspace_buffer: [core.max_workspace_name_bytes + 16]u8 = undefined;
     const workspace = workspaceLabel(input.location, input.workspace_name, &workspace_buffer);
-    const width = @min(measure_module(workspace) + 1, area.w);
+    const width = @min(core.measure(workspace) + 1, area.w);
     if (width == 0) {
         return;
     }
 
-    const rect: RectType = .{ .x = area.x, .y = area.y, .w = width, .h = 1 };
+    const rect: core.Rect = .{ .x = area.x, .y = area.y, .w = width, .h = 1 };
     context.hits.add(rect, .active_workspace);
 
-    const style: StyleType = .{
+    const style: core.Style = .{
         .fg = context.palette.text,
         .bg = if (context.isHovered(.active_workspace))
             context.palette.surface0
@@ -285,10 +271,10 @@ fn listFits(names: WorkspaceNames, available: u16) bool {
     return listWidth(names.snapshot, names.active_index, names.active_name) <= available;
 }
 
-fn listWidth(snapshot: *const WorkspaceListSnapshot, active_index: ?usize, active_name: []const u8) u16 {
+fn listWidth(snapshot: *const client.WorkspaceListSnapshot, active_index: ?usize, active_name: []const u8) u16 {
     var total: u16 = 0;
     for (0..snapshot.count) |index| {
-        total +|= measure_module(workspaceNameAt(.{
+        total +|= core.measure(workspaceNameAt(.{
             .snapshot = snapshot,
             .active_index = active_index,
             .active_name = active_name,
@@ -299,13 +285,13 @@ fn listWidth(snapshot: *const WorkspaceListSnapshot, active_index: ?usize, activ
 
 fn workspaceNameAt(names: WorkspaceNames, index: usize) []const u8 {
     if (names.active_name.len != 0 and names.active_index != null and names.active_index.? == index) {
-        return truncateName_module(names.active_name);
+        return client.truncateName(names.active_name);
     }
 
     return names.snapshot.nameAt(index);
 }
 
-fn activeWorkspaceId(location: ?TabLocationType) ?WorkspaceIdType {
+fn activeWorkspaceId(location: ?core.TabLocation) ?core.WorkspaceId {
     const value = location orelse return null;
     return switch (value.workspace) {
         .workspace => |workspace| workspace,
@@ -316,23 +302,23 @@ fn activeWorkspaceId(location: ?TabLocationType) ?WorkspaceIdType {
 /// Fallback for the moment before the first workspace-list snapshot lands.
 /// Worktrees stay out of the chrome until their workflow is settled; a
 /// worktree-located client still names its container by id.
-fn workspaceLabel(location: ?TabLocationType, workspace_name: []const u8, buffer: []u8) []const u8 {
+fn workspaceLabel(location: ?core.TabLocation, workspace_name: []const u8, buffer: []u8) []const u8 {
     const value = location orelse return "-";
     return switch (value.workspace) {
         .workspace => |workspace| if (workspace_name.len == 0)
-            std.fmt.bufPrint(buffer, "workspace {d}", .{raw_module(workspace)}) catch "workspace"
+            std.fmt.bufPrint(buffer, "workspace {d}", .{core.raw(workspace)}) catch "workspace"
         else
             workspace_name,
         .worktree => |worktree| std.fmt.bufPrint(
             buffer,
             "worktree {d}",
-            .{raw_module(worktree)},
+            .{core.raw(worktree)},
         ) catch "worktree",
     };
 }
 
 test "workspace label uses the name from the runtime snapshot" {
-    var buffer: [max_workspace_name_bytes_module + 16]u8 = undefined;
+    var buffer: [core.max_workspace_name_bytes + 16]u8 = undefined;
     const label = workspaceLabel(
         .{
             .workspace = .{ .workspace = @enumFromInt(7) },
@@ -345,7 +331,7 @@ test "workspace label uses the name from the runtime snapshot" {
 }
 
 test "worktree locations fall back to their id and missing locations to a dash" {
-    var buffer: [max_workspace_name_bytes_module + 16]u8 = undefined;
+    var buffer: [core.max_workspace_name_bytes + 16]u8 = undefined;
     try std.testing.expectEqualStrings("worktree 9", workspaceLabel(
         .{
             .workspace = .{ .worktree = @enumFromInt(9) },
@@ -358,8 +344,8 @@ test "worktree locations fall back to their id and missing locations to a dash" 
 }
 
 test "the list collapses when the row cannot fit every workspace" {
-    var snapshot: WorkspaceListSnapshot = .{};
-    const entries = [_]EntryInputType{
+    var snapshot: client.WorkspaceListSnapshot = .{};
+    const entries = [_]client.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
     };
@@ -371,19 +357,19 @@ test "the list collapses when the row cannot fit every workspace" {
 }
 
 test "the workspace label ignores git branch and dirty state" {
-    var snapshot: WorkspaceListSnapshot = .{};
-    const entries = [_]EntryInputType{
+    var snapshot: client.WorkspaceListSnapshot = .{};
+    const entries = [_]client.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1, .branch = "main", .dirty = true },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1, .branch = "main" },
     };
     _ = try snapshot.replace(.{ .revision = 1, .entries = &entries });
-    var buffer = try BufferType.init(std.testing.allocator, 40, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme_support.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
     };
 
@@ -409,8 +395,8 @@ test "the workspace label ignores git branch and dirty state" {
 }
 
 test "the active name replaces only the active workspace snapshot name" {
-    var snapshot: WorkspaceListSnapshot = .{};
-    const entries = [_]EntryInputType{
+    var snapshot: client.WorkspaceListSnapshot = .{};
+    const entries = [_]client.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
     };
@@ -429,19 +415,19 @@ test "the active name replaces only the active workspace snapshot name" {
 }
 
 test "the telar mark toggles the sidebar and dims while it is hidden" {
-    var buffer = try BufferType.init(std.testing.allocator, 40, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var plan: PlanType = .{};
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme_support.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .nerd_font,
         .icon_plan = &plan,
     };
-    const workspaces: WorkspaceListSnapshot = .{};
+    const workspaces: client.WorkspaceListSnapshot = .{};
     const input: TopBarInput = .{
         .area = buffer.area(),
         .sidebar_visible = true,
@@ -454,10 +440,10 @@ test "the telar mark toggles the sidebar and dims while it is hidden" {
 
     render(&context, input);
     try std.testing.expect(plan.len >= 1);
-    try std.testing.expectEqual(IconType.telar_mark, plan.slice()[0].icon);
+    try std.testing.expectEqual(client.Icon.telar_mark, plan.slice()[0].icon);
     try std.testing.expectEqual(@as(u16, 2), plan.slice()[0].area.w);
     try std.testing.expectEqual(widget.Action.toggle_sidebar, hits.at(1, 0).?);
-    try std.testing.expectEqualDeep(theme_support.default_theme.palette.accent, buffer.at(1, 0).?.style.fg);
+    try std.testing.expectEqualDeep(client.theme_support.default_theme.palette.accent, buffer.at(1, 0).?.style.fg);
 
     plan.reset();
     hits = .{};
@@ -465,22 +451,22 @@ test "the telar mark toggles the sidebar and dims while it is hidden" {
     hidden.sidebar_visible = false;
     render(&context, hidden);
     try std.testing.expect(plan.len >= 1);
-    try std.testing.expectEqual(IconType.telar_mark, plan.slice()[0].icon);
+    try std.testing.expectEqual(client.Icon.telar_mark, plan.slice()[0].icon);
     try std.testing.expectEqual(widget.Action.toggle_sidebar, hits.at(1, 0).?);
-    try std.testing.expectEqualDeep(theme_support.default_theme.palette.subtext0, buffer.at(1, 0).?.style.fg);
+    try std.testing.expectEqualDeep(client.theme_support.default_theme.palette.subtext0, buffer.at(1, 0).?.style.fg);
 }
 
 test "proxy badge reserves the right edge before workspace navigation" {
-    var buffer = try BufferType.init(std.testing.allocator, 40, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme_support.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
     };
-    const workspaces: WorkspaceListSnapshot = .{};
+    const workspaces: client.WorkspaceListSnapshot = .{};
 
     render(&context, .{
         .area = buffer.area(),
@@ -494,23 +480,23 @@ test "proxy badge reserves the right edge before workspace navigation" {
 
     const badge_x = @as(usize, buffer.w) - 2;
     try std.testing.expectEqualStrings(
-        IconType.proxy_active.unicodeGlyph(),
+        client.Icon.proxy_active.unicodeGlyph(),
         buffer.cells[badge_x].text(),
     );
     try std.testing.expect(hits.at(@intCast(badge_x), 0) == null);
 }
 
 test "wildcard proxy scope renders a distinct warning badge" {
-    var buffer = try BufferType.init(std.testing.allocator, 20, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 20, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme_support.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
     };
-    const workspaces: WorkspaceListSnapshot = .{};
+    const workspaces: client.WorkspaceListSnapshot = .{};
 
     render(&context, .{
         .area = buffer.area(),
@@ -524,21 +510,21 @@ test "wildcard proxy scope renders a distinct warning badge" {
     });
 
     const badge = buffer.at(18, 0).?;
-    try std.testing.expectEqualStrings(IconType.proxy_active.unicodeGlyph(), badge.text());
-    try std.testing.expectEqualDeep(theme_support.default_theme.palette.red, badge.style.fg);
+    try std.testing.expectEqualStrings(client.Icon.proxy_active.unicodeGlyph(), badge.text());
+    try std.testing.expectEqualDeep(client.theme_support.default_theme.palette.red, badge.style.fg);
 }
 
 test "installed system trust keeps a yellow badge while the proxy is off" {
-    var buffer = try BufferType.init(std.testing.allocator, 20, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 20, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme_support.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
     };
-    const workspaces: WorkspaceListSnapshot = .{};
+    const workspaces: client.WorkspaceListSnapshot = .{};
 
     render(&context, .{
         .area = buffer.area(),
@@ -552,24 +538,24 @@ test "installed system trust keeps a yellow badge while the proxy is off" {
     });
 
     const badge = buffer.at(18, 0).?;
-    try std.testing.expectEqualStrings(IconType.proxy_active.unicodeGlyph(), badge.text());
-    try std.testing.expectEqualDeep(theme_support.default_theme.palette.yellow, badge.style.fg);
+    try std.testing.expectEqualStrings(client.Icon.proxy_active.unicodeGlyph(), badge.text());
+    try std.testing.expectEqualDeep(client.theme_support.default_theme.palette.yellow, badge.style.fg);
 }
 
 test "configured right content stops before the permanent proxy badge" {
-    var buffer = try BufferType.init(std.testing.allocator, 40, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme_support.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
     };
-    const workspaces: WorkspaceListSnapshot = .{};
-    var content: ContentType = .{};
+    const workspaces: client.WorkspaceListSnapshot = .{};
+    var content: client.Content = .{};
     try content.append(.{ .text = "quota", .style = .{ .foreground = .{ .palette = .accent } } });
-    const right: SlotType = .{ .content = content };
+    const right: client.Slot = .{ .content = content };
 
     render(&context, .{
         .area = buffer.area(),
@@ -585,27 +571,27 @@ test "configured right content stops before the permanent proxy badge" {
     try std.testing.expectEqualStrings("q", buffer.at(32, 0).?.text());
     try std.testing.expectEqualStrings("a", buffer.at(36, 0).?.text());
     try std.testing.expectEqualStrings(
-        IconType.proxy_active.unicodeGlyph(),
+        client.Icon.proxy_active.unicodeGlyph(),
         buffer.at(38, 0).?.text(),
     );
     try std.testing.expectEqualDeep(
-        theme_support.default_theme.palette.accent,
+        client.theme_support.default_theme.palette.accent,
         buffer.at(32, 0).?.style.fg,
     );
 }
 
 test "workspace navigation starts right after the telar mark" {
-    var buffer = try BufferType.init(std.testing.allocator, 40, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme_support.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
     };
-    var workspaces: WorkspaceListSnapshot = .{};
-    const entries = [_]EntryInputType{
+    var workspaces: client.WorkspaceListSnapshot = .{};
+    const entries = [_]client.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
     };
     _ = try workspaces.replace(.{ .revision = 1, .entries = &entries });

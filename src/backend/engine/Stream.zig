@@ -1,4 +1,3 @@
-const InitOptionsType = @import("InitOptions.zig");
 const std = @import("std");
 const Record = @import("Record.zig");
 const rpc = @import("rpc.zig");
@@ -30,7 +29,7 @@ pub const InitOptions = @import("InitOptions.zig");
 /// session.stream.init(.{ .allocator = gpa, .io = io, .stdout = child.stdout.? });
 /// defer session.stream.deinit();
 /// ```
-pub fn init(stream: *Stream, options: InitOptionsType) void {
+pub fn init(stream: *Stream, options: InitOptions) void {
     stream.discarding = false;
     stream.reader.init(options.allocator, options.io, stream.streams.toStreams(), &.{options.stdout});
 }

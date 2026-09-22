@@ -1,11 +1,7 @@
+const core = @import("telar-core");
 const history = @import("history.zig");
-const HistoryScopeType = @import("telar-core").HistoryScope;
-const PaneIdType = @import("telar-core").PaneId;
-const HistoryAuthorFilterType = @import("telar-core").HistoryAuthorFilter;
 const std = @import("std");
 const Cursor = @import("Cursor.zig");
-const pane_module = @import("telar-core").pane;
-const max_history_results_module = @import("telar-core").max_history_results;
 const HistoryOptions = @This();
 
 action: history.HistoryAction,
@@ -17,11 +13,11 @@ period_days: u16 = 0,
 dry_run: bool = false,
 assume_yes: bool = false,
 query: ?[*:0]const u8 = null,
-scope: HistoryScopeType = .global,
+scope: core.HistoryScope = .global,
 scope_value: ?[*:0]const u8 = null,
-pane_id: PaneIdType = .invalid,
+pane_id: core.PaneId = .invalid,
 failed_only: bool = false,
-author: HistoryAuthorFilterType = .all,
+author: core.HistoryAuthorFilter = .all,
 limit: u16 = 20,
 socket: ?[*:0]const u8 = null,
 
@@ -109,7 +105,7 @@ pub fn parse(args: []const [*:0]const u8) !HistoryOptions {
             const value = try cursor.require(error.MissingPaneId);
 
             const raw = try std.fmt.parseInt(u64, std.mem.span(value), 10);
-            options.pane_id = try pane_module(raw);
+            options.pane_id = try core.pane(raw);
             try options.setScope(.pane, null);
         } else if (std.mem.eql(u8, arg, "--failed")) {
             options.failed_only = true;
@@ -174,7 +170,7 @@ pub fn parse(args: []const [*:0]const u8) !HistoryOptions {
             const value = try cursor.require(error.MissingHistoryLimit);
 
             options.limit = try std.fmt.parseInt(u16, std.mem.span(value), 10);
-            if (options.limit == 0 or options.limit > max_history_results_module) {
+            if (options.limit == 0 or options.limit > core.max_history_results) {
                 return error.InvalidHistoryLimit;
             }
         } else if (std.mem.eql(u8, arg, "--socket")) {
@@ -225,7 +221,7 @@ fn daysFromCivil(year: i64, month: i64, day: i64) i64 {
     return era * 146_097 + doe - 719_468;
 }
 
-fn setScope(options: *HistoryOptions, scope: HistoryScopeType, value: ?[*:0]const u8) !void {
+fn setScope(options: *HistoryOptions, scope: core.HistoryScope, value: ?[*:0]const u8) !void {
     if (options.scope != .global) {
         return error.ConflictingHistoryScopes;
     }

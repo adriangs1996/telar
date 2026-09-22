@@ -1,5 +1,5 @@
-const TabLocationType = @import("telar-core").TabLocation;
+const core = @import("telar-core");
 const TabVersion = @This();
 
-location: TabLocationType,
+location: core.TabLocation,
 layout_revision: u64,

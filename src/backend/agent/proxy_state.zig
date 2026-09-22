@@ -1,12 +1,11 @@
 //! Bounded lifecycle state for model exchanges observed through the proxy.
 
+const core = @import("telar-core");
 const ProxyExchange = @import("ProxyExchange.zig");
 const types = @import("types.zig");
 const ProxyObservation = @import("ProxyObservation.zig");
 const ProxyState = @import("ProxyState.zig");
-const AgentStatusType = @import("telar-core").AgentStatus;
 const std = @import("std");
-const AgentProviderType = @import("telar-core").AgentProvider;
 
 pub fn sameExchange(left: ProxyExchange, right: ProxyExchange) bool {
     return left.protocol == right.protocol and
@@ -28,10 +27,10 @@ fn testObservation(phase: types.ProxyPhase, exchange: ProxyExchange, observed_at
     };
 }
 
-fn expectProxyEvidence(state: *const ProxyState, status: AgentStatusType, observed_at_ms: i64) !void {
+fn expectProxyEvidence(state: *const ProxyState, status: core.AgentStatus, observed_at_ms: i64) !void {
     try std.testing.expect(state.currentEvidence() != null);
     const evidence = state.currentEvidence().?;
-    try std.testing.expectEqual(AgentProviderType.claude, evidence.provider);
+    try std.testing.expectEqual(core.AgentProvider.claude, evidence.provider);
     try std.testing.expectEqual(status, evidence.status);
     try std.testing.expectEqual(observed_at_ms, evidence.observed_at_ms);
 }

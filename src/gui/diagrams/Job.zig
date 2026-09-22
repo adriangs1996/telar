@@ -1,4 +1,5 @@
 //! One owned request. There is at most one active helper process per GUI.
+const source_kind = @import("source_kind.zig");
 const Theme = @import("Theme.zig");
 const Job = @This();
 
@@ -10,7 +11,7 @@ source: [max_source_bytes]u8 = undefined,
 len: u32,
 theme: Theme,
 scale: f32,
-kind: @import("source_kind.zig").Kind = .mermaid,
+kind: source_kind.Kind = .mermaid,
 
 /// Example: `try writer.writeAll(job.text());`
 pub fn text(job: *const Job) []const u8 {

@@ -1,8 +1,8 @@
+const core = @import("telar-core");
 const Identity = @import("Identity.zig");
-const AgentProviderType = @import("telar-core").AgentProvider;
 const ProcessObservation = @This();
 
 identity: Identity,
-provider: AgentProviderType,
+provider: core.AgentProvider,
 process_id: u32,
 observed_at_ms: i64,

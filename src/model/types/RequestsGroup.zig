@@ -1,0 +1,18 @@
+pub const RequestsGroup = enum {
+    change_review_query,
+    change_review_command,
+    agent_prompt,
+    agent_control,
+    agent_query,
+    agent_history,
+    initial_open,
+    workspace_operation,
+    workspace_snapshot,
+    tab_snapshot,
+    pane_operation,
+    attachment,
+    tab_operation,
+    notification,
+    editor_open,
+    ignored,
+};

@@ -1,23 +1,19 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const core = @import("telar-core");
+const icons = @import("../layout/icons.zig");
 const MultiplexerModel = @import("MultiplexerModel.zig");
 const std = @import("std");
 const TabInit = @import("TabInit.zig");
-const IconType = @import("../layout/icons.zig").Icon;
 const Tab = @This();
-const PaneForeground = @import("telar-core").PaneForeground;
-const PaneId = @import("telar-core").PaneId;
-const max_foreground_name_bytes = @import("telar-core").max_foreground_name_bytes;
 
-location: TabLocationType,
+location: core.TabLocation,
 /// An empty canonical label follows the focused foreground application.
-label: [max_tab_label_bytes_module]u8 = undefined,
+label: [core.max_tab_label_bytes]u8 = undefined,
 label_len: u8 = 0,
 model: MultiplexerModel,
 snapshot_loaded: bool = false,
 restore_display_order: bool = false,
-foreground_pane: PaneId = .invalid,
-foreground_name: [max_foreground_name_bytes]u8 = undefined,
+foreground_pane: core.PaneId = .invalid,
+foreground_name: [core.max_foreground_name_bytes]u8 = undefined,
 foreground_name_len: u8 = 0,
 
 pub fn init(gpa: std.mem.Allocator, input: TabInit) Tab {
@@ -58,12 +54,12 @@ pub fn isAutomatic(tab: *const Tab) bool {
 
 /// Resolves automatic tab artwork from the same pane as its display label.
 /// Example: if (tab.labelIcon()) |icon| draw(icon);
-pub fn labelIcon(tab: *const Tab) ?IconType {
+pub fn labelIcon(tab: *const Tab) ?icons.Icon {
     if (!tab.isAutomatic()) {
         return null;
     }
 
-    return IconType.forApplication(tab.applicationName());
+    return icons.Icon.forApplication(tab.applicationName());
 }
 
 fn applicationName(tab: *const Tab) []const u8 {
@@ -82,12 +78,12 @@ fn applicationName(tab: *const Tab) []const u8 {
 
 /// Refreshes lightweight names using this client's focus before panes attach.
 /// Example: `_ = tab.applyForegroundSnapshot(names, saved_focus);`.
-pub fn applyForegroundSnapshot(tab: *Tab, names: []const PaneForeground, saved_focus: ?PaneId) bool {
+pub fn applyForegroundSnapshot(tab: *Tab, names: []const core.PaneForeground, saved_focus: ?core.PaneId) bool {
     if (names.len == 0) {
         return false;
     }
 
-    var previous: [max_tab_label_bytes_module]u8 = undefined;
+    var previous: [core.max_tab_label_bytes]u8 = undefined;
     const previous_len = tab.labelSlice().len;
     @memcpy(previous[0..previous_len], tab.labelSlice());
     const focused = if (tab.snapshot_loaded) tab.model.layout.focused() else saved_focus orelse tab.model.layout.focused();
@@ -105,7 +101,7 @@ pub fn applyForegroundSnapshot(tab: *Tab, names: []const PaneForeground, saved_f
 
 /// Updates a detached tab's selected foreground without creating a pane model.
 /// Example: `_ = tab.applyForegroundReport(report);`.
-pub fn applyForegroundReport(tab: *Tab, report: PaneForeground) bool {
+pub fn applyForegroundReport(tab: *Tab, report: core.PaneForeground) bool {
     if (report.pane_id != tab.foreground_pane or std.mem.eql(u8, report.name, tab.foreground_name[0..tab.foreground_name_len])) {
         return false;
     }

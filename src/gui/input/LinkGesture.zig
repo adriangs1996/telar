@@ -1,4 +1,5 @@
 //! A native link opens on release; dragging or changed identity cancels it.
+const data = @import("model");
 const client = @import("telar-client");
 const Hit = @import("LinkHit.zig");
 const Gesture = @This();
@@ -15,7 +16,7 @@ pub fn begin(gesture: *Gesture, hit: Hit, version: client.Version) void {
 
 /// A release opens only the unchanged target. Cancellation never opens a URL.
 /// Example: `const target = gesture.finish(current_hit, app.model.version());`
-pub fn finish(gesture: *Gesture, current: ?Hit, version: client.Version) ?client.LinkTarget {
+pub fn finish(gesture: *Gesture, current: ?Hit, version: client.Version) ?data.LinkTarget {
     gesture.validate(current, version);
     const pressed = gesture.pressed orelse return null;
     gesture.pressed = null;

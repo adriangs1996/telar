@@ -1,4 +1,5 @@
 //! Bounded native progress state scoped to visible pane attachments.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -20,7 +21,10 @@ pub fn begin(motions: *ProgressMotions) void {
 /// Samples one pane without retaining model pointers or scheduling idle frames.
 /// Example: `const filled = motions.fraction(pane, &clock);`
 pub fn fraction(motions: *ProgressMotions, pane: *const client.Pane, clock: *FrameClock) f32 {
-    const key: client.AgentKey = .{ .pane_id = pane.id, .pane_generation = pane.attachment_generation };
+    const key: data.AgentKey = .{
+        .pane_id = pane.id,
+        .pane_generation = pane.attachment_generation,
+    };
     if (pane.progress_state == .remove) {
         motions.remove(key);
         return 0;
@@ -45,7 +49,7 @@ pub fn end(motions: *ProgressMotions) void {
     motions.len = kept;
 }
 
-fn find(motions: *const ProgressMotions, key: client.AgentKey) ?usize {
+fn find(motions: *const ProgressMotions, key: data.AgentKey) ?usize {
     for (motions.entries[0..motions.len], 0..) |entry, index| {
         if (std.meta.eql(entry.key, key)) {
             return index;
@@ -66,7 +70,7 @@ fn insert(motions: *ProgressMotions, entry: ProgressMotion) ?usize {
     return index;
 }
 
-fn remove(motions: *ProgressMotions, key: client.AgentKey) void {
+fn remove(motions: *ProgressMotions, key: data.AgentKey) void {
     const index = motions.find(key) orelse return;
     motions.len -= 1;
     motions.entries[index] = motions.entries[motions.len];

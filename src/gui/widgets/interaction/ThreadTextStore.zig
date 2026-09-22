@@ -1,3 +1,5 @@
 //! Lazily owned, double-buffered text geometry for the native reader.
-allocator: @import("std").mem.Allocator,
-maps: @import("../../render/GenericPresentedState.zig").Type(@import("ThreadTextGeometry.zig")) = .{},
+const std = @import("std");
+const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
+allocator: std.mem.Allocator,
+maps: GenericPresentedState(@import("ThreadTextGeometry.zig")) = .{},

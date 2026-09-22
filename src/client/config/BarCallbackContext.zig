@@ -1,9 +1,9 @@
-const CallbackContext = @import("CallbackContext.zig");
+const data = @import("model");
 const BarTime = @import("BarTime.zig");
 const BarMetrics = @import("BarMetrics.zig");
 const BarCallbackContext = @This();
 
-client: CallbackContext,
+client: data.CallbackContext,
 time: BarTime,
 metrics: ?BarMetrics,
 command_output: ?[]const u8 = null,

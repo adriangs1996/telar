@@ -3,11 +3,10 @@
 //! hooks point at. This is the pure scan over appended bytes; the runtime
 //! owns the file I/O.
 
-const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
+const core = @import("telar-core");
 const Scan = @import("Scan.zig");
 const std = @import("std");
 const TitleLine = @import("TitleLine.zig");
-const truncateSessionTitle = @import("telar-core").truncateSessionTitle;
 
 /// Bytes one probe reads; a longer backlog continues on the next probe.
 pub const max_scan_bytes = 64 * 1024;
@@ -22,7 +21,7 @@ const title_prefix = "{\"type\":\"custom-title\"";
 /// ```zig
 /// const result = scan(bytes, "0192...", &title_buffer);
 /// ```
-pub fn scan(bytes: []const u8, session: []const u8, buffer: *[max_agent_session_title_bytes_module]u8) Scan {
+pub fn scan(bytes: []const u8, session: []const u8, buffer: *[core.max_agent_session_title_bytes]u8) Scan {
     var result: Scan = .{ .consumed = 0, .title = null };
     var rest = bytes;
 
@@ -41,14 +40,14 @@ pub fn scan(bytes: []const u8, session: []const u8, buffer: *[max_agent_session_
             continue;
         }
 
-        result.title = truncateSessionTitle(buffer, parsed.customTitle);
+        result.title = core.truncateSessionTitle(buffer, parsed.customTitle);
     }
 
     return result;
 }
 
 test "scan keeps the last name for the session and leaves a partial line" {
-    var buffer: [max_agent_session_title_bytes_module]u8 = undefined;
+    var buffer: [core.max_agent_session_title_bytes]u8 = undefined;
     const bytes =
         "{\"type\":\"custom-title\",\"customTitle\":\"first\",\"sessionId\":\"abc\"}\n" ++
         "{\"type\":\"user\",\"message\":{\"content\":\"{\\\"type\\\":\\\"custom-title\\\"}\"}}\n" ++
@@ -65,7 +64,7 @@ test "scan keeps the last name for the session and leaves a partial line" {
 }
 
 test "scan reports a cleared name as an empty title and bounds long names" {
-    var buffer: [max_agent_session_title_bytes_module]u8 = undefined;
+    var buffer: [core.max_agent_session_title_bytes]u8 = undefined;
     const cleared = scan("{\"type\":\"custom-title\",\"customTitle\":\"\",\"sessionId\":\"abc\"}\n", "abc", &buffer);
     try std.testing.expectEqualStrings("", cleared.title.?);
 

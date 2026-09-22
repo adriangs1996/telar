@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const std = @import("std");
 const ListenerType = @import("Listener.zig");
 const InterceptionType = @import("Interception.zig");
@@ -10,7 +11,6 @@ const service_support = @import("service_support.zig");
 const CountersType = @import("../Counters.zig");
 const PathsType = @import("Paths.zig");
 const ClientConfiguration = @import("ClientConfiguration.zig");
-const enter_module = @import("telar-core").enter;
 const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const HalfType = @import("../capture/Half.zig");
 const SnapshotType = @import("../Snapshot.zig");
@@ -136,7 +136,7 @@ pub fn clientConfiguration(service: *const Service) ClientConfiguration {
 }
 
 fn run(service: *Service) anyerror!void {
-    const path = enter_module(.observation);
+    const path = core.enter(.observation);
     defer path.restore();
     try service.configuration.beginServing(service.io);
 

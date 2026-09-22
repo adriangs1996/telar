@@ -1,12 +1,10 @@
-const RequestIdType = @import("telar-core").RequestId;
+const core = @import("telar-core");
 const QueryOrigin = @import("QueryOrigin.zig");
-const HistoryScope = @import("telar-core").HistoryScope;
-const PaneIdType = @import("telar-core").PaneId;
 const Input = @This();
 
-request_id: RequestIdType,
+request_id: core.RequestId,
 origin: QueryOrigin,
-scope: HistoryScope = .global,
+scope: core.HistoryScope = .global,
 scope_value: []const u8 = "",
-pane_id: PaneIdType = .invalid,
+pane_id: core.PaneId = .invalid,
 since_ms: i64 = 0,

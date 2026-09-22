@@ -1,3 +1,3 @@
-const RequestIdType = @import("telar-core").RequestId;
+const core = @import("telar-core");
 
-pub const initial_request_id: RequestIdType = @enumFromInt(1);
+pub const initial_request_id: core.RequestId = @enumFromInt(1);

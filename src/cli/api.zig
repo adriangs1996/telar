@@ -1,20 +1,10 @@
 //! The `telar api schema` command: prints the exact wire contract the running
 //! binary speaks so agents and scripts can check compatibility.
 
+const core = @import("telar-core");
 const std = @import("std");
 const ApiOptionsType = @import("arguments/ApiOptions.zig");
 const Bound = @import("Bound.zig");
-const max_frame_size_module = @import("telar-core").max_frame_size;
-const max_agent_snapshot_entries_module = @import("telar-core").max_agent_snapshot_entries;
-const max_pane_text_rows_module = @import("telar-core").max_pane_text_rows;
-const max_pane_text_bytes_module = @import("telar-core").max_pane_text_bytes;
-const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
-const max_history_results_module = @import("telar-core").max_history_results;
-const schema_version_module = @import("telar-core").schema_version;
-const schema_id_module = @import("telar-core").schema_id;
-const ClientTagType = @import("telar-core").ClientTag;
-const ServerTagType = @import("telar-core").ServerTag;
-const AgentStatusType = @import("telar-core").AgentStatus;
 const control = @import("control.zig");
 
 /// Prints the schema version, fingerprint, message tags and bounds.
@@ -36,26 +26,26 @@ pub fn run(init: std.process.Init, options: ApiOptionsType) !void {
 }
 
 const bounds = [_]Bound{
-    .{ .name = "max_frame_bytes", .value = max_frame_size_module },
-    .{ .name = "max_agent_snapshot_entries", .value = max_agent_snapshot_entries_module },
-    .{ .name = "max_pane_text_rows", .value = max_pane_text_rows_module },
-    .{ .name = "max_pane_text_bytes", .value = max_pane_text_bytes_module },
-    .{ .name = "max_pane_text_input_bytes", .value = max_pane_text_input_bytes_module },
-    .{ .name = "max_history_results", .value = max_history_results_module },
+    .{ .name = "max_frame_bytes", .value = core.max_frame_size },
+    .{ .name = "max_agent_snapshot_entries", .value = core.max_agent_snapshot_entries },
+    .{ .name = "max_pane_text_rows", .value = core.max_pane_text_rows },
+    .{ .name = "max_pane_text_bytes", .value = core.max_pane_text_bytes },
+    .{ .name = "max_pane_text_input_bytes", .value = core.max_pane_text_input_bytes },
+    .{ .name = "max_history_results", .value = core.max_history_results },
 };
 
 fn writeText(writer: *std.Io.Writer) !void {
-    try writer.print("schema {s} fingerprint {s}\n\n", .{ schema_version_module, schema_id_module[2..] });
+    try writer.print("schema {s} fingerprint {s}\n\n", .{ core.schema_version, core.schema_id[2..] });
     try writer.writeAll("client requests\n");
-    inline for (@typeInfo(ClientTagType).@"enum".fields) |field| {
+    inline for (@typeInfo(core.ClientTag).@"enum".fields) |field| {
         try writer.print("  0x{x:0>2}  {s}\n", .{ field.value, field.name });
     }
     try writer.writeAll("\nserver messages\n");
-    inline for (@typeInfo(ServerTagType).@"enum".fields) |field| {
+    inline for (@typeInfo(core.ServerTag).@"enum".fields) |field| {
         try writer.print("  0x{x:0>2}  {s}\n", .{ field.value, field.name });
     }
     try writer.writeAll("\nagent statuses\n");
-    inline for (@typeInfo(AgentStatusType).@"enum".fields) |field| {
+    inline for (@typeInfo(core.AgentStatus).@"enum".fields) |field| {
         try writer.print("  {d}  {s}\n", .{ field.value, field.name });
     }
     try writer.writeAll("\nbounds\n");
@@ -66,15 +56,15 @@ fn writeText(writer: *std.Io.Writer) !void {
 
 fn writeJson(writer: *std.Io.Writer) !void {
     try writer.writeAll("{\"schema_version\":");
-    try control.writeJsonString(writer, schema_version_module);
+    try control.writeJsonString(writer, core.schema_version);
     try writer.writeAll(",\"fingerprint\":");
-    try control.writeJsonString(writer, schema_id_module[2..]);
+    try control.writeJsonString(writer, core.schema_id[2..]);
     try writer.writeAll(",\"client_requests\":{");
-    try writeEnumJson(writer, ClientTagType);
+    try writeEnumJson(writer, core.ClientTag);
     try writer.writeAll("},\"server_messages\":{");
-    try writeEnumJson(writer, ServerTagType);
+    try writeEnumJson(writer, core.ServerTag);
     try writer.writeAll("},\"agent_statuses\":{");
-    try writeEnumJson(writer, AgentStatusType);
+    try writeEnumJson(writer, core.AgentStatus);
     try writer.writeAll("},\"bounds\":{");
     for (bounds, 0..) |bound, index| {
         if (index != 0) {

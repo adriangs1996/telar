@@ -1,13 +1,11 @@
-const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
-const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
-const validateSessionTitle_module = @import("telar-core").validateSessionTitle;
+const core = @import("telar-core");
 /// A ready session title with the source that produced it, bounded so the
 /// checkpoint can carry it and restore can hand it back to a resumed agent.
 const SessionTitle = @This();
 
-bytes: [max_agent_session_title_bytes_module]u8 = undefined,
+bytes: [core.max_agent_session_title_bytes]u8 = undefined,
 len: u8 = 0,
-source: AgentTitleSourceType,
+source: core.AgentTitleSource,
 
 pub fn slice(title: *const SessionTitle) []const u8 {
     return title.bytes[0..title.len];
@@ -19,12 +17,12 @@ pub fn slice(title: *const SessionTitle) []const u8 {
 /// ```zig
 /// const title = try SessionTitle.init("Investigate proxy lifecycle", .generated);
 /// ```
-pub fn init(value: []const u8, source: AgentTitleSourceType) !SessionTitle {
+pub fn init(value: []const u8, source: core.AgentTitleSource) !SessionTitle {
     if (source != .generated and source != .manual and source != .agent) {
         return error.InvalidSessionTitle;
     }
 
-    try validateSessionTitle_module(value);
+    try core.validateSessionTitle(value);
     var title: SessionTitle = .{ .source = source };
     @memcpy(title.bytes[0..value.len], value);
     title.len = @intCast(value.len);

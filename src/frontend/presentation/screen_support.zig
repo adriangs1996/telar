@@ -1,11 +1,7 @@
-const ScreenType = @import("Screen.zig");
-const ParsedType = @import("Parsed.zig");
+const core = @import("telar-core");
+const data = @import("model");
 const GenericInput = @import("GenericInput.zig").Type;
 const std = @import("std");
-const StyleType = @import("telar-core").Style;
-const KeyType = @import("telar-client").Key;
-const CharType = @import("telar-client").Char;
-const MouseType = @import("telar-client").Mouse;
 const FunctionKeyParameters = @import("FunctionKeyParameters.zig");
 const KittyModifierEvent = @import("KittyModifierEvent.zig");
 const pointer = @import("pointer.zig");
@@ -30,7 +26,7 @@ pub const Screen = @import("Screen.zig");
 
 pub const PatchSink = @import("PatchSink.zig");
 
-pub fn writeStyle(w: *std.Io.Writer, style: StyleType) !void {
+pub fn writeStyle(w: *std.Io.Writer, style: core.Style) !void {
     // Reset first: turning attributes off individually needs one code per
     // attribute and a memory of which were on. Resetting costs four bytes.
     try w.writeAll("\x1b[0");
@@ -196,9 +192,9 @@ pub const Event = union(enum) {
         primary_device_attributes,
     };
 
-    pub const Key = KeyType;
-    pub const Char = CharType;
-    pub const Mouse = MouseType;
+    pub const Key = data.Key;
+    pub const Char = data.Char;
+    pub const Mouse = data.Mouse;
 };
 
 pub const Parsed = @import("Parsed.zig");
@@ -211,7 +207,7 @@ pub const Parsed = @import("Parsed.zig");
 /// reports `incomplete` with a length of zero and lets the caller keep the
 /// bytes, which is the only honest thing to do.
 /// Surfaces OSC 10/11 color reports and consumes other complete OSC replies.
-fn parseOscReply(input: []const u8) ParsedType {
+fn parseOscReply(input: []const u8) Parsed {
     var end: usize = 2;
     var terminator_len: usize = 0;
     while (end < input.len) : (end += 1) {
@@ -274,7 +270,7 @@ fn parseOscColor(text: []const u8) ?Event.Rgb8 {
     return .{ .r = channels[0], .g = channels[1], .b = channels[2] };
 }
 
-pub fn parse(input: []const u8) ?ParsedType {
+pub fn parse(input: []const u8) ?Parsed {
     if (input.len == 0) {
         return null;
     }
@@ -417,7 +413,7 @@ pub fn parse(input: []const u8) ?ParsedType {
     return .{ .event = .incomplete, .len = length };
 }
 
-fn parseKittyKey(body: []const u8, length: usize) ?ParsedType {
+fn parseKittyKey(body: []const u8, length: usize) ?Parsed {
     var fields = std.mem.splitScalar(u8, body, ';');
     const codepoint_text = fields.next() orelse return null;
     const modifier_text = fields.next();
@@ -442,7 +438,7 @@ fn parseKittyKey(body: []const u8, length: usize) ?ParsedType {
     };
 }
 
-fn parseCursorKey(body: []const u8, code: Event.Key.Code, length: usize) ?ParsedType {
+fn parseCursorKey(body: []const u8, code: Event.Key.Code, length: usize) ?Parsed {
     const parameters = parseFunctionKeyParameters(body) orelse return null;
     if (parameters.number != 1) {
         return null;
@@ -457,7 +453,7 @@ fn parseCursorKey(body: []const u8, code: Event.Key.Code, length: usize) ?Parsed
     }, length);
 }
 
-fn parseTildeKey(body: []const u8, length: usize) ?ParsedType {
+fn parseTildeKey(body: []const u8, length: usize) ?Parsed {
     if (std.mem.startsWith(u8, body, "27;")) {
         return parseModifyOtherKeys(body, length);
     }
@@ -568,7 +564,7 @@ fn parseKittyModifierEvent(field: ?[]const u8) ?KittyModifierEvent {
     return .{ .modifier = modifier, .event = event };
 }
 
-fn parseModifyOtherKeys(body: []const u8, length: usize) ?ParsedType {
+fn parseModifyOtherKeys(body: []const u8, length: usize) ?Parsed {
     var fields = std.mem.splitScalar(u8, body, ';');
     if (!std.mem.eql(u8, fields.next() orelse return null, "27")) {
         return null;
@@ -581,7 +577,7 @@ fn parseModifyOtherKeys(body: []const u8, length: usize) ?ParsedType {
     return codepointKey(codepoint, modifier, length);
 }
 
-fn codepointKey(codepoint: u32, modifier: u32, length: usize) ?ParsedType {
+fn codepointKey(codepoint: u32, modifier: u32, length: usize) ?Parsed {
     const mods = parseKeyModifiers(modifier) orelse return null;
     const code = codepointCode(codepoint) orelse return null;
 
@@ -617,7 +613,7 @@ fn parseKeyModifiers(modifier: u32) ?Event.Key.Mods {
     return modsOf((modifier_bits & 0b111) + 1);
 }
 
-fn parseApc(input: []const u8) ParsedType {
+fn parseApc(input: []const u8) Parsed {
     var end: usize = 2;
     while (end + 1 < input.len) : (end += 1) {
         if (input[end] != 0x1b or input[end + 1] != '\\') {
@@ -653,7 +649,7 @@ fn parseApc(input: []const u8) ParsedType {
     return .{ .event = .incomplete, .len = 0 };
 }
 
-fn parseByte(input: []const u8) ?ParsedType {
+fn parseByte(input: []const u8) ?Parsed {
     switch (input[0]) {
         // LF is Ctrl+J, also used by host mappings for multiline prompts.
         // Collapsing it into Enter would turn it into CR when re-encoded.
@@ -685,7 +681,7 @@ fn parseByte(input: []const u8) ?ParsedType {
     return key(.{ .char = .init(input[0..length]) }, .{}, length);
 }
 
-fn parseAlt(input: []const u8) ParsedType {
+fn parseAlt(input: []const u8) Parsed {
     if (input[1] == 0x1b) {
         // ESC ESC: legacy terminals prefix a whole CSI or SS3 sequence with
         // ESC for a modified key, so Alt+Up arrives as `ESC ESC [ A`. Only
@@ -716,7 +712,7 @@ fn parseAlt(input: []const u8) ParsedType {
 }
 
 /// `ESC O X`, application cursor mode.
-fn parseSs3(input: []const u8) ?ParsedType {
+fn parseSs3(input: []const u8) ?Parsed {
     if (input.len < 3) {
         return .{ .event = .incomplete, .len = 0 };
     }
@@ -731,11 +727,11 @@ fn parseSs3(input: []const u8) ?ParsedType {
     };
 }
 
-fn key(code: Event.Key.Code, mods: Event.Key.Mods, length: usize) ParsedType {
+fn key(code: Event.Key.Code, mods: Event.Key.Mods, length: usize) Parsed {
     return .{ .event = .{ .key = .{ .code = code, .mods = mods } }, .len = length };
 }
 
-fn physicalKey(pressed: Event.Key, length: usize) ParsedType {
+fn physicalKey(pressed: Event.Key, length: usize) Parsed {
     var leased = pressed;
     leased.physical = physicalIdentity(pressed.code);
 
@@ -745,7 +741,7 @@ fn physicalKey(pressed: Event.Key, length: usize) ParsedType {
     };
 }
 
-fn altKey(pressed: Event.Key, length: usize) ParsedType {
+fn altKey(pressed: Event.Key, length: usize) Parsed {
     var modified = pressed;
     modified.mods.alt = true;
 
@@ -781,7 +777,7 @@ fn modsOf(param: u32) Event.Key.Mods {
 /// Worth preferring over the older encoding because coordinates are decimal
 /// rather than single bytes, so it keeps working past column 223 - which any
 /// full screen terminal passes.
-fn parseMouse(input: []const u8) ?ParsedType {
+fn parseMouse(input: []const u8) ?Parsed {
     var index: usize = 3;
     var fields: [3]u32 = .{ 0, 0, 0 };
     var field: usize = 0;
@@ -968,7 +964,7 @@ test "an unknown escape sequence is consumed rather than desynchronising" {
 
 test "the diff sends only what changed" {
     const gpa = std.testing.allocator;
-    var screen = try ScreenType.init(gpa, 40, 10);
+    var screen = try Screen.init(gpa, 40, 10);
     defer screen.deinit();
 
     var out: [16 * 1024]u8 = undefined;
@@ -1004,7 +1000,7 @@ test "a resize forces a full repaint" {
     // Otherwise the diff compares against a screen the terminal no longer has,
     // and the result is the half drawn window everyone recognises.
     const gpa = std.testing.allocator;
-    var screen = try ScreenType.init(gpa, 10, 3);
+    var screen = try Screen.init(gpa, 10, 3);
     defer screen.deinit();
 
     var out: [8 * 1024]u8 = undefined;
@@ -1022,7 +1018,7 @@ test "a resize forces a full repaint" {
 
 test "a protocol patch scans only its damaged cells" {
     const gpa = std.testing.allocator;
-    var screen = try ScreenType.init(gpa, 10, 3);
+    var screen = try Screen.init(gpa, 10, 3);
     defer screen.deinit();
 
     var out: [8 * 1024]u8 = undefined;
@@ -1041,7 +1037,7 @@ test "a protocol patch scans only its damaged cells" {
 
 test "damage accumulates as one conservative range per row" {
     const gpa = std.testing.allocator;
-    var screen = try ScreenType.init(gpa, 10, 2);
+    var screen = try Screen.init(gpa, 10, 2);
     defer screen.deinit();
 
     var out: [8 * 1024]u8 = undefined;
@@ -1061,7 +1057,7 @@ test "damage accumulates as one conservative range per row" {
 
 test "a patch crossing rows keeps exact damage on both" {
     const gpa = std.testing.allocator;
-    var screen = try ScreenType.init(gpa, 10, 2);
+    var screen = try Screen.init(gpa, 10, 2);
     defer screen.deinit();
 
     var out: [8 * 1024]u8 = undefined;
@@ -1079,7 +1075,7 @@ test "a patch crossing rows keeps exact damage on both" {
 
 test "a cursor-only frame scans no cells" {
     const gpa = std.testing.allocator;
-    var screen = try ScreenType.init(gpa, 10, 2);
+    var screen = try Screen.init(gpa, 10, 2);
     defer screen.deinit();
 
     var out: [8 * 1024]u8 = undefined;
@@ -1378,7 +1374,7 @@ test "the real cursor is placed only when a field asks for it" {
     // distraction, so the default is hidden. A text field is the exception,
     // and it is the only thing a screen reader or an input method can follow.
     const gpa = std.testing.allocator;
-    var screen = try ScreenType.init(gpa, 10, 3);
+    var screen = try Screen.init(gpa, 10, 3);
     defer screen.deinit();
 
     var out: [4096]u8 = undefined;
@@ -1397,7 +1393,7 @@ test "the real cursor is placed only when a field asks for it" {
 
 test "mouse pointer changes fold until a shape or recovery changes" {
     const gpa = std.testing.allocator;
-    var screen = try ScreenType.init(gpa, 10, 3);
+    var screen = try Screen.init(gpa, 10, 3);
     defer screen.deinit();
 
     var out: [4096]u8 = undefined;
@@ -1549,7 +1545,7 @@ test "a failed flush forgets nothing the terminal did not receive" {
     // so a writer error mid-flush left the screen claiming cells the terminal
     // never got, and the retry emitted nothing.
     const gpa = std.testing.allocator;
-    var screen = try ScreenType.init(gpa, 10, 2);
+    var screen = try Screen.init(gpa, 10, 2);
     defer screen.deinit();
     var out: [8 * 1024]u8 = undefined;
     var initial = std.Io.Writer.fixed(&out);

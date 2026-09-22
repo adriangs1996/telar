@@ -1,7 +1,7 @@
+const core = @import("telar-core");
+const backend = @import("telar-backend");
 const std = @import("std");
 const build_options = @import("build_options");
-const RecorderType = @import("telar-core").Recorder;
-const max_args_module = @import("telar-backend").max_args;
 const parser = @import("cli/parser.zig");
 const usage_module = @import("cli/usage.zig");
 const server_module = @import("cli/server.zig");
@@ -15,7 +15,6 @@ const history_module = @import("cli/history.zig");
 const notification_module = @import("cli/notification.zig");
 const config_module = @import("cli/config.zig");
 const plugin_module = @import("cli/plugin.zig");
-const run_module = @import("telar-backend").run;
 const agent_module = @import("cli/agent.zig");
 const pane_module = @import("cli/pane.zig");
 const workspace_module = @import("cli/workspace.zig");
@@ -56,7 +55,7 @@ pub const telar_diagnostics = build_options.diagnostics;
 pub const telar_echo_trace = build_options.echo_trace;
 pub const telar_echo_trace_cpu = build_options.echo_trace_cpu;
 
-pub var echo_recorder: if (build_options.echo_trace) RecorderType else void = if (build_options.echo_trace) .{} else {};
+pub var echo_recorder: if (build_options.echo_trace) core.Recorder else void = if (build_options.echo_trace) .{} else {};
 
 fn dumpEchoTrace(init: std.process.Init) void {
     if (comptime build_options.echo_trace) {
@@ -65,7 +64,7 @@ fn dumpEchoTrace(init: std.process.Init) void {
     }
 }
 
-fn collectArgs(init: std.process.Init, storage: *[max_args_module][*:0]const u8) ![]const [*:0]const u8 {
+fn collectArgs(init: std.process.Init, storage: *[backend.max_args][*:0]const u8) ![]const [*:0]const u8 {
     var iterator = init.minimal.args.iterate();
     var len: usize = 0;
     while (iterator.next()) |arg| {
@@ -86,7 +85,7 @@ fn collectArgs(init: std.process.Init, storage: *[max_args_module][*:0]const u8)
 /// ```
 pub fn main(init: std.process.Init) !void {
     defer dumpEchoTrace(init);
-    var arg_storage: [max_args_module][*:0]const u8 = undefined;
+    var arg_storage: [backend.max_args][*:0]const u8 = undefined;
     const args = try collectArgs(init, &arg_storage);
 
     switch (try parser.Cli.parse(args, init.minimal.environ)) {
@@ -103,7 +102,7 @@ pub fn main(init: std.process.Init) !void {
         .notification => |options| try notification_module.run(init, options),
         .config_check => |options| try config_module.runCheck(init, options),
         .plugin_worker => |options| try plugin_module.runWorker(init, options),
-        .tap_worker => |options| try run_module(init, std.mem.span(options.entry)),
+        .tap_worker => |options| try backend.run(init, std.mem.span(options.entry)),
         .plugin => |options| try plugin_module.run(init, options),
         .agent => |options| std.process.exit(try agent_module.run(init, options)),
         .pane => |options| std.process.exit(try pane_module.run(init, options)),

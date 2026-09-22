@@ -1,11 +1,10 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const RectType = @import("telar-core").Rect;
-const RemovedPanes = @import("RemovedPanes.zig");
+const core = @import("telar-core");
+const data = @import("model");
 const TabReconciliation = @This();
 
-location: TabLocationType,
-area: RectType,
-removed_panes: RemovedPanes = .{},
+location: core.TabLocation,
+area: core.Rect,
+removed_panes: data.RemovedPanes = .{},
 active: bool,
 panes_changed: bool,
 snapshot_loaded: bool = false,

@@ -1,3 +1,4 @@
 //! Omitted activity at one page boundary, recoverable by opening its disclosure.
+const core = @import("telar-core");
 key: u64,
-direction: @import("telar-core").agent_history.Direction,
+direction: core.agent_history.Direction,

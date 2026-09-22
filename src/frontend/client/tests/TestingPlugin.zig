@@ -1,6 +1,6 @@
-const PluginActionType = @import("telar-client").PluginAction;
-const DigestType = @import("telar-core").Digest;
+const data = @import("model");
+const core = @import("telar-core");
 const TestingPlugin = @This();
 
-action: PluginActionType,
-digest: DigestType,
+action: data.PluginAction,
+digest: core.Digest,

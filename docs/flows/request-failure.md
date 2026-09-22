@@ -70,7 +70,7 @@ new client to rebuild its projection.
 
 ## Validation
 
-- `src/client/application/session/request_failure.zig` checks notification
+- `src/model/application/session/request_failure.zig` checks notification
   title, target, message and duration mapping.
 - `src/client/AttachedClient.zig` owns correlation,
   concrete recovery dispatch and error reporting.

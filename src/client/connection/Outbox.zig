@@ -1,66 +1,15 @@
-const encodeOpenEditor = @import("telar-core").encodeOpenEditor;
 const outbox_support = @import("outbox_support.zig");
 const root = @import("../input/input_namespace.zig");
 const OwnedLaunchCwd = @import("OwnedLaunchCwd.zig");
 const OwnedClientLayout = @import("OwnedClientLayout.zig");
 const Stats = @import("Stats.zig");
 const Snapshot = @import("OutboxSnapshot.zig");
-const PaneIdType = @import("telar-core").PaneId;
-const max_history_command_bytes_module = @import("telar-core").max_history_command_bytes;
-const RenameTabType = @import("telar-core").RenameTab;
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 const OwnedRename = @import("OwnedRename.zig");
-const RenameWorkspaceType = @import("telar-core").RenameWorkspace;
 const OwnedWorkspaceRename = @import("OwnedWorkspaceRename.zig");
-const CreateWorkspaceType = @import("telar-core").CreateWorkspace;
 const OwnedCreateWorkspace = @import("OwnedCreateWorkspace.zig");
-const CreateTabType = @import("telar-core").CreateTab;
 const OwnedCreateTab = @import("OwnedCreateTab.zig");
-const ShowNotificationType = @import("telar-core").ShowNotification;
-const max_notification_title_bytes_module = @import("telar-core").max_notification_title_bytes;
-const max_notification_message_bytes_module = @import("telar-core").max_notification_message_bytes;
 const OwnedNotification = @import("OwnedNotification.zig");
-const ClientLayoutUpdateType = @import("telar-core").ClientLayoutUpdate;
-const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
-const encodeClientLayoutUpdate_module = @import("telar-core").encodeClientLayoutUpdate;
 const std = @import("std");
-const encodeOpenPane_module = @import("telar-core").encodeOpenPane;
-const encodePaneInput_module = @import("telar-core").encodePaneInput;
-const encodePaneResize_module = @import("telar-core").encodePaneResize;
-const encodeFrameAck_module = @import("telar-core").encodeFrameAck;
-const encodeRequestSnapshot_module = @import("telar-core").encodeRequestSnapshot;
-const encodeDetachPane_module = @import("telar-core").encodeDetachPane;
-const encodeRequestTabSnapshot_module = @import("telar-core").encodeRequestTabSnapshot;
-const encodeCreatePane_module = @import("telar-core").encodeCreatePane;
-const encodeClosePane_module = @import("telar-core").encodeClosePane;
-const encodeRequestWorkspaceSnapshot_module = @import("telar-core").encodeRequestWorkspaceSnapshot;
-const encodeCreateTab_module = @import("telar-core").encodeCreateTab;
-const encodeRenameTab_module = @import("telar-core").encodeRenameTab;
-const encodeCloseTab_module = @import("telar-core").encodeCloseTab;
-const encodeMoveTab_module = @import("telar-core").encodeMoveTab;
-const encodeRequestGraphicsSnapshot_module = @import("telar-core").encodeRequestGraphicsSnapshot;
-const encodeGraphicsCredit_module = @import("telar-core").encodeGraphicsCredit;
-const encodeConfigureGraphics_module = @import("telar-core").encodeConfigureGraphics;
-const encodeConfigureTerminalColors_module = @import("telar-core").encodeConfigureTerminalColors;
-const encodeRequestRuntimeState_module = @import("telar-core").encodeRequestRuntimeState;
-const encodeCreateWorkspace_module = @import("telar-core").encodeCreateWorkspace;
-const encodeRenameWorkspace_module = @import("telar-core").encodeRenameWorkspace;
-const encodeSetPaneViewport_module = @import("telar-core").encodeSetPaneViewport;
-const encodeCopySelection_module = @import("telar-core").encodeCopySelection;
-const encodeShowNotification_module = @import("telar-core").encodeShowNotification;
-const encodeAcknowledgeAgent_module = @import("telar-core").encodeAcknowledgeAgent;
-const encodeSearchPane_module = @import("telar-core").encodeSearchPane;
-const encodeQueryHistory_module = @import("telar-core").encodeQueryHistory;
-const encodeDeleteHistory_module = @import("telar-core").encodeDeleteHistory;
-const encodeReadHistoryOutput_module = @import("telar-core").encodeReadHistoryOutput;
-const encodeSuggestCommand_module = @import("telar-core").encodeSuggestCommand;
-const encodeCompletePaneFocus_module = @import("telar-core").encodeCompletePaneFocus;
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
-const PaneResizeType = @import("telar-core").PaneResize;
-const FrameAckType = @import("telar-core").FrameAck;
-const encodeCompleteClientCommand = @import("telar-core").encodeCompleteClientCommand;
-const ClientCommand = @import("telar-core").ClientCommand;
-const max_argument_count = @import("telar-core").max_argument_count;
 const core = @import("telar-core");
 const Outbox = @This();
 
@@ -106,10 +55,10 @@ pub fn snapshot(outbox: *const Outbox) Snapshot {
 }
 
 /// Retains a completion outside the small per-message metadata. Example: `try outbox.pushClientCompletion(reply);`
-pub fn pushClientCompletion(self: *Outbox, reply: ClientCommand) !void {
+pub fn pushClientCompletion(self: *Outbox, reply: core.ClientCommand) !void {
     try reply.validateWire();
     const index = try self.reserve();
-    const encoded = encodeCompleteClientCommand(&self.input_bytes[index], reply) catch unreachable;
+    const encoded = core.encodeCompleteClientCommand(&self.input_bytes[index], reply) catch unreachable;
     self.item_launch_cwd[index] = null;
     self.items[index] = .{ .complete_client_command = @intCast(encoded.len) };
 }
@@ -139,7 +88,7 @@ pub fn push(outbox: *Outbox, message: outbox_support.Message) !void {
     try outbox.append(message);
 }
 
-pub fn pushInput(outbox: *Outbox, pane_id: PaneIdType, bytes: []const u8) !void {
+pub fn pushInput(outbox: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void {
     if (bytes.len == 0 or bytes.len > root.max_encoded_bytes) {
         return error.InvalidInputLength;
     }
@@ -169,9 +118,9 @@ pub fn pushInput(outbox: *Outbox, pane_id: PaneIdType, bytes: []const u8) !void 
 
 /// Owns one prompt in the existing slot byte storage without coalescing turns.
 /// Example: `try outbox.pushAgentPrompt(prompt);`
-pub fn pushAgentPrompt(outbox: *Outbox, prompt: @import("telar-core").AgentPrompt) !void {
+pub fn pushAgentPrompt(outbox: *Outbox, prompt: core.AgentPrompt) !void {
     try prompt.images.validate();
-    if ((prompt.text.len == 0 and prompt.images.count == 0) or prompt.text.len > @import("telar-core").agent_thread.max_prompt_bytes or prompt.text.len > root.max_encoded_bytes or !std.unicode.utf8ValidateSlice(prompt.text) or std.mem.indexOfScalar(u8, prompt.text, 0) != null) {
+    if ((prompt.text.len == 0 and prompt.images.count == 0) or prompt.text.len > core.agent_thread.max_prompt_bytes or prompt.text.len > root.max_encoded_bytes or !std.unicode.utf8ValidateSlice(prompt.text) or std.mem.indexOfScalar(u8, prompt.text, 0) != null) {
         return error.InvalidAgentPrompt;
     }
     if (!prompt.options.valid()) {
@@ -208,10 +157,10 @@ pub fn pushAgentPrompt(outbox: *Outbox, prompt: @import("telar-core").AgentPromp
 
 /// Owns cursors in the existing outbound byte slot without per-input allocation.
 /// Example: `try outbox.pushAgentHistory(query);`
-pub fn pushAgentHistory(outbox: *Outbox, query: @import("telar-core").QueryAgentHistory) !void {
-    _ = try @import("telar-core").AgentHistoryCursor.init(query.cursor);
-    _ = try @import("telar-core").AgentHistoryCursor.init(query.anchor);
-    _ = try @import("telar-core").AgentHistoryCursor.init(query.anchor_turn);
+pub fn pushAgentHistory(outbox: *Outbox, query: core.QueryAgentHistory) !void {
+    _ = try core.AgentHistoryCursor.init(query.cursor);
+    _ = try core.AgentHistoryCursor.init(query.anchor);
+    _ = try core.AgentHistoryCursor.init(query.anchor_turn);
     if (query.cursor.len + query.anchor.len + query.anchor_turn.len > root.max_encoded_bytes) {
         return error.InvalidAgentHistoryCursor;
     }
@@ -247,8 +196,8 @@ fn pushReview(self: *Outbox, value: anytype) !void {
 
 /// Reserves a whole bounded paste before copying any chunk into the queue.
 /// Example: `try outbox.pushInputBatch(pane_id, encoded_paste);`.
-pub fn pushInputBatch(outbox: *Outbox, pane_id: PaneIdType, bytes: []const u8) !void {
-    if (bytes.len == 0 or bytes.len > max_history_command_bytes_module + 13) {
+pub fn pushInputBatch(outbox: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void {
+    if (bytes.len == 0 or bytes.len > core.max_history_command_bytes + 13) {
         return error.InvalidInputLength;
     }
 
@@ -265,8 +214,8 @@ pub fn pushInputBatch(outbox: *Outbox, pane_id: PaneIdType, bytes: []const u8) !
     }
 }
 
-pub fn pushRename(outbox: *Outbox, rename: RenameTabType) !void {
-    if (rename.label.len == 0 or rename.label.len > max_tab_label_bytes_module) {
+pub fn pushRename(outbox: *Outbox, rename: core.RenameTab) !void {
+    if (rename.label.len == 0 or rename.label.len > core.max_tab_label_bytes) {
         return error.InvalidTabLabel;
     }
 
@@ -279,8 +228,8 @@ pub fn pushRename(outbox: *Outbox, rename: RenameTabType) !void {
     try outbox.append(.{ .rename_tab = owned });
 }
 
-pub fn pushWorkspaceRename(outbox: *Outbox, rename: RenameWorkspaceType) !void {
-    if (rename.name.len == 0 or rename.name.len > max_tab_label_bytes_module) {
+pub fn pushWorkspaceRename(outbox: *Outbox, rename: core.RenameWorkspace) !void {
+    if (rename.name.len == 0 or rename.name.len > core.max_tab_label_bytes) {
         return error.InvalidWorkspaceName;
     }
     var owned: OwnedWorkspaceRename = .{
@@ -292,8 +241,8 @@ pub fn pushWorkspaceRename(outbox: *Outbox, rename: RenameWorkspaceType) !void {
     try outbox.append(.{ .rename_workspace = owned });
 }
 
-pub fn pushCreateWorkspace(outbox: *Outbox, request: CreateWorkspaceType) !void {
-    if (request.name.len == 0 or request.name.len > max_tab_label_bytes_module) {
+pub fn pushCreateWorkspace(outbox: *Outbox, request: core.CreateWorkspace) !void {
+    if (request.name.len == 0 or request.name.len > core.max_tab_label_bytes) {
         return error.InvalidWorkspaceName;
     }
 
@@ -308,8 +257,8 @@ pub fn pushCreateWorkspace(outbox: *Outbox, request: CreateWorkspaceType) !void 
     try outbox.append(.{ .create_workspace = owned });
 }
 
-pub fn pushCreateTab(outbox: *Outbox, request: CreateTabType) !void {
-    if (request.label.len > max_tab_label_bytes_module) {
+pub fn pushCreateTab(outbox: *Outbox, request: core.CreateTab) !void {
+    if (request.label.len > core.max_tab_label_bytes) {
         return error.InvalidTabLabel;
     }
 
@@ -325,9 +274,9 @@ pub fn pushCreateTab(outbox: *Outbox, request: CreateTabType) !void {
     try outbox.append(.{ .create_tab = owned });
 }
 
-pub fn pushNotification(outbox: *Outbox, request: ShowNotificationType) !void {
-    if (request.notification.title.len > max_notification_title_bytes_module or
-        request.notification.message.len > max_notification_message_bytes_module)
+pub fn pushNotification(outbox: *Outbox, request: core.ShowNotification) !void {
+    if (request.notification.title.len > core.max_notification_title_bytes or
+        request.notification.message.len > core.max_notification_message_bytes)
     {
         return error.NotificationTooLarge;
     }
@@ -350,7 +299,7 @@ pub fn pushNotification(outbox: *Outbox, request: ShowNotificationType) !void {
 /// ```zig
 /// try outbox.pushClientLayout(update);
 /// ```
-pub fn pushClientLayout(outbox: *Outbox, update: ClientLayoutUpdateType) !void {
+pub fn pushClientLayout(outbox: *Outbox, update: core.ClientLayoutUpdate) !void {
     var offset: usize = 0;
     const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
     while (offset < mutable_len) : (offset += 1) {
@@ -358,8 +307,8 @@ pub fn pushClientLayout(outbox: *Outbox, update: ClientLayoutUpdateType) !void {
         switch (outbox.items[index]) {
             .client_layout => |slot_index| {
                 const slot = &outbox.client_layouts[slot_index];
-                var scratch: [max_client_layout_wire_bytes_module]u8 = undefined;
-                const encoded = try encodeClientLayoutUpdate_module(&scratch, update);
+                var scratch: [core.max_client_layout_wire_bytes]u8 = undefined;
+                const encoded = try core.encodeClientLayoutUpdate(&scratch, update);
                 @memcpy(slot.bytes[0..encoded.len], encoded);
                 slot.len = @intCast(encoded.len);
                 outbox.stats.coalesced_client_layout +|= 1;
@@ -439,78 +388,78 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
             if (owned.launch) |*launch| {
                 launch.cwd = outbox.launchCwd(outbox.head);
             }
-            return encodeOpenPane_module(buffer, owned);
+            return core.encodeOpenPane(buffer, owned);
         },
-        .pane_input => |value| encodePaneInput_module(buffer, .{
+        .pane_input => |value| core.encodePaneInput(buffer, .{
             .pane_id = value.pane_id,
             .bytes = outbox.input_bytes[outbox.head][0..value.len],
         }),
-        .pane_resize => |value| encodePaneResize_module(buffer, value),
-        .frame_ack => |value| encodeFrameAck_module(buffer, value),
-        .request_snapshot => |value| encodeRequestSnapshot_module(buffer, value),
-        .detach_pane => |value| encodeDetachPane_module(buffer, value),
-        .request_tab_snapshot => |value| encodeRequestTabSnapshot_module(buffer, value),
+        .pane_resize => |value| core.encodePaneResize(buffer, value),
+        .frame_ack => |value| core.encodeFrameAck(buffer, value),
+        .request_snapshot => |value| core.encodeRequestSnapshot(buffer, value),
+        .detach_pane => |value| core.encodeDetachPane(buffer, value),
+        .request_tab_snapshot => |value| core.encodeRequestTabSnapshot(buffer, value),
         .create_pane => |value| {
-            var scratch: [max_argument_count][]const u8 = undefined;
+            var scratch: [core.max_argument_count][]const u8 = undefined;
             var owned = value.view(&outbox.input_bytes[outbox.head], &scratch);
             owned.launch.cwd = outbox.launchCwd(outbox.head);
-            return encodeCreatePane_module(buffer, owned);
+            return core.encodeCreatePane(buffer, owned);
         },
-        .close_pane => |value| encodeClosePane_module(buffer, value),
-        .request_workspace_snapshot => |value| encodeRequestWorkspaceSnapshot_module(buffer, value),
+        .close_pane => |value| core.encodeClosePane(buffer, value),
+        .request_workspace_snapshot => |value| core.encodeRequestWorkspaceSnapshot(buffer, value),
         .create_tab => |*value| encode: {
-            var scratch: [max_argument_count][]const u8 = undefined;
+            var scratch: [core.max_argument_count][]const u8 = undefined;
             var owned = value.view(&outbox.input_bytes[outbox.head], &scratch);
             owned.launch.cwd = outbox.launchCwd(outbox.head);
-            break :encode encodeCreateTab_module(buffer, owned);
+            break :encode core.encodeCreateTab(buffer, owned);
         },
-        .rename_tab => |*value| encodeRenameTab_module(buffer, .{
+        .rename_tab => |*value| core.encodeRenameTab(buffer, .{
             .request_id = value.request_id,
             .location = value.location,
             .label = value.slice(),
         }),
-        .close_tab => |value| encodeCloseTab_module(buffer, value),
-        .move_tab => |value| encodeMoveTab_module(buffer, value),
-        .request_graphics_snapshot => |value| encodeRequestGraphicsSnapshot_module(buffer, value),
-        .graphics_credit => |value| encodeGraphicsCredit_module(buffer, value),
-        .configure_graphics => |value| encodeConfigureGraphics_module(buffer, value),
-        .configure_terminal_colors => |value| encodeConfigureTerminalColors_module(buffer, value),
-        .request_runtime_state => |value| encodeRequestRuntimeState_module(buffer, value),
-        .create_workspace => |*value| encodeCreateWorkspace_module(
+        .close_tab => |value| core.encodeCloseTab(buffer, value),
+        .move_tab => |value| core.encodeMoveTab(buffer, value),
+        .request_graphics_snapshot => |value| core.encodeRequestGraphicsSnapshot(buffer, value),
+        .graphics_credit => |value| core.encodeGraphicsCredit(buffer, value),
+        .configure_graphics => |value| core.encodeConfigureGraphics(buffer, value),
+        .configure_terminal_colors => |value| core.encodeConfigureTerminalColors(buffer, value),
+        .request_runtime_state => |value| core.encodeRequestRuntimeState(buffer, value),
+        .create_workspace => |*value| core.encodeCreateWorkspace(
             buffer,
             value.view(outbox.launchCwd(outbox.head)),
         ),
-        .rename_workspace => |*value| encodeRenameWorkspace_module(buffer, .{
+        .rename_workspace => |*value| core.encodeRenameWorkspace(buffer, .{
             .request_id = value.request_id,
             .workspace = value.workspace,
             .name = value.slice(),
         }),
-        .set_pane_viewport => |value| encodeSetPaneViewport_module(buffer, value),
-        .copy_selection => |value| encodeCopySelection_module(buffer, value),
-        .show_notification => |*value| encodeShowNotification_module(buffer, value.view()),
+        .set_pane_viewport => |value| core.encodeSetPaneViewport(buffer, value),
+        .copy_selection => |value| core.encodeCopySelection(buffer, value),
+        .show_notification => |*value| core.encodeShowNotification(buffer, value.view()),
         .client_layout => |slot| outbox.client_layouts[slot].slice(),
-        .acknowledge_agent => |value| encodeAcknowledgeAgent_module(buffer, value),
-        .search_pane => |*value| encodeSearchPane_module(buffer, value.view()),
-        .query_history => |*value| encodeQueryHistory_module(buffer, value.view()),
-        .delete_history => |value| encodeDeleteHistory_module(buffer, value),
-        .read_history_output => |value| encodeReadHistoryOutput_module(buffer, value),
-        .suggest_command => |*value| encodeSuggestCommand_module(buffer, value.view()),
+        .acknowledge_agent => |value| core.encodeAcknowledgeAgent(buffer, value),
+        .search_pane => |*value| core.encodeSearchPane(buffer, value.view()),
+        .query_history => |*value| core.encodeQueryHistory(buffer, value.view()),
+        .delete_history => |value| core.encodeDeleteHistory(buffer, value),
+        .read_history_output => |value| core.encodeReadHistoryOutput(buffer, value),
+        .suggest_command => |*value| core.encodeSuggestCommand(buffer, value.view()),
         .complete_client_command => |length| outbox.input_bytes[outbox.head][0..length],
         .open_editor => |value| encode: {
             var request = value;
             const bytes = &outbox.input_bytes[outbox.head];
             request.editor = bytes[0..value.editor.len];
             request.path = bytes[value.editor.len..][0..value.path.len];
-            break :encode encodeOpenEditor(buffer, request);
+            break :encode core.encodeOpenEditor(buffer, request);
         },
-        .complete_pane_focus => |value| encodeCompletePaneFocus_module(buffer, value),
-        .agent_prompt => |*value| @import("telar-core").encodeAgentPrompt(buffer, value.view(&outbox.input_bytes[outbox.head])),
-        .agent_interrupt => |value| @import("telar-core").encodeAgentInterrupt(buffer, value),
-        .agent_resume => |value| @import("telar-core").encodeAgentResume(buffer, value),
-        .agent_approval => |value| @import("telar-core").encodeAgentApproval(buffer, value),
+        .complete_pane_focus => |value| core.encodeCompletePaneFocus(buffer, value),
+        .agent_prompt => |*value| core.encodeAgentPrompt(buffer, value.view(&outbox.input_bytes[outbox.head])),
+        .agent_interrupt => |value| core.encodeAgentInterrupt(buffer, value),
+        .agent_resume => |value| core.encodeAgentResume(buffer, value),
+        .agent_approval => |value| core.encodeAgentApproval(buffer, value),
         .query_change_review, .change_review_command => |len| outbox.input_bytes[outbox.head][0..len],
-        .query_agent_thread => |value| @import("telar-core").encodeQueryAgentThread(buffer, value),
-        .query_agent_history => |*value| @import("telar-core").encodeQueryAgentHistory(buffer, value.view(&outbox.input_bytes[outbox.head])),
+        .query_agent_thread => |value| core.encodeQueryAgentThread(buffer, value),
+        .query_agent_history => |*value| core.encodeQueryAgentHistory(buffer, value.view(&outbox.input_bytes[outbox.head])),
     };
 }
 
@@ -545,7 +494,7 @@ fn append(outbox: *Outbox, message: outbox_support.Message) !void {
 }
 
 fn claimLaunchCwd(outbox: *Outbox, cwd: []const u8) !u8 {
-    if (cwd.len == 0 or cwd.len > max_cwd_bytes_module) {
+    if (cwd.len == 0 or cwd.len > core.max_cwd_bytes) {
         return error.InvalidCwd;
     }
     for (&outbox.launch_cwds, 0..) |*slot, index| {
@@ -578,13 +527,13 @@ fn releaseLaunchSlot(outbox: *Outbox, slot_index: u8) void {
     slot.used = false;
 }
 
-fn claimClientLayout(outbox: *Outbox, update: ClientLayoutUpdateType) !u8 {
+fn claimClientLayout(outbox: *Outbox, update: core.ClientLayoutUpdate) !u8 {
     for (&outbox.client_layouts, 0..) |*slot, index| {
         if (slot.used) {
             continue;
         }
 
-        const encoded = try encodeClientLayoutUpdate_module(&slot.bytes, update);
+        const encoded = try core.encodeClientLayoutUpdate(&slot.bytes, update);
         slot.len = @intCast(encoded.len);
         slot.used = true;
         return @intCast(index);
@@ -635,7 +584,7 @@ fn mutableTailIndex(outbox: *const Outbox) ?usize {
     return index;
 }
 
-fn pushResize(outbox: *Outbox, resize: PaneResizeType) !void {
+fn pushResize(outbox: *Outbox, resize: core.PaneResize) !void {
     var offset: usize = 0;
     const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
     while (offset < mutable_len) : (offset += 1) {
@@ -654,7 +603,7 @@ fn pushResize(outbox: *Outbox, resize: PaneResizeType) !void {
     try outbox.append(.{ .pane_resize = resize });
 }
 
-fn pushAck(outbox: *Outbox, ack: FrameAckType) !void {
+fn pushAck(outbox: *Outbox, ack: core.FrameAck) !void {
     var offset: usize = 0;
     const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
     while (offset < mutable_len) : (offset += 1) {

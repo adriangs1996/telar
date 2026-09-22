@@ -1,5 +1,5 @@
-const PlacementType = @import("telar-core").Placement;
+const core = @import("telar-core");
 const FallbackPlacement = @This();
 
-placement: PlacementType,
+placement: core.Placement,
 external_id: u32,

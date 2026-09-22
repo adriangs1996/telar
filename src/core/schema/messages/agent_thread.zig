@@ -1,4 +1,7 @@
 //! Bounded typed controls and coalescible conversation snapshots.
+const AgentImages = @import("../../AgentImages.zig");
+const RecentConversations = @import("../../RecentConversations.zig");
+const AgentSkills = @import("../../AgentSkills.zig");
 const std = @import("std");
 const Encoder = @import("../Encoder.zig");
 const Decoder = @import("../Decoder.zig");
@@ -43,7 +46,7 @@ pub fn decodeAgentPrompt(decoder: *Decoder) !@import("AgentPrompt.zig") {
         .options = try decodeOptions(decoder, false),
     };
     const count = try decoder.readByte();
-    if (count > @import("../../AgentImages.zig").capacity) {
+    if (count > AgentImages.capacity) {
         return error.TooManyAgentImages;
     }
 
@@ -65,7 +68,7 @@ pub fn encodeAgentInterrupt(buffer: []u8, request: @import("AgentInterrupt.zig")
 /// Example: `const bytes = try encodeAgentResume(buffer, request);`
 pub fn encodeAgentResume(buffer: []u8, request: @import("AgentResume.zig")) ![]const u8 {
     try validateTarget(request);
-    if (request.conversation_index >= @import("../../RecentConversations.zig").capacity) {
+    if (request.conversation_index >= RecentConversations.capacity) {
         return error.InvalidConversation;
     }
 
@@ -97,7 +100,7 @@ pub fn decodeControl(comptime T: type, decoder: *Decoder) !T {
         }
     }
     if (comptime @hasField(T, "conversation_index")) {
-        if (request.conversation_index >= @import("../../RecentConversations.zig").capacity) {
+        if (request.conversation_index >= RecentConversations.capacity) {
             return error.InvalidConversation;
         }
     }
@@ -249,8 +252,8 @@ pub fn decodeSnapshotBody(decoder: *Decoder, output: ?*Snapshot) !SnapshotView {
         pending = .{ .id = approval_id, .kind = kind, .description_len = @intCast(description.len) };
         @memcpy(pending.?.description[0..description.len], description);
     }
-    const skills = try @import("../../AgentSkills.zig").decode(decoder);
-    const recent = try @import("../../RecentConversations.zig").decode(decoder);
+    const skills = try AgentSkills.decode(decoder);
+    const recent = try RecentConversations.decode(decoder);
     const resumed = try decoder.readBool();
     const options = try decodeOptions(decoder, true);
     const model_count = try decoder.readByte();

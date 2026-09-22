@@ -1,14 +1,11 @@
 //! Paired mechanism probes; timings are diagnostic, never correctness thresholds.
 
+const core = @import("telar-core");
 const std = @import("std");
 const PaneFixtureType = @import("PaneFixture.zig");
-const max_search_matches_module = @import("telar-core").max_search_matches;
-const SearchMatchType = @import("telar-core").SearchMatch;
 const pane_mod = @import("../../pane/pane_namespace.zig");
 const Cursor = @import("../../pane/Cursor.zig");
-const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
 const attachment_mod = @import("../attachment/attachment_namespace.zig");
-const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
 const StatsType = @import("../../media/Stats.zig");
 const system_metrics = @import("../observability/system_metrics.zig");
 const RequestFixture = @import("RequestFixture.zig");
@@ -17,7 +14,6 @@ const body = @import("../../proxy/http/body.zig");
 const ServiceType = @import("../../history/Service.zig");
 const QueryType = @import("../../history/Query.zig");
 const model_module = @import("../../history/model.zig");
-const RequestIdType = @import("telar-core").RequestId;
 
 fn now() i96 {
     return std.Io.Clock.awake.now(std.testing.io).nanoseconds;
@@ -44,7 +40,7 @@ test "performance probe measures bounded search turns against the complete query
         _ = try fixture.pane.ingest(std.testing.io, row);
     }
     const needle = ([_]u8{'a'} ** 63) ++ "b";
-    var matches: [max_search_matches_module]SearchMatchType = undefined;
+    var matches: [core.max_search_matches]core.SearchMatch = undefined;
     var complete_times: [20]u64 = undefined;
     for (&complete_times) |*time| {
         const started = now();
@@ -99,9 +95,9 @@ test "performance probe measures runtime staging of a 4K RGBA transfer" {
     var stage_times: [20]u64 = undefined;
     var total_times: [20]u64 = undefined;
     for (&stage_times, &total_times) |*stage, *total| {
-        attachment.graphics.credit = max_image_bytes_per_pane_module;
+        attachment.graphics.credit = core.max_image_bytes_per_pane;
         const started = now();
-        const result = try attachment_mod.stageNextTransfer(attachment, max_image_bytes_global_module);
+        const result = try attachment_mod.stageNextTransfer(attachment, core.max_image_bytes_global);
         stage.* = elapsed(started);
         if (result == .blocked) {
             const borrow = pane.beginMediaProcessing().?;
@@ -109,7 +105,7 @@ test "performance probe measures runtime staging of a 4K RGBA transfer" {
             pane.processMedia(borrow.current_size, &stats);
             pane.completeMediaProcessing();
             const adoption_started = now();
-            try std.testing.expectEqual(attachment_mod.StageResult.staged, try attachment_mod.stageNextTransfer(attachment, max_image_bytes_global_module));
+            try std.testing.expectEqual(attachment_mod.StageResult.staged, try attachment_mod.stageNextTransfer(attachment, core.max_image_bytes_global));
             stage.* = @max(stage.*, elapsed(adoption_started));
         }
         total.* = elapsed(started);
@@ -169,7 +165,7 @@ test "performance probe executes a queued history burst and preserves every corr
             .query_result => |result| result.request_id,
             else => return error.UnexpectedResponse,
         };
-        try std.testing.expectEqual(@as(RequestIdType, @enumFromInt(id)), request_id);
+        try std.testing.expectEqual(@as(core.RequestId, @enumFromInt(id)), request_id);
         if (id == 32) {
             try std.testing.expect(response == .query_result);
         }

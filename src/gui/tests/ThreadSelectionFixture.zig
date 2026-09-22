@@ -1,4 +1,7 @@
 //! Headless native reader fixture; no window or desktop input is created.
+const event_module = @import("../input/event.zig");
+const native = @import("../native/native.zig");
+const ClipboardResult = @import("../input/ClipboardResult.zig");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -46,7 +49,7 @@ pub fn publish(fixture: *Fixture) !void {
     try fixture.session.settle();
 }
 
-pub fn send(fixture: *Fixture, event: @import("../input/event.zig").Event) !void {
+pub fn send(fixture: *Fixture, event: event_module.Event) !void {
     try input_support.accept(fixture.session.gui, event);
     try input_support.pump(fixture.session.gui);
 }
@@ -107,14 +110,14 @@ pub fn drag(fixture: *Fixture, points: [2][2]f64) !void {
     try fixture.send(.{ .pointer = .{ .kind = .release, .x = points[1][0], .y = points[1][1] } });
 }
 
-pub fn clipboard(fixture: *Fixture) !@import("../native/native.zig").HostRequest {
-    var request: @import("../native/native.zig").HostRequest = .{};
+pub fn clipboard(fixture: *Fixture) !native.HostRequest {
+    var request: native.HostRequest = .{};
     if (!fixture.session.gui.host.next(&request)) {
         return error.MissingClipboardWrite;
     }
     return request;
 }
 
-pub fn ack(fixture: *Fixture, request: @import("../native/native.zig").HostRequest, status: @import("../input/ClipboardResult.zig").Status) !void {
+pub fn ack(fixture: *Fixture, request: native.HostRequest, status: ClipboardResult.Status) !void {
     try fixture.send(.{ .clipboard = .{ .operation = .write, .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .status = status } });
 }

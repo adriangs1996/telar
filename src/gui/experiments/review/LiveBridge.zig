@@ -1,9 +1,9 @@
 //! Experimental coordinator transport. No sockets, JSON or parsing on UI input.
+const client = @import("telar-client");
 const std = @import("std");
 const native = @import("../../native/native.zig");
 const LiveSnapshot = @import("LiveSnapshot.zig");
 const ReviewSubmission = @import("ReviewSubmission.zig");
-const Model = @import("telar-client").ChangeReviewModel;
 const Self = @This();
 const Operation = enum { load, submit, wait };
 
@@ -62,7 +62,7 @@ pub fn deinit(self: *Self) void {
 
 /// Bounded copy and nonblocking enqueue; the worker serializes and sends it.
 /// Example: `try bridge.submit(&widget.model);`
-pub fn submit(self: *Self, model: *const Model) !void {
+pub fn submit(self: *Self, model: *const client.ChangeReviewModel) !void {
     if (self.attempted) {
         return error.ReviewAlreadySubmitted;
     }

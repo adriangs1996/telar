@@ -3,11 +3,10 @@
 //! The runtime owns agent truth. This capability owns one immutable client
 //! copy so application decisions and presentation read the same revision.
 
+const data = @import("model");
+const core = @import("telar-core");
 const std = @import("std");
-const AgentInput = @import("AgentInput.zig");
 const Snapshot = @import("AgentSnapshot.zig");
-const AgentProviderType = @import("telar-core").AgentProvider;
-const AgentBlockedReasonType = @import("telar-core").AgentBlockedReason;
 
 pub fn copyLabel(destination: []u8, source: []const u8) !u8 {
     if (source.len > destination.len) {
@@ -27,7 +26,7 @@ pub fn copyLabel(destination: []u8, source: []const u8) !u8 {
     return @intCast(source.len);
 }
 
-fn testingAgent() AgentInput {
+fn testingAgent() data.AgentInput {
     return .{
         .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
         .location = .{
@@ -51,7 +50,7 @@ test "snapshots own current agents and ignore stale replacement" {
     const agent = testingAgent();
 
     try std.testing.expect(try snapshot.replace(.{ .revision = 4, .agents = &.{agent} }));
-    try std.testing.expectEqual(AgentProviderType.codex, snapshot.slice()[0].provider);
+    try std.testing.expectEqual(core.AgentProvider.codex, snapshot.slice()[0].provider);
     try std.testing.expectEqualStrings("Improve sidebar", snapshot.slice()[0].sessionTitle());
     try std.testing.expect(!try snapshot.replace(.{ .revision = 3, .agents = &.{} }));
     try std.testing.expectEqual(@as(u8, 1), snapshot.count);
@@ -70,7 +69,7 @@ test "snapshot owns attention fields and their event line" {
     event[0] = 'x';
 
     const stored = snapshot.slice()[0];
-    try std.testing.expectEqual(AgentBlockedReasonType.question, stored.blockedReason());
+    try std.testing.expectEqual(core.AgentBlockedReason.question, stored.blockedReason());
     try std.testing.expectEqualStrings("ask", stored.lastEvent());
     try std.testing.expectEqual(@as(u32, 42), stored.statusAgeSeconds());
 

@@ -1,28 +1,14 @@
 //! Bounded one-shot protocol from a plugin worker back to the client broker.
 
-const max_notification_title_bytes_module = @import("telar-core").max_notification_title_bytes;
-const max_notification_message_bytes_module = @import("telar-core").max_notification_message_bytes;
-const max_callback_effects_module = @import("../config/effects.zig").max_callback_effects;
-const EffectBatchType = @import("../config/EffectBatch.zig");
+const core = @import("telar-core");
+const data = @import("model");
 const std = @import("std");
-const raw_module = @import("telar-core").raw;
-const SplitDirectionType = @import("../input/action.zig").SplitDirection;
-const DirectionType = @import("../input/action.zig").Direction;
-const TabMoveType = @import("../input/action.zig").TabMove;
-const NotificationLevelType = @import("telar-core").NotificationLevel;
-const NotificationTargetType = @import("telar-core").NotificationTarget;
-const pane_module = @import("telar-core").pane;
-const tab_module = @import("telar-core").tab;
-const workspace_module = @import("telar-core").workspace;
-const NotificationType = @import("../input/Notification.zig");
-const SidebarDirectionType = @import("../input/action.zig").SidebarDirection;
-const ScrollDirectionType = @import("../input/action.zig").ScrollDirection;
 
 const notification_max_bytes = 1 + 1 + 4 + 1 + 8 + 1 +
-    max_notification_title_bytes_module + 1 + max_notification_message_bytes_module;
-pub const max_bytes = 1 + max_callback_effects_module * notification_max_bytes;
+    core.max_notification_title_bytes + 1 + core.max_notification_message_bytes;
+pub const max_bytes = 1 + data.effects.max_callback_effects * notification_max_bytes;
 
-pub fn encode(buffer: []u8, batch: *const EffectBatchType) ![]const u8 {
+pub fn encode(buffer: []u8, batch: *const data.EffectBatch) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     try writer.writeByte(batch.len);
     for (batch.slice()) |action| switch (action) {
@@ -78,15 +64,15 @@ pub fn encode(buffer: []u8, batch: *const EffectBatchType) ![]const u8 {
                 .none => try writer.writeByte(0),
                 .pane => |pane_id| {
                     try writer.writeByte(1);
-                    try writeU64(&writer, raw_module(pane_id));
+                    try writeU64(&writer, core.raw(pane_id));
                 },
                 .tab => |tab_id| {
                     try writer.writeByte(2);
-                    try writeU64(&writer, raw_module(tab_id));
+                    try writeU64(&writer, core.raw(tab_id));
                 },
                 .workspace => |workspace_id| {
                     try writer.writeByte(3);
-                    try writeU64(&writer, raw_module(workspace_id));
+                    try writeU64(&writer, core.raw(workspace_id));
                 },
             }
             try writeSized8(&writer, value.title());
@@ -97,15 +83,15 @@ pub fn encode(buffer: []u8, batch: *const EffectBatchType) ![]const u8 {
     return writer.buffered();
 }
 
-pub fn decode(bytes: []const u8) !EffectBatchType {
+pub fn decode(bytes: []const u8) !data.EffectBatch {
     if (bytes.len == 0) {
         return error.TruncatedWorkerResult;
     }
     const count = bytes[0];
-    if (count > max_callback_effects_module) {
+    if (count > data.effects.max_callback_effects) {
         return error.TooManyWorkerEffects;
     }
-    var batch: EffectBatchType = .{};
+    var batch: data.EffectBatch = .{};
     var offset: usize = 1;
     for (0..count) |index| {
         if (offset >= bytes.len) {
@@ -115,11 +101,11 @@ pub fn decode(bytes: []const u8) !EffectBatchType {
         offset += 1;
         batch.items[index] = switch (tag) {
             1 => .{ .split_pane = std.enums.fromInt(
-                SplitDirectionType,
+                data.SplitDirection,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             2 => .{ .focus_pane = std.enums.fromInt(
-                DirectionType,
+                data.InputDirection,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             3 => .toggle_sidebar,
@@ -130,12 +116,12 @@ pub fn decode(bytes: []const u8) !EffectBatchType {
             8 => .rename_tab,
             9 => .close_tab,
             10 => .{ .move_tab = std.enums.fromInt(
-                TabMoveType,
+                data.ActionTabMove,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             11 => .detach,
             12 => .{ .resize_pane = std.enums.fromInt(
-                DirectionType,
+                data.InputDirection,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             13 => .toggle_pane_fullscreen,
@@ -145,23 +131,23 @@ pub fn decode(bytes: []const u8) !EffectBatchType {
             17 => .{ .select_workspace = try byte(bytes, &offset) },
             18 => notification: {
                 const level = std.enums.fromInt(
-                    NotificationLevelType,
+                    core.NotificationLevel,
                     try byte(bytes, &offset),
                 ) orelse return error.InvalidWorkerEffect;
                 const duration_ms = try readU32(bytes, &offset);
-                const target: NotificationTargetType = switch (try byte(bytes, &offset)) {
+                const target: core.NotificationTarget = switch (try byte(bytes, &offset)) {
                     0 => .none,
-                    1 => .{ .pane = pane_module(try readU64(bytes, &offset)) catch
+                    1 => .{ .pane = core.pane(try readU64(bytes, &offset)) catch
                         return error.InvalidWorkerEffect },
-                    2 => .{ .tab = tab_module(try readU64(bytes, &offset)) catch
+                    2 => .{ .tab = core.tab(try readU64(bytes, &offset)) catch
                         return error.InvalidWorkerEffect },
-                    3 => .{ .workspace = workspace_module(try readU64(bytes, &offset)) catch
+                    3 => .{ .workspace = core.workspace(try readU64(bytes, &offset)) catch
                         return error.InvalidWorkerEffect },
                     else => return error.InvalidWorkerEffect,
                 };
                 const title = try sized8(bytes, &offset);
                 const message = try sized8(bytes, &offset);
-                break :notification .{ .notification = NotificationType.init(.{
+                break :notification .{ .notification = data.Notification.init(.{
                     .level = level,
                     .duration_ms = duration_ms,
                     .target = target,
@@ -170,7 +156,7 @@ pub fn decode(bytes: []const u8) !EffectBatchType {
                 }) catch return error.InvalidWorkerEffect };
             },
             19 => .{ .resize_sidebar = std.enums.fromInt(
-                SidebarDirectionType,
+                data.ActionSidebarDirection,
                 try byte(bytes, &offset),
             ) orelse return error.InvalidWorkerEffect },
             else => return error.UnknownWorkerEffect,
@@ -237,7 +223,7 @@ fn byte(bytes: []const u8, offset: *usize) !u8 {
 }
 
 test "plugin result protocol round trips semantic effects" {
-    var batch: EffectBatchType = .{};
+    var batch: data.EffectBatch = .{};
     batch.items[0] = .{ .focus_pane = .left };
     batch.items[1] = .{ .select_tab_offset = -1 };
     batch.items[2] = .{ .resize_pane = .down };
@@ -246,7 +232,7 @@ test "plugin result protocol round trips semantic effects" {
     batch.items[5] = .{ .resize_sidebar = .right };
     batch.items[6] = .new_workspace;
     batch.items[7] = .{ .select_workspace = 3 };
-    batch.items[8] = .{ .notification = try NotificationType.init(.{
+    batch.items[8] = .{ .notification = try data.Notification.init(.{
         .level = .warning,
         .duration_ms = 3000,
         .target = .{ .workspace = @enumFromInt(9) },
@@ -259,8 +245,8 @@ test "plugin result protocol round trips semantic effects" {
 }
 
 test "plugin result protocol rejects focused scroll effects" {
-    for ([_]ScrollDirectionType{ .up, .down }) |direction| {
-        var batch: EffectBatchType = .{};
+    for ([_]data.ScrollDirection{ .up, .down }) |direction| {
+        var batch: data.EffectBatch = .{};
         batch.items[0] = .{ .scroll_pane = direction };
         batch.len = 1;
         var buffer: [max_bytes]u8 = undefined;
@@ -274,7 +260,7 @@ test "plugin result protocol rejects invalid enum discriminants" {
 }
 
 test "plugin result protocol rejects agent mode toggles" {
-    var batch: EffectBatchType = .{};
+    var batch: data.EffectBatch = .{};
     batch.items[0] = .toggle_thread_view;
     batch.len = 1;
     var buffer: [max_bytes]u8 = undefined;

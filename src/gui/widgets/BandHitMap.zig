@@ -3,8 +3,10 @@
 //! one target per visible agent card and pane frame extension, and the sidebar
 //! resize handle. Cell targets stay in `HitMap`; this table is looked up first
 //! because pixel targets need not align with the grid.
+const client = @import("telar-client");
+const std = @import("std");
+const action = @import("action.zig");
 const core = @import("telar-core");
-const Action = @import("action.zig").Action;
 const BandHit = @import("BandHit.zig");
 const Bands = @import("Bands.zig");
 const BandHitMap = @This();
@@ -30,7 +32,7 @@ pub fn add(hits: *BandHitMap, hit: BandHit) !void {
 
 /// Later targets take precedence, as later quads do.
 /// Example: `const action = hits.at(.{ event.x, event.y });`
-pub fn at(hits: *const BandHitMap, point: [2]f64) ?Action {
+pub fn at(hits: *const BandHitMap, point: [2]f64) ?action.Action {
     var index = hits.len;
     while (index > 0) {
         index -= 1;
@@ -44,9 +46,9 @@ pub fn at(hits: *const BandHitMap, point: [2]f64) ?Action {
 
 /// The first target carrying `intent`, for tests that click by identity.
 /// Example: `const tab = hits.find(.{ .select_tab = id }) orelse return error.Missing;`
-pub fn find(hits: *const BandHitMap, intent: @import("telar-client").Intent) ?BandHit {
+pub fn find(hits: *const BandHitMap, intent: client.Intent) ?BandHit {
     for (hits.items[0..hits.len]) |hit| {
-        if (hit.action == .intent and @import("std").meta.eql(hit.action.intent, intent)) {
+        if (hit.action == .intent and std.meta.eql(hit.action.intent, intent)) {
             return hit;
         }
     }

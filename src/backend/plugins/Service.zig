@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const std = @import("std");
 const service_support = @import("service_support.zig");
 const Worker = @import("Worker.zig");
@@ -5,7 +6,6 @@ const ResultType = @import("Result.zig");
 const InitOptions = @import("InitOptions.zig");
 const Exchange = @import("../proxy/capture/Exchange.zig");
 const ExchangeIdentityType = @import("ExchangeIdentity.zig");
-const CapabilityType = @import("telar-core").Capability;
 const Frame = @import("Frame.zig");
 const protocol = @import("protocol.zig");
 const Service = @This();
@@ -100,7 +100,7 @@ pub fn authorize(service: *const Service, result: *const ResultType) !void {
     }
     try service_support.requireCapability(spec, .proxy_tap);
     for (result.batch.slice()) |effect| {
-        const capability: CapabilityType = switch (effect) {
+        const capability: core.Capability = switch (effect) {
             .record_command => .history_write,
             .notification => .notifications,
             .agent_evidence => .proxy_tap,

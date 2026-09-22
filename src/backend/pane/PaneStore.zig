@@ -1,40 +1,33 @@
-const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+const core = @import("telar-core");
 const Pane = @import("Pane.zig");
-const GenericSlotIndex = @import("telar-core").GenericSlotIndex;
 const GraphicsLimitsType = @import("../media/GraphicsLimits.zig");
 const GraphicsBudgetType = @import("../media/GraphicsBudget.zig");
-const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
-const PaneIdType = @import("telar-core").PaneId;
-const raw_module = @import("telar-core").raw;
 const std = @import("std");
 const PaneKey = @import("PaneKey.zig");
 const exit_module = @import("../pty/exit.zig");
 const PaneExitTransition = @import("PaneExitTransition.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const PaneDescriptorType = @import("telar-core").PaneDescriptor;
-const pane_module = @import("telar-core").pane;
 const PaneStore = @This();
 
-items: [max_panes_per_tab]?*Pane = [_]?*Pane{null} ** max_panes_per_tab,
+items: [core.max_panes_per_tab]?*Pane = [_]?*Pane{null} ** core.max_panes_per_tab,
 count: usize = 0,
 /// Panes whose child has exited but which have not been collected yet.
 /// `collectFinished` runs on every event; this makes the common case -
 /// nothing exited - one branch instead of a store scan.
 exited_count: usize = 0,
-index: GenericSlotIndex(2 * max_panes_per_tab) = .{},
+index: core.GenericSlotIndex(2 * core.max_panes_per_tab) = .{},
 next_id: u64 = 1,
 next_generation: u64 = 1,
 graphics_limits: GraphicsLimitsType = .{},
-graphics_budget: GraphicsBudgetType = .init(max_image_bytes_global_module),
+graphics_budget: GraphicsBudgetType = .init(core.max_image_bytes_global),
 
-pub fn find(store: *PaneStore, pane_id: PaneIdType) ?*Pane {
-    const slot = store.index.get(raw_module(pane_id)) orelse return null;
+pub fn find(store: *PaneStore, pane_id: core.PaneId) ?*Pane {
+    const slot = store.index.get(core.raw(pane_id)) orelse return null;
     const pane = store.items[slot].?;
     std.debug.assert(pane.id == pane_id);
     return pane;
 }
 
-pub fn findRunning(store: *PaneStore, pane_id: PaneIdType) ?*Pane {
+pub fn findRunning(store: *PaneStore, pane_id: core.PaneId) ?*Pane {
     const pane = store.find(pane_id) orelse return null;
     return if (pane.launch_state.discoverable()) pane else null;
 }
@@ -63,7 +56,7 @@ pub fn resolveControl(store: *PaneStore, key: PaneKey) ?*Pane {
 }
 
 pub fn resolveConst(store: *const PaneStore, key: PaneKey) ?*const Pane {
-    const slot = store.index.get(raw_module(key.id)) orelse return null;
+    const slot = store.index.get(core.raw(key.id)) orelse return null;
     const pane = store.items[slot].?;
     std.debug.assert(pane.id == key.id);
     if (pane.generation != key.generation) {
@@ -79,7 +72,7 @@ pub fn resolveConst(store: *const PaneStore, key: PaneKey) ?*const Pane {
 /// const pane = store.resolveControlConst(key) orelse return null;
 /// ```
 pub fn resolveControlConst(store: *const PaneStore, key: PaneKey) ?*const Pane {
-    const slot = store.index.get(raw_module(key.id)) orelse return null;
+    const slot = store.index.get(core.raw(key.id)) orelse return null;
     const pane = store.items[slot].?;
     std.debug.assert(pane.id == key.id);
     if (key.generation != 0 and pane.generation != key.generation) {
@@ -106,7 +99,7 @@ pub fn completeExit(store: *PaneStore, key: PaneKey, exit: exit_module.Exit) ?Pa
     };
 }
 
-pub fn firstAt(store: *PaneStore, location: TabLocationType) ?*Pane {
+pub fn firstAt(store: *PaneStore, location: core.TabLocation) ?*Pane {
     for (store.items) |slot| {
         const pane = slot orelse continue;
         if (pane.launch_state.discoverable() and
@@ -124,7 +117,7 @@ pub fn firstAt(store: *PaneStore, location: TabLocationType) ?*Pane {
 /// ```zig
 /// const descriptors = store.descriptorsAt(location, &storage);
 /// ```
-pub fn descriptorsAt(store: *const PaneStore, location: TabLocationType, output: *[max_panes_per_tab]PaneDescriptorType) []const PaneDescriptorType {
+pub fn descriptorsAt(store: *const PaneStore, location: core.TabLocation, output: *[core.max_panes_per_tab]core.PaneDescriptor) []const core.PaneDescriptor {
     var len: usize = 0;
     for (store.items) |slot| {
         const pane = slot orelse continue;
@@ -161,7 +154,7 @@ pub fn positionAt(store: *const PaneStore, wanted: *const Pane) ?u16 {
     return null;
 }
 
-pub fn countAt(store: *const PaneStore, location: TabLocationType) u16 {
+pub fn countAt(store: *const PaneStore, location: core.TabLocation) u16 {
     var count: u16 = 0;
     for (store.items) |slot| {
         const pane = slot orelse continue;
@@ -184,7 +177,7 @@ pub fn countAt(store: *const PaneStore, location: TabLocationType) u16 {
 ///     removeTab(location);
 /// }
 /// ```
-pub fn hasAt(store: *const PaneStore, location: TabLocationType) bool {
+pub fn hasAt(store: *const PaneStore, location: core.TabLocation) bool {
     for (store.items) |slot| {
         const pane = slot orelse continue;
         if (std.meta.eql(pane.location, location)) {
@@ -194,7 +187,7 @@ pub fn hasAt(store: *const PaneStore, location: TabLocationType) bool {
     return false;
 }
 
-pub fn closeAt(store: *PaneStore, location: TabLocationType) void {
+pub fn closeAt(store: *PaneStore, location: core.TabLocation) void {
     for (store.items) |slot| {
         const pane = slot orelse continue;
         if (!std.meta.eql(pane.location, location)) {
@@ -231,10 +224,10 @@ pub fn advanceCounters(store: *PaneStore, next_pane_id: u64, next_generation: u6
 }
 
 pub fn allocateKey(store: *PaneStore) !PaneKey {
-    if (store.count == max_panes_per_tab) {
+    if (store.count == core.max_panes_per_tab) {
         return error.PaneLimitReached;
     }
-    const pane_id = try pane_module(store.next_id);
+    const pane_id = try core.pane(store.next_id);
     if (store.next_generation == 0 or store.next_generation == std.math.maxInt(u64)) {
         return error.PaneGenerationExhausted;
     }
@@ -248,7 +241,7 @@ pub fn insert(store: *PaneStore, pane: *Pane) !void {
     for (&store.items, 0..) |*slot, position| {
         if (slot.* == null) {
             slot.* = pane;
-            store.index.put(raw_module(pane.id), position);
+            store.index.put(core.raw(pane.id), position);
             store.count += 1;
             return;
         }
@@ -259,7 +252,7 @@ pub fn insert(store: *PaneStore, pane: *Pane) !void {
 pub fn removeAndDestroy(store: *PaneStore, pane: *Pane) void {
     for (&store.items) |*slot| {
         if (slot.* == pane) {
-            store.index.remove(raw_module(pane.id));
+            store.index.remove(core.raw(pane.id));
             if (pane.exit != null) {
                 store.exited_count -= 1;
             }

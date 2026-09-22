@@ -1,4 +1,3 @@
-const FuzzerRunType = @import("FuzzerRun.zig");
 const std = @import("std");
 const builtin = @import("builtin");
 
@@ -45,7 +44,7 @@ pub const FuzzerRun = @import("FuzzerRun.zig");
 /// ```zig
 /// const run = addFuzzerRun(b, .{ .exe = exe, .corpus_dir = corpus, .output_dir = b.path("afl-out") });
 /// ```
-pub fn addFuzzerRun(b: *std.Build, fuzzer: FuzzerRunType) *std.Build.Step.Run {
+pub fn addFuzzerRun(b: *std.Build, fuzzer: FuzzerRun) *std.Build.Step.Run {
     const run = b.addSystemCommand(&.{
         b.findProgram(&.{"afl-fuzz"}, &.{}) catch
             @panic("Could not find 'afl-fuzz', which is required to run"),

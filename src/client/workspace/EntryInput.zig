@@ -1,7 +1,7 @@
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const core = @import("telar-core");
 const EntryInput = @This();
 
-workspace: WorkspaceIdType,
+workspace: core.WorkspaceId,
 name: []const u8,
 path: []const u8,
 tab_count: u16,

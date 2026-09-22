@@ -1,8 +1,7 @@
 //! Application policy for the shared bounded client diagnostic banner.
+const model_data = @import("model");
 
 const Replacement = @import("Replacement.zig");
-const types = @import("../../model/types.zig");
-const DiagnosticType = @import("../../config/Diagnostic.zig");
 const ModelType = @import("../../model/Model.zig");
 const std = @import("std");
 const VersionType = @import("../../model/Version.zig");
@@ -12,23 +11,23 @@ const VersionType = @import("../../model/Version.zig");
 /// ```zig
 /// const diagnostic = formatted("plugin failed: {s}", .{@errorName(err)});
 /// ```
-pub fn formatted(comptime format: []const u8, args: anytype) DiagnosticType {
-    var diagnostic: DiagnosticType = .{};
+pub fn formatted(comptime format: []const u8, args: anytype) model_data.Diagnostic {
+    var diagnostic: model_data.Diagnostic = .{};
     diagnostic.set(format, args);
 
     return diagnostic;
 }
 
-fn invalidDiagnostic() DiagnosticType {
-    var diagnostic: DiagnosticType = .{};
+fn invalidDiagnostic() model_data.Diagnostic {
+    var diagnostic: model_data.Diagnostic = .{};
     diagnostic.buffer[0] = 0xff;
     diagnostic.len = 1;
 
     return diagnostic;
 }
 
-fn oversizedDiagnostic() DiagnosticType {
-    var diagnostic: DiagnosticType = .{};
+fn oversizedDiagnostic() model_data.Diagnostic {
+    var diagnostic: model_data.Diagnostic = .{};
     diagnostic.len = diagnostic.buffer.len + 1;
 
     return diagnostic;
@@ -87,7 +86,7 @@ test "diagnostic clears visible text once" {
 }
 
 /// Validates replacement text before committing. Example: `_ = try replace(model, .{ .diagnostic = value });`.
-pub fn replace(model: *ModelType, replacement: Replacement) !types.Change {
+pub fn replace(model: *ModelType, replacement: Replacement) !model_data.Change {
     return model.replaceDiagnostic(replacement.diagnostic) catch |err| switch (err) {
         error.InvalidClientDiagnostic => if (replacement.invalid_fallback) |fallback|
             model.replaceDiagnostic(fallback)

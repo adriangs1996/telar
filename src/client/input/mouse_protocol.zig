@@ -1,11 +1,11 @@
 //! Projection from host mouse events to a focused pane's SGR protocol.
 
-const MouseTrackingType = @import("telar-core").MouseTracking;
-const Mouse = @import("Mouse.zig");
+const core = @import("telar-core");
+const data = @import("model");
 const SgrInput = @import("SgrInput.zig");
 const std = @import("std");
 
-pub fn tracked(tracking: MouseTrackingType, kind: Mouse.Kind) bool {
+pub fn tracked(tracking: core.MouseTracking, kind: data.Mouse.Kind) bool {
     return switch (tracking) {
         .none => false,
         .x10 => kind == .press,

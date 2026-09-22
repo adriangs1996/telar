@@ -1,17 +1,19 @@
 //! Groups whole graphemes by face, retaining contextual shaping within each span.
+const GlyphAtlas = @import("GlyphAtlas.zig");
+const assets = @import("assets");
+const font_id = @import("font_id.zig");
 const core = @import("telar-core");
 const FontSet = @import("FontSet.zig");
 const FontRun = @import("FontRun.zig");
 const Box = @import("BoxDrawing.zig");
 const Block = @import("BlockElement.zig");
 const Braille = @import("Braille.zig");
-const Id = @import("font_id.zig").Id;
 const FontRuns = @This();
 
 fonts: *const FontSet,
 iterator: core.GraphemeIterator,
 /// The face a caller asked for; graphemes it lacks follow the terminal chain.
-preferred: Id = .primary,
+preferred: font_id.Id = .primary,
 
 /// Borrows slices of the original UTF-8; unsupported clusters remain in primary.
 /// Consecutive graphemes of the preferred face share one span; every other
@@ -54,7 +56,7 @@ pub fn next(runs: *FontRuns) ?FontRun {
 
 test "Braille separates font spans without splitting combining graphemes" {
     const std = @import("std");
-    var atlas = try @import("GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = "office\u{301}\u{2801}\u{2802}\u{301}ffi" } };
     const before = runs.next().?;
@@ -72,7 +74,7 @@ test "Braille separates font spans without splitting combining graphemes" {
 
 test "box drawing keeps contextual text and marked boxes in whole font spans" {
     const std = @import("std");
-    var atlas = try @import("GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = "office\u{301}╭│\u{301}ffi" } };
     try std.testing.expectEqualStrings("office\u{301}", runs.next().?.text);
@@ -86,7 +88,7 @@ test "box drawing keeps contextual text and marked boxes in whole font spans" {
 
 test "block elements separate font spans while marked blocks stay in the font path" {
     const std = @import("std");
-    var atlas = try @import("GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     var runs: FontRuns = .{ .fonts = &atlas.fonts, .iterator = .{ .bytes = "office\u{301}▐▛\u{fe0f}█\u{301}ffi" } };
     try std.testing.expectEqualStrings("office\u{301}", runs.next().?.text);

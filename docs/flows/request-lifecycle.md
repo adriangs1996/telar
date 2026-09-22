@@ -121,7 +121,7 @@ snapshots.
 - `src/client/connection/LifecycleState.zig` owns identity bounds and preflight;
   frontend tab/handoff integration tests exercise refusal before provisional
   effects and reserve capacity for recovery.
-- `src/client/connection/requests.zig` proves single consumption, group and pane
+- `src/model/connection/requests.zig` proves single consumption, group and pane
   lookup, exact close completion and stale-retirement exceptions.
 - `request delivery rolls correlation back when transport is full` in
   `src/frontend/client/tests/` crosses the public request and transport

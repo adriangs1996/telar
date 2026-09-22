@@ -1,12 +1,9 @@
+const client = @import("telar-client");
+const data = @import("model");
 const std = @import("std");
 const host_inputs = @import("host_inputs.zig");
 const Chunk = @import("Chunk.zig");
-const SchedulerType = @import("telar-client").Scheduler;
 const StartupInputState = @import("../../resources/StartupInputState.zig");
-const Config = @import("telar-client").RouterConfig;
-const ModeType = @import("telar-client").Mode;
-const ActionType = @import("telar-client").Action;
-const HintsType = @import("telar-client").Hints;
 const State = @This();
 
 file: std.Io.File,
@@ -17,8 +14,8 @@ router: host_inputs.Router,
 chunk: Chunk = .{},
 read_pending: bool = false,
 presentation_revision: u64 = 0,
-input_timeout: SchedulerType = .{},
-binding_timeout: SchedulerType = .{},
+input_timeout: client.Scheduler = .{},
+binding_timeout: client.Scheduler = .{},
 startup_input: StartupInputState = .{},
 
 /// Creates the host input state around the client-owned TTY handle.
@@ -26,7 +23,7 @@ startup_input: StartupInputState = .{},
 /// ```zig
 /// const state = try State.init(input_file, config);
 /// ```
-pub fn init(file: std.Io.File, config: Config) !State {
+pub fn init(file: std.Io.File, config: client.RouterConfig) !State {
     return .{ .file = file, .router = try host_inputs.buildRouter(config) };
 }
 
@@ -63,13 +60,13 @@ pub fn presentationVersion(state: *const State) u64 {
 /// ```zig
 /// const mode = state.statusMode(copy_mode_active);
 /// ```
-pub fn statusMode(state: *const State, copy_mode_active: bool) ModeType {
+pub fn statusMode(state: *const State, copy_mode_active: bool) client.Mode {
     if (!state.router.prefixPending()) {
         return if (copy_mode_active) .copy else .normal;
     }
 
     const DescribedAction = struct {
-        action: ActionType,
+        action: data.Action,
         label: []const u8,
     };
     const useful = [_]DescribedAction{
@@ -82,7 +79,7 @@ pub fn statusMode(state: *const State, copy_mode_active: bool) ModeType {
         .{ .action = .close_pane, .label = "close pane" },
         .{ .action = .enter_copy_mode, .label = "copy mode" },
     };
-    var hints: HintsType = .{};
+    var hints: client.Hints = .{};
     for (useful) |described| {
         const key = state.router.prefixedKeyForAction(described.action) orelse continue;
 

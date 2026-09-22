@@ -14,17 +14,17 @@ applyInputDecision / applyDecision
         |
 AttachedClient.executeAction
         |
-plugin_actions.start
+AttachedClient.startPluginAction
         |
 ClientModel.beginPluginExecution { id, configuration_generation }
         |
 Io.Select.concurrent -> isolated one-shot worker
         |
-plugin_actions.start
+AttachedClient.startPluginAction
         |
 ClientEvent.plugin_result { execution_id, result }
         |
-plugin_actions.complete
+AttachedClient.completePluginAction
         |
 finish exact id -> reject stale generation -> authorize whole batch
         |
@@ -32,7 +32,7 @@ AttachedClient.executeAction -> focused client use cases
         |
 ClientModel / bounded runtime outbox
         |
-plugin_actions.complete
+AttachedClient.completePluginAction
         |
 loop directive or diagnostic + notification
         |
@@ -41,12 +41,12 @@ presentation_lifecycle.observe -> Presenter
 
 ## Start ownership and order
 
-`AttachedClient.executeAction` calls plugin_actions.start after prompt authority has
+`AttachedClient.executeAction` calls AttachedClient.startPluginAction after prompt authority has
 accepted the configured action. It does not resolve a package, reserve model
 state or schedule work.
 
-`plugin_actions.start` adapts the configured stable plugin and action IDs to
-`plugin_actions.start`. The operation owns this order:
+`AttachedClient.startPluginAction` adapts the configured stable plugin and action IDs to
+`AttachedClient.startPluginAction`. The operation owns this order:
 
 1. suppress a second invocation while one execution is active;
 2. resolve the action and build its worker request;
@@ -60,7 +60,7 @@ commit, `errdefer` removes only that exact reservation. The event loop remains
 the sole writer of `ClientModel`; the worker receives copied request data and
 returns through `ClientEvent.plugin_result`.
 
-`plugin_actions.start` handles preparation and the resulting outcome in the
+`AttachedClient.startPluginAction` handles preparation and the resulting outcome in the
 same concrete operation. Active, busy and unavailable outcomes stay quiet. An
 invalid configured action commits a bounded diagnostic and publishes its failure
 notification. Registry resolution and actual worker scheduling are called
@@ -73,7 +73,7 @@ empty frame.
 ## Completion ownership and order
 
 The completion event retains the execution identity even when the worker
-failed. `plugin_actions.complete` first consumes only a matching active
+failed. `AttachedClient.completePluginAction` first consumes only a matching active
 identity. An unknown completion cannot clear newer work. It then compares the
 captured configuration generation with the current model generation.
 
@@ -88,7 +88,7 @@ for every effect before any effect runs. After authorization, the completion
 operation clears an obsolete diagnostic before applying the batch.
 
 The same function handles the resulting outcome.
-`plugin_actions.complete` maps `exit` to the client-loop exit
+`AttachedClient.completePluginAction` maps `exit` to the client-loop exit
 directive, keeps applied and obsolete outcomes quiet, and sends worker or
 authorization failures through `client_diagnostic.replace`. It then builds a
 bounded notification from the committed banner and calls

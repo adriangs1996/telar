@@ -1,14 +1,14 @@
+const assets = @import("assets");
+const core = @import("telar-core");
+const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
-const RectType = @import("telar-core").Rect;
 const SidebarProviderPlacement = @import("SidebarProviderPlacement.zig");
 const SidebarContent = @import("SidebarContent.zig");
 const CellSize = @import("CellSize.zig");
 const kitty_sidebar = @import("kitty_sidebar.zig");
 const SidebarFocus = @import("SidebarFocus.zig");
 const rounded = @import("rounded_rectangle.zig");
-const writeDeleteImage_module = @import("kitty_protocol").writeDeleteImage;
 const kitty_codec = @import("kitty_codec.zig");
-const writeDeletePlacement_module = @import("kitty_protocol").writeDeletePlacement;
 /// Media assets for the hybrid sidebar. Cells retain the complete fallback,
 /// hover, text, and hit targets; graphics add only the rounded focus edge and
 /// official provider artwork.
@@ -23,7 +23,7 @@ pub const provider_count = 3;
 pub const provider_source_size = 64;
 pub const provider_source_width = provider_count * provider_source_size;
 const provider_raster_size = 64;
-pub const provider_source_pixels: []const u8 = @import("assets").provider_symbols_rgba;
+pub const provider_source_pixels: []const u8 = assets.provider_symbols_rgba;
 // A flat rounded card needs little source resolution. This keeps its RGBA
 // payload plus the provider atlas comfortably inside one media pass even
 // after base64 expansion.
@@ -38,8 +38,8 @@ focused_card_pixels: []u8 = &.{},
 focused_card_width: u32 = 0,
 focused_card_height: u32 = 0,
 focused_card_color: [3]u8 = @splat(0),
-focused_card: ?RectType = null,
-emitted_focused_card: ?RectType = null,
+focused_card: ?core.Rect = null,
+emitted_focused_card: ?core.Rect = null,
 focused_card_dirty: bool = false,
 focused_card_emitted: bool = false,
 provider_atlas: []u8 = &.{},
@@ -48,7 +48,7 @@ provider_slot_height: u32 = 0,
 provider_atlas_width: u32 = 0,
 provider_atlas_height: u32 = 0,
 provider_foreground: [3]u8 = @splat(255),
-area: RectType = .{},
+area: core.Rect = .{},
 provider_marks: [max_provider_placements]SidebarProviderPlacement = undefined,
 provider_mark_count: u8 = 0,
 emitted_provider_mark_count: u8 = 0,
@@ -204,10 +204,10 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *std.Io.Writer) std.Io.Wri
     var written: usize = 0;
     if (!renderer.visible) {
         if (renderer.focused_card_emitted) {
-            written += try writeDeleteImage_module(writer, focused_card_id);
+            written += try kitty_protocol.writeDeleteImage(writer, focused_card_id);
         }
         if (renderer.provider_emitted) {
-            written += try writeDeleteImage_module(writer, provider_atlas_id);
+            written += try kitty_protocol.writeDeleteImage(writer, provider_atlas_id);
         }
         renderer.emitted = false;
         renderer.focused_card_emitted = false;
@@ -249,7 +249,7 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *std.Io.Writer) std.Io.Wri
     }
     if (renderer.placements_dirty) {
         if (renderer.emitted_focused_card != null) {
-            written += try writeDeletePlacement_module(
+            written += try kitty_protocol.writeDeletePlacement(
                 writer,
                 focused_card_id,
                 focused_card_placement_id,
@@ -277,7 +277,7 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *std.Io.Writer) std.Io.Wri
             }
         }
         renderer.emitted_focused_card = renderer.focused_card;
-        for (0..renderer.emitted_provider_mark_count) |index| written += try writeDeletePlacement_module(
+        for (0..renderer.emitted_provider_mark_count) |index| written += try kitty_protocol.writeDeletePlacement(
             writer,
             provider_atlas_id,
             first_provider_placement_id + @as(u32, @intCast(index)),

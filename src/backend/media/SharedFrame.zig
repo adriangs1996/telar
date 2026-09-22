@@ -1,5 +1,5 @@
+const core = @import("telar-core");
 const SharedFrameKey = @import("SharedFrameKey.zig");
-const FormatType = @import("telar-core").Format;
 const media = @import("media.zig");
 const SharedFrame = @This();
 
@@ -12,7 +12,7 @@ payload_start: usize,
 payload_end: usize,
 key: SharedFrameKey,
 byte_len: usize,
-format: FormatType,
+format: core.Format,
 width: u32,
 height: u32,
 medium: media.Medium,

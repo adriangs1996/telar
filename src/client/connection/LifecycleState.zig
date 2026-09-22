@@ -1,10 +1,10 @@
-const TrackerType = @import("Tracker.zig");
+const data = @import("model");
+const core = @import("telar-core");
 const std = @import("std");
-const RequestIdType = @import("telar-core").RequestId;
 const State = @This();
 
 next_request_id: u64 = 2,
-tracker: TrackerType = .{},
+tracker: data.Tracker = .{},
 
 /// Checks that one request slot and `id_count` consecutive identities
 /// remain without changing either resource.
@@ -28,10 +28,10 @@ pub fn ensureCanStart(self: *const State, id_count: u64) !void {
 /// ```zig
 /// const request_id = try self.nextId();
 /// ```
-pub fn nextId(self: *State) !RequestIdType {
+pub fn nextId(self: *State) !core.RequestId {
     try self.ensureCanStart(1);
 
-    const request_id: RequestIdType = @enumFromInt(self.next_request_id);
+    const request_id: core.RequestId = @enumFromInt(self.next_request_id);
     self.next_request_id += 1;
 
     return request_id;
@@ -39,11 +39,11 @@ pub fn nextId(self: *State) !RequestIdType {
 
 test "request identities never reach the reserved zero or maximum values" {
     var state: State = .{};
-    try std.testing.expectEqual(@as(RequestIdType, @enumFromInt(2)), try state.nextId());
+    try std.testing.expectEqual(@as(core.RequestId, @enumFromInt(2)), try state.nextId());
 
     state.next_request_id = std.math.maxInt(u64) - 1;
     try std.testing.expectEqual(
-        @as(RequestIdType, @enumFromInt(std.math.maxInt(u64) - 1)),
+        @as(core.RequestId, @enumFromInt(std.math.maxInt(u64) - 1)),
         try state.nextId(),
     );
     try std.testing.expectError(error.RequestIdExhausted, state.nextId());
@@ -64,7 +64,7 @@ test "request preflight preserves identities needed by synchronous recovery" {
 
 test "request identity allocation stops before correlation overflow" {
     var state: State = .{};
-    for (0..TrackerType.capacity) |index| {
+    for (0..data.Tracker.capacity) |index| {
         try state.tracker.add(@enumFromInt(index + 20), .notification);
     }
     const next_request_id = state.next_request_id;

@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const Sources = @import("Sources.zig");
 const LocalListenerType = @import("../transport/LocalListener.zig");
 const StopSignalCoordinator = @import("lifecycle/StopSignalCoordinator.zig");
@@ -5,7 +6,6 @@ const ServiceType = @import("../history/Service.zig");
 const EngineService = @import("../engine/Service.zig");
 const ProxyRuntime = @import("resources/ProxyRuntime.zig");
 const PluginsService = @import("../plugins/Service.zig");
-const enabled_module = @import("telar-core").enabled;
 /// Owns the dependencies required to arm every initial runtime event source.
 const InitialSources = @This();
 
@@ -36,7 +36,7 @@ pub fn schedule(initial_sources: *InitialSources) !void {
     try initial_sources.sources.waitForAgentMaintenance();
     try initial_sources.sources.waitForSystemMetrics();
 
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         if (initial_sources.telemetry_available) {
             try initial_sources.sources.waitForTelemetry();
         }

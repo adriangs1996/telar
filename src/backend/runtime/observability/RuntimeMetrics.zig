@@ -1,4 +1,4 @@
-const TimingType = @import("telar-core").Timing;
+const core = @import("telar-core");
 const RuntimeMetrics = @This();
 
 started_ns: u64,
@@ -8,7 +8,7 @@ stale_pane_events: u64 = 0,
 geometry_rejections: u64 = 0,
 input_events: u64 = 0,
 input_bytes: u64 = 0,
-input_write: TimingType = .{},
+input_write: core.Timing = .{},
 pty_events: u64 = 0,
 pty_bytes: u64 = 0,
 frames: u64 = 0,
@@ -48,7 +48,7 @@ graphics_transfers_prepared: u64 = 0,
 graphics_transfers_adopted: u64 = 0,
 /// Fallback copy of one generation out of live media storage into the
 /// transfer, on the runtime thread.
-graphics_freeze: TimingType = .{},
+graphics_freeze: core.Timing = .{},
 media_bytes: u64 = 0,
 media_discarded_frames: u64 = 0,
 /// Shared frames dropped with no replacement ingested: the pane kept a
@@ -65,13 +65,13 @@ media_file_frames: u64 = 0,
 media_resets: u64 = 0,
 media_failures: u64 = 0,
 /// One media actor batch: shared frame folding, mapping and decoding.
-media_ingest: TimingType = .{},
-system_sample: TimingType = .{},
+media_ingest: core.Timing = .{},
+system_sample: core.Timing = .{},
 system_sample_last_ns: u64 = 0,
-decode: TimingType = .{},
-ingest: TimingType = .{},
-encode: TimingType = .{},
-ack: TimingType = .{},
+decode: core.Timing = .{},
+ingest: core.Timing = .{},
+encode: core.Timing = .{},
+ack: core.Timing = .{},
 history_captured: u64 = 0,
 history_dropped: u64 = 0,
 history_candidate_input_bytes: u64 = 0,

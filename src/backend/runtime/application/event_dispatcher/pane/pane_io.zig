@@ -1,13 +1,9 @@
-const enabled_module = @import("telar-core").enabled;
-const now_module = @import("telar-core").now;
+const core = @import("telar-core");
 const pane_mod = @import("../../../../pane/pane_namespace.zig");
-const elapsed_module = @import("telar-core").elapsed;
 const InputCompletion = @import("../../../entrypoints/events/pane/InputCompletion.zig");
 const ResponseCompletion = @import("../../../entrypoints/events/pane/ResponseCompletion.zig");
 const PaneType = @import("../../../../pane/Pane.zig");
 const InputWrite = @import("../../../entrypoints/events/pane/InputWrite.zig");
-const mark_module = @import("telar-core").mark;
-const enter_module = @import("telar-core").enter;
 const ResponseWrite = @import("../../../entrypoints/events/pane/ResponseWrite.zig");
 
 const Application = @import("../../Application.zig");
@@ -28,9 +24,9 @@ pub fn handleInputWritten(application: *Application, completion: InputCompletion
 
     pane.completePtyInputWrite(result);
 
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         application.metrics.input_write.observe(
-            elapsed_module(completion.started_ns, now_module(application.io)),
+            core.elapsed(completion.started_ns, core.now(application.io)),
         );
     }
 
@@ -76,7 +72,7 @@ pub fn scheduleInput(application: *Application, pane: *PaneType) !void {
         .io = application.io,
         .pane = pane,
         .bytes = bytes,
-        .started_ns = if (comptime enabled_module) now_module(application.io) else 0,
+        .started_ns = if (comptime core.enabled) core.now(application.io) else 0,
     };
 
     startPaneInputWrite(application, write) catch |err| {
@@ -106,14 +102,14 @@ pub fn scheduleResponse(application: *Application, pane: *PaneType) !void {
 }
 
 fn startPaneInputWrite(application: *Application, write: InputWrite) !void {
-    mark_module(application.io, .pty_write_queued);
+    core.mark(application.io, .pty_write_queued);
     try application.select.concurrent(.pane_input_written, writePaneInput, .{write});
 }
 
 fn writePaneInput(write: InputWrite) InputCompletion {
-    mark_module(write.io, .pty_write_start);
-    defer mark_module(write.io, .pty_write_done);
-    const path = enter_module(.interactive);
+    core.mark(write.io, .pty_write_start);
+    defer core.mark(write.io, .pty_write_done);
+    const path = core.enter(.interactive);
     defer path.restore();
 
     write.pane.pty_write_mutex.lockUncancelable(write.io);
@@ -131,7 +127,7 @@ fn startPaneResponseWrite(application: *Application, write: ResponseWrite) !void
 }
 
 fn writePaneResponse(write: ResponseWrite) ResponseCompletion {
-    const path = enter_module(.interactive);
+    const path = core.enter(.interactive);
     defer path.restore();
 
     write.pane.pty_write_mutex.lockUncancelable(write.io);

@@ -1,4 +1,5 @@
 //! Resident shaping shared by composer painting and native input.
+const std = @import("std");
 const core = @import("telar-core");
 const Font = @This();
 
@@ -17,7 +18,7 @@ pub fn measure(font: Font, text: []const u8) u16 {
 /// Writes visual positions for every grapheme boundary in one bounded span.
 /// Example: `font.positions(line, scratch[0 .. line.len + 1]);`
 pub fn positions(font: Font, text: []const u8, output: []u32) void {
-    @import("std").debug.assert(output.len == text.len + 1);
+    std.debug.assert(output.len == text.len + 1);
     font.atlas.caretPositions(.{ .text = text, .x = 0, .y = 0, .color = .white, .face = .sans, .pixel_height = font.pixel_height }, output) catch {
         var iterator: core.GraphemeIterator = .{ .bytes = text };
         var width: u32 = 0;
@@ -34,7 +35,7 @@ pub fn positions(font: Font, text: []const u8, output: []u32) void {
 /// the resident-only measurement path. Example: `try font.prepare(text);`
 pub fn prepare(font: Font, text: []const u8) !void {
     try font.atlas.prepareEditor();
-    var paragraphs = @import("std").mem.tokenizeAny(u8, text, "\r\n");
+    var paragraphs = std.mem.tokenizeAny(u8, text, "\r\n");
     while (paragraphs.next()) |paragraph| {
         _ = try font.atlas.measure(.{ .text = paragraph, .x = 0, .y = 0, .color = .white, .face = .sans, .pixel_height = font.pixel_height });
     }

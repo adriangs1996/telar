@@ -1,18 +1,19 @@
 //! Client-owned input routing over the last successfully delivered targets.
 //! The compositor may prepare new targets while input retains the visible
 //! ones. Gesture and physical-key leases keep their owner across focus changes.
+const event_module = @import("../../input/event.zig");
+const key_owner = @import("key_owner.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
-const Event = @import("../../input/event.zig").Event;
 const Key = @import("../../input/KeyInput.zig");
 const Pointer = @import("../../input/PointerEvent.zig");
 const Id = @import("Id.zig");
 const Target = @import("Target.zig");
 const Registry = @import("Registry.zig");
 const Route = @import("Route.zig");
-const Owner = @import("key_owner.zig").Owner;
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
-const GenericTable = client.GenericTable;
+const GenericTable = data.GenericTable;
 const Dispatcher = @This();
 
 maps: GenericPresentedState(Registry) = .{},
@@ -21,7 +22,7 @@ hovered: ?Id = null,
 captures: [3]?Id = @splat(null),
 /// Retired captures still consume their eventual release.
 discarded: [3]bool = @splat(false),
-keys: GenericTable(Owner, client.max_physical_leases) = .{},
+keys: GenericTable(key_owner.Owner, data.keybind.max_physical_leases) = .{},
 revision: u64 = 0,
 window_focused: bool = true,
 next_id: u64 = 1,
@@ -125,7 +126,7 @@ pub fn present(dispatcher: *Dispatcher, delivered: bool) void {
 /// paste and IME use focused ownership, never hover. Call only on the client
 /// thread after native admission copied its borrowed bytes.
 /// Example: `const routed = dispatcher.route(event);`
-pub fn route(dispatcher: *Dispatcher, event: Event) Route {
+pub fn route(dispatcher: *Dispatcher, event: event_module.Event) Route {
     return switch (event) {
         .key => |value| dispatcher.key(value, true),
         .text => |value| if (value.physical != null) dispatcher.textKey(value) else dispatcher.text(),
@@ -242,7 +243,7 @@ fn key(dispatcher: *Dispatcher, event: Key, navigate: bool) Route {
     }
 
     if (event.physical) |physical| {
-        const owner: Owner = if (!result.consumed) .fallback else if (result.target) |target| .{ .widget = target.id } else .discarded;
+        const owner: key_owner.Owner = if (!result.consumed) .fallback else if (result.target) |target| .{ .widget = target.id } else .discarded;
         if (!dispatcher.keys.acquire(physical, owner)) {
             dispatcher.overflowed = true;
             return .{ .consumed = true };

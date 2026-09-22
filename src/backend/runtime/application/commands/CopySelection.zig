@@ -1,7 +1,7 @@
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const CopySelection = @This();
 
-pane_id: PaneIdType,
+pane_id: core.PaneId,
 start_x: u16,
 start_y: u32,
 end_x: u16,

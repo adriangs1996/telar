@@ -1,5 +1,6 @@
 //! Lazily allocated by composer preparation. Two copies of the maximum editor
 //! text admit its paragraph and wrapped lines; native lookups never allocate.
+const ShapingEntry = @import("ShapingEntry.zig");
 const std = @import("std");
 const freetype = @import("freetype");
 const Entry = @import("EditorShapingEntry.zig");
@@ -19,7 +20,7 @@ count: u8 = 0,
 /// Returned spans remain valid until the next insertion clears the arena.
 /// Example: `if (cache.find(key)) |shaped| return shaped;`
 pub fn find(cache: *const Cache, key: Key) ?ShapedRun {
-    if (key.text.len <= @import("ShapingEntry.zig").max_bytes) {
+    if (key.text.len <= ShapingEntry.max_bytes) {
         return null;
     }
 
@@ -48,7 +49,7 @@ pub fn clear(cache: *Cache) void {
 /// Owns long runs without retaining caller buffers or growing the budget.
 /// Example: `cache.remember(key, shaped);`
 pub fn remember(cache: *Cache, key: Key, shaped: ShapedRun) void {
-    if (key.text.len <= @import("ShapingEntry.zig").max_bytes or key.text.len > capacity or shaped.glyphs.len > capacity) {
+    if (key.text.len <= ShapingEntry.max_bytes or key.text.len > capacity or shaped.glyphs.len > capacity) {
         return;
     }
 

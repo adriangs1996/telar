@@ -1,9 +1,9 @@
+const core = @import("telar-core");
 const TabCreatedType = @import("../../../workspace/TabCreated.zig");
-const PaneIdType = @import("telar-core").PaneId;
 const CreateTabResult = @This();
 
 created: TabCreatedType,
-root_pane_id: PaneIdType,
+root_pane_id: core.PaneId,
 
-kind: @import("telar-core").PaneKind = .terminal,
+kind: core.PaneKind = .terminal,
 pane_generation: u64 = 0,

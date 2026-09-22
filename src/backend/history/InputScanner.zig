@@ -1,4 +1,3 @@
-const EventType = @import("Event.zig");
 const escape_ops = @import("escape.zig");
 const std = @import("std");
 /// Classifies keyboard bytes going *to* a child: submits, cancels, and
@@ -27,8 +26,8 @@ pub fn reset(scanner: *InputScanner) void {
     scanner.* = .{};
 }
 
-pub fn feed(scanner: *InputScanner, bytes: []const u8) EventType {
-    var event: EventType = .{};
+pub fn feed(scanner: *InputScanner, bytes: []const u8) Event {
+    var event: Event = .{};
     for (bytes) |byte| scanner.feedByte(byte, &event);
     return event;
 }
@@ -45,7 +44,7 @@ pub fn typedText(scanner: *const InputScanner) ?[]const u8 {
     return scanner.typed[0..scanner.typed_len];
 }
 
-fn feedByte(scanner: *InputScanner, byte: u8, event: *EventType) void {
+fn feedByte(scanner: *InputScanner, byte: u8, event: *Event) void {
     switch (scanner.state) {
         .ground => switch (byte) {
             escape_ops.esc => {

@@ -1,8 +1,7 @@
-const PaneIdType = @import("telar-core").PaneId;
-const AgentReportStateType = @import("telar-core").AgentReportState;
+const core = @import("telar-core");
 const effects = @import("effects.zig");
 const AgentEvidence = @This();
 
-pane: PaneIdType,
-state: AgentReportStateType,
+pane: core.PaneId,
+state: core.AgentReportState,
 confidence: effects.Confidence,

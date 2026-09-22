@@ -3,12 +3,10 @@
 //! Credentials are generated, registered, validated, and erased inside this
 //! package. Runtime and pane state only see pane keys and observations.
 
-const ca_module = @import("ca.zig");
-const PaneKeyType = @import("../pane/PaneKey.zig");
+const core = @import("telar-core");
 const middleware = @import("middleware.zig");
 const types = @import("../agent/types.zig");
 const buffer_support = @import("capture/buffer_support.zig");
-const ProxyType = @import("Proxy.zig");
 const GenericLifecyclePort = @import("GenericLifecyclePort.zig").Type;
 const ServiceType = @import("service/Service.zig");
 const service_support = @import("service/service_support.zig");
@@ -16,7 +14,6 @@ const GenericLifecycle = @import("GenericLifecycle.zig").Type;
 const OverrideType = @import("../pty/Override.zig");
 const std = @import("std");
 const ProxyTestFiles = @import("ProxyTestFiles.zig");
-const pane_module = @import("telar-core").pane;
 const connection_admission = @import("connection_admission.zig");
 const connect_authentication = @import("connect_authentication.zig");
 const root = @import("h2/h2.zig");
@@ -85,7 +82,7 @@ pub fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8,
     };
 }
 
-fn waitForConnectionMetrics(proxy: *const ProxyType, expected_active: u32, expected_limit_drops: u64) !void {
+fn waitForConnectionMetrics(proxy: *const Proxy, expected_active: u32, expected_limit_drops: u64) !void {
     for (0..1000) |_| {
         const metrics_snapshot = proxy.metrics();
 
@@ -116,7 +113,7 @@ test "pane registration owns and disposes its ephemeral environment" {
     const gpa = std.testing.allocator;
     var files = try ProxyTestFiles.init(io);
     defer files.deinit();
-    const proxy = try ProxyType.create(io, gpa, files.config());
+    const proxy = try Proxy.create(io, gpa, files.config());
     defer proxy.destroy();
 
     var inherited_map = std.process.Environ.Map.init(gpa);
@@ -124,7 +121,7 @@ test "pane registration owns and disposes its ephemeral environment" {
     try inherited_map.put("PATH", "/bin:/usr/bin");
     const inherited_block = try inherited_map.createPosixBlock(gpa, .{});
     defer inherited_block.deinit(gpa);
-    const key: PaneKeyType = .{ .id = try pane_module(7), .generation = 2 };
+    const key: PaneKey = .{ .id = try core.pane(7), .generation = 2 };
     var environment = try proxy.registerPane(key, .{
         .inherited = .{ .block = inherited_block },
         .overrides = &.{.{ .name = "TELAR_PANE_ID", .value = "7" }},
@@ -144,7 +141,7 @@ test "proxy lifecycle accepts traffic and cancels an active tunnel during destru
     const gpa = std.testing.allocator;
     var files = try ProxyTestFiles.init(io);
     defer files.deinit();
-    var proxy: ?*ProxyType = try ProxyType.create(io, gpa, files.config());
+    var proxy: ?*Proxy = try Proxy.create(io, gpa, files.config());
     defer {
         if (proxy) |owned| {
             owned.destroy();
@@ -186,7 +183,7 @@ test "proxy connection admission enforces the real worker limit" {
     const gpa = std.testing.allocator;
     var files = try ProxyTestFiles.init(io);
     defer files.deinit();
-    const proxy = try ProxyType.create(io, gpa, files.config());
+    const proxy = try Proxy.create(io, gpa, files.config());
     defer proxy.destroy();
 
     const address = proxy.address();
@@ -217,7 +214,7 @@ test "proxy connection admission enforces the real worker limit" {
 }
 
 test {
-    std.testing.refAllDecls(ca_module);
+    std.testing.refAllDecls(ca);
     std.testing.refAllDecls(connection_admission);
     std.testing.refAllDecls(connect_authentication);
     std.testing.refAllDecls(root);

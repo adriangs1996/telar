@@ -1,5 +1,5 @@
-const KeyType = @import("Key.zig");
+const data = @import("model");
 const Hint = @This();
 
-key: KeyType,
+key: data.Key,
 label: []const u8,

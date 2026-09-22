@@ -1,14 +1,13 @@
 //! Application policy for keyboard copy mode and captured mouse selections.
 
-const PointType = @import("telar-core").Point;
-const std = @import("std");
+const core = @import("telar-core");
 
 pub const Authority = union(enum) {
     unowned,
     target_missing,
     selection: struct {
         dragging: bool,
-        position: ?PointType,
+        position: ?core.Point,
     },
     owned: struct {
         pointer_inside: bool,

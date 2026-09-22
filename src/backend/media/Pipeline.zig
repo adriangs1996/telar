@@ -1,10 +1,10 @@
+const core = @import("telar-core");
 const vt = @import("ghostty-vt");
 const std = @import("std");
 const Batch = @import("Batch.zig");
 const media = @import("media.zig");
 const Initialization = @import("Initialization.zig");
 const png = @import("png.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
 const Processing = @import("Processing.zig");
 const SharedMemoryAvailability = @import("SharedMemoryAvailability.zig");
 const Pipeline = @This();
@@ -94,7 +94,7 @@ pub fn queueOutput(pipeline: *Pipeline, bytes: []const u8) void {
     pipeline.observeQueueDepth();
 }
 
-pub fn queueResize(pipeline: *Pipeline, size: TerminalSizeType) void {
+pub fn queueResize(pipeline: *Pipeline, size: core.TerminalSize) void {
     var batch = &pipeline.batches[pipeline.active];
     if (!batch.pushResize(size)) {
         pipeline.dropActive(0, 1);
@@ -194,7 +194,7 @@ fn observeQueueDepth(pipeline: *Pipeline) void {
     pipeline.queue_byte_high_water = @max(pipeline.queue_byte_high_water, bytes);
 }
 
-fn resetState(pipeline: *Pipeline, size: TerminalSizeType) !void {
+fn resetState(pipeline: *Pipeline, size: core.TerminalSize) !void {
     if (pipeline.enabled) {
         pipeline.stream.deinit();
     }

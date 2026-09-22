@@ -1,16 +1,12 @@
 //! Composition of the long-lived runtime process selected by `telar server`.
 
+const backend = @import("telar-backend");
+const core = @import("telar-core");
+const client = @import("telar-client");
 const std = @import("std");
 const ServerOptions = @import("arguments/ServerOptions.zig");
 const RuntimeConnector = @import("RuntimeConnector.zig");
 const ServerLaunch = @import("ServerLaunch.zig");
-const RuntimeType = @import("telar-backend").Runtime;
-const TrustStoreType = @import("telar-core").TrustStore;
-const PackageType = @import("telar-client").Package;
-const CapabilitySetType = @import("telar-core").CapabilitySet;
-const stableId_module = @import("telar-core").stableId;
-const encodeRuntimeStop_module = @import("telar-core").encodeRuntimeStop;
-const decodeServer_module = @import("telar-core").decodeServer;
 const ProxyAuthorityNames = @import("ProxyAuthorityNames.zig");
 const HistoryPath = @import("HistoryPath.zig");
 const TestEnvironment = @import("TestEnvironment.zig");
@@ -47,7 +43,7 @@ pub fn run(init: std.process.Init, options: ServerOptions) !void {
         return launch.launchDaemon();
     }
 
-    var runtime: RuntimeType = undefined;
+    var runtime: backend.Runtime = undefined;
     try runtime.init(launch.runtimeInitialization());
     defer runtime.deinit();
 
@@ -65,10 +61,10 @@ fn printEndpoint(init: std.process.Init, connector: *const RuntimeConnector) !vo
     try std.Io.File.stdout().writeStreamingAll(init.io, line);
 }
 
-pub fn grantedCapabilities(trust: *const TrustStoreType, package: *const PackageType) CapabilitySetType {
-    var granted = CapabilitySetType.initEmpty();
+pub fn grantedCapabilities(trust: *const core.TrustStore, package: *const client.Package) core.CapabilitySet {
+    var granted = core.CapabilitySet.initEmpty();
     for (trust.entries[0..trust.count]) |entry| {
-        if (entry.grant.plugin_hash != stableId_module(package.manifest.id())) {
+        if (entry.grant.plugin_hash != core.stableId(package.manifest.id())) {
             continue;
         }
         if (!std.mem.eql(u8, &entry.grant.digest, &package.digest)) {
@@ -90,10 +86,10 @@ fn stop(init: std.process.Init, connector: *const RuntimeConnector) !void {
     defer connection.deinit(init.io);
 
     var send_buffer: [1]u8 = undefined;
-    try connection.send(init.io, try encodeRuntimeStop_module(&send_buffer));
+    try connection.send(init.io, try core.encodeRuntimeStop(&send_buffer));
 
     var receive_buffer: [2048]u8 = undefined;
-    switch (try decodeServer_module(try connection.receive(init.io, &receive_buffer))) {
+    switch (try core.decodeServer(try connection.receive(init.io, &receive_buffer))) {
         .runtime_stopping => try std.Io.File.stdout().writeStreamingAll(init.io, "telar runtime is stopping\n"),
         .request_failed => |failure| {
             std.debug.print("telar runtime: {s}\n", .{failure.message});

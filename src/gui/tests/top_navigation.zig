@@ -1,3 +1,5 @@
+const QuadList = @import("../render/QuadList.zig");
+const Quad_module = @import("../render/Quad.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -467,7 +469,7 @@ fn quadsIn(quads: []const Quad, area: Rect) !std.ArrayList(Quad) {
 fn expectNumberLabel(fixture: *Fixture, bounds: Rect, label: Label) !void {
     const renderer = &fixture.session.gui.renderer;
     const actual = try firstInk(renderer.quads.items(), bounds);
-    var reference = @import("../render/QuadList.zig").init(std.testing.allocator);
+    var reference = QuadList.init(std.testing.allocator);
     defer reference.deinit();
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &reference, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     const natural: Rect = .{ .x = bounds.x + renderer.chrome.px(3), .y = bounds.y, .width = renderer.chrome.px(14), .height = bounds.height - renderer.chrome.px(5) };
@@ -489,8 +491,7 @@ fn firstInk(quads: []const Quad, bounds: Rect) !Quad {
 }
 
 fn solid(quad: Quad) bool {
-    const uv = @import("../render/Quad.zig").solid_uv;
-    return quad.u0 == uv[0] and quad.v0 == uv[1] and quad.u1 == uv[2] and quad.v1 == uv[3];
+    return quad.u0 == Quad_module.solid_uv[0] and quad.v0 == Quad_module.solid_uv[1] and quad.u1 == Quad_module.solid_uv[2] and quad.v1 == Quad_module.solid_uv[3];
 }
 
 test "native automatic tabs show the foreground application mark and preserve manual titles" {
@@ -526,7 +527,7 @@ test "native automatic tabs show the foreground application mark and preserve ma
 
 fn hasApplicationMark(quads: []const Quad, bounds: Rect) bool {
     for (quads) |quad| {
-        if (quad.texture == @import("../render/Quad.zig").sprite_texture and quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
+        if (quad.texture == Quad_module.sprite_texture and quad.x >= bounds.x and quad.y >= bounds.y and quad.x + quad.width <= bounds.x + bounds.width and quad.y + quad.height <= bounds.y + bounds.height) {
             return true;
         }
     }

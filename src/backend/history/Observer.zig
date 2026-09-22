@@ -1,16 +1,13 @@
+const core = @import("telar-core");
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const TerminalTracker = @import("TerminalTracker.zig");
 const Batch = @import("Batch.zig");
 const SampleType = @import("Sample.zig");
-const TableType = @import("telar-core").Table;
-const builtin_table_module = @import("telar-core").builtin_table;
-const SignalType = @import("telar-core").Signal;
 const Initialization = @import("Initialization.zig");
 const observer_support = @import("observer_support.zig");
 const ObserverInputObservation = @import("ObserverInputObservation.zig");
 const ObserverOutputObservation = @import("ObserverOutputObservation.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
 const ClockType = @import("Clock.zig");
 const Processing = @import("Processing.zig");
 const codex_screen = @import("codex_screen.zig");
@@ -30,8 +27,8 @@ dropped_bytes: u64 = 0,
 resets: u64 = 0,
 failures: u64 = 0,
 sample: SampleType = .{},
-manifests: *const TableType = &builtin_table_module,
-last_signal: ?SignalType = null,
+manifests: *const core.Table = &core.builtin_table,
+last_signal: ?core.Signal = null,
 last_signal_ms: i64 = 0,
 codex_screen_lost: bool = false,
 
@@ -120,7 +117,7 @@ pub fn queueOutput(observer: *Observer, observation: ObserverOutputObservation) 
     } });
 }
 
-pub fn queueResize(observer: *Observer, size: TerminalSizeType) void {
+pub fn queueResize(observer: *Observer, size: core.TerminalSize) void {
     observer.pushControl(.{ .resize = size });
 }
 
@@ -258,7 +255,7 @@ pub fn processSealed(observer: *Observer, processing: Processing, sink: anytype)
 /// does not republish the projection on every batch. Codex's ready screen
 /// is reconsidered on output: the prior sample may have preceded Stop and
 /// been rejected by the runtime. Input alone never refreshes this proof.
-fn publishSignal(observer: *Observer, signal: ?SignalType, now_ms: ?i64) ?SignalType {
+fn publishSignal(observer: *Observer, signal: ?core.Signal, now_ms: ?i64) ?core.Signal {
     const current = signal orelse {
         observer.last_signal = null;
         return null;
@@ -334,7 +331,7 @@ fn dropActive(observer: *Observer, incoming_bytes: usize, incoming_events: usize
     batch.reset_before = true;
 }
 
-fn resetState(observer: *Observer, cwd: []const u8, size: TerminalSizeType) !void {
+fn resetState(observer: *Observer, cwd: []const u8, size: core.TerminalSize) !void {
     observer.tracker.deinit(&observer.terminal);
     observer.stream.deinit();
     observer.enabled = false;

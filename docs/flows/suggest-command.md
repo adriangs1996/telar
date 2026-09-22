@@ -12,7 +12,7 @@ suggest_command action
         |
 AttachedClient.beginSuggestion -> name prompt (target .suggest) + model.suggestion.begin
         |
-Enter with text -> name_prompts.submit(.suggest) -> AttachedClient.requestSuggestion
+Enter with text -> AttachedClient.submitPrompt(.suggest) -> AttachedClient.requestSuggestion
         |
 model.suggestion.expect(request id)  (phase waiting, prompt stays open)
         |
@@ -65,7 +65,7 @@ uses the existing prompt submission path and stays disabled during generation.
 ## Paste
 
 Enter over a ready suggestion first closes the prompt, then pastes the text
-through the ordinary pane-paste path (`pane_inputs.expressionPaste`),
+through the ordinary pane-paste path (`AttachedClient.pasteExpression`),
 without a trailing Enter. The order matters for the same reason as the
 history palette: `planPaneInput(.focused)` refuses input while a prompt
 owns it.
@@ -84,7 +84,7 @@ suggestion at 1024; the engine's own prompt and reply caps bound the rest.
   reply reduction.
 - `src/client/model/suggestion.zig` proves stale-reply rejection,
   edit invalidation and failure phases.
-- `src/client/model/name_prompt.zig` proves the palette's submit
+- `src/model/state/name_prompt.zig` proves the palette's submit
   and selection commands.
 - `src/frontend/client/tests/graphics_and_clipboard.zig` proves a stray
   suggestion is ignored without ending the client.

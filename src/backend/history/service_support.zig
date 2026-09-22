@@ -1,14 +1,14 @@
 //! Application facade for command history.
 
+const core = @import("telar-core");
 const std = @import("std");
-const FiltersType = @import("telar-core").Filters;
 const Service = @import("Service.zig");
 const CommandContextType = @import("CommandContext.zig");
 const CommandType = @import("Command.zig");
 
 test "service configuration controls recording and output capture" {
     const io = std.testing.io;
-    var filters: FiltersType = .{};
+    var filters: core.Filters = .{};
     try filters.commands.add("vault kv");
     var service = try Service.init(std.testing.allocator, .{
         .database_path = ":memory:",

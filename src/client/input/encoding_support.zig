@@ -3,13 +3,12 @@
 //! Host-terminal bytes never cross this boundary. Keys are parsed first and
 //! encoded against modes reported by the runtime-owned VT.
 
-const Key = @import("Key.zig");
-const InputModesType = @import("telar-core").InputModes;
+const data = @import("model");
+const core = @import("telar-core");
 const std = @import("std");
 const Encoding = @import("Encoding.zig");
-const Char = @import("Char.zig");
 
-pub fn encodeKey(buffer: []u8, key: Key, modes: InputModesType) ![]const u8 {
+pub fn encodeKey(buffer: []u8, key: data.Key, modes: core.InputModes) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     const encoding: Encoding = .init(key, modes);
 
@@ -62,7 +61,7 @@ pub fn encodeKey(buffer: []u8, key: Key, modes: InputModesType) ![]const u8 {
     return writer.buffered();
 }
 
-fn encodeText(writer: *std.Io.Writer, key: Key, encoding: Encoding) !bool {
+fn encodeText(writer: *std.Io.Writer, key: data.Key, encoding: Encoding) !bool {
     if (encoding.reportsAllKeys()) {
         return false;
     }
@@ -87,7 +86,7 @@ fn encodeText(writer: *std.Io.Writer, key: Key, encoding: Encoding) !bool {
     return true;
 }
 
-fn textCharacter(key: Key, char: Char) !Char {
+fn textCharacter(key: data.Key, char: data.Char) !data.Char {
     if (key.mods.shift) {
         if (key.kitty) |codepoints| {
             if (codepoints.shifted) |shifted| {
@@ -105,7 +104,7 @@ fn textCharacter(key: Key, char: Char) !Char {
 
 // Host flags 7 deliver text as UTF-8 or a shifted alternate, not as a Kitty
 // associated-text field. Reuse the legacy text choice, never the physical key.
-fn associatedCodepoint(key: Key, encoding: Encoding) !?u21 {
+fn associatedCodepoint(key: data.Key, encoding: Encoding) !?u21 {
     if (encoding.kitty_flags & 0b10000 == 0 or key.phase == .release or key.mods.ctrl or key.mods.alt) {
         return null;
     }
@@ -130,7 +129,7 @@ fn associatedCodepoint(key: Key, encoding: Encoding) !?u21 {
     return codepoint;
 }
 
-fn encodeKitty(writer: *std.Io.Writer, key: Key, encoding: Encoding) !void {
+fn encodeKitty(writer: *std.Io.Writer, key: data.Key, encoding: Encoding) !void {
     const text = try associatedCodepoint(key, encoding);
     try writer.writeAll("\x1b[");
     try encodeKittyCodepoints(writer, key, encoding.kitty_flags);
@@ -150,7 +149,7 @@ fn encodeKitty(writer: *std.Io.Writer, key: Key, encoding: Encoding) !void {
     try writer.writeByte('u');
 }
 
-fn encodeKittyCodepoints(writer: *std.Io.Writer, key: Key, flags: u5) !void {
+fn encodeKittyCodepoints(writer: *std.Io.Writer, key: data.Key, flags: u5) !void {
     if (key.kitty) |codepoints| {
         try writer.print("{d}", .{codepoints.primary});
         if (flags & 0b00100 != 0 and (codepoints.shifted != null or codepoints.base != null)) {
@@ -177,7 +176,7 @@ fn encodeKittyCodepoints(writer: *std.Io.Writer, key: Key, flags: u5) !void {
     try writer.print("{d}", .{codepoint});
 }
 
-fn encodeLegacyCharacter(writer: *std.Io.Writer, char: Char, key: Key) !void {
+fn encodeLegacyCharacter(writer: *std.Io.Writer, char: data.Char, key: data.Key) !void {
     if (key.mods.alt) {
         try writer.writeByte(0x1b);
     }
@@ -206,7 +205,7 @@ fn encodeLegacyCharacter(writer: *std.Io.Writer, char: Char, key: Key) !void {
     try writer.writeByte(encoded);
 }
 
-pub fn encodePaste(buffer: []u8, text: []const u8, modes: InputModesType) ![]const u8 {
+pub fn encodePaste(buffer: []u8, text: []const u8, modes: core.InputModes) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
     if (modes.bracketed_paste) {
         try writer.writeAll("\x1b[200~");

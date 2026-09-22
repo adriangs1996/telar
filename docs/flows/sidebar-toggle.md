@@ -13,22 +13,14 @@ reply.
 
 ```text
 native, Lua, plugin or pointer sidebar action
-        |
-AttachedClient.executeAction
-        |
-sidebar_toggles.toggle / sidebar_toggles.resize
-        |
-ClientModel toggle or width commit
-        |
-sidebar_toggles
-        |
-sidebar_projection.apply
-        |
-sidebar_projection.apply
-        |                         |
-View projection and pane_resize  presentation_lifecycle.observe
-        |                         |
-runtime socket                   Presenter
+  -> AttachedClient.executeAction
+  -> AttachedClient.toggleSidebar / resizeSidebar
+  -> Model commits visibility or width
+  -> private AttachedClient.deliverSidebarLayout
+       verify commit; project chrome; invalidate graphics; resize attached panes
+
+next presentation observation
+  -> Presenter compares model versions and schedules the paced frame
 ```
 
 `ClientModel` is the source of truth for requested visibility and preferred
@@ -37,18 +29,18 @@ only `ClientModel.Version.chrome` and returns the complete committed layout.
 Explicit configuration updates use `setSidebarVisible`; applying an identical
 layout is a no-op.
 
-The shared action dispatcher only translates the action and delegates. Lua
+The shared action dispatcher calls the concrete sidebar operation. Lua
 callback context also reads the committed model value, never the disposable
 view projection.
 
 ## Effects and presentation
 
-After the commit, `sidebar_projection.apply` verifies visibility, width and
+After the commit, `AttachedClient.deliverSidebarLayout` verifies visibility, width and
 chrome revision. It projects both values into `View`, invalidates graphics
 placements and publishes the resulting size for every attached pane in the
 active tab, in that order. With no active workspace it completes after the
 first two effects. Configuration reload calls the same
-`sidebar_projection.apply` operation after its model transaction. That function
+`AttachedClient.deliverSidebarLayout` operation after its model transaction. That function
 calls the chrome and graphics service ports and `AttachedClient.resizeAttachedPanes`
 directly. This immediate projection gives
 geometry effects the same workbench that the next frame will show.
@@ -77,18 +69,10 @@ roll back the client preference.
 
 ## Validation
 
-- `src/client/model/Model.zig` proves source-of-truth ownership, no-op
-  assignment and chrome-revision isolation.
-- `src/client/application/notifications/toggle_sidebar.zig` proves
-  commit-before-effects ordering and post-commit failure behavior.
-- `src/client/application/notifications/sidebar_layout_delivery.zig` proves
-  exact commit validation, complete effect order, empty-workspace behavior and
-  partial geometry failures.
-- `src/client/operations/notifications/sidebar_projection.zig` wires the physical ports shared
-  with configuration reload.
-- `src/frontend/client/presentation/view.zig` proves toggle and separator-drag
-  intents without mutating semantic state.
-- `src/frontend/client/tests/pane_lifecycle.zig` proves exact expanded, contracted and resized
-  `pane_resize` messages, rejection before partial effects, absence of direct
-  presentation scheduling and presenter-only frame scheduling through a
-  substituted runtime socket.
+- `src/client/model/Model.zig` owns visibility, width and chrome revisions.
+- `src/client/AttachedClient.zig` validates each commit and delivers chrome,
+  graphics invalidation and pane geometry in order.
+- `src/client/attached_client_tests.zig` rejects stale visibility, width and
+  revision before accessing a host port.
+- `src/frontend/client/tests/pane_lifecycle.zig` checks expanded, contracted and
+  resized pane geometry and presenter-owned frame scheduling.

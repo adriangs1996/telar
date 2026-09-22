@@ -3,12 +3,12 @@
 //! Focus replacements keep the old labels visible until the new image is placed.
 //! Text, geometry and theme changes still fall back to cells; latest plan wins.
 
+const core = @import("telar-core");
+const client = @import("telar-client");
 const PlanType = @import("../presentation/Plan.zig");
 const LabelType = @import("../presentation/Label.zig");
 const std = @import("std");
-const measure_module = @import("telar-core").measure;
 const PillRenderer = @import("PillRenderer.zig");
-const theme = @import("telar-client").theme_support;
 const kitty_codec = @import("kitty_codec.zig");
 
 pub const max_cache_bytes = 1024 * 1024;
@@ -21,7 +21,7 @@ fn testingPlan(names: []const []const u8, selected: usize) PlanType {
         var label: LabelType = .{ .offset = plan.area.w, .width = 0, .selected = index == selected };
         const text = std.fmt.bufPrint(&label.bytes, "{d} {s}", .{ index + 1, name }) catch unreachable;
         label.len = @intCast(text.len);
-        label.width = measure_module(text) + 2;
+        label.width = core.measure(text) + 2;
         plan.labels[plan.len] = label;
         plan.len += 1;
         plan.area.w += label.width + @as(u16, @intFromBool(index + 1 != names.len));
@@ -33,7 +33,7 @@ fn testingPlan(names: []const []const u8, selected: usize) PlanType {
 test "small labels use JetBrains Mono and a centered three-quarter-height pill" {
     var renderer = PillRenderer.init(std.testing.allocator);
     defer renderer.deinit();
-    const palette = &theme.default_theme.palette;
+    const palette = &client.theme_support.default_theme.palette;
     _ = renderer.configure(.{ .support = .supported, .cell_width = 22, .cell_height = 58 });
     var plan = testingPlan(&.{ "zsh", "nvim", "Pi" }, 1);
     renderer.prepare(&plan, palette);
@@ -84,7 +84,7 @@ test "small labels use JetBrains Mono and a centered three-quarter-height pill" 
 test "a position-only move settles after one placement instead of retiring every pass" {
     var renderer = PillRenderer.init(std.testing.allocator);
     defer renderer.deinit();
-    const palette = &theme.default_theme.palette;
+    const palette = &client.theme_support.default_theme.palette;
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var plan = testingPlan(&.{ "zsh", "nvim" }, 1);
     renderer.prepare(&plan, palette);
@@ -114,7 +114,7 @@ test "a position-only move settles after one placement instead of retiring every
 test "label coverage rejects stale focus text theme and cell size" {
     var renderer = PillRenderer.init(std.testing.allocator);
     defer renderer.deinit();
-    var palette = theme.default_theme.palette;
+    var palette = client.theme_support.default_theme.palette;
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var plan = testingPlan(&.{ "zsh", "nvim" }, 1);
     renderer.prepare(&plan, &palette);
@@ -169,7 +169,7 @@ test "label coverage rejects stale focus text theme and cell size" {
 test "large label images are chunked and canceled before replacement or hide" {
     var renderer = PillRenderer.init(std.testing.allocator);
     defer renderer.deinit();
-    const palette = &theme.default_theme.palette;
+    const palette = &client.theme_support.default_theme.palette;
     _ = renderer.configure(.{ .support = .supported, .cell_width = 22, .cell_height = 64 });
     const names = [_][]const u8{"long-process-label"} ** 8;
     const large = testingPlan(&names, 3);
@@ -221,7 +221,7 @@ test "large label images are chunked and canceled before replacement or hide" {
 test "focus replacements retain graphical text through chunking and latest-wins cancellation" {
     var renderer = PillRenderer.init(std.testing.allocator);
     defer renderer.deinit();
-    const palette = &theme.default_theme.palette;
+    const palette = &client.theme_support.default_theme.palette;
     _ = renderer.configure(.{ .support = .supported, .cell_width = 22, .cell_height = 64 });
     const names = [_][]const u8{"long-process-label"} ** 8;
     var plan = testingPlan(&names, 0);
@@ -286,10 +286,10 @@ test "unsupported text quotas and allocation failure keep the cell fallback" {
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     var renderer = PillRenderer.init(failing.allocator());
     defer renderer.deinit();
-    const palette = &theme.default_theme.palette;
+    const palette = &client.theme_support.default_theme.palette;
     const plan = testingPlan(&.{ "zsh", "nvim" }, 1);
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    renderer.prepare(&plan, &theme.builtin(.terminal).palette);
+    renderer.prepare(&plan, &client.theme_support.builtin(.terminal).palette);
     try std.testing.expectEqual(@as(usize, 0), renderer.retainedBytes());
     renderer.prepare(&plan, palette);
     try std.testing.expect(renderer.failed);

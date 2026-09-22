@@ -1,8 +1,10 @@
 //! One attachment's pixel trajectory and its last committed model coordinate.
+const std_module = @import("std");
+const data = @import("model");
 const client = @import("telar-client");
 const Motion = @This();
 
-key: client.AgentKey,
+key: data.AgentKey,
 motion: @import("../ScrollMotion.zig") = .{},
 applied: f64 = 0,
 anchor_revision: u64 = 0,
@@ -53,7 +55,7 @@ pub fn geometry(entry: *Motion, target: @import("Target.zig"), now_ns: u64) void
 /// A new gesture or reversal takes control from the current visible position.
 /// Example: `entry.input(normalized_pixel_event, now_ns);`
 pub fn input(entry: *Motion, event: @import("../../input/ScrollEvent.zig"), now_ns: u64) void {
-    if (!@import("std").math.isFinite(event.delta_y)) {
+    if (!std_module.math.isFinite(event.delta_y)) {
         return;
     }
 
@@ -94,7 +96,7 @@ pub fn bound(entry: *Motion, now_ns: u64) void {
     }
 
     const maximum = entry.limit * entry.step;
-    const budget = @as(f64, @import("std").math.maxInt(u32)) * entry.step;
+    const budget = @as(f64, std_module.math.maxInt(u32)) * entry.step;
     entry.motion.constrain(if (entry.has_newer) -budget else 0, if (entry.has_older) budget else maximum);
     const spring = entry.motion.spring;
     entry.waiting = (entry.has_newer and spring.position <= 0 and (spring.target < 0 or spring.velocity < 0)) or (entry.has_older and spring.position >= maximum and (spring.target > maximum or spring.velocity > 0));
@@ -302,7 +304,7 @@ fn testGeometry(limit: f64) @import("Target.zig") {
 }
 
 fn testPane() !client.Pane {
-    return client.Pane.init(@import("std").testing.allocator, .{
+    return client.Pane.init(std_module.testing.allocator, .{
         .spec = .{
             .pane_id = @enumFromInt(1),
             .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },

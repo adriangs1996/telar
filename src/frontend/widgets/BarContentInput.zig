@@ -1,6 +1,5 @@
-const ContentType = @import("telar-client").Content;
-const AlignmentType = @import("telar-client").Alignment;
+const client = @import("telar-client");
 const Input = @This();
 
-content: *const ContentType,
-alignment: AlignmentType,
+content: *const client.Content,
+alignment: client.Alignment,

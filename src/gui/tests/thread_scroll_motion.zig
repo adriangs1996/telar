@@ -1,3 +1,4 @@
+const thread_selection = @import("../widgets/interaction/thread_selection.zig");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -221,7 +222,7 @@ test "cancelled gestures and text selection stop autonomous transcript movement"
     try publish(session);
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
     const stopped = pane.transcript_scroll;
-    try std.testing.expect(@import("../widgets/interaction/thread_selection.zig").enter(session.gui, pane.id));
+    try std.testing.expect(thread_selection.enter(session.gui, pane.id));
     try std.testing.expectEqual(@as(usize, 0), session.gui.widgets.thread_scroll.len);
     try scroll.advance(session.gui, std.math.maxInt(u64));
     try std.testing.expectEqual(stopped, pane.transcript_scroll);

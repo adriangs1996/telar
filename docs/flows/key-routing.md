@@ -25,11 +25,11 @@ TUI: host_inputs.handleRead → feed → router.next → decoded
                           /                         \
                     action request             key / replay
                           |                         |
-             AttachedClient.executeAction          key_routing.apply
+             AttachedClient.executeAction          AttachedClient.routeKeyInput
                           |                         |
                 concrete operation         retained application owner
                           |                         |
-           actionCompleted(post-action policy)   pane_inputs.send
+           actionCompleted(post-action policy)   AttachedClient.sendPaneInput
 ```
 
 `GuiClient.executeAction` also applies native palette, sidebar and transcript behavior.
@@ -58,7 +58,7 @@ into a newly focused composer. TUI mouse, paste and terminal responses are
 handled explicitly in `host_inputs.decoded`. Startup input similarly yields
 host responses while retaining early user input, without a callback object.
 
-`key_routing.apply` reads current authority and retained physical leases, then
+`AttachedClient.routeKeyInput` reads current authority and retained physical leases, then
 calls the selected concrete operation. Priority, exclusivity and follow-up order
 are visible in the same module.
 
@@ -98,7 +98,7 @@ The modal does not claim these prior buffered bytes. Its active capture applies
 to new semantic keys.
 
 A selected owner failure propagates and never falls through to another owner.
-If the pane target disappeared or is exclusively owned, `pane_inputs.send`
+If the pane target disappeared or is exclusively owned, `AttachedClient.sendPaneInput`
 returns no delivery and the route ends without another effect.
 
 ## Held scroll bindings
@@ -139,7 +139,7 @@ Legacy press-only input retains its old behavior. See
 ## Clipboard preview order
 
 Only an unmodified `Ctrl+V` is eligible for local image inspection. The operation
-first waits for `pane_inputs.send` to accept the input into the client outbox.
+first waits for `AttachedClient.sendPaneInput` to accept the input into the client outbox.
 It starts the preview only after that confirmed delivery. A missing pane never
 starts a preview.
 
@@ -175,7 +175,7 @@ delivery.
 
 ## Validation
 
-- `src/client/application/input/key_routing.zig` proves capture authority,
+- `src/model/application/input/key_routing.zig` proves capture authority,
   semantic and byte priority, exact-pane leases, prompt repeat ownership,
   orphan and saturation policy, exclusive failures, confirmed delivery and
   `Ctrl+V` ordering.

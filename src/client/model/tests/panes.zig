@@ -1,27 +1,21 @@
+const core = @import("telar-core");
+const model_data = @import("model");
 const ModelType = @import("../Model.zig");
 const std = @import("std");
-const TabLocationType = @import("telar-core").TabLocation;
-const PaneIdType = @import("telar-core").PaneId;
-const RectType = @import("telar-core").Rect;
 const VersionType = @import("../Version.zig");
-const layout_mod = @import("../../workspace/layout_support.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const types = @import("../types.zig");
 const TabsModel = @import("../../workspace/TabsModel.zig");
-const PaneSplitType = @import("../PaneSplit.zig");
 
 test "pane focus resolves identity and direction through one visible revision" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
-    const area: RectType = .{ .w = 80, .h = 24 };
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
+    const area: core.Rect = .{ .w = 80, .h = 24 };
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     _ = model.workspace.active().?.model.setPaneForeground(first, "nvim");
@@ -70,13 +64,13 @@ test "pane focus resolves identity and direction through one visible revision" {
 test "fullscreen directional focus publishes geometry only for horizontal moves" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
-    const area: RectType = .{ .w = 80, .h = 24 };
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
+    const area: core.Rect = .{ .w = 80, .h = 24 };
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     const active = &model.workspace.active().?.model;
     try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .vertical, .area = area });
@@ -84,7 +78,11 @@ test "fullscreen directional focus publishes geometry only for horizontal moves"
     const tiled_size = active.contentSize(second, area).?;
     _ = model.togglePaneFullscreen(.{ .area = area }).?;
     const entered_version = model.version();
-    for ([_]layout_mod.Direction{ .up, .down, .left }) |direction| {
+    for ([_]model_data.LayoutDirection{
+        .up,
+        .down,
+        .left,
+    }) |direction| {
         try std.testing.expect(model.focusPane(.{ .target = .{ .direction = direction }, .area = area }) == null);
     }
 
@@ -94,7 +92,7 @@ test "fullscreen directional focus publishes geometry only for horizontal moves"
     try std.testing.expectEqual(second, moved.focused);
     try std.testing.expect(moved.geometry_changed);
     try std.testing.expectEqual(entered_version.panes + 1, moved.panes_revision);
-    try std.testing.expectEqual(TerminalSizeType{ .cols = 78, .rows = 22 }, active.contentSize(second, area).?);
+    try std.testing.expectEqual(core.TerminalSize{ .cols = 78, .rows = 22 }, active.contentSize(second, area).?);
     try std.testing.expect(active.contentSize(first, area) == null);
     try std.testing.expect(model.focusPane(.{ .target = .{ .direction = .right }, .area = area }) == null);
     try std.testing.expectEqual(moved.panes_revision, model.version().panes);
@@ -111,13 +109,13 @@ test "pane resize owns direction resolution geometry and visible revisions" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
-    const area: RectType = .{ .w = 101, .h = 41 };
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
+    const area: core.Rect = .{ .w = 101, .h = 41 };
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 101, .rows = 41 } });
     const active = &model.workspace.active().?.model;
     try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
@@ -162,13 +160,13 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
-    const area: RectType = .{ .w = 101, .h = 41 };
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
+    const area: core.Rect = .{ .w = 101, .h = 41 };
     try std.testing.expect(model.togglePaneFullscreen(.{ .area = area }) == null);
     try std.testing.expectEqual(VersionType{}, model.version());
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 101, .rows = 41 } });
@@ -185,7 +183,7 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
     try std.testing.expectEqual(model.version().panes, entered.panes_revision);
     try std.testing.expectEqualDeep(area, entered.area);
     try std.testing.expect(entered.fullscreen);
-    try std.testing.expectEqual(TerminalSizeType{ .cols = area.w - 2, .rows = area.h - 2 }, active.contentSize(first, area).?);
+    try std.testing.expectEqual(core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, active.contentSize(first, area).?);
     try std.testing.expect(active.contentSize(second, area) == null);
     try std.testing.expectEqual(VersionType{ .panes = 1 }, model.version());
 
@@ -204,13 +202,13 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
 test "splitting a single fullscreen pane focuses the new pane without leaving fullscreen" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
-    const area: RectType = .{ .w = 101, .h = 41 };
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
+    const area: core.Rect = .{ .w = 101, .h = 41 };
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
     const entered = model.togglePaneFullscreen(.{ .area = area }).?;
     try std.testing.expect(entered.fullscreen);
@@ -238,11 +236,11 @@ test "pane closure planning requires the active attached pane without mutation" 
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const pane_id: PaneIdType = @enumFromInt(1);
+    const pane_id: core.PaneId = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     const closure = model.planPaneClosure().?;
@@ -261,12 +259,12 @@ test "active pane retirement advances the visible pane revision once" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
 
@@ -304,10 +302,10 @@ test "inactive pane retirement changes membership without a visible revision" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const active: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const inactive: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
-    const inactive_pane: PaneIdType = @enumFromInt(2);
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const active: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const inactive: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const inactive_pane: core.PaneId = @enumFromInt(2);
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = active, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = inactive,
@@ -339,12 +337,12 @@ test "split confirmation replaces a target retired during pane creation" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const target: PaneIdType = @enumFromInt(1);
-    const created: PaneIdType = @enumFromInt(2);
+    const target: core.PaneId = @enumFromInt(1);
+    const created: core.PaneId = @enumFromInt(2);
     try model.workspace.bootstrap(.{ .pane_id = target, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     try std.testing.expect(model.workspace.active().?.model.removePane(target));
 
@@ -358,13 +356,13 @@ test "split confirmation replaces a target retired during pane creation" {
         .new_pane = created,
     });
 
-    try std.testing.expectEqual(types.PaneSplitDisposition.active, commit.disposition);
-    try std.testing.expectEqual(types.Change.changed, commit.change);
+    try std.testing.expectEqual(model_data.PaneSplitDisposition.active, commit.disposition);
+    try std.testing.expectEqual(model_data.Change.changed, commit.change);
     try std.testing.expect(model.workspace.findPane(target) == null);
     try std.testing.expect(model.workspace.findPane(created).?.attached);
     try std.testing.expectEqual(created, model.workspace.active().?.model.layout.focused().?);
     try std.testing.expectEqualDeep(VersionType{ .panes = 1 }, model.version());
-    try std.testing.expectEqualDeep(RectType{ .w = 40, .h = 10 }, commit.area);
+    try std.testing.expectEqualDeep(core.Rect{ .w = 40, .h = 10 }, commit.area);
     try std.testing.expectEqual(model.workspace.activeConst().?.model.layout.currentRevision(), commit.layout_revision);
     try std.testing.expectEqual(model.version().workspace, commit.workspace_revision);
     try std.testing.expectEqual(model.version().tabs, commit.tabs_revision);
@@ -376,11 +374,11 @@ test "inactive split confirmation retains membership without visible revision" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
-    const target: PaneIdType = @enumFromInt(1);
-    const created: PaneIdType = @enumFromInt(3);
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const target: core.PaneId = @enumFromInt(1);
+    const created: core.PaneId = @enumFromInt(3);
     try model.workspace.bootstrap(.{ .pane_id = target, .location = first, .size = .{ .cols = 40, .rows = 10 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
@@ -400,8 +398,8 @@ test "inactive split confirmation retains membership without visible revision" {
         .new_pane = created,
     });
 
-    try std.testing.expectEqual(types.PaneSplitDisposition.inactive, commit.disposition);
-    try std.testing.expectEqual(types.Change.unchanged, commit.change);
+    try std.testing.expectEqual(model_data.PaneSplitDisposition.inactive, commit.disposition);
+    try std.testing.expectEqual(model_data.Change.unchanged, commit.change);
     try std.testing.expect(!model.workspace.findPane(created).?.attached);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
     try std.testing.expectEqual(model.workspace.find(first.tab_id).?.model.layout.currentRevision(), commit.layout_revision);
@@ -416,11 +414,11 @@ test "split confirmation leaves a retired tab unrepresented" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
-    const target: PaneIdType = @enumFromInt(1);
-    const created: PaneIdType = @enumFromInt(3);
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const target: core.PaneId = @enumFromInt(1);
+    const created: core.PaneId = @enumFromInt(3);
     try model.workspace.bootstrap(.{ .pane_id = target, .location = first, .size = .{ .cols = 40, .rows = 10 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
@@ -440,8 +438,8 @@ test "split confirmation leaves a retired tab unrepresented" {
         .new_pane = created,
     });
 
-    try std.testing.expectEqual(types.PaneSplitDisposition.stale, commit.disposition);
-    try std.testing.expectEqual(types.Change.unchanged, commit.change);
+    try std.testing.expectEqual(model_data.PaneSplitDisposition.stale, commit.disposition);
+    try std.testing.expectEqual(model_data.Change.unchanged, commit.change);
     try std.testing.expect(model.workspace.findPane(created) == null);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
     try std.testing.expectEqual(@as(u64, 0), commit.layout_revision);
@@ -451,7 +449,7 @@ test "split confirmation leaves a retired tab unrepresented" {
     try std.testing.expectEqual(model.version().panes, commit.panes_revision);
 }
 
-fn commitSplit(target: PaneIdType, location: TabLocationType, axis: layout_mod.Axis) PaneSplitType {
+fn commitSplit(target: core.PaneId, location: core.TabLocation, axis: model_data.LayoutAxis) model_data.PaneSplit {
     return .{
         .target_pane = target,
         .location = location,
@@ -463,10 +461,10 @@ fn commitSplit(target: PaneIdType, location: TabLocationType, axis: layout_mod.A
 test "applying layouts rejects foreign membership before changing focus or geometry" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
-    const area: RectType = .{ .w = 80, .h = 24 };
+    const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
+    const area: core.Rect = .{ .w = 80, .h = 24 };
     try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     const saved = model.workspace.active().?.model.layout;

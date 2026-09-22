@@ -1,5 +1,5 @@
+const core = @import("telar-core");
 const proxy_ops = @import("proxy.zig");
-const ProxyScopeType = @import("telar-core").ProxyScope;
 const Joiner = @import("../../proxy/capture/Joiner.zig");
 const CaptureSink = @import("CaptureSink.zig");
 const std = @import("std");
@@ -15,7 +15,7 @@ const Snapshot = @import("../../proxy/Snapshot.zig");
 const Runtime = @This();
 
 owner: proxy_ops.ProxyOwner,
-scope: ProxyScopeType,
+scope: core.ProxyScope,
 system_trusted: bool,
 captures: Joiner,
 capture_sink: ?CaptureSink = null,
@@ -66,7 +66,7 @@ pub fn active(runtime: *const Runtime) bool {
 /// ```zig
 /// if (proxy_runtime.interceptionScope() == .wildcard) warnExpandedScope();
 /// ```
-pub fn interceptionScope(runtime: *const Runtime) ProxyScopeType {
+pub fn interceptionScope(runtime: *const Runtime) core.ProxyScope {
     return runtime.scope;
 }
 

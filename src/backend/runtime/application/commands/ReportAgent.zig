@@ -1,12 +1,11 @@
+const core = @import("telar-core");
 const PaneKeyType = @import("../../../pane/PaneKey.zig");
-const AgentReportStateType = @import("telar-core").AgentReportState;
 const SessionFileType = @import("../../../agent/SessionFile.zig");
-const AgentBlockedReasonType = @import("telar-core").AgentBlockedReason;
 const ReportAgent = @This();
 
 pane: PaneKeyType,
-state: AgentReportStateType,
-blocked_reason: AgentBlockedReasonType = .none,
+state: core.AgentReportState,
+blocked_reason: core.AgentBlockedReason = .none,
 event: []const u8 = "",
 session: []const u8,
 session_file: SessionFileType = .{},

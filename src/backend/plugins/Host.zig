@@ -1,7 +1,6 @@
+const lua = @import("telar-lua");
 const std = @import("std");
-const VmType = @import("telar-lua").Vm;
 const lua_api = @import("lua-api");
-const open_module = @import("telar-lua").open;
 const host_support = @import("host_support.zig");
 const ExchangeType = @import("Exchange.zig");
 const BatchType = @import("Batch.zig");
@@ -9,7 +8,7 @@ const Host = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
-vm: *VmType,
+vm: *lua.Vm,
 package_root: []const u8,
 callback_ref: c_int = lua_api.c.LUA_NOREF,
 module_cache_ref: c_int = lua_api.c.LUA_NOREF,
@@ -23,7 +22,7 @@ pub fn initWithResources(io: std.Io, gpa: std.mem.Allocator, entry_path: []const
     var host: Host = .{
         .io = io,
         .gpa = gpa,
-        .vm = try VmType.init(io, .{
+        .vm = try lua.Vm.init(io, .{
             .memory = 64 * 1024 * 1024,
             .instructions = 5_000_000,
             .deadline_after_ns = 200 * std.time.ns_per_ms,
@@ -31,7 +30,7 @@ pub fn initWithResources(io: std.Io, gpa: std.mem.Allocator, entry_path: []const
         .package_root = try gpa.dupe(u8, root),
     };
     errdefer host.deinit();
-    try open_module(host.vm.state);
+    try lua.open(host.vm.state);
     try host.installTelar();
     host.installRequire();
     try host.loadPlugin(entry_path);

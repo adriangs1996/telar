@@ -1,12 +1,12 @@
+const id = @import("schema/id.zig");
 const agent_thread = @import("agent_thread.zig");
 const AgentThreadItem = @import("AgentThreadItem.zig");
 const AgentApprovalRequest = @import("AgentApprovalRequest.zig");
-const PaneId = @import("schema/id.zig").PaneId;
 const std = @import("std");
 const AgentModel = @import("AgentModel.zig");
 const AgentOptions = @import("AgentOptions.zig");
 
-pane_id: PaneId,
+pane_id: id.PaneId,
 pane_generation: u64,
 revision: u64 = 0,
 thread_id: [agent_thread.max_item_reference_bytes]u8 = @splat(0),

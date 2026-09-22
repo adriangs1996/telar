@@ -1,13 +1,12 @@
+const client = @import("telar-client");
 const window_title = @import("window_title.zig");
-const WindowTitleState = @import("telar-client").WindowTitleState;
 const std = @import("std");
-const SyncInput = @import("telar-client").SyncInput;
 const State = @This();
 
 hostname: [window_title.max_hostname_bytes]u8 = undefined,
 hostname_len: u8 = 0,
 hostname_loaded: bool = false,
-title: WindowTitleState = .{},
+title: client.WindowTitleState = .{},
 
 /// Caches the host name on first use; the host terminal does not need it
 /// fresh and the lookup never repeats.
@@ -38,7 +37,7 @@ pub fn hostnameSlice(state: *const State) []const u8 {
 /// ```zig
 /// try state.sync(writer, .{ .template = template, .tokens = tokens });
 /// ```
-pub fn sync(state: *State, writer: *std.Io.Writer, input: SyncInput) !void {
+pub fn sync(state: *State, writer: *std.Io.Writer, input: client.SyncInput) !void {
     if (input.template.len == 0) {
         return;
     }

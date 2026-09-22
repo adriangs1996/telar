@@ -1,14 +1,13 @@
-const OutputPlacementType = @import("kitty_protocol").OutputPlacement;
+const kitty_protocol = @import("kitty_protocol");
 const presentation = @import("presentation.zig");
 const std = @import("std");
-const writeDeletePlacement_module = @import("kitty_protocol").writeDeletePlacement;
 const kitty_codec = @import("../graphics/kitty_codec.zig");
 const PlacementState = @This();
 
 id: u32,
 z: i32,
-desired: ?OutputPlacementType = null,
-emitted: ?OutputPlacementType = null,
+desired: ?kitty_protocol.OutputPlacement = null,
+emitted: ?kitty_protocol.OutputPlacement = null,
 
 pub fn wanted(placement: *const PlacementState) bool {
     return placement.desired != null;
@@ -25,7 +24,7 @@ pub fn write(placement: *PlacementState, writer: *std.Io.Writer, image_id: u32) 
 
     var written: usize = 0;
     if (placement.emitted != null) {
-        written += try writeDeletePlacement_module(writer, image_id, placement.id);
+        written += try kitty_protocol.writeDeletePlacement(writer, image_id, placement.id);
     }
 
     if (placement.desired) |desired| {

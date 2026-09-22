@@ -69,6 +69,10 @@ A design is incomplete while any item is unknown.
   never becomes the authority that mutates client layout.
 - `telar-core` shares types and pure operations. It owns no live runtime or
   client state.
+- `model` owns reusable value definitions and bounded state with invariant-preserving
+  methods. It depends only on core and standard Zig modules; live transports,
+  Lua VMs, plugin registries and host services stay with their process owner.
+  Consumers use its named module API; see [shared model](../src/model/README.md).
 - The VT emulator alone defines child screen semantics. Observers may tap bytes
   but cannot define or mutate the screen.
 - Rendering changes buffers or graphics state. It never writes around the

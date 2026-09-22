@@ -1,19 +1,13 @@
+const core = @import("telar-core");
 const requests = @import("../requests.zig");
-const SocketChannelType = @import("telar-core").SocketChannel;
 const LocalListenerType = @import("../../../transport/LocalListener.zig");
 const ClientMessage = @import("../../ClientMessage.zig");
-const mark_module = @import("telar-core").mark;
-const now_module = @import("telar-core").now;
-const decodeClient_module = @import("telar-core").decodeClient;
-const enabled_module = @import("telar-core").enabled;
-const elapsed_module = @import("telar-core").elapsed;
 const request_role = @import("../../client/request_role.zig");
 const std = @import("std");
 const ClientSent = @import("../../ClientSent.zig");
 const SessionType = @import("../../client/Session.zig");
 const Write = @import("../../client/Write.zig");
 const SourcesType = @import("../../Sources.zig");
-const PaneIdType = @import("telar-core").PaneId;
 const handshake_module = @import("../../../transport/handshake.zig");
 const Read = @import("../../client/Read.zig");
 
@@ -25,7 +19,7 @@ const Application = @import("../Application.zig");
 /// ```zig
 /// try ClientEvents.handleAccepted(&application, result, listener);
 /// ```
-pub fn handleAccepted(application: *Application, result: anyerror!SocketChannelType, listener: *LocalListenerType) !void {
+pub fn handleAccepted(application: *Application, result: anyerror!core.SocketChannel, listener: *LocalListenerType) !void {
     var runtime: AdmissionRuntime = .{ .application = application, .listener = listener };
     try acceptClient(&runtime, result);
 }
@@ -64,7 +58,7 @@ pub fn handleHandshaken(application: *Application, result: anyerror!void) void {
 /// const should_stop = try ClientEvents.handleMessage(&application, event);
 /// ```
 pub fn handleMessage(application: *Application, event: ClientMessage) !bool {
-    mark_module(application.io, .runtime_dispatch);
+    core.mark(application.io, .runtime_dispatch);
     const session = application.clients.resolve(event.client) orelse {
         application.metrics.stale_client_messages += 1;
         return false;
@@ -81,16 +75,16 @@ pub fn handleMessage(application: *Application, event: ClientMessage) !bool {
         application.dropClient(event.client);
         return false;
     };
-    const decode_started = now_module(application.io);
-    const message = decodeClient_module(payload) catch {
+    const decode_started = core.now(application.io);
+    const message = core.decodeClient(payload) catch {
         application.dropClient(event.client);
         return false;
     };
 
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         application.metrics.client_messages += 1;
         application.metrics.decode.observe(
-            elapsed_module(decode_started, now_module(application.io)),
+            core.elapsed(decode_started, core.now(application.io)),
         );
     }
 
@@ -156,11 +150,11 @@ fn rearmClientAccept(runtime: *AdmissionRuntime) !void {
     try sources.acceptClient(runtime.listener);
 }
 
-fn shutdownAdmissionConnection(runtime: *AdmissionRuntime, connection: *SocketChannelType) void {
+fn shutdownAdmissionConnection(runtime: *AdmissionRuntime, connection: *core.SocketChannel) void {
     connection.shutdown(runtime.application.io);
 }
 
-fn startClientHandshake(runtime: *AdmissionRuntime, connection: *SocketChannelType) !void {
+fn startClientHandshake(runtime: *AdmissionRuntime, connection: *core.SocketChannel) !void {
     try runtime.application.select.concurrent(.handshaken, handshakeClient, .{ runtime.application.io, connection });
 }
 
@@ -178,12 +172,12 @@ fn startNegotiatedClientRead(application: *Application, session: *SessionType) !
     };
 }
 
-fn detachAfterClientSend(application: *Application, session: *SessionType, pane: PaneIdType) void {
+fn detachAfterClientSend(application: *Application, session: *SessionType, pane: core.PaneId) void {
     _ = session.attachments.detach(pane);
     application.collect();
 }
 
-fn handshakeClient(io: std.Io, connection: *SocketChannelType) anyerror!void {
+fn handshakeClient(io: std.Io, connection: *core.SocketChannel) anyerror!void {
     const response = try handshake_module.perform(io, connection);
 
     if (response == .rejected) {
@@ -193,17 +187,17 @@ fn handshakeClient(io: std.Io, connection: *SocketChannelType) anyerror!void {
 
 fn receiveSession(read: Read) ClientMessage {
     const result = read.connection.receive(read.io, read.buffer);
-    mark_module(read.io, .runtime_read);
+    core.mark(read.io, .runtime_read);
     return .{ .client = read.key, .result = result };
 }
 
 fn sendSession(write: Write) ClientSent {
-    mark_module(write.io, .runtime_send_start);
-    defer mark_module(write.io, .runtime_send_done);
+    core.mark(write.io, .runtime_send_start);
+    defer core.mark(write.io, .runtime_send_done);
     return .{ .client = write.key, .result = write.connection.send(write.io, write.payload) };
 }
 
-fn acceptClient(runtime: *AdmissionRuntime, result: anyerror!SocketChannelType) !void {
+fn acceptClient(runtime: *AdmissionRuntime, result: anyerror!core.SocketChannel) !void {
     var accepted = result catch {
         try rearmClientAccept(runtime);
         return;

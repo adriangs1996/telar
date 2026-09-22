@@ -1,4 +1,5 @@
 //! History pages are targeted request replies, independent of live revisions.
+const agent_thread = @import("../../agent_thread.zig");
 const std = @import("std");
 const Encoder = @import("../Encoder.zig");
 const Decoder = @import("../Decoder.zig");
@@ -96,11 +97,11 @@ pub fn decodeAgentHistoryPage(decoder: *Decoder) !View {
 fn validateQuery(query: Query) !void {
     try codec.validateRequestId(query.request_id);
     try codec.validatePaneId(query.pane_id);
-    if (query.pane_generation == 0 or query.view_generation == 0 or query.anchor.len > @import("../../agent_thread.zig").max_item_source_bytes or (query.cursor.len != 0 and query.anchor.len != 0)) {
+    if (query.pane_generation == 0 or query.view_generation == 0 or query.anchor.len > agent_thread.max_item_source_bytes or (query.cursor.len != 0 and query.anchor.len != 0)) {
         return error.InvalidAgentHistoryQuery;
     }
 
-    if (query.anchor_turn.len > @import("../../agent_thread.zig").max_item_source_turn_bytes or (query.anchor.len == 0) != (query.anchor_turn.len == 0)) {
+    if (query.anchor_turn.len > agent_thread.max_item_source_turn_bytes or (query.anchor.len == 0) != (query.anchor_turn.len == 0)) {
         return error.InvalidAgentHistoryQuery;
     }
 

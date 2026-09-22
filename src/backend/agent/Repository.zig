@@ -1,11 +1,9 @@
-const IteratorType = @import("Iterator.zig");
-const ConstIteratorType = @import("ConstIterator.zig");
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const core = @import("telar-core");
 const Agent = @import("Agent.zig");
 const PaneKeyType = @import("../pane/PaneKey.zig");
 pub const Repository = @This();
 
-slots: [max_agent_snapshot_entries]?Agent = @splat(null),
+slots: [core.max_agent_snapshot_entries]?Agent = @splat(null),
 
 pub const Iterator = @import("Iterator.zig");
 
@@ -93,7 +91,7 @@ pub fn remove(repository: *Repository, key: PaneKeyType) bool {
 /// ```zig
 /// var iterator = repository.iterator();
 /// ```
-pub fn iterator(repository: *Repository) IteratorType {
+pub fn iterator(repository: *Repository) Iterator {
     return .{ .repository = repository };
 }
 
@@ -102,6 +100,6 @@ pub fn iterator(repository: *Repository) IteratorType {
 /// ```zig
 /// var iterator = repository.constIterator();
 /// ```
-pub fn constIterator(repository: *const Repository) ConstIteratorType {
+pub fn constIterator(repository: *const Repository) ConstIterator {
     return .{ .repository = repository };
 }

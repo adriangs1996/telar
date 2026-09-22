@@ -1,12 +1,11 @@
 //! PNG decoding for Ghostty's media terminal. All Wuffs allocations use the
 //! caller's quota-accounted allocator, including decoder and work buffers.
 
+const core = @import("telar-core");
 const ParkingMutex = @import("ParkingMutex.zig");
 const vt = @import("ghostty-vt");
 const std = @import("std");
 const wuffs = @import("wuffs");
-const ImageType = @import("telar-core").Image;
-const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
 const GraphicsBudgetType = @import("GraphicsBudget.zig");
 const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
 
@@ -35,14 +34,14 @@ fn decode(allocator: std.mem.Allocator, bytes: []const u8) vt.sys.DecodeError!vt
     };
     errdefer allocator.free(image.data);
 
-    const metadata: ImageType = .{
+    const metadata: core.Image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = image.width,
         .height = image.height,
         .byte_len = image.data.len,
     };
-    _ = metadata.validate(max_image_bytes_per_screen_module) catch return error.InvalidData;
+    _ = metadata.validate(core.max_image_bytes_per_screen) catch return error.InvalidData;
 
     return .{ .width = image.width, .height = image.height, .data = image.data };
 }

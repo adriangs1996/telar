@@ -1,5 +1,5 @@
-const Key = @import("Key.zig");
-const InputModes = @import("telar-core").InputModes;
+const data = @import("model");
+const core = @import("telar-core");
 const Encoding = @This();
 
 modifier: u8,
@@ -8,7 +8,7 @@ event_types: bool,
 event: ?u2,
 cursor_keys: bool,
 
-pub fn init(key: Key, modes: InputModes) Encoding {
+pub fn init(key: data.Key, modes: core.InputModes) Encoding {
     const event_types = modes.kitty_keyboard_flags & 0b00010 != 0;
 
     return .{
@@ -26,7 +26,7 @@ pub fn reportsAllKeys(encoding: Encoding) bool {
     return encoding.kitty_flags & 0b01000 != 0;
 }
 
-pub fn usesKittyFor(encoding: Encoding, key: Key) bool {
+pub fn usesKittyFor(encoding: Encoding, key: data.Key) bool {
     if (encoding.kitty_flags == 0) {
         return false;
     }

@@ -1,5 +1,8 @@
 //! Owned input semantics for one delivered widget. No projection, text slice,
 //! Canvas or widget pointer crosses the presentation boundary.
+const core = @import("telar-core");
+const client = @import("telar-client");
+const history_action = @import("history_action.zig");
 const Target = @This();
 
 id: @import("Id.zig") = .{},
@@ -26,7 +29,7 @@ thread_anchor_revision: u64 = 0,
 thread_resolved_scroll: f64 = 0,
 thread_reanchor: bool = false,
 thread_skip_folded: bool = false,
-thread_prefetch: ?@import("telar-core").agent_history.Direction = null,
+thread_prefetch: ?core.agent_history.Direction = null,
 thread_has_older: bool = false,
 thread_has_newer: bool = false,
 label: [128]u8 = undefined,
@@ -37,11 +40,11 @@ traverse_tab: bool = true,
 pub const Field = enum { name, directory };
 pub const PromptAction = enum { submit, cancel };
 pub const Action = union(enum) {
-    intent: @import("telar-client").Intent,
+    intent: client.Intent,
     text_field: Field,
-    composer: @import("telar-core").PaneId,
-    change_review: @import("telar-core").PaneId,
-    transcript: @import("telar-core").PaneId,
+    composer: core.PaneId,
+    change_review: core.PaneId,
+    transcript: core.PaneId,
     thread_item: @import("ThreadItemControl.zig"),
     message_link: @import("MessageLinkControl.zig"),
     agent_control: @import("AgentControl.zig"),
@@ -50,13 +53,13 @@ pub const Action = union(enum) {
     composer_completion: @import("CompletionChoice.zig"),
     prompt: PromptAction,
     complete_path: @import("PathCompletionChoice.zig"),
-    history: @import("history_action.zig").Action,
+    history: history_action.Action,
     resize_sidebar,
     custom: u64,
 };
 
 /// Example: `const pane_id = target.paneId() orelse return;`
-pub fn paneId(target: Target) ?@import("telar-core").PaneId {
+pub fn paneId(target: Target) ?core.PaneId {
     return switch (target.action) {
         .composer, .transcript, .change_review => |id| id,
         .agent_control => |control| control.pane_id,

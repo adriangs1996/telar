@@ -4,7 +4,7 @@ The runtime owns the canonical label. The client prompt edits a candidate and
 closes only after a locally accepted request; it does not rename the replica.
 
 ```text
-operations/input/name_prompts.handleInput
+AttachedClient.inputPrompt
   -> AttachedClient.requestTabRename
      -> pending-operation gate, validate label, resolve exact target
      -> AttachedClient.sendTabRenameRequest -> owned rename_tab
@@ -40,7 +40,7 @@ replay cannot apply later. A correlated runtime failure preserves the old label
 and publishes the runtime notice. Reconnect rebuilds labels from snapshots.
 
 Source: `src/client/AttachedClient.zig` and
-`src/client/operations/input/name_prompts.zig`.
+`AttachedClient.inputPrompt`.
 Tests: `src/frontend/client/tests/renaming_and_telemetry.zig`,
 `tab_lifecycle.zig`, `src/client/model/tests/tabs.zig`, and
 `src/client/connection/outbox_support.zig` cover prompt lifetime, owned bytes,

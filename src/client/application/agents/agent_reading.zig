@@ -1,9 +1,9 @@
 //! Disposable navigation and admission for bounded historical reading windows.
+const data = @import("model");
 const core = @import("telar-core");
 const Model = @import("../../model/Model.zig");
 const Pane = @import("../../panes/Pane.zig");
 const Window = @import("../../panes/AgentHistoryWindow.zig");
-const Operation = @import("../../connection/AgentHistoryOperation.zig");
 
 /// Input records only bounded intent; preparation and allocation occur later.
 /// Example: `_ = navigate(model, id, .older);`
@@ -190,7 +190,7 @@ pub fn unfreeze(model: *Model, id: core.PaneId, attachment: u64) void {
 
 /// Owns the validated page only after exact request and attachment admission.
 /// Example: `_ = try apply(model, operation, response);`
-pub fn apply(model: *Model, operation: Operation, response: core.AgentHistoryPageView) !bool {
+pub fn apply(model: *Model, operation: data.AgentHistoryOperation, response: core.AgentHistoryPageView) !bool {
     const pane = resolve(model, operation) orelse return false;
     if (response.view_generation != operation.view_generation or response.snapshot.pane_id != pane.id or response.snapshot.pane_generation != pane.pane_generation) {
         return error.InvalidHistoryResponse;
@@ -208,7 +208,7 @@ pub fn apply(model: *Model, operation: Operation, response: core.AgentHistoryPag
 
 /// Failed requests stay readable and retry only after another navigation gesture.
 /// Example: `_ = failed(model, operation, message);`
-pub fn failed(model: *Model, operation: Operation, message: []const u8) bool {
+pub fn failed(model: *Model, operation: data.AgentHistoryOperation, message: []const u8) bool {
     const pane = resolve(model, operation) orelse return false;
     pane.agent_history.?.fail(message);
     invalidate(model, pane.id);
@@ -271,7 +271,7 @@ fn invalidate(model: *Model, id: core.PaneId) void {
     }
 }
 
-fn resolve(model: *Model, operation: Operation) ?*Pane {
+fn resolve(model: *Model, operation: data.AgentHistoryOperation) ?*Pane {
     const value = findPane(model, operation.owner.pane_id) orelse return null;
     if (value.attachment_generation != operation.owner.attachment_generation or value.pane_generation != operation.owner.pane_generation) {
         return null;

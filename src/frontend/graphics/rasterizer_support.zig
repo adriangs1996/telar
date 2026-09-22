@@ -4,6 +4,7 @@
 //! single-threaded. Callers own the destination buffer and the media-path
 //! scheduling around it.
 
+const assets = @import("assets");
 const BitmapBlend = @import("BitmapBlend.zig");
 const freetype = @import("freetype");
 const Surface = @import("Surface.zig");
@@ -11,7 +12,7 @@ const PixelBlend = @import("PixelBlend.zig");
 const Rasterizer = @import("Rasterizer.zig");
 const std = @import("std");
 
-pub const embedded_font: []const u8 = @import("assets").jetbrains_mono;
+pub const embedded_font: []const u8 = assets.jetbrains_mono;
 
 pub fn fixed26_6Round(value: anytype) i32 {
     const signed: i64 = @intCast(value);

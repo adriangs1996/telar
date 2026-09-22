@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const std = @import("std");
 const Fixture = @import("ConversationFixture.zig");
 const Text = @import("../widgets/MessageText.zig");
@@ -6,7 +7,6 @@ const client = @import("telar-client");
 const Canvas = @import("../widgets/Canvas.zig");
 const Color = @import("../render/Color.zig");
 const colors = @import("../render/cell_colors.zig");
-const CoreColor = @import("telar-core").Color;
 const Rect = @import("../render/Rect.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 const SyntaxPaint = @import("../widgets/SyntaxPaint.zig");
@@ -62,7 +62,7 @@ test "diff source coordinates exclude generated gutters and preserve Unicode thr
     defer fixture.deinit();
     try fixture.enableCache();
     const store = try fixture.state.?.threadText(std.testing.allocator);
-    const snapshot = try std.testing.allocator.create(@import("telar-core").AgentThreadSnapshot);
+    const snapshot = try std.testing.allocator.create(core.AgentThreadSnapshot);
     defer std.testing.allocator.destroy(snapshot);
     snapshot.* = .{ .pane_id = @enumFromInt(1), .pane_generation = 5, .revision = 7, .item_count = 1, .text_len = source.len };
     @memcpy(snapshot.text_storage[0..source.len], source);
@@ -127,14 +127,14 @@ test "diff syntax follows every theme and recolors existing source after palette
         try expectInk(&canvas, canvas.theme.syntax(.comment));
     }
 
-    const override: CoreColor = .{ .rgb = .{ 17, 37, 227 } };
+    const override: core.Color = .{ .rgb = .{ 17, 37, 227 } };
     canvas.theme.syntax_styles.set(.keyword, .{ .color = override });
     fixture.quads.clear();
     try text.draw(&canvas);
     try expectInk(&canvas, override);
 }
 
-fn expectInk(canvas: *const Canvas, color: CoreColor) !void {
+fn expectInk(canvas: *const Canvas, color: core.Color) !void {
     const foreground = canvas.theme.terminal.foreground;
     const expected = colors.withPalette(color, Color.rgb(foreground[0], foreground[1], foreground[2]), &canvas.theme.terminal.palette);
     for (canvas.quads.items()) |quad| {

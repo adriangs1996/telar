@@ -1,11 +1,9 @@
-const RectType = @import("telar-core").Rect;
-const TabsModel = @import("telar-client").TabsModel;
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
-const AlignmentType = @import("telar-client").Alignment;
+const core = @import("telar-core");
+const client = @import("telar-client");
 const Input = @This();
 
-area: RectType,
-tabs: ?*const TabsModel,
-model: *const MultiplexerModel,
-alignment: AlignmentType = .right,
+area: core.Rect,
+tabs: ?*const client.TabsModel,
+model: *const client.MultiplexerModel,
+alignment: client.Alignment = .right,
 animation_frame: u8 = 0,

@@ -5,6 +5,16 @@
 //! and the handshake fingerprint is derived from the same corpus, so a wire
 //! change cannot ship without a visible schema bump.
 
+const agent_thread = @import("schema/messages/agent_thread.zig");
+const AgentHistoryCursor = @import("AgentHistoryCursor.zig");
+const agent_thread_module = @import("agent_thread.zig");
+const AgentEffort = @import("AgentEffort.zig");
+const AgentSkills = @import("AgentSkills.zig");
+const agent_history_module = @import("agent_history.zig");
+const agent_history_messages = @import("schema/messages/agent_history.zig");
+const pane_kind = @import("schema/pane_kind.zig");
+const RecentConversation = @import("RecentConversation.zig");
+const RecentConversations = @import("RecentConversations.zig");
 const std = @import("std");
 const schema = @import("schema/schema.zig");
 const Entry = @import("Entry.zig");
@@ -991,7 +1001,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         try agent_threads.encodeAgentInterrupt(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3 }),
     ));
     helper.add(.{ .name = "agent_resume", .direction = .client, .golden_hex = golden.agent_resume }, helper.commit(
-        try @import("schema/messages/agent_thread.zig").encodeAgentResume(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .expected_revision = 4, .conversation_index = 1 }),
+        try agent_thread.encodeAgentResume(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .expected_revision = 4, .conversation_index = 1 }),
     ));
     helper.add(.{ .name = "agent_approval", .direction = .client, .golden_hex = golden.agent_approval }, helper.commit(
         try agent_threads.encodeAgentApproval(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .approval_id = 9, .accept = true }),
@@ -1019,8 +1029,8 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .request_id = @enumFromInt(5),
         .view_generation = 7,
         .snapshot = thread_snapshot,
-        .before = try @import("AgentHistoryCursor.zig").init("before"),
-        .after = try @import("AgentHistoryCursor.zig").init("after"),
+        .before = try AgentHistoryCursor.init("before"),
+        .after = try AgentHistoryCursor.init("after"),
         .has_before = true,
         .has_after = true,
     };
@@ -2404,15 +2414,15 @@ test "agent snapshot owns a bounded conversation and rejects corrupt ranges" {
     try std.testing.expectEqualStrings("run", copied.pending_approval.?.text());
     try std.testing.expectEqualStrings("Fake model", copied.models()[0].labelSlice());
     try std.testing.expectEqualStrings("low", copied.models()[0].efforts()[0].idSlice());
-    try std.testing.expectEqual(@import("agent_thread.zig").Access.read_only, copied.options.access);
+    try std.testing.expectEqual(agent_thread_module.Access.read_only, copied.options.access);
     try std.testing.expect(copied.accepts(snapshot.options));
-    copied.model_storage[0].default_effort = try @import("AgentEffort.zig").init("unsupported");
+    copied.model_storage[0].default_effort = try AgentEffort.init("unsupported");
     try std.testing.expectError(error.InvalidAgentCatalog, agent_threads.encodeAgentThreadSnapshot(&buffer, &copied));
     copied = snapshot;
-    copied.model_storage[0].effort_count = @import("agent_thread.zig").max_efforts + 1;
+    copied.model_storage[0].effort_count = agent_thread_module.max_efforts + 1;
     try std.testing.expectError(error.InvalidAgentCatalog, agent_threads.encodeAgentThreadSnapshot(&buffer, &copied));
     copied = snapshot;
-    copied.model_count = @import("agent_thread.zig").max_models + 1;
+    copied.model_count = agent_thread_module.max_models + 1;
     try std.testing.expectError(error.InvalidAgentCatalog, agent_threads.encodeAgentThreadSnapshot(&buffer, &copied));
     snapshot.item_storage[0].text_offset = 6;
     try std.testing.expectError(error.InvalidAgentSnapshot, agent_threads.encodeAgentThreadSnapshot(&buffer, &snapshot));
@@ -2598,7 +2608,7 @@ test "agent snapshot maximum metadata text catalog and approval fit a bounded fr
     snapshot.pending_approval = .{ .id = 1, .kind = .command, .description_len = limits.max_approval_bytes };
     @memset(&snapshot.pending_approval.?.description, 'a');
     const description: [122]u8 = @splat('s');
-    for (0..@import("AgentSkills.zig").capacity) |index| {
+    for (0..AgentSkills.capacity) |index| {
         var name: [3]u8 = undefined;
         _ = try std.fmt.bufPrint(&name, "{d:0>3}", .{index});
         try snapshot.skills.append(.{ .name = &name, .description = &description });
@@ -2617,7 +2627,7 @@ test "agent snapshot maximum metadata text catalog and approval fit a bounded fr
 
     const Page = @import("AgentHistoryPage.zig");
     const Cursor = @import("AgentHistoryCursor.zig");
-    const maximum_cursor: [@import("agent_history.zig").max_cursor_bytes]u8 = @splat('c');
+    const maximum_cursor: [agent_history_module.max_cursor_bytes]u8 = @splat('c');
     const page: Page = .{
         .request_id = @enumFromInt(1),
         .view_generation = 1,
@@ -2627,7 +2637,7 @@ test "agent snapshot maximum metadata text catalog and approval fit a bounded fr
         .has_before = true,
         .has_after = true,
     };
-    const page_bytes = try @import("schema/messages/agent_history.zig").encodeAgentHistoryPage(&buffer, &page);
+    const page_bytes = try agent_history_messages.encodeAgentHistoryPage(&buffer, &page);
     try std.testing.expect(page_bytes.len < buffer.len);
     try std.testing.expect(@sizeOf(Page) < 128 * 1024);
     try (try root.decodeServer(page_bytes)).agent_history_page.snapshot.copyTo(&copied);
@@ -2635,7 +2645,7 @@ test "agent snapshot maximum metadata text catalog and approval fit a bounded fr
 }
 
 fn fixtureAgentOptions() !@import("AgentOptions.zig") {
-    var options: @import("AgentOptions.zig") = .{ .effort = try @import("AgentEffort.zig").init("low") };
+    var options: @import("AgentOptions.zig") = .{ .effort = try AgentEffort.init("low") };
     try options.setModel("fake-model");
     return options;
 }
@@ -2650,7 +2660,7 @@ test "agent tab launch carries only cwd and rejects executable overrides" {
         .launch = .{ .cwd = "/project", .cwd_source = @enumFromInt(3), .arguments = &.{} },
     };
     const decoded = (try root.decodeClient(try tab_module.encodeCreateTab(&buffer, request))).create_tab;
-    try std.testing.expectEqual(@import("schema/pane_kind.zig").PaneKind.agent, decoded.kind);
+    try std.testing.expectEqual(pane_kind.PaneKind.agent, decoded.kind);
     try std.testing.expectEqualStrings("/project", decoded.launch.cwd);
     try std.testing.expectEqual(@as(u16, 0), decoded.launch.argument_count);
     try std.testing.expectEqual(@as(u64, 3), id_module.raw(decoded.launch.cwd_source.?));
@@ -2661,7 +2671,7 @@ test "agent tab launch carries only cwd and rejects executable overrides" {
 test "resume request bounds and recent catalog survive owned snapshot decoding" {
     const core = schema;
     var snapshot: core.AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 3, .status = .ready, .recent = .{ .phase = .ready } };
-    try snapshot.recent.append(try @import("RecentConversation.zig").init("previous-thread", "Parser fixes"));
+    try snapshot.recent.append(try RecentConversation.init("previous-thread", "Parser fixes"));
     var storage: [96 * 1024]u8 = undefined;
     var copied: core.AgentThreadSnapshot = undefined;
     const bytes = try core.encodeAgentThreadSnapshot(&storage, &snapshot);
@@ -2675,7 +2685,7 @@ test "resume request bounds and recent catalog survive owned snapshot decoding" 
     const request: core.AgentResume = .{ .request_id = @enumFromInt(7), .pane_id = snapshot.pane_id, .pane_generation = 3, .expected_revision = snapshot.revision, .conversation_index = 0 };
     const encoded = try core.encodeAgentResume(&storage, request);
     try std.testing.expectEqualDeep(request, (try core.decodeClient(encoded)).agent_resume);
-    storage[encoded.len - 1] = @import("RecentConversations.zig").capacity;
+    storage[encoded.len - 1] = RecentConversations.capacity;
     try std.testing.expectError(error.InvalidConversation, core.decodeClient(encoded));
 }
 

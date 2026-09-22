@@ -1,8 +1,6 @@
-const PaneIdType = @import("telar-core").PaneId;
-const TabLocationType = @import("telar-core").TabLocation;
-const RectType = @import("telar-core").Rect;
+const core = @import("telar-core");
 const DiscoveredPane = @This();
 
-pane_id: PaneIdType,
-location: TabLocationType,
-area: RectType,
+pane_id: core.PaneId,
+location: core.TabLocation,
+area: core.Rect,

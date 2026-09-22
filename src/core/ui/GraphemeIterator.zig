@@ -1,4 +1,3 @@
-const ClusterType = @import("Cluster.zig");
 const unicode = @import("unicode");
 const std = @import("std");
 const text = @import("text.zig");
@@ -22,7 +21,7 @@ const window = 16;
 
 pub const Cluster = @import("Cluster.zig");
 
-pub fn next(it: *GraphemeIterator) ?ClusterType {
+pub fn next(it: *GraphemeIterator) ?Cluster {
     if (it.index >= it.bytes.len) {
         return null;
     }

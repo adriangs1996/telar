@@ -4,12 +4,12 @@
 //! workspaces need a lookup is the adapter's knowledge: it holds the
 //! sprite page the images land in.
 
+const favicon_outcome = @import("favicon_outcome.zig");
 const std = @import("std");
 const Client = @import("../../AttachedClient.zig");
 const CompletionType = @import("../../completion/FaviconCompletion.zig");
 const ImageType = @import("../../completion/FaviconImage.zig");
 const RequestType = @import("FaviconRequest.zig");
-const Outcome = @import("favicon_outcome.zig").FaviconOutcome;
 const TestRunner = @import("FaviconTestRunner.zig");
 
 /// Starts a lookup when no other is in flight and a runner is bound.
@@ -40,7 +40,7 @@ pub fn request(client: *Client, wanted: RequestType) !bool {
 /// ```zig
 /// switch (complete(client, completion)) { .image => |image| place(image), else => {} }
 /// ```
-pub fn complete(client: *Client, completion: CompletionType) Outcome {
+pub fn complete(client: *Client, completion: CompletionType) favicon_outcome.FaviconOutcome {
     const answered = client.favicons.finish(completion.execution_id);
     const result = completion.result catch |err| {
         if (answered and err != error.FaviconNotFound) {

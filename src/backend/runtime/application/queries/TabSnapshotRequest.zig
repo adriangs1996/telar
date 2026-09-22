@@ -1,4 +1,4 @@
-const TabLocationType = @import("telar-core").TabLocation;
+const core = @import("telar-core");
 const Request = @This();
 
-location: TabLocationType,
+location: core.TabLocation,

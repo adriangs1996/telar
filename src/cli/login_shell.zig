@@ -3,9 +3,9 @@
 //! login shell once and letting it exec telar gives the native client the
 //! same world a terminal would.
 
+const backend = @import("telar-backend");
+const GuiOptions = @import("arguments/GuiOptions.zig");
 const std = @import("std");
-const max_args_module = @import("telar-backend").max_args;
-const login_shell_flag = @import("arguments/GuiOptions.zig").login_shell_flag;
 
 /// Set in the relaunched process so it never relaunches again.
 pub const marker = "TELAR_LOGIN_SHELL";
@@ -27,7 +27,7 @@ pub fn relaunch(init: std.process.Init, args: []const [*:0]const u8) !void {
     const executable = executable_buffer[0..try std.process.executablePath(init.io, &executable_buffer)];
     const shell = loginShell(environ);
 
-    var argv: [max_args_module + 6][]const u8 = undefined;
+    var argv: [backend.max_args + 6][]const u8 = undefined;
     var argc: usize = 0;
     for ([_][]const u8{ shell, "-l", "-c", command(shell), executable, "gui" }) |arg| {
         argv[argc] = arg;
@@ -35,7 +35,7 @@ pub fn relaunch(init: std.process.Init, args: []const [*:0]const u8) !void {
     }
     for (args) |arg| {
         const value = std.mem.span(arg);
-        if (std.mem.eql(u8, value, login_shell_flag)) {
+        if (std.mem.eql(u8, value, GuiOptions.login_shell_flag)) {
             continue;
         }
 

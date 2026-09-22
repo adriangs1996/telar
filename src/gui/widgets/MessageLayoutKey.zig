@@ -1,4 +1,5 @@
 //! Exact geometry context plus a fingerprint of the complete source span.
+const label_face = @import("label_face.zig");
 text_hash: u64,
 text_len: usize,
 owner: @import("MessageLayoutOwner.zig"),
@@ -11,7 +12,7 @@ scale: f32,
 pixel_height: u16,
 cell_width: u32,
 cell_height: u32,
-face: @import("label_face.zig").Face,
+face: label_face.Face,
 bold: bool,
 italic: bool,
 viewport_top: f32 = 0,

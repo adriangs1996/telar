@@ -1,7 +1,6 @@
-const PaneIdType = @import("telar-core").PaneId;
-const PointType = @import("telar-core").Point;
+const core = @import("telar-core");
 const PointerPress = @This();
 
-pane_id: PaneIdType,
-position: PointType,
+pane_id: core.PaneId,
+position: core.Point,
 now_ns: u64,

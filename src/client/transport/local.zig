@@ -1,9 +1,9 @@
 //! Client connection to a local telar runtime.
 
+const core = @import("telar-core");
 const std = @import("std");
-const SocketChannelType = @import("telar-core").SocketChannel;
 
-pub fn connect(io: std.Io, path: []const u8) !SocketChannelType {
+pub fn connect(io: std.Io, path: []const u8) !core.SocketChannel {
     _ = io;
     if (!std.fs.path.isAbsolute(path)) {
         return error.RelativePath;

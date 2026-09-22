@@ -1,9 +1,7 @@
-const RectType = @import("telar-core").Rect;
-const AgentStatusType = @import("telar-core").AgentStatus;
-const ColorType = @import("telar-core").Color;
+const core = @import("telar-core");
 const AgentStatusInput = @This();
 
-area: RectType,
-status: AgentStatusType,
+area: core.Rect,
+status: core.AgentStatus,
 animation_frame: u8,
-background: ColorType,
+background: core.Color,

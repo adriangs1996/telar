@@ -19,6 +19,7 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
         gui.addImport("freetype", app.modules.freetype);
         gui.addImport("assets", app.modules.assets);
         gui.addImport("telar-client", app.modules.client);
+        gui.addImport("model", app.modules.data);
         gui.addImport("telar-core", app.modules.core);
         gui.addObjectFile(app.modules.syntax_library.?);
         const diagram_options = b.addOptions();

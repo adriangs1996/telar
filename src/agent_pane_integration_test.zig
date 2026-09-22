@@ -1,7 +1,7 @@
+const backend = @import("telar-backend");
 const std = @import("std");
 const core = @import("telar-core");
 const Peer = @import("AgentRuntimePeer.zig");
-const serve = @import("telar-backend").serve;
 
 const provider =
     \\#!/bin/sh
@@ -54,7 +54,7 @@ test "runtime agent pane IPC retains its conversation across clients and reaps i
     const socket = try std.fmt.bufPrint(&socket_storage, "{s}/agent.sock", .{directory});
     var stop_storage: [1]u8 = undefined;
     var stop: std.Io.Queue(u8) = .init(&stop_storage);
-    var server = try io.concurrent(serve, .{ io, gpa, .{ .endpoint = socket, .environment = inherited, .stop = &stop } });
+    var server = try io.concurrent(backend.serve, .{ io, gpa, .{ .endpoint = socket, .environment = inherited, .stop = &stop } });
     defer {
         stop.putOneUncancelable(io, 0) catch {};
         _ = server.await(io) catch {};

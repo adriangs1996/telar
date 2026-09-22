@@ -1,5 +1,4 @@
-const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
-const ClientTabLayoutType = @import("telar-core").ClientTabLayout;
+const core = @import("telar-core");
 const SnapshotStorage = @This();
 
-tabs: [max_client_layout_tabs_module]ClientTabLayoutType = undefined,
+tabs: [core.max_client_layout_tabs]core.ClientTabLayout = undefined,

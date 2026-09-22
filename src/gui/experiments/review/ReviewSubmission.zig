@@ -1,19 +1,17 @@
 //! Copies saved comment bodies before an asynchronous delivery can outlive edits.
+const client = @import("telar-client");
 const std = @import("std");
-const Model = @import("telar-client").ChangeReviewModel;
-const Comment = @import("telar-client").ChangeReviewComment;
 const ReviewFeedback = @import("ReviewFeedback.zig");
-const limits = @import("telar-client").change_review_limits;
 const Self = @This();
 
 revision_id: []const u8 = "",
-comments: [limits.comments]Comment = @splat(.{}),
-feedback: [limits.comments]ReviewFeedback = undefined,
+comments: [client.change_review_limits.comments]client.ChangeReviewComment = @splat(.{}),
+feedback: [client.change_review_limits.comments]ReviewFeedback = undefined,
 count: usize = 0,
 
 /// Paths borrow a retained snapshot; bodies belong to this submission.
 /// Example: `try submission.capture(model, revision_id);`
-pub fn capture(self: *Self, model: *const Model, revision_id: []const u8) !void {
+pub fn capture(self: *Self, model: *const client.ChangeReviewModel, revision_id: []const u8) !void {
     self.count = 0;
     self.revision_id = revision_id;
     for (model.comments) |comment| {
@@ -44,7 +42,7 @@ pub fn write(self: *const Self, writer: *std.Io.Writer) !void {
 }
 
 test "review prototype delivery copies bodies and exports file coordinates instead of diff row offsets" {
-    const model = try std.testing.allocator.create(Model);
+    const model = try std.testing.allocator.create(client.ChangeReviewModel);
     defer std.testing.allocator.destroy(model);
     model.* = .{};
     try model.revisions[0].load("Updated sample.py\n@@ -20,2 +30,2 @@\n-old\n+first\n+second\n-old2\n");

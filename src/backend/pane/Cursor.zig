@@ -1,19 +1,17 @@
-const max_search_needle_bytes_module = @import("telar-core").max_search_needle_bytes;
-const max_search_matches_module = @import("telar-core").max_search_matches;
-const SearchMatchType = @import("telar-core").SearchMatch;
+const core = @import("telar-core");
 const std = @import("std");
 const text_search = @import("text_search.zig");
 const Cursor = @This();
 
 pub const rows_per_turn = 32;
-needle: [max_search_needle_bytes_module]u21 = undefined,
-prefix: [max_search_needle_bytes_module]usize = undefined,
+needle: [core.max_search_needle_bytes]u21 = undefined,
+prefix: [core.max_search_needle_bytes]usize = undefined,
 needle_len: usize = 0,
 fold: bool = true,
 revision: ?u64 = null,
 next_row: usize = 0,
 end_row: usize = 0,
-matches: [max_search_matches_module]SearchMatchType = undefined,
+matches: [core.max_search_matches]core.SearchMatch = undefined,
 count: u8 = 0,
 truncated: bool = false,
 

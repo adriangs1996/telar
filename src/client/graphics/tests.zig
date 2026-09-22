@@ -1,14 +1,12 @@
-const PaneIdType = @import("telar-core").PaneId;
-const ImageType = @import("telar-core").Image;
+const core = @import("telar-core");
 const retained = @import("retained.zig");
 const std = @import("std");
 const store_module = @import("store.zig");
-const ShmNameType = @import("telar-core").ShmName;
 
-const pane_id: PaneIdType = @enumFromInt(1);
-const image: ImageType = .{ .key = .{ .image_id = 1, .generation = 1 }, .format = .rgb, .width = 1, .height = 1, .byte_len = 3 };
+const pane_id: core.PaneId = @enumFromInt(1);
+const image: core.Image = .{ .key = .{ .image_id = 1, .generation = 1 }, .format = .rgb, .width = 1, .height = 1, .byte_len = 3 };
 
-fn receive(store: *retained.Store, metadata: ImageType) !void {
+fn receive(store: *retained.Store, metadata: core.Image) !void {
     try store.applyImage(.{ .pane_id = pane_id, .revision = metadata.key.generation, .image = metadata });
     try store.applyChunk(.{ .pane_id = pane_id, .revision = metadata.key.generation, .key = metadata.key, .offset = 0, .bytes = "rgb" });
 }
@@ -70,7 +68,7 @@ test "rejected shared transfers relinquish their unique name without freeing a b
     defer source.deinit();
     try receive(&source, image);
     const shared = source.images.get(store_module.identity(pane_id, image.key)).?.shared orelse return error.SharedMemoryUnavailable;
-    const name = try ShmNameType.init(shared.slice());
+    const name = try core.ShmName.init(shared.slice());
     var store = retained.Store.init(std.testing.allocator);
     defer store.deinit();
     try receive(&store, image);

@@ -1,7 +1,7 @@
-const PositionType = @import("../../bars/model.zig").Position;
+const model = @import("../../bars/model.zig");
 const CallbackRefType = @import("../../bars/CallbackRef.zig");
 const CallbackRequest = @This();
 
-position: PositionType,
+position: model.Position,
 reference: CallbackRefType,
 output: ?[]const u8 = null,

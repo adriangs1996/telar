@@ -1,6 +1,6 @@
 //! Test-only collectors for typed router decisions. Never imported by a host.
+const data = @import("model");
 const builtin = @import("builtin");
-const Control = @import("telar-client").Control;
 
 comptime {
     if (!builtin.is_test) {
@@ -8,7 +8,7 @@ comptime {
     }
 }
 
-pub fn routeEvent(router: anytype, input: @TypeOf(router.*).KeyInput, capture: anytype) !Control {
+pub fn routeEvent(router: anytype, input: @TypeOf(router.*).KeyInput, capture: anytype) !data.KeybindControl {
     errdefer router.eventFailed(input.key);
     return apply(router, router.routeEvent(input, .{
         .captures_keys = if (@hasDecl(@TypeOf(capture.*), "capturesKeys")) capture.capturesKeys() else false,
@@ -16,7 +16,7 @@ pub fn routeEvent(router: anytype, input: @TypeOf(router.*).KeyInput, capture: a
     }), capture);
 }
 
-pub fn apply(router: anytype, decision: @TypeOf(router.*).Decision, capture: anytype) !Control {
+pub fn apply(router: anytype, decision: @TypeOf(router.*).Decision, capture: anytype) !data.KeybindControl {
     switch (decision) {
         .forward => |value| {
             if (@hasDecl(@TypeOf(capture.*), "key")) {
@@ -50,7 +50,7 @@ pub fn apply(router: anytype, decision: @TypeOf(router.*).Decision, capture: any
     return .continue_routing;
 }
 
-pub fn feed(router: anytype, input: @TypeOf(router.*).Feed, capture: anytype) !Control {
+pub fn feed(router: anytype, input: @TypeOf(router.*).Feed, capture: anytype) !data.KeybindControl {
     var remaining = input;
     while (router.next(&remaining)) |event| {
         if (try decoded(router, .{ .event = event, .now_ns = input.now_ns }, capture) == .stop) {
@@ -61,16 +61,16 @@ pub fn feed(router: anytype, input: @TypeOf(router.*).Feed, capture: anytype) !C
     return .continue_routing;
 }
 
-pub fn expireInput(router: anytype, now_ns: u64, capture: anytype) !Control {
+pub fn expireInput(router: anytype, now_ns: u64, capture: anytype) !data.KeybindControl {
     const event = router.expireInput(now_ns) orelse return .continue_routing;
     return decoded(router, .{ .event = event, .now_ns = now_ns }, capture);
 }
 
-pub fn expireBinding(router: anytype, now_ns: u64, capture: anytype) !Control {
+pub fn expireBinding(router: anytype, now_ns: u64, capture: anytype) !data.KeybindControl {
     return apply(router, router.expireBinding(now_ns), capture);
 }
 
-fn decoded(router: anytype, input: anytype, capture: anytype) !Control {
+fn decoded(router: anytype, input: anytype, capture: anytype) !data.KeybindControl {
     const event = input.event;
     if (event.paste_content) {
         if (@hasDecl(@TypeOf(capture.*), "pasteContent")) {

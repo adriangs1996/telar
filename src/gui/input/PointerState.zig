@@ -1,4 +1,6 @@
 //! Native geometry admission plus independent bounded gesture owners.
+const pointer_owner = @import("pointer_owner.zig");
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -6,7 +8,6 @@ const Geometry = @import("PointerGeometry.zig");
 const Sample = @import("PointerSample.zig");
 const Event = @import("PointerEvent.zig");
 const PointerState = @This();
-const Owner = @import("pointer_owner.zig").Owner;
 const PointerHover = @import("PointerHover.zig");
 const LinkGesture = @import("LinkGesture.zig");
 
@@ -14,8 +15,12 @@ geometry: Geometry = .{},
 revision: u64 = 0,
 gesture_revision: u64 = 0,
 scroll_remainder: f64 = 0,
-owners: [3]Owner = @splat(.shared),
-last: [3]client.Mouse = @splat(.{ .x = 0, .y = 0, .kind = .release }),
+owners: [3]pointer_owner.Owner = @splat(.shared),
+last: [3]data.Mouse = @splat(.{
+    .x = 0,
+    .y = 0,
+    .kind = .release,
+}),
 hover: PointerHover = .{},
 link_gesture: LinkGesture = .{},
 

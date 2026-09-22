@@ -1,11 +1,11 @@
-const RequestIdType = @import("telar-core").RequestId;
+const core = @import("telar-core");
 const QueryOrigin = @import("QueryOrigin.zig");
 const StatsTop = @import("StatsTop.zig");
 const std = @import("std");
 /// Owned aggregate result for one stats query.
 const StatsResult = @This();
 
-request_id: RequestIdType,
+request_id: core.RequestId,
 origin: QueryOrigin,
 total: u64,
 unique: u64,

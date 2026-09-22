@@ -1,4 +1,7 @@
 //! Composition selects the concrete modal before any widget emits quads.
+const HistoryModalMetrics = @import("HistoryModalMetrics.zig");
+const WorkspaceFormLayout = @import("WorkspaceFormLayout.zig");
+const HistoryModalLayout = @import("HistoryModalLayout.zig");
 const Canvas = @import("../Canvas.zig");
 const core = @import("telar-core");
 const Modal = @import("Modal.zig");
@@ -30,7 +33,7 @@ pub fn compose(input: @import("OverlayComposition.zig"), pending: *@import("HitS
 
     const host: core.Rect = .{ .w = input.projection.host_size.cols, .h = input.projection.host_size.rows };
     if (prompt.target() == .create_workspace) {
-        const layout = try @import("WorkspaceFormLayout.zig").measure(input.canvas, input.projection);
+        const layout = try WorkspaceFormLayout.measure(input.canvas, input.projection);
         pending.modal = host;
         pending.native_modal = layout.bounds;
         try widgets.append(.{ .modal = .{ .workspace_form = .{ .layout = layout, .projection = input.projection } } });
@@ -38,8 +41,8 @@ pub fn compose(input: @import("OverlayComposition.zig"), pending: *@import("HitS
     }
 
     if (prompt.target() == .history) {
-        const metrics = @import("HistoryModalMetrics.zig").fromCanvas(input.canvas);
-        var layout = @import("HistoryModalLayout.zig").measure(metrics, prompt.inspecting());
+        const metrics = HistoryModalMetrics.fromCanvas(input.canvas);
+        var layout = HistoryModalLayout.measure(metrics, prompt.inspecting());
         const offset = @min(input.canvas.chrome.px(12), @max(0, layout.viewport.height - layout.bounds.y - layout.bounds.height));
         layout.offsetY(offset * (1 - input.history_reveal));
         pending.modal = host;

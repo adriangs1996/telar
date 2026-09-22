@@ -1,3 +1,4 @@
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -26,7 +27,7 @@ test "projection composes terminal thread link chrome notifications and modal be
     pane.cursor = .{ .x = 0, .y = 0, .visible = true, .appearance = .{ .shape = .bar } };
     const hit = try linkFor(&fixture);
     _ = model.publishNotification(0, .{ .title = "Build", .message = "Finished" });
-    _ = model.advanceNotifications(client.transition_duration_ns);
+    _ = model.advanceNotifications(data.notifications.transition_duration_ns);
     model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "Borrowed title" } });
     const projection = fixture.projection();
     var canvas = begin(&fixture, &projection);
@@ -85,7 +86,7 @@ test "complete widget list fits the maximum pane count with every optional layer
     const gui = fixture.session.gui;
     const panes = gui.app.model.activeTabModel().?;
     for (1..core.max_panes_per_tab) |index| {
-        var layout: client.LayoutSnapshot = .{};
+        var layout: data.LayoutSnapshot = .{};
         panes.layout.snapshot(gui.region.area, &layout);
         var largest = layout.views()[0];
         for (layout.views()[1..]) |view| {
@@ -99,7 +100,7 @@ test "complete widget list fits the maximum pane count with every optional layer
 
     _ = gui.app.model.publishNotification(0, .{ .title = "First", .message = "Finished" });
     _ = gui.app.model.publishNotification(0, .{ .title = "Second", .message = "Ready" });
-    _ = gui.app.model.advanceNotifications(client.transition_duration_ns);
+    _ = gui.app.model.advanceNotifications(data.notifications.transition_duration_ns);
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "All panes" } });
     const projection = fixture.projection();
     const hit = try linkFor(&fixture);
@@ -185,7 +186,7 @@ fn begin(fixture: *Fixture, projection: *const client.Projection) Canvas {
     const renderer = &fixture.session.gui.renderer;
     const gui = fixture.session.gui;
     renderer.begin();
-    gui.chrome.now_ns = client.transition_duration_ns;
+    gui.chrome.now_ns = data.notifications.transition_duration_ns;
     gui.chrome.animation.begin(gui.chrome.now_ns);
     gui.widgets.begin(projection.prompt != null);
     gui.widgets.prompt_generation = if (projection.prompt) |prompt| prompt.generation else 0;
@@ -217,7 +218,7 @@ fn linkFor(fixture: *Fixture) !@import("../input/LinkHit.zig") {
         .content = view.content,
         .area = view.content.row(0),
         .match = .{
-            .target = try client.LinkTarget.init("https://example.com"),
+            .target = try data.LinkTarget.init("https://example.com"),
             .start = .{
                 .x = 0,
                 .y = 0,

@@ -1,5 +1,5 @@
-const Target = @import("AttachmentTarget.zig");
+const data = @import("model");
 const PendingDeletion = @This();
 
-target: Target,
+target: data.AttachmentTarget,
 frames: u8,

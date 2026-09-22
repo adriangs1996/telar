@@ -1,6 +1,5 @@
-const RectType = @import("telar-core").Rect;
-const AgentProviderType = @import("telar-core").AgentProvider;
+const core = @import("telar-core");
 const ProviderMark = @This();
 
-area: RectType,
-provider: AgentProviderType,
+area: core.Rect,
+provider: core.AgentProvider,

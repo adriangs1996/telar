@@ -1,7 +1,7 @@
+const core = @import("telar-core");
 const vt = @import("ghostty-vt");
 const std = @import("std");
 const main = @import("main.zig");
-const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
 const KgpIngestContext = @This();
 
 const width = 1920;
@@ -47,7 +47,7 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator) !KgpIngestContext {
     var terminal = try vt.Terminal.init(io, gpa, .{
         .cols = main.cols,
         .rows = main.rows,
-        .kitty_image_storage_limit = max_image_bytes_per_screen_module,
+        .kitty_image_storage_limit = core.max_image_bytes_per_screen,
         .kitty_image_loading_limits = .direct,
     });
     errdefer terminal.deinit(gpa);

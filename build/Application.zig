@@ -4,6 +4,7 @@ const Modules = @import("Modules.zig");
 const lua_build = @import("lua.zig");
 const freetype_build = @import("freetype.zig");
 const assets_build = @import("assets.zig");
+const model_build = @import("model.zig");
 const client_build = @import("client.zig");
 const c_flags = @import("c_flags.zig");
 
@@ -105,7 +106,24 @@ pub fn init(b: *std.Build) ?@This() {
     });
     core.addImport("unicode", unicode);
     coverage.instrumentModule(core);
-    const client = client_build.add(b, core, .{ .api = lua_api, .telar = telar_lua });
+    const data = model_build.create(b, core);
+    b.modules.put(
+        b.allocator,
+        b.dupe("model"),
+        data,
+    ) catch @panic("out of memory");
+    coverage.instrumentModule(data);
+    const client = client_build.add(
+        b,
+        .{
+            .core = core,
+            .data = data,
+            .lua = .{
+                .api = lua_api,
+                .telar = telar_lua,
+            },
+        },
+    );
     coverage.instrumentModule(client);
 
     const backend = b.addModule("telar-backend", .{
@@ -136,6 +154,7 @@ pub fn init(b: *std.Build) ?@This() {
         .link_libc = true,
     });
     const freetype = freetype_build.add(b, .{ .target = target, .optimize = optimize, .disable_coverage = coverage.enabled });
+    frontend.addImport("model", data);
     frontend.addImport("telar-core", core);
     frontend.addImport("telar-client", client);
     frontend.addImport("kitty_protocol", kitty_protocol);
@@ -168,6 +187,7 @@ pub fn init(b: *std.Build) ?@This() {
     exe.root_module.addImport("telar-backend", backend);
     exe.root_module.addImport("telar-frontend", frontend);
     exe.root_module.addImport("telar-client", client);
+    exe.root_module.addImport("model", data);
     exe.root_module.addImport("telar-core", core);
     exe.root_module.addImport("ghostty-vt", ghostty_vt);
     const diagnostics_enabled = b.option(
@@ -200,6 +220,7 @@ pub fn init(b: *std.Build) ?@This() {
 
     const modules: Modules = .{
         .unicode = unicode,
+        .data = data,
         .core = core,
         .backend = backend,
         .frontend = frontend,

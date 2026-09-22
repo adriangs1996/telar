@@ -1,8 +1,9 @@
 //! Line widths for the visible portion of a table cell, without heap storage.
+const MessageTable = @import("MessageTable.zig");
 const Alignment = @This();
 
 pub const capacity = 256;
-kind: @import("MessageTable.zig").Alignment = .left,
+kind: MessageTable.Alignment = .left,
 first_row: usize = 0,
 widths: [capacity]f32 = @splat(0),
 

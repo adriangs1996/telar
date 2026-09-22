@@ -1,7 +1,7 @@
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const Request = @This();
 
 event_id: u64,
 bytes: []u8,
-pane: PaneIdType,
+pane: core.PaneId,
 pane_generation: u64,

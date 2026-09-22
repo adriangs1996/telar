@@ -1,3 +1,5 @@
+const native = @import("../native/native.zig");
+const ImagePreview = @import("../widgets/interaction/ImagePreview.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Fixture = @import("ConversationFixture.zig");
@@ -45,7 +47,7 @@ test "four attachment previews keep aspect ratio and reuse textures across draft
     }
     try std.testing.expectEqual(@as(usize, 4), drawn);
     try std.testing.expect(store.nextJob() == null);
-    try @import("../native/native.zig").DiagramTexture.validate(&store.textures());
+    try native.DiagramTexture.validate(&store.textures());
     canvas.chrome.ratio = 2;
     widget.bounds.width = 20;
     try widget.draw(&canvas);
@@ -55,7 +57,7 @@ test "four attachment previews keep aspect ratio and reuse textures across draft
 test "attachment source identity cannot collide with a diagram containing the same text" {
     var store = Store.init(std.testing.allocator);
     defer store.deinit();
-    var request = @import("../widgets/interaction/ImagePreview.zig").requestFor(.{ .pane_id = @enumFromInt(1), .generation = 7, .path = "/tmp/image.png" });
+    var request = ImagePreview.requestFor(.{ .pane_id = @enumFromInt(1), .generation = 7, .path = "/tmp/image.png" });
     _ = store.request(request);
     request.kind = .mermaid;
     try std.testing.expect(store.lookup(request) == null);

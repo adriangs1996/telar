@@ -1,3 +1,5 @@
+const native = @import("../native/native.zig");
+const frame_widget = @import("../widgets/frame_widget.zig");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -37,7 +39,7 @@ pub fn resize(fixture: *Fixture, cols: u16, rows: u16) !void {
 
 /// Measures one exact window through the GUI client and settles the PTY.
 /// Example: `try fixture.measure(.{ .width = 800, .height = 600, .scale = 2 });`
-pub fn measure(fixture: *Fixture, viewport: @import("../native/native.zig").Viewport) !void {
+pub fn measure(fixture: *Fixture, viewport: native.Viewport) !void {
     const renderer = &fixture.session.gui.renderer;
     const gui = fixture.session.gui;
     const size = try gui.resizeViewport(viewport);
@@ -76,7 +78,7 @@ pub fn prepare(fixture: *Fixture, projection_value: client.Projection) !void {
     fixture.chrome.animation.begin(fixture.chrome.now_ns);
     canvas.animation = &fixture.chrome.animation;
     var context = try fixture.chrome.begin(&canvas, &projection_value);
-    var widgets: @import("../widgets/frame_widget.zig").List = .{};
+    var widgets: frame_widget.List = .{};
     try fixture.chrome.compose(&context, &widgets);
     try widgets.draw(&canvas);
     fixture.chrome.seal();

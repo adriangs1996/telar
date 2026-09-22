@@ -1,5 +1,15 @@
 //! Public entrypoint for telar-backend.
 
+const model = @import("history/model.zig");
+const blit_module = @import("pane/blit.zig");
+const damage = @import("pane/damage.zig");
+const shared_transfer = @import("media/shared_transfer.zig");
+const media = @import("media/media.zig");
+const command_support = @import("pty/command_support.zig");
+const service_support = @import("plugins/service_support.zig");
+const handshake = @import("transport/handshake.zig");
+const host_support = @import("plugins/host_support.zig");
+const instance = @import("runtime/instance.zig");
 pub const AgentDescriptionOptions = @import("runtime/AgentDescriptionOptions.zig");
 pub const Authority = @import("proxy/Authority.zig");
 pub const AuthorityFiles = @import("proxy/AuthorityFiles.zig");
@@ -11,7 +21,7 @@ pub const GraphicsLimits = @import("media/GraphicsLimits.zig");
 pub const IngestTestGate = @import("runtime/IngestTestGate.zig");
 pub const Initialization = @import("runtime/Initialization.zig");
 pub const InputScanner = @import("history/InputScanner.zig");
-pub const LaunchPhase = @import("history/model.zig").LaunchPhase;
+pub const LaunchPhase = model.LaunchPhase;
 pub const LaunchTestFault = @import("runtime/application/LaunchTestFault.zig");
 pub const LocalListener = @import("transport/LocalListener.zig");
 pub const Options = @import("engine/Options.zig");
@@ -23,16 +33,16 @@ pub const ServiceSpec = @import("plugins/ServiceSpec.zig");
 pub const Session = @import("pty/Session.zig");
 pub const SharedFrameView = @import("media/SharedFrameView.zig");
 pub const Stats = @import("media/Stats.zig");
-pub const blit = @import("pane/blit.zig").blit;
-pub const collectSpans = @import("pane/damage.zig").collectSpans;
-pub const freezeSharedPixels = @import("media/shared_transfer.zig").freezeSharedPixels;
-pub const image_loading_limits = @import("media/media.zig").image_loading_limits;
-pub const max_args = @import("pty/command_support.zig").max_args;
-pub const max_workers = @import("plugins/service_support.zig").max_workers;
-pub const performSchema = @import("transport/handshake.zig").performSchema;
-pub const placementValue = @import("media/media.zig").placementValue;
-pub const run = @import("plugins/host_support.zig").run;
-pub const serve = @import("runtime/instance.zig").serve;
+pub const blit = blit_module.blit;
+pub const collectSpans = damage.collectSpans;
+pub const freezeSharedPixels = shared_transfer.freezeSharedPixels;
+pub const image_loading_limits = media.image_loading_limits;
+pub const max_args = command_support.max_args;
+pub const max_workers = service_support.max_workers;
+pub const performSchema = handshake.performSchema;
+pub const placementValue = media.placementValue;
+pub const run = host_support.run;
+pub const serve = instance.serve;
 
 test {
     _ = @import("change_review/Service.zig");

@@ -1,6 +1,5 @@
-const RectType = @import("telar-core").Rect;
-const StyleType = @import("telar-core").Style;
+const core = @import("telar-core");
 const Placement = @This();
 
-rect: RectType,
-style: StyleType,
+rect: core.Rect,
+style: core.Style,

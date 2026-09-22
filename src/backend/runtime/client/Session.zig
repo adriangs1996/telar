@@ -1,21 +1,16 @@
+const core = @import("telar-core");
 const ClientKey = @import("../../history/ClientKey.zig");
-const SocketChannelType = @import("telar-core").SocketChannel;
 const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
 const DeliveryType = @import("../delivery/Delivery.zig");
 const session_support = @import("session_support.zig");
-const PaneIdType = @import("telar-core").PaneId;
 const PendingPaneFocus = @import("PendingPaneFocus.zig");
-const TerminalColorsType = @import("telar-core").TerminalColors;
 const PendingType = @import("../application/Pending.zig");
 const std = @import("std");
-const CompletePaneFocusType = @import("telar-core").CompletePaneFocus;
-const max_frame_size_module = @import("telar-core").max_frame_size;
-const read_buffer_size_module = @import("telar-core").read_buffer_size;
 const PendingClientCommand = @import("PendingClientCommand.zig");
 const Session = @This();
 
 key: ClientKey,
-connection: SocketChannelType,
+connection: core.SocketChannel,
 receive_buffer: []u8,
 read_buffer: []u8,
 attachments: AttachmentStoreType = .{},
@@ -24,17 +19,17 @@ role: session_support.Role = .undecided,
 read_pending: bool = false,
 send_pending: bool = false,
 closing: bool = false,
-last_input_pane: PaneIdType = .invalid,
+last_input_pane: core.PaneId = .invalid,
 last_input_sequence: u64 = 0,
 pending_client_command: ?PendingClientCommand = null,
 pending_pane_focus: ?PendingPaneFocus = null,
-terminal_colors: TerminalColorsType = .{},
+terminal_colors: core.TerminalColors = .{},
 pending_search: ?PendingType = null,
 search_scheduled: bool = false,
 cell_deadline_ns: ?u64 = null,
 
 /// Example: `if (session.setTerminalColors(colors)) { updateOwnedPanes(); }`.
-pub fn setTerminalColors(session: *Session, colors: TerminalColorsType) bool {
+pub fn setTerminalColors(session: *Session, colors: core.TerminalColors) bool {
     if (std.meta.eql(session.terminal_colors, colors)) {
         return false;
     }
@@ -61,7 +56,7 @@ pub fn releaseFocus(session: *Session) void {
 
 /// Checks all correlation fields without consuming an unrelated completion.
 /// Example: `if (!session.acceptsFocusCompletion(sender, reply)) return;`.
-pub fn acceptsFocusCompletion(session: *const Session, sender: ClientKey, reply: CompletePaneFocusType) bool {
+pub fn acceptsFocusCompletion(session: *const Session, sender: ClientKey, reply: core.CompletePaneFocus) bool {
     const pending = session.pending_pane_focus orelse return false;
 
     return std.meta.eql(pending.target, sender) and pending.request_id == reply.request_id and
@@ -75,10 +70,10 @@ pub fn acceptsFocusCompletion(session: *const Session, sender: ClientKey, reply:
 /// ```zig
 /// const session = try Session.create(gpa, key, connection);
 /// ```
-pub fn create(gpa: std.mem.Allocator, key: ClientKey, connection: SocketChannelType) !*Session {
-    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
+pub fn create(gpa: std.mem.Allocator, key: ClientKey, connection: core.SocketChannel) !*Session {
+    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
     errdefer gpa.free(receive_buffer);
-    const read_buffer = try gpa.alloc(u8, read_buffer_size_module);
+    const read_buffer = try gpa.alloc(u8, core.read_buffer_size);
     errdefer gpa.free(read_buffer);
 
     var delivery = try DeliveryType.init(gpa);

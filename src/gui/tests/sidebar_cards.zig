@@ -1,5 +1,6 @@
 //! Slice 4 of the GUI visual language: the sidebar header, one
 //! list ordered by attention and the three-row card in device pixels.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -24,7 +25,7 @@ test {
 
 // Six agents across the four groups; the idle one sits in the fixture's
 // focused pane so its card is the selected one.
-const entries = [_]client.AgentInput{
+const entries = [_]data.AgentInput{
     .{ .key = .{ .pane_id = Session.pane_id, .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = .claude, .status = .ready, .status_age_s = 10, .workspace_label = "telar", .session_title = "idle shell", .last_event = "done: tests green" },
     .{ .key = .{ .pane_id = @enumFromInt(52), .pane_generation = 1 }, .location = Session.location, .pane_index = 2, .provider = .codex, .status = .working, .status_age_s = 30, .workspace_label = "telar", .session_title = "fix proxy tests", .last_event = "\u{bb} Edit src/client/bars/Output.zig" },
     .{ .key = .{ .pane_id = @enumFromInt(53), .pane_generation = 1 }, .location = Session.location, .pane_index = 3, .provider = .claude, .status = .blocked, .blocked_reason = .permission, .status_age_s = 90, .workspace_label = "server", .session_title = "rotate the CA", .last_event = "Run zig build test?" },

@@ -1,4 +1,5 @@
 //! Bounded presentation rows. Work is folded without changing the transcript.
+const client = @import("telar-client");
 const std = @import("std");
 const View = @import("ThreadItemView.zig");
 const State = @import("interaction/State.zig");
@@ -85,5 +86,5 @@ fn sameTurn(first: View, next: View) bool {
 }
 
 fn turnKey(view: View) u64 {
-    return @import("telar-client").AgentHistoryWindow.groupKey(view.thread.transcript.?, view.item);
+    return client.AgentHistoryWindow.groupKey(view.thread.transcript.?, view.item);
 }

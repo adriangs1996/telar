@@ -1,6 +1,6 @@
+const core = @import("telar-core");
 const Scored = @import("Scored.zig");
 const QueryType = @import("Query.zig");
-const score_module = @import("telar-core").score;
 const FuzzyPage = @This();
 
 pub const max_candidates = 1000;
@@ -17,7 +17,7 @@ pub fn init(request: *const QueryType) FuzzyPage {
 /// Keeps newer candidates ahead of older candidates on equal scores.
 /// Example: `ranking.consider(.{ .id = id, .command = text }, query);`.
 pub fn consider(ranking: *FuzzyPage, candidate: struct { id: i64, command: []const u8 }, query: []const u8) void {
-    const score = score_module(candidate.command, query) orelse return;
+    const score = core.score(candidate.command, query) orelse return;
     if (ranking.count == ranking.wanted and score <= ranking.best[ranking.count - 1].score) {
         return;
     }

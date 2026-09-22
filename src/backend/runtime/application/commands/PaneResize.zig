@@ -1,6 +1,5 @@
-const PaneIdType = @import("telar-core").PaneId;
-const TerminalSizeType = @import("telar-core").TerminalSize;
+const core = @import("telar-core");
 const PaneResize = @This();
 
-pane_id: PaneIdType,
-size: TerminalSizeType,
+pane_id: core.PaneId,
+size: core.TerminalSize,

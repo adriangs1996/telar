@@ -1,5 +1,5 @@
-const AgentInput = @import("AgentInput.zig");
+const data = @import("model");
 const SnapshotInput = @This();
 
 revision: u64,
-agents: []const AgentInput,
+agents: []const data.AgentInput,

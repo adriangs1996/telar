@@ -1,13 +1,10 @@
 //! Configuration loading shared by CLI entrypoints and `telar config check`.
 
+const client = @import("telar-client");
+const data = @import("model");
 const std = @import("std");
 const Selection = @import("Selection.zig");
-const GenerationType = @import("telar-client").Generation;
-const DiagnosticType = @import("telar-client").Diagnostic;
 const ConfigCheckOptionsType = @import("arguments/ConfigCheckOptions.zig");
-const defaultPath_module = @import("telar-client").defaultPath;
-const RegistryType = @import("telar-client").Registry;
-const validate = @import("telar-client").validateDefaultBindings;
 const ResolvedSelection = @import("ResolvedSelection.zig");
 
 /// Loads one config generation or returns null when configuration is disabled
@@ -17,7 +14,7 @@ const ResolvedSelection = @import("ResolvedSelection.zig");
 /// const generation = try config.loadGeneration(process_init, .{}, &path_buffer);
 /// defer if (generation) |value| value.deinit();
 /// ```
-pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer: []u8) !?*GenerationType {
+pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer: []u8) !?*client.Generation {
     if (selection.disabled) {
         return null;
     }
@@ -33,8 +30,8 @@ pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer:
         },
         else => |other| return other,
     };
-    var diagnostic: DiagnosticType = .{};
-    return GenerationType.loadFile(.{
+    var diagnostic: data.Diagnostic = .{};
+    return client.Generation.loadFile(.{
         .gpa = init.gpa,
         .io = init.io,
         .diagnostic = &diagnostic,
@@ -59,9 +56,9 @@ pub fn runCheck(init: std.process.Init, options: ConfigCheckOptionsType) !void {
     const path = if (options.path) |value|
         std.mem.span(value)
     else
-        try defaultPath_module(init.minimal.environ, &path_buffer);
-    var diagnostic: DiagnosticType = .{};
-    const generation = GenerationType.loadFile(.{
+        try client.defaultPath(init.minimal.environ, &path_buffer);
+    var diagnostic: data.Diagnostic = .{};
+    const generation = client.Generation.loadFile(.{
         .gpa = init.gpa,
         .io = init.io,
         .diagnostic = &diagnostic,
@@ -75,13 +72,13 @@ pub fn runCheck(init: std.process.Init, options: ConfigCheckOptionsType) !void {
     };
     defer generation.deinit();
 
-    const registry = try RegistryType.load(.{
+    const registry = try client.Registry.load(.{
         .gpa = init.gpa,
         .io = init.io,
         .config_dir = generation.configDir(),
     }, generation.pluginSlice());
     try registry.validateConfiguredActions(generation.snapshot.bindingSlice());
-    validate(generation.snapshot.prefix, generation.snapshot.bindingSlice()) catch |err| {
+    client.validateDefaultBindings(generation.snapshot.prefix, generation.snapshot.bindingSlice()) catch |err| {
         std.debug.print("telar config: keybindings do not compile: {s}\n", .{@errorName(err)});
         return err;
     };
@@ -94,7 +91,7 @@ fn resolveSelection(environ: std.process.Environ, selection: Selection, path_buf
     }
 
     return .{
-        .path = try defaultPath_module(environ, path_buffer),
+        .path = try client.defaultPath(environ, path_buffer),
         .explicit = selection.profile != null,
     };
 }

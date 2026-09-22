@@ -1,3 +1,4 @@
+const font_id = @import("font_id.zig");
 const freetype = @import("freetype");
 const ShapedRun = @import("ShapedRun.zig");
 const Entry = @This();
@@ -8,8 +9,8 @@ pub const max_glyphs = 32;
 text: [max_bytes]u8 = undefined,
 len: u8 = 0,
 count: u8 = 0,
-font: @import("font_id.zig").Id = .primary,
-preferred: @import("font_id.zig").Id = .primary,
+font: font_id.Id = .primary,
+preferred: font_id.Id = .primary,
 pixel_height: u16 = 0,
 columns: u32 = 0,
 rtl: bool = false,

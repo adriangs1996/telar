@@ -1,3 +1,5 @@
+const client = @import("telar-client");
+const core = @import("telar-core");
 const KittyGraphicsWriterType = @import("../../graphics/KittyGraphicsWriter.zig");
 const KittySidebarRendererType = @import("../../graphics/KittySidebarRenderer.zig");
 const IconsRenderer = @import("../../graphics/IconsRenderer.zig");
@@ -5,9 +7,7 @@ const ToastRenderer = @import("../../graphics/ToastRenderer.zig");
 const ModalRenderer = @import("../../graphics/ModalRenderer.zig");
 const PillRenderer = @import("../../graphics/PillRenderer.zig");
 const delivery_module = @import("../../attachments/delivery.zig");
-const Metrics = @import("telar-client").TelemetryMetrics;
 const std = @import("std");
-const enabled_module = @import("telar-core").enabled;
 const CombinedGraphicsWriter = @This();
 
 panes: KittyGraphicsWriterType,
@@ -18,7 +18,7 @@ modal: *ModalRenderer,
 pill: *PillRenderer,
 attachments: *delivery_module.Store,
 allow_toast_transmission: bool,
-metrics: *Metrics,
+metrics: *client.TelemetryMetrics,
 
 pub fn writeOpaque(context: *anyopaque, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     const self: *CombinedGraphicsWriter = @ptrCast(@alignCast(context));
@@ -67,7 +67,7 @@ pub fn writeOpaque(context: *anyopaque, writer: *std.Io.Writer) std.Io.Writer.Er
             }
         }
     }
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         self.metrics.pane_graphics_flushed_bytes += pane_bytes;
         self.metrics.toast_graphics_flushed_bytes += toast_bytes;
         self.metrics.sidebar_graphics_flushed_bytes += sidebar_bytes;

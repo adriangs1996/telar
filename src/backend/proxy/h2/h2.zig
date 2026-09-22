@@ -1,13 +1,8 @@
 //! Public HTTP/2 relay capability for intercepted TLS connections.
 
 const relay_mod = @import("relay.zig");
-const StatsType = @import("Stats.zig");
-const SettingsType = @import("Settings.zig");
 const GenericConnectionPort = @import("GenericConnectionPort.zig").Type;
 const GenericConnection = @import("GenericConnection.zig").Type;
-const H2Route = @import("H2Route.zig");
-const RelayOptionsType = @import("RelayOptions.zig");
-const RelayConfigurationType = @import("RelayConfiguration.zig");
 const TransformPipelineType = @import("../TransformPipeline.zig");
 const TransformContextType = @import("../TransformContext.zig");
 const std = @import("std");
@@ -46,8 +41,8 @@ pub const RelayConfiguration = @import("RelayConfiguration.zig");
 /// ```zig
 /// const request = relayOptions(.request, &settings, .{ .dialect = .anthropic_messages });
 /// ```
-pub fn relayOptions(direction: relay_mod.Direction, settings: *SettingsType, configuration: RelayConfigurationType) RelayOptionsType {
-    const route: H2Route = switch (direction) {
+pub fn relayOptions(direction: relay_mod.Direction, settings: *Settings, configuration: RelayConfiguration) RelayOptions {
+    const route: Route = switch (direction) {
         .request => .{ .from = .child, .to = .origin, .direction = .request },
         .response => .{ .from = .origin, .to = .child, .direction = .response },
     };
@@ -79,7 +74,7 @@ pub fn relayOptions(direction: relay_mod.Direction, settings: *SettingsType, con
 ///     .dialect = .anthropic_messages,
 /// }, &sink);
 /// ```
-pub fn relay(session: anytype, options: RelayOptionsType, sink: anytype) StatsType {
+pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
     const route = options.route;
     const transformation = options.transformation orelse return relay_mod.relay(
         session,
@@ -112,7 +107,7 @@ pub fn relay(session: anytype, options: RelayOptionsType, sink: anytype) StatsTy
 }
 
 test "relay options map direction and peer settings" {
-    var settings: SettingsType = .{};
+    var settings: Settings = .{};
     var pipeline: TransformPipelineType = .{};
     const context: TransformContextType = undefined;
 

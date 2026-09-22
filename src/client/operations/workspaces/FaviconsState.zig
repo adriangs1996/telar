@@ -1,7 +1,7 @@
 //! Client-owned bookkeeping of the favicon worker: the one lookup in
 //! flight, its workspace and the next execution identity. Results for any
 //! other execution are stale and released unread.
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const core = @import("telar-core");
 const State = @This();
 
 pub const ExecutionId = enum(u64) {
@@ -12,11 +12,11 @@ pub const ExecutionId = enum(u64) {
 next_id: u64 = 1,
 /// Execution whose result is awaited; `.none` while the worker is idle.
 execution: ExecutionId = .none,
-workspace: WorkspaceIdType = .invalid,
+workspace: core.WorkspaceId = .invalid,
 
 /// Reserves an identity for looking up `workspace`.
 /// Example: `const id = state.reserve(workspace);`
-pub fn reserve(state: *State, workspace: WorkspaceIdType) ExecutionId {
+pub fn reserve(state: *State, workspace: core.WorkspaceId) ExecutionId {
     const id: ExecutionId = @enumFromInt(state.next_id);
     state.next_id += 1;
     state.execution = id;

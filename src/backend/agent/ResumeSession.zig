@@ -1,16 +1,16 @@
+const core = @import("telar-core");
 const std = @import("std");
-const AgentProvider = @import("telar-core").AgentProvider;
 const SessionReference = @import("SessionReference.zig");
 const providers = @import("providers/providers.zig");
 const ResumeSession = @This();
 
-provider: AgentProvider,
+provider: core.AgentProvider,
 reference: SessionReference,
 
 /// Accepts only a built-in provider and a UUID, so stored values cannot add
 /// options or shell syntax to a reconstructed resume command.
 /// Example: `const session = try ResumeSession.init(.claude, reference);`.
-pub fn init(provider: AgentProvider, reference: SessionReference) !ResumeSession {
+pub fn init(provider: core.AgentProvider, reference: SessionReference) !ResumeSession {
     if (providers.of(provider).resume_prefix == null or !isUuid(reference.slice())) {
         return error.InvalidResumeSession;
     }

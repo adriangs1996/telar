@@ -4,8 +4,8 @@ The runtime owns workspace name, tab membership, labels and order. The client
 retains layouts, focus, buffers and disposable resources for canonical identities.
 
 ```text
-operations/input/name_prompts.handleInput
-  -> operations/workspaces/workspace_renames.request
+AttachedClient.inputPrompt
+  -> AttachedClient.requestWorkspaceRename
   -> owned rename_workspace -> runtime rename
 
 rename reply or requested workspace_snapshot
@@ -58,7 +58,7 @@ failure preserves the canonical replica and completed cleanup. Reconnect or a
 later snapshot repairs disposable resources. No operation schedules a draw.
 
 Source: `src/client/AttachedClient.zig`,
-`workspace_renames.zig`, and `src/client/model/Model.zig`.
+`AttachedClient.requestWorkspaceRename`, and `src/client/model/Model.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`,
 `renaming_and_telemetry.zig`, `src/client/model/tests/workspaces.zig`, and
 `tabs.zig` cover correlation, atomic validation, retained layouts, foreground

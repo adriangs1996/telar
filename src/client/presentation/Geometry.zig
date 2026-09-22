@@ -1,17 +1,15 @@
-const RegionType = @import("../workspace/Region.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
+const data = @import("model");
+const core = @import("telar-core");
 const GeometryPane = @import("GeometryPane.zig");
 const ProjectionType = @import("Projection.zig");
 const std = @import("std");
 const Geometry = @This();
 
-region: RegionType = .{ .area = .{}, .revision = 0 },
-location: ?TabLocationType = null,
+region: data.Region = .{ .area = .{}, .revision = 0 },
+location: ?core.TabLocation = null,
 layout_revision: u64 = 0,
-host_size: TerminalSizeType = .{ .cols = 0, .rows = 0 },
-panes: [max_panes_per_tab_module]GeometryPane = undefined,
+host_size: core.TerminalSize = .{ .cols = 0, .rows = 0 },
+panes: [core.max_panes_per_tab]GeometryPane = undefined,
 len: u8 = 0,
 
 /// Captures coordinate identity, not cells or model pointers.

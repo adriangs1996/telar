@@ -1,8 +1,8 @@
-const RectType = @import("telar-core").Rect;
-const Icon = @import("telar-client").Icon;
+const core = @import("telar-core");
+const client = @import("telar-client");
 const Mark = @This();
 
-area: RectType,
-icon: Icon,
+area: core.Rect,
+icon: client.Icon,
 foreground: [3]u8,
 background: [3]u8,

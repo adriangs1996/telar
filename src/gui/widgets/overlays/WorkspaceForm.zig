@@ -1,4 +1,5 @@
 //! Native context creation: pixel-sized fields, folder suggestions and actions.
+const Target = @import("../interaction/Target.zig");
 const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
 const Rect = @import("../../render/Rect.zig");
@@ -17,7 +18,7 @@ pub fn draw(widget: WorkspaceForm, canvas: *Canvas) !void {
     const first = canvas.quads.items().len;
     try widget.header(canvas);
     if (layout.compact) {
-        const field: @import("../interaction/Target.zig").Field = if (widget.projection.prompt.?.mode.create_workspace.focus == .name) .name else .directory;
+        const field: Target.Field = if (widget.projection.prompt.?.mode.create_workspace.focus == .name) .name else .directory;
         var editor = TextField.fromPrompt(&widget.projection.prompt.?, layout.directory, field);
         editor.form_control = true;
         editor.placeholder = if (field == .name) "Context name" else "Working directory";

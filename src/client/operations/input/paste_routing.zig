@@ -2,19 +2,15 @@
 
 const routing = @import("../../application/input/paste_routing.zig");
 const Client = @import("../../AttachedClient.zig");
-const ApplicationInputPasteRoutingOutcome = @import("../../application/input/paste_routing.zig").Outcome;
-const ApplicationInputPasteRoutingCommand = @import("../../application/input/paste_routing.zig").Command;
 const PasteRoutingAuthority = @import("../../application/input/PasteRoutingAuthority.zig");
 const RouteType = @import("../../application/input/Route.zig");
-const name_prompts = @import("name_prompts.zig");
-const pane_pastes = @import("pane_pastes.zig");
 
 /// Routes one opening boundary using the current client authority.
 ///
 /// ```zig
 /// _ = try start(client);
 /// ```
-pub fn start(client: *Client) !ApplicationInputPasteRoutingOutcome {
+pub fn start(client: *Client) !routing.Outcome {
     return dispatch(client, .start);
 }
 
@@ -23,7 +19,7 @@ pub fn start(client: *Client) !ApplicationInputPasteRoutingOutcome {
 /// ```zig
 /// _ = try content(client, bytes);
 /// ```
-pub fn content(client: *Client, text: []const u8) !ApplicationInputPasteRoutingOutcome {
+pub fn content(client: *Client, text: []const u8) !routing.Outcome {
     return dispatch(client, .{ .content = text });
 }
 
@@ -32,11 +28,11 @@ pub fn content(client: *Client, text: []const u8) !ApplicationInputPasteRoutingO
 /// ```zig
 /// _ = try finish(client);
 /// ```
-pub fn finish(client: *Client) !ApplicationInputPasteRoutingOutcome {
+pub fn finish(client: *Client) !routing.Outcome {
     return dispatch(client, .finish);
 }
 
-fn dispatch(client: *Client, command: ApplicationInputPasteRoutingCommand) !ApplicationInputPasteRoutingOutcome {
+fn dispatch(client: *Client, command: routing.Command) !routing.Outcome {
     const owner = routing.resolve(snapshot(client), command) orelse return .ignored;
     try route(client, .{ .owner = owner, .command = command });
     return switch (owner) {
@@ -60,14 +56,18 @@ fn snapshot(client: *const Client) PasteRoutingAuthority {
 fn route(client: *Client, value: RouteType) !void {
     switch (value.owner) {
         .prompt => switch (value.command) {
-            .start => _ = try name_prompts.handleInput(client, .paste_start),
-            .content => |text| _ = try name_prompts.handleInput(client, .{ .paste_text = text }),
-            .finish => _ = try name_prompts.handleInput(client, .paste_end),
+            .start => _ = try client.inputPrompt(.paste_start),
+            .content => |text| _ = try client.inputPrompt(
+                .{
+                    .paste_text = text,
+                },
+            ),
+            .finish => _ = try client.inputPrompt(.paste_end),
         },
         .pane => switch (value.command) {
-            .start => _ = try pane_pastes.start(client),
-            .content => |text| _ = try pane_pastes.content(client, text),
-            .finish => _ = try pane_pastes.finish(client),
+            .start => _ = try client.startPanePaste(),
+            .content => |text| _ = try client.appendPanePaste(text),
+            .finish => _ = try client.finishPanePaste(),
         },
     }
 }

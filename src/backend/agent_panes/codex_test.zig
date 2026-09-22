@@ -1,3 +1,4 @@
+const protocol = @import("protocol.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Codex = @import("Codex.zig");
@@ -536,7 +537,7 @@ test "Codex unrepresentable file change metadata cannot expose an approval" {
         const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, change, .{});
         defer parsed.deinit();
         var buffer: [2048]u8 = undefined;
-        const notification = try @import("protocol.zig").encode(&buffer, .{
+        const notification = try protocol.encode(&buffer, .{
             .method = "item/started",
             .params = .{ .threadId = "thread-1", .turnId = "turn-1", .item = .{ .id = "files", .type = "fileChange", .changes = .{parsed.value} } },
         });

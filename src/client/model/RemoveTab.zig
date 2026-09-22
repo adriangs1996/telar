@@ -1,5 +1,5 @@
-const TabLocationType = @import("telar-core").TabLocation;
+const core = @import("telar-core");
 const RemoveTab = @This();
 
-location: TabLocationType,
+location: core.TabLocation,
 workspace_removed: bool,

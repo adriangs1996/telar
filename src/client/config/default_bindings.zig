@@ -1,18 +1,16 @@
 //! Built-in keymap, kept declarative and separate from input dispatch.
 
+const data = @import("model");
 const GenericBinding = @import("../input/GenericBinding.zig").Type;
-const ActionType = @import("../input/action.zig").Action;
 const config_model = @import("model.zig");
-const KeyType = @import("../input/Key.zig");
 const Resolved = @import("Resolved.zig");
 const GenericKeymap = @import("../input/GenericKeymap.zig").Type;
-const parseKey_module = @import("../input/chord.zig").parseKey;
 const std = @import("std");
 
 pub const count = 42;
-pub const Binding = GenericBinding(ActionType, config_model.max_binding_keys);
+pub const Binding = GenericBinding(data.Action, config_model.max_binding_keys);
 
-pub fn load(prefix: KeyType) ![count]Binding {
+pub fn load(prefix: data.Key) ![count]Binding {
     return .{
         try prefixed(prefix, "a", .new_agent_tab),
 
@@ -84,7 +82,7 @@ pub fn load(prefix: KeyType) ![count]Binding {
 /// replace every default they conflict with — same sequence, or one a prefix
 /// of the other. Dropping prefix conflicts too keeps the merged keymap free
 /// of the ambiguity the router rejects; every other default is appended.
-pub fn resolve(prefix: KeyType, configured: []const Binding) !Resolved {
+pub fn resolve(prefix: data.Key, configured: []const Binding) !Resolved {
     if (configured.len > config_model.max_bindings) {
         return error.TooManyBindings;
     }
@@ -118,19 +116,19 @@ pub fn resolve(prefix: KeyType, configured: []const Binding) !Resolved {
 /// Proves the merged keymap compiles with the same parameters the client's
 /// router uses. `telar config check` calls this so a merge that the router
 /// would reject fails here instead of at interactive startup.
-pub fn validate(prefix: KeyType, configured: []const Binding) !void {
+pub fn validate(prefix: data.Key, configured: []const Binding) !void {
     const resolved = try resolve(prefix, configured);
-    _ = try GenericKeymap(ActionType, config_model.max_bindings, config_model.max_binding_keys)
+    _ = try GenericKeymap(data.Action, config_model.max_bindings, config_model.max_binding_keys)
         .init(resolved.slice());
 }
 
-fn prefixed(prefix: KeyType, suffix: []const u8, action_value: ActionType) !Binding {
-    return .init(&.{ prefix, try parseKey_module(suffix) }, action_value);
+fn prefixed(prefix: data.Key, suffix: []const u8, action_value: data.Action) !Binding {
+    return .init(&.{ prefix, try data.chord.parseKey(suffix) }, action_value);
 }
 
 test "agent tab creation uses configured prefix key and allows overrides" {
     const testing = std.testing;
-    const prefix = try parseKey_module("ctrl+s");
+    const prefix = try data.chord.parseKey("ctrl+s");
     const expected = try prefixed(prefix, "a", .new_agent_tab);
     const resolved = try resolve(prefix, &.{});
     var found: usize = 0;
@@ -163,7 +161,7 @@ test "agent tab creation uses configured prefix key and allows overrides" {
 
 test "focused scroll defaults use the configured prefix and can be overridden" {
     const testing = std.testing;
-    const prefix = try parseKey_module("ctrl+s");
+    const prefix = try data.chord.parseKey("ctrl+s");
     const up = try prefixed(prefix, "-", .{ .scroll_pane = .up });
     const down = try prefixed(prefix, "=", .{ .scroll_pane = .down });
     const defaults = try resolve(prefix, &.{});
@@ -186,7 +184,7 @@ test "focused scroll defaults use the configured prefix and can be overridden" {
 
 test "configured bindings extend defaults and override matching sequences" {
     const testing = std.testing;
-    const prefix = try parseKey_module("ctrl+s");
+    const prefix = try data.chord.parseKey("ctrl+s");
     const override = try prefixed(prefix, "s", .detach);
     const global = try Binding.parse(&.{"ctrl+d"}, .detach);
 
@@ -194,7 +192,7 @@ test "configured bindings extend defaults and override matching sequences" {
 
     try testing.expectEqual(@as(usize, count + 1), resolved.slice().len);
     try testing.expect(resolved.bindings[0].sameSequence(&override));
-    try testing.expectEqualDeep(ActionType.detach, resolved.bindings[0].action);
+    try testing.expectEqualDeep(data.Action.detach, resolved.bindings[0].action);
     try testing.expect(resolved.bindings[1].sameSequence(&global));
 
     var matching_defaults: usize = 0;
@@ -208,11 +206,11 @@ test "configured bindings extend defaults and override matching sequences" {
 
 test "a configured binding evicts every default it prefix-conflicts with" {
     const testing = std.testing;
-    const prefix = try parseKey_module("ctrl+b");
+    const prefix = try data.chord.parseKey("ctrl+b");
     // Extends the default `<prefix> s` (toggle_sidebar) by one key. The
     // default must be dropped, or the merged keymap is prefix-ambiguous.
     const extended = try Binding.init(
-        &.{ prefix, try parseKey_module("s"), try parseKey_module("x") },
+        &.{ prefix, try data.chord.parseKey("s"), try data.chord.parseKey("x") },
         .detach,
     );
     const shadowed = try prefixed(prefix, "s", .toggle_sidebar);
@@ -228,10 +226,10 @@ test "a configured binding evicts every default it prefix-conflicts with" {
 
 test "validating rejects configured bindings that conflict with each other" {
     const testing = std.testing;
-    const prefix = try parseKey_module("ctrl+b");
+    const prefix = try data.chord.parseKey("ctrl+b");
     const short = try prefixed(prefix, "g", .toggle_sidebar);
     const long = try Binding.init(
-        &.{ prefix, try parseKey_module("g"), try parseKey_module("x") },
+        &.{ prefix, try data.chord.parseKey("g"), try data.chord.parseKey("x") },
         .detach,
     );
 
@@ -240,7 +238,7 @@ test "validating rejects configured bindings that conflict with each other" {
 
 test "resolving bindings enforces the router capacity" {
     const testing = std.testing;
-    const prefix = try parseKey_module("ctrl+s");
+    const prefix = try data.chord.parseKey("ctrl+s");
     const configured = try Binding.parse(&.{"ctrl+d"}, .detach);
     const bindings: [config_model.max_bindings]Binding = @splat(configured);
 

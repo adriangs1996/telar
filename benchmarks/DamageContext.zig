@@ -1,22 +1,20 @@
+const core = @import("telar-core");
 const std = @import("std");
-const CellType = @import("telar-core").Cell;
-const SpanType = @import("telar-core").Span;
 const Fixture = @import("Fixture.zig");
 const main = @import("main.zig");
-const max_span_count_module = @import("telar-core").max_span_count;
 const DamageContext = @This();
 
 gpa: std.mem.Allocator,
-acknowledged: []CellType,
-current: []CellType,
+acknowledged: []core.Cell,
+current: []core.Cell,
 damaged_rows: []bool,
-spans: []SpanType,
+spans: []core.Span,
 changed_index: usize,
 
 pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture, workload: main.Workload) !DamageContext {
-    const acknowledged = try gpa.dupe(CellType, fixture.cells_a);
+    const acknowledged = try gpa.dupe(core.Cell, fixture.cells_a);
     errdefer gpa.free(acknowledged);
-    const current = try gpa.dupe(CellType, fixture.cells_a);
+    const current = try gpa.dupe(core.Cell, fixture.cells_a);
     errdefer gpa.free(current);
     const damaged_rows = try gpa.alloc(bool, main.rows);
     errdefer gpa.free(damaged_rows);
@@ -32,7 +30,7 @@ pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture, workload: main.Work
         }
     }
     const changed_index: usize = @intCast(fixture.spans(workload, 1)[0].start);
-    const spans = try gpa.alloc(SpanType, max_span_count_module);
+    const spans = try gpa.alloc(core.Span, core.max_span_count);
     return .{
         .gpa = gpa,
         .acknowledged = acknowledged,

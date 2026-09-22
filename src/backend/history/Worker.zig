@@ -1,9 +1,9 @@
+const core = @import("telar-core");
 const std = @import("std");
 const StoreType = @import("persistence/Store.zig");
 const CountersType = @import("Counters.zig");
 const Context = @import("Context.zig");
 const model = @import("model.zig");
-const enter_module = @import("telar-core").enter;
 const worker_support = @import("worker_support.zig");
 const LaunchAttemptType = @import("LaunchAttempt.zig");
 const SessionStartedType = @import("SessionStarted.zig");
@@ -79,7 +79,7 @@ pub fn run(worker: *Worker, context: Context) anyerror!void {
             model.deinitRequest(request, worker.gpa);
         };
 
-        const path = enter_module(.observation);
+        const path = core.enter(.observation);
         defer path.restore();
 
         while (next < count) {

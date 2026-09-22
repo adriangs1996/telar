@@ -1,11 +1,8 @@
-const CreationResourcesType = @import("CreationResources.zig");
-const CreationRequestType = @import("CreationRequest.zig");
-const AgentCommandType = @import("AgentCommand.zig");
-const CaptureContextType = @import("CaptureContext.zig");
-const PaneIdType = @import("telar-core").PaneId;
-const TabLocationType = @import("telar-core").TabLocation;
+const Session = @import("../pty/Session.zig");
+const Session_module = @import("../agent_panes/Session.zig");
+const core = @import("telar-core");
+const process = @import("process.zig");
 const pane_namespace = @import("pane_namespace.zig");
-const SessionType = @import("process.zig").Process;
 const vt = @import("ghostty-vt");
 const PipelineType = @import("../media/Pipeline.zig");
 const PtyResponseQueue = @import("PtyResponseQueue.zig");
@@ -13,37 +10,21 @@ const GraphicsLimitsType = @import("../media/GraphicsLimits.zig");
 const PaneMediaAllocatorType = @import("../media/PaneMediaAllocator.zig");
 const std = @import("std");
 const PaneInputQueue = @import("PaneInputQueue.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const BufferType = @import("telar-core").Buffer;
-const CursorType = @import("telar-core").Cursor;
-const MouseType = @import("telar-core").Mouse;
-const InputModesType = @import("telar-core").InputModes;
-const PointerShapeType = @import("telar-core").PointerShape;
 const State = @import("../media/State.zig");
 const exit_module = @import("../pty/exit.zig");
 const ServiceType = @import("../history/Service.zig");
 const ObserverType = @import("../history/Observer.zig");
 const CacheType = @import("../process/Cache.zig");
-const PaneProgressStateType = @import("telar-core").PaneProgressState;
 const model = @import("../history/model.zig");
 const SequenceType = @import("../history/Sequence.zig");
 const CwdState = @import("CwdState.zig");
 const TitleState = @import("TitleState.zig");
 const LaunchRecord = @import("LaunchRecord.zig");
-const TableType = @import("telar-core").Table;
-const TerminalColorsType = @import("telar-core").TerminalColors;
-const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
-const MouseTrackingType = @import("telar-core").MouseTracking;
 const TextRequest = @import("TextRequest.zig");
 const TextDump = @import("TextDump.zig");
-const SearchMatchType = @import("telar-core").SearchMatch;
 const SearchResult = @import("SearchResult.zig");
 const PaneCursor = @import("Cursor.zig");
 const PaneKey = @import("PaneKey.zig");
-const CellType = @import("telar-core").Cell;
-const now_module = @import("telar-core").now;
-const enterTerminalAllocations_module = @import("telar-core").enterTerminalAllocations;
-const elapsed_module = @import("telar-core").elapsed;
 const MediaProcessingBorrow = @import("MediaProcessingBorrow.zig");
 const StatsType = @import("../media/Stats.zig");
 const ProcessorType = @import("../media/Processor.zig");
@@ -52,7 +33,6 @@ const ObserverOutputObservation = @import("../history/ObserverOutputObservation.
 const HistoryObservationBorrow = @import("HistoryObservationBorrow.zig");
 const HistoryObservationCompletion = @import("HistoryObservationCompletion.zig");
 const agent_process = @import("../process/process.zig");
-const AgentProviderType = @import("telar-core").AgentProvider;
 const HistoryStats = @import("../history/Stats.zig");
 const cwd_module = @import("../process/cwd.zig");
 const blit = @import("blit.zig");
@@ -63,13 +43,13 @@ pub const CreationResources = @import("CreationResources.zig");
 
 pub const CreationRequest = @import("CreationRequest.zig");
 
-id: PaneIdType,
+id: core.PaneId,
 generation: u64,
-location: TabLocationType,
+location: core.TabLocation,
 launch_state: pane_namespace.LaunchState = .starting,
-session: SessionType,
-kind: @import("telar-core").PaneKind = .terminal,
-agent_thread: ?*@import("telar-core").AgentThreadSnapshot = null,
+session: process.Process,
+kind: core.PaneKind = .terminal,
+agent_thread: ?*core.AgentThreadSnapshot = null,
 review_availability: ReviewAvailability = .{},
 terminal: vt.Terminal,
 stream: vt.TerminalStream,
@@ -85,16 +65,16 @@ input_queue: PaneInputQueue = .{},
 cell_input_ns: ?u64 = null,
 input_write_pending: bool = false,
 input_write_len: usize = 0,
-size: TerminalSizeType,
+size: core.TerminalSize,
 render_state: vt.RenderState = .empty,
 text_metadata: @import("TextMetadataCapture.zig"),
-screen: BufferType,
+screen: core.Buffer,
 damaged_rows: []bool,
 output_buffer: [pane_namespace.output_chunk_size]u8 = undefined,
-cursor: CursorType = .{},
-mouse: MouseType = .{},
-input_modes: InputModesType = .{},
-pointer_shape: PointerShapeType = .default,
+cursor: core.Cursor = .{},
+mouse: core.Mouse = .{},
+input_modes: core.InputModes = .{},
+pointer_shape: core.PointerShape = .default,
 foreground_override: ?vt.color.RGB = null,
 background_override: ?vt.color.RGB = null,
 semantic_colors_dirty: bool = false,
@@ -116,7 +96,7 @@ history_service: *ServiceType,
 history_observer: ObserverType,
 agent_process_cache: CacheType = .{},
 foreground_revision: u64 = 1,
-progress_state: PaneProgressStateType = .remove,
+progress_state: core.PaneProgressState = .remove,
 progress_percent: ?u8 = null,
 progress_revision: u64 = 1,
 history_session_id: model.SessionId,
@@ -133,9 +113,9 @@ workspace_path: []u8,
 cwd: CwdState,
 title: TitleState = .{},
 launch_record: LaunchRecord = .{},
-manifests: *const TableType,
-pending_size: ?TerminalSizeType = null,
-pending_terminal_colors: ?TerminalColorsType = null,
+manifests: *const core.Table,
+pending_size: ?core.TerminalSize = null,
+pending_terminal_colors: ?core.TerminalColors = null,
 /// When the child's synchronized-output block started holding frames
 /// back, null while no hold is active. See `holdFrames`.
 sync_hold_started_ns: ?u64 = null,
@@ -148,7 +128,7 @@ gpa: std.mem.Allocator,
 /// ```zig
 /// const pane = try Pane.create(resources, request);
 /// ```
-pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*Pane {
+pub fn create(resources: CreationResources, request: CreationRequest) !*Pane {
     const io = resources.io;
     const gpa = resources.gpa;
     const history_service = resources.history_service;
@@ -232,7 +212,7 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
         .io = io,
         .allocator = pane.media_allocator.allocator(),
         .size = size,
-        .storage_limit = @min(max_image_bytes_per_screen_module, graphics_limits.pane_bytes / 2),
+        .storage_limit = @min(core.max_image_bytes_per_screen, graphics_limits.pane_bytes / 2),
         .payload_limit = graphics_limits.payload_bytes,
         .write_pty = writeMediaPty,
     });
@@ -263,7 +243,7 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
     // Spawn last. Once the child exists, Pane.create cannot fail and
     // erase evidence that a process ran before launch commit.
     if (request.kind == .terminal) {
-        pane.session = .{ .terminal = try @import("../pty/Session.zig").spawn(command.?, .{
+        pane.session = .{ .terminal = try Session.spawn(command.?, .{
             .cols = size.cols,
             .rows = size.rows,
             .cell_width_px = size.cell_width_px,
@@ -272,7 +252,7 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
     } else {
         pane.stream.nextSlice("This agent pane is available in the Telar GUI.");
         try pane.render(true);
-        const snapshot = try gpa.create(@import("telar-core").AgentThreadSnapshot);
+        const snapshot = try gpa.create(core.AgentThreadSnapshot);
         errdefer gpa.destroy(snapshot);
         snapshot.* = .{ .pane_id = identity.id, .pane_generation = identity.generation };
         if (request.restore_conversation) |conversation| {
@@ -280,7 +260,7 @@ pub fn create(resources: CreationResourcesType, request: CreationRequestType) !*
             snapshot.thread_id_len = conversation.id_len;
         }
 
-        const managed = try @import("../agent_panes/Session.zig").init(io, gpa, .{
+        const managed = try Session_module.init(io, gpa, .{
             .pane_id = identity.id,
             .pane_generation = identity.generation,
             .cwd = launch_cwd,
@@ -329,9 +309,9 @@ pub fn requestClose(pane: *Pane) bool {
     return true;
 }
 
-pub fn mouseState(pane: *const Pane) MouseType {
+pub fn mouseState(pane: *const Pane) core.Mouse {
     const modes = &pane.terminal.modes;
-    const tracking: MouseTrackingType = if (modes.get(.mouse_event_any))
+    const tracking: core.MouseTracking = if (modes.get(.mouse_event_any))
         .any
     else if (modes.get(.mouse_event_button))
         .button
@@ -399,7 +379,7 @@ pub fn dumpText(pane: *const Pane, request: TextRequest, storage: []u8) TextDump
 /// var matches: [schema.max_search_matches]schema.SearchMatch = undefined;
 /// const result = pane.searchText("error", &matches);
 /// ```
-pub fn searchText(pane: *const Pane, needle: []const u8, storage: []SearchMatchType) SearchResult {
+pub fn searchText(pane: *const Pane, needle: []const u8, storage: []core.SearchMatch) SearchResult {
     std.debug.assert(!pane.ingest_pending);
     var cursor = PaneCursor.init(needle);
     while (!(cursor.advance(pane) catch unreachable)) {}
@@ -428,7 +408,7 @@ pub fn vtScrollbackBytes(pane: *const Pane) usize {
 }
 
 pub fn vtScreenBytes(pane: *const Pane) usize {
-    return pane.screen.cells.len * @sizeOf(CellType);
+    return pane.screen.cells.len * @sizeOf(core.Cell);
 }
 
 pub fn actorStarted(pane: *Pane) void {
@@ -478,13 +458,13 @@ pub fn completeExitWait(pane: *Pane, exit: exit_module.Exit) void {
     pane.actorFinished();
 }
 
-pub fn pointerShape(pane: *const Pane) PointerShapeType {
+pub fn pointerShape(pane: *const Pane) core.PointerShape {
     return switch (pane.terminal.mouse_shape) {
-        inline else => |shape| @field(PointerShapeType, @tagName(shape)),
+        inline else => |shape| @field(core.PointerShape, @tagName(shape)),
     };
 }
 
-pub fn inputModeState(pane: *const Pane) InputModesType {
+pub fn inputModeState(pane: *const Pane) core.InputModes {
     const modes = &pane.terminal.modes;
     return .{
         .cursor_keys = modes.get(.cursor_keys),
@@ -563,9 +543,9 @@ pub fn canInlineOutput(pane: *const Pane, bytes: []const u8) bool {
 
 pub fn ingest(pane: *Pane, io: std.Io, bytes: []const u8) !u64 {
     pane.search_revision +%= 1;
-    const started = now_module(io);
+    const started = core.now(io);
     {
-        const terminal_allocations = enterTerminalAllocations_module();
+        const terminal_allocations = core.enterTerminalAllocations();
         defer terminal_allocations.restore();
         pane.stream.nextSlice(bytes);
     }
@@ -584,7 +564,7 @@ pub fn ingest(pane: *Pane, io: std.Io, bytes: []const u8) !u64 {
     }
     pane.render_pending = true;
     pane.dirty = true;
-    return elapsed_module(started, now_module(io));
+    return core.elapsed(started, core.now(io));
 }
 
 pub fn queueMediaOutput(pane: *Pane, bytes: []const u8) void {
@@ -638,7 +618,7 @@ pub fn refreshGraphicsProjection(pane: *Pane) void {
 
 /// Processes a sealed media batch through explicit resource borrows.
 /// Example: `pane.processMedia(size, &stats);`.
-pub fn processMedia(pane: *Pane, current_size: TerminalSizeType, stats: *StatsType) void {
+pub fn processMedia(pane: *Pane, current_size: core.TerminalSize, stats: *StatsType) void {
     var processor = pane.mediaProcessor();
     processor.processMedia(current_size, stats);
 }
@@ -955,10 +935,10 @@ pub fn cancelHistoryObservation(pane: *Pane) void {
 /// ```zig
 /// pane.processHistoryObservation(.{ .size = size, .provider = provider }, &stats);
 /// ```
-pub fn processHistoryObservation(pane: *Pane, context: struct { size: TerminalSizeType, provider: AgentProviderType }, stats: *HistoryStats) void {
+pub fn processHistoryObservation(pane: *Pane, context: struct { size: core.TerminalSize, provider: core.AgentProvider }, stats: *HistoryStats) void {
     var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const cwd = cwd_module.read(pane.session.processId(), &cwd_buffer);
-    var capture_context: CaptureContextType = .{ .pane = pane, .observation_stats = stats };
+    var capture_context: CaptureContext = .{ .pane = pane, .observation_stats = stats };
     pane.history_observer.processSealed(.{
         .cwd = cwd,
         .current_size = context.size,
@@ -1002,7 +982,7 @@ pub fn writePty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) voi
 pub fn reportProgress(handler: *vt.TerminalStream.Handler, report: vt.osc.Command.ProgressReport) void {
     const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
     const pane: *Pane = @fieldParentPtr("stream", stream);
-    const state: PaneProgressStateType = switch (report.state) {
+    const state: core.PaneProgressState = switch (report.state) {
         .remove => .remove,
         .set => .set,
         .@"error" => .@"error",
@@ -1028,7 +1008,7 @@ pub fn expireProgress(pane: *Pane, shell_foreground: bool) void {
     pane.applyProgress(.remove, null);
 }
 
-fn applyProgress(pane: *Pane, state: PaneProgressStateType, percent: ?u8) void {
+fn applyProgress(pane: *Pane, state: core.PaneProgressState, percent: ?u8) void {
     if (pane.progress_state == state and pane.progress_percent == percent) {
         return;
     }
@@ -1069,7 +1049,7 @@ pub const AgentCommand = @import("AgentCommand.zig");
 
 /// Captures runtime-owned metadata without borrowing the observation worker's VT.
 /// Call only on the runtime thread. Example: `_ = pane.recordAgentCommand(report);`.
-pub fn recordAgentCommand(pane: *Pane, report: AgentCommandType) bool {
+pub fn recordAgentCommand(pane: *Pane, report: AgentCommand) bool {
     const sequence = pane.history_sequence.reserve() orelse return false;
 
     return pane.history_service.recordAgentCommand(pane.io, .{
@@ -1107,7 +1087,7 @@ pub fn finishHistory(pane: *Pane) void {
     if (pane.history_session_finished) {
         return;
     }
-    var capture_context: CaptureContextType = .{ .pane = pane };
+    var capture_context: CaptureContext = .{ .pane = pane };
     if (pane.history_observer.enabled) {
         pane.history_observer.tracker.interrupt(pane_namespace.historyClock(pane.io), &capture_context);
     }
@@ -1151,7 +1131,7 @@ pub fn readyToDestroy(pane: *const Pane) bool {
 /// Replaces host defaults without changing child overrides or cell styles.
 /// An ingest actor never shares mutable VT state with this operation.
 /// Example: `pane.setTerminalColors(.{ .background = .{ 16, 16, 16 } });`.
-pub fn setTerminalColors(pane: *Pane, colors: TerminalColorsType) void {
+pub fn setTerminalColors(pane: *Pane, colors: core.TerminalColors) void {
     pane.pending_terminal_colors = colors;
     if (!pane.ingest_pending) {
         pane.applyTerminalColors();
@@ -1191,12 +1171,12 @@ fn terminalRgb(color: ?[3]u8) ?vt.color.RGB {
     return .{ .r = rgb[0], .g = rgb[1], .b = rgb[2] };
 }
 
-pub fn resize(pane: *Pane, size: TerminalSizeType) !void {
+pub fn resize(pane: *Pane, size: core.TerminalSize) !void {
     try pane.requestResize(size);
     try pane.applyPendingResize();
 }
 
-pub fn requestResize(pane: *Pane, size: TerminalSizeType) !void {
+pub fn requestResize(pane: *Pane, size: core.TerminalSize) !void {
     if (std.meta.eql(pane.pending_size orelse pane.size, size)) {
         return;
     }
@@ -1213,7 +1193,7 @@ pub fn applyPendingResize(pane: *Pane) !void {
     const size = pane.pending_size orelse return;
     pane.search_revision +%= 1;
     {
-        const terminal_allocations = enterTerminalAllocations_module();
+        const terminal_allocations = core.enterTerminalAllocations();
         defer terminal_allocations.restore();
         try pane.stream.handler.resize(.{
             .cols = size.cols,
@@ -1269,7 +1249,7 @@ pub fn holdFrames(pane: *Pane, io: std.Io) bool {
 
 pub fn render(pane: *Pane, force: bool) !void {
     {
-        const terminal_allocations = enterTerminalAllocations_module();
+        const terminal_allocations = core.enterTerminalAllocations();
         defer terminal_allocations.restore();
         try pane.render_state.update(pane.gpa, &pane.terminal);
     }

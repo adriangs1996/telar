@@ -1,4 +1,4 @@
-const RangeType = @import("telar-core").Range;
+const core = @import("telar-core");
 const Options = @This();
 
 /// Cells to draw as selected, in coordinates relative to `area`.
@@ -7,7 +7,7 @@ const Options = @This();
 /// belongs to the application: the emulator has a selection concept, but
 /// which drag the user is making, and whether it is even aimed at this
 /// pane, is not something it can know.
-selection: ?RangeType = null,
+selection: ?core.Range = null,
 
 /// Draw the pane's cursor. Off for unfocused panes: two visible cursors in
 /// one screen is worse than none, and the real cursor is placed by `term`.

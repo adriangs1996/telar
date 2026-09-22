@@ -1,3 +1,5 @@
+const ChromeFixture = @import("ChromeFixture.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const Fixture = @import("OverlayFixture.zig");
@@ -16,7 +18,7 @@ test "notification motion samples host time without squeezing text or changing t
     try std.testing.expectEqual(@as(usize, 0), fixture.overlays.presented().notifications.count);
     try std.testing.expectEqual(@as(u32, 17), fixture.animation.?.wakeupAfter(0));
 
-    fixture.animation.?.begin(client.transition_duration_ns / 2);
+    fixture.animation.?.begin(data.notifications.transition_duration_ns / 2);
     try fixture.prepare();
     const halfway = fixture.overlays.prepared().notifications.hits[0].bounds;
     try std.testing.expectEqual(@as(f32, 360), halfway.width);
@@ -26,7 +28,7 @@ test "notification motion samples host time without squeezing text or changing t
     fixture.present(false);
     try std.testing.expectEqual(@as(usize, 0), fixture.overlays.presented().notifications.count);
 
-    fixture.animation.?.begin(client.transition_duration_ns * 2);
+    fixture.animation.?.begin(data.notifications.transition_duration_ns * 2);
     try fixture.paint();
     const settled = fixture.overlays.presented().notifications.hits[0].bounds;
     try std.testing.expectEqual(halfway.width, settled.width);
@@ -36,10 +38,10 @@ test "notification motion samples host time without squeezing text or changing t
     try std.testing.expectEqual(original, fixture.model.version());
 
     _ = fixture.model.dismissNotification(id, fixture.animation.?.now_ns);
-    fixture.animation.?.begin(client.transition_duration_ns * 2 + client.transition_duration_ns / 2);
+    fixture.animation.?.begin(data.notifications.transition_duration_ns * 2 + data.notifications.transition_duration_ns / 2);
     try fixture.paint();
     try std.testing.expect(!fixture.overlays.presented().notifications.hits[0].enabled);
-    fixture.animation.?.begin(client.transition_duration_ns * 4);
+    fixture.animation.?.begin(data.notifications.transition_duration_ns * 4);
     try fixture.paint();
     try std.testing.expectEqual(@as(usize, 0), fixture.overlays.presented().notifications.count);
     try std.testing.expectEqual(@as(usize, 0), fixture.renderer.quads.items().len);
@@ -51,31 +53,37 @@ test "notification stack retargets from the current position and retires hidden 
     defer fixture.deinit();
     fixture.animation = .{};
     const first = fixture.model.publishNotification(0, .{ .title = "First", .message = "Done" }).id;
-    fixture.animation.?.begin(client.transition_duration_ns);
+    fixture.animation.?.begin(data.notifications.transition_duration_ns);
     try fixture.paint();
     const top = bounds(fixture, first).y;
 
-    _ = fixture.model.publishNotification(client.transition_duration_ns, .{ .title = "Second", .message = "Done" });
-    fixture.animation.?.begin(client.transition_duration_ns);
+    _ = fixture.model.publishNotification(
+        data.notifications.transition_duration_ns,
+        .{
+            .title = "Second",
+            .message = "Done",
+        },
+    );
+    fixture.animation.?.begin(data.notifications.transition_duration_ns);
     try fixture.paint();
     try std.testing.expectEqual(top, bounds(fixture, first).y);
-    fixture.animation.?.begin(client.transition_duration_ns + 90 * std.time.ns_per_ms);
+    fixture.animation.?.begin(data.notifications.transition_duration_ns + 90 * std.time.ns_per_ms);
     try fixture.paint();
     const middle = bounds(fixture, first).y;
     try std.testing.expect(middle > top);
-    fixture.animation.?.begin(client.transition_duration_ns * 3);
+    fixture.animation.?.begin(data.notifications.transition_duration_ns * 3);
     try fixture.paint();
     try std.testing.expect(bounds(fixture, first).y > middle);
     try std.testing.expectEqual(@as(u32, 0), fixture.animation.?.wakeupAfter(fixture.animation.?.now_ns));
 
     fixture.size.cols = 10;
     fixture.size.rows = 3;
-    fixture.animation.?.begin(client.transition_duration_ns * 4);
+    fixture.animation.?.begin(data.notifications.transition_duration_ns * 4);
     try fixture.paint();
     try std.testing.expectEqual(@as(usize, 0), fixture.overlays.presented().notifications.count);
     try std.testing.expectEqual(@as(u32, 0), fixture.animation.?.wakeupAfter(fixture.animation.?.now_ns));
     for (fixture.overlays.notifications.motions) |motion| {
-        try std.testing.expectEqual(client.Id.invalid, motion.id);
+        try std.testing.expectEqual(data.notifications.Id.invalid, motion.id);
     }
 }
 
@@ -108,7 +116,7 @@ test "notification controls use pixel edges and warm frames keep allocation boun
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const id = fixture.model.publishNotification(0, .{ .title = "Build complete", .message = "All checks passed" }).id;
-    _ = fixture.model.advanceNotifications(client.transition_duration_ns);
+    _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns);
     try fixture.paint();
     const card = bounds(fixture, id);
     const close = fixture.overlays.presented().notifications.hits[1].bounds;
@@ -139,7 +147,7 @@ test "notification controls use pixel edges and warm frames keep allocation boun
 }
 
 test "GUI notification lifecycle wakes at semantic boundaries while the host owns frames" {
-    var fixture = try @import("ChromeFixture.zig").init();
+    var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     const app = &fixture.session.gui.app;
     const now = client.monotonic(app.io);
@@ -151,11 +159,11 @@ test "GUI notification lifecycle wakes at semantic boundaries while the host own
         },
     );
     try std.testing.expectEqual(.host, app.timers.animation_clock);
-    try std.testing.expectEqual(now + client.transition_duration_ns, app.notification_scheduler.deadline_ns.load(.acquire));
-    try std.testing.expect(Clock.frame_interval_ns < client.transition_duration_ns);
+    try std.testing.expectEqual(now + data.notifications.transition_duration_ns, app.notification_scheduler.deadline_ns.load(.acquire));
+    try std.testing.expect(Clock.frame_interval_ns < data.notifications.transition_duration_ns);
 }
 
-fn bounds(fixture: *const Fixture, id: client.Id) Rect {
+fn bounds(fixture: *const Fixture, id: data.notifications.Id) Rect {
     const hits = &fixture.overlays.presented().notifications;
     for (hits.hits[0..hits.count]) |hit| {
         if (hit.namespace == 2 and (hit.action.intent == .notification_dismiss and hit.action.intent.notification_dismiss == id)) {

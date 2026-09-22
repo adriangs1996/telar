@@ -1,7 +1,6 @@
+const data = @import("model");
 const std = @import("std");
 const GenericBinding = @import("GenericBinding.zig").Type;
-const keybind = @import("keybind.zig");
-const Key = @import("Key.zig");
 
 pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_keys: usize) type {
     if (max_bindings == 0 or max_bindings > std.math.maxInt(u16)) {
@@ -41,7 +40,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
             while (index < map.len) : (index += 1) {
                 const previous = map.bindingAt(index - 1);
                 const current = map.bindingAt(index);
-                const shared = keybind.commonPrefix(previous.slice(), current.slice());
+                const shared = data.keybind.commonPrefix(previous.slice(), current.slice());
                 if (shared == previous.len or shared == current.len) {
                     if (previous.len == current.len) {
                         return error.DuplicateBinding;
@@ -57,14 +56,14 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
         }
 
         pub const Range = struct { start: usize, end: usize };
-        const Match = struct { depth: usize, key: Key };
+        const Match = struct { depth: usize, key: data.Key };
 
         pub fn matchingRange(map: *const Self, range: Range, match: Match) ?Range {
             var low = range.start;
             var high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (keybind.keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .lt) {
+                if (data.keybind.keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .lt) {
                     low = middle + 1;
                 } else {
                     high = middle;
@@ -75,7 +74,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
             high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (keybind.keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .gt) {
+                if (data.keybind.keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .gt) {
                     high = middle;
                 } else {
                     low = middle + 1;
@@ -92,7 +91,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
         }
 
         fn orderLessThan(bindings: *const [max_bindings]BindingType, a: u16, b: u16) bool {
-            return keybind.sequenceOrder(bindings[a].slice(), bindings[b].slice()) == .lt;
+            return data.keybind.sequenceOrder(bindings[a].slice(), bindings[b].slice()) == .lt;
         }
     };
 }

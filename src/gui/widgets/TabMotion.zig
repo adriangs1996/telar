@@ -1,7 +1,8 @@
+const core = @import("telar-core");
 const Rect = @import("../render/Rect.zig");
 const TabMotion = @This();
 
-id: @import("telar-core").TabId,
+id: core.TabId,
 from: Rect,
 to: Rect,
 transition: @import("../animation/Transition.zig"),

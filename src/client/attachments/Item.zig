@@ -1,6 +1,6 @@
-const types = @import("types.zig");
+const model_data = @import("model");
 const Item = @This();
 
-id: types.Id,
+id: model_data.AttachmentId,
 width: u32,
 height: u32,

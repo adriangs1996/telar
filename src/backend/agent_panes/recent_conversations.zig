@@ -1,3 +1,4 @@
+const history_page = @import("history_page.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const protocol = @import("protocol.zig");
@@ -22,7 +23,7 @@ pub fn load(snapshot: *core.AgentThreadSnapshot, result: std.json.Value, cwd: []
 
         const name = protocol.string(protocol.field(entry, "name"));
         const raw = if (name.len != 0) name else protocol.string(protocol.field(entry, "preview"));
-        const prefix = @import("history_page.zig").prefix(raw, 160);
+        const prefix = history_page.prefix(raw, 160);
         var title: [160]u8 = undefined;
         for (prefix, 0..) |byte, index| {
             title[index] = if (byte < 0x20 or byte == 0x7f) ' ' else byte;

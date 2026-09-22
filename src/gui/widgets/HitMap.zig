@@ -1,5 +1,5 @@
+const action = @import("action.zig");
 const core = @import("telar-core");
-const Action = @import("action.zig").Action;
 const Hit = @import("Hit.zig");
 const HitMap = @This();
 
@@ -26,7 +26,7 @@ pub fn add(hits: *HitMap, hit: Hit) !void {
 
 /// Later targets take precedence, as later quads do.
 /// Example: `const action = hits.at(.{ mouse.x, mouse.y });`
-pub fn at(hits: *const HitMap, point: [2]u16) ?Action {
+pub fn at(hits: *const HitMap, point: [2]u16) ?action.Action {
     var index = hits.len;
     while (index > 0) {
         index -= 1;

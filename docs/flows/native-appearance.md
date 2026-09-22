@@ -329,7 +329,7 @@ also discards the staged renderer. Diagnostics use the model's existing
 diagnostic state and the `gui_config` stderr log scope; the GUI does not yet
 paint the TUI diagnostic banner.
 
-Successful adoption uses `config_reloads.handle` to commit the shared model and
+Successful adoption uses `AttachedClient.completeConfigReload` to commit the shared model and
 swap its Lua owners. The GUI then installs the prepared renderer, applies the
 typed colors/cursor settings, resets `CursorClock` and publishes metrics and
 terminal defaults through `AttachedClient.applyHostUpdate`. A replacement renderer inherits

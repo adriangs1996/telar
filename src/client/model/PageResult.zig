@@ -1,8 +1,8 @@
-const HistoryEntryType = @import("telar-core").HistoryEntry;
+const core = @import("telar-core");
 const PageResult = @This();
 
 request_id: u64,
-entries: []const HistoryEntryType,
+entries: []const core.HistoryEntry,
 snapshot_id: u64,
 has_more: bool,
 now_ms: i64,

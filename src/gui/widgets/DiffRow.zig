@@ -1,7 +1,7 @@
-const Line = @import("telar-core").ChangeReviewDiffLine;
+const core = @import("telar-core");
 const Rect = @import("../render/Rect.zig");
 
-line: Line,
+line: core.ChangeReviewDiffLine,
 fragment: []const u8,
 bounds: Rect,
 code: Rect,

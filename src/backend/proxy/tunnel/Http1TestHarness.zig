@@ -1,9 +1,9 @@
+const core = @import("telar-core");
 const Http1Capture = @import("Http1Capture.zig");
 const PipelineType = @import("../Pipeline.zig");
 const CountersType = @import("../Counters.zig");
 const ExchangeType = @import("Exchange.zig");
 const std = @import("std");
-const pane_module = @import("telar-core").pane;
 const identity = @import("../identity.zig");
 const middleware = @import("../middleware.zig");
 const SnapshotType = @import("../Snapshot.zig");
@@ -21,7 +21,7 @@ pub fn init(harness: *TestHarness) !void {
         .pipeline = &harness.pipeline,
         .telemetry = &harness.counters,
         .credential = .{
-            .pane_id = try pane_module(7),
+            .pane_id = try core.pane(7),
             .pane_generation = 11,
             .token = .{0x42} ** identity.token_bytes,
         },

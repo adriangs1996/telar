@@ -2,14 +2,14 @@
 //! order and never evicted: a shaped run cached against slot N keeps
 //! meaning the same face until the set is rebuilt with the font. A full
 //! pool refuses further faces; their graphemes keep the replacement glyph.
+const font_id = @import("font_id.zig");
 const std = @import("std");
 const FallbackFace = @import("FallbackFace.zig");
 const FontFace = @import("FontFace.zig");
 const FontMatch = @import("../native/FontMatch.zig").FontMatch;
-const Id = @import("font_id.zig").Id;
 const FallbackPool = @This();
 
-pub const capacity = Id.fallback_slots;
+pub const capacity = font_id.Id.fallback_slots;
 
 faces: [capacity]?FallbackFace = @splat(null),
 count: u8 = 0,

@@ -1,20 +1,16 @@
 //! Bar value parsing independent of generation loading and callback registries.
 
+const data = @import("model");
+const model = @import("../bars/model.zig");
+const icons = @import("../layout/icons.zig");
 const lua_api = @import("lua-api");
-const Diagnostic = @import("Diagnostic.zig");
 const lua_value = @import("lua_value.zig");
-const min_interval_ms_module = @import("../bars/model.zig").min_interval_ms;
-const max_interval_ms_module = @import("../bars/model.zig").max_interval_ms;
 const std = @import("std");
 const ContentType = @import("../bars/Content.zig");
-const max_segments_module = @import("../bars/model.zig").max_segments;
 const ParsedBarSegment = @import("ParsedBarSegment.zig");
-const IconType = @import("../layout/icons.zig").Icon;
 const StyleType = @import("../bars/Style.zig");
-const ColorType = @import("../bars/model.zig").Color;
-const PaletteColorType = @import("../bars/model.zig").PaletteColor;
 
-pub fn parseBarInterval(state: *lua_api.c.lua_State, index: c_int, diagnostic: *Diagnostic) !u64 {
+pub fn parseBarInterval(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !u64 {
     const absolute = lua_api.c.lua_absindex(state, index);
     _ = lua_api.c.lua_getfield(state, absolute, "every_ms");
     defer lua_value.pop(state, 1);
@@ -25,10 +21,10 @@ pub fn parseBarInterval(state: *lua_api.c.lua_State, index: c_int, diagnostic: *
             diagnostic.set("bar every_ms must be an integer", .{});
             return error.InvalidConfig;
         };
-    if (value < min_interval_ms_module or value > max_interval_ms_module) {
+    if (value < model.min_interval_ms or value > model.max_interval_ms) {
         diagnostic.set(
             "bar every_ms must be in {d}..{d}",
-            .{ min_interval_ms_module, max_interval_ms_module },
+            .{ model.min_interval_ms, model.max_interval_ms },
         );
         return error.InvalidConfig;
     }
@@ -36,7 +32,7 @@ pub fn parseBarInterval(state: *lua_api.c.lua_State, index: c_int, diagnostic: *
     return @as(u64, @intCast(value)) * std.time.ns_per_ms;
 }
 
-pub fn parseBarContent(state: *lua_api.c.lua_State, index: c_int, diagnostic: *Diagnostic) !ContentType {
+pub fn parseBarContent(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !ContentType {
     const absolute = lua_api.c.lua_absindex(state, index);
     var content: ContentType = .{};
     if (lua_api.c.lua_type(state, absolute) == lua_api.c.LUA_TNIL) {
@@ -70,8 +66,8 @@ pub fn parseBarContent(state: *lua_api.c.lua_State, index: c_int, diagnostic: *D
     }
 
     const count = lua_api.c.lua_rawlen(state, absolute);
-    if (count > max_segments_module) {
-        diagnostic.set("bar content exceeds {d} segments", .{max_segments_module});
+    if (count > model.max_segments) {
+        diagnostic.set("bar content exceeds {d} segments", .{model.max_segments});
         return error.InvalidBarContent;
     }
     try lua_value.ensureArrayOnly(state, .{ .index = absolute, .count = count, .path = "bar content" }, diagnostic);
@@ -92,7 +88,7 @@ pub fn parseBarContent(state: *lua_api.c.lua_State, index: c_int, diagnostic: *D
     return content;
 }
 
-pub fn parseBarSegment(state: *lua_api.c.lua_State, index: c_int, diagnostic: *Diagnostic) !ParsedBarSegment {
+pub fn parseBarSegment(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !ParsedBarSegment {
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_value.string(state, absolute)) |value| {
         return .{ .text = value, .icon = null, .style = .{} };
@@ -119,7 +115,7 @@ pub fn parseBarSegment(state: *lua_api.c.lua_State, index: c_int, diagnostic: *D
     lua_value.pop(state, 1);
 
     _ = lua_api.c.lua_getfield(state, absolute, "icon");
-    const icon_value: ?IconType = if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL)
+    const icon_value: ?icons.Icon = if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL)
         null
     else icon: {
         const name = lua_value.string(state, -1) orelse {
@@ -159,7 +155,7 @@ pub fn parseBarSegment(state: *lua_api.c.lua_State, index: c_int, diagnostic: *D
     return .{ .text = text_value, .icon = icon_value, .style = style };
 }
 
-pub fn parseBarColor(state: *lua_api.c.lua_State, index: c_int, diagnostic: *Diagnostic) !ColorType {
+pub fn parseBarColor(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !model.Color {
     if (lua_value.integer(state, index)) |value| {
         if (value < 0 or value > 255) {
             diagnostic.set("bar color index must be in 0..255", .{});
@@ -176,7 +172,7 @@ pub fn parseBarColor(state: *lua_api.c.lua_State, index: c_int, diagnostic: *Dia
     if (std.ascii.eqlIgnoreCase(name, "default")) {
         return .{ .value = .default };
     }
-    inline for (std.meta.fields(PaletteColorType)) |field| {
+    inline for (std.meta.fields(model.PaletteColor)) |field| {
         if (normalizedNameEql(name, field.name)) {
             return .{ .palette = @enumFromInt(field.value) };
         }
@@ -197,8 +193,8 @@ pub fn parseBarColor(state: *lua_api.c.lua_State, index: c_int, diagnostic: *Dia
     return error.InvalidBarContent;
 }
 
-pub fn parseBarIcon(name: []const u8) ?IconType {
-    inline for (std.meta.fields(IconType)) |field| {
+pub fn parseBarIcon(name: []const u8) ?icons.Icon {
+    inline for (std.meta.fields(icons.Icon)) |field| {
         if (normalizedNameEql(name, field.name)) {
             return @enumFromInt(field.value);
         }

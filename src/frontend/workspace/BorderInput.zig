@@ -1,13 +1,12 @@
-const ViewType = @import("telar-client").LayoutView;
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
-const PaneProgressStateType = @import("telar-core").PaneProgressState;
-const PaletteType = @import("telar-client").Palette;
+const data = @import("model");
+const client = @import("telar-client");
+const core = @import("telar-core");
 const BorderInput = @This();
 
-view: ViewType,
+view: data.LayoutView,
 foreground_name: []const u8,
-fullscreen_model: ?*const MultiplexerModel = null,
-progress_state: PaneProgressStateType,
+fullscreen_model: ?*const client.MultiplexerModel = null,
+progress_state: core.PaneProgressState,
 progress_percent: ?u8,
 animation_frame: u8,
-palette: *const PaletteType,
+palette: *const client.Palette,

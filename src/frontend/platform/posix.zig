@@ -1,7 +1,5 @@
-const PosixFastWriter = @import("PosixFastWriter.zig");
-const PosixTty = @import("PosixTty.zig");
+const client = @import("telar-client");
 
-const LocalTime = @import("telar-client").LocalTime;
 const std = @import("std");
 const sequences = @import("sequences.zig");
 
@@ -12,7 +10,7 @@ pub const unistd = @cImport({
     @cInclude("unistd.h");
 });
 
-pub fn localTime() LocalTime {
+pub fn localTime() client.LocalTime {
     var seconds: time.time_t = 0;
     if (time.time(&seconds) == -1) {
         return fallbackLocalTime();
@@ -34,7 +32,7 @@ pub fn localTime() LocalTime {
     };
 }
 
-fn fallbackLocalTime() LocalTime {
+fn fallbackLocalTime() client.LocalTime {
     return .{ .year = 1970, .month = 1, .day = 1, .hour = 0, .minute = 0, .second = 0, .weekday = 4 };
 }
 
@@ -63,7 +61,7 @@ pub var crash_restore: struct {
 /// `abort`, so catching SIGABRT (plus the hardware faults) covers panics as
 /// well as genuine crashes. The handler defers to the default disposition
 /// afterwards, so exit status and core dumps are unchanged.
-pub fn installCrashRestore(t: *const PosixTty) void {
+pub fn installCrashRestore(t: *const Tty) void {
     crash_restore = .{
         .fd = t.fd,
         .original = t.original,
@@ -105,14 +103,14 @@ test "fast output attempts at most 4 KiB and yields on a full descriptor" {
     var fds: [2]std.c.fd_t = undefined;
     try std.testing.expect(std.c.pipe(&fds) == 0);
     defer _ = std.c.close(fds[0]);
-    var fast: PosixFastWriter = .{ .fd = fds[1] };
+    var fast: FastWriter = .{ .fd = fds[1] };
     defer fast.deinit();
     const flags = std.posix.O{ .NONBLOCK = true };
     try std.testing.expect(std.c.fcntl(fast.fd, std.posix.F.SETFL, @as(c_int, @bitCast(flags))) == 0);
     const bytes = [_]u8{0x34} ** 8192;
-    try std.testing.expectEqual(@as(usize, 4096), try PosixFastWriter.writeOpaque(&fast, &bytes));
+    try std.testing.expectEqual(@as(usize, 4096), try FastWriter.writeOpaque(&fast, &bytes));
     for (0..1024) |_| {
-        if (try PosixFastWriter.writeOpaque(&fast, &bytes) == 0) {
+        if (try FastWriter.writeOpaque(&fast, &bytes) == 0) {
             return;
         }
     }

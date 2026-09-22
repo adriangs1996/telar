@@ -1,24 +1,14 @@
 //! Client integration tests for presentation.
 
+const client_module = @import("telar-client");
+const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
-const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const std = @import("std");
-const encodeKey_module = @import("telar-client").encodeKey;
 const Chunk = @import("../controllers/input/Chunk.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
-const PointerShapeType = @import("telar-core").PointerShape;
-const CellType = @import("telar-core").Cell;
-const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
-const decodeServer_module = @import("telar-core").decodeServer;
-const supportsSharedMemory_module = @import("telar-client").supportsSharedMemory;
 const host_resizes = @import("../controllers/host/host_resizes.zig");
-const ShmNameType = @import("telar-core").ShmName;
-const ImageType = @import("telar-core").Image;
-const encodeGraphicsSharedImage_module = @import("telar-core").encodeGraphicsSharedImage;
-const encodeGraphicsPlacement_module = @import("telar-core").encodeGraphicsPlacement;
-const enabled_module = @import("telar-core").enabled;
 const OutputType = @import("../resources/Output.zig");
 
 test "presentation folds repeated observations into one draw task" {
@@ -31,25 +21,25 @@ test "presentation folds repeated observations into one draw task" {
     _ = try client.model.setDiagnostic("first revision", .{});
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expect(host(client).presenter.draw_pending);
-    try std.testing.expectEqual(@as(usize, 1), host(client).presenter.pending_updates);
+    try std.testing.expect(TerminalClient.of(client).presenter.draw_pending);
+    try std.testing.expectEqual(@as(usize, 1), TerminalClient.of(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expect(host(client).presenter.draw_pending);
-    try std.testing.expectEqual(@as(usize, 1), host(client).presenter.pending_updates);
+    try std.testing.expect(TerminalClient.of(client).presenter.draw_pending);
+    try std.testing.expectEqual(@as(usize, 1), TerminalClient.of(client).presenter.pending_updates);
 
     _ = try client.model.setDiagnostic("second revision", .{});
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expect(host(client).presenter.draw_pending);
-    try std.testing.expectEqual(@as(usize, 2), host(client).presenter.pending_updates);
+    try std.testing.expect(TerminalClient.of(client).presenter.draw_pending);
+    try std.testing.expectEqual(@as(usize, 2), TerminalClient.of(client).presenter.pending_updates);
 
     try harness.settleModelPresentation();
 
-    try std.testing.expect(!host(client).presenter.draw_pending);
-    try std.testing.expectEqual(@as(usize, 0), host(client).presenter.pending_updates);
-    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
+    try std.testing.expect(!TerminalClient.of(client).presenter.draw_pending);
+    try std.testing.expectEqual(@as(usize, 0), TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
 }
 
 test "an observation with pacer credit presents inline without a draw task" {
@@ -59,16 +49,16 @@ test "an observation with pacer credit presents inline without a draw task" {
     try harness.bootstrap();
     const client = harness.client;
     // The harness pacer schedules every frame; a real client holds burst credit.
-    host(client).presenter.pacer = .{};
-    const drawn_before = host(client).presenter.pacer.stats.drawn;
+    TerminalClient.of(client).presenter.pacer = .{};
+    const drawn_before = TerminalClient.of(client).presenter.pacer.stats.drawn;
 
     _ = try client.model.setDiagnostic("inline revision", .{});
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expect(!host(client).presenter.draw_pending);
-    try std.testing.expectEqual(@as(usize, 0), host(client).presenter.pending_updates);
-    try std.testing.expectEqual(drawn_before + 1, host(client).presenter.pacer.stats.drawn);
-    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
+    try std.testing.expect(!TerminalClient.of(client).presenter.draw_pending);
+    try std.testing.expectEqual(@as(usize, 0), TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(drawn_before + 1, TerminalClient.of(client).presenter.pacer.stats.drawn);
+    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
 }
 
 test "host input presentation state schedules only through observation" {
@@ -78,12 +68,12 @@ test "host input presentation state schedules only through observation" {
     try harness.bootstrap();
     const client = harness.client;
     const model_version = client.model.version();
-    const input_revision = host(client).host_input.presentationVersion();
-    const pending_updates = host(client).presenter.pending_updates;
+    const input_revision = TerminalClient.of(client).host_input.presentationVersion();
+    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
     var encoded: [32]u8 = undefined;
-    const prefix_bytes = try encodeKey_module(
+    const prefix_bytes = try client_module.encodeKey(
         &encoded,
-        host(client).host_input.router.prefix.?,
+        TerminalClient.of(client).host_input.router.prefix.?,
         .{},
     );
     var prefix: Chunk = .{};
@@ -92,18 +82,18 @@ test "host input presentation state schedules only through observation" {
 
     try std.testing.expect(!try host_inputs.handleRead(client, prefix));
 
-    try std.testing.expect(host(client).host_input.router.prefixPending());
-    try std.testing.expectEqual(input_revision + 1, host(client).host_input.presentationVersion());
+    try std.testing.expect(TerminalClient.of(client).host_input.router.prefixPending());
+    try std.testing.expectEqual(input_revision + 1, TerminalClient.of(client).host_input.presentationVersion());
     try std.testing.expectEqualDeep(model_version, client.model.version());
-    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
 
-    try std.testing.expectEqual(pending_updates + 1, host(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, TerminalClient.of(client).presenter.pending_updates);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
-        host(client).host_input.presentationVersion(),
-        host(client).presenter.presentation_state.prepared.presentation_ingress.input_routing,
+        TerminalClient.of(client).host_input.presentationVersion(),
+        TerminalClient.of(client).presenter.presentation_state.prepared.presentation_ingress.input_routing,
     );
 }
 
@@ -115,50 +105,50 @@ test "host pointer shape follows semantic hover through paced presentation" {
     const client = harness.client;
 
     try std.testing.expectEqual(
-        PointerShapeType.default,
-        host(client).presenter.screen.presented_mouse_pointer.?,
+        core.PointerShape.default,
+        TerminalClient.of(client).presenter.screen.presented_mouse_pointer.?,
     );
 
     try host_inputs.mouse(client, .{
-        .x = host(client).view.regions.top.x,
-        .y = host(client).view.regions.top.y,
+        .x = TerminalClient.of(client).view.regions.top.x,
+        .y = TerminalClient.of(client).view.regions.top.y,
         .kind = .move,
     });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
-        PointerShapeType.pointer,
-        host(client).presenter.screen.presented_mouse_pointer.?,
+        core.PointerShape.pointer,
+        TerminalClient.of(client).presenter.screen.presented_mouse_pointer.?,
     );
 
     try host_inputs.mouse(client, .{
-        .x = host(client).view.regions.sidebar.w - 1,
+        .x = TerminalClient.of(client).view.regions.sidebar.w - 1,
         .y = 5,
         .kind = .move,
     });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
-        PointerShapeType.ew_resize,
-        host(client).presenter.screen.presented_mouse_pointer.?,
+        core.PointerShape.ew_resize,
+        TerminalClient.of(client).presenter.screen.presented_mouse_pointer.?,
     );
 
     try host_inputs.mouse(client, .{
-        .x = host(client).view.regions.workbench.x,
-        .y = host(client).view.regions.workbench.y,
+        .x = TerminalClient.of(client).view.regions.workbench.x,
+        .y = TerminalClient.of(client).view.regions.workbench.y,
         .kind = .move,
     });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     try std.testing.expectEqual(
-        PointerShapeType.default,
-        host(client).presenter.screen.presented_mouse_pointer.?,
+        core.PointerShape.default,
+        TerminalClient.of(client).presenter.screen.presented_mouse_pointer.?,
     );
 
     var payload: [128]u8 = undefined;
-    const cells = [_]CellType{.{}};
-    for ([_]PointerShapeType{ .text, .wait, .zoom_in }, 0..) |shape, index| {
-        const encoded = try encodePaneFrame_module(&payload, .{
+    const cells = [_]core.Cell{.{}};
+    for ([_]core.PointerShape{ .text, .wait, .zoom_in }, 0..) |shape, index| {
+        const encoded = try core.encodePaneFrame(&payload, .{
             .pane_id = TestHarness.bootstrap_pane,
             .frame_id = index + 1,
             .base_frame_id = index,
@@ -168,31 +158,31 @@ test "host pointer shape follows semantic hover through paced presentation" {
             .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = if (index == 0) &.{.{ .start = 0, .cells = &cells }} else &.{},
         });
-        _ = try client.handleServerMessage(try decodeServer_module(encoded));
+        _ = try client.handleServerMessage(try core.decodeServer(encoded));
         try presentation_lifecycle.observe(client);
         try harness.settleModelPresentation();
-        try std.testing.expectEqual(shape, host(client).presenter.screen.presented_mouse_pointer.?);
+        try std.testing.expectEqual(shape, TerminalClient.of(client).presenter.screen.presented_mouse_pointer.?);
     }
 
-    try host_inputs.mouse(client, .{ .x = host(client).view.regions.top.x, .y = host(client).view.regions.top.y, .kind = .move });
+    try host_inputs.mouse(client, .{ .x = TerminalClient.of(client).view.regions.top.x, .y = TerminalClient.of(client).view.regions.top.y, .kind = .move });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(PointerShapeType.pointer, host(client).presenter.screen.presented_mouse_pointer.?);
+    try std.testing.expectEqual(core.PointerShape.pointer, TerminalClient.of(client).presenter.screen.presented_mouse_pointer.?);
 
     _ = try client.executeAction(.enter_copy_mode, .effect);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try host_inputs.mouse(client, .{ .x = host(client).view.regions.workbench.x, .y = host(client).view.regions.workbench.y, .kind = .move });
+    try host_inputs.mouse(client, .{ .x = TerminalClient.of(client).view.regions.workbench.x, .y = TerminalClient.of(client).view.regions.workbench.y, .kind = .move });
     try host_inputs.key(client, .plain(.escape));
     try std.testing.expect(!client.model.copyModeActive());
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(PointerShapeType.default, host(client).presenter.screen.presented_mouse_pointer.?);
+    try std.testing.expectEqual(core.PointerShape.default, TerminalClient.of(client).presenter.screen.presented_mouse_pointer.?);
 
-    try host_inputs.mouse(client, .{ .x = host(client).view.regions.workbench.x, .y = host(client).view.regions.workbench.y, .kind = .move });
+    try host_inputs.mouse(client, .{ .x = TerminalClient.of(client).view.regions.workbench.x, .y = TerminalClient.of(client).view.regions.workbench.y, .kind = .move });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(PointerShapeType.zoom_in, host(client).presenter.screen.presented_mouse_pointer.?);
+    try std.testing.expectEqual(core.PointerShape.zoom_in, TerminalClient.of(client).presenter.screen.presented_mouse_pointer.?);
 }
 
 test "presentation flushes an explicit empty model before bootstrap" {
@@ -206,8 +196,8 @@ test "presentation flushes an explicit empty model before bootstrap" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
-    for (host(client).presenter.screen.front.cells) |cell| {
+    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    for (TerminalClient.of(client).presenter.screen.front.cells) |cell| {
         try std.testing.expectEqualStrings(" ", cell.text());
         try std.testing.expectEqual(@as(u8, 1), cell.width);
     }
@@ -220,21 +210,21 @@ test "a media tick that yields to a pending draw runs at that draw's completion"
     try harness.bootstrap();
     const client = harness.client;
 
-    host(client).presenter.draw_pending = true;
-    host(client).presenter.media_tick_pending = true;
+    TerminalClient.of(client).presenter.draw_pending = true;
+    TerminalClient.of(client).presenter.media_tick_pending = true;
     try presentation_lifecycle.handleMediaTick(client, {});
 
-    try std.testing.expect(!host(client).presenter.media_tick_pending);
-    try std.testing.expect(host(client).presenter.media_after_draw);
+    try std.testing.expect(!TerminalClient.of(client).presenter.media_tick_pending);
+    try std.testing.expect(TerminalClient.of(client).presenter.media_after_draw);
 
-    host(client).presenter.draw_pending = false;
-    try host(client).presenter.requestMedia();
+    TerminalClient.of(client).presenter.draw_pending = false;
+    try TerminalClient.of(client).presenter.requestMedia();
 
-    try std.testing.expect(host(client).presenter.media_tick_pending);
-    try std.testing.expect(!host(client).presenter.media_after_draw);
+    try std.testing.expect(TerminalClient.of(client).presenter.media_tick_pending);
+    try std.testing.expect(!TerminalClient.of(client).presenter.media_after_draw);
     // The deferred pass was armed for now, not a pacer interval later.
     while (true) {
-        switch (try host(client).inbox.receive()) {
+        switch (try TerminalClient.of(client).inbox.receive()) {
             .media_tick => |result| {
                 try presentation_lifecycle.handleMediaTick(client, result);
                 break;
@@ -243,7 +233,7 @@ test "a media tick that yields to a pending draw runs at that draw's completion"
             else => return error.UnexpectedEvent,
         }
     }
-    try std.testing.expect(!host(client).presenter.media_tick_pending);
+    try std.testing.expect(!TerminalClient.of(client).presenter.media_tick_pending);
 }
 
 fn createSharedObject(name: [:0]const u8, pixels: []const u8) !void {
@@ -268,7 +258,7 @@ fn createSharedObject(name: [:0]const u8, pixels: []const u8) !void {
 }
 
 test "shared pane graphics reach the host inside the cell frame" {
-    if (comptime !supportsSharedMemory_module()) {
+    if (comptime !client_module.supportsSharedMemory()) {
         return error.SkipZigTest;
     }
 
@@ -279,16 +269,16 @@ test "shared pane graphics reach the host inside the cell frame" {
     const client = harness.client;
     _ = try host_resizes.apply(client, .{ .cols = 80, .rows = 24, .width_px = 800, .height_px = 480 });
     _ = try client.model.observeHostCapability(.{ .images = .supported });
-    host(client).graphics_store.shared_memory = true;
+    TerminalClient.of(client).graphics_store.shared_memory = true;
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
 
     var capture: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer capture.deinit();
-    host(client).writer = &capture.writer;
+    TerminalClient.of(client).writer = &capture.writer;
 
     var name_buffer: [64]u8 = undefined;
-    const name = try ShmNameType.init(try std.fmt.bufPrint(
+    const name = try core.ShmName.init(try std.fmt.bufPrint(
         &name_buffer,
         "/tlrtest-frame-{d}",
         .{std.c.getpid()},
@@ -298,28 +288,28 @@ test "shared pane graphics reach the host inside the cell frame" {
     defer _ = std.c.shm_unlink(name.sliceZ());
 
     var payload: [256]u8 = undefined;
-    const image: ImageType = .{
+    const image: core.Image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = 1,
         .height = 1,
         .byte_len = 4,
     };
-    const shared = try encodeGraphicsSharedImage_module(&payload, .{
+    const shared = try core.encodeGraphicsSharedImage(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .image = image,
         .name = name,
     });
-    _ = try client.handleServerMessage(try decodeServer_module(shared));
-    const placement = try encodeGraphicsPlacement_module(&payload, .{
+    _ = try client.handleServerMessage(try core.decodeServer(shared));
+    const placement = try core.encodeGraphicsPlacement(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .placement = .{ .key = image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    _ = try client.handleServerMessage(try decodeServer_module(placement));
+    _ = try client.handleServerMessage(try core.decodeServer(placement));
     try presentation_lifecycle.observe(client);
-    try std.testing.expect(host(client).presenter.draw_pending);
+    try std.testing.expect(TerminalClient.of(client).presenter.draw_pending);
     try harness.settleModelPresentation();
 
     const host_bytes = capture.written();
@@ -331,13 +321,13 @@ test "shared pane graphics reach the host inside the cell frame" {
         return error.FrameNotSynchronized;
     try std.testing.expect(std.mem.indexOf(u8, host_bytes[begin..place], "\x1b[?2026l") == null);
     try std.testing.expect(std.mem.indexOf(u8, host_bytes[place..], "\x1b[?2026l") != null);
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         try std.testing.expectEqual(@as(u64, 1), client.telemetry.metrics.pane_shared_images);
     }
 
     // The transmit asked the host for a reply; its OK reaches the store.
     try std.testing.expect(std.mem.indexOf(u8, host_bytes[transmit..place], "q=0;") != null);
-    var images = host(client).graphics_store.images.iterator();
+    var images = TerminalClient.of(client).graphics_store.images.iterator();
     const entry = images.next() orelse return error.ImageMissing;
     try std.testing.expect(!entry.value_ptr.delivery.host_acked);
     try host_inputs.terminalResponse(client, .{ .kitty_graphics = .{
@@ -353,19 +343,19 @@ test "presentation worker failures release their scheduling tokens" {
     defer harness.deinit();
     const client = harness.client;
 
-    host(client).presenter.draw_pending = true;
+    TerminalClient.of(client).presenter.draw_pending = true;
     try std.testing.expectError(
         error.DrawWorkerFailed,
         presentation_lifecycle.handleDraw(client, error.DrawWorkerFailed),
     );
-    try std.testing.expect(!host(client).presenter.draw_pending);
+    try std.testing.expect(!TerminalClient.of(client).presenter.draw_pending);
 
-    host(client).presenter.media_tick_pending = true;
+    TerminalClient.of(client).presenter.media_tick_pending = true;
     try std.testing.expectError(
         error.MediaWorkerFailed,
         presentation_lifecycle.handleMediaTick(client, error.MediaWorkerFailed),
     );
-    try std.testing.expect(!host(client).presenter.media_tick_pending);
+    try std.testing.expect(!TerminalClient.of(client).presenter.media_tick_pending);
 }
 
 test "TUI frame ACKs advance while a sealed host write retains its presentation token" {
@@ -382,18 +372,18 @@ test "TUI frame ACKs advance while a sealed host write retains its presentation 
         var wire: [1024]u8 = undefined;
         try std.testing.expectEqual(@as(u64, 1), (try harness.nextClientMessage(&wire)).frame_ack.frame_id);
         try harness.settle();
-        const before = host(client).presenter.presentation_state.delivered;
-        const token = try host(client).presenter.presentation_state.begin(.{
-            .observation = host(client).presenter.presentation_state.observed,
+        const before = TerminalClient.of(client).presenter.presentation_state.delivered;
+        const token = try TerminalClient.of(client).presenter.presentation_state.begin(.{
+            .observation = TerminalClient.of(client).presenter.presentation_state.observed,
             .commit = client.model.activeTabModelConst().?.presentationCommit(),
         });
-        host(client).output = try Output.init(std.testing.allocator, host(client).writer);
-        const output = &host(client).output.?;
+        TerminalClient.of(client).output = try Output.init(std.testing.allocator, TerminalClient.of(client).writer);
+        const output = &TerminalClient.of(client).output.?;
         output.delivery = token;
         try output.writer.writeAll("frame");
         const work = output.begin().?;
         try std.testing.expectEqual(@as(u64, 1), pane.pending_frame_id);
-        try std.testing.expectEqualDeep(before, host(client).presenter.presentation_state.delivered);
+        try std.testing.expectEqualDeep(before, TerminalClient.of(client).presenter.presentation_state.delivered);
         try receiveCellFrame(&harness, 2);
         try std.testing.expectEqual(@as(u64, 2), (try harness.nextClientMessage(&wire)).frame_ack.frame_id);
         try harness.settle();
@@ -402,7 +392,7 @@ test "TUI frame ACKs advance while a sealed host write retains its presentation 
         try std.testing.expectEqualStrings("B", pane.buffer.cells[0].text());
         if (fail) {
             try std.testing.expectError(error.WriteFailed, presentation_lifecycle.handleWritten(client, error.WriteFailed));
-            try std.testing.expect(host(client).presenter.presentation_state.preparation_invalid);
+            try std.testing.expect(TerminalClient.of(client).presenter.presentation_state.preparation_invalid);
         } else {
             try Output.write(work);
             try presentation_lifecycle.handleWritten(client, {});
@@ -410,16 +400,16 @@ test "TUI frame ACKs advance while a sealed host write retains its presentation 
 
         try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
         try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
-        try std.testing.expect(host(client).presenter.presentation_state.active == null);
+        try std.testing.expect(TerminalClient.of(client).presenter.presentation_state.active == null);
         try std.testing.expect(!output.pending);
     }
 }
 
 fn receiveCellFrame(harness: *TestHarness, frame_id: u64) !void {
-    var cells: [4]CellType = @splat(.{});
+    var cells: [4]core.Cell = @splat(.{});
     cells[0].bytes[0] = if (frame_id == 1) 'A' else 'B';
     var wire: [1024]u8 = undefined;
-    const payload = try encodePaneFrame_module(&wire, .{
+    const payload = try core.encodePaneFrame(&wire, .{
         .pane_id = TestHarness.bootstrap_pane,
         .frame_id = frame_id,
         .base_frame_id = frame_id - 1,
@@ -428,6 +418,6 @@ fn receiveCellFrame(harness: *TestHarness, frame_id: u64) !void {
         .scroll = .{ .total_rows = 2, .offset = 0 },
         .spans = &.{.{ .start = 0, .cells = if (frame_id == 1) &cells else cells[0..1] }},
     });
-    _ = try harness.client.handleServerMessage(try decodeServer_module(payload));
+    _ = try harness.client.handleServerMessage(try core.decodeServer(payload));
     @memset(&wire, 0xff);
 }

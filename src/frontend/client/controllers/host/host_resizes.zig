@@ -1,25 +1,22 @@
 //! Adapts host TTY resize events to one client's application state.
 
+const client_module = @import("telar-client");
+const data = @import("model");
+const core = @import("telar-core");
 const TerminalClient = @import("../../TerminalClient.zig");
-const host = TerminalClient.of;
-const Client = @import("telar-client").AttachedClient;
 const platform = @import("../../../platform/platform.zig");
 const Source = @import("Source.zig");
-const HostCommitType = @import("telar-client").HostCommit;
 const host_capabilities = @import("host_capabilities.zig");
 const std = @import("std");
 const SizeType = @import("../../../platform/Size.zig");
-const HostUpdateType = @import("telar-client").HostUpdate;
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const HostCapabilitiesType = @import("telar-client").HostCapabilities;
 
 /// Registers the next platform resize observation for this client.
 ///
 /// ```zig
 /// try schedule(client, watcher);
 /// ```
-pub fn schedule(client: *Client, watcher: *platform.ResizeWatcher) !void {
-    try host(client).inbox.start(.resized, .{ wait, .{ client.io, watcher } });
+pub fn schedule(client: *client_module.AttachedClient, watcher: *platform.ResizeWatcher) !void {
+    try TerminalClient.of(client).inbox.start(.resized, .{ wait, .{ client.io, watcher } });
 }
 
 /// Handles one completed platform resize event and rearms its watcher.
@@ -27,7 +24,7 @@ pub fn schedule(client: *Client, watcher: *platform.ResizeWatcher) !void {
 /// ```zig
 /// _ = try handle(client, result, source);
 /// ```
-pub fn handle(client: *Client, result: anyerror!void, source: Source) !?HostCommitType {
+pub fn handle(client: *client_module.AttachedClient, result: anyerror!void, source: Source) !?data.HostCommit {
     try result;
     const commit = try apply(client, source.tty.size());
     try host_capabilities.refresh(client);
@@ -45,7 +42,7 @@ fn wait(io: std.Io, watcher: *platform.ResizeWatcher) anyerror!void {
 /// ```zig
 /// const commit = try apply(client, measurement);
 /// ```
-pub fn apply(client: *Client, measurement: SizeType) !?HostCommitType {
+pub fn apply(client: *client_module.AttachedClient, measurement: SizeType) !?data.HostCommit {
     const update = resolve(client.model.hostCapabilities(), measurement);
 
     return client.applyHostUpdate(update);
@@ -56,11 +53,11 @@ pub fn apply(client: *Client, measurement: SizeType) !?HostCommitType {
 /// ```zig
 /// const size = initialSize(tty.size());
 /// ```
-pub fn initialSize(measurement: SizeType) TerminalSizeType {
+pub fn initialSize(measurement: SizeType) core.TerminalSize {
     return resolve(.{}, measurement).size;
 }
 
-fn resolve(current: HostCapabilitiesType, measurement: SizeType) HostUpdateType {
+fn resolve(current: data.HostCapabilities, measurement: SizeType) data.HostUpdate {
     var capabilities = current;
     const cols = if (measurement.cols == 0) 80 else measurement.cols;
     const rows = if (measurement.rows == 0) 24 else measurement.rows;
@@ -84,7 +81,7 @@ fn resolve(current: HostCapabilitiesType, measurement: SizeType) HostUpdateType 
 }
 
 test "initial host size normalizes an empty grid and resolves pixels" {
-    try std.testing.expectEqual(TerminalSizeType{
+    try std.testing.expectEqual(core.TerminalSize{
         .cols = 80,
         .rows = 24,
         .cell_width_px = 10,

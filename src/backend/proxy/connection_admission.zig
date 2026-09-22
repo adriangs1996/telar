@@ -1,7 +1,5 @@
 //! Bounded ownership transfer for accepted proxy connections.
 
-const SlotSnapshotType = @import("SlotSnapshot.zig");
-const SlotsType = @import("Slots.zig");
 const GenericConnectionAdmissionPort = @import("GenericConnectionAdmissionPort.zig").Type;
 const GenericRunner = @import("GenericRunner.zig").Type;
 const ConnectionAdmissionCapture = @import("ConnectionAdmissionCapture.zig");
@@ -51,28 +49,28 @@ fn expectSteps(capture: *const ConnectionAdmissionCapture, expected: []const Ste
 }
 
 test "connection slots never expose a count above their bound" {
-    var slots = SlotsType.init(2);
+    var slots = Slots.init(2);
 
     try std.testing.expect(slots.acquire());
     try std.testing.expect(slots.acquire());
     try std.testing.expect(!slots.acquire());
-    try std.testing.expectEqual(SlotSnapshotType{ .active = 2, .limit_drops = 1 }, slots.snapshot());
+    try std.testing.expectEqual(SlotSnapshot{ .active = 2, .limit_drops = 1 }, slots.snapshot());
 
     slots.release();
     try std.testing.expect(slots.acquire());
-    try std.testing.expectEqual(SlotSnapshotType{ .active = 2, .limit_drops = 1 }, slots.snapshot());
+    try std.testing.expectEqual(SlotSnapshot{ .active = 2, .limit_drops = 1 }, slots.snapshot());
 
     slots.release();
     slots.release();
-    try std.testing.expectEqual(SlotSnapshotType{ .active = 0, .limit_drops = 1 }, slots.snapshot());
+    try std.testing.expectEqual(SlotSnapshot{ .active = 0, .limit_drops = 1 }, slots.snapshot());
 }
 
 test "a zero connection limit rejects and counts every attempt" {
-    var slots = SlotsType.init(0);
+    var slots = Slots.init(0);
 
     try std.testing.expect(!slots.acquire());
     try std.testing.expect(!slots.acquire());
-    try std.testing.expectEqual(SlotSnapshotType{ .active = 0, .limit_drops = 2 }, slots.snapshot());
+    try std.testing.expectEqual(SlotSnapshot{ .active = 0, .limit_drops = 2 }, slots.snapshot());
 }
 
 test "listener closure stops and cancels the worker group" {

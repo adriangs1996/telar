@@ -7,21 +7,20 @@
 //! field except `name` is optional; a built-in name extends or overrides the
 //! shipped manifest instead of creating a new agent.
 
+const data = @import("model");
+const core = @import("telar-core");
 const lua_api = @import("lua-api");
 const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
-const DiagnosticType = @import("Diagnostic.zig");
 const value = @import("lua_value.zig");
 const EntryInput = @import("EntryInput.zig");
 const FieldLookup = @import("FieldLookup.zig");
-const AgentAttachmentMarkers = @import("telar-core").AgentAttachmentMarkers;
 const std = @import("std");
 const TextValue = @import("TextValue.zig");
-const measure_module = @import("telar-core").measure;
 
 const phrase_fields = .{ "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt" };
 const text_fields = .{ "display_name", "placeholder", "icon" };
 
-pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *DiagnosticType) !void {
+pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.agents must be an array", .{});
@@ -72,7 +71,7 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnos
     }
 }
 
-fn parseCommandTools(state: *lua_api.c.lua_State, input: EntryInput, diagnostic: *DiagnosticType) !void {
+fn parseCommandTools(state: *lua_api.c.lua_State, input: EntryInput, diagnostic: *data.Diagnostic) !void {
     _ = lua_api.c.lua_getfield(state, input.entry, "command_tools");
     defer value.pop(state, 1);
     if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
@@ -114,7 +113,7 @@ fn parseCommandTools(state: *lua_api.c.lua_State, input: EntryInput, diagnostic:
 }
 
 /// Reads the optional display fields and the attachment policy of one entry.
-fn parsePresentation(state: *lua_api.c.lua_State, input: EntryInput, diagnostic: *DiagnosticType) !void {
+fn parsePresentation(state: *lua_api.c.lua_State, input: EntryInput, diagnostic: *data.Diagnostic) !void {
     inline for (text_fields) |field| {
         const lookup: FieldLookup = .{ .entry = input.entry, .position = input.position, .field = field };
         if (try optionalText(state, lookup, diagnostic)) |text| {
@@ -131,8 +130,8 @@ fn parsePresentation(state: *lua_api.c.lua_State, input: EntryInput, diagnostic:
     }
 }
 
-fn attachmentMarkers(text: []const u8) ?AgentAttachmentMarkers {
-    inline for (std.meta.fields(AgentAttachmentMarkers)) |field| {
+fn attachmentMarkers(text: []const u8) ?core.AgentAttachmentMarkers {
+    inline for (std.meta.fields(core.AgentAttachmentMarkers)) |field| {
         if (std.mem.eql(u8, text, field.name)) {
             return @enumFromInt(field.value);
         }
@@ -144,7 +143,7 @@ fn attachmentMarkers(text: []const u8) ?AgentAttachmentMarkers {
 /// Returns a printable string field, `null` when absent, and a diagnostic
 /// when present with the wrong shape. The slice borrows the Lua stack value,
 /// which stays alive while the entry table is on the stack.
-fn optionalText(state: *lua_api.c.lua_State, lookup: FieldLookup, diagnostic: *DiagnosticType) !?[]const u8 {
+fn optionalText(state: *lua_api.c.lua_State, lookup: FieldLookup, diagnostic: *data.Diagnostic) !?[]const u8 {
     _ = lua_api.c.lua_getfield(state, lookup.entry, lookup.field.ptr);
     defer value.pop(state, 1);
     if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
@@ -162,8 +161,8 @@ fn optionalText(state: *lua_api.c.lua_State, lookup: FieldLookup, diagnostic: *D
 
 /// Stores one presentation string on the manifest. `icon` must also occupy
 /// exactly one cell so custom marks align with the built-in artwork.
-fn applyText(input: EntryInput, item: TextValue, diagnostic: *DiagnosticType) !void {
-    if (std.mem.eql(u8, item.field, "icon") and measure_module(item.text) != 1) {
+fn applyText(input: EntryInput, item: TextValue, diagnostic: *data.Diagnostic) !void {
+    if (std.mem.eql(u8, item.field, "icon") and core.measure(item.text) != 1) {
         diagnostic.set("config.runtime.agents[{d}].icon must be exactly one cell wide", .{input.position});
         return error.InvalidConfig;
     }
@@ -184,7 +183,7 @@ fn applyText(input: EntryInput, item: TextValue, diagnostic: *DiagnosticType) !v
     };
 }
 
-fn parseList(state: *lua_api.c.lua_State, input: anytype, diagnostic: *DiagnosticType) !void {
+fn parseList(state: *lua_api.c.lua_State, input: anytype, diagnostic: *data.Diagnostic) !void {
     _ = lua_api.c.lua_getfield(state, input.entry, input.field.ptr);
     defer value.pop(state, 1);
     if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {

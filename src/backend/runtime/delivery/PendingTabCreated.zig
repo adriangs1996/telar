@@ -1,16 +1,13 @@
-const RequestIdType = @import("telar-core").RequestId;
-const TabLocationType = @import("telar-core").TabLocation;
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const PendingTabCreated = @This();
 
-request_id: RequestIdType,
-location: TabLocationType,
+request_id: core.RequestId,
+location: core.TabLocation,
 position: u16,
-label: [max_tab_label_bytes_module]u8,
+label: [core.max_tab_label_bytes]u8,
 label_len: u8,
-root_pane_id: PaneIdType,
-kind: @import("telar-core").PaneKind = .terminal,
+root_pane_id: core.PaneId,
+kind: core.PaneKind = .terminal,
 pane_generation: u64 = 0,
 
 pub fn labelSlice(created: *const PendingTabCreated) []const u8 {

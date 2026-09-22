@@ -1,3 +1,4 @@
+const event_module = @import("../input/event.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -5,11 +6,10 @@ const Widget = @import("Widget.zig");
 const Editor = @import("editor.zig");
 const Route = @import("../widgets/interaction/Route.zig");
 const Target = @import("../widgets/interaction/Target.zig");
-const Event = @import("../input/event.zig").Event;
 const actions = @import("action.zig");
 const syntax_limits = @import("../syntax/limits.zig");
 
-pub fn apply(w: *Widget, event: Event, route: Route) !bool {
+pub fn apply(w: *Widget, event: event_module.Event, route: Route) !bool {
     if (event == .focus and !event.focus) {
         w.dragging = false;
         w.pending_g = false;

@@ -1,12 +1,12 @@
-const OutboxType = @import("telar-client").Outbox;
+const client = @import("telar-client");
 const std = @import("std");
 const OutboxContext = @This();
 
-outbox: *OutboxType,
+outbox: *client.Outbox,
 buffer: [4096]u8 = undefined,
 
 pub fn init(gpa: std.mem.Allocator) !OutboxContext {
-    const outbox = try gpa.create(OutboxType);
+    const outbox = try gpa.create(client.Outbox);
     outbox.* = .{};
     return .{ .outbox = outbox };
 }

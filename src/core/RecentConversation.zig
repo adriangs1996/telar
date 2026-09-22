@@ -1,3 +1,4 @@
+const agent = @import("schema/messages/agent.zig");
 const std = @import("std");
 
 id: [128]u8 = @splat(0),
@@ -7,7 +8,7 @@ title_len: u8 = 0,
 
 /// Example: `const entry = try RecentConversation.init(id, title);`
 pub fn init(id: []const u8, title: []const u8) !@This() {
-    try @import("schema/messages/agent.zig").validateSessionReference(id);
+    try agent.validateSessionReference(id);
     if (title.len > 160 or !std.unicode.utf8ValidateSlice(title)) {
         return error.InvalidConversation;
     }

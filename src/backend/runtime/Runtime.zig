@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const ResourcesType = @import("resources/Resources.zig");
 const Loop = @import("Loop.zig");
 const ApplicationType = @import("application/Application.zig");
@@ -6,7 +7,6 @@ const InitializationType = @import("Initialization.zig");
 const InitialSourcesType = @import("InitialSources.zig");
 const SourcesType = @import("Sources.zig");
 const OptionsType = @import("Options.zig");
-const enter_module = @import("telar-core").enter;
 const runtime_event = @import("event.zig");
 const events = @import("application/events.zig");
 const change_review = @import("application/change_review.zig");
@@ -108,7 +108,7 @@ fn composeApplication(runtime: *Runtime, options: OptionsType) !void {
 pub fn run(runtime: *Runtime) !void {
     while (true) {
         const event = try runtime.loop.next();
-        const path = enter_module(runtime_event.diagnosticsPath(event));
+        const path = core.enter(runtime_event.diagnosticsPath(event));
         defer path.restore();
 
         if (try runtime.update(event)) {

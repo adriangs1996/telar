@@ -1,3 +1,4 @@
+const historical_item = @import("historical_item.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Request = @import("HistoryRequest.zig");
@@ -243,7 +244,7 @@ fn loadPage(task: *ProviderHistory) !*core.AgentHistoryPage {
         }
 
         var normalizer: @import("ItemNormalizer.zig") = .{ .body_buffer = task.body, .include_history_details = true };
-        var update = try @import("historical_item.zig").normalize(&normalizer, raw_item);
+        var update = try historical_item.normalize(&normalizer, raw_item);
         if (update.truncated) {
             return error.HistoryItemNotRepresentable;
         }

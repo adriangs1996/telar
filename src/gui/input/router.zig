@@ -1,7 +1,8 @@
+const data = @import("model");
 const client = @import("telar-client");
 
 // No escape decoder is instantiated: AppKit and Wayland supply semantic keys.
-pub const Type = client.GenericRouter(client.Action, .{
+pub const Type = client.GenericRouter(data.actions.Action, .{
     .max_bindings = client.config_model.max_bindings,
     .max_keys = client.config_model.max_binding_keys,
     .input_capacity = 1,

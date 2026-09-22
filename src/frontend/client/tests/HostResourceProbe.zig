@@ -1,4 +1,5 @@
 //! Records host port calls while the shared client runs its real host policy.
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -81,7 +82,7 @@ fn invalidate(context: *anyopaque) void {
     self.record(.invalidate) catch unreachable;
 }
 
-fn region(context: *anyopaque) client.Region {
+fn region(context: *anyopaque) data.Region {
     const self: *Probe = @ptrCast(@alignCast(context));
     return self.chrome.region();
 }

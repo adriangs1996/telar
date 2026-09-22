@@ -1,4 +1,8 @@
 //! A chrome control in device pixels with one semantic intent.
+const alignment_module = @import("../layout/alignment.zig");
+const label_face = @import("label_face.zig");
+const label_size = @import("label_size.zig");
+const action_module = @import("action.zig");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
@@ -7,7 +11,6 @@ const Label = @import("Label.zig");
 const AttentionDot = @import("AttentionDot.zig");
 const Layout = @import("../layout/Layout.zig");
 const Item = @import("../layout/Item.zig");
-const Action = @import("action.zig").Action;
 const PixelButton = @This();
 
 context: *const Context,
@@ -16,11 +19,11 @@ intent: client.Intent,
 text: []const u8,
 active: bool = false,
 background: bool = true,
-alignment: @import("../layout/alignment.zig").Alignment = .start,
+alignment: alignment_module.Alignment = .start,
 radius: f32 = 999,
 bold: bool = false,
-face: @import("label_face.zig").Face = .sans,
-size: @import("label_size.zig").Size = .body,
+face: label_face.Face = .sans,
+size: label_size.Size = .body,
 /// Horizontal inset of the label inside the control, in device pixels.
 inset: f32 = 0,
 /// An attention dot painted at the trailing edge in this color, if any.
@@ -35,7 +38,7 @@ pub fn draw(button: PixelButton, canvas: *Canvas) !void {
     }
 
     const palette = canvas.theme.palette;
-    const action: Action = .{ .intent = button.intent };
+    const action: action_module.Action = .{ .intent = button.intent };
     const hovered = button.context.isHovered(action);
 
     if (button.background) {

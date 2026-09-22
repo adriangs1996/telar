@@ -1,6 +1,5 @@
-const RequestIdType = @import("telar-core").RequestId;
-const TabLocationType = @import("telar-core").TabLocation;
+const core = @import("telar-core");
 const PendingTabSnapshot = @This();
 
-request_id: RequestIdType,
-location: TabLocationType,
+request_id: core.RequestId,
+location: core.TabLocation,

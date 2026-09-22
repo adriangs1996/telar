@@ -1,32 +1,21 @@
 //! Kitty graphics delivery backed by the shared client resource catalog.
 
-const supportsSharedMemory = @import("telar-client").supportsSharedMemory;
+const client = @import("telar-client");
+const core = @import("telar-core");
+const kitty_protocol = @import("kitty_protocol");
 const DestinationSizeInput = @import("DestinationSizeInput.zig");
 const std = @import("std");
 const capability_mod = @import("capabilities.zig");
 const codec = @import("kitty_codec.zig");
 const delivery = @import("kitty_delivery.zig");
-const ImageType = @import("telar-core").Image;
-const identity = @import("telar-client").identity;
-const TabLocationType = @import("telar-core").TabLocation;
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
 const KittyGraphicsWriter = @import("KittyGraphicsWriter.zig");
 const TransmissionFixture = @import("TransmissionFixture.zig");
 const TestCompressionScheduler = @import("TestCompressionScheduler.zig");
-const PaneIdType = @import("telar-core").PaneId;
-const PlacementIdentity = @import("telar-client").PlacementIdentity;
-const writeDeleteImage = @import("kitty_protocol").writeDeleteImage;
-const writeDeletePlacement = @import("kitty_protocol").writeDeletePlacement;
-const writeDeleteImageRange = @import("kitty_protocol").writeDeleteImageRange;
-const max_images_per_pane_module = @import("telar-core").max_images_per_pane;
-const max_chunks_per_image_module = @import("telar-core").max_chunks_per_image;
-const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
-const ShmNameType = @import("telar-core").ShmName;
 
 /// Whether this client build can map POSIX shared memory the runtime names.
 /// The client declares it to the runtime explicitly; nothing is assumed.
 pub fn clientSupportsSharedMemory() bool {
-    return supportsSharedMemory();
+    return client.supportsSharedMemory();
 }
 
 /// Encoded image bytes one media pass may put on the direct-data fallback
@@ -105,7 +94,7 @@ test "direct transmission chunks payload without changing pixels" {
 test "exterior IDs do not collide across panes with identical child IDs" {
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const metadata: ImageType = .{
+    const metadata: core.Image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = 1,
@@ -114,24 +103,24 @@ test "exterior IDs do not collide across panes with identical child IDs" {
     };
     try store.applyImage(.{ .pane_id = @enumFromInt(1), .revision = 1, .image = metadata });
     try store.applyImage(.{ .pane_id = @enumFromInt(2), .revision = 1, .image = metadata });
-    const first = store.images.get(identity(@enumFromInt(1), metadata.key)).?.delivery.external_id;
-    const second = store.images.get(identity(@enumFromInt(2), metadata.key)).?.delivery.external_id;
+    const first = store.images.get(client.identity(@enumFromInt(1), metadata.key)).?.delivery.external_id;
+    const second = store.images.get(client.identity(@enumFromInt(2), metadata.key)).?.delivery.external_id;
     try std.testing.expect(first != second);
     try std.testing.expect(first < 0x40000000 and second < 0x40000000);
 }
 
 test "unchanged graphics emit no work and resize does not retransmit pixels" {
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const metadata: ImageType = .{
+    const metadata: core.Image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = 1,
@@ -198,17 +187,17 @@ test "unchanged graphics emit no work and resize does not retransmit pixels" {
 test "image transmission is paced across frames by the byte budget" {
     // Regression: the writer base64-encoded whole images inside one frame's
     // flush, so a large child image sat between a keystroke and its echo.
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const metadata: ImageType = .{
+    const metadata: core.Image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = 512,
@@ -350,7 +339,7 @@ test "performance probe measures compression work outside the presentation turn"
         if (comptime @hasField(delivery.Store, "compression_scheduler")) {
             fixture.store.delivery.compression_scheduler = .{ .context = &scheduler, .start = TestCompressionScheduler.schedule };
         }
-        const image = fixture.store.images.getPtr(identity(@enumFromInt(1), TransmissionFixture.metadata.key)).?;
+        const image = fixture.store.images.getPtr(client.identity(@enumFromInt(1), TransmissionFixture.metadata.key)).?;
         turn.* = 0;
         const started = std.Io.Clock.awake.now(std.testing.io).nanoseconds;
         while (true) {
@@ -401,7 +390,7 @@ test "async compression owns its input and emits the same pixels" {
             if (turns == 1) {
                 try std.testing.expectEqual(@as(usize, 2), job.allocating.written().len);
             }
-            const image = fixture.store.images.getPtr(identity(@enumFromInt(1), TransmissionFixture.metadata.key)).?;
+            const image = fixture.store.images.getPtr(client.identity(@enumFromInt(1), TransmissionFixture.metadata.key)).?;
             try std.testing.expect(job.input.ptr != image.pixels.ptr);
             try std.testing.expect(job.input_len <= compression_slice_per_frame);
             scheduler.complete(&fixture.store);
@@ -424,7 +413,7 @@ test "an image deleted during compression releases its orphan only after complet
     var scheduler: TestCompressionScheduler = .{};
     fixture.store.delivery.host_zlib = true;
     fixture.store.delivery.compression_scheduler = .{ .context = &scheduler, .start = TestCompressionScheduler.schedule };
-    const image_key = identity(@enumFromInt(1), TransmissionFixture.metadata.key);
+    const image_key = client.identity(@enumFromInt(1), TransmissionFixture.metadata.key);
     const image = fixture.store.images.getPtr(image_key).?;
     var budget: usize = compression_slice_per_frame;
     try std.testing.expect(!delivery.advanceCompression(&fixture.store, image, &budget));
@@ -567,18 +556,18 @@ test "a compressed transmission resumes across frames" {
 }
 
 test "continuous replacements complete and hand off without a blank frame" {
-    const pane_id: PaneIdType = @enumFromInt(1);
-    const location: TabLocationType = .{
+    const pane_id: core.PaneId = @enumFromInt(1);
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const first: ImageType = .{
+    const first: core.Image = .{
         .key = .{ .image_id = 7, .generation = 1 },
         .format = .rgba,
         .width = 1,
@@ -616,9 +605,9 @@ test "continuous replacements complete and hand off without a blank frame" {
     var first_writer = std.Io.Writer.fixed(&small_buffer);
     _ = try graphics_writer.write(&first_writer);
 
-    const placement_key: PlacementIdentity = .{ .pane_id = pane_id, .virtual_id = 1 };
+    const placement_key: client.PlacementIdentity = .{ .pane_id = pane_id, .virtual_id = 1 };
     const placement_id = store.placements.get(placement_key).?.delivery.external_id;
-    const first_id = store.images.get(identity(pane_id, first.key)).?.delivery.external_id;
+    const first_id = store.images.get(client.identity(pane_id, first.key)).?.delivery.external_id;
     try std.testing.expectEqual(
         first_id,
         store.placements.get(placement_key).?.delivery.emitted_image_id.?,
@@ -627,7 +616,7 @@ test "continuous replacements complete and hand off without a blank frame" {
     const pixels = try std.testing.allocator.alloc(u8, 256 * 256 * 4);
     defer std.testing.allocator.free(pixels);
     @memset(pixels, 0x5a);
-    const second: ImageType = .{
+    const second: core.Image = .{
         .key = .{ .image_id = 7, .generation = 2 },
         .format = .rgba,
         .width = 256,
@@ -665,7 +654,7 @@ test "continuous replacements complete and hand off without a blank frame" {
 
     // A third browser frame arrives before the second has crossed the host
     // terminal. It replaces pending work, but cannot abort the open KGP stream.
-    const third: ImageType = .{
+    const third: core.Image = .{
         .key = .{ .image_id = 7, .generation = 3 },
         .format = .rgba,
         .width = 256,
@@ -698,8 +687,8 @@ test "continuous replacements complete and hand off without a blank frame" {
     });
     try std.testing.expectEqual(@as(usize, 3), store.images.count());
 
-    const second_id = store.images.get(identity(pane_id, second.key)).?.delivery.external_id;
-    const third_id = store.images.get(identity(pane_id, third.key)).?.delivery.external_id;
+    const second_id = store.images.get(client.identity(pane_id, second.key)).?.delivery.external_id;
+    const third_id = store.images.get(client.identity(pane_id, third.key)).?.delivery.external_id;
     var second_placement_buffer: [64]u8 = undefined;
     const second_placement = try std.fmt.bufPrint(
         &second_placement_buffer,
@@ -768,15 +757,15 @@ test "continuous replacements complete and hand off without a blank frame" {
         store.placements.get(placement_key).?.delivery.emitted_image_id.?,
     );
     try std.testing.expectEqual(@as(usize, 1), store.images.count());
-    try std.testing.expect(store.images.contains(identity(pane_id, third.key)));
+    try std.testing.expect(store.images.contains(client.identity(pane_id, third.key)));
 }
 
 test "image and placement deletes encode exactly and clear client state" {
     var output: [256]u8 = undefined;
     var writer = std.Io.Writer.fixed(&output);
-    _ = try writeDeleteImage(&writer, 7);
-    _ = try writeDeletePlacement(&writer, 7, 11);
-    _ = try writeDeleteImageRange(&writer, 1, 9);
+    _ = try kitty_protocol.writeDeleteImage(&writer, 7);
+    _ = try kitty_protocol.writeDeletePlacement(&writer, 7, 11);
+    _ = try kitty_protocol.writeDeleteImageRange(&writer, 1, 9);
     try std.testing.expectEqualStrings(
         "\x1b_Ga=d,d=I,i=7,q=2\x1b\\" ++
             "\x1b_Ga=d,d=i,i=7,p=11,q=2\x1b\\" ++
@@ -786,8 +775,8 @@ test "image and placement deletes encode exactly and clear client state" {
 
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
-    const metadata: ImageType = .{
+    const pane_id: core.PaneId = @enumFromInt(1);
+    const metadata: core.Image = .{
         .key = .{ .image_id = 7, .generation = 1 },
         .format = .rgba,
         .width = 1,
@@ -829,8 +818,8 @@ test "image and placement deletes encode exactly and clear client state" {
 test "client graphics store enforces image and chunk counts" {
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
-    for (0..max_images_per_pane_module) |index| {
+    const pane_id: core.PaneId = @enumFromInt(1);
+    for (0..core.max_images_per_pane) |index| {
         const image_id: u32 = @intCast(index + 1);
         try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = .{
             .key = .{ .image_id = image_id, .generation = 1 },
@@ -857,7 +846,7 @@ test "client graphics store enforces image and chunk counts" {
         .image_id = 1,
         .generation = 1,
     }).?;
-    entry.chunks = max_chunks_per_image_module;
+    entry.chunks = core.max_chunks_per_image;
     try std.testing.expectError(error.GraphicsChunkLimitExceeded, store.applyChunk(.{
         .pane_id = pane_id,
         .revision = 1,
@@ -880,7 +869,7 @@ test "client graphics store enforces image and chunk counts" {
         .offset = 0,
         .bytes = &.{ 1, 2, 3, 4 },
     });
-    try std.testing.expectEqual(max_images_per_pane_module, store.images.count());
+    try std.testing.expectEqual(core.max_images_per_pane, store.images.count());
     try std.testing.expect(store.images.contains(.{
         .pane_id = pane_id,
         .image_id = 1,
@@ -891,7 +880,7 @@ test "client graphics store enforces image and chunk counts" {
 test "a completed newer generation replaces incomplete client image storage" {
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
+    const pane_id: core.PaneId = @enumFromInt(1);
     try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = .{
         .key = .{ .image_id = 7, .generation = 1 },
         .format = .rgba,
@@ -936,8 +925,8 @@ test "a flood of stale generations of one image cannot overflow eviction" {
     // generations could coexist and completing one wrote past the array.
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
-    const generations = max_images_per_pane_module + 8;
+    const pane_id: core.PaneId = @enumFromInt(1);
+    const generations = core.max_images_per_pane + 8;
     var generation: u64 = 1;
     while (generation <= generations) : (generation += 1) {
         try store.applyImage(.{ .pane_id = pane_id, .revision = generation, .image = .{
@@ -971,10 +960,10 @@ test "the store tracks panes for a whole client, not one tab" {
     // returned ClientPaneLimitExceeded and the error killed the client.
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const panes = max_panes_per_tab_module + 8;
+    const panes = core.max_panes_per_tab + 8;
     var index: usize = 0;
     while (index < panes) : (index += 1) {
-        const pane_id: PaneIdType = @enumFromInt(index + 1);
+        const pane_id: core.PaneId = @enumFromInt(index + 1);
         try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = .{
             .key = .{ .image_id = 1, .generation = 1 },
             .format = .rgb,
@@ -991,16 +980,16 @@ test "the store tracks panes for a whole client, not one tab" {
 test "pane usage counters match a full recount" {
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const first_pane: PaneIdType = @enumFromInt(1);
-    const second_pane: PaneIdType = @enumFromInt(2);
-    const metadata: ImageType = .{
+    const first_pane: core.PaneId = @enumFromInt(1);
+    const second_pane: core.PaneId = @enumFromInt(2);
+    const metadata: core.Image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = 1,
         .height = 1,
         .byte_len = 4,
     };
-    for ([_]PaneIdType{ first_pane, second_pane }) |pane_id| {
+    for ([_]core.PaneId{ first_pane, second_pane }) |pane_id| {
         try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = metadata });
         try store.applyChunk(.{
             .pane_id = pane_id,
@@ -1026,7 +1015,7 @@ test "pane usage counters match a full recount" {
     });
     try store.deleteImage(.{ .pane_id = second_pane, .revision = 3, .key = metadata.key });
 
-    for ([_]PaneIdType{ first_pane, second_pane }) |pane_id| {
+    for ([_]core.PaneId{ first_pane, second_pane }) |pane_id| {
         var counted: delivery.Store.PaneUsage = .{};
         var images = store.images.iterator();
         while (images.next()) |entry| {
@@ -1059,8 +1048,8 @@ test "pane usage counters match a full recount" {
 test "snapshot replacement returns client image credit" {
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
-    const image: ImageType = .{
+    const pane_id: core.PaneId = @enumFromInt(1);
+    const image: core.Image = .{
         .key = .{ .image_id = 7, .generation = 1 },
         .format = .rgba,
         .width = 1,
@@ -1084,14 +1073,14 @@ test "snapshot replacement returns client image credit" {
 }
 
 test "shared client pixels have a bounded POSIX lifetime" {
-    if (comptime !supportsSharedMemory()) {
+    if (comptime !client.supportsSharedMemory()) {
         return error.SkipZigTest;
     }
 
     var store = delivery.Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
-    const image: ImageType = .{
+    const pane_id: core.PaneId = @enumFromInt(1);
+    const image: core.Image = .{
         .key = .{ .image_id = 7, .generation = 1 },
         .format = .rgba,
         .width = 1,
@@ -1099,7 +1088,7 @@ test "shared client pixels have a bounded POSIX lifetime" {
         .byte_len = 4,
     };
     try store.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = image });
-    const shared = store.images.get(identity(pane_id, image.key)).?.shared.?;
+    const shared = store.images.get(client.identity(pane_id, image.key)).?.shared.?;
     const fd = std.c.shm_open(
         shared.sliceZ(),
         @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })),
@@ -1126,7 +1115,7 @@ test "shared client pixels have a bounded POSIX lifetime" {
             .y = 0,
         },
     });
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1199,33 +1188,33 @@ test "shared transmission sends only a KGP resource name" {
 }
 
 test "a host acknowledgement retires a replaced shared image without probing" {
-    if (comptime !supportsSharedMemory()) {
+    if (comptime !client.supportsSharedMemory()) {
         return error.SkipZigTest;
     }
 
     var store = delivery.Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
+    const pane_id: core.PaneId = @enumFromInt(1);
     const source = [_]u8{ 1, 2, 3, 255 };
     var first_name_buffer: [64]u8 = undefined;
-    const first_name = try ShmNameType.init(try std.fmt.bufPrint(&first_name_buffer, "/tlrtest-ack1-{d}", .{std.c.getpid()}));
+    const first_name = try core.ShmName.init(try std.fmt.bufPrint(&first_name_buffer, "/tlrtest-ack1-{d}", .{std.c.getpid()}));
     _ = std.c.shm_unlink(first_name.sliceZ());
     try testCreateSharedObject(first_name.sliceZ(), &source);
     defer _ = std.c.shm_unlink(first_name.sliceZ());
     var second_name_buffer: [64]u8 = undefined;
-    const second_name = try ShmNameType.init(try std.fmt.bufPrint(&second_name_buffer, "/tlrtest-ack2-{d}", .{std.c.getpid()}));
+    const second_name = try core.ShmName.init(try std.fmt.bufPrint(&second_name_buffer, "/tlrtest-ack2-{d}", .{std.c.getpid()}));
     _ = std.c.shm_unlink(second_name.sliceZ());
     try testCreateSharedObject(second_name.sliceZ(), &source);
     defer _ = std.c.shm_unlink(second_name.sliceZ());
 
-    const first: ImageType = .{ .key = .{ .image_id = 7, .generation = 1 }, .format = .rgba, .width = 1, .height = 1, .byte_len = 4 };
+    const first: core.Image = .{ .key = .{ .image_id = 7, .generation = 1 }, .format = .rgba, .width = 1, .height = 1, .byte_len = 4 };
     try store.applySharedImage(.{ .pane_id = pane_id, .revision = 1, .image = first, .name = first_name });
     try store.applyPlacement(.{
         .pane_id = pane_id,
         .revision = 1,
         .placement = .{ .key = first.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1241,16 +1230,16 @@ test "a host acknowledgement retires a replaced shared image without probing" {
     var writer = std.Io.Writer.fixed(&output);
     _ = try graphics_writer.write(&writer);
     try std.testing.expect(std.mem.indexOf(u8, writer.buffered(), "q=0;") != null);
-    const first_external = store.images.get(identity(pane_id, first.key)).?.delivery.external_id;
+    const first_external = store.images.get(client.identity(pane_id, first.key)).?.delivery.external_id;
 
     // A reply for an id the store does not hold changes nothing.
     try std.testing.expect(!delivery.noteHostReply(&store, first_external + 1000, true));
     try std.testing.expect(delivery.noteHostReply(&store, first_external, true));
-    try std.testing.expect(store.images.get(identity(pane_id, first.key)).?.delivery.host_acked);
+    try std.testing.expect(store.images.get(client.identity(pane_id, first.key)).?.delivery.host_acked);
 
     // The object still exists: without the reply a probe would keep the
     // replaced generation alive. With it, the replacement retires it.
-    const second: ImageType = .{ .key = .{ .image_id = 7, .generation = 2 }, .format = .rgba, .width = 1, .height = 1, .byte_len = 4 };
+    const second: core.Image = .{ .key = .{ .image_id = 7, .generation = 2 }, .format = .rgba, .width = 1, .height = 1, .byte_len = 4 };
     try store.applySharedImage(.{ .pane_id = pane_id, .revision = 2, .image = second, .name = second_name });
     try store.applyPlacement(.{
         .pane_id = pane_id,
@@ -1261,34 +1250,34 @@ test "a host acknowledgement retires a replaced shared image without probing" {
     var second_writer = std.Io.Writer.fixed(&second_output);
     _ = try graphics_writer.write(&second_writer);
     try std.testing.expectEqual(@as(usize, 1), store.images.count());
-    try std.testing.expect(store.images.get(identity(pane_id, second.key)) != null);
+    try std.testing.expect(store.images.get(client.identity(pane_id, second.key)) != null);
     const credit = store.peekCredit() orelse return error.CreditNotReleased;
     try std.testing.expectEqual(@as(usize, 4), credit.bytes);
     store.consumeCredit(credit);
 }
 
 test "a host error reply reclaims the shared name and retransmits inline" {
-    if (comptime !supportsSharedMemory()) {
+    if (comptime !client.supportsSharedMemory()) {
         return error.SkipZigTest;
     }
 
     var store = delivery.Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
+    const pane_id: core.PaneId = @enumFromInt(1);
     const source = [_]u8{ 1, 2, 3, 255 };
     var name_buffer: [64]u8 = undefined;
-    const name = try ShmNameType.init(try std.fmt.bufPrint(&name_buffer, "/tlrtest-nack-{d}", .{std.c.getpid()}));
+    const name = try core.ShmName.init(try std.fmt.bufPrint(&name_buffer, "/tlrtest-nack-{d}", .{std.c.getpid()}));
     _ = std.c.shm_unlink(name.sliceZ());
     try testCreateSharedObject(name.sliceZ(), &source);
     defer _ = std.c.shm_unlink(name.sliceZ());
-    const image: ImageType = .{ .key = .{ .image_id = 7, .generation = 1 }, .format = .rgba, .width = 1, .height = 1, .byte_len = 4 };
+    const image: core.Image = .{ .key = .{ .image_id = 7, .generation = 1 }, .format = .rgba, .width = 1, .height = 1, .byte_len = 4 };
     try store.applySharedImage(.{ .pane_id = pane_id, .revision = 1, .image = image, .name = name });
     try store.applyPlacement(.{
         .pane_id = pane_id,
         .revision = 1,
         .placement = .{ .key = image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1303,7 +1292,7 @@ test "a host error reply reclaims the shared name and retransmits inline" {
     var output: [1024]u8 = undefined;
     var writer = std.Io.Writer.fixed(&output);
     _ = try graphics_writer.write(&writer);
-    const external = store.images.get(identity(pane_id, image.key)).?.delivery.external_id;
+    const external = store.images.get(client.identity(pane_id, image.key)).?.delivery.external_id;
 
     try std.testing.expect(delivery.noteHostReply(&store, external, false));
 
@@ -1319,8 +1308,8 @@ test "a host error reply reclaims the shared name and retransmits inline" {
 test "graphics revisions ignore stale deltas and validate snapshots" {
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
-    const metadata: ImageType = .{
+    const pane_id: core.PaneId = @enumFromInt(1);
+    const metadata: core.Image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = 1,
@@ -1330,7 +1319,7 @@ test "graphics revisions ignore stale deltas and validate snapshots" {
     try store.applyImage(.{ .pane_id = pane_id, .revision = 5, .image = metadata });
     try std.testing.expectEqual(@as(u64, 1), store.ingressVersion());
     try store.deleteImage(.{ .pane_id = pane_id, .revision = 4, .key = metadata.key });
-    try std.testing.expect(store.images.contains(identity(pane_id, metadata.key)));
+    try std.testing.expect(store.images.contains(client.identity(pane_id, metadata.key)));
     try std.testing.expectEqual(@as(u64, 1), store.ingressVersion());
 
     try store.applySnapshot(.{ .pane_id = pane_id, .revision = 8, .phase = .begin });
@@ -1368,14 +1357,14 @@ fn testCreateSharedObject(name: [:0]const u8, pixels: []const u8) !void {
 }
 
 test "an undersized runtime shared object is rejected and unlinked" {
-    if (comptime !supportsSharedMemory()) {
+    if (comptime !client.supportsSharedMemory()) {
         return error.SkipZigTest;
     }
 
     var store = delivery.Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
     var name_buffer: [64]u8 = undefined;
-    const name = try ShmNameType.init(try std.fmt.bufPrint(&name_buffer, "/tlrtest-short-{d}", .{std.c.getpid()}));
+    const name = try core.ShmName.init(try std.fmt.bufPrint(&name_buffer, "/tlrtest-short-{d}", .{std.c.getpid()}));
     _ = std.c.shm_unlink(name.sliceZ());
     defer _ = std.c.shm_unlink(name.sliceZ());
     try testCreateSharedObject(name.sliceZ(), "RGBA");
@@ -1400,14 +1389,14 @@ test "an undersized runtime shared object is rejected and unlinked" {
 }
 
 test "a runtime-named image maps without copying and hands the host its name" {
-    if (comptime !supportsSharedMemory()) {
+    if (comptime !client.supportsSharedMemory()) {
         return error.SkipZigTest;
     }
 
     var store = delivery.Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
     var name_buffer: [64]u8 = undefined;
-    const name = try ShmNameType.init(try std.fmt.bufPrint(
+    const name = try core.ShmName.init(try std.fmt.bufPrint(
         &name_buffer,
         "/tlrtest-map-{d}",
         .{std.c.getpid()},
@@ -1416,8 +1405,8 @@ test "a runtime-named image maps without copying and hands the host its name" {
     const source = [_]u8{ 1, 2, 3, 255 };
     try testCreateSharedObject(name.sliceZ(), &source);
 
-    const pane_id: PaneIdType = @enumFromInt(1);
-    const image: ImageType = .{
+    const pane_id: core.PaneId = @enumFromInt(1);
+    const image: core.Image = .{
         .key = .{ .image_id = 7, .generation = 1 },
         .format = .rgba,
         .width = 1,
@@ -1430,7 +1419,7 @@ test "a runtime-named image maps without copying and hands the host its name" {
         .image = image,
         .name = name,
     });
-    const entry = store.images.get(identity(pane_id, image.key)).?;
+    const entry = store.images.get(client.identity(pane_id, image.key)).?;
     try std.testing.expectEqual(@as(usize, 4), entry.received);
     try std.testing.expectEqualSlices(u8, &source, entry.pixels);
 
@@ -1445,7 +1434,7 @@ test "a runtime-named image maps without copying and hands the host its name" {
             .y = 0,
         },
     });
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1483,14 +1472,14 @@ test "a runtime-named image maps without copying and hands the host its name" {
 }
 
 test "a control pass hands the host shared names and placements without pixel streams" {
-    if (comptime !supportsSharedMemory()) {
+    if (comptime !client.supportsSharedMemory()) {
         return error.SkipZigTest;
     }
 
     var store = delivery.Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
     var name_buffer: [64]u8 = undefined;
-    const name = try ShmNameType.init(try std.fmt.bufPrint(
+    const name = try core.ShmName.init(try std.fmt.bufPrint(
         &name_buffer,
         "/tlrtest-control-{d}",
         .{std.c.getpid()},
@@ -1500,8 +1489,8 @@ test "a control pass hands the host shared names and placements without pixel st
     try testCreateSharedObject(name.sliceZ(), &source);
     defer _ = std.c.shm_unlink(name.sliceZ());
 
-    const pane_id: PaneIdType = @enumFromInt(1);
-    const shared_image: ImageType = .{
+    const pane_id: core.PaneId = @enumFromInt(1);
+    const shared_image: core.Image = .{
         .key = .{ .image_id = 7, .generation = 1 },
         .format = .rgba,
         .width = 1,
@@ -1514,7 +1503,7 @@ test "a control pass hands the host shared names and placements without pixel st
         .revision = 1,
         .placement = .{ .key = shared_image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    const inline_image: ImageType = .{
+    const inline_image: core.Image = .{
         .key = .{ .image_id = 8, .generation = 1 },
         .format = .rgba,
         .width = 1,
@@ -1530,8 +1519,8 @@ test "a control pass hands the host shared names and placements without pixel st
     });
     // A shared-memory client also names its own images; a host that lost
     // one is served inline, which is the bulk pass's job.
-    store.images.getPtr(identity(pane_id, inline_image.key)).?.delivery.force_direct = true;
-    var model = MultiplexerModel.init(std.testing.allocator);
+    store.images.getPtr(client.identity(pane_id, inline_image.key)).?.delivery.force_direct = true;
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1575,8 +1564,8 @@ test "a control pass hands the host shared names and placements without pixel st
 }
 
 test "a control pass emits nothing while a chunked transfer is open" {
-    const pane_id: PaneIdType = @enumFromInt(1);
-    var model = MultiplexerModel.init(std.testing.allocator);
+    const pane_id: core.PaneId = @enumFromInt(1);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1589,7 +1578,7 @@ test "a control pass emits nothing while a chunked transfer is open" {
     const pixels = try std.testing.allocator.alloc(u8, 64 * 64 * 4);
     defer std.testing.allocator.free(pixels);
     @memset(pixels, 0x5a);
-    const image: ImageType = .{
+    const image: core.Image = .{
         .key = .{ .image_id = 7, .generation = 1 },
         .format = .rgba,
         .width = 64,
@@ -1631,14 +1620,14 @@ test "a control pass emits nothing while a chunked transfer is open" {
 }
 
 test "a host that never consumes shared names loses them and gets pixels inline" {
-    if (comptime !supportsSharedMemory()) {
+    if (comptime !client.supportsSharedMemory()) {
         return error.SkipZigTest;
     }
 
     var store = delivery.Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
-    var model = MultiplexerModel.init(std.testing.allocator);
+    const pane_id: core.PaneId = @enumFromInt(1);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
     try model.addRoot(.{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1654,7 +1643,7 @@ test "a host that never consumes shared names loses them and gets pixels inline"
     const source = [_]u8{ 9, 9, 9, 255 };
     for ([_][]const u8{ "a1", "a2" }, 1..) |suffix, generation| {
         var name_buffer: [64]u8 = undefined;
-        const name = try ShmNameType.init(try std.fmt.bufPrint(
+        const name = try core.ShmName.init(try std.fmt.bufPrint(
             &name_buffer,
             "/tlrtest-exp-{s}-{d}",
             .{ suffix, std.c.getpid() },

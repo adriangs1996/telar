@@ -1,0 +1,22 @@
+const core = @import("telar-core");
+const AgentKey = @import("AgentKey.zig");
+const AgentInput = @This();
+
+key: AgentKey,
+location: core.TabLocation,
+pane_index: u16,
+workspace_label: []const u8 = "",
+tab_label: []const u8 = "",
+session_title: []const u8 = "",
+title_source: core.AgentTitleSource = .telar,
+title_state: core.AgentTitleState = .placeholder,
+cwd_label: []const u8 = "",
+provider: core.AgentProvider,
+provider_name: []const u8 = "",
+display_name: []const u8 = "",
+icon: []const u8 = "",
+attachments: core.AgentAttachmentMarkers = .none,
+status: core.AgentStatus,
+blocked_reason: core.AgentBlockedReason = .none,
+last_event: []const u8 = "",
+status_age_s: u32 = 0,

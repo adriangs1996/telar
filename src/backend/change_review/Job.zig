@@ -1,9 +1,9 @@
+const operation_module = @import("operation.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Service = @import("Service.zig");
 const Context = @import("Context.zig");
 const Result = @import("Result.zig");
-const Operation = @import("operation.zig").Operation;
 const ClientKey = @import("../history/ClientKey.zig");
 const Job = @This();
 
@@ -36,7 +36,7 @@ fn work(self: *Job, io: std.Io) !void {
     }
 
     const decoded = try core.decodeClient(self.wire[0..self.wire_len]);
-    const operation: Operation = switch (decoded) {
+    const operation: operation_module.Operation = switch (decoded) {
         .query_change_review => |value| .{ .query = value },
         .change_review_command => |value| .{ .command = value },
         .report_change_review_sample => |value| .{ .sample = value },

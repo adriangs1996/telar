@@ -1,4 +1,3 @@
-const SnapshotType = @import("Snapshot.zig");
 const std = @import("std");
 const diagnostics = @import("diagnostics.zig");
 /// Counting wrapper around the process GPA. Debug builds attribute every
@@ -38,7 +37,7 @@ pub fn allocator(heap: *Heap) std.mem.Allocator {
     };
 }
 
-pub fn snapshot(heap: *const Heap) SnapshotType {
+pub fn snapshot(heap: *const Heap) Snapshot {
     return .{
         .live_bytes = diagnostics.load(&heap.live_bytes),
         .live_allocs = diagnostics.load(&heap.live_allocs),

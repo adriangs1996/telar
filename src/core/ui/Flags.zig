@@ -1,4 +1,4 @@
-const Underline = @import("Style.zig").Underline;
+const Style = @import("Style.zig");
 
 /// Attributes preserve the emulator's bit layout for the VT-to-cell bitcast.
 /// The layout is checked beside that conversion in backend/pane/blit.zig.
@@ -11,6 +11,6 @@ pub const Flags = packed struct(u16) {
     invisible: bool = false,
     strikethrough: bool = false,
     overline: bool = false,
-    underline: Underline = .none,
+    underline: Style.Underline = .none,
     _padding: u5 = 0,
 };

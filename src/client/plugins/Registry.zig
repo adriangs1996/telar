@@ -1,36 +1,31 @@
+const core = @import("telar-core");
+const data = @import("model");
 const model = @import("../config/model.zig");
 const Package = @import("Package.zig");
-const max_grants_module = @import("telar-core").max_grants;
-const GrantType = @import("telar-core").Grant;
 const LoadContext = @import("LoadContext.zig");
 const PluginSpecType = @import("../config/PluginSpec.zig");
-const TrustStoreType = @import("telar-core").TrustStore;
 const plugins = @import("plugins.zig");
 const std = @import("std");
-const stableId_module = @import("telar-core").stableId;
-const PluginActionType = @import("../input/PluginAction.zig");
 const Invocation = @import("Invocation.zig");
-const CallbackContextType = @import("../config/CallbackContext.zig");
 const WorkerRequest = @import("WorkerRequest.zig");
-const CapabilityType = @import("telar-core").Capability;
 const BatchAuthorization = @import("BatchAuthorization.zig");
 const Registry = @This();
 
 packages: [model.max_plugins]Package = undefined,
 count: u8 = 0,
-grants: [max_grants_module]GrantType = undefined,
+grants: [core.max_grants]core.Grant = undefined,
 grant_count: u8 = 0,
 
 /// Loads enabled plugin packages without persisted capability grants.
 /// For example: `const registry = try Registry.load(context, specs);`.
 pub fn load(context: LoadContext, specs: []const PluginSpecType) !Registry {
-    const empty: TrustStoreType = .{};
+    const empty: core.TrustStore = .{};
     return loadWithTrust(context, specs, &empty);
 }
 
 /// Loads enabled plugin packages and their persisted capability grants.
 /// For example: `const registry = try Registry.loadWithTrust(context, specs, trust);`.
-pub fn loadWithTrust(context: LoadContext, specs: []const PluginSpecType, trust: *const TrustStoreType) !Registry {
+pub fn loadWithTrust(context: LoadContext, specs: []const PluginSpecType, trust: *const core.TrustStore) !Registry {
     var registry: Registry = .{};
     registry.grant_count = trust.count;
     for (trust.entries[0..trust.count], 0..) |entry, index|
@@ -47,7 +42,7 @@ pub fn loadWithTrust(context: LoadContext, specs: []const PluginSpecType, trust:
             if (std.mem.eql(u8, existing.manifest.id(), package.manifest.id())) {
                 return error.DuplicatePluginId;
             }
-            if (stableId_module(existing.manifest.id()) == stableId_module(package.manifest.id())) {
+            if (core.stableId(existing.manifest.id()) == core.stableId(package.manifest.id())) {
                 return error.PluginIdHashCollision;
             }
         }
@@ -57,13 +52,13 @@ pub fn loadWithTrust(context: LoadContext, specs: []const PluginSpecType, trust:
     return registry;
 }
 
-pub fn resolve(registry: *const Registry, requested: PluginActionType) !Invocation {
+pub fn resolve(registry: *const Registry, requested: data.PluginAction) !Invocation {
     for (registry.packages[0..registry.count], 0..) |*package, package_index| {
-        if (stableId_module(package.manifest.id()) != requested.plugin) {
+        if (core.stableId(package.manifest.id()) != requested.plugin) {
             continue;
         }
         for (package.manifest.actions[0..package.manifest.action_count], 0..) |*name, action_index| {
-            if (stableId_module(name.slice()) == requested.action) {
+            if (core.stableId(name.slice()) == requested.action) {
                 return .{
                     .package_index = @intCast(package_index),
                     .action_index = @intCast(action_index),
@@ -84,7 +79,7 @@ pub fn validateConfiguredActions(registry: *const Registry, bindings: []const mo
     };
 }
 
-pub fn workerRequest(registry: *const Registry, invocation: Invocation, context: CallbackContextType) !WorkerRequest {
+pub fn workerRequest(registry: *const Registry, invocation: Invocation, context: data.CallbackContext) !WorkerRequest {
     if (invocation.package_index >= registry.count) {
         return error.PluginNotConfigured;
     }
@@ -95,7 +90,7 @@ pub fn workerRequest(registry: *const Registry, invocation: Invocation, context:
     const action_name = package.manifest.actions[invocation.action_index].slice();
     var request: WorkerRequest = .{
         .package_index = invocation.package_index,
-        .plugin_id = stableId_module(package.manifest.id()),
+        .plugin_id = core.stableId(package.manifest.id()),
         .digest = package.digest,
         .package = package.*,
         .action_len = @intCast(action_name.len),
@@ -105,7 +100,7 @@ pub fn workerRequest(registry: *const Registry, invocation: Invocation, context:
     return request;
 }
 
-pub fn authorize(registry: *const Registry, package_index: u8, capability: CapabilityType) !void {
+pub fn authorize(registry: *const Registry, package_index: u8, capability: core.Capability) !void {
     if (package_index >= registry.count) {
         return error.PluginNotConfigured;
     }
@@ -129,13 +124,13 @@ pub fn authorizeBatch(registry: *const Registry, authorization: BatchAuthorizati
         return error.PluginNotConfigured;
     }
     const package = &registry.packages[authorization.package_index];
-    if (stableId_module(package.manifest.id()) != authorization.plugin_id or
+    if (core.stableId(package.manifest.id()) != authorization.plugin_id or
         !std.mem.eql(u8, &package.digest, &authorization.digest))
     {
         return error.StalePluginWorker;
     }
     for (authorization.batch.slice()) |effect| {
-        const capability: ?CapabilityType = switch (effect) {
+        const capability: ?core.Capability = switch (effect) {
             .split_pane, .close_pane, .new_workspace, .rename_workspace, .new_tab, .rename_tab, .close_tab, .move_tab, .detach => .runtime_control,
             .focus_pane,
             .navigate_pane,

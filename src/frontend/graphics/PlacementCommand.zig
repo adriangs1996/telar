@@ -1,7 +1,7 @@
-const OutputPlacementType = @import("kitty_protocol").OutputPlacement;
+const kitty_protocol = @import("kitty_protocol");
 const PlacementCommand = @This();
 
 image_id: u32,
 placement_id: u32,
-value: OutputPlacementType,
+value: kitty_protocol.OutputPlacement,
 z: i32,

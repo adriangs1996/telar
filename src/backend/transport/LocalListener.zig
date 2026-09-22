@@ -1,6 +1,6 @@
+const core = @import("telar-core");
 const std = @import("std");
 const local = @import("local.zig");
-const SocketChannelType = @import("telar-core").SocketChannel;
 const LocalListener = @This();
 
 listener: std.Io.net.Server,
@@ -43,7 +43,7 @@ pub fn listen(io: std.Io, path: []const u8) !LocalListener {
     return result;
 }
 
-pub fn accept(listener: *LocalListener, io: std.Io) !SocketChannelType {
+pub fn accept(listener: *LocalListener, io: std.Io) !core.SocketChannel {
     std.debug.assert(listener.active);
     const stream = try listener.listener.accept(io);
     errdefer stream.close(io);

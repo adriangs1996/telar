@@ -1,3 +1,5 @@
+const Quad = @import("../render/Quad.zig");
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -27,7 +29,7 @@ test "native pane frames use the smaller pixel gutter on both axes" {
             _ = model.layout.setPaneGaps(gaps);
             const projection = fixture.projection();
             try fixture.paint(projection);
-            var layout: client.LayoutSnapshot = .{};
+            var layout: data.LayoutSnapshot = .{};
             model.layout.snapshot(projection.geometry.area, &layout);
             var frames: [3]Rect = undefined;
             for (layout.views(), &frames) |view, *frame| {
@@ -129,7 +131,7 @@ test "native agent targets retain generation through scroll and snapshot replace
     // A short band forces the cards to scroll below their header.
     try fixture.resize(120, 9);
     var agents: client.AgentSnapshot = .{};
-    const entries = [_]client.AgentInput{
+    const entries = [_]data.AgentInput{
         .{ .key = .{ .pane_id = @enumFromInt(51), .pane_generation = 4 }, .location = Session.location, .pane_index = 1, .provider = .codex, .status = .working, .display_name = "Codex", .session_title = "Implement GUI", .workspace_label = "telar", .cwd_label = "/telar" },
         .{ .key = .{ .pane_id = @enumFromInt(52), .pane_generation = 8 }, .location = Session.location, .pane_index = 2, .provider = .claude, .status = .blocked, .display_name = "Claude" },
         .{ .key = .{ .pane_id = @enumFromInt(53), .pane_generation = 9 }, .location = Session.location, .pane_index = 3, .provider = .codex, .status = .done, .display_name = "Codex" },
@@ -179,7 +181,7 @@ test "native fullscreen labels keep hidden panes reachable without covering term
     const target = fixture.target(.{ .focus_pane = Session.pane_id }).?;
     try std.testing.expectEqualDeep(client.Intent{ .focus_pane = Session.pane_id }, fixture.click(target, 0).intent);
     try std.testing.expect(fixture.target(.{ .focus_pane = second }) != null);
-    var layout: client.LayoutSnapshot = .{};
+    var layout: data.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
     const content = fixture.session.gui.renderer.metrics.rect(fixture.session.gui.renderer.origin, layout.views()[0].content);
     for (fixture.session.gui.renderer.quads.items()) |quad| {
@@ -327,14 +329,14 @@ test "native sidebar ignores configured footer slots" {
     projection.bar_state = &state;
     try fixture.paint(projection);
     const renderer = &fixture.session.gui.renderer;
-    const before = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, renderer.quads.items());
+    const before = try std.testing.allocator.dupe(Quad.Quad, renderer.quads.items());
     defer std.testing.allocator.free(before);
 
     var content: client.Content = .{};
     try content.append(.{ .text = "footer", .style = .{ .background = .{ .value = .{ .rgb = .{ 0, 0, 255 } } } } });
     state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .metrics };
     try fixture.paint(projection);
-    try std.testing.expectEqualSlices(@import("../render/Quad.zig").Quad, before, renderer.quads.items());
+    try std.testing.expectEqualSlices(Quad.Quad, before, renderer.quads.items());
 }
 
 test "native child progress remains visible with a single borderless pane" {
@@ -363,7 +365,12 @@ test "native mode hints preserve navigation in the top bar" {
     try fixture.paint(projection);
     try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) != null);
     var hints: client.Hints = .{};
-    hints.append(.{ .key = try client.parseKey("Ctrl+v"), .label = "split vertically" });
+    hints.append(
+        .{
+            .key = try data.chord.parseKey("Ctrl+v"),
+            .label = "split vertically",
+        },
+    );
     projection.status_mode = .{ .prefix = hints };
     try fixture.paint(projection);
     try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) != null);

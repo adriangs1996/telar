@@ -4,14 +4,13 @@
 //! that file on the observation path; this file owns the bounded watch store,
 //! never the I/O or the file formats.
 
+const core = @import("telar-core");
 const Registration = @import("Registration.zig");
 const Watch = @import("Watch.zig");
 const Watches = @import("Watches.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
-const pane_module = @import("telar-core").pane;
 const SessionReference = @import("SessionReference.zig");
 const std = @import("std");
-const AgentSessionFileKindType = @import("telar-core").AgentSessionFileKind;
 
 pub fn fresh(registration: Registration) Watch {
     var watch: Watch = .{ .key = registration.key, .session = registration.session, .kind = registration.kind };
@@ -22,8 +21,8 @@ pub fn fresh(registration: Registration) Watch {
 
 test "watches replace a changed path, keep progress for the same one and pick the stalest due" {
     var watches: Watches = .{};
-    const key: PaneKey = .{ .id = try pane_module(7), .generation = 3 };
-    const other: PaneKey = .{ .id = try pane_module(8), .generation = 1 };
+    const key: PaneKey = .{ .id = try core.pane(7), .generation = 3 };
+    const other: PaneKey = .{ .id = try core.pane(8), .generation = 1 };
     const session = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1);
 
     try std.testing.expect(watches.put(.{ .key = key, .session = session, .kind = .claude_transcript, .path = "/a.jsonl" }));
@@ -33,7 +32,7 @@ test "watches replace a changed path, keep progress for the same one and pick th
     try std.testing.expectEqual(@as(?u64, 40), watches.find(key).?.offset);
     try std.testing.expect(watches.put(.{ .key = key, .session = session, .kind = .codex_state, .path = "/a.jsonl" }));
     try std.testing.expect(watches.find(key).?.offset == null);
-    try std.testing.expectEqual(AgentSessionFileKindType.codex_state, watches.find(key).?.kind);
+    try std.testing.expectEqual(core.AgentSessionFileKind.codex_state, watches.find(key).?.kind);
     try std.testing.expect(!watches.put(.{ .key = key, .session = session, .kind = .codex_state, .path = "" }));
     try std.testing.expectEqual(@as(usize, 1), watches.count());
 
@@ -52,7 +51,7 @@ test "watches replace a changed path, keep progress for the same one and pick th
 
 test "a watch remembers the last name it handed over" {
     var watch: Watch = .{
-        .key = .{ .id = try pane_module(7), .generation = 3 },
+        .key = .{ .id = try core.pane(7), .generation = 3 },
         .session = try SessionReference.init("abc", 1),
         .kind = .codex_state,
     };

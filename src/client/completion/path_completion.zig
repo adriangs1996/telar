@@ -3,8 +3,8 @@
 //! bounded result, never more than `Result.max_entries` names of at most
 //! `Result.max_name_bytes` bytes inside `Result.max_path_bytes` paths.
 
+const data = @import("model");
 const std = @import("std");
-const Result = @import("../model/PathCompletionResult.zig");
 const JobType = @import("PathCompletionJob.zig");
 
 /// Splits the query at its last `/`: the part before is the directory to
@@ -15,8 +15,8 @@ const JobType = @import("PathCompletionJob.zig");
 /// const result = try run(io, gpa, job);
 /// defer gpa.destroy(result);
 /// ```
-pub fn run(io: std.Io, gpa: std.mem.Allocator, job: JobType) !*Result {
-    const result = try gpa.create(Result);
+pub fn run(io: std.Io, gpa: std.mem.Allocator, job: JobType) !*data.PathCompletionResult {
+    const result = try gpa.create(data.PathCompletionResult);
     errdefer gpa.destroy(result);
     result.* = .{};
     try list(io, job.querySlice(), result);
@@ -24,7 +24,7 @@ pub fn run(io: std.Io, gpa: std.mem.Allocator, job: JobType) !*Result {
 }
 
 /// Fills `result` without allocating; see `run` for the query rules.
-pub fn list(io: std.Io, query: []const u8, result: *Result) !void {
+pub fn list(io: std.Io, query: []const u8, result: *data.PathCompletionResult) !void {
     if (query.len == 0 or query[0] != '/') {
         return error.RelativeQuery;
     }
@@ -86,9 +86,9 @@ test "listing keeps directories only, filters the typed prefix and hides dotfile
     file.close(io);
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
-    var query_buffer: [Result.max_path_bytes]u8 = undefined;
+    var query_buffer: [data.PathCompletionResult.max_path_bytes]u8 = undefined;
 
-    var result: Result = .{};
+    var result: data.PathCompletionResult = .{};
     try list(io, try std.fmt.bufPrint(&query_buffer, "{s}/te", .{root}), &result);
     try std.testing.expectEqual(@as(usize, 2), result.slice().len);
     try std.testing.expectEqualStrings("telar", result.slice()[0].slice());
@@ -117,16 +117,16 @@ test "listing stops at the entry bound and a missing base lists nothing" {
     var temp = std.testing.tmpDir(.{});
     defer temp.cleanup();
     var name: [8]u8 = undefined;
-    for (0..Result.max_entries + 5) |index| {
+    for (0..data.PathCompletionResult.max_entries + 5) |index| {
         try temp.dir.createDirPath(io, try std.fmt.bufPrint(&name, "d{d}", .{index}));
     }
     var root_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const root = root_buffer[0..try temp.dir.realPath(io, &root_buffer)];
-    var query_buffer: [Result.max_path_bytes]u8 = undefined;
+    var query_buffer: [data.PathCompletionResult.max_path_bytes]u8 = undefined;
 
-    var result: Result = .{};
+    var result: data.PathCompletionResult = .{};
     try list(io, try std.fmt.bufPrint(&query_buffer, "{s}/d", .{root}), &result);
-    try std.testing.expectEqual(@as(usize, Result.max_entries), result.slice().len);
+    try std.testing.expectEqual(@as(usize, data.PathCompletionResult.max_entries), result.slice().len);
 
     result = .{};
     try list(io, try std.fmt.bufPrint(&query_buffer, "{s}/missing/x", .{root}), &result);

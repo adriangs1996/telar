@@ -98,7 +98,8 @@ neither runtime truth nor a common instance of navigation or focus.
 | Attached client | `src/client/AttachedClient.zig` | Shared aggregate: model, transport, configuration, plugins, host ports |
 | Operations | `src/client/operations/` | Concrete policies, state mutations, request correlation and host delivery |
 | Model | `src/client/model/Model.zig` | Disposable semantic state and transitions |
-| Domain values and algorithms | `src/client/application/` | Operation inputs, outcomes and cohesive state algorithms; no required dispatch layer |
+| Shared values | `src/model/model.zig` | Public value contracts and bounded state; depends only on core |
+| Client domain algorithms | `src/client/application/` | Client-specific operations; no required dispatch layer |
 | Entrypoints | `src/client/entrypoints/server_messages.zig` | Synchronous decoded-message dispatch |
 | Panes | `src/client/panes/` | Cells, damage, child modes and attachment-aware commits |
 | Workspace | `src/client/workspace/` | Tabs, splits, navigation and explicit geometry |

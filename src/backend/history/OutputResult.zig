@@ -1,10 +1,10 @@
-const RequestIdType = @import("telar-core").RequestId;
+const core = @import("telar-core");
 const QueryOrigin = @import("QueryOrigin.zig");
 const std = @import("std");
 /// Owned captured-output read result.
 const OutputResult = @This();
 
-request_id: RequestIdType,
+request_id: core.RequestId,
 origin: QueryOrigin,
 id: u64,
 truncated: bool,

@@ -1,9 +1,3 @@
-const FillType = @import("Fill.zig");
-const CellWriteType = @import("CellWrite.zig");
-const TextWriteType = @import("TextWrite.zig");
-const TruncatedTextType = @import("TruncatedText.zig");
-const RightAlignedTextType = @import("RightAlignedText.zig");
-const BoxType = @import("Box.zig");
 const CellType = @import("Cell.zig");
 const std = @import("std");
 const RectType = @import("Rect.zig");
@@ -112,7 +106,7 @@ pub fn clear(b: *Buffer, style: StyleType) void {
     @memset(b.cells, .{ .style = style });
 }
 
-pub fn fill(b: *Buffer, r: RectType, fill_value: FillType) void {
+pub fn fill(b: *Buffer, r: RectType, fill_value: Fill) void {
     // Edge sums in u32: `x + w` may exceed maxInt(u16), and positions past
     // it are unaddressable anyway.
     const x_end = @min(@as(u32, r.x) + r.w, @as(u32, std.math.maxInt(u16)) + 1);
@@ -135,7 +129,7 @@ pub fn fill(b: *Buffer, r: RectType, fill_value: FillType) void {
 /// ```zig
 /// buffer.setCell(.{ .x = 4, .y = 2 }, .{ .text = "界", .width = 2 });
 /// ```
-pub fn setCell(b: *Buffer, point: PointType, value: CellWriteType) void {
+pub fn setCell(b: *Buffer, point: PointType, value: CellWrite) void {
     if (!b.clip.contains(point.x, point.y)) {
         return;
     }
@@ -181,7 +175,7 @@ pub fn setCell(b: *Buffer, point: PointType, value: CellWriteType) void {
 /// ```zig
 /// const width = buffer.writeText(area, .{ .point = .{ .x = 2, .y = 1 }, .text = "ready" });
 /// ```
-pub fn writeText(b: *Buffer, r: RectType, write: TextWriteType) u16 {
+pub fn writeText(b: *Buffer, r: RectType, write: TextWrite) u16 {
     if (write.point.y < r.y or write.point.y >= @as(u32, r.y) + r.h) {
         return 0;
     }
@@ -216,8 +210,8 @@ pub fn writeText(b: *Buffer, r: RectType, write: TextWriteType) u16 {
 /// ```zig
 /// buffer.writeTruncated(area, .{ .point = .{ .x = 0, .y = 0 }, .text = name, .max_width = 12 });
 /// ```
-pub fn writeTruncated(b: *Buffer, r: RectType, truncated: TruncatedTextType) u16 {
-    const write: TextWriteType = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
+pub fn writeTruncated(b: *Buffer, r: RectType, truncated: TruncatedText) u16 {
+    const write: TextWrite = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
 
     if (truncated.max_width == 0) {
         return 0;
@@ -263,8 +257,8 @@ pub fn writeTruncated(b: *Buffer, r: RectType, truncated: TruncatedTextType) u16
 /// ```zig
 /// buffer.writeLeftTruncated(area, .{ .point = .{ .x = 0, .y = 0 }, .text = path, .max_width = 20 });
 /// ```
-pub fn writeLeftTruncated(b: *Buffer, r: RectType, truncated: TruncatedTextType) u16 {
-    const write: TextWriteType = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
+pub fn writeLeftTruncated(b: *Buffer, r: RectType, truncated: TruncatedText) u16 {
+    const write: TextWrite = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
 
     if (truncated.max_width == 0) {
         return 0;
@@ -305,7 +299,7 @@ pub fn writeLeftTruncated(b: *Buffer, r: RectType, truncated: TruncatedTextType)
 /// ```zig
 /// buffer.writeRight(area, .{ .y = area.y, .text = "100%" });
 /// ```
-pub fn writeRight(b: *Buffer, r: RectType, write: RightAlignedTextType) u16 {
+pub fn writeRight(b: *Buffer, r: RectType, write: RightAlignedText) u16 {
     const width = text_module.measure(write.text);
     if (width > r.w) {
         return b.writeTruncated(r, .{ .point = .{ .x = r.x, .y = write.y }, .text = write.text, .max_width = r.w, .style = write.style });
@@ -322,7 +316,7 @@ pub fn writeRight(b: *Buffer, r: RectType, write: RightAlignedTextType) u16 {
 /// ```zig
 /// buffer.box(area, .{ .style = border, .title = " session " });
 /// ```
-pub fn box(b: *Buffer, r: RectType, box_value: BoxType) void {
+pub fn box(b: *Buffer, r: RectType, box_value: Box) void {
     if (r.w < 2 or r.h < 2) {
         return;
     }

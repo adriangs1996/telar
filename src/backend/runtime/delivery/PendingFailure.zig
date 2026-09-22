@@ -1,7 +1,6 @@
-const RequestIdType = @import("telar-core").RequestId;
-const FailureCodeType = @import("telar-core").FailureCode;
+const core = @import("telar-core");
 const PendingFailure = @This();
 
-request_id: RequestIdType,
-code: FailureCodeType,
+request_id: core.RequestId,
+code: core.FailureCode,
 message: []const u8,

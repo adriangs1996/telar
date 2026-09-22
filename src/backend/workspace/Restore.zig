@@ -1,9 +1,8 @@
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
-const TabIdType = @import("telar-core").TabId;
+const core = @import("telar-core");
 const Restore = @This();
 
-id: WorkspaceIdType,
+id: core.WorkspaceId,
 path: []const u8,
 explicit_name: ?[]const u8,
-first_tab_id: TabIdType,
+first_tab_id: core.TabId,
 first_tab_label: []const u8,

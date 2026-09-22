@@ -1,4 +1,5 @@
 //! Synchronous row layout. The tallest wrapped cell determines the row height.
+const MessageTable = @import("MessageTable.zig");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Flow = @import("MessageTextFlow.zig");
@@ -6,7 +7,7 @@ const Row = @This();
 
 table: @import("MessageTablePaint.zig"),
 canvas: *Canvas,
-widths: *[@import("MessageTable.zig").max_columns]f32,
+widths: *[MessageTable.max_columns]f32,
 y: f32 = 0,
 
 /// Caps preferred widths so a long URL cannot claim the whole table.
@@ -27,7 +28,7 @@ pub fn layout(row: *Row, text: []const u8, options: @import("MessageTableRowOpti
     var cells = row.table.table.rowCells(text);
     var height: f32 = row.canvas.chrome.px(25);
     const padding = row.canvas.chrome.px(9);
-    var alignments: [@import("MessageTable.zig").max_columns]@import("MessageTextAlignment.zig") = undefined;
+    var alignments: [MessageTable.max_columns]@import("MessageTextAlignment.zig") = undefined;
     var x = row.table.bounds.x;
     for (row.widths[0..row.table.table.columns], 0..) |width, column| {
         const cell = cells.next() orelse "";

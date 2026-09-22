@@ -1,10 +1,11 @@
 //! Disposable stack position, keyed by semantic notification identity.
+const data = @import("model");
 const client = @import("telar-client");
 const Clock = @import("../../animation/FrameClock.zig");
 const Transition = @import("../../animation/Transition.zig");
 const Motion = @This();
 
-id: client.Id = .invalid,
+id: data.notifications.Id = .invalid,
 from: f32 = 0,
 to: f32 = 0,
 transition: Transition = .{ .from = 0, .to = 1, .started_ns = 0, .duration_ns = 180_000_000 },

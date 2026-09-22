@@ -1,11 +1,10 @@
 //! Application policy for routing one normalized host pointer event.
 
-const PointerCommand = @import("PointerCommand.zig");
-const std = @import("std");
+const data = @import("model");
 
 pub const Authority = union(enum) {
     unavailable,
-    available: PointerCommand,
+    available: data.PointerCommand,
 };
 
 pub const Outcome = enum {
@@ -31,7 +30,7 @@ pub const Failure = enum {
     pane,
 };
 
-fn testingCommand() PointerCommand {
+fn testingCommand() data.PointerCommand {
     return .{
         .event = .{ .x = 4, .y = 7, .kind = .press },
         .exterior_pixels = false,

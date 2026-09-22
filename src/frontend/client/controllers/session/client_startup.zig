@@ -1,17 +1,14 @@
 //! Starts one constructed client in the order required by request
 //! correlation, the runtime handshake and asynchronous event sources.
 
+const client_module = @import("telar-client");
 const TerminalClient = @import("../../TerminalClient.zig");
-const host = TerminalClient.of;
-const Client = @import("telar-client").AttachedClient;
 const Request = @import("Request.zig");
-const rectSize_module = @import("telar-client").rectSize;
 const host_capabilities = @import("../host/host_capabilities.zig");
 const presentation_lifecycle = @import("../../presentation/presentation_lifecycle.zig");
 const host_inputs = @import("../input/host_inputs.zig");
 const host_resizes = @import("../host/host_resizes.zig");
 const client_telemetry = @import("../../resources/telemetry.zig");
-const supportsSharedMemory_module = @import("telar-client").supportsSharedMemory;
 
 /// Starts host negotiation and arms I/O without opening a child before its
 /// terminal defaults are available or the bounded probe expires.
@@ -19,8 +16,8 @@ const supportsSharedMemory_module = @import("telar-client").supportsSharedMemory
 /// ```zig
 /// try start(client, .{ .resize_watcher = &watcher });
 /// ```
-pub fn start(client: *Client, request: Request) !void {
-    _ = rectSize_module(client.geometry().area) orelse
+pub fn start(client: *client_module.AttachedClient, request: Request) !void {
+    _ = client_module.rectSize(client.geometry().area) orelse
         return error.TerminalTooSmall;
     client.startup.phase = .probing;
     try host_capabilities.begin(client);
@@ -38,10 +35,10 @@ pub fn start(client: *Client, request: Request) !void {
 /// Advances startup after an event. FIFO configuration precedes the state
 /// request, so the existing layout/open flow needs no color-probe knowledge.
 /// Example: `if (try advance(client)) return .{ .exit = 0 };`.
-pub fn advance(client: *Client) !bool {
-    if (client.startup.phase == .probing and host(client).host_negotiation.initial_settled) {
+pub fn advance(client: *client_module.AttachedClient) !bool {
+    if (client.startup.phase == .probing and TerminalClient.of(client).host_negotiation.initial_settled) {
         try client.runtime_transport.bootstrap(.{
-            .graphics_shared = supportsSharedMemory_module(),
+            .graphics_shared = client_module.supportsSharedMemory(),
             .client_identity = client.client_identity,
             .terminal_colors = client.model.hostCapabilities().terminal_colors,
         });

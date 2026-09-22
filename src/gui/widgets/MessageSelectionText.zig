@@ -1,4 +1,5 @@
 //! Visible message text selected by source byte offsets, with no retained slices.
+const MessageTable = @import("MessageTable.zig");
 const std = @import("std");
 const Selection = @This();
 
@@ -26,7 +27,7 @@ pub fn write(selection: Selection, writer: *std.Io.Writer) !void {
     while (blocks.index < selected.range[1]) {
         const block = blocks.next() orelse break;
         if (block.kind == .table) {
-            const table = @import("MessageTable.zig").parse(block.text).?;
+            const table = MessageTable.parse(block.text).?;
             try selected.writeRow(writer, table.rowCells(table.header));
             var rows: @import("MessageBlocks.zig") = .{ .text = table.body, .markdown = false };
             while (rows.next()) |row| {

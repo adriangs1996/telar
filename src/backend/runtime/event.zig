@@ -1,7 +1,7 @@
 //! Events delivered to the runtime loop and their execution-budget class.
+const core = @import("telar-core");
 const EditorJob = @import("../editors/Job.zig");
 
-const SocketChannelType = @import("telar-core").SocketChannel;
 const ClientMessage = @import("ClientMessage.zig");
 const ClientSent = @import("ClientSent.zig");
 const model = @import("../history/model.zig");
@@ -21,11 +21,10 @@ const ResponseType = @import("../engine/Response.zig");
 const SystemMetricsSample = @import("observability/SystemMetricsSample.zig");
 const CompletionType = @import("resources/Completion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
-const PathType = @import("telar-core").Path;
 const std = @import("std");
 
 pub const Event = union(enum) {
-    accepted: anyerror!SocketChannelType,
+    accepted: anyerror!core.SocketChannel,
     handshaken: anyerror!void,
     client_message: ClientMessage,
     client_sent: ClientSent,
@@ -120,11 +119,11 @@ pub fn discard(completed: Event, io: std.Io) void {
 /// const path = diagnosticsPath(event);
 /// diagnostics.record(path, elapsed_ns);
 /// ```
-pub fn diagnosticsPath(event: Event) PathType {
+pub fn diagnosticsPath(event: Event) core.Path {
     return diagnosticsPathForTag(std.meta.activeTag(event));
 }
 
-fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) PathType {
+fn diagnosticsPathForTag(tag: std.meta.Tag(Event)) core.Path {
     return switch (tag) {
         .pane_output,
         .pane_ingested,
@@ -175,12 +174,12 @@ test "interactive events use the interactive budget" {
     };
 
     for (tags) |tag| {
-        try std.testing.expectEqual(PathType.interactive, diagnosticsPathForTag(tag));
+        try std.testing.expectEqual(core.Path.interactive, diagnosticsPathForTag(tag));
     }
 }
 
 test "media events use the media budget" {
-    try std.testing.expectEqual(PathType.media, diagnosticsPathForTag(.pane_media));
+    try std.testing.expectEqual(core.Path.media, diagnosticsPathForTag(.pane_media));
 }
 
 test "observation events use the observation budget" {
@@ -203,7 +202,7 @@ test "observation events use the observation budget" {
     };
 
     for (tags) |tag| {
-        try std.testing.expectEqual(PathType.observation, diagnosticsPathForTag(tag));
+        try std.testing.expectEqual(core.Path.observation, diagnosticsPathForTag(tag));
     }
 }
 
@@ -216,6 +215,6 @@ test "lifecycle events stay outside latency-budgeted paths" {
     };
 
     for (tags) |tag| {
-        try std.testing.expectEqual(PathType.other, diagnosticsPathForTag(tag));
+        try std.testing.expectEqual(core.Path.other, diagnosticsPathForTag(tag));
     }
 }

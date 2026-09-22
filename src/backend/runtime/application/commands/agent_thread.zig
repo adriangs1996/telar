@@ -1,10 +1,10 @@
+const core = @import("telar-core");
 const ConversationSelection = @import("ConversationSelection.zig");
-const Approval = @import("telar-core").AgentApprovalDecision;
 
 pub const Action = union(enum) {
-    prompt: @import("telar-core").AgentSubmission,
+    prompt: core.AgentSubmission,
     interrupt,
     resume_conversation: ConversationSelection,
-    approval: Approval,
+    approval: core.AgentApprovalDecision,
     query,
 };

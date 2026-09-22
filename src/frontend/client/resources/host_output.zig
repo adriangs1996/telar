@@ -1,9 +1,9 @@
 //! Single-flight host output. The worker borrows only sealed bytes and a writer.
 
+const client = @import("telar-client");
 const std = @import("std");
 const PrefixWriter = @import("PrefixWriter.zig");
 const Output = @import("Output.zig");
-const TokenType = @import("telar-client").Token;
 
 test "a nonblocking prefix and the output actor transmit each byte exactly once" {
     for ([_]usize{ 0, 2, 5 }) |limit| {
@@ -55,7 +55,7 @@ test "a completed write releases its exact completion token" {
     try std.testing.expectEqual(@as(usize, 0), target.end);
     try Output.write(work);
     const delivered = (try output.complete({})).?;
-    try std.testing.expectEqual(@as(TokenType, @enumFromInt(42)), delivered);
+    try std.testing.expectEqual(@as(client.Token, @enumFromInt(42)), delivered);
     try std.testing.expect(output.delivery == null);
     try std.testing.expectError(error.HostFrameTooLarge, output.prepareFrame(1_000_000));
 }

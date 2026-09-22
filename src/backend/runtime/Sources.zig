@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const std = @import("std");
 const event = @import("event.zig");
 const LocalListenerType = @import("../transport/LocalListener.zig");
@@ -10,7 +11,6 @@ const ProxyRuntime = @import("resources/ProxyRuntime.zig");
 const ProxyScheduleContext = @import("ProxyScheduleContext.zig");
 const ProxyCaptureScheduleContext = @import("ProxyCaptureScheduleContext.zig");
 const PluginsService = @import("../plugins/Service.zig");
-const waitForTick_module = @import("telar-core").waitForTick;
 /// Arms asynchronous infrastructure work and maps each completion to its
 /// corresponding runtime event.
 ///
@@ -117,5 +117,5 @@ pub fn waitForSystemMetrics(sources: *Sources) !void {
 /// try sources.waitForTelemetry();
 /// ```
 pub fn waitForTelemetry(sources: *Sources) !void {
-    try sources.select.concurrent(.telemetry_tick, waitForTick_module, .{sources.io});
+    try sources.select.concurrent(.telemetry_tick, core.waitForTick, .{sources.io});
 }

@@ -1,6 +1,6 @@
+const diagnostic = @import("diagnostic.zig");
 const std = @import("std");
 const Violation = @import("Violation.zig");
-const Rule = @import("diagnostic.zig").Rule;
 const naming = @import("layout_naming.zig");
 const LayoutAnalyzer = @This();
 
@@ -18,6 +18,8 @@ pub fn check(self: LayoutAnalyzer) !void {
     var layout_count: usize = 0;
     var public_functions: usize = 0;
     var constructors: usize = 0;
+    var named_value_types: usize = 0;
+    var matching_value_type = false;
 
     for (self.tree.rootDecls()) |node| {
         if (self.tree.fullContainerField(node) != null) {
@@ -28,6 +30,19 @@ pub fn check(self: LayoutAnalyzer) !void {
             if (variable.ast.init_node.unwrap()) |value| {
                 if (std.mem.eql(u8, self.tree.getNodeSource(value), "@This()")) {
                     implicit_struct = true;
+                }
+
+                var container_buffer: [2]std.zig.Ast.Node.Index = undefined;
+                if (self.tree.fullContainerDecl(&container_buffer, value)) |container| {
+                    const kind = self.tree.tokenTag(container.ast.main_token);
+                    if (kind == .keyword_enum or kind == .keyword_union) {
+                        named_value_types += 1;
+                        matching_value_type = matching_value_type or std.mem.eql(
+                            u8,
+                            stem,
+                            self.tree.tokenSlice(variable.ast.mut_token + 1),
+                        );
+                    }
                 }
 
                 layout_count += try self.checkLayout(value, variable.ast.mut_token);
@@ -59,7 +74,7 @@ pub fn check(self: LayoutAnalyzer) !void {
         if (!naming.pascalCase(stem) or stem.len == "Generic".len or !std.ascii.isUpper(stem["Generic".len]) or constructors != 1 or public_functions != 1 or implicit_struct) {
             try self.append(0, .generic_file);
         }
-    } else if (implicit_struct or layout_count != 0) {
+    } else if (implicit_struct or layout_count != 0 or (named_value_types == 1 and matching_value_type and public_functions == 0)) {
         if (!naming.pascalCase(stem)) {
             try self.append(0, .type_file_name);
         }
@@ -146,7 +161,7 @@ fn checkConstructorImports(self: LayoutAnalyzer) !void {
     }
 }
 
-fn append(self: LayoutAnalyzer, token: std.zig.Ast.TokenIndex, rule: Rule) !void {
+fn append(self: LayoutAnalyzer, token: std.zig.Ast.TokenIndex, rule: diagnostic.Rule) !void {
     const location = self.tree.tokenLocation(0, token);
     try self.violations.append(self.allocator, .{
         .rule = rule,

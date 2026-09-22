@@ -1,12 +1,10 @@
+const core = @import("telar-core");
 const GraphicsLimitsType = @import("../media/GraphicsLimits.zig");
 const std = @import("std");
-const FiltersType = @import("telar-core").Filters;
 const Config = @import("../proxy/Config.zig");
 const ServiceSpec = @import("../plugins/ServiceSpec.zig");
 const AgentDescriptionOptions = @import("AgentDescriptionOptions.zig");
 const OptionsType = @import("../engine/Options.zig");
-const TableType = @import("telar-core").Table;
-const builtin_table_module = @import("telar-core").builtin_table;
 const IngestTestGate = @import("IngestTestGate.zig");
 const LaunchTestFaultType = @import("application/LaunchTestFault.zig");
 const Options = @This();
@@ -18,7 +16,7 @@ environment: std.process.Environ,
 history_path: [:0]const u8 = ":memory:",
 /// Record-time history filtering: secrets refusal plus configured
 /// command and cwd patterns.
-history_filters: FiltersType = .{},
+history_filters: core.Filters = .{},
 /// Keep a bounded raw output tail per command (opt-in).
 history_output_capture: bool = false,
 proxy: ?Config = null,
@@ -29,7 +27,7 @@ agent_descriptions: ?AgentDescriptionOptions = null,
 /// The headless agent behind features like command suggestion.
 engine: ?OptionsType = null,
 /// Agent identification rules; the built-in table unless configured.
-agent_manifests: TableType = builtin_table_module,
+agent_manifests: core.Table = core.builtin_table,
 /// Absolute session checkpoint path; null keeps the session volatile.
 session_path: ?[]const u8 = null,
 /// Type each restored agent's resume command into its relaunched shell.

@@ -1,12 +1,12 @@
+const data = @import("model");
 const std = @import("std");
-const GenericField = @import("../../input/GenericField.zig").Type;
 const SearchMatch = @import("SearchMatch.zig");
 const limits = @import("limits.zig");
 const Search = @This();
 
 pub const Direction = enum { forward, backward };
 
-query: GenericField(limits.search_bytes) = .{},
+query: data.GenericField(limits.search_bytes) = .{},
 match: ?SearchMatch = null,
 
 /// Retains a bounded literal query; invalid input leaves the previous search intact.

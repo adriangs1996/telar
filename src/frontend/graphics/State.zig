@@ -1,12 +1,11 @@
-const max_placements_per_pane_module = @import("telar-core").max_placements_per_pane;
+const core = @import("telar-core");
 const kitty = @import("kitty.zig");
 const CompressionSchedulerType = @import("CompressionScheduler.zig");
 const CompressionType = @import("Compression.zig");
-const TimingType = @import("telar-core").Timing;
 const PartialTransmissionType = @import("PartialTransmission.zig");
 const State = @This();
 
-delete_queue: [max_placements_per_pane_module * 2]kitty.Delete = undefined,
+delete_queue: [core.max_placements_per_pane * 2]kitty.Delete = undefined,
 delete_head: usize = 0,
 delete_len: usize = 0,
 delete_overflow: bool = false,
@@ -20,5 +19,5 @@ compression_input: []u8 = &.{},
 pass_counter: u64 = 0,
 shared_expiries: u8 = 0,
 clock_ns: u64 = 0,
-retire_latency: TimingType = .{},
+retire_latency: core.Timing = .{},
 partial: ?PartialTransmissionType = null,

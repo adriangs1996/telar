@@ -1,71 +1,43 @@
 //! Visible structure and interaction state of one telar client.
 
-const SnapshotType = @import("telar-client").AgentSnapshot;
-const HistoryPaletteState = @import("telar-client").HistoryPaletteState;
-const SuggestionState = @import("telar-client").SuggestionState;
-const CenterType = @import("telar-client").Center;
-const WorkspaceListSnapshot = @import("telar-client").WorkspaceListSnapshot;
+const client = @import("telar-client");
+const data = @import("model");
+const core = @import("telar-core");
 const PlanType = @import("../../presentation/Plan.zig");
-const State = @import("telar-client").State;
-const PromptType = @import("telar-client").Prompt;
-const PathCompletionState = @import("telar-client").PathCompletionState;
 const tab_rename_module = @import("../../widgets/tab_rename.zig");
 const ContextType = @import("../../widgets/Context.zig");
-const RectType = @import("telar-core").Rect;
 const PickerSources = @import("PickerSources.zig");
 const GotoPickerOutput = @import("../../widgets/GotoPickerOutput.zig");
-const ResultsType = @import("telar-client").Results;
-const SourcesType = @import("telar-client").Sources;
-const collect_module = @import("telar-client").collect;
 const goto_picker_module = @import("../../widgets/goto_picker.zig");
 const RowType = @import("../../widgets/Row.zig");
-const max_label_bytes_module = @import("telar-client").max_label_bytes;
-const describe_module = @import("telar-client").describe;
-const max_history_results = @import("telar-core").max_history_results;
 const EntryType = @import("../../widgets/Entry.zig");
 const history_browser_module = @import("../../widgets/history_browser.zig");
 const context_support = @import("../../widgets/context_support.zig");
 const std = @import("std");
 const RenderStats = @import("RenderStats.zig");
 const ScreenType = @import("../../presentation/Screen.zig");
-const BufferType = @import("telar-core").Buffer;
 const PatchSinkType = @import("../../presentation/PatchSink.zig");
 const diff = @import("../../presentation/diff.zig");
 const CompositorType = @import("../../workspace/Compositor.zig");
 const TestingComposition = @import("TestingComposition.zig");
 const LayoutRegions = @import("../../widgets/LayoutRegions.zig");
-const default_width = @import("telar-client").default_width;
 const StateType = @import("State.zig");
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
-const PointerShape = @import("telar-core").PointerShape;
-const TabLocationType = @import("telar-core").TabLocation;
-const IntentType = @import("telar-client").Intent;
-const PaneIdType = @import("telar-core").PaneId;
 const term = @import("../../presentation/screen_support.zig");
 const RenderInput = @import("RenderInput.zig");
-const AgentInputType = @import("telar-client").AgentInput;
-const TargetType = @import("telar-client").AttachmentTarget;
-const CaptureType = @import("telar-client").Capture;
 const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
-const theme_mod = @import("telar-client").theme_support;
-const ColorType = @import("telar-core").Color;
 const kitty_codec = @import("../../graphics/kitty_codec.zig");
 const toast_module = @import("../../widgets/toast.zig");
-const transition_duration_ns_module = @import("telar-client").transition_duration_ns;
-const TabsModel = @import("telar-client").TabsModel;
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const EntryInputType = @import("telar-client").EntryInput;
 
-pub const empty_agent_snapshot: SnapshotType = .{};
-pub const empty_history_palette: HistoryPaletteState = .{};
-pub const empty_suggestion: SuggestionState = .{};
-pub const empty_path_completion: PathCompletionState = .{};
-pub const empty_notifications: CenterType = .{};
-pub const empty_workspace_list: WorkspaceListSnapshot = .{};
+pub const empty_agent_snapshot: client.AgentSnapshot = .{};
+pub const empty_history_palette: client.HistoryPaletteState = .{};
+pub const empty_suggestion: client.SuggestionState = .{};
+pub const empty_path_completion: data.PathCompletionState = .{};
+pub const empty_notifications: data.Center = .{};
+pub const empty_workspace_list: client.WorkspaceListSnapshot = .{};
 pub const empty_pane_labels: PlanType = .{};
-pub const default_bars_state: State = .{};
+pub const default_bars_state: client.State = .{};
 
-pub fn promptKind(prompt: ?*const PromptType) tab_rename_module.Kind {
+pub fn promptKind(prompt: ?*const data.Prompt) tab_rename_module.Kind {
     const current = prompt orelse return .rename_tab;
 
     return switch (current.target()) {
@@ -79,7 +51,7 @@ pub fn promptKind(prompt: ?*const PromptType) tab_rename_module.Kind {
     };
 }
 
-pub fn pickerPrompt(prompt: ?*PromptType) ?*PromptType {
+pub fn pickerPrompt(prompt: ?*data.Prompt) ?*data.Prompt {
     const current = prompt orelse return null;
     return switch (current.target()) {
         .goto, .history, .suggest, .palette => current,
@@ -87,7 +59,7 @@ pub fn pickerPrompt(prompt: ?*PromptType) ?*PromptType {
     };
 }
 
-pub fn promptField(prompt: ?*PromptType) ?*tab_rename_module.Field {
+pub fn promptField(prompt: ?*data.Prompt) ?*tab_rename_module.Field {
     const current = prompt orelse return null;
     return switch (current.target()) {
         .goto, .history, .suggest, .palette => null,
@@ -97,9 +69,9 @@ pub fn promptField(prompt: ?*PromptType) ?*tab_rename_module.Field {
 
 /// Computes the deterministic result set and renders the visible window with
 /// the clamped selection highlighted, scrolled so the selection stays visible.
-pub fn renderGotoPicker(context: *ContextType, application: RectType, sources: PickerSources) GotoPickerOutput {
-    var results: ResultsType = .{};
-    const match_sources: SourcesType = .{
+pub fn renderGotoPicker(context: *ContextType, application: core.Rect, sources: PickerSources) GotoPickerOutput {
+    var results: client.Results = .{};
+    const match_sources: client.Sources = .{
         .agents = sources.agents,
         .workspaces = sources.workspaces,
         .tabs = sources.tabs,
@@ -111,7 +83,7 @@ pub fn renderGotoPicker(context: *ContextType, application: RectType, sources: P
         return renderHistoryPalette(context, application, sources);
     }
 
-    collect_module(match_sources, sources.prompt.paletteQuery(), &results);
+    client.collect(match_sources, sources.prompt.paletteQuery(), &results);
 
     const total: u16 = results.len;
     const selected: u16 = if (total == 0) 0 else @min(sources.prompt.selection(), total - 1);
@@ -121,8 +93,8 @@ pub fn renderGotoPicker(context: *ContextType, application: RectType, sources: P
     var rows: [goto_picker_module.max_rows]RowType = undefined;
     for (0..window) |offset| {
         const index = start + offset;
-        var label: [max_label_bytes_module]u8 = undefined;
-        const text = describe_module(match_sources, results.slice()[index].item, &label);
+        var label: [client.max_label_bytes]u8 = undefined;
+        const text = client.describe(match_sources, results.slice()[index].item, &label);
         var row: RowType = .{ .selected = index == selected };
         const len = @min(text.len, goto_picker_module.max_row_bytes);
         @memcpy(row.text[0..len], text[0..len]);
@@ -140,9 +112,9 @@ pub fn renderGotoPicker(context: *ContextType, application: RectType, sources: P
 }
 
 /// Projects owned history into the specialized compact browser.
-fn renderHistoryPalette(context: *ContextType, application: RectType, sources: PickerSources) GotoPickerOutput {
+fn renderHistoryPalette(context: *ContextType, application: core.Rect, sources: PickerSources) GotoPickerOutput {
     const entries = sources.history.slice();
-    var rows: [max_history_results]EntryType = undefined;
+    var rows: [core.max_history_results]EntryType = undefined;
     for (entries, 0..) |*entry, index| {
         rows[index] = .{
             .command = sources.history.commandAt(@intCast(index)) orelse entry.commandSlice(),
@@ -180,7 +152,7 @@ fn renderHistoryPalette(context: *ContextType, application: RectType, sources: P
 /// Renders the suggestion palette through the same list modal: one row
 /// holding the suggested command, the waiting state or the failure, and a
 /// footer that says what Enter does next.
-fn renderSuggestPalette(context: *ContextType, application: RectType, sources: PickerSources) GotoPickerOutput {
+fn renderSuggestPalette(context: *ContextType, application: core.Rect, sources: PickerSources) GotoPickerOutput {
     const state = sources.suggestion;
     const text: []const u8 = switch (state.phase) {
         .idle => "",
@@ -232,7 +204,7 @@ pub fn addStats(a: RenderStats, b: RenderStats) RenderStats {
     return .{ .scanned = a.scanned + b.scanned, .damaged = a.damaged + b.damaged };
 }
 
-pub fn syncRegion(screen: *ScreenType, source: *const BufferType, area: RectType) !RenderStats {
+pub fn syncRegion(screen: *ScreenType, source: *const core.Buffer, area: core.Rect) !RenderStats {
     var stats: RenderStats = .{};
     var y = area.y;
     while (y < area.y + area.h) : (y += 1) {
@@ -268,40 +240,40 @@ fn testingCompose(compositor: *CompositorType, composition: TestingComposition) 
 }
 
 test "visible regions reserve top bottom sidebar and workbench" {
-    const regions = LayoutRegions.calculate(120, 40, .{ .visible = true, .preferred_width = default_width });
-    try std.testing.expectEqual(RectType{ .x = 42, .w = 78, .h = 1 }, regions.top);
-    try std.testing.expectEqual(RectType{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
-    try std.testing.expectEqual(RectType{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
-    try std.testing.expectEqual(RectType{ .x = 42, .y = 39, .w = 78, .h = 1 }, regions.bottom);
+    const regions = LayoutRegions.calculate(120, 40, .{ .visible = true, .preferred_width = data.sidebar.default_width });
+    try std.testing.expectEqual(core.Rect{ .x = 42, .w = 78, .h = 1 }, regions.top);
+    try std.testing.expectEqual(core.Rect{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
+    try std.testing.expectEqual(core.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
+    try std.testing.expectEqual(core.Rect{ .x = 42, .y = 39, .w = 78, .h = 1 }, regions.bottom);
 }
 
 test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
     var state = try StateType.init(std.testing.allocator, 80, 24);
     defer state.deinit();
 
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
-    const area: RectType = .{ .w = 1, .h = 1 };
+    const area: core.Rect = .{ .w = 1, .h = 1 };
     state.pointer_position = .{ .x = 0, .y = 0 };
     state.hits.add(area, .toggle_sidebar);
-    try std.testing.expectEqual(PointerShape.pointer, state.mousePointerShape(.{ .model = &model }));
-    try std.testing.expectEqual(PointerShape.default, state.mousePointerShape(.{ .model = &model, .copy_mode_active = true }));
+    try std.testing.expectEqual(core.PointerShape.pointer, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(core.PointerShape.default, state.mousePointerShape(.{ .model = &model, .copy_mode_active = true }));
 
     state.hits.clear();
     state.hits.add(area, .{ .focus_pane = @enumFromInt(7) });
-    try std.testing.expectEqual(PointerShape.default, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(core.PointerShape.default, state.mousePointerShape(.{ .model = &model }));
 
     state.hits.clear();
     state.hits.add(area, .resize_sidebar);
-    try std.testing.expectEqual(PointerShape.ew_resize, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(core.PointerShape.ew_resize, state.mousePointerShape(.{ .model = &model }));
 
     state.pointer_position = null;
     state.sidebar_resize_active = true;
-    try std.testing.expectEqual(PointerShape.ew_resize, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(core.PointerShape.ew_resize, state.mousePointerShape(.{ .model = &model }));
 }
 
 test "narrow clients hide the sidebar without forgetting user intent" {
-    const regions = LayoutRegions.calculate(61, 20, .{ .visible = true, .preferred_width = default_width });
+    const regions = LayoutRegions.calculate(61, 20, .{ .visible = true, .preferred_width = data.sidebar.default_width });
     try std.testing.expect(regions.sidebar.isEmpty());
     try std.testing.expectEqual(@as(u16, 61), regions.workbench.w);
 }
@@ -310,25 +282,25 @@ test "sidebar toggle changes only the disposable client layout" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    try std.testing.expectEqual(@as(u16, default_width), state.regions.sidebar.w);
-    try std.testing.expectEqual(RectType{ .x = 42, .w = 58, .h = 1 }, state.regions.top);
-    try std.testing.expectEqual(RectType{ .x = 42, .y = 29, .w = 58, .h = 1 }, state.regions.bottom);
+    try std.testing.expectEqual(@as(u16, data.sidebar.default_width), state.regions.sidebar.w);
+    try std.testing.expectEqual(core.Rect{ .x = 42, .w = 58, .h = 1 }, state.regions.top);
+    try std.testing.expectEqual(core.Rect{ .x = 42, .y = 29, .w = 58, .h = 1 }, state.regions.bottom);
 
     state.toggleSidebar();
 
     try std.testing.expectEqual(@as(u16, 0), state.regions.sidebar.w);
     try std.testing.expectEqual(@as(u16, 100), state.regions.workbench.w);
-    try std.testing.expectEqual(RectType{ .w = 100, .h = 1 }, state.regions.top);
-    try std.testing.expectEqual(RectType{ .x = 0, .y = 29, .w = 100, .h = 1 }, state.regions.bottom);
+    try std.testing.expectEqual(core.Rect{ .w = 100, .h = 1 }, state.regions.top);
+    try std.testing.expectEqual(core.Rect{ .x = 0, .y = 29, .w = 100, .h = 1 }, state.regions.bottom);
 }
 
 test "sidebar separator drag reports exact preferred widths" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -348,13 +320,13 @@ test "sidebar separator drag reports exact preferred widths" {
 
     const dragged = state.handleMouse(.{ .x = 72, .y = 5, .kind = .drag });
     try std.testing.expect(dragged.consumed);
-    try std.testing.expectEqualDeep(IntentType{ .resize_sidebar = 73 }, dragged.intent);
+    try std.testing.expectEqualDeep(client.Intent{ .resize_sidebar = 73 }, dragged.intent);
     try std.testing.expect(!dragged.layout_changed);
     try std.testing.expect(state.sidebar_resize_active);
 
     const released = state.handleMouse(.{ .x = 70, .y = 5, .kind = .release });
     try std.testing.expect(released.consumed);
-    try std.testing.expectEqualDeep(IntentType{ .resize_sidebar = 71 }, released.intent);
+    try std.testing.expectEqualDeep(client.Intent{ .resize_sidebar = 71 }, released.intent);
     try std.testing.expect(!released.layout_changed);
     try std.testing.expect(!state.sidebar_resize_active);
 }
@@ -362,9 +334,9 @@ test "sidebar separator drag reports exact preferred widths" {
 test "empty production sidebar has no task controls" {
     var state = try StateType.init(std.testing.allocator, 100, 30);
     defer state.deinit();
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -382,19 +354,19 @@ test "the inline new-context form shows both fields and the selected completion 
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
     state.toggleSidebar();
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 120, .rows = 28 } });
     var screen = try ScreenType.init(gpa, 120, 30);
     defer screen.deinit();
-    var prompt: PromptType = .{ .mode = .{ .create_workspace = .{ .focus = .directory, .selection = 1 } }, .field = .init("agents"), .directory = .init("/work/te") };
-    var completion: PathCompletionState = .{};
+    var prompt: data.Prompt = .{ .mode = .{ .create_workspace = .{ .focus = .directory, .selection = 1 } }, .field = .init("agents"), .directory = .init("/work/te") };
+    var completion: data.PathCompletionState = .{};
     completion.expect(@enumFromInt(1));
-    var result: @import("telar-client").PathCompletionResult = .{};
+    var result: data.PathCompletionResult = .{};
     try result.setBase("/work");
     try result.append("telar");
     try result.append("tests");
@@ -439,14 +411,14 @@ test "workbench clicks return focus intent without mutating pane layout" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
     try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 50, .rows = 22 } });
     try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = state.workbench() });
     try std.testing.expect(model.focusPane(first));
@@ -479,7 +451,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     click.kind = .press;
     const interaction = state.handleMouse(click);
 
-    try std.testing.expectEqualDeep(IntentType{ .focus_pane = second }, interaction.intent);
+    try std.testing.expectEqualDeep(client.Intent{ .focus_pane = second }, interaction.intent);
     try std.testing.expect(!interaction.layout_changed);
     try std.testing.expectEqual(first, model.layout.focused().?);
     try std.testing.expectEqual(revision, model.layout.currentRevision());
@@ -490,10 +462,10 @@ test "workbench clicks return focus intent without mutating pane layout" {
     model.find(second).?.pointer_shape = .text;
     const input: RenderInput = .{ .model = &model, .compositor = &compositor };
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(PointerShape.text, screen.mouse_pointer);
+    try std.testing.expectEqual(core.PointerShape.text, screen.mouse_pointer);
     try std.testing.expectEqual(first, model.layout.focused().?);
 
-    inline for (std.meta.tags(PointerShape)) |shape| {
+    inline for (std.meta.tags(core.PointerShape)) |shape| {
         model.find(second).?.pointer_shape = shape;
         const stats = try state.render(&screen, input);
         try std.testing.expectEqual(@as(usize, 0), stats.scanned);
@@ -502,61 +474,61 @@ test "workbench clicks return focus intent without mutating pane layout" {
 
     model.find(second).?.pointer_shape = .text;
     _ = try state.render(&screen, .{ .model = &model, .copy_mode_active = true });
-    try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
-    var prompt: PromptType = .{ .mode = .{ .create_workspace = .{} }, .field = .{} };
+    try std.testing.expectEqual(core.PointerShape.default, screen.mouse_pointer);
+    var prompt: data.Prompt = .{ .mode = .{ .create_workspace = .{} }, .field = .{} };
     _ = try state.render(&screen, .{ .model = &model, .prompt = &prompt });
-    try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
+    try std.testing.expectEqual(core.PointerShape.default, screen.mouse_pointer);
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(PointerShape.text, screen.mouse_pointer);
+    try std.testing.expectEqual(core.PointerShape.text, screen.mouse_pointer);
 
     const before_border = state.interactionVersion();
     _ = state.handleMouse(.{ .x = second_view.outer.x, .y = point.y, .kind = .move });
     try std.testing.expectEqual(before_border + 1, state.interactionVersion());
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
+    try std.testing.expectEqual(core.PointerShape.default, screen.mouse_pointer);
     _ = state.handleMouse(point);
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(PointerShape.text, screen.mouse_pointer);
+    try std.testing.expectEqual(core.PointerShape.text, screen.mouse_pointer);
 
     const before_move = state.interactionVersion();
     _ = state.handleMouse(.{ .x = point.x + 1, .y = point.y, .kind = .move });
     try std.testing.expectEqual(before_move, state.interactionVersion());
     state.sidebar_resize_active = true;
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(PointerShape.ew_resize, screen.mouse_pointer);
+    try std.testing.expectEqual(core.PointerShape.ew_resize, screen.mouse_pointer);
     state.sidebar_resize_active = false;
     model.find(second).?.attached = false;
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
+    try std.testing.expectEqual(core.PointerShape.default, screen.mouse_pointer);
 
     try std.testing.expect(model.removePane(second));
     _ = try state.render(&screen, input);
-    try std.testing.expectEqual(PointerShape.default, screen.mouse_pointer);
+    try std.testing.expectEqual(core.PointerShape.default, screen.mouse_pointer);
     _ = try state.render(&screen, .{ .model = &model, .force = true });
-    try std.testing.expectEqual(PointerShape.crosshair, screen.mouse_pointer);
+    try std.testing.expectEqual(core.PointerShape.crosshair, screen.mouse_pointer);
 }
 
 test "sidebar agent snapshots version changed hover only once" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 34, .rows = 27 } });
     try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = state.workbench() });
     try std.testing.expect(model.toggleFullscreen());
-    const agent_entries = [_]AgentInputType{.{
+    const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 },
         .location = location,
         .pane_index = 1,
         .provider = .codex,
         .status = .blocked,
     }};
-    var snapshot: SnapshotType = .{};
+    var snapshot: client.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try ScreenType.init(gpa, 100, 30);
     defer screen.deinit();
@@ -582,43 +554,43 @@ test "sidebar agent snapshots version changed hover only once" {
     try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
     const click = term.Event.Mouse{ .x = 4, .y = 4, .kind = .press };
     const interaction = state.handleMouse(click);
-    try std.testing.expectEqualDeep(IntentType{ .focus_agent = agent_entries[0].key }, interaction.intent);
+    try std.testing.expectEqualDeep(client.Intent{ .focus_agent = agent_entries[0].key }, interaction.intent);
     try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
-    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(2)), model.layout.focused().?);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(2)), model.layout.focused().?);
 }
 
 test "focused agent image preview reserves space below its pane and opens a modal layer" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first_pane: PaneIdType = @enumFromInt(1);
-    const target_pane: PaneIdType = @enumFromInt(2);
+    const first_pane: core.PaneId = @enumFromInt(1);
+    const target_pane: core.PaneId = @enumFromInt(2);
     try model.addRoot(.{ .pane_id = first_pane, .location = location, .size = .{
         .cols = state.workbench().w,
         .rows = state.workbench().h,
     } });
     try model.split(.{ .existing_pane = first_pane, .new_pane = target_pane, .location = location, .axis = .horizontal, .area = state.workbench() });
-    const agent_entries = [_]AgentInputType{.{
+    const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = target_pane, .pane_generation = 4 },
         .location = location,
         .pane_index = 2,
         .provider = .codex,
         .status = .ready,
     }};
-    var snapshot: SnapshotType = .{};
+    var snapshot: client.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    const target: TargetType = .{
+    const target: data.AttachmentTarget = .{
         .pane_id = agent_entries[0].key.pane_id,
         .pane_generation = agent_entries[0].key.pane_generation,
     };
     try std.testing.expect(!state.syncAttachmentTarget(target));
-    const capture = try gpa.create(CaptureType);
+    const capture = try gpa.create(client.Capture);
     capture.* = .{
         .request = .{ .target = target, .sequence = 1 },
         .png = try gpa.dupe(u8, "png"),
@@ -684,13 +656,13 @@ test "focused agent image preview reserves space below its pane and opens a moda
         .compositor = &compositor,
         .agents = &snapshot,
     });
-    try std.testing.expectEqual(RectType{ .x = 10, .y = 3, .w = 80, .h = 24 }, state.graphics_plan.modal_area);
+    try std.testing.expectEqual(core.Rect{ .x = 10, .y = 3, .w = 80, .h = 24 }, state.graphics_plan.modal_area);
     try std.testing.expect(!sidebar_before_modal.eqlPublic(screen.back.at(20, 4).?));
 
     model.find(first_pane).?.pointer_shape = .crosshair;
     _ = state.handleMouse(.{ .x = first_view.content.x, .y = first_view.content.y, .kind = .move });
     _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor });
-    try std.testing.expectEqual(PointerShape.pointer, screen.mouse_pointer);
+    try std.testing.expectEqual(core.PointerShape.pointer, screen.mouse_pointer);
 
     const modal_scroll = state.handleMouse(.{
         .x = state.regions.workbench.x,
@@ -712,31 +684,31 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    const first_location: TabLocationType = .{
+    const first_location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const second_location: TabLocationType = .{
+    const second_location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(1),
     };
-    const first_pane: PaneIdType = @enumFromInt(1);
-    const second_pane: PaneIdType = @enumFromInt(2);
-    const shell_pane: PaneIdType = @enumFromInt(3);
-    const workspace_pane: PaneIdType = @enumFromInt(4);
+    const first_pane: core.PaneId = @enumFromInt(1);
+    const second_pane: core.PaneId = @enumFromInt(2);
+    const shell_pane: core.PaneId = @enumFromInt(3);
+    const workspace_pane: core.PaneId = @enumFromInt(4);
 
-    var first_model = MultiplexerModel.init(gpa);
+    var first_model = client.MultiplexerModel.init(gpa);
     defer first_model.deinit();
     try first_model.addRoot(.{ .pane_id = first_pane, .location = first_location, .size = .{ .cols = 34, .rows = 27 } });
     try first_model.split(.{ .existing_pane = first_pane, .new_pane = second_pane, .location = first_location, .axis = .horizontal, .area = state.workbench() });
     try first_model.split(.{ .existing_pane = second_pane, .new_pane = shell_pane, .location = first_location, .axis = .vertical, .area = state.workbench() });
     try std.testing.expect(first_model.focusPane(first_pane));
 
-    var second_model = MultiplexerModel.init(gpa);
+    var second_model = client.MultiplexerModel.init(gpa);
     defer second_model.deinit();
     try second_model.addRoot(.{ .pane_id = workspace_pane, .location = second_location, .size = .{ .cols = 38, .rows = 27 } });
 
-    const agent_entries = [_]AgentInputType{
+    const agent_entries = [_]data.AgentInput{
         .{
             .key = .{ .pane_id = first_pane, .pane_generation = 1 },
             .location = first_location,
@@ -759,7 +731,7 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
             .status = .ready,
         },
     };
-    var snapshot: SnapshotType = .{};
+    var snapshot: client.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try ScreenType.init(gpa, 100, 30);
     defer screen.deinit();
@@ -792,21 +764,21 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     var state = try StateType.init(std.testing.allocator, 100, 30);
     defer state.deinit();
     try state.configureSidebar(.kitty_hybrid, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 30, .rows = 20 } });
-    const agent_entries = [_]AgentInputType{.{
+    const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 4 },
         .location = location,
         .pane_index = 1,
         .provider = .claude,
         .status = .ready,
     }};
-    var snapshot: SnapshotType = .{};
+    var snapshot: client.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try ScreenType.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
@@ -820,8 +792,8 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     const interaction_revision = state.interactionVersion();
     const interaction = state.handleMouse(.{ .x = 4, .y = 4, .kind = .press });
     try std.testing.expectEqual(interaction_revision + 1, state.interactionVersion());
-    try std.testing.expectEqualDeep(IntentType{ .focus_agent = agent_entries[0].key }, interaction.intent);
-    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(1)), model.layout.focused().?);
+    try std.testing.expectEqualDeep(client.Intent{ .focus_agent = agent_entries[0].key }, interaction.intent);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(1)), model.layout.focused().?);
     try std.testing.expect(state.kittySidebar().damaged());
 }
 
@@ -829,13 +801,13 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
     var state = try StateType.initWithAppearance(
         std.testing.allocator,
         .{ .width = 100, .height = 30 },
-        .{ .theme = theme_mod.default_theme, .icons = .nerd_font },
+        .{ .theme = client.theme_support.default_theme, .icons = .nerd_font },
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -864,13 +836,13 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
     var state = try StateType.initWithAppearance(
         std.testing.allocator,
         .{ .width = 100, .height = 30 },
-        .{ .theme = theme_mod.default_theme, .icons = .nerd_font },
+        .{ .theme = client.theme_support.default_theme, .icons = .nerd_font },
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .{ .support = .unsupported, .cell_width = 10, .cell_height = 20 });
-    var model = MultiplexerModel.init(std.testing.allocator);
+    var model = client.MultiplexerModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -897,14 +869,14 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
     var state = try StateType.init(gpa, 100, 24);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
     const area = state.workbench();
     try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 6 } });
     try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .vertical, .area = area });
@@ -934,7 +906,7 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
         for (0..label.width) |offset| {
             const cell = screen.back.at(original.area.x + label.offset + @as(u16, @intCast(offset)), original.area.y).?;
             try std.testing.expectEqualStrings(" ", cell.text());
-            try std.testing.expectEqual(ColorType.default, cell.style.bg);
+            try std.testing.expectEqual(core.Color.default, cell.style.bg);
         }
     }
 
@@ -981,9 +953,9 @@ test "cell rendering leaves toast rasterization to the media pass" {
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -991,7 +963,7 @@ test "cell rendering leaves toast rasterization to the media pass" {
         .cols = state.workbench().w,
         .rows = state.workbench().h,
     } });
-    var center: CenterType = .{};
+    var center: data.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
     var screen = try ScreenType.init(gpa, 120, 30);
     defer screen.deinit();
@@ -1027,9 +999,9 @@ test "client chrome uses Shade by default" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -1053,14 +1025,14 @@ test "client chrome uses Shade by default" {
     try std.testing.expectEqualDeep(state.palette().panel_bg, screen.back.cells[top_start].style.bg);
     try std.testing.expectEqualDeep(state.palette().accent, screen.back.cells[top_start].style.fg);
     try std.testing.expect(!screen.back.cells[top_start].style.flags.inverse);
-    try std.testing.expectEqual(theme_mod.Builtin.shade, state.theme.base);
+    try std.testing.expectEqual(client.theme_support.Builtin.shade, state.theme.base);
 }
 
 test "configuration diagnostics stay inside the bottom bar" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
     var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
@@ -1091,11 +1063,11 @@ test "configuration diagnostics stay inside the bottom bar" {
 
 test "terminal theme leaves client chrome backgrounds to the host terminal" {
     const gpa = std.testing.allocator;
-    var state = try StateType.initWithTheme(gpa, .{ .width = 80, .height = 24 }, theme_mod.builtin(.terminal));
+    var state = try StateType.initWithTheme(gpa, .{ .width = 80, .height = 24 }, client.theme_support.builtin(.terminal));
     defer state.deinit();
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -1116,10 +1088,10 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
         .force = true,
     });
 
-    try std.testing.expectEqualDeep(ColorType.default, screen.back.cells[0].style.bg);
+    try std.testing.expectEqualDeep(core.Color.default, screen.back.cells[0].style.bg);
     // The sidebar column stays on the host terminal's background.
     try std.testing.expectEqualDeep(
-        ColorType.default,
+        core.Color.default,
         screen.back.cells[@as(usize, 23) * 80].style.bg,
     );
 }
@@ -1128,9 +1100,9 @@ test "clickable toast restores pane cells after its exit animation" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(7),
     };
@@ -1139,7 +1111,7 @@ test "clickable toast restores pane cells after its exit animation" {
         .rows = state.workbench().h,
     } });
     const overlay = toast_module.overlayArea(state.workbench());
-    var center: CenterType = .{};
+    var center: data.Center = .{};
     const notification_id = center.push(100, .{
         .level = .success,
         .title = "Ready",
@@ -1176,12 +1148,12 @@ test "clickable toast restores pane cells after its exit animation" {
         .kind = .press,
     });
     try std.testing.expectEqualDeep(
-        IntentType{ .notification_activate = notification_id },
+        client.Intent{ .notification_activate = notification_id },
         interaction.intent,
     );
     const target = center.activate(notification_id, 200).?;
     try std.testing.expectEqual(location.tab_id, target.select_tab);
-    try std.testing.expect(center.advance(200 + transition_duration_ns_module));
+    try std.testing.expect(center.advance(200 + data.notifications.transition_duration_ns));
     try std.testing.expect(!center.hasItems());
     _ = try state.render(&screen, .{
         .model = &model,
@@ -1199,20 +1171,20 @@ test "changing themes invalidates client chrome" {
     state.dirty = false;
     state.hovered = .active_workspace;
 
-    state.setTheme(theme_mod.builtin(.catppuccin));
+    state.setTheme(client.theme_support.builtin(.catppuccin));
 
     try std.testing.expect(state.dirty);
     try std.testing.expect(state.hovered == null);
-    try std.testing.expectEqual(theme_mod.Builtin.catppuccin, state.theme.base);
+    try std.testing.expectEqual(client.theme_support.Builtin.catppuccin, state.theme.base);
 }
 
 test "tab bar renders ordered labels and clicks carry runtime ids" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var tabs = TabsModel.init(gpa);
+    var tabs = client.TabsModel.init(gpa);
     defer tabs.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try tabs.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(4),
@@ -1245,12 +1217,12 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     const click = term.Event.Mouse{ .x = 65, .y = 23, .kind = .press };
     const interaction = state.handleMouse(click);
     try std.testing.expectEqualDeep(
-        IntentType{ .select_tab = @enumFromInt(4) },
+        client.Intent{ .select_tab = @enumFromInt(4) },
         interaction.intent,
     );
     try std.testing.expect(state.hits.at(71, 23) == null);
     try std.testing.expectEqualDeep(
-        IntentType{ .select_tab = @enumFromInt(9) },
+        client.Intent{ .select_tab = @enumFromInt(9) },
         state.handleMouse(.{ .x = 72, .y = 23, .kind = .press }).intent,
     );
 
@@ -1263,7 +1235,7 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         .button = 2,
     });
     try std.testing.expectEqualDeep(
-        IntentType{ .rename_tab = @enumFromInt(4) },
+        client.Intent{ .rename_tab = @enumFromInt(4) },
         rename.intent,
     );
 }
@@ -1272,10 +1244,10 @@ test "tab bar marks the tab whose pane is fullscreen" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var tabs = TabsModel.init(gpa);
+    var tabs = client.TabsModel.init(gpa);
     defer tabs.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const logs: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(9) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const logs: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(9) };
     try tabs.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(4),
@@ -1313,7 +1285,7 @@ test "tab bar marks the tab whose pane is fullscreen" {
     try std.testing.expectEqualStrings("\u{26f6}", screen.back.cells[bottom_row + 98].text());
     try std.testing.expect(state.hits.at(89, 29) == null);
     try std.testing.expectEqualDeep(
-        IntentType{ .select_tab = @enumFromInt(9) },
+        client.Intent{ .select_tab = @enumFromInt(9) },
         state.handleMouse(.{ .x = 98, .y = 29, .kind = .press }).intent,
     );
 
@@ -1328,15 +1300,15 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
-    var workspaces: WorkspaceListSnapshot = .{};
-    const entries = [_]EntryInputType{
+    var workspaces: client.WorkspaceListSnapshot = .{};
+    const entries = [_]client.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
         .{ .workspace = @enumFromInt(2), .name = "api", .path = "/w/api", .tab_count = 1 },
     };
@@ -1380,7 +1352,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .kind = .press,
     });
     try std.testing.expectEqualDeep(
-        IntentType{ .select_workspace = @enumFromInt(2) },
+        client.Intent{ .select_workspace = @enumFromInt(2) },
         interaction.intent,
     );
 

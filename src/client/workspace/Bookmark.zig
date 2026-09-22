@@ -1,8 +1,7 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const PaneIdType = @import("telar-core").PaneId;
-const LayoutType = @import("WorkspaceLayout.zig");
+const core = @import("telar-core");
+const data = @import("model");
 const Bookmark = @This();
 
-location: TabLocationType,
-pane_id: PaneIdType,
-tab_layout: ?LayoutType = null,
+location: core.TabLocation,
+pane_id: core.PaneId,
+tab_layout: ?data.WorkspaceLayout = null,

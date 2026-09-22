@@ -1,12 +1,12 @@
 //! Routes only delivered review targets; late native events cannot replace owners.
+const event_module = @import("../input/event.zig");
 const std = @import("std");
 const Widget = @import("Widget.zig");
-const Event = @import("../input/event.zig").Event;
 const Id = @import("../widgets/interaction/Id.zig");
 
 /// Clipboard completions arrive after the native input queue resolves the host request.
 /// Example: `_ = try dispatch.apply(widget, event);`
-pub fn apply(widget: *Widget, event: Event) !bool {
+pub fn apply(widget: *Widget, event: event_module.Event) !bool {
     const state = widget.widgets orelse return true;
     var route = if (event == .key and widget.ownsKey(event.key)) state.dispatcher.editorKey(event.key) else state.dispatcher.route(event);
     if (event == .accessibility) {
@@ -31,7 +31,7 @@ pub fn apply(widget: *Widget, event: Event) !bool {
     return true;
 }
 
-fn explicitTarget(event: Event) ?Id {
+fn explicitTarget(event: event_module.Event) ?Id {
     return switch (event) {
         .text => |value| if (value.target_id == 0) null else .{ .target_id = value.target_id, .generation = value.generation },
         .key => |value| if (value.target_id == 0) null else .{ .target_id = value.target_id, .generation = value.generation },

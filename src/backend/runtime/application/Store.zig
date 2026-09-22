@@ -1,17 +1,11 @@
-const ExportedType = @import("Exported.zig");
+const core = @import("telar-core");
 const std = @import("std");
 const Record = @import("Record.zig");
-const max_client_layout_clients_module = @import("telar-core").max_client_layout_clients;
-const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
-const ClientTabLayoutType = @import("telar-core").ClientTabLayout;
-const encodeClientLayoutUpdate_module = @import("telar-core").encodeClientLayoutUpdate;
 const Update = @import("Update.zig");
 const client_layout_store = @import("client_layout_store.zig");
 const StoredTab = @import("StoredTab.zig");
 const SnapshotQuery = @import("SnapshotQuery.zig");
 const SnapshotStorage = @import("SnapshotStorage.zig");
-const ClientLayoutSnapshotType = @import("telar-core").ClientLayoutSnapshot;
-const ClientIdentityType = @import("telar-core").ClientIdentity;
 const Store = @This();
 
 gpa: ?std.mem.Allocator = null,
@@ -25,7 +19,7 @@ clock: u64 = 0,
 /// defer store.deinit();
 /// ```
 pub fn init(gpa: std.mem.Allocator) !Store {
-    const records = try gpa.alloc(Record, max_client_layout_clients_module);
+    const records = try gpa.alloc(Record, core.max_client_layout_clients);
     for (records) |*record| {
         record.* = .{};
     }
@@ -56,13 +50,13 @@ pub const Exported = @import("Exported.zig");
 ///     const exported = try store.exportRecord(index, &buffer) orelse continue;
 /// }
 /// ```
-pub fn exportRecord(store: *const Store, index: usize, buffer: []u8) !?ExportedType {
+pub fn exportRecord(store: *const Store, index: usize, buffer: []u8) !?Exported {
     const record = &store.records[index];
     if (record.identity == .invalid) {
         return null;
     }
 
-    var tabs: [max_client_layout_tabs_module]ClientTabLayoutType = undefined;
+    var tabs: [core.max_client_layout_tabs]core.ClientTabLayout = undefined;
     for (record.tabs[0..record.tab_count], 0..) |*tab, position| {
         tabs[position] = tab.schemaLayout();
     }
@@ -70,7 +64,7 @@ pub fn exportRecord(store: *const Store, index: usize, buffer: []u8) !?ExportedT
     return .{
         .identity = record.identity,
         .last_used = record.last_used,
-        .payload = try encodeClientLayoutUpdate_module(buffer, .{
+        .payload = try core.encodeClientLayoutUpdate(buffer, .{
             .sidebar_visible = record.sidebar_visible,
             .sidebar_width = record.sidebar_width,
             .workspace_list_collapsed = record.workspace_list_collapsed,
@@ -148,7 +142,7 @@ pub fn replace(store: *Store, update: Update) !void {
 /// ```zig
 /// const snapshot = store.snapshot(query, &storage);
 /// ```
-pub fn snapshot(store: *Store, query: SnapshotQuery, storage: *SnapshotStorage) ClientLayoutSnapshotType {
+pub fn snapshot(store: *Store, query: SnapshotQuery, storage: *SnapshotStorage) core.ClientLayoutSnapshot {
     const record = store.find(query.identity) orelse return .{ .restored = false };
     store.touch(record);
     var tab_count: usize = 0;
@@ -173,7 +167,7 @@ pub fn snapshot(store: *Store, query: SnapshotQuery, storage: *SnapshotStorage) 
     };
 }
 
-fn acquire(store: *Store, identity: ClientIdentityType) !*Record {
+fn acquire(store: *Store, identity: core.ClientIdentity) !*Record {
     if (store.find(identity)) |record| {
         store.touch(record);
         return record;
@@ -205,7 +199,7 @@ fn acquire(store: *Store, identity: ClientIdentityType) !*Record {
     return record;
 }
 
-fn find(store: *Store, identity: ClientIdentityType) ?*Record {
+fn find(store: *Store, identity: core.ClientIdentity) ?*Record {
     for (store.records) |*record| {
         if (record.identity == identity) {
             return record;

@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const RepositoryType = @import("Repository.zig");
 const RestoredAgents = @import("RestoredAgents.zig");
 const ResumeSession = @import("ResumeSession.zig");
@@ -6,16 +7,12 @@ const ReportObservationType = @import("ReportObservation.zig");
 const IdentityType = @import("Identity.zig");
 const SessionReferenceType = @import("SessionReference.zig");
 const PaneKeyType = @import("../pane/PaneKey.zig");
-const AgentProviderType = @import("telar-core").AgentProvider;
 const SessionTitleType = @import("SessionTitle.zig");
 const tracker_support = @import("tracker_support.zig");
 const ProcessObservationType = @import("ProcessObservation.zig");
 const ProxyObservationType = @import("ProxyObservation.zig");
 const ScreenObservationType = @import("ScreenObservation.zig");
 const std = @import("std");
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
-const AgentSnapshotEntryType = @import("telar-core").AgentSnapshotEntry;
-const AgentStatusType = @import("telar-core").AgentStatus;
 const JobType = @import("Job.zig");
 const ResultType = @import("Result.zig");
 const DescriptionFinishedType = @import("DescriptionFinished.zig");
@@ -119,7 +116,7 @@ pub fn awaitingResume(tracker: *const Tracker, key: PaneKeyType) bool {
 /// ```zig
 /// const provider = tracker.projectedProvider(key);
 /// ```
-pub fn projectedProvider(tracker: *const Tracker, key: PaneKeyType) AgentProviderType {
+pub fn projectedProvider(tracker: *const Tracker, key: PaneKeyType) core.AgentProvider {
     const agent = tracker.repository.findConst(key) orelse return .unknown;
     return agent.snapshot(0).provider;
 }
@@ -391,7 +388,7 @@ pub fn remove(tracker: *Tracker, key: PaneKeyType) bool {
 /// var entries: [max_records]schema.AgentSnapshotEntry = undefined;
 /// const snapshot = tracker.snapshot(&entries, now_ms);
 /// ```
-pub fn snapshot(tracker: *const Tracker, entries: *[max_agent_snapshot_entries]AgentSnapshotEntryType, now_ms: i64) []const AgentSnapshotEntryType {
+pub fn snapshot(tracker: *const Tracker, entries: *[core.max_agent_snapshot_entries]core.AgentSnapshotEntry, now_ms: i64) []const core.AgentSnapshotEntry {
     var count: usize = 0;
     var iterator = tracker.repository.constIterator();
 
@@ -408,7 +405,7 @@ pub fn snapshot(tracker: *const Tracker, entries: *[max_agent_snapshot_entries]A
 /// ```zig
 /// const status = tracker.projectedStatus(pane_key);
 /// ```
-pub fn projectedStatus(tracker: *const Tracker, key: PaneKeyType) ?AgentStatusType {
+pub fn projectedStatus(tracker: *const Tracker, key: PaneKeyType) ?core.AgentStatus {
     const agent = tracker.repository.findConst(key) orelse return null;
     return agent.projectedStatus();
 }

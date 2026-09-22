@@ -1,5 +1,5 @@
+const data = @import("model");
 const keybind = @import("keybind.zig");
-const Control = @import("telar-client").Control;
 const Capture = @This();
 
 bytes: [256]u8 = undefined,
@@ -16,7 +16,7 @@ pub fn forward(capture: *Capture, bytes: []const u8) !void {
     capture.len += bytes.len;
 }
 
-pub fn action(capture: *Capture, value: keybind.TestAction) !Control {
+pub fn action(capture: *Capture, value: keybind.TestAction) !data.KeybindControl {
     capture.actions[capture.action_len] = value;
     capture.action_len += 1;
     return if (capture.stop_on_action) .stop else .continue_routing;

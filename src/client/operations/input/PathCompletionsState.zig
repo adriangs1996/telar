@@ -1,15 +1,14 @@
 //! Client-owned bookkeeping of the directory-completion worker: the
 //! query the form wants listed, the one in flight and the next identity.
-const ExecutionIdType = @import("../../model/PathCompletionState.zig").ExecutionId;
-const max_path_bytes_module = @import("../../model/PathCompletionResult.zig").max_path_bytes;
+const data = @import("model");
 const State = @This();
 
 next_id: u64 = 1,
 /// Execution whose result is awaited; `.none` while the worker is idle.
-execution: ExecutionIdType = .none,
-wanted: [max_path_bytes_module]u8 = undefined,
+execution: data.PathCompletionState.ExecutionId = .none,
+wanted: [data.PathCompletionResult.max_path_bytes]u8 = undefined,
 wanted_len: u16 = 0,
-inflight: [max_path_bytes_module]u8 = undefined,
+inflight: [data.PathCompletionResult.max_path_bytes]u8 = undefined,
 inflight_len: u16 = 0,
 
 pub fn wantedSlice(state: *const State) []const u8 {
@@ -34,8 +33,8 @@ pub fn want(state: *State, query: []const u8) bool {
 
 /// Reserves an identity for listing the wanted query.
 /// Example: `const id = state.reserve();`
-pub fn reserve(state: *State) ExecutionIdType {
-    const id: ExecutionIdType = @enumFromInt(state.next_id);
+pub fn reserve(state: *State) data.PathCompletionState.ExecutionId {
+    const id: data.PathCompletionState.ExecutionId = @enumFromInt(state.next_id);
     state.next_id += 1;
     state.execution = id;
     @memcpy(state.inflight[0..state.wanted_len], state.wantedSlice());
@@ -45,7 +44,7 @@ pub fn reserve(state: *State) ExecutionIdType {
 
 /// Retires the in-flight execution if it is the completed one.
 /// Example: `if (!state.finish(completion.execution_id)) return;`
-pub fn finish(state: *State, id: ExecutionIdType) bool {
+pub fn finish(state: *State, id: data.PathCompletionState.ExecutionId) bool {
     if (id == .none or id != state.execution) {
         return false;
     }

@@ -1,6 +1,5 @@
+const core = @import("telar-core");
 const vt = @import("ghostty-vt");
-const TableType = @import("telar-core").Table;
-const SignalType = @import("telar-core").Signal;
 const std = @import("std");
 /// Plain text of the active screen, captured bottom-up so the rows nearest
 /// the prompt are complete whenever the screen exceeds the capacity.
@@ -49,7 +48,7 @@ pub fn text(sample: *const Sample) []const u8 {
 /// ```zig
 /// const signal = sample.signal(&core.agent_manifest.builtin_table);
 /// ```
-pub fn signal(sample: *const Sample, table: *const TableType) ?SignalType {
+pub fn signal(sample: *const Sample, table: *const core.Table) ?core.Signal {
     return table.detect(sample.text());
 }
 

@@ -1,10 +1,8 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const LaunchViewType = @import("telar-core").LaunchView;
+const core = @import("telar-core");
 const LaunchPane = @This();
 
-location: TabLocationType,
-size: TerminalSizeType,
-launch: LaunchViewType,
+location: core.TabLocation,
+size: core.TerminalSize,
+launch: core.LaunchView,
 launch_cwd: []const u8,
 workspace_path: []const u8,

@@ -13,11 +13,11 @@ View.handleMouse -> AgentKey
        |
 InputHandler.mouse
        |
-operations/agents/agent_navigation.apply
+AttachedClient.navigateAgent
        |
 ClientModel.planAgentNavigation
        |
-       +-- local tab -> tab_selections.select -> AttachedClient.applyPaneFocus
+       +-- local tab -> AttachedClient.selectTab -> AttachedClient.applyPaneFocus
        |
        +-- remote pane -> AttachedClient.requestWorkspacePane
 ```
@@ -56,7 +56,7 @@ selection. See [Client layout persistence](client-layout-persistence.md).
 
 - `src/client/model/Model.zig` resolves exact generations and local or
   remote plans without exposing the agent replica.
-- `src/client/operations/agents/agent_navigation.zig` applies selection before
+- `src/client/AttachedClient.zig` applies selection before
   focus and calls the concrete tab, focus and handoff operations.
 - `src/frontend/client/tests/notifications_and_agents.zig` and
   `src/frontend/client/tests/synchronization.zig` exercise stale/pending

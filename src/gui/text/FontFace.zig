@@ -2,6 +2,7 @@
 //! and a bounded set of sized instances, so chrome labels at several
 //! heights and terminal cells share the face without re-running its size
 //! setup or invalidating anything cached per height.
+const builtin = @import("builtin");
 const std = @import("std");
 const freetype = @import("freetype");
 const AtlasOptions = @import("AtlasOptions.zig");
@@ -65,7 +66,7 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
     const shaping_font = freetype.c.hb_ft_font_create_referenced(face) orelse return error.ShapingFontInitFailed;
     errdefer freetype.c.hb_font_destroy(shaping_font);
     var mac_rasterizer: ?MacRasterizer = null;
-    if (@import("builtin").os.tag == .macos and options.thicken) {
+    if (builtin.os.tag == .macos and options.thicken) {
         mac_rasterizer = try MacRasterizer.init(.{
             .font = options.font.ptr,
             .font_len = options.font.len,

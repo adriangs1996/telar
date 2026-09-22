@@ -1,7 +1,8 @@
+const shared_model = @import("model");
 const client = @import("telar-client");
 
 pub const Message = union(enum) {
-    server: anyerror!*const client.RuntimeMessage,
+    server: anyerror!*const shared_model.RuntimeMessage,
     sent: anyerror!void,
     input_ready,
     focus: bool,
@@ -14,7 +15,7 @@ pub const Message = union(enum) {
     bar_tick: anyerror!void,
     bar_command: client.BarUpdatesCompletion,
     plugin_result: client.PluginActionsCompletion,
-    path_completion: client.PathCompletionCompletion,
+    path_completion: shared_model.PathCompletionCompletion,
     favicon: client.FaviconCompletion,
     diagram_ready,
     syntax_ready,

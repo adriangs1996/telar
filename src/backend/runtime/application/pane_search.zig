@@ -6,16 +6,14 @@ const PaneStore = @import("../../pane/PaneStore.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
 const Pane = @import("../../pane/Pane.zig");
 const core = @import("telar-core");
-const SearchPaneType = @import("telar-core").SearchPane;
 const Cursor = @import("../../pane/Cursor.zig");
 const std = @import("std");
 const Wake = @import("Wake.zig");
 const MatchesType = @import("commands/Matches.zig");
-const RequestIdType = @import("telar-core").RequestId;
 
 /// Starts a search, replacing only this client's previous search.
 /// Example: `try start(application, session, request);`.
-pub fn start(application: *Application, session: *Session, request: SearchPaneType) !void {
+pub fn start(application: *Application, session: *Session, request: core.SearchPane) !void {
     const pane = resolveTarget(&application.model.panes, session, request.pane_id) orelse {
         try session.delivery.responses.push(.{ .request_failed = .{
             .request_id = request.request_id,
@@ -103,7 +101,7 @@ pub fn advance(application: *Application, completion: Wake) !void {
     }
 }
 
-fn fail(session: *Session, request_id: RequestIdType, message: []const u8) !void {
+fn fail(session: *Session, request_id: core.RequestId, message: []const u8) !void {
     try session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = .resource_limit,

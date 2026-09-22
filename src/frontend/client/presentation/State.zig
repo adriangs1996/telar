@@ -1,15 +1,9 @@
-const BufferType = @import("telar-core").Buffer;
+const core = @import("telar-core");
+const client = @import("telar-client");
+const data = @import("model");
 const LayoutRegions = @import("../../widgets/LayoutRegions.zig");
-const StateType = @import("telar-client").WorkspaceState;
-const ThemeType = @import("telar-client").ColorTheme;
-const ClientTheme = @import("telar-client").Theme;
 const context_support = @import("../../widgets/context_support.zig");
-const default_width = @import("telar-client").default_width;
-const PointType = @import("telar-core").Point;
-const RectType = @import("telar-core").Rect;
 const WidgetsState = @import("../../widgets/State.zig");
-const SidebarRenderingType = @import("telar-client").SidebarRendering;
-const ResolvedSidebarRenderingType = @import("telar-client").ResolvedSidebarRendering;
 const KittySidebarRendererType = @import("../../graphics/KittySidebarRenderer.zig");
 const IconsRenderer = @import("../../graphics/IconsRenderer.zig");
 const ToastRenderer = @import("../../graphics/ToastRenderer.zig");
@@ -18,60 +12,44 @@ const PillRenderer = @import("../../graphics/PillRenderer.zig");
 const delivery_module = @import("../../attachments/delivery.zig");
 const GraphicsPlan = @import("GraphicsPlan.zig");
 const std = @import("std");
-const theme_mod = @import("telar-client").theme_support;
 const Dimensions = @import("Dimensions.zig");
 const Appearance = @import("Appearance.zig");
-const RegionType = @import("telar-client").Region;
-const PaletteType = @import("telar-client").Palette;
-const ConfigurationType = @import("telar-client").SidebarRendererInput;
-const PaneBottomReservationType = @import("telar-client").PaneBottomReservation;
 const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
-const TargetType = @import("telar-client").AttachmentTarget;
-const CaptureType = @import("telar-client").Capture;
-const AttachmentsTypesId = @import("telar-client").AttachmentId;
-const MarkerScreenType = @import("telar-client").MarkerScreen;
-const CenterType = @import("telar-client").Center;
 const screen_support = @import("../../presentation/screen_support.zig");
-const ViewInteractionCommand = @import("telar-client").ViewInteractionCommand;
 const view_ops = @import("view.zig");
 const ScreenType = @import("../../presentation/Screen.zig");
-const StyleType = @import("telar-core").Style;
 const RenderInput = @import("RenderInput.zig");
 const RenderStats = @import("RenderStats.zig");
 const ContextType = @import("../../widgets/Context.zig");
-const LayoutSnapshot = @import("telar-client").LayoutSnapshot;
 const composition_module = @import("../../widgets/composition.zig");
 const history_browser_module = @import("../../widgets/history_browser.zig");
 const goto_picker_module = @import("../../widgets/goto_picker.zig");
 const toast_module = @import("../../widgets/toast.zig");
 const CursorType = @import("../../widgets/Cursor.zig");
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
 const SidebarProviderPlacementType = @import("../../graphics/SidebarProviderPlacement.zig");
 const kitty_sidebar_module = @import("../../graphics/kitty_sidebar.zig");
-const PointerShape = @import("telar-core").PointerShape;
-const PaneIdType = @import("telar-core").PaneId;
 const State = @This();
 
-scratch: BufferType,
+scratch: core.Buffer,
 regions: LayoutRegions,
-geometry_state: StateType,
-theme: ThemeType,
-icon_theme: ClientTheme,
+geometry_state: client.WorkspaceState,
+theme: client.ColorTheme,
+icon_theme: client.Theme,
 hits: context_support.Hits = .{},
 tab_drag: @import("TabDrag.zig") = .{},
 sidebar_requested: bool = true,
-sidebar_preferred_width: u16 = default_width,
+sidebar_preferred_width: u16 = data.sidebar.default_width,
 sidebar_resize_active: bool = false,
 hovered: ?context_support.Action = null,
-pointer_position: ?PointType = null,
+pointer_position: ?core.Point = null,
 // Last projected content bounds distinguish border crossings without
 // invalidating chrome for every mouse move within the same pane.
-pointer_content: RectType = .{},
+pointer_content: core.Rect = .{},
 sidebar: WidgetsState = .{},
 workspace_list_collapsed: bool = false,
 dirty: bool = true,
 interaction_revision: u64 = 0,
-sidebar_rendering: ResolvedSidebarRenderingType = .cells,
+sidebar_rendering: client.ResolvedSidebarRendering = .cells,
 toast_overlay_drawn: bool = false,
 kitty_sidebar: KittySidebarRendererType,
 kitty_icons: IconsRenderer,
@@ -83,10 +61,10 @@ graphics_plan: GraphicsPlan = .{},
 graphics_plan_dirty: bool = false,
 cell_width_px: u16 = 0,
 cell_height_px: u16 = 0,
-modal_overlay_area: RectType = .{},
+modal_overlay_area: core.Rect = .{},
 
 pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
-    return initWithTheme(gpa, .{ .width = width, .height = height }, theme_mod.default_theme);
+    return initWithTheme(gpa, .{ .width = width, .height = height }, client.theme_support.default_theme);
 }
 
 /// Initializes view state with a selected color theme.
@@ -94,7 +72,7 @@ pub fn init(gpa: std.mem.Allocator, width: u16, height: u16) !State {
 /// ```zig
 /// var view = try State.initWithTheme(gpa, .{ .width = 80, .height = 24 }, theme);
 /// ```
-pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_theme: ThemeType) !State {
+pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_theme: client.ColorTheme) !State {
     return initWithAppearance(gpa, dimensions, .{ .theme = selected_theme });
 }
 
@@ -106,7 +84,7 @@ pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_th
 pub fn initWithAppearance(gpa: std.mem.Allocator, dimensions: Dimensions, appearance: Appearance) !State {
     const regions: LayoutRegions = .calculate(dimensions.width, dimensions.height, .{
         .visible = true,
-        .preferred_width = default_width,
+        .preferred_width = data.sidebar.default_width,
     });
 
     return .{
@@ -145,12 +123,12 @@ pub fn resize(state: *State, width: u16, height: u16) !void {
     state.dirty = true;
 }
 
-pub fn workbench(state: *const State) RectType {
+pub fn workbench(state: *const State) core.Rect {
     return state.geometry().area;
 }
 
 /// Example: `const region = view.geometry();`.
-pub fn geometry(state: *const State) RegionType {
+pub fn geometry(state: *const State) data.Region {
     return state.geometry_state.current;
 }
 
@@ -172,17 +150,17 @@ fn recalculateRegions(state: *State, width: u16, height: u16) void {
     state.geometry_state.update(state.regions.workbench);
 }
 
-pub fn palette(state: *const State) *const PaletteType {
+pub fn palette(state: *const State) *const client.Palette {
     return &state.theme.palette;
 }
 
-pub fn setTheme(state: *State, selected_theme: ThemeType) void {
+pub fn setTheme(state: *State, selected_theme: client.ColorTheme) void {
     state.theme = selected_theme;
     state.hovered = null;
     state.dirty = true;
 }
 
-pub fn setIconTheme(state: *State, selected_theme: ClientTheme) void {
+pub fn setIconTheme(state: *State, selected_theme: client.Theme) void {
     if (state.icon_theme == selected_theme) {
         return;
     }
@@ -275,7 +253,7 @@ pub fn resetSidebarScroll(state: *State) void {
 /// ```zig
 /// try view.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 8, .cell_height = 16 });
 /// ```
-pub fn configureSidebar(state: *State, requested: SidebarRenderingType, configuration: ConfigurationType) !void {
+pub fn configureSidebar(state: *State, requested: client.SidebarRendering, configuration: client.SidebarRendererInput) !void {
     const resolved = try requested.resolve(configuration.support);
     const toast_changed = state.kitty_toasts.configure(configuration);
     const modal_changed = state.kitty_modal.configure(configuration);
@@ -323,7 +301,7 @@ pub fn kittyAttachments(state: *State) *delivery_module.Store {
 /// ```zig
 /// const reservation = view.attachmentReservation();
 /// ```
-pub fn attachmentReservation(state: *const State) ?PaneBottomReservationType {
+pub fn attachmentReservation(state: *const State) ?data.PaneBottomReservation {
     const target = state.attachment_store.visibleTarget() orelse return null;
 
     return .{
@@ -340,7 +318,7 @@ pub fn attachmentReservation(state: *const State) ?PaneBottomReservationType {
 /// ```zig
 /// const layout_changed = view.syncAttachmentTarget(target);
 /// ```
-pub fn syncAttachmentTarget(state: *State, target: ?TargetType) bool {
+pub fn syncAttachmentTarget(state: *State, target: ?data.AttachmentTarget) bool {
     const change = state.attachment_store.setTarget(target);
     if (!change.changed) {
         return false;
@@ -350,7 +328,7 @@ pub fn syncAttachmentTarget(state: *State, target: ?TargetType) bool {
     return change.layout_changed;
 }
 
-pub fn adoptAttachment(state: *State, capture: *CaptureType) !bool {
+pub fn adoptAttachment(state: *State, capture: *client.Capture) !bool {
     const had_items = state.attachment_store.hasVisibleItems();
     try state.attachment_store.adopt(capture);
     const has_items = state.attachment_store.hasVisibleItems();
@@ -365,7 +343,7 @@ pub fn adoptAttachment(state: *State, capture: *CaptureType) !bool {
 /// ```zig
 /// const layout_changed = view.removeAttachment(id) orelse return;
 /// ```
-pub fn removeAttachment(state: *State, id: AttachmentsTypesId) ?bool {
+pub fn removeAttachment(state: *State, id: data.AttachmentId) ?bool {
     const had_items = state.attachment_store.hasVisibleItems();
     if (!state.attachment_store.remove(id)) {
         return null;
@@ -383,7 +361,7 @@ pub fn removeAttachment(state: *State, id: AttachmentsTypesId) ?bool {
 /// ```zig
 /// const layout_changed = view.removePromptAttachments(target) orelse return;
 /// ```
-pub fn removePromptAttachments(state: *State, target: TargetType) ?bool {
+pub fn removePromptAttachments(state: *State, target: data.AttachmentTarget) ?bool {
     const had_items = state.attachment_store.hasVisibleItems();
     if (state.attachment_store.removeVisible(target) == 0) {
         return null;
@@ -402,7 +380,7 @@ pub fn removePromptAttachments(state: *State, target: TargetType) ?bool {
 /// ```zig
 /// const layout_changed = view.reconcileAttachmentMarkers(target, screen) orelse return;
 /// ```
-pub fn reconcileAttachmentMarkers(state: *State, target: TargetType, screen: MarkerScreenType) ?bool {
+pub fn reconcileAttachmentMarkers(state: *State, target: data.AttachmentTarget, screen: client.MarkerScreen) ?bool {
     const had_items = state.attachment_store.hasVisibleItems();
     if (state.attachment_store.reconcileMarkers(target, screen) == 0) {
         return null;
@@ -437,7 +415,7 @@ pub fn closeAttachmentModal(state: *State) bool {
 /// ```zig
 /// _ = try view.prepareGraphics(model.notificationSnapshot(), media_idle);
 /// ```
-pub fn prepareGraphics(state: *State, snapshot: *const CenterType, media_idle: bool) !bool {
+pub fn prepareGraphics(state: *State, snapshot: *const data.Center, media_idle: bool) !bool {
     if (!state.graphics_plan_dirty and
         !(media_idle and state.kitty_toasts.preparationDeferred()))
     {
@@ -481,11 +459,11 @@ pub fn graphicsPreparationPending(state: *const State) bool {
 /// ```zig
 /// const covered = view.graphicalToastsCover(model.notificationSnapshot());
 /// ```
-pub fn graphicalToastsCover(state: *const State, snapshot: *const CenterType) bool {
+pub fn graphicalToastsCover(state: *const State, snapshot: *const data.Center) bool {
     return state.kitty_toasts.covers(snapshot);
 }
 
-pub fn graphicalModalCovers(state: *const State, area: RectType) bool {
+pub fn graphicalModalCovers(state: *const State, area: core.Rect) bool {
     return state.kitty_modal.covers(area);
 }
 
@@ -505,8 +483,8 @@ pub fn graphicalPillCoversPlan(state: *const State) bool {
 /// ```zig
 /// const interaction = view.handleMouse(mouse);
 /// ```
-pub fn handleMouse(state: *State, mouse: screen_support.Event.Mouse) ViewInteractionCommand {
-    var result: ViewInteractionCommand = .{};
+pub fn handleMouse(state: *State, mouse: screen_support.Event.Mouse) client.ViewInteractionCommand {
+    var result: client.ViewInteractionCommand = .{};
     if (state.attachment_store.hasModal()) {
         result.consumed = true;
     }
@@ -631,7 +609,7 @@ fn renderDiagnosticBanner(state: *State, screen: *ScreenType, diagnostic: ?[]con
         return;
     }
     const colors = state.palette();
-    const style: StyleType = .{
+    const style: core.Style = .{
         .fg = colors.text,
         .bg = colors.red,
         .flags = .{ .bold = true },
@@ -675,8 +653,8 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
         else
             null,
     };
-    var fallback_layout: LayoutSnapshot = .{};
-    var fallback_attachment_area: RectType = .{};
+    var fallback_layout: data.LayoutSnapshot = .{};
+    var fallback_attachment_area: core.Rect = .{};
     const layout = if (input.compositor) |compositor|
         compositor.layoutSnapshot()
     else layout: {
@@ -739,7 +717,7 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
         else
             goto_picker_module.modalArea(application_area)
     else
-        RectType{};
+        core.Rect{};
     const graphical_modal = state.graphicalModalCovers(current_modal_area);
     if (input.compositor) |compositor| {
         if (!state.modal_overlay_area.isEmpty()) {
@@ -759,7 +737,7 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
     state.kitty_pill.observe(pill_plan, state.palette());
     if (state.kitty_pill.coversText(pill_plan, state.palette())) {
         for (pill_plan.slice()) |label| {
-            const area: RectType = .{ .x = pill_plan.area.x + label.offset, .y = pill_plan.area.y, .w = label.width, .h = 1 };
+            const area: core.Rect = .{ .x = pill_plan.area.x + label.offset, .y = pill_plan.area.y, .w = label.width, .h = 1 };
             state.scratch.fill(area, .{ .glyph = " ", .style = .{} });
         }
     }
@@ -800,7 +778,7 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
         }
     }
     if (hybrid) {
-        var provider_marks: [max_agent_snapshot_entries]SidebarProviderPlacementType = undefined;
+        var provider_marks: [core.max_agent_snapshot_entries]SidebarProviderPlacementType = undefined;
         var provider_mark_count: usize = 0;
         for (composed.sidebar.provider_marks[0..composed.sidebar.provider_mark_count]) |mark| {
             const provider = kitty_sidebar_module.SidebarProvider.fromAgent(mark.provider) orelse continue;
@@ -864,7 +842,7 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
     return stats;
 }
 
-pub fn mousePointerShape(state: *State, input: RenderInput) PointerShape {
+pub fn mousePointerShape(state: *State, input: RenderInput) core.PointerShape {
     state.pointer_content = .{};
 
     if (input.copy_mode_active or input.prompt != null) {
@@ -896,7 +874,7 @@ pub fn mousePointerShape(state: *State, input: RenderInput) PointerShape {
     };
 }
 
-fn panePointerShape(state: *State, input: RenderInput, pane_id: PaneIdType) PointerShape {
+fn panePointerShape(state: *State, input: RenderInput, pane_id: core.PaneId) core.PointerShape {
     if (state.attachment_store.hasModal()) {
         return .default;
     }
@@ -906,7 +884,7 @@ fn panePointerShape(state: *State, input: RenderInput, pane_id: PaneIdType) Poin
         return .default;
     }
 
-    var fallback: LayoutSnapshot = .{};
+    var fallback: data.LayoutSnapshot = .{};
     const layout = if (input.compositor) |compositor|
         compositor.layoutSnapshot()
     else layout: {

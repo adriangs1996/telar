@@ -1,12 +1,11 @@
-const PaneIdType = @import("telar-core").PaneId;
-const TabLocationType = @import("telar-core").TabLocation;
+const core = @import("telar-core");
 const model = @import("model.zig");
 const std = @import("std");
 const LaunchAttempt = @This();
 
-pane_id: PaneIdType,
+pane_id: core.PaneId,
 pane_generation: u64,
-location: TabLocationType,
+location: core.TabLocation,
 started_at_ms: i64,
 failed_at_ms: i64,
 phase: model.LaunchPhase,

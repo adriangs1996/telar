@@ -1,8 +1,8 @@
 //! Optional proxy ownership and observation scheduling for one runtime.
 
+const core = @import("telar-core");
 const ProxyType = @import("../../proxy/Proxy.zig");
 const GenericOwner = @import("GenericOwner.zig").Type;
-const ProxyScopeType = @import("telar-core").ProxyScope;
 const std = @import("std");
 const FakeCapability = @import("FakeCapability.zig");
 const FakeScheduler = @import("FakeScheduler.zig");
@@ -17,7 +17,7 @@ fn destroyProxy(proxy: *ProxyType) void {
 
 pub const ProxyOwner = GenericOwner(ProxyType, destroyProxy);
 
-pub fn configuredScope(hosts: []const []const u8) ProxyScopeType {
+pub fn configuredScope(hosts: []const []const u8) core.ProxyScope {
     for (hosts) |host| {
         if (std.mem.startsWith(u8, host, "*")) {
             return .wildcard;
@@ -28,9 +28,9 @@ pub fn configuredScope(hosts: []const []const u8) ProxyScopeType {
 }
 
 test "runtime scope distinguishes exact and wildcard policies" {
-    try std.testing.expectEqual(ProxyScopeType.exact, configuredScope(&.{"api.openai.com"}));
-    try std.testing.expectEqual(ProxyScopeType.wildcard, configuredScope(&.{"*.openai.com"}));
-    try std.testing.expectEqual(ProxyScopeType.wildcard, configuredScope(&.{"*"}));
+    try std.testing.expectEqual(core.ProxyScope.exact, configuredScope(&.{"api.openai.com"}));
+    try std.testing.expectEqual(core.ProxyScope.wildcard, configuredScope(&.{"*.openai.com"}));
+    try std.testing.expectEqual(core.ProxyScope.wildcard, configuredScope(&.{"*"}));
 }
 
 fn destroyFakeCapability(capability: *FakeCapability) void {

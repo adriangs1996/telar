@@ -1,21 +1,12 @@
 //! The `telar notification show` command.
 
-const RequestIdType = @import("telar-core").RequestId;
-const max_notification_title_bytes_module = @import("telar-core").max_notification_title_bytes;
-const max_notification_message_bytes_module = @import("telar-core").max_notification_message_bytes;
+const core = @import("telar-core");
 const std = @import("std");
 const NotificationOptions = @import("arguments/NotificationOptions.zig");
 const RuntimeConnector = @import("RuntimeConnector.zig");
-const encodeShowNotification_module = @import("telar-core").encodeShowNotification;
-const max_frame_size_module = @import("telar-core").max_frame_size;
-const decodeServer_module = @import("telar-core").decodeServer;
-const ShowNotificationType = @import("telar-core").ShowNotification;
-const NotificationShownType = @import("telar-core").NotificationShown;
-const NotificationLevelType = @import("telar-core").NotificationLevel;
-const PaneIdType = @import("telar-core").PaneId;
 
-const request_id: RequestIdType = @enumFromInt(1);
-const request_buffer_size = 1 + 8 + 1 + 4 + 1 + 8 + 2 + max_notification_title_bytes_module + 2 + max_notification_message_bytes_module;
+const request_id: core.RequestId = @enumFromInt(1);
+const request_buffer_size = 1 + 8 + 1 + 4 + 1 + 8 + 2 + core.max_notification_title_bytes + 2 + core.max_notification_message_bytes;
 
 /// Sends one bounded notification request to the running local runtime and
 /// fails when no UI client accepted it.
@@ -35,11 +26,11 @@ pub fn run(init: std.process.Init, options: NotificationOptions) !void {
     defer connection.deinit(init.io);
 
     var send_buffer: [request_buffer_size]u8 = undefined;
-    try connection.send(init.io, try encodeShowNotification_module(&send_buffer, request(options)));
+    try connection.send(init.io, try core.encodeShowNotification(&send_buffer, request(options)));
 
-    const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
+    const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
     defer init.gpa.free(receive_buffer);
-    const response = try decodeServer_module(try connection.receive(init.io, receive_buffer));
+    const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
     switch (response) {
         .notification_shown => |shown| validateAcknowledgement(shown) catch |err| {
             if (err == error.NoNotificationClients) {
@@ -56,7 +47,7 @@ pub fn run(init: std.process.Init, options: NotificationOptions) !void {
     }
 }
 
-fn request(options: NotificationOptions) ShowNotificationType {
+fn request(options: NotificationOptions) core.ShowNotification {
     return .{
         .request_id = request_id,
         .notification = .{
@@ -69,7 +60,7 @@ fn request(options: NotificationOptions) ShowNotificationType {
     };
 }
 
-fn validateAcknowledgement(shown: NotificationShownType) !void {
+fn validateAcknowledgement(shown: core.NotificationShown) !void {
     if (shown.request_id != request_id) {
         return error.UnexpectedRuntimeResponse;
     }
@@ -89,9 +80,9 @@ test "notification options map to one protocol request" {
     });
 
     try std.testing.expectEqual(request_id, message.request_id);
-    try std.testing.expectEqual(NotificationLevelType.success, message.notification.level);
+    try std.testing.expectEqual(core.NotificationLevel.success, message.notification.level);
     try std.testing.expectEqual(@as(u32, 2500), message.notification.duration_ms);
-    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(42)), message.notification.target.pane);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(42)), message.notification.target.pane);
     try std.testing.expectEqualStrings("Build complete", message.notification.title);
     try std.testing.expectEqualStrings("Open the pane", message.notification.message);
 }

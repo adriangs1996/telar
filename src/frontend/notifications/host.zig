@@ -1,13 +1,12 @@
 //! Host-level notification adapters: the outer terminal's OSC 9 channel and
 //! the operating system's notification service.
 
-const max_notification_title_bytes = @import("telar-core").max_notification_title_bytes;
-const max_notification_message_bytes = @import("telar-core").max_notification_message_bytes;
+const core = @import("telar-core");
 const std = @import("std");
 const Payload = @import("Payload.zig");
 const builtin = @import("builtin");
 
-pub const max_payload_bytes = max_notification_title_bytes + max_notification_message_bytes + 8;
+pub const max_payload_bytes = core.max_notification_title_bytes + core.max_notification_message_bytes + 8;
 
 const command_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(3) },

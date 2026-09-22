@@ -1,12 +1,12 @@
 //! Per-CONNECT identity and observation state shared by protocol adapters.
 
+const core = @import("telar-core");
 const request_support = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
 const PipelineType = @import("../Pipeline.zig");
 const CountersType = @import("../Counters.zig");
 const Exchange = @import("Exchange.zig");
 const CredentialType = @import("../Credential.zig");
-const pane_module = @import("telar-core").pane;
 const identity = @import("../identity.zig");
 const std = @import("std");
 const ExchangeCapture = @import("ExchangeCapture.zig");
@@ -27,7 +27,7 @@ pub fn requestPhase(classification: request_support.RequestClass) middleware.Pha
 
 fn testExchange(pipeline: *const PipelineType, counters: *CountersType) !Exchange {
     const credential: CredentialType = .{
-        .pane_id = try pane_module(7),
+        .pane_id = try core.pane(7),
         .pane_generation = 11,
         .token = .{0x42} ** identity.token_bytes,
     };

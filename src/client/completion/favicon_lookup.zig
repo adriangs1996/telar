@@ -1,8 +1,8 @@
 //! Finds and reads a workspace's favicon file off the interactive path:
 //! `favicon.png`, `favicon.ico`, then `.telar/icon.png` under the workspace root, regular
 //! files only, at most `max_file_bytes`. Decoding belongs to the adapter.
+const core = @import("telar-core");
 const std = @import("std");
-const max_cwd_bytes = @import("telar-core").max_cwd_bytes;
 
 pub const max_file_bytes: usize = 1024 * 1024;
 pub const candidates = [_][]const u8{ "favicon.png", "favicon.ico", ".telar/icon.png" };
@@ -12,11 +12,11 @@ pub const candidates = [_][]const u8{ "favicon.png", "favicon.ico", ".telar/icon
 /// Example: `const bytes = try favicon_lookup.read(io, cwd, buffer);`
 pub fn read(io: std.Io, cwd: []const u8, buffer: []u8) ![]const u8 {
     std.debug.assert(buffer.len >= max_file_bytes);
-    if (cwd.len == 0 or cwd.len > max_cwd_bytes) {
+    if (cwd.len == 0 or cwd.len > core.max_cwd_bytes) {
         return error.FaviconNotFound;
     }
 
-    var path: [max_cwd_bytes + 32]u8 = undefined;
+    var path: [core.max_cwd_bytes + 32]u8 = undefined;
     for (candidates) |name| {
         const joined = std.fmt.bufPrint(&path, "{s}/{s}", .{ cwd, name }) catch continue;
         if (readRegular(io, joined, buffer[0..max_file_bytes]) catch null) |bytes| {

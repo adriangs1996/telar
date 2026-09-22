@@ -1,5 +1,7 @@
 //! Tabs keep their navigation geometry. Workspace controls are a fallback
 //! while the sidebar is hidden or the current context is not in its list.
+const SidebarRegions = @import("SidebarRegions.zig");
+const Bands = @import("Bands.zig");
 const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");
 const WorkspaceIndicators = @import("WorkspaceIndicators.zig");
@@ -94,7 +96,7 @@ pub fn draw(widget: TopBar, canvas: *Canvas) !void {
 
     const active = widget.context.workspaceId();
     const listed = if (active) |id| widget.context.projection.workspaces.indexOf(id) != null else false;
-    const regions = if (widget.context.sidebar_regions) |prepared| prepared.* else try @import("SidebarRegions.zig").resolve(canvas, @import("Bands.zig").resolve(canvas).sidebar, widget.context.projection.workspaces.count);
+    const regions = if (widget.context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, Bands.resolve(canvas).sidebar, widget.context.projection.workspaces.count);
     if (!widget.sidebar_visible or !listed or regions.projects.height <= 0) {
         try workspaces.draw(canvas);
     }

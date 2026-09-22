@@ -1,23 +1,16 @@
-const RestoreType = @import("Restore.zig");
+const core = @import("telar-core");
 const StateType = @import("State.zig");
 const std = @import("std");
 const ProbeSchedule = @import("ProbeSchedule.zig");
 const ProbeType = @import("Probe.zig");
 const WorkspaceType = @import("Workspace.zig");
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const ObservationType = @import("Observation.zig");
 const Reader = @import("Reader.zig");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const repository_support = @import("repository_support.zig");
 const Ensured = @import("Ensured.zig");
 const Insert = @import("Insert.zig");
-const TabLocationType = @import("telar-core").TabLocation;
 const Proposal = @import("Proposal.zig");
-const workspace_module = @import("telar-core").workspace;
-const tab_module = @import("telar-core").tab;
-const raw_module = @import("telar-core").raw;
 const state_mod = @import("state_support.zig");
-const TabIdType = @import("telar-core").TabId;
 const Repository = @This();
 
 state: *StateType,
@@ -52,7 +45,7 @@ pub fn reserveGitProbe(repository: *Repository, request: ProbeSchedule) ?ProbeTy
 
 /// Cancels only the matching observation, including a removed workspace.
 /// Example: `repository.cancelGitProbe(probe.workspace);`.
-pub fn cancelGitProbe(repository: *Repository, workspace: WorkspaceIdType) void {
+pub fn cancelGitProbe(repository: *Repository, workspace: core.WorkspaceId) void {
     if (repository.state.git_probe == workspace) {
         repository.state.git_probe = null;
     }
@@ -83,7 +76,7 @@ pub fn reader(repository: *const Repository) Reader {
     return Reader.init(repository.state);
 }
 
-pub fn find(repository: *Repository, location: WorkspaceLocationType) ?*WorkspaceType {
+pub fn find(repository: *Repository, location: core.WorkspaceLocation) ?*WorkspaceType {
     const workspace_id = repository_support.workspaceId(location) orelse return null;
 
     for (&repository.state.items) |*slot| {
@@ -126,7 +119,7 @@ pub fn ensure(repository: *Repository, path: []const u8) !Ensured {
 ///     .explicit_name = "backend",
 /// });
 /// ```
-pub fn insert(repository: *Repository, request: Insert) !TabLocationType {
+pub fn insert(repository: *Repository, request: Insert) !core.TabLocation {
     var proposal = try repository.propose(request);
     defer proposal.rollback();
     return proposal.commit();
@@ -144,8 +137,8 @@ pub fn propose(repository: *Repository, request: Insert) !Proposal {
         return error.WorkspaceLimitReached;
     }
 
-    const workspace_id = try workspace_module(repository.state.next_workspace_id);
-    const tab_id = try tab_module(repository.state.next_tab_id);
+    const workspace_id = try core.workspace(repository.state.next_workspace_id);
+    const tab_id = try core.tab(repository.state.next_tab_id);
     const path = try repository.gpa.dupe(u8, request.path);
     errdefer repository.gpa.free(path);
     const workspace = try WorkspaceType.init(.{
@@ -174,7 +167,7 @@ pub const Restore = @import("Restore.zig");
 /// ```zig
 /// const location = try repository.restoreWorkspace(.{ .id = id, .path = "/work", .explicit_name = null, .first_tab_id = tab, .first_tab_label = "main" });
 /// ```
-pub fn restoreWorkspace(repository: *Repository, request: RestoreType) !TabLocationType {
+pub fn restoreWorkspace(repository: *Repository, request: Restore) !core.TabLocation {
     if (repository.state.count == repository.state.items.len) {
         return error.WorkspaceLimitReached;
     }
@@ -207,8 +200,8 @@ pub fn restoreWorkspace(repository: *Repository, request: RestoreType) !TabLocat
         break;
     } else unreachable;
 
-    repository.state.next_workspace_id = @max(repository.state.next_workspace_id, raw_module(request.id) + 1);
-    repository.state.next_tab_id = @max(repository.state.next_tab_id, raw_module(request.first_tab_id) + 1);
+    repository.state.next_workspace_id = @max(repository.state.next_workspace_id, core.raw(request.id) + 1);
+    repository.state.next_tab_id = @max(repository.state.next_tab_id, core.raw(request.first_tab_id) + 1);
     state_mod.advanceRevision(repository.state);
     return .{ .workspace = .{ .workspace = request.id }, .tab_id = request.first_tab_id };
 }
@@ -218,13 +211,13 @@ pub fn restoreWorkspace(repository: *Repository, request: RestoreType) !TabLocat
 /// ```zig
 /// try repository.restoreTab(.{ .workspace = workspace, .tab_id = tab_id }, "logs");
 /// ```
-pub fn restoreTab(repository: *Repository, location: TabLocationType, label: []const u8) !void {
+pub fn restoreTab(repository: *Repository, location: core.TabLocation, label: []const u8) !void {
     const workspace = repository.find(location.workspace) orelse return error.WorkspaceNotFound;
     if (workspace.containsTab(location.tab_id)) {
         return error.DuplicateTabIdentity;
     }
     _ = try workspace.createTab(location.tab_id, label);
-    repository.state.next_tab_id = @max(repository.state.next_tab_id, raw_module(location.tab_id) + 1);
+    repository.state.next_tab_id = @max(repository.state.next_tab_id, core.raw(location.tab_id) + 1);
     state_mod.advanceRevision(repository.state);
 }
 
@@ -233,7 +226,7 @@ pub fn restoreTab(repository: *Repository, location: TabLocationType, label: []c
 /// ```zig
 /// _ = repository.remove(workspace_id);
 /// ```
-pub fn remove(repository: *Repository, workspace_id: WorkspaceIdType) bool {
+pub fn remove(repository: *Repository, workspace_id: core.WorkspaceId) bool {
     for (&repository.state.items) |*slot| {
         const workspace = if (slot.*) |*value| value else continue;
 
@@ -251,8 +244,8 @@ pub fn remove(repository: *Repository, workspace_id: WorkspaceIdType) bool {
     return false;
 }
 
-pub fn nextTabId(repository: *const Repository) !TabIdType {
-    return tab_module(repository.state.next_tab_id);
+pub fn nextTabId(repository: *const Repository) !core.TabId {
+    return core.tab(repository.state.next_tab_id);
 }
 
 /// Commits a previously proposed tab identity after aggregate mutation.
@@ -261,8 +254,8 @@ pub fn nextTabId(repository: *const Repository) !TabIdType {
 /// ```zig
 /// repository.recordTabCreated(tab_id);
 /// ```
-pub fn recordTabCreated(repository: *Repository, tab_id: TabIdType) void {
-    std.debug.assert(raw_module(tab_id) == repository.state.next_tab_id);
+pub fn recordTabCreated(repository: *Repository, tab_id: core.TabId) void {
+    std.debug.assert(core.raw(tab_id) == repository.state.next_tab_id);
     repository.state.next_tab_id += 1;
     state_mod.advanceRevision(repository.state);
 }

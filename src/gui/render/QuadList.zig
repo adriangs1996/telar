@@ -1,5 +1,6 @@
 //! The quads of one frame, in draw order. Cleared and refilled per frame so
 //! the backend never sees a stale quad.
+const DiagramTexture = @import("../native/DiagramTexture.zig");
 const std = @import("std");
 const Color = @import("Color.zig");
 const Rect = @import("Rect.zig");
@@ -115,7 +116,7 @@ pub fn pushSprite(list: *QuadList, rect: Rect, sprite: SpriteQuad) !void {
 /// Appends one complete diagram texture. Pane clipping also adjusts its UVs.
 /// Example: `try list.pushDiagram(bounds, 0);`
 pub fn pushDiagram(list: *QuadList, rect: Rect, slot: u8) !void {
-    if (slot >= @import("../native/DiagramTexture.zig").slot_count) {
+    if (slot >= DiagramTexture.slot_count) {
         return error.InvalidDiagramSlot;
     }
 

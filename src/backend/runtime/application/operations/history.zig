@@ -1,5 +1,6 @@
 //! Runtime history operations, reached from requests.dispatch.
 
+const core = @import("telar-core");
 const DeleteContextType = @import("../../entrypoints/requests/DeleteContext.zig");
 const PruneContextType = @import("../../entrypoints/requests/PruneContext.zig");
 const PruneType = @import("../../../history/Prune.zig");
@@ -7,21 +8,13 @@ const ReadContextType = @import("../../entrypoints/requests/ReadContext.zig");
 const StatsContextType = @import("../../entrypoints/requests/StatsContext.zig");
 const StatsQueryType = @import("../../../history/StatsQuery.zig");
 const HistoryRequest = @import("../queries/HistoryRequest.zig");
-const enabled_module = @import("telar-core").enabled;
 const HistoryQueryFailure = @import("../../entrypoints/requests/HistoryQueryFailure.zig");
-const QueryHistoryType = @import("telar-core").QueryHistory;
-const RequestIdType = @import("telar-core").RequestId;
-const DeleteHistoryType = @import("telar-core").DeleteHistory;
-const PruneHistoryType = @import("telar-core").PruneHistory;
-const ReadHistoryOutputType = @import("telar-core").ReadHistoryOutput;
-const HistoryStatsQueryType = @import("telar-core").HistoryStatsQuery;
-const ImportHistoryViewType = @import("telar-core").ImportHistoryView;
 const std = @import("std");
 const QueryType = @import("../../../history/Query.zig");
 const RequestContext = @import("../RequestContext.zig");
 
 /// Example: `try history.routeQueryHistory(request, wire);`.
-pub fn routeQueryHistory(request: *RequestContext, wire: QueryHistoryType) !void {
+pub fn routeQueryHistory(request: *RequestContext, wire: core.QueryHistory) !void {
     queryHistory(request, .{
         .request_id = wire.request_id,
         .origin = .{ .client = request.session.key, .close_after_reply = request.session.role == .control },
@@ -47,7 +40,7 @@ pub fn routeQueryHistory(request: *RequestContext, wire: QueryHistoryType) !void
             return;
         },
         error.HistoryQueueFull => {
-            if (comptime enabled_module) {
+            if (comptime core.enabled) {
                 request.application.metrics.history_query_failures += 1;
             }
 
@@ -61,13 +54,13 @@ pub fn routeQueryHistory(request: *RequestContext, wire: QueryHistoryType) !void
         else => return err,
     };
 
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         request.application.metrics.history_queries += 1;
     }
 }
 
 /// Example: `try history.routeDeleteHistory(request, delete);`.
-pub fn routeDeleteHistory(request: *RequestContext, delete: DeleteHistoryType) !void {
+pub fn routeDeleteHistory(request: *RequestContext, delete: core.DeleteHistory) !void {
     try historyDeleteHistory(request, .{
         .io = request.application.io,
         .origin = .{
@@ -79,7 +72,7 @@ pub fn routeDeleteHistory(request: *RequestContext, delete: DeleteHistoryType) !
 }
 
 /// Example: `try history.routePruneHistory(request, prune);`.
-pub fn routePruneHistory(request: *RequestContext, prune: PruneHistoryType) !void {
+pub fn routePruneHistory(request: *RequestContext, prune: core.PruneHistory) !void {
     try historyPruneHistory(request, .{
         .io = request.application.io,
         .origin = .{
@@ -91,7 +84,7 @@ pub fn routePruneHistory(request: *RequestContext, prune: PruneHistoryType) !voi
 }
 
 /// Example: `try history.routeReadHistoryOutput(request, read);`.
-pub fn routeReadHistoryOutput(request: *RequestContext, read: ReadHistoryOutputType) !void {
+pub fn routeReadHistoryOutput(request: *RequestContext, read: core.ReadHistoryOutput) !void {
     try historyReadHistoryOutput(request, .{
         .io = request.application.io,
         .origin = .{
@@ -103,7 +96,7 @@ pub fn routeReadHistoryOutput(request: *RequestContext, read: ReadHistoryOutputT
 }
 
 /// Example: `try history.routeHistoryStats(request, query);`.
-pub fn routeHistoryStats(request: *RequestContext, query: HistoryStatsQueryType) !void {
+pub fn routeHistoryStats(request: *RequestContext, query: core.HistoryStatsQuery) !void {
     try historyHistoryStats(request, .{
         .io = request.application.io,
         .origin = .{
@@ -115,7 +108,7 @@ pub fn routeHistoryStats(request: *RequestContext, query: HistoryStatsQueryType)
 }
 
 /// Example: `try history.routeImportHistory(request, batch);`.
-pub fn routeImportHistory(request: *RequestContext, batch: ImportHistoryViewType) !void {
+pub fn routeImportHistory(request: *RequestContext, batch: core.ImportHistoryView) !void {
     try historyImportHistory(request, request.application.io, batch);
 }
 
@@ -188,7 +181,7 @@ fn historyPruneHistory(request: *RequestContext, context: PruneContextType) !voi
     }
 }
 
-fn historyRefuse(request: *RequestContext, request_id: RequestIdType) !void {
+fn historyRefuse(request: *RequestContext, request_id: core.RequestId) !void {
     try request.session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = .resource_limit,
@@ -236,7 +229,7 @@ fn historyHistoryStats(request: *RequestContext, context: StatsContextType) !voi
     }
 }
 
-fn historyImportHistory(request: *RequestContext, io: std.Io, batch: ImportHistoryViewType) !void {
+fn historyImportHistory(request: *RequestContext, io: std.Io, batch: core.ImportHistoryView) !void {
     if (!request.application.history_service.importBatch(io, batch)) {
         try request.session.delivery.responses.push(.{ .request_failed = .{
             .request_id = batch.request_id,

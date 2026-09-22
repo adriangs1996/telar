@@ -1,29 +1,24 @@
-const PaneIdType = @import("telar-core").PaneId;
-const RectType = @import("telar-core").Rect;
-const LayoutType = @import("WorkspaceLayout.zig");
-const max_client_layout_nodes_module = @import("telar-core").max_client_layout_nodes;
-const ClientLayoutNodeType = @import("telar-core").ClientLayoutNode;
-const LayoutSnapshot = @import("LayoutSnapshot.zig");
+const core = @import("telar-core");
+const data = @import("model");
 const std = @import("std");
-const MetricsType = @import("Metrics.zig");
 
-const first: PaneIdType = @enumFromInt(1);
-const second: PaneIdType = @enumFromInt(2);
-const area: RectType = .{ .w = 80, .h = 24 };
+const first: core.PaneId = @enumFromInt(1);
+const second: core.PaneId = @enumFromInt(2);
+const area: core.Rect = .{ .w = 80, .h = 24 };
 
 test "presentation measurements change geometry without changing the split tree" {
-    var tree: LayoutType = .{};
+    var tree: data.WorkspaceLayout = .{};
     try tree.addRoot(first);
     try tree.splitFocused(second, .horizontal);
-    var before_nodes: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
+    var before_nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
     const before = tree.clientLayoutNodes(&before_nodes);
-    var terminal: LayoutSnapshot = .{};
+    var terminal: data.LayoutSnapshot = .{};
     tree.snapshot(area, &terminal);
 
     try std.testing.expect(tree.setMetrics(.{ .border = 0, .gap = 0 }));
-    var native: LayoutSnapshot = .{};
+    var native: data.LayoutSnapshot = .{};
     tree.snapshot(area, &native);
-    var after_nodes: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
+    var after_nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
     try std.testing.expectEqualDeep(before, tree.clientLayoutNodes(&after_nodes));
     try std.testing.expectEqual(area.w / 2, native.find(first).?.content.w);
     try std.testing.expectEqualDeep(native.find(first).?.outer, native.find(first).?.content);
@@ -34,13 +29,13 @@ test "presentation measurements change geometry without changing the split tree"
 }
 
 test "restoring layout keeps current presentation measurements" {
-    var tree: LayoutType = .{};
+    var tree: data.WorkspaceLayout = .{};
     try tree.addRoot(first);
     try tree.splitFocused(second, .horizontal);
     const saved = tree;
     _ = tree.setMetrics(.{ .border = 0, .gap = 0 });
     try std.testing.expect(tree.restoreSaved(saved, .{ .ids = &.{ first, second }, .focused = second }));
-    try std.testing.expectEqualDeep(MetricsType{ .border = 0, .gap = 0 }, tree.metrics);
+    try std.testing.expectEqualDeep(data.Metrics{ .border = 0, .gap = 0 }, tree.metrics);
     try tree.restoreDisplayOrder(&.{ second, first }, first);
-    try std.testing.expectEqualDeep(MetricsType{ .border = 0, .gap = 0 }, tree.metrics);
+    try std.testing.expectEqualDeep(data.Metrics{ .border = 0, .gap = 0 }, tree.metrics);
 }

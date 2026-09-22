@@ -1,7 +1,6 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const TabMoveDirectionType = @import("telar-core").TabMoveDirection;
+const core = @import("telar-core");
 const TabMoveIntent = @This();
 
-location: TabLocationType,
-direction: TabMoveDirectionType,
-relative_to: ?@import("telar-core").TabId = null,
+location: core.TabLocation,
+direction: core.TabMoveDirection,
+relative_to: ?core.TabId = null,

@@ -1,3 +1,4 @@
+const frame_widget = @import("../widgets/frame_widget.zig");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -52,7 +53,7 @@ pub fn prepare(fixture: *Fixture) !void {
     fixture.widgets.begin(fixture.model.name_prompt.active());
     const projection_value = fixture.projection();
     fixture.widgets.prompt_generation = if (projection_value.prompt) |prompt| prompt.generation else 0;
-    var widgets: @import("../widgets/frame_widget.zig").List = .{};
+    var widgets: frame_widget.List = .{};
     try fixture.overlays.compose(.{ .canvas = &target, .projection = &projection_value }, &widgets);
     try widgets.draw(&target);
     fixture.overlays.seal();

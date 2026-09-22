@@ -58,7 +58,7 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
    flight, and the next draw captures the latest accumulated state.
 2. Input: AppKit text input or Wayland/XKB produces owned semantic keys and
    committed UTF-8 text. `GuiClient` admits bounded input into `InputQueue` and forwards keys via
-   `pane_inputs.send`. Paste uses `pane_pastes.start/content/finish`, whose
+   `AttachedClient.sendPaneInput`. Paste uses `AttachedClient.startPanePaste/content/finish`, whose
    delivery uses the same pane-input operation and a captured pane identity.
    Cmd+V on macOS and Ctrl+Shift+V on Linux read the native clipboard. Application
    multiplexer bindings are not activated without corresponding native UI.

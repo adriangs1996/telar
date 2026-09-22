@@ -1,10 +1,10 @@
+const gui_event = @import("../gui_event.zig");
 const std = @import("std");
 const client = @import("telar-client");
 const Store = @import("Store.zig");
 const Service = @import("Service.zig");
 const Result = @import("Result.zig");
 const DiffHighlighter = @import("DiffHighlighter.zig");
-const Inbox = @import("../gui_event.zig").Inbox;
 const limits = @import("limits.zig");
 
 const source = "Updated main.zig\n@@ -0,0 +1 @@\n+fn run(context: *anyopaque) void { _ = context; }\n";
@@ -103,7 +103,7 @@ test "syntax service adopts only notified results and rolls back closed inbox ad
     service.beginFrame();
     try std.testing.expect(service.store.request(source) != null);
     try std.testing.expect(service.job == null);
-    var inbox: Inbox = .init(std.testing.io, .{});
+    var inbox: gui_event.Inbox = .init(std.testing.io, .{});
     defer inbox.deinit();
     inbox.close();
     _ = service.store.request("Updated other.zig\n+const x = 0;\n");

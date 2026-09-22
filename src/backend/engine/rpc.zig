@@ -6,7 +6,6 @@
 //! Records are JSON objects with a `type`; command replies carry
 //! `type = "response"`, the echoed `command` and a `success` flag.
 
-const RecordType = @import("Record.zig");
 const std = @import("std");
 const Envelope = @import("Envelope.zig");
 
@@ -31,7 +30,7 @@ pub const Record = @import("Record.zig");
 /// var record = parse(gpa, line) orelse continue;
 /// defer record.deinit();
 /// ```
-pub fn parse(gpa: std.mem.Allocator, line: []const u8) ?RecordType {
+pub fn parse(gpa: std.mem.Allocator, line: []const u8) ?Record {
     if (line.len == 0 or line.len > max_line_bytes) {
         return null;
     }

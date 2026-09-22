@@ -1,29 +1,15 @@
+//! Serializes configuration sections without access to client resources.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const Client = @import("../../AttachedClient.zig");
 const Snapshot = @import("../../config/Snapshot.zig");
-const CommandTab = @import("../../input/CommandTab.zig");
-const Query = @import("ConfigurationQuery.zig");
+const Query = @import("../../config/ConfigurationQuery.zig");
 const model = @import("../../config/model.zig");
-const Action = @import("../../input/action.zig").Action;
 pub const Section = enum { client, theme, gui, input, runtime, binding };
 
-/// Reads adopted values without executing Lua. Example: `try config_queries.show(client, reply);`
-pub fn show(client: *Client, reply: *core.ClientCommand) !void {
-    const section = if (reply.length == 0) Section.client else std.meta.stringToEnum(Section, reply.text()) orelse return error.UnknownConfigurationSection;
-    const generation = client.lua_generation orelse return error.ConfigurationNotLoaded;
-    var writer = std.Io.Writer.fixed(&reply.bytes);
-    if (section == .client) {
-        try std.json.Stringify.value(.{ .source = client.options.config_path, .profile = client.options.profile, .generation = client.model.configurationGeneration(), .sidebar_visible = client.model.sidebarVisible(), .sidebar_width = client.model.sidebarWidth(), .workspace_list_collapsed = client.model.workspaceListCollapsed(), .pane_gaps = client.model.paneGaps(), .window_title = client.model.windowTitleTemplate(), .sound = generation.snapshot.sound, .notification_delivery = generation.snapshot.notification_delivery, .history_show_agent_commands = generation.snapshot.history_show_agent_commands, .history_enter_runs = generation.snapshot.history_enter_runs, .history_match_fts = generation.snapshot.history_match_fts, .sections = [_][]const u8{ "client", "theme", "gui", "input", "runtime", "binding" } }, .{}, &writer);
-    } else {
-        try writeSection(&generation.snapshot, .{ .section = section, .index = std.math.cast(usize, reply.value) orelse return error.InvalidIndex }, &writer);
-    }
-
-    reply.length = @intCast(writer.buffered().len);
-    reply.status = .applied;
-}
-
-fn writeSection(snapshot: *const Snapshot, query: Query, writer: *std.Io.Writer) !void {
+/// Writes one immutable configuration section into the bounded reply writer.
+/// Example: `try config_queries.writeSection(snapshot, query, &writer);`
+pub fn writeSection(snapshot: *const Snapshot, query: Query, writer: *std.Io.Writer) !void {
     switch (query.section) {
         .client => unreachable,
         .theme => try std.json.Stringify.value(.{ .base = snapshot.theme, .light = snapshot.theme_light, .dark = snapshot.theme_dark, .icons = snapshot.icon_theme, .sidebar_rendering = snapshot.sidebar_rendering }, .{}, writer),
@@ -52,7 +38,7 @@ fn writeSection(snapshot: *const Snapshot, query: Query, writer: *std.Io.Writer)
     }
 }
 
-fn writeAction(action: Action, writer: *std.Io.Writer) !void {
+fn writeAction(action: data.Action, writer: *std.Io.Writer) !void {
     try writer.writeAll("{\"type\":");
     try std.json.Stringify.value(@tagName(action), .{}, writer);
     try writer.writeAll(",\"value\":");
@@ -81,7 +67,7 @@ fn writeAction(action: Action, writer: *std.Io.Writer) !void {
 test "configuration queries serialize occupied bindings and reject missing indices" {
     var snapshot: Snapshot = .{};
     snapshot.binding_count = 1;
-    snapshot.bindings[0] = try model.ConfiguredBinding.init(&.{snapshot.prefix}, .{ .command_tab = try CommandTab.init(&.{ "echo", "ready" }, "test") });
+    snapshot.bindings[0] = try model.ConfiguredBinding.init(&.{snapshot.prefix}, .{ .command_tab = try data.CommandTab.init(&.{ "echo", "ready" }, "test") });
     snapshot.bindings_prefixed[0] = true;
     var buffer: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);

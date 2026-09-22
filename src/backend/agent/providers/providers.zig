@@ -12,13 +12,12 @@
 //! runs on the interactive path. Screen scans that need the emulator live in
 //! `history.prompt_scan`, because the history package is built on its own.
 
+const core = @import("telar-core");
 const Capabilities = @import("Capabilities.zig");
-const AgentProvider = @import("telar-core").AgentProvider;
 const claude = @import("claude.zig");
 const codex = @import("codex.zig");
 const pi = @import("pi.zig");
 const std = @import("std");
-const first_custom_agent_provider_module = @import("telar-core").first_custom_agent_provider;
 
 pub const default: Capabilities = .{};
 
@@ -28,7 +27,7 @@ pub const default: Capabilities = .{};
 /// ```zig
 /// const prefix = providers.of(record.provider).resume_prefix orelse return null;
 /// ```
-pub fn of(provider: AgentProvider) *const Capabilities {
+pub fn of(provider: core.AgentProvider) *const Capabilities {
     return switch (provider) {
         .claude => &claude.capabilities,
         .codex => &codex.capabilities,
@@ -42,7 +41,7 @@ test "built-in agents own their capabilities and configured agents get the defau
     try std.testing.expectEqualStrings("codex resume ", of(.codex).resume_prefix.?);
     try std.testing.expectEqualStrings("pi --session ", of(.pi).resume_prefix.?);
     try std.testing.expect(of(.unknown).resume_prefix == null);
-    try std.testing.expect(of(@enumFromInt(first_custom_agent_provider_module)).resume_prefix == null);
+    try std.testing.expect(of(@enumFromInt(core.first_custom_agent_provider)).resume_prefix == null);
 
     try std.testing.expect(of(.codex).ready_prompt_settles_report);
     try std.testing.expect(!of(.claude).ready_prompt_settles_report);

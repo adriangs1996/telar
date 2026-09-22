@@ -1,3 +1,4 @@
+const view_module = @import("../../diagrams/view.zig");
 const std = @import("std");
 const Canvas = @import("../Canvas.zig");
 const Rect = @import("../../render/Rect.zig");
@@ -46,7 +47,7 @@ pub fn draw(widget: Widget, canvas: *Canvas) !void {
     const header = @min(canvas.chrome.px(40), area.height / 5);
     const content: Rect = .{ .x = area.x + margin / 2, .y = area.y + header, .width = @max(0, area.width - margin), .height = @max(0, area.height - header - margin / 2) };
     const request = Preview.requestFor(.{ .pane_id = preview.control.pane_id, .generation = preview.generation, .path = preview.path() });
-    const view: @import("../../diagrams/view.zig").View = if (canvas.diagrams) |store| store.request(request) else .{ .failed = .unavailable };
+    const view: view_module.View = if (canvas.diagrams) |store| store.request(request) else .{ .failed = .unavailable };
     switch (view) {
         .ready => |ready| try canvas.diagramAt(Preview.fit(content, .{ ready.width, ready.height }), ready.slot),
         else => _ = try canvas.textAt(content, .{ .text = if (view == .pending) "Loading image…" else "Image preview unavailable", .face = .sans, .size = .body, .color = canvas.theme.palette.subtext0 }),

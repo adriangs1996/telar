@@ -1,4 +1,6 @@
 //! One owned hover target. Pointer movement within a cell does no text scanning.
+const hover_target = @import("hover_target.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -93,7 +95,7 @@ pub fn refresh(hover: *Hover, gui: *const GuiClient) void {
 
     hover.cached = stamp;
     hover.dirty = false;
-    const target = @import("hover_target.zig").resolve(gui, mouse, event.mods);
+    const target = hover_target.resolve(gui, mouse, event.mods);
     hover.assign(target.link, target.shape);
     if (target.link) |hit| {
         const pane = gui.app.model.activeTabModelConst().?.findConst(hit.pane_id).?;
@@ -120,7 +122,7 @@ pub fn prepare(hover: *Hover) void {
 
 /// Visible previews cover terminal cells until a replacement is delivered.
 /// Example: `if (hover.covers(mouse)) return .{ .consumed = true };`
-pub fn covers(hover: *const Hover, mouse: client.Mouse) bool {
+pub fn covers(hover: *const Hover, mouse: data.Mouse) bool {
     const preview = hover.shown_preview orelse return false;
     return preview.contains(mouse.x, mouse.y);
 }

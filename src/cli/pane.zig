@@ -11,8 +11,6 @@ const control = @import("control.zig");
 const agent = @import("agent.zig");
 const ExecutionContextType = @import("ExecutionContext.zig");
 const PaneRefType = @import("PaneRef.zig");
-const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
-const raw_module = @import("telar-core").raw;
 const values = @import("arguments/values.zig");
 const SnapshotType = @import("Snapshot.zig");
 
@@ -103,7 +101,7 @@ fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContex
             }
         },
         .send_keys => {
-            var storage: [max_pane_text_input_bytes_module + 1]u8 = undefined;
+            var storage: [core.max_pane_text_input_bytes + 1]u8 = undefined;
             const text = std.mem.span(options.text.?);
             @memcpy(storage[0..text.len], text);
             var len = text.len;
@@ -119,7 +117,7 @@ fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContex
             if (options.json) {
                 try context.writer.print("{{\"changed\":{},\"focused_pane_id\":{d},\"reason\":\"{s}\"}}\n", .{
                     result.outcome == .focused,
-                    raw_module(result.focused_pane_id),
+                    core.raw(result.focused_pane_id),
                     @tagName(result.outcome),
                 });
             }

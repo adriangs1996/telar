@@ -1,16 +1,19 @@
 //! Synchronous semantic snapshots. Native adapters copy borrowed bytes before
 //! returning; only their platform caches persist beyond this call.
+const routing = @import("routing.zig");
+const EditorDisplay = @import("EditorDisplay.zig");
+const data = @import("model");
 const client = @import("telar-client");
 const GuiClient = @import("../../GuiClient.zig");
 const native = @import("../../native/native.zig");
 const FieldView = @import("FieldView.zig");
-const GenericField = client.GenericField;
+const GenericField = data.GenericField;
 
 /// Uses current committed text and the delivered editor's geometry. Preedit
 /// is intentionally excluded from surrounding text sent to the native IME.
 /// Example: `if (host_context.text(gui, output)) publish(output);`
 pub fn text(gui: *GuiClient, output: *native.TextContext) bool {
-    @import("routing.zig").reconcileFocus(gui);
+    routing.reconcileFocus(gui);
     output.* = .{};
     if (!gui.focused) {
         return false;
@@ -20,7 +23,7 @@ pub fn text(gui: *GuiClient, output: *native.TextContext) bool {
     const current = FieldView.captureClient(&gui.app, target) orelse return false;
     const geometry = gui.widgets.editors.presented().find(target.id) orelse return false;
     const preedit = if (gui.widgets.preedit.owner) |owner| if (owner.eql(target.id)) &gui.widgets.preedit else null else null;
-    var display = @import("EditorDisplay.zig").capture(current, preedit);
+    var display = EditorDisplay.capture(current, preedit);
     const view = display.field.view(geometry.columns);
     const multiline: @import("MultilineLayout.zig") = .{ .text = display.field.text(), .head = @intCast(display.field.head), .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
     const caret = if (geometry.multiline) multiline.position(@intCast(display.field.head)) else [2]u32{ view.cursor, 0 };
@@ -46,7 +49,7 @@ pub fn text(gui: *GuiClient, output: *native.TextContext) bool {
 /// the current matching prompt only until the host copies this snapshot.
 /// Example: `if (host_context.accessibility(gui, output)) publish(output);`
 pub fn accessibility(gui: *GuiClient, output: *native.AccessibilityTree) bool {
-    @import("routing.zig").reconcileFocus(gui);
+    routing.reconcileFocus(gui);
     const state = &gui.widgets;
     const registry = state.dispatcher.maps.presented();
     const modal = gui.app.model.name_prompt.active();

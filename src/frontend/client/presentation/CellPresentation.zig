@@ -1,9 +1,8 @@
-const Projection = @import("telar-client").Projection;
+const client = @import("telar-client");
 const Resources = @import("Resources.zig");
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
 const CellPresentation = @This();
 
-projection: Projection,
+projection: client.Projection,
 resources: Resources,
-model: *const MultiplexerModel,
+model: *const client.MultiplexerModel,
 force: bool,

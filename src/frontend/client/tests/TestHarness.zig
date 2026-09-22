@@ -1,30 +1,16 @@
+const core = @import("telar-core");
+const client_module = @import("telar-client");
 const TerminalClient = @import("../TerminalClient.zig");
-const host = TerminalClient.of;
-const SocketChannelType = @import("telar-core").SocketChannel;
 const std = @import("std");
-const Client = @import("telar-client").AttachedClient;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const bar_updates = @import("telar-client").operations.bar_updates;
-const path_completions = @import("telar-client").operations.path_completions;
-const ClientMessageType = @import("telar-core").ClientMessage;
-const decodeClient_module = @import("telar-core").decodeClient;
-const PaneIdType = @import("telar-core").PaneId;
-const RequestIdType = @import("telar-core").RequestId;
-const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
-const decodeServer_module = @import("telar-core").decodeServer;
-const TabLocationType = @import("telar-core").TabLocation;
-const initial_request_id_module = @import("telar-client").initial_request_id;
-const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
-const TabIdType = @import("telar-core").TabId;
-const TabsModel = @import("telar-client").TabsModel;
 const TestHarness = @This();
 
-connection: SocketChannelType,
-peer: SocketChannelType,
+connection: core.SocketChannel,
+peer: core.SocketChannel,
 input_read: std.Io.File,
 input_write: std.Io.File,
 sink: std.Io.Writer.Discarding,
-client: *Client,
+client: *client_module.AttachedClient,
 
 pub fn init(harness: *TestHarness) !void {
     try harness.initWithAsyncOutput(false);
@@ -72,7 +58,7 @@ pub fn deinit(harness: *TestHarness) void {
     // EOF unblocks a pending input read so task cancellation never has
     // to wait on the pipe.
     harness.input_write.close(io);
-    host(harness.client).deinit();
+    TerminalClient.of(harness.client).deinit();
     harness.peer.deinit(io);
     harness.connection.deinit(io);
     harness.input_read.close(io);
@@ -82,7 +68,7 @@ pub fn deinit(harness: *TestHarness) void {
 /// observes exactly what the runtime peer would receive.
 pub fn settle(harness: *TestHarness) !void {
     while (harness.client.runtime_transport.outbox.inFlight() or harness.client.runtime_transport.outbox.len != 0) {
-        switch (try host(harness.client).inbox.receive()) {
+        switch (try TerminalClient.of(harness.client).inbox.receive()) {
             .sent => |result| try harness.client.completeRuntimeSend(result),
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
             .sidebar_animation_tick => |result| {
@@ -94,15 +80,15 @@ pub fn settle(harness: *TestHarness) !void {
                 try presentation_lifecycle.observe(harness.client);
             },
             .bar_tick => |result| {
-                try bar_updates.handleTick(harness.client, result);
+                try client_module.operations.bar_updates.handleTick(harness.client, result);
                 try presentation_lifecycle.observe(harness.client);
             },
             .bar_command => |completion| {
-                try bar_updates.completeCommand(harness.client, completion);
+                try client_module.operations.bar_updates.completeCommand(harness.client, completion);
                 try presentation_lifecycle.observe(harness.client);
             },
             .path_completion => |completion| {
-                try path_completions.complete(harness.client, completion);
+                try harness.client.completePathCompletion(completion);
                 try presentation_lifecycle.observe(harness.client);
             },
             else => return error.UnexpectedEvent,
@@ -112,19 +98,19 @@ pub fn settle(harness: *TestHarness) !void {
 
 pub fn settleModelPresentation(harness: *TestHarness) !void {
     var target = harness.client.model.version();
-    const graphics_target = host(harness.client).graphics_store.ingressVersion();
-    const attachment_target = host(harness.client).view.kittyAttachments().ingressVersion();
-    const view_interaction_target = host(harness.client).view.interactionVersion();
-    const input_routing_target = host(harness.client).host_input.presentationVersion();
-    while (!std.meta.eql(host(harness.client).presenter.presentation_state.prepared.model, target) or
-        host(harness.client).presenter.presentation_state.prepared.graphics_ingress != graphics_target or
-        host(harness.client).presenter.presentation_state.prepared.attachment_ingress != attachment_target or
-        host(harness.client).presenter.presentation_state.prepared.presentation_ingress.view_interaction !=
+    const graphics_target = TerminalClient.of(harness.client).graphics_store.ingressVersion();
+    const attachment_target = TerminalClient.of(harness.client).view.kittyAttachments().ingressVersion();
+    const view_interaction_target = TerminalClient.of(harness.client).view.interactionVersion();
+    const input_routing_target = TerminalClient.of(harness.client).host_input.presentationVersion();
+    while (!std.meta.eql(TerminalClient.of(harness.client).presenter.presentation_state.prepared.model, target) or
+        TerminalClient.of(harness.client).presenter.presentation_state.prepared.graphics_ingress != graphics_target or
+        TerminalClient.of(harness.client).presenter.presentation_state.prepared.attachment_ingress != attachment_target or
+        TerminalClient.of(harness.client).presenter.presentation_state.prepared.presentation_ingress.view_interaction !=
             view_interaction_target or
-        host(harness.client).presenter.presentation_state.prepared.presentation_ingress.input_routing !=
+        TerminalClient.of(harness.client).presenter.presentation_state.prepared.presentation_ingress.input_routing !=
             input_routing_target)
     {
-        switch (try host(harness.client).inbox.receive()) {
+        switch (try TerminalClient.of(harness.client).inbox.receive()) {
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
             .sent => |result| try harness.client.completeRuntimeSend(result),
             .media_tick => |result| try presentation_lifecycle.handleMediaTick(harness.client, result),
@@ -139,17 +125,17 @@ pub fn settleModelPresentation(harness: *TestHarness) !void {
                 target = harness.client.model.version();
             },
             .bar_tick => |result| {
-                try bar_updates.handleTick(harness.client, result);
+                try client_module.operations.bar_updates.handleTick(harness.client, result);
                 try presentation_lifecycle.observe(harness.client);
                 target = harness.client.model.version();
             },
             .bar_command => |completion| {
-                try bar_updates.completeCommand(harness.client, completion);
+                try client_module.operations.bar_updates.completeCommand(harness.client, completion);
                 try presentation_lifecycle.observe(harness.client);
                 target = harness.client.model.version();
             },
             .path_completion => |completion| {
-                try path_completions.complete(harness.client, completion);
+                try harness.client.completePathCompletion(completion);
                 try presentation_lifecycle.observe(harness.client);
                 target = harness.client.model.version();
             },
@@ -159,12 +145,12 @@ pub fn settleModelPresentation(harness: *TestHarness) !void {
 }
 
 /// Receives the next message the client sent to the runtime.
-pub fn nextClientMessage(harness: *TestHarness, buffer: []u8) !ClientMessageType {
+pub fn nextClientMessage(harness: *TestHarness, buffer: []u8) !core.ClientMessage {
     const payload = try harness.peer.receive(std.testing.io, buffer);
-    return decodeClient_module(payload);
+    return core.decodeClient(payload);
 }
 
-pub fn nextAttachmentRequest(harness: *TestHarness, pane_id: PaneIdType, buffer: []u8) !RequestIdType {
+pub fn nextAttachmentRequest(harness: *TestHarness, pane_id: core.PaneId, buffer: []u8) !core.RequestId {
     while (true) {
         switch (try harness.nextClientMessage(buffer)) {
             .open_pane => |open| {
@@ -180,8 +166,8 @@ pub fn nextAttachmentRequest(harness: *TestHarness, pane_id: PaneIdType, buffer:
     }
 }
 
-pub fn discoverAndRequestAttachment(harness: *TestHarness, pane_id: PaneIdType, buffer: []u8) !RequestIdType {
-    const snapshot = try encodeTabSnapshot_module(buffer, .{
+pub fn discoverAndRequestAttachment(harness: *TestHarness, pane_id: core.PaneId, buffer: []u8) !core.RequestId {
+    const snapshot = try core.encodeTabSnapshot(buffer, .{
         .request_id = @enumFromInt(3),
         .location = bootstrap_location,
         .panes = &.{
@@ -189,38 +175,38 @@ pub fn discoverAndRequestAttachment(harness: *TestHarness, pane_id: PaneIdType, 
             .{ .pane_id = pane_id, .lifecycle = .running },
         },
     });
-    _ = try harness.client.handleServerMessage(try decodeServer_module(snapshot));
+    _ = try harness.client.handleServerMessage(try core.decodeServer(snapshot));
     try harness.settle();
 
     return harness.nextAttachmentRequest(pane_id, buffer);
 }
 
-pub const bootstrap_location: TabLocationType = .{
+pub const bootstrap_location: core.TabLocation = .{
     .workspace = .{ .workspace = @enumFromInt(1) },
     .tab_id = @enumFromInt(1),
 };
-pub const bootstrap_pane: PaneIdType = @enumFromInt(10);
+pub const bootstrap_pane: core.PaneId = @enumFromInt(10);
 
 /// Answers the initial open request through the real entrypoint, leaving
 /// the client with one attached pane and its two snapshot requests (ids
 /// 2 and 3) delivered to the peer.
 pub fn bootstrap(harness: *TestHarness) !void {
     try harness.client.request_lifecycle.tracker.add(
-        initial_request_id_module,
+        client_module.initial_request_id,
         .{
             .initial_open = .{},
         },
     );
     var payload: [128]u8 = undefined;
-    const opened = try encodePaneOpened_module(&payload, .{
-        .request_id = initial_request_id_module,
+    const opened = try core.encodePaneOpened(&payload, .{
+        .request_id = client_module.initial_request_id,
         .pane_id = bootstrap_pane,
         .location = bootstrap_location,
         .created = true,
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try harness.client.handleServerMessage(try decodeServer_module(opened)),
+        try harness.client.handleServerMessage(try core.decodeServer(opened)),
     );
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -232,8 +218,8 @@ pub fn bootstrap(harness: *TestHarness) !void {
     try harness.settleModelPresentation();
 }
 
-pub fn addTab(harness: *TestHarness, tab_id: TabIdType, pane_id: PaneIdType) !TabLocationType {
-    const location: TabLocationType = .{
+pub fn addTab(harness: *TestHarness, tab_id: core.TabId, pane_id: core.PaneId) !core.TabLocation {
+    const location: core.TabLocation = .{
         .workspace = bootstrap_location.workspace,
         .tab_id = tab_id,
     };
@@ -248,11 +234,11 @@ pub fn addTab(harness: *TestHarness, tab_id: TabIdType, pane_id: PaneIdType) !Ta
     return location;
 }
 
-pub fn addInactiveTab(harness: *TestHarness, tab_id: TabIdType, pane_id: PaneIdType) !TabLocationType {
+pub fn addInactiveTab(harness: *TestHarness, tab_id: core.TabId, pane_id: core.PaneId) !core.TabLocation {
     const location = try harness.addTab(tab_id, pane_id);
     const tab = harness.client.model.workspace.find(tab_id).?;
-    TabsModel.detachAll(tab);
-    try host(harness.client).graphics_store.setPaneVisible(pane_id, false);
+    client_module.TabsModel.detachAll(tab);
+    try TerminalClient.of(harness.client).graphics_store.setPaneVisible(pane_id, false);
     try std.testing.expect(harness.client.model.workspace.select(bootstrap_location.tab_id));
 
     return location;

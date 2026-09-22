@@ -1,12 +1,11 @@
-const RectType = @import("telar-core").Rect;
-const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+const core = @import("telar-core");
 const Label = @import("Label.zig");
 const PaintedLabel = @import("PaintedLabel.zig");
 const std = @import("std");
 const Plan = @This();
 
-area: RectType = .{},
-labels: [max_panes_per_tab]Label = undefined,
+area: core.Rect = .{},
+labels: [core.max_panes_per_tab]Label = undefined,
 len: u8 = 0,
 
 pub fn slice(plan: *const Plan) []const Label {
@@ -17,7 +16,7 @@ pub fn slice(plan: *const Plan) []const Label {
 /// Continuation cells are skipped and grapheme bytes remain intact.
 /// Example: `_ = plan.appendPainted(.{ .buffer = buffer, .area = area, .selected = true });`.
 pub fn appendPainted(plan: *Plan, painted: PaintedLabel) bool {
-    if (plan.len == max_panes_per_tab or painted.area.h != 1 or painted.area.x < plan.area.x or
+    if (plan.len == core.max_panes_per_tab or painted.area.h != 1 or painted.area.x < plan.area.x or
         !std.meta.eql(painted.area, painted.area.intersect(painted.buffer.area())))
     {
         return false;

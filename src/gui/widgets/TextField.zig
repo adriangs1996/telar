@@ -1,11 +1,13 @@
 //! A bounded editable surface drawn in Zig. Its owner supplies committed text
 //! and selection; provisional IME text belongs to the interaction state.
+const label_face = @import("label_face.zig");
+const shared_model = @import("model");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
 const Rect = @import("../render/Rect.zig");
 const TextField = @This();
-const GenericField = client.GenericField;
+const GenericField = shared_model.GenericField;
 const EditorDisplay = @import("interaction/EditorDisplay.zig");
 
 bounds: Rect,
@@ -21,12 +23,12 @@ placeholder: []const u8 = "",
 layer: u8 = 1,
 multiline: bool = false,
 appearance: enum { standard, embedded } = .standard,
-face: @import("label_face.zig").Face = .mono,
+face: label_face.Face = .mono,
 font_pixels: ?u16 = null,
 
 /// Borrows one canonical prompt field only for synchronous drawing.
 /// Example: `try TextField.fromPrompt(&prompt, bounds, .name).draw(canvas);`
-pub fn fromPrompt(prompt: *const client.Prompt, bounds: Rect, field: Target.Field) TextField {
+pub fn fromPrompt(prompt: *const shared_model.Prompt, bounds: Rect, field: Target.Field) TextField {
     const directory = field == .directory;
     return .{
         .bounds = bounds,

@@ -20,11 +20,11 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
-const Lines = @import("BoxLines.zig").Lines;
+const BoxLines = @import("BoxLines.zig");
 
 /// Returns the four edge weights. Dashes and curves use separate geometry.
 /// Example: `const lines = box_lines.get(0x253c).?;`
-pub fn get(codepoint: u21) ?Lines {
+pub fn get(codepoint: u21) ?BoxLines.Lines {
     return switch (codepoint) {
         0x2500 => .{ .left = .light, .right = .light },
         0x2501 => .{ .left = .heavy, .right = .heavy },

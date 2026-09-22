@@ -1,4 +1,4 @@
-const ImageKeyType = @import("telar-core").ImageKey;
+const core = @import("telar-core");
 const KnownImage = @This();
 
-key: ImageKeyType
+key: core.ImageKey

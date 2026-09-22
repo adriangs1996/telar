@@ -1,7 +1,6 @@
-const types = @import("../../model/types.zig");
-const TargetType = @import("../../attachments/AttachmentTarget.zig");
+const model_data = @import("model");
 const CapturedImage = @This();
 
-execution_id: types.ClipboardCaptureId,
-result_id: types.ClipboardCaptureId,
-target: TargetType,
+execution_id: model_data.ClipboardCaptureId,
+result_id: model_data.ClipboardCaptureId,
+target: model_data.AttachmentTarget,

@@ -1,6 +1,6 @@
-const TabLocationType = @import("telar-core").TabLocation;
+const core = @import("telar-core");
 const RenameTab = @This();
 
-location: TabLocationType,
+location: core.TabLocation,
 /// Borrowed only for the synchronous transition.
 label: []const u8,

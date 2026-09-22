@@ -193,7 +193,7 @@ new notifications after reconciliation.
   handling.
 - `src/client/model/Model.zig` proves isolated notification versioning and
   immutable snapshot access.
-- `src/client/application/notifications/notifications.zig` proves commit-before-
+- `src/model/application/notifications/notifications.zig` proves commit-before-
   timer-before-navigation ordering, delivery policy, stale interaction
   behavior and retained commits after effect failures.
 - `src/client/AttachedClient.zig` owns local timestamp acquisition,

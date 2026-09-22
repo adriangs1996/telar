@@ -1,8 +1,8 @@
+const action_module = @import("action.zig");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
-const Action = @import("action.zig").Action;
 const Button = @This();
 
 context: *const Context,
@@ -15,7 +15,7 @@ active: bool = false,
 /// Example: `try button.draw(canvas);`
 pub fn draw(button: Button, canvas: *Canvas) !void {
     const palette = canvas.theme.palette;
-    const action: Action = .{ .intent = button.intent };
+    const action: action_module.Action = .{ .intent = button.intent };
     const hovered = button.context.isHovered(action);
     try canvas.fill(button.area, if (button.active) palette.accent else if (hovered) palette.surface1 else palette.surface0);
     try canvas.text(button.area, .{

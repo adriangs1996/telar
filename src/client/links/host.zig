@@ -1,7 +1,7 @@
 //! Operating-system adapter for opening allowlisted URLs with the default handler.
 
+const data = @import("model");
 const std = @import("std");
-const TargetType = @import("LinkTarget.zig");
 const builtin = @import("builtin");
 
 const command_timeout: std.Io.Timeout = .{
@@ -14,7 +14,7 @@ const command_timeout: std.Io.Timeout = .{
 /// ```zig
 /// try open(io, target);
 /// ```
-pub fn open(io: std.Io, target: TargetType) !void {
+pub fn open(io: std.Io, target: data.LinkTarget) !void {
     if (target.scheme == .file) {
         return error.UnsupportedLinkScheme;
     }
@@ -45,5 +45,5 @@ pub fn open(io: std.Io, target: TargetType) !void {
 }
 
 test "host URL worker rejects non-web schemes before spawning a process" {
-    try std.testing.expectError(error.UnsupportedLinkScheme, open(std.testing.io, try TargetType.init("file:///tmp/example.txt")));
+    try std.testing.expectError(error.UnsupportedLinkScheme, open(std.testing.io, try data.LinkTarget.init("file:///tmp/example.txt")));
 }

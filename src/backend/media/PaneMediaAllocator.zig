@@ -1,7 +1,6 @@
-const MappingType = @import("Mapping.zig");
+const core = @import("telar-core");
 const std = @import("std");
 const GraphicsBudget = @import("GraphicsBudget.zig");
-const max_images_per_pane_module = @import("telar-core").max_images_per_pane;
 /// Allocator used by VT stream effects and KGP. Charging allocations before
 /// forwarding them to the child allocator makes compressed input, decoded
 /// pixels, parser buffers and IPC transfer snapshots obey one hard budget.
@@ -19,7 +18,7 @@ used: usize = 0,
 /// allocator's safety-checked scribble on freed memory away from an
 /// object a client or host may still be reading. Touched only by
 /// whoever holds the pane's media borrow.
-mappings: [max_images_per_pane_module]?MappingType = @splat(null),
+mappings: [core.max_images_per_pane]?Mapping = @splat(null),
 
 pub const Mapping = @import("Mapping.zig");
 

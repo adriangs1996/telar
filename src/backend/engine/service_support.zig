@@ -5,7 +5,6 @@
 //! and it is killed after an idle interval or on any protocol failure so
 //! the next prompt starts a fresh process.
 
-const ServiceType = @import("Service.zig");
 const std = @import("std");
 const fakes = @import("testing.zig");
 const Prompt = @import("Prompt.zig");
@@ -13,8 +12,8 @@ const types = @import("types.zig");
 
 pub const Service = @import("Service.zig");
 
-fn testService(arguments: []const []const u8, timeout_ms: u32, idle_timeout_ms: u32) !ServiceType {
-    return ServiceType.init(std.testing.allocator, fakes.options(arguments, timeout_ms, idle_timeout_ms));
+fn testService(arguments: []const []const u8, timeout_ms: u32, idle_timeout_ms: u32) !Service {
+    return Service.init(std.testing.allocator, fakes.options(arguments, timeout_ms, idle_timeout_ms));
 }
 
 test "the actor answers prompts over one child and reuses it" {
@@ -95,7 +94,7 @@ test "the ring refuses requests beyond its capacity and the loop drains it" {
     for (0..types.max_pending_requests) |_| try std.testing.expect(service.submit(io, .{ .prompt = prompt }));
     try std.testing.expect(!service.submit(io, .{ .prompt = prompt }));
 
-    var worker = try io.concurrent(ServiceType.run, .{ &service, io });
+    var worker = try io.concurrent(Service.run, .{ &service, io });
     for (0..types.max_pending_requests) |_| {
         try std.testing.expectEqual(types.Status.success, (try service.receiveResponse(io)).status);
     }

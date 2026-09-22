@@ -1,10 +1,10 @@
 //! Connects one disposable review surface to the runtime's acknowledged editions.
+const gui_event = @import("../gui_event.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Widget = @import("Widget.zig");
 const PreparedEdition = @import("PreparedEdition.zig");
-const Inbox = @import("../gui_event.zig").Inbox;
 const dispatch = @import("dispatch.zig");
 const Self = @This();
 const Pending = @import("Pending.zig");
@@ -198,7 +198,7 @@ pub fn synchronize(self: *Self, app: *client.AttachedClient) !void {
 
 /// Copies one bounded patch and starts its index/highlight work off the UI path.
 /// Example: `panel.start(.{ .app = app, .inbox = inbox });`
-pub fn start(self: *Self, context: struct { app: *client.AttachedClient, inbox: *Inbox }) void {
+pub fn start(self: *Self, context: struct { app: *client.AttachedClient, inbox: *gui_event.Inbox }) void {
     const state = &context.app.change_review;
     if (self.job != null or !state.loaded or state.snapshot.edition_id == 0 or state.snapshot.edition_id == self.edition or !self.widget.loading) {
         return;

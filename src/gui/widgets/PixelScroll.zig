@@ -1,4 +1,5 @@
 //! Bounded, disposable scrolling for a native list in device pixels.
+const data = @import("model");
 const client = @import("telar-client");
 const PixelScroll = @This();
 
@@ -30,7 +31,7 @@ pub fn resetGesture(state: *PixelScroll) void {
 
 /// Moves one item without changing client navigation.
 /// Example: `if (scroll.wheel(.scroll_down)) chrome.invalidate();`
-pub fn wheel(state: *PixelScroll, kind: client.Mouse.Kind) bool {
+pub fn wheel(state: *PixelScroll, kind: data.Mouse.Kind) bool {
     return state.scrollBy(switch (kind) {
         .scroll_up => -@as(f64, @floatFromInt(state.step)),
         .scroll_down => @as(f64, @floatFromInt(state.step)),

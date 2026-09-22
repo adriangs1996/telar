@@ -1,3 +1,5 @@
+const SpritePage = @import("../image/SpritePage.zig");
+const Quad = @import("../render/Quad.zig");
 const std = @import("std");
 const Canvas = @import("../widgets/Canvas.zig");
 const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
@@ -64,7 +66,7 @@ test "warm widget drawing uses the supplied canvas without allocations" {
 test "sprite widgets keep page selection tint and placement inside a composed list" {
     var fixture = try CanvasFixture.init();
     defer fixture.deinit();
-    var page = try @import("../image/SpritePage.zig").init(std.testing.allocator, 16);
+    var page = try SpritePage.init(std.testing.allocator, 16);
     defer page.deinit();
     var canvas = fixture.canvas();
     canvas.sprites = &page;
@@ -76,9 +78,9 @@ test "sprite widgets keep page selection tint and placement inside a composed li
     try list.draw(&canvas);
     const quads = fixture.quads.items();
     try std.testing.expectEqual(@as(usize, 2), quads.len);
-    try std.testing.expectEqual(@import("../render/Quad.zig").atlas_texture, quads[0].texture);
+    try std.testing.expectEqual(Quad.atlas_texture, quads[0].texture);
     const sprite = quads[1];
-    try std.testing.expectEqual(@import("../render/Quad.zig").sprite_texture, sprite.texture);
+    try std.testing.expectEqual(Quad.sprite_texture, sprite.texture);
     try std.testing.expectEqual(@as(f32, 12), sprite.x);
     try std.testing.expectEqual(@as(f32, 24), sprite.y);
     try std.testing.expectEqual(@as(f32, 0.5), sprite.a);

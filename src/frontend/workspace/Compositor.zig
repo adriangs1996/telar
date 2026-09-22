@@ -1,13 +1,9 @@
+const core = @import("telar-core");
+const client = @import("telar-client");
+const data = @import("model");
 const std = @import("std");
-const BufferType = @import("telar-core").Buffer;
-const RectType = @import("telar-core").Rect;
-const TabLocationType = @import("telar-core").TabLocation;
 const BorderTheme = @import("BorderTheme.zig");
-const CopyProjection = @import("telar-client").CopyProjection;
-const PaneBottomReservationType = @import("telar-client").PaneBottomReservation;
-const LayoutSnapshot = @import("telar-client").LayoutSnapshot;
 const PlanType = @import("../presentation/Plan.zig");
-const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 const PaneProjection = @import("PaneProjection.zig");
 const Composition = @import("Composition.zig");
 const CompositionResult = @import("CompositionResult.zig");
@@ -16,8 +12,6 @@ const multiplexer = @import("multiplexer.zig");
 const IncrementalComposition = @import("IncrementalComposition.zig");
 const CompositionInput = @import("CompositionInput.zig");
 const CopyChangeComposition = @import("CopyChangeComposition.zig");
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
-const ThreadViewType = @import("telar-client").ThreadView;
 const thread_surface = @import("thread_surface.zig");
 /// Presentation-owned cache for one active tab. It borrows an immutable
 /// multiplexer model during composition and returns the exact model work that
@@ -25,16 +19,16 @@ const thread_surface = @import("thread_surface.zig");
 const Compositor = @This();
 
 gpa: std.mem.Allocator,
-composed: ?BufferType = null,
-area: RectType = .{},
-source: ?TabLocationType = null,
+composed: ?core.Buffer = null,
+area: core.Rect = .{},
+source: ?core.TabLocation = null,
 border_theme: ?BorderTheme = null,
-copy: ?CopyProjection = null,
-bottom_reservation: ?PaneBottomReservationType = null,
-bottom_reservation_area: RectType = .{},
-layout_snapshot: LayoutSnapshot = .{},
+copy: ?client.CopyProjection = null,
+bottom_reservation: ?data.PaneBottomReservation = null,
+bottom_reservation_area: core.Rect = .{},
+layout_snapshot: data.LayoutSnapshot = .{},
 fullscreen_labels: PlanType = .{},
-panes: [max_panes_per_tab]PaneProjection = undefined,
+panes: [core.max_panes_per_tab]PaneProjection = undefined,
 pane_count: u8 = 0,
 progress_animation_frame: u8 = 0,
 agents_revision: u64 = 0,
@@ -153,7 +147,7 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
             target.pushClip(view.content);
             defer target.popClip();
             if (view.surface == .thread) {
-                if (ThreadViewType.capture(model, options.agents, pane.id)) |thread| {
+                if (client.ThreadView.capture(model, options.agents, pane.id)) |thread| {
                     thread_surface.paint(target, view.content, .{ .view = thread, .palette = options.palette });
                 }
                 continue;
@@ -217,7 +211,7 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
 /// ```zig
 /// compositor.copyArea(destination, area);
 /// ```
-pub fn copyArea(compositor: *const Compositor, destination: *BufferType, area: RectType) void {
+pub fn copyArea(compositor: *const Compositor, destination: *core.Buffer, area: core.Rect) void {
     const source = if (compositor.composed) |*buffer| buffer else return;
     if (source.w != destination.w or source.h != destination.h) {
         return;
@@ -239,7 +233,7 @@ pub fn copyArea(compositor: *const Compositor, destination: *BufferType, area: R
 /// ```zig
 /// const layout = compositor.layoutSnapshot();
 /// ```
-pub fn layoutSnapshot(compositor: *const Compositor) *const LayoutSnapshot {
+pub fn layoutSnapshot(compositor: *const Compositor) *const data.LayoutSnapshot {
     return &compositor.layout_snapshot;
 }
 
@@ -249,7 +243,7 @@ pub fn layoutSnapshot(compositor: *const Compositor) *const LayoutSnapshot {
 /// ```zig
 /// const shelf = compositor.bottomReservationArea();
 /// ```
-pub fn bottomReservationArea(compositor: *const Compositor) RectType {
+pub fn bottomReservationArea(compositor: *const Compositor) core.Rect {
     return compositor.bottom_reservation_area;
 }
 
@@ -397,8 +391,8 @@ fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, 
     }
 }
 
-fn paneProjectionChanged(compositor: *Compositor, model: *const MultiplexerModel) bool {
-    var next: [max_panes_per_tab]PaneProjection = undefined;
+fn paneProjectionChanged(compositor: *Compositor, model: *const client.MultiplexerModel) bool {
+    var next: [core.max_panes_per_tab]PaneProjection = undefined;
     var next_count: u8 = 0;
     for (compositor.layout_snapshot.views()) |view| {
         const pane = model.findConst(view.pane_id) orelse continue;

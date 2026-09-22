@@ -1,3 +1,6 @@
+const CellMesh = @import("../render/CellMesh.zig");
+const GlyphAtlas = @import("../text/GlyphAtlas.zig");
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -77,7 +80,7 @@ test "native decorated combining clusters remain bounded and atlas exhaustion re
     renderer.quads.clear();
     try canvas.text(area, .{ .text = cluster ** 120, .color = .default, .bold = true, .italic = true, .faint = true, .underline = true, .strikethrough = true });
     const count = renderer.quads.items().len;
-    try std.testing.expect(count <= area.w * @import("../render/CellMesh.zig").capacity);
+    try std.testing.expect(count <= area.w * CellMesh.capacity);
     const calls = atlas.shape_calls;
     const version = atlas.version;
     renderer.quads.clear();
@@ -85,7 +88,7 @@ test "native decorated combining clusters remain bounded and atlas exhaustion re
     try std.testing.expectEqual(calls, atlas.shape_calls);
     try std.testing.expectEqual(version, atlas.version);
     try std.testing.expectEqual(count, renderer.quads.items().len);
-    atlas.shelf_y = @import("../text/GlyphAtlas.zig").side;
+    atlas.shelf_y = GlyphAtlas.side;
     renderer.quads.clear();
     try canvas.text(area, .{ .text = "Ω", .color = .default, .bold = true, .italic = true });
     try std.testing.expectEqual(version, atlas.version);
@@ -110,7 +113,7 @@ fn populateMultiplexer(fixture: *Fixture) !void {
     const panes = model.activeTabModel().?;
     const area = Regions.calculate(160, 60).workbench;
     for (1..8) |index| {
-        var layout: client.LayoutSnapshot = .{};
+        var layout: data.LayoutSnapshot = .{};
         panes.layout.snapshot(area, &layout);
         var largest = layout.views()[0];
         for (layout.views()[1..]) |view| {
@@ -124,7 +127,7 @@ fn populateMultiplexer(fixture: *Fixture) !void {
 
     var identities: [core.max_panes_per_tab]core.PaneId = undefined;
     const visible = panes.layout.orderedPanes(&identities);
-    var agents: [8]client.AgentInput = undefined;
+    var agents: [8]data.AgentInput = undefined;
     for (&agents, visible, 0..) |*agent, id, index| {
         agent.* = .{ .key = .{ .pane_id = id, .pane_generation = 1 }, .location = Session.location, .pane_index = @intCast(index + 1), .provider = .codex, .status = .working, .display_name = "Codex", .session_title = "Implement native GUI", .workspace_label = "telar", .cwd_label = "/telar" };
         const pane = panes.find(id).?;
@@ -143,6 +146,6 @@ fn populateMultiplexer(fixture: *Fixture) !void {
         _ = model.publishNotification(0, .{ .title = title, .message = "All checks passed", .target = .{ .select_tab = Session.location.tab_id } });
     }
 
-    _ = model.advanceNotifications(client.transition_duration_ns);
+    _ = model.advanceNotifications(data.notifications.transition_duration_ns);
     try std.testing.expectEqual(@as(u8, 4), model.notification_center.count);
 }

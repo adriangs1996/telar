@@ -1,14 +1,13 @@
+const core = @import("telar-core");
 const Identity = @import("Identity.zig");
-const AgentReportStateType = @import("telar-core").AgentReportState;
 const SessionReference = @import("SessionReference.zig");
 const SessionFile = @import("SessionFile.zig");
-const AgentBlockedReasonType = @import("telar-core").AgentBlockedReason;
 const ReportObservation = @This();
 
 identity: Identity,
-state: AgentReportStateType,
+state: core.AgentReportState,
 /// Why the agent is blocked, when the hook names it; `none` otherwise.
-blocked_reason: AgentBlockedReasonType = .none,
+blocked_reason: core.AgentBlockedReason = .none,
 /// One line naming the reported moment; empty when the hook has none.
 event: []const u8 = "",
 observed_at_ms: i64,

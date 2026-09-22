@@ -1,15 +1,16 @@
+const data = @import("model");
 const client = @import("telar-client");
 const ActionCapture = @This();
 
-value: ?client.Action = null,
+value: ?data.actions.Action = null,
 keys: usize = 0,
 
-pub fn action(capture: *ActionCapture, value: client.Action) !client.Control {
+pub fn action(capture: *ActionCapture, value: data.actions.Action) !data.keybind.Control {
     capture.value = value;
     return .continue_routing;
 }
 
-pub fn key(capture: *ActionCapture, _: client.Key) !void {
+pub fn key(capture: *ActionCapture, _: data.Key) !void {
     capture.keys += 1;
 }
 

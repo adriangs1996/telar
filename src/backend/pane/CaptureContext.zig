@@ -1,7 +1,7 @@
+const core = @import("telar-core");
 const PaneType = @import("Pane.zig");
 const StatsType = @import("../history/Stats.zig");
 const CommandType = @import("../history/Command.zig");
-const HistoryAuthorType = @import("telar-core").HistoryAuthor;
 const CaptureContext = @This();
 
 pane: *PaneType,
@@ -19,7 +19,7 @@ pub fn emit(context: *CaptureContext, command: CommandType) void {
 
         return;
     };
-    var author: HistoryAuthorType = .human;
+    var author: core.HistoryAuthor = .human;
     if (pane.injected_submissions.load(.monotonic) > 0) {
         _ = pane.injected_submissions.fetchSub(1, .monotonic);
         author = .agent;

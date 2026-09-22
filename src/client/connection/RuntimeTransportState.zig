@@ -1,18 +1,15 @@
+const data = @import("model");
 const core = @import("telar-core");
-const SocketChannelType = @import("telar-core").SocketChannel;
 const OutboxType = @import("Outbox.zig");
 const std = @import("std");
-const max_frame_size_module = @import("telar-core").max_frame_size;
-const read_buffer_size_module = @import("telar-core").read_buffer_size;
 const Bootstrap = @import("Bootstrap.zig");
-const RuntimeMessage = @import("RuntimeMessage.zig");
 const State = @This();
 
-connection: *SocketChannelType,
+connection: *core.SocketChannel,
 send_buffer: []u8,
 receive_buffer: []u8,
 read_buffer: []u8,
-received: RuntimeMessage = undefined,
+received: data.RuntimeMessage = undefined,
 outbox: OutboxType = .{},
 receive_pending: bool = false,
 
@@ -36,7 +33,7 @@ pub fn cancelRead(state: *State) void {
 /// Releases the read reservation. The returned borrow lasts until the next
 /// read, which the consumer arms only after dispatch finishes.
 /// Example: `const payload = try state.completeRead(result);`.
-pub fn completeRead(state: *State, result: anyerror!*const RuntimeMessage) !*const RuntimeMessage {
+pub fn completeRead(state: *State, result: anyerror!*const data.RuntimeMessage) !*const data.RuntimeMessage {
     std.debug.assert(state.receive_pending);
     state.receive_pending = false;
     return result;
@@ -45,10 +42,10 @@ pub fn completeRead(state: *State, result: anyerror!*const RuntimeMessage) !*con
 /// Owns the decoded value beside its wire bytes until dispatch finishes.
 /// Inbox messages borrow this value; they do not duplicate it in every slot.
 /// Example: `return state.read(io);`.
-pub fn read(state: *State, io: std.Io) !*const RuntimeMessage {
+pub fn read(state: *State, io: std.Io) !*const data.RuntimeMessage {
     const bytes = try state.connection.receive(io, state.receive_buffer);
     core.mark(io, .client_read);
-    state.received = try RuntimeMessage.decode(io, bytes);
+    state.received = try data.RuntimeMessage.decode(io, bytes);
     return &state.received;
 }
 
@@ -75,12 +72,12 @@ pub fn send(state: *State, io: std.Io, bytes: []const u8) !void {
 /// ```zig
 /// var state = try State.init(gpa, connection);
 /// ```
-pub fn init(gpa: std.mem.Allocator, connection: *SocketChannelType) !State {
-    const receive_buffer = try gpa.alloc(u8, max_frame_size_module);
+pub fn init(gpa: std.mem.Allocator, connection: *core.SocketChannel) !State {
+    const receive_buffer = try gpa.alloc(u8, core.max_frame_size);
     errdefer gpa.free(receive_buffer);
-    const read_buffer = try gpa.alloc(u8, read_buffer_size_module);
+    const read_buffer = try gpa.alloc(u8, core.read_buffer_size);
     errdefer gpa.free(read_buffer);
-    const send_buffer = try gpa.alloc(u8, max_frame_size_module);
+    const send_buffer = try gpa.alloc(u8, core.max_frame_size);
     connection.bindReadBuffer(read_buffer);
 
     return .{

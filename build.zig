@@ -1,3 +1,4 @@
+const run_widget = @import("run_widget.zig");
 const std = @import("std");
 const Application = @import("build/Application.zig");
 const Benchmarks = @import("build/Benchmarks.zig");
@@ -17,7 +18,7 @@ pub fn build(b: *std.Build) void {
     const diagram_helper = diagram_renderer.add(b, app);
     packaging.add(b, app, diagram_helper);
     app.modules.gui = gui.add(b, app, diagram_helper);
-    @import("run_widget.zig").addBuild(b, app);
+    run_widget.addBuild(b, app);
     const parallel_tests = tests.add(b, app, bench);
     parallel_tests.dependOn(cross.add(b));
 }

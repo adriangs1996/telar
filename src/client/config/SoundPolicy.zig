@@ -1,4 +1,4 @@
-const AgentSound = @import("telar-core").AgentSound;
+const core = @import("telar-core");
 const SoundPolicy = @This();
 
 enabled: bool = true,
@@ -12,7 +12,7 @@ needs_input: bool = true,
 ///     _ = playback.request(.ready);
 /// }
 /// ```
-pub fn allows(configuration: SoundPolicy, kind: AgentSound) bool {
+pub fn allows(configuration: SoundPolicy, kind: core.AgentSound) bool {
     if (!configuration.enabled) {
         return false;
     }

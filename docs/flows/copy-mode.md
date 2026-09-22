@@ -38,7 +38,7 @@ ClientModel.Version.copy and optional viewport
 
 Entry resolves the attached focused pane and captures its current viewport.
 An active name prompt, missing pane or repeated entry is a no-op. While copy
-mode is active, `key_routing.apply` sends semantic keys to copy mode and
+mode is active, `AttachedClient.routeKeyInput` sends semantic keys to copy mode and
 consumes replayed bytes. Neither reaches the child. Copy mode does not make
 `capturesKeys` true, so configured prefix bindings remain available. See
 [Key routing](key-routing.md).
@@ -78,7 +78,7 @@ retry. Viewport synchronization follows the commit. If that effect fails, the
 client retains the committed disposable state; reconnection or a later runtime
 frame repairs the operational projection. Copy mode uses the same
 `PaneViewportChange` effect port as normal scrolling, so graphics and
-`set_pane_viewport` policy stay in `pane_viewports`.
+`set_pane_viewport` policy stay in `AttachedClient.applyPaneViewport`.
 
 ## Search
 
@@ -165,12 +165,12 @@ presentation state, never semantic authority inside `multiplexer.Pane`.
 
 ## Validation
 
-- `src/client/input/copy_mode.zig` proves fixed-state motions, selection and
+- `src/model/input/copy_mode.zig` proves fixed-state motions, selection and
   frame reconciliation.
 - `src/client/model/Model.zig` proves entry authority, independent
   revisions, no-ops, stale-plan rejection, frame reconciliation and exact pane
   release.
-- `src/client/application/input/copy_mode.zig` proves copy-before-exit and
+- `src/model/application/input/copy_mode.zig` proves copy-before-exit and
   viewport-after-commit ordering, including both failure policies.
 - `src/client/application/input/copy_mode_pointer.zig` proves exclusive
   pointer ownership, bounded wheel movement and selected-effect failures.
@@ -179,7 +179,7 @@ presentation state, never semantic authority inside `multiplexer.Pane`.
 - `src/client/AttachedClient.zig` owns the selection outbox adapter.
 - `src/frontend/presentation/screen_support.zig` proves exact OSC 52 encoding,
   multi-chunk payloads and the terminal-side size bound.
-- `src/client/operations/panes/pane_viewports.zig` owns graphics visibility and
+- `src/client/AttachedClient.zig` owns graphics visibility and
   runtime viewport synchronization for both normal input and copy mode.
 - `src/frontend/client/tests/` proves key and pointer routing,
   outside-wheel consumption, missing-target exit, backpressure, clipboard

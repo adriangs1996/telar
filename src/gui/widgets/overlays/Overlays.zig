@@ -1,3 +1,6 @@
+const router_module = @import("../../input/router.zig");
+const modal_widget = @import("modal_widget.zig");
+const data = @import("model");
 const client = @import("telar-client");
 const HitState = @import("HitState.zig");
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
@@ -9,7 +12,7 @@ notifications: @import("Notifications.zig") = .{},
 history_motion: @import("ModalMotion.zig") = .{},
 gesture: ?u8 = null,
 /// The native keymap, for the palette's bound-key column.
-router: ?*const @import("../../input/router.zig").Type = null,
+router: ?*const router_module.Type = null,
 /// Host scale, so the palette's logical width becomes cells.
 scale: f32 = 1,
 
@@ -31,7 +34,7 @@ pub fn compose(overlays: *Overlays, input: @import("OverlayComposition.zig"), wi
     modal_input.scale = overlays.scale;
     const history_generation = if (input.projection.prompt) |prompt| if (prompt.target() == .history) prompt.generation else null else null;
     modal_input.history_reveal = overlays.history_motion.sample(history_generation, input.canvas.animation);
-    try @import("modal_widget.zig").compose(modal_input, pending, widgets);
+    try modal_widget.compose(modal_input, pending, widgets);
 }
 
 /// Seal after all widgets have drawn and registered their controls.
@@ -58,7 +61,7 @@ pub fn presented(overlays: *const Overlays) *const HitState {
 /// through release if a prompt closes between pointer events. A primary
 /// press on a palette row chooses that row.
 /// Example: `if (overlays.pointer(mouse)) |interaction| return interaction;`.
-pub fn pointer(overlays: *Overlays, mouse: client.Mouse) ?client.ViewInteractionCommand {
+pub fn pointer(overlays: *Overlays, mouse: data.Mouse) ?client.ViewInteractionCommand {
     const button = mouse.button & 3;
     const captured = overlays.gesture != null;
     if (mouse.kind == .release and overlays.gesture == button) {

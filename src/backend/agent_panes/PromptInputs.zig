@@ -1,6 +1,7 @@
+const core = @import("telar-core");
 const std = @import("std");
 text: []const u8,
-images: *const @import("telar-core").AgentImages,
+images: *const core.AgentImages,
 skills: *const @import("SkillCatalog.zig"),
 
 /// Adds exact advertised skill paths without filesystem access or model lookup.

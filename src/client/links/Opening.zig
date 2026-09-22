@@ -1,11 +1,11 @@
-const TargetType = @import("LinkTarget.zig");
+const data = @import("model");
 const opening_support = @import("opening_support.zig");
 const Opening = @This();
 
 active: bool = false,
-pending: ?TargetType = null,
+pending: ?data.LinkTarget = null,
 
-pub fn request(opening: *Opening, target: TargetType) opening_support.Request {
+pub fn request(opening: *Opening, target: data.LinkTarget) opening_support.Request {
     if (!opening.active) {
         opening.active = true;
 
@@ -17,7 +17,7 @@ pub fn request(opening: *Opening, target: TargetType) opening_support.Request {
     return .queued;
 }
 
-pub fn complete(opening: *Opening) ?TargetType {
+pub fn complete(opening: *Opening) ?data.LinkTarget {
     const next = opening.pending;
     opening.pending = null;
     opening.active = next != null;

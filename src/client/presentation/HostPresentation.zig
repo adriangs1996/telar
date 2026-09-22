@@ -1,5 +1,5 @@
+const core = @import("telar-core");
 const GeometryType = @import("Geometry.zig");
-const PaneId = @import("telar-core").PaneId;
 /// The adapter's presentation as the client application drives and queries
 /// it: host size, input pacing, the frame cadence timers align to, and the
 /// geometry a pointer gesture may trust while a presentation is in flight.
@@ -11,7 +11,7 @@ note_input_fn: *const fn (*anyopaque, u64) void,
 frame_interval_ns_fn: *const fn (*anyopaque) u64,
 in_flight_fn: *const fn (*anyopaque) bool,
 delivered_geometry_fn: *const fn (*anyopaque) ?GeometryType,
-note_pane_input_fn: ?*const fn (*anyopaque, PaneId, u64) void = null,
+note_pane_input_fn: ?*const fn (*anyopaque, core.PaneId, u64) void = null,
 
 /// Example: `try client.presentation.resize(size.cols, size.rows);`.
 pub fn resize(port: HostPresentation, cols: u16, rows: u16) !void {
@@ -25,7 +25,7 @@ pub fn noteInput(port: HostPresentation, now_ns: u64) void {
 
 /// Marks admitted child input, after routing and outbox admission succeed.
 /// Example: `client.presentation.notePaneInput(delivery.pane_id, now_ns);`
-pub fn notePaneInput(port: HostPresentation, pane_id: PaneId, now_ns: u64) void {
+pub fn notePaneInput(port: HostPresentation, pane_id: core.PaneId, now_ns: u64) void {
     if (port.note_pane_input_fn) |notify| {
         notify(port.context, pane_id, now_ns);
     }

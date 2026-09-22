@@ -4,28 +4,25 @@ const core = @import("telar-core");
 const Job = @import("../../../change_review/Job.zig");
 const review_owner = @import("../change_review_owner.zig");
 const PendingFailureType = @import("../../delivery/PendingFailure.zig");
-const QueryChangeReview = @import("telar-core").QueryChangeReview;
-const ChangeReviewCommand = @import("telar-core").ChangeReviewCommand;
-const ReportChangeReviewSample = @import("telar-core").ReportChangeReviewSample;
 const std = @import("std");
 const RequestContext = @import("../RequestContext.zig");
 
 /// Example: `try reviews.routeQueryChangeReview(request, message);`.
-pub fn routeQueryChangeReview(request: *RequestContext, message: QueryChangeReview) !void {
+pub fn routeQueryChangeReview(request: *RequestContext, message: core.QueryChangeReview) !void {
     admitReview(request, message) catch |err| {
         try request.session.delivery.responses.push(.{ .request_failed = reviewFailure(message.request_id, err) });
     };
 }
 
 /// Example: `try reviews.routeChangeReviewCommand(request, message);`.
-pub fn routeChangeReviewCommand(request: *RequestContext, message: ChangeReviewCommand) !void {
+pub fn routeChangeReviewCommand(request: *RequestContext, message: core.ChangeReviewCommand) !void {
     admitReview(request, message) catch |err| {
         try request.session.delivery.responses.push(.{ .request_failed = reviewFailure(message.request_id, err) });
     };
 }
 
 /// Example: `try reviews.routeReportChangeReviewSample(request, message);`.
-pub fn routeReportChangeReviewSample(request: *RequestContext, message: ReportChangeReviewSample) !void {
+pub fn routeReportChangeReviewSample(request: *RequestContext, message: core.ReportChangeReviewSample) !void {
     admitReview(request, message) catch |err| {
         try request.session.delivery.responses.push(.{ .request_failed = reviewFailure(message.request_id, err) });
     };

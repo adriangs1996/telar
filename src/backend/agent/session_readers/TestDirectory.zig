@@ -1,7 +1,6 @@
+const core = @import("telar-core");
 const std = @import("std");
-const AgentSessionFileKind = @import("telar-core").AgentSessionFileKind;
 const WatchType = @import("../Watch.zig");
-const pane_module = @import("telar-core").pane;
 const SessionReferenceType = @import("../SessionReference.zig");
 const TestDirectory = @This();
 
@@ -19,9 +18,9 @@ pub fn deinit(directory: *TestDirectory) void {
     directory.temp.cleanup();
 }
 
-pub fn watch(directory: *const TestDirectory, kind: AgentSessionFileKind, name: []const u8) !WatchType {
+pub fn watch(directory: *const TestDirectory, kind: core.AgentSessionFileKind, name: []const u8) !WatchType {
     var value: WatchType = .{
-        .key = .{ .id = try pane_module(7), .generation = 3 },
+        .key = .{ .id = try core.pane(7), .generation = 3 },
         .session = try SessionReferenceType.init("abc", 1),
         .kind = kind,
     };

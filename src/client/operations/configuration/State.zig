@@ -1,17 +1,16 @@
+const model = @import("../../bars/model.zig");
+const timers_module = @import("../../resources/timers.zig");
 const core = @import("telar-core");
-const SchedulerType = core.DeadlineScheduler;
 const bar_updates = @import("bar_updates.zig");
 const CommandExecution = @import("CommandExecution.zig");
 const Synchronization = @import("Synchronization.zig");
 const std = @import("std");
-const PositionType = @import("../../bars/model.zig").Position;
 const DueInput = @import("DueInput.zig");
 const Due = @import("Due.zig");
-const TimerKind = @import("../../resources/timers.zig").Kind;
 const HostTimers = @import("../../resources/HostTimers.zig");
 const State = @This();
 
-scheduler: SchedulerType = .{},
+scheduler: core.DeadlineScheduler = .{},
 generation: u64 = 0,
 deadlines: [bar_updates.position_count]u64 = @splat(bar_updates.no_deadline),
 pending_callbacks: u8 = 0,
@@ -42,7 +41,7 @@ pub fn synchronize(state: *State, input: Synchronization) void {
     state.pending_commands = 0;
     const configuration = input.configuration orelse return;
 
-    for (std.enums.values(PositionType)) |position| {
+    for (std.enums.values(model.Position)) |position| {
         if (configuration.source(position).interval() != null) {
             state.deadlines[@intFromEnum(position)] = input.now_ns;
         }
@@ -55,7 +54,7 @@ pub fn takeDue(state: *State, input: DueInput) Due {
     }
 
     var due: Due = .{};
-    for (std.enums.values(PositionType)) |position| {
+    for (std.enums.values(model.Position)) |position| {
         const index = @intFromEnum(position);
         const deadline_ns = state.deadlines[index];
         if (deadline_ns == bar_updates.no_deadline or deadline_ns > input.now_ns) {
@@ -87,7 +86,7 @@ pub fn nextDeadline(state: *const State) ?u64 {
     return if (next == bar_updates.no_deadline) null else next;
 }
 
-pub fn reserveCommand(state: *State, generation: u64, position: PositionType) !CommandExecution {
+pub fn reserveCommand(state: *State, generation: u64, position: model.Position) !CommandExecution {
     std.debug.assert(state.command_execution == null);
     if (state.next_command_execution_id == 0) {
         return error.BarCommandExecutionIdExhausted;
@@ -119,7 +118,7 @@ test "bar timer scheduling retries failure and reuses one pending worker" {
         reject: bool = true,
         calls: usize = 0,
 
-        fn arm(raw: *anyopaque, kind: TimerKind, scheduler: *SchedulerType) !void {
+        fn arm(raw: *anyopaque, kind: timers_module.Kind, scheduler: *core.DeadlineScheduler) !void {
             const self: *@This() = @ptrCast(@alignCast(raw));
             self.calls += 1;
             try std.testing.expectEqual(.bar, kind);
@@ -140,7 +139,7 @@ test "bar timer scheduling retries failure and reuses one pending worker" {
     const io = std.testing.io;
     try state.rearm(io, timers);
     try std.testing.expectEqual(@as(usize, 0), timer.calls);
-    state.pending_callbacks = PositionType.bottom_left.bit();
+    state.pending_callbacks = model.Position.bottom_left.bit();
     try std.testing.expectError(error.TimerBusy, state.rearm(io, timers));
     try std.testing.expect(!state.scheduler.pending);
     timer.reject = false;
@@ -152,7 +151,7 @@ test "bar timer scheduling retries failure and reuses one pending worker" {
     try std.testing.expectEqual(@as(usize, 2), timer.calls);
 
     state.pending_callbacks = 0;
-    state.deadlines[@intFromEnum(PositionType.bottom_left)] = immediate + std.time.ns_per_s;
+    state.deadlines[@intFromEnum(model.Position.bottom_left)] = immediate + std.time.ns_per_s;
     try state.rearm(io, timers);
     try std.testing.expectEqual(immediate + std.time.ns_per_s, state.scheduler.deadline_ns.load(.acquire));
     try std.testing.expectEqual(@as(usize, 2), timer.calls);

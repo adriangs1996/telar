@@ -1,30 +1,19 @@
 //! SQLite storage owned by the history worker.
 
+const core = @import("telar-core");
 const std = @import("std");
 const ColumnMigration = @import("ColumnMigration.zig");
 const model = @import("../model.zig");
 const CommandFinishedType = @import("../CommandFinished.zig");
-const TabLocationType = @import("telar-core").TabLocation;
 const LocationColumns = @import("LocationColumns.zig");
-const raw_module = @import("telar-core").raw;
 const EntryType = @import("../Entry.zig");
-const max_history_command_bytes_module = @import("telar-core").max_history_command_bytes;
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
-const max_history_provider_bytes_module = @import("telar-core").max_history_provider_bytes;
-const pane_module = @import("telar-core").pane;
 const StatsQueryType = @import("../StatsQuery.zig");
 const Store = @import("Store.zig");
-const workspace_module = @import("telar-core").workspace;
-const tab_module = @import("telar-core").tab;
 const LaunchAttemptType = @import("../LaunchAttempt.zig");
 const SessionStartedType = @import("../SessionStarted.zig");
 const SessionTitleType = @import("../SessionTitle.zig");
-const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
-const AgentTitleStateType = @import("telar-core").AgentTitleState;
 const QueryType = @import("../Query.zig");
 const QueryOriginType = @import("../QueryOrigin.zig");
-const HistoryAuthorType = @import("telar-core").HistoryAuthor;
-const HistoryOriginType = @import("telar-core").HistoryOrigin;
 const PruneType = @import("../Prune.zig");
 
 pub const entry_columns = "id, pane_id, started_at_ms, duration_ns, exit_code, status, command, cwd, workspace_path, author, origin, provider, command_truncated";
@@ -325,10 +314,10 @@ pub fn bindCommandSource(stmt: *c.sqlite3_stmt, value: *const CommandFinishedTyp
     }
 }
 
-pub fn locationColumns(location: TabLocationType) LocationColumns {
+pub fn locationColumns(location: core.TabLocation) LocationColumns {
     return switch (location.workspace) {
-        .workspace => |id| .{ .kind = 0, .id = raw_module(id) },
-        .worktree => |id| .{ .kind = 1, .id = raw_module(id) },
+        .workspace => |id| .{ .kind = 0, .id = core.raw(id) },
+        .worktree => |id| .{ .kind = 1, .id = core.raw(id) },
     };
 }
 
@@ -346,17 +335,17 @@ pub fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !EntryType {
     if (raw_history_id <= 0 or raw_pane <= 0) {
         return error.InvalidHistoryId;
     }
-    if (command.len > max_history_command_bytes_module or
-        cwd.len > max_cwd_bytes_module or
-        workspace_path.len > max_cwd_bytes_module or
-        provider.len > max_history_provider_bytes_module)
+    if (command.len > core.max_history_command_bytes or
+        cwd.len > core.max_cwd_bytes or
+        workspace_path.len > core.max_cwd_bytes or
+        provider.len > core.max_history_provider_bytes)
     {
         return error.InvalidHistoryText;
     }
     const raw_pane_id: u64 = @intCast(raw_pane);
     return .{
         .id = @intCast(raw_history_id),
-        .pane_id = try pane_module(raw_pane_id),
+        .pane_id = try core.pane(raw_pane_id),
         .started_at_ms = c.sqlite3_column_int64(stmt, 2),
         .duration_ns = c.sqlite3_column_int64(stmt, 3),
         .exit_code = if (c.sqlite3_column_type(stmt, 4) == c.SQLITE_NULL)
@@ -424,7 +413,7 @@ pub fn bindStatsFilters(stmt: *c.sqlite3_stmt, request: *const StatsQueryType) v
         .pane => _ = c.sqlite3_bind_int64(
             stmt,
             parameter,
-            @intCast(raw_module(request.pane_id)),
+            @intCast(core.raw(request.pane_id)),
         ),
     }
 }
@@ -458,10 +447,10 @@ test "persists sessions and filters command history" {
     try std.testing.expectEqual(@as(u32, 0o600), database_stat.permissions.toMode() & 0o777);
 
     const session_id: model.SessionId = .{1} ** 16;
-    const pane_id = try pane_module(7);
-    const location: TabLocationType = .{
-        .workspace = .{ .workspace = try workspace_module(3) },
-        .tab_id = try tab_module(2),
+    const pane_id = try core.pane(7);
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = try core.workspace(3) },
+        .tab_id = try core.tab(2),
     };
     const attempt: LaunchAttemptType = .{
         .pane_id = pane_id,
@@ -524,11 +513,11 @@ test "persists sessions and filters command history" {
     const title = c.sqlite3_column_text(title_stmt, 0)[0..title_len];
     try std.testing.expectEqualStrings("Improve agent sidebar", title);
     try std.testing.expectEqual(
-        @as(c_int, @intFromEnum(AgentTitleSourceType.generated)),
+        @as(c_int, @intFromEnum(core.AgentTitleSource.generated)),
         c.sqlite3_column_int(title_stmt, 1),
     );
     try std.testing.expectEqual(
-        @as(c_int, @intFromEnum(AgentTitleStateType.ready)),
+        @as(c_int, @intFromEnum(core.AgentTitleState.ready)),
         c.sqlite3_column_int(title_stmt, 2),
     );
 
@@ -619,7 +608,7 @@ test "persists sessions and filters command history" {
 test "author filters partition query results" {
     var store = try Store.open(":memory:");
     defer store.close();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -671,7 +660,7 @@ test "author filters partition query results" {
     defer humans.deinit();
     try std.testing.expectEqual(@as(usize, 1), humans.entries.len);
     try std.testing.expectEqualStrings("git status", humans.entries[0].command);
-    try std.testing.expectEqual(HistoryAuthorType.human, humans.entries[0].author);
+    try std.testing.expectEqual(core.HistoryAuthor.human, humans.entries[0].author);
 
     const agents = try store.query(std.testing.allocator, &(try QueryType.init(.{
         .request_id = @enumFromInt(2),
@@ -748,7 +737,7 @@ test "agent command synthesis persists provenance and deduplicates tool calls" {
     const result = try store.query(std.testing.allocator, &query);
     defer result.deinit();
     try std.testing.expectEqual(@as(usize, 1), result.entries.len);
-    try std.testing.expectEqual(HistoryOriginType.hook, result.entries[0].origin);
+    try std.testing.expectEqual(core.HistoryOrigin.hook, result.entries[0].origin);
     try std.testing.expectEqualStrings("codex", result.entries[0].provider);
     try std.testing.expectEqualStrings("zig build test --summary all", result.entries[0].command);
     try std.testing.expectEqual(model.CommandStatus.completed, result.entries[0].status);
@@ -788,7 +777,7 @@ test "opening a version four database migrates command provenance to version fiv
 test "delete and prune remove rows and keep the FTS index consistent" {
     var store = try Store.open(":memory:");
     defer store.close();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -862,7 +851,7 @@ test "delete and prune remove rows and keep the FTS index consistent" {
 test "command output rows round trip through the store" {
     var store = try Store.open(":memory:");
     defer store.close();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -933,7 +922,7 @@ test "command output rows round trip through the store" {
 test "fuzzy matching ranks subsequences and collapses duplicates" {
     var store = try Store.open(":memory:");
     defer store.close();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -1066,7 +1055,7 @@ pub fn appendQueryFilters(sql: *std.Io.Writer, request: *const QueryType) !void 
 
 pub fn bindQueryFilters(stmt: *c.sqlite3_stmt, parameter: *c_int, request: *const QueryType) void {
     if (request.author != .all) {
-        const author: HistoryAuthorType = if (request.author == .human) .human else .agent;
+        const author: core.HistoryAuthor = if (request.author == .human) .human else .agent;
         _ = c.sqlite3_bind_int(stmt, parameter.*, @intFromEnum(author));
         parameter.* += 1;
     }
@@ -1080,7 +1069,7 @@ pub fn bindQueryFilters(stmt: *c.sqlite3_stmt, parameter: *c_int, request: *cons
             _ = c.sqlite3_bind_int64(
                 stmt,
                 parameter.*,
-                @intCast(raw_module(request.pane_id)),
+                @intCast(core.raw(request.pane_id)),
             );
             parameter.* += 1;
         },

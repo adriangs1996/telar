@@ -1,21 +1,19 @@
 //! Wires copy-mode pointer ownership to geometry and copy-mode effects.
 
+const data = @import("model");
+const core = @import("telar-core");
 const CopyModePointerCommand = @import("../../application/input/CopyModePointerCommand.zig");
 const copy_mode_pointer = @import("../../application/input/copy_mode_pointer.zig");
 const Client = @import("../../AttachedClient.zig");
 const MultiplexerModel = @import("../../workspace/MultiplexerModel.zig");
-const MouseType = @import("../../input/Mouse.zig");
 const CopyModePointerContext = @import("CopyModePointerContext.zig");
-const ApplicationInputCopyModePointerAuthority = @import("../../application/input/copy_mode_pointer.zig").Authority;
-const PointType = @import("telar-core").Point;
-const PointerMotionType = @import("../../input/PointerMotion.zig");
 
 /// Gives copy mode first refusal for one cell-based pointer event.
 ///
 /// ```zig
 /// if (try apply(client, model, event)) return;
 /// ```
-pub fn apply(client: *Client, model: *MultiplexerModel, event: MouseType) !bool {
+pub fn apply(client: *Client, model: *MultiplexerModel, event: data.Mouse) !bool {
     var context: CopyModePointerContext = .{
         .client = client,
         .model = model,
@@ -27,10 +25,10 @@ pub fn apply(client: *Client, model: *MultiplexerModel, event: MouseType) !bool 
     return outcome != .unowned;
 }
 
-fn resolve(context: *CopyModePointerContext, event: MouseType) ApplicationInputCopyModePointerAuthority {
+fn resolve(context: *CopyModePointerContext, event: data.Mouse) copy_mode_pointer.Authority {
     if (context.client.model.pointerSelection()) |selection| {
         const view = context.model.viewForPane(selection.pane_id, context.area);
-        const position: ?PointType = if (view != null and view.?.content.w > 0 and view.?.content.h > 0) .{
+        const position: ?core.Point = if (view != null and view.?.content.w > 0 and view.?.content.h > 0) .{
             .x = @min(event.x -| view.?.content.x, view.?.content.w - 1),
             .y = @min(event.y -| view.?.content.y, view.?.content.h - 1),
         } else null;
@@ -59,7 +57,7 @@ fn cancelPointer(context: *CopyModePointerContext) !void {
     _ = try context.client.applyCopyMode(.cancel_pointer);
 }
 
-fn pointer(context: *CopyModePointerContext, motion: PointerMotionType) !void {
+fn pointer(context: *CopyModePointerContext, motion: data.PointerMotion) !void {
     _ = try context.client.applyCopyMode(
         .{
             .pointer = motion,

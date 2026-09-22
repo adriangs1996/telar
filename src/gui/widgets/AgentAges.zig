@@ -1,4 +1,5 @@
 //! Client-local status clocks shared by native cards and pane headers.
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -48,7 +49,7 @@ pub fn secondsAt(ages: *const AgentAges, index: usize) u32 {
     return ages.entries[0..ages.len][index].seconds(ages.now_ns);
 }
 
-fn find(ages: *const AgentAges, key: client.AgentKey) ?*const StatusAge {
+fn find(ages: *const AgentAges, key: data.AgentKey) ?*const StatusAge {
     for (ages.entries[0..ages.len]) |*age| {
         if (std.meta.eql(age.key, key)) {
             return age;
@@ -61,7 +62,22 @@ fn find(ages: *const AgentAges, key: client.AgentKey) ?*const StatusAge {
 test "status clocks keep subsecond progress through frequent snapshots and reordering" {
     var snapshot: client.AgentSnapshot = .{};
     var ages: AgentAges = .{};
-    const first: client.AgentInput = .{ .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 }, .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) }, .pane_index = 1, .provider = .codex, .status = .working, .status_age_s = 5 };
+    const first: data.AgentInput = .{
+        .key = .{
+            .pane_id = @enumFromInt(1),
+            .pane_generation = 1,
+        },
+        .location = .{
+            .workspace = .{
+                .workspace = @enumFromInt(1),
+            },
+            .tab_id = @enumFromInt(1),
+        },
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .working,
+        .status_age_s = 5,
+    };
     var second = first;
     second.key.pane_id = @enumFromInt(2);
     second.status_age_s = 20;
@@ -84,7 +100,22 @@ test "status clocks keep subsecond progress through frequent snapshots and reord
 test "status clocks reset for new intervals generations removals and replicas" {
     var snapshot: client.AgentSnapshot = .{};
     var ages: AgentAges = .{};
-    var input: client.AgentInput = .{ .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 }, .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) }, .pane_index = 1, .provider = .codex, .status = .working, .status_age_s = 5 };
+    var input: data.AgentInput = .{
+        .key = .{
+            .pane_id = @enumFromInt(1),
+            .pane_generation = 1,
+        },
+        .location = .{
+            .workspace = .{
+                .workspace = @enumFromInt(1),
+            },
+            .tab_id = @enumFromInt(1),
+        },
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .working,
+        .status_age_s = 5,
+    };
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{input} });
     ages.observe(&snapshot, 100 * std.time.ns_per_s);
     input.status = .blocked;

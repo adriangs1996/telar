@@ -1,3 +1,4 @@
+const std = @import("std");
 pub const InputEvent = extern struct {
     kind: u32,
     code: u32 = 0,
@@ -14,8 +15,8 @@ pub const InputEvent = extern struct {
     generation: u64 = 0,
     selection_start: u32 = 0,
     selection_end: u32 = 0,
-    replacement_start: u32 = @import("std").math.maxInt(u32),
-    replacement_end: u32 = @import("std").math.maxInt(u32),
+    replacement_start: u32 = std.math.maxInt(u32),
+    replacement_end: u32 = std.math.maxInt(u32),
     delta_x: f64 = 0,
     delta_y: f64 = 0,
     precise: u32 = 0,

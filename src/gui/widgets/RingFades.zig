@@ -1,4 +1,5 @@
 //! Bounded attention transitions owned by the chrome and keyed by attachment.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -21,7 +22,7 @@ pub fn begin(rings: *RingFades) void {
 
 /// Samples time and requests a wake even when no agent is working.
 /// Example: `const opacity = rings.alpha(attachment, &clock);`
-pub fn alpha(rings: *RingFades, key: client.AgentKey, clock: *FrameClock) f32 {
+pub fn alpha(rings: *RingFades, key: data.AgentKey, clock: *FrameClock) f32 {
     const index = rings.find(key) orelse rings.insert(.{
         .key = key,
         .transition = .{ .from = 0, .to = 1, .started_ns = clock.now_ns, .duration_ns = duration_ns },
@@ -44,7 +45,7 @@ pub fn end(rings: *RingFades) void {
     rings.len = kept;
 }
 
-fn find(rings: *const RingFades, key: client.AgentKey) ?usize {
+fn find(rings: *const RingFades, key: data.AgentKey) ?usize {
     for (rings.entries[0..rings.len], 0..) |entry, index| {
         if (std.meta.eql(entry.key, key)) {
             return index;
@@ -68,7 +69,10 @@ fn insert(rings: *RingFades, entry: RingFade) ?usize {
 test "attention transitions fold missed frames park and reset on reattachment" {
     var rings: RingFades = .{};
     var clock: FrameClock = .{};
-    var key: client.AgentKey = .{ .pane_id = @enumFromInt(7), .pane_generation = 1 };
+    var key: data.AgentKey = .{
+        .pane_id = @enumFromInt(7),
+        .pane_generation = 1,
+    };
     clock.begin(0);
     rings.begin();
     try std.testing.expectEqual(@as(f32, 0), rings.alpha(key, &clock));

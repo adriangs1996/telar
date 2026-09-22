@@ -1,15 +1,13 @@
-const RuntimeMessage = @import("../connection/RuntimeMessage.zig");
+const data = @import("model");
+const core = @import("telar-core");
 const Metrics = @import("Metrics.zig");
-const SinkType = @import("telar-core").Sink;
 const std = @import("std");
-const enabled_module = @import("telar-core").enabled;
-const now_module = @import("telar-core").now;
 const State = @This();
 
 pub const buffer_size = 8192;
 
 metrics: Metrics,
-sink: SinkType,
+sink: core.Sink,
 buffer: [buffer_size]u8 = undefined,
 write_pending: bool = false,
 enabled: bool,
@@ -20,9 +18,9 @@ enabled: bool,
 /// var telemetry = State.init(io, runtime_endpoint);
 /// ```
 pub fn init(io: std.Io, endpoint: []const u8) State {
-    if (!enabled_module or endpoint.len == 0) {
+    if (!core.enabled or endpoint.len == 0) {
         return .{
-            .metrics = .{ .started_ns = now_module(io) },
+            .metrics = .{ .started_ns = core.now(io) },
             .sink = .{},
             .enabled = false,
         };
@@ -30,10 +28,10 @@ pub fn init(io: std.Io, endpoint: []const u8) State {
 
     var suffix_buffer: [64]u8 = undefined;
     const suffix = std.fmt.bufPrint(&suffix_buffer, "client-{d}", .{std.c.getpid()}) catch "client";
-    var sink = SinkType.init(io, endpoint, suffix);
+    var sink = core.Sink.init(io, endpoint, suffix);
 
     return .{
-        .metrics = .{ .started_ns = now_module(io) },
+        .metrics = .{ .started_ns = core.now(io) },
         .sink = sink,
         .enabled = sink.available(),
     };
@@ -74,8 +72,8 @@ pub fn disable(state: *State, io: std.Io) void {
 
 /// Records a decoded message before the client rearms its borrowed receive buffer.
 /// Example: `telemetry.recordMessage(received);`
-pub fn recordMessage(self: *State, observation: *const RuntimeMessage) void {
-    if (comptime !enabled_module) {
+pub fn recordMessage(self: *State, observation: *const data.RuntimeMessage) void {
+    if (comptime !core.enabled) {
         return;
     }
 

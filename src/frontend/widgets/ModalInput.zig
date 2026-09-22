@@ -1,9 +1,8 @@
-const RectType = @import("telar-core").Rect;
-const SnapshotType = @import("telar-client").AttachmentSnapshot;
-const PlanType = @import("telar-client").Plan;
+const core = @import("telar-core");
+const client = @import("telar-client");
 const ModalInput = @This();
 
-application: RectType,
-snapshot: *const SnapshotType,
-plan: *PlanType,
+application: core.Rect,
+snapshot: *const client.AttachmentSnapshot,
+plan: *client.Plan,
 graphical_frame: bool,

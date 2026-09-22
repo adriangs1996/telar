@@ -19,6 +19,7 @@ root through `b.path`, even from these support files.
 | Frontend execution experiments | [experiments.zig](experiments.zig) |
 | FreeType/HarfBuzz sources and flags | [freetype.zig](freetype.zig) |
 | Vendored Lua library and API module | [lua.zig](lua.zig) |
+| Shared value module, depending only on core | [model.zig](model.zig) |
 | Shared-client module imports | [client.zig](client.zig) |
 | Embedded asset module | [assets.zig](assets.zig) |
 | Coverage instrumentation and native coverage flags | [Coverage.zig](Coverage.zig), [c_flags.zig](c_flags.zig) |

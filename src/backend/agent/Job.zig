@@ -1,11 +1,11 @@
+const core = @import("telar-core");
 const PaneKeyType = @import("../pane/PaneKey.zig");
-const AgentProviderType = @import("telar-core").AgentProvider;
 const description = @import("description.zig");
 const Job = @This();
 
 pane: PaneKeyType,
 session_id: [16]u8,
-provider: AgentProviderType,
+provider: core.AgentProvider,
 query: [description.max_query_bytes]u8 = undefined,
 query_len: u16,
 

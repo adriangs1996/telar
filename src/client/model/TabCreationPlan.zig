@@ -1,6 +1,5 @@
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const TabCreationPlan = @This();
 
-workspace: WorkspaceLocationType,
-cwd_source: PaneIdType,
+workspace: core.WorkspaceLocation,
+cwd_source: core.PaneId,

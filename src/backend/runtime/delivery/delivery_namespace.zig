@@ -1,5 +1,6 @@
 //! Bounded runtime-to-client delivery policy and logical send transaction.
 
+const core_module = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
 const QueryResultType = @import("../../history/QueryResult.zig");
 const OutputResultType = @import("../../history/OutputResult.zig");
@@ -8,22 +9,15 @@ const AttachmentWork = @import("AttachmentWork.zig");
 const Transaction = @import("Transaction.zig");
 const Completion = @import("Completion.zig");
 const std = @import("std");
-const max_agent_workspace_label_bytes_module = @import("telar-core").max_agent_workspace_label_bytes;
-const max_agent_cwd_label_bytes_module = @import("telar-core").max_agent_cwd_label_bytes;
 const Delivery = @import("Delivery.zig");
-const pane_module = @import("telar-core").pane;
-const max_clipboard_bytes_module = @import("telar-core").max_clipboard_bytes;
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const StateType = @import("../../workspace/State.zig");
 const TrackerType = @import("../../agent/Tracker.zig");
 const SamplerType = @import("../observability/Sampler.zig");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const workspace_module = @import("telar-core").workspace;
 const Sources = @import("Sources.zig");
 const ReaderType = @import("../../workspace/Reader.zig");
-const decodeServer_module = @import("telar-core").decodeServer;
 const ForegroundProjection = @import("ForegroundProjection.zig");
 
 pub const Effect = union(enum) {
@@ -202,7 +196,7 @@ fn isUtf8Continuation(byte: u8) bool {
 }
 
 test "delivery display labels are bounded and valid" {
-    var workspace: [max_agent_workspace_label_bytes_module]u8 = undefined;
+    var workspace: [core_module.max_agent_workspace_label_bytes]u8 = undefined;
     try std.testing.expectEqualStrings("telar", copyDisplayPrefix(&workspace, "telar"));
     try std.testing.expectEqual(@as(usize, 0), copyDisplayPrefix(&workspace, "bad\nname").len);
     const long_workspace = "abcdefghijklmnopqrstuvwxabcdefghijklmnopqrstuvé-more";
@@ -211,7 +205,7 @@ test "delivery display labels are bounded and valid" {
     try std.testing.expect(std.unicode.utf8ValidateSlice(shortened_workspace));
     try std.testing.expect(std.mem.endsWith(u8, shortened_workspace, "…"));
 
-    var cwd: [max_agent_cwd_label_bytes_module]u8 = undefined;
+    var cwd: [core_module.max_agent_cwd_label_bytes]u8 = undefined;
     try std.testing.expectEqualStrings(
         "~/sandbox/telar",
         shortenCwd(&cwd, "/Users/adrian/sandbox/telar", "/Users/adrian"),
@@ -227,11 +221,11 @@ test "delivery display labels are bounded and valid" {
 test "oversized clipboard input preserves the pending message" {
     var delivery = try Delivery.init(std.testing.allocator);
     defer delivery.deinit(std.testing.allocator);
-    const pane_id = try pane_module(7);
+    const pane_id = try core_module.pane(7);
     try std.testing.expect(delivery.setClipboard(pane_id, "pending"));
-    var oversized: [max_clipboard_bytes_module + 1]u8 = undefined;
+    var oversized: [core_module.max_clipboard_bytes + 1]u8 = undefined;
 
-    try std.testing.expect(!delivery.setClipboard(try pane_module(8), &oversized));
+    try std.testing.expect(!delivery.setClipboard(try core_module.pane(8), &oversized));
 
     try std.testing.expect(delivery.clipboard_pending);
     try std.testing.expectEqual(pane_id, delivery.clipboard_pane);
@@ -241,12 +235,12 @@ test "oversized clipboard input preserves the pending message" {
 test "clipboard accepts exactly the wire byte limit" {
     var delivery = try Delivery.init(std.testing.allocator);
     defer delivery.deinit(std.testing.allocator);
-    var bytes: [max_clipboard_bytes_module]u8 = undefined;
+    var bytes: [core_module.max_clipboard_bytes]u8 = undefined;
     @memset(&bytes, 'x');
 
-    try std.testing.expect(delivery.setClipboard(try pane_module(7), &bytes));
+    try std.testing.expect(delivery.setClipboard(try core_module.pane(7), &bytes));
 
-    try std.testing.expectEqual(@as(u32, max_clipboard_bytes_module), delivery.clipboard_len);
+    try std.testing.expectEqual(@as(u32, core_module.max_clipboard_bytes), delivery.clipboard_len);
     try std.testing.expectEqualSlices(u8, &bytes, &delivery.clipboard_storage);
 }
 
@@ -286,8 +280,8 @@ test "delivery preserves management before resync wire order" {
     var agents: TrackerType = .{};
     var system_metrics: SamplerType = .{};
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
-    const workspace: WorkspaceLocationType = .{
-        .workspace = try workspace_module(7),
+    const workspace: core_module.WorkspaceLocation = .{
+        .workspace = try core_module.workspace(7),
     };
     try delivery.enqueue(.{ .request_failed = .{
         .request_id = @enumFromInt(3),
@@ -310,7 +304,7 @@ test "delivery preserves management before resync wire order" {
         .sources = sources,
         .metrics = &metrics,
     })).?;
-    try std.testing.expect((try decodeServer_module(first.payload)) == .request_failed);
+    try std.testing.expect((try core_module.decodeServer(first.payload)) == .request_failed);
     delivery.commit(.{ .prepared = first, .attachments = &attachments, .metrics = &metrics });
     _ = delivery.complete({});
 
@@ -320,7 +314,7 @@ test "delivery preserves management before resync wire order" {
         .sources = sources,
         .metrics = &metrics,
     })).?;
-    try std.testing.expect((try decodeServer_module(second.payload)) == .resync_required);
+    try std.testing.expect((try core_module.decodeServer(second.payload)) == .resync_required);
 }
 
 test "agent conversation delivery coalesces revisions independently for reconnecting clients" {
@@ -335,7 +329,7 @@ test "agent conversation delivery coalesces revisions independently for reconnec
     var workspaces: StateType = .{};
     var agents: TrackerType = .{};
     var system_metrics: SamplerType = .{};
-    var snapshot: @import("telar-core").AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 8, .revision = 1, .status = .ready };
+    var snapshot: core_module.AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 8, .revision = 1, .status = .ready };
     var pane: @import("../../pane/Pane.zig") = undefined;
     pane.id = snapshot.pane_id;
     pane.generation = snapshot.pane_generation;
@@ -356,17 +350,17 @@ test "agent conversation delivery coalesces revisions independently for reconnec
     first.proxy_status_sent = true;
     first.agent_revision_sent = std.math.maxInt(u64);
     const initial = (try first.prepare(.{ .io = std.testing.io, .attachments = &attachments, .sources = sources, .metrics = &metrics })).?;
-    try std.testing.expectEqual(@as(u64, 1), (try decodeServer_module(initial.payload)).agent_thread_snapshot.revision);
+    try std.testing.expectEqual(@as(u64, 1), (try core_module.decodeServer(initial.payload)).agent_thread_snapshot.revision);
     first.commit(.{ .prepared = initial, .attachments = &attachments, .metrics = &metrics });
     snapshot.revision = 15;
     _ = first.complete({});
     const newest = (try first.prepare(.{ .io = std.testing.io, .attachments = &attachments, .sources = sources, .metrics = &metrics })).?;
-    try std.testing.expectEqual(@as(u64, 15), (try decodeServer_module(newest.payload)).agent_thread_snapshot.revision);
+    try std.testing.expectEqual(@as(u64, 15), (try core_module.decodeServer(newest.payload)).agent_thread_snapshot.revision);
     first.commit(.{ .prepared = newest, .attachments = &attachments, .metrics = &metrics });
     _ = first.complete({});
     second.requestAgentThread(pane.key());
     const recovered = (try second.prepare(.{ .io = std.testing.io, .attachments = &attachments, .sources = sources, .metrics = &metrics })).?;
-    try std.testing.expectEqual(@as(u64, 15), (try decodeServer_module(recovered.payload)).agent_thread_snapshot.revision);
+    try std.testing.expectEqual(@as(u64, 15), (try core_module.decodeServer(recovered.payload)).agent_thread_snapshot.revision);
     try std.testing.expectEqual(@as(u64, 15), first.agent_threads_sent[0].?.revision);
     try std.testing.expect(second.agent_threads_sent[0] == null);
     second.commit(.{ .prepared = recovered, .attachments = &attachments, .metrics = &metrics });

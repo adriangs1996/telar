@@ -1,6 +1,6 @@
-const PaneViewportChange = @import("PaneViewportChange.zig");
+const data = @import("model");
 const CopyModeCommit = @This();
 
 active: bool,
-viewport: ?PaneViewportChange,
+viewport: ?data.PaneViewportChange,
 copy_revision: u64,

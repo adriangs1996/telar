@@ -1,12 +1,11 @@
-const max_intercept_hosts = @import("telar-core").max_intercept_hosts;
-const max_hostname_bytes_module = @import("telar-core").max_hostname_bytes;
+const core = @import("telar-core");
 const std = @import("std");
 const interception_policy = @import("interception_policy.zig");
 const Policy = @This();
 
-exact_storage: [max_intercept_hosts][]const u8 = undefined,
+exact_storage: [core.max_intercept_hosts][]const u8 = undefined,
 exact_count: u16 = 0,
-suffix_storage: [max_intercept_hosts][]const u8 = undefined,
+suffix_storage: [core.max_intercept_hosts][]const u8 = undefined,
 suffix_count: u16 = 0,
 intercept_all: bool = false,
 
@@ -18,13 +17,13 @@ intercept_all: bool = false,
 /// const policy = try Policy.init(&.{"api.openai.com"});
 /// ```
 pub fn init(configured: []const []const u8) !Policy {
-    if (configured.len > max_intercept_hosts) {
+    if (configured.len > core.max_intercept_hosts) {
         return error.TooManyProxyInterceptHosts;
     }
 
     var policy: Policy = .{};
     for (configured) |host| {
-        if (host.len == 0 or host.len > max_hostname_bytes_module) {
+        if (host.len == 0 or host.len > core.max_hostname_bytes) {
             return error.InvalidProxyInterceptHost;
         }
 

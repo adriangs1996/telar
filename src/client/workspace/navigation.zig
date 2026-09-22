@@ -1,19 +1,14 @@
 //! Bounded, disposable navigation bookmarks for workspace handoffs.
 
+const core = @import("telar-core");
+const data = @import("model");
 const History = @import("History.zig");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const std = @import("std");
-const TabIdType = @import("telar-core").TabId;
-const PaneIdType = @import("telar-core").PaneId;
 const Layouts = @import("Layouts.zig");
-const LayoutType = @import("WorkspaceLayout.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const SavedLayout = @import("SavedLayout.zig");
-const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
 
 test "workspace bookmarks replace the last focused tab and pane" {
     var history: History = .{};
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(3) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(3) };
     history.remember(.{
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(4) },
         .pane_id = @enumFromInt(5),
@@ -24,23 +19,23 @@ test "workspace bookmarks replace the last focused tab and pane" {
     });
 
     const restored = history.find(workspace).?;
-    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(7)), restored.location.tab_id);
-    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(9)), restored.pane_id);
+    try std.testing.expectEqual(@as(core.TabId, @enumFromInt(7)), restored.location.tab_id);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(9)), restored.pane_id);
     history.forget(workspace);
     try std.testing.expect(history.find(workspace) == null);
 }
 
 test "live layout retention stays bounded and replaces existing tabs before eviction" {
     var layouts: Layouts = .{};
-    var layout: LayoutType = .{};
-    const pane: PaneIdType = @enumFromInt(5);
+    var layout: data.WorkspaceLayout = .{};
+    const pane: core.PaneId = @enumFromInt(5);
     try layout.addRoot(pane);
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(3) },
         .tab_id = @enumFromInt(1),
     };
-    var saved: SavedLayout = .{ .location = location, .pane_id = pane, .workspace_active = true, .layout = layout };
-    for (0..max_client_layout_tabs_module) |index| {
+    var saved: data.SavedLayout = .{ .location = location, .pane_id = pane, .workspace_active = true, .layout = layout };
+    for (0..core.max_client_layout_tabs) |index| {
         saved.location.tab_id = @enumFromInt(index + 1);
         layouts.retain(saved);
     }
@@ -64,9 +59,9 @@ test "live layout retention stays bounded and replaces existing tabs before evic
 
 test "saved layouts are keyed by complete tab identity" {
     var layouts: Layouts = .{};
-    var first: LayoutType = .{};
+    var first: data.WorkspaceLayout = .{};
     try first.addRoot(@enumFromInt(5));
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(3) },
         .tab_id = @enumFromInt(4),
     };
@@ -77,7 +72,7 @@ test "saved layouts are keyed by complete tab identity" {
         .layout = first,
     });
 
-    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(5)), layouts.find(location).?.pane_id);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(5)), layouts.find(location).?.pane_id);
     layouts.forget(location);
     try std.testing.expect(layouts.find(location) == null);
 }

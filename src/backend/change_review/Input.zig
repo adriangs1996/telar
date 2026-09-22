@@ -1,4 +1,4 @@
+const operation_module = @import("operation.zig");
 const Context = @import("Context.zig");
-const Operation = @import("operation.zig").Operation;
 context: Context,
-operation: Operation,
+operation: operation_module.Operation,

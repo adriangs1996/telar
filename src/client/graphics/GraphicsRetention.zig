@@ -1,5 +1,5 @@
-const PaneIdType = @import("telar-core").PaneId;
-const CommandType = @import("../application/panes/pane_graphics.zig").Command;
+const core = @import("telar-core");
+const data = @import("model");
 const CreditType = @import("Credit.zig");
 /// The client's retained-graphics store as controllers see it. Each adapter
 /// instantiates the shared `GenericResourceStore` with its own per-entry
@@ -7,35 +7,35 @@ const CreditType = @import("Credit.zig");
 const GraphicsRetention = @This();
 
 context: *anyopaque,
-apply_fn: *const fn (*anyopaque, CommandType) anyerror!void,
-clear_pane_fn: *const fn (*anyopaque, PaneIdType) void,
-set_pane_visible_fn: *const fn (*anyopaque, PaneIdType, bool) anyerror!void,
-pane_visible_fn: *const fn (*anyopaque, PaneIdType) bool,
-has_pane_graphics_fn: *const fn (*anyopaque, PaneIdType) bool,
+apply_fn: *const fn (*anyopaque, data.PaneGraphicsCommand) anyerror!void,
+clear_pane_fn: *const fn (*anyopaque, core.PaneId) void,
+set_pane_visible_fn: *const fn (*anyopaque, core.PaneId, bool) anyerror!void,
+pane_visible_fn: *const fn (*anyopaque, core.PaneId) bool,
+has_pane_graphics_fn: *const fn (*anyopaque, core.PaneId) bool,
 ingress_version_fn: *const fn (*anyopaque) u64,
 peek_credit_fn: *const fn (*anyopaque) ?CreditType,
 consume_credit_fn: *const fn (*anyopaque, CreditType) void,
 
 /// Applies one decoded graphics message. Example: `try client.graphics.apply(command);`.
-pub fn apply(port: GraphicsRetention, command: CommandType) !void {
+pub fn apply(port: GraphicsRetention, command: data.PaneGraphicsCommand) !void {
     return port.apply_fn(port.context, command);
 }
 
 /// Example: `client.graphics.clearPane(pane_id);`.
-pub fn clearPane(port: GraphicsRetention, pane_id: PaneIdType) void {
+pub fn clearPane(port: GraphicsRetention, pane_id: core.PaneId) void {
     port.clear_pane_fn(port.context, pane_id);
 }
 
 /// Example: `try client.graphics.setPaneVisible(pane_id, false);`.
-pub fn setPaneVisible(port: GraphicsRetention, pane_id: PaneIdType, visible: bool) !void {
+pub fn setPaneVisible(port: GraphicsRetention, pane_id: core.PaneId, visible: bool) !void {
     return port.set_pane_visible_fn(port.context, pane_id, visible);
 }
 
-pub fn paneVisible(port: GraphicsRetention, pane_id: PaneIdType) bool {
+pub fn paneVisible(port: GraphicsRetention, pane_id: core.PaneId) bool {
     return port.pane_visible_fn(port.context, pane_id);
 }
 
-pub fn hasPaneGraphics(port: GraphicsRetention, pane_id: PaneIdType) bool {
+pub fn hasPaneGraphics(port: GraphicsRetention, pane_id: core.PaneId) bool {
     return port.has_pane_graphics_fn(port.context, pane_id);
 }
 

@@ -4,19 +4,17 @@
 //! actor scheduling either establish a fully observable pane or execute the
 //! matching rollback path.
 
+const core = @import("telar-core");
 const std = @import("std");
-const max_argument_count_module = @import("telar-core").max_argument_count;
 const command_support = @import("../../pty/command_support.zig");
 const PaneOverrides = @import("PaneOverrides.zig");
 const proxy_mod = @import("../../proxy/proxy_namespace.zig");
 const Pane = @import("../../pane/Pane.zig");
 const OutputCompletion = @import("../entrypoints/events/pane/OutputCompletion.zig");
-const mark_module = @import("telar-core").mark;
 const ExitCompletion = @import("../entrypoints/events/pane/ExitCompletion.zig");
-const pane_module = @import("telar-core").pane;
 
 comptime {
-    std.debug.assert(max_argument_count_module <= command_support.max_args);
+    std.debug.assert(core.max_argument_count <= command_support.max_args);
 }
 
 comptime {
@@ -26,7 +24,7 @@ comptime {
 pub fn readPane(io: std.Io, pane: *Pane) OutputCompletion {
     const len = pane.session.read(io, &pane.output_buffer) catch |err|
         return .{ .pane = pane.key(), .result = err };
-    mark_module(io, .pty_read);
+    core.mark(io, .pty_read);
     return .{ .pane = pane.key(), .result = @intCast(len) };
 }
 
@@ -38,7 +36,7 @@ test "pane overrides name the runtime socket and the pane's own identity" {
     var overrides: PaneOverrides = .{};
 
     const entries = overrides.build(.{
-        .key = .{ .id = try pane_module(12), .generation = 3 },
+        .key = .{ .id = try core.pane(12), .generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(4) },
             .tab_id = @enumFromInt(9),

@@ -1,4 +1,5 @@
 //! Resolves native affordances through the delivered controls before pane text.
+const data = @import("model");
 const builtin = @import("builtin");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -9,7 +10,7 @@ pub const link_modifier: u32 = if (builtin.os.tag == .macos) 8 else 4;
 
 /// Native link modifiers are never encoded into child mouse coordinates.
 /// Example: `const target = resolve(gui, mouse, event.mods);`
-pub fn resolve(gui: *const GuiClient, mouse: client.Mouse, mods: u32) Target {
+pub fn resolve(gui: *const GuiClient, mouse: data.Mouse, mods: u32) Target {
     if (!gui.focused) {
         return .{};
     }
@@ -42,7 +43,7 @@ pub fn resolve(gui: *const GuiClient, mouse: client.Mouse, mods: u32) Target {
         .pane_content => |id| {
             const model = gui.app.model.activeTabModelConst() orelse return .{};
             const pane = model.findConst(id) orelse return .{};
-            var layout: client.LayoutSnapshot = .{};
+            var layout: data.LayoutSnapshot = .{};
             model.layout.snapshot(gui.region.area, &layout);
             const view = layout.find(id) orelse return .{};
             if (view.surface != .terminal or !view.content.contains(mouse.x, mouse.y)) {

@@ -1,14 +1,14 @@
-const SupportType = @import("telar-client").Support;
+const data = @import("model");
+const client = @import("telar-client");
 const std = @import("std");
 const host_negotiation = @import("host_negotiation.zig");
-const SchedulerType = @import("telar-client").Scheduler;
 const State = @This();
 
-zlib_support: SupportType = .unknown,
+zlib_support: data.EnvironmentSupport = .unknown,
 deadline_ns: ?u64 = null,
 received: std.EnumSet(host_negotiation.Color) = .initEmpty(),
 initial_settled: bool = false,
-timer: SchedulerType = .{},
+timer: client.Scheduler = .{},
 
 /// Example: `if (state.begin(now_ns)) try writer.writeAll(color_query);`.
 pub fn begin(state: *State, now_ns: u64) bool {

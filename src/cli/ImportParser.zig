@@ -1,5 +1,5 @@
+const core = @import("telar-core");
 const history = @import("arguments/history.zig");
-const max_import_command_bytes_module = @import("telar-core").max_import_command_bytes;
 const ImportedEntry = @import("ImportedEntry.zig");
 const std = @import("std");
 /// Line-driven histfile parser producing (timestamp, command) entries.
@@ -12,7 +12,7 @@ pending_time_ms: i64 = 0,
 /// Two alternating buffers: `flush` returns a slice into the active one
 /// and `begin` switches to the other, so a finished entry stays valid
 /// while the next command starts on the same fed line.
-command_storage: [2][max_import_command_bytes_module]u8 = undefined,
+command_storage: [2][core.max_import_command_bytes]u8 = undefined,
 active: u1 = 0,
 command_len: usize = 0,
 command_active: bool = false,

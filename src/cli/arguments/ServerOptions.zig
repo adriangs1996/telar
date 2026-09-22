@@ -1,5 +1,5 @@
+const backend = @import("telar-backend");
 const server = @import("server.zig");
-const GraphicsLimitsType = @import("telar-backend").GraphicsLimits;
 const Cursor = @import("Cursor.zig");
 const std = @import("std");
 const ServerOptions = @This();
@@ -7,7 +7,7 @@ const ServerOptions = @This();
 action: server.ServerAction = .run,
 mode: server.ServerMode = .foreground,
 socket: ?[*:0]const u8 = null,
-graphics: GraphicsLimitsType = .{},
+graphics: backend.GraphicsLimits = .{},
 graphics_pane_set: bool = false,
 graphics_global_set: bool = false,
 config: ?[*:0]const u8 = null,

@@ -1,8 +1,8 @@
+const diagnostic = @import("diagnostic.zig");
 const std = @import("std");
 const analysis = @import("analysis.zig");
-const Rule = @import("diagnostic.zig").Rule;
 
-fn expectRules(expected: []const Rule, path: []const u8, source: [:0]const u8) !void {
+fn expectRules(expected: []const diagnostic.Rule, path: []const u8, source: [:0]const u8) !void {
     const violations = try analysis.lintFile(std.testing.allocator, source, path);
     defer std.testing.allocator.free(violations);
 
@@ -113,6 +113,33 @@ test "malformed input reports syntax instead of guessing a filename category" {
 
     try std.testing.expect(violations.len != 0);
     for (violations) |violation| {
-        try std.testing.expectEqual(Rule.invalid_syntax, violation.rule);
+        try std.testing.expectEqual(diagnostic.Rule.invalid_syntax, violation.rule);
     }
+}
+
+test "dedicated enums and unions use the exact PascalCase type name" {
+    try expectRules(
+        &.{},
+        "Phase.zig",
+        "pub const Phase = enum { ready };\n",
+    );
+    try expectRules(
+        &.{},
+        "Result.zig",
+        "pub const Result = union(enum) { ready, value: u8 };\n",
+    );
+    try expectRules(
+        &.{
+            .namespace_file_name,
+        },
+        "Result.zig",
+        "pub const Result = union(enum) { ready };\npub const Phase = enum { ready };\n",
+    );
+    try expectRules(
+        &.{
+            .namespace_file_name,
+        },
+        "Result.zig",
+        "pub const Result = union(enum) { ready };\npub fn helper() void {}\n",
+    );
 }

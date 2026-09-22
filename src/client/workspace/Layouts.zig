@@ -1,10 +1,9 @@
-const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
-const SavedLayout = @import("SavedLayout.zig");
+const core = @import("telar-core");
+const data = @import("model");
 const std = @import("std");
-const TabLocationType = @import("telar-core").TabLocation;
 const Layouts = @This();
 
-entries: [max_client_layout_tabs_module]?SavedLayout = @splat(null),
+entries: [core.max_client_layout_tabs]?data.SavedLayout = @splat(null),
 eviction_index: usize = 0,
 
 /// Retains the latest split tree for one stable tab identity.
@@ -12,8 +11,8 @@ eviction_index: usize = 0,
 /// ```zig
 /// try layouts.remember(saved);
 /// ```
-pub fn remember(layouts: *Layouts, saved: SavedLayout) !void {
-    var free: ?*?SavedLayout = null;
+pub fn remember(layouts: *Layouts, saved: data.SavedLayout) !void {
+    var free: ?*?data.SavedLayout = null;
     for (&layouts.entries) |*slot| {
         if (slot.*) |entry| {
             if (std.meta.eql(entry.location, saved.location)) {
@@ -36,7 +35,7 @@ pub fn remember(layouts: *Layouts, saved: SavedLayout) !void {
 /// ```zig
 /// layouts.retain(saved);
 /// ```
-pub fn retain(layouts: *Layouts, saved: SavedLayout) void {
+pub fn retain(layouts: *Layouts, saved: data.SavedLayout) void {
     layouts.remember(saved) catch {
         layouts.entries[layouts.eviction_index] = saved;
         layouts.eviction_index = (layouts.eviction_index + 1) % layouts.entries.len;
@@ -48,7 +47,7 @@ pub fn retain(layouts: *Layouts, saved: SavedLayout) void {
 /// ```zig
 /// const saved = layouts.find(location) orelse return;
 /// ```
-pub fn find(layouts: *const Layouts, location: TabLocationType) ?SavedLayout {
+pub fn find(layouts: *const Layouts, location: core.TabLocation) ?data.SavedLayout {
     for (layouts.entries) |slot| {
         const entry = slot orelse continue;
         if (std.meta.eql(entry.location, location)) {
@@ -64,7 +63,7 @@ pub fn find(layouts: *const Layouts, location: TabLocationType) ?SavedLayout {
 /// ```zig
 /// layouts.forget(location);
 /// ```
-pub fn forget(layouts: *Layouts, location: TabLocationType) void {
+pub fn forget(layouts: *Layouts, location: core.TabLocation) void {
     for (&layouts.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (std.meta.eql(entry.location, location)) {

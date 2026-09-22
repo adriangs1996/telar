@@ -1,4 +1,6 @@
 //! The GUI owns all worker output, even if shutdown drops its inbox notification.
+const gui_event = @import("../gui_event.zig");
+const worker = @import("worker.zig");
 const std = @import("std");
 const Service = @This();
 
@@ -38,7 +40,7 @@ pub fn beginFrame(service: *Service) void {
 
 /// Admits visible requests only after measuring and painting have finished.
 /// Example: `service.start(&loop.inbox);`
-pub fn start(service: *Service, inbox: *@import("../gui_event.zig").Inbox) void {
+pub fn start(service: *Service, inbox: *gui_event.Inbox) void {
     const job = service.store.nextJob() orelse return;
     service.job = job;
     inbox.start(.diagram_ready, .{ execute, .{ service, inbox.io } }) catch {
@@ -57,5 +59,5 @@ pub fn notify(service: *Service) void {
 /// Example: `try inbox.start(.diagram_ready, .{ Service.execute, .{ service, io } });`
 pub fn execute(service: *Service, io: std.Io) void {
     const job = &service.job.?;
-    service.result = .{ .id = job.id, .result = @import("worker.zig").render(io, service.store.allocator, job) };
+    service.result = .{ .id = job.id, .result = worker.render(io, service.store.allocator, job) };
 }

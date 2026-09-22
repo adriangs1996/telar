@@ -1,9 +1,9 @@
 //! Pane process ownership: terminal sessions own a PTY; agent sessions own pipes.
+const exit = @import("../pty/exit.zig");
 const std = @import("std");
 const Terminal = @import("../pty/Session.zig");
 const AgentProcess = @import("AgentProcess.zig");
 const Size = @import("../pty/Size.zig");
-const Exit = @import("../pty/exit.zig").Exit;
 
 pub const Process = union(enum) {
     terminal: Terminal,
@@ -58,7 +58,7 @@ pub const Process = union(enum) {
     }
 
     /// Example: `const exit = try process.wait();`
-    pub fn wait(process: *Process) !Exit {
+    pub fn wait(process: *Process) !exit.Exit {
         return switch (process.*) {
             .terminal => |*session| session.wait(),
             .agent => error.NotATerminal,

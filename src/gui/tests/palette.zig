@@ -1,4 +1,6 @@
 //! Slice 6 of the GUI visual language: the native command palette.
+const Viewport = @import("../native/Viewport.zig");
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -121,7 +123,14 @@ test "native palette prints the bound chord from the native keymap" {
     try fixture.paint();
     const without = fixture.renderer.quads.items().len;
 
-    var router = try routing.build(.{ .prefix = client.default_prefix, .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
+    var router = try routing.build(
+        .{
+            .prefix = data.keybind.default_prefix,
+            .bindings = &.{},
+            .escape_timeout_ns = 1,
+            .sequence_timeout_ns = 1,
+        },
+    );
     fixture.overlays.router = &router;
     try fixture.paint();
     try std.testing.expect(fixture.renderer.quads.items().len > without);
@@ -132,9 +141,20 @@ test "native palette repaints warm without shaping rasterizing or allocating" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     try populate(fixture);
-    var router = try routing.build(.{ .prefix = client.default_prefix, .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
+    var router = try routing.build(
+        .{
+            .prefix = data.keybind.default_prefix,
+            .bindings = &.{},
+            .escape_timeout_ns = 1,
+            .sequence_timeout_ns = 1,
+        },
+    );
     fixture.overlays.router = &router;
-    for ([_]client.command_palette.Prefix{ .goto, .actions, .suggest }) |prefix| {
+    for ([_]data.command_palette.Prefix{
+        .goto,
+        .actions,
+        .suggest,
+    }) |prefix| {
         fixture.model.name_prompt.begin(.{ .palette = prefix });
         _ = fixture.model.name_prompt.apply(.move_down);
         try fixture.paint();
@@ -249,7 +269,7 @@ test "suggestion clips long unicode commands on short and scaled hosts" {
     fixture.model.name_prompt.begin(.{ .palette = .suggest });
     fixture.model.suggestion.expect(9);
     try std.testing.expect(fixture.model.suggestion.apply(.{ .request_id = @enumFromInt(9), .status = .ready, .text = "find . -name '界é favicon*' -print " ** 20 }));
-    for ([_]@import("../native/Viewport.zig").Viewport{ .{ .width = 640, .height = 220, .scale = 1 }, .{ .width = 320, .height = 160, .scale = 1 }, .{ .width = 160, .height = 90, .scale = 1 }, .{ .width = 32, .height = 32, .scale = 1 }, .{ .width = 2560, .height = 1440, .scale = 2 } }) |viewport| {
+    for ([_]Viewport.Viewport{ .{ .width = 640, .height = 220, .scale = 1 }, .{ .width = 320, .height = 160, .scale = 1 }, .{ .width = 160, .height = 90, .scale = 1 }, .{ .width = 32, .height = 32, .scale = 1 }, .{ .width = 2560, .height = 1440, .scale = 2 } }) |viewport| {
         fixture.size = try fixture.renderer.measure(viewport);
         fixture.overlays.scale = viewport.scale;
         try fixture.paint();
@@ -310,10 +330,10 @@ test "native prefix keys open the palette prefixed and enter runs the chosen act
     try chord(session, "?");
     try std.testing.expect(model.name_prompt.currentConst().?.target() == .palette);
     try std.testing.expectEqualStrings("?", model.name_prompt.currentConst().?.field.text());
-    try std.testing.expectEqual(client.command_palette.Prefix.suggest, model.name_prompt.currentConst().?.paletteMode());
+    try std.testing.expectEqual(data.command_palette.Prefix.suggest, model.name_prompt.currentConst().?.paletteMode());
     try special(session, 3);
     try typeText(session, ">toggle sidebar");
-    try std.testing.expectEqual(client.command_palette.Prefix.actions, model.name_prompt.currentConst().?.paletteMode());
+    try std.testing.expectEqual(data.command_palette.Prefix.actions, model.name_prompt.currentConst().?.paletteMode());
     const visible = model.sidebarVisible();
     try special(session, 1);
     try std.testing.expect(!model.name_prompt.active());

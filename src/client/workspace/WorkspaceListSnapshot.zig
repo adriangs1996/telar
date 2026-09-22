@@ -1,14 +1,12 @@
-const max_workspace_list_entries = @import("telar-core").max_workspace_list_entries;
+const core = @import("telar-core");
 const Entry = @import("Entry.zig");
 const workspace_list = @import("workspace_list.zig");
 const SnapshotInput = @import("SnapshotInput.zig");
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const Snapshot = @This();
 
 revision: u64 = 0,
 count: usize = 0,
-entries: [max_workspace_list_entries]Entry = undefined,
+entries: [core.max_workspace_list_entries]Entry = undefined,
 path_pool: [workspace_list.path_pool_size]u8 = undefined,
 pool_len: usize = 0,
 
@@ -21,7 +19,7 @@ pub fn replace(snapshot: *Snapshot, input: SnapshotInput) !bool {
     if (input.revision <= snapshot.revision) {
         return false;
     }
-    if (input.entries.len > max_workspace_list_entries) {
+    if (input.entries.len > core.max_workspace_list_entries) {
         return error.TooManyWorkspaces;
     }
 
@@ -31,7 +29,7 @@ pub fn replace(snapshot: *Snapshot, input: SnapshotInput) !bool {
     };
 
     for (input.entries, 0..) |entry, index| {
-        if (entry.path.len > max_cwd_bytes_module) {
+        if (entry.path.len > core.max_cwd_bytes) {
             return error.WorkspacePathTooLong;
         }
         if (replacement.pool_len + entry.path.len > workspace_list.path_pool_size) {
@@ -102,7 +100,7 @@ pub fn pathAt(snapshot: *const Snapshot, index: usize) []const u8 {
 /// ```zig
 /// const workspace = snapshot.workspaceAt(0);
 /// ```
-pub fn workspaceAt(snapshot: *const Snapshot, index: usize) WorkspaceIdType {
+pub fn workspaceAt(snapshot: *const Snapshot, index: usize) core.WorkspaceId {
     return snapshot.entries[index].workspace;
 }
 
@@ -111,7 +109,7 @@ pub fn workspaceAt(snapshot: *const Snapshot, index: usize) WorkspaceIdType {
 /// ```zig
 /// const workspace = snapshot.workspaceAtPosition(0) orelse return;
 /// ```
-pub fn workspaceAtPosition(snapshot: *const Snapshot, position: usize) ?WorkspaceIdType {
+pub fn workspaceAtPosition(snapshot: *const Snapshot, position: usize) ?core.WorkspaceId {
     if (position >= snapshot.count) {
         return null;
     }
@@ -124,7 +122,7 @@ pub fn workspaceAtPosition(snapshot: *const Snapshot, position: usize) ?Workspac
 /// ```zig
 /// const index = snapshot.indexOf(workspace) orelse return;
 /// ```
-pub fn indexOf(snapshot: *const Snapshot, workspace: WorkspaceIdType) ?usize {
+pub fn indexOf(snapshot: *const Snapshot, workspace: core.WorkspaceId) ?usize {
     for (snapshot.entries[0..snapshot.count], 0..) |entry, index| {
         if (entry.workspace == workspace) {
             return index;

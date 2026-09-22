@@ -1,9 +1,8 @@
-const TerminalSizeType = @import("telar-core").TerminalSize;
+const core = @import("telar-core");
 const Stats = @import("Stats.zig");
-const AgentProviderType = @import("telar-core").AgentProvider;
 const Processing = @This();
 
 cwd: ?[]const u8,
-current_size: TerminalSizeType,
+current_size: core.TerminalSize,
 stats: *Stats,
-provider: AgentProviderType = .unknown,
+provider: core.AgentProvider = .unknown,

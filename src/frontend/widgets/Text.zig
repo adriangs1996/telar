@@ -1,5 +1,5 @@
-const ColorType = @import("telar-core").Color;
+const core = @import("telar-core");
 const Text = @This();
 
 text: []const u8,
-color: ColorType
+color: core.Color

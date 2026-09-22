@@ -1,17 +1,17 @@
 //! Values accepted and published by the agent capability.
 
+const core = @import("telar-core");
 const ProxyObservation = @import("ProxyObservation.zig");
 const std = @import("std");
-const AgentProviderType = @import("telar-core").AgentProvider;
 
 test "agent policy interprets neutral wire dialects without importing a proxy adapter" {
     var observation: ProxyObservation = undefined;
     observation.dialect = .anthropic_messages;
-    try std.testing.expectEqual(AgentProviderType.claude, observation.impliedProvider());
+    try std.testing.expectEqual(core.AgentProvider.claude, observation.impliedProvider());
     observation.dialect = .openai_responses;
-    try std.testing.expectEqual(AgentProviderType.codex, observation.impliedProvider());
+    try std.testing.expectEqual(core.AgentProvider.codex, observation.impliedProvider());
     observation.dialect = .unknown;
-    try std.testing.expectEqual(AgentProviderType.unknown, observation.impliedProvider());
+    try std.testing.expectEqual(core.AgentProvider.unknown, observation.impliedProvider());
 }
 
 pub const working_expiry_ms: i64 = 2 * 60 * 1000;

@@ -1,7 +1,8 @@
 //! A delivered conversation action owns an item identity, never a row index.
+const core = @import("telar-core");
 const Control = @This();
 
-pane_id: @import("telar-core").PaneId,
+pane_id: core.PaneId,
 attachment_generation: u64,
 identity: u64,
 source_key: u64 = 0,

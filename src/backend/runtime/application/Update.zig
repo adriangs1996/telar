@@ -1,8 +1,7 @@
-const ClientIdentityType = @import("telar-core").ClientIdentity;
-const ClientLayoutUpdateViewType = @import("telar-core").ClientLayoutUpdateView;
+const core = @import("telar-core");
 const Sources = @import("Sources.zig");
 const Update = @This();
 
-identity: ClientIdentityType,
-layout: ClientLayoutUpdateViewType,
+identity: core.ClientIdentity,
+layout: core.ClientLayoutUpdateView,
 sources: Sources,

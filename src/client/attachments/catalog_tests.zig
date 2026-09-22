@@ -1,10 +1,9 @@
-const TargetType = @import("AttachmentTarget.zig");
+const data = @import("model");
 const std = @import("std");
 const CaptureType = @import("Capture.zig");
 const retained = @import("retained.zig");
-const types = @import("types.zig");
 
-const target: TargetType = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 };
+const target: data.AttachmentTarget = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 };
 
 fn capture(gpa: std.mem.Allocator, sequence: u64) !*CaptureType {
     const result = try gpa.create(CaptureType);
@@ -56,7 +55,7 @@ test "attachment eviction skips a borrowed slot and keeps the four-item bound" {
     }
 
     try std.testing.expectEqualStrings("private png", lease.png);
-    try std.testing.expectEqual(types.max_items, store.snapshot().len);
+    try std.testing.expectEqual(data.attachment_types.max_items, store.snapshot().len);
     try std.testing.expect(store.find(@enumFromInt(1)) != null);
     try std.testing.expect(store.find(@enumFromInt(2)) == null);
 }

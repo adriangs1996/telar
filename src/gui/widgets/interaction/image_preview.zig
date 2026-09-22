@@ -1,6 +1,6 @@
+const event_module = @import("../../input/event.zig");
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
-const Event = @import("../../input/event.zig").Event;
 
 /// Revalidates a delivered image control before copying its local reference.
 /// Example: `image_preview.open(gui, target);`
@@ -39,7 +39,7 @@ pub fn close(gui: *GuiClient) void {
 
 /// Consumes preview input even before its first frame lands or while it closes.
 /// Example: `if (image_preview.route(gui, event)) return true;`
-pub fn route(gui: *GuiClient, event: Event) bool {
+pub fn route(gui: *GuiClient, event: event_module.Event) bool {
     const preview = gui.widgets.image_preview orelse return false;
     const model = gui.app.model.activeTabModelConst();
     const pane = gui.app.model.agentPane(preview.control.pane_id);

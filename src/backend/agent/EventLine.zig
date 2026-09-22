@@ -2,11 +2,11 @@
 //! truncates on a UTF-8 boundary and drops the text at its first control
 //! byte, so the stored line is always valid for the wire.
 
-const max_agent_last_event_bytes_module = @import("telar-core").max_agent_last_event_bytes;
+const core = @import("telar-core");
 const std = @import("std");
 const EventLine = @This();
 
-bytes: [max_agent_last_event_bytes_module]u8 = undefined,
+bytes: [core.max_agent_last_event_bytes]u8 = undefined,
 len: u8 = 0,
 
 /// Stores the first control-free line of `text`, cut to the wire bound on

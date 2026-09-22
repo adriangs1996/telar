@@ -1,7 +1,7 @@
 //! Called only by the observation worker. Rendering consumes retained roles.
+const core = @import("telar-core");
 const std = @import("std");
 const client = @import("telar-client");
-const Lines = @import("telar-core").ChangeReviewDiffLines;
 const SourceSide = @import("SourceSide.zig");
 const CapturedSpan = @import("CapturedSpan.zig").CapturedSpan;
 const NativeRequest = @import("NativeRequest.zig").NativeRequest;
@@ -39,7 +39,7 @@ pub fn run(self: *Self) !void {
     defer before.deinit();
     var after: SourceSide = .{ .allocator = self.allocator, .origin = @intFromPtr(self.text.ptr), .old = false };
     defer after.deinit();
-    var lines: Lines = .{ .text = self.text };
+    var lines: core.ChangeReviewDiffLines = .{ .text = self.text };
     while (lines.next()) |line| {
         switch (line.kind) {
             .file, .hunk => {
@@ -68,7 +68,7 @@ pub fn run(self: *Self) !void {
 // Upstream query compilation depends only on bundled grammars. Keep this cold
 // setup outside the deadline for processing untrusted source fragments.
 fn prepareLanguages(self: *Self) !void {
-    var lines: Lines = .{ .text = self.text };
+    var lines: core.ChangeReviewDiffLines = .{ .text = self.text };
     while (lines.next()) |line| {
         if (line.kind != .file) {
             continue;

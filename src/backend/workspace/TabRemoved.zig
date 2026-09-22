@@ -1,11 +1,10 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const core = @import("telar-core");
 /// Committed disappearance of a tab from its workspace aggregate.
 const TabRemoved = @This();
 
-location: TabLocationType,
+location: core.TabLocation,
 workspace_removed: bool,
-previous_workspace: ?WorkspaceIdType = null,
+previous_workspace: ?core.WorkspaceId = null,
 
 /// Creates a removal fact and rejects an impossible workspace handoff.
 /// A predecessor exists only when the removal also removed its workspace.
@@ -13,7 +12,7 @@ previous_workspace: ?WorkspaceIdType = null,
 /// ```zig
 /// const event = try TabRemoved.init(location, true, previous_workspace);
 /// ```
-pub fn init(location: TabLocationType, workspace_removed: bool, previous_workspace: ?WorkspaceIdType) !TabRemoved {
+pub fn init(location: core.TabLocation, workspace_removed: bool, previous_workspace: ?core.WorkspaceId) !TabRemoved {
     if (!workspace_removed and previous_workspace != null) {
         return error.UnexpectedPreviousWorkspace;
     }

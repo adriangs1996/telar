@@ -1,53 +1,15 @@
 //! Runtime protocol projection from authoritative state.
-const encodeEditorOpened = @import("telar-core").encodeEditorOpened;
+const core = @import("telar-core");
 
-const encodeClientList = @import("telar-core").encodeClientList;
 const EncodeContext = @import("EncodeContext.zig");
 const response_queue = @import("response_queue.zig");
-const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
-const PaneDescriptorType = @import("telar-core").PaneDescriptor;
-const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
-const TabDescriptorType = @import("telar-core").TabDescriptor;
-const PaneForeground = @import("telar-core").PaneForeground;
-const max_history_results = @import("telar-core").max_history_results;
-const HistoryEntryType = @import("telar-core").HistoryEntry;
-const max_pane_text_bytes_module = @import("telar-core").max_pane_text_bytes;
-const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
-const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
-const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
-const encodeWorkspaceSnapshot_module = @import("telar-core").encodeWorkspaceSnapshot;
-const encodeTabCreated_module = @import("telar-core").encodeTabCreated;
-const encodeTabRenamed_module = @import("telar-core").encodeTabRenamed;
-const encodeTabClosed_module = @import("telar-core").encodeTabClosed;
-const encodeTabMoved_module = @import("telar-core").encodeTabMoved;
-const encodeNotification_module = @import("telar-core").encodeNotification;
-const encodeNotificationShown_module = @import("telar-core").encodeNotificationShown;
-const encodeAgentSound_module = @import("telar-core").encodeAgentSound;
-const encodeRequestCompleted_module = @import("telar-core").encodeRequestCompleted;
-const encodeHistoryPruned_module = @import("telar-core").encodeHistoryPruned;
-const max_history_stats_top_module = @import("telar-core").max_history_stats_top;
-const HistoryStatsTopType = @import("telar-core").HistoryStatsTop;
-const encodeHistoryStats_module = @import("telar-core").encodeHistoryStats;
-const encodeHistoryOutput_module = @import("telar-core").encodeHistoryOutput;
-const encodePaneMatches_module = @import("telar-core").encodePaneMatches;
-const encodePaneText_module = @import("telar-core").encodePaneText;
-const encodePaneFocusCommand_module = @import("telar-core").encodePaneFocusCommand;
-const encodePaneFocusResult_module = @import("telar-core").encodePaneFocusResult;
-const encodeCommandSuggestion_module = @import("telar-core").encodeCommandSuggestion;
 const QueryResultType = @import("../../history/QueryResult.zig");
-const encodeClientCommand = @import("telar-core").encodeClientCommand;
-const encodeClientCommandResult = @import("telar-core").encodeClientCommandResult;
 const std = @import("std");
-const encodeHistoryResults_module = @import("telar-core").encodeHistoryResults;
 const StateType = @import("../../workspace/State.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
-const workspace = @import("telar-core").workspace;
 const OutputResultType = @import("../../history/OutputResult.zig");
 const StatsResultType = @import("../../history/StatsResult.zig");
 const ReaderType = @import("../../workspace/Reader.zig");
-const decodeServer_module = @import("telar-core").decodeServer;
-const FailureCodeType = @import("telar-core").FailureCode;
-const SuggestionStatusType = @import("telar-core").SuggestionStatus;
 
 /// Encodes one queued response against the *current* stores. A response can
 /// outlive what it describes - the workspace of a queued snapshot may close
@@ -65,19 +27,19 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
     const history_output = context.history_output;
     const history_stats = context.history_stats;
 
-    var descriptor_storage: [max_panes_per_tab]PaneDescriptorType = undefined;
-    var tab_storage: [max_tabs_per_workspace]TabDescriptorType = undefined;
-    var foreground_storage: [max_panes_per_tab]PaneForeground = undefined;
-    var history_storage: [max_history_results]HistoryEntryType = undefined;
-    var text_storage: [max_pane_text_bytes_module]u8 = undefined;
+    var descriptor_storage: [core.max_panes_per_tab]core.PaneDescriptor = undefined;
+    var tab_storage: [core.max_tabs_per_workspace]core.TabDescriptor = undefined;
+    var foreground_storage: [core.max_panes_per_tab]core.PaneForeground = undefined;
+    var history_storage: [core.max_history_results]core.HistoryEntry = undefined;
+    var text_storage: [core.max_pane_text_bytes]u8 = undefined;
     return switch (response.*) {
-        .request_failed => |failure| try encodeRequestFailed_module(buffer, .{
+        .request_failed => |failure| try core.encodeRequestFailed(buffer, .{
             .request_id = failure.request_id,
             .code = failure.code,
             .message = failure.message,
         }),
-        .pane_opened => |opened| try encodePaneOpened_module(buffer, opened),
-        .tab_snapshot => |snapshot| try encodeTabSnapshot_module(buffer, .{
+        .pane_opened => |opened| try core.encodePaneOpened(buffer, opened),
+        .tab_snapshot => |snapshot| try core.encodeTabSnapshot(buffer, .{
             .request_id = snapshot.request_id,
             .location = snapshot.location,
             .panes = panes.descriptorsAt(snapshot.location, &descriptor_storage),
@@ -87,7 +49,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
                 snapshot.workspace,
                 &tab_storage,
             ) orelse
-                break :payload try encodeRequestFailed_module(buffer, .{
+                break :payload try core.encodeRequestFailed(buffer, .{
                     .request_id = snapshot.request_id,
                     .code = .workspace_not_found,
                     .message = "workspace closed before its snapshot was sent",
@@ -112,14 +74,14 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
 
                 tab.foregrounds = foreground_storage[start..foreground_count];
             }
-            break :payload try encodeWorkspaceSnapshot_module(buffer, .{
+            break :payload try core.encodeWorkspaceSnapshot(buffer, .{
                 .request_id = snapshot.request_id,
                 .workspace = snapshot.workspace,
                 .name = descriptor_snapshot.name,
                 .tabs = descriptor_snapshot.tabs,
             });
         },
-        .tab_created => |*created| try encodeTabCreated_module(buffer, .{
+        .tab_created => |*created| try core.encodeTabCreated(buffer, .{
             .request_id = created.request_id,
             .location = created.location,
             .position = created.position,
@@ -128,19 +90,19 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
             .kind = created.kind,
             .pane_generation = created.pane_generation,
         }),
-        .tab_renamed => |*renamed| try encodeTabRenamed_module(buffer, .{
+        .tab_renamed => |*renamed| try core.encodeTabRenamed(buffer, .{
             .request_id = renamed.request_id,
             .location = renamed.location,
             .label = renamed.labelSlice(),
         }),
-        .tab_closed => |closed| try encodeTabClosed_module(buffer, closed),
-        .tab_moved => |moved| try encodeTabMoved_module(buffer, moved),
-        .notification => |*notification| try encodeNotification_module(
+        .tab_closed => |closed| try core.encodeTabClosed(buffer, closed),
+        .tab_moved => |moved| try core.encodeTabMoved(buffer, moved),
+        .notification => |*notification| try core.encodeNotification(
             buffer,
             notification.view(),
         ),
-        .notification_shown => |shown| try encodeNotificationShown_module(buffer, shown),
-        .agent_sound => |sound| try encodeAgentSound_module(buffer, sound),
+        .notification_shown => |shown| try core.encodeNotificationShown(buffer, shown),
+        .agent_sound => |sound| try core.encodeAgentSound(buffer, sound),
         .change_review => |result| payload: {
             if (context.change_review) |owned| {
                 owned.* = result;
@@ -158,28 +120,28 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
 
             const page = result.value;
             if (panes.resolveControlConst(.{ .id = page.snapshot.pane_id, .generation = page.snapshot.pane_generation }) == null) {
-                break :payload try encodeRequestFailed_module(buffer, .{
+                break :payload try core.encodeRequestFailed(buffer, .{
                     .request_id = page.request_id,
                     .code = .pane_not_found,
                     .message = "agent pane closed before its history was sent",
                 });
             }
 
-            break :payload try @import("telar-core").encodeAgentHistoryPage(buffer, page);
+            break :payload try core.encodeAgentHistoryPage(buffer, page);
         },
         .history_result => |result| payload: {
             history_result.* = result;
             break :payload try encodeHistoryResult(buffer, result, &history_storage);
         },
-        .request_completed => |completed| try encodeRequestCompleted_module(buffer, completed),
-        .history_pruned => |pruned| try encodeHistoryPruned_module(buffer, pruned),
+        .request_completed => |completed| try core.encodeRequestCompleted(buffer, completed),
+        .history_pruned => |pruned| try core.encodeHistoryPruned(buffer, pruned),
         .history_stats => |result| payload: {
             history_stats.* = result;
-            var top_storage: [max_history_stats_top_module]HistoryStatsTopType = undefined;
+            var top_storage: [core.max_history_stats_top]core.HistoryStatsTop = undefined;
             for (result.top, 0..) |entry, index| {
                 top_storage[index] = .{ .count = entry.count, .command = entry.command };
             }
-            break :payload try encodeHistoryStats_module(buffer, .{
+            break :payload try core.encodeHistoryStats(buffer, .{
                 .request_id = result.request_id,
                 .total = result.total,
                 .unique = result.unique,
@@ -188,7 +150,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
         },
         .history_output => |result| payload: {
             history_output.* = result;
-            break :payload try encodeHistoryOutput_module(buffer, .{
+            break :payload try core.encodeHistoryOutput(buffer, .{
                 .request_id = result.request_id,
                 .id = result.id,
                 .truncated = result.truncated,
@@ -196,7 +158,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
                 .content = result.content,
             });
         },
-        .pane_matches => |*found| try encodePaneMatches_module(buffer, .{
+        .pane_matches => |*found| try core.encodePaneMatches(buffer, .{
             .request_id = found.request_id,
             .pane_id = found.pane_id,
             .truncated = found.matches.truncated,
@@ -204,26 +166,26 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
         }),
         .pane_text => |*read| payload: {
             const target = panes.resolveControlConst(read.pane) orelse
-                break :payload try encodeRequestFailed_module(buffer, .{
+                break :payload try core.encodeRequestFailed(buffer, .{
                     .request_id = read.request_id,
                     .code = .pane_not_found,
                     .message = "pane closed before its text was read",
                 });
             const dump = target.dumpText(.{ .rows = read.rows, .source = read.source }, &text_storage);
-            break :payload try encodePaneText_module(buffer, .{
+            break :payload try core.encodePaneText(buffer, .{
                 .request_id = read.request_id,
                 .pane_id = read.pane.id,
                 .truncated = dump.truncated,
                 .text = text_storage[0..dump.len],
             });
         },
-        .client_command => |command| try encodeClientCommand(buffer, command),
-        .client_command_result => |command| try encodeClientCommandResult(buffer, command),
-        .client_list => |list| try encodeClientList(buffer, list),
-        .pane_focus_command => |command| try encodePaneFocusCommand_module(buffer, command),
-        .editor_opened => |result| try encodeEditorOpened(buffer, result),
-        .pane_focus_result => |result| try encodePaneFocusResult_module(buffer, result),
-        .command_suggestion => |*suggested| try encodeCommandSuggestion_module(buffer, .{
+        .client_command => |command| try core.encodeClientCommand(buffer, command),
+        .client_command_result => |command| try core.encodeClientCommandResult(buffer, command),
+        .client_list => |list| try core.encodeClientList(buffer, list),
+        .pane_focus_command => |command| try core.encodePaneFocusCommand(buffer, command),
+        .editor_opened => |result| try core.encodeEditorOpened(buffer, result),
+        .pane_focus_result => |result| try core.encodePaneFocusResult(buffer, result),
+        .command_suggestion => |*suggested| try core.encodeCommandSuggestion(buffer, .{
             .request_id = suggested.request_id,
             .status = suggested.status,
             .text = suggested.textSlice(),
@@ -231,7 +193,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
     };
 }
 
-fn encodeHistoryResult(buffer: []u8, result: *const QueryResultType, storage: *[max_history_results]HistoryEntryType) ![]const u8 {
+fn encodeHistoryResult(buffer: []u8, result: *const QueryResultType, storage: *[core.max_history_results]core.HistoryEntry) ![]const u8 {
     std.debug.assert(result.entries.len <= storage.len);
     for (result.entries, 0..) |entry, index| {
         storage[index] = .{
@@ -254,7 +216,7 @@ fn encodeHistoryResult(buffer: []u8, result: *const QueryResultType, storage: *[
             .workspace_path = entry.workspace_path,
         };
     }
-    return encodeHistoryResults_module(buffer, .{
+    return core.encodeHistoryResults(buffer, .{
         .request_id = result.request_id,
         .entries = storage[0..result.entries.len],
         .snapshot_id = result.snapshot_id,
@@ -267,7 +229,7 @@ test "a workspace snapshot for a vanished workspace becomes a failure reply" {
     var panes: PaneStore = .{};
     var response: response_queue.PendingResponse = .{ .workspace_snapshot = .{
         .request_id = @enumFromInt(9),
-        .workspace = .{ .workspace = try workspace(77) },
+        .workspace = .{ .workspace = try core.workspace(77) },
     } };
     var buffer: [1024]u8 = undefined;
     var history_result: ?*QueryResultType = null;
@@ -282,10 +244,10 @@ test "a workspace snapshot for a vanished workspace becomes a failure reply" {
         .history_output = &history_output,
         .history_stats = &history_stats,
     }, &response);
-    const decoded = try decodeServer_module(payload);
+    const decoded = try core.decodeServer(payload);
 
     try std.testing.expect(decoded == .request_failed);
-    try std.testing.expectEqual(FailureCodeType.workspace_not_found, decoded.request_failed.code);
+    try std.testing.expectEqual(core.FailureCode.workspace_not_found, decoded.request_failed.code);
 }
 
 test "a command suggestion encodes its owned text and a bare status" {
@@ -307,13 +269,13 @@ test "a command suggestion encodes its owned text and a bare status" {
     var ready: response_queue.PendingResponse = .{ .command_suggestion = .{ .request_id = @enumFromInt(41), .status = .ready } };
     @memcpy(ready.command_suggestion.text[0..6], "ls -lS");
     ready.command_suggestion.text_len = 6;
-    const decoded = try decodeServer_module(try encodeResponse(context, &ready));
+    const decoded = try core.decodeServer(try encodeResponse(context, &ready));
     try std.testing.expect(decoded == .command_suggestion);
-    try std.testing.expectEqual(SuggestionStatusType.ready, decoded.command_suggestion.status);
+    try std.testing.expectEqual(core.SuggestionStatus.ready, decoded.command_suggestion.status);
     try std.testing.expectEqualStrings("ls -lS", decoded.command_suggestion.text);
 
     var timed_out: response_queue.PendingResponse = .{ .command_suggestion = .{ .request_id = @enumFromInt(42), .status = .timeout } };
-    const bare = try decodeServer_module(try encodeResponse(context, &timed_out));
-    try std.testing.expectEqual(SuggestionStatusType.timeout, bare.command_suggestion.status);
+    const bare = try core.decodeServer(try encodeResponse(context, &timed_out));
+    try std.testing.expectEqual(core.SuggestionStatus.timeout, bare.command_suggestion.status);
     try std.testing.expectEqual(@as(usize, 0), bare.command_suggestion.text.len);
 }

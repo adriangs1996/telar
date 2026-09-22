@@ -1,7 +1,7 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const LayoutType = @import("WorkspaceLayout.zig");
+const core = @import("telar-core");
+const data = @import("model");
 const PendingLayoutRestore = @This();
 
-location: TabLocationType,
-layout: LayoutType,
+location: core.TabLocation,
+layout: data.WorkspaceLayout,
 restore_saved_focus: bool = false,

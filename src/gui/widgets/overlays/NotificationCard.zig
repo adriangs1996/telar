@@ -1,4 +1,5 @@
 //! One native card. Text and semantic state are borrowed only while drawing.
+const shared_model = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -11,7 +12,7 @@ const Hits = @import("NotificationHits.zig");
 const Text = @import("NotificationText.zig");
 const Card = @This();
 
-item: *const client.NotificationItem,
+item: *const shared_model.NotificationItem,
 bounds: Rect,
 body: Text = .{},
 opacity: f32 = 1,

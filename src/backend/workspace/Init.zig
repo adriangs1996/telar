@@ -1,8 +1,7 @@
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
-const TabIdType = @import("telar-core").TabId;
+const core = @import("telar-core");
 const Init = @This();
 
-id: WorkspaceIdType,
+id: core.WorkspaceId,
 path: []u8,
-default_tab_id: TabIdType,
+default_tab_id: core.TabId,
 explicit_name: ?[]const u8 = null,

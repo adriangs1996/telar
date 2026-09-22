@@ -1,10 +1,10 @@
+const client = @import("telar-client");
 const std = @import("std");
 const core = @import("telar-core");
-const ThreadView = @import("telar-client").ThreadView;
 const Selector = @import("interaction/ComposerSelector.zig");
 const Options = @This();
 
-thread: ThreadView,
+thread: client.ThreadView,
 kind: @FieldType(Selector, "kind"),
 
 /// Uses only entries advertised by the live provider. Example: `const count = options.count();`

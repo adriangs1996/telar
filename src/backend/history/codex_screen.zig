@@ -1,13 +1,10 @@
 //! Codex's live composer and the status rows immediately above it. Transcript
 //! text is never a ready prompt, even when it quotes the complete placeholder.
 
+const core = @import("telar-core");
 const vt = @import("ghostty-vt");
-const TableType = @import("telar-core").Table;
-const Signal = @import("telar-core").Signal;
 const Row = @import("Row.zig");
 const std = @import("std");
-const StatusType = @import("telar-core").Status;
-const builtin_table_module = @import("telar-core").builtin_table;
 
 const max_rows = 32;
 
@@ -17,7 +14,7 @@ const max_rows = 32;
 /// ```zig
 /// const signal = codex_screen.scan(terminal, manifests);
 /// ```
-pub fn scan(terminal: *const vt.Terminal, manifests: *const TableType) ?Signal {
+pub fn scan(terminal: *const vt.Terminal, manifests: *const core.Table) ?core.Signal {
     const first_row = terminal.rows - @min(terminal.rows, max_rows);
     var y: usize = terminal.rows;
     while (y > first_row) {
@@ -75,7 +72,7 @@ test "Codex status clocks support remapped shortcuts and disabled animations" {
         defer stream.deinit();
         stream.nextSlice(text);
         stream.nextSlice("\r\n\r\n\xe2\x80\xba Ask Codex to do anything\x1b[3G");
-        try std.testing.expectEqual(StatusType.working, scan(&terminal, &builtin_table_module).?.status);
+        try std.testing.expectEqual(core.Status.working, scan(&terminal, &core.builtin_table).?.status);
     }
 }
 
@@ -86,9 +83,9 @@ test "Codex composer drafts prove readiness without claiming identity" {
     defer stream.deinit();
     stream.nextSlice("\xe2\x80\xba my next question\r\n  continued draft");
 
-    const signal = scan(&terminal, &builtin_table_module).?;
+    const signal = scan(&terminal, &core.builtin_table).?;
     try std.testing.expect(signal.ready_confirmed);
     try std.testing.expect(!signal.identity_confirmed);
     stream.nextSlice("\x1b[?25l");
-    try std.testing.expect(scan(&terminal, &builtin_table_module) == null);
+    try std.testing.expect(scan(&terminal, &core.builtin_table) == null);
 }

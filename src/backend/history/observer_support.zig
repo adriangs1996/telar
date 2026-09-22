@@ -7,20 +7,14 @@
 //! graphics and glyph APCs are disabled here: history needs their framing,
 //! not their payload decoding or storage.
 
-const StatsType = @import("Stats.zig");
+const core = @import("telar-core");
 
-const ObserverType = @import("Observer.zig");
 const Input = @import("Input.zig");
 const Output = @import("Output.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
 const ClockType = @import("Clock.zig");
-const TableType = @import("telar-core").Table;
-const SignalType = @import("telar-core").Signal;
 const vt = @import("ghostty-vt");
 const std = @import("std");
 const CommandType = @import("Command.zig");
-const StatusType = @import("telar-core").Status;
-const AgentProviderType = @import("telar-core").AgentProvider;
 const CodexTestSink = @import("CodexTestSink.zig");
 
 pub const batch_bytes = 4 * 16 * 1024;
@@ -43,7 +37,7 @@ pub const Processing = @import("Processing.zig");
 pub const Event = union(enum) {
     input: Input,
     output: Output,
-    resize: TerminalSizeType,
+    resize: core.TerminalSize,
     shell_exit: struct {
         clock: ClockType,
         exit_code: i32,
@@ -56,7 +50,7 @@ pub const Observer = @import("Observer.zig");
 /// A visible blocked phrase stands. An agent whose manifest declares its own
 /// ready prompt is not subject to the generic glyph scan; for the rest the
 /// glyph scan decides readiness and the phrases only confirm identity.
-pub fn mergeSignals(table: *const TableType, phrases: ?SignalType, prompt: ?SignalType) ?SignalType {
+pub fn mergeSignals(table: *const core.Table, phrases: ?core.Signal, prompt: ?core.Signal) ?core.Signal {
     const signal = phrases orelse return prompt;
 
     if (signal.status == .blocked or table.declaresReadyPrompt(signal.provider)) {
@@ -68,7 +62,7 @@ pub fn mergeSignals(table: *const TableType, phrases: ?SignalType, prompt: ?Sign
     return result;
 }
 
-pub fn vtResize(size: TerminalSizeType) vt.Terminal.Resize {
+pub fn vtResize(size: core.TerminalSize) vt.Terminal.Resize {
     return .{
         .cols = size.cols,
         .rows = size.rows,
@@ -80,8 +74,8 @@ pub fn vtResize(size: TerminalSizeType) vt.Terminal.Resize {
 }
 
 test "input and output are observed in enqueue order" {
-    var observer: ObserverType = undefined;
-    const size: TerminalSizeType = .{
+    var observer: Observer = undefined;
+    const size: core.TerminalSize = .{
         .cols = 40,
         .rows = 8,
         .cell_width_px = 0,
@@ -106,7 +100,7 @@ test "input and output are observed in enqueue order" {
     observer.queueOutput(.{ .bytes = "echo isolated\r\n", .shell_foreground = false, .clock = started });
     observer.queueShellExit(.{ .real_ms = 20, .awake_ns = 500 }, 0);
     try std.testing.expect(observer.seal());
-    var stats: StatsType = .{};
+    var stats: Stats = .{};
     observer.processSealed(.{ .cwd = null, .current_size = size, .stats = &stats }, &collector);
     observer.finishSealed();
 
@@ -115,7 +109,7 @@ test "input and output are observed in enqueue order" {
 }
 
 test "overflow marks the observer for a counted reset" {
-    var observer: ObserverType = undefined;
+    var observer: Observer = undefined;
     try observer.init(.{
         .io = std.testing.io,
         .gpa = std.testing.allocator,
@@ -137,7 +131,7 @@ test "overflow marks the observer for a counted reset" {
 }
 
 test "Claude readiness comes from the prompt at the visible cursor" {
-    const size: TerminalSizeType = .{
+    const size: core.TerminalSize = .{
         .cols = 40,
         .rows = 8,
         .cell_width_px = 0,
@@ -147,14 +141,14 @@ test "Claude readiness comes from the prompt at the visible cursor" {
         "Working (1s, esc to interrupt)\r\x1b[2K\xe2\x9d\xaf ",
         size,
     )).?;
-    try std.testing.expectEqual(StatusType.ready, signal.status);
-    try std.testing.expectEqual(AgentProviderType.claude, signal.provider);
+    try std.testing.expectEqual(core.Status.ready, signal.status);
+    try std.testing.expectEqual(core.AgentProvider.claude, signal.provider);
     try std.testing.expect(!signal.identity_confirmed);
     try std.testing.expect(signal.ready_confirmed);
 }
 
 test "a raw Claude prompt with a hidden cursor is not ready" {
-    const size: TerminalSizeType = .{
+    const size: core.TerminalSize = .{
         .cols = 40,
         .rows = 8,
         .cell_width_px = 0,
@@ -164,7 +158,7 @@ test "a raw Claude prompt with a hidden cursor is not ready" {
 }
 
 test "Claude software cursor confirms readiness while the terminal cursor is hidden" {
-    const size: TerminalSizeType = .{
+    const size: core.TerminalSize = .{
         .cols = 40,
         .rows = 8,
         .cell_width_px = 0,
@@ -174,13 +168,13 @@ test "Claude software cursor confirms readiness while the terminal cursor is hid
         "\x1b[?25l\xe2\x9d\xaf \x1b[7my\x1b[27m ma\xc3\xb1ana ?\r\nstatus",
         size,
     )).?;
-    try std.testing.expectEqual(StatusType.ready, signal.status);
-    try std.testing.expectEqual(AgentProviderType.claude, signal.provider);
+    try std.testing.expectEqual(core.Status.ready, signal.status);
+    try std.testing.expectEqual(core.AgentProvider.claude, signal.provider);
     try std.testing.expect(signal.ready_confirmed);
 }
 
 test "an inverse status row does not revive a stale Claude prompt" {
-    const size: TerminalSizeType = .{
+    const size: core.TerminalSize = .{
         .cols = 40,
         .rows = 8,
         .cell_width_px = 0,
@@ -192,8 +186,8 @@ test "an inverse status row does not revive a stale Claude prompt" {
     ) == null);
 }
 
-fn agentSignalForOutput(output: []const u8, size: TerminalSizeType) !?SignalType {
-    var observer: ObserverType = undefined;
+fn agentSignalForOutput(output: []const u8, size: core.TerminalSize) !?core.Signal {
+    var observer: Observer = undefined;
     try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = size });
     defer observer.deinit();
 
@@ -203,7 +197,7 @@ fn agentSignalForOutput(output: []const u8, size: TerminalSizeType) !?SignalType
     var noop: Noop = .{};
     observer.queueOutput(.{ .bytes = output, .shell_foreground = false, .clock = .{ .real_ms = 1, .awake_ns = 1 } });
     try std.testing.expect(observer.seal());
-    var stats: StatsType = .{};
+    var stats: Stats = .{};
     observer.processSealed(.{ .cwd = null, .current_size = size, .stats = &stats }, &noop);
     observer.finishSealed();
     return if (stats.agent_observation) |observation| observation.signal else null;
@@ -217,18 +211,18 @@ test "Codex transcript quotes do not keep the idle composer working or blocked" 
         var bytes: [1024]u8 = undefined;
         const output = try std.fmt.bufPrint(&bytes, "{s}\r\n\r\n\xe2\x94\x80 Worked for 12s \xe2\x94\x80\r\n\r\n\xe2\x80\xba Ask Codex to do anything\x1b[3G", .{quote});
         const signal = (try agentSignalForOutput(output, codex_test_size)).?;
-        try std.testing.expectEqual(AgentProviderType.codex, signal.provider);
-        try std.testing.expectEqual(StatusType.ready, signal.status);
+        try std.testing.expectEqual(core.AgentProvider.codex, signal.provider);
+        try std.testing.expectEqual(core.Status.ready, signal.status);
         try std.testing.expect(signal.ready_confirmed);
     }
 }
 
-const codex_test_size: TerminalSizeType = .{ .cols = 100, .rows = 16, .cell_width_px = 0, .cell_height_px = 0 };
+const codex_test_size: core.TerminalSize = .{ .cols = 100, .rows = 16, .cell_width_px = 0, .cell_height_px = 0 };
 
-fn codexTestBatch(observer: *ObserverType, bytes: []const u8, now_ms: i64) !StatsType {
+fn codexTestBatch(observer: *Observer, bytes: []const u8, now_ms: i64) !Stats {
     observer.queueOutput(.{ .bytes = bytes, .shell_foreground = false, .clock = .{ .real_ms = now_ms, .awake_ns = @intCast(now_ms * 1_000_000) } });
     try std.testing.expect(observer.seal());
-    var stats: StatsType = .{};
+    var stats: Stats = .{};
     var sink: CodexTestSink = .{};
     observer.processSealed(.{ .cwd = null, .current_size = codex_test_size, .stats = &stats, .provider = .codex }, &sink);
     observer.finishSealed();
@@ -236,7 +230,7 @@ fn codexTestBatch(observer: *ObserverType, bytes: []const u8, now_ms: i64) !Stat
 }
 
 test "Codex synchronized repaint never publishes its intermediate idle prompt" {
-    var observer: ObserverType = undefined;
+    var observer: Observer = undefined;
     try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = codex_test_size });
     defer observer.deinit();
 
@@ -246,12 +240,12 @@ test "Codex synchronized repaint never publishes its intermediate idle prompt" {
 
     const complete = try codexTestBatch(&observer, "\x1b[1;1HWorking (2s, esc to interrupt)\x1b[4;3H\x1b[?2026l", 201);
     if (complete.agent_observation) |observation| {
-        try std.testing.expectEqual(StatusType.working, observation.signal.status);
+        try std.testing.expectEqual(core.Status.working, observation.signal.status);
     }
 }
 
 test "Codex repaints preserve the PTY timestamp and reconsider an unchanged ready screen" {
-    var observer: ObserverType = undefined;
+    var observer: Observer = undefined;
     try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = codex_test_size });
     defer observer.deinit();
 
@@ -262,7 +256,7 @@ test "Codex repaints preserve the PTY timestamp and reconsider an unchanged read
 
     observer.queueInput(.{ .bytes = "next turn\r", .shell_foreground = false, .clock = .{ .real_ms = 20_000, .awake_ns = 20_000_000_000 } });
     try std.testing.expect(observer.seal());
-    var stats: StatsType = .{};
+    var stats: Stats = .{};
     var sink: CodexTestSink = .{};
     observer.processSealed(.{ .cwd = null, .current_size = codex_test_size, .stats = &stats, .provider = .codex }, &sink);
     observer.finishSealed();
@@ -273,16 +267,16 @@ test "every byte boundary of a Codex synchronized redraw preserves working until
     const initial = "\x1b[1;1HWorking (1s)\x1b[4;1H\xe2\x80\xba Ask Codex to do anything\x1b[4;3H";
     const repaint = "\x1b[?2026h\x1b[1;1H\x1b[2K\x1b[4;3H\x1b[1;1H\xe2\x80\xa2 Thinking (2s)\x1b[4;3H\x1b[?2026l";
     for (0..repaint.len + 1) |split| {
-        var observer: ObserverType = undefined;
+        var observer: Observer = undefined;
         try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = codex_test_size });
         defer observer.deinit();
         _ = try codexTestBatch(&observer, initial, 100);
 
         const first = try codexTestBatch(&observer, repaint[0..split], 200);
         const second = try codexTestBatch(&observer, repaint[split..], 201);
-        for ([_]StatsType{ first, second }) |stats| {
+        for ([_]Stats{ first, second }) |stats| {
             if (stats.agent_observation) |observation| {
-                try std.testing.expectEqual(StatusType.working, observation.signal.status);
+                try std.testing.expectEqual(core.Status.working, observation.signal.status);
             }
         }
 
@@ -301,7 +295,7 @@ test "Codex transcript placeholders without a live composer never prove readines
 }
 
 test "observation loss cannot manufacture an idle Codex screen from a partial repaint" {
-    var observer: ObserverType = undefined;
+    var observer: Observer = undefined;
     try observer.init(.{ .io = std.testing.io, .gpa = std.testing.allocator, .cwd = "/work", .size = codex_test_size });
     defer observer.deinit();
     const flood: [batch_bytes]u8 = @splat('x');
@@ -311,7 +305,7 @@ test "observation loss cannot manufacture an idle Codex screen from a partial re
     try std.testing.expect(lost.agent_observation == null);
 
     const recovered = try codexTestBatch(&observer, "\x1b[1;1HWorking (2s)\x1b[4;3H", 300);
-    try std.testing.expectEqual(StatusType.working, recovered.agent_observation.?.signal.status);
+    try std.testing.expectEqual(core.Status.working, recovered.agent_observation.?.signal.status);
     const idle = try codexTestBatch(&observer, "\x1b[1;1H\x1b[2K\x1b[4;3H", 400);
     try std.testing.expect(idle.agent_observation.?.signal.ready_confirmed);
 }

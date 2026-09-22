@@ -1,5 +1,5 @@
-const Mouse = @import("../../input/Mouse.zig");
+const data = @import("model");
 const Command = @This();
 
-kind: Mouse.Kind,
+kind: data.Mouse.Kind,
 left_button: bool = true,

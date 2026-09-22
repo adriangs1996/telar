@@ -1,36 +1,17 @@
 //! Client integration tests for input.
 
+const client_module = @import("telar-client");
+const data = @import("model");
+const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
-const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
 const support = @import("support.zig");
-const CaptureType = @import("telar-client").Capture;
-const view_interactions = @import("telar-client").operations.view_interactions;
 const std = @import("std");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
-const input_operations = @import("telar-client").operations;
-const parseKey_module = @import("telar-client").parseKey;
-const clipboard_images = @import("telar-client").operations.clipboard_images;
-const BufferType = @import("telar-core").Buffer;
-const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
-const decodeServer_module = @import("telar-core").decodeServer;
-const Client = @import("telar-client").AttachedClient;
-const TargetType = @import("telar-client").AttachmentTarget;
 const PiFrame = @import("PiFrame.zig");
-const InputModesType = @import("telar-core").InputModes;
-const CellType = @import("telar-core").Cell;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const Chunk = @import("../controllers/input/Chunk.zig");
-const config_reloads = @import("telar-client").operations.config_reloads;
-const PaneIdType = @import("telar-core").PaneId;
-const enabled_module = @import("telar-core").enabled;
-const name_prompts = @import("telar-client").operations.name_prompts;
 const term = @import("../../presentation/screen_support.zig");
-const model_module = @import("telar-client").config_model;
-const ScrollDirectionType = @import("telar-client").ScrollDirection;
-const pane_focus_reports = @import("telar-client").operations.pane_focus_reports;
-const PaneSurfaceType = @import("telar-core").PaneSurface;
-const ControlType = @import("telar-client").Control;
 
 test "closing a preview deletes its matching atomic image marker" {
     var harness: TestHarness = undefined;
@@ -40,14 +21,14 @@ test "closing a preview deletes its matching atomic image marker" {
     const client = harness.client;
     const target = try support.installTestingAttachmentTarget(client, 1);
     for (1..3) |sequence| {
-        const capture = try client.gpa.create(CaptureType);
+        const capture = try client.gpa.create(client_module.Capture);
         capture.* = .{
             .request = .{ .target = target, .sequence = sequence },
             .png = try client.gpa.dupe(u8, "png"),
             .width = 2,
             .height = 2,
         };
-        _ = try host(client).view.adoptAttachment(capture);
+        _ = try TerminalClient.of(client).view.adoptAttachment(capture);
     }
     const pane = client.model.activeTabModel().?.find(target.pane_id).?;
     pane.buffer.clear(.{});
@@ -57,15 +38,15 @@ test "closing a preview deletes its matching atomic image marker" {
         .x = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = prompt, .style = .{} }),
         .y = 0,
     };
-    const first = host(client).view.kittyAttachments().snapshot().items[0].id;
+    const first = TerminalClient.of(client).view.kittyAttachments().snapshot().items[0].id;
     const model = client.model.activeTabModel().?;
 
-    _ = try view_interactions.apply(client, model, .{
+    _ = try client_module.operations.view_interactions.apply(client, model, .{
         .intent = .{ .attachment_dismiss = first },
         .consumed = true,
     });
 
-    const remaining = host(client).view.kittyAttachments().snapshot();
+    const remaining = TerminalClient.of(client).view.kittyAttachments().snapshot();
     try std.testing.expectEqual(@as(u8, 1), remaining.len);
     try std.testing.expectEqual(@as(u64, 2), @intFromEnum(remaining.items[0].id));
     try harness.settle();
@@ -85,14 +66,14 @@ test "child marker deletion and prompt submission retire paired previews" {
     try harness.bootstrap();
     const client = harness.client;
     const target = try support.installTestingAttachmentTarget(client, 1);
-    const capture = try client.gpa.create(CaptureType);
+    const capture = try client.gpa.create(client_module.Capture);
     capture.* = .{
         .request = .{ .target = target, .sequence = 1 },
         .png = try client.gpa.dupe(u8, "png"),
         .width = 2,
         .height = 2,
     };
-    _ = try host(client).view.adoptAttachment(capture);
+    _ = try TerminalClient.of(client).view.adoptAttachment(capture);
     const pane = client.model.activeTabModel().?.find(target.pane_id).?;
     pane.buffer.clear(.{});
     pane.cursor = .{
@@ -101,17 +82,22 @@ test "child marker deletion and prompt submission retire paired previews" {
         .y = 0,
     };
 
-    try host_inputs.key(client, try parseKey_module("backspace"));
+    try host_inputs.key(client, try data.chord.parseKey("backspace"));
 
-    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
     const pending = (try client.model.beginClipboardCapture(target)).?;
-    try host_inputs.key(client, try parseKey_module("enter"));
+    try host_inputs.key(client, try data.chord.parseKey("enter"));
     try std.testing.expect(client.model.clipboardCapture() == null);
     const completed = try support.testingClipboardCapture(client, pending, "private png");
 
-    try clipboard_images.complete(client, .{ .execution_id = pending.id, .result = completed });
+    try client.completeClipboardCapture(
+        .{
+            .execution_id = pending.id,
+            .result = completed,
+        },
+    );
 
-    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
     try std.testing.expect(client.clipboard_capture_resources.orphan == null);
 }
 
@@ -122,19 +108,19 @@ test "Claude marker disappearance in a committed frame retires its paired previe
     try harness.bootstrap();
     const client = harness.client;
     const target = try support.installTestingAttachmentProvider(client, 1, .claude);
-    const capture = try client.gpa.create(CaptureType);
+    const capture = try client.gpa.create(client_module.Capture);
     capture.* = .{
         .request = .{ .target = target, .sequence = 1, .marker_policy = .stable_number },
         .png = try client.gpa.dupe(u8, "png"),
         .width = 2,
         .height = 2,
     };
-    _ = try host(client).view.adoptAttachment(capture);
-    var pane_buffer = try BufferType.init(std.testing.allocator, 40, 3);
+    _ = try TerminalClient.of(client).view.adoptAttachment(capture);
+    var pane_buffer = try core.Buffer.init(std.testing.allocator, 40, 3);
     defer pane_buffer.deinit();
     _ = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "> [Image #7]", .style = .{} });
     var payload: [16 * 1024]u8 = undefined;
-    const marker_frame = try encodePaneFrame_module(&payload, .{
+    const marker_frame = try core.encodePaneFrame(&payload, .{
         .pane_id = target.pane_id,
         .frame_id = 1,
         .base_frame_id = 0,
@@ -145,14 +131,14 @@ test "Claude marker disappearance in a committed frame retires its paired previe
         .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
     });
 
-    _ = try client.handleServerMessage(try decodeServer_module(marker_frame));
-    try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
-    try host_inputs.key(client, try parseKey_module("backspace"));
-    try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
+    _ = try client.handleServerMessage(try core.decodeServer(marker_frame));
+    try std.testing.expectEqual(@as(u8, 1), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
+    try host_inputs.key(client, try data.chord.parseKey("backspace"));
+    try std.testing.expectEqual(@as(u8, 1), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
 
     pane_buffer.clear(.{});
     const empty_cursor = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = "> ", .style = .{} });
-    const empty_frame = try encodePaneFrame_module(&payload, .{
+    const empty_frame = try core.encodePaneFrame(&payload, .{
         .pane_id = target.pane_id,
         .frame_id = 2,
         .base_frame_id = 0,
@@ -163,32 +149,32 @@ test "Claude marker disappearance in a committed frame retires its paired previe
         .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
     });
 
-    _ = try client.handleServerMessage(try decodeServer_module(empty_frame));
-    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
+    _ = try client.handleServerMessage(try core.decodeServer(empty_frame));
+    try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
 }
 
 const pi_test_path = "/var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.png";
 
-fn adoptPiPreview(client: *Client, target: TargetType) !void {
-    const capture = try client.gpa.create(CaptureType);
+fn adoptPiPreview(client: *client_module.AttachedClient, target: data.AttachmentTarget) !void {
+    const capture = try client.gpa.create(client_module.Capture);
     capture.* = .{
         .request = .{ .target = target, .sequence = 1, .marker_policy = .pasted_path },
         .png = try client.gpa.dupe(u8, "png"),
         .width = 2,
         .height = 2,
     };
-    _ = try host(client).view.adoptAttachment(capture);
+    _ = try TerminalClient.of(client).view.adoptAttachment(capture);
 }
 
 /// Commits one Pi editor frame: hidden hardware cursor, an inverse-video
 /// cell right after `prompt` as Pi's own cursor.
-fn commitPiFrame(client: *Client, input: PiFrame) !void {
-    var pane_buffer = try BufferType.init(std.testing.allocator, 120, 3);
+fn commitPiFrame(client: *client_module.AttachedClient, input: PiFrame) !void {
+    var pane_buffer = try core.Buffer.init(std.testing.allocator, 120, 3);
     defer pane_buffer.deinit();
     const cursor_x = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = input.prompt, .style = .{} });
     pane_buffer.setCell(.{ .x = cursor_x, .y = 1 }, .{ .text = " ", .width = 1, .style = .{ .flags = .{ .inverse = true } } });
     var payload: [16 * 1024]u8 = undefined;
-    const frame = try encodePaneFrame_module(&payload, .{
+    const frame = try core.encodePaneFrame(&payload, .{
         .pane_id = input.target.pane_id,
         .frame_id = input.id,
         .base_frame_id = 0,
@@ -199,7 +185,7 @@ fn commitPiFrame(client: *Client, input: PiFrame) !void {
         .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
     });
 
-    _ = try client.handleServerMessage(try decodeServer_module(frame));
+    _ = try client.handleServerMessage(try core.decodeServer(frame));
 }
 
 test "closing a Pi preview deletes its whole pasted path from the editor" {
@@ -213,15 +199,15 @@ test "closing a Pi preview deletes its whole pasted path from the editor" {
     try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
     var ack_wire: [512]u8 = undefined;
     try std.testing.expectEqual(@as(u64, 1), (try harness.nextClientMessage(&ack_wire)).frame_ack.frame_id);
-    const id = host(client).view.kittyAttachments().snapshot().items[0].id;
+    const id = TerminalClient.of(client).view.kittyAttachments().snapshot().items[0].id;
     const model = client.model.activeTabModel().?;
 
-    _ = try view_interactions.apply(client, model, .{
+    _ = try client_module.operations.view_interactions.apply(client, model, .{
         .intent = .{ .attachment_dismiss = id },
         .consumed = true,
     });
 
-    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
     try harness.settle();
     var buffer: [512]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
@@ -238,22 +224,22 @@ test "a Pi path removed by a word deletion retires its preview on the next frame
     const target = try support.installTestingAttachmentProvider(client, 1, .pi);
     try adoptPiPreview(client, target);
     try commitPiFrame(client, .{ .target = target, .prompt = "> " ++ pi_test_path, .id = 1 });
-    try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 1), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
 
-    try host_inputs.key(client, try parseKey_module("ctrl+w"));
-    try std.testing.expectEqual(@as(u8, 1), host(client).view.kittyAttachments().snapshot().len);
+    try host_inputs.key(client, try data.chord.parseKey("ctrl+w"));
+    try std.testing.expectEqual(@as(u8, 1), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
     try commitPiFrame(client, .{
         .target = target,
         .prompt = "> /var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.",
         .id = 2,
     });
 
-    try std.testing.expectEqual(@as(u8, 0), host(client).view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
 }
 
 test "host keys use the keyboard modes received in a pane frame" {
     const lifecycle = "\x1b[97u\x1b[97;1:2u\x1b[97;1:3u\x1b[99;5u\x1b[99;1:3u";
-    const cases = [_]struct { modes: InputModesType, expected: []const u8, host: []const u8 = "\x1b[13;2u\x1b[27;2;13~\r\n" }{
+    const cases = [_]struct { modes: core.InputModes, expected: []const u8, host: []const u8 = "\x1b[13;2u\x1b[27;2;13~\r\n" }{
         .{
             .modes = .{ .kitty_keyboard_flags = 7 },
             .expected = "\x1b[13;2u\x1b[13;2u\r\x1b[106;5u",
@@ -282,8 +268,8 @@ test "host keys use the keyboard modes received in a pane frame" {
         try harness.bootstrap();
 
         var payload: [128]u8 = undefined;
-        const cells = [_]CellType{.{}};
-        const snapshot = try encodePaneFrame_module(&payload, .{
+        const cells = [_]core.Cell{.{}};
+        const snapshot = try core.encodePaneFrame(&payload, .{
             .pane_id = TestHarness.bootstrap_pane,
             .frame_id = 1,
             .base_frame_id = 0,
@@ -293,7 +279,7 @@ test "host keys use the keyboard modes received in a pane frame" {
             .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = &.{.{ .start = 0, .cells = &cells }},
         });
-        _ = try harness.client.handleServerMessage(try decodeServer_module(snapshot));
+        _ = try harness.client.handleServerMessage(try core.decodeServer(snapshot));
         try presentation_lifecycle.observe(harness.client);
         try harness.settleModelPresentation();
         const host_bytes = case.host;
@@ -329,7 +315,7 @@ test "releasing the physical prefix preserves its logical sequence through clien
     try harness.bootstrap();
     const client = harness.client;
     const adoption = try support.testingConfigAdoption(1, true);
-    _ = try config_reloads.apply(client, adoption);
+    _ = try support.reloadConfiguration(client, adoption);
     try std.testing.expect(!client.model.sidebarVisible());
 
     const lifecycle =
@@ -343,7 +329,7 @@ test "releasing the physical prefix preserves its logical sequence through clien
     try std.testing.expect(!try host_inputs.handleRead(client, chunk));
 
     try std.testing.expect(client.model.sidebarVisible());
-    try std.testing.expect(!host(client).host_input.router.prefixPending());
+    try std.testing.expect(!TerminalClient.of(client).host_input.router.prefixPending());
 }
 
 test "streamed paste captures target and framing while restoring its live viewport" {
@@ -353,8 +339,8 @@ test "streamed paste captures target and framing while restoring its live viewpo
     try harness.bootstrap();
     const client = harness.client;
     const tab = &client.model.workspace.active().?.model;
-    const other_pane: PaneIdType = @enumFromInt(11);
-    try tab.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
+    const other_pane: core.PaneId = @enumFromInt(11);
+    try tab.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
     try std.testing.expect(tab.focusPane(TestHarness.bootstrap_pane));
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.input_modes.bracketed_paste = true;
@@ -363,25 +349,25 @@ test "streamed paste captures target and framing while restoring its live viewpo
         .offset = 0,
     };
     const version = client.model.version();
-    const pending_updates = host(client).presenter.pending_updates;
+    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
     const input_events = client.telemetry.metrics.input_events;
     const input_bytes = client.telemetry.metrics.input_bytes;
     const timing_count = client.telemetry.metrics.input_enqueue.count;
 
-    _ = try input_operations.paste_routing.start(client);
+    _ = try client_module.operations.paste_routing.start(client);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.panePasteSession().?.pane_id);
     try std.testing.expect(client.model.panePasteSession().?.bracketed_paste);
     pane.input_modes.bracketed_paste = false;
     try std.testing.expect(tab.focusPane(other_pane));
-    _ = try input_operations.paste_routing.content(client, "pasted");
-    _ = try input_operations.paste_routing.finish(client);
+    _ = try client_module.operations.paste_routing.content(client, "pasted");
+    _ = try client_module.operations.paste_routing.finish(client);
 
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try support.expectNonViewportVersionEqual(version, client.model.version());
-    try std.testing.expectEqual(pending_updates, host(client).presenter.pending_updates);
-    if (comptime enabled_module) {
+    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    if (comptime core.enabled) {
         try std.testing.expectEqual(input_events + 3, client.telemetry.metrics.input_events);
         try std.testing.expectEqual(input_bytes + 18, client.telemetry.metrics.input_bytes);
         try std.testing.expectEqual(timing_count + 3, client.telemetry.metrics.input_enqueue.count);
@@ -407,19 +393,19 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
     const client = harness.client;
     const version = client.model.version();
 
-    _ = try input_operations.paste_routing.start(client);
+    _ = try client_module.operations.paste_routing.start(client);
 
     try std.testing.expect(client.model.panePasteActive());
     try std.testing.expect(!client.model.enterCopyMode());
-    try std.testing.expect(!name_prompts.beginWorkspaceRename(client));
+    try std.testing.expect(!client.openNamePrompt(.rename_workspace));
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualDeep(version, client.model.version());
 
-    _ = try input_operations.paste_routing.finish(client);
+    _ = try client_module.operations.paste_routing.finish(client);
 
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expect(name_prompts.beginWorkspaceRename(client));
+    try std.testing.expect(client.openNamePrompt(.rename_workspace));
 }
 
 test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
@@ -428,12 +414,12 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expect(name_prompts.beginActiveTabRename(client));
+    try std.testing.expect(client.openNamePrompt(.rename_active_tab));
 
-    _ = try input_operations.paste_routing.start(client);
+    _ = try client_module.operations.paste_routing.start(client);
     try std.testing.expect(client.model.name_prompt.currentConst().?.pasting);
-    _ = try input_operations.paste_routing.content(client, " one\r");
-    _ = try input_operations.paste_routing.finish(client);
+    _ = try client_module.operations.paste_routing.content(client, " one\r");
+    _ = try client_module.operations.paste_routing.finish(client);
 
     const prompt = client.model.name_prompt.currentConst().?;
     try std.testing.expect(!prompt.pasting);
@@ -441,13 +427,13 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    try host_inputs.key(client, try parseKey_module("escape"));
+    try host_inputs.key(client, try data.chord.parseKey("escape"));
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expect(client.model.enterCopyMode());
 
-    _ = try input_operations.paste_routing.start(client);
-    _ = try input_operations.paste_routing.content(client, "ignored");
-    _ = try input_operations.paste_routing.finish(client);
+    _ = try client_module.operations.paste_routing.start(client);
+    _ = try client_module.operations.paste_routing.content(client, "ignored");
+    _ = try client_module.operations.paste_routing.finish(client);
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(!client.model.panePasteActive());
@@ -464,9 +450,9 @@ test "name prompt rejects pointer routing after host telemetry" {
     pane.mouse = .{ .tracking = .normal, .sgr = true };
     const pane_view = client.model.workspace.active().?.model.viewForPane(
         pane.id,
-        host(client).view.workbench(),
+        TerminalClient.of(client).view.workbench(),
     ).?;
-    try std.testing.expect(name_prompts.beginActiveTabRename(client));
+    try std.testing.expect(client.openNamePrompt(.rename_active_tab));
     const version = client.model.version();
     const outbox_len = client.runtime_transport.outbox.len;
     const mouse_events = client.telemetry.metrics.mouse_events;
@@ -480,7 +466,7 @@ test "name prompt rejects pointer routing after host telemetry" {
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         try std.testing.expectEqual(mouse_events + 1, client.telemetry.metrics.mouse_events);
     }
 }
@@ -499,7 +485,7 @@ test "mouse reports preserve scrollback and remain outside user-input telemetry"
     };
     const pane_view = client.model.workspace.active().?.model.viewForPane(
         pane.id,
-        host(client).view.workbench(),
+        TerminalClient.of(client).view.workbench(),
     ).?;
     const version = client.model.version();
     const input_events = client.telemetry.metrics.input_events;
@@ -519,7 +505,7 @@ test "mouse reports preserve scrollback and remain outside user-input telemetry"
 
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
     try std.testing.expectEqualDeep(version, client.model.version());
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         try std.testing.expectEqual(input_events, client.telemetry.metrics.input_events);
         try std.testing.expectEqual(input_bytes, client.telemetry.metrics.input_bytes);
         try std.testing.expectEqual(timing_count, client.telemetry.metrics.input_enqueue.count);
@@ -549,7 +535,7 @@ test "mouse reports preserve exact host pixels relative to pane content" {
     pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = true };
     const pane_view = client.model.workspace.active().?.model.viewForPane(
         pane.id,
-        host(client).view.workbench(),
+        TerminalClient.of(client).view.workbench(),
     ).?;
 
     try host_inputs.mouse(client, .{
@@ -576,13 +562,13 @@ test "alternate-screen wheel sends cursor keys to the pane under the pointer" {
     const client = harness.client;
     const model = &client.model.workspace.active().?.model;
     const focused = TestHarness.bootstrap_pane;
-    const hovered: PaneIdType = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
+    const hovered: core.PaneId = @enumFromInt(20);
+    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
     try std.testing.expect(model.focusPane(focused));
     const pane = model.find(hovered).?;
     pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
     pane.scroll = .{ .total_rows = pane.buffer.h, .offset = 0 };
-    const hovered_view = model.viewForPane(hovered, host(client).view.workbench()).?;
+    const hovered_view = model.viewForPane(hovered, TerminalClient.of(client).view.workbench()).?;
     const version = client.model.version();
 
     try host_inputs.mouse(client, .{
@@ -611,7 +597,7 @@ test "alternate-screen wheel sends cursor keys to the pane under the pointer" {
     try std.testing.expectEqualStrings("\x1b[A\x1b[A\x1b[A", &received);
 }
 
-fn testingHostInput(client: *Client, bytes: []const u8) !void {
+fn testingHostInput(client: *client_module.AttachedClient, bytes: []const u8) !void {
     var chunk: Chunk = .{};
     try std.testing.expect(bytes.len <= chunk.bytes.len);
     @memcpy(chunk.bytes[0..bytes.len], bytes);
@@ -628,14 +614,14 @@ test "focused scroll bindings target focus rather than hover and normal input re
     const client = harness.client;
     const model = client.model.activeTabModel().?;
     const focused = TestHarness.bootstrap_pane;
-    const hovered: PaneIdType = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
+    const hovered: core.PaneId = @enumFromInt(20);
+    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
     try std.testing.expect(model.focusPane(focused));
     const pane = model.find(focused).?;
     const other = model.find(hovered).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 10, .offset = 10 };
-    const hovered_view = model.viewForPane(hovered, host(client).view.workbench()).?;
+    const hovered_view = model.viewForPane(hovered, TerminalClient.of(client).view.workbench()).?;
     try host_inputs.mouse(client, .{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
     const version = client.model.version();
 
@@ -645,7 +631,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     try std.testing.expectEqual(@as(u32, 10), other.scroll.offset);
     try std.testing.expectEqual(focused, model.layout.focused().?);
     try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expect(!host(client).graphics_store.paneVisible(focused));
+    try std.testing.expect(!TerminalClient.of(client).graphics_store.paneVisible(focused));
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try std.testing.expectEqual(@as(usize, 1), client.runtime_transport.outbox.len);
     try harness.settle();
@@ -655,9 +641,9 @@ test "focused scroll bindings target focus rather than hover and normal input re
     try std.testing.expectEqual(focused, scrolled.set_pane_viewport.pane_id);
     try std.testing.expectEqual(@as(u32, 7), scrolled.set_pane_viewport.offset);
 
-    try host_inputs.key(client, try parseKey_module("x"));
+    try host_inputs.key(client, try data.chord.parseKey("x"));
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
-    try std.testing.expect(host(client).graphics_store.paneVisible(focused));
+    try std.testing.expect(TerminalClient.of(client).graphics_store.paneVisible(focused));
     try harness.settle();
     const restored = try harness.nextClientMessage(&buffer);
     try std.testing.expect(restored == .set_pane_viewport);
@@ -706,8 +692,8 @@ test "held scroll suffixes pace both viewport directions without queued steps" {
         _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 2000 * ms });
         try std.testing.expectEqualDeep(version, client.model.version());
         try std.testing.expectEqual(pending, client.runtime_transport.outbox.len);
-        try std.testing.expect(host(client).host_input.router.inputDeadline() == null);
-        try std.testing.expect(host(client).host_input.router.bindingDeadline() == null);
+        try std.testing.expect(TerminalClient.of(client).host_input.router.inputDeadline() == null);
+        try std.testing.expect(TerminalClient.of(client).host_input.router.bindingDeadline() == null);
 
         _ = try host_inputs.feed(client, .{ .bytes = press, .now_ns = 2001 * ms });
         try std.testing.expectEqual(@as(u32, if (up) 38 else 62), pane.scroll.offset);
@@ -726,15 +712,15 @@ test "a held global scroll cannot move a newly focused pane or resume after retu
     const client = harness.client;
     const model = client.model.activeTabModel().?;
     const focused = TestHarness.bootstrap_pane;
-    const second: PaneIdType = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = second, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
+    const second: core.PaneId = @enumFromInt(20);
+    try model.split(.{ .existing_pane = focused, .new_pane = second, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
     try std.testing.expect(model.focusPane(focused));
     const pane = model.find(focused).?;
     const other = model.find(second).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
     other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 100, .offset = 100 };
-    const binding = try model_module.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
-    host(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
+    const binding = try client_module.config_model.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
+    TerminalClient.of(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
     const repeated = "\x1b[45::45;3:2u";
 
     _ = try host_inputs.feed(client, .{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 });
@@ -783,7 +769,7 @@ test "focused scroll bindings emit unmodified SGR wheel reports in cells or pixe
         pane.cursor = .{ .visible = true, .x = 5, .y = 3 };
         const version = client.model.version();
 
-        for ([_]ScrollDirectionType{ .up, .down }) |direction| {
+        for ([_]data.ScrollDirection{ .up, .down }) |direction| {
             try testingHostInput(client, if (direction == .up) "\x02-" else "\x02=");
             try std.testing.expectEqualDeep(version, client.model.version());
             try std.testing.expectEqual(@as(u32, 2), pane.scroll.offset);
@@ -811,8 +797,8 @@ test "held global scroll paces SGR reports without forwarding the binding chord"
     const client = harness.client;
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true };
-    const binding = try model_module.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
-    host(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
+    const binding = try client_module.config_model.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
+    TerminalClient.of(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
     const version = client.model.version();
     const repeated = "\x1b[45::45;3:2u";
 
@@ -848,17 +834,17 @@ test "focused scroll sends alternate-screen cursor keys only to the focused pane
     const client = harness.client;
     const model = client.model.activeTabModel().?;
     const focused = TestHarness.bootstrap_pane;
-    const hovered: PaneIdType = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = host(client).view.workbench() });
+    const hovered: core.PaneId = @enumFromInt(20);
+    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
     try std.testing.expect(model.focusPane(focused));
     const pane = model.find(focused).?;
     pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
     pane.scroll = .{ .total_rows = pane.buffer.h, .offset = 0 };
-    const hovered_view = model.viewForPane(hovered, host(client).view.workbench()).?;
+    const hovered_view = model.viewForPane(hovered, TerminalClient.of(client).view.workbench()).?;
     try host_inputs.mouse(client, .{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
     const version = client.model.version();
 
-    for ([_]ScrollDirectionType{ .up, .down }) |direction| {
+    for ([_]data.ScrollDirection{ .up, .down }) |direction| {
         _ = try client.executeAction(
             .{
                 .scroll_pane = direction,
@@ -919,7 +905,7 @@ test "focused scroll retires copy mode before moving the restored viewport" {
     const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     _ = try client.executeAction(.enter_copy_mode, .effect);
-    try host_inputs.key(client, try parseKey_module("g"));
+    try host_inputs.key(client, try data.chord.parseKey("g"));
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -959,7 +945,7 @@ test "focus reporting emits focus-in only after the pane opts in" {
     try harness.settle();
 
     try std.testing.expect(client.model.reportedPaneFocus().?.focus_events);
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         try std.testing.expectEqual(input_events, client.telemetry.metrics.input_events);
     }
     var buffer: [256]u8 = undefined;
@@ -979,8 +965,8 @@ test "canonical reported focus retirement is silent and idempotent" {
     const version = client.model.version();
     const outbox_len = client.runtime_transport.outbox.len;
 
-    try std.testing.expect(pane_focus_reports.retire(client) == .applied);
-    try std.testing.expect(pane_focus_reports.retire(client) == .unchanged);
+    try std.testing.expect(client.model.forgetReportedPaneFocus());
+    try std.testing.expect(!client.model.forgetReportedPaneFocus());
 
     try std.testing.expect(client.model.reportedPaneFocus() == null);
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -997,13 +983,13 @@ test "native thread view action flips the focused pane surface" {
     var expected_version = client.model.version();
     const active = client.model.activeTabModelConst().?;
     const focused = active.layout.focused().?;
-    try std.testing.expectEqual(PaneSurfaceType.terminal, active.layout.surface(focused));
+    try std.testing.expectEqual(core.PaneSurface.terminal, active.layout.surface(focused));
 
-    for ([_]PaneSurfaceType{ .thread, .terminal }) |expected_surface| {
+    for ([_]core.PaneSurface{ .thread, .terminal }) |expected_surface| {
         const control = try client.executeAction(.toggle_thread_view, .effect);
 
         expected_version.panes +%= 1;
-        try std.testing.expectEqual(ControlType.continue_routing, control);
+        try std.testing.expectEqual(data.KeybindControl.continue_routing, control);
         try std.testing.expectEqual(expected_surface, active.layout.surface(focused));
         try std.testing.expectEqualDeep(expected_version, client.model.version());
     }
@@ -1034,5 +1020,5 @@ test "detach stops a host batch before its remaining text reaches the pane" {
 
     try std.testing.expectEqual(.stop, control);
     try std.testing.expectEqual(before, client.telemetry.metrics.input_events);
-    try std.testing.expectEqual(@as(usize, 0), host(client).host_input.router.input_end);
+    try std.testing.expectEqual(@as(usize, 0), TerminalClient.of(client).host_input.router.input_end);
 }

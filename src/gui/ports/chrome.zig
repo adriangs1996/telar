@@ -1,4 +1,5 @@
 //! Native geometry and hit testing implement the shared chrome port.
+const data = @import("model");
 const client = @import("telar-client");
 const hover_target = @import("../input/hover_target.zig");
 const GuiClient = @import("../GuiClient.zig");
@@ -47,7 +48,7 @@ fn sidebarLayout(context: *anyopaque, _: bool, _: u16) void {
 
 fn workspaceList(_: *anyopaque, _: bool) void {}
 
-fn pointer(context: *anyopaque, event: client.Mouse) client.ViewInteractionCommand {
+fn pointer(context: *anyopaque, event: data.Mouse) client.ViewInteractionCommand {
     const gui = host(context);
     // A prompt can open before its first paint; it already owns the pointer.
     if (gui.app.model.name_prompt.active() and gui.overlays.presented().modal == null) {
@@ -69,7 +70,7 @@ fn pointer(context: *anyopaque, event: client.Mouse) client.ViewInteractionComma
     return gui.chrome.pointer(event);
 }
 
-fn linkPointer(context: *anyopaque, event: client.Mouse) bool {
+fn linkPointer(context: *anyopaque, event: data.Mouse) bool {
     if (event.kind != .press or event.button & 3 == 1) {
         return false;
     }
@@ -104,7 +105,7 @@ fn sidebarRenderer(_: *anyopaque) client.SidebarRendering {
 
 fn adoptSidebarRenderer(_: *anyopaque, _: client.SidebarRendering) void {}
 
-fn region(context: *anyopaque) client.Region {
+fn region(context: *anyopaque) data.Region {
     return host(context).region;
 }
 

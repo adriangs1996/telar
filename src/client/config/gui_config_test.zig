@@ -1,6 +1,8 @@
+const GuiWindow = @import("GuiWindow.zig");
+const builtin = @import("builtin");
+const data = @import("model");
 const std = @import("std");
 const Generation = @import("Generation.zig");
-const Diagnostic = @import("Diagnostic.zig");
 const GuiConfig = @import("GuiConfig.zig");
 
 test "GUI configuration owns font names and overlays profiles independently of chrome" {
@@ -20,7 +22,7 @@ test "GUI configuration owns font names and overlays profiles independently of c
         \\  profiles = { large = { gui = { font = { size = 24, thicken_strength = 0 }, window = { padding = { y = 12 } }, chrome = { scale = 1.5 }, sidebar = { width = 320 } }, theme = { terminal = { background = "#ffffff" } } } },
         \\}
     ;
-    var diagnostic: Diagnostic = .{};
+    var diagnostic: data.Diagnostic = .{};
     const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@gui.lua", .number = 1, .profile = "large" });
     const config = generation.snapshot.gui;
     const terminal = generation.snapshot.theme.terminal;
@@ -125,7 +127,7 @@ test "GUI validation rejects malformed values including profiles that are not se
     for (invalid) |fields| {
         var source: [512]u8 = undefined;
         const text = try std.fmt.bufPrint(&source, "return {{ api_version = 2, {s} }}", .{fields});
-        var diagnostic: Diagnostic = .{};
+        var diagnostic: data.Diagnostic = .{};
         try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = text, .source_name = "@invalid.lua", .number = 1 }));
         try std.testing.expect(diagnostic.message().len > 0);
     }
@@ -147,17 +149,17 @@ test "window preferences preserve defaults and profile inheritance with numeric 
         \\}
     ;
     for ([_][]const u8{ "inherited", "zero", "minimal", "integral_float", "maximal", "legacy_on", "legacy_off" }, [_]u8{ 40, 0, 1, 20, 255, 20, 0 }) |profile, radius| {
-        var diagnostic: Diagnostic = .{};
+        var diagnostic: data.Diagnostic = .{};
         const generation = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@window.lua", .number = 1, .profile = profile });
         defer generation.deinit();
         try std.testing.expectEqual(radius, generation.snapshot.gui.window.background_blur);
         try std.testing.expectEqual(std.mem.eql(u8, profile, "zero"), generation.snapshot.gui.window.titlebar);
     }
 
-    var diagnostic: Diagnostic = .{};
+    var diagnostic: data.Diagnostic = .{};
     const defaults = try Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2 }", .source_name = "@defaults.lua", .number = 1 });
     defer defaults.deinit();
     try std.testing.expectEqual(@as(u8, 0), defaults.snapshot.gui.window.background_blur);
-    try std.testing.expectEqual(@import("GuiWindow.zig").default_titlebar, defaults.snapshot.gui.window.titlebar);
-    try std.testing.expectEqual(@import("builtin").os.tag != .macos, defaults.snapshot.gui.window.titlebar);
+    try std.testing.expectEqual(GuiWindow.default_titlebar, defaults.snapshot.gui.window.titlebar);
+    try std.testing.expectEqual(builtin.os.tag != .macos, defaults.snapshot.gui.window.titlebar);
 }

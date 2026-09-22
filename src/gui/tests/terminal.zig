@@ -1,3 +1,7 @@
+const Regions = @import("../widgets/Regions.zig");
+const builtin = @import("builtin");
+const Quad_module = @import("../render/Quad.zig");
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const host_ports = @import("../host_ports.zig");
 const std = @import("std");
@@ -60,7 +64,7 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     try std.testing.expect(app.runtime_transport.receive_pending);
     try std.testing.expectEqualDeep(colors, app.model.hostCapabilities().terminal_colors);
     try std.testing.expect(app.model.hostCapabilities().agent_panes);
-    try std.testing.expectEqual(client.Support.supported, app.model.hostCapabilities().pointer_pixels);
+    try std.testing.expectEqual(data.environment.Support.supported, app.model.hostCapabilities().pointer_pixels);
     const graphics = try core.decodeClient(session.pending.?);
     try std.testing.expect(graphics == .configure_graphics);
     try std.testing.expect(!graphics.configure_graphics.shared);
@@ -170,7 +174,7 @@ test "native font lookup resolves installed faces and fails explicitly for missi
     var family: client.FontFamily = .{};
     try family.set("Telar-Test-Missing-Family-98a34b1");
     try std.testing.expectError(error.FontFamilyNotFound, Source.load(std.testing.allocator, std.testing.io, &family));
-    try family.set(if (@import("builtin").os.tag == .macos) "Menlo" else "DejaVu Sans Mono");
+    try family.set(if (builtin.os.tag == .macos) "Menlo" else "DejaVu Sans Mono");
     var source = try Source.load(std.testing.allocator, std.testing.io, &family);
     defer source.deinit(std.testing.allocator);
     try std.testing.expect(source.owned);
@@ -190,7 +194,7 @@ test "cursor shapes focus and blink reuse retained ink without changing the atla
     const bounds = session.gui.renderer.metrics.rect(session.gui.renderer.origin, content);
     pane.cursor.x = 0;
     try paintTerminal(session);
-    const ink = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, session.gui.renderer.retained.at(
+    const ink = try std.testing.allocator.dupe(Quad_module.Quad, session.gui.renderer.retained.at(
         .{
             content.x,
             content.y,
@@ -218,7 +222,7 @@ test "cursor shapes focus and blink reuse retained ink without changing the atla
     }
 
     try std.testing.expectEqualSlices(
-        @import("../render/Quad.zig").Quad,
+        Quad_module.Quad,
         ink,
         session.gui.renderer.retained.at(
             .{
@@ -371,7 +375,7 @@ test "native resize publishes exact grid pixels and preserves runtime-owned pane
     );
     try session.gui.resize(size, session.gui.renderer.theme);
     try session.settle();
-    const regions = @import("../widgets/Regions.zig").calculate(size.cols, size.rows);
+    const regions = Regions.calculate(size.cols, size.rows);
     try std.testing.expectEqual(regions.workbench, session.gui.region.area);
     try std.testing.expectEqual(size, session.gui.app.model.hostSize());
     try std.testing.expectEqual(size.cell_width_px, session.gui.app.model.hostSize().cell_width_px);
@@ -386,7 +390,7 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     try session.receiveFrame(1);
     try present(session);
     const model = session.gui.app.model.activeTabModel().?;
-    const second: @import("telar-core").PaneId = @enumFromInt(11);
+    const second: core.PaneId = @enumFromInt(11);
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
     const token = try session.draw();
     const commit = session.gui.lifecycle.active.?.delivery.commit;
@@ -408,7 +412,7 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     try session.settle();
     try expectFullRedraw(session);
     try paintTerminal(session);
-    var layout: @import("telar-client").LayoutSnapshot = .{};
+    var layout: data.LayoutSnapshot = .{};
     model.layout.snapshot(session.gui.region.area, &layout);
     for (session.gui.renderer.quads.items()) |quad| {
         const contained = for (layout.views()) |view| {
@@ -458,7 +462,7 @@ test "native inbox holds input and GPU completion until the consumer runs" {
     try std.testing.expectEqual(consumed, inbox.snapshot().consumed);
 }
 
-fn paneContent(session: *Session) @import("telar-core").Rect {
+fn paneContent(session: *Session) core.Rect {
     const model = session.gui.app.model.activeTabModel().?;
     return model.viewForPane(Session.pane_id, session.gui.region.area).?.content;
 }

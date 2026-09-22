@@ -4,6 +4,7 @@ const Modules = @This();
 
 unicode: *std.Build.Module,
 core: *std.Build.Module,
+data: *std.Build.Module,
 backend: *std.Build.Module,
 frontend: *std.Build.Module,
 client: *std.Build.Module,
@@ -42,6 +43,7 @@ pub fn addSuiteTest(modules: Modules, b: *std.Build, suite: Suite) *std.Build.St
     tests.root_module.addImport("telar-backend", modules.backend);
     tests.root_module.addImport("telar-frontend", modules.frontend);
     tests.root_module.addImport("telar-client", modules.client);
+    tests.root_module.addImport("model", modules.data);
     tests.root_module.addImport("kitty_protocol", modules.kitty_protocol);
     tests.root_module.addImport("lua-api", modules.lua_api);
     tests.root_module.addImport("telar-lua", modules.telar_lua);

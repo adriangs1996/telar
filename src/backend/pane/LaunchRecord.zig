@@ -1,4 +1,4 @@
-const LaunchViewType = @import("telar-core").LaunchView;
+const core = @import("telar-core");
 const std = @import("std");
 /// Bounded copy of the command a pane was launched with, kept so a session
 /// checkpoint can relaunch it. Panes whose command does not fit, or which
@@ -18,7 +18,7 @@ count: u16 = 0,
 /// var record: LaunchRecord = .{};
 /// record.capture(launch);
 /// ```
-pub fn capture(record: *LaunchRecord, launch: LaunchViewType) void {
+pub fn capture(record: *LaunchRecord, launch: core.LaunchView) void {
     record.* = .{};
     if (launch.environment_mode != .inherit_runtime or launch.argument_count == 0 or launch.argument_count > max_arguments) {
         return;

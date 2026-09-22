@@ -17,15 +17,15 @@
 //! No terminal here and no allocator. A field is a string with two offsets in
 //! it, which is what lets every edge case be a two line test.
 
-const GenericField = @import("GenericField.zig").Type;
+const data = @import("model");
+const core = @import("telar-core");
 const std = @import("std");
-const measure_module = @import("telar-core").measure;
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-const F = GenericField(128);
+const F = data.GenericField(128);
 
 /// A base letter plus a combining acute: one cluster, two codepoints.
 const e_acute = "e\u{0301}";
@@ -142,7 +142,7 @@ test "a paste is an insert, so it cannot behave differently from typing" {
 test "input past the capacity is dropped whole, never split" {
     // Truncating mid cluster would store a fragment that renders as a
     // replacement character and cannot be deleted by one backspace.
-    var f: GenericField(8) = .init("");
+    var f: data.GenericField(8) = .init("");
     f.insert("1234567");
     f.insert(astronaut);
     try std.testing.expectEqualStrings("1234567", f.text());
@@ -193,7 +193,7 @@ test "the view never cuts a wide cluster in half" {
     while (width <= 12) : (width += 1) {
         f.home(false);
         const v = f.view(width);
-        try std.testing.expect(measure_module(v.text) <= width);
+        try std.testing.expect(core.measure(v.text) <= width);
         // Every visible byte belongs to a whole cluster.
         try std.testing.expectEqual(@as(usize, 0), v.text.len % astronaut.len);
     }

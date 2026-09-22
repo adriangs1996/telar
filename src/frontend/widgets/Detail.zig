@@ -1,6 +1,6 @@
+const core = @import("telar-core");
 const Inspection = @import("Inspection.zig");
 const std = @import("std");
-const raw_module = @import("telar-core").raw;
 const history_browser = @import("history_browser.zig");
 const Detail = @This();
 
@@ -21,7 +21,7 @@ pub fn init(content: Inspection) Detail {
     const exit = if (entry.exit_code) |code| std.fmt.bufPrint(&exit_storage, "{d}", .{code}) catch "?" else "unknown";
     const header: []const u8 = std.fmt.bufPrint(&detail.header, "#{d}  {s}  exit {s}", .{ entry.id, @tagName(entry.status), exit }) catch "";
     detail.header_len = header.len;
-    const author: []const u8 = std.fmt.bufPrint(&detail.author, "{s}  pane {d}", .{ @tagName(entry.author), raw_module(entry.pane_id) }) catch "";
+    const author: []const u8 = std.fmt.bufPrint(&detail.author, "{s}  pane {d}", .{ @tagName(entry.author), core.raw(entry.pane_id) }) catch "";
     detail.author_len = author.len;
     const time = history_browser.timestampText(entry.started_at_ms, &detail.time);
     detail.time_len = time.len;

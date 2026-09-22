@@ -1,6 +1,7 @@
 //! Codex app-server JSONL bounds, verified against the locally generated
 //! Codex 0.154 schema. Unknown server requests receive an explicit RPC error.
 
+const command_module = @import("command.zig");
 const std = @import("std");
 
 pub const max_line_bytes = 256 * 1024;
@@ -10,7 +11,7 @@ pub const queue_depth = 8;
 pub const max_approvals = 8;
 pub const Event = union(enum) {
     line: anyerror![]const u8,
-    command: anyerror!@import("command.zig").Command,
+    command: anyerror!command_module.Command,
     deadline: anyerror!void,
     resume_deadline: anyerror!void,
     command_deadline: anyerror!void,

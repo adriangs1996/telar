@@ -1,9 +1,8 @@
 //! Vertical tests for bounded pane text reads.
 
+const core = @import("telar-core");
 const PaneFixture = @import("PaneFixture.zig");
 const std = @import("std");
-const max_pane_text_bytes_module = @import("telar-core").max_pane_text_bytes;
-const max_pane_text_rows_module = @import("telar-core").max_pane_text_rows;
 
 fn ingestLines(fixture: *PaneFixture) !void {
     _ = try fixture.pane.ingest(
@@ -18,7 +17,7 @@ test "recent rows dump scrollback and screen as plain text, newest last" {
     try fixture.init();
     defer fixture.deinit();
     try ingestLines(&fixture);
-    var storage: [max_pane_text_bytes_module]u8 = undefined;
+    var storage: [core.max_pane_text_bytes]u8 = undefined;
 
     const dump = fixture.pane.dumpText(.{ .rows = 3, .source = .recent }, &storage);
 
@@ -31,9 +30,9 @@ test "screen rows never reach into scrollback" {
     try fixture.init();
     defer fixture.deinit();
     try ingestLines(&fixture);
-    var storage: [max_pane_text_bytes_module]u8 = undefined;
+    var storage: [core.max_pane_text_bytes]u8 = undefined;
 
-    const dump = fixture.pane.dumpText(.{ .rows = max_pane_text_rows_module, .source = .screen }, &storage);
+    const dump = fixture.pane.dumpText(.{ .rows = core.max_pane_text_rows, .source = .screen }, &storage);
 
     try std.testing.expect(!dump.truncated);
     try std.testing.expectEqualStrings("four\nfive\nsix\nseven", storage[0..dump.len]);

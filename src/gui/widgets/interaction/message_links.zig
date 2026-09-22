@@ -1,4 +1,5 @@
 //! Resolves delivered Markdown hits against their exact live message snapshot.
+const data = @import("model");
 const client = @import("telar-client");
 const std = @import("std");
 const GuiClient = @import("../../GuiClient.zig");
@@ -93,13 +94,13 @@ pub fn open(gui: *GuiClient, control: Control) !void {
     const decoded = Destination.init(source) catch return;
     const text = decoded.text();
     if (!std.mem.startsWith(u8, text, "/") and !std.ascii.startsWithIgnoreCase(text, "file:")) {
-        const target = client.LinkTarget.init(text) catch return;
+        const target = data.LinkTarget.init(text) catch return;
         _ = try gui.app.openLink(target);
         clear(gui);
         return;
     }
 
-    const path = client.FilePath.fromDestination(text) catch |err| {
+    const path = data.FilePath.fromDestination(text) catch |err| {
         try gui.app.publishNotificationNow(
             .{
                 .level = .warning,

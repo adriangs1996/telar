@@ -1,21 +1,15 @@
 //! Agent and terminal observation contracts through Runtime.update.
 
+const core = @import("telar-core");
 const std = @import("std");
 const pane_mod = @import("../../pane/pane_namespace.zig");
-const AgentProviderType = @import("telar-core").AgentProvider;
 const CacheType = @import("../../process/Cache.zig");
 const Pane = @import("../../pane/Pane.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const ObservationExpectedMetrics = @import("../entrypoints/events/pane/ObservationExpectedMetrics.zig");
-const enabled_module = @import("telar-core").enabled;
-const AgentStatusType = @import("telar-core").AgentStatus;
 const agent_identity = @import("../application/coordinators/agent_identity.zig");
-const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const AgentReportStateType = @import("telar-core").AgentReportState;
 const StatsType = @import("../../history/Stats.zig");
 const TrackerType = @import("../../agent/Tracker.zig");
-const AgentSoundType = @import("telar-core").AgentSound;
 const sound_module = @import("../../agent/sound.zig");
 const ResumeSession = @import("../../agent/ResumeSession.zig");
 const SessionReference = @import("../../agent/SessionReference.zig");
@@ -26,7 +20,7 @@ fn queueFollowUp(fixture: *EventFixture) void {
     fixture.pane.queueHistoryOutput(.{ .bytes = "follow-up", .shell_foreground = false, .clock = pane_mod.historyClock(std.testing.io) });
 }
 
-fn processCache(provider: AgentProviderType, process_id: u32, executable: []const u8) CacheType {
+fn processCache(provider: core.AgentProvider, process_id: u32, executable: []const u8) CacheType {
     var cache = CacheType.init(executable);
     cache.process_group_id = process_id;
     cache.provider = provider;
@@ -39,7 +33,7 @@ fn nonShellProcessId(pane: *const Pane) u32 {
 }
 
 fn expectMetrics(metrics: *const RuntimeMetrics, expected: ObservationExpectedMetrics) !void {
-    const actual = if (comptime enabled_module) expected else ObservationExpectedMetrics{};
+    const actual = if (comptime core.enabled) expected else ObservationExpectedMetrics{};
     try std.testing.expectEqual(actual.inspections, metrics.agent_process_inspections);
     try std.testing.expectEqual(actual.misses, metrics.agent_process_misses);
     try std.testing.expectEqual(actual.input_bytes, metrics.history_candidate_input_bytes);
@@ -77,7 +71,7 @@ test "known process observation commits pane state agent evidence and metrics" {
     try std.testing.expectEqualStrings("/observed", fixture.pane.cwd.slice());
     try std.testing.expectEqual(foreground_revision + 1, fixture.pane.foreground_revision);
     try std.testing.expectEqualStrings("Claude Code", fixture.pane.agent_process_cache.name());
-    try std.testing.expectEqual(AgentStatusType.ready, fixture.agents.projectedStatus(fixture.pane.key()).?);
+    try std.testing.expectEqual(core.AgentStatus.ready, fixture.agents.projectedStatus(fixture.pane.key()).?);
     try expectMetrics(fixture.metrics, .{
         .inspections = 1,
         .input_bytes = 13,
@@ -274,8 +268,8 @@ test "working to ready screen evidence publishes one generation-safe sound" {
         },
     });
 
-    try std.testing.expectEqual(AgentStatusType.done, fixture.agents.projectedStatus(identity.key).?);
-    try std.testing.expectEqualDeep(AgentSoundNotificationType{
+    try std.testing.expectEqual(core.AgentStatus.done, fixture.agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqualDeep(core.AgentSoundNotification{
         .pane_id = identity.key.id,
         .pane_generation = identity.key.generation,
         .sound = .ready,
@@ -301,7 +295,7 @@ test "a delayed screen completion cannot settle a newer Codex Stop or publish a 
         .process_probe = .{ .cache = processCache(.codex, process_id, "Codex") },
     });
 
-    try std.testing.expectEqual(AgentStatusType.working, fixture.agents.projectedStatus(identity.key).?);
+    try std.testing.expectEqual(core.AgentStatus.working, fixture.agents.projectedStatus(identity.key).?);
     try std.testing.expect(fixture.sound() == null);
 }
 
@@ -309,17 +303,17 @@ test "Codex PTY frames and continuing Stop hooks publish exactly one final compl
     var fixture: EventFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
-    const size: TerminalSizeType = .{ .cols = 100, .rows = 16 };
+    const size: core.TerminalSize = .{ .cols = 100, .rows = 16 };
     fixture.pane.history_observer.queueResize(size);
     const identity = agent_identity.fromPane(fixture.pane);
     const process_id = nonShellProcessId(fixture.pane);
     _ = fixture.agents.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = process_id, .observed_at_ms = 50 });
 
     const cases = [_]struct {
-        report: ?AgentReportStateType,
+        report: ?core.AgentReportState,
         now_ms: i64,
         output: []const u8,
-        status: AgentStatusType,
+        status: core.AgentStatus,
         sound: bool = false,
     }{
         .{ .report = .working, .now_ms = 100, .output = "\x1b[1;1HWorking (1s)\x1b[4;1H\xe2\x80\xba Ask Codex to do anything\x1b[4;3H", .status = .working },
@@ -346,9 +340,9 @@ test "Codex PTY frames and continuing Stop hooks publish exactly one final compl
 }
 
 test "sounds are restricted to working-to-ready and working-to-blocked transitions" {
-    try std.testing.expectEqual(AgentSoundType.ready, sound_module.soundForTransition(.working, .ready).?);
-    try std.testing.expectEqual(AgentSoundType.ready, sound_module.soundForTransition(.working, .done).?);
-    try std.testing.expectEqual(AgentSoundType.needs_input, sound_module.soundForTransition(.working, .blocked).?);
+    try std.testing.expectEqual(core.AgentSound.ready, sound_module.soundForTransition(.working, .ready).?);
+    try std.testing.expectEqual(core.AgentSound.ready, sound_module.soundForTransition(.working, .done).?);
+    try std.testing.expectEqual(core.AgentSound.needs_input, sound_module.soundForTransition(.working, .blocked).?);
     try std.testing.expect(sound_module.soundForTransition(null, .ready) == null);
     try std.testing.expect(sound_module.soundForTransition(.ready, .ready) == null);
     try std.testing.expect(sound_module.soundForTransition(.blocked, .ready) == null);
@@ -376,6 +370,6 @@ test "a pane-root agent keeps its resumed session and receives screen observatio
 
     try std.testing.expect(!fixture.agents.awaitingResume(key));
     try std.testing.expect(fixture.agents.resumeSession(key).?.eql(session));
-    try std.testing.expectEqual(AgentProviderType.codex, fixture.agents.projectedProvider(key));
-    try std.testing.expectEqual(AgentStatusType.working, fixture.agents.projectedStatus(key).?);
+    try std.testing.expectEqual(core.AgentProvider.codex, fixture.agents.projectedProvider(key));
+    try std.testing.expectEqual(core.AgentStatus.working, fixture.agents.projectedStatus(key).?);
 }

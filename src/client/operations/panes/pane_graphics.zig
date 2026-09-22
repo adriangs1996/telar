@@ -1,9 +1,8 @@
 //! Reconciles retained resources and semantic fallbacks using concrete dependencies.
 
+const data = @import("model");
 const Model = @import("../../model/Model.zig");
 const GraphicsRetention = @import("../../graphics/GraphicsRetention.zig");
-const ApplicationPanesPaneGraphicsCommand = @import("../../application/panes/pane_graphics.zig").Command;
-const ResourceResultType = @import("../../application/panes/pane_graphics.zig").ResourceResult;
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -30,7 +29,7 @@ pub fn syncFallbacks(model: *Model, graphics: GraphicsRetention) void {
 
 /// Classifies bounded ingress recovery without sending runtime messages.
 /// Example: `const result = try applyResources(graphics, command);`
-pub fn applyResources(graphics: GraphicsRetention, command: ApplicationPanesPaneGraphicsCommand) !ResourceResultType {
+pub fn applyResources(graphics: GraphicsRetention, command: data.PaneGraphicsCommand) !data.PaneGraphicsResourceResult {
     const before = graphics.ingressVersion();
     graphics.apply(command) catch |err| switch (err) {
         error.GraphicsResyncRequired => return .{ .resync_required = command.paneId() },

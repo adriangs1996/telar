@@ -1,5 +1,5 @@
-const AgentProvider = @import("telar-core").AgentProvider;
+const core = @import("telar-core");
 const ToolHookInput = @import("ToolHookInput.zig");
 
-provider: AgentProvider,
+provider: core.AgentProvider,
 input: ToolHookInput,

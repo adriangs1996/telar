@@ -1,14 +1,12 @@
 //! Synchronization of one pane's graphics state across client attachments.
 
+const core = @import("telar-core");
 const Pane = @import("../../../../pane/Pane.zig");
 const AttachmentStore = @import("../../../attachment/AttachmentStore.zig");
 const Stats = @import("Stats.zig");
 const Consumers = @import("Consumers.zig");
-const ImageKeyType = @import("telar-core").ImageKey;
-const PaneIdType = @import("telar-core").PaneId;
 const attachment_mod = @import("../../../attachment/attachment_namespace.zig");
 const std = @import("std");
-const ShmNameType = @import("telar-core").ShmName;
 const PaneFixtureType = @import("../../../tests/PaneFixture.zig");
 const shared_transfer_module = @import("../../../../media/shared_transfer.zig");
 const StatsType = @import("../../../../media/Stats.zig");
@@ -63,7 +61,7 @@ fn discardUnwanted(pane: *Pane, stores: []const *AttachmentStore) void {
     }
 }
 
-fn wanted(key: ImageKeyType, pane_id: PaneIdType, stores: []const *AttachmentStore) bool {
+fn wanted(key: core.ImageKey, pane_id: core.PaneId, stores: []const *AttachmentStore) bool {
     for (stores) |store| {
         const attachment = store.find(pane_id) orelse continue;
         if (!attachment.graphics.shared_transport) {
@@ -82,7 +80,7 @@ fn wanted(key: ImageKeyType, pane_id: PaneIdType, stores: []const *AttachmentSto
     return false;
 }
 
-fn objectExists(name: ShmNameType) bool {
+fn objectExists(name: core.ShmName) bool {
     const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
     if (std.posix.errno(fd) != .SUCCESS) {
         return false;
@@ -91,7 +89,7 @@ fn objectExists(name: ShmNameType) bool {
     return true;
 }
 
-fn liveKey(fixture: *PaneFixtureType, image_id: u32) ImageKeyType {
+fn liveKey(fixture: *PaneFixtureType, image_id: u32) core.ImageKey {
     const image = fixture.pane.media.terminal.screens.active.kitty_images.imageById(image_id).?;
     return .{ .image_id = image.id, .generation = image.generation };
 }

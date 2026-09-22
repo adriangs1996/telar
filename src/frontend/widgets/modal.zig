@@ -1,6 +1,6 @@
 //! Shared geometry for application-level modal overlays.
 
-const RectType = @import("telar-core").Rect;
+const core = @import("telar-core");
 const std_module = @import("std");
 
 const size_numerator: u32 = 4;
@@ -12,7 +12,7 @@ const size_denominator: u32 = 5;
 /// ```zig
 /// const area = modal.area(context.buffer.area());
 /// ```
-pub fn area(application: RectType) RectType {
+pub fn area(application: core.Rect) core.Rect {
     const width: u16 = @intCast(@as(u32, application.w) * size_numerator / size_denominator);
     const height: u16 = @intCast(@as(u32, application.h) * size_numerator / size_denominator);
 
@@ -27,7 +27,7 @@ pub fn area(application: RectType) RectType {
 test "modal occupies eighty percent of the application and stays centered" {
     const std = std_module;
 
-    try std.testing.expectEqual(RectType{ .x = 22, .y = 14, .w = 96, .h = 32 }, area(.{
+    try std.testing.expectEqual(core.Rect{ .x = 22, .y = 14, .w = 96, .h = 32 }, area(.{
         .x = 10,
         .y = 10,
         .w = 120,
@@ -38,7 +38,7 @@ test "modal occupies eighty percent of the application and stays centered" {
 test "modal centers odd remainders without exceeding its application area" {
     const std = std_module;
 
-    try std.testing.expectEqual(RectType{ .x = 10, .y = 2, .w = 80, .h = 19 }, area(.{
+    try std.testing.expectEqual(core.Rect{ .x = 10, .y = 2, .w = 80, .h = 19 }, area(.{
         .w = 101,
         .h = 24,
     }));

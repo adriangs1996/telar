@@ -7,11 +7,12 @@
 //! host paints, including one Telar does not know. Cell fallbacks remain
 //! underneath every placement.
 
+const assets = @import("assets");
+const client = @import("telar-client");
 const std = @import("std");
 const MarkType = @import("../ui/Mark.zig");
 const IconsSlot = @import("IconsSlot.zig");
 const ui_icons = @import("../ui/icons.zig");
-const IconType = @import("telar-client").Icon;
 const Placement = @import("Placement.zig");
 const RasterSize = @import("RasterSize.zig");
 const RasterizerType = @import("Rasterizer.zig");
@@ -21,11 +22,11 @@ const BitmapType = @import("Bitmap.zig");
 const bitmap = @import("bitmap_support.zig");
 const IconsRenderer = @import("IconsRenderer.zig");
 
-pub const embedded_font: []const u8 = @import("assets").nerd_icons;
+pub const embedded_font: []const u8 = assets.nerd_icons;
 
 /// The telar mark is artwork rather than a font glyph, checked in at the
 /// largest size a cell slot can use.
-const mark_source: []const u8 = @import("assets").telar_mark_64_rgba;
+const mark_source: []const u8 = assets.telar_mark_64_rgba;
 const mark_source_side: u32 = 64;
 
 comptime {
@@ -71,7 +72,7 @@ pub fn ensureSlot(slots: *[ui_icons.max_marks]IconsSlot, count: *u8, wanted: Ico
     return added;
 }
 
-pub fn isWorkingIcon(icon: IconType) bool {
+pub fn isWorkingIcon(icon: client.Icon) bool {
     return switch (icon) {
         .agent_working_0,
         .agent_working_1,
@@ -244,8 +245,8 @@ test "embedded subset rasterizes every configured Nerd Font icon" {
     defer renderer.deinit();
     try std.testing.expect(renderer.text != null);
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var marks: [std.meta.fields(IconType).len]MarkType = undefined;
-    inline for (std.meta.fields(IconType), 0..) |field, index| {
+    var marks: [std.meta.fields(client.Icon).len]MarkType = undefined;
+    inline for (std.meta.fields(client.Icon), 0..) |field, index| {
         marks[index] = .{
             .area = .{ .x = @intCast(index), .w = 1, .h = 1 },
             .icon = @enumFromInt(field.value),

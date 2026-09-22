@@ -6,6 +6,7 @@
 //! pane whose agent is blocked or failed and only while it is not focused;
 //! it fades in through `RingFades`. Unfocused panes get one quad of the
 //! terminal background at 0.15 over their content.
+const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
@@ -39,7 +40,7 @@ pub fn draw(decorations: PaneDecorations, canvas: *Canvas) !void {
         return;
     }
 
-    var layout: client.LayoutSnapshot = .{};
+    var layout: data.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
     for (layout.views()) |view| {
         const pane = model.findConst(view.pane_id) orelse continue;
@@ -76,7 +77,7 @@ fn ring(decorations: PaneDecorations, canvas: *Canvas, spec: RingSpec) !void {
     });
 }
 
-fn border(decorations: PaneDecorations, canvas: *Canvas, view: client.LayoutView) !void {
+fn border(decorations: PaneDecorations, canvas: *Canvas, view: data.LayoutView) !void {
     const context = decorations.context;
     const outer = view.outer;
     const content = view.content;
@@ -112,7 +113,7 @@ fn border(decorations: PaneDecorations, canvas: *Canvas, view: client.LayoutView
 // The grid reserves rectangular cells for gutters. Extend the trailing frame
 // into that reservation so both axes leave the smaller pixel gap, without
 // moving terminal cells or their input coordinates.
-fn frameRect(self: PaneDecorations, canvas: *const Canvas, view: client.LayoutView) Rect {
+fn frameRect(self: PaneDecorations, canvas: *const Canvas, view: data.LayoutView) Rect {
     var frame = canvas.rect(view.outer);
     const layout = &self.context.projection.model.?.layout;
     const gap = layout.metrics.gutter(layout.pane_gaps);

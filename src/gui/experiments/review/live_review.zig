@@ -1,17 +1,15 @@
+const client = @import("telar-client");
 const std = @import("std");
 const Widget = @import("../../change_review/Widget.zig");
 const LiveSnapshot = @import("LiveSnapshot.zig");
 const ReviewFeedback = @import("ReviewFeedback.zig");
-const Anchor = @import("telar-client").ChangeReviewAnchor;
-const Revision = @import("telar-client").ChangeReviewRevision;
 const LiveBridge = @import("LiveBridge.zig");
-const limits = @import("telar-client").change_review_limits;
 
 /// Rehydrates retained editions and delivered comments before opening the window.
 /// Example: `try live_review.load(widget, snapshot);`
 pub fn load(w: *Widget, snapshot: *LiveSnapshot) !void {
     const value = snapshot.parsed.value;
-    var anchors: [limits.comments]Anchor = undefined;
+    var anchors: [client.change_review_limits.comments]client.ChangeReviewAnchor = undefined;
     for (value.comments, 0..) |comment, index| {
         anchors[index] = try locate(&snapshot.revisions[0], comment);
     }
@@ -90,7 +88,7 @@ pub fn accept(w: *Widget, snapshots: struct { initial: *LiveSnapshot, corrected:
     w.model.status = "Review delivered. The agent's correction is available in edition 2.";
 }
 
-fn locate(revision: *const Revision, comment: ReviewFeedback) !Anchor {
+fn locate(revision: *const client.ChangeReviewRevision, comment: ReviewFeedback) !client.ChangeReviewAnchor {
     const file_index = revision.findFile(comment.file) orelse return error.InvalidReviewComment;
     const file = revision.files[file_index];
     var first: ?usize = null;

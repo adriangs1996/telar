@@ -1,18 +1,15 @@
 //! Length-delimited protocol between the runtime and one tap worker.
 
+const core = @import("telar-core");
 const ExchangeIdentity = @import("ExchangeIdentity.zig");
 const Exchange = @import("../proxy/capture/Exchange.zig");
 const std = @import("std");
-const raw_module = @import("telar-core").raw;
 const ExchangeType = @import("Exchange.zig");
 const Cursor = @import("Cursor.zig");
-const pane_module = @import("telar-core").pane;
 const middleware = @import("../proxy/middleware.zig");
 const types = @import("../agent/types.zig");
 const BatchType = @import("Batch.zig");
 const effects = @import("effects.zig");
-const AgentReportStateType = @import("telar-core").AgentReportState;
-const NotificationLevelType = @import("telar-core").NotificationLevel;
 const Half = @import("../proxy/capture/Half.zig");
 const HalfType = @import("Half.zig");
 const buffer_support = @import("../proxy/capture/buffer_support.zig");
@@ -31,7 +28,7 @@ pub fn encodeExchange(buffer: []u8, identity: ExchangeIdentity, captured: *const
     try writer.writeByte(1);
     try writeInt(&writer, u64, identity.id);
     try writeInt(&writer, u64, identity.generation);
-    try writeInt(&writer, u64, raw_module(representative.pane.id));
+    try writeInt(&writer, u64, core.raw(representative.pane.id));
     try writeInt(&writer, u64, representative.pane.generation);
     try writer.writeByte(@intFromEnum(representative.protocol));
     try writer.writeByte(@intFromEnum(representative.dialect));
@@ -58,7 +55,7 @@ pub fn decodeExchange(bytes: []const u8) !ExchangeType {
     }
     const id = try cursor.int(u64);
     const generation = try cursor.int(u64);
-    const pane = pane_module(try cursor.int(u64)) catch return error.InvalidExchange;
+    const pane = core.pane(try cursor.int(u64)) catch return error.InvalidExchange;
     const pane_generation = try cursor.int(u64);
     const protocol = std.enums.fromInt(middleware.Protocol, try cursor.byte()) orelse return error.InvalidExchange;
     const dialect = std.enums.fromInt(types.ApiDialect, try cursor.byte()) orelse return error.InvalidExchange;
@@ -124,7 +121,7 @@ pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const BatchType) ![]co
         },
         .agent_evidence => |evidence| {
             try writer.writeByte(2);
-            try writeInt(&writer, u64, raw_module(evidence.pane));
+            try writeInt(&writer, u64, core.raw(evidence.pane));
             try writer.writeByte(@intFromEnum(evidence.state));
             try writer.writeByte(@intFromEnum(evidence.confidence));
         },
@@ -171,12 +168,12 @@ pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: BatchTyp
                 .redact = try cursor.boolean(),
             } },
             2 => .{ .agent_evidence = .{
-                .pane = pane_module(try cursor.int(u64)) catch return error.InvalidEffect,
-                .state = std.enums.fromInt(AgentReportStateType, try cursor.byte()) orelse return error.InvalidEffect,
+                .pane = core.pane(try cursor.int(u64)) catch return error.InvalidEffect,
+                .state = std.enums.fromInt(core.AgentReportState, try cursor.byte()) orelse return error.InvalidEffect,
                 .confidence = std.enums.fromInt(effects.Confidence, try cursor.byte()) orelse return error.InvalidEffect,
             } },
             3 => .{ .notification = .{
-                .level = std.enums.fromInt(NotificationLevelType, try cursor.byte()) orelse return error.InvalidEffect,
+                .level = std.enums.fromInt(core.NotificationLevel, try cursor.byte()) orelse return error.InvalidEffect,
                 .duration_ms = try cursor.int(u32),
                 .title = try cursor.sized(),
                 .message = try cursor.sized(),
@@ -287,7 +284,7 @@ test "effect protocol round trips all effect variants and rejects trailing bytes
     try std.testing.expectEqual(@as(u64, 9), decoded.event_id);
     try std.testing.expectEqualStrings("git status", decoded.batch.items[0].record_command.command);
     try std.testing.expectEqualStrings("call-1", decoded.batch.items[0].record_command.tool_call_id);
-    try std.testing.expectEqual(AgentReportStateType.working, decoded.batch.items[1].agent_evidence.state);
+    try std.testing.expectEqual(core.AgentReportState.working, decoded.batch.items[1].agent_evidence.state);
     try std.testing.expectEqualStrings("Observed", decoded.batch.items[2].notification.message);
     storage[encoded.len] = 0;
     try std.testing.expectError(error.TrailingFrame, decodeEffects(storage[0 .. encoded.len + 1]));

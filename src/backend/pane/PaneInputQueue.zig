@@ -1,4 +1,4 @@
-const max_input_bytes_module = @import("telar-core").max_input_bytes;
+const core = @import("telar-core");
 const std = @import("std");
 /// Bytes typed at a child that has not accepted them yet.
 ///
@@ -10,7 +10,7 @@ const std = @import("std");
 /// froze every other pane's input behind one blocked PTY write.
 const PaneInputQueue = @This();
 
-pub const capacity = 2 * max_input_bytes_module;
+pub const capacity = 2 * core.max_input_bytes;
 
 bytes: [capacity]u8 = undefined,
 head: usize = 0,

@@ -1,10 +1,8 @@
-const PaneType = @import("Pane.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
+const core = @import("telar-core");
 const TabDetachmentPlan = @This();
 
-location: TabLocationType,
-panes: [max_panes_per_tab]PaneType = undefined,
+location: core.TabLocation,
+panes: [core.max_panes_per_tab]Pane = undefined,
 len: u8 = 0,
 owns_paste: bool = false,
 owns_reported_focus: bool = false,
@@ -18,6 +16,6 @@ pub const Pane = @import("Pane.zig");
 /// ```zig
 /// for (plan.slice()) |pane| detach(pane.pane_id);
 /// ```
-pub fn slice(plan: *const TabDetachmentPlan) []const PaneType {
+pub fn slice(plan: *const TabDetachmentPlan) []const Pane {
     return plan.panes[0..plan.len];
 }

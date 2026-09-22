@@ -1,6 +1,6 @@
 //! One workspace's favicon in the GUI registry: what the lookup found and,
 //! once placed, where it sits in the sprite page.
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const core = @import("telar-core");
 const Sprite = @import("../image/Sprite.zig");
 
 pub const State = enum {
@@ -16,6 +16,6 @@ pub const State = enum {
     full,
 };
 
-workspace: WorkspaceIdType,
+workspace: core.WorkspaceId,
 state: State = .wanted,
 sprite: Sprite = .{ .index = 0 },

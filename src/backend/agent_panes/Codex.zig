@@ -1,9 +1,10 @@
+const recent_conversations = @import("recent_conversations.zig");
+const command_module = @import("command.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const protocol = @import("protocol.zig");
 const Transcript = @import("Transcript.zig");
 const PendingApproval = @import("PendingApproval.zig");
-const Command = @import("command.zig").Command;
 const Prompt = @import("Prompt.zig");
 const model_catalog = @import("model_catalog.zig");
 const Codex = @This();
@@ -168,7 +169,7 @@ pub fn receive(codex: *Codex, frame: @import("ProviderFrame.zig")) !?[]const u8 
             return null;
         }
 
-        @import("recent_conversations.zig").load(&codex.transcript.value, result, codex.cwd) catch {
+        recent_conversations.load(&codex.transcript.value, result, codex.cwd) catch {
             codex.transcript.value.recent.phase = .failed;
         };
         return null;
@@ -248,7 +249,7 @@ pub fn receive(codex: *Codex, frame: @import("ProviderFrame.zig")) !?[]const u8 
 
 /// Sends only valid actions for the current thread and approval generation.
 /// Example: `if (try codex.command(.interrupt)) |line| try transport.write(line);`
-pub fn command(codex: *Codex, value: Command) !?[]const u8 {
+pub fn command(codex: *Codex, value: command_module.Command) !?[]const u8 {
     switch (value) {
         .resume_conversation => |target| {
             if (!codex.transcript.value.canResume() or codex.pending_resume_request != null) {

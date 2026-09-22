@@ -1,7 +1,6 @@
 const std = @import("std");
 const core = @import("telar-core");
 const FramePacer = @import("../FramePacer.zig");
-const Pane = FramePacer.Pane;
 
 const Instant = enum(u64) {
     initial = 100 * std.time.ns_per_ms,
@@ -19,7 +18,7 @@ fn now(instant: Instant) u64 {
     return @intFromEnum(instant);
 }
 
-fn pane(identity: Identity, revision: Revision) Pane {
+fn pane(identity: Identity, revision: Revision) FramePacer.Pane {
     return .{
         .pane_id = @enumFromInt(@intFromEnum(identity)),
         .frame_id = @intFromEnum(revision),

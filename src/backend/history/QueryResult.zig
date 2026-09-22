@@ -1,10 +1,10 @@
-const RequestIdType = @import("telar-core").RequestId;
+const core = @import("telar-core");
 const QueryOrigin = @import("QueryOrigin.zig");
 const Entry = @import("Entry.zig");
 const std = @import("std");
 const QueryResult = @This();
 
-request_id: RequestIdType,
+request_id: core.RequestId,
 origin: QueryOrigin,
 entries: []Entry,
 gpa: std.mem.Allocator,

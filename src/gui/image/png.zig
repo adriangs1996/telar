@@ -6,7 +6,6 @@
 //! small file cannot expand past the bound. Runs in the favicon worker,
 //! never on the interactive path.
 const std = @import("std");
-const flate = std.compress.flate;
 const PngHeader = @import("PngHeader.zig");
 const PngPalette = @import("PngPalette.zig");
 const DecodedImage = @import("DecodedImage.zig");
@@ -167,8 +166,8 @@ fn collectImageData(bytes: []const u8, idat: []u8) Error!void {
 // lets the decoder consume empty final blocks after filling the pixel buffer.
 fn inflate(idat: []const u8, raw: []u8) Error!void {
     var input = std.Io.Reader.fixed(idat);
-    var window: [flate.max_window_len]u8 = undefined;
-    var decompress = flate.Decompress.init(&input, .zlib, &window);
+    var window: [std.compress.flate.max_window_len]u8 = undefined;
+    var decompress = std.compress.flate.Decompress.init(&input, .zlib, &window);
     decompress.reader.readSliceAll(raw) catch return error.InvalidPngData;
     var extra: [1]u8 = undefined;
     const trailing = decompress.reader.readSliceShort(&extra) catch return error.InvalidPngData;
@@ -316,8 +315,8 @@ pub fn encodeForTest(allocator: std.mem.Allocator, spec: PngTestSpec, samples: [
 
     var compressed: std.Io.Writer.Allocating = try .initCapacity(allocator, 4096);
     defer compressed.deinit();
-    var window: [flate.max_window_len]u8 = undefined;
-    var compress = try flate.Compress.init(&compressed.writer, &window, .zlib, .default);
+    var window: [std.compress.flate.max_window_len]u8 = undefined;
+    var compress = try std.compress.flate.Compress.init(&compressed.writer, &window, .zlib, .default);
     try compress.writer.writeAll(raw);
     try compress.finish();
 

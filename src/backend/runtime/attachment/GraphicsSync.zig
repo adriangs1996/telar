@@ -1,12 +1,6 @@
-const KnownImageType = @import("KnownImage.zig");
-const KnownPlacementType = @import("KnownPlacement.zig");
-const TransferType = @import("Transfer.zig");
+const core = @import("telar-core");
 const PaneType = @import("../../pane/Pane.zig");
 const graphics = @import("graphics.zig");
-const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
-const TimingType = @import("telar-core").Timing;
-const max_images_per_pane_module = @import("telar-core").max_images_per_pane;
-const max_placements_per_pane_module = @import("telar-core").max_placements_per_pane;
 const std = @import("std");
 const Sync = @This();
 
@@ -20,7 +14,7 @@ revision: u64 = 1,
 target_revision: u64 = 0,
 batch_active: bool = false,
 observed_revision: u64,
-credit: usize = max_image_bytes_per_pane_module,
+credit: usize = core.max_image_bytes_per_pane,
 shared_transport: bool = false,
 sent_images: u32 = 0,
 sent_placements: u32 = 0,
@@ -28,12 +22,12 @@ stage_blocked: u32 = 0,
 /// Transfers adopted from the media actor's parked objects: no copy on
 /// the runtime thread.
 adopted: u32 = 0,
-freeze: TimingType = .{},
-transfer: ?TransferType = null,
-known_images: [max_images_per_pane_module]?KnownImageType =
-    [_]?KnownImageType{null} ** max_images_per_pane_module,
-known_placements: [max_placements_per_pane_module]?KnownPlacementType =
-    [_]?KnownPlacementType{null} ** max_placements_per_pane_module,
+freeze: core.Timing = .{},
+transfer: ?Transfer = null,
+known_images: [core.max_images_per_pane]?KnownImage =
+    [_]?KnownImage{null} ** core.max_images_per_pane,
+known_placements: [core.max_placements_per_pane]?KnownPlacement =
+    [_]?KnownPlacement{null} ** core.max_placements_per_pane,
 gpa: std.mem.Allocator,
 
 pub fn init(gpa: std.mem.Allocator, pane: *PaneType) Sync {
@@ -55,8 +49,8 @@ pub fn reset(sync: *Sync) void {
     sync.batch_active = false;
     sync.target_revision = 0;
     sync.observed_revision = 0;
-    sync.known_images = [_]?KnownImageType{null} ** max_images_per_pane_module;
-    sync.known_placements = [_]?KnownPlacementType{null} ** max_placements_per_pane_module;
+    sync.known_images = [_]?KnownImage{null} ** core.max_images_per_pane;
+    sync.known_placements = [_]?KnownPlacement{null} ** core.max_placements_per_pane;
 }
 
 pub fn freeTransfer(sync: *Sync) void {

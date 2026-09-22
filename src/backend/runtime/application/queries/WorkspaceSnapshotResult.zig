@@ -1,4 +1,4 @@
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const core = @import("telar-core");
 const Result = @This();
 
-location: WorkspaceLocationType,
+location: core.WorkspaceLocation,

@@ -1,9 +1,8 @@
-const TerminalSizeType = @import("telar-core").TerminalSize;
+const core = @import("telar-core");
 const std = @import("std");
 const Harness = @import("Harness.zig");
-const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
 
-pub const size: TerminalSizeType = .{ .cols = 10, .rows = 5, .cell_width_px = 10, .cell_height_px = 20 };
+pub const size: core.TerminalSize = .{ .cols = 10, .rows = 5, .cell_width_px = 10, .cell_height_px = 20 };
 const fixture = @embedFile("testdata/rgba.png");
 const encoded = &encoded_storage;
 const encoded_storage = encoded: {
@@ -17,7 +16,7 @@ test "PNG KGP preserves chunk state across every PTY split and keeps cursor poli
     defer std.testing.allocator.free(bytes);
 
     for (0..bytes.len + 1) |split| {
-        const harness = try Harness.create(max_image_bytes_per_screen_module);
+        const harness = try Harness.create(core.max_image_bytes_per_screen);
         defer harness.destroy();
         harness.feed(bytes[0..split]);
         harness.feed(bytes[split..]);
@@ -31,7 +30,7 @@ test "PNG KGP accepts Pi's 4096-character chunks and quiet anonymous placements"
     var base64: [std.base64.standard.Encoder.calcSize(large.len)]u8 = undefined;
     const data = std.base64.standard.Encoder.encode(&base64, large);
     try std.testing.expect(data.len > 8192);
-    const harness = try Harness.create(max_image_bytes_per_screen_module);
+    const harness = try Harness.create(core.max_image_bytes_per_screen);
     defer harness.destroy();
     harness.feed("\x1b[3;4H");
 
@@ -67,7 +66,7 @@ test "PNG queries validate without storing and malformed uploads recover" {
     const previous_log_level = std.testing.log_level;
     std.testing.log_level = .err;
     defer std.testing.log_level = previous_log_level;
-    const harness = try Harness.create(max_image_bytes_per_screen_module);
+    const harness = try Harness.create(core.max_image_bytes_per_screen);
     defer harness.destroy();
     const query = try std.fmt.allocPrint(std.testing.allocator, "\x1b_Ga=q,f=100,i=7;{s}\x1b\\", .{encoded});
     defer std.testing.allocator.free(query);

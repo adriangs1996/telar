@@ -1,4 +1,3 @@
-const OpenOptionsType = @import("OpenOptions.zig");
 const std = @import("std");
 const SessionSpec = @import("SessionSpec.zig");
 const Request = @import("Request.zig");
@@ -24,7 +23,7 @@ timeout_ms: u32,
 /// ```zig
 /// const session = try Session.open(io, gpa, .{ .entry = entry, .timeout_ms = 200 });
 /// ```
-pub fn open(io: std.Io, gpa: std.mem.Allocator, options: OpenOptionsType) !*Session {
+pub fn open(io: std.Io, gpa: std.mem.Allocator, options: OpenOptions) !*Session {
     const session = try gpa.create(Session);
     errdefer gpa.destroy(session);
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;

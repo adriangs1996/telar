@@ -1,14 +1,13 @@
 const std = @import("std");
 const core = @import("telar-core");
-const agent_thread = core.agent_thread;
 const Transcript = @This();
 
 value: core.AgentThreadSnapshot,
 next_identity: u64 = 1,
 turn_identity: u64 = 0,
-ids: [agent_thread.max_items][128]u8 = undefined,
-id_lengths: [agent_thread.max_items]u8 = @splat(0),
-truncated_items: [agent_thread.max_items]bool = @splat(false),
+ids: [core.agent_thread.max_items][128]u8 = undefined,
+id_lengths: [core.agent_thread.max_items]u8 = @splat(0),
+truncated_items: [core.agent_thread.max_items]bool = @splat(false),
 
 /// Selects the provider turn used to scope item IDs and approval lookups.
 /// Example: `try transcript.setTurn(provider_turn_id);`
@@ -55,7 +54,7 @@ pub fn update(transcript: *Transcript, value: @import("ItemUpdate.zig")) void {
 
     transcript.truncated_items[index] = item.truncated or (item.append and transcript.truncated_items[index]);
     const prior_len = if (item.append) stored.text_len else 0;
-    const available = agent_thread.max_text_bytes - prior_len;
+    const available = core.agent_thread.max_text_bytes - prior_len;
     const keep = utf8Prefix(item.text, @min(item.text.len, available));
 
     if (keep != item.text.len) {
@@ -64,13 +63,13 @@ pub fn update(transcript: *Transcript, value: @import("ItemUpdate.zig")) void {
     }
 
     const additional = prior_len + keep -| stored.text_len;
-    while (transcript.value.text_len + additional > agent_thread.max_text_bytes and index != 0) {
+    while (transcript.value.text_len + additional > core.agent_thread.max_text_bytes and index != 0) {
         transcript.evictFirst();
         index -= 1;
         stored = &transcript.value.item_storage[index];
     }
 
-    if (transcript.value.text_len + additional > agent_thread.max_text_bytes) {
+    if (transcript.value.text_len + additional > core.agent_thread.max_text_bytes) {
         transcript.value.truncated = true;
         transcript.truncated_items[index] = true;
         return;
@@ -161,15 +160,15 @@ fn metadata(transcript: *Transcript, index: usize, update_item: @import("ItemUpd
     const source = if (update_item.id.len != 0) update_item.id else previous[row.source_offset..][0..row.source_len];
     const source_turn = if (update_item.source_turn.len != 0) update_item.source_turn else previous[row.source_turn_offset..][0..row.source_turn_len];
     const lengths = .{
-        metadataPrefix(title, agent_thread.max_item_title_bytes),
-        metadataPrefix(detail, agent_thread.max_item_detail_bytes),
-        if (reference.len <= agent_thread.max_item_reference_bytes and std.unicode.utf8ValidateSlice(reference) and std.mem.indexOfScalar(u8, reference, 0) == null) reference.len else 0,
+        metadataPrefix(title, core.agent_thread.max_item_title_bytes),
+        metadataPrefix(detail, core.agent_thread.max_item_detail_bytes),
+        if (reference.len <= core.agent_thread.max_item_reference_bytes and std.unicode.utf8ValidateSlice(reference) and std.mem.indexOfScalar(u8, reference, 0) == null) reference.len else 0,
         source.len,
         source_turn.len,
     };
     const old_length = @as(usize, row.title_len) + row.detail_len + row.reference_len + row.source_len + row.source_turn_len;
     const new_length = lengths[0] + lengths[1] + lengths[2] + lengths[3] + lengths[4];
-    if (transcript.value.metadata_len - old_length + new_length > agent_thread.max_metadata_bytes) {
+    if (transcript.value.metadata_len - old_length + new_length > core.agent_thread.max_metadata_bytes) {
         transcript.value.truncated = true;
         return;
     }
@@ -225,12 +224,12 @@ fn find(transcript: *const Transcript, update_item: @import("ItemUpdate.zig")) ?
 
 fn append(transcript: *Transcript, item: @import("ItemUpdate.zig")) usize {
     const reference: []const u8 = item.reference orelse "";
-    const metadata_bytes = metadataPrefix(item.title orelse "", agent_thread.max_item_title_bytes) + metadataPrefix(item.detail orelse "", agent_thread.max_item_detail_bytes) + @min(reference.len, agent_thread.max_item_reference_bytes) + item.id.len + item.source_turn.len;
-    while (transcript.value.item_count != 0 and transcript.value.metadata_len + metadata_bytes > agent_thread.max_metadata_bytes) {
+    const metadata_bytes = metadataPrefix(item.title orelse "", core.agent_thread.max_item_title_bytes) + metadataPrefix(item.detail orelse "", core.agent_thread.max_item_detail_bytes) + @min(reference.len, core.agent_thread.max_item_reference_bytes) + item.id.len + item.source_turn.len;
+    while (transcript.value.item_count != 0 and transcript.value.metadata_len + metadata_bytes > core.agent_thread.max_metadata_bytes) {
         transcript.evictFirst();
     }
 
-    if (transcript.value.item_count == agent_thread.max_items) {
+    if (transcript.value.item_count == core.agent_thread.max_items) {
         transcript.evictFirst();
     }
 
@@ -329,14 +328,14 @@ test "transcript evicts oldest items to enforce count and byte limits" {
         transcript.update(.{ .role = .user, .text = "x" });
     }
 
-    try std.testing.expectEqual(@as(u8, agent_thread.max_items), transcript.value.item_count);
+    try std.testing.expectEqual(@as(u8, core.agent_thread.max_items), transcript.value.item_count);
     try std.testing.expect(transcript.value.truncated);
-    const full = [_]u8{'a'} ** agent_thread.max_text_bytes;
+    const full = [_]u8{'a'} ** core.agent_thread.max_text_bytes;
     transcript.update(.{ .id = "last", .role = .assistant, .text = &full });
     try std.testing.expectEqual(@as(u8, 1), transcript.value.item_count);
-    try std.testing.expectEqual(@as(u32, agent_thread.max_text_bytes), transcript.value.text_len);
+    try std.testing.expectEqual(@as(u32, core.agent_thread.max_text_bytes), transcript.value.text_len);
     transcript.update(.{ .id = "last", .role = .assistant, .text = "overflow", .append = true });
-    try std.testing.expectEqual(@as(u32, agent_thread.max_text_bytes), transcript.value.text_len);
+    try std.testing.expectEqual(@as(u32, core.agent_thread.max_text_bytes), transcript.value.text_len);
     try std.testing.expectEqualStrings("last", transcript.value.items()[0].sourceId(&transcript.value));
     try std.testing.expect(!transcript.value.items()[0].fragment_end);
 }
@@ -392,14 +391,14 @@ test "transcript metadata is bounded valid UTF8 without NUL and reference trunca
 
 test "transcript metadata pressure evicts old rows while keeping new structured identities" {
     var transcript: Transcript = .{ .value = .{ .pane_id = @enumFromInt(1), .pane_generation = 2 } };
-    const detail = [_]u8{'x'} ** agent_thread.max_item_detail_bytes;
+    const detail = [_]u8{'x'} ** core.agent_thread.max_item_detail_bytes;
     for (0..40) |_| {
         transcript.update(.{ .role = .tool, .kind = .subagent, .title = "Agent", .detail = &detail, .reference = "child-id", .text = "summary" });
     }
 
     try std.testing.expect(transcript.value.item_count < 40);
     try std.testing.expect(transcript.value.truncated);
-    try std.testing.expect(transcript.value.metadata_len <= agent_thread.max_metadata_bytes);
+    try std.testing.expect(transcript.value.metadata_len <= core.agent_thread.max_metadata_bytes);
     for (transcript.value.items()) |item| {
         try std.testing.expectEqualStrings("Agent", item.title(&transcript.value));
         try std.testing.expectEqualStrings("child-id", item.reference(&transcript.value));

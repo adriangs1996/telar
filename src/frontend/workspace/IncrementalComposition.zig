@@ -1,11 +1,10 @@
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const client = @import("telar-client");
+const core = @import("telar-core");
 const ScreenType = @import("../presentation/Screen.zig");
-const BufferType = @import("telar-core").Buffer;
-const CopyProjection = @import("telar-client").CopyProjection;
 const IncrementalComposition = @This();
 
-model: *const MultiplexerModel,
+model: *const client.MultiplexerModel,
 screen: *ScreenType,
-target: *BufferType,
-previous_copy: ?CopyProjection,
+target: *core.Buffer,
+previous_copy: ?client.CopyProjection,
 copy_changed: bool,

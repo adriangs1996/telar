@@ -1,34 +1,14 @@
 //! Substituted platform resources shared by client integration tests.
 
-const HeapType = @import("telar-core").Heap;
+const core = @import("telar-core");
+const client_module = @import("telar-client");
+const data = @import("model");
 const ResourcesType = @import("../entrypoints/Resources.zig");
-const Client = @import("telar-client").AttachedClient;
-const PaneIdType = @import("telar-core").PaneId;
-const VersionType = @import("telar-client").Version;
 const std = @import("std");
-const AgentStatusType = @import("telar-core").AgentStatus;
-const encodeAgentSnapshot_module = @import("telar-core").encodeAgentSnapshot;
 const TestHarness = @import("TestHarness.zig");
-const AdoptionType = @import("telar-client").ConfigAdoption;
-const DiagnosticType = @import("telar-client").Diagnostic;
-const GenerationType = @import("telar-client").Generation;
-const RegistryType = @import("telar-client").Registry;
-const TrustStoreType = @import("telar-core").TrustStore;
-const ActionType = @import("telar-client").Action;
-const config_reloads = @import("telar-client").operations.config_reloads;
-const CallbackContextType = @import("telar-client").CallbackContext;
 const TestingPlugin = @import("TestingPlugin.zig");
-const parseManifest_module = @import("telar-core").parseManifest;
-const DigestType = @import("telar-core").Digest;
-const stableId_module = @import("telar-core").stableId;
-const TargetType = @import("telar-client").AttachmentTarget;
-const AgentProviderType = @import("telar-core").AgentProvider;
-const AgentInputType = @import("telar-client").AgentInput;
-const builtin_table_module = @import("telar-core").builtin_table;
-const ClipboardCaptureType = @import("telar-client").ClipboardCapture;
-const CaptureType = @import("telar-client").Capture;
 
-pub fn clientEventResourcesForTest(heap: *const HeapType) ResourcesType {
+pub fn clientEventResourcesForTest(heap: *const core.Heap) ResourcesType {
     return .{
         .tty = undefined,
         .resize_watcher = undefined,
@@ -36,13 +16,13 @@ pub fn clientEventResourcesForTest(heap: *const HeapType) ResourcesType {
     };
 }
 
-pub fn reportedPaneId(client: *const Client) ?PaneIdType {
+pub fn reportedPaneId(client: *const client_module.AttachedClient) ?core.PaneId {
     const reported = client.model.reportedPaneFocus() orelse return null;
 
     return reported.pane_id;
 }
 
-pub fn expectNonPromptVersionEqual(expected: VersionType, actual: VersionType) !void {
+pub fn expectNonPromptVersionEqual(expected: client_module.Version, actual: client_module.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -67,7 +47,7 @@ pub fn expectNonPromptVersionEqual(expected: VersionType, actual: VersionType) !
     try std.testing.expectEqual(expected.viewport, actual.viewport);
 }
 
-pub fn expectNonCopyVersionEqual(expected: VersionType, actual: VersionType) !void {
+pub fn expectNonCopyVersionEqual(expected: client_module.Version, actual: client_module.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -92,7 +72,7 @@ pub fn expectNonCopyVersionEqual(expected: VersionType, actual: VersionType) !vo
     try std.testing.expectEqual(expected.viewport, actual.viewport);
 }
 
-pub fn expectNonCopyOrViewportVersionEqual(expected: VersionType, actual: VersionType) !void {
+pub fn expectNonCopyOrViewportVersionEqual(expected: client_module.Version, actual: client_module.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -116,7 +96,7 @@ pub fn expectNonCopyOrViewportVersionEqual(expected: VersionType, actual: Versio
     try std.testing.expectEqual(expected.prompt, actual.prompt);
 }
 
-pub fn expectNonViewportVersionEqual(expected: VersionType, actual: VersionType) !void {
+pub fn expectNonViewportVersionEqual(expected: client_module.Version, actual: client_module.Version) !void {
     try std.testing.expectEqual(expected.workspace, actual.workspace);
     try std.testing.expectEqual(expected.configuration, actual.configuration);
     try std.testing.expectEqual(expected.diagnostic, actual.diagnostic);
@@ -141,7 +121,7 @@ pub fn expectNonViewportVersionEqual(expected: VersionType, actual: VersionType)
     try std.testing.expectEqual(expected.copy, actual.copy);
 }
 
-pub fn expectOnlyNotificationVersionChanged(expected: VersionType, actual: VersionType) !void {
+pub fn expectOnlyNotificationVersionChanged(expected: client_module.Version, actual: client_module.Version) !void {
     try std.testing.expect(actual.notifications > expected.notifications);
 
     var normalized = actual;
@@ -154,8 +134,8 @@ pub fn expectOnlyNotificationVersionChanged(expected: VersionType, actual: Versi
 // socketpair instead of the runtime socket, a pipe instead of the tty's read
 // handle, and a discarding writer instead of the host terminal.
 
-pub fn encodeTestingAgentSnapshot(buffer: []u8, revision: u64, status: AgentStatusType) ![]const u8 {
-    return encodeAgentSnapshot_module(buffer, .{
+pub fn encodeTestingAgentSnapshot(buffer: []u8, revision: u64, status: core.AgentStatus) ![]const u8 {
+    return core.encodeAgentSnapshot(buffer, .{
         .revision = revision,
         .entries = &.{.{
             .pane_id = TestHarness.bootstrap_pane,
@@ -183,7 +163,7 @@ pub fn encodeTestingAgentSnapshot(buffer: []u8, revision: u64, status: AgentStat
     });
 }
 
-pub fn testingConfigAdoption(number: u64, changed: bool) !AdoptionType {
+pub fn testingConfigAdoption(number: u64, changed: bool) !client_module.ConfigAdoption {
     const source = if (changed)
         \\local telar = require("telar")
         \\local config = telar.config({ api_version = 2 })
@@ -205,9 +185,9 @@ pub fn testingConfigAdoption(number: u64, changed: bool) !AdoptionType {
     return testingConfigAdoptionSource(number, source);
 }
 
-pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !AdoptionType {
-    var diagnostic: DiagnosticType = .{};
-    const generation = try GenerationType.loadSource(.{
+pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !client_module.ConfigAdoption {
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try client_module.Generation.loadSource(.{
         .gpa = std.testing.allocator,
         .io = std.testing.io,
         .diagnostic = &diagnostic,
@@ -217,10 +197,10 @@ pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !AdoptionTyp
         .number = number,
     });
     errdefer generation.deinit();
-    const registry = try std.testing.allocator.create(RegistryType);
+    const registry = try std.testing.allocator.create(client_module.Registry);
     errdefer std.testing.allocator.destroy(registry);
     registry.* = .{};
-    const trust_store = try std.testing.allocator.create(TrustStoreType);
+    const trust_store = try std.testing.allocator.create(core.TrustStore);
     errdefer std.testing.allocator.destroy(trust_store);
     trust_store.* = .{};
     return .{
@@ -237,16 +217,16 @@ pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !AdoptionTyp
     };
 }
 
-pub fn installTestingLuaBinding(client: *Client, source: []const u8) !ActionType {
+pub fn installTestingLuaBinding(client: *client_module.AttachedClient, source: []const u8) !data.Action {
     const adoption = try testingConfigAdoptionSource(1, source);
     std.debug.assert(adoption.generation.snapshot.binding_count == 1);
     const configured = adoption.generation.snapshot.bindings[0].action;
-    _ = try config_reloads.apply(client, adoption);
+    _ = try reloadConfiguration(client, adoption);
 
     return configured;
 }
 
-pub const testing_plugin_context: CallbackContextType = .{
+pub const testing_plugin_context: data.CallbackContext = .{
     .sidebar_visible = true,
     .tab_count = 1,
     .active_tab_index = 0,
@@ -254,14 +234,14 @@ pub const testing_plugin_context: CallbackContextType = .{
     .focused_pane_id = @intFromEnum(TestHarness.bootstrap_pane),
 };
 
-pub fn installTestingPlugin(client: *Client) !TestingPlugin {
+pub fn installTestingPlugin(client: *client_module.AttachedClient) !TestingPlugin {
     std.debug.assert(client.plugin_registry == null);
-    const manifest = try parseManifest_module(
+    const manifest = try core.parseManifest(
         client.gpa,
         "{\"api_version\":1,\"id\":\"dev.telar.client-test\",\"version\":\"1\",\"entry\":\"plugin.lua\",\"source\":{\"url\":\"local:test\",\"revision\":\"one\"},\"actions\":[\"run\"],\"capabilities\":[\"runtime.control\"]}",
     );
-    const digest: DigestType = @splat(7);
-    const registry = try client.gpa.create(RegistryType);
+    const digest: core.Digest = @splat(7);
+    const registry = try client.gpa.create(client_module.Registry);
     registry.* = .{};
     registry.packages[0] = .{
         .manifest = manifest,
@@ -273,25 +253,25 @@ pub fn installTestingPlugin(client: *Client) !TestingPlugin {
 
     return .{
         .action = .{
-            .plugin = stableId_module(manifest.id()),
-            .action = stableId_module("run"),
+            .plugin = core.stableId(manifest.id()),
+            .action = core.stableId("run"),
         },
         .digest = digest,
     };
 }
 
-pub fn installTestingAttachmentTarget(client: *Client, generation: u64) !TargetType {
+pub fn installTestingAttachmentTarget(client: *client_module.AttachedClient, generation: u64) !data.AttachmentTarget {
     return installTestingAttachmentProvider(client, generation, .codex);
 }
 
-pub fn installTestingAttachmentProvider(client: *Client, generation: u64, provider: AgentProviderType) !TargetType {
-    const target: TargetType = .{
+pub fn installTestingAttachmentProvider(client: *client_module.AttachedClient, generation: u64, provider: core.AgentProvider) !data.AttachmentTarget {
+    const target: data.AttachmentTarget = .{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = generation,
     };
     _ = try client.model.reconcileAgentSnapshot(.{
         .revision = generation,
-        .agents = &.{AgentInputType{
+        .agents = &.{data.AgentInput{
             .key = .{
                 .pane_id = target.pane_id,
                 .pane_generation = target.pane_generation,
@@ -299,7 +279,7 @@ pub fn installTestingAttachmentProvider(client: *Client, generation: u64, provid
             .location = TestHarness.bootstrap_location,
             .pane_index = 1,
             .provider = provider,
-            .attachments = builtin_table_module.attachments(provider),
+            .attachments = core.builtin_table.attachments(provider),
             .status = .working,
         }},
     });
@@ -308,8 +288,8 @@ pub fn installTestingAttachmentProvider(client: *Client, generation: u64, provid
     return target;
 }
 
-pub fn testingClipboardCapture(client: *Client, execution: ClipboardCaptureType, bytes: []const u8) !*CaptureType {
-    const capture = try client.gpa.create(CaptureType);
+pub fn testingClipboardCapture(client: *client_module.AttachedClient, execution: data.ClipboardCapture, bytes: []const u8) !*client_module.Capture {
+    const capture = try client.gpa.create(client_module.Capture);
     errdefer client.gpa.destroy(capture);
     capture.* = .{
         .request = .{
@@ -323,4 +303,18 @@ pub fn testingClipboardCapture(client: *Client, execution: ClipboardCaptureType,
     client.clipboard_capture_resources.orphan = capture;
 
     return capture;
+}
+
+pub fn reloadConfiguration(client: *client_module.AttachedClient, adoption: client_module.ConfigAdoption) !data.ConfigurationCommit {
+    const outcome = try client.completeConfigReload(
+        .{
+            .loaded = .{
+                .generation = adoption.generation,
+                .registry = adoption.registry,
+                .trust_store = adoption.trust_store,
+                .mtime_ns = client.reload.mtime_ns,
+            },
+        },
+    );
+    return outcome.adopted;
 }

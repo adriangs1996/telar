@@ -3,35 +3,28 @@
 const core = @import("telar-core");
 const Application = @import("../Application.zig");
 const PaneKeyType = @import("../../../pane/PaneKey.zig");
-const ClientCommand = @import("telar-core").ClientCommand;
-const DetachClient = @import("telar-core").DetachClient;
-const QueryClients = @import("telar-core").QueryClients;
 const Session = @import("../../client/Session.zig");
-const RequestPaneFocusType = @import("telar-core").RequestPaneFocus;
-const CompletePaneFocusType = @import("telar-core").CompletePaneFocus;
-const RequestRuntimeStateType = @import("telar-core").RequestRuntimeState;
-const ClientLayoutUpdateViewType = @import("telar-core").ClientLayoutUpdateView;
 const std = @import("std");
 const ClientKeyType = @import("../../../history/ClientKey.zig");
 const RequestContext = @import("../RequestContext.zig");
 
 /// Example: `try clients.routeRequestPaneFocus(request, focus);`.
-pub fn routeRequestPaneFocus(request: *RequestContext, focus: RequestPaneFocusType) !void {
+pub fn routeRequestPaneFocus(request: *RequestContext, focus: core.RequestPaneFocus) !void {
     try requestFocus(request.application, request.session, focus);
 }
 
 /// Example: `try clients.routeCompletePaneFocus(request, completion);`.
-pub fn routeCompletePaneFocus(request: *RequestContext, completion: CompletePaneFocusType) !void {
+pub fn routeCompletePaneFocus(request: *RequestContext, completion: core.CompletePaneFocus) !void {
     try completeFocus(request.application, request.session, completion);
 }
 
 /// Example: `try clients.routeRequestRuntimeState(request, runtime_state);`.
-pub fn routeRequestRuntimeState(request: *RequestContext, runtime_state: RequestRuntimeStateType) !void {
+pub fn routeRequestRuntimeState(request: *RequestContext, runtime_state: core.RequestRuntimeState) !void {
     try request.session.delivery.requestRuntimeState(runtime_state.client_identity);
 }
 
 /// Example: `try clients.routeUpdateClientLayout(request, update);`.
-pub fn routeUpdateClientLayout(request: *RequestContext, update: ClientLayoutUpdateViewType) !void {
+pub fn routeUpdateClientLayout(request: *RequestContext, update: core.ClientLayoutUpdateView) !void {
     const identity = request.session.delivery.client_identity;
     if (identity == .invalid) {
         return error.ClientLayoutNotSubscribed;
@@ -49,7 +42,7 @@ pub fn routeUpdateClientLayout(request: *RequestContext, update: ClientLayoutUpd
 }
 
 /// Example: `try clients.routeClientCommand(request, command);`.
-pub fn routeClientCommand(request: *RequestContext, command: ClientCommand) !void {
+pub fn routeClientCommand(request: *RequestContext, command: core.ClientCommand) !void {
     requestClientCommand(request, request.session, command) catch |err| {
         try request.session.delivery.responses.push(.{ .request_failed = .{
             .request_id = command.request_id,
@@ -60,12 +53,12 @@ pub fn routeClientCommand(request: *RequestContext, command: ClientCommand) !voi
 }
 
 /// Example: `try clients.completeClientCommand(request, command);`.
-pub fn completeClientCommand(request: *RequestContext, command: ClientCommand) !void {
+pub fn completeClientCommand(request: *RequestContext, command: core.ClientCommand) !void {
     try finishClientCommand(request, request.session, command);
 }
 
 /// Example: `try clients.routeDetachClient(request, command);`.
-pub fn routeDetachClient(request: *RequestContext, command: DetachClient) !void {
+pub fn routeDetachClient(request: *RequestContext, command: core.DetachClient) !void {
     if (request.session.role != .control or request.session.key.id == command.client_id) {
         return rejectDetachClient(request, command.request_id);
     }
@@ -76,13 +69,13 @@ pub fn routeDetachClient(request: *RequestContext, command: DetachClient) !void 
 }
 
 /// Example: `try clients.routeQueryClients(request, query);`.
-pub fn routeQueryClients(request: *RequestContext, query: QueryClients) !void {
+pub fn routeQueryClients(request: *RequestContext, query: core.QueryClients) !void {
     var result = queryClients(request);
     result.request_id = query.request_id;
     try request.session.delivery.responses.push(.{ .client_list = result });
 }
 
-fn requestFocus(application: *Application, session: *Session, focus: RequestPaneFocusType) !void {
+fn requestFocus(application: *Application, session: *Session, focus: core.RequestPaneFocus) !void {
     if (session.role != .control) {
         return error.InvalidClientRole;
     }
@@ -147,7 +140,7 @@ fn requestFocus(application: *Application, session: *Session, focus: RequestPane
     try application.pump(target);
 }
 
-fn completeFocus(application: *Application, session: *Session, completion: CompletePaneFocusType) !void {
+fn completeFocus(application: *Application, session: *Session, completion: core.CompletePaneFocus) !void {
     if (session.role != .ui) {
         return error.InvalidClientRole;
     }

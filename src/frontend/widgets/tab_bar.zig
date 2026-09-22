@@ -1,11 +1,10 @@
 //! Ordered tab navigation.
 
+const core = @import("telar-core");
+const client = @import("telar-client");
 const ContextType = @import("Context.zig");
 const TabBarInput = @import("TabBarInput.zig");
-const RectType = @import("telar-core").Rect;
 const Label = @import("Label.zig");
-const StyleType = @import("telar-core").Style;
-const TabsModel = @import("telar-client").TabsModel;
 const widget = @import("context_support.zig");
 
 /// One empty cell keeps neighbouring tabs from reading as a single label.
@@ -20,7 +19,7 @@ pub fn render(context: *ContextType, input: TabBarInput) void {
         const label = Label.initModel(input.model);
         const width = @min(label.width(), input.area.w);
         const x = alignedStart(input, width);
-        const rect: RectType = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
+        const rect: core.Rect = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
         label.draw(context, .{ .rect = rect, .style = activeStyle(context) });
     }
 }
@@ -46,11 +45,11 @@ pub fn desiredWidth(input: TabBarInput) u16 {
     return 0;
 }
 
-pub fn barStyle(context: *const ContextType) StyleType {
+pub fn barStyle(context: *const ContextType) core.Style {
     return .{ .fg = context.palette.subtext0, .bg = context.palette.panel_bg };
 }
 
-fn activeStyle(context: *const ContextType) StyleType {
+fn activeStyle(context: *const ContextType) core.Style {
     return .{
         .fg = context.palette.surface_dim,
         .bg = context.palette.accent,
@@ -60,11 +59,11 @@ fn activeStyle(context: *const ContextType) StyleType {
 
 /// Inactive tabs sit one surface above the bar so they read as buttons; the
 /// gap between them keeps the bar's own background.
-fn inactiveStyle(context: *const ContextType) StyleType {
+fn inactiveStyle(context: *const ContextType) core.Style {
     return .{ .fg = context.palette.subtext0, .bg = context.palette.surface0 };
 }
 
-fn hoveredStyle(context: *const ContextType) StyleType {
+fn hoveredStyle(context: *const ContextType) core.Style {
     return .{
         .fg = context.palette.text,
         .bg = context.palette.surface1,
@@ -72,7 +71,7 @@ fn hoveredStyle(context: *const ContextType) StyleType {
     };
 }
 
-fn renderCollection(context: *ContextType, input: TabBarInput, collection: *const TabsModel) void {
+fn renderCollection(context: *ContextType, input: TabBarInput, collection: *const client.TabsModel) void {
     if (collection.count == 0) {
         return;
     }
@@ -88,7 +87,7 @@ fn renderCollection(context: *ContextType, input: TabBarInput, collection: *cons
                 break;
             }
 
-            const gap: RectType = .{ .x = x, .y = input.area.y, .w = tab_gap, .h = 1 };
+            const gap: core.Rect = .{ .x = x, .y = input.area.y, .w = tab_gap, .h = 1 };
             _ = context.buffer.writeTruncated(gap, .{ .point = .{ .x = x, .y = input.area.y }, .text = " ", .max_width = tab_gap, .style = barStyle(context) });
             x += tab_gap;
         }
@@ -100,10 +99,10 @@ fn renderCollection(context: *ContextType, input: TabBarInput, collection: *cons
 
         const label = Label.init(tab, index);
         const width = @min(label.width(), remaining);
-        const rect: RectType = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
+        const rect: core.Rect = .{ .x = x, .y = input.area.y, .w = width, .h = 1 };
         const action: widget.Action = .{ .select_tab = tab.location.tab_id };
         context.hits.add(rect, action);
-        const style: StyleType = if (index == collection.active_index)
+        const style: core.Style = if (index == collection.active_index)
             activeStyle(context)
         else if (context.isHovered(action))
             hoveredStyle(context)
@@ -117,7 +116,7 @@ fn renderCollection(context: *ContextType, input: TabBarInput, collection: *cons
     }
 }
 
-fn decorateProgress(context: *ContextType, input: TabBarInput, rect: RectType) void {
+fn decorateProgress(context: *ContextType, input: TabBarInput, rect: core.Rect) void {
     const pane = input.model.focusedPaneConst() orelse return;
     if (pane.progress_state == .remove or rect.w == 0) {
         return;
@@ -160,7 +159,7 @@ fn bouncingPosition(width: u16, frame: u8) u16 {
 }
 
 /// The active tab is always visible; earlier tabs are added while they fit.
-fn firstVisibleIndex(collection: *const TabsModel, available: u16) usize {
+fn firstVisibleIndex(collection: *const client.TabsModel, available: u16) usize {
     var first_visible = collection.active_index;
     var used = tabWidth(collection, first_visible, available);
     while (first_visible > 0) {
@@ -179,7 +178,7 @@ fn firstVisibleIndex(collection: *const TabsModel, available: u16) usize {
 
 /// The block anchors to its alignment edge: when the tabs do not fill the
 /// region the unused cells stay on the other side.
-fn visibleWidth(collection: *const TabsModel, first_visible: usize, available: u16) u16 {
+fn visibleWidth(collection: *const client.TabsModel, first_visible: usize, available: u16) u16 {
     var total: u16 = 0;
     for (first_visible..collection.count) |index| {
         const gap: u16 = if (index != first_visible) tab_gap else 0;
@@ -193,7 +192,7 @@ fn visibleWidth(collection: *const TabsModel, first_visible: usize, available: u
     return total;
 }
 
-fn tabWidth(collection: *const TabsModel, index: usize, available: u16) u16 {
+fn tabWidth(collection: *const client.TabsModel, index: usize, available: u16) u16 {
     const tab = if (collection.items[index]) |*value| value else return 0;
     return @min(Label.init(tab, index).width(), available);
 }

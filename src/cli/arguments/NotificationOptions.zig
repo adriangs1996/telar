@@ -1,20 +1,13 @@
-const NotificationLevelType = @import("telar-core").NotificationLevel;
-const default_notification_duration_ms_module = @import("telar-core").default_notification_duration_ms;
-const NotificationTargetType = @import("telar-core").NotificationTarget;
+const core = @import("telar-core");
 const std = @import("std");
 const Cursor = @import("Cursor.zig");
-const min_notification_duration_ms_module = @import("telar-core").min_notification_duration_ms;
-const max_notification_duration_ms_module = @import("telar-core").max_notification_duration_ms;
-const pane_module = @import("telar-core").pane;
-const tab_module = @import("telar-core").tab;
-const workspace_module = @import("telar-core").workspace;
 const NotificationOptions = @This();
 
 title: [*:0]const u8,
 body: ?[*:0]const u8 = null,
-level: NotificationLevelType = .info,
-duration_ms: u32 = default_notification_duration_ms_module,
-target: NotificationTargetType = .none,
+level: core.NotificationLevel = .info,
+duration_ms: u32 = core.default_notification_duration_ms,
+target: core.NotificationTarget = .none,
 socket: ?[*:0]const u8 = null,
 
 pub fn parse(args: []const [*:0]const u8) !NotificationOptions {
@@ -70,8 +63,8 @@ pub fn parse(args: []const [*:0]const u8) !NotificationOptions {
                 std.mem.span(value),
                 10,
             );
-            if (options.duration_ms < min_notification_duration_ms_module or
-                options.duration_ms > max_notification_duration_ms_module)
+            if (options.duration_ms < core.min_notification_duration_ms or
+                options.duration_ms > core.max_notification_duration_ms)
             {
                 return error.InvalidNotificationDuration;
             }
@@ -83,7 +76,7 @@ pub fn parse(args: []const [*:0]const u8) !NotificationOptions {
             }
             const value = try cursor.require(error.MissingPaneId);
 
-            options.target = .{ .pane = try pane_module(try std.fmt.parseUnsigned(
+            options.target = .{ .pane = try core.pane(try std.fmt.parseUnsigned(
                 u64,
                 std.mem.span(value),
                 10,
@@ -95,7 +88,7 @@ pub fn parse(args: []const [*:0]const u8) !NotificationOptions {
             }
             const value = try cursor.require(error.MissingTabId);
 
-            options.target = .{ .tab = try tab_module(try std.fmt.parseUnsigned(
+            options.target = .{ .tab = try core.tab(try std.fmt.parseUnsigned(
                 u64,
                 std.mem.span(value),
                 10,
@@ -107,7 +100,7 @@ pub fn parse(args: []const [*:0]const u8) !NotificationOptions {
             }
             const value = try cursor.require(error.MissingWorkspaceId);
 
-            options.target = .{ .workspace = try workspace_module(try std.fmt.parseUnsigned(
+            options.target = .{ .workspace = try core.workspace(try std.fmt.parseUnsigned(
                 u64,
                 std.mem.span(value),
                 10,

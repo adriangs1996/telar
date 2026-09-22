@@ -1,4 +1,5 @@
 //! Rendering, JSON and subprocess I/O stay on one bounded GUI observation task.
+const attachment = @import("../image/attachment.zig");
 const std = @import("std");
 const Job = @import("Job.zig");
 const Image = @import("Image.zig");
@@ -10,7 +11,7 @@ const engine = @import("diagram_renderer_options");
 /// Example: `const image = try worker.render(io, allocator, &job);`
 pub fn render(io: std.Io, allocator: std.mem.Allocator, job: *const Job) !Image {
     if (job.kind == .local_image) {
-        return @import("../image/attachment.zig").load(io, allocator, job.text());
+        return attachment.load(io, allocator, job.text());
     }
 
     var task: Task = .{ .io = io, .allocator = allocator, .job = job };

@@ -1,5 +1,6 @@
 //! Runtime tabs operations, reached from requests.dispatch.
 
+const core = @import("telar-core");
 const Application = @import("../Application.zig");
 const CreateTab = @import("../commands/CreateTab.zig");
 const CreateTabResult = @import("../commands/CreateTabResult.zig");
@@ -15,12 +16,6 @@ const MoveTabFailure = @import("../../entrypoints/requests/MoveTabFailure.zig");
 const CloseTab = @import("../commands/CloseTab.zig");
 const TabSnapshotRequest = @import("../queries/TabSnapshotRequest.zig");
 const TabSnapshotResult = @import("../queries/TabSnapshotResult.zig");
-const RequestTabSnapshotType = @import("telar-core").RequestTabSnapshot;
-const RequestIdType = @import("telar-core").RequestId;
-const CreateTabViewType = @import("telar-core").CreateTabView;
-const RenameTabType = @import("telar-core").RenameTab;
-const CloseTabType = @import("telar-core").CloseTab;
-const MoveTabType = @import("telar-core").MoveTab;
 const std = @import("std");
 const launch_cwd_module = @import("../../client/launch_cwd.zig");
 const CreateTabPrepareLaunch = @import("../commands/CreateTabPrepareLaunch.zig");
@@ -33,7 +28,7 @@ const TabRemovedType = @import("../../../workspace/TabRemoved.zig");
 const RequestContext = @import("../RequestContext.zig");
 
 /// Example: `try tabs.routeRequestTabSnapshot(request, wire);`.
-pub fn routeRequestTabSnapshot(request: *RequestContext, wire: RequestTabSnapshotType) !void {
+pub fn routeRequestTabSnapshot(request: *RequestContext, wire: core.RequestTabSnapshot) !void {
     const snapshot = requestTabSnapshot(request, .{ .location = wire.location }) catch |err| {
         if (err == error.TabNotFound) {
             try request.session.delivery.responses.push(.{ .request_failed = .{
@@ -54,7 +49,7 @@ pub fn routeRequestTabSnapshot(request: *RequestContext, wire: RequestTabSnapsho
 }
 
 /// Example: `try tabs.routeCreateTab(request, wire);`.
-pub fn routeCreateTab(request: *RequestContext, wire: CreateTabViewType) !void {
+pub fn routeCreateTab(request: *RequestContext, wire: core.CreateTabView) !void {
     const result = createTab(request, .{
         .workspace = wire.workspace,
         .kind = wire.kind,
@@ -94,7 +89,7 @@ pub fn routeCreateTab(request: *RequestContext, wire: CreateTabViewType) !void {
 }
 
 /// Example: `try tabs.routeRenameTab(request, wire);`.
-pub fn routeRenameTab(request: *RequestContext, wire: RenameTabType) !void {
+pub fn routeRenameTab(request: *RequestContext, wire: core.RenameTab) !void {
     const renamed = renameTab(request, .{
         .location = wire.location,
         .label = wire.label,
@@ -126,7 +121,7 @@ pub fn routeRenameTab(request: *RequestContext, wire: RenameTabType) !void {
 }
 
 /// Example: `try tabs.routeCloseTab(request, wire);`.
-pub fn routeCloseTab(request: *RequestContext, wire: CloseTabType) !void {
+pub fn routeCloseTab(request: *RequestContext, wire: core.CloseTab) !void {
     const removed = closeTab(request, .{ .location = wire.location }) catch |err| {
         switch (err) {
             error.TabNotFound => try closeTabQueueTabNotFound(request, wire.request_id),
@@ -145,7 +140,7 @@ pub fn routeCloseTab(request: *RequestContext, wire: CloseTabType) !void {
 }
 
 /// Example: `try tabs.routeMoveTab(request, wire);`.
-pub fn routeMoveTab(request: *RequestContext, wire: MoveTabType) !void {
+pub fn routeMoveTab(request: *RequestContext, wire: core.MoveTab) !void {
     const moved = moveTab(request, .{
         .location = wire.location,
         .direction = wire.direction,
@@ -274,7 +269,7 @@ fn createTab(request: *RequestContext, command: CreateTab) anyerror!CreateTabRes
     };
 }
 
-fn createTabQueueFailure(request: *RequestContext, request_id: RequestIdType, failure: CreateTabFailure) !void {
+fn createTabQueueFailure(request: *RequestContext, request_id: core.RequestId, failure: CreateTabFailure) !void {
     try request.session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,
@@ -290,7 +285,7 @@ fn renameTab(request: *RequestContext, command: RenameTab) anyerror!TabRenamedTy
     return renamed;
 }
 
-fn renameTabQueueFailure(request: *RequestContext, request_id: RequestIdType, failure: RenameTabFailure) !void {
+fn renameTabQueueFailure(request: *RequestContext, request_id: core.RequestId, failure: RenameTabFailure) !void {
     try request.session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,
@@ -309,7 +304,7 @@ fn moveTab(request: *RequestContext, command: MoveTab) anyerror!TabMovedType {
     return moved;
 }
 
-fn moveTabQueueFailure(request: *RequestContext, request_id: RequestIdType, failure: MoveTabFailure) !void {
+fn moveTabQueueFailure(request: *RequestContext, request_id: core.RequestId, failure: MoveTabFailure) !void {
     try request.session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,
@@ -327,7 +322,7 @@ fn closeTab(request: *RequestContext, command: CloseTab) anyerror!TabRemovedType
     return removed;
 }
 
-fn closeTabQueueTabNotFound(request: *RequestContext, request_id: RequestIdType) !void {
+fn closeTabQueueTabNotFound(request: *RequestContext, request_id: core.RequestId) !void {
     try request.session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = .tab_not_found,

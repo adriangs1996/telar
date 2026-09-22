@@ -1,10 +1,10 @@
 //! Immediate pixel layout over caller-owned children. Nested containers use
 //! their parent's assigned rectangle; no retained tree or allocation is needed.
+const length = @import("length.zig");
+const alignment_module = @import("alignment.zig");
 const std = @import("std");
 const Rect = @import("../render/Rect.zig");
 const Item = @import("Item.zig");
-const Length = @import("length.zig").Length;
-const Alignment = @import("alignment.zig").Alignment;
 const Insets = @import("Insets.zig");
 const Layout = @This();
 
@@ -14,8 +14,8 @@ area: Rect,
 direction: Direction = .row,
 padding: Insets = .{},
 gap: f32 = 0,
-alignment: Alignment = .start,
-cross_alignment: Alignment = .start,
+alignment: alignment_module.Alignment = .start,
+cross_alignment: alignment_module.Alignment = .start,
 
 /// Places children in O(n) time. Fixed/content sizes reserve their space
 /// first; fill children split the remainder equally above their minimums.
@@ -119,7 +119,7 @@ fn validLength(value: f32) bool {
     return std.math.isFinite(value) and value >= 0 and value <= 65535;
 }
 
-fn policy(child: *const Item, axis: usize) Length {
+fn policy(child: *const Item, axis: usize) length.Length {
     return if (axis == 0) child.width else child.height;
 }
 
@@ -139,7 +139,7 @@ fn mainSize(child: *const Item, axis: usize, available_and_share: [2]f32) f32 {
         childSize(child, axis, available_and_share[0]);
 }
 
-fn offset(alignment: Alignment, free: f32) f32 {
+fn offset(alignment: alignment_module.Alignment, free: f32) f32 {
     return switch (alignment) {
         .start => 0,
         .center => @floor(free / 2),

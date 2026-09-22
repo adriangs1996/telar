@@ -1,36 +1,28 @@
-const InitType = @import("Init.zig");
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
-const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
+const core = @import("telar-core");
 const Tab = @import("Tab.zig");
-const max_git_branch_bytes_module = @import("telar-core").max_git_branch_bytes;
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const std = @import("std");
 const ObservationType = @import("Observation.zig");
 const WorkspaceRenamedType = @import("WorkspaceRenamed.zig");
-const TabIdType = @import("telar-core").TabId;
 const TabCreatedType = @import("TabCreated.zig");
 const TabRenamedType = @import("TabRenamed.zig");
-const TabMoveTarget = @import("telar-core").TabMoveTarget;
 const TabMovedType = @import("TabMoved.zig");
-const TabDescriptorType = @import("telar-core").TabDescriptor;
 const Workspace = @This();
 
 pub const Init = @import("Init.zig");
 
-id: WorkspaceIdType,
+id: core.WorkspaceId,
 path: []u8,
-explicit_name: [max_tab_label_bytes_module]u8 = undefined,
+explicit_name: [core.max_tab_label_bytes]u8 = undefined,
 explicit_name_len: u8 = 0,
-tabs: [max_tabs_per_workspace_module]?Tab = [_]?Tab{null} ** max_tabs_per_workspace_module,
+tabs: [core.max_tabs_per_workspace]?Tab = [_]?Tab{null} ** core.max_tabs_per_workspace,
 tab_count: usize = 0,
-git_branch: [max_git_branch_bytes_module]u8 = undefined,
+git_branch: [core.max_git_branch_bytes]u8 = undefined,
 git_branch_len: u8 = 0,
 git_dirty: bool = false,
 git_checked_at_ms: i64 = 0,
 
-pub fn init(options: InitType) !Workspace {
-    if (options.path.len == 0 or options.path.len > max_cwd_bytes_module or std.mem.indexOfScalar(u8, options.path, 0) != null) {
+pub fn init(options: Init) !Workspace {
+    if (options.path.len == 0 or options.path.len > core.max_cwd_bytes or std.mem.indexOfScalar(u8, options.path, 0) != null) {
         return error.InvalidWorkspacePath;
     }
 
@@ -121,7 +113,7 @@ pub fn rename(workspace: *Workspace, name_value: []const u8) !WorkspaceRenamedTy
     ) catch unreachable;
 }
 
-pub fn defaultTab(workspace: *const Workspace) TabIdType {
+pub fn defaultTab(workspace: *const Workspace) core.TabId {
     std.debug.assert(workspace.tab_count != 0);
     return workspace.tabs[0].?.id;
 }
@@ -130,7 +122,7 @@ pub fn tabCount(workspace: *const Workspace) usize {
     return workspace.tab_count;
 }
 
-pub fn containsTab(workspace: *const Workspace, tab_id: TabIdType) bool {
+pub fn containsTab(workspace: *const Workspace, tab_id: core.TabId) bool {
     return workspace.findTabConst(tab_id) != null;
 }
 
@@ -141,7 +133,7 @@ pub fn containsTab(workspace: *const Workspace, tab_id: TabIdType) bool {
 /// ```zig
 /// const created = try workspace.createTab(tab_id, "logs");
 /// ```
-pub fn createTab(workspace: *Workspace, tab_id: TabIdType, label: []const u8) !TabCreatedType {
+pub fn createTab(workspace: *Workspace, tab_id: core.TabId, label: []const u8) !TabCreatedType {
     if (workspace.tab_count == workspace.tabs.len) {
         return error.TabLimitReached;
     }
@@ -161,7 +153,7 @@ pub fn createTab(workspace: *Workspace, tab_id: TabIdType, label: []const u8) !T
 /// ```zig
 /// const renamed = try workspace.renameTab(tab_id, "server");
 /// ```
-pub fn renameTab(workspace: *Workspace, tab_id: TabIdType, label: []const u8) !TabRenamedType {
+pub fn renameTab(workspace: *Workspace, tab_id: core.TabId, label: []const u8) !TabRenamedType {
     const tab = workspace.findTab(tab_id) orelse return error.TabNotFound;
     try tab.rename(label);
 
@@ -171,7 +163,7 @@ pub fn renameTab(workspace: *Workspace, tab_id: TabIdType, label: []const u8) !T
     }, tab.labelSlice()) catch unreachable;
 }
 
-pub fn removeTab(workspace: *Workspace, tab_id: TabIdType) bool {
+pub fn removeTab(workspace: *Workspace, tab_id: core.TabId) bool {
     const index = workspace.tabIndex(tab_id) orelse return false;
     var cursor = index;
 
@@ -190,7 +182,7 @@ pub fn removeTab(workspace: *Workspace, tab_id: TabIdType) bool {
 /// ```zig
 /// const moved = workspace.moveTab(tab_id, .{ .direction = .previous }) orelse return;
 /// ```
-pub fn moveTab(workspace: *Workspace, tab_id: TabIdType, destination: TabMoveTarget) ?TabMovedType {
+pub fn moveTab(workspace: *Workspace, tab_id: core.TabId, destination: core.TabMoveTarget) ?TabMovedType {
     const index = workspace.tabIndex(tab_id) orelse return null;
     const target = if (destination.relative_to) |anchor| blk: {
         const anchor_index = workspace.tabIndex(anchor) orelse return null;
@@ -219,7 +211,7 @@ pub fn moveTab(workspace: *Workspace, tab_id: TabIdType, destination: TabMoveTar
     };
 }
 
-pub fn tabLabel(workspace: *const Workspace, tab_id: TabIdType) ?[]const u8 {
+pub fn tabLabel(workspace: *const Workspace, tab_id: core.TabId) ?[]const u8 {
     const tab = workspace.findTabConst(tab_id) orelse return null;
     return tab.labelSlice();
 }
@@ -231,7 +223,7 @@ pub fn tabLabel(workspace: *const Workspace, tab_id: TabIdType) ?[]const u8 {
 /// var storage: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
 /// const tabs = workspace.writeDescriptors(&storage);
 /// ```
-pub fn writeDescriptors(workspace: *const Workspace, output: *[max_tabs_per_workspace_module]TabDescriptorType) []TabDescriptorType {
+pub fn writeDescriptors(workspace: *const Workspace, output: *[core.max_tabs_per_workspace]core.TabDescriptor) []core.TabDescriptor {
     for (&workspace.tabs, 0..) |*slot, index| {
         if (index == workspace.tab_count) {
             break;
@@ -249,7 +241,7 @@ pub fn writeDescriptors(workspace: *const Workspace, output: *[max_tabs_per_work
     return output[0..workspace.tab_count];
 }
 
-fn findTab(workspace: *Workspace, tab_id: TabIdType) ?*Tab {
+fn findTab(workspace: *Workspace, tab_id: core.TabId) ?*Tab {
     for (&workspace.tabs) |*slot| {
         const tab = if (slot.*) |*value| value else continue;
 
@@ -261,7 +253,7 @@ fn findTab(workspace: *Workspace, tab_id: TabIdType) ?*Tab {
     return null;
 }
 
-fn findTabConst(workspace: *const Workspace, tab_id: TabIdType) ?*const Tab {
+fn findTabConst(workspace: *const Workspace, tab_id: core.TabId) ?*const Tab {
     for (&workspace.tabs) |*slot| {
         const tab = if (slot.*) |*value| value else continue;
 
@@ -273,7 +265,7 @@ fn findTabConst(workspace: *const Workspace, tab_id: TabIdType) ?*const Tab {
     return null;
 }
 
-fn tabIndex(workspace: *const Workspace, tab_id: TabIdType) ?usize {
+fn tabIndex(workspace: *const Workspace, tab_id: core.TabId) ?usize {
     for (workspace.tabs[0..workspace.tab_count], 0..) |slot, index| {
         if (slot != null and slot.?.id == tab_id) {
             return index;

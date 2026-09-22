@@ -4,22 +4,18 @@ const AgentHistoryInput = @import("../AgentHistoryInput.zig");
 const AgentReport = @import("../AgentReport.zig");
 const AgentCommandReport = @import("../AgentCommandReport.zig");
 const values = @import("values.zig");
-const AgentStatusType = @import("telar-core").AgentStatus;
-const PaneTextSourceType = @import("telar-core").PaneTextSource;
 const std = @import("std");
-const max_agent_session_reference_bytes_module = @import("telar-core").max_agent_session_reference_bytes;
-const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
 const Cursor = @import("Cursor.zig");
 const AgentOptions = @This();
 
 action: agent.AgentAction,
 target: ?values.Target = null,
-until: AgentStatusType = .done,
+until: core.AgentStatus = .done,
 timeout_seconds: u32 = values.default_wait_timeout_seconds,
 text: ?[*:0]const u8 = null,
 wait_after_prompt: bool = false,
 lines: u16 = 40,
-source: PaneTextSourceType = .recent,
+source: core.PaneTextSource = .recent,
 json: bool = false,
 socket: ?[*:0]const u8 = null,
 approval_id: ?u64 = null,
@@ -161,7 +157,7 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
             _ = try core.RecentConversation.init(std.mem.span(args[2]), "");
         }
 
-        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > max_agent_session_reference_bytes_module) {
+        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > core.max_agent_session_reference_bytes) {
             return error.InvalidSessionReference;
         }
 
@@ -174,7 +170,7 @@ pub fn parse(args: []const [*:0]const u8) !AgentOptions {
         }
 
         options.text = args[2];
-        if (std.mem.span(options.text.?).len > max_pane_text_input_bytes_module) {
+        if (std.mem.span(options.text.?).len > core.max_pane_text_input_bytes) {
             return error.InvalidPromptText;
         }
 

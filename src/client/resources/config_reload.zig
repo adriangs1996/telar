@@ -4,26 +4,26 @@
 //! an adoption to apply — nothing here touches client state beyond the
 //! module's own.
 
+const data = @import("model");
+const default_bindings = @import("../config/default_bindings.zig");
+const core = @import("telar-core");
 const Loaded = @import("Loaded.zig");
-const DiagnosticType = @import("../config/Diagnostic.zig");
 const ConfigReloadState = @import("ConfigReloadState.zig");
 const ScheduleArgs = @import("ScheduleArgs.zig");
 const WaitArgs = @import("WaitArgs.zig");
 const Adoption = @import("Adoption.zig");
 const ResolveArgs = @import("ResolveArgs.zig");
 const RejectContext = @import("RejectContext.zig");
-const validateDefaultBindings_module = @import("../config/default_bindings.zig").validate;
 const GenerationType = @import("../config/Generation.zig");
 const Partial = @import("Partial.zig");
 const RegistryType = @import("../plugins/Registry.zig");
 const std = @import("std");
-const TrustStoreType = @import("telar-core").TrustStore;
 
 pub const ConfigReload = union(enum) {
     unchanged: i128,
     loaded: Loaded,
     failed: struct {
-        diagnostic: DiagnosticType,
+        diagnostic: data.Diagnostic,
         mtime_ns: i128,
     },
 };
@@ -55,7 +55,7 @@ pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) !void {
 
 pub const Outcome = union(enum) {
     unchanged,
-    rejected: DiagnosticType,
+    rejected: data.Diagnostic,
     adopted: Adoption,
 };
 
@@ -88,7 +88,7 @@ pub fn resolve(state: *ConfigReloadState, args: ResolveArgs) Outcome {
                 "reloaded sidebar renderer is unavailable: {s}",
                 .{@errorName(err)},
             );
-            validateDefaultBindings_module(snapshot.prefix, snapshot.bindingSlice()) catch |err| return rejection.reject(
+            default_bindings.validate(snapshot.prefix, snapshot.bindingSlice()) catch |err| return rejection.reject(
                 "reloaded keymap is invalid: {s}",
                 .{@errorName(err)},
             );
@@ -120,7 +120,7 @@ pub fn wait(args: WaitArgs) anyerror!ConfigReload {
     if (!args.force_reload and mtime_ns == args.known_mtime_ns) {
         return .{ .unchanged = mtime_ns };
     }
-    var diagnostic: DiagnosticType = .{};
+    var diagnostic: data.Diagnostic = .{};
     const generation = GenerationType.loadFile(.{
         .gpa = args.gpa,
         .io = args.io,
@@ -191,8 +191,8 @@ pub fn trustWatchFingerprint(io: std.Io, path: []const u8) u64 {
     return hasher.final();
 }
 
-fn loadReloadTrustStore(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !*TrustStoreType {
-    const store = try gpa.create(TrustStoreType);
+fn loadReloadTrustStore(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !*core.TrustStore {
+    const store = try gpa.create(core.TrustStore);
     errdefer gpa.destroy(store);
     const stat = std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false }) catch |err| switch (err) {
         error.FileNotFound => {
@@ -206,7 +206,7 @@ fn loadReloadTrustStore(gpa: std.mem.Allocator, io: std.Io, path: []const u8) !*
     }
     const source = try std.Io.Dir.cwd().readFileAlloc(io, path, gpa, .limited(64 * 1024));
     defer gpa.free(source);
-    store.* = try TrustStoreType.parse(gpa, source);
+    store.* = try core.TrustStore.parse(gpa, source);
     return store;
 }
 
@@ -216,9 +216,9 @@ test "a rejected load is freed once and reports why" {
     var state: ConfigReloadState = .{ .mtime_ns = 0 };
     const gpa = std.testing.allocator;
     const registry = try gpa.create(RegistryType);
-    const trust = try gpa.create(TrustStoreType);
+    const trust = try gpa.create(core.TrustStore);
     trust.* = .{};
-    var diagnostic: DiagnosticType = .{};
+    var diagnostic: data.Diagnostic = .{};
     const generation = try GenerationType.loadSource(.{
         .gpa = gpa,
         .io = std.testing.io,

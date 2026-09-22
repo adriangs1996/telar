@@ -1,4 +1,6 @@
 //! Bounded shared-client jobs run as inbox producers, outside native callbacks.
+const favicon_worker = @import("../image/favicon_worker.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
@@ -117,9 +119,9 @@ fn startPathCompletion(context: *anyopaque, job: client.PathCompletionJob) !void
 
 fn startFavicon(context: *anyopaque, job: client.FaviconJob) !void {
     const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    try GuiClient.of(app).driver.inbox.start(.favicon, .{ @import("../image/favicon_worker.zig").execute, .{ app.io, app.gpa, job } });
+    try GuiClient.of(app).driver.inbox.start(.favicon, .{ favicon_worker.execute, .{ app.io, app.gpa, job } });
 }
 
-fn executePathCompletion(io: std.Io, gpa: std.mem.Allocator, job: client.PathCompletionJob) client.PathCompletionCompletion {
+fn executePathCompletion(io: std.Io, gpa: std.mem.Allocator, job: client.PathCompletionJob) data.PathCompletionCompletion {
     return .{ .execution_id = job.execution_id, .result = client.runPathCompletion(io, gpa, job) };
 }

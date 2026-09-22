@@ -1,8 +1,8 @@
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const client = @import("telar-client");
 const ScreenType = @import("../presentation/Screen.zig");
 const CompositionInput = @import("CompositionInput.zig");
 const Composition = @This();
 
-model: *const MultiplexerModel,
+model: *const client.MultiplexerModel,
 screen: *ScreenType,
 input: CompositionInput,

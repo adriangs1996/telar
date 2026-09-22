@@ -1,4 +1,4 @@
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const core = @import("telar-core");
 const ControlAgent = @import("ControlAgent.zig");
 const values = @import("arguments/values.zig");
 const std = @import("std");
@@ -6,7 +6,7 @@ const control = @import("control.zig");
 const Snapshot = @This();
 
 revision: u64 = 0,
-entries: [max_agent_snapshot_entries]ControlAgent = undefined,
+entries: [core.max_agent_snapshot_entries]ControlAgent = undefined,
 count: usize = 0,
 
 pub fn slice(snapshot: *const Snapshot) []const ControlAgent {

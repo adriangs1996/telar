@@ -1,4 +1,6 @@
 //! Converts runtime cells into a bounded native frame. No VT parsing lives here.
+const frame_budget = @import("frame_budget.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -158,7 +160,7 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
         return error.NativeCellBudgetExceeded;
     }
 
-    try renderer.quads.reserve(@import("frame_budget.zig").quads(cells));
+    try renderer.quads.reserve(frame_budget.quads(cells));
     try renderer.cell_quads.reserve(CellMesh.capacity);
     try renderer.retained.resize(.{ size.cols, size.rows });
     return size;
@@ -186,7 +188,7 @@ pub fn begin(renderer: *Renderer) void {
 pub fn prepare(renderer: *Renderer, projection: client.Projection) !client.PresentationCommit {
     renderer.begin();
     const model = projection.model orelse return .{};
-    var layout: client.LayoutSnapshot = .{};
+    var layout: data.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
     var commit: client.PresentationCommit = .{ .location = model.location };
     for (layout.views()) |view| {

@@ -1,15 +1,13 @@
 //! Explicit, reversible installation of Telar's short-lived system-trust CA.
 
+const backend = @import("telar-backend");
 const std = @import("std");
 const ProxyOptionsType = @import("arguments/ProxyOptions.zig");
 const AuthorityPaths = @import("AuthorityPaths.zig");
 const InspectionContext = @import("InspectionContext.zig");
 const Inspection = @import("Inspection.zig");
-const AuthorityType = @import("telar-backend").Authority;
 const InstallOptions = @import("InstallOptions.zig");
 const PreparedAuthority = @import("PreparedAuthority.zig");
-const ResourcesType = @import("telar-backend").Resources;
-const AuthorityFilesType = @import("telar-backend").AuthorityFiles;
 const proxy_module = @import("arguments/proxy.zig");
 const builtin = @import("builtin");
 const AuthorityTarget = @import("AuthorityTarget.zig");
@@ -145,7 +143,7 @@ fn inspect(context: InspectionContext, paths: *const AuthorityPaths) Inspection 
         return .{ .status = .stale, .record = stored };
     validateDirectory(context.io, std.fs.path.dirname(paths.recordPath()) orelse return .{ .status = .stale, .record = stored }) catch
         return .{ .status = .stale, .record = stored };
-    const authority = AuthorityType.loadExisting(.{ .io = context.io, .allocator = context.gpa }, paths.files()) catch
+    const authority = backend.Authority.loadExisting(.{ .io = context.io, .allocator = context.gpa }, paths.files()) catch
         return .{ .status = .stale, .record = stored };
     if (!std.mem.eql(u8, &authority.fingerprint(), &stored.fingerprint)) {
         return .{ .status = .stale, .record = stored };
@@ -205,8 +203,8 @@ fn install(init: std.process.Init, options: InstallOptions) !void {
 }
 
 fn prepareAuthority(init: std.process.Init, paths: *const AuthorityPaths) !PreparedAuthority {
-    const resources: ResourcesType = .{ .io = init.io, .allocator = init.gpa };
-    if (AuthorityType.loadExisting(resources, paths.files())) |authority| {
+    const resources: backend.Resources = .{ .io = init.io, .allocator = init.gpa };
+    if (backend.Authority.loadExisting(resources, paths.files())) |authority| {
         if (try authority.hasSystemLifetime() and !(try authority.expiresWithin(init.io, rotation_window_seconds))) {
             return .{ .authority = authority };
         }
@@ -218,14 +216,14 @@ fn prepareAuthority(init: std.process.Init, paths: *const AuthorityPaths) !Prepa
     var prepared: PreparedAuthority = undefined;
     prepared.temporary_key_len = (try std.fmt.bufPrint(&prepared.temporary_key, "{s}.rotate-{s}", .{ paths.files().key, &suffix })).len;
     prepared.temporary_certificate_len = (try std.fmt.bufPrint(&prepared.temporary_certificate, "{s}.rotate-{s}", .{ paths.files().certificate, &suffix })).len;
-    const files: AuthorityFilesType = .{
+    const files: backend.AuthorityFiles = .{
         .key = prepared.temporary_key[0..prepared.temporary_key_len],
         .certificate = prepared.temporary_certificate[0..prepared.temporary_certificate_len],
     };
     errdefer std.Io.Dir.deleteFileAbsolute(init.io, files.key) catch {};
     errdefer std.Io.Dir.deleteFileAbsolute(init.io, files.certificate) catch {};
     prepared.temporary = true;
-    prepared.authority = try AuthorityType.createSystem(resources, files);
+    prepared.authority = try backend.Authority.createSystem(resources, files);
     return prepared;
 }
 
@@ -565,7 +563,7 @@ test "inspection accepts only the recorded short-lived authority" {
     const directory = directory_buffer[0..directory_len];
     try prepareDirectory(io, directory);
     const paths = try AuthorityPaths.init(directory);
-    const authority = try AuthorityType.loadOrCreateSystem(.{ .io = io, .allocator = std.testing.allocator }, paths.files());
+    const authority = try backend.Authority.loadOrCreateSystem(.{ .io = io, .allocator = std.testing.allocator }, paths.files());
     var environment = std.process.Environ.Map.init(std.testing.allocator);
     defer environment.deinit();
     try environment.put("HOME", "/Users/test");
@@ -612,19 +610,19 @@ test "authority activation replaces the key and certificate as one recoverable p
     const directory = directory_buffer[0..directory_len];
     try prepareDirectory(io, directory);
     const paths = try AuthorityPaths.init(directory);
-    const resources: ResourcesType = .{ .io = io, .allocator = std.testing.allocator };
-    _ = try AuthorityType.loadOrCreate(resources, paths.files());
+    const resources: backend.Resources = .{ .io = io, .allocator = std.testing.allocator };
+    _ = try backend.Authority.loadOrCreate(resources, paths.files());
 
     var prepared: PreparedAuthority = undefined;
     prepared.temporary_key_len = (try std.fmt.bufPrint(&prepared.temporary_key, "{s}.new", .{paths.files().key})).len;
     prepared.temporary_certificate_len = (try std.fmt.bufPrint(&prepared.temporary_certificate, "{s}.new", .{paths.files().certificate})).len;
     prepared.temporary = true;
-    prepared.authority = try AuthorityType.createSystem(resources, prepared.files(&paths));
+    prepared.authority = try backend.Authority.createSystem(resources, prepared.files(&paths));
     const replacement_fingerprint = prepared.authority.fingerprint();
 
     try activatePrepared(io, &prepared, &paths);
 
-    const loaded = try AuthorityType.loadExisting(resources, paths.files());
+    const loaded = try backend.Authority.loadExisting(resources, paths.files());
     try std.testing.expectEqualSlices(u8, &replacement_fingerprint, &loaded.fingerprint());
     try std.testing.expect(try loaded.hasSystemLifetime());
 }

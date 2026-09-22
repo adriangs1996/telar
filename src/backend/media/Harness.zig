@@ -1,12 +1,10 @@
+const core = @import("telar-core");
 const PipelineType = @import("Pipeline.zig");
 const GraphicsBudgetType = @import("GraphicsBudget.zig");
 const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
 const State = @import("State.zig");
 const std = @import("std");
-const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
-const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
 const png_test = @import("png_test.zig");
-const max_encoded_chunk_bytes_module = @import("telar-core").max_encoded_chunk_bytes;
 const ProcessorType = @import("Processor.zig");
 const StatsType = @import("Stats.zig");
 const vt = @import("ghostty-vt");
@@ -24,16 +22,16 @@ pub fn create(storage_limit: usize) !*Harness {
     errdefer std.testing.allocator.destroy(harness);
     harness.* = .{
         .pipeline = undefined,
-        .budget = .init(max_image_bytes_global_module),
+        .budget = .init(core.max_image_bytes_global),
         .allocator = undefined,
     };
-    harness.allocator = .init(std.testing.allocator, &harness.budget, max_image_bytes_per_pane_module);
+    harness.allocator = .init(std.testing.allocator, &harness.budget, core.max_image_bytes_per_pane);
     try harness.pipeline.init(.{
         .io = std.testing.io,
         .allocator = harness.allocator.allocator(),
         .size = png_test.size,
         .storage_limit = storage_limit,
-        .payload_limit = max_encoded_chunk_bytes_module,
+        .payload_limit = core.max_encoded_chunk_bytes,
         .write_pty = writePty,
     });
     return harness;

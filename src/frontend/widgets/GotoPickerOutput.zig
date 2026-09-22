@@ -1,6 +1,6 @@
-const RectType = @import("telar-core").Rect;
+const core = @import("telar-core");
 const CursorType = @import("Cursor.zig");
 const Output = @This();
 
-area: RectType,
+area: core.Rect,
 cursor: ?CursorType,

@@ -1,4 +1,3 @@
-const RequestType = @import("Request.zig");
 const middleware = @import("middleware.zig");
 const Transformer = @import("Transformer.zig");
 const HeaderView = @import("HeaderView.zig");
@@ -26,7 +25,7 @@ pub const Request = @import("Request.zig");
 /// ```zig
 /// const changed = pipeline.apply(.{ .io = io, .context = context, .headers = &headers });
 /// ```
-pub fn apply(pipeline: *const TransformPipeline, request: RequestType) bool {
+pub fn apply(pipeline: *const TransformPipeline, request: Request) bool {
     const headers = request.headers;
 
     var changed = false;

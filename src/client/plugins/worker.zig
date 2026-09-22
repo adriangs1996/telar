@@ -1,9 +1,9 @@
 //! Isolated one-shot Lua plugin worker.
 
+const data = @import("model");
 const std = @import("std");
 const Input = @import("Input.zig");
 const generation_support = @import("../config/generation_support.zig");
-const DiagnosticType = @import("../config/Diagnostic.zig");
 const GenerationType = @import("../config/Generation.zig");
 const protocol = @import("protocol.zig");
 
@@ -50,7 +50,7 @@ pub fn run(init: std.process.Init, input: Input) !void {
         \\} } }
     );
 
-    var diagnostic: DiagnosticType = .{};
+    var diagnostic: data.Diagnostic = .{};
     const generation = GenerationType.loadSource(.{
         .gpa = init.gpa,
         .io = init.io,

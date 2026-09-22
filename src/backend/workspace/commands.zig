@@ -1,23 +1,19 @@
 //! Domain command handlers for workspace aggregates stored by a repository.
 
+const core = @import("telar-core");
 const Repository = @import("Repository.zig");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const WorkspaceRenamedType = @import("WorkspaceRenamed.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const TabMoveTarget = @import("telar-core").TabMoveTarget;
 const TabMovedType = @import("TabMoved.zig");
 const TabRemovedType = @import("TabRemoved.zig");
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const std = @import("std");
 const StateType = @import("State.zig");
-const tab_module = @import("telar-core").tab;
 
 /// Renames an existing aggregate and advances the workspace-list projection.
 ///
 /// ```zig
 /// try renameWorkspace(&repository, location, "backend");
 /// ```
-pub fn renameWorkspace(repository: *Repository, location: WorkspaceLocationType, name: []const u8) !WorkspaceRenamedType {
+pub fn renameWorkspace(repository: *Repository, location: core.WorkspaceLocation, name: []const u8) !WorkspaceRenamedType {
     const workspace = repository.find(location) orelse return error.WorkspaceNotFound;
     const renamed = try workspace.rename(name);
     repository.recordListChange();
@@ -29,7 +25,7 @@ pub fn renameWorkspace(repository: *Repository, location: WorkspaceLocationType,
 /// ```zig
 /// const moved = try moveTab(&repository, location, .{ .direction = .previous });
 /// ```
-pub fn moveTab(repository: *Repository, location: TabLocationType, destination: TabMoveTarget) !TabMovedType {
+pub fn moveTab(repository: *Repository, location: core.TabLocation, destination: core.TabMoveTarget) !TabMovedType {
     const workspace = repository.find(location.workspace) orelse return error.WorkspaceNotFound;
     return workspace.moveTab(location.tab_id, destination) orelse error.TabNotFound;
 }
@@ -40,7 +36,7 @@ pub fn moveTab(repository: *Repository, location: TabLocationType, destination: 
 /// ```zig
 /// const removed = removeTab(&repository, location) orelse return;
 /// ```
-pub fn removeTab(repository: *Repository, location: TabLocationType) ?TabRemovedType {
+pub fn removeTab(repository: *Repository, location: core.TabLocation) ?TabRemovedType {
     const workspace = repository.find(location.workspace) orelse return null;
 
     if (!workspace.removeTab(location.tab_id)) {
@@ -49,7 +45,7 @@ pub fn removeTab(repository: *Repository, location: TabLocationType) ?TabRemoved
 
     repository.recordListChange();
     const workspace_removed = workspace.tabCount() == 0;
-    var previous_workspace: ?WorkspaceIdType = null;
+    var previous_workspace: ?core.WorkspaceId = null;
 
     if (workspace_removed) {
         const workspace_id = switch (location.workspace) {
@@ -64,11 +60,11 @@ pub fn removeTab(repository: *Repository, location: TabLocationType) ?TabRemoved
     return TabRemovedType.init(location, workspace_removed, previous_workspace) catch unreachable;
 }
 
-fn insertWorkspace(repository: *Repository, path: []const u8) !TabLocationType {
+fn insertWorkspace(repository: *Repository, path: []const u8) !core.TabLocation {
     return repository.insert(.{ .path = path });
 }
 
-fn insertTestingTab(repository: *Repository, location: WorkspaceLocationType, label: []const u8) !TabLocationType {
+fn insertTestingTab(repository: *Repository, location: core.WorkspaceLocation, label: []const u8) !core.TabLocation {
     const workspace = repository.find(location) orelse return error.WorkspaceNotFound;
     const tab_id = try repository.nextTabId();
     const created = try workspace.createTab(tab_id, label);
@@ -139,9 +135,9 @@ test "removing a missing tab leaves repository state unchanged" {
     defer repository.deinit();
     const existing = try insertWorkspace(&repository, "/work/project");
     const revision = repository.reader().revision();
-    const missing: TabLocationType = .{
+    const missing: core.TabLocation = .{
         .workspace = existing.workspace,
-        .tab_id = try tab_module(999),
+        .tab_id = try core.tab(999),
     };
 
     try std.testing.expect(removeTab(&repository, missing) == null);

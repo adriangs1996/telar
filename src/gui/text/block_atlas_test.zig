@@ -1,4 +1,5 @@
 //! Resource and continuity proofs for procedural block elements in the atlas.
+const assets = @import("assets");
 const std = @import("std");
 const Atlas = @import("GlyphAtlas.zig");
 const QuadList = @import("../render/QuadList.zig");
@@ -6,7 +7,7 @@ const TextRun = @import("TextRun.zig");
 const quad = @import("../render/Quad.zig");
 
 fn makeAtlas() !Atlas {
-    return Atlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    return Atlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
 }
 
 test "block elements never shape rasterize or allocate even cold and fill the configured cell" {

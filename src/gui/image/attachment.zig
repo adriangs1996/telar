@@ -1,4 +1,7 @@
 //! Local attachment I/O and decoding run only on the bounded media worker.
+const core = @import("telar-core");
+const builtin = @import("builtin");
+const png = @import("png.zig");
 const std = @import("std");
 const Image = @import("../diagrams/Image.zig");
 const native = @cImport({
@@ -10,7 +13,7 @@ extern fn telar_gui_decode_attachment(bytes: [*]const u8, len: usize, width: *u3
 /// Validates the opened file before allocating or decoding its bounded snapshot.
 /// Example: `var image = try attachment.load(io, allocator, path);`
 pub fn load(io: std.Io, allocator: std.mem.Allocator, path: []const u8) !Image {
-    try @import("telar-core").AgentImages.validatePath(path);
+    try core.AgentImages.validatePath(path);
     var storage: [1025]u8 = undefined;
     const name = try std.fmt.bufPrintZ(&storage, "{s}", .{path});
     const fd = std.c.open(name, .{ .ACCMODE = .RDONLY, .NOFOLLOW = true, .NONBLOCK = true, .CLOEXEC = true });
@@ -36,7 +39,7 @@ pub fn load(io: std.Io, allocator: std.mem.Allocator, path: []const u8) !Image {
 /// Produces a bounded premultiplied texture independent of the source lifetime.
 /// Example: `var image = try attachment.decode(allocator, png_bytes);`
 pub fn decode(allocator: std.mem.Allocator, bytes: []const u8) !Image {
-    if (@import("builtin").os.tag == .macos) {
+    if (builtin.os.tag == .macos) {
         var width: u32 = 0;
         var height: u32 = 0;
         const pixels = telar_gui_decode_attachment(bytes.ptr, bytes.len, &width, &height) orelse return error.InvalidImage;
@@ -48,7 +51,7 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8) !Image {
         return .{ .width = width, .height = height, .logical_width = @floatFromInt(width), .logical_height = @floatFromInt(height), .pixels = try allocator.dupe(u8, pixels[0 .. @as(usize, width) * height * 4]) };
     }
 
-    var decoded = try @import("png.zig").decode(allocator, bytes, .{ .max_side = 2048, .max_pixels = Image.max_pixels });
+    var decoded = try png.decode(allocator, bytes, .{ .max_side = 2048, .max_pixels = Image.max_pixels });
     for (0..@as(usize, decoded.width) * decoded.height) |index| {
         const pixel = decoded.pixels[index * 4 ..][0..4];
         for (pixel[0..3]) |*channel| {
@@ -61,7 +64,7 @@ pub fn decode(allocator: std.mem.Allocator, bytes: []const u8) !Image {
 
 test "attachment decoding preserves orientation and premultiplies transparent pixels" {
     const allocator = std.testing.allocator;
-    const bytes = try @import("png.zig").encodeForTest(allocator, .{ .header = .{ .width = 2, .height = 2, .color = .rgba } }, &.{ 255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255, 255, 255, 255, 0 });
+    const bytes = try png.encodeForTest(allocator, .{ .header = .{ .width = 2, .height = 2, .color = .rgba } }, &.{ 255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255, 255, 255, 255, 0 });
     defer allocator.free(bytes);
     var image = try decode(allocator, bytes);
     defer image.deinit(allocator);

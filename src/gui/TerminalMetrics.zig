@@ -1,6 +1,6 @@
+const native = @import("native/native.zig");
 const std = @import("std");
 const core = @import("telar-core");
-const Viewport = @import("native/native.zig").Viewport;
 const Metrics = @This();
 
 cell_width: u16,
@@ -27,7 +27,7 @@ pub fn glyphCell(metrics: Metrics) @import("render/Rect.zig") {
 
 /// Computes only complete cells. Edge pixels belong to the native chrome.
 /// Example: `const size = try metrics.measure(viewport);`
-pub fn measure(metrics: Metrics, viewport: Viewport) !core.TerminalSize {
+pub fn measure(metrics: Metrics, viewport: native.Viewport) !core.TerminalSize {
     if (metrics.cell_width == 0 or metrics.cell_height == 0) {
         return error.InvalidCellSize;
     }

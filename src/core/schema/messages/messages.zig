@@ -6,6 +6,8 @@
 //! and the trailing-bytes check, so a payload is never accepted with data
 //! after its message.
 
+const agent_thread = @import("agent_thread.zig");
+const agent_history = @import("agent_history.zig");
 const OpenEditor = @import("OpenEditor.zig");
 const EditorOpened = @import("EditorOpened.zig");
 const editor = @import("editor.zig");
@@ -189,7 +191,7 @@ pub const ServerMessage = union(enum) {
     change_review_changed: ChangeReviewChanged,
     change_review_snapshot: @import("ChangeReviewSnapshotView.zig"),
     pane_opened: PaneOpenedType,
-    agent_thread_snapshot: @import("agent_thread.zig").SnapshotView,
+    agent_thread_snapshot: agent_thread.SnapshotView,
     agent_history_page: @import("AgentHistoryPageView.zig"),
     pane_frame: FrameViewType,
     pane_exited: PaneExitedType,
@@ -256,15 +258,15 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
             .request_workspace_snapshot = try GenericDerived(RequestWorkspaceSnapshotType).decode(&decoder),
         },
         .create_tab => .{ .create_tab = try tab.decodeCreateTab(&decoder) },
-        .agent_prompt => .{ .agent_prompt = try @import("agent_thread.zig").decodeAgentPrompt(&decoder) },
-        .agent_interrupt => .{ .agent_interrupt = try @import("agent_thread.zig").decodeControl(@import("AgentInterrupt.zig"), &decoder) },
-        .agent_resume => .{ .agent_resume = try @import("agent_thread.zig").decodeControl(@import("AgentResume.zig"), &decoder) },
-        .agent_approval => .{ .agent_approval = try @import("agent_thread.zig").decodeControl(@import("AgentApproval.zig"), &decoder) },
-        .query_change_review => .{ .query_change_review = try @import("change_review.zig").decode(@import("QueryChangeReview.zig"), &decoder) },
-        .change_review_command => .{ .change_review_command = try @import("change_review.zig").decode(@import("ChangeReviewCommand.zig"), &decoder) },
-        .report_change_review_sample => .{ .report_change_review_sample = try @import("change_review.zig").decode(@import("ReportChangeReviewSample.zig"), &decoder) },
-        .query_agent_thread => .{ .query_agent_thread = try @import("agent_thread.zig").decodeControl(@import("QueryAgentThread.zig"), &decoder) },
-        .query_agent_history => .{ .query_agent_history = try @import("agent_history.zig").decodeQueryAgentHistory(&decoder) },
+        .agent_prompt => .{ .agent_prompt = try agent_thread.decodeAgentPrompt(&decoder) },
+        .agent_interrupt => .{ .agent_interrupt = try agent_thread.decodeControl(@import("AgentInterrupt.zig"), &decoder) },
+        .agent_resume => .{ .agent_resume = try agent_thread.decodeControl(@import("AgentResume.zig"), &decoder) },
+        .agent_approval => .{ .agent_approval = try agent_thread.decodeControl(@import("AgentApproval.zig"), &decoder) },
+        .query_change_review => .{ .query_change_review = try change_review.decode(@import("QueryChangeReview.zig"), &decoder) },
+        .change_review_command => .{ .change_review_command = try change_review.decode(@import("ChangeReviewCommand.zig"), &decoder) },
+        .report_change_review_sample => .{ .report_change_review_sample = try change_review.decode(@import("ReportChangeReviewSample.zig"), &decoder) },
+        .query_agent_thread => .{ .query_agent_thread = try agent_thread.decodeControl(@import("QueryAgentThread.zig"), &decoder) },
+        .query_agent_history => .{ .query_agent_history = try agent_history.decodeQueryAgentHistory(&decoder) },
         .rename_tab => .{ .rename_tab = try tab.decodeRenameTab(&decoder) },
         .close_tab => .{ .close_tab = try GenericDerived(CloseTabType).decode(&decoder) },
         .move_tab => .{ .move_tab = try GenericDerived(MoveTabType).decode(&decoder) },
@@ -323,9 +325,9 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
     const tag = try decodeTag(tags.ServerTag, try decoder.readByte());
     const message: ServerMessage = switch (tag) {
         .change_review_changed => .{ .change_review_changed = try change_review.decode(ChangeReviewChanged, &decoder) },
-        .change_review_snapshot => .{ .change_review_snapshot = try @import("change_review.zig").decode(@import("ChangeReviewSnapshotView.zig"), &decoder) },
-        .agent_thread_snapshot => .{ .agent_thread_snapshot = try @import("agent_thread.zig").decodeAgentThreadSnapshot(&decoder) },
-        .agent_history_page => .{ .agent_history_page = try @import("agent_history.zig").decodeAgentHistoryPage(&decoder) },
+        .change_review_snapshot => .{ .change_review_snapshot = try change_review.decode(@import("ChangeReviewSnapshotView.zig"), &decoder) },
+        .agent_thread_snapshot => .{ .agent_thread_snapshot = try agent_thread.decodeAgentThreadSnapshot(&decoder) },
+        .agent_history_page => .{ .agent_history_page = try agent_history.decodeAgentHistoryPage(&decoder) },
         .pane_opened => .{ .pane_opened = try GenericDerived(PaneOpenedType).decode(&decoder) },
         .pane_frame => .{ .pane_frame = try frame.decodeBody(&decoder) },
         .pane_exited => .{ .pane_exited = try GenericDerived(PaneExitedType).decode(&decoder) },

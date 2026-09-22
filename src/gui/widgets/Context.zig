@@ -1,7 +1,9 @@
+const core = @import("telar-core");
+const workspace_identity = @import("workspace_identity.zig");
+const action_module = @import("action.zig");
 const std = @import("std");
 const HitMap = @import("HitMap.zig");
 const BandHitMap = @import("BandHitMap.zig");
-const Action = @import("action.zig").Action;
 const client = @import("telar-client");
 const AgentAges = @import("AgentAges.zig");
 const Context = @This();
@@ -9,9 +11,9 @@ const Context = @This();
 hits: *HitMap,
 bands: *BandHitMap,
 projection: *const client.Projection,
-hovered: ?Action,
+hovered: ?action_module.Action,
 /// Last delivered project identity, used only during the empty handoff frame.
-presented_workspace: ?@import("telar-core").WorkspaceId = null,
+presented_workspace: ?core.WorkspaceId = null,
 sidebar_regions: ?*const @import("SidebarRegions.zig") = null,
 ages: ?*const AgentAges = null,
 /// Placed workspace favicons; `null` in fixtures without a registry.
@@ -20,8 +22,8 @@ progress: ?*@import("ProgressMotions.zig") = null,
 
 /// Resolves the navigation highlight without retaining retired pane or tab data.
 /// Example: `const selected = context.workspaceId() == workspace;`
-pub fn workspaceId(context: *const Context) ?@import("telar-core").WorkspaceId {
-    return @import("workspace_identity.zig").navigationId(context.projection, context.presented_workspace);
+pub fn workspaceId(context: *const Context) ?core.WorkspaceId {
+    return workspace_identity.navigationId(context.projection, context.presented_workspace);
 }
 
 /// Shares one status clock between cards and pane headers.
@@ -38,6 +40,6 @@ pub fn statusAgeAt(context: *const Context, index: usize) u32 {
 
 /// Compares the delivered hover identity with a semantic control action.
 /// Example: `const hovered = context.isHovered(.{ .intent = .toggle_sidebar });`
-pub fn isHovered(context: *const Context, action: Action) bool {
+pub fn isHovered(context: *const Context, action: action_module.Action) bool {
     return if (context.hovered) |value| std.meta.eql(value, action) else false;
 }

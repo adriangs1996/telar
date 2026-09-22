@@ -8,6 +8,30 @@ const source_roots: []const []const u8 = &.{ "build.zig", "build", "src", "examp
 /// Register tests/checks and return the parallel-test barrier: `tests.add(b, app, bench)`.
 pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const test_step = b.step("test", "Run the tests");
+    const model_tests = b.addTest(
+        .{
+            .root_module = app.modules.data,
+        },
+    );
+    app.coverage.instrumentTest(model_tests);
+    const run_model_tests = b.addRunArtifact(model_tests);
+    const model_boundaries = b.addSystemCommand(&.{
+        "python3",
+        b.pathFromRoot("tools/check_model_boundaries.py"),
+        "--root",
+        b.pathFromRoot("."),
+    });
+    const model_boundary_tests = b.addSystemCommand(&.{
+        "python3",
+        b.pathFromRoot("tools/test_model_boundaries.py"),
+    });
+    model_boundary_tests.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
+    model_boundaries.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
+    model_boundaries.step.dependOn(&model_boundary_tests.step);
+    run_model_tests.step.dependOn(&model_boundaries.step);
+    b.step("check-model-boundaries", "Check shared model dependency boundaries").dependOn(&model_boundaries.step);
+    b.step("test-model", "Run shared model tests without client or adapters").dependOn(&run_model_tests.step);
+    test_step.dependOn(&run_model_tests.step);
     const client_tests = b.addTest(.{ .root_module = app.modules.client });
     app.coverage.instrumentTest(client_tests);
     const run_client_tests = b.addRunArtifact(client_tests);
@@ -15,6 +39,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     const boundary_tests = b.addSystemCommand(&.{ "python3", b.pathFromRoot("tools/test_client_boundaries.py") });
     boundary_tests.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
     client_boundaries.step.dependOn(&boundary_tests.step);
+    client_boundaries.step.dependOn(&model_boundaries.step);
     run_client_tests.step.dependOn(&client_boundaries.step);
     b.step("check-client-boundaries", "Check shared-client module and capability boundaries").dependOn(&client_boundaries.step);
     b.step("test-client", "Run renderer-independent client tests").dependOn(&run_client_tests.step);
@@ -26,16 +51,25 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     inventory_tests.setEnvironmentVariable("PYTHONDONTWRITEBYTECODE", "1");
     test_step.dependOn(&inventory_tests.step);
     check_step.dependOn(&inventory_tests.step);
+    const model_check = b.addTest(
+        .{
+            .root_module = app.modules.data,
+        },
+    );
+    check_step.dependOn(&model_check.step);
     const client_check = b.addTest(.{ .root_module = app.modules.client });
     check_step.dependOn(&client_check.step);
     check_step.dependOn(&client_boundaries.step);
     const check_client = b.step("check-client", "Semantic-analyze only the shared client");
     check_client.dependOn(&client_check.step);
     check_client.dependOn(&client_boundaries.step);
-    // The shared client depends on core and the Lua modules only; the checker
+    // The shared client depends on model, core and the Lua modules; the checker
     // in tools/ enforces the same set at source level.
-    std.debug.assert(app.modules.client.import_table.count() == 3 and app.modules.client.import_table.get("telar-core").? == app.modules.core);
+    std.debug.assert(app.modules.client.import_table.count() == 4 and app.modules.client.import_table.get("telar-core").? == app.modules.core);
     std.debug.assert(app.modules.client.import_table.get("telar-lua").? == app.modules.telar_lua and app.modules.client.import_table.get("lua-api").? == app.modules.lua_api);
+
+    std.debug.assert(app.modules.client.import_table.get("model").? == app.modules.data);
+    std.debug.assert(app.modules.data.import_table.count() == 1 and app.modules.data.import_table.get("telar-core").? == app.modules.core);
 
     for (app.modules.core.import_table.values()) |dependency| {
         std.debug.assert(dependency != app.modules.client and dependency != app.modules.frontend and dependency != app.modules.backend);

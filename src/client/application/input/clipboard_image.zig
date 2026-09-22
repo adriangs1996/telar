@@ -1,16 +1,12 @@
 //! Application policy for one bounded local clipboard image capture.
+const core = @import("telar-core");
+const model_data = @import("model");
 
-const ClipboardCaptureType = @import("../../model/ClipboardCapture.zig");
 const CapturedImage = @import("CapturedImage.zig");
-const types = @import("../../model/types.zig");
 const ModelType = @import("../../model/Model.zig");
-const std = @import("std");
-const TargetType = @import("../../attachments/AttachmentTarget.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const AgentInputType = @import("../../agents/AgentInput.zig");
 
 pub const StartOutcome = union(enum) {
-    started: ClipboardCaptureType,
+    started: model_data.ClipboardCapture,
     busy,
     unsupported,
     no_target,
@@ -19,11 +15,11 @@ pub const StartOutcome = union(enum) {
 pub const CompletionCommand = union(enum) {
     succeeded: CapturedImage,
     failed: struct {
-        execution_id: types.ClipboardCaptureId,
+        execution_id: model_data.ClipboardCaptureId,
         reason: anyerror,
     },
 
-    pub fn executionId(command: CompletionCommand) types.ClipboardCaptureId {
+    pub fn executionId(command: CompletionCommand) model_data.ClipboardCaptureId {
         return switch (command) {
             .succeeded => |result| result.execution_id,
             .failed => |failure| failure.execution_id,
@@ -54,19 +50,19 @@ pub const CompletionEvent = enum {
     resize,
 };
 
-fn installFocusedTarget(model: *ModelType) !TargetType {
-    const location: TabLocationType = .{
+fn installFocusedTarget(model: *ModelType) !model_data.AttachmentTarget {
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const target: TargetType = .{
+    const target: model_data.AttachmentTarget = .{
         .pane_id = @enumFromInt(7),
         .pane_generation = 2,
     };
     try model.workspace.bootstrap(.{ .pane_id = target.pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.reconcileAgentSnapshot(.{
         .revision = 1,
-        .agents = &.{AgentInputType{
+        .agents = &.{model_data.AgentInput{
             .key = .{
                 .pane_id = target.pane_id,
                 .pane_generation = target.pane_generation,
@@ -81,7 +77,7 @@ fn installFocusedTarget(model: *ModelType) !TargetType {
     return target;
 }
 
-fn successfulCommand(capture: ClipboardCaptureType) CompletionCommand {
+fn successfulCommand(capture: model_data.ClipboardCapture) CompletionCommand {
     return .{ .succeeded = .{
         .execution_id = capture.id,
         .result_id = capture.id,

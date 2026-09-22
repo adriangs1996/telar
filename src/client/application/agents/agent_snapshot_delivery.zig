@@ -1,14 +1,12 @@
 //! Application policy for delivering dependent client state after one agent
 //! snapshot commit.
+const core = @import("telar-core");
+const model_data = @import("model");
 
-const AgentStatusChangeType = @import("../../model/AgentStatusChange.zig");
-const InputType = @import("../../notifications/NotificationInput.zig");
-const notification_capability = @import("../../notifications/notifications.zig");
 const std = @import("std");
-const AgentStatusType = @import("telar-core").AgentStatus;
 
-pub fn alertInput(change: AgentStatusChangeType, label: []const u8, message_buffer: *[96]u8) ?InputType {
-    const level: notification_capability.Level = switch (change.current) {
+pub fn alertInput(change: model_data.AgentStatusChange, label: []const u8, message_buffer: *[96]u8) ?model_data.NotificationInput {
+    const level: model_data.NotificationLevel = switch (change.current) {
         .blocked => .warning,
         .done => .success,
         .failed => .failure,
@@ -33,11 +31,11 @@ pub fn alertInput(change: AgentStatusChangeType, label: []const u8, message_buff
         .duration_ns = if (change.current == .failed)
             7 * std.time.ns_per_s
         else
-            notification_capability.default_duration_ns,
+            model_data.notifications.default_duration_ns,
     };
 }
 
-fn statusName(status: AgentStatusType) []const u8 {
+fn statusName(status: core.AgentStatus) []const u8 {
     return switch (status) {
         .blocked => "waiting for input",
         .done => "done",

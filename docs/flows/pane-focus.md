@@ -10,7 +10,7 @@ host input -> input/actions or agent navigation
      -> Model.focusPane
      -> AttachedClient.deliverPaneFocus
         -> attachment reservation and geometry
-        -> pane_focus_reports.sync
+        -> AttachedClient.synchronizeReportedFocus
         -> fullscreen geometry and missing attachments
   -> adapter observes presentation revisions
 ```
@@ -29,7 +29,7 @@ invalidates placements and offers the visible pane size, then requests missing
 attachments. A newly visible detached pane cannot receive input until its
 correlated `pane_opened` confirmation arrives. Pending requests are deduplicated.
 
-Semantic focus and reported child focus are separate. `pane_focus_reports.sync`
+Semantic focus and reported child focus are separate. `AttachedClient.synchronizeReportedFocus`
 commits the reported target in the model and emits focus-out before focus-in.
 Enabling focus reports on an already focused pane sends focus-in once. Disabling
 them updates report state without sending focus-out. Report state changes no
@@ -38,7 +38,7 @@ presentation revision and its bytes are not counted as user input.
 Intentional tab detachment clears only that tab's report owner, before its
 `detach_pane` messages. Canonical pane retirement calls `AttachedClient.releasePaneResources`
 and silently forgets that exact owner. Canonical tab/workspace replacement can
-forget the entire obsolete reporting context through `pane_focus_reports.retire`.
+forget the entire obsolete reporting context through `Model.forgetReportedPaneFocus`.
 These paths do not send child input to a retired attachment.
 
 Tab, workspace, frame and snapshot operations call
@@ -52,7 +52,7 @@ loop. Reconnect rebuilds disposable state without stopping runtime panes.
 Operations do not draw: the adapter observes the changed model revision.
 
 Source: `src/client/AttachedClient.zig`,
-`AttachedClient.deliverPaneFocus` and `operations/panes/pane_focus_reports.zig`.
+`AttachedClient.deliverPaneFocus` and `AttachedClient.synchronizeReportedFocus`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
 `src/frontend/client/tests/mouse_selection.zig`, and
 `src/client/model/tests/panes.zig`.

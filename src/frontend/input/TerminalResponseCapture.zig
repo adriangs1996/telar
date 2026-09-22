@@ -1,5 +1,5 @@
+const data = @import("model");
 const keybind = @import("keybind.zig");
-const Control = @import("telar-client").Control;
 const term = @import("../presentation/screen_support.zig");
 const TerminalResponseCapture = @This();
 
@@ -12,7 +12,7 @@ pub fn forward(capture: *TerminalResponseCapture, bytes: []const u8) !void {
     capture.forwarded += bytes.len;
 }
 
-pub fn action(capture: *TerminalResponseCapture, _: keybind.TestAction) !Control {
+pub fn action(capture: *TerminalResponseCapture, _: keybind.TestAction) !data.KeybindControl {
     capture.actions += 1;
     return .continue_routing;
 }

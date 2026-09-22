@@ -5,16 +5,15 @@
 //! without scaling, so the border keeps one physical thickness on every side.
 //! Modal text and the rectangular body stay in the cell buffer.
 
+const core = @import("telar-core");
+const client = @import("telar-client");
 const Asset = @import("Asset.zig");
 const ModalRenderKey = @import("ModalRenderKey.zig");
 const CornerPixel = @import("CornerPixel.zig");
 const RoundedRectangle = @import("RoundedRectangle.zig");
 const PixelPoint = @import("PixelPoint.zig");
-const ColorType = @import("telar-core").Color;
-const RectType = @import("telar-core").Rect;
 const std = @import("std");
 const ModalRenderer = @import("ModalRenderer.zig");
-const theme = @import("telar-client").theme_support;
 
 pub const max_cache_bytes: usize = 512 * 1024;
 const first_image_id: u32 = 0x80002000;
@@ -127,7 +126,7 @@ pub fn fill(pixels: []u8, color: [3]u8) void {
         pixels[index..][0..4].* = .{ color[0], color[1], color[2], 255 };
 }
 
-pub fn rgb(color: ColorType) ?[3]u8 {
+pub fn rgb(color: core.Color) ?[3]u8 {
     return switch (color) {
         .rgb => |value| value,
         else => null,
@@ -146,7 +145,7 @@ pub fn placementImageId(index: usize) u32 {
     return imageId(if (index < 4) 0 else if (index < 6) 1 else 2);
 }
 
-pub fn optionalAreaEql(a: ?RectType, b: ?RectType) bool {
+pub fn optionalAreaEql(a: ?core.Rect, b: ?core.Rect) bool {
     if (a == null or b == null) {
         return a == null and b == null;
     }
@@ -155,7 +154,7 @@ pub fn optionalAreaEql(a: ?RectType, b: ?RectType) bool {
 
 // The Kitty frame needs an explicit RGB `panel_bg`; the default Shade
 // theme inherits the host background, so these tests draw the Vesper chrome.
-const opaque_palette = theme.builtin(.vesper).palette;
+const opaque_palette = client.theme_support.builtin(.vesper).palette;
 
 test "rounded modal assets are exact-size bounded and transparent outside corners" {
     var renderer = ModalRenderer.init(std.testing.allocator);
@@ -185,7 +184,7 @@ test "modal assets use the same background as the client chrome" {
     var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var palette = theme.default_theme.palette;
+    var palette = client.theme_support.default_theme.palette;
     palette.panel_bg = .{ .rgb = .{ 1, 2, 3 } };
     palette.surface0 = .{ .rgb = .{ 4, 5, 6 } };
 
@@ -198,7 +197,7 @@ test "modal frame transmission ends in eight natural-size placements" {
     var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    const area: RectType = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
+    const area: core.Rect = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
     renderer.prepare(area, &opaque_palette);
 
     var output: std.Io.Writer.Allocating = .init(std.testing.allocator);
@@ -220,7 +219,7 @@ test "closing a stale modal frame leaves no media work behind" {
     var renderer = ModalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    const area: RectType = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
+    const area: core.Rect = .{ .x = 2, .y = 1, .w = 40, .h = 12 };
     renderer.prepare(area, &opaque_palette);
 
     var initial: std.Io.Writer.Allocating = .init(std.testing.allocator);

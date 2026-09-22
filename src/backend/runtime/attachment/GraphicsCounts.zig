@@ -1,4 +1,4 @@
-const TimingType = @import("telar-core").Timing;
+const core = @import("telar-core");
 const GraphicsCounts = @This();
 
 images: u32,
@@ -10,4 +10,4 @@ stage_blocked: u32,
 adopted: u32,
 /// Time spent copying frozen generations out of live media storage
 /// on the runtime thread, the fallback when nothing was adopted.
-freeze: TimingType,
+freeze: core.Timing,

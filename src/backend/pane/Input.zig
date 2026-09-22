@@ -1,7 +1,7 @@
-const CellType = @import("telar-core").Cell;
+const core = @import("telar-core");
 const Input = @This();
 
-current: []const CellType,
-acknowledged: []const CellType,
+current: []const core.Cell,
+acknowledged: []const core.Cell,
 cols: u16,
 damaged_rows: []const bool,

@@ -1,5 +1,9 @@
 //! Native chrome drawing over the terminal atlas and the host's measured grid.
 //! Every primitive is clipped to its supplied area; no widget owns GPU resources.
+const GlyphAtlas = @import("../text/GlyphAtlas.zig");
+const assets = @import("assets");
+const QuadList = @import("../render/QuadList.zig");
+const TerminalRenderer = @import("../render/TerminalRenderer.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -401,9 +405,9 @@ fn clampRadius(bounds: Rect, radius: f32) f32 {
 }
 
 test "chrome text clips graphemes preserves metrics and reuses the terminal atlas" {
-    var atlas = try @import("../text/GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
-    var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
+    var quads = QuadList.init(std.testing.allocator);
     defer quads.deinit();
     var canvas: Canvas = .{
         .atlas = &atlas,
@@ -432,11 +436,11 @@ test "chrome text clips graphemes preserves metrics and reuses the terminal atla
 }
 
 test "fallback icons fit each chrome column with negative letter spacing" {
-    var renderer = @import("../render/TerminalRenderer.zig").init(std.testing.allocator);
+    var renderer = TerminalRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     renderer.config.font = .{ .size = 22, .line_height = 0.75, .letter_spacing = -5, .thicken = true };
     _ = try renderer.measure(.{ .width = 800, .height = 600, .scale = 2 });
-    var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
+    var quads = QuadList.init(std.testing.allocator);
     defer quads.deinit();
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = .{ 8, 12 }, .theme = client.theme_support.default_theme };
     const area: core.Rect = .{ .x = 1, .y = 1, .w = 3, .h = 1 };
@@ -452,9 +456,9 @@ test "fallback icons fit each chrome column with negative letter spacing" {
 }
 
 test "chrome icons track label size preserve aspect and reuse cached glyphs" {
-    var atlas = try @import("../text/GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
-    var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
+    var quads = QuadList.init(std.testing.allocator);
     defer quads.deinit();
     var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = client.theme_support.default_theme };
     for ([_]u16{ 11, 22, 33 }) |size| {

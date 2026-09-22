@@ -1,12 +1,12 @@
-const TabLocationType = @import("telar-core").TabLocation;
+const core = @import("telar-core");
+const data = @import("model");
 const RemovedWorkspaceTabs = @import("RemovedWorkspaceTabs.zig");
-const RemovedWorkspacePanes = @import("RemovedWorkspacePanes.zig");
 const WorkspaceReconciliation = @This();
 
-previous_active: TabLocationType,
-active: TabLocationType,
+previous_active: core.TabLocation,
+active: core.TabLocation,
 removed_tabs: RemovedWorkspaceTabs = .{},
-removed_panes: RemovedWorkspacePanes = .{},
+removed_panes: data.RemovedWorkspacePanes = .{},
 workspace_changed: bool = false,
 tabs_changed: bool = false,
 active_tab_changed: bool = false,

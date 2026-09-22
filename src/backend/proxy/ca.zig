@@ -1,9 +1,5 @@
 //! Private local certificate authority used only by Telar child processes.
 
-const ResourcesType = @import("Resources.zig");
-const AuthorityFilesType = @import("AuthorityFiles.zig");
-const PairType = @import("Pair.zig");
-const AuthorityType = @import("Authority.zig");
 const std = @import("std");
 const tlsz = @import("tls");
 const SecureWrite = @import("SecureWrite.zig");
@@ -32,9 +28,9 @@ pub const Pair = @import("Pair.zig");
 
 pub const Authority = @import("Authority.zig");
 
-pub fn generate(io: std.Io, validity_seconds: i64) Error!PairType {
+pub fn generate(io: std.Io, validity_seconds: i64) Error!Pair {
     const now = std.Io.Clock.real.now(io).toSeconds();
-    var pair: PairType = .{ .key_pair = tlsz.x509.KeyPair.generate(io) };
+    var pair: Pair = .{ .key_pair = tlsz.x509.KeyPair.generate(io) };
     defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
     const cert = tlsz.x509.create(
         &pair.cert_buf,
@@ -52,7 +48,7 @@ pub fn generate(io: std.Io, validity_seconds: i64) Error!PairType {
     return pair;
 }
 
-pub fn load(resources: ResourcesType, files: AuthorityFilesType) Error!PairType {
+pub fn load(resources: Resources, files: AuthorityFiles) Error!Pair {
     const io = resources.io;
     const gpa = resources.allocator;
 
@@ -75,7 +71,7 @@ pub fn load(resources: ResourcesType, files: AuthorityFilesType) Error!PairType 
         parsed.key.ecdsa[0..Ecdsa.SecretKey.encoded_length].*,
     ) catch return error.ReadFailed;
     defer std.crypto.secureZero(u8, std.mem.asBytes(&secret));
-    var pair: PairType = .{
+    var pair: Pair = .{
         .key_pair = tlsz.x509.KeyPair.fromSecretKey(secret) catch return error.ReadFailed,
     };
     defer std.crypto.secureZero(u8, std.mem.asBytes(&pair));
@@ -87,7 +83,7 @@ pub fn load(resources: ResourcesType, files: AuthorityFilesType) Error!PairType 
     }).parse() catch return error.ReadFailed;
     parsed_cert.verify(parsed_cert, std.Io.Clock.real.now(io).toSeconds()) catch
         return error.ReadFailed;
-    const authority: AuthorityType = .{ .pair = pair };
+    const authority: Authority = .{ .pair = pair };
     var probe = authority.mint(io, "validation.telar.invalid") catch
         return error.ReadFailed;
     defer std.crypto.secureZero(u8, std.mem.asBytes(&probe));
@@ -100,7 +96,7 @@ pub fn load(resources: ResourcesType, files: AuthorityFilesType) Error!PairType 
     return pair;
 }
 
-pub fn persist(io: std.Io, pair: *const PairType, files: AuthorityFilesType) Error!void {
+pub fn persist(io: std.Io, pair: *const Pair, files: AuthorityFiles) Error!void {
     var buffer: [max_pem_len]u8 = undefined;
     defer std.crypto.secureZero(u8, &buffer);
     // Create both destinations with 0600 from their first inode. Exclusive
@@ -193,7 +189,7 @@ pub fn randomSerial(io: std.Io) u64 {
 
 test "minted leaves verify against the local authority" {
     const io = std.testing.io;
-    const authority: AuthorityType = .{ .pair = try generate(io, ca_seconds) };
+    const authority: Authority = .{ .pair = try generate(io, ca_seconds) };
     const leaf = try authority.mint(io, "api.anthropic.com");
     const parsed_leaf = try (std.crypto.Certificate{ .buffer = leaf.certDer(), .index = 0 }).parse();
     const parsed_ca = try (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse();
@@ -216,11 +212,11 @@ test "authority files and derived bundle are owner-only" {
     const cert_path = try std.fmt.bufPrint(&cert_buffer, "{s}/ca-cert.pem", .{directory});
     const bundle_path = try std.fmt.bufPrint(&bundle_buffer, "{s}/ca-bundle.pem", .{directory});
 
-    const resources: ResourcesType = .{ .io = io, .allocator = gpa };
-    const files: AuthorityFilesType = .{ .key = key_path, .certificate = cert_path };
-    var authority = try AuthorityType.loadOrCreate(resources, files);
+    const resources: Resources = .{ .io = io, .allocator = gpa };
+    const files: AuthorityFiles = .{ .key = key_path, .certificate = cert_path };
+    var authority = try Authority.loadOrCreate(resources, files);
     try authority.writeBundle(resources, bundle_path);
-    _ = try AuthorityType.loadOrCreate(resources, files);
+    _ = try Authority.loadOrCreate(resources, files);
     for ([_][]const u8{ key_path, cert_path, bundle_path }) |path| {
         const stat = try std.Io.Dir.cwd().statFile(io, path, .{ .follow_symlinks = false });
         try std.testing.expectEqual(std.Io.File.Kind.file, stat.kind);
@@ -230,8 +226,8 @@ test "authority files and derived bundle are owner-only" {
 
 test "system authorities have a bounded 30-day lifetime" {
     const io = std.testing.io;
-    const authority: AuthorityType = .{ .pair = try generate(io, system_ca_seconds) };
+    const authority: Authority = .{ .pair = try generate(io, system_ca_seconds) };
     try std.testing.expect(try authority.hasSystemLifetime());
-    try std.testing.expect(!(try (AuthorityType{ .pair = try generate(io, ca_seconds) }).hasSystemLifetime()));
+    try std.testing.expect(!(try (Authority{ .pair = try generate(io, ca_seconds) }).hasSystemLifetime()));
     try std.testing.expectEqual(@as(usize, 40), authority.fingerprint().len);
 }

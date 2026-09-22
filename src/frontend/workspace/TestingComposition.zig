@@ -1,16 +1,13 @@
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
+const client = @import("telar-client");
+const core = @import("telar-core");
+const data = @import("model");
 const ScreenType = @import("../presentation/Screen.zig");
-const RectType = @import("telar-core").Rect;
-const PaletteType = @import("telar-client").Palette;
-const theme = @import("telar-client").theme_support;
-const CopyProjection = @import("telar-client").CopyProjection;
-const PaneBottomReservationType = @import("telar-client").PaneBottomReservation;
 const TestingComposition = @This();
 
-model: *MultiplexerModel,
+model: *client.MultiplexerModel,
 screen: *ScreenType,
-area: RectType,
-palette: *const PaletteType = &theme.default_theme.palette,
-copy: ?CopyProjection = null,
-bottom_reservation: ?PaneBottomReservationType = null,
+area: core.Rect,
+palette: *const client.Palette = &client.theme_support.default_theme.palette,
+copy: ?client.CopyProjection = null,
+bottom_reservation: ?data.PaneBottomReservation = null,
 force: bool = false,

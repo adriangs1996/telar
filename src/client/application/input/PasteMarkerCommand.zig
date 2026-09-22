@@ -1,6 +1,6 @@
-const types = @import("../../model/types.zig");
+const model_data = @import("model");
 const pane_input = @import("pane_input.zig");
 const PasteMarkerCommand = @This();
 
-target: types.PaneInputTarget,
+target: model_data.PaneInputTarget,
 marker: pane_input.PasteMarker,

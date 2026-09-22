@@ -1,31 +1,28 @@
-const DefinitionType = @import("Definition.zig");
+const core = @import("telar-core");
 const model = @import("model.zig");
-const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
-const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
-const AgentTitleStateType = @import("telar-core").AgentTitleState;
 const std = @import("std");
 const SessionTitle = @This();
 
 pub const Definition = @import("Definition.zig");
 
 id: model.SessionId,
-title: [max_agent_session_title_bytes_module]u8 = undefined,
+title: [core.max_agent_session_title_bytes]u8 = undefined,
 title_len: u8 = 0,
-source: AgentTitleSourceType,
-state: AgentTitleStateType,
+source: core.AgentTitleSource,
+state: core.AgentTitleState,
 
 /// Validates and owns the fixed-size representation persisted by history.
 ///
 /// ```zig
 /// const title = try SessionTitle.init(.{ .id = id, .title = "Fix tests", .source = .generated, .state = .ready });
 /// ```
-pub fn init(definition: DefinitionType) !SessionTitle {
+pub fn init(definition: Definition) !SessionTitle {
     const id = definition.id;
     const title_value = definition.title;
     const source = definition.source;
     const state = definition.state;
 
-    if (title_value.len > max_agent_session_title_bytes_module) {
+    if (title_value.len > core.max_agent_session_title_bytes) {
         return error.AgentTitleTooLong;
     }
     if (!std.unicode.utf8ValidateSlice(title_value)) {

@@ -17,17 +17,17 @@ Ctrl+V
   |
 InputHandler.key
   |
-key_routing.apply -> key_routing.apply
+AttachedClient.routeKeyInput -> AttachedClient.routeCurrentKey
   |
-pane_inputs.send -> client outbox
+AttachedClient.sendPaneInput -> client outbox
   |
-clipboard_images.start
+AttachedClient.startClipboardCapture
   |
 ClientModel.beginClipboardCapture { id, target }
   |
 ClientEvent.clipboard_image media worker
   |
-clipboard_images.complete
+AttachedClient.completeClipboardCapture
   |
 finish exact id -> validate returned target -> validate current target
   |
@@ -35,7 +35,7 @@ attachments.Store.adopt -> Store.ingressVersion
   |
 optional pane resize
   |
-clipboard_images.complete
+AttachedClient.completeClipboardCapture
   |
 quiet result or bounded failure notification
   |
@@ -43,9 +43,9 @@ presentation_lifecycle.observe -> Presenter -> paced cell and media passes
 ```
 
 `InputHandler.key` delegates the semantic key without recognizing `Ctrl+V`.
-`key_routing.apply` completes its pane effect before it asks for a preview, and
-the adapter maps those effects to `pane_inputs.send` followed by
-`clipboard_images.start`. The runtime drains the outbox to the PTY
+`AttachedClient.routeKeyInput` completes its pane effect before it asks for a preview, and
+the adapter maps those effects to `AttachedClient.sendPaneInput` followed by
+`AttachedClient.startClipboardCapture`. The runtime drains the outbox to the PTY
 independently. A missing target, unsupported platform, busy worker or
 scheduling failure can drop the preview, but none can retract or delay an
 already accepted pane input transaction. See [Key routing](key-routing.md).
@@ -82,7 +82,7 @@ cursor position. An atomic placeholder costs one deletion key; a Pi path costs
 one per grapheme, and the cursor must share a row with the path's end or
 start. The whole sequence is bounded by `attachments.max_removal_keys`, which
 the pane-input boundary can encode as one transaction.
-`pane_inputs.sendKeys` encodes the sequence against the pane's current
+`AttachedClient.sendPaneKeys` encodes the sequence against the pane's current
 keyboard modes and enqueues it as one input transaction. Telar retires the
 local image only after that transaction is accepted.
 
@@ -111,7 +111,7 @@ increasing identity and the exact pane generation selected at start. This is
 lifecycle state, not render state, so reserving or finishing it does not
 advance `ClientModel.Version`.
 
-`clipboard_images.start` queries the capture service for platform support,
+`AttachedClient.startClipboardCapture` queries the capture service for platform support,
 resolves the focused target, commits the model reservation and schedules the
 media worker in the same function. It returns `unsupported`, `no_target`,
 `busy` or the started reservation directly. A
@@ -128,7 +128,7 @@ Its only borrowed client memory is the heap-stable orphan result slot.
 ## Completion policy
 
 `ClientEvent.clipboard_image` carries the capture identity even when clipboard
-access failed. `clipboard_images.complete` first finishes only that exact
+access failed. `AttachedClient.completeClipboardCapture` first finishes only that exact
 identity. An unrelated completion cannot clear newer work.
 
 A successful worker result must repeat the same identity and target. The model
@@ -142,7 +142,7 @@ and reports whether the shelf changed pane geometry. The operation resolves
 the active tab and calls `AttachedClient.resizeAttachedPanes` to offer new pane
 sizes to the runtime only for that layout transition. The same operation then handles the classified outcome.
 
-`clipboard_images.complete` keeps applied, stale, ignored and
+`AttachedClient.completeClipboardCapture` keeps applied, stale, ignored and
 clipboard-empty results quiet. It maps oversized, worker and adoption failures
 to bounded notifications published by that operation. An adoption
 failure consumes the capture and frees its buffer. A resize delivery failure
@@ -189,7 +189,7 @@ event does not wipe megabytes synchronously.
   bounds, retained-byte limits, target scoping, marker planning across a
   wrapped placeholder, backslash continuation, the bounded deletion watch and
   ingress revision.
-- `src/client/attachments/path_marker.zig` proves Pi path parsing across
+- `src/model/attachments/path_marker.zig` proves Pi path parsing across
   forced wraps, extent limits, screen-order collection and cursor resolution.
 - `src/frontend/client/tests/` proves pane delivery without a target,
   successful resource observation, stale target cleanup, quiet clipboard-empty

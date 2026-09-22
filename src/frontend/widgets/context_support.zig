@@ -1,34 +1,27 @@
 //! Frame-scoped widget dependencies and semantic UI actions.
 
-const PaneIdType = @import("telar-core").PaneId;
-const TabIdType = @import("telar-core").TabId;
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
-const AgentKeyType = @import("telar-client").AgentKey;
-const IdType = @import("telar-client").Id;
-const AttachmentsTypesId = @import("telar-client").AttachmentId;
+const core = @import("telar-core");
+const data = @import("model");
+const client = @import("telar-client");
 const GenericHits = @import("../ui/GenericHits.zig").Type;
-const BufferType = @import("telar-core").Buffer;
 const std = @import("std");
 const PlanType = @import("../ui/Plan.zig");
 const Context = @import("Context.zig");
-const theme = @import("telar-client").theme_support;
-const StyleType = @import("telar-core").Style;
-const IconType = @import("telar-client").Icon;
 
 pub const Action = union(enum) {
     toggle_sidebar,
     resize_sidebar,
-    focus_pane: PaneIdType,
-    select_tab: TabIdType,
+    focus_pane: core.PaneId,
+    select_tab: core.TabId,
     active_workspace,
-    select_workspace: WorkspaceIdType,
+    select_workspace: core.WorkspaceId,
     toggle_workspace_list,
-    sidebar_focus_agent: AgentKeyType,
+    sidebar_focus_agent: data.AgentKey,
     sidebar_scroll_to: u16,
-    notification_activate: IdType,
-    notification_dismiss: IdType,
-    attachment_open: AttachmentsTypesId,
-    attachment_dismiss: AttachmentsTypesId,
+    notification_activate: data.NotificationId,
+    notification_dismiss: data.NotificationId,
+    attachment_open: data.AttachmentId,
+    attachment_dismiss: data.AttachmentId,
     attachment_shelf_hold,
     attachment_modal_close,
     attachment_modal_hold,
@@ -41,19 +34,19 @@ pub const Action = union(enum) {
 pub const Hits = GenericHits(Action, 704);
 
 test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
-    var buffer = try BufferType.init(std.testing.allocator, 4, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
     var plan: PlanType = .{};
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .nerd_font,
         .icon_plan = &plan,
     };
-    const style: StyleType = .{
+    const style: core.Style = .{
         .fg = .{ .rgb = .{ 1, 2, 3 } },
         .bg = .{ .rgb = .{ 4, 5, 6 } },
     };
@@ -65,18 +58,18 @@ test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
     }));
     try std.testing.expectEqualStrings("C", buffer.at(1, 0).?.text());
     try std.testing.expectEqual(@as(u8, 1), plan.len);
-    try std.testing.expectEqual(IconType.cpu, plan.slice()[0].icon);
+    try std.testing.expectEqual(client.Icon.cpu, plan.slice()[0].icon);
 }
 
 test "the telar mark stays graphical over a host-provided background" {
-    var buffer = try BufferType.init(std.testing.allocator, 4, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
     var plan: PlanType = .{};
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .nerd_font,
         .icon_plan = &plan,
@@ -88,42 +81,42 @@ test "the telar mark stays graphical over a host-provided background" {
 }
 
 test "the telar mark publishes a graphical mark under the Unicode theme too" {
-    var buffer = try BufferType.init(std.testing.allocator, 4, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
     var plan: PlanType = .{};
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .unicode,
         .icon_plan = &plan,
     };
-    const style: StyleType = .{
-        .fg = theme.default_theme.palette.accent,
-        .bg = theme.default_theme.palette.panel_bg,
+    const style: core.Style = .{
+        .fg = client.theme_support.default_theme.palette.accent,
+        .bg = client.theme_support.default_theme.palette.panel_bg,
     };
 
     _ = context.drawIcon(.{ .area = buffer.area(), .point = .{ .x = 1, .y = 0 }, .icon = .telar_mark, .style = style });
     try std.testing.expectEqual(@as(u8, 1), plan.len);
-    try std.testing.expectEqual(IconType.telar_mark, plan.slice()[0].icon);
+    try std.testing.expectEqual(client.Icon.telar_mark, plan.slice()[0].icon);
     try std.testing.expectEqualStrings(" ", buffer.at(1, 0).?.text());
 
     _ = context.drawIcon(.{ .area = buffer.area(), .point = .{ .x = 2, .y = 0 }, .icon = .cpu, .style = style });
     try std.testing.expectEqual(@as(u8, 1), plan.len);
-    try std.testing.expectEqualStrings(IconType.cpu.unicodeGlyph(), buffer.at(2, 0).?.text());
+    try std.testing.expectEqualStrings(client.Icon.cpu.unicodeGlyph(), buffer.at(2, 0).?.text());
 }
 
 test "Nerd Font theme keeps Unicode when terminal colors cannot be reproduced" {
-    var buffer = try BufferType.init(std.testing.allocator, 4, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
     var plan: PlanType = .{};
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
         .icon_theme = .nerd_font,
         .icon_plan = &plan,

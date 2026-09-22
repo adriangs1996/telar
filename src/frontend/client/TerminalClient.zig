@@ -2,16 +2,11 @@
 //! that only make sense while somebody is looking. `init` builds the shared
 //! state in place, then binds every host port to this heap-stable value.
 
+const client_module = @import("telar-client");
+const data = @import("model");
 const std = @import("std");
-const AttachedClient = @import("telar-client").AttachedClient;
-const OptionsType = @import("telar-client").Options;
 const Params = @import("Params.zig");
 const CompressionType = @import("../graphics/Compression.zig");
-const BarUpdatesCompletion = @import("telar-client").BarUpdatesCompletion;
-const PathCompletionCompletion = @import("telar-client").PathCompletionCompletion;
-const PluginActionsCompletion = @import("telar-client").PluginActionsCompletion;
-const ConfigReloadType = @import("telar-client").ConfigReload;
-const CompletionType = @import("telar-client").operations.ClipboardImageCompletion;
 const OutputType = @import("resources/Output.zig");
 const HostNegotiationState = @import("resources/HostNegotiationState.zig");
 const Presenter = @import("presentation/Presenter.zig");
@@ -20,14 +15,12 @@ const ScreenType = @import("../presentation/Screen.zig");
 const kitty_delivery = @import("../graphics/kitty_delivery.zig");
 const InputState = @import("controllers/input/State.zig");
 const host_inputs = @import("controllers/input/host_inputs.zig");
-const SidebarRenderingType = @import("telar-client").SidebarRendering;
-const default_width = @import("telar-client").default_width;
 const host_ports = @import("resources/host_ports.zig");
 const presentation_lifecycle = @import("presentation/presentation_lifecycle.zig");
 
 pub const InputRouter = host_inputs.Router;
-pub const Options = OptionsType;
-pub const AppearanceThemes = @import("telar-client").AppearanceThemes;
+pub const Options = client_module.Options;
+pub const AppearanceThemes = client_module.AppearanceThemes;
 
 pub const ClientEvent = union(enum) {
     /// Bytes read into `host_input.chunk`; zero is EOF.
@@ -36,7 +29,7 @@ pub const ClientEvent = union(enum) {
     binding_timeout: anyerror!void,
     capability_timeout: anyerror!void,
     resized: anyerror!void,
-    server: anyerror!*const @import("telar-client").RuntimeMessage,
+    server: anyerror!*const data.RuntimeMessage,
     sent: anyerror!void,
     draw: anyerror!void,
     media_tick: anyerror!void,
@@ -45,32 +38,30 @@ pub const ClientEvent = union(enum) {
     sidebar_animation_tick: anyerror!void,
     notification_tick: anyerror!void,
     bar_tick: anyerror!void,
-    bar_command: BarUpdatesCompletion,
+    bar_command: client_module.BarUpdatesCompletion,
     sound_played: anyerror!void,
     notified: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
-    config_reload: anyerror!ConfigReloadType,
-    plugin_result: PluginActionsCompletion,
-    path_completion: PathCompletionCompletion,
-    clipboard_image: CompletionType,
+    config_reload: anyerror!client_module.ConfigReload,
+    plugin_result: client_module.PluginActionsCompletion,
+    path_completion: data.PathCompletionCompletion,
+    clipboard_image: client_module.operations.ClipboardImageCompletion,
     link_opened: anyerror!void,
 };
 
-const GenericInbox = @import("telar-client").GenericInbox;
-
 const TerminalClient = @This();
 
-app: AttachedClient,
+app: client_module.AttachedClient,
 writer: *std.Io.Writer,
 output: ?OutputType = null,
-inbox: GenericInbox(ClientEvent),
+inbox: client_module.GenericInbox(ClientEvent),
 host_negotiation: HostNegotiationState = .{},
 presenter: Presenter,
 view: PresentationState,
 graphics_store: kitty_delivery.Store,
 host_input: InputState,
-sidebar_rendering: SidebarRenderingType,
+sidebar_rendering: client_module.SidebarRendering,
 
 /// Recovers the terminal client that embeds one shared client. Every host
 /// port and every terminal-side handler receives the shared client and
@@ -79,12 +70,12 @@ sidebar_rendering: SidebarRenderingType,
 /// ```zig
 /// const terminal = TerminalClient.of(client);
 /// ```
-pub fn of(client: *AttachedClient) *TerminalClient {
+pub fn of(client: *client_module.AttachedClient) *TerminalClient {
     return @fieldParentPtr("app", client);
 }
 
 /// Read-only variant of `of`. Example: `const terminal = TerminalClient.ofConst(client);`.
-pub fn ofConst(client: *const AttachedClient) *const TerminalClient {
+pub fn ofConst(client: *const client_module.AttachedClient) *const TerminalClient {
     return @fieldParentPtr("app", client);
 }
 
@@ -95,7 +86,7 @@ pub fn init(params: Params) !*TerminalClient {
     const gpa = params.gpa;
     const terminal = try gpa.create(TerminalClient);
     errdefer gpa.destroy(terminal);
-    try AttachedClient.init(&terminal.app, .{
+    try client_module.AttachedClient.init(&terminal.app, .{
         .gpa = gpa,
         .io = params.io,
         .connection = params.connection,
@@ -116,7 +107,7 @@ pub fn init(params: Params) !*TerminalClient {
         .{ .theme = params.options.theme, .icons = params.options.icon_theme },
     );
     errdefer view.deinit();
-    view.setSidebarLayout(params.options.sidebar_visible, default_width);
+    view.setSidebarLayout(params.options.sidebar_visible, data.sidebar.default_width);
     try view.configureSidebar(
         params.options.sidebar_rendering,
         .{

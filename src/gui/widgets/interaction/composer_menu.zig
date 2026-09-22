@@ -1,9 +1,9 @@
+const event_module = @import("../../input/event.zig");
 const std = @import("std");
 const client = @import("telar-client");
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
 const Selector = @import("ComposerSelector.zig");
-const Event = @import("../../input/event.zig").Event;
 
 /// Revalidates the exact pane, catalog and draft settings represented on screen.
 /// Example: `if (!composer_menu.eligible(gui, target)) return;`
@@ -81,7 +81,7 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
 
 /// Consumes menu input after the dispatcher establishes physical-key ownership.
 /// Example: `if (try composer_menu.route(gui, event, route)) return true;`
-pub fn route(gui: *GuiClient, event: Event, decision: @import("Route.zig")) !bool {
+pub fn route(gui: *GuiClient, event: event_module.Event, decision: @import("Route.zig")) !bool {
     const state = &gui.widgets.composer_menu;
     const selector = state.selector orelse return false;
     const fallback_lease = switch (event) {

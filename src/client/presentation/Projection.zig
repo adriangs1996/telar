@@ -1,41 +1,35 @@
+const data = @import("model");
+const core = @import("telar-core");
 const VersionType = @import("../model/Version.zig");
-const RegionType = @import("../workspace/Region.zig");
 const PresentationIngress = @import("PresentationIngress.zig");
 const MultiplexerModel = @import("../workspace/MultiplexerModel.zig");
 const TabsModel = @import("../workspace/TabsModel.zig");
 const SnapshotType = @import("../agents/AgentSnapshot.zig");
-const CenterType = @import("../notifications/Center.zig");
 const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
-const PromptType = @import("../model/Prompt.zig");
 const HistoryPaletteState = @import("../model/HistoryPaletteState.zig");
 const SuggestionState = @import("../model/SuggestionState.zig");
-const PathCompletionState = @import("../model/PathCompletionState.zig");
-const ProxyScopeType = @import("telar-core").ProxyScope;
 const SystemMetricsType = @import("../model/SystemMetrics.zig");
 const StateType = @import("../bars/State.zig");
 const hints_support = @import("../input/hints_support.zig");
 const CopyProjectionType = @import("../workspace/CopyProjection.zig");
-const HostCapabilitiesType = @import("../model/HostCapabilities.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
 const ThreadViewType = @import("ThreadView.zig");
-const PaneIdType = @import("telar-core").PaneId;
 const Projection = @This();
 
 version: VersionType,
-geometry: RegionType,
+geometry: data.Region,
 presentation_ingress: PresentationIngress = .{},
 model: ?*const MultiplexerModel,
 tabs: *const TabsModel,
 agents: *const SnapshotType,
 sidebar_animation_frame: u8,
-notifications: *const CenterType,
+notifications: *const data.Center,
 workspaces: *const WorkspaceListSnapshot,
-prompt: ?PromptType,
+prompt: ?data.Prompt,
 history: *const HistoryPaletteState,
 suggestion: *const SuggestionState,
-path_completion: *const PathCompletionState,
+path_completion: *const data.PathCompletionState,
 proxy_tls_active: bool,
-proxy_tls_scope: ProxyScopeType,
+proxy_tls_scope: core.ProxyScope,
 proxy_system_trusted: bool,
 system_metrics: ?SystemMetricsType,
 bar_state: *const StateType,
@@ -45,8 +39,8 @@ copy: ?CopyProjectionType,
 sidebar_visible: bool,
 sidebar_width: u16,
 workspace_list_collapsed: bool,
-host_capabilities: HostCapabilitiesType,
-host_size: TerminalSizeType,
+host_capabilities: data.HostCapabilities,
+host_size: core.TerminalSize,
 /// Configured host window title template; empty leaves the host alone.
 window_title_template: []const u8 = "",
 
@@ -55,7 +49,7 @@ window_title_template: []const u8 = "",
 /// ```zig
 /// const thread = projection.threadView(pane_id) orelse return;
 /// ```
-pub fn threadView(projection: *const Projection, pane_id: PaneIdType) ?ThreadViewType {
+pub fn threadView(projection: *const Projection, pane_id: core.PaneId) ?ThreadViewType {
     const model = projection.model orelse return null;
 
     var thread = ThreadViewType.capture(model, projection.agents, pane_id) orelse return null;

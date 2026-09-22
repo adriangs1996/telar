@@ -1,8 +1,8 @@
-const types = @import("types.zig");
+const data = @import("model");
 const PlanItem = @import("PlanItem.zig");
 const Plan = @This();
 
-thumbnails: [types.max_items]PlanItem = undefined,
+thumbnails: [data.attachment_types.max_items]PlanItem = undefined,
 thumbnail_count: u8 = 0,
 modal: ?PlanItem = null,
 

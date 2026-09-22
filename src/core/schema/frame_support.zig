@@ -1,5 +1,6 @@
 //! Pane screen snapshots and patches for Telar's current protocol.
 
+const Cursor = @import("Cursor.zig");
 const CellType = @import("../ui/Cell.zig");
 const transport = @import("../transport/transport.zig");
 const EncoderType = @import("Encoder.zig");
@@ -182,7 +183,7 @@ pub fn decodeBody(decoder: *DecoderType) !FrameView {
     };
     const span_count = try decoder.readInt(u16);
     const shape_byte = std.math.cast(u3, try decoder.readByte()) orelse return error.InvalidCursorShape;
-    const cursor_shape = std.enums.fromInt(@import("Cursor.zig").Shape, shape_byte) orelse return error.InvalidCursorShape;
+    const cursor_shape = std.enums.fromInt(Cursor.Shape, shape_byte) orelse return error.InvalidCursorShape;
     const cursor_blink = try decoder.readBool();
 
     const metadata_length = try decoder.readInt(u32);

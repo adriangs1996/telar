@@ -1,7 +1,7 @@
+const core = @import("telar-core");
 const Identity = @import("Identity.zig");
 const types = @import("types.zig");
 const ProxyExchange = @import("ProxyExchange.zig");
-const AgentProviderType = @import("telar-core").AgentProvider;
 /// Owned proxy evidence enriched by the runtime with the exact agent identity
 /// that was active when the observation arrived.
 ///
@@ -25,7 +25,7 @@ observed_at_ms: i64,
 ///     refreshActivity();
 /// }
 /// ```
-pub fn impliedProvider(observation: *const ProxyObservation) AgentProviderType {
+pub fn impliedProvider(observation: *const ProxyObservation) core.AgentProvider {
     return switch (observation.dialect) {
         .unknown => .unknown,
         .anthropic_messages => .claude,

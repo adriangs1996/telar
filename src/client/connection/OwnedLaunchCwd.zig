@@ -1,8 +1,8 @@
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const core = @import("telar-core");
 const std = @import("std");
 const OwnedLaunchCwd = @This();
 
-bytes: [max_cwd_bytes_module]u8 = undefined,
+bytes: [core.max_cwd_bytes]u8 = undefined,
 len: u16 = 0,
 used: bool = false,
 

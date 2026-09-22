@@ -1,26 +1,20 @@
-const PageResultType = @import("PageResult.zig");
-const max_history_results = @import("telar-core").max_history_results;
+const core = @import("telar-core");
 const Entry = @import("Entry.zig");
-const HistoryScopeType = @import("telar-core").HistoryScope;
 const Storage = @import("Storage.zig");
 const std = @import("std");
-const HistoryEntryType = @import("telar-core").HistoryEntry;
 const history_palette = @import("history_palette.zig");
-const HistoryOutputType = @import("telar-core").HistoryOutput;
-const raw_module = @import("telar-core").raw;
-const RequestFailedType = @import("telar-core").RequestFailed;
 const State = @This();
 
 revision: u64 = 0,
 pending_request: u64 = 0,
-entries: [max_history_results]Entry = undefined,
+entries: [core.max_history_results]Entry = undefined,
 len: u8 = 0,
 phase: enum { idle, loading, ready, failed } = .idle,
 has_page: bool = false,
 now_ms: i64 = 0,
 enter_runs: bool = false,
 match_fuzzy: bool = true,
-effective_scope: HistoryScopeType = .global,
+effective_scope: core.HistoryScope = .global,
 storage: ?*Storage = null,
 allocator: ?std.mem.Allocator = null,
 commands_len: u32 = 0,
@@ -100,7 +94,7 @@ pub const PageResult = @import("PageResult.zig");
 
 /// Reserves correlation and replaces actionable rows in one transition.
 /// Example: `if (!state.beginPageRequest(id, .global)) return;`.
-pub fn beginPageRequest(state: *State, id: u64, scope: HistoryScopeType) bool {
+pub fn beginPageRequest(state: *State, id: u64, scope: core.HistoryScope) bool {
     if (id == 0 or !state.track(id)) {
         state.rejectQuery();
         return false;
@@ -113,7 +107,7 @@ pub fn beginPageRequest(state: *State, id: u64, scope: HistoryScopeType) bool {
 
 /// Commits entries, pagination and display time under a single revision.
 /// Example: `_ = state.acceptPageResult(page);`.
-pub fn acceptPageResult(state: *State, result: PageResultType) bool {
+pub fn acceptPageResult(state: *State, result: PageResult) bool {
     if (!state.applyEntries(result.request_id, result.entries)) {
         return false;
     }
@@ -153,7 +147,7 @@ pub fn page(state: *State, direction: enum { older, newer }) bool {
                 return false;
             }
 
-            state.pending_offset = state.page_offset -| max_history_results;
+            state.pending_offset = state.page_offset -| core.max_history_results;
         },
     }
 
@@ -212,7 +206,7 @@ fn expect(state: *State, request_id: u64) void {
 /// ```zig
 /// Internal half of acceptPageResult; metadata commits before publication.
 /// ```
-fn applyEntries(state: *State, request_id: u64, entries: []const HistoryEntryType) bool {
+fn applyEntries(state: *State, request_id: u64, entries: []const core.HistoryEntry) bool {
     _ = state.retire(request_id);
     if (request_id == 0 or request_id != state.pending_request or state.phase != .loading) {
         return false;
@@ -221,7 +215,7 @@ fn applyEntries(state: *State, request_id: u64, entries: []const HistoryEntryTyp
     state.len = 0;
     state.commands_len = 0;
     for (entries) |*entry| {
-        if (state.len == max_history_results) {
+        if (state.len == core.max_history_results) {
             break;
         }
 
@@ -307,9 +301,9 @@ pub fn expectOutput(state: *State, request: struct { request_id: u64, id: u64 })
 
 /// Owns output before the receive buffer is reused; stale selections are ignored.
 /// Example: `_ = state.applyOutput(reply);`.
-pub fn applyOutput(state: *State, reply: HistoryOutputType) bool {
-    _ = state.retire(raw_module(reply.request_id));
-    if (state.output_request == 0 or raw_module(reply.request_id) != state.output_request or reply.id != state.output_id) {
+pub fn applyOutput(state: *State, reply: core.HistoryOutput) bool {
+    _ = state.retire(core.raw(reply.request_id));
+    if (state.output_request == 0 or core.raw(reply.request_id) != state.output_request or reply.id != state.output_id) {
         return false;
     }
 
@@ -325,8 +319,8 @@ pub fn applyOutput(state: *State, reply: HistoryOutputType) bool {
 
 /// Keeps observation failures local to their query or inspector.
 /// Example: `_ = state.fail(reply);`.
-pub fn fail(state: *State, failure: RequestFailedType) bool {
-    const request = raw_module(failure.request_id);
+pub fn fail(state: *State, failure: core.RequestFailed) bool {
+    const request = core.raw(failure.request_id);
     const owned = state.retire(request);
     if (request == state.pending_request and request != 0) {
         state.phase = .failed;
@@ -371,7 +365,7 @@ pub fn outputHint(state: *const State) []const u8 {
 
 /// Loads one complete command when the page's shared storage quota was exhausted.
 /// Example: `_ = state.applyFull(reply_id, entries);`.
-pub fn applyFull(state: *State, request_id: u64, entries: []const HistoryEntryType) bool {
+pub fn applyFull(state: *State, request_id: u64, entries: []const core.HistoryEntry) bool {
     if (request_id == 0 or request_id != state.full_request) {
         return false;
     }

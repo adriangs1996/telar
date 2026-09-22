@@ -1,8 +1,9 @@
+const agent_threads = @import("../application/agent_threads.zig");
+const SessionTitle = @import("../../agent/SessionTitle.zig");
+const core_module = @import("telar-core");
 const std = @import("std");
 const Runtime = @import("../Runtime.zig");
 const Initialization = @import("../Initialization.zig");
-const Encoder = @import("telar-core").Encoder;
-const LaunchView = @import("telar-core").LaunchView;
 const commands = @import("../../workspace/commands.zig");
 const PersistenceEncoder = @import("../../persistence/Encoder.zig");
 
@@ -74,8 +75,8 @@ test "shutdown replaces a pending checkpoint with the latest session and release
     try std.testing.expectEqualStrings("late tab", reader.tabLabel(.{ .workspace = workspace.location.workspace, .tab_id = tab_id }).?);
 }
 
-fn sleepLaunch(buffer: []u8) !LaunchView {
-    var encoder = Encoder.init(buffer);
+fn sleepLaunch(buffer: []u8) !core_module.LaunchView {
+    var encoder = core_module.Encoder.init(buffer);
     try encoder.writeSized16("/bin/sleep");
     try encoder.writeSized16("600");
 
@@ -151,7 +152,7 @@ fn awaitManagedPane(runtime: *Runtime, pane: *@import("../../pane/Pane.zig")) !v
     while (true) {
         switch (try runtime.loop.next()) {
             .agent_thread_changed => |changed| {
-                if (try @import("../application/agent_threads.zig").handle(&runtime.application, changed)) {
+                if (try agent_threads.handle(&runtime.application, changed)) {
                     return error.ProviderStopped;
                 }
 
@@ -236,7 +237,7 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
         try std.testing.expect(first.application.session.dirty);
     }
 
-    first.application.restoreAgentTitle(pane, try @import("../../agent/SessionTitle.zig").init("Keep this title", .manual));
+    first.application.restoreAgentTitle(pane, try SessionTitle.init("Keep this title", .manual));
     first.deinit();
 
     // A second shutdown before processing provider events must preserve the intention.

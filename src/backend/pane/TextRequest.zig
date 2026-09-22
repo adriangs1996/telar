@@ -1,5 +1,5 @@
-const PaneTextSourceType = @import("telar-core").PaneTextSource;
+const core = @import("telar-core");
 const TextRequest = @This();
 
 rows: u16,
-source: PaneTextSourceType,
+source: core.PaneTextSource,

@@ -1,12 +1,10 @@
 //! Shared control-client helpers for CLI commands that address panes and
 //! agents through the local runtime.
 
+const core = @import("telar-core");
 const std = @import("std");
-const RequestFailedType = @import("telar-core").RequestFailed;
-const AgentStatusType = @import("telar-core").AgentStatus;
 const ControlAgent = @import("ControlAgent.zig");
 const Snapshot = @import("Snapshot.zig");
-const pane_module = @import("telar-core").pane;
 
 /// Reads the pane identity the runtime injected into this process.
 ///
@@ -40,7 +38,7 @@ pub const ControlError = error{
     RuntimeRefused,
 };
 
-pub fn failureError(failure: RequestFailedType) ControlError {
+pub fn failureError(failure: core.RequestFailed) ControlError {
     return switch (failure.code) {
         .pane_not_found => error.PaneNotFound,
         .pane_exited => error.PaneExited,
@@ -71,7 +69,7 @@ pub fn describe(err: anyerror) []const u8 {
     };
 }
 
-pub fn statusName(status: AgentStatusType) []const u8 {
+pub fn statusName(status: core.AgentStatus) []const u8 {
     return switch (status) {
         .unknown => "unknown",
         .working => "working",
@@ -167,7 +165,7 @@ test "json strings escape quotes, backslashes and control bytes" {
 test "snapshot resolution prefers exact pane ids and rejects ambiguous titles" {
     var snapshot: Snapshot = .{};
     snapshot.entries[0] = ControlAgent.fromEntry(.{
-        .pane_id = try pane_module(7),
+        .pane_id = try core.pane(7),
         .pane_generation = 2,
         .process_id = 1,
         .session_id = .{0} ** 16,

@@ -1,5 +1,5 @@
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const SetPaneViewport = @This();
 
-pane_id: PaneIdType,
+pane_id: core.PaneId,
 offset: u32,

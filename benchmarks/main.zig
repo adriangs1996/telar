@@ -1,38 +1,26 @@
 //! Reproducible benchmarks for telar's interactive path.
 
+const data = @import("model");
+const core = @import("telar-core");
+const backend = @import("telar-backend");
+const frontend = @import("telar-frontend");
+const client = @import("telar-client");
 const Case = @import("Case.zig");
-const default_width = @import("telar-client").default_width;
 const std = @import("std");
 const Measurement = @import("Measurement.zig");
-const SpanType = @import("telar-core").Span;
-const FrameType = @import("telar-core").Frame;
-const CellType = @import("telar-core").Cell;
 const DamageContext = @import("DamageContext.zig");
-const collectSpans_module = @import("telar-backend").collectSpans;
 const FrameContext = @import("FrameContext.zig");
 const HistoryInputContext = @import("HistoryInputContext.zig");
 const EncodeContext = @import("EncodeContext.zig");
-const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
 const DecodeContext = @import("DecodeContext.zig");
-const decodeServer_module = @import("telar-core").decodeServer;
 const PipelineContext = @import("PipelineContext.zig");
-const apply_module = @import("telar-frontend").apply;
 const OutboxContext = @import("OutboxContext.zig");
-const GenericBinding = @import("telar-client").GenericBinding;
-const GenericRouter = @import("telar-frontend").GenericRouter;
 const KeybindContext = @import("KeybindContext.zig");
 const LuaCallbackContext = @import("LuaCallbackContext.zig");
 const ClientUiContext = @import("ClientUiContext.zig");
 const CursorContext = @import("CursorContext.zig");
 const PacerContext = @import("PacerContext.zig");
 const LayoutContext = @import("LayoutContext.zig");
-const WorkspaceLayoutSupportDirection = @import("telar-client").WorkspaceLayoutSupportDirection;
-const raw_module = @import("telar-core").raw;
-const CompositorType = @import("telar-frontend").Compositor;
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
-const ScreenType = @import("telar-frontend").Screen;
-const CompositionResultType = @import("telar-frontend").CompositionResult;
-const default_theme_module = @import("telar-client").theme_support.default_theme;
 const MultiplexerContext = @import("MultiplexerContext.zig");
 const IncrementalComposeContext = @import("IncrementalComposeContext.zig");
 const GraphicsContext = @import("GraphicsContext.zig");
@@ -40,8 +28,6 @@ const TransmitContext = @import("TransmitContext.zig");
 const KgpIngestContext = @import("KgpIngestContext.zig");
 const SharedFrameContext = @import("SharedFrameContext.zig");
 const TextRasterContext = @import("TextRasterContext.zig");
-const SurfaceType = @import("telar-frontend").Surface;
-const ColorType = @import("telar-frontend").Color;
 const ResultWriter = @import("ResultWriter.zig");
 const ExecutionResources = @import("ExecutionResources.zig");
 const Fixture = @import("Fixture.zig");
@@ -100,9 +86,9 @@ const cases = [_]Case{
     .{ .name = "frontend.lua.callback", .work_per_op = 1, .work_unit = "callbacks" },
     .{ .name = "frontend.pacer.late_frame", .work_per_op = 1, .work_unit = "frames" },
     .{ .name = "frontend.flush.cursor_only", .work_per_op = 1, .work_unit = "frames" },
-    .{ .name = "frontend.client_ui.chrome.tabs_1", .work_per_op = 2 * cols + default_width * (rows - 2), .work_unit = "cells" },
-    .{ .name = "frontend.client_ui.chrome.tabs_8", .work_per_op = 2 * cols + default_width * (rows - 2), .work_unit = "cells" },
-    .{ .name = "frontend.client_ui.chrome.tabs_64", .work_per_op = 2 * cols + default_width * (rows - 2), .work_unit = "cells" },
+    .{ .name = "frontend.client_ui.chrome.tabs_1", .work_per_op = 2 * cols + data.sidebar.default_width * (rows - 2), .work_unit = "cells" },
+    .{ .name = "frontend.client_ui.chrome.tabs_8", .work_per_op = 2 * cols + data.sidebar.default_width * (rows - 2), .work_unit = "cells" },
+    .{ .name = "frontend.client_ui.chrome.tabs_64", .work_per_op = 2 * cols + data.sidebar.default_width * (rows - 2), .work_unit = "cells" },
     .{ .name = "frontend.layout.directional_focus", .work_per_op = 4, .work_unit = "panes" },
     .{ .name = "frontend.multiplexer.compose_four", .work_per_op = cell_count, .work_unit = "cells" },
     .{ .name = "frontend.multiplexer.patch_one_cell", .work_per_op = 1, .work_unit = "cells" },
@@ -198,7 +184,7 @@ fn measure(input: anytype, comptime run: fn (@TypeOf(input.context), usize) anye
     };
 }
 
-pub fn frame(frame_id: u64, spans: []const SpanType) FrameType {
+pub fn frame(frame_id: u64, spans: []const core.Span) core.Frame {
     return .{
         .pane_id = @enumFromInt(1),
         .frame_id = frame_id,
@@ -210,7 +196,7 @@ pub fn frame(frame_id: u64, spans: []const SpanType) FrameType {
     };
 }
 
-pub fn fillEditor(cells: []CellType, variant: u8) void {
+pub fn fillEditor(cells: []core.Cell, variant: u8) void {
     for (cells, 0..) |*cell, index| {
         const x = index % cols;
         const y = index / cols;
@@ -227,7 +213,7 @@ pub fn fillEditor(cells: []CellType, variant: u8) void {
     }
 }
 
-pub fn fillFragmentedSpans(spans: []SpanType, cells: []const CellType) void {
+pub fn fillFragmentedSpans(spans: []core.Span, cells: []const core.Cell) void {
     var span_index: usize = 0;
     for (0..fragmented_rows) |y| {
         for ([_]usize{ 12, 91 }) |cluster_start| {
@@ -248,7 +234,7 @@ fn runDamage(context: *DamageContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         context.current[context.changed_index].bytes[0] = if (iteration & 1 == 0) '0' else '1';
-        const diff = collectSpans_module(.{
+        const diff = backend.collectSpans(.{
             .current = context.current,
             .acknowledged = context.acknowledged,
             .cols = cols,
@@ -285,7 +271,7 @@ fn runEncode(context: *EncodeContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         const spans = context.fixture.spans(context.workload, iteration & 1);
-        const payload = try encodePaneFrame_module(context.fixture.encode_buffer, frame(2, spans));
+        const payload = try core.encodePaneFrame(context.fixture.encode_buffer, frame(2, spans));
         checksum +%= payload.len;
         checksum +%= payload[payload.len - 1];
     }
@@ -295,7 +281,7 @@ fn runEncode(context: *EncodeContext, iterations: usize) !u64 {
 fn runDecode(context: *DecodeContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
-        const message = try decodeServer_module(context.payloads[iteration & 1]);
+        const message = try core.decodeServer(context.payloads[iteration & 1]);
         const decoded = message.pane_frame;
         checksum +%= decoded.encoded_spans.len + decoded.span_count + decoded.frame_id;
     }
@@ -305,8 +291,8 @@ fn runDecode(context: *DecodeContext, iterations: usize) !u64 {
 fn runPipeline(context: *PipelineContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
-        const message = try decodeServer_module(context.payloads[iteration & 1]);
-        const applied = try apply_module(&context.screen, message.pane_frame);
+        const message = try core.decodeServer(context.payloads[iteration & 1]);
+        const applied = try frontend.apply(&context.screen, message.pane_frame);
         var writer = std.Io.Writer.fixed(context.output);
         const flushed = try context.screen.flush(&writer);
         checksum +%= applied.cells + flushed.cells + flushed.scanned + flushed.bytes;
@@ -326,8 +312,8 @@ fn runOutboxInput(context: *OutboxContext, iterations: usize) !u64 {
 }
 
 pub const KeybindAction = enum(u8) { detach, palette };
-pub const KeybindBinding = GenericBinding(KeybindAction, 4);
-pub const KeybindRouter = GenericRouter(KeybindAction, .{
+pub const KeybindBinding = client.GenericBinding(KeybindAction, 4);
+pub const KeybindRouter = frontend.GenericRouter(KeybindAction, .{
     .max_bindings = 16,
     .max_keys = 4,
     .input_capacity = 64,
@@ -337,7 +323,28 @@ pub const KeybindRouter = GenericRouter(KeybindAction, .{
 fn runKeybind(context: *KeybindContext, iterations: usize) !u64 {
     const input = "cargo test\x02d";
     for (0..iterations) |iteration| {
-        _ = try context.router.feed(.{ .bytes = input, .now_ns = iteration }, context);
+        var feed: KeybindRouter.Feed = .{ .bytes = input, .now_ns = iteration };
+        while (context.router.next(&feed)) |decoded| {
+            const key = switch (decoded.event) {
+                .key => |key| key,
+                else => return error.UnexpectedBenchmarkEvent,
+            };
+            const decision = context.router.routeEvent(.{ .key = key, .raw = decoded.raw, .now_ns = iteration }, .{});
+            switch (decision) {
+                .forward => |forward| {
+                    context.checksum +%= forward.raw.len;
+                    if (forward.raw.len != 0) {
+                        context.checksum +%= forward.raw[0];
+                    }
+                },
+                .action => |request| {
+                    context.checksum +%= @intFromEnum(request.value) + 1;
+                    context.router.actionCompleted(request, null);
+                },
+                .pending => {},
+                .replay, .discard => return error.UnexpectedBenchmarkDecision,
+            }
+        }
     }
     return context.checksum;
 }
@@ -400,11 +407,11 @@ fn runPacer(context: *PacerContext, iterations: usize) !u64 {
 }
 
 fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
-    const directions = [_]WorkspaceLayoutSupportDirection{ .right, .down, .left, .up };
+    const directions = [_]data.layout.Direction{ .right, .down, .left, .up };
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         if (context.layout.focusDirection(directions[iteration & 3], context.area)) |pane_id| {
-            checksum +%= raw_module(pane_id);
+            checksum +%= core.raw(pane_id);
         }
     }
     return checksum;
@@ -412,11 +419,11 @@ fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
 
 /// Composes one model over the whole host screen with the default palette,
 /// the way the presenter does for a client without chrome.
-pub fn composeFullScreen(compositor: *CompositorType, model: *const MultiplexerModel, screen: *ScreenType) !CompositionResultType {
+pub fn composeFullScreen(compositor: *frontend.Compositor, model: *const client.MultiplexerModel, screen: *frontend.Screen) !frontend.CompositionResult {
     return compositor.render(.{
         .model = model,
         .screen = screen,
-        .input = .{ .area = screen.back.area(), .palette = &default_theme_module.palette },
+        .input = .{ .area = screen.back.area(), .palette = &client.theme_support.default_theme.palette },
     });
 }
 
@@ -434,7 +441,7 @@ fn runIncrementalCompose(context: *IncrementalComposeContext, iterations: usize)
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         context.model.find(@enumFromInt(1)).?.applied_frame_id = 1;
-        const frame_view = (try decodeServer_module(
+        const frame_view = (try core.decodeServer(
             context.payloads[iteration & 1],
         )).pane_frame;
         _ = try context.model.applyFrame(frame_view);
@@ -519,12 +526,12 @@ fn runSharedFrameFreeze(context: *SharedFrameContext, iterations: usize) !u64 {
 }
 
 fn runTextRaster(context: *TextRasterContext, iterations: usize) !u64 {
-    const surface: SurfaceType = .{
+    const surface: frontend.Surface = .{
         .pixels = context.pixels,
         .width = TextRasterContext.width,
         .height = TextRasterContext.height,
     };
-    const color: ColorType = .{
+    const color: frontend.Color = .{
         .red = 220,
         .green = 230,
         .blue = 240,

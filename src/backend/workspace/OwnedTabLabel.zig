@@ -1,11 +1,11 @@
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const core = @import("telar-core");
 const OwnedTabLabel = @This();
 
-bytes: [max_tab_label_bytes_module]u8 = undefined,
+bytes: [core.max_tab_label_bytes]u8 = undefined,
 len: u8,
 
 pub fn init(label: []const u8) !OwnedTabLabel {
-    if (label.len > max_tab_label_bytes_module) {
+    if (label.len > core.max_tab_label_bytes) {
         return error.InvalidTabLabel;
     }
 

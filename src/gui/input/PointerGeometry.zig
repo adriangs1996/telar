@@ -1,3 +1,4 @@
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -9,7 +10,7 @@ size: core.TerminalSize = .{ .cols = 0, .rows = 0 },
 
 /// Padding lies outside the grid, never over its first cell. Existing drags
 /// clamp there so selection can finish beyond the window. Example: `geometry.resolve(event)`.
-pub fn resolve(geometry: Geometry, event: Event) ?client.Mouse {
+pub fn resolve(geometry: Geometry, event: Event) ?data.Mouse {
     if (event.kind == .leave) {
         return null;
     }

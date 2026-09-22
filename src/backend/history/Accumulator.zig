@@ -1,7 +1,7 @@
+const core = @import("telar-core");
 const std = @import("std");
 const EntryType = @import("Entry.zig");
 const model = @import("model.zig");
-const max_frame_size = @import("telar-core").max_frame_size;
 const QueryType = @import("Query.zig");
 const QueryResultType = @import("QueryResult.zig");
 const Accumulator = @This();
@@ -27,7 +27,7 @@ pub fn deinit(accumulator: *Accumulator) void {
 pub fn append(accumulator: *Accumulator, owned: EntryType) !bool {
     var entry = owned;
     const bytes = model.encoded_entry_overhead_bytes + entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
-    if (accumulator.entries.items.len == accumulator.limit or bytes > max_frame_size - accumulator.encoded_bytes) {
+    if (accumulator.entries.items.len == accumulator.limit or bytes > core.max_frame_size - accumulator.encoded_bytes) {
         entry.deinit(accumulator.gpa);
         accumulator.has_more = true;
         return false;

@@ -1,6 +1,6 @@
-const ImageType = @import("telar-core").Image;
+const core = @import("telar-core");
 const SharedTransmission = @This();
 
 external_id: u32,
-image: ImageType,
+image: core.Image,
 name: []const u8,

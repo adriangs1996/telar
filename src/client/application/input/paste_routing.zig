@@ -1,7 +1,6 @@
 //! Application policy for assigning each streamed paste phase to one owner.
 
 const PasteRoutingAuthority = @import("PasteRoutingAuthority.zig");
-const std = @import("std");
 
 pub const Command = union(enum) {
     start,

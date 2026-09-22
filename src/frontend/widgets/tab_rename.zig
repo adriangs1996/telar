@@ -1,18 +1,14 @@
 //! Inline tab-name editor occupying the bottom bar.
 
-const GenericField = @import("telar-client").GenericField;
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const data = @import("model");
+const core = @import("telar-core");
 const ContextType = @import("Context.zig");
 const TabRenameInput = @import("TabRenameInput.zig");
 const CursorType = @import("Cursor.zig");
-const measure_module = @import("telar-core").measure;
-const RectType = @import("telar-core").Rect;
-const WorkspaceFormType = @import("telar-client").WorkspaceForm;
-const StyleType = @import("telar-core").Style;
 const LabelInput = @import("InlineLabel.zig");
 const FieldInput = @import("InlineField.zig");
 
-pub const Field = GenericField(max_tab_label_bytes_module);
+pub const Field = data.GenericField(core.max_tab_label_bytes);
 pub const Kind = enum { rename_tab, create_workspace, rename_workspace, copy_search_forward, copy_search_backward };
 
 pub const create_hint = " create? ↵";
@@ -43,8 +39,8 @@ pub fn render(context: *ContextType, input: TabRenameInput) CursorType {
         .bg = context.palette.panel_bg,
         .flags = .{ .bold = true },
     } });
-    const field_x = area.x + measure_module(prefix);
-    const field_area: RectType = .{
+    const field_x = area.x + core.measure(prefix);
+    const field_area: core.Rect = .{
         .x = field_x,
         .y = area.y,
         .w = area.w -| (field_x - area.x),
@@ -65,15 +61,15 @@ pub fn render(context: *ContextType, input: TabRenameInput) CursorType {
 /// `new context: name  dir: directory  completions…` in one row; the
 /// completion names follow the directory field and the selected one is
 /// highlighted. A pending confirmation replaces the list.
-fn renderCreateForm(context: *ContextType, input: TabRenameInput, form: *const WorkspaceFormType) CursorType {
+fn renderCreateForm(context: *ContextType, input: TabRenameInput, form: *const data.WorkspaceForm) CursorType {
     const area = input.area;
     const prompt = input.prompt.?;
-    const label_style: StyleType = .{ .fg = context.palette.accent, .bg = context.palette.panel_bg, .flags = .{ .bold = true } };
+    const label_style: core.Style = .{ .fg = context.palette.accent, .bg = context.palette.panel_bg, .flags = .{ .bold = true } };
     var x = area.x;
     const end = area.x + area.w;
     x += writeLabel(context, .{ .area = area, .x = x, .text = " new context: ", .style = label_style });
 
-    const name_area: RectType = .{ .x = x, .y = area.y, .w = @min(24, end -| x), .h = 1 };
+    const name_area: core.Rect = .{ .x = x, .y = area.y, .w = @min(24, end -| x), .h = 1 };
     var name_field = prompt.field;
     const name_view = name_field.view(name_area.w);
     writeField(context, .{ .area = name_area, .text = name_view.text, .focused = form.focus == .name });
@@ -83,8 +79,8 @@ fn renderCreateForm(context: *ContextType, input: TabRenameInput, form: *const W
     const remaining = end -| x;
     const entries = if (input.path_completion) |state| state.entries() else &.{};
     const list_wanted = !form.confirm_create and entries.len != 0 and remaining > 30;
-    const hint_width: u16 = if (form.confirm_create) @min(measure_module(create_hint), remaining / 2) else 0;
-    const directory_area: RectType = .{ .x = x, .y = area.y, .w = if (list_wanted) remaining / 2 else remaining - hint_width, .h = 1 };
+    const hint_width: u16 = if (form.confirm_create) @min(core.measure(create_hint), remaining / 2) else 0;
+    const directory_area: core.Rect = .{ .x = x, .y = area.y, .w = if (list_wanted) remaining / 2 else remaining - hint_width, .h = 1 };
     var directory_field = prompt.directory;
     const directory_view = directory_field.view(directory_area.w);
     writeField(context, .{ .area = directory_area, .text = directory_view.text, .focused = form.focus == .directory });
@@ -120,7 +116,7 @@ fn writeLabel(context: *ContextType, input: LabelInput) u16 {
     const x = input.x;
     const text = input.text;
     const style = input.style;
-    const width = @min(measure_module(text), (area.x + area.w) -| x);
+    const width = @min(core.measure(text), (area.x + area.w) -| x);
     if (width == 0) {
         return 0;
     }

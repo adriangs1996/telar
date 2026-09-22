@@ -8,11 +8,18 @@ retain their upstream layout.
   methods live at file scope and its self type is `@This()`. Named ordinary
   structs are not declared at file scope inside another file. Auxiliary state
   and options types have their own files too.
-- A namespace of functions, enums, unions and constants uses snake_case.
+- A standalone enum or union owns a PascalCase file with one explicit named
+  declaration matching the filename. Methods belong inside that declaration.
+  A namespace of functions and constants, including local enums/unions, uses
+  snake_case.
 - A generic family owns `GenericName.zig`. Its only public file-level function
   is `Type(...) type`. Methods belong to the returned type; private helpers and
   tests are allowed. The constructor's signature follows the existing function
   style rules.
+- Import a module namespace once and qualify its members: `const core =
+  @import("telar-core");`, then `core.TabCreated`. Avoid private aliases for
+  individual module members. Public reexports define the module API and retain
+  their names. Concrete type files keep direct imports.
 - Import generic constructors directly, retaining the prefix:
 
   ```zig

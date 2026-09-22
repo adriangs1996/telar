@@ -1,3 +1,4 @@
+const Quad_module = @import("../render/Quad.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -6,7 +7,6 @@ const Renderer = @import("../render/TerminalRenderer.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const QuadList = @import("../render/QuadList.zig");
 const Quad = @import("../render/Quad.zig").Quad;
-const solid_uv = @import("../render/Quad.zig").solid_uv;
 
 test "Braille pattern replacement removes retained dots and blank Braille erases all ink" {
     const session = try Session.init();
@@ -223,8 +223,8 @@ fn paint(session: *Session) !void {
 }
 
 fn expectSolid(item: Quad) !void {
-    try std.testing.expectEqual(solid_uv[0], item.u0);
-    try std.testing.expectEqual(solid_uv[1], item.v0);
-    try std.testing.expectEqual(solid_uv[0], item.u1);
-    try std.testing.expectEqual(solid_uv[1], item.v1);
+    try std.testing.expectEqual(Quad_module.solid_uv[0], item.u0);
+    try std.testing.expectEqual(Quad_module.solid_uv[1], item.v0);
+    try std.testing.expectEqual(Quad_module.solid_uv[0], item.u1);
+    try std.testing.expectEqual(Quad_module.solid_uv[1], item.v1);
 }

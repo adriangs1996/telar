@@ -5,10 +5,9 @@
 //! recent status change comes first, and the pane key breaks ties so the
 //! order is stable across revisions.
 
+const data = @import("model");
+const core = @import("telar-core");
 const Agent = @import("Agent.zig");
-const AgentInput = @import("AgentInput.zig");
-const AgentStatusType = @import("telar-core").AgentStatus;
-const raw_module = @import("telar-core").raw;
 const std = @import("std");
 
 /// Attention groups from most to least urgent.
@@ -25,7 +24,7 @@ pub const Group = enum(u8) {
 /// ```zig
 /// if (group(agent.status) == .needs_input) count += 1;
 /// ```
-pub fn group(status: AgentStatusType) Group {
+pub fn group(status: core.AgentStatus) Group {
     return switch (status) {
         .blocked, .failed => .needs_input,
         .working => .working,
@@ -62,7 +61,7 @@ pub fn compare(left: *const Agent, right: *const Agent) std.math.Order {
         return by_age;
     }
 
-    const by_pane = std.math.order(raw_module(left.key.pane_id), raw_module(right.key.pane_id));
+    const by_pane = std.math.order(core.raw(left.key.pane_id), core.raw(right.key.pane_id));
     if (by_pane != .eq) {
         return by_pane;
     }
@@ -70,11 +69,11 @@ pub fn compare(left: *const Agent, right: *const Agent) std.math.Order {
     return std.math.order(left.key.pane_generation, right.key.pane_generation);
 }
 
-fn testingAgent(pane: u64, status: AgentStatusType, age: u32) !Agent {
+fn testingAgent(pane: u64, status: core.AgentStatus, age: u32) !Agent {
     return try Agent.init(testingInput(pane, status, age));
 }
 
-fn testingInput(pane: u64, status: AgentStatusType, age: u32) AgentInput {
+fn testingInput(pane: u64, status: core.AgentStatus, age: u32) data.AgentInput {
     return .{
         .key = .{ .pane_id = @enumFromInt(pane), .pane_generation = 1 },
         .location = .{
@@ -144,6 +143,6 @@ test "sorting a mixed list yields the sidebar order" {
 
     const expected = [_]u64{ 7, 3, 5, 2, 4, 1, 6 };
     for (expected, order) |pane, agent| {
-        try std.testing.expectEqual(pane, raw_module(agent.key.pane_id));
+        try std.testing.expectEqual(pane, core.raw(agent.key.pane_id));
     }
 }

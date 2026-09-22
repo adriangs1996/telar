@@ -3,36 +3,26 @@
 //! Every process, proxy, screen, title, authority, and projection mutation for
 //! one pane generation crosses this type.
 
-const ProjectionContextType = @import("ProjectionContext.zig");
+const core = @import("telar-core");
 const JobType = @import("Job.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
-const AgentAuthorityType = @import("telar-core").AgentAuthority;
 const Evidence = @import("Evidence.zig");
 const ProxyState = @import("ProxyState.zig");
 const Title = @import("Title.zig");
 const SessionReferenceType = @import("SessionReference.zig");
-const AgentSnapshotEntryType = @import("telar-core").AgentSnapshotEntry;
 const Identity = @import("Identity.zig");
 const ProcessObservation = @import("ProcessObservation.zig");
 const ProxyObservation = @import("ProxyObservation.zig");
 const providers = @import("providers/providers.zig");
 const ReportObservation = @import("ReportObservation.zig");
 const ScreenObservation = @import("ScreenObservation.zig");
-const AgentProviderType = @import("telar-core").AgentProvider;
-const AgentStatusType = @import("telar-core").AgentStatus;
 const std = @import("std");
 const description = @import("description.zig");
 const ResultType = @import("Result.zig");
 const DescriptionFinished = @import("DescriptionFinished.zig");
 const SessionTitleType = @import("SessionTitle.zig");
-const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
 const types = @import("types.zig");
-const generic_placeholder_module = @import("telar-core").generic_placeholder;
-const validateSessionTitle_module = @import("telar-core").validateSessionTitle;
-const pane_module = @import("telar-core").pane;
 const ProxyExchange = @import("ProxyExchange.zig");
-const AgentSourceType = @import("telar-core").AgentSource;
-const AgentBlockedReasonType = @import("telar-core").AgentBlockedReason;
 const ReportDetail = @import("ReportDetail.zig");
 const EventLine = @import("EventLine.zig");
 
@@ -65,7 +55,7 @@ key: PaneKey,
 process_id: u32,
 agent_process_id: ?u32 = null,
 session_id: [16]u8,
-authority: AgentAuthorityType = .candidate,
+authority: core.AgentAuthority = .candidate,
 process: ?Evidence = null,
 managed: ?Evidence = null,
 proxy: ProxyState = .{},
@@ -85,7 +75,7 @@ title: Title = .{},
 /// reports `done` instead of `ready` while unseen.
 seen: bool = true,
 session_reference: ?SessionReferenceType = null,
-projected: AgentSnapshotEntryType,
+projected: core.AgentSnapshotEntry,
 
 /// Creates the candidate aggregate for one exact pane generation.
 ///
@@ -277,7 +267,7 @@ pub fn applyReport(agent: *Agent, observation: ReportObservation) bool {
 /// ```
 pub fn applyScreen(agent: *Agent, observation: ScreenObservation) bool {
     const signal = observation.signal;
-    const process_provider = if (agent.process) |evidence| evidence.provider else AgentProviderType.unknown;
+    const process_provider = if (agent.process) |evidence| evidence.provider else core.AgentProvider.unknown;
 
     if (process_provider != .unknown and signal.provider != .unknown and signal.provider != process_provider) {
         return false;
@@ -404,7 +394,7 @@ pub fn retire(agent: *Agent) void {
 /// ```zig
 /// const result = agent.reproject(.{ .sequence = 4, .now_ms = now_ms, .can_queue_description = true });
 /// ```
-pub fn reproject(agent: *Agent, context: ProjectionContextType) ProjectionResult {
+pub fn reproject(agent: *Agent, context: ProjectionContext) ProjectionResult {
     const evidence = agent.chooseEvidence(context.now_ms) orelse return .no_evidence;
     const provider_value = agent.projectionProvider(evidence);
     const previous = agent.projected;
@@ -448,7 +438,7 @@ pub fn reproject(agent: *Agent, context: ProjectionContextType) ProjectionResult
 /// ```zig
 /// const entry = agent.snapshot(now_ms);
 /// ```
-pub fn snapshot(agent: *const Agent, now_ms: i64) AgentSnapshotEntryType {
+pub fn snapshot(agent: *const Agent, now_ms: i64) core.AgentSnapshotEntry {
     var entry = agent.projected;
     entry.session_title = agent.title.slice();
     entry.title_source = agent.title.source;
@@ -477,7 +467,7 @@ pub fn statusAgeSeconds(agent: *const Agent, now_ms: i64) u32 {
 /// ```zig
 /// const status = agent.projectedStatus();
 /// ```
-pub fn projectedStatus(agent: *const Agent) AgentStatusType {
+pub fn projectedStatus(agent: *const Agent) core.AgentStatus {
     return agent.projected.status;
 }
 
@@ -715,7 +705,7 @@ pub fn durableTitle(agent: *const Agent) ?SessionTitleType {
     return SessionTitleType.init(agent.title.slice(), agent.title.source) catch null;
 }
 
-fn applyReadyTitle(agent: *Agent, value: []const u8, source: AgentTitleSourceType) void {
+fn applyReadyTitle(agent: *Agent, value: []const u8, source: core.AgentTitleSource) void {
     std.debug.assert(validTitle(value));
     agent.title.clearSensitive();
     @memcpy(agent.title.bytes[0..value.len], value);
@@ -728,7 +718,7 @@ fn applyReadyTitle(agent: *Agent, value: []const u8, source: AgentTitleSourceTyp
 // The hook names the reason when it has one. Without it, a response that
 // closed on a tool request while nothing is in flight is a permission
 // prompt; the remaining blocked states carry no evidence about their cause.
-fn blockedReason(agent: *const Agent, evidence: Evidence) AgentBlockedReasonType {
+fn blockedReason(agent: *const Agent, evidence: Evidence) core.AgentBlockedReason {
     if (agent.projected.status != .blocked) {
         return .none;
     }
@@ -756,7 +746,7 @@ fn refreshEvent(agent: *Agent, evidence: Evidence) bool {
     return true;
 }
 
-fn provider(agent: *const Agent) AgentProviderType {
+fn provider(agent: *const Agent) core.AgentProvider {
     if (agent.managed) |evidence| {
         return evidence.provider;
     }
@@ -880,7 +870,7 @@ fn screenOrder(observation: ScreenObservation, evidence: Evidence) std.math.Orde
 /// A turn that finished while the previous projection was `working` stays
 /// `done` until acknowledged. Any other evidence status ends the unseen
 /// window so the next completion is reported again.
-fn visibleStatus(agent: *Agent, previous: AgentStatusType, current: AgentStatusType) AgentStatusType {
+fn visibleStatus(agent: *Agent, previous: core.AgentStatus, current: core.AgentStatus) core.AgentStatus {
     if (current != .ready) {
         agent.seen = true;
         return current;
@@ -893,7 +883,7 @@ fn visibleStatus(agent: *Agent, previous: AgentStatusType, current: AgentStatusT
     return if (agent.seen) .ready else .done;
 }
 
-fn projectionProvider(agent: *const Agent, evidence: Evidence) AgentProviderType {
+fn projectionProvider(agent: *const Agent, evidence: Evidence) core.AgentProvider {
     if (agent.process) |process| {
         return process.provider;
     }
@@ -920,7 +910,7 @@ fn ensurePlaceholder(agent: *Agent) void {
         return;
     }
 
-    const placeholder = generic_placeholder_module;
+    const placeholder = core.generic_placeholder;
 
     if (std.mem.eql(u8, agent.title.slice(), placeholder)) {
         return;
@@ -930,7 +920,7 @@ fn ensurePlaceholder(agent: *Agent) void {
     agent.title.len = @intCast(placeholder.len);
 }
 
-fn advanceTitle(agent: *Agent, status: AgentStatusType, can_queue: bool) bool {
+fn advanceTitle(agent: *Agent, status: core.AgentStatus, can_queue: bool) bool {
     if (agent.title.phase != .waiting_work or status != .working) {
         return false;
     }
@@ -948,11 +938,11 @@ fn advanceTitle(agent: *Agent, status: AgentStatusType, can_queue: bool) bool {
 }
 
 fn validTitle(value: []const u8) bool {
-    validateSessionTitle_module(value) catch return false;
+    core.validateSessionTitle(value) catch return false;
     return true;
 }
 
-fn sameProjection(left_value: AgentSnapshotEntryType, right_value: AgentSnapshotEntryType) bool {
+fn sameProjection(left_value: core.AgentSnapshotEntry, right_value: core.AgentSnapshotEntry) bool {
     var left = left_value;
     var right = right_value;
     left.sequence = 0;
@@ -962,7 +952,7 @@ fn sameProjection(left_value: AgentSnapshotEntryType, right_value: AgentSnapshot
 
 fn testIdentity() !Identity {
     return .{
-        .key = .{ .id = try pane_module(7), .generation = 3 },
+        .key = .{ .id = try core.pane(7), .generation = 3 },
         .process_id = 42,
         .session_id = .{0xa5} ** 16,
     };
@@ -980,7 +970,7 @@ test "agent rejects an untracked proxy response" {
         .observed_at_ms = 100,
     }));
     try std.testing.expect(agent.proxy.currentEvidence() == null);
-    try std.testing.expectEqual(AgentAuthorityType.candidate, agent.authority);
+    try std.testing.expectEqual(core.AgentAuthority.candidate, agent.authority);
 }
 
 test "agent applies a tracked proxy lifecycle" {
@@ -995,7 +985,7 @@ test "agent applies a tracked proxy lifecycle" {
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
-    try std.testing.expectEqual(AgentAuthorityType.active, agent.authority);
+    try std.testing.expectEqual(core.AgentAuthority.active, agent.authority);
 
     try std.testing.expect(agent.applyProxy(.{
         .identity = identity,
@@ -1006,9 +996,9 @@ test "agent applies a tracked proxy lifecycle" {
     }));
 
     const evidence = agent.proxy.currentEvidence().?;
-    try std.testing.expectEqual(AgentProviderType.claude, evidence.provider);
-    try std.testing.expectEqual(AgentStatusType.working, evidence.status);
-    try std.testing.expectEqual(AgentSourceType.proxy_tls, evidence.source);
+    try std.testing.expectEqual(core.AgentProvider.claude, evidence.provider);
+    try std.testing.expectEqual(core.AgentStatus.working, evidence.status);
+    try std.testing.expectEqual(core.AgentSource.proxy_tls, evidence.source);
     try std.testing.expectEqual(@as(i64, 200), evidence.observed_at_ms);
 }
 
@@ -1033,8 +1023,8 @@ test "agent applies semantic completion without changing its authority" {
     }));
 
     const evidence = agent.proxy.currentEvidence().?;
-    try std.testing.expectEqual(AgentStatusType.ready, evidence.status);
-    try std.testing.expectEqual(AgentAuthorityType.active, agent.authority);
+    try std.testing.expectEqual(core.AgentStatus.ready, evidence.status);
+    try std.testing.expectEqual(core.AgentAuthority.active, agent.authority);
 }
 
 test "agent rejects completion from a contradictory provider" {
@@ -1057,8 +1047,8 @@ test "agent rejects completion from a contradictory provider" {
         .observed_at_ms = 200,
     }));
     var evidence = agent.proxy.currentEvidence().?;
-    try std.testing.expectEqual(AgentProviderType.claude, evidence.provider);
-    try std.testing.expectEqual(AgentStatusType.working, evidence.status);
+    try std.testing.expectEqual(core.AgentProvider.claude, evidence.provider);
+    try std.testing.expectEqual(core.AgentStatus.working, evidence.status);
     try std.testing.expectEqual(@as(i64, 100), evidence.observed_at_ms);
 
     try std.testing.expect(agent.applyProxy(.{
@@ -1069,8 +1059,8 @@ test "agent rejects completion from a contradictory provider" {
         .observed_at_ms = 300,
     }));
     evidence = agent.proxy.currentEvidence().?;
-    try std.testing.expectEqual(AgentProviderType.claude, evidence.provider);
-    try std.testing.expectEqual(AgentStatusType.ready, evidence.status);
+    try std.testing.expectEqual(core.AgentProvider.claude, evidence.provider);
+    try std.testing.expectEqual(core.AgentStatus.ready, evidence.status);
     try std.testing.expectEqual(@as(i64, 300), evidence.observed_at_ms);
 }
 
@@ -1103,8 +1093,8 @@ test "a process-backed agent accepts exchanges with any provider family" {
     }));
 
     const evidence = agent.proxy.currentEvidence().?;
-    try std.testing.expectEqual(AgentStatusType.ready, evidence.status);
-    try std.testing.expectEqual(AgentProviderType.pi, agent.provider());
+    try std.testing.expectEqual(core.AgentStatus.ready, evidence.status);
+    try std.testing.expectEqual(core.AgentProvider.pi, agent.provider());
 }
 
 test "semantic completion does not clear stronger blocked screen evidence" {
@@ -1136,9 +1126,9 @@ test "semantic completion does not clear stronger blocked screen evidence" {
         .exchange = exchange,
         .observed_at_ms = 200,
     }));
-    try std.testing.expectEqual(AgentAuthorityType.obscured, agent.authority);
+    try std.testing.expectEqual(core.AgentAuthority.obscured, agent.authority);
     try std.testing.expect(agent.screen != null);
-    try std.testing.expectEqual(AgentStatusType.blocked, agent.chooseEvidence(200).?.status);
+    try std.testing.expectEqual(core.AgentStatus.blocked, agent.chooseEvidence(200).?.status);
 }
 
 test "agent coalesces frequent proxy activity" {
@@ -1196,7 +1186,7 @@ test "new proxy work resumes an obscured agent" {
         .exchange = exchange,
         .observed_at_ms = 100,
     }));
-    try std.testing.expectEqual(AgentAuthorityType.resumed, agent.authority);
+    try std.testing.expectEqual(core.AgentAuthority.resumed, agent.authority);
     try std.testing.expect(agent.screen == null);
 }
 
@@ -1222,13 +1212,13 @@ test "managed official state persists idle and stronger authority cannot be repl
     agent.applyManaged(.{ .status = .blocked, .observed_at_ms = 10 });
     try std.testing.expect(!agent.expire(std.math.maxInt(i64)));
     try std.testing.expectEqual(ProjectionResult.changed, agent.reproject(.{ .sequence = 1, .now_ms = 20, .can_queue_description = false }));
-    try std.testing.expectEqual(AgentProviderType.codex, agent.projected.provider);
-    try std.testing.expectEqual(AgentStatusType.blocked, agent.projected.status);
-    try std.testing.expectEqual(AgentSourceType.lifecycle_report, agent.projected.source);
+    try std.testing.expectEqual(core.AgentProvider.codex, agent.projected.provider);
+    try std.testing.expectEqual(core.AgentStatus.blocked, agent.projected.status);
+    try std.testing.expectEqual(core.AgentSource.lifecycle_report, agent.projected.source);
     agent.applyManaged(.{ .status = .working, .observed_at_ms = 30 });
     _ = agent.reproject(.{ .sequence = 2, .now_ms = 30, .can_queue_description = false });
-    try std.testing.expectEqual(AgentStatusType.working, agent.projected.status);
+    try std.testing.expectEqual(core.AgentStatus.working, agent.projected.status);
     agent.applyManaged(.{ .status = .ready, .observed_at_ms = 40 });
     _ = agent.reproject(.{ .sequence = 3, .now_ms = 40, .can_queue_description = false });
-    try std.testing.expectEqual(AgentStatusType.done, agent.projected.status);
+    try std.testing.expectEqual(core.AgentStatus.done, agent.projected.status);
 }

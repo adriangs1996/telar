@@ -1,8 +1,8 @@
 //! Bounded color-probe lifecycle for one exterior terminal. OSC reports have
 //! no request ID, so probes never overlap and unsolicited reports are ignored.
 
+const data = @import("model");
 const std = @import("std");
-const HostCapabilitiesType = @import("telar-client").HostCapabilities;
 const HostNegotiationState = @import("HostNegotiationState.zig");
 
 pub const timeout_ns = 250 * std.time.ns_per_ms;
@@ -12,7 +12,7 @@ pub const Color = enum { foreground, background };
 
 /// Resolves unanswered terminal probes without putting probe policy in the model.
 /// Example: `const next = settledCapabilities(current);`.
-pub fn settledCapabilities(current: HostCapabilitiesType) HostCapabilitiesType {
+pub fn settledCapabilities(current: data.HostCapabilities) data.HostCapabilities {
     var next = current;
     if (next.images == .unknown) {
         next.images = .unsupported;
@@ -26,7 +26,7 @@ pub fn settledCapabilities(current: HostCapabilitiesType) HostCapabilitiesType {
 }
 
 test "probe fallback retains resolved capabilities" {
-    const current: HostCapabilitiesType = .{ .images = .supported, .appearance = .dark };
+    const current: data.HostCapabilities = .{ .images = .supported, .appearance = .dark };
     const next = settledCapabilities(current);
     try std.testing.expectEqual(.supported, next.images);
     try std.testing.expectEqual(.unsupported, next.pointer_pixels);

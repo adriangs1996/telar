@@ -1,5 +1,9 @@
 //! Visible activity text uses the scene's single clock. Idle text never
 //! schedules work, and animation only changes cached glyph opacity.
+const GlyphAtlas = @import("../text/GlyphAtlas.zig");
+const assets = @import("assets");
+const QuadList = @import("../render/QuadList.zig");
+const client = @import("telar-client");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
@@ -32,12 +36,12 @@ pub fn draw(activity: ActivityText, canvas: *Canvas) !void {
 }
 
 test "activity animates cached glyphs and parks when complete or invisible" {
-    var atlas = try @import("../text/GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
-    var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
+    var quads = QuadList.init(std.testing.allocator);
     defer quads.deinit();
     var clock: FrameClock = .{};
-    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = @import("telar-client").theme_support.default_theme, .animation = &clock, .chrome = .{ .body = 16, .title = 18, .small = 12 } };
+    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = client.theme_support.default_theme, .animation = &clock, .chrome = .{ .body = 16, .title = 18, .small = 12 } };
     var activity: ActivityText = .{ .bounds = .{ .x = 0, .y = 0, .width = 240, .height = 32 }, .label = .{ .text = "Thinking", .face = .sans, .size = .body }, .active = true };
     clock.begin(0);
     try activity.draw(&canvas);

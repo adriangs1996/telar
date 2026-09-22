@@ -4,7 +4,6 @@
 //! middleware headers, applies the bounded pipeline, re-encodes the result, and
 //! accepts it only when HTTP framing and connection semantics stay unchanged.
 
-const InputType = @import("Input.zig");
 const HeadType = @import("Head.zig");
 const HeadersType = @import("../Headers.zig");
 const head = @import("head_support.zig");
@@ -34,7 +33,7 @@ pub const Input = @import("Input.zig");
 /// ```zig
 /// const decision = decide(input);
 /// ```
-pub fn decide(input: InputType) Decision {
+pub fn decide(input: Input) Decision {
     const original = input.original;
     const original_head = input.original_head;
     const is_response = input.is_response;

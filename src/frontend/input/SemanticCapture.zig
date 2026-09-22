@@ -1,21 +1,19 @@
-const Key = @import("telar-client").Key;
-const RepeatPolicy = @import("telar-client").RepeatPolicy;
+const data = @import("model");
 const keybind = @import("keybind.zig");
-const Control = @import("telar-client").Control;
 const SemanticCapture = @This();
 
-keys: [128]Key = undefined,
+keys: [128]data.Key = undefined,
 key_count: usize = 0,
 action_count: usize = 0,
 fail_key: bool = false,
 fail_action: bool = false,
-repeat_policy: ?RepeatPolicy = null,
+repeat_policy: ?data.RepeatPolicy = null,
 
-pub fn repeatPolicy(capture: *const SemanticCapture, value: keybind.TestAction) ?RepeatPolicy {
+pub fn repeatPolicy(capture: *const SemanticCapture, value: keybind.TestAction) ?data.RepeatPolicy {
     return if (value == .next) capture.repeat_policy else null;
 }
 
-pub fn key(capture: *SemanticCapture, value: Key) !void {
+pub fn key(capture: *SemanticCapture, value: data.Key) !void {
     if (capture.fail_key) {
         return error.KeyDeliveryFailed;
     }
@@ -26,7 +24,7 @@ pub fn key(capture: *SemanticCapture, value: Key) !void {
 
 pub fn forward(_: *SemanticCapture, _: []const u8) !void {}
 
-pub fn action(capture: *SemanticCapture, _: keybind.TestAction) !Control {
+pub fn action(capture: *SemanticCapture, _: keybind.TestAction) !data.KeybindControl {
     if (capture.fail_action) {
         return error.ActionFailed;
     }

@@ -6,18 +6,15 @@
 //! owned buffer and hands it to a worker that writes a temp file and renames
 //! it into place. Restore runs once, before the listener accepts clients.
 
+const core = @import("telar-core");
 const std = @import("std");
 const WriteJob = @import("WriteJob.zig");
-const max_agent_session_reference_bytes_module = @import("telar-core").max_agent_session_reference_bytes;
-const AgentProviderType = @import("telar-core").AgentProvider;
 const root_module = @import("../../agent/providers/providers.zig");
-const first_custom_agent_provider_module = @import("telar-core").first_custom_agent_provider;
 const State = @import("State.zig");
 const TestingScheduler = @import("TestingScheduler.zig");
 const OwnedWrite = @import("OwnedWrite.zig");
 const ResumeSession = @import("../../agent/ResumeSession.zig");
 const SessionReference = @import("../../agent/SessionReference.zig");
-const Encoder = @import("telar-core").Encoder;
 
 pub const debounce_ns: u64 = 500 * std.time.ns_per_ms;
 pub const snapshot_bytes = 1024 * 1024;
@@ -53,7 +50,7 @@ pub fn writeFile(job: WriteJob) anyerror!void {
     };
 }
 
-pub const max_resume_command_bytes = 32 + max_agent_session_reference_bytes_module;
+pub const max_resume_command_bytes = 32 + core.max_agent_session_reference_bytes;
 
 /// Builds the shell line that resumes a built-in agent's session, typed into
 /// the restored pane's shell. Only the built-in capability table
@@ -64,7 +61,7 @@ pub const max_resume_command_bytes = 32 + max_agent_session_reference_bytes_modu
 /// ```zig
 /// const line = resumeCommand(&buffer, .claude, session) orelse return;
 /// ```
-pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: AgentProviderType, session: []const u8) ?[]const u8 {
+pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: core.AgentProvider, session: []const u8) ?[]const u8 {
     const reference = SessionReference.init(session, 0) catch return null;
     _ = ResumeSession.init(provider, reference) catch return null;
     const template = root_module.of(provider).resume_prefix orelse return null;
@@ -81,7 +78,7 @@ pub fn resumeCommand(buffer: *[max_resume_command_bytes]u8, provider: AgentProvi
 /// Rebuilds fixed resume argv only when the original executable is the same
 /// built-in agent. Shells keep their argv and receive the shell resume line.
 /// Example: `const count = try directResumeArguments(&encoder, executable, session);`.
-pub fn directResumeArguments(encoder: *Encoder, executable: []const u8, session: ResumeSession) !?u16 {
+pub fn directResumeArguments(encoder: *core.Encoder, executable: []const u8, session: ResumeSession) !?u16 {
     const prefix = root_module.of(session.provider).resume_prefix orelse return null;
     var words = std.mem.tokenizeScalar(u8, prefix, ' ');
     const command = words.next() orelse return null;
@@ -107,7 +104,7 @@ test "resume commands exist only for built-in providers and UUID references" {
     try std.testing.expectEqualStrings("claude --resume " ++ session ++ "\r", resumeCommand(&buffer, .claude, session).?);
     try std.testing.expectEqualStrings("codex resume " ++ session ++ "\r", resumeCommand(&buffer, .codex, session).?);
     try std.testing.expectEqualStrings("pi --session " ++ session ++ "\r", resumeCommand(&buffer, .pi, session).?);
-    try std.testing.expect(resumeCommand(&buffer, @enumFromInt(first_custom_agent_provider_module), session) == null);
+    try std.testing.expect(resumeCommand(&buffer, @enumFromInt(core.first_custom_agent_provider), session) == null);
     try std.testing.expect(resumeCommand(&buffer, .claude, "not-a-uuid") == null);
     try std.testing.expect(resumeCommand(&buffer, .claude, "0192aaaa-bbbb-cccc-dddd-eeeeffff000g") == null);
 }

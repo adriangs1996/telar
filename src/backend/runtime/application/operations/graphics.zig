@@ -1,19 +1,16 @@
 //! Runtime graphics operations, reached from requests.dispatch.
 
+const core = @import("telar-core");
 const RequestGraphicsSnapshot = @import("../commands/RequestGraphicsSnapshot.zig");
 const request_graphics_snapshot = @import("../commands/request_graphics_snapshot.zig");
 const ReturnGraphicsCredit = @import("../commands/ReturnGraphicsCredit.zig");
 const graphics_credit = @import("../commands/graphics_credit.zig");
 const ConfigureGraphics = @import("../commands/ConfigureGraphics.zig");
 const graphics_configuration = @import("../commands/graphics_configuration.zig");
-const RequestGraphicsSnapshotType = @import("telar-core").RequestGraphicsSnapshot;
-const GraphicsCreditType = @import("telar-core").GraphicsCredit;
-const ConfigureGraphicsType = @import("telar-core").ConfigureGraphics;
-const TerminalColors = @import("telar-core").TerminalColors;
 const RequestContext = @import("../RequestContext.zig");
 
 /// Example: `try graphics.routeRequestGraphicsSnapshot(request, wire);`.
-pub fn routeRequestGraphicsSnapshot(request: *RequestContext, wire: RequestGraphicsSnapshotType) !void {
+pub fn routeRequestGraphicsSnapshot(request: *RequestContext, wire: core.RequestGraphicsSnapshot) !void {
     const result = try requestGraphicsSnapshot(request, .{ .pane_id = wire.pane_id });
 
     if (result == .pane_not_attached) {
@@ -22,7 +19,7 @@ pub fn routeRequestGraphicsSnapshot(request: *RequestContext, wire: RequestGraph
 }
 
 /// Example: `try graphics.routeGraphicsCredit(request, credit);`.
-pub fn routeGraphicsCredit(request: *RequestContext, credit: GraphicsCreditType) !void {
+pub fn routeGraphicsCredit(request: *RequestContext, credit: core.GraphicsCredit) !void {
     const result = try graphicsCredit(request, .{
         .pane_id = credit.pane_id,
         .bytes = credit.bytes,
@@ -34,12 +31,12 @@ pub fn routeGraphicsCredit(request: *RequestContext, credit: GraphicsCreditType)
 }
 
 /// Example: `try graphics.routeConfigureGraphics(request, configure);`.
-pub fn routeConfigureGraphics(request: *RequestContext, configure: ConfigureGraphicsType) !void {
+pub fn routeConfigureGraphics(request: *RequestContext, configure: core.ConfigureGraphics) !void {
     _ = try configureGraphics(request, .{ .shared = configure.shared });
 }
 
 /// Example: `try graphics.routeConfigureTerminalColors(request, colors);`.
-pub fn routeConfigureTerminalColors(request: *RequestContext, colors: TerminalColors) !void {
+pub fn routeConfigureTerminalColors(request: *RequestContext, colors: core.TerminalColors) !void {
     if (request.session.setTerminalColors(colors)) {
         request.application.refreshTerminalColors(request.session.key);
     }

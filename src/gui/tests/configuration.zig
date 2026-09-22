@@ -1,3 +1,5 @@
+const builtin = @import("builtin");
+const native = @import("../native/native.zig");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const Fixture = @import("ConfigurationFixture.zig");
@@ -79,7 +81,7 @@ test "GUI reload preserves an in-flight frame and keeps input and receipt ACKs m
     try std.testing.expect(try reload.apply(session.gui, &session.gui.renderer));
     try std.testing.expectEqual(@as(u64, 2), session.gui.app.lua_generation.?.number);
     try std.testing.expectEqual(@as(f32, 20), session.gui.renderer.config.font.size);
-    try std.testing.expectEqual(@import("builtin").os.tag == .macos, session.gui.renderer.atlas.?.fonts.primary.mac_rasterizer != null);
+    try std.testing.expectEqual(builtin.os.tag == .macos, session.gui.renderer.atlas.?.fonts.primary.mac_rasterizer != null);
     try std.testing.expect(pixels != session.gui.renderer.atlas.?.pixels.ptr);
     try session.gui.resize(try session.gui.renderer.measure(Fixture.viewport), session.gui.renderer.theme);
     try present(session);
@@ -172,7 +174,7 @@ test "GUI reload restages fonts for a changed viewport before adopting and joins
     const reload = &session.gui.driver.configuration;
     try fixture.write("config.lua", "return { api_version = 2, gui = { font = { size = 20 } } }");
     try fixture.wait();
-    const viewport: @import("../native/native.zig").Viewport = .{ .width = 360, .height = 144, .scale = 2 };
+    const viewport: native.Viewport = .{ .width = 360, .height = 144, .scale = 2 };
     reload.observe(session.gui.renderer.config, viewport);
     try std.testing.expect(!try reload.apply(session.gui, &session.gui.renderer));
     try std.testing.expectEqual(@as(u64, 1), session.gui.app.lua_generation.?.number);
@@ -283,7 +285,7 @@ fn present(session: *Session) !void {
 }
 
 test "font weight reload keeps PTY geometry and rebuilds only for effective macOS changes" {
-    const is_macos = @import("builtin").os.tag == .macos;
+    const is_macos = builtin.os.tag == .macos;
     var fixture = try Fixture.init("return { api_version = 2 }", null);
     defer fixture.deinit();
     const session = fixture.session;

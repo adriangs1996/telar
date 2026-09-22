@@ -3,10 +3,10 @@
 //! shows. Every result is one control-free UTF-8 line within the wire
 //! bound, so the runtime accepts it as it is.
 
+const core = @import("telar-core");
 const std = @import("std");
-const max_agent_last_event_bytes_module = @import("telar-core").max_agent_last_event_bytes;
 
-pub const Buffer = [max_agent_last_event_bytes_module]u8;
+pub const Buffer = [core.max_agent_last_event_bytes]u8;
 
 /// The tool input keys worth showing next to the tool name, in the order
 /// they are tried. Shell commands and paths come first because they name
@@ -51,7 +51,7 @@ pub fn toolCall(buffer: *Buffer, tool_name: []const u8, tool_input: std.json.Val
 
     // Each piece is bounded on its own so a long shell command still shows
     // the tool name; `line` then cuts the whole on a UTF-8 boundary.
-    var scratch: [2 * max_agent_last_event_bytes_module]u8 = undefined;
+    var scratch: [2 * core.max_agent_last_event_bytes]u8 = undefined;
     var len: usize = 0;
     append(&scratch, &len, "» ");
     append(&scratch, &len, tool_name);

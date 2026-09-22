@@ -1,11 +1,11 @@
 //! Canonical editions and comments. Every method doing work runs on observation workers.
+const operation_module = @import("operation.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Context = @import("Context.zig");
 const Edition = @import("Edition.zig");
 const Group = @import("Group.zig");
 const Sample = @import("Sample.zig");
-const Operation = @import("operation.zig").Operation;
 const Result = @import("Result.zig");
 const ProviderPatch = @import("ProviderPatch.zig");
 const storage = @import("storage.zig");

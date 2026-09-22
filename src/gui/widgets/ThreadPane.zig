@@ -1,3 +1,6 @@
+const ThreadLayout = @import("ThreadLayout.zig");
+const thread_status = @import("thread_status.zig");
+const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
@@ -24,9 +27,9 @@ pub fn draw(widget: ThreadPane, canvas: *Canvas) !void {
     defer canvas.quads.clipFrom(first, bounds);
     const palette = canvas.theme.palette;
     const approval = if (widget.thread.transcript) |snapshot| snapshot.pending_approval else null;
-    const layout = @import("ThreadLayout.zig").resolve(canvas, bounds, .{ .blocked = approval != null, .images = if (widget.thread.composer_images) |images| images.count != 0 else false });
+    const layout = ThreadLayout.resolve(canvas, bounds, .{ .blocked = approval != null, .images = if (widget.thread.composer_images) |images| images.count != 0 else false });
     const status = if (widget.thread.transcript) |snapshot| snapshot.status else .starting;
-    const status_text = @import("thread_status.zig").text(widget.thread.transcript);
+    const status_text = thread_status.text(widget.thread.transcript);
     const title = if (widget.thread.agent) |agent| agent.displayName() else if (widget.thread.kind == .agent) "Codex" else "Conversation";
     const header = layout.header;
     const status_width = @min(header.width / 2, try canvas.measure(.{ .text = status_text, .face = .sans, .size = .small }) + canvas.chrome.px(18));
@@ -48,7 +51,7 @@ pub fn draw(widget: ThreadPane, canvas: *Canvas) !void {
     }
 
     _ = try canvas.textAt(.{ .x = header.x, .y = header.y, .width = @max(0, header.width - status_width - resume_width), .height = header.height }, .{ .text = title, .face = .sans, .size = .title, .bold = true, .color = palette.text });
-    try (@import("ActivityText.zig"){ .bounds = .{ .x = header.x + header.width - status_width, .y = header.y, .width = status_width, .height = header.height }, .label = .{ .text = status_text, .face = .sans, .size = .small, .color = if (status == .blocked) palette.yellow else if (status == .failed) palette.red else palette.subtext0 }, .active = @import("thread_status.zig").active(widget.thread.transcript) }).draw(canvas);
+    try (@import("ActivityText.zig"){ .bounds = .{ .x = header.x + header.width - status_width, .y = header.y, .width = status_width, .height = header.height }, .label = .{ .text = status_text, .face = .sans, .size = .small, .color = if (status == .blocked) palette.yellow else if (status == .failed) palette.red else palette.subtext0 }, .active = thread_status.active(widget.thread.transcript) }).draw(canvas);
     var request: ?*const core.AgentApprovalRequest = null;
     if (canvas.widgets) |state| {
         if (state.approval_review) |review| {
@@ -71,7 +74,7 @@ fn drawTerminalThread(widget: ThreadPane, canvas: *Canvas) !void {
     try canvas.fill(widget.area, palette.surface_dim);
     const header, const rest = widget.area.splitTop(1);
     var storage: [256]u8 = undefined;
-    const title = if (widget.thread.agent) |agent| @import("std").fmt.bufPrint(&storage, " {s} {s} · {s}", .{ agent.iconGlyph(), agent.displayName(), @tagName(agent.status) }) catch "Agent" else " no agent in this pane";
+    const title = if (widget.thread.agent) |agent| std.fmt.bufPrint(&storage, " {s} {s} · {s}", .{ agent.iconGlyph(), agent.displayName(), @tagName(agent.status) }) catch "Agent" else " no agent in this pane";
     try canvas.fill(header, palette.surface0);
     try canvas.text(header, .{ .text = title, .color = palette.accent, .bold = true });
     if (rest.isEmpty()) {

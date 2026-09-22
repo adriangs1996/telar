@@ -1,20 +1,16 @@
-const RequestIdType = @import("telar-core").RequestId;
+const core = @import("telar-core");
 const QueryOriginType = @import("../../../history/QueryOrigin.zig");
-const HistoryScope = @import("telar-core").HistoryScope;
-const PaneIdType = @import("telar-core").PaneId;
-const HistoryAuthorFilterType = @import("telar-core").HistoryAuthorFilter;
-const HistoryMatchType = @import("telar-core").HistoryMatch;
 const Request = @This();
 
-request_id: RequestIdType,
+request_id: core.RequestId,
 origin: QueryOriginType,
 text: []const u8,
-scope: HistoryScope,
+scope: core.HistoryScope,
 scope_value: []const u8,
-pane_id: PaneIdType,
+pane_id: core.PaneId,
 failed_only: bool,
-author: HistoryAuthorFilterType,
-match: HistoryMatchType,
+author: core.HistoryAuthorFilter,
+match: core.HistoryMatch,
 distinct: bool,
 limit: u16,
 offset: u32 = 0,

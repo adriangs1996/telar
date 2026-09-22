@@ -1,6 +1,6 @@
-const Line = @import("telar-core").ChangeReviewDiffLine;
+const core = @import("telar-core");
 
-value: Line,
+value: core.ChangeReviewDiffLine,
 offset: usize,
 file: usize,
 hunk: usize,

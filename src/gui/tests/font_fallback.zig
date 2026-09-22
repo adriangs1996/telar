@@ -1,6 +1,8 @@
 //! System font fallback: graphemes no embedded face covers are looked up
 //! once through the native port, loaded into a bounded pool and painted
 //! fitted to the cell; misses and a full pool keep the replacement glyph.
+const FontSource = @import("../text/FontSource.zig");
+const font_id = @import("../text/font_id.zig");
 const std = @import("std");
 const builtin = @import("builtin");
 const assets = @import("assets");
@@ -9,7 +11,6 @@ const FontMatch = @import("../native/FontMatch.zig").FontMatch;
 const FallbackPool = @import("../text/FallbackPool.zig");
 const QuadList = @import("../render/QuadList.zig");
 const TextRun = @import("../text/TextRun.zig");
-const Id = @import("../text/font_id.zig").Id;
 
 /// U+23F5, the arrow Claude Code prints in `⏵⏵ auto mode on`; in neither
 /// JetBrains Mono nor Symbols Nerd Font Mono.
@@ -37,7 +38,7 @@ test "a grapheme no embedded face covers resolves to a discovered installed face
     for (uncovered, 1..) |candidate, lookups| {
         try std.testing.expect(!atlas.fonts.primary.covers(candidate));
         try std.testing.expect(!atlas.fonts.symbols.covers(candidate));
-        try std.testing.expectEqual(Id.primary, atlas.fonts.source(candidate, .primary));
+        try std.testing.expectEqual(font_id.Id.primary, atlas.fonts.source(candidate, .primary));
         var text_buffer: [64]u8 = undefined;
         const text = try std.fmt.bufPrint(&text_buffer, "{s}{s} auto mode on", .{ candidate, candidate });
         list.clear();
@@ -102,10 +103,10 @@ test "a grapheme no installed face covers is looked up once and keeps the replac
     try std.testing.expectEqual(@as(usize, 1), atlas.fonts.lookups);
     try std.testing.expectEqual(@as(u8, 0), atlas.fonts.pool.count);
     try std.testing.expect(atlas.fonts.misses.contains(arrow));
-    try std.testing.expectEqual(Id.primary, atlas.fonts.source(arrow, .primary));
+    try std.testing.expectEqual(font_id.Id.primary, atlas.fonts.source(arrow, .primary));
     _ = try atlas.place(cellRun(arrow), &list);
     const shaped = atlas.shaping_cache.find(.{ .text = arrow, .face = .primary, .pixel_height = 16 }).?;
-    try std.testing.expectEqual(Id.primary, shaped.font);
+    try std.testing.expectEqual(font_id.Id.primary, shaped.font);
     try std.testing.expectEqual(@as(u32, 0), shaped.glyphs[0].codepoint);
 }
 
@@ -164,7 +165,7 @@ test "the pool holds eight discovered faces refuses the ninth and evicts nothing
     }
 
     try std.testing.expectEqual(@as(?u3, null), atlas.fonts.pool.find(matches[FallbackPool.capacity]));
-    try std.testing.expectEqual(Id.fallback_0, atlas.fonts.source(plex_only[0], .primary));
+    try std.testing.expectEqual(font_id.Id.fallback_0, atlas.fonts.source(plex_only[0], .primary));
 
     // A grapheme none of the eight covers is refused without asking the port.
     atlas.fonts.lookup = missingLookup;
@@ -175,9 +176,9 @@ test "the pool holds eight discovered faces refuses the ninth and evicts nothing
     try std.testing.expectEqual(@as(usize, 0), missing_calls);
     try std.testing.expectEqual(@as(usize, 0), atlas.fonts.lookups);
     try std.testing.expect(atlas.fonts.misses.contains(arrow));
-    try std.testing.expectEqual(Id.primary, atlas.fonts.source(arrow, .primary));
+    try std.testing.expectEqual(font_id.Id.primary, atlas.fonts.source(arrow, .primary));
     const shaped = atlas.shaping_cache.find(.{ .text = arrow, .face = .primary, .pixel_height = 16 }).?;
-    try std.testing.expectEqual(Id.primary, shaped.font);
+    try std.testing.expectEqual(font_id.Id.primary, shaped.font);
     try std.testing.expectEqual(@as(u32, 0), shaped.glyphs[0].codepoint);
     try std.testing.expectEqual(@as(u8, FallbackPool.capacity), atlas.fonts.pool.count);
     for (matches[0..FallbackPool.capacity], 0..) |match, slot| {
@@ -200,7 +201,7 @@ test "one installed file serves every grapheme it covers through one pool slot" 
     _ = try atlas.place(cellRun(plex_only[0] ++ plex_only[1]), &list);
     try std.testing.expectEqual(@as(u8, 1), atlas.fonts.pool.count);
     try std.testing.expectEqual(@as(usize, 1), atlas.fonts.lookups);
-    try std.testing.expectEqual(Id.fallback_0, atlas.fonts.source(plex_only[1], .primary));
+    try std.testing.expectEqual(font_id.Id.fallback_0, atlas.fonts.source(plex_only[1], .primary));
     try std.testing.expect(!atlas.fonts.misses.contains(plex_only[1]));
 }
 
@@ -223,7 +224,7 @@ test "the native fallback port reports a readable monochrome file or none" {
     if (lookup(arrow, &match) == 0) {
         const path = std.mem.sliceTo(&match.path, 0);
         try std.testing.expect(path.len > 0);
-        const bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(@import("../text/FontSource.zig").max_bytes));
+        const bytes = try std.Io.Dir.cwd().readFileAlloc(std.testing.io, path, std.testing.allocator, .limited(FontSource.max_bytes));
         defer std.testing.allocator.free(bytes);
         try std.testing.expect(bytes.len > 0);
     }
@@ -256,10 +257,10 @@ test "font set revision changes on discovery and stays stable through warm raste
     defer atlas.deinit();
     atlas.fonts.lookup = copiedLookup;
     const identity = atlas.fonts.identity;
-    try std.testing.expectEqual(Id.primary, atlas.fonts.source(plex_only[0], .primary));
+    try std.testing.expectEqual(font_id.Id.primary, atlas.fonts.source(plex_only[0], .primary));
     try std.testing.expect(atlas.fonts.discover(std.testing.allocator, plex_only[0]));
     try std.testing.expectEqual(@as(u64, 1), atlas.fonts.revision);
-    try std.testing.expectEqual(Id.fallback_0, atlas.fonts.source(plex_only[0], .primary));
+    try std.testing.expectEqual(font_id.Id.fallback_0, atlas.fonts.source(plex_only[0], .primary));
     try std.testing.expect(!atlas.fonts.discover(std.testing.allocator, plex_only[1]));
     const revision = atlas.fonts.revision;
     var list = QuadList.init(std.testing.allocator);
@@ -302,12 +303,12 @@ test "font discovery retires cached missing glyphs in painting measurement and e
         atlas.fonts.lookup = missingLookup;
         _ = try atlas.measure(cellRun(plex_only[0]));
         _ = try atlas.measure(cellRun(long_text));
-        try std.testing.expectEqual(Id.primary, atlas.shaping_cache.find(key).?.font);
+        try std.testing.expectEqual(font_id.Id.primary, atlas.shaping_cache.find(key).?.font);
         try std.testing.expectEqual(@as(u32, 0), atlas.shaping_cache.find(key).?.glyphs[0].codepoint);
         try std.testing.expect(atlas.editor_shaping_cache.?.find(long_key) != null);
         atlas.fonts.lookup = copiedLookup;
         try std.testing.expect(atlas.fonts.discover(std.testing.allocator, plex_only[1]));
-        try std.testing.expectEqual(Id.fallback_0, atlas.fonts.source(plex_only[0], .primary));
+        try std.testing.expectEqual(font_id.Id.fallback_0, atlas.fonts.source(plex_only[0], .primary));
         var list = QuadList.init(std.testing.allocator);
         defer list.deinit();
         if (comptime std.mem.eql(u8, entrypoint, "paint")) {
@@ -320,7 +321,7 @@ test "font discovery retires cached missing glyphs in painting measurement and e
         }
 
         const resolved = atlas.shaping_cache.find(key).?;
-        try std.testing.expectEqual(Id.fallback_0, resolved.font);
+        try std.testing.expectEqual(font_id.Id.fallback_0, resolved.font);
         try std.testing.expect(resolved.glyphs[0].codepoint != 0);
         try std.testing.expect(atlas.editor_shaping_cache.?.find(long_key) == null);
         try std.testing.expectEqual(atlas.fonts.revision, atlas.shaping_revision);

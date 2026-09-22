@@ -3,7 +3,6 @@
 const ContentType = @import("../../bars/Content.zig");
 const Failure = @import("Failure.zig");
 const BarUpdateCommitType = @import("../../model/BarUpdateCommit.zig");
-const std = @import("std");
 
 pub const Result = union(enum) {
     content: ContentType,

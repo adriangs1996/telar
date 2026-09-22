@@ -1,5 +1,8 @@
 //! Slice 5 of the GUI visual language: pixel chrome bands, the tab strip,
 //! attention dots and rings, pane headers and the toast policy.
+const QuadList = @import("../render/QuadList.zig");
+const frame_widget = @import("../widgets/frame_widget.zig");
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -29,7 +32,7 @@ test "chrome bands leave complete cells below them and share the pointer origin"
         try std.testing.expectEqual([2]u32{ 0, chrome.top_bar }, renderer.origin);
         try std.testing.expect(chrome.vertical() + @as(u32, size.rows) * size.cell_height_px <= 700);
         try std.testing.expect(chrome.vertical() + @as(u32, size.rows + 1) * size.cell_height_px > 700);
-        var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
+        var quads = QuadList.init(std.testing.allocator);
         defer quads.deinit();
         const canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = client.theme_support.default_theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
         const bands = Bands.resolve(&canvas);
@@ -196,7 +199,7 @@ test "the attention ring surrounds an unfocused blocked pane only and the header
     var projection = fixture.projection();
     projection.agents = &agents;
     try fixture.paint(projection);
-    var layout: client.LayoutSnapshot = .{};
+    var layout: data.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
     const renderer = &fixture.session.gui.renderer;
     const blocked_outer = renderer.metrics.rect(renderer.origin, layout.find(second).?.outer);
@@ -235,24 +238,33 @@ test "toasts cap at two and skip a pane already on screen" {
         _ = model.publishNotification(0, .{ .title = title, .message = "done", .target = .{ .focus_pane = @enumFromInt(999) } });
     }
 
-    _ = model.advanceNotifications(client.transition_duration_ns);
+    _ = model.advanceNotifications(data.notifications.transition_duration_ns);
     var overlays: Overlays = .{};
     const renderer = &fixture.session.gui.renderer;
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     renderer.quads.clear();
     var projection = fixture.projection();
-    var widgets: @import("../widgets/frame_widget.zig").List = .{};
+    var widgets: frame_widget.List = .{};
     try overlays.compose(.{ .canvas = &canvas, .projection = &projection }, &widgets);
     try widgets.draw(&canvas);
     overlays.seal();
     try std.testing.expectEqual(@as(usize, Notifications.max_visible * 2), overlays.prepared().notifications.count);
 
-    _ = model.dismissNotification(model.notification_center.itemAt(0).?.id, client.transition_duration_ns);
-    _ = model.dismissNotification(model.notification_center.itemAt(1).?.id, client.transition_duration_ns);
-    _ = model.dismissNotification(model.notification_center.itemAt(2).?.id, client.transition_duration_ns);
-    _ = model.advanceNotifications(client.transition_duration_ns * 3);
-    _ = model.publishNotification(client.transition_duration_ns * 3, .{ .title = "Seen", .message = "visible pane", .target = .{ .focus_pane = Session.pane_id } });
-    _ = model.advanceNotifications(client.transition_duration_ns * 4);
+    _ = model.dismissNotification(model.notification_center.itemAt(0).?.id, data.notifications.transition_duration_ns);
+    _ = model.dismissNotification(model.notification_center.itemAt(1).?.id, data.notifications.transition_duration_ns);
+    _ = model.dismissNotification(model.notification_center.itemAt(2).?.id, data.notifications.transition_duration_ns);
+    _ = model.advanceNotifications(data.notifications.transition_duration_ns * 3);
+    _ = model.publishNotification(
+        data.notifications.transition_duration_ns * 3,
+        .{
+            .title = "Seen",
+            .message = "visible pane",
+            .target = .{
+                .focus_pane = Session.pane_id,
+            },
+        },
+    );
+    _ = model.advanceNotifications(data.notifications.transition_duration_ns * 4);
     renderer.quads.clear();
     projection = fixture.projection();
     widgets = .{};

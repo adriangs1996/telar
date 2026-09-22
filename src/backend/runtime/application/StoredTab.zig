@@ -1,19 +1,14 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const PaneIdType = @import("telar-core").PaneId;
-const max_client_layout_nodes_module = @import("telar-core").max_client_layout_nodes;
-const ClientLayoutNodeType = @import("telar-core").ClientLayoutNode;
-const ClientTabLayoutViewType = @import("telar-core").ClientTabLayoutView;
-const ClientTabLayoutType = @import("telar-core").ClientTabLayout;
+const core = @import("telar-core");
 const StoredTab = @This();
 
-location: TabLocationType,
-focused_pane: PaneIdType,
+location: core.TabLocation,
+focused_pane: core.PaneId,
 fullscreen: bool,
 workspace_active: bool,
-nodes: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined,
+nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined,
 node_count: u8,
 
-pub fn copy(tab: ClientTabLayoutViewType) !StoredTab {
+pub fn copy(tab: core.ClientTabLayoutView) !StoredTab {
     var stored: StoredTab = .{
         .location = tab.location,
         .focused_pane = tab.focused_pane,
@@ -30,7 +25,7 @@ pub fn copy(tab: ClientTabLayoutViewType) !StoredTab {
     return stored;
 }
 
-pub fn schemaLayout(tab: *const StoredTab) ClientTabLayoutType {
+pub fn schemaLayout(tab: *const StoredTab) core.ClientTabLayout {
     return .{
         .location = tab.location,
         .focused_pane = tab.focused_pane,

@@ -1,5 +1,6 @@
 //! Two bounded snapshots for the native renderer's single presentation in flight.
 
+const std = @import("std");
 /// Keeps prepared controls private until their frame is delivered.
 /// Example: `const Presented = GenericPresentedState(HitState);`.
 pub fn Type(comptime Value: type) type {
@@ -40,7 +41,7 @@ pub fn Type(comptime Value: type) type {
         /// Mutates only the unsealed replacement while its frame is prepared.
         /// Example: `try state.preparing().add(target);`
         pub fn preparing(state: *State) *Value {
-            @import("std").debug.assert(!state.sealed);
+            std.debug.assert(!state.sealed);
             return &state.slots[state.current ^ 1];
         }
 

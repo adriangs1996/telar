@@ -4,16 +4,13 @@
 //! is inspected only when that process group changes or while a new group is
 //! inside its bounded acquisition window.
 
+const core = @import("telar-core");
 const builtin = @import("builtin");
 const ProbeInput = @import("ProbeInput.zig");
 const Probe = @import("Probe.zig");
-const Table = @import("telar-core").Table;
 const Identification = @import("Identification.zig");
 const std = @import("std");
 const Cache = @import("Cache.zig");
-const AgentProviderType = @import("telar-core").AgentProvider;
-const max_foreground_name_bytes_module = @import("telar-core").max_foreground_name_bytes;
-const builtin_table_module = @import("telar-core").builtin_table;
 
 const Native = if (builtin.os.tag == .macos) @import("darwin.zig") else void;
 
@@ -32,7 +29,7 @@ pub fn probe(input: ProbeInput) Probe {
     return probeWith(input, identifyProcessGroup);
 }
 
-fn probeWith(input: ProbeInput, comptime identify: fn (*const Table, u32) Identification) Probe {
+fn probeWith(input: ProbeInput, comptime identify: fn (*const core.Table, u32) Identification) Probe {
     const process_group_id = input.process_group_id;
     const previous = input.previous;
 
@@ -78,7 +75,7 @@ fn sameIdentity(left: Cache, right: Cache) bool {
         std.mem.eql(u8, left.name(), right.name());
 }
 
-fn identifyProcessGroup(table: *const Table, process_group_id: u32) Identification {
+fn identifyProcessGroup(table: *const core.Table, process_group_id: u32) Identification {
     return switch (builtin.os.tag) {
         .macos => identifyMacosProcessGroup(table, process_group_id),
         .linux => identifyLinuxProcessGroup(table, process_group_id),
@@ -86,7 +83,7 @@ fn identifyProcessGroup(table: *const Table, process_group_id: u32) Identificati
     };
 }
 
-fn identifyMacosProcessGroup(table: *const Table, process_group_id: u32) Identification {
+fn identifyMacosProcessGroup(table: *const core.Table, process_group_id: u32) Identification {
     if (comptime builtin.os.tag != .macos) {
         return .{};
     }
@@ -132,7 +129,7 @@ fn identifyMacosProcessGroup(table: *const Table, process_group_id: u32) Identif
     return fallback;
 }
 
-fn identifyMacosProcess(table: *const Table, pid: u32) Identification {
+fn identifyMacosProcess(table: *const core.Table, pid: u32) Identification {
     if (comptime builtin.os.tag != .macos) {
         return .{};
     }
@@ -189,7 +186,7 @@ fn readMacosArgv(pid: u32, buffer: []u8) ?[]const u8 {
     return rest[offset..];
 }
 
-fn identifyLinuxProcessGroup(table: *const Table, process_group_id: u32) Identification {
+fn identifyLinuxProcessGroup(table: *const core.Table, process_group_id: u32) Identification {
     if (comptime builtin.os.tag != .linux) {
         return .{};
     }
@@ -216,7 +213,7 @@ fn identifyLinuxProcessGroup(table: *const Table, process_group_id: u32) Identif
     return fallback;
 }
 
-fn identifyLinuxProcess(table: *const Table, pid: u32) Identification {
+fn identifyLinuxProcess(table: *const core.Table, pid: u32) Identification {
     if (comptime builtin.os.tag != .linux) {
         return .{};
     }
@@ -287,7 +284,7 @@ fn readSmallFile(path: []const u8, buffer: []u8) ?[]const u8 {
     return buffer[0..len];
 }
 
-fn identifyCommand(table: *const Table, comm: []const u8, argv: []const u8) AgentProviderType {
+fn identifyCommand(table: *const core.Table, comm: []const u8, argv: []const u8) core.AgentProvider {
     if (providerFromToken(table, comm)) |provider| {
         return provider;
     }
@@ -315,7 +312,7 @@ fn identifyCommand(table: *const Table, comm: []const u8, argv: []const u8) Agen
 
 /// The foreground name a pane shows: the manifest display name for a known
 /// agent, otherwise the executable basename.
-pub fn applicationName(table: *const Table, provider: AgentProviderType, command: []const u8) []const u8 {
+pub fn applicationName(table: *const core.Table, provider: core.AgentProvider, command: []const u8) []const u8 {
     if (provider == .unknown) {
         return boundedCommandName(command);
     }
@@ -325,7 +322,7 @@ pub fn applicationName(table: *const Table, provider: AgentProviderType, command
 
 pub fn boundedCommandName(command: []const u8) []const u8 {
     const basename = pathBasename(command);
-    const len = @min(basename.len, max_foreground_name_bytes_module);
+    const len = @min(basename.len, core.max_foreground_name_bytes);
     const candidate = basename[0..len];
     if (candidate.len == 0 or !std.unicode.utf8ValidateSlice(candidate)) {
         return "";
@@ -334,11 +331,11 @@ pub fn boundedCommandName(command: []const u8) []const u8 {
     return candidate;
 }
 
-fn providerFromToken(table: *const Table, token: []const u8) ?AgentProviderType {
+fn providerFromToken(table: *const core.Table, token: []const u8) ?core.AgentProvider {
     return table.providerFromExecutable(pathBasename(token));
 }
 
-fn providerFromExecutablePath(table: *const Table, path: []const u8) ?AgentProviderType {
+fn providerFromExecutablePath(table: *const core.Table, path: []const u8) ?core.AgentProvider {
     if (providerFromToken(table, path)) |provider| {
         return provider;
     }
@@ -409,15 +406,15 @@ test "process file reads are bounded and missing files return null" {
 }
 
 test "identifies direct agent executables" {
-    try std.testing.expectEqual(AgentProviderType.claude, identifyCommand(&builtin_table_module, "claude", "claude\x00"));
-    try std.testing.expectEqual(AgentProviderType.claude, identifyCommand(&builtin_table_module, "node", "/usr/bin/node\x00/opt/claude-code/claude-code\x00"));
-    try std.testing.expectEqual(AgentProviderType.codex, identifyCommand(&builtin_table_module, "codex", "codex\x00"));
-    try std.testing.expectEqual(AgentProviderType.codex, identifyCommand(&builtin_table_module, "node", "node\x00/usr/lib/node_modules/@openai/codex/bin/codex.js\x00"));
+    try std.testing.expectEqual(core.AgentProvider.claude, identifyCommand(&core.builtin_table, "claude", "claude\x00"));
+    try std.testing.expectEqual(core.AgentProvider.claude, identifyCommand(&core.builtin_table, "node", "/usr/bin/node\x00/opt/claude-code/claude-code\x00"));
+    try std.testing.expectEqual(core.AgentProvider.codex, identifyCommand(&core.builtin_table, "codex", "codex\x00"));
+    try std.testing.expectEqual(core.AgentProvider.codex, identifyCommand(&core.builtin_table, "node", "node\x00/usr/lib/node_modules/@openai/codex/bin/codex.js\x00"));
 }
 
 test "does not infer an agent from arbitrary runtime arguments" {
-    try std.testing.expectEqual(AgentProviderType.unknown, identifyCommand(
-        &builtin_table_module,
+    try std.testing.expectEqual(core.AgentProvider.unknown, identifyCommand(
+        &core.builtin_table,
         "node",
         "node\x00script.js\x00tell claude to review this\x00",
     ));
@@ -425,11 +422,11 @@ test "does not infer an agent from arbitrary runtime arguments" {
 
 test "process acquisition is bounded and cached" {
     const Fake = struct {
-        fn claude(table: *const Table, _: u32) Identification {
+        fn claude(table: *const core.Table, _: u32) Identification {
             return .init(table, .claude, "claude");
         }
 
-        fn unknown(table: *const Table, _: u32) Identification {
+        fn unknown(table: *const core.Table, _: u32) Identification {
             return .init(table, .unknown, "node");
         }
     };
@@ -440,12 +437,12 @@ test "process acquisition is bounded and cached" {
     }, Fake.unknown);
     try std.testing.expect(shell_probe.changed);
     try std.testing.expect(shellForeground(shell_probe.cache, shell));
-    try std.testing.expectEqual(AgentProviderType.unknown, shell_probe.cache.provider);
+    try std.testing.expectEqual(core.AgentProvider.unknown, shell_probe.cache.provider);
 
     const identified = probeWith(.{ .process_group_id = 20, .previous = .{} }, Fake.claude);
     try std.testing.expect(identified.changed);
     try std.testing.expect(identified.inspected);
-    try std.testing.expectEqual(AgentProviderType.claude, identified.cache.provider);
+    try std.testing.expectEqual(core.AgentProvider.claude, identified.cache.provider);
     try std.testing.expectEqualStrings("Claude Code", identified.cache.name());
     const cached = probeWith(.{ .process_group_id = 20, .previous = identified.cache }, Fake.unknown);
     try std.testing.expect(!cached.changed);
@@ -463,16 +460,16 @@ test "process acquisition is bounded and cached" {
 }
 
 test "foreground names are bounded application labels" {
-    try std.testing.expectEqualStrings("Claude Code", applicationName(&builtin_table_module, .claude, "claude"));
-    try std.testing.expectEqualStrings("Pi", applicationName(&builtin_table_module, .pi, "node"));
-    try std.testing.expectEqualStrings("zsh", applicationName(&builtin_table_module, .unknown, "/bin/zsh"));
-    try std.testing.expectEqualStrings("", applicationName(&builtin_table_module, .unknown, "bad\x1bname"));
+    try std.testing.expectEqualStrings("Claude Code", applicationName(&core.builtin_table, .claude, "claude"));
+    try std.testing.expectEqualStrings("Pi", applicationName(&core.builtin_table, .pi, "node"));
+    try std.testing.expectEqualStrings("zsh", applicationName(&core.builtin_table, .unknown, "/bin/zsh"));
+    try std.testing.expectEqualStrings("", applicationName(&core.builtin_table, .unknown, "bad\x1bname"));
 }
 
 test "direct pane-root agents retain provider evidence instead of becoming shells" {
     const Fake = struct {
-        fn identify(table: *const Table, pid: u32) Identification {
-            const provider: AgentProviderType = switch (pid) {
+        fn identify(table: *const core.Table, pid: u32) Identification {
+            const provider: core.AgentProvider = switch (pid) {
                 10 => .claude,
                 11 => .codex,
                 else => .pi,
@@ -480,7 +477,7 @@ test "direct pane-root agents retain provider evidence instead of becoming shell
             return .init(table, provider, "node");
         }
 
-        fn unexpected(_: *const Table, _: u32) Identification {
+        fn unexpected(_: *const core.Table, _: u32) Identification {
             unreachable;
         }
     };
@@ -500,24 +497,24 @@ test "direct pane-root agents retain provider evidence instead of becoming shell
 
 test "pane-root acquisition can recognize an agent after exec in the same process group" {
     const Fake = struct {
-        fn starting(table: *const Table, _: u32) Identification {
+        fn starting(table: *const core.Table, _: u32) Identification {
             return .init(table, .unknown, "node");
         }
 
-        fn ready(table: *const Table, _: u32) Identification {
+        fn ready(table: *const core.Table, _: u32) Identification {
             return .init(table, .codex, "codex");
         }
     };
 
     const root_pid: std.c.pid_t = 10;
     const starting = probeWith(.{ .process_group_id = root_pid, .previous = .init("node") }, Fake.starting);
-    try std.testing.expectEqual(AgentProviderType.unknown, starting.cache.provider);
+    try std.testing.expectEqual(core.AgentProvider.unknown, starting.cache.provider);
     const retry = probeWith(.{ .process_group_id = root_pid, .previous = starting.cache }, Fake.starting);
     try std.testing.expect(retry.inspected);
     try std.testing.expect(!retry.changed);
     try std.testing.expectEqual(starting.cache.attempts + 1, retry.cache.attempts);
     const ready = probeWith(.{ .process_group_id = root_pid, .previous = retry.cache }, Fake.ready);
-    try std.testing.expectEqual(AgentProviderType.codex, ready.cache.provider);
+    try std.testing.expectEqual(core.AgentProvider.codex, ready.cache.provider);
     try std.testing.expect(ready.inspected);
     try std.testing.expect(!shellForeground(ready.cache, root_pid));
 }

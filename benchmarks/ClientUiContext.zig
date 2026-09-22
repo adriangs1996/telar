@@ -1,31 +1,27 @@
-const TabsModel = @import("telar-client").TabsModel;
-const ScreenType = @import("telar-frontend").Screen;
-const State = @import("telar-frontend").State;
+const client = @import("telar-client");
+const frontend = @import("telar-frontend");
+const core = @import("telar-core");
+const data = @import("model");
 const std = @import("std");
-const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const main = @import("main.zig");
-const default_width = @import("telar-client").default_width;
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
-const CompositorType = @import("telar-frontend").Compositor;
 const ClientUiContext = @This();
 
-tabs: TabsModel,
-screen: ScreenType,
-view: State,
+tabs: client.TabsModel,
+screen: frontend.Screen,
+view: frontend.State,
 
 pub fn init(gpa: std.mem.Allocator, tab_count: usize) !ClientUiContext {
-    std.debug.assert(tab_count >= 1 and tab_count <= max_tabs_per_workspace);
-    var tabs = TabsModel.init(gpa);
+    std.debug.assert(tab_count >= 1 and tab_count <= core.max_tabs_per_workspace);
+    var tabs = client.TabsModel.init(gpa);
     errdefer tabs.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try tabs.bootstrap(.{
         .pane_id = @enumFromInt(1),
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(1) },
-        .size = .{ .cols = main.cols - default_width, .rows = main.rows - 2 },
+        .size = .{ .cols = main.cols - data.sidebar.default_width, .rows = main.rows - 2 },
     });
     for (1..tab_count) |index| {
-        var label_buffer: [max_tab_label_bytes_module]u8 = undefined;
+        var label_buffer: [core.max_tab_label_bytes]u8 = undefined;
         const label = try std.fmt.bufPrint(&label_buffer, "tab-{d}", .{index + 1});
         _ = try tabs.addCreated(.{
             .location = .{
@@ -35,14 +31,14 @@ pub fn init(gpa: std.mem.Allocator, tab_count: usize) !ClientUiContext {
             .position = @intCast(index),
             .label = label,
             .root_pane_id = @enumFromInt(index + 1),
-        }, .{ .cols = main.cols - default_width, .rows = main.rows - 2 });
+        }, .{ .cols = main.cols - data.sidebar.default_width, .rows = main.rows - 2 });
     }
-    var screen = try ScreenType.init(gpa, main.cols, main.rows);
+    var screen = try frontend.Screen.init(gpa, main.cols, main.rows);
     errdefer screen.deinit();
-    var view = try State.init(gpa, main.cols, main.rows);
+    var view = try frontend.State.init(gpa, main.cols, main.rows);
     errdefer view.deinit();
     const model = &tabs.active().?.model;
-    var compositor = CompositorType.init(gpa);
+    var compositor = frontend.Compositor.init(gpa);
     defer compositor.deinit();
     _ = try compositor.render(.{
         .model = model,

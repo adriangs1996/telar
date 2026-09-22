@@ -1,3 +1,7 @@
+const HistoryModalLayout = @import("../widgets/overlays/HistoryModalLayout.zig");
+const Quad = @import("../render/Quad.zig");
+const HistoryModalMetrics = @import("../widgets/overlays/HistoryModalMetrics.zig");
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -67,7 +71,11 @@ test "native prompt renders selections and owns its gesture until release" {
 test "native modal closure keeps its presented pointer barrier across failed frames" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
-    const move: client.Mouse = .{ .x = 1, .y = 1, .kind = .move };
+    const move: data.Mouse = .{
+        .x = 1,
+        .y = 1,
+        .kind = .move,
+    };
     fixture.model.name_prompt.begin(.create_workspace);
     try fixture.prepare();
     try std.testing.expect(fixture.overlays.pointer(move) == null);
@@ -97,13 +105,19 @@ test "native notification replacement retains the delivered card identity" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const first = fixture.model.publishNotification(0, .{ .title = "First", .message = "Delivered" }).id;
-    _ = fixture.model.advanceNotifications(client.transition_duration_ns);
+    _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns);
     try fixture.paint();
     const close = fixture.overlays.presented().notifications.hits[1].bounds;
-    _ = fixture.model.dismissNotification(first, client.transition_duration_ns);
-    _ = fixture.model.advanceNotifications(client.transition_duration_ns * 2);
-    const second = fixture.model.publishNotification(client.transition_duration_ns * 2, .{ .title = "Next", .message = "Prepared" }).id;
-    _ = fixture.model.advanceNotifications(client.transition_duration_ns * 3);
+    _ = fixture.model.dismissNotification(first, data.notifications.transition_duration_ns);
+    _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns * 2);
+    const second = fixture.model.publishNotification(
+        data.notifications.transition_duration_ns * 2,
+        .{
+            .title = "Next",
+            .message = "Prepared",
+        },
+    ).id;
+    _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns * 3);
     try fixture.prepare();
     try std.testing.expectEqual(close, fixture.overlays.prepared().notifications.hits[1].bounds);
     const mouse: @import("../input/PointerEvent.zig") = .{ .x = close.x, .y = close.y, .kind = .press };
@@ -204,7 +218,7 @@ test "native notification close has precedence and cannot leak its release to a 
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const id = fixture.model.publishNotification(0, .{ .title = "Build complete", .message = "Open result", .target = .{ .select_tab = @enumFromInt(7) } }).id;
-    _ = fixture.model.advanceNotifications(client.transition_duration_ns);
+    _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns);
     try fixture.paint();
     try std.testing.expectEqual(@as(usize, 2), fixture.overlays.presented().notifications.count);
     const card = fixture.overlays.presented().notifications.hits[0].bounds;
@@ -278,7 +292,7 @@ test "native new-context form paints both fields, the completion list and the co
     _ = fixture.model.name_prompt.apply(.{ .insert = "agents" });
     _ = fixture.model.name_prompt.apply(.tab);
     _ = fixture.model.name_prompt.apply(.{ .insert = "/work/te" });
-    var result: client.PathCompletionResult = .{};
+    var result: data.PathCompletionResult = .{};
     try result.setBase("/work");
     try result.append("telar");
     try result.append("tests");
@@ -385,10 +399,10 @@ test "native context layout ignores terminal cell geometry and reuses its warm d
     try std.testing.expectEqual(@as(usize, 0), failing.allocated_bytes);
 }
 
-fn historyRows(fixture: *Fixture) ![]@import("../render/Quad.zig").Quad {
+fn historyRows(fixture: *Fixture) ![]Quad.Quad {
     const canvas = fixture.canvas();
-    const layout = @import("../widgets/overlays/HistoryModalLayout.zig").measure(@import("../widgets/overlays/HistoryModalMetrics.zig").fromCanvas(&canvas), false);
-    var result: std.ArrayList(@import("../render/Quad.zig").Quad) = .empty;
+    const layout = HistoryModalLayout.measure(HistoryModalMetrics.fromCanvas(&canvas), false);
+    var result: std.ArrayList(Quad.Quad) = .empty;
     errdefer result.deinit(std.testing.allocator);
     for (fixture.renderer.quads.items()) |quad| {
         if (quad.y >= layout.results.y and quad.y + quad.height <= layout.results.y + layout.results.height) {
@@ -399,7 +413,7 @@ fn historyRows(fixture: *Fixture) ![]@import("../render/Quad.zig").Quad {
     return result.toOwnedSlice(std.testing.allocator);
 }
 
-fn expectHistoryRows(fixture: *Fixture, expected: []const @import("../render/Quad.zig").Quad) !void {
+fn expectHistoryRows(fixture: *Fixture, expected: []const Quad.Quad) !void {
     const actual = try historyRows(fixture);
     defer std.testing.allocator.free(actual);
     try std.testing.expectEqualDeep(expected, actual);

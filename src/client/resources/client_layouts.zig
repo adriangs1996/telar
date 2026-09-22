@@ -1,50 +1,19 @@
-//! Synchronizes the reconnectable subset of disposable client layout state.
+//! Captures layout versions and serializes model state into caller-owned buffers.
+const core = @import("telar-core");
+const Model = @import("../model/Model.zig");
 
-const Client = @import("../AttachedClient.zig");
-const max_client_layout_nodes_module = @import("telar-core").max_client_layout_nodes;
-const ClientLayoutNodeType = @import("telar-core").ClientLayoutNode;
-const max_client_layout_tabs_module = @import("telar-core").max_client_layout_tabs;
-const ClientTabLayoutType = @import("telar-core").ClientTabLayout;
 const Version = @import("Version.zig");
-const ClientLayoutUpdateType = @import("telar-core").ClientLayoutUpdate;
 const std = @import("std");
 
-/// Coalesces the complete, canonical layout of the current workspace into the
-/// runtime outbox. Tabs without a runtime snapshot are omitted until known.
-///
-/// ```zig
-/// try client_layouts.observe(client);
-/// ```
-pub fn observe(client: *Client) !void {
-    if (!client.client_layouts.snapshot_received) {
-        return;
-    }
-
-    const version = captureVersion(client) orelse return;
-    if (client.client_layouts.last_sent) |last| {
-        if (last.eql(&version)) {
-            return;
-        }
-    }
-
-    var nodes: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
-    var tabs: [max_client_layout_tabs_module]ClientTabLayoutType = undefined;
-    const update = buildUpdate(client, &nodes, &tabs) orelse return;
-    client.sendRuntimeClientLayout(update) catch |err| switch (err) {
-        error.ClientOutboxFull, error.TooManyPendingClientLayouts => return,
-        else => return err,
-    };
-
-    client.client_layouts.last_sent = version;
-}
-
-fn captureVersion(client: *Client) ?Version {
-    const active_tab = client.model.activeTabLocation() orelse return null;
+/// Captures revisions of loaded tabs; an empty workspace has no export.
+/// Example: `const version = client_layouts.captureVersion(model) orelse return;`
+pub fn captureVersion(model: *Model) ?Version {
+    const active_tab = model.activeTabLocation() orelse return null;
     var version: Version = .{
-        .chrome = client.model.version().chrome,
+        .chrome = model.version().chrome,
         .active_tab = active_tab,
     };
-    var tabs = client.model.workspace.tabIterator();
+    var tabs = model.workspace.tabIterator();
     while (tabs.next()) |tab| {
         if (!tab.snapshot_loaded) {
             continue;
@@ -63,13 +32,15 @@ fn captureVersion(client: *Client) ?Version {
     return version;
 }
 
-fn buildUpdate(client: *Client, nodes: *[max_client_layout_nodes_module]ClientLayoutNodeType, output: *[max_client_layout_tabs_module]ClientTabLayoutType) ?ClientLayoutUpdateType {
-    const active_tab = client.model.activeTabLocation() orelse return null;
-    var scratch: [max_client_layout_nodes_module]ClientLayoutNodeType = undefined;
+/// Writes a bounded layout snapshot into caller-owned node and tab buffers.
+/// Example: `const update = client_layouts.buildUpdate(model, &nodes, &tabs) orelse return;`
+pub fn buildUpdate(model: *Model, nodes: *[core.max_client_layout_nodes]core.ClientLayoutNode, output: *[core.max_client_layout_tabs]core.ClientTabLayout) ?core.ClientLayoutUpdate {
+    const active_tab = model.activeTabLocation() orelse return null;
+    var scratch: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
     var node_count: usize = 0;
     var tab_count: usize = 0;
     var active_included = false;
-    var tabs = client.model.workspace.tabIterator();
+    var tabs = model.workspace.tabIterator();
     while (tabs.next()) |tab| {
         if (!tab.snapshot_loaded) {
             continue;
@@ -99,9 +70,9 @@ fn buildUpdate(client: *Client, nodes: *[max_client_layout_nodes_module]ClientLa
     }
 
     return .{
-        .sidebar_visible = client.model.sidebarVisible(),
-        .sidebar_width = client.model.sidebarWidth(),
-        .workspace_list_collapsed = client.model.workspaceListCollapsed(),
+        .sidebar_visible = model.sidebarVisible(),
+        .sidebar_width = model.sidebarWidth(),
+        .workspace_list_collapsed = model.workspaceListCollapsed(),
         .active_tab = active_tab,
         .tabs = output[0..tab_count],
     };

@@ -1,10 +1,13 @@
 //! Disposable native controls. The shared client remains the sole navigation owner.
+const SidebarRegions = @import("SidebarRegions.zig");
+const core = @import("telar-core");
+const action_module = @import("action.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const HitMap = @import("HitMap.zig");
-const Action = @import("action.zig").Action;
 const Bands = @import("Bands.zig");
 const SidebarState = @import("SidebarState.zig");
 const AgentAges = @import("AgentAges.zig");
@@ -22,7 +25,7 @@ ages: AgentAges = .{},
 rings: RingFades = .{},
 progress: @import("ProgressMotions.zig") = .{},
 favicons: Favicons = .{},
-hovered: ?Action = null,
+hovered: ?action_module.Action = null,
 gesture_button: ?u8 = null,
 band_gesture: ?u8 = null,
 sidebar_resize_active: bool = false,
@@ -38,7 +41,7 @@ pub fn begin(chrome: *Chrome, canvas: *Canvas, projection: *const client.Project
     const pending = chrome.maps.begin();
     try registerPanes(&pending.hits, projection.*);
     pending.bands = Bands.resolve(canvas);
-    pending.sidebar_regions = try @import("SidebarRegions.zig").resolve(canvas, pending.bands.sidebar, projection.workspaces.count);
+    pending.sidebar_regions = try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.count);
     chrome.ages.observe(projection.agents, chrome.now_ns);
     chrome.progress.begin();
     const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = chrome.hovered, .presented_workspace = chrome.presented().workspace, .ages = &chrome.ages, .favicons = &chrome.favicons, .progress = &chrome.progress, .sidebar_regions = &pending.sidebar_regions };
@@ -97,7 +100,7 @@ pub fn widgetPointer(chrome: *Chrome, event: PointerEvent, resizing: bool) void 
 /// Retains a cell-control gesture through release, even outside its
 /// bounds. Compare `revision` around this call to request a local repaint.
 /// Example: `const command = chrome.pointer(mouse);`
-pub fn pointer(chrome: *Chrome, event: client.Mouse) client.ViewInteractionCommand {
+pub fn pointer(chrome: *Chrome, event: data.Mouse) client.ViewInteractionCommand {
     const visible = chrome.presented();
     const action = visible.hits.at(.{ event.x, event.y });
     chrome.hover(action);
@@ -199,7 +202,7 @@ pub fn sidebarScrollAt(chrome: *Chrome, point: [2]f64) ?*@import("PixelScroll.zi
 /// hand over a control and the horizontal resize cursor over the sidebar
 /// edge or while it is being dragged.
 /// Example: `hover.assign(null, chrome.bandShape(event));`
-pub fn bandShape(chrome: *const Chrome, event: PointerEvent) @import("telar-core").PointerShape {
+pub fn bandShape(chrome: *const Chrome, event: PointerEvent) core.PointerShape {
     if (chrome.sidebar_resize_active) {
         return .col_resize;
     }
@@ -231,7 +234,7 @@ fn buttonIntent(intent: client.Intent, button: u8) client.Intent {
     return if (button != 0) .none else intent;
 }
 
-fn hover(chrome: *Chrome, action: ?Action) void {
+fn hover(chrome: *Chrome, action: ?action_module.Action) void {
     if (!std.meta.eql(action, chrome.hovered)) {
         chrome.hovered = action;
         chrome.invalidate();
@@ -240,7 +243,7 @@ fn hover(chrome: *Chrome, action: ?Action) void {
 
 fn registerPanes(hits: *HitMap, projection: client.Projection) !void {
     const model = projection.model orelse return;
-    var layout: client.LayoutSnapshot = .{};
+    var layout: data.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
     for (layout.views()) |view| {
         try hits.add(.{ .area = view.content, .action = .{ .pane_content = view.pane_id } });

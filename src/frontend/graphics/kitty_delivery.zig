@@ -1,19 +1,13 @@
 //! Kitty delivery state. The shared catalog owns pixels, quotas and revisions.
 
-const ImageStateType = @import("ImageState.zig");
-const PlacementStateType = @import("PlacementState.zig");
-const GenericResourceStore = @import("telar-client").GenericResourceStore;
+const client = @import("telar-client");
+const core = @import("telar-core");
 const Compression = @import("Compression.zig");
 const std = @import("std");
 const kitty = @import("kitty.zig");
-const supportsSharedMemory = @import("telar-client").supportsSharedMemory;
-const PaneIdType = @import("telar-core").PaneId;
-const ImageIdentity = @import("telar-client").ImageIdentity;
 const PartialPlacement = @import("PartialPlacement.zig");
-const enabled_module = @import("telar-core").enabled;
-const PlacementIdentity = @import("telar-client").PlacementIdentity;
 
-pub const Store = GenericResourceStore(@This());
+pub const Store = client.GenericResourceStore(@This());
 const ImageEntry = Store.ImageEntry;
 const PlacementEntry = Store.PlacementEntry;
 
@@ -209,7 +203,7 @@ pub fn sharedPixelsConsumed(_: *Store, entry: *const ImageEntry) bool {
     if (entry.delivery.host_acked) {
         return true;
     }
-    if (comptime !supportsSharedMemory()) {
+    if (comptime !client.supportsSharedMemory()) {
         return false;
     }
     const fd = std.c.shm_open(
@@ -228,7 +222,7 @@ pub fn sharedPixelsConsumed(_: *Store, entry: *const ImageEntry) bool {
 }
 
 pub fn expireSharedTransmissions(store: *Store) void {
-    if (comptime !supportsSharedMemory()) {
+    if (comptime !client.supportsSharedMemory()) {
         return;
     }
     var images = store.images.iterator();
@@ -251,7 +245,7 @@ pub fn expireSharedTransmissions(store: *Store) void {
     }
 }
 
-pub fn loseSharedName(store: *Store, pane_id: PaneIdType, image: *ImageEntry) void {
+pub fn loseSharedName(store: *Store, pane_id: core.PaneId, image: *ImageEntry) void {
     const shared = if (image.shared) |*value| value else return;
     _ = std.c.shm_unlink(shared.sliceZ());
     image.delivery.emitted_shared = false;
@@ -368,7 +362,7 @@ pub fn popDelete(store: *Store) ?kitty.Delete {
     return value;
 }
 
-pub fn exteriorGenerationLive(store: *const Store, key: ImageIdentity, external_id: u32) bool {
+pub fn exteriorGenerationLive(store: *const Store, key: client.ImageIdentity, external_id: u32) bool {
     if (store.delivery.partial) |partial| {
         if (std.meta.eql(partial.key, key)) {
             return true;
@@ -428,15 +422,15 @@ pub fn capturePartialPlacements(store: *Store) void {
     }
 }
 
-pub fn imageCreated(store: *Store) !ImageStateType {
+pub fn imageCreated(store: *Store) !ImageState {
     return .{ .external_id = try allocateImageId(store) };
 }
-pub fn placementCreated(store: *Store) !PlacementStateType {
+pub fn placementCreated(store: *Store) !PlacementState {
     return .{ .external_id = try allocatePlacementId(store) };
 }
 pub const releaseImage = freeCompression;
 pub fn imageDeleted(store: *Store, entry: ImageEntry) void {
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         if (entry.retire_pending and entry.delivery.emitted_shared and entry.delivery.transmitted_ns != 0 and store.delivery.clock_ns != 0) {
             store.delivery.retire_latency.observe(store.delivery.clock_ns -| entry.delivery.transmitted_ns);
         }
@@ -449,7 +443,7 @@ pub fn placementDeleted(store: *Store, entry: PlacementEntry) void {
         queueDelete(store, .{ .placement = .{ .image_id = image_id, .placement_id = entry.delivery.external_id } });
     }
 }
-pub fn placementChanged(store: *Store, key: PlacementIdentity, entry: *PlacementEntry) void {
+pub fn placementChanged(store: *Store, key: client.PlacementIdentity, entry: *PlacementEntry) void {
     entry.delivery.dirty = true;
     rememberPartialPlacement(store, .{ .pane_id = key.pane_id, .placement = entry.placement, .external_id = entry.delivery.external_id });
 }
@@ -460,7 +454,7 @@ pub fn placementVisibility(store: *Store, entry: *PlacementEntry, visible: bool)
     entry.delivery.emitted_image_id = null;
     entry.delivery.dirty = visible;
 }
-pub fn canRelease(store: *Store, key: ImageIdentity, entry: *const ImageEntry) bool {
+pub fn canRelease(store: *Store, key: client.ImageIdentity, entry: *const ImageEntry) bool {
     if (exteriorGenerationLive(store, key, entry.delivery.external_id) or !sharedPixelsConsumed(store, entry)) {
         return false;
     }

@@ -1,5 +1,5 @@
+const data = @import("model");
 const keybind = @import("keybind.zig");
-const Control = @import("telar-client").Control;
 const term = @import("../presentation/screen_support.zig");
 const MouseCapture = @This();
 
@@ -10,7 +10,7 @@ pub fn forward(capture: *MouseCapture, bytes: []const u8) !void {
     capture.forwarded += bytes.len;
 }
 
-pub fn action(_: *MouseCapture, _: keybind.TestAction) !Control {
+pub fn action(_: *MouseCapture, _: keybind.TestAction) !data.KeybindControl {
     return .continue_routing;
 }
 

@@ -1,6 +1,5 @@
-const WorkType = @import("Work.zig");
+const client = @import("telar-client");
 const std = @import("std");
-const TokenType = @import("telar-client").Token;
 const FastWrite = @import("FastWrite.zig");
 const Output = @This();
 
@@ -10,7 +9,7 @@ writer: std.Io.Writer,
 buffers: [2][]u8,
 active: u1 = 0,
 pending: bool = false,
-delivery: ?TokenType = null,
+delivery: ?client.Token = null,
 draw_deferred: bool = false,
 media_deferred: bool = false,
 fast_write: ?FastWrite = null,
@@ -45,7 +44,7 @@ pub fn prepareFrame(output: *Output, cells: usize) !void {
 
 /// Seals bytes without copying. The returned borrow ends at complete().
 /// Example: `const work = output.begin() orelse return;`.
-pub fn begin(output: *Output) ?WorkType {
+pub fn begin(output: *Output) ?Work {
     if (output.pending or output.writer.end == 0) {
         return null;
     }
@@ -59,7 +58,7 @@ pub fn begin(output: *Output) ?WorkType {
 
 /// Attempts one nonblocking prefix before handing the remaining bytes off.
 /// Example: `const remaining = try output.tryWrite(work);`.
-pub fn tryWrite(output: *Output, work: WorkType) !WorkType {
+pub fn tryWrite(output: *Output, work: Work) !Work {
     std.debug.assert(output.pending);
     const fast = output.fast_write orelse return work;
     const written = try fast.write(fast.context, work.bytes);
@@ -72,7 +71,7 @@ pub fn tryWrite(output: *Output, work: WorkType) !WorkType {
 
 /// Ends the borrow before propagating failure. Failed writes never retire damage.
 /// Example: `const delivery = try output.complete(result);`.
-pub fn complete(output: *Output, result: anyerror!void) !?TokenType {
+pub fn complete(output: *Output, result: anyerror!void) !?client.Token {
     std.debug.assert(output.pending);
     output.pending = false;
     const delivery = output.delivery;
@@ -91,7 +90,7 @@ pub fn deinit(output: *Output) void {
 
 /// Runs exclusively on the host-output actor.
 /// Example: `try Output.write(work);`.
-pub fn write(work: WorkType) anyerror!void {
+pub fn write(work: Work) anyerror!void {
     try work.target.writeAll(work.bytes);
     try work.target.flush();
 }

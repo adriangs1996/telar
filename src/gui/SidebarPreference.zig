@@ -2,6 +2,7 @@
 //! state seeded from `gui.sidebar.width`, moved by the keyboard and the
 //! pointer, and replaced when a reload changes the configured value. It is
 //! never persisted; the Lua file is the durable form.
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const SidebarBand = @import("widgets/SidebarBand.zig");
@@ -33,7 +34,7 @@ pub fn observe(preference: *Preference, band: SidebarBand) void {
 
 /// Moves the preference by one keyboard step; false when the bounds held it.
 /// Example: `if (gui.sidebar.step(.right)) gui.chrome.invalidate();`
-pub fn step(preference: *Preference, direction: client.SidebarDirection) bool {
+pub fn step(preference: *Preference, direction: data.actions.SidebarDirection) bool {
     const delta: f32 = switch (direction) {
         .left => -SidebarBand.logical_step,
         .right => SidebarBand.logical_step,

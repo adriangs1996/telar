@@ -1,18 +1,21 @@
 //! Cell targets become authoritative only after their frame is delivered.
+const client = @import("telar-client");
+const data = @import("model");
+const std = @import("std");
 const core = @import("telar-core");
 const widget = @import("../../widgets/context_support.zig");
 const GenericHits = @import("../../ui/GenericHits.zig").Type;
 const TabDrag = @This();
 
-gesture: @import("telar-client").TabDrag = .{},
-escape_key: ?@import("telar-client").Physical = null,
+gesture: client.TabDrag = .{},
+escape_key: ?data.Physical = null,
 hits: GenericHits(core.TabId, core.max_tabs_per_workspace) = .{},
 workspace: ?core.WorkspaceLocation = null,
 
 /// Example: `drag.present(&view.hits, delivered_workspace);`
 pub fn present(drag: *TabDrag, hits: *const widget.Hits, workspace: ?core.WorkspaceLocation) void {
     if (drag.gesture.source) |source| {
-        if (!@import("std").meta.eql(@as(?core.WorkspaceLocation, source.workspace), workspace)) {
+        if (!std.meta.eql(@as(?core.WorkspaceLocation, source.workspace), workspace)) {
             drag.gesture.cancel();
         }
     }
@@ -31,7 +34,7 @@ pub fn present(drag: *TabDrag, hits: *const widget.Hits, workspace: ?core.Worksp
 
 /// Includes the one-cell gaps between tabs in the nearest insertion slot.
 /// Example: `const target = drag.destination(mouse);`
-pub fn destination(drag: *const TabDrag, mouse: @import("telar-client").Mouse) ?core.TabMoveTarget {
+pub fn destination(drag: *const TabDrag, mouse: data.Mouse) ?core.TabMoveTarget {
     const entries = drag.hits.registered();
     if (entries.len == 0) {
         return null;

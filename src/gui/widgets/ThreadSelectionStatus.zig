@@ -1,7 +1,9 @@
 //! Reader status occupies the existing footer rather than obscuring selectable text.
+const core = @import("telar-core");
+const TextFit = @import("TextFit.zig");
 const Status = @This();
 bounds: @import("../render/Rect.zig"),
-pane_id: @import("telar-core").PaneId,
+pane_id: core.PaneId,
 
 /// Example: `try status.draw(canvas);`
 pub fn draw(status: Status, canvas: *@import("Canvas.zig")) !void {
@@ -21,7 +23,7 @@ pub fn draw(status: Status, canvas: *@import("Canvas.zig")) !void {
         .copy_failed => "Could not copy · selection kept for retry",
         .geometry_limit => "Selection exceeds the visible text limit · reduce the selected area",
     } else if (selection.blocked_edge) "Clear selection with Esc to load more messages" else if (selection.keyboard) "Copy mode · arrows/hjkl · v select · y copy · Esc exit" else if (selection.selected()) "Text selected · Cmd/Ctrl+C copy · Esc clear" else return;
-    var storage: [@import("TextFit.zig").max_bytes]u8 = undefined;
+    var storage: [TextFit.max_bytes]u8 = undefined;
     var label: @import("Label.zig") = .{ .text = text, .face = .sans, .size = .small, .color = if (selection.problem != null or selection.blocked_edge) canvas.theme.palette.yellow else canvas.theme.palette.subtext0 };
     label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = status.bounds.width }).fit(label, &storage);
     _ = try canvas.textAt(status.bounds, label);

@@ -1,5 +1,3 @@
-const RecordType = @import("Record.zig");
-const PacerStats = @import("PacerStats.zig");
 const pace = @import("pace.zig");
 const std = @import("std");
 /// Bounds the frame rate without adding latency to an idle UI.
@@ -31,7 +29,7 @@ input_frames: u32 = pace.default_input_frames,
 last_input_ns: ?u64 = null,
 /// Grace frames left for the current input.
 input_frames_left: u32 = 0,
-stats: PacerStats = .{},
+stats: Stats = .{},
 
 pub const Stats = @import("PacerStats.zig");
 
@@ -59,7 +57,7 @@ pub fn waitUntil(p: *const Pacer, now: u64) ?u64 {
 /// ```zig
 /// pacer.record(.{ .now = now_ns, .scheduled_deadline = deadline_ns, .absorbed = pending_updates });
 /// ```
-pub fn record(p: *Pacer, frame: RecordType) void {
+pub fn record(p: *Pacer, frame: Record) void {
     std.debug.assert(p.interval != 0);
     const usable = p.available(frame.now);
     if (usable == 0 and frame.scheduled_deadline == null) {

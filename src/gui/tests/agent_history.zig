@@ -1,3 +1,4 @@
+const native = @import("../native/native.zig");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -5,7 +6,6 @@ const client = @import("telar-client");
 const Fixture = @import("ConversationFixture.zig");
 const Flow = @import("../widgets/ThreadFlow.zig");
 const Target = @import("../widgets/interaction/Target.zig");
-const Window = client.AgentHistoryWindow;
 
 fn snapshot(first: u64) !*core.AgentThreadSnapshot {
     const value = try std.testing.allocator.create(core.AgentThreadSnapshot);
@@ -74,7 +74,7 @@ test "collapsed turns prefetch enough visible content without replacing the last
     try fixture.enableCache();
     const live = try foldedTurn(1000);
     defer std.testing.allocator.destroy(live);
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     defer std.testing.allocator.destroy(window);
     window.start(live, 1);
     const page = try std.testing.allocator.create(core.AgentHistoryPage);
@@ -84,7 +84,7 @@ test "collapsed turns prefetch enough visible content without replacing the last
     flow.thread.history = window;
     flow.thread.history_generation = 1;
     var loaded: usize = 0;
-    while (loaded < Window.capacity) : (loaded += 1) {
+    while (loaded < client.AgentHistoryWindow.capacity) : (loaded += 1) {
         try publish(&fixture, &flow);
         flow.thread.transcript_scroll = flow.resolved_scroll;
         flow.thread.transcript_anchor_revision += 1;
@@ -100,7 +100,7 @@ test "collapsed turns prefetch enough visible content without replacing the last
         window.pending = .older;
         try std.testing.expect(window.apply(page));
     }
-    try std.testing.expect(loaded > 2 and loaded < Window.capacity);
+    try std.testing.expect(loaded > 2 and loaded < client.AgentHistoryWindow.capacity);
     try std.testing.expect(flow.height >= flow.bounds.height);
     try std.testing.expectEqual(2 * @as(usize, window.count), flow.len);
     for (flow.rows[1..flow.len], flow.rows[0 .. flow.len - 1]) |row, previous| {
@@ -118,15 +118,15 @@ test "prefetch replaces only offscreen pages at capacity and preserves fractiona
     try fixture.enableCache();
     const live = try snapshot(1000);
     defer std.testing.allocator.destroy(live);
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     defer std.testing.allocator.destroy(window);
     window.start(live, 1);
-    for (0..Window.capacity) |index| {
+    for (0..client.AgentHistoryWindow.capacity) |index| {
         const source = try snapshot(100 + index * 10);
         defer std.testing.allocator.destroy(source);
         window.pages[index] = .{ .request_id = @enumFromInt(1), .view_generation = 1, .snapshot = source.*, .has_before = true, .has_after = true };
     }
-    window.count = Window.capacity;
+    window.count = client.AgentHistoryWindow.capacity;
     var flow = flowFor(live);
     flow.thread.history = window;
     flow.thread.history_generation = 1;
@@ -145,8 +145,8 @@ test "prefetch replaces only offscreen pages at capacity and preserves fractiona
     try std.testing.expect(window.apply(page));
     try publish(&fixture, &flow);
     try std.testing.expectApproxEqAbs(before, try rowY(&flow, 100), 0.001);
-    try std.testing.expectError(error.MissingHistoryRow, rowY(&flow, 100 + (Window.capacity - 1) * 10));
-    try std.testing.expectEqual(@as(u8, Window.capacity), window.count);
+    try std.testing.expectError(error.MissingHistoryRow, rowY(&flow, 100 + (client.AgentHistoryWindow.capacity - 1) * 10));
+    try std.testing.expectEqual(@as(u8, client.AgentHistoryWindow.capacity), window.count);
 
     flow.bounds.height = flow.height + 100;
     flow.thread.transcript_scroll = 0;
@@ -162,7 +162,7 @@ test "prepending history preserves the delivered message anchor through failed d
     defer std.testing.allocator.destroy(live);
     const earlier = try snapshot(10);
     defer std.testing.allocator.destroy(earlier);
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     defer std.testing.allocator.destroy(window);
     var flow = flowFor(live);
     var canvas = fixture.canvas();
@@ -204,7 +204,7 @@ test "history seam deduplicates exact provider fragments and preserves the newer
     const earlier = try snapshot(17);
     defer std.testing.allocator.destroy(earlier);
     earlier.item_storage[3].identity = 999;
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     defer std.testing.allocator.destroy(window);
     window.start(live, 1);
     window.pages[1] = window.pages[0];
@@ -259,7 +259,7 @@ test "history scroll can reach the beginning of two newline-heavy pages" {
     defer fixture.deinit();
     const live = try snapshot(20);
     defer std.testing.allocator.destroy(live);
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     defer std.testing.allocator.destroy(window);
     window.start(live, 1);
     window.pages[1] = window.pages[0];
@@ -383,7 +383,7 @@ test "loading newer messages preserves the delivered anchor and earlier context"
     defer std.testing.allocator.destroy(earlier);
     const later = try snapshot(30);
     defer std.testing.allocator.destroy(later);
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     defer std.testing.allocator.destroy(window);
     window.start(live, 1);
     window.pages[1] = window.pages[0];
@@ -476,7 +476,7 @@ test "historical copy and link targets resolve owned page bytes and retire on ev
     defer session.deinit();
     const gui = session.gui;
     const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     window.start(pane.agent_thread.?, 1);
     pane.agent_history = window;
     const page = &window.pages[0].snapshot;
@@ -494,7 +494,7 @@ test "historical copy and link targets resolve owned page bytes and retire on ev
     const items = @import("../widgets/interaction/thread_items.zig");
     try std.testing.expect(items.eligible(gui, target));
     try items.activate(gui, target);
-    var request: @import("../native/native.zig").HostRequest = .{};
+    var request: native.HostRequest = .{};
     try std.testing.expect(gui.host.next(&request));
     try std.testing.expectEqualStrings(text, request.text.?[0..request.len]);
     pane.clearHistory();
@@ -514,15 +514,15 @@ test "reused provider item IDs in different turns retain both messages anchors a
     const repeated = &earlier.item_storage[3];
     @memcpy(earlier.metadata_storage[repeated.source_turn_offset..][0..6], "Turn-2");
     try std.testing.expectEqualStrings(repeated.sourceId(earlier), live.item_storage[0].sourceId(live));
-    try std.testing.expect(!Window.sameFragment(.{ .snapshot = earlier, .item = repeated }, .{ .snapshot = live, .item = &live.item_storage[0] }));
-    try std.testing.expect(Window.itemKey(earlier, repeated) != Window.itemKey(live, &live.item_storage[0]));
+    try std.testing.expect(!client.AgentHistoryWindow.sameFragment(.{ .snapshot = earlier, .item = repeated }, .{ .snapshot = live, .item = &live.item_storage[0] }));
+    try std.testing.expect(client.AgentHistoryWindow.itemKey(earlier, repeated) != client.AgentHistoryWindow.itemKey(live, &live.item_storage[0]));
     var flow = flowFor(live);
     var canvas = fixture.canvas();
     try flow.resolve(&canvas);
     flow.thread.transcript_scroll = flow.scroll_limit;
     try publish(&fixture, &flow);
     const before = try rowY(&flow, 20);
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     defer std.testing.allocator.destroy(window);
     window.start(live, 1);
     window.pages[1] = window.pages[0];
@@ -563,7 +563,7 @@ fn foldedHistorySession() !*Session {
         item.kind = .command;
     }
 
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     window.start(live, 1);
     window.pages[1] = window.pages[0];
     window.pages[0].snapshot = earlier.*;
@@ -662,7 +662,7 @@ test "one history gesture crosses folded pages without evicting the visible answ
     try std.testing.expectEqual(answer, window.pages[0].snapshot.items()[3].identity);
     try std.testing.expectEqualStrings("", window.cursor(.older));
     try std.testing.expectEqual(.older, pane.history_intent.?);
-    try std.testing.expectEqual(@as(u8, Window.max_scan_pages), window.scan_remaining);
+    try std.testing.expectEqual(@as(u8, client.AgentHistoryWindow.max_scan_pages), window.scan_remaining);
 }
 
 test "expanded work and a different folded turn remain ordinary history stops" {
@@ -745,7 +745,7 @@ test "newer folded pages preserve the prompt and stop at the next public respons
 test "opening one skipped work group retains the boundaries of other groups" {
     const live = try foldedTurn(100);
     defer std.testing.allocator.destroy(live);
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     defer std.testing.allocator.destroy(window);
     window.start(live, 1);
     for (1..4) |index| {
@@ -778,7 +778,7 @@ test "new live text stays at the bottom without resetting earlier history" {
     defer std.testing.allocator.destroy(live);
     const older = try snapshot(10);
     defer std.testing.allocator.destroy(older);
-    const window = try std.testing.allocator.create(Window);
+    const window = try std.testing.allocator.create(client.AgentHistoryWindow);
     defer std.testing.allocator.destroy(window);
     window.start(live, 1);
     window.pages[1] = window.pages[0];

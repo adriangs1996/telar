@@ -1,12 +1,10 @@
-const enabled_module = @import("telar-core").enabled;
+const core = @import("telar-core");
 const proxy_observation = @import("../../entrypoints/events/proxy_observation.zig");
 const PaneKeyType = @import("../../../pane/PaneKey.zig");
 const RecordCommandType = @import("../../../plugins/RecordCommand.zig");
 const AgentEvidenceType = @import("../../../plugins/AgentEvidence.zig");
-const Status = @import("telar-core").Status;
 const agent_identity = @import("../coordinators/agent_identity.zig");
 const PluginNotification = @import("../../../plugins/Notification.zig");
-const encodeNotification_module = @import("telar-core").encodeNotification;
 const ObservationType = @import("../../../proxy/Observation.zig");
 const Half = @import("../../../proxy/capture/Half.zig");
 const ResultType = @import("../../../plugins/Result.zig");
@@ -21,7 +19,6 @@ const JobType = @import("../../../agent/Job.zig");
 const std = @import("std");
 const description_module = @import("../../../agent/description.zig");
 const DescriptionFinishedType = @import("../../../agent/DescriptionFinished.zig");
-const NotificationType = @import("telar-core").Notification;
 
 const Application = @import("../Application.zig");
 
@@ -39,7 +36,7 @@ pub fn handleProxyObservation(application: *Application, result: anyerror!Observ
         return;
     };
 
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         application.metrics.proxy_observations +|= 1;
     }
 
@@ -296,7 +293,7 @@ fn applyPluginEvidence(application: *Application, evidence: AgentEvidenceType) b
     if (pane.exit != null) {
         return false;
     }
-    const status: Status = switch (evidence.state) {
+    const status: core.Status = switch (evidence.state) {
         .working, .settling => .working,
         .blocked => .blocked,
         .ready => .ready,
@@ -320,13 +317,13 @@ fn applyPluginEvidence(application: *Application, evidence: AgentEvidenceType) b
 
 fn publishPluginEffectNotification(application: *Application, notification: PluginNotification) bool {
     var validation_buffer: [512]u8 = undefined;
-    const value: NotificationType = .{
+    const value: core.Notification = .{
         .level = notification.level,
         .duration_ms = notification.duration_ms,
         .title = notification.title,
         .message = notification.message,
     };
-    _ = encodeNotification_module(&validation_buffer, value) catch return false;
+    _ = core.encodeNotification(&validation_buffer, value) catch return false;
     return (application.publishNotification(value)) != 0;
 }
 

@@ -1,14 +1,13 @@
 //! Owned, bounded projection of fullscreen labels for deferred media rendering.
 
-const max_foreground_name_bytes_module = @import("telar-core").max_foreground_name_bytes;
-const BufferType = @import("telar-core").Buffer;
+const core = @import("telar-core");
 const std = @import("std");
 const Plan = @import("Plan.zig");
 
-pub const max_text_bytes = max_foreground_name_bytes_module + 32;
+pub const max_text_bytes = core.max_foreground_name_bytes + 32;
 
 test "label plans own cell text and compare content independently of position" {
-    var buffer = try BufferType.init(std.testing.allocator, 20, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 20, 1);
     defer buffer.deinit();
     _ = buffer.writeText(buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = " 1 e\u{301}界 " });
     var plan: Plan = .{ .area = .{ .w = 8, .h = 1 } };

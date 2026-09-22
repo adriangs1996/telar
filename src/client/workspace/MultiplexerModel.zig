@@ -1,29 +1,14 @@
-const PaneSurfaceType = @import("telar-core").PaneSurface;
+const core = @import("telar-core");
+const model_data = @import("model");
 const GenericPaneIterator = @import("GenericPaneIterator.zig").Type;
 const PresentationCommitType = @import("../panes/PresentationCommit.zig");
 const std = @import("std");
-const LayoutType = @import("WorkspaceLayout.zig");
-const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 const PaneType = @import("../panes/Pane.zig");
 const multiplexer = @import("multiplexer.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const LayoutSnapshot = @import("LayoutSnapshot.zig");
-const PaneIdType = @import("telar-core").PaneId;
-const raw_module = @import("telar-core").raw;
 const Spec = @import("../panes/Spec.zig");
 const PaneSplit = @import("PaneSplit.zig");
 const DiscoveredPane = @import("DiscoveredPane.zig");
-const PaneSetType = @import("PaneSet.zig");
-const layout_mod = @import("layout_support.zig");
-const RectType = @import("telar-core").Rect;
-const FrameViewType = @import("telar-core").FrameView;
 const AppliedType = @import("../panes/Applied.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const ViewType = @import("LayoutView.zig");
-const MouseType = @import("../input/Mouse.zig");
-const PaneMousePlan = @import("PaneMousePlan.zig");
-const SplitTargetType = @import("SplitTarget.zig");
-const ProspectiveSplitType = @import("ProspectiveSplit.zig");
 const Model = @This();
 
 /// Captures all active-tab panes, including panes hidden by fullscreen.
@@ -38,15 +23,15 @@ pub fn presentationCommit(model: *const Model) PresentationCommitType {
 }
 
 gpa: std.mem.Allocator,
-layout: LayoutType = .{},
+layout: model_data.WorkspaceLayout = .{},
 /// Membership owns these records. Addresses survive tab moves; removal invalidates borrows.
-panes: [max_panes_per_tab]?*PaneType = @splat(null),
+panes: [core.max_panes_per_tab]?*PaneType = @splat(null),
 pane_index: multiplexer.PaneIndex = .{},
 pane_count: usize = 0,
-location: ?TabLocationType = null,
+location: ?core.TabLocation = null,
 cell_width_px: u16 = 0,
 cell_height_px: u16 = 0,
-layout_snapshot: LayoutSnapshot = .{},
+layout_snapshot: model_data.LayoutSnapshot = .{},
 
 pub fn init(gpa: std.mem.Allocator) Model {
     return .{ .gpa = gpa };
@@ -91,23 +76,23 @@ pub fn focusedPaneConst(model: *const Model) ?*const PaneType {
     return model.findConst(pane_id);
 }
 
-pub fn displayIndex(model: *const Model, pane_id: PaneIdType) ?u16 {
+pub fn displayIndex(model: *const Model, pane_id: core.PaneId) ?u16 {
     return model.layout.displayIndex(pane_id);
 }
 
-pub fn find(model: *Model, pane_id: PaneIdType) ?*PaneType {
+pub fn find(model: *Model, pane_id: core.PaneId) ?*PaneType {
     if (pane_id == .invalid) {
         return null;
     }
-    const slot = model.pane_index.get(raw_module(pane_id)) orelse return null;
+    const slot = model.pane_index.get(core.raw(pane_id)) orelse return null;
     return model.panes[slot].?;
 }
 
-pub fn findConst(model: *const Model, pane_id: PaneIdType) ?*const PaneType {
+pub fn findConst(model: *const Model, pane_id: core.PaneId) ?*const PaneType {
     if (pane_id == .invalid) {
         return null;
     }
-    const slot = model.pane_index.get(raw_module(pane_id)) orelse return null;
+    const slot = model.pane_index.get(core.raw(pane_id)) orelse return null;
     return model.panes[slot].?;
 }
 
@@ -117,7 +102,7 @@ pub fn findConst(model: *const Model, pane_id: PaneIdType) ?*const PaneType {
 /// ```zig
 /// const change = try model.setPaneCwd(pane_id, "/work/telar");
 /// ```
-pub fn setPaneCwd(model: *Model, pane_id: PaneIdType, path: []const u8) !multiplexer.MetadataChange {
+pub fn setPaneCwd(model: *Model, pane_id: core.PaneId, path: []const u8) !multiplexer.MetadataChange {
     const pane = model.find(pane_id) orelse return .unchanged;
     if (std.mem.eql(u8, pane.cwdSlice(), path)) {
         return .unchanged;
@@ -131,7 +116,7 @@ pub fn setPaneCwd(model: *Model, pane_id: PaneIdType, path: []const u8) !multipl
 /// ```zig
 /// const change = model.setPaneForeground(pane_id, "zsh");
 /// ```
-pub fn setPaneForeground(model: *Model, pane_id: PaneIdType, name: []const u8) multiplexer.MetadataChange {
+pub fn setPaneForeground(model: *Model, pane_id: core.PaneId, name: []const u8) multiplexer.MetadataChange {
     const pane = model.find(pane_id) orelse return .unchanged;
 
     return if (pane.setForegroundName(name)) .display_changed else .unchanged;
@@ -142,7 +127,7 @@ pub fn setPaneForeground(model: *Model, pane_id: PaneIdType, name: []const u8) m
 /// ```zig
 /// const change = model.setPaneTitle(pane_id, "vim README.md");
 /// ```
-pub fn setPaneTitle(model: *Model, pane_id: PaneIdType, title: []const u8) !multiplexer.MetadataChange {
+pub fn setPaneTitle(model: *Model, pane_id: core.PaneId, title: []const u8) !multiplexer.MetadataChange {
     const pane = model.find(pane_id) orelse return .unchanged;
 
     return if (try pane.setTitle(title)) .display_changed else .unchanged;
@@ -236,7 +221,7 @@ pub fn addDiscovered(model: *Model, discovered: DiscoveredPane) !void {
     });
 }
 
-pub fn restoreDisplayOrder(model: *Model, pane_ids: []const PaneIdType, focused_pane: PaneIdType) !void {
+pub fn restoreDisplayOrder(model: *Model, pane_ids: []const core.PaneId, focused_pane: core.PaneId) !void {
     if (pane_ids.len != model.pane_count) {
         return error.UnexpectedPaneCount;
     }
@@ -250,7 +235,7 @@ pub fn restoreDisplayOrder(model: *Model, pane_ids: []const PaneIdType, focused_
 /// ```zig
 /// const restored = model.restoreSavedLayout(saved, .{ .ids = pane_ids, .focused = focused_pane });
 /// ```
-pub fn restoreSavedLayout(model: *Model, saved: LayoutType, panes: PaneSetType) bool {
+pub fn restoreSavedLayout(model: *Model, saved: model_data.WorkspaceLayout, panes: model_data.PaneSet) bool {
     if (panes.ids.len != model.pane_count) {
         return false;
     }
@@ -267,7 +252,7 @@ pub fn restoreSavedLayout(model: *Model, saved: LayoutType, panes: PaneSetType) 
 
 /// Installs an attachment identity allocated by the owning client model.
 /// Example: `try model.markAttached(pane_id, generation);`.
-pub fn markAttached(model: *Model, pane_id: PaneIdType, generation: u64) !void {
+pub fn markAttached(model: *Model, pane_id: core.PaneId, generation: u64) !void {
     const pane = model.find(pane_id) orelse return error.PaneNotFound;
     if (pane.attached) {
         return;
@@ -276,19 +261,19 @@ pub fn markAttached(model: *Model, pane_id: PaneIdType, generation: u64) !void {
     pane.attach(generation);
 }
 
-pub fn removePane(self: *Model, pane_id: PaneIdType) bool {
-    if (pane_id == .invalid or raw_module(pane_id) == multiplexer.PaneIndex.tombstone_key) {
+pub fn removePane(self: *Model, pane_id: core.PaneId) bool {
+    if (pane_id == .invalid or core.raw(pane_id) == multiplexer.PaneIndex.tombstone_key) {
         return false;
     }
 
-    const slot = self.pane_index.get(raw_module(pane_id)) orelse return false;
+    const slot = self.pane_index.get(core.raw(pane_id)) orelse return false;
     const pane = self.panes[slot].?;
     const gpa = pane.gpa;
     pane.deinit();
     gpa.destroy(pane);
     self.panes[slot] = null;
     self.pane_count -= 1;
-    self.pane_index.remove(raw_module(pane_id));
+    self.pane_index.remove(core.raw(pane_id));
     _ = self.layout.remove(pane_id);
     if (self.pane_count == 0) {
         self.location = null;
@@ -297,20 +282,20 @@ pub fn removePane(self: *Model, pane_id: PaneIdType) bool {
     return true;
 }
 
-pub fn focusPane(model: *Model, pane_id: PaneIdType) bool {
+pub fn focusPane(model: *Model, pane_id: core.PaneId) bool {
     if (!model.layout.focusPane(pane_id)) {
         return false;
     }
     return true;
 }
 
-pub fn focusDirection(model: *Model, direction: layout_mod.Direction, area: RectType) ?PaneIdType {
+pub fn focusDirection(model: *Model, direction: model_data.LayoutDirection, area: core.Rect) ?core.PaneId {
     _ = model.layout.focused() orelse return null;
     const focused = model.layout.focusDirection(direction, area) orelse return null;
     return focused;
 }
 
-pub fn resizeFocused(model: *Model, direction: layout_mod.Direction, area: RectType) bool {
+pub fn resizeFocused(model: *Model, direction: model_data.LayoutDirection, area: core.Rect) bool {
     if (!model.layout.resizeFocused(direction, area)) {
         return false;
     }
@@ -322,7 +307,7 @@ pub fn resizeFocused(model: *Model, direction: layout_mod.Direction, area: RectT
 /// ```zig
 /// if (model.setSurface(pane_id, .thread)) recompose();
 /// ```
-pub fn setSurface(model: *Model, pane_id: PaneIdType, surface: PaneSurfaceType) bool {
+pub fn setSurface(model: *Model, pane_id: core.PaneId, surface: core.PaneSurface) bool {
     return model.layout.setSurface(pane_id, surface);
 }
 
@@ -333,12 +318,12 @@ pub fn toggleFullscreen(model: *Model) bool {
     return true;
 }
 
-pub fn applyFrame(model: *Model, frame: FrameViewType) !AppliedType {
+pub fn applyFrame(model: *Model, frame: core.FrameView) !AppliedType {
     const pane = model.find(frame.pane_id) orelse return error.PaneNotFound;
     return pane.applyFrame(frame);
 }
 
-pub fn contentSize(self: *Model, pane_id: PaneIdType, area: RectType) ?TerminalSizeType {
+pub fn contentSize(self: *Model, pane_id: core.PaneId, area: core.Rect) ?core.TerminalSize {
     const view = self.layoutSnapshot(area).find(pane_id) orelse return null;
     var size = multiplexer.rectSize(view.content) orelse return null;
     size.cell_width_px = self.cell_width_px;
@@ -346,7 +331,7 @@ pub fn contentSize(self: *Model, pane_id: PaneIdType, area: RectType) ?TerminalS
     return size;
 }
 
-pub fn viewForPane(self: *Model, pane_id: PaneIdType, area: RectType) ?ViewType {
+pub fn viewForPane(self: *Model, pane_id: core.PaneId, area: core.Rect) ?model_data.LayoutView {
     return self.layoutSnapshot(area).find(pane_id);
 }
 
@@ -357,7 +342,7 @@ pub fn viewForPane(self: *Model, pane_id: PaneIdType, area: RectType) ?ViewType 
 /// ```zig
 /// const plan = model.planPaneMouse(event, area) orelse return;
 /// ```
-pub fn planPaneMouse(self: *Model, event: MouseType, area: RectType) ?PaneMousePlan {
+pub fn planPaneMouse(self: *Model, event: model_data.Mouse, area: core.Rect) ?model_data.PaneMousePlan {
     const snapshot = self.layoutSnapshot(area);
     const wheel = event.kind == .scroll_up or event.kind == .scroll_down;
     var pane = self.focusedPane() orelse return null;
@@ -382,7 +367,7 @@ pub fn planPaneMouse(self: *Model, event: MouseType, area: RectType) ?PaneMouseP
 
 /// Resolves the focused pane without consulting pointer coordinates.
 /// Example: `const plan = model.planFocusedPaneMouse(area) orelse return;`.
-pub fn planFocusedPaneMouse(self: *Model, area: RectType) ?PaneMousePlan {
+pub fn planFocusedPaneMouse(self: *Model, area: core.Rect) ?model_data.PaneMousePlan {
     const pane = self.focusedPane() orelse return null;
     const view = self.layoutSnapshot(area).find(pane.id) orelse return null;
 
@@ -393,7 +378,7 @@ pub fn planFocusedPaneMouse(self: *Model, area: RectType) ?PaneMousePlan {
     return paneMousePlan(pane, view.content);
 }
 
-pub fn layoutSnapshot(model: *Model, area: RectType) *const LayoutSnapshot {
+pub fn layoutSnapshot(model: *Model, area: core.Rect) *const model_data.LayoutSnapshot {
     if (model.layout_snapshot.revision != model.layout.currentRevision() or
         !std.meta.eql(model.layout_snapshot.area, area))
     {
@@ -407,7 +392,7 @@ pub fn layoutSnapshot(model: *Model, area: RectType) *const LayoutSnapshot {
 /// ```zig
 /// const split = model.prospectiveSplit(.{ .pane_id = pane_id, .axis = .horizontal }, area);
 /// ```
-pub fn prospectiveSplit(model: *Model, target: SplitTargetType, area: RectType) ?ProspectiveSplitType {
+pub fn prospectiveSplit(model: *Model, target: model_data.SplitTarget, area: core.Rect) ?model_data.ProspectiveSplit {
     return model.layoutSnapshot(area).prospectiveSplit(target, model.pane_count);
 }
 
@@ -424,7 +409,7 @@ pub fn setCellSize(model: *Model, width: u16, height: u16) void {
 /// ```zig
 /// if (model.setGraphicsPlaceholder(pane_id, true)) scheduleObservation();
 /// ```
-pub fn setGraphicsPlaceholder(model: *Model, pane_id: PaneIdType, visible: bool) bool {
+pub fn setGraphicsPlaceholder(model: *Model, pane_id: core.PaneId, visible: bool) bool {
     const pane = model.find(pane_id) orelse return false;
     if (pane.graphics_placeholder == visible) {
         return false;
@@ -469,7 +454,7 @@ fn insertPane(model: *Model, spec: Spec, attached: bool) !void {
         return error.DuplicatePane;
     }
 
-    if (model.pane_count == max_panes_per_tab) {
+    if (model.pane_count == core.max_panes_per_tab) {
         return error.PaneLimitReached;
     }
 
@@ -483,7 +468,7 @@ fn insertPane(model: *Model, spec: Spec, attached: bool) !void {
             });
             slot.* = pane;
             model.pane_count += 1;
-            model.pane_index.put(raw_module(spec.pane_id), @intCast(slot_index));
+            model.pane_index.put(core.raw(spec.pane_id), @intCast(slot_index));
 
             return;
         }
@@ -493,7 +478,7 @@ fn insertPane(model: *Model, spec: Spec, attached: bool) !void {
 
 /// Captures the mouse policy of an already resolved pane.
 /// Example: `const plan = MultiplexerModel.paneMousePlan(pane, view.content);`
-pub fn paneMousePlan(pane: *const PaneType, content: RectType) PaneMousePlan {
+pub fn paneMousePlan(pane: *const PaneType, content: core.Rect) model_data.PaneMousePlan {
     return .{
         .pane_id = pane.id,
         .content = content,
@@ -510,9 +495,9 @@ test "pane insertion rolls back every allocation failure without retiring existi
 fn exerciseInsertion(gpa: std.mem.Allocator) !void {
     var self = Model.init(gpa);
     defer self.deinit();
-    const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
+    const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
     try self.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 1, .rows = 1 } });
     const original = self.find(first).?;
     try original.setComposer("keep draft");
@@ -538,29 +523,29 @@ test "pane slots bound membership and reuse holes without moving live records" {
     var accounting = std.testing.FailingAllocator.init(std.testing.allocator, .{});
     var self = Model.init(accounting.allocator());
     defer self.deinit();
-    const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
-    for (0..max_panes_per_tab) |index| {
+    const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+    for (0..core.max_panes_per_tab) |index| {
         try self.addDiscovered(.{ .pane_id = @enumFromInt(index + 1), .location = location, .area = .{ .w = 1, .h = 1 } });
     }
 
-    const kept_id: PaneIdType = @enumFromInt(max_panes_per_tab);
+    const kept_id: core.PaneId = @enumFromInt(core.max_panes_per_tab);
     const kept = self.find(kept_id).?;
     const attempts = accounting.alloc_index;
-    try std.testing.expectError(error.PaneLimitReached, self.addDiscovered(.{ .pane_id = @enumFromInt(max_panes_per_tab + 1), .location = location, .area = .{ .w = 1, .h = 1 } }));
+    try std.testing.expectError(error.PaneLimitReached, self.addDiscovered(.{ .pane_id = @enumFromInt(core.max_panes_per_tab + 1), .location = location, .area = .{ .w = 1, .h = 1 } }));
     try std.testing.expectEqual(attempts, accounting.alloc_index);
     try std.testing.expect(self.removePane(@enumFromInt(1)));
-    try self.addDiscovered(.{ .pane_id = @enumFromInt(max_panes_per_tab + 1), .location = location, .area = .{ .w = 1, .h = 1 } });
+    try self.addDiscovered(.{ .pane_id = @enumFromInt(core.max_panes_per_tab + 1), .location = location, .area = .{ .w = 1, .h = 1 } });
     try std.testing.expectEqual(kept, self.find(kept_id).?);
 
     accounting.fail_index = accounting.alloc_index;
     var panes = self.paneConstIterator();
-    try std.testing.expectEqual(@as(?*const PaneType, self.find(@enumFromInt(max_panes_per_tab + 1))), panes.next());
+    try std.testing.expectEqual(@as(?*const PaneType, self.find(@enumFromInt(core.max_panes_per_tab + 1))), panes.next());
     var count: usize = 1;
     while (panes.next()) |_| {
         count += 1;
     }
 
-    try std.testing.expectEqual(max_panes_per_tab, count);
+    try std.testing.expectEqual(core.max_panes_per_tab, count);
     _ = self.presentationCommit();
     try std.testing.expect(!accounting.has_induced_failure);
 }

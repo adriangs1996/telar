@@ -4,9 +4,9 @@
 //! gets taller bars, and every band is rounded to whole device pixels
 //! before the cell grid is measured. Text sizes derive from the terminal
 //! size too, times `gui.chrome.scale`, and never move the bands.
+const client = @import("telar-client");
+const label_size = @import("label_size.zig");
 const std = @import("std");
-const GuiConfig = @import("telar-client").GuiConfig;
-const Size = @import("label_size.zig").Size;
 const Metrics = @This();
 
 /// Logical heights at the reference font size, from the visual language plan.
@@ -38,7 +38,7 @@ small: u16 = 0,
 
 /// Resolves every band and text size for one display scale and configuration.
 /// Example: `const chrome = ChromeMetrics.resolve(renderer.config, viewport.scale);`
-pub fn resolve(config: GuiConfig, scale: f32) Metrics {
+pub fn resolve(config: client.GuiConfig, scale: f32) Metrics {
     const font = config.font;
     const ratio = scale * font.size / reference_font_size;
     const base = font.size * scale * config.chrome.scale;
@@ -62,7 +62,7 @@ pub fn px(metrics: Metrics, logical: f32) f32 {
 
 /// The pixel height of one text role; the terminal role is the caller's.
 /// Example: `const height = canvas.chrome.textSize(.small) orelse canvas.metrics.pixel_height;`
-pub fn text(metrics: Metrics, size: Size) ?u16 {
+pub fn text(metrics: Metrics, size: label_size.Size) ?u16 {
     return switch (size) {
         .terminal => null,
         .title => metrics.title,
@@ -73,7 +73,7 @@ pub fn text(metrics: Metrics, size: Size) ?u16 {
 
 /// The row one sans label of `size` needs: its line box rounded up.
 /// Example: `const header_height = canvas.chrome.rowHeight(.body);`
-pub fn rowHeight(metrics: Metrics, size: Size) f32 {
+pub fn rowHeight(metrics: Metrics, size: label_size.Size) f32 {
     const pixels: f32 = @floatFromInt(metrics.text(size) orelse 0);
     return @ceil(pixels * sans_line_ratio);
 }

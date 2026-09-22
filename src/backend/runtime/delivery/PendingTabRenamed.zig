@@ -1,11 +1,9 @@
-const RequestIdType = @import("telar-core").RequestId;
-const TabLocationType = @import("telar-core").TabLocation;
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const core = @import("telar-core");
 const PendingTabRenamed = @This();
 
-request_id: RequestIdType,
-location: TabLocationType,
-label: [max_tab_label_bytes_module]u8,
+request_id: core.RequestId,
+location: core.TabLocation,
+label: [core.max_tab_label_bytes]u8,
 label_len: u8,
 
 pub fn labelSlice(renamed: *const PendingTabRenamed) []const u8 {

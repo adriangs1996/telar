@@ -1,9 +1,9 @@
+const core = @import("telar-core");
 const PaneKey = @import("PaneKey.zig");
-const TabLocationType = @import("telar-core").TabLocation;
 /// Fact produced when the runtime owns a discoverable pane and its actors.
 const PaneLaunched = @This();
 
 key: PaneKey,
-location: TabLocationType,
+location: core.TabLocation,
 
-kind: @import("telar-core").PaneKind = .terminal,
+kind: core.PaneKind = .terminal,

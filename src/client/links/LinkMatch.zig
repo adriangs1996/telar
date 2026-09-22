@@ -1,7 +1,8 @@
 //! An owned URI and its cell interval in absolute pane coordinates.
+const data = @import("model");
 const Position = @import("Position.zig");
 
-target: @import("LinkTarget.zig"),
+target: data.LinkTarget,
 start: Position,
 /// Exclusive end, possibly on a later soft-wrapped row.
 end: Position,

@@ -1,31 +1,22 @@
-const TabIteratorType = @import("TabIterator.zig");
+const core = @import("telar-core");
+const data = @import("model");
 const std = @import("std");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const max_workspace_name_bytes_module = @import("telar-core").max_workspace_name_bytes;
-const max_tabs_per_workspace = @import("telar-core").max_tabs_per_workspace;
 const Tab = @import("Tab.zig");
 const PendingLayoutRestore = @import("PendingLayoutRestore.zig");
 const RootTab = @import("RootTab.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const LayoutType = @import("WorkspaceLayout.zig");
-const TabIdType = @import("telar-core").TabId;
-const PaneIdType = @import("telar-core").PaneId;
 const PaneType = @import("../panes/Pane.zig");
 const PaneSnapshot = @import("PaneSnapshot.zig");
-const RectType = @import("telar-core").Rect;
-const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
 const WorkspaceSnapshotInput = @import("WorkspaceSnapshotInput.zig");
+const label_validation = @import("label_validation.zig");
 const tabs_ops = @import("tabs.zig");
-const WorkspaceTabInput = @import("WorkspaceTabInput.zig");
 const CreatedTab = @import("CreatedTab.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
 const Model = @This();
 
 gpa: std.mem.Allocator,
-workspace: ?WorkspaceLocationType = null,
-workspace_name: [max_workspace_name_bytes_module]u8 = undefined,
+workspace: ?core.WorkspaceLocation = null,
+workspace_name: [core.max_workspace_name_bytes]u8 = undefined,
 workspace_name_len: u16 = 0,
-items: [max_tabs_per_workspace]?Tab = [_]?Tab{null} ** max_tabs_per_workspace,
+items: [core.max_tabs_per_workspace]?Tab = [_]?Tab{null} ** core.max_tabs_per_workspace,
 count: usize = 0,
 active_index: usize = 0,
 pane_gaps: bool = true,
@@ -121,7 +112,7 @@ pub fn replaceWithRoot(model: *Model, root: RootTab) !void {
     model.workspace = root.location.workspace;
 }
 
-pub fn restoreLayoutOnNextSnapshot(model: *Model, location: TabLocationType, saved: LayoutType) bool {
+pub fn restoreLayoutOnNextSnapshot(model: *Model, location: core.TabLocation, saved: data.WorkspaceLayout) bool {
     if (model.find(location.tab_id) == null) {
         return false;
     }
@@ -135,7 +126,7 @@ pub fn restoreLayoutOnNextSnapshot(model: *Model, location: TabLocationType, sav
 /// ```zig
 /// _ = model.restoreClientLayoutOnNextSnapshot(location, saved);
 /// ```
-pub fn restoreClientLayoutOnNextSnapshot(model: *Model, location: TabLocationType, saved: LayoutType) bool {
+pub fn restoreClientLayoutOnNextSnapshot(model: *Model, location: core.TabLocation, saved: data.WorkspaceLayout) bool {
     if (model.find(location.tab_id) == null) {
         return false;
     }
@@ -156,7 +147,7 @@ pub fn restoreClientLayoutOnNextSnapshot(model: *Model, location: TabLocationTyp
 
 pub const TabIterator = @import("TabIterator.zig");
 
-pub fn tabIterator(model: *Model) TabIteratorType {
+pub fn tabIterator(model: *Model) TabIterator {
     return .{ .items = model.items[0..model.count] };
 }
 
@@ -186,7 +177,7 @@ pub fn displayedWorkspaceName(model: *const Model) []const u8 {
     return model.workspaceName();
 }
 
-pub fn find(model: *Model, tab_id: TabIdType) ?*Tab {
+pub fn find(model: *Model, tab_id: core.TabId) ?*Tab {
     for (model.items[0..model.count]) |*slot| {
         const tab = if (slot.*) |*value| value else continue;
         if (tab.location.tab_id == tab_id) {
@@ -196,13 +187,13 @@ pub fn find(model: *Model, tab_id: TabIdType) ?*Tab {
     return null;
 }
 
-pub fn indexOf(model: *const Model, tab_id: TabIdType) ?usize {
+pub fn indexOf(model: *const Model, tab_id: core.TabId) ?usize {
     for (model.items[0..model.count], 0..) |slot, index|
         if (slot != null and slot.?.location.tab_id == tab_id) return index;
     return null;
 }
 
-pub fn findPane(model: *Model, pane_id: PaneIdType) ?*PaneType {
+pub fn findPane(model: *Model, pane_id: core.PaneId) ?*PaneType {
     for (model.items[0..model.count]) |*slot| {
         const tab = if (slot.*) |*value| value else continue;
         if (tab.model.find(pane_id)) |pane| {
@@ -226,26 +217,26 @@ pub fn detachAll(tab: *Tab) void {
 /// ```zig
 /// const tab = try model.reconcileTab(snapshot, workbench);
 /// ```
-pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: RectType) !*Tab {
+pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !*Tab {
     const tab = model.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
     if (!std.meta.eql(tab.location, snapshot.location)) {
         return error.UnexpectedTab;
     }
-    if (snapshot.panes.len > max_panes_per_tab_module) {
+    if (snapshot.panes.len > core.max_panes_per_tab) {
         return error.TooManyPanes;
     }
     for (snapshot.panes, 0..) |pane_id, index| {
-        if (std.mem.findScalar(PaneIdType, snapshot.panes[0..index], pane_id) != null) {
+        if (std.mem.findScalar(core.PaneId, snapshot.panes[0..index], pane_id) != null) {
             return error.DuplicatePane;
         }
     }
 
     const focused_before = tab.model.layout.focused();
-    var removed: [max_panes_per_tab_module]PaneIdType = undefined;
+    var removed: [core.max_panes_per_tab]core.PaneId = undefined;
     var removed_count: usize = 0;
     var panes = tab.model.paneIterator();
     while (panes.next()) |pane| {
-        if (std.mem.findScalar(PaneIdType, snapshot.panes, pane.id) == null) {
+        if (std.mem.findScalar(core.PaneId, snapshot.panes, pane.id) == null) {
             removed[removed_count] = pane.id;
             removed_count += 1;
         }
@@ -263,7 +254,7 @@ pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: RectType) !*Tab
 
     var focus_after = tab.model.layout.focused();
     if (focused_before) |pane_id| {
-        if (std.mem.findScalar(PaneIdType, snapshot.panes, pane_id) != null) {
+        if (std.mem.findScalar(core.PaneId, snapshot.panes, pane_id) != null) {
             focus_after = pane_id;
         }
     }
@@ -300,7 +291,7 @@ pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: RectType) !*Tab
     return tab;
 }
 
-pub fn tabForPane(model: *Model, pane_id: PaneIdType) ?*Tab {
+pub fn tabForPane(model: *Model, pane_id: core.PaneId) ?*Tab {
     for (model.items[0..model.count]) |*slot| {
         const tab = if (slot.*) |*value| value else continue;
         if (tab.model.find(pane_id) != null) {
@@ -315,7 +306,7 @@ pub fn tabForPane(model: *Model, pane_id: PaneIdType) ?*Tab {
 /// ```zig
 /// const tab = model.tabForPaneConst(pane_id) orelse return;
 /// ```
-pub fn tabForPaneConst(model: *const Model, pane_id: PaneIdType) ?*const Tab {
+pub fn tabForPaneConst(model: *const Model, pane_id: core.PaneId) ?*const Tab {
     for (model.items[0..model.count]) |*slot| {
         const tab = if (slot.*) |*value| value else continue;
         if (tab.model.findConst(pane_id) != null) {
@@ -341,11 +332,11 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !void
         return error.WorkspaceHasNoTabs;
     }
 
-    if (snapshot.tabs.len > max_tabs_per_workspace) {
+    if (snapshot.tabs.len > core.max_tabs_per_workspace) {
         return error.TabLimitReached;
     }
 
-    if (snapshot.name.len == 0 or snapshot.name.len > max_workspace_name_bytes_module or
+    if (snapshot.name.len == 0 or snapshot.name.len > core.max_workspace_name_bytes or
         std.mem.findScalar(u8, snapshot.name, 0) != null)
     {
         return error.InvalidWorkspaceName;
@@ -356,12 +347,12 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !void
             return error.InvalidTabId;
         }
 
-        if (descriptor.pane_count > max_panes_per_tab_module) {
+        if (descriptor.pane_count > core.max_panes_per_tab) {
             return error.TooManyPanes;
         }
 
         if (descriptor.label.len != 0) {
-            try tabs_ops.validateLabel(descriptor.label);
+            try label_validation.validate(descriptor.label, .renamed_tab);
         }
 
         if (descriptor.foregrounds.len > descriptor.pane_count) {
@@ -373,7 +364,7 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !void
                 return error.InvalidPaneId;
             }
 
-            if (foreground.name.len == 0 or foreground.name.len > @import("telar-core").max_foreground_name_bytes or std.mem.findScalar(u8, foreground.name, 0) != null) {
+            if (foreground.name.len == 0 or foreground.name.len > core.max_foreground_name_bytes or std.mem.findScalar(u8, foreground.name, 0) != null) {
                 return error.InvalidForegroundName;
             }
 
@@ -392,7 +383,7 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !void
     }
 
     const active_id = (model.activeConst() orelse return error.WorkspaceHasNoTabs).location.tab_id;
-    var canonical_ids: [max_tabs_per_workspace]TabIdType = undefined;
+    var canonical_ids: [core.max_tabs_per_workspace]core.TabId = undefined;
     for (snapshot.tabs, 0..) |descriptor, index| {
         canonical_ids[index] = descriptor.tab_id;
     }
@@ -401,7 +392,7 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !void
     while (current > 0) {
         current -= 1;
         const tab_id = model.items[current].?.location.tab_id;
-        if (std.mem.findScalar(TabIdType, canonical_ids[0..snapshot.tabs.len], tab_id) == null) {
+        if (std.mem.findScalar(core.TabId, canonical_ids[0..snapshot.tabs.len], tab_id) == null) {
             model.removeForReconciliation(current);
         }
     }
@@ -424,7 +415,7 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !void
 
     std.debug.assert(model.count == snapshot.tabs.len);
     if (model.pending_layout_restore) |pending| {
-        if (std.mem.findScalar(TabIdType, canonical_ids[0..snapshot.tabs.len], pending.location.tab_id) == null) {
+        if (std.mem.findScalar(core.TabId, canonical_ids[0..snapshot.tabs.len], pending.location.tab_id) == null) {
             model.pending_layout_restore = null;
         }
     }
@@ -446,8 +437,8 @@ fn removeForReconciliation(model: *Model, index: usize) void {
     model.items[model.count] = null;
 }
 
-fn insertDiscovered(model: *Model, descriptor: WorkspaceTabInput, index: usize) void {
-    std.debug.assert(model.count < max_tabs_per_workspace);
+fn insertDiscovered(model: *Model, descriptor: data.WorkspaceTabInput, index: usize) void {
+    std.debug.assert(model.count < core.max_tabs_per_workspace);
     std.debug.assert(index <= model.count);
 
     var cursor = model.count;
@@ -472,7 +463,7 @@ fn insertDiscovered(model: *Model, descriptor: WorkspaceTabInput, index: usize) 
 /// ```zig
 /// const tab = try model.addCreated(created, size);
 /// ```
-pub fn addCreated(model: *Model, created: CreatedTab, size: TerminalSizeType) !*Tab {
+pub fn addCreated(model: *Model, created: CreatedTab, size: core.TerminalSize) !*Tab {
     const workspace = model.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(workspace, created.location.workspace)) {
         return error.UnexpectedWorkspace;
@@ -483,7 +474,7 @@ pub fn addCreated(model: *Model, created: CreatedTab, size: TerminalSizeType) !*
     if (model.findPane(created.root_pane_id) != null) {
         return error.PaneAlreadyExists;
     }
-    if (model.count == max_tabs_per_workspace) {
+    if (model.count == core.max_tabs_per_workspace) {
         return error.TabLimitReached;
     }
     if (created.position > model.count) {
@@ -523,9 +514,9 @@ pub fn addCreated(model: *Model, created: CreatedTab, size: TerminalSizeType) !*
 /// ```zig
 /// const change = try model.applyLabel(tab_id, "server");
 /// ```
-pub fn applyLabel(model: *Model, tab_id: TabIdType, label: []const u8) !tabs_ops.LabelChange {
+pub fn applyLabel(model: *Model, tab_id: core.TabId, label: []const u8) !tabs_ops.LabelChange {
     const tab = model.find(tab_id) orelse return error.TabNotFound;
-    try tabs_ops.validateLabel(label);
+    try label_validation.validate(label, .renamed_tab);
 
     if (std.mem.eql(u8, tab.canonicalLabel(), label)) {
         return .unchanged;
@@ -535,7 +526,7 @@ pub fn applyLabel(model: *Model, tab_id: TabIdType, label: []const u8) !tabs_ops
     return .changed;
 }
 
-pub fn select(model: *Model, tab_id: TabIdType) bool {
+pub fn select(model: *Model, tab_id: core.TabId) bool {
     const index = model.indexOf(tab_id) orelse return false;
     if (index == model.active_index) {
         return false;
@@ -571,7 +562,7 @@ pub fn selectPosition(model: *Model, position: usize) bool {
 /// ```zig
 /// const change = try model.applyPosition(tab_id, 1);
 /// ```
-pub fn applyPosition(model: *Model, tab_id: TabIdType, position: u16) !tabs_ops.PositionChange {
+pub fn applyPosition(model: *Model, tab_id: core.TabId, position: u16) !tabs_ops.PositionChange {
     const from = model.indexOf(tab_id) orelse return error.TabNotFound;
     const target: usize = position;
     if (target >= model.count) {
@@ -599,7 +590,7 @@ pub fn applyPosition(model: *Model, tab_id: TabIdType, position: u16) !tabs_ops.
     return .changed;
 }
 
-pub fn remove(model: *Model, tab_id: TabIdType) bool {
+pub fn remove(model: *Model, tab_id: core.TabId) bool {
     const index = model.indexOf(tab_id) orelse return false;
     const active_id = model.activeConst().?.location.tab_id;
     model.items[index].?.deinit();

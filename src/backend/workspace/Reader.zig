@@ -1,16 +1,10 @@
+const core = @import("telar-core");
 const StateType = @import("State.zig");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const TabLocationType = @import("telar-core").TabLocation;
 const WorkspaceType = @import("Workspace.zig");
 const repository_support = @import("repository_support.zig");
 const std = @import("std");
-const TabIdType = @import("telar-core").TabId;
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
-const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
-const TabDescriptorType = @import("telar-core").TabDescriptor;
 const DescriptorSnapshot = @import("DescriptorSnapshot.zig");
 const state_mod = @import("state_support.zig");
-const WorkspaceListEntryType = @import("telar-core").WorkspaceListEntry;
 const Reader = @This();
 
 state: *const StateType,
@@ -27,7 +21,7 @@ pub fn revision(reader: Reader) u64 {
     return reader.state.revision;
 }
 
-pub fn containsWorkspace(reader: Reader, location: WorkspaceLocationType) bool {
+pub fn containsWorkspace(reader: Reader, location: core.WorkspaceLocation) bool {
     return reader.find(location) != null;
 }
 
@@ -36,7 +30,7 @@ pub fn containsWorkspace(reader: Reader, location: WorkspaceLocationType) bool {
 /// ```zig
 /// const location = reader.locationByPath("/work/telar") orelse return;
 /// ```
-pub fn locationByPath(reader: Reader, path: []const u8) ?TabLocationType {
+pub fn locationByPath(reader: Reader, path: []const u8) ?core.TabLocation {
     const workspace = reader.findByPath(path) orelse return null;
     return .{
         .workspace = .{ .workspace = workspace.id },
@@ -44,7 +38,7 @@ pub fn locationByPath(reader: Reader, path: []const u8) ?TabLocationType {
     };
 }
 
-fn find(reader: Reader, location: WorkspaceLocationType) ?*const WorkspaceType {
+fn find(reader: Reader, location: core.WorkspaceLocation) ?*const WorkspaceType {
     const workspace_id = repository_support.workspaceId(location) orelse return null;
 
     for (&reader.state.items) |*slot| {
@@ -70,22 +64,22 @@ fn findByPath(reader: Reader, path: []const u8) ?*const WorkspaceType {
     return null;
 }
 
-pub fn contains(reader: Reader, location: TabLocationType) bool {
+pub fn contains(reader: Reader, location: core.TabLocation) bool {
     const workspace = reader.find(location.workspace) orelse return false;
     return workspace.containsTab(location.tab_id);
 }
 
-pub fn defaultTab(reader: Reader, location: WorkspaceLocationType) ?TabIdType {
+pub fn defaultTab(reader: Reader, location: core.WorkspaceLocation) ?core.TabId {
     const workspace = reader.find(location) orelse return null;
     return workspace.defaultTab();
 }
 
-pub fn workspacePath(reader: Reader, location: WorkspaceLocationType) ?[]const u8 {
+pub fn workspacePath(reader: Reader, location: core.WorkspaceLocation) ?[]const u8 {
     const workspace = reader.find(location) orelse return null;
     return workspace.pathSlice();
 }
 
-pub fn workspaceName(reader: Reader, location: WorkspaceLocationType) ?[]const u8 {
+pub fn workspaceName(reader: Reader, location: core.WorkspaceLocation) ?[]const u8 {
     const workspace = reader.find(location) orelse return null;
     return workspace.name();
 }
@@ -96,12 +90,12 @@ pub fn workspaceName(reader: Reader, location: WorkspaceLocationType) ?[]const u
 /// ```zig
 /// const explicit = reader.explicitName(location) orelse "";
 /// ```
-pub fn explicitName(reader: Reader, location: WorkspaceLocationType) ?[]const u8 {
+pub fn explicitName(reader: Reader, location: core.WorkspaceLocation) ?[]const u8 {
     const workspace = reader.find(location) orelse return null;
     return workspace.explicitName();
 }
 
-pub fn tabLabel(reader: Reader, location: TabLocationType) ?[]const u8 {
+pub fn tabLabel(reader: Reader, location: core.TabLocation) ?[]const u8 {
     const workspace = reader.find(location.workspace) orelse return null;
     return workspace.tabLabel(location.tab_id);
 }
@@ -111,7 +105,7 @@ pub fn tabLabel(reader: Reader, location: TabLocationType) ?[]const u8 {
 /// ```zig
 /// const previous = reader.previousWorkspace(workspace_id);
 /// ```
-pub fn previousWorkspace(reader: Reader, workspace_id: WorkspaceIdType) ?WorkspaceIdType {
+pub fn previousWorkspace(reader: Reader, workspace_id: core.WorkspaceId) ?core.WorkspaceId {
     if (reader.state.count < 2) {
         return null;
     }
@@ -156,7 +150,7 @@ pub fn totalTabs(reader: Reader) usize {
 /// var tabs: [max_tabs_per_workspace]schema.TabDescriptor = undefined;
 /// const snapshot = reader.descriptors(location, &tabs) orelse return;
 /// ```
-pub fn descriptors(reader: Reader, location: WorkspaceLocationType, output: *[max_tabs_per_workspace_module]TabDescriptorType) ?DescriptorSnapshot {
+pub fn descriptors(reader: Reader, location: core.WorkspaceLocation, output: *[core.max_tabs_per_workspace]core.TabDescriptor) ?DescriptorSnapshot {
     const workspace = reader.find(location) orelse return null;
 
     return .{
@@ -172,7 +166,7 @@ pub fn descriptors(reader: Reader, location: WorkspaceLocationType, output: *[ma
 /// var entries: [max_workspaces]schema.WorkspaceListEntry = undefined;
 /// const list = reader.listEntries(&entries);
 /// ```
-pub fn listEntries(reader: Reader, output: *[state_mod.max_workspaces]WorkspaceListEntryType) []const WorkspaceListEntryType {
+pub fn listEntries(reader: Reader, output: *[state_mod.max_workspaces]core.WorkspaceListEntry) []const core.WorkspaceListEntry {
     var count_value: usize = 0;
 
     for (&reader.state.items) |*slot| {

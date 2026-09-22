@@ -1,8 +1,8 @@
+const core = @import("telar-core");
 const EvidenceType = @import("Evidence.zig");
 const types = @import("types.zig");
 const ProxyExchangeType = @import("ProxyExchange.zig");
 const ProxyObservationType = @import("ProxyObservation.zig");
-const AgentStatusType = @import("telar-core").AgentStatus;
 const proxy_state = @import("proxy_state.zig");
 const ProxyState = @This();
 
@@ -103,7 +103,7 @@ pub fn currentEvidence(state: *const ProxyState) ?EvidenceType {
     return state.evidence;
 }
 
-fn replaceEvidence(state: *ProxyState, observation: *const ProxyObservationType, status: AgentStatusType) bool {
+fn replaceEvidence(state: *ProxyState, observation: *const ProxyObservationType, status: core.AgentStatus) bool {
     if (state.isOlderThanEvidence(observation.observed_at_ms)) {
         return false;
     }
@@ -121,7 +121,7 @@ fn track(state: *ProxyState, phase: types.ProxyPhase, exchange: ProxyExchangeTyp
     };
 }
 
-fn statusAfter(state: *const ProxyState, phase: types.ProxyPhase) AgentStatusType {
+fn statusAfter(state: *const ProxyState, phase: types.ProxyPhase) core.AgentStatus {
     return switch (phase) {
         .request_started, .response_activity, .response_finished => .working,
         .provider_turn_completed => if (state.active_count == 0) .ready else .working,

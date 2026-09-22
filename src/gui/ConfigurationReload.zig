@@ -1,25 +1,26 @@
 //! One off-thread Lua/font preparation and one pending adoption. Only the
 //! window thread resolves client state, after native frame consumers finish.
+const gui_event = @import("gui_event.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const native = @import("native/native.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
 const GuiClient = @import("GuiClient.zig");
 const Request = @import("ConfigurationRequest.zig");
-const reloads = client.operations.config_reloads;
 const font_rendering = @import("text/font_rendering.zig");
 const Reload = @This();
 
 io: std.Io,
-inbox: *@import("gui_event.zig").Inbox = undefined,
-ticket: ?@import("telar-client").InboxProducerTicket = null,
+inbox: *gui_event.Inbox = undefined,
+ticket: ?client.InboxProducerTicket = null,
 worker: ?std.Io.Future(void) = null,
 ready: std.atomic.Value(bool) = .init(false),
 scheduled: ?client.ConfigWaitArgs = null,
 request: ?Request = null,
 pending: bool = false,
 result: anyerror!client.ConfigReload = error.NotStarted,
-failure: ?client.Diagnostic = null,
+failure: ?data.Diagnostic = null,
 prepared: ?Renderer = null,
 retired: ?Renderer = null,
 current: client.GuiConfig = .{},
@@ -52,7 +53,7 @@ pub fn accept(reload: *Reload, app: *client.AttachedClient) !void {
         if (try reload.result == .unchanged) {
             reload.pending = false;
             reload.request = null;
-            _ = try reloads.handle(app, reload.result);
+            _ = try app.completeConfigReload(reload.result);
         }
     }
 }
@@ -107,7 +108,7 @@ pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
     // Physical downstream effects can fail after the common model commits.
     // Keep native resources on that same generation even on this failure path.
     var delivery_error: ?anyerror = null;
-    const outcome = reloads.handle(&gui.app, result) catch |err| blk: {
+    const outcome = gui.app.completeConfigReload(result) catch |err| blk: {
         delivery_error = err;
         break :blk null;
     };
@@ -185,7 +186,7 @@ fn prepare(reload: *Reload, request: Request) void {
     }
 
     reload.prepared = Renderer.configured(request.wait.gpa, reload.io, .{ .config = config, .viewport = request.viewport }) catch |err| {
-        var diagnostic: client.Diagnostic = .{};
+        var diagnostic: data.Diagnostic = .{};
         diagnostic.set("cannot prepare GUI font '{s}': {s}", .{ config.font.family.name(), @errorName(err) });
         reload.failure = diagnostic;
         return;

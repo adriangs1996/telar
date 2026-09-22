@@ -1,10 +1,8 @@
+const frontend = @import("telar-frontend");
+const client = @import("telar-client");
+const core = @import("telar-core");
 const std = @import("std");
-const StoreType = @import("telar-frontend").Store;
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
-const PaneIdType = @import("telar-core").PaneId;
 const main = @import("main.zig");
-const ImageType = @import("telar-core").Image;
-const KittyGraphicsWriterType = @import("telar-frontend").KittyGraphicsWriter;
 /// A full inline delivery of one browser-frame-sized image: the media path's
 /// unit of throughput. One op is every writer pass an unbounded budget needs
 /// until the store goes idle, so the zlib variant includes its deflate.
@@ -15,17 +13,17 @@ const height = 360;
 const raw_len = width * height * 4;
 
 gpa: std.mem.Allocator,
-store: StoreType,
-model: MultiplexerModel,
+store: frontend.Store,
+model: client.MultiplexerModel,
 output: []u8,
 
 pub fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
-    var store = StoreType.init(gpa);
+    var store = frontend.Store.init(gpa);
     errdefer store.deinit();
     store.delivery.host_zlib = zlib;
-    var model = MultiplexerModel.init(gpa);
+    var model = client.MultiplexerModel.init(gpa);
     errdefer model.deinit();
-    const pane_id: PaneIdType = @enumFromInt(1);
+    const pane_id: core.PaneId = @enumFromInt(1);
     try model.addRoot(.{
         .pane_id = pane_id,
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
@@ -55,7 +53,7 @@ pub fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
             pixels[index + 3] = 255;
         }
     }
-    const metadata: ImageType = .{
+    const metadata: core.Image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgba,
         .width = width,
@@ -107,7 +105,7 @@ pub fn deliver(context: *TransmitContext) !u64 {
     var written: u64 = 0;
     while (context.store.damage) {
         var output = std.Io.Writer.fixed(context.output);
-        var graphics_writer: KittyGraphicsWriterType = .{
+        var graphics_writer: frontend.KittyGraphicsWriter = .{
             .store = &context.store,
             .layout_snapshot = context.model.layoutSnapshot(.{ .w = main.cols, .h = main.rows }),
             .cell_width = 10,

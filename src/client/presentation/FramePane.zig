@@ -1,16 +1,11 @@
-const PaneIdType = @import("telar-core").PaneId;
-const CursorType = @import("telar-core").Cursor;
-const MouseType = @import("telar-core").Mouse;
-const InputModesType = @import("telar-core").InputModes;
-const PointerShapeType = @import("telar-core").PointerShape;
-const ScrollType = @import("telar-core").Scroll;
+const core = @import("telar-core");
 const Pane = @This();
 
-id: PaneIdType,
+id: core.PaneId,
 start: usize,
 len: usize,
-cursor: CursorType,
-mouse: MouseType,
-input_modes: InputModesType,
-pointer_shape: PointerShapeType,
-scroll: ScrollType,
+cursor: core.Cursor,
+mouse: core.Mouse,
+input_modes: core.InputModes,
+pointer_shape: core.PointerShape,
+scroll: core.Scroll,

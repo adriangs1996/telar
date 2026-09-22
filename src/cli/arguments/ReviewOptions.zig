@@ -1,8 +1,7 @@
+const core = @import("telar-core");
 const std = @import("std");
 const Cursor = @import("Cursor.zig");
 const values = @import("values.zig");
-const review = @import("telar-core").change_review;
-const AgentProvider = @import("telar-core").AgentProvider;
 const ReviewOptions = @This();
 
 pub const Action = enum { list, show, comment, delete, submit, reviewed, feedback, ack };
@@ -17,10 +16,10 @@ path: []const u8 = "",
 first_line: u32 = 0,
 last_line: u32 = 0,
 body: []const u8 = "",
-side: review.Side = .after,
+side: core.change_review.Side = .after,
 draft: bool = false,
 reviewed: bool = true,
-provider: AgentProvider = .unknown,
+provider: core.AgentProvider = .unknown,
 session: []const u8 = "",
 feedback_id: u64 = 0,
 json: bool = false,
@@ -72,7 +71,7 @@ pub fn parse(args: []const [*:0]const u8) !ReviewOptions {
                     .first => self.first_line = try positive(u32, bytes),
                     .last => self.last_line = try positive(u32, bytes),
                     .body => self.body = bytes,
-                    .provider => self.provider = std.meta.stringToEnum(AgentProvider, bytes) orelse return error.InvalidReviewProvider,
+                    .provider => self.provider = std.meta.stringToEnum(core.AgentProvider, bytes) orelse return error.InvalidReviewProvider,
                     .session => self.session = bytes,
                     .feedback_id => self.feedback_id = try positive(u64, bytes),
                     else => unreachable,
@@ -109,7 +108,7 @@ fn positive(comptime T: type, bytes: []const u8) !T {
 }
 
 fn validate(self: *ReviewOptions) !void {
-    if (self.session.len > review.max_identity_bytes or !std.unicode.utf8ValidateSlice(self.session)) {
+    if (self.session.len > core.change_review.max_identity_bytes or !std.unicode.utf8ValidateSlice(self.session)) {
         return error.InvalidReviewSession;
     }
 
@@ -118,7 +117,7 @@ fn validate(self: *ReviewOptions) !void {
             self.last_line = self.first_line;
         }
 
-        if (self.path.len == 0 or self.path.len > review.max_path_bytes or self.first_line == 0 or self.last_line < self.first_line or self.body.len == 0 or self.body.len > review.max_comment_bytes or !std.unicode.utf8ValidateSlice(self.body)) {
+        if (self.path.len == 0 or self.path.len > core.change_review.max_path_bytes or self.first_line == 0 or self.last_line < self.first_line or self.body.len == 0 or self.body.len > core.change_review.max_comment_bytes or !std.unicode.utf8ValidateSlice(self.body)) {
             return error.InvalidReviewComment;
         }
     } else if (self.body.len != 0 or self.path.len != 0 or self.first_line != 0 or self.last_line != 0 or self.draft or self.side == .before) {
@@ -138,7 +137,7 @@ fn validate(self: *ReviewOptions) !void {
     }
 
     if (self.action == .feedback or self.action == .ack) {
-        if (self.provider == .unknown or self.session.len == 0 or self.session.len > review.max_identity_bytes) {
+        if (self.provider == .unknown or self.session.len == 0 or self.session.len > core.change_review.max_identity_bytes) {
             return error.MissingReviewAgentIdentity;
         }
 
@@ -154,9 +153,9 @@ test "review CLI parses line ranges and requires cooperative feedback identity" 
     const options = try ReviewOptions.parse(&.{ "comment", "--current", "--edition", "3", "--file", "src/main.zig", "--first", "7", "--last", "9", "--body", "Keep café intact", "--before" });
     try std.testing.expectEqual(@as(u64, 3), options.edition);
     try std.testing.expectEqual(@as(u32, 9), options.last_line);
-    try std.testing.expectEqual(review.Side.before, options.side);
+    try std.testing.expectEqual(core.change_review.Side.before, options.side);
     const feedback = try ReviewOptions.parse(&.{ "feedback", "--provider", "codex", "--session", "session-1", "--json" });
-    try std.testing.expectEqual(AgentProvider.codex, feedback.provider);
+    try std.testing.expectEqual(core.AgentProvider.codex, feedback.provider);
     const pinned = try ReviewOptions.parse(&.{ "reviewed", "--edition", "3", "--session", "session-1" });
     try std.testing.expectEqualStrings("session-1", pinned.session);
     try std.testing.expectError(error.MissingReviewAgentIdentity, ReviewOptions.parse(&.{"feedback"}));

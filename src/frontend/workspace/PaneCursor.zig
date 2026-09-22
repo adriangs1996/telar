@@ -1,6 +1,6 @@
-const RectType = @import("telar-core").Rect;
-const ViewType = @import("telar-client").CopyModeView;
+const core = @import("telar-core");
+const data = @import("model");
 const PaneCursor = @This();
 
-content: RectType,
-copy: ?ViewType,
+content: core.Rect,
+copy: ?data.CopyModeView,

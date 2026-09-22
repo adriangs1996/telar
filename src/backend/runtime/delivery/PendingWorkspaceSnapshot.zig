@@ -1,6 +1,5 @@
-const RequestIdType = @import("telar-core").RequestId;
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const core = @import("telar-core");
 const PendingWorkspaceSnapshot = @This();
 
-request_id: RequestIdType,
-workspace: WorkspaceLocationType,
+request_id: core.RequestId,
+workspace: core.WorkspaceLocation,

@@ -6,12 +6,10 @@
 //! Screen text is bounded so the whole prompt fits the engine's prompt
 //! cap, and the user never sees more than one suggested line.
 
+const core = @import("telar-core");
 const Context = @import("Context.zig");
 const types = @import("../../engine/types.zig");
-const max_suggestion_request_bytes_module = @import("telar-core").max_suggestion_request_bytes;
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const std = @import("std");
-const max_suggestion_bytes_module = @import("telar-core").max_suggestion_bytes;
 
 /// Visible rows sent as context; the last rows hold the latest command and
 /// its output.
@@ -34,8 +32,8 @@ const instructions =
 /// const prompt = buildPrompt(.{ .cwd = cwd, .screen = screen, .request = text }, &buffer);
 /// ```
 pub fn buildPrompt(context: Context, buffer: *[types.max_prompt_bytes]u8) []const u8 {
-    const request = context.request[0..@min(context.request.len, max_suggestion_request_bytes_module)];
-    const cwd = context.cwd[0..@min(context.cwd.len, max_cwd_bytes_module)];
+    const request = context.request[0..@min(context.request.len, core.max_suggestion_request_bytes)];
+    const cwd = context.cwd[0..@min(context.cwd.len, core.max_cwd_bytes)];
     const fixed = instructions.len + "Working directory: ".len + cwd.len + "\nLast screen rows:\n".len +
         "\nRequest: ".len + request.len + 1;
     std.debug.assert(fixed < buffer.len);
@@ -75,7 +73,7 @@ pub fn extractCommand(reply: []const u8) ?[]const u8 {
             continue;
         }
 
-        if (line.len > max_suggestion_bytes_module) {
+        if (line.len > core.max_suggestion_bytes) {
             return null;
         }
 
@@ -124,5 +122,5 @@ test "replies reduce to one command line" {
     try std.testing.expect(extractCommand("\n\n") == null);
     try std.testing.expect(extractCommand("``") == null);
     try std.testing.expect(extractCommand("ls\x07") == null);
-    try std.testing.expect(extractCommand("x" ** (max_suggestion_bytes_module + 1)) == null);
+    try std.testing.expect(extractCommand("x" ** (core.max_suggestion_bytes + 1)) == null);
 }

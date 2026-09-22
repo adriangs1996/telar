@@ -1,27 +1,11 @@
+const core = @import("telar-core");
 const CreditType = @import("Credit.zig");
-const ImageType = @import("telar-core").Image;
 const SharedPixels = @import("SharedPixels.zig");
-const PlacementType = @import("telar-core").Placement;
-const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
 const ImageIdentity = @import("ImageIdentity.zig");
 const PlacementIdentity = @import("PlacementIdentity.zig");
 const PixelAllocation = @import("PixelAllocation.zig");
 const store_ops = @import("store.zig");
-const SnapshotType = @import("telar-core").Snapshot;
-const CoreSchemaImage = @import("telar-core").SchemaImage;
-const SharedImageType = @import("telar-core").SharedImage;
-const ShmNameType = @import("telar-core").ShmName;
-const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
-const max_images_per_pane_module = @import("telar-core").max_images_per_pane;
-const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
-const ImageChunkType = @import("telar-core").ImageChunk;
-const max_chunks_per_image_module = @import("telar-core").max_chunks_per_image;
-const CoreSchemaPlacement = @import("telar-core").SchemaPlacement;
-const max_placements_per_pane_module = @import("telar-core").max_placements_per_pane;
-const DeleteImageType = @import("telar-core").DeleteImage;
-const ImageKeyType = @import("telar-core").ImageKey;
-const DeletePlacementType = @import("telar-core").DeletePlacement;
 
 /// Creates one resource catalog with an explicit image-delivery lifetime policy.
 /// Example: `var assets = ResourceStore(Delivery).init(gpa);`.
@@ -29,7 +13,7 @@ pub fn Type(comptime Delivery: type) type {
     return struct {
         const Self = @This();
         pub const ImageEntry = struct {
-            metadata: ImageType,
+            metadata: core.Image,
             pixels: []u8,
             shared: ?SharedPixels = null,
             received: usize = 0,
@@ -39,7 +23,7 @@ pub fn Type(comptime Delivery: type) type {
             delivery: Delivery.ImageState = .{},
         };
         pub const PlacementEntry = struct {
-            placement: PlacementType,
+            placement: core.Placement,
             delivery: Delivery.PlacementState = .{},
         };
 
@@ -63,14 +47,14 @@ pub fn Type(comptime Delivery: type) type {
         shared_memory: bool = false,
         damage: bool = false,
         ingress_revision: u64 = 0,
-        revisions: std.AutoHashMapUnmanaged(PaneIdType, RevisionState) = .{},
-        hidden_panes: std.AutoHashMapUnmanaged(PaneIdType, void) = .{},
-        usage: std.AutoHashMapUnmanaged(PaneIdType, PaneUsage) = .{},
+        revisions: std.AutoHashMapUnmanaged(core.PaneId, RevisionState) = .{},
+        hidden_panes: std.AutoHashMapUnmanaged(core.PaneId, void) = .{},
+        usage: std.AutoHashMapUnmanaged(core.PaneId, PaneUsage) = .{},
 
         delivery: Delivery.State = .{},
         const ImageCommit = struct {
-            pane_id: PaneIdType,
-            image: ImageType,
+            pane_id: core.PaneId,
+            image: core.Image,
             allocation: *PixelAllocation,
             received: usize,
         };
@@ -188,7 +172,7 @@ pub fn Type(comptime Delivery: type) type {
             entry.shared = null;
         }
 
-        pub fn applySnapshot(store: *Self, message: SnapshotType) !void {
+        pub fn applySnapshot(store: *Self, message: core.Snapshot) !void {
             const revision = try store.revisionState(message.pane_id);
             switch (message.phase) {
                 .begin => {
@@ -212,7 +196,7 @@ pub fn Type(comptime Delivery: type) type {
             store.noteIngressChange();
         }
 
-        pub fn applyImage(store: *Self, message: CoreSchemaImage) !void {
+        pub fn applyImage(store: *Self, message: core.SchemaImage) !void {
             if (!try store.acceptRevision(message.pane_id, message.revision)) {
                 return;
             }
@@ -223,7 +207,7 @@ pub fn Type(comptime Delivery: type) type {
             store.noteIngressChange();
         }
 
-        pub fn applySharedImage(store: *Self, message: SharedImageType) !void {
+        pub fn applySharedImage(store: *Self, message: core.SharedImage) !void {
             if (comptime !store_ops.supportsSharedMemory()) {
                 return error.GraphicsSharedMappingFailed;
             }
@@ -245,7 +229,7 @@ pub fn Type(comptime Delivery: type) type {
             store.noteIngressChange();
         }
 
-        fn mapSharedPixels(store: *Self, name: ShmNameType, byte_len: usize) !PixelAllocation {
+        fn mapSharedPixels(store: *Self, name: core.ShmName, byte_len: usize) !PixelAllocation {
             _ = store;
             if (comptime !store_ops.supportsSharedMemory()) {
                 return error.SharedMemoryUnavailable;
@@ -281,8 +265,8 @@ pub fn Type(comptime Delivery: type) type {
             return .{ .pixels = map, .shared = shared };
         }
 
-        fn admitImage(store: *Self, pane_id: PaneIdType, image: ImageType) !usize {
-            const byte_len = try image.validate(max_image_bytes_per_pane_module);
+        fn admitImage(store: *Self, pane_id: core.PaneId, image: core.Image) !usize {
+            const byte_len = try image.validate(core.max_image_bytes_per_pane);
             const key = store_ops.identity(pane_id, image.key);
             // A new header supersedes every transfer of this image id that never
             // finished, so evict those before quota accounting rather than let a
@@ -298,7 +282,7 @@ pub fn Type(comptime Delivery: type) type {
             const pane_usage: PaneUsage = store.usage.get(pane_id) orelse .{};
             const logical_count = store.paneLogicalImageCount(pane_id, image.key.image_id);
             const replacing = store.hasImageId(pane_id, image.key.image_id);
-            if (previous == null and !replacing and logical_count >= max_images_per_pane_module) {
+            if (previous == null and !replacing and logical_count >= core.max_images_per_pane) {
                 return error.GraphicsImageLimitExceeded;
             }
             const previous_len = if (previous) |entry| entry.pixels.len else 0;
@@ -307,7 +291,7 @@ pub fn Type(comptime Delivery: type) type {
                 pane_usage.bytes - previous_len,
                 byte_len,
             ) catch return error.GraphicsQuotaExceeded;
-            if (next_pane_bytes > max_image_bytes_per_pane_module) {
+            if (next_pane_bytes > core.max_image_bytes_per_pane) {
                 return error.GraphicsQuotaExceeded;
             }
             const next_total = std.math.add(
@@ -315,7 +299,7 @@ pub fn Type(comptime Delivery: type) type {
                 store.total_bytes - previous_len,
                 byte_len,
             ) catch return error.GraphicsQuotaExceeded;
-            if (next_total > max_image_bytes_global_module) {
+            if (next_total > core.max_image_bytes_global) {
                 return error.GraphicsQuotaExceeded;
             }
 
@@ -348,7 +332,7 @@ pub fn Type(comptime Delivery: type) type {
             store.damage = true;
         }
 
-        pub fn applyChunk(store: *Self, message: ImageChunkType) !void {
+        pub fn applyChunk(store: *Self, message: core.ImageChunk) !void {
             if (!try store.acceptRevision(message.pane_id, message.revision)) {
                 return;
             }
@@ -357,7 +341,7 @@ pub fn Type(comptime Delivery: type) type {
             if (message.offset != entry.received) {
                 return error.InvalidGraphicsChunkOffset;
             }
-            if (entry.chunks == max_chunks_per_image_module) {
+            if (entry.chunks == core.max_chunks_per_image) {
                 return error.GraphicsChunkLimitExceeded;
             }
             const end = std.math.add(usize, entry.received, message.bytes.len) catch
@@ -377,7 +361,7 @@ pub fn Type(comptime Delivery: type) type {
             store.noteIngressChange();
         }
 
-        pub fn applyPlacement(store: *Self, message: CoreSchemaPlacement) !void {
+        pub fn applyPlacement(store: *Self, message: core.SchemaPlacement) !void {
             if (!try store.acceptRevision(message.pane_id, message.revision)) {
                 return;
             }
@@ -391,7 +375,7 @@ pub fn Type(comptime Delivery: type) type {
                 entry.placement = placement;
                 Delivery.placementChanged(store, key, entry);
             } else {
-                if (store.panePlacementCount(pane_id) == max_placements_per_pane_module) {
+                if (store.panePlacementCount(pane_id) == core.max_placements_per_pane) {
                     return error.GraphicsPlacementLimitExceeded;
                 }
                 const usage = try store.usageFor(pane_id);
@@ -407,7 +391,7 @@ pub fn Type(comptime Delivery: type) type {
             store.noteIngressChange();
         }
 
-        pub fn deleteImage(store: *Self, message: DeleteImageType) !void {
+        pub fn deleteImage(store: *Self, message: core.DeleteImage) !void {
             if (!try store.acceptRevision(message.pane_id, message.revision)) {
                 return;
             }
@@ -416,7 +400,7 @@ pub fn Type(comptime Delivery: type) type {
             }
         }
 
-        fn deleteImageData(store: *Self, pane_id: PaneIdType, key: ImageKeyType) bool {
+        fn deleteImageData(store: *Self, pane_id: core.PaneId, key: core.ImageKey) bool {
             const image_key = store_ops.identity(pane_id, key);
             const image = store.images.getPtr(image_key) orelse return false;
             image.retire_pending = true;
@@ -436,7 +420,7 @@ pub fn Type(comptime Delivery: type) type {
             store.freePixels(&removed_entry);
         }
 
-        fn removePlacementsForImage(store: *Self, pane_id: PaneIdType, key: ImageKeyType) void {
+        fn removePlacementsForImage(store: *Self, pane_id: core.PaneId, key: core.ImageKey) void {
             var iterator = store.placements.iterator();
             while (iterator.next()) |entry| {
                 if (entry.key_ptr.pane_id == pane_id and
@@ -449,7 +433,7 @@ pub fn Type(comptime Delivery: type) type {
             }
         }
 
-        pub fn deletePlacement(store: *Self, message: DeletePlacementType) !void {
+        pub fn deletePlacement(store: *Self, message: core.DeletePlacement) !void {
             if (!try store.acceptRevision(message.pane_id, message.revision)) {
                 return;
             }
@@ -469,13 +453,13 @@ pub fn Type(comptime Delivery: type) type {
             store.ingress_revision +%= 1;
         }
 
-        pub fn clearPane(store: *Self, pane_id: PaneIdType) void {
+        pub fn clearPane(store: *Self, pane_id: core.PaneId) void {
             store.clearPaneData(pane_id, false);
             store.removeRevision(pane_id);
             store.setPaneVisible(pane_id, true) catch {};
         }
 
-        fn clearPaneData(store: *Self, pane_id: PaneIdType, release_credit: bool) void {
+        fn clearPaneData(store: *Self, pane_id: core.PaneId, release_credit: bool) void {
             var placements = store.placements.iterator();
             while (placements.next()) |entry| {
                 if (entry.key_ptr.pane_id != pane_id) {
@@ -532,7 +516,7 @@ pub fn Type(comptime Delivery: type) type {
             store.pruneUsage(credit.pane_id, usage.*);
         }
 
-        pub fn setPaneVisible(store: *Self, pane_id: PaneIdType, visible: bool) !void {
+        pub fn setPaneVisible(store: *Self, pane_id: core.PaneId, visible: bool) !void {
             if (visible) {
                 _ = store.hidden_panes.remove(pane_id);
             } else {
@@ -551,21 +535,21 @@ pub fn Type(comptime Delivery: type) type {
             store.damage = true;
         }
 
-        pub fn paneVisible(store: *const Self, pane_id: PaneIdType) bool {
+        pub fn paneVisible(store: *const Self, pane_id: core.PaneId) bool {
             return !store.hidden_panes.contains(pane_id);
         }
 
-        pub fn hasPaneGraphics(store: *const Self, pane_id: PaneIdType) bool {
+        pub fn hasPaneGraphics(store: *const Self, pane_id: core.PaneId) bool {
             const usage = store.usage.get(pane_id) orelse return false;
             return usage.count != 0;
         }
 
-        fn panePlacementCount(store: *const Self, pane_id: PaneIdType) usize {
+        fn panePlacementCount(store: *const Self, pane_id: core.PaneId) usize {
             const usage = store.usage.get(pane_id) orelse return 0;
             return usage.placements;
         }
 
-        fn usageFor(store: *Self, pane_id: PaneIdType) !*PaneUsage {
+        fn usageFor(store: *Self, pane_id: core.PaneId) !*PaneUsage {
             const entry = try store.usage.getOrPut(store.gpa, pane_id);
             if (!entry.found_existing) {
                 entry.value_ptr.* = .{};
@@ -573,7 +557,7 @@ pub fn Type(comptime Delivery: type) type {
             return entry.value_ptr;
         }
 
-        fn noteImageRemoved(store: *Self, pane_id: PaneIdType, image: ImageEntry) void {
+        fn noteImageRemoved(store: *Self, pane_id: core.PaneId, image: ImageEntry) void {
             const usage = store.usage.getPtr(pane_id) orelse return;
             usage.count -= 1;
             usage.bytes -= image.pixels.len;
@@ -584,20 +568,20 @@ pub fn Type(comptime Delivery: type) type {
             store.pruneUsage(pane_id, usage.*);
         }
 
-        fn notePlacementRemoved(store: *Self, pane_id: PaneIdType) void {
+        fn notePlacementRemoved(store: *Self, pane_id: core.PaneId) void {
             const usage = store.usage.getPtr(pane_id) orelse return;
             usage.placements -= 1;
             store.pruneUsage(pane_id, usage.*);
         }
 
-        fn pruneUsage(store: *Self, pane_id: PaneIdType, usage: PaneUsage) void {
+        fn pruneUsage(store: *Self, pane_id: core.PaneId, usage: PaneUsage) void {
             if (usage.count == 0 and usage.placements == 0 and usage.released_bytes == 0) {
                 _ = store.usage.remove(pane_id);
             }
         }
 
-        fn paneLogicalImageCount(store: *const Self, pane_id: PaneIdType, replacing_id: u32) usize {
-            var ids: [max_images_per_pane_module]u32 = undefined;
+        fn paneLogicalImageCount(store: *const Self, pane_id: core.PaneId, replacing_id: u32) usize {
+            var ids: [core.max_images_per_pane]u32 = undefined;
             var count: usize = 0;
             var replacing_present = false;
             var iterator = store.images.iterator();
@@ -626,7 +610,7 @@ pub fn Type(comptime Delivery: type) type {
             return count + @intFromBool(replacing_present);
         }
 
-        fn hasImageId(store: *const Self, pane_id: PaneIdType, image_id: u32) bool {
+        fn hasImageId(store: *const Self, pane_id: core.PaneId, image_id: u32) bool {
             var iterator = store.images.iterator();
             while (iterator.next()) |entry| {
                 if (entry.key_ptr.pane_id == pane_id and entry.key_ptr.image_id == image_id) {
@@ -636,15 +620,15 @@ pub fn Type(comptime Delivery: type) type {
             return false;
         }
 
-        fn removeOtherGenerations(store: *Self, pane_id: PaneIdType, current: ImageKeyType) void {
+        fn removeOtherGenerations(store: *Self, pane_id: core.PaneId, current: core.ImageKey) void {
             store.retireOtherGenerations(pane_id, current);
         }
 
-        fn evictReplacedGenerations(store: *Self, pane_id: PaneIdType, incoming: ImageKeyType) void {
+        fn evictReplacedGenerations(store: *Self, pane_id: core.PaneId, incoming: core.ImageKey) void {
             store.retireOtherGenerations(pane_id, incoming);
         }
 
-        fn retireOtherGenerations(store: *Self, pane_id: PaneIdType, current: ImageKeyType) void {
+        fn retireOtherGenerations(store: *Self, pane_id: core.PaneId, current: core.ImageKey) void {
             var images = store.images.iterator();
             while (images.next()) |entry| {
                 if (entry.key_ptr.pane_id != pane_id or
@@ -658,10 +642,10 @@ pub fn Type(comptime Delivery: type) type {
             store.collectRetired(pane_id, current.image_id);
         }
 
-        pub fn collectRetired(store: *Self, pane_id: ?PaneIdType, image_id: ?u32) void {
+        pub fn collectRetired(store: *Self, pane_id: ?core.PaneId, image_id: ?u32) void {
             // Retransmissions bypass the logical image count, so sweep in bounded
             // batches instead of assuming one fixed array holds every generation.
-            var retired: [max_images_per_pane_module]ImageIdentity = undefined;
+            var retired: [core.max_images_per_pane]ImageIdentity = undefined;
             while (true) {
                 var count: usize = 0;
                 var images = store.images.iterator();
@@ -696,7 +680,7 @@ pub fn Type(comptime Delivery: type) type {
             }
         }
 
-        fn removeIncomplete(store: *Self, pane_id: PaneIdType) void {
+        fn removeIncomplete(store: *Self, pane_id: core.PaneId) void {
             var placements = store.placements.iterator();
             while (placements.next()) |entry| {
                 if (entry.key_ptr.pane_id != pane_id) {
@@ -733,7 +717,7 @@ pub fn Type(comptime Delivery: type) type {
             }
         }
 
-        fn revisionState(store: *Self, pane_id: PaneIdType) !*RevisionState {
+        fn revisionState(store: *Self, pane_id: core.PaneId) !*RevisionState {
             const entry = try store.revisions.getOrPut(store.gpa, pane_id);
             if (!entry.found_existing) {
                 entry.value_ptr.* = .{};
@@ -741,7 +725,7 @@ pub fn Type(comptime Delivery: type) type {
             return entry.value_ptr;
         }
 
-        fn acceptRevision(store: *Self, pane_id: PaneIdType, value: u64) !bool {
+        fn acceptRevision(store: *Self, pane_id: core.PaneId, value: u64) !bool {
             const state = try store.revisionState(pane_id);
             if (state.awaiting_snapshot) {
                 return false;
@@ -761,7 +745,7 @@ pub fn Type(comptime Delivery: type) type {
             return true;
         }
 
-        fn removeRevision(store: *Self, pane_id: PaneIdType) void {
+        fn removeRevision(store: *Self, pane_id: core.PaneId) void {
             _ = store.revisions.remove(pane_id);
         }
 

@@ -1,10 +1,10 @@
-const PaneType = @import("telar-client").Pane;
-const ViewType = @import("telar-client").LayoutView;
+const client = @import("telar-client");
+const data = @import("model");
 const RenderStats = @import("RenderStats.zig");
 const CopyChangeComposition = @This();
 
-pane: *const PaneType,
-view: ViewType,
+pane: *const client.Pane,
+view: data.LayoutView,
 rows: u16,
 cols: u16,
 stats: *RenderStats,

@@ -1,5 +1,5 @@
-const TabDescriptorType = @import("telar-core").TabDescriptor;
+const core = @import("telar-core");
 const DescriptorSnapshot = @This();
 
 name: []const u8,
-tabs: []TabDescriptorType,
+tabs: []core.TabDescriptor,

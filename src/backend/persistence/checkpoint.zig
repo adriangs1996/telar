@@ -5,19 +5,16 @@
 //! rebuild: identities, paths, labels, pane launch commands and client layout
 //! replicas. File descriptors, PTYs and in-flight work are never written.
 
+const core = @import("telar-core");
 const WorkspaceRecord = @import("WorkspaceRecord.zig");
 const TabRecord = @import("TabRecord.zig");
 const PaneRecord = @import("PaneRecord.zig");
 const LayoutRecord = @import("LayoutRecord.zig");
-const validateSessionTitle_module = @import("telar-core").validateSessionTitle;
 const std = @import("std");
-const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const Encoder = @import("Encoder.zig");
 const Reader = @import("Reader.zig");
 const ArgumentIterator = @import("ArgumentIterator.zig");
 const Counters = @import("Counters.zig");
-const EncoderType = @import("telar-core").Encoder;
 
 pub const magic: *const [8]u8 = "TELARCKP";
 /// Version 2 added pane titles; version 3 permits automatic tab labels.
@@ -55,8 +52,8 @@ pub fn validateTitle(title: []const u8, source: u8) !void {
         return;
     }
 
-    validateSessionTitle_module(title) catch return error.InvalidCheckpoint;
-    switch (std.enums.fromInt(AgentTitleSourceType, source) orelse return error.InvalidCheckpoint) {
+    core.validateSessionTitle(title) catch return error.InvalidCheckpoint;
+    switch (std.enums.fromInt(core.AgentTitleSource, source) orelse return error.InvalidCheckpoint) {
         .generated, .manual, .agent => {},
         .telar, .terminal => return error.InvalidCheckpoint,
     }
@@ -70,19 +67,19 @@ pub fn validatePaneKind(record: PaneRecord) !void {
             return error.InvalidCheckpoint;
         },
         .agent => {
-            if (record.argument_count != 0 or record.arguments.len != 0 or record.agent_provider != @intFromEnum(@import("telar-core").AgentProvider.codex) or !std.fs.path.isAbsolute(record.cwd)) {
+            if (record.argument_count != 0 or record.arguments.len != 0 or record.agent_provider != @intFromEnum(core.AgentProvider.codex) or !std.fs.path.isAbsolute(record.cwd)) {
                 return error.InvalidCheckpoint;
             }
 
             if (record.agent_session.len != 0) {
-                _ = @import("telar-core").RecentConversation.init(record.agent_session, "") catch return error.InvalidCheckpoint;
+                _ = core.RecentConversation.init(record.agent_session, "") catch return error.InvalidCheckpoint;
             }
         },
     }
 }
 
 pub fn validatePath(path: []const u8) !void {
-    if (path.len == 0 or path.len > max_cwd_bytes_module or std.mem.indexOfScalar(u8, path, 0) != null) {
+    if (path.len == 0 or path.len > core.max_cwd_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
         return error.InvalidCheckpoint;
     }
 }
@@ -110,7 +107,7 @@ test "checkpoint records round trip through the file encoding" {
         .agent_provider = 1,
         .agent_session = "0192aaaa-bbbb-cccc-dddd-eeeeffff0000",
         .agent_title = "Investigate proxy lifecycle",
-        .agent_title_source = @intFromEnum(AgentTitleSourceType.generated),
+        .agent_title_source = @intFromEnum(core.AgentTitleSource.generated),
     });
     try encoder.layout(.{ .identity = 42, .last_used = 3, .payload = "\x1a\x01" });
     const bytes = try encoder.finish();
@@ -133,7 +130,7 @@ test "checkpoint records round trip through the file encoding" {
     try std.testing.expectEqual(@as(u8, 1), pane.agent_provider);
     try std.testing.expectEqualStrings("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", pane.agent_session);
     try std.testing.expectEqualStrings("Investigate proxy lifecycle", pane.agent_title);
-    try std.testing.expectEqual(@intFromEnum(AgentTitleSourceType.generated), pane.agent_title_source);
+    try std.testing.expectEqual(@intFromEnum(core.AgentTitleSource.generated), pane.agent_title_source);
     const layout = (try reader.next()).?.layout;
     try std.testing.expectEqual(@as(u64, 42), layout.identity);
     try std.testing.expectEqualStrings("\x1a\x01", layout.payload);
@@ -199,24 +196,24 @@ test "pane titles must be printable and come from a durable source" {
 
     var placeholder = base;
     placeholder.agent_title = "New Claude Code session";
-    placeholder.agent_title_source = @intFromEnum(AgentTitleSourceType.telar);
+    placeholder.agent_title_source = @intFromEnum(core.AgentTitleSource.telar);
     var encoder = try Encoder.init(&buffer, counters);
     try std.testing.expectError(error.InvalidCheckpoint, encoder.pane(placeholder));
 
     var agent_named = base;
     agent_named.agent_title = "Fix proxy";
-    agent_named.agent_title_source = @intFromEnum(AgentTitleSourceType.agent);
+    agent_named.agent_title_source = @intFromEnum(core.AgentTitleSource.agent);
     encoder = try Encoder.init(&buffer, counters);
     try encoder.pane(agent_named);
 
     var control = base;
     control.agent_title = "a\x1bb";
-    control.agent_title_source = @intFromEnum(AgentTitleSourceType.manual);
+    control.agent_title_source = @intFromEnum(core.AgentTitleSource.manual);
     encoder = try Encoder.init(&buffer, counters);
     try std.testing.expectError(error.InvalidCheckpoint, encoder.pane(control));
 
     var sourced_empty = base;
-    sourced_empty.agent_title_source = @intFromEnum(AgentTitleSourceType.generated);
+    sourced_empty.agent_title_source = @intFromEnum(core.AgentTitleSource.generated);
     encoder = try Encoder.init(&buffer, counters);
     try std.testing.expectError(error.InvalidCheckpoint, encoder.pane(sourced_empty));
 
@@ -229,7 +226,7 @@ test "pane titles must be printable and come from a durable source" {
 
 test "a version 1 checkpoint still reads, with no pane title" {
     var buffer: [512]u8 = undefined;
-    var inner = EncoderType.init(&buffer);
+    var inner = core.Encoder.init(&buffer);
     try inner.writeBytes(magic);
     try inner.writeInt(u16, 1);
     try inner.writeInt(u64, 2);
@@ -288,13 +285,13 @@ test "agent pane checkpoints round trip empty and known conversations without ex
             .rows = 24,
             .arguments = "",
             .argument_count = 0,
-            .agent_provider = @intFromEnum(@import("telar-core").AgentProvider.codex),
+            .agent_provider = @intFromEnum(core.AgentProvider.codex),
             .agent_session = reference,
         });
         const bytes = try encoder.finish();
         var reader = try Reader.init(bytes);
         const pane = (try reader.next()).?.pane;
-        try std.testing.expectEqual(@import("telar-core").PaneKind.agent, pane.kind);
+        try std.testing.expectEqual(core.PaneKind.agent, pane.kind);
         try std.testing.expectEqualStrings(reference, pane.agent_session);
         try std.testing.expectEqual(@as(u16, 0), pane.argument_count);
         try std.testing.expectEqualStrings("", pane.arguments);
@@ -317,14 +314,14 @@ test "agent pane checkpoint rejects argv unsupported providers and unsafe refere
         .rows = 24,
         .arguments = "",
         .argument_count = 0,
-        .agent_provider = @intFromEnum(@import("telar-core").AgentProvider.codex),
+        .agent_provider = @intFromEnum(core.AgentProvider.codex),
     };
     var record = base;
     record.arguments = "/bin/sh\x00";
     record.argument_count = 1;
     try std.testing.expectError(error.InvalidCheckpoint, validatePaneKind(record));
     record = base;
-    record.agent_provider = @intFromEnum(@import("telar-core").AgentProvider.claude);
+    record.agent_provider = @intFromEnum(core.AgentProvider.claude);
     try std.testing.expectError(error.InvalidCheckpoint, validatePaneKind(record));
     record = base;
     record.cwd = "relative";
@@ -349,14 +346,14 @@ test "version 3 pane records restore as terminals without a kind byte" {
         .arguments = "/bin/sh\x00",
         .argument_count = 1,
         .agent_title = "Legacy title",
-        .agent_title_source = @intFromEnum(AgentTitleSourceType.manual),
+        .agent_title_source = @intFromEnum(core.AgentTitleSource.manual),
     });
     const bytes = try encoder.finish();
     std.mem.writeInt(u16, buffer[magic.len..][0..2], 3, .little);
     // The terminal kind byte is zero, so it becomes the legacy end marker.
     var reader = try Reader.init(bytes[0 .. bytes.len - 1]);
     const pane = (try reader.next()).?.pane;
-    try std.testing.expectEqual(@import("telar-core").PaneKind.terminal, pane.kind);
+    try std.testing.expectEqual(core.PaneKind.terminal, pane.kind);
     try std.testing.expectEqualStrings("Legacy title", pane.agent_title);
     try std.testing.expectEqualStrings("/bin/sh\x00", pane.arguments);
     try std.testing.expect(try reader.next() == null);

@@ -1,9 +1,9 @@
+const Target = @import("Target.zig");
 const client = @import("telar-client");
-const Action = @import("Target.zig").Action;
 
 /// Borrows semantic names only until registry registration copies them.
 /// Example: `const label = labels.forAction(&projection, action);`
-pub fn forAction(projection: *const client.Projection, action: Action) []const u8 {
+pub fn forAction(projection: *const client.Projection, action: Target.Action) []const u8 {
     return switch (action) {
         .resize_sidebar => "Resize sidebar",
         .custom => "Agents",

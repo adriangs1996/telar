@@ -8,10 +8,6 @@
 
 const types = @import("../agent/types.zig");
 
-const EffectBatchType = @import("EffectBatch.zig");
-const TransformationType = @import("Transformation.zig");
-const HeadersType = @import("Headers.zig");
-const TransformPipelineType = @import("TransformPipeline.zig");
 const std = @import("std");
 
 pub const Phase = enum {
@@ -64,24 +60,24 @@ pub fn isIdentityContentEncoding(value: []const u8) bool {
 pub const Event = @import("MiddlewareEvent.zig");
 
 test "observable SSE headers require one event-stream type and identity bytes" {
-    var headers: HeadersType = .{};
+    var headers: Headers = .{};
     try headers.append(.{ .name = "content-type", .value = "Text/Event-Stream; charset=utf-8" });
     try std.testing.expect(hasObservableSseBody(&headers));
 
     try headers.append(.{ .name = "content-encoding", .value = "identity" });
     try std.testing.expect(hasObservableSseBody(&headers));
 
-    var encoded: HeadersType = .{};
+    var encoded: Headers = .{};
     try encoded.append(.{ .name = "content-type", .value = "text/event-stream" });
     try encoded.append(.{ .name = "content-encoding", .value = "gzip" });
     try std.testing.expect(!hasObservableSseBody(&encoded));
 
-    var duplicate: HeadersType = .{};
+    var duplicate: Headers = .{};
     try duplicate.append(.{ .name = "content-type", .value = "text/event-stream" });
     try duplicate.append(.{ .name = "content-type", .value = "text/event-stream" });
     try std.testing.expect(!hasObservableSseBody(&duplicate));
 
-    var missing: HeadersType = .{};
+    var missing: Headers = .{};
     try missing.append(.{ .name = "content-encoding", .value = "identity" });
     try std.testing.expect(!hasObservableSseBody(&missing));
 }
@@ -139,7 +135,7 @@ pub const Headers = @import("Headers.zig");
 /// ```zig
 /// const observable = hasObservableSseBody(&headers);
 /// ```
-pub fn hasObservableSseBody(headers: *const HeadersType) bool {
+pub fn hasObservableSseBody(headers: *const Headers) bool {
     var content_type_seen = false;
     var event_stream = false;
 
@@ -210,12 +206,12 @@ pub fn isSensitiveName(name: []const u8) bool {
 }
 
 test "header effect batches are atomic and preserve pseudo-header order" {
-    var headers: HeadersType = .{};
+    var headers: Headers = .{};
     try headers.append(.{ .name = ":method", .value = "POST" });
     try headers.append(.{ .name = ":path", .value = "/v1/messages" });
     try headers.append(.{ .name = "authorization", .value = "secret", .sensitive = true });
 
-    var effects: EffectBatchType = .{};
+    var effects: EffectBatch = .{};
     try effects.set(.{ .name = ":path", .value = "/v1/responses" });
     try effects.remove("authorization");
     try effects.set(.{ .name = "x-telar", .value = "enabled" });
@@ -232,15 +228,15 @@ test "header effect batches are atomic and preserve pseudo-header order" {
 
 test "invalid complete effect batch preserves the original headers" {
     const TransformerImpl = struct {
-        fn transform(_: *anyopaque, transformation: TransformationType) TransformStatus {
+        fn transform(_: *anyopaque, transformation: Transformation) TransformStatus {
             transformation.effects.set(.{ .name = ":new", .value = "invalid" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = TransformerImpl.transform });
-    var headers: HeadersType = .{};
+    var headers: Headers = .{};
     try headers.append(.{ .name = ":method", .value = "GET" });
     try std.testing.expect(!pipeline.apply(.{ .io = std.testing.io, .context = undefined, .headers = &headers }));
     try std.testing.expectEqual(@as(u16, 1), headers.len);
@@ -248,11 +244,11 @@ test "invalid complete effect batch preserves the original headers" {
 }
 
 test "known secret headers remain sensitive regardless of transformer flags" {
-    var headers: HeadersType = .{};
+    var headers: Headers = .{};
     try headers.append(.{ .name = "Authorization", .value = "Bearer secret" });
     try std.testing.expect(headers.fields[0].sensitive);
 
-    var effects: EffectBatchType = .{};
+    var effects: EffectBatch = .{};
     try effects.set(.{ .name = "authorization", .value = "Bearer replacement" });
     try headers.apply(effects.effects[0..effects.len]);
     try std.testing.expect(headers.fields[0].sensitive);

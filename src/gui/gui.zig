@@ -2,6 +2,8 @@
 //! Shared client controllers own the session; native backends deliver input
 //! and consume sealed cell frames without knowing the terminal protocol.
 
+const run_module = @import("run.zig");
+const event = @import("input/event.zig");
 pub const GuiClient = @import("GuiClient.zig");
 pub const Color = @import("render/Color.zig");
 pub const GlyphAtlas = @import("text/GlyphAtlas.zig");
@@ -9,13 +11,13 @@ pub const QuadList = @import("render/QuadList.zig");
 pub const Rect = @import("render/Rect.zig");
 pub const TextRun = @import("text/TextRun.zig");
 pub const cell_colors = @import("render/cell_colors.zig");
-pub const run = @import("run.zig").run;
+pub const run = run_module.run;
 pub const quad = @import("render/Quad.zig");
 pub const Canvas = @import("widgets/Canvas.zig");
 pub const Layout = @import("layout/Layout.zig");
 pub const LayoutItem = @import("layout/Item.zig");
 pub const GenericWidgetList = @import("widgets/GenericWidgetList.zig").Type;
-pub const InputEvent = @import("input/event.zig").Event;
+pub const InputEvent = event.Event;
 pub const PointerEvent = @import("input/PointerEvent.zig");
 pub const TextInput = @import("input/TextInput.zig");
 

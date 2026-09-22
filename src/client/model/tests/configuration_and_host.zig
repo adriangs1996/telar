@@ -1,18 +1,9 @@
+const core = @import("telar-core");
+const model_data = @import("model");
 const ModelType = @import("../Model.zig");
 const std = @import("std");
 const VersionType = @import("../Version.zig");
-const types = @import("../types.zig");
-const DiagnosticType = @import("../../config/Diagnostic.zig");
-const CallbackContextType = @import("../../config/CallbackContext.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const PaneIdType = @import("telar-core").PaneId;
-const raw_module = @import("telar-core").raw;
-const TargetType = @import("../../attachments/AttachmentTarget.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const graphics = @import("../../environment/environment.zig");
-const HostCapabilitiesType = @import("../HostCapabilities.zig");
 const EntryInputType = @import("../../workspace/EntryInput.zig");
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
 
 test "sidebar visibility advances only the chrome revision" {
     var model = ModelType.init(std.testing.allocator, true);
@@ -99,13 +90,23 @@ test "client diagnostics publish only changed valid text" {
     defer model.deinit();
 
     try std.testing.expect(model.diagnostic() == null);
-    try std.testing.expectEqual(types.Change.changed, try model.setDiagnostic("Lua failed: {s}", .{"boom"}));
+    try std.testing.expectEqual(model_data.Change.changed, try model.setDiagnostic(
+        "Lua failed: {s}",
+        .{
+            "boom",
+        },
+    ));
     try std.testing.expectEqualStrings("Lua failed: boom", model.diagnostic().?);
     try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
-    try std.testing.expectEqual(types.Change.unchanged, try model.setDiagnostic("Lua failed: {s}", .{"boom"}));
+    try std.testing.expectEqual(model_data.Change.unchanged, try model.setDiagnostic(
+        "Lua failed: {s}",
+        .{
+            "boom",
+        },
+    ));
     try std.testing.expectEqual(VersionType{ .diagnostic = 1 }, model.version());
 
-    var invalid: DiagnosticType = .{};
+    var invalid: model_data.Diagnostic = .{};
     invalid.buffer[0] = 0xff;
     invalid.len = 1;
     try std.testing.expectError(error.InvalidClientDiagnostic, model.replaceDiagnostic(invalid));
@@ -113,9 +114,9 @@ test "client diagnostics publish only changed valid text" {
     try std.testing.expectError(error.InvalidClientDiagnostic, model.replaceDiagnostic(invalid));
     try std.testing.expectEqualStrings("Lua failed: boom", model.diagnostic().?);
 
-    try std.testing.expectEqual(types.Change.changed, model.clearDiagnostic());
+    try std.testing.expectEqual(model_data.Change.changed, model.clearDiagnostic());
     try std.testing.expect(model.diagnostic() == null);
-    try std.testing.expectEqual(types.Change.unchanged, model.clearDiagnostic());
+    try std.testing.expectEqual(model_data.Change.unchanged, model.clearDiagnostic());
     try std.testing.expectEqual(VersionType{ .diagnostic = 2 }, model.version());
 }
 
@@ -123,7 +124,7 @@ test "callback context is a value projection of committed client state" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expectEqualDeep(CallbackContextType{
+    try std.testing.expectEqualDeep(model_data.CallbackContext{
         .sidebar_visible = true,
         .tab_count = 0,
         .active_tab_index = 0,
@@ -131,20 +132,20 @@ test "callback context is a value projection of committed client state" {
         .focused_pane_id = 0,
     }, model.callbackContext());
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(3) },
         .tab_id = @enumFromInt(5),
     };
-    const pane_id: PaneIdType = @enumFromInt(7);
+    const pane_id: core.PaneId = @enumFromInt(7);
     try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     _ = model.toggleSidebar();
 
-    try std.testing.expectEqualDeep(CallbackContextType{
+    try std.testing.expectEqualDeep(model_data.CallbackContext{
         .sidebar_visible = false,
         .tab_count = 1,
         .active_tab_index = 0,
         .pane_count = 1,
-        .focused_pane_id = raw_module(pane_id),
+        .focused_pane_id = core.raw(pane_id),
     }, model.callbackContext());
 }
 
@@ -200,7 +201,7 @@ test "plugin execution identity exhaustion cannot publish a partial reservation"
 test "clipboard capture is single flight and completion matches its exact identity" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const target: TargetType = .{
+    const target: model_data.AttachmentTarget = .{
         .pane_id = @enumFromInt(7),
         .pane_generation = 3,
     };
@@ -254,7 +255,7 @@ test "clipboard capture validation and identity exhaustion leave no reservation"
 }
 
 test "host resize commits resolved geometry once" {
-    const initial: TerminalSizeType = .{
+    const initial: core.TerminalSize = .{
         .cols = 80,
         .rows = 24,
         .cell_width_px = 10,
@@ -269,7 +270,7 @@ test "host resize commits resolved geometry once" {
         },
     });
     defer model.deinit();
-    const resized: TerminalSizeType = .{
+    const resized: core.TerminalSize = .{
         .cols = 100,
         .rows = 30,
         .cell_width_px = 10,
@@ -323,8 +324,8 @@ test "presentation capabilities commit independently without probe policy" {
 
     const graphics_commit = (try model.observeHostCapability(.{ .images = .supported })).?;
     try std.testing.expect(graphics_commit.resize == null);
-    try std.testing.expectEqual(graphics.Support.supported, model.hostCapabilities().images);
-    try std.testing.expectEqual(graphics.Support.unknown, model.hostCapabilities().pointer_pixels);
+    try std.testing.expectEqual(model_data.EnvironmentSupport.supported, model.hostCapabilities().images);
+    try std.testing.expectEqual(model_data.EnvironmentSupport.unknown, model.hostCapabilities().pointer_pixels);
 
     _ = try model.observeHostCapability(.{ .pointer_pixels = .unsupported });
     const version = model.version();
@@ -341,7 +342,7 @@ test "host pixel observations commit raw measurements and resolved geometry atom
         .height = 480,
     } })).?;
 
-    try std.testing.expectEqual(TerminalSizeType{
+    try std.testing.expectEqual(core.TerminalSize{
         .cols = 80,
         .rows = 24,
         .cell_width_px = 10,
@@ -396,7 +397,7 @@ test "host reconciliation validates geometry before publishing capabilities" {
     }));
 
     try std.testing.expectEqualDeep(size, model.hostSize());
-    try std.testing.expectEqualDeep(HostCapabilitiesType{}, model.hostCapabilities());
+    try std.testing.expectEqualDeep(model_data.HostCapabilities{}, model.hostCapabilities());
     try std.testing.expectEqualDeep(version, model.version());
 }
 
@@ -449,7 +450,7 @@ test "workspace list reconciliation owns navigation state and one isolated revis
     try std.testing.expectEqualStrings("/w/telar", model.workspaceListSnapshot().pathAt(0));
     try std.testing.expect(model.knowsWorkspace(@enumFromInt(1)));
     try std.testing.expect(!model.knowsWorkspace(@enumFromInt(9)));
-    try std.testing.expectEqual(@as(WorkspaceIdType, @enumFromInt(2)), model.workspaceAtPosition(1).?);
+    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(2)), model.workspaceAtPosition(1).?);
     try std.testing.expect(model.workspaceAtPosition(2) == null);
 
     try std.testing.expect((try model.reconcileWorkspaceList(.{

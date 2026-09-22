@@ -1,6 +1,5 @@
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const LaunchViewType = @import("telar-core").LaunchView;
+const core = @import("telar-core");
 const PrepareLaunch = @This();
 
-workspace: WorkspaceLocationType,
-launch: LaunchViewType,
+workspace: core.WorkspaceLocation,
+launch: core.LaunchView,

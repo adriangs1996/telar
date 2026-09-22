@@ -1,9 +1,9 @@
+const core = @import("telar-core");
 const std = @import("std");
 const ClientKey = @import("../../history/ClientKey.zig");
-const SocketChannelType = @import("telar-core").SocketChannel;
 const Write = @This();
 
 io: std.Io,
 key: ClientKey,
-connection: *SocketChannelType,
+connection: *core.SocketChannel,
 payload: []const u8,

@@ -1,10 +1,10 @@
-const LayoutType = @import("telar-client").WorkspaceLayout;
-const RectType = @import("telar-core").Rect;
+const data = @import("model");
+const core = @import("telar-core");
 const main = @import("main.zig");
 const LayoutContext = @This();
 
-layout: LayoutType = .{},
-area: RectType = .{ .w = main.cols, .h = main.rows },
+layout: data.WorkspaceLayout = .{},
+area: core.Rect = .{ .w = main.cols, .h = main.rows },
 
 pub fn init() !LayoutContext {
     var context: LayoutContext = .{};

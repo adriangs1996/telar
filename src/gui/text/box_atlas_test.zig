@@ -1,4 +1,5 @@
 //! Resource ownership and fallback proofs for procedural box glyphs.
+const assets = @import("assets");
 const std = @import("std");
 const Atlas = @import("GlyphAtlas.zig");
 const Cache = @import("BoxCache.zig");
@@ -6,7 +7,7 @@ const QuadList = @import("../render/QuadList.zig");
 const TextRun = @import("TextRun.zig");
 
 fn makeAtlas() !Atlas {
-    return Atlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    return Atlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
 }
 
 test "box mask identities include geometry and stroke but exclude position color and font slant" {

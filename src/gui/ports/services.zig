@@ -1,4 +1,5 @@
 //! Host services execute as bounded inbox producers.
+const data = @import("model");
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
 
@@ -7,7 +8,7 @@ pub fn links(app: *client.AttachedClient) client.LinkOpener {
     return .{ .context = app, .open = openLink };
 }
 
-fn openLink(context: *anyopaque, target: client.LinkTarget) !void {
+fn openLink(context: *anyopaque, target: data.LinkTarget) !void {
     const app: *client.AttachedClient = @ptrCast(@alignCast(context));
     try GuiClient.of(app).driver.inbox.start(.link_opened, .{ client.openHostLink, .{ app.io, target } });
 }

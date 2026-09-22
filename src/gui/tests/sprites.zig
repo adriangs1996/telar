@@ -1,6 +1,7 @@
 //! Slice 8 of the GUI visual language: the RGBA sprite page beside the alpha
 //! atlas, the quads that select it, the provider marks on the card and the
 //! favicon that reaches `project_icon`.
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -97,7 +98,7 @@ const BandHitMap = @import("../widgets/BandHitMap.zig");
 const AgentCard = @import("../widgets/AgentCard.zig");
 const CardGeometry = @import("../widgets/CardGeometry.zig");
 
-fn agent(provider: core.AgentProvider, pane: u32) client.AgentInput {
+fn agent(provider: core.AgentProvider, pane: u32) data.AgentInput {
     return .{ .key = .{ .pane_id = @enumFromInt(pane), .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = provider, .status = .ready, .status_age_s = 1, .workspace_label = "telar", .session_title = "title", .last_event = "event" };
 }
 
@@ -161,7 +162,12 @@ test "a warm repaint with sprites shapes rasterizes and allocates nothing" {
     var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     var agents: client.AgentSnapshot = .{};
-    var inputs = [_]client.AgentInput{ agent(.claude, 51), agent(.codex, 52), agent(.pi, 53), agent(.unknown, 54) };
+    var inputs = [_]data.AgentInput{
+        agent(.claude, 51),
+        agent(.codex, 52),
+        agent(.pi, 53),
+        agent(.unknown, 54),
+    };
     for (&inputs) |*input| {
         input.status = .working;
         // Keep the elapsed label stable while exercising every opacity step.

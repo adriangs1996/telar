@@ -1,7 +1,7 @@
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const Pane = @This();
 
-id: PaneIdType,
+id: core.PaneId,
 attachment_generation: u64,
 cols: u16,
 rows: u16,

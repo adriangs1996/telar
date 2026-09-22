@@ -1,12 +1,11 @@
-const max_notification_title_bytes = @import("telar-core").max_notification_title_bytes;
-const max_notification_message_bytes = @import("telar-core").max_notification_message_bytes;
+const core = @import("telar-core");
 const host = @import("host.zig");
 /// One owned, sanitized payload handed to the system-notification worker.
 const Payload = @This();
 
-title: [max_notification_title_bytes]u8 = undefined,
+title: [core.max_notification_title_bytes]u8 = undefined,
 title_len: u8 = 0,
-message: [max_notification_message_bytes]u8 = undefined,
+message: [core.max_notification_message_bytes]u8 = undefined,
 message_len: u8 = 0,
 
 pub fn init(title: []const u8, message: []const u8) Payload {

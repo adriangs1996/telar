@@ -1,4 +1,5 @@
 //! Native notification composition and bounded, disposable stack motion.
+const shared_model = @import("model");
 const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
 const Clock = @import("../../animation/FrameClock.zig");
@@ -10,7 +11,7 @@ const GenericWidgetList = @import("../GenericWidgetList.zig").Type;
 
 pub const max_visible = Hits.max_visible;
 pub const Cards = GenericWidgetList(Card, max_visible);
-motions: [client.max_items]Motion = @splat(.{}),
+motions: [shared_model.notifications.max_items]Motion = @splat(.{}),
 
 /// Returns a bounded list of measured cards without emitting quads. Its text
 /// borrows the projection until the caller draws the list.
@@ -25,7 +26,7 @@ pub fn prepare(notifications: *Notifications, canvas: *Canvas, projection: clien
         return result;
     }
 
-    var used: [client.max_items]bool = @splat(false);
+    var used: [shared_model.notifications.max_items]bool = @splat(false);
     var y = host.y + margin;
     var painted: usize = 0;
     var cards: [max_visible]Card = undefined;
@@ -89,7 +90,7 @@ pub fn prepare(notifications: *Notifications, canvas: *Canvas, projection: clien
     return result;
 }
 
-fn motion(notifications: *Notifications, id: client.Id, y: f32) ?usize {
+fn motion(notifications: *Notifications, id: shared_model.notifications.Id, y: f32) ?usize {
     for (notifications.motions, 0..) |entry, index| {
         if (entry.id == id) {
             return index;
@@ -108,7 +109,7 @@ fn motion(notifications: *Notifications, id: client.Id, y: f32) ?usize {
     return null;
 }
 
-fn visibility(item: *const client.NotificationItem, clock: ?*Clock) f32 {
+fn visibility(item: *const shared_model.NotificationItem, clock: ?*Clock) f32 {
     var sampled = item.*;
     if (clock) |frame| {
         if (sampled.phase == .entering) {
@@ -126,19 +127,19 @@ fn visibility(item: *const client.NotificationItem, clock: ?*Clock) f32 {
         }
     }
 
-    const t = @as(f32, @floatFromInt(sampled.transition_position_ns)) / @as(f32, @floatFromInt(client.transition_duration_ns));
+    const t = @as(f32, @floatFromInt(sampled.transition_position_ns)) / @as(f32, @floatFromInt(shared_model.notifications.transition_duration_ns));
     return t * t * (3 - 2 * t);
 }
 
 /// Suppresses a notice whose target pane is already visible in the active tab.
 /// Example: `if (Notifications.targetVisible(projection, item.target)) continue;`
-pub fn targetVisible(projection: client.Projection, target: client.NotificationTarget) bool {
+pub fn targetVisible(projection: client.Projection, target: shared_model.notifications.Target) bool {
     const pane_id = switch (target) {
         .focus_pane => |id| id,
         else => return false,
     };
     const model = projection.model orelse return false;
-    var layout: client.LayoutSnapshot = .{};
+    var layout: shared_model.LayoutSnapshot = .{};
     model.layout.snapshot(projection.geometry.area, &layout);
     return layout.find(pane_id) != null;
 }

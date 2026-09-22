@@ -1,6 +1,6 @@
-const ClipboardCaptureIdType = @import("../../model/types.zig").ClipboardCaptureId;
+const data = @import("model");
 const CaptureType = @import("../../attachments/Capture.zig");
 const Completion = @This();
 
-execution_id: ClipboardCaptureIdType,
+execution_id: data.ClipboardCaptureId,
 result: anyerror!*CaptureType,

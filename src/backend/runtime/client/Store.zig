@@ -1,7 +1,7 @@
+const core = @import("telar-core");
 const store_support = @import("store_support.zig");
 const SessionType = @import("Session.zig");
 const std = @import("std");
-const SocketChannelType = @import("telar-core").SocketChannel;
 const ClientKey = @import("../../history/ClientKey.zig");
 const RemovalResources = @import("RemovalResources.zig");
 const Store = @This();
@@ -26,7 +26,7 @@ pub fn hasCapacity(store: *const Store) bool {
 /// ```zig
 /// const session = try store.add(gpa, connection);
 /// ```
-pub fn add(store: *Store, gpa: std.mem.Allocator, connection: SocketChannelType) !*SessionType {
+pub fn add(store: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel) !*SessionType {
     if (!store.hasCapacity()) {
         return error.ClientLimitReached;
     }

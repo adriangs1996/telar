@@ -1,18 +1,14 @@
-const RequestIdType = @import("telar-core").RequestId;
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
-const LaunchType = @import("telar-core").Launch;
-const CreateWorkspaceType = @import("telar-core").CreateWorkspace;
+const core = @import("telar-core");
 const OwnedCreateWorkspace = @This();
 
-request_id: RequestIdType,
-size: TerminalSizeType,
-name: [max_tab_label_bytes_module]u8 = undefined,
+request_id: core.RequestId,
+size: core.TerminalSize,
+name: [core.max_tab_label_bytes]u8 = undefined,
 name_len: u8,
-launch: LaunchType,
+launch: core.Launch,
 create_cwd: bool,
 
-pub fn view(value: *const OwnedCreateWorkspace, cwd: []const u8) CreateWorkspaceType {
+pub fn view(value: *const OwnedCreateWorkspace, cwd: []const u8) core.CreateWorkspace {
     var launch = value.launch;
     launch.cwd = cwd;
 

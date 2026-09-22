@@ -14,47 +14,25 @@ queue.
 ## Client boundary
 
 ```text
-semantic key, routed bytes, paste or pointer event
-                         |
-                  InputHandler
-                         |
-         +----------------+----------------+----------------+
-         |                |                |                |
-   key_routing      paste_routing   pane_mouse_inputs  pane_inputs
-         |                |                |                |
- key_routing.apply  pane_pastes pane_mouse_inputs.apply       |
-         |                |                |                |
-  pane-owned input  captured paste  SGR / alternate bytes   |
-         |                |                |                |
-         +----------------+----------------+----------------+
-                         |
-                 pane_inputs.send
-                         |
-             ClientModel.planPaneInput
-                         |
-              encode key when required
-                         |
-       host / paste ---------------- mouse
-             |                         |
- pane_viewports.apply(.bottom)       |
-             |                         |
-             +-----------+-------------+
-                         |
-                  send effect
-                         |
- AttachedClient.sendRuntimeInput -> Outbox -> pane_input
+host adapter drains semantic input
+  -> AttachedClient.routeKeyInput / paste_routing / pointer_routing
+  -> AttachedClient.sendPaneInput / startPanePaste / inputPaneMouse
+       capture the target and its current input modes
+       encode key, paste marker, mouse report or supplied bytes
+       applyPaneViewport(.bottom) when required by the source
+  -> private deliverPaneInput
+  -> private sendRuntimeInput -> Outbox -> pane_input
 ```
 
-`InputHandler` delegates semantic keys and replayed bytes to `key_routing`
-without deciding their owner. It delegates paste phases to `paste_routing` and
-host pointer events to `pointer_routing`; only its pane-owned branch enters
-`pane_mouse_inputs`. It does not inspect prompt, copy-mode or pane authority,
-resolve pane storage, inspect child mouse modes, encode child input, restore
-scrollback, write pane-input telemetry or enqueue pane bytes. See
-[Key routing](key-routing.md) for keyboard ownership.
 
-`pane_mouse_inputs.apply` selects viewport, alternate-scroll or child-report policy.
-Only the latter two enter `pane_inputs.send`. See
+The host adapter dispatches semantic keys and replayed bytes to
+`AttachedClient.routeKeyInput`. Paste and pointer routing retain their current
+entrypoints and call the corresponding owner operations. Child input policy,
+leases, viewport restoration, telemetry and transport delivery are visible in
+`AttachedClient`. See [Key routing](key-routing.md) for keyboard ownership.
+
+`AttachedClient.inputPaneMouse` selects viewport, alternate-scroll or child-report policy.
+Only the latter two enter `AttachedClient.sendPaneInput`. See
 [Pane mouse input](pane-mouse-input.md) for target and coordinate rules.
 
 `ClientModel.planPaneInput` is a read-only query. Normal input resolves the
@@ -66,11 +44,11 @@ prompt or copy mode rejects normal input because each owns it exclusively.
 Planning returns a value copy of `input_modes` and never advances
 `ClientModel.Version`.
 
-`pane_inputs.send` accepts either already-routed bytes or a semantic key. It
+`AttachedClient.sendPaneInput` accepts either already-routed bytes or a semantic key. It
 encodes keys against the planned child modes before committing anything, then
 rejects empty or oversized external payloads. A release that the child's
 protocol cannot represent becomes a zero-byte no-op. Press, repeat and paste
-compose `pane_viewports.apply` with a `.bottom` intent before delivery.
+compose `AttachedClient.applyPaneViewport` with a `.bottom` intent before delivery.
 Release and mouse reports preserve the current viewport. The final effect
 carries only `pane_id` and a slice borrowed for the synchronous call.
 
@@ -89,7 +67,7 @@ The routing snapshot and borrowed command are fixed values. The operation adds n
 allocation, queue or retained pointer. A selected owner failure propagates and
 never falls through to the other owner.
 
-`pane_pastes.start` asks `ClientModel` to capture the focused pane and its
+`AttachedClient.startPanePaste` asks `ClientModel` to capture the focused pane and its
 current `bracketed_paste` mode as one `PanePasteSession`. The state has no
 presentation revision because the UI does not render it.
 
@@ -102,7 +80,7 @@ with that prompt through its own `Prompt.pasting` state.
 
 The session also freezes whether framing is required. If the child changes its
 terminal mode during the stream, Telar still emits a closing marker exactly
-when it emitted an opening marker. `pane_pastes.finish` keeps the session
+when it emitted an opening marker. `AttachedClient.finishPanePaste` keeps the session
 valid during that final delivery and clears it afterward even when delivery
 fails.
 
@@ -115,14 +93,14 @@ not create a streamed session; they read the focused child's current mode and
 frame one bounded value in one delivery.
 
 An unmodified `Ctrl+V` follows the normal pane-input transaction first.
-`key_routing.apply` requests its best-effort local image preview only after a
+`AttachedClient.routeKeyInput` requests its best-effort local image preview only after a
 confirmed delivery. See [Key routing](key-routing.md) for that ordering and
 [Clipboard image preview](clipboard-image.md) for its media worker, identity,
 bounds and presentation path.
 
 ## Effects and failure policy
 
-`pane_inputs.send` plans and encodes the input, calls `pane_viewports.apply`
+`AttachedClient.sendPaneInput` plans and encodes the input, calls `AttachedClient.applyPaneViewport`
 when needed, then calls `AttachedClient.sendRuntimeInput` directly. The outbox copies the borrowed bytes,
 coalesces adjacent input for the same pane and preserves protocol order. See
 [Client runtime transport](runtime-transport.md) for send-token and
@@ -144,7 +122,7 @@ its existing event counter and is not double-counted as user-input enqueue
 latency.
 
 Terminal focus reports are deliberately outside this use case. They pass
-through `operations/panes/pane_focus_reports.sync` or `clear`. These operations
+through `AttachedClient.synchronizeReportedFocus` or `clear`. These operations
 use `AttachedClient.sendRuntimeInput`, so
 focus bytes remain outside user-input telemetry and can target the pane that
 just lost focus.
@@ -168,7 +146,7 @@ different pane or the runtime event loop.
 - `src/client/model/Model.zig` proves active-target resolution, paste
   identity and framing capture, exact release, attachment checks and exclusive
   modes.
-- `src/client/application/input/pane_paste.zig` proves start rollback,
+- `src/model/application/input/pane_paste.zig` proves start rollback,
   ordered delivery, unframed behavior, content retention and unconditional
   finish cleanup.
 - `src/client/application/input/paste_routing.zig` proves start authority,
@@ -176,7 +154,7 @@ different pane or the runtime event loop.
 - `src/client/application/input/pane_input.zig` proves child-mode encoding,
   exact key-lease targets, legacy and Kitty releases, explicit marker delivery,
   bounds, source-specific viewport policy, effect order and failure behavior.
-- `src/client/application/input/pane_mouse.zig` proves exclusive pointer
+- `src/model/application/input/pane_mouse.zig` proves exclusive pointer
   policy before any report reaches pane input.
 - `src/frontend/client/tests/` proves captured target and framing,
   prompt and copy-mode routing, viewport and protocol order, owner exclusion,

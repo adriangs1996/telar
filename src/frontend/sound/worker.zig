@@ -1,7 +1,7 @@
 //! Platform adapter for one host-audio worker.
 
+const core = @import("telar-core");
 const std = @import("std");
-const AgentSound = @import("telar-core").AgentSound;
 const builtin = @import("builtin");
 const Windows = @import("Windows.zig");
 
@@ -14,7 +14,7 @@ const playback_timeout: std.Io.Timeout = .{
 /// ```zig
 /// try play(io, .ready);
 /// ```
-pub fn play(io: std.Io, kind: AgentSound) !void {
+pub fn play(io: std.Io, kind: core.AgentSound) !void {
     switch (builtin.os.tag) {
         .macos => if (!commandSucceeded(io, &.{
             "/usr/bin/afplay",
@@ -39,7 +39,7 @@ pub fn play(io: std.Io, kind: AgentSound) !void {
     }
 }
 
-fn playLinux(io: std.Io, kind: AgentSound) !void {
+fn playLinux(io: std.Io, kind: core.AgentSound) !void {
     const event = switch (kind) {
         .ready => "complete",
         .needs_input => "dialog-warning",

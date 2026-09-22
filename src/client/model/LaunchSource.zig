@@ -1,6 +1,5 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const LaunchSource = @This();
 
-location: TabLocationType,
-pane_id: PaneIdType,
+location: core.TabLocation,
+pane_id: core.PaneId,

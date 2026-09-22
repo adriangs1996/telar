@@ -1,6 +1,7 @@
 //! One three-row agent card: project and status, a regular-weight title,
 //! then the live event while working or the workspace branch at rest. The card paints only;
 //! the sidebar owns its position, its hit target and its clipping.
+const action_module = @import("action.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -49,7 +50,7 @@ pub fn draw(card: AgentCard, canvas: *Canvas) !void {
 
 /// The action a click on the card performs.
 /// Example: `try hits.add(.{ .area = cells, .action = card.action() });`
-pub fn action(card: AgentCard) @import("action.zig").Action {
+pub fn action(card: AgentCard) action_module.Action {
     return .{ .intent = .{ .focus_agent = card.agent.key } };
 }
 

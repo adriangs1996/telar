@@ -1,8 +1,7 @@
 //! A preset owns chrome roles and native terminal colors. TUI panes and gaps
 //! retain their host's defaults; child truecolor remains application-owned.
 
-const ThemeType = @import("Theme.zig");
-const ColorType = @import("telar-core").Color;
+const core = @import("telar-core");
 const std = @import("std");
 
 pub const Builtin = enum {
@@ -31,7 +30,7 @@ pub const Theme = @import("Theme.zig");
 
 pub const default_theme = builtin(.shade);
 
-pub fn fromName(name: []const u8) ?ThemeType {
+pub fn fromName(name: []const u8) ?Theme {
     if (eql(name, "shade") or eql(name, "osaka-jade") or eql(name, "osaka_jade") or eql(name, "osakajade")) {
         return builtin(.shade);
     }
@@ -50,7 +49,7 @@ pub fn fromName(name: []const u8) ?ThemeType {
     return null;
 }
 
-pub fn builtin(name: Builtin) ThemeType {
+pub fn builtin(name: Builtin) Theme {
     return .{
         .base = name,
         .terminal = terminal(name),
@@ -146,8 +145,8 @@ pub fn builtin(name: Builtin) ThemeType {
     };
 }
 
-fn syntax(name: Builtin) ThemeType.SyntaxStyles {
-    var result: ThemeType.SyntaxStyles = .initFill(null);
+fn syntax(name: Builtin) Theme.SyntaxStyles {
+    var result: Theme.SyntaxStyles = .initFill(null);
     if (name != .shade) {
         return result;
     }
@@ -211,15 +210,15 @@ fn rgb24(value: u24) [3]u8 {
     return .{ @intCast(value >> 16), @intCast((value >> 8) & 0xff), @intCast(value & 0xff) };
 }
 
-fn rgb24c(value: u24) ColorType {
+fn rgb24c(value: u24) core.Color {
     return .{ .rgb = rgb24(value) };
 }
 
-fn rgb(red: u8, green: u8, blue: u8) ColorType {
+fn rgb(red: u8, green: u8, blue: u8) core.Color {
     return .{ .rgb = .{ red, green, blue } };
 }
 
-fn indexed(index: u8) ColorType {
+fn indexed(index: u8) core.Color {
     return .{ .indexed = index };
 }
 
@@ -230,7 +229,7 @@ fn eql(a: []const u8, b: []const u8) bool {
 test "Shade is the default theme and its panel takes the terminal background" {
     try std.testing.expectEqual(Builtin.shade, default_theme.base);
     try std.testing.expectEqualDeep(rgb(168, 201, 140), default_theme.palette.accent);
-    try std.testing.expectEqualDeep(ColorType.default, default_theme.palette.panel_bg);
+    try std.testing.expectEqualDeep(core.Color.default, default_theme.palette.panel_bg);
     try std.testing.expectEqualDeep(rgb(212, 180, 119), default_theme.palette.yellow);
 
     const vesper = builtin(.vesper);
@@ -295,7 +294,7 @@ test "bundled palettes keep their defining colors" {
 test "overrides replace only the requested color roles" {
     const base = builtin(.vesper);
     const custom = base.withOverrides(.{ .panel_bg = .default, .accent = rgb(1, 2, 3) });
-    try std.testing.expectEqualDeep(ColorType.default, custom.palette.panel_bg);
+    try std.testing.expectEqualDeep(core.Color.default, custom.palette.panel_bg);
     try std.testing.expectEqualDeep(rgb(1, 2, 3), custom.palette.accent);
     try std.testing.expectEqualDeep(base.palette.text, custom.palette.text);
 }

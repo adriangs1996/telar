@@ -1,7 +1,7 @@
-const RectType = @import("telar-core").Rect;
-const ItemType = @import("telar-client").NotificationItem;
+const core = @import("telar-core");
+const data = @import("model");
 const CardInput = @This();
 
-area: RectType,
-item: *const ItemType,
+area: core.Rect,
+item: *const data.NotificationItem,
 paint: bool,

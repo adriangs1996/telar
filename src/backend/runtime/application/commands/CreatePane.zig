@@ -1,9 +1,7 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const LaunchViewType = @import("telar-core").LaunchView;
+const core = @import("telar-core");
 const CreatePane = @This();
 
-location: TabLocationType,
-size: TerminalSizeType,
+location: core.TabLocation,
+size: core.TerminalSize,
 /// Every slice in this view is borrowed only for `execute`.
-launch: LaunchViewType,
+launch: core.LaunchView,

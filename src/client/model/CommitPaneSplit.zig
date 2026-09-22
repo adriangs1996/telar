@@ -1,6 +1,6 @@
-const PaneSplit = @import("PaneSplit.zig");
-const PaneIdType = @import("telar-core").PaneId;
+const data = @import("model");
+const core = @import("telar-core");
 const CommitPaneSplit = @This();
 
-split: PaneSplit,
-new_pane: PaneIdType,
+split: data.PaneSplit,
+new_pane: core.PaneId,

@@ -1,4 +1,5 @@
 //! Copies rendered text from the pinned page window, including offscreen spans.
+const ThreadDetails = @import("../ThreadDetails.zig");
 const std = @import("std");
 const Copy = @This();
 const GuiClient = @import("../../GuiClient.zig");
@@ -34,7 +35,7 @@ pub fn write(copy: Copy) !void {
             owner.source_offset = row.detail_offset;
             var lines = std.mem.tokenizeAny(u8, item.detail(snapshot), "\r\n");
             while (lines.next()) |line| {
-                if (@import("../ThreadDetails.zig").represented(line, item.text(snapshot), item.kind == .command)) {
+                if (ThreadDetails.represented(line, item.text(snapshot), item.kind == .command)) {
                     continue;
                 }
                 owner.source_offset = row.detail_offset + @as(u32, @intCast(@intFromPtr(line.ptr) - @intFromPtr(item.detail(snapshot).ptr)));

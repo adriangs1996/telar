@@ -1,3 +1,7 @@
+const GlyphAtlas = @import("../text/GlyphAtlas.zig");
+const assets = @import("assets");
+const QuadList = @import("../render/QuadList.zig");
+const client = @import("telar-client");
 const std = @import("std");
 const Fixture = @This();
 const SyntaxStore = @import("../syntax/Store.zig");
@@ -11,7 +15,7 @@ state: ?*@import("../widgets/interaction/State.zig") = null,
 syntax: ?*SyntaxStore = null,
 
 pub fn init() !Fixture {
-    return .{ .atlas = try @import("../text/GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 15 }), .quads = @import("../render/QuadList.zig").init(std.testing.allocator) };
+    return .{ .atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 15 }), .quads = QuadList.init(std.testing.allocator) };
 }
 
 pub fn deinit(fixture: *Fixture) void {
@@ -28,7 +32,7 @@ pub fn deinit(fixture: *Fixture) void {
 }
 
 pub fn canvas(fixture: *Fixture) @import("../widgets/Canvas.zig") {
-    return .{ .atlas = &fixture.atlas, .quads = &fixture.quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 9, .cell_height = 22, .baseline = 17, .pixel_height = 15 }, .theme = @import("telar-client").theme_support.default_theme, .chrome = .{ .body = 15, .title = 18, .small = 12, .ratio = 1 }, .animation = &fixture.clock, .widgets = fixture.state, .syntax = fixture.syntax };
+    return .{ .atlas = &fixture.atlas, .quads = &fixture.quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 9, .cell_height = 22, .baseline = 17, .pixel_height = 15 }, .theme = client.theme_support.default_theme, .chrome = .{ .body = 15, .title = 18, .small = 12, .ratio = 1 }, .animation = &fixture.clock, .widgets = fixture.state, .syntax = fixture.syntax };
 }
 
 /// Runs the worker before painting, just as the asynchronous host does.

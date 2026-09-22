@@ -1,5 +1,6 @@
 //! Provenance identifies one immutable snapshot slice independently of its hash.
-pane_id: @import("telar-core").PaneId,
+const core = @import("telar-core");
+pane_id: core.PaneId,
 attachment_generation: u64,
 pane_generation: u64,
 snapshot_revision: u64,

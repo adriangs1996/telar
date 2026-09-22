@@ -1,5 +1,5 @@
-const DiagnosticType = @import("../../config/Diagnostic.zig");
+const data = @import("model");
 const Replacement = @This();
 
-diagnostic: DiagnosticType,
-invalid_fallback: ?DiagnosticType = null,
+diagnostic: data.Diagnostic,
+invalid_fallback: ?data.Diagnostic = null,

@@ -1,10 +1,8 @@
 //! Application policy for one bounded client plugin execution.
+const model_data = @import("model");
 
 const PluginExecutionType = @import("../../model/PluginExecution.zig");
 const PluginResult = @import("PluginResult.zig");
-const types = @import("../../model/types.zig");
-const std = @import("std");
-const EffectBatchType = @import("../../config/EffectBatch.zig");
 
 pub const StartOutcome = union(enum) {
     started: PluginExecutionType,
@@ -16,11 +14,11 @@ pub const StartOutcome = union(enum) {
 pub const CompletionCommand = union(enum) {
     succeeded: PluginResult,
     failed: struct {
-        execution_id: types.PluginExecutionId,
+        execution_id: model_data.PluginExecutionId,
         reason: anyerror,
     },
 
-    pub fn executionId(command: CompletionCommand) types.PluginExecutionId {
+    pub fn executionId(command: CompletionCommand) model_data.PluginExecutionId {
         return switch (command) {
             .succeeded => |result| result.execution_id,
             .failed => |failure| failure.execution_id,
@@ -52,7 +50,7 @@ pub const CompletionEvent = enum {
     apply,
 };
 
-fn successfulCommand(execution_id: types.PluginExecutionId, batch: *const EffectBatchType) CompletionCommand {
+fn successfulCommand(execution_id: model_data.PluginExecutionId, batch: *const model_data.EffectBatch) CompletionCommand {
     return .{ .succeeded = .{
         .execution_id = execution_id,
         .package_index = 0,

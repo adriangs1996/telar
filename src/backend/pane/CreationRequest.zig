@@ -1,18 +1,16 @@
+const core = @import("telar-core");
 const PaneKey = @import("PaneKey.zig");
-const TabLocationType = @import("telar-core").TabLocation;
 const CommandType = @import("../pty/Command.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
 const GraphicsLimitsType = @import("../media/GraphicsLimits.zig");
-const TerminalColorsType = @import("telar-core").TerminalColors;
 const CreationRequest = @This();
 
 identity: PaneKey,
-location: TabLocationType,
+location: core.TabLocation,
 command: ?*const CommandType = null,
-kind: @import("telar-core").PaneKind = .terminal,
-restore_conversation: ?@import("telar-core").RecentConversation = null,
+kind: core.PaneKind = .terminal,
+restore_conversation: ?core.RecentConversation = null,
 launch_cwd: []const u8,
 workspace_path: []const u8,
-size: TerminalSizeType,
+size: core.TerminalSize,
 graphics_limits: GraphicsLimitsType,
-terminal_colors: TerminalColorsType = .{},
+terminal_colors: core.TerminalColors = .{},

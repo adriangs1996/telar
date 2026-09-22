@@ -1,6 +1,6 @@
+const data = @import("model");
 const lua_api = @import("lua-api");
 const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
-const DiagnosticType = @import("Diagnostic.zig");
 const value = @import("lua_value.zig");
 const std = @import("std");
 const config_model = @import("model.zig");
@@ -9,7 +9,7 @@ const Parser = @This();
 
 state: *lua_api.c.lua_State,
 runtime: *RuntimeSnapshotType,
-diagnostic: *DiagnosticType,
+diagnostic: *data.Diagnostic,
 
 pub fn parseOutput(parser: *Parser, absolute: c_int) !void {
     _ = lua_api.c.lua_getfield(parser.state, absolute, "output");

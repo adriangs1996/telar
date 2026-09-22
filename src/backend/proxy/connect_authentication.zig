@@ -1,12 +1,9 @@
 //! Authentication and target policy for one HTTP CONNECT request.
 
-const TargetType = @import("Target.zig");
-const AuthenticatedType = @import("Authenticated.zig");
-const RejectionType = @import("Rejection.zig");
+const core = @import("telar-core");
 const GenericCredentialPort = @import("GenericCredentialPort.zig").Type;
 const GenericConnectAuthenticationCommand = @import("GenericConnectAuthenticationCommand.zig").Type;
 const std = @import("std");
-const max_hostname_bytes_module = @import("telar-core").max_hostname_bytes;
 const TestStore = @import("TestStore.zig");
 const CredentialType = @import("Credential.zig");
 const ExpectedRejection = @import("ExpectedRejection.zig");
@@ -39,11 +36,11 @@ pub const RejectionReason = enum {
 pub const Rejection = @import("Rejection.zig");
 
 pub const Decision = union(enum) {
-    authenticated: AuthenticatedType,
-    rejected: RejectionType,
+    authenticated: Authenticated,
+    rejected: Rejection,
 };
 
-pub fn parseTarget(head: []const u8) ?TargetType {
+pub fn parseTarget(head: []const u8) ?Target {
     const line_end = std.mem.indexOf(u8, head, "\r\n") orelse return null;
     var parts = std.mem.splitScalar(u8, head[0..line_end], ' ');
     if (!std.mem.eql(u8, parts.next() orelse return null, "CONNECT")) {
@@ -61,7 +58,7 @@ pub fn parseTarget(head: []const u8) ?TargetType {
     }
 
     const host_bytes = authority[0..colon];
-    if (host_bytes.len > max_hostname_bytes_module) {
+    if (host_bytes.len > core.max_hostname_bytes) {
         return null;
     }
 
@@ -214,7 +211,7 @@ test "authenticated malformed targets map to a bad request without an auth metri
         "CONNECT api.openai.com:0 HTTP/1.1",
         "CONNECT api.openai.com:+443 HTTP/1.1",
         "CONNECT api.openai.com:65536 HTTP/1.1",
-        "CONNECT " ++ "a" ** (max_hostname_bytes_module + 1) ++ ":443 HTTP/1.1",
+        "CONNECT " ++ "a" ** (core.max_hostname_bytes + 1) ++ ":443 HTTP/1.1",
     };
 
     for (invalid_start_lines) |start_line| {

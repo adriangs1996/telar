@@ -1,6 +1,5 @@
-const PaletteType = @import("telar-client").Palette;
-const ThreadViewType = @import("telar-client").ThreadView;
+const client = @import("telar-client");
 const ThreadSurfaceInput = @This();
 
-view: ThreadViewType,
-palette: *const PaletteType,
+view: client.ThreadView,
+palette: *const client.Palette,

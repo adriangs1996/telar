@@ -21,6 +21,9 @@
 //! No runtime, PTY or child process is needed. The single-file layout is
 //! intentional here so the assembly and your widget can be read together.
 
+const macos_gui = @import("build/macos_gui.zig");
+const linux_gui = @import("build/linux_gui.zig");
+const event_module = @import("src/gui/input/event.zig");
 const std = @import("std");
 const client = @import("telar-client");
 const native = @import("src/gui/native/native.zig");
@@ -31,7 +34,6 @@ const Rect = @import("src/gui/render/Rect.zig");
 const WidgetState = @import("src/gui/widgets/interaction/State.zig");
 const Route = @import("src/gui/widgets/interaction/Route.zig");
 const Id = @import("src/gui/widgets/interaction/Id.zig");
-const Event = @import("src/gui/input/event.zig").Event;
 const FrameClock = @import("src/gui/animation/FrameClock.zig");
 const Services = @import("src/gui/host/Services.zig");
 const GenericEventPool = @import("src/gui/input/GenericEventPool.zig").Type;
@@ -54,7 +56,7 @@ const Inbox = struct {
     head: usize = 0,
     len: usize = 0,
 
-    fn push(inbox: *Inbox, event: Event) !void {
+    fn push(inbox: *Inbox, event: event_module.Event) !void {
         // Reserve one slot for the single outstanding GPU completion.
         if (inbox.len >= inbox.messages.len - 1) {
             return error.NativeInputFull;
@@ -199,7 +201,7 @@ const Runner = struct {
 
     // The dispatcher chooses the delivered target and retains gesture/key
     // ownership. Your widget decides what the semantic event does to its state.
-    fn dispatch(runner: *Runner, value: Event) !void {
+    fn dispatch(runner: *Runner, value: event_module.Event) !void {
         var event = value;
         if (event == .clipboard) {
             const operation = runner.widget.host.complete(event.clipboard) orelse return;
@@ -365,7 +367,7 @@ fn accessibility(context: ?*anyopaque, out: *native.AccessibilityTree) callconv(
     return @intFromBool(from(context).widget.accessibility(out));
 }
 
-fn explicitTarget(event: Event) ?Id {
+fn explicitTarget(event: event_module.Event) ?Id {
     return switch (event) {
         .text => |value| if (value.target_id == 0) null else .{ .target_id = value.target_id, .generation = value.generation },
         .key => |value| if (value.target_id == 0) null else .{ .target_id = value.target_id, .generation = value.generation },
@@ -388,14 +390,15 @@ pub fn addBuild(b: *std.Build, app: @import("build/Application.zig")) void {
     const module = b.createModule(.{ .root_source_file = b.path("run_widget.zig"), .target = app.modules.target, .optimize = app.modules.optimize, .link_libc = true });
     module.addImport("telar-core", app.modules.core);
     module.addImport("telar-client", app.modules.client);
+    module.addImport("model", app.modules.data);
     module.addImport("assets", app.modules.assets);
     module.addImport("freetype", app.modules.freetype);
     module.addObjectFile(app.modules.syntax_library.?);
     module.addCSourceFile(.{ .file = b.path("src/gui/native/wake.c"), .flags = &.{} });
     if (os == .macos) {
-        @import("build/macos_gui.zig").add(b, module, app.coverage.enabled);
+        macos_gui.add(b, module, app.coverage.enabled);
     } else {
-        @import("build/linux_gui.zig").add(b, module, app.coverage.enabled);
+        linux_gui.add(b, module, app.coverage.enabled);
     }
 
     const executable = b.addExecutable(.{ .name = "run-widget", .root_module = module });

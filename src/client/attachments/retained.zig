@@ -1,9 +1,7 @@
 //! Attachment delivery for consumers that hold PNG bytes across media turns.
+const model_data = @import("model");
 
-const SlotStateType = @import("SlotState.zig");
-const LeaseType = @import("Lease.zig");
 const GenericCatalog = @import("GenericCatalog.zig").Type;
-const types = @import("types.zig");
 const std = @import("std");
 
 pub const Store = GenericCatalog(@This());
@@ -13,7 +11,7 @@ pub const Lease = @import("Lease.zig");
 
 /// Pins one active PNG without borrowing its catalog slot.
 /// Example: `const lease = try retain(&store, id); defer release(&store, lease);`.
-pub fn retain(store: *Store, id: types.Id) !LeaseType {
+pub fn retain(store: *Store, id: model_data.AttachmentId) !Lease {
     const slot = store.find(id) orelse return error.UnknownAttachment;
     if (slot.retire_pending) {
         return error.AttachmentRetired;
@@ -25,13 +23,13 @@ pub fn retain(store: *Store, id: types.Id) !LeaseType {
 
 /// Returns one lease. Wiping and freeing remain in the catalog's media reap.
 /// Example: `release(&store, lease); store.reapRetired();`.
-pub fn release(store: *Store, lease: LeaseType) void {
+pub fn release(store: *Store, lease: Lease) void {
     const slot = store.find(lease.id) orelse unreachable;
     std.debug.assert(slot.delivery.leases != 0);
     slot.delivery.leases -= 1;
 }
 
-pub fn createSlot(_: *Store) !SlotStateType {
+pub fn createSlot(_: *Store) !SlotState {
     return .{};
 }
 pub fn targetChanged(_: *Store) void {}

@@ -1,4 +1,3 @@
-const PaneIdType = @import("telar-core").PaneId;
 const AgentType = @import("../agents/Agent.zig");
 const AgentSnapshotType = @import("../agents/AgentSnapshot.zig");
 const MultiplexerModel = @import("../workspace/MultiplexerModel.zig");
@@ -9,7 +8,7 @@ const ThreadView = @This();
 const core = @import("telar-core");
 const Pane = @import("../panes/Pane.zig");
 
-pane_id: PaneIdType,
+pane_id: core.PaneId,
 agent: ?*const AgentType,
 composer: []const u8,
 composer_images: ?*const core.AgentImages = null,
@@ -35,7 +34,7 @@ branch: []const u8 = "",
 /// ```zig
 /// const thread = ThreadView.capture(model, agents, pane_id) orelse return;
 /// ```
-pub fn capture(model: *const MultiplexerModel, agents: ?*const AgentSnapshotType, pane_id: PaneIdType) ?ThreadView {
+pub fn capture(model: *const MultiplexerModel, agents: ?*const AgentSnapshotType, pane_id: core.PaneId) ?ThreadView {
     const pane = model.findConst(pane_id) orelse return null;
     const agent = if (agents) |snapshot| found: {
         const key = snapshot.keyForPane(pane.location, pane_id) orelse break :found null;

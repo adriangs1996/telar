@@ -1,2 +1,3 @@
+const client = @import("telar-client");
 chrome: *@import("../Chrome.zig"),
-projection: *const @import("telar-client").Projection,
+projection: *const client.Projection,

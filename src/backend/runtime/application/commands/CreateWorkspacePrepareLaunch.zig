@@ -1,5 +1,5 @@
-const LaunchViewType = @import("telar-core").LaunchView;
+const core = @import("telar-core");
 const PrepareLaunch = @This();
 
-launch: LaunchViewType,
+launch: core.LaunchView,
 create_cwd: bool = false,

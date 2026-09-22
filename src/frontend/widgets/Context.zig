@@ -1,7 +1,6 @@
-const BufferType = @import("telar-core").Buffer;
+const core = @import("telar-core");
+const client = @import("telar-client");
 const context_support = @import("context_support.zig");
-const PaletteType = @import("telar-client").Palette;
-const ThemeType = @import("telar-client").Theme;
 const PlanType = @import("../ui/Plan.zig");
 const std = @import("std");
 const IconDraw = @import("IconDraw.zig");
@@ -9,11 +8,11 @@ const IconDraw = @import("IconDraw.zig");
 /// transport, or runtime models.
 const Context = @This();
 
-buffer: *BufferType,
+buffer: *core.Buffer,
 hits: *context_support.Hits,
-palette: *const PaletteType,
+palette: *const client.Palette,
 hovered: ?context_support.Action,
-icon_theme: ThemeType = .unicode,
+icon_theme: client.Theme = .unicode,
 icon_plan: ?*PlanType = null,
 
 pub fn isHovered(context: *const Context, action: context_support.Action) bool {

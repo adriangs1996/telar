@@ -1,11 +1,11 @@
 //! Projects the history inspector's geometry without mutating semantic state.
 
-const ModelType = @import("telar-client").Model;
+const client = @import("telar-client");
 const widget = @import("../../widgets/history_browser.zig");
 
 /// Returns the current inspector's scroll bound, when clamping is needed.
 /// Example: `const limit = scrollLimit(&client.model) orelse return;`.
-pub fn scrollLimit(state: *const ModelType) ?u32 {
+pub fn scrollLimit(state: *const client.Model) ?u32 {
     const prompt = state.name_prompt.currentConst() orelse return null;
     const palette = &state.history_palette;
     if (prompt.target() != .history or !prompt.inspecting() or prompt.detailScroll() == 0 or

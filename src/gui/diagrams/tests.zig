@@ -1,3 +1,6 @@
+const gui_event = @import("../gui_event.zig");
+const Job = @import("Job.zig");
+const protocol = @import("protocol.zig");
 const std = @import("std");
 const Store = @import("Store.zig");
 const Service = @import("Service.zig");
@@ -179,7 +182,7 @@ test "diagram service frees an owned image when inbox shutdown drops its complet
     {
         var service = Service.init(accounting.allocator());
         defer service.deinit();
-        var inbox: @import("../gui_event.zig").Inbox = .init(std.testing.io, .{});
+        var inbox: gui_event.Inbox = .init(std.testing.io, .{});
         defer inbox.deinit();
         const ticket = try inbox.reserve();
         _ = service.store.request(request(1, source));
@@ -197,7 +200,7 @@ test "diagram service frees an owned image when inbox shutdown drops its complet
 test "diagram service rolls back worker admission when the inbox is closed" {
     var service = Service.init(std.testing.allocator);
     defer service.deinit();
-    var inbox: @import("../gui_event.zig").Inbox = .init(std.testing.io, .{});
+    var inbox: gui_event.Inbox = .init(std.testing.io, .{});
     defer inbox.deinit();
     inbox.close();
     _ = service.store.request(request(1, source));
@@ -254,7 +257,7 @@ test "invalid diagram sources geometry and malformed result buffers never enter 
     for ([_][]const u8{ "", "x\x00y", "\xff" }) |text| {
         try std.testing.expectEqual(.invalid, store.request(request(1, text)).failed);
     }
-    var too_long: [@import("Job.zig").max_source_bytes + 1]u8 = @splat('x');
+    var too_long: [Job.max_source_bytes + 1]u8 = @splat('x');
     try std.testing.expectEqual(.limit, store.request(request(1, &too_long)).failed);
     for ([_]f32{ 0, 0.49, 4.01, std.math.inf(f32), std.math.nan(f32) }) |scale| {
         var input = request(1, source);
@@ -288,7 +291,7 @@ fn load(store: *Store, input: Request, side: u32) !void {
 }
 
 fn protocolImage(allocator: std.mem.Allocator) !Image {
-    const bytes = try allocator.alloc(u8, @import("protocol.zig").header_bytes + 4);
+    const bytes = try allocator.alloc(u8, protocol.header_bytes + 4);
     errdefer allocator.free(bytes);
     @memset(bytes, 0);
     @memcpy(bytes[0..4], "TLRD");
@@ -296,5 +299,5 @@ fn protocolImage(allocator: std.mem.Allocator) !Image {
     std.mem.writeInt(u32, bytes[8..12], 1, .little);
     std.mem.writeInt(u32, bytes[12..16], @bitCast(@as(f32, 1)), .little);
     std.mem.writeInt(u32, bytes[16..20], @bitCast(@as(f32, 1)), .little);
-    return @import("protocol.zig").decode(bytes);
+    return protocol.decode(bytes);
 }

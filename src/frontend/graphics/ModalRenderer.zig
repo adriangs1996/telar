@@ -1,14 +1,11 @@
+const core = @import("telar-core");
+const client = @import("telar-client");
+const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
 const modal = @import("modal.zig");
 const Asset = @import("Asset.zig");
 const ModalRenderKey = @import("ModalRenderKey.zig");
-const RectType = @import("telar-core").Rect;
-const ConfigurationType = @import("telar-client").SidebarRendererInput;
-const PaletteType = @import("telar-client").Palette;
-const writeTransmissionAbort_module = @import("kitty_protocol").writeTransmissionAbort;
-const writeDeleteImage_module = @import("kitty_protocol").writeDeleteImage;
 const kitty_codec = @import("kitty_codec.zig");
-const writeDeletePlacement_module = @import("kitty_protocol").writeDeletePlacement;
 const Renderer = @This();
 
 gpa: std.mem.Allocator,
@@ -17,8 +14,8 @@ supported: bool = false,
 cell_width: u16 = 0,
 cell_height: u16 = 0,
 key: ?ModalRenderKey = null,
-desired_area: ?RectType = null,
-emitted_area: ?RectType = null,
+desired_area: ?core.Rect = null,
+emitted_area: ?core.Rect = null,
 frame_usable: bool = false,
 partial: ?modal.AssetKind = null,
 abort_pending: bool = false,
@@ -40,7 +37,7 @@ pub fn retainedBytes(renderer: *const Renderer) usize {
 
 /// Applies host graphics support and cell geometry to modal rendering.
 /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
-pub fn configure(renderer: *Renderer, configuration: ConfigurationType) bool {
+pub fn configure(renderer: *Renderer, configuration: client.SidebarRendererInput) bool {
     const supported = configuration.support == .supported;
     if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
         renderer.cell_height == configuration.cell_height)
@@ -59,7 +56,7 @@ pub fn configure(renderer: *Renderer, configuration: ConfigurationType) bool {
     return true;
 }
 
-pub fn prepare(renderer: *Renderer, area: RectType, palette: *const PaletteType) void {
+pub fn prepare(renderer: *Renderer, area: core.Rect, palette: *const client.Palette) void {
     renderer.frame_usable = renderer.supported and renderer.cell_width != 0 and
         renderer.cell_height != 0 and !area.isEmpty();
     const background = modal.rgb(palette.panel_bg) orelse {
@@ -160,7 +157,7 @@ pub fn prepare(renderer: *Renderer, area: RectType, palette: *const PaletteType)
     for (&renderer.assets) |*asset| asset.dirty = true;
 }
 
-pub fn covers(renderer: *const Renderer, area: RectType) bool {
+pub fn covers(renderer: *const Renderer, area: core.Rect) bool {
     if (!renderer.frame_usable or renderer.partial != null or renderer.abort_pending or
         !modal.optionalAreaEql(renderer.desired_area, area) or
         !modal.optionalAreaEql(renderer.emitted_area, area))
@@ -197,13 +194,13 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
     }
     var written: usize = 0;
     if (renderer.abort_pending) {
-        written += try writeTransmissionAbort_module(writer);
+        written += try kitty_protocol.writeTransmissionAbort(writer);
         renderer.abort_pending = false;
     }
     if (!renderer.supported) {
         for (&renderer.assets, 0..) |*asset, index| {
             if (asset.emitted) {
-                written += try writeDeleteImage_module(writer, modal.imageId(index));
+                written += try kitty_protocol.writeDeleteImage(writer, modal.imageId(index));
             }
             asset.emitted = false;
             asset.dirty = false;
@@ -223,7 +220,7 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
                 continue;
             }
             if (asset.emitted) {
-                written += try writeDeleteImage_module(writer, modal.imageId(index));
+                written += try kitty_protocol.writeDeleteImage(writer, modal.imageId(index));
                 asset.emitted = false;
             }
             const progress = try kitty_codec.writeTransmissionChunks(writer, .{
@@ -303,7 +300,7 @@ fn deletePlacements(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.E
     _ = renderer;
     var written: usize = 0;
     for (0..modal.placement_count) |index|
-        written += try writeDeletePlacement_module(
+        written += try kitty_protocol.writeDeletePlacement(
             writer,
             modal.placementImageId(index),
             modal.placementId(index),
@@ -311,7 +308,7 @@ fn deletePlacements(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.E
     return written;
 }
 
-fn writePlacements(renderer: *const Renderer, writer: *std.Io.Writer, area: RectType) std.Io.Writer.Error!usize {
+fn writePlacements(renderer: *const Renderer, writer: *std.Io.Writer, area: core.Rect) std.Io.Writer.Error!usize {
     const key = renderer.key.?;
     const horizontal = renderer.assets[@intFromEnum(modal.AssetKind.horizontal)];
     const vertical = renderer.assets[@intFromEnum(modal.AssetKind.vertical)];

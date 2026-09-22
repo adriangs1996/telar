@@ -1,13 +1,11 @@
 //! Runtime tap actor set: one bounded sequential worker per trusted plugin.
 
+const core = @import("telar-core");
 const ServiceSpec = @import("ServiceSpec.zig");
-const CapabilityType = @import("telar-core").Capability;
 const Exchange = @import("../proxy/capture/Exchange.zig");
-const CapabilitySetType = @import("telar-core").CapabilitySet;
 const Service = @import("Service.zig");
 const ResultType = @import("Result.zig");
 const std = @import("std");
-const stableId_module = @import("telar-core").stableId;
 const Worker = @import("Worker.zig");
 const Frame = @import("Frame.zig");
 
@@ -16,7 +14,7 @@ pub const queue_depth = 64;
 pub const restart_limit = 5;
 pub const restart_window_ms = 10 * 60 * 1000;
 
-pub fn requireCapability(spec: *const ServiceSpec, capability: CapabilityType) !void {
+pub fn requireCapability(spec: *const ServiceSpec, capability: core.Capability) !void {
     if (!spec.declared.contains(capability)) {
         return error.CapabilityNotDeclared;
     }
@@ -36,10 +34,10 @@ pub fn capturedBytes(captured: *const Exchange) usize {
 }
 
 test "effect authorization checks exact identity, declaration and grant" {
-    var declared = CapabilitySetType.initEmpty();
+    var declared = core.CapabilitySet.initEmpty();
     declared.insert(.proxy_tap);
     declared.insert(.history_write);
-    var granted = CapabilitySetType.initEmpty();
+    var granted = core.CapabilitySet.initEmpty();
     granted.insert(.proxy_tap);
     const digest = [_]u8{0x5a} ** 32;
     const spec = try ServiceSpec.init(0, 7, .{
@@ -56,7 +54,7 @@ test "effect authorization checks exact identity, declaration and grant" {
     var result: ResultType = .{
         .gpa = std.testing.allocator,
         .package_index = 0,
-        .plugin_id = stableId_module("tap.test"),
+        .plugin_id = core.stableId("tap.test"),
         .digest = digest,
         .generation = 7,
         .event_id = 1,

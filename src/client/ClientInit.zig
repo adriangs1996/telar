@@ -1,7 +1,5 @@
+const core = @import("telar-core");
 const std = @import("std");
-const SocketChannelType = @import("telar-core").SocketChannel;
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const ClientIdentityType = @import("telar-core").ClientIdentity;
 const OptionsType = @import("Options.zig");
 /// What the shared client cannot fabricate: allocators, the runtime
 /// connection, identity, options and the workbench grid metrics the adapter
@@ -10,9 +8,9 @@ const ClientInit = @This();
 
 gpa: std.mem.Allocator,
 io: std.Io,
-connection: *SocketChannelType,
-host_size: TerminalSizeType,
+connection: *core.SocketChannel,
+host_size: core.TerminalSize,
 window_width_px: u32 = 0,
 window_height_px: u32 = 0,
-client_identity: ClientIdentityType = @enumFromInt(1),
+client_identity: core.ClientIdentity = @enumFromInt(1),
 options: OptionsType,

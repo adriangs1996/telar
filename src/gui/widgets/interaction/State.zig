@@ -1,4 +1,10 @@
 //! Presentation-owned targets plus client-owned transient editor state.
+const std_module = @import("std");
+const Registry = @import("Registry.zig");
+const native = @import("../../native/native.zig");
+const core = @import("telar-core");
+const labels = @import("labels.zig");
+const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
 const Dispatcher = @import("Dispatcher.zig");
@@ -9,10 +15,9 @@ const Id = @import("Id.zig");
 const CompletionsState = @import("CompletionState.zig");
 const CopyFeedback = @import("../CopyFeedback.zig");
 const MessageLinkPreview = @import("../MessageLinkPreview.zig");
-const TabDrag = @import("telar-client").TabDrag;
 const TabDropSlots = @import("TabDropSlots.zig");
 const TabMotions = @import("../TabMotions.zig");
-const TabMoveIntent = ?@import("telar-client").TabMoveIntent;
+const TabMoveIntent = ?client.TabMoveIntent;
 
 const State = @This();
 
@@ -20,7 +25,7 @@ dispatcher: Dispatcher = .{},
 completions: CompletionsState = .{},
 message_link_preview: ?MessageLinkPreview = null,
 copy_feedback: CopyFeedback = .{},
-tab_drag: TabDrag = .{},
+tab_drag: client.TabDrag = .{},
 tab_drag_step: f64 = 4,
 tab_drop_slots: TabDropSlots = .{},
 tab_motions: TabMotions = .{},
@@ -43,13 +48,13 @@ thread_scroll: @import("ThreadScrollMotions.zig") = .{},
 thread_selection: @import("ThreadSelection.zig") = .{},
 thread_text: ?*@import("ThreadTextStore.zig") = null,
 message_layout: ?*@import("../MessageLayoutCache.zig") = null,
-message_layout_allocator: @import("std").mem.Allocator = undefined,
+message_layout_allocator: std_module.mem.Allocator = undefined,
 image_preview: ?@import("ImagePreview.zig") = null,
 approval_review: ?@import("AgentReview.zig") = null,
 composer_menu: @import("ComposerMenuState.zig") = .{},
 history_scroll_generation: u64 = 0,
 history_scroll_inspecting: bool = false,
-native_nodes: [@import("Registry.zig").capacity]@import("../../native/native.zig").AccessibilityNode = undefined,
+native_nodes: [Registry.capacity]native.AccessibilityNode = undefined,
 pending_cuts: [4]?@import("PendingCut.zig") = @splat(null),
 pending_pastes: [4]?@import("PendingPaste.zig") = @splat(null),
 pending_thread_copies: [4]?@import("ThreadCopy.zig") = @splat(null),
@@ -58,7 +63,7 @@ copied_until_ns: u64 = 0,
 
 /// Includes reads still converting an image, so send cannot strand a late attachment.
 /// Example: `if (state.pastingImage(pane_id)) disableSend();`
-pub fn pastingImage(state: *const State, pane_id: @import("telar-core").PaneId) bool {
+pub fn pastingImage(state: *const State, pane_id: core.PaneId) bool {
     for (state.pending_pastes) |pending| {
         const paste = pending orelse continue;
         const target = state.dispatcher.maps.presented().find(paste.owner) orelse continue;
@@ -72,7 +77,7 @@ pub fn pastingImage(state: *const State, pane_id: @import("telar-core").PaneId) 
 
 /// Reserves bounded geometry for long messages during frame preparation only.
 /// Example: `const cache = try state.messageLayout(canvas.atlas.allocator);`
-pub fn messageLayout(state: *State, allocator: @import("std").mem.Allocator) !*@import("../MessageLayoutCache.zig") {
+pub fn messageLayout(state: *State, allocator: std_module.mem.Allocator) !*@import("../MessageLayoutCache.zig") {
     if (state.message_layout == null) {
         const cache = try allocator.create(@import("../MessageLayoutCache.zig"));
         cache.* = .{};
@@ -85,7 +90,7 @@ pub fn messageLayout(state: *State, allocator: @import("std").mem.Allocator) !*@
 
 /// Owns text hit geometry only when an agent conversation is prepared.
 /// Example: `const text = try state.threadText(canvas.atlas.allocator);`
-pub fn threadText(state: *State, allocator: @import("std").mem.Allocator) !*@import("ThreadTextStore.zig") {
+pub fn threadText(state: *State, allocator: std_module.mem.Allocator) !*@import("ThreadTextStore.zig") {
     if (state.thread_text == null) {
         const store = try allocator.create(@import("ThreadTextStore.zig"));
         store.* = .{ .allocator = allocator };
@@ -159,7 +164,7 @@ pub fn chrome(state: *State, canvas: *Canvas, input: @import("ChromeRegistration
             .pane_content => continue,
         };
         const target: Target = .{ .bounds = hit.area, .action = action, .focusable = action != .resize_sidebar };
-        _ = try state.dispatcher.add(target.labelled(@import("labels.zig").forAction(input.projection, action)));
+        _ = try state.dispatcher.add(target.labelled(labels.forAction(input.projection, action)));
     }
 
     if (state.dispatcher.focused) |id| {

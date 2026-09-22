@@ -1,18 +1,15 @@
+const core = @import("telar-core");
 const io_events = @import("pane_io.zig");
 const projection = @import("pane_projection.zig");
-const enabled_module = @import("telar-core").enabled;
 const pane_mod = @import("../../../../pane/pane_namespace.zig");
 const std = @import("std");
 const exit_ops = @import("../../../entrypoints/events/pane/exit.zig");
 const OutputCompletion = @import("../../../entrypoints/events/pane/OutputCompletion.zig");
 const IngestTestGateType = @import("../../../IngestTestGate.zig");
-const mark_module = @import("telar-core").mark;
 const IngestCompletion = @import("../../../entrypoints/events/pane/IngestCompletion.zig");
 const ExitCompletion = @import("../../../entrypoints/events/pane/ExitCompletion.zig");
 const PaneType = @import("../../../../pane/Pane.zig");
 const OutputIngest = @import("../../../entrypoints/events/pane/OutputIngest.zig");
-const PaneIdType = @import("telar-core").PaneId;
-const enter_module = @import("telar-core").enter;
 const PaneIngestStats = @import("../../../../pane/PaneIngestStats.zig");
 const ReadType = @import("../../../entrypoints/events/pane/Read.zig");
 const pane_launcher_mod = @import("../../pane_launcher.zig");
@@ -26,7 +23,7 @@ const Application = @import("../../Application.zig");
 /// try PanePipelineEvents.handleOutput(&application, event, ingest_gate);
 /// ```
 pub fn handleOutput(application: *Application, event: OutputCompletion, ingest_gate: ?*IngestTestGateType) !void {
-    mark_module(application.io, .output_dispatch);
+    core.mark(application.io, .output_dispatch);
     var context: OutputRuntime = .{ .application = application, .ingest_gate = ingest_gate };
     try processOutput(&context, event);
 
@@ -42,7 +39,7 @@ pub fn handleOutput(application: *Application, event: OutputCompletion, ingest_g
 /// try PanePipelineEvents.handleIngested(&application, event);
 /// ```
 pub fn handleIngested(application: *Application, event: IngestCompletion) !void {
-    mark_module(application.io, .ingest_dispatch);
+    core.mark(application.io, .ingest_dispatch);
     try commitIngest(application, event);
 }
 
@@ -84,7 +81,7 @@ const OutputRuntime = @import("OutputRuntime.zig");
 const PaneIngestTask = @import("PaneIngestTask.zig");
 
 fn startOutputIngest(context: *OutputRuntime, ingest: OutputIngest) !void {
-    mark_module(ingest.io, .vt_queued);
+    core.mark(ingest.io, .vt_queued);
     const task: PaneIngestTask = .{ .ingest = ingest, .gate = context.ingest_gate };
 
     if (context.ingest_gate == null and ingest.pane.canInlineOutput(ingest.bytes)) {
@@ -95,7 +92,7 @@ fn startOutputIngest(context: *OutputRuntime, ingest: OutputIngest) !void {
     try context.application.select.concurrent(.pane_ingested, ingestPane, .{task});
 }
 
-fn paneHasOutstandingFrame(context: *OutputRuntime, pane_id: PaneIdType) bool {
+fn paneHasOutstandingFrame(context: *OutputRuntime, pane_id: core.PaneId) bool {
     for (&context.application.clients.items) |*slot| {
         const client = slot.* orelse continue;
         const attachment = client.attachments.find(pane_id) orelse continue;
@@ -109,10 +106,10 @@ fn paneHasOutstandingFrame(context: *OutputRuntime, pane_id: PaneIdType) bool {
 }
 
 fn ingestPane(task: PaneIngestTask) IngestCompletion {
-    mark_module(task.ingest.io, .vt_start);
-    defer mark_module(task.ingest.io, .vt_done);
+    core.mark(task.ingest.io, .vt_start);
+    defer core.mark(task.ingest.io, .vt_done);
 
-    const path = enter_module(.interactive);
+    const path = core.enter(.interactive);
     defer path.restore();
 
     if (task.gate) |gate| {
@@ -161,7 +158,7 @@ fn processOutput(context: *OutputRuntime, completion: OutputCompletion) !void {
 
     pane.completePtyOutputRead(.data);
 
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         context.application.metrics.pty_events += 1;
         context.application.metrics.pty_bytes += output_len;
 
@@ -218,7 +215,7 @@ fn commitIngest(application: *Application, completion: IngestCompletion) !void {
         return;
     };
 
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         application.metrics.ingest.observe(stats.elapsed_ns);
     }
 

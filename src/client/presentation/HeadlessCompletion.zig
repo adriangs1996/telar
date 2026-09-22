@@ -1,2 +1,3 @@
-token: @import("lifecycle.zig").Token,
-outcome: @import("lifecycle.zig").Outcome,
+const lifecycle = @import("lifecycle.zig");
+token: lifecycle.Token,
+outcome: lifecycle.Outcome,

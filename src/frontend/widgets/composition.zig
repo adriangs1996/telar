@@ -3,6 +3,8 @@
 //! This is deliberately linear. Reading `render` shows every visible widget,
 //! its region, its order, and the only conditional replacement in the frame.
 
+const client = @import("telar-client");
+const core = @import("telar-core");
 const ContextType = @import("Context.zig");
 const CompositionInput = @import("CompositionInput.zig");
 const CompositionOutput = @import("CompositionOutput.zig");
@@ -13,11 +15,8 @@ const tab_rename = @import("tab_rename.zig");
 const status_bar = @import("status_bar.zig");
 const workbench = @import("workbench.zig");
 const BarLayoutRegions = @import("BarLayoutRegions.zig");
-const AlignmentType = @import("telar-client").Alignment;
 const tab_bar = @import("tab_bar.zig");
 const bar_content = @import("bar_content.zig");
-const SlotType = @import("telar-client").Slot;
-const StyleType = @import("telar-core").Style;
 
 pub fn render(context: *ContextType, input: CompositionInput) CompositionOutput {
     top_bar.render(context, .{
@@ -102,7 +101,7 @@ fn renderBottom(context: *ContextType, input: CompositionInput) void {
     });
 
     for (slots, regions.items, 0..) |*slot, area, index| {
-        const alignment: AlignmentType = switch (index) {
+        const alignment: client.Alignment = switch (index) {
             0 => .left,
             1 => .center,
             else => .right,
@@ -125,7 +124,7 @@ fn renderBottom(context: *ContextType, input: CompositionInput) void {
     }
 }
 
-fn bottomDesiredWidth(slot: *const SlotType, input: CompositionInput) u16 {
+fn bottomDesiredWidth(slot: *const client.Slot, input: CompositionInput) u16 {
     return switch (slot.*) {
         .empty => 0,
         .content => |*content| content.width(),
@@ -138,7 +137,7 @@ fn bottomDesiredWidth(slot: *const SlotType, input: CompositionInput) u16 {
     };
 }
 
-fn bottomStyle(context: *const ContextType) StyleType {
+fn bottomStyle(context: *const ContextType) core.Style {
     return .{
         .fg = context.palette.subtext0,
         .bg = context.palette.panel_bg,

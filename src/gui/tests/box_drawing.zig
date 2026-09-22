@@ -1,3 +1,4 @@
+const Quad_module = @import("../render/Quad.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -7,7 +8,6 @@ const Canvas = @import("../widgets/Canvas.zig");
 const CellMesh = @import("../render/CellMesh.zig");
 const QuadList = @import("../render/QuadList.zig");
 const Quad = @import("../render/Quad.zig").Quad;
-const solid_uv = @import("../render/Quad.zig").solid_uv;
 
 test "terminal box borders join adjacent cells for light heavy double and mixed strokes" {
     const session = try Session.init();
@@ -262,5 +262,5 @@ fn expectJoin(first: []const Quad, second: []const Quad, vertical: bool) !void {
 }
 
 fn isSolid(item: Quad) bool {
-    return item.u0 == solid_uv[0] and item.v0 == solid_uv[1] and item.u1 == solid_uv[0] and item.v1 == solid_uv[1];
+    return item.u0 == Quad_module.solid_uv[0] and item.v0 == Quad_module.solid_uv[1] and item.u1 == Quad_module.solid_uv[0] and item.v1 == Quad_module.solid_uv[1];
 }

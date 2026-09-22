@@ -22,7 +22,7 @@ stopping the server discards every record.
 ```text
 completed client event
         |
-client_layouts.observe
+AttachedClient.synchronizeClientLayout
         |
 fixed-size version comparison
         |

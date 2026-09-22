@@ -4,11 +4,10 @@
 //! and `Tracker` remain transitional capability roots until their semantic
 //! state is separated from live resources and observation behavior.
 
+const core = @import("telar-core");
 const GraphicsLimitsType = @import("../../media/GraphicsLimits.zig");
 const RuntimeModel = @import("RuntimeModel.zig");
 const std = @import("std");
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
-const AgentSnapshotEntryType = @import("telar-core").AgentSnapshotEntry;
 const RepositoryType = @import("../../workspace/Repository.zig");
 
 test "runtime model starts with empty configured capability roots" {
@@ -33,7 +32,7 @@ test "runtime model starts with empty configured capability roots" {
     try std.testing.expectEqual(graphics_limits.global_bytes, model.panes.graphics_budget.limit);
     try std.testing.expectEqualDeep(graphics_limits, model.panes.graphics_limits);
 
-    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
     try std.testing.expectEqual(@as(usize, 0), model.agents.snapshot(&entries, 0).len);
 }
 

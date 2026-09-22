@@ -1,4 +1,5 @@
 //! A bounded Markdown block reader. Incomplete streaming fences remain code.
+const MessageTable = @import("MessageTable.zig");
 const std = @import("std");
 const Block = @import("MessageBlock.zig");
 const Blocks = @This();
@@ -56,7 +57,7 @@ pub fn next(blocks: *Blocks) ?Block {
     }
 
     if (std.mem.indexOfScalar(u8, line, '|') != null) {
-        if (@import("MessageTable.zig").parse(blocks.text[source_offset..])) |table| {
+        if (MessageTable.parse(blocks.text[source_offset..])) |table| {
             blocks.index = source_offset + table.len;
             return .{ .text = blocks.text[source_offset..blocks.index], .kind = .table, .source_offset = @intCast(source_offset) };
         }

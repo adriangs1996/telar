@@ -1,8 +1,8 @@
 //! Typed, diagnostic-producing reads from the Lua stack.
 
+const data = @import("model");
 const lua_api = @import("lua-api");
 const RequiredField = @import("RequiredField.zig");
-const Diagnostic = @import("Diagnostic.zig");
 const std = @import("std");
 const OptionalString = @import("OptionalString.zig");
 const OptionalInteger = @import("OptionalInteger.zig");
@@ -41,7 +41,7 @@ pub fn integer(state: *lua_api.c.lua_State, index: c_int) ?lua_api.c.lua_Integer
     return if (is_number == 1) value else null;
 }
 
-pub fn requiredStringField(state: *lua_api.c.lua_State, input: RequiredField, diagnostic: *Diagnostic) ![]const u8 {
+pub fn requiredStringField(state: *lua_api.c.lua_State, input: RequiredField, diagnostic: *data.Diagnostic) ![]const u8 {
     const absolute = lua_api.c.lua_absindex(state, input.index);
     _ = lua_api.c.lua_getfield(state, absolute, input.name);
     const value = string(state, -1) orelse {
@@ -53,7 +53,7 @@ pub fn requiredStringField(state: *lua_api.c.lua_State, input: RequiredField, di
     return value;
 }
 
-pub fn requiredIntegerField(state: *lua_api.c.lua_State, input: RequiredField, diagnostic: *Diagnostic) !lua_api.c.lua_Integer {
+pub fn requiredIntegerField(state: *lua_api.c.lua_State, input: RequiredField, diagnostic: *data.Diagnostic) !lua_api.c.lua_Integer {
     const absolute = lua_api.c.lua_absindex(state, input.index);
     _ = lua_api.c.lua_getfield(state, absolute, input.name);
     const value = integer(state, -1) orelse {
@@ -65,7 +65,7 @@ pub fn requiredIntegerField(state: *lua_api.c.lua_State, input: RequiredField, d
     return value;
 }
 
-pub fn optionalStringField(state: *lua_api.c.lua_State, input: OptionalString, diagnostic: *Diagnostic) ![]const u8 {
+pub fn optionalStringField(state: *lua_api.c.lua_State, input: OptionalString, diagnostic: *data.Diagnostic) ![]const u8 {
     const absolute = lua_api.c.lua_absindex(state, input.index);
     _ = lua_api.c.lua_getfield(state, absolute, input.name);
     defer pop(state, 1);
@@ -79,7 +79,7 @@ pub fn optionalStringField(state: *lua_api.c.lua_State, input: OptionalString, d
     };
 }
 
-pub fn optionalIntegerField(state: *lua_api.c.lua_State, input: OptionalInteger, diagnostic: *Diagnostic) !lua_api.c.lua_Integer {
+pub fn optionalIntegerField(state: *lua_api.c.lua_State, input: OptionalInteger, diagnostic: *data.Diagnostic) !lua_api.c.lua_Integer {
     const absolute = lua_api.c.lua_absindex(state, input.index);
     _ = lua_api.c.lua_getfield(state, absolute, input.name);
     defer pop(state, 1);
@@ -93,7 +93,7 @@ pub fn optionalIntegerField(state: *lua_api.c.lua_State, input: OptionalInteger,
     };
 }
 
-pub fn optionalPositiveId(state: *lua_api.c.lua_State, input: RequiredField, diagnostic: *Diagnostic) !?u64 {
+pub fn optionalPositiveId(state: *lua_api.c.lua_State, input: RequiredField, diagnostic: *data.Diagnostic) !?u64 {
     const absolute = lua_api.c.lua_absindex(state, input.index);
     _ = lua_api.c.lua_getfield(state, absolute, input.name);
     defer pop(state, 1);
@@ -113,7 +113,7 @@ pub fn optionalPositiveId(state: *lua_api.c.lua_State, input: RequiredField, dia
     return @intCast(value);
 }
 
-pub fn optionalMebibytes(state: *lua_api.c.lua_State, input: OptionalMebibytes, diagnostic: *Diagnostic) !usize {
+pub fn optionalMebibytes(state: *lua_api.c.lua_State, input: OptionalMebibytes, diagnostic: *data.Diagnostic) !usize {
     const absolute = lua_api.c.lua_absindex(state, input.index);
     _ = lua_api.c.lua_getfield(state, absolute, input.name);
     defer pop(state, 1);
@@ -133,7 +133,7 @@ pub fn optionalMebibytes(state: *lua_api.c.lua_State, input: OptionalMebibytes, 
     return @as(usize, @intCast(value)) * 1024 * 1024;
 }
 
-pub fn optionalMilliseconds(state: *lua_api.c.lua_State, input: OptionalMilliseconds, diagnostic: *Diagnostic) !u64 {
+pub fn optionalMilliseconds(state: *lua_api.c.lua_State, input: OptionalMilliseconds, diagnostic: *data.Diagnostic) !u64 {
     const absolute = lua_api.c.lua_absindex(state, input.index);
     _ = lua_api.c.lua_getfield(state, absolute, input.name);
     defer pop(state, 1);
@@ -156,7 +156,7 @@ pub fn optionalMilliseconds(state: *lua_api.c.lua_State, input: OptionalMillisec
     return @as(u64, @intCast(value)) * std.time.ns_per_ms;
 }
 
-pub fn ensureOnlyFields(state: *lua_api.c.lua_State, fields: Fields, diagnostic: *Diagnostic) !void {
+pub fn ensureOnlyFields(state: *lua_api.c.lua_State, fields: Fields, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, fields.index);
     lua_api.c.lua_pushnil(state);
     while (lua_api.c.lua_next(state, absolute) != 0) {
@@ -179,7 +179,7 @@ pub fn ensureOnlyFields(state: *lua_api.c.lua_State, fields: Fields, diagnostic:
     }
 }
 
-pub fn ensureArrayOnly(state: *lua_api.c.lua_State, input: Array, diagnostic: *Diagnostic) !void {
+pub fn ensureArrayOnly(state: *lua_api.c.lua_State, input: Array, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, input.index);
     lua_api.c.lua_pushnil(state);
     while (lua_api.c.lua_next(state, absolute) != 0) {

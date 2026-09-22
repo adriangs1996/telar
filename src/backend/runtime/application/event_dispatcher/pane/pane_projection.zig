@@ -1,9 +1,9 @@
+const core = @import("telar-core");
 const ProbeType = @import("../../../../process/Probe.zig");
 const sound_module = @import("../../../../agent/sound.zig");
 const agents = @import("../agent_events.zig");
 const io_events = @import("pane_io.zig");
 
-const enabled_module = @import("telar-core").enabled;
 const ProcessReconciliation = @import("../../../entrypoints/events/pane/ProcessReconciliation.zig");
 const agent_identity = @import("../../coordinators/agent_identity.zig");
 const ScreenReconciliation = @import("../../../entrypoints/events/pane/ScreenReconciliation.zig");
@@ -13,14 +13,10 @@ const ObservationCompletion = @import("../../../entrypoints/events/pane/Observat
 const MediaCompletion = @import("../../../entrypoints/events/pane/MediaCompletion.zig");
 const PaneType = @import("../../../../pane/Pane.zig");
 const ObservationWork = @import("../../../entrypoints/events/pane/ObservationWork.zig");
-const enter_module = @import("telar-core").enter;
 const StatsType = @import("../../../../history/Stats.zig");
 const agent_process = @import("../../../../process/process.zig");
-const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
 const MediaWork = @import("../../../entrypoints/events/pane/MediaWork.zig");
 const MediaStats = @import("../../../../media/Stats.zig");
-const now_module = @import("telar-core").now;
-const elapsed_module = @import("telar-core").elapsed;
 const root = @import("../../../attachment/attachment_namespace.zig");
 const PaneStats = @import("../../../entrypoints/events/pane/Stats.zig");
 const store_support = @import("../../../client/store_support.zig");
@@ -69,7 +65,7 @@ pub fn handleMedia(application: *Application, completion: MediaCompletion) !void
     pane.refreshGraphicsProjection();
 
     const projection = synchronizeMediaClients(application, pane, completion.stats.reset);
-    if (comptime enabled_module) {
+    if (comptime core.enabled) {
         application.metrics.graphics_transfers_staged +|= projection.staged;
     }
 
@@ -120,7 +116,7 @@ fn startPaneObservation(application: *Application, work: ObservationWork) !void 
 }
 
 fn observePane(work: ObservationWork) ObservationCompletion {
-    const path = enter_module(.observation);
+    const path = core.enter(.observation);
     defer path.restore();
 
     var stats: StatsType = .{};
@@ -133,7 +129,7 @@ fn observePane(work: ObservationWork) ObservationCompletion {
     return .{ .pane = work.pane.key(), .stats = stats, .process_probe = process_probe };
 }
 
-fn publishObservedAgentSound(application: *Application, notification: AgentSoundNotificationType) void {
+fn publishObservedAgentSound(application: *Application, notification: core.AgentSoundNotification) void {
     application.publishAgentSound(notification);
 }
 
@@ -142,13 +138,13 @@ fn startPaneMedia(application: *Application, work: MediaWork) !void {
 }
 
 fn processPaneMedia(work: MediaWork) MediaCompletion {
-    const path = enter_module(.media);
+    const path = core.enter(.media);
     defer path.restore();
 
     var stats: MediaStats = .{};
-    const started = now_module(work.pane.io);
+    const started = core.now(work.pane.io);
     work.pane.processMedia(work.current_size, &stats);
-    stats.elapsed_ns = elapsed_module(started, now_module(work.pane.io));
+    stats.elapsed_ns = core.elapsed(started, core.now(work.pane.io));
     return .{ .pane = work.pane.key(), .stats = stats };
 }
 
@@ -196,7 +192,7 @@ fn completeObservation(application: *Application, completion: ObservationComplet
 }
 
 fn observeProcessMetrics(application: *Application, probe: ProbeType) void {
-    if (comptime !enabled_module) {
+    if (comptime !core.enabled) {
         return;
     }
 
@@ -240,7 +236,7 @@ fn reconcileProcess(application: *Application, reconciliation: ProcessReconcilia
 }
 
 fn observeHistoryMetrics(application: *Application, stats: StatsType) void {
-    if (comptime !enabled_module) {
+    if (comptime !core.enabled) {
         return;
     }
 
@@ -287,7 +283,7 @@ fn reconcileScreen(application: *Application, reconciliation: ScreenReconciliati
 }
 
 fn observeMediaMetrics(application: *Application, stats: MediaStats) void {
-    if (comptime !enabled_module) {
+    if (comptime !core.enabled) {
         return;
     }
 

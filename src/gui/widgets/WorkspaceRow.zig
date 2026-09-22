@@ -1,4 +1,6 @@
 //! A project identity: favicon, name and path, with attention separate from selection.
+const AgentCard = @import("AgentCard.zig");
+const client = @import("telar-client");
 const std = @import("std");
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
@@ -42,7 +44,7 @@ pub fn draw(row: WorkspaceRow, canvas: *Canvas) !void {
     if (sprite) |value| {
         try canvas.spriteTintedAt(icon, .{ .sprite = value, .alpha = if (selected) 1 else 0.5 });
     } else {
-        try canvas.iconAt(icon, .{ .text = @import("AgentCard.zig").project_glyph, .color = ink, .face = .sans, .size = .body });
+        try canvas.iconAt(icon, .{ .text = AgentCard.project_glyph, .color = ink, .face = .sans, .size = .body });
     }
 
     const left = icon.x + icon.width + canvas.chrome.px(9);
@@ -61,14 +63,14 @@ pub fn draw(row: WorkspaceRow, canvas: *Canvas) !void {
 fn drawAttention(row: WorkspaceRow, canvas: *Canvas, area: Rect) !f32 {
     const workspace = row.context.projection.workspaces.workspaceAt(row.index);
     var count: u8 = 0;
-    var urgent: ?*const @import("telar-client").Agent = null;
+    var urgent: ?*const client.Agent = null;
     for (row.context.projection.agents.slice()) |*agent| {
         if (!std.meta.eql(agent.location.workspace, core.WorkspaceLocation{ .workspace = workspace }) or !attention.needsInput(agent.status)) {
             continue;
         }
 
         count += 1;
-        if (urgent == null or @import("telar-client").agent_attention.compare(agent, urgent.?) == .lt) {
+        if (urgent == null or client.agent_attention.compare(agent, urgent.?) == .lt) {
             urgent = agent;
         }
     }

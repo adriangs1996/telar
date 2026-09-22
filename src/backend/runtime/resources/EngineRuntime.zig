@@ -1,5 +1,3 @@
-const OptionsType = @import("../../engine/Options.zig");
-const ServiceType = @import("../../engine/Service.zig");
 const engine = @import("engine.zig");
 const std = @import("std");
 const EngineRuntimeState = @import("EngineRuntimeState.zig");
@@ -17,9 +15,9 @@ pub const Service = @import("../../engine/Service.zig");
 /// var engine_runtime = try Runtime.init(io, gpa, options);
 /// defer engine_runtime.deinit();
 /// ```
-pub fn init(io: std.Io, gpa: std.mem.Allocator, options: OptionsType) !Runtime {
+pub fn init(io: std.Io, gpa: std.mem.Allocator, options: Options) !Runtime {
     const state = try gpa.create(EngineRuntimeState);
-    const engine_service = ServiceType.init(gpa, options) catch |err| {
+    const engine_service = Service.init(gpa, options) catch |err| {
         gpa.destroy(state);
         return err;
     };
@@ -37,7 +35,7 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator, options: OptionsType) !Runtime {
 /// ```zig
 /// const service = engine_runtime.service();
 /// ```
-pub fn service(runtime: *Runtime) *ServiceType {
+pub fn service(runtime: *Runtime) *Service {
     return &runtime.lifecycle.state.service;
 }
 

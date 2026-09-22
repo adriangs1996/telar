@@ -1,4 +1,4 @@
-const TimingType = @import("telar-core").Timing;
+const core = @import("telar-core");
 const Metrics = @This();
 
 started_ns: u64,
@@ -50,14 +50,14 @@ max_pending_updates: u64 = 0,
 mouse_events: u64 = 0,
 chrome_scanned_cells: u64 = 0,
 chrome_damaged_cells: u64 = 0,
-decode: TimingType = .{},
-apply: TimingType = .{},
-compose: TimingType = .{},
-ack_enqueue: TimingType = .{},
-input_enqueue: TimingType = .{},
-flush: TimingType = .{},
-media_flush: TimingType = .{},
-draw_lateness: TimingType = .{},
-paced_interval: TimingType = .{},
+decode: core.Timing = .{},
+apply: core.Timing = .{},
+compose: core.Timing = .{},
+ack_enqueue: core.Timing = .{},
+input_enqueue: core.Timing = .{},
+flush: core.Timing = .{},
+media_flush: core.Timing = .{},
+draw_lateness: core.Timing = .{},
+paced_interval: core.Timing = .{},
 /// Time between consecutive pane images handed to the host.
-pane_present_interval: TimingType = .{},
+pane_present_interval: core.Timing = .{},

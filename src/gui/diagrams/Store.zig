@@ -1,10 +1,11 @@
 //! GUI-owned diagram requests and images, mutated only between native flights.
+const native = @import("../native/native.zig");
+const view_module = @import("view.zig");
 const std = @import("std");
 const Request = @import("Request.zig");
 const Job = @import("Job.zig");
 const Completion = @import("Completion.zig");
 const Entry = @import("Entry.zig");
-const View = @import("view.zig").View;
 const Store = @This();
 
 pub const capacity = 8;
@@ -47,7 +48,7 @@ pub fn beginFrame(store: *Store) void {
 
 /// Looks up frozen frame content without retaining offscreen resources.
 /// Example: `if (store.lookup(request)) |view| draw(view);`
-pub fn lookup(store: *Store, input: Request) ?View {
+pub fn lookup(store: *Store, input: Request) ?view_module.View {
     for (&store.entries, 0..) |*entry, slot| {
         if (matches(entry, input)) {
             return view(entry, @intCast(slot));
@@ -74,7 +75,7 @@ pub fn pin(store: *Store, input: Request) void {
 
 /// Copies one visible request into a bounded replaceable slot. It does no I/O.
 /// Example: `_ = store.request(request);`
-pub fn request(store: *Store, input: Request) View {
+pub fn request(store: *Store, input: Request) view_module.View {
     for (&store.entries, 0..) |*entry, slot| {
         if (matches(entry, input)) {
             entry.frame = store.frame;
@@ -133,8 +134,8 @@ pub fn nextJob(store: *Store) ?Job {
 
 /// Exposes borrowed pixels only after preparation has finished replacing slots.
 /// Example: `renderer.diagrams = store.textures();`
-pub fn textures(store: *const Store) [capacity]@import("../native/native.zig").DiagramTexture {
-    var result: [capacity]@import("../native/native.zig").DiagramTexture = @splat(.{});
+pub fn textures(store: *const Store) [capacity]native.DiagramTexture {
+    var result: [capacity]native.DiagramTexture = @splat(.{});
     for (&store.entries, 0..) |*entry, slot| {
         if (entry.image) |image| {
             if (entry.frame != store.frame) {
@@ -222,7 +223,7 @@ fn matches(entry: *const Entry, input: Request) bool {
         entry.scale == input.scale and std.meta.eql(entry.theme, input.theme) and std.mem.eql(u8, source, input.text);
 }
 
-fn view(entry: *const Entry, slot: u8) View {
+fn view(entry: *const Entry, slot: u8) view_module.View {
     return switch (entry.status) {
         .pending, .running => .pending,
         .failed => .{ .failed = entry.failure },
@@ -275,7 +276,7 @@ fn discard(store: *Store, completion: Completion) void {
     image.deinit(store.allocator);
 }
 
-fn failure(err: anyerror) @import("view.zig").Failure {
+fn failure(err: anyerror) view_module.Failure {
     return switch (err) {
         error.UnsupportedDiagram => .unsupported,
         error.DiagramLimit, error.OutOfMemory => .limit,

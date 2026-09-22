@@ -1,10 +1,7 @@
-const DecoderType = @import("telar-core").Decoder;
+const core = @import("telar-core");
 const Counters = @import("Counters.zig");
 const checkpoint = @import("checkpoint.zig");
 const std = @import("std");
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
-const validateSessionReference_module = @import("telar-core").validateSessionReference;
-const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
 /// Reads one checkpoint. Every slice borrows the input bytes.
 ///
 /// ```zig
@@ -13,13 +10,13 @@ const max_client_layout_wire_bytes_module = @import("telar-core").max_client_lay
 /// ```
 const Reader = @This();
 
-inner: DecoderType,
+inner: core.Decoder,
 counters: Counters,
 version: u16,
 finished: bool = false,
 
 pub fn init(bytes: []const u8) !Reader {
-    var decoder = DecoderType.init(bytes);
+    var decoder = core.Decoder.init(bytes);
     const header = try decoder.readBytes(checkpoint.magic.len);
     if (!std.mem.eql(u8, header, checkpoint.magic)) {
         return error.InvalidCheckpoint;
@@ -58,12 +55,12 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
             const path = try reader.inner.readSized16();
             try checkpoint.validatePath(path);
             const name = try reader.inner.readSized16();
-            if (name.len > max_tab_label_bytes_module) {
+            if (name.len > core.max_tab_label_bytes) {
                 return error.InvalidCheckpoint;
             }
             const first_tab_id = try reader.inner.readInt(u64);
             const first_tab_label = try reader.inner.readSized16();
-            if ((reader.version < 3 and first_tab_label.len == 0) or first_tab_label.len > max_tab_label_bytes_module) {
+            if ((reader.version < 3 and first_tab_label.len == 0) or first_tab_label.len > core.max_tab_label_bytes) {
                 return error.InvalidCheckpoint;
             }
             return .{ .workspace = .{
@@ -78,7 +75,7 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
             const workspace_id = try reader.inner.readInt(u64);
             const tab_id = try reader.inner.readInt(u64);
             const label = try reader.inner.readSized16();
-            if ((reader.version < 3 and label.len == 0) or label.len > max_tab_label_bytes_module) {
+            if ((reader.version < 3 and label.len == 0) or label.len > core.max_tab_label_bytes) {
                 return error.InvalidCheckpoint;
             }
             return .{ .tab = .{ .workspace_id = workspace_id, .tab_id = tab_id, .label = label } };
@@ -102,13 +99,13 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
             const agent_provider = try reader.inner.readByte();
             const agent_session = try reader.inner.readSized16();
             if (agent_session.len != 0) {
-                validateSessionReference_module(agent_session) catch return error.InvalidCheckpoint;
+                core.validateSessionReference(agent_session) catch return error.InvalidCheckpoint;
             }
             const agent_title = if (reader.version >= 2) try reader.inner.readSized16() else "";
             const agent_title_source = if (reader.version >= 2) try reader.inner.readByte() else 0;
             try checkpoint.validateTitle(agent_title, agent_title_source);
             const kind_value = if (reader.version >= 4) try reader.inner.readByte() else 0;
-            const pane_kind = std.enums.fromInt(@import("telar-core").PaneKind, kind_value) orelse return error.InvalidCheckpoint;
+            const pane_kind = std.enums.fromInt(core.PaneKind, kind_value) orelse return error.InvalidCheckpoint;
             const pane: @import("PaneRecord.zig") = .{
                 .kind = pane_kind,
                 .pane_id = pane_id,
@@ -131,7 +128,7 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
             const identity = try reader.inner.readInt(u64);
             const last_used = try reader.inner.readInt(u64);
             const payload = try reader.inner.readSized32();
-            if (payload.len == 0 or payload.len > max_client_layout_wire_bytes_module) {
+            if (payload.len == 0 or payload.len > core.max_client_layout_wire_bytes) {
                 return error.InvalidCheckpoint;
             }
             return .{ .layout = .{ .identity = identity, .last_used = last_used, .payload = payload } };

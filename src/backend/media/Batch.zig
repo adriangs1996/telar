@@ -1,5 +1,5 @@
+const core = @import("telar-core");
 const media = @import("media.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
 const Batch = @This();
 
 bytes: [media.batch_bytes]u8 = undefined,
@@ -48,7 +48,7 @@ pub fn pushOutput(batch: *Batch, bytes: []const u8) bool {
     return true;
 }
 
-pub fn pushResize(batch: *Batch, size: TerminalSizeType) bool {
+pub fn pushResize(batch: *Batch, size: core.TerminalSize) bool {
     if (batch.event_count == batch.events.len) {
         return false;
     }

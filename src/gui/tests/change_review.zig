@@ -1,9 +1,9 @@
+const event_module = @import("../input/event.zig");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
-const Event = @import("../input/event.zig").Event;
 const PointerEvent = @import("../input/PointerEvent.zig");
 const host_ports = @import("../host_ports.zig");
 
@@ -94,7 +94,7 @@ fn withComment(snapshot: core.ChangeReviewSnapshotView, body: []const u8) core.C
     return value;
 }
 
-pub fn send(session: *Session, event: Event) !void {
+pub fn send(session: *Session, event: event_module.Event) !void {
     try input_support.accept(session.gui, event);
     try input_support.pump(session.gui);
 }

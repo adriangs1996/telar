@@ -1,3 +1,4 @@
+const Quad = @import("../render/Quad.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Fixture = @import("ConversationFixture.zig");
@@ -121,12 +122,12 @@ test "long message plans match uncached painting and invalidate all source and g
     fixture.quads.clear();
     try text.draw(&canvas);
     try std.testing.expectEqual(next_plan, cache.next_plan);
-    const cached = try std.testing.allocator.dupe(@import("../render/Quad.zig").Quad, fixture.quads.items());
+    const cached = try std.testing.allocator.dupe(Quad.Quad, fixture.quads.items());
     defer std.testing.allocator.free(cached);
     canvas.widgets = null;
     fixture.quads.clear();
     try text.draw(&canvas);
-    try std.testing.expectEqualSlices(@import("../render/Quad.zig").Quad, cached, fixture.quads.items());
+    try std.testing.expectEqualSlices(Quad.Quad, cached, fixture.quads.items());
     canvas.widgets = fixture.state;
     for (0..9) |change| {
         switch (change) {

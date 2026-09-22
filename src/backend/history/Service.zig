@@ -1,35 +1,23 @@
-const ServiceConfig = @import("ServiceConfig.zig");
-const CountersType = @import("Counters.zig");
-const SnapshotType = @import("Snapshot.zig");
-const LaunchAttemptRequestType = @import("LaunchAttemptRequest.zig");
-const SessionStartRequestType = @import("SessionStartRequest.zig");
-const CommandRecordType = @import("CommandRecord.zig");
-const AgentCommandRecordType = @import("AgentCommandRecord.zig");
+const core = @import("telar-core");
 const std = @import("std");
 const ChannelType = @import("Channel.zig");
 const WorkerType = @import("Worker.zig");
-const FiltersType = @import("telar-core").Filters;
 const model = @import("model.zig");
 const request_factory = @import("request_factory.zig");
 const SessionFinishedType = @import("SessionFinished.zig");
 const DefinitionType = @import("Definition.zig");
-const ImportHistoryViewType = @import("telar-core").ImportHistoryView;
 const DeleteType = @import("Delete.zig");
 const PruneType = @import("Prune.zig");
 const StatsQueryType = @import("StatsQuery.zig");
-const max_history_command_bytes_module = @import("telar-core").max_history_command_bytes;
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
-const max_history_provider_bytes_module = @import("telar-core").max_history_provider_bytes;
-const max_history_tool_call_id_bytes_module = @import("telar-core").max_history_tool_call_id_bytes;
 const QueryType = @import("Query.zig");
 const Service = @This();
 
 gpa: std.mem.Allocator,
 channel: ChannelType,
 worker: WorkerType,
-filters: FiltersType,
+filters: core.Filters,
 capture_output: bool,
-stats: CountersType = .{},
+stats: Stats = .{},
 
 pub const Config = @import("ServiceConfig.zig");
 
@@ -48,9 +36,9 @@ pub const AgentCommandRecord = @import("AgentCommandRecord.zig");
 /// ```zig
 /// var service = try Service.init(gpa, .{ .database_path = ":memory:" });
 /// ```
-pub fn init(gpa: std.mem.Allocator, config: ServiceConfig) !Service {
+pub fn init(gpa: std.mem.Allocator, config: Config) !Service {
     const channel = try ChannelType.init(gpa);
-    var stats: CountersType = .{};
+    var stats: Stats = .{};
 
     return .{
         .gpa = gpa,
@@ -127,7 +115,7 @@ pub fn newSessionId(_: *Service, io: std.Io) model.SessionId {
 /// ```zig
 /// _ = service.recordLaunchAttempt(io, request);
 /// ```
-pub fn recordLaunchAttempt(service: *Service, io: std.Io, request: LaunchAttemptRequestType) bool {
+pub fn recordLaunchAttempt(service: *Service, io: std.Io, request: LaunchAttemptRequest) bool {
     const owned = request_factory.launchAttempt(service.gpa, io, request) catch return false;
     return service.submit(io, owned);
 }
@@ -137,7 +125,7 @@ pub fn recordLaunchAttempt(service: *Service, io: std.Io, request: LaunchAttempt
 /// ```zig
 /// _ = service.startSession(io, request);
 /// ```
-pub fn startSession(service: *Service, io: std.Io, request: SessionStartRequestType) bool {
+pub fn startSession(service: *Service, io: std.Io, request: SessionStartRequest) bool {
     const owned = request_factory.sessionStarted(service.gpa, request) catch return false;
     return service.submit(io, owned);
 }
@@ -167,7 +155,7 @@ pub fn setSessionTitle(service: *Service, io: std.Io, definition: DefinitionType
 /// ```zig
 /// if (!service.importBatch(io, view)) return error.ImportRefused;
 /// ```
-pub fn importBatch(service: *Service, io: std.Io, view: ImportHistoryViewType) bool {
+pub fn importBatch(service: *Service, io: std.Io, view: core.ImportHistoryView) bool {
     const request = request_factory.importBatch(service.gpa, view) catch return false;
     return service.submit(io, request);
 }
@@ -214,7 +202,7 @@ pub fn statsHistory(service: *Service, io: std.Io, stats_query: StatsQueryType) 
 /// ```zig
 /// _ = service.recordCommand(io, record);
 /// ```
-pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecordType) bool {
+pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecord) bool {
     if (!service.filters.shouldRecord(.{ .command = record.command.bytes, .cwd = record.command.cwd })) {
         return true;
     }
@@ -229,7 +217,7 @@ pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecordType) b
 /// ```zig
 /// _ = service.recordAgentCommand(io, record);
 /// ```
-pub fn recordAgentCommand(service: *Service, io: std.Io, record: AgentCommandRecordType) bool {
+pub fn recordAgentCommand(service: *Service, io: std.Io, record: AgentCommandRecord) bool {
     if (record.origin == .pane) {
         return false;
     }
@@ -237,11 +225,11 @@ pub fn recordAgentCommand(service: *Service, io: std.Io, record: AgentCommandRec
         return true;
     }
     if (record.command.bytes.len == 0 or
-        record.command.bytes.len > max_history_command_bytes_module or
-        record.command.cwd.len > max_cwd_bytes_module or
-        record.context.workspace_path.len > max_cwd_bytes_module or
-        record.provider.len > max_history_provider_bytes_module or
-        record.tool_call_id.len > max_history_tool_call_id_bytes_module)
+        record.command.bytes.len > core.max_history_command_bytes or
+        record.command.cwd.len > core.max_cwd_bytes or
+        record.context.workspace_path.len > core.max_cwd_bytes or
+        record.provider.len > core.max_history_provider_bytes or
+        record.tool_call_id.len > core.max_history_tool_call_id_bytes)
     {
         return false;
     }
@@ -286,7 +274,7 @@ pub fn query(service: *Service, io: std.Io, request: QueryType) bool {
 /// ```zig
 /// const stats = service.statsSnapshot();
 /// ```
-pub fn statsSnapshot(service: *const Service) SnapshotType {
+pub fn statsSnapshot(service: *const Service) StatsSnapshot {
     return service.stats.snapshot(service.worker.available());
 }
 

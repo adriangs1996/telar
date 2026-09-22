@@ -1,6 +1,6 @@
-const ShmNameType = @import("telar-core").ShmName;
+const core = @import("telar-core");
 const Frozen = @This();
 
 pixels: []u8 = &.{},
-name: ?ShmNameType = null,
+name: ?core.ShmName = null,
 reserved_len: usize,

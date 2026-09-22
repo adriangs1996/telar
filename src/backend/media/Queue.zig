@@ -1,4 +1,3 @@
-const Request = @import("Request.zig");
 const Entry = @import("Entry.zig");
 const transfer_preparation = @import("transfer_preparation.zig");
 const Frozen = @import("Frozen.zig");
@@ -11,7 +10,7 @@ entries: [8]?Entry = @splat(null),
 
 /// Offers one deduplicated request without retaining emulator pointers.
 /// Example: `const added = queue.request(request);`.
-pub fn request(queue: *Queue, value: Request) bool {
+pub fn request(queue: *Queue, value: Input) bool {
     var free: ?usize = null;
     for (queue.entries, 0..) |entry, index| {
         if (entry) |existing| {
@@ -30,7 +29,7 @@ pub fn request(queue: *Queue, value: Request) bool {
 
 /// Transfers one completed reservation to the attachment. Null means pending.
 /// Example: `const frozen = try queue.take(request) orelse return;`.
-pub fn take(queue: *Queue, value: Request) !?Frozen {
+pub fn take(queue: *Queue, value: Input) !?Frozen {
     for (&queue.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (!transfer_preparation.same(entry.request, value)) {

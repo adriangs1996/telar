@@ -1,10 +1,10 @@
 //! The same bounded provisional value drives glyphs and native caret queries.
-const GenericField = @import("telar-client").GenericField;
+const data = @import("model");
 const FieldView = @import("FieldView.zig");
 const Preedit = @import("Preedit.zig");
 const Display = @This();
 
-field: GenericField(8192),
+field: data.GenericField(8192),
 provisional: bool = false,
 
 /// Surrounding text remains untouched; only this local display copy changes.

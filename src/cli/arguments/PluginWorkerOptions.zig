@@ -1,11 +1,11 @@
-const CallbackContextType = @import("telar-client").CallbackContext;
+const data = @import("model");
 const plugin_worker = @import("plugin_worker.zig");
 const std = @import("std");
 const PluginWorkerOptions = @This();
 
 entry: [*:0]const u8,
 action: [*:0]const u8,
-context: CallbackContextType,
+context: data.CallbackContext,
 
 /// Example: `const options = try PluginWorkerOptions.parse(args);`.
 pub fn parse(args: []const [*:0]const u8) !PluginWorkerOptions {

@@ -1,7 +1,7 @@
-const PlacementType = @import("telar-core").Placement;
+const core = @import("telar-core");
 const DestinationSizeInput = @This();
 
-placement: PlacementType,
+placement: core.Placement,
 source_width: u32,
 source_height: u32,
 cell_width: u16,

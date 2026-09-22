@@ -1,9 +1,9 @@
 //! Sequential execution of history requests against durable storage.
 
+const core = @import("telar-core");
 const QueryType = @import("Query.zig");
 const std = @import("std");
 const model = @import("model.zig");
-const RequestIdType = @import("telar-core").RequestId;
 const QueryOriginType = @import("QueryOrigin.zig");
 const Context = @import("Context.zig");
 const PrunedType = @import("Pruned.zig");
@@ -13,10 +13,6 @@ const SessionStartedType = @import("SessionStarted.zig");
 const CommandFinishedType = @import("CommandFinished.zig");
 const CountersType = @import("Counters.zig");
 const Worker = @import("Worker.zig");
-const ImportEntryType = @import("telar-core").ImportEntry;
-const encodeImportHistory_module = @import("telar-core").encodeImportHistory;
-const decodeClient_module = @import("telar-core").decodeClient;
-const HistoryAuthorType = @import("telar-core").HistoryAuthor;
 
 pub const Execution = enum {
     continue_running,
@@ -76,7 +72,7 @@ pub fn superseded(request: model.Request, later: []const model.Request) bool {
     return false;
 }
 
-pub fn unavailableResponse(request_id: RequestIdType, origin: QueryOriginType) model.Response {
+pub fn unavailableResponse(request_id: core.RequestId, origin: QueryOriginType) model.Response {
     return .{ .failed = .{
         .request_id = request_id,
         .origin = origin,
@@ -177,17 +173,17 @@ test "import batches remain idempotent at the worker storage boundary" {
     var database = try StoreType.open(":memory:");
     defer database.close();
     var buffer: [512]u8 = undefined;
-    const entries = [_]ImportEntryType{
+    const entries = [_]core.ImportEntry{
         .{ .started_at_ms = 1_000, .command = "git status" },
         .{ .started_at_ms = 2_000, .command = "make -j4" },
     };
-    const encoded = try encodeImportHistory_module(&buffer, .{
+    const encoded = try core.encodeImportHistory(&buffer, .{
         .request_id = @enumFromInt(3),
         .source = "zsh:/tmp/histfile",
         .base_sequence = 0,
         .entries = &entries,
     });
-    const view = (try decodeClient_module(encoded)).import_history;
+    const view = (try core.decodeClient(encoded)).import_history;
     const first = try ImportBatchType.init(gpa, view);
     defer first.deinit(gpa);
     const second = try ImportBatchType.init(gpa, view);
@@ -208,5 +204,5 @@ test "import batches remain idempotent at the worker storage boundary" {
 
     try std.testing.expectEqual(@as(usize, 2), result.entries.len);
     try std.testing.expectEqualStrings("make -j4", result.entries[0].command);
-    try std.testing.expectEqual(HistoryAuthorType.human, result.entries[0].author);
+    try std.testing.expectEqual(core.HistoryAuthor.human, result.entries[0].author);
 }

@@ -1,8 +1,6 @@
-const PaneIdType = @import("telar-core").PaneId;
-const PlacementType = @import("telar-core").Placement;
-const ImageType = @import("telar-core").Image;
+const core = @import("telar-core");
 const PlacementGeometry = @This();
 
-pane_id: PaneIdType,
-placement: PlacementType,
-image: ImageType,
+pane_id: core.PaneId,
+placement: core.Placement,
+image: core.Image,

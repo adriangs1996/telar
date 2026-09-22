@@ -1,13 +1,13 @@
+const data = @import("model");
 const lua_api = @import("lua-api");
 const SnapshotType = @import("Snapshot.zig");
-const DiagnosticType = @import("Diagnostic.zig");
 const value = @import("lua_value.zig");
 const std = @import("std");
 const Parser = @This();
 
 state: *lua_api.c.lua_State,
 snapshot: *SnapshotType,
-diagnostic: *DiagnosticType,
+diagnostic: *data.Diagnostic,
 
 pub fn parseMatch(parser: *Parser, absolute: c_int) !void {
     _ = lua_api.c.lua_getfield(parser.state, absolute, "match");

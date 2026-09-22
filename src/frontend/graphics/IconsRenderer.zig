@@ -1,16 +1,13 @@
+const client = @import("telar-client");
+const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
 const RasterizerType = @import("Rasterizer.zig");
 const ui_icons = @import("../ui/icons.zig");
 const IconsSlot = @import("IconsSlot.zig");
 const Placement = @import("Placement.zig");
 const icons = @import("icons.zig");
-const ConfigurationType = @import("telar-client").SidebarRendererInput;
 const MarkType = @import("../ui/Mark.zig");
-const IconType = @import("telar-client").Icon;
-const writeTransmissionAbort_module = @import("kitty_protocol").writeTransmissionAbort;
-const writeDeleteImage_module = @import("kitty_protocol").writeDeleteImage;
 const kitty_codec = @import("kitty_codec.zig");
-const writeDeletePlacement_module = @import("kitty_protocol").writeDeletePlacement;
 const Renderer = @This();
 
 gpa: std.mem.Allocator,
@@ -62,7 +59,7 @@ pub fn available(renderer: *const Renderer) bool {
 
 /// Applies host graphics support and cell geometry to the icon atlas.
 /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
-pub fn configure(renderer: *Renderer, configuration: ConfigurationType) bool {
+pub fn configure(renderer: *Renderer, configuration: client.SidebarRendererInput) bool {
     const supported = configuration.support == .supported and renderer.text != null;
     if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
         renderer.cell_height == configuration.cell_height)
@@ -103,10 +100,10 @@ pub fn prepare(renderer: *Renderer, marks: []const MarkType) !void {
         const wanted = icons.slotFromMark(mark);
         if (icons.isWorkingIcon(mark.icon)) {
             inline for (.{
-                IconType.agent_working_0,
-                IconType.agent_working_1,
-                IconType.agent_working_2,
-                IconType.agent_working_3,
+                client.Icon.agent_working_0,
+                client.Icon.agent_working_1,
+                client.Icon.agent_working_2,
+                client.Icon.agent_working_3,
             }) |frame| {
                 _ = try icons.ensureSlot(&next_slots, &next_slot_count, .{
                     .icon = frame,
@@ -193,18 +190,18 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
     }
     var written: usize = 0;
     if (renderer.transfer_abort_pending) {
-        written += try writeTransmissionAbort_module(writer);
+        written += try kitty_protocol.writeTransmissionAbort(writer);
         renderer.transfer_abort_pending = false;
         renderer.transfer_offset = 0;
     }
 
     if (!renderer.visible) {
         if (renderer.transfer_offset != 0) {
-            written += try writeTransmissionAbort_module(writer);
+            written += try kitty_protocol.writeTransmissionAbort(writer);
             renderer.transfer_offset = 0;
         }
         if (renderer.image_emitted) {
-            written += try writeDeleteImage_module(writer, icons.image_id);
+            written += try kitty_protocol.writeDeleteImage(writer, icons.image_id);
         }
         renderer.image_emitted = false;
         renderer.image_dirty = false;
@@ -215,7 +212,7 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
 
     if (renderer.image_dirty) {
         if (renderer.transfer_offset == 0 and renderer.image_emitted) {
-            written += try writeDeleteImage_module(writer, icons.image_id);
+            written += try kitty_protocol.writeDeleteImage(writer, icons.image_id);
             renderer.image_emitted = false;
             renderer.emitted_placement_count = 0;
         }
@@ -245,7 +242,7 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
 
     if (renderer.placements_dirty and renderer.image_emitted) {
         for (0..renderer.emitted_placement_count) |index| {
-            written += try writeDeletePlacement_module(
+            written += try kitty_protocol.writeDeletePlacement(
                 writer,
                 icons.image_id,
                 icons.first_placement_id + @as(u32, @intCast(index)),

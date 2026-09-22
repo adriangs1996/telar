@@ -1,27 +1,24 @@
 //! Wires host pointer authority and normalization to client pointer owners.
 
+const data = @import("model");
+const pointer_routing = @import("../../application/input/pointer_routing.zig");
+const core = @import("telar-core");
+const projection_support = @import("../../presentation/projection_support.zig");
 const Client = @import("../../AttachedClient.zig");
-const MouseType = @import("../../input/Mouse.zig");
-const ApplicationInputPointerRoutingOutcome = @import("../../application/input/pointer_routing.zig").Outcome;
-const enabled_module = @import("telar-core").enabled;
 const PointerRoutingContext = @import("PointerRoutingContext.zig");
-const PointerCommandType = @import("../../application/input/PointerCommand.zig");
-const AuthorityType = @import("../../application/input/pointer_routing.zig").Authority;
-const capture_module = @import("../../presentation/projection_support.zig").capture;
 const GeometryType = @import("../../presentation/Geometry.zig");
 const std = @import("std");
 const copy_mode_pointer = @import("copy_mode_pointer.zig");
 const ViewOutcomeType = @import("../../application/input/ViewOutcome.zig");
 const view_interactions = @import("view_interactions.zig");
-const pane_mouse_inputs = @import("pane_mouse_inputs.zig");
 
 /// Routes one host pointer event through the current exclusive owner.
 ///
 /// ```zig
 /// _ = try apply(client, event);
 /// ```
-pub fn apply(client: *Client, event: MouseType) !ApplicationInputPointerRoutingOutcome {
-    if (comptime enabled_module) {
+pub fn apply(client: *Client, event: data.Mouse) !pointer_routing.Outcome {
+    if (comptime core.enabled) {
         client.telemetry.metrics.mouse_events += 1;
     }
 
@@ -49,7 +46,7 @@ pub fn apply(client: *Client, event: MouseType) !ApplicationInputPointerRoutingO
     return .pane;
 }
 
-fn link(context: *PointerRoutingContext, command: PointerCommandType) !bool {
+fn link(context: *PointerRoutingContext, command: data.PointerCommand) !bool {
     if (context.client.chrome.linkPointer(command.event)) |consumed| {
         return consumed;
     }
@@ -57,7 +54,7 @@ fn link(context: *PointerRoutingContext, command: PointerCommandType) !bool {
     return context.client.inputLinkPointer(context.model.?, command.event);
 }
 
-fn resolve(context: *PointerRoutingContext, event: MouseType) AuthorityType {
+fn resolve(context: *PointerRoutingContext, event: data.Mouse) pointer_routing.Authority {
     const selection = context.client.model.pointerSelection();
     const captured = if (selection) |value| value.dragging else false;
     if (context.client.model.name_prompt.active() and !captured) {
@@ -68,7 +65,7 @@ fn resolve(context: *PointerRoutingContext, event: MouseType) AuthorityType {
     const begins_gesture = event.kind == .press or event.kind == .scroll_up or event.kind == .scroll_down;
     if (begins_gesture and !captured and context.client.presentation.inFlight()) {
         const delivered = context.client.presentation.deliveredGeometry() orelse return .unavailable;
-        const projection = capture_module(&context.client.model, .{ .geometry = context.client.geometry() });
+        const projection = projection_support.capture(&context.client.model, .{ .geometry = context.client.geometry() });
         const current = GeometryType.capture(projection);
         if (!delivered.matches(&current)) {
             return .unavailable;
@@ -95,11 +92,11 @@ fn resolve(context: *PointerRoutingContext, event: MouseType) AuthorityType {
     } };
 }
 
-fn copyMode(context: *PointerRoutingContext, command: PointerCommandType) !bool {
+fn copyMode(context: *PointerRoutingContext, command: data.PointerCommand) !bool {
     return copy_mode_pointer.apply(context.client, context.model.?, command.event);
 }
 
-fn view(context: *PointerRoutingContext, command: PointerCommandType) !ViewOutcomeType {
+fn view(context: *PointerRoutingContext, command: data.PointerCommand) !ViewOutcomeType {
     const interaction = context.client.chrome.pointer(command.event);
     const outcome = try view_interactions.apply(context.client, context.model.?, interaction);
 
@@ -109,10 +106,11 @@ fn view(context: *PointerRoutingContext, command: PointerCommandType) !ViewOutco
     };
 }
 
-fn pane(context: *PointerRoutingContext, command: PointerCommandType) !void {
-    _ = try pane_mouse_inputs.apply(
-        context.client,
+fn pane(context: *PointerRoutingContext, command: data.PointerCommand) !void {
+    _ = try context.client.inputPaneMouse(
         context.model.?,
-        .{ .pointer = command },
+        .{
+            .pointer = command,
+        },
     );
 }

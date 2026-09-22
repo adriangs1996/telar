@@ -1,4 +1,3 @@
-const TerminalTrackerConfig = @import("TerminalTrackerConfig.zig");
 const std = @import("std");
 const OscTracker = @import("OscTracker.zig");
 const vt = @import("ghostty-vt");
@@ -55,7 +54,7 @@ pub const Phase = enum {
 
 pub const Config = @import("TerminalTrackerConfig.zig");
 
-pub fn init(gpa: std.mem.Allocator, config: TerminalTrackerConfig) !Tracker {
+pub fn init(gpa: std.mem.Allocator, config: Config) !Tracker {
     const terminal = config.terminal;
     const screen = terminal.screens.get(.primary).?;
     const anchor = try screen.pages.trackPin(screen.cursor.page_pin.*);

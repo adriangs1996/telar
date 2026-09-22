@@ -1,5 +1,10 @@
+const lua = @import("telar-lua");
+const data = @import("model");
+const core = @import("telar-core");
+const icons = @import("../layout/icons.zig");
+const model = @import("../bars/model.zig");
+const sidebar_rendering = @import("sidebar_rendering.zig");
 const std = @import("std");
-const VmType = @import("telar-lua").Vm;
 const SnapshotType = @import("Snapshot.zig");
 const config_model = @import("model.zig");
 const Callback = @import("Callback.zig");
@@ -18,62 +23,30 @@ const lua_api = @import("lua-api");
 const FileInput = @import("FileInput.zig");
 const PluginSpecType = @import("PluginSpec.zig");
 const CallbackInvocation = @import("CallbackInvocation.zig");
-const DiagnosticType = @import("Diagnostic.zig");
-const EffectBatchType = @import("EffectBatch.zig");
-const InputDecisionType = @import("effects.zig").InputDecision;
 const BarInvocationType = @import("BarInvocation.zig");
 const ContentType = @import("../bars/Content.zig");
-const default_callback_instruction_limit_module = @import("telar-lua").default_callback_instruction_limit;
-const default_callback_deadline_ns_module = @import("telar-lua").default_callback_deadline_ns;
 const bar_values = @import("bar_values.zig");
 const CallbackPreparation = @import("CallbackPreparation.zig");
 const lua_value = @import("lua_value.zig");
-const max_callback_effects_module = @import("effects.zig").max_callback_effects;
-const ActionType = @import("../input/action.zig").Action;
-const open_module = @import("telar-lua").open;
 const plugins_config = @import("plugins.zig");
 const commands_config = @import("commands.zig");
 const session_config = @import("session.zig");
 const agents_config = @import("agents.zig");
 const history_config = @import("history.zig");
 const proxy_config = @import("proxy.zig");
-const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
-const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
 const client_history_config = @import("client_history.zig");
 const ThemeParser = @import("ThemeParser.zig");
-const ThemeType = @import("../layout/icons.zig").Theme;
 const notifications_config = @import("notifications.zig");
-const SourceType = @import("../bars/model.zig").Source;
-const min_command_timeout_ms_module = @import("../bars/model.zig").min_command_timeout_ms;
-const max_command_timeout_ms_module = @import("../bars/model.zig").max_command_timeout_ms;
 const CommandType = @import("../bars/BarCommand.zig");
-const max_command_args_module = @import("../bars/model.zig").max_command_args;
 const CallbackRefType = @import("../bars/CallbackRef.zig");
-const parseKey_module = @import("../input/chord.zig").parseKey;
-const SidebarRenderingType = @import("sidebar_rendering.zig").SidebarRendering;
 const BindingInput = @import("BindingInput.zig");
 const ParsedBinding = @import("ParsedBinding.zig");
-const KeyType = @import("../input/Key.zig");
 const ActionInput = @import("ActionInput.zig");
-const ClientInputCallbackRefCallbackRef = @import("../input/CallbackRef.zig");
-const ScrollDirectionType = @import("../input/action.zig").ScrollDirection;
-const DirectionType = @import("../input/action.zig").Direction;
-const CommandTabType = @import("../input/CommandTab.zig");
-const NotificationLevelType = @import("telar-core").NotificationLevel;
-const default_notification_duration_ms_module = @import("telar-core").default_notification_duration_ms;
-const min_notification_duration_ms_module = @import("telar-core").min_notification_duration_ms;
-const max_notification_duration_ms_module = @import("telar-core").max_notification_duration_ms;
-const NotificationTargetType = @import("telar-core").NotificationTarget;
-const pane_module = @import("telar-core").pane;
-const tab_module = @import("telar-core").tab;
-const workspace_module = @import("telar-core").workspace;
-const NotificationType = @import("../input/Notification.zig");
-const stableId_module = @import("telar-core").stableId;
 const Generation = @This();
 
 gpa: std.mem.Allocator,
 number: u64,
-vm: *VmType,
+vm: *lua.Vm,
 snapshot: SnapshotType = .{},
 callbacks: [config_model.max_bindings]Callback = undefined,
 callback_count: u16 = 0,
@@ -97,7 +70,7 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
     generation.* = .{
         .gpa = context.gpa,
         .number = spec.number,
-        .vm = try VmType.init(context.io, .{
+        .vm = try lua.Vm.init(context.io, .{
             .memory = config_model.default_memory_limit,
             .instructions = config_model.default_load_instruction_limit,
             .deadline_after_ns = (LimitsType{}).deadline_after_ns,
@@ -187,7 +160,7 @@ fn installRequire(generation: *Generation) void {
 
 /// Runs an action callback against one immutable client snapshot.
 /// For example: `generation.invokeCallback(.{ .reference = callback, .context = snapshot }, diagnostic)`.
-pub fn invokeCallback(generation: *Generation, invocation: CallbackInvocation, diagnostic: *DiagnosticType) !EffectBatchType {
+pub fn invokeCallback(generation: *Generation, invocation: CallbackInvocation, diagnostic: *data.Diagnostic) !data.EffectBatch {
     const callback = try generation.prepareCallback(.{ .invocation = invocation, .expression = false }, diagnostic);
     _ = callback;
     const state = generation.vm.state;
@@ -201,7 +174,7 @@ pub fn invokeCallback(generation: *Generation, invocation: CallbackInvocation, d
 
 /// Runs an input expression against one immutable client snapshot.
 /// For example: `generation.invokeExpression(.{ .reference = expression, .context = snapshot }, diagnostic)`.
-pub fn invokeExpression(generation: *Generation, invocation: CallbackInvocation, diagnostic: *DiagnosticType) !InputDecisionType {
+pub fn invokeExpression(generation: *Generation, invocation: CallbackInvocation, diagnostic: *data.Diagnostic) !data.InputDecision {
     const callback = try generation.prepareCallback(.{ .invocation = invocation, .expression = true }, diagnostic);
     const state = generation.vm.state;
     defer lua_api.c.lua_settop(state, 0);
@@ -212,7 +185,7 @@ pub fn invokeExpression(generation: *Generation, invocation: CallbackInvocation,
     return generation_support.parseInputDecision(state, .{ .index = -1, .callback = callback }, diagnostic);
 }
 
-pub fn invokeBar(generation: *Generation, invocation: BarInvocationType, diagnostic: *DiagnosticType) !ContentType {
+pub fn invokeBar(generation: *Generation, invocation: BarInvocationType, diagnostic: *data.Diagnostic) !ContentType {
     const reference = invocation.reference;
     if (reference.generation != generation.number or reference.id >= generation.bar_callback_count) {
         diagnostic.set("bar callback belongs to an obsolete configuration generation", .{});
@@ -222,7 +195,7 @@ pub fn invokeBar(generation: *Generation, invocation: BarInvocationType, diagnos
     const state = generation.vm.state;
     lua_api.c.lua_settop(state, 0);
     defer lua_api.c.lua_settop(state, 0);
-    generation.vm.resetBudget(default_callback_instruction_limit_module, default_callback_deadline_ns_module);
+    generation.vm.resetBudget(lua.default_callback_instruction_limit, lua.default_callback_deadline_ns);
     _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, generation.bar_callbacks[reference.id].registry_ref);
     generation_support.pushReadonlyBarContext(state, invocation.context);
     if (lua_api.c.lua_pcallk(state, 1, 1, 0, 0, null) != lua_api.c.LUA_OK) {
@@ -233,7 +206,7 @@ pub fn invokeBar(generation: *Generation, invocation: BarInvocationType, diagnos
     return bar_values.parseBarContent(state, -1, diagnostic);
 }
 
-fn prepareCallback(generation: *Generation, preparation: CallbackPreparation, diagnostic: *DiagnosticType) !*const Callback {
+fn prepareCallback(generation: *Generation, preparation: CallbackPreparation, diagnostic: *data.Diagnostic) !*const Callback {
     const reference = preparation.invocation.reference;
     if (reference.generation != generation.number or reference.id >= generation.callback_count) {
         diagnostic.set("callback belongs to an obsolete configuration generation", .{});
@@ -247,22 +220,22 @@ fn prepareCallback(generation: *Generation, preparation: CallbackPreparation, di
     const state = generation.vm.state;
     lua_api.c.lua_settop(state, 0);
     generation.vm.resetBudget(
-        default_callback_instruction_limit_module,
-        default_callback_deadline_ns_module,
+        lua.default_callback_instruction_limit,
+        lua.default_callback_deadline_ns,
     );
     _ = lua_api.c.lua_rawgeti(state, lua_api.c.LUA_REGISTRYINDEX, callback.registry_ref);
     generation_support.pushReadonlyContext(state, preparation.invocation.context);
     return callback;
 }
 
-fn parseEffectBatch(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !EffectBatchType {
+fn parseEffectBatch(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !data.EffectBatch {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("Lua callback must return an action or an array of actions", .{});
         return error.InvalidCallbackResult;
     }
-    var batch: EffectBatchType = .{};
+    var batch: data.EffectBatch = .{};
     _ = lua_api.c.lua_getfield(state, absolute, "kind");
     const single = lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL;
     lua_value.pop(state, 1);
@@ -272,8 +245,8 @@ fn parseEffectBatch(generation: *Generation, index: c_int, diagnostic: *Diagnost
         return batch;
     }
     const count = lua_api.c.lua_rawlen(state, absolute);
-    if (count > max_callback_effects_module) {
-        diagnostic.set("Lua callback exceeds {d} effects", .{max_callback_effects_module});
+    if (count > data.effects.max_callback_effects) {
+        diagnostic.set("Lua callback exceeds {d} effects", .{data.effects.max_callback_effects});
         return error.InvalidCallbackResult;
     }
     for (0..count) |effect_index| {
@@ -288,7 +261,7 @@ fn parseEffectBatch(generation: *Generation, index: c_int, diagnostic: *Diagnost
     return batch;
 }
 
-fn parseReturnedAction(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !ActionType {
+fn parseReturnedAction(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !data.Action {
     if (lua_api.c.lua_type(generation.vm.state, index) == lua_api.c.LUA_TFUNCTION) {
         diagnostic.set("a callback cannot return another callback", .{});
         return error.InvalidCallbackResult;
@@ -302,10 +275,10 @@ fn parseReturnedAction(generation: *Generation, index: c_int, diagnostic: *Diagn
 }
 
 fn openEnvironment(generation: *Generation) !void {
-    try open_module(generation.vm.state);
+    try lua.open(generation.vm.state);
 }
 
-fn parseSnapshot(generation: *Generation, diagnostic: *DiagnosticType) !void {
+fn parseSnapshot(generation: *Generation, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.lua must return a table", .{});
@@ -372,7 +345,7 @@ fn parseSnapshot(generation: *Generation, diagnostic: *DiagnosticType) !void {
     try generation.parseProfiles(-1, diagnostic);
 }
 
-fn parseProfile(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseProfile(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "theme", "client", "gui", "runtime", "plugins" }, .path = "profile" }, diagnostic);
@@ -403,7 +376,7 @@ fn parseProfile(generation: *Generation, index: c_int, diagnostic: *DiagnosticTy
     lua_value.pop(state, 1);
 }
 
-fn parseProfiles(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseProfiles(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     const base_snapshot = generation.snapshot;
@@ -445,7 +418,7 @@ fn parseProfiles(generation: *Generation, index: c_int, diagnostic: *DiagnosticT
         };
 }
 
-fn parseRuntime(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseRuntime(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -514,16 +487,16 @@ fn parseRuntime(generation: *Generation, index: c_int, diagnostic: *DiagnosticTy
     }, diagnostic);
     const runtime = generation.snapshot.runtime;
     if (runtime.graphics_pane_bytes < 2 * 1024 * 1024 or
-        runtime.graphics_pane_bytes > max_image_bytes_per_pane_module or
+        runtime.graphics_pane_bytes > core.max_image_bytes_per_pane or
         runtime.graphics_global_bytes < runtime.graphics_pane_bytes or
-        runtime.graphics_global_bytes > max_image_bytes_global_module)
+        runtime.graphics_global_bytes > core.max_image_bytes_global)
     {
         diagnostic.set("runtime graphics limits are outside Telar's safe bounds", .{});
         return error.InvalidConfig;
     }
 }
 
-fn parseClient(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseClient(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -555,7 +528,7 @@ fn parseClient(generation: *Generation, index: c_int, diagnostic: *DiagnosticTyp
             diagnostic.set("config.client.icons must be a string", .{});
             return error.InvalidConfig;
         };
-        generation.snapshot.icon_theme = ThemeType.parse(value) catch {
+        generation.snapshot.icon_theme = icons.Theme.parse(value) catch {
             diagnostic.set("unknown config.client.icons: {s}", .{value});
             lua_value.pop(state, 1);
             return error.InvalidConfig;
@@ -657,7 +630,7 @@ fn parseClient(generation: *Generation, index: c_int, diagnostic: *DiagnosticTyp
     lua_value.pop(state, 1);
 }
 
-fn parseBars(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseBars(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -686,7 +659,7 @@ fn parseBars(generation: *Generation, index: c_int, diagnostic: *DiagnosticType)
     lua_value.pop(state, 1);
 }
 
-fn parseSidebarFooter(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseSidebarFooter(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -701,7 +674,7 @@ fn parseSidebarFooter(generation: *Generation, index: c_int, diagnostic: *Diagno
     }
     try lua_value.ensureArrayOnly(state, .{ .index = absolute, .count = count, .path = "config.client.bars.sidebar_footer" }, diagnostic);
 
-    var parsed: [3]SourceType = .{ .empty, .empty, .empty };
+    var parsed: [3]model.Source = .{ .empty, .empty, .empty };
     for (0..count) |slot_index| {
         _ = lua_api.c.lua_geti(state, absolute, @intCast(slot_index + 1));
         defer lua_value.pop(state, 1);
@@ -717,7 +690,7 @@ fn parseSidebarFooter(generation: *Generation, index: c_int, diagnostic: *Diagno
     generation.snapshot.bars.sidebar_footer = parsed;
 }
 
-fn parseBottomBar(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseBottomBar(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -726,7 +699,7 @@ fn parseBottomBar(generation: *Generation, index: c_int, diagnostic: *Diagnostic
     }
 
     try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "left", "center", "right" }, .path = "config.client.bars.bottom" }, diagnostic);
-    var parsed: [3]SourceType = .{ .empty, .empty, .empty };
+    var parsed: [3]model.Source = .{ .empty, .empty, .empty };
     inline for (.{ "left", "center", "right" }, 0..) |field, source_index| {
         _ = lua_api.c.lua_getfield(state, absolute, field);
         if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
@@ -747,7 +720,7 @@ fn parseBottomBar(generation: *Generation, index: c_int, diagnostic: *Diagnostic
     generation.snapshot.bars.bottom = parsed;
 }
 
-fn parseTopBar(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseTopBar(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -772,7 +745,7 @@ fn parseTopBar(generation: *Generation, index: c_int, diagnostic: *DiagnosticTyp
     generation.snapshot.bars.top_right = source;
 }
 
-fn parseBarSource(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !SourceType {
+fn parseBarSource(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !model.Source {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -818,7 +791,7 @@ fn parseBarSource(generation: *Generation, index: c_int, diagnostic: *Diagnostic
     return error.InvalidConfig;
 }
 
-fn parseBarCommand(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !SourceType {
+fn parseBarCommand(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !model.Source {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     try lua_value.ensureOnlyFields(state, .{
@@ -838,10 +811,10 @@ fn parseBarCommand(generation: *Generation, index: c_int, diagnostic: *Diagnosti
             return error.InvalidConfig;
         };
     lua_value.pop(state, 1);
-    if (timeout_value < min_command_timeout_ms_module or timeout_value > max_command_timeout_ms_module) {
+    if (timeout_value < model.min_command_timeout_ms or timeout_value > model.max_command_timeout_ms) {
         diagnostic.set(
             "bar command timeout_ms must be in {d}..{d}",
-            .{ min_command_timeout_ms_module, max_command_timeout_ms_module },
+            .{ model.min_command_timeout_ms, model.max_command_timeout_ms },
         );
         return error.InvalidConfig;
     }
@@ -859,9 +832,9 @@ fn parseBarCommand(generation: *Generation, index: c_int, diagnostic: *Diagnosti
     }
     const command_table = lua_api.c.lua_absindex(state, -1);
     const count = lua_api.c.lua_rawlen(state, command_table);
-    if (count == 0 or count > max_command_args_module) {
+    if (count == 0 or count > model.max_command_args) {
         lua_value.pop(state, 1);
-        diagnostic.set("bar command must contain 1..{d} arguments", .{max_command_args_module});
+        diagnostic.set("bar command must contain 1..{d} arguments", .{model.max_command_args});
         return error.InvalidConfig;
     }
     try lua_value.ensureArrayOnly(state, .{ .index = command_table, .count = count, .path = "bar command" }, diagnostic);
@@ -890,7 +863,7 @@ fn parseBarCommand(generation: *Generation, index: c_int, diagnostic: *Diagnosti
     return .{ .command = command };
 }
 
-fn registerBarCallback(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !CallbackRefType {
+fn registerBarCallback(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !CallbackRefType {
     const state = generation.vm.state;
     if (lua_api.c.lua_type(state, index) != lua_api.c.LUA_TFUNCTION) {
         diagnostic.set("bar render must be a Lua function", .{});
@@ -909,12 +882,12 @@ fn registerBarCallback(generation: *Generation, index: c_int, diagnostic: *Diagn
     return .{ .generation = generation.number, .id = id };
 }
 
-fn parsePrefix(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parsePrefix(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const value = lua_value.string(generation.vm.state, index) orelse {
         diagnostic.set("config.client.prefix must be a string", .{});
         return error.InvalidConfig;
     };
-    const prefix = parseKey_module(value) catch |err| {
+    const prefix = data.chord.parseKey(value) catch |err| {
         diagnostic.set("invalid config.client.prefix: {s}", .{@errorName(err)});
         return error.InvalidConfig;
     };
@@ -926,7 +899,7 @@ fn parsePrefix(generation: *Generation, index: c_int, diagnostic: *DiagnosticTyp
     }
 }
 
-fn parseInputOptions(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseInputOptions(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -954,7 +927,7 @@ fn parseInputOptions(generation: *Generation, index: c_int, diagnostic: *Diagnos
     }, diagnostic);
 }
 
-fn parseSound(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseSound(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -980,7 +953,7 @@ fn parseSound(generation: *Generation, index: c_int, diagnostic: *DiagnosticType
     }
 }
 
-fn parseSidebar(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseSidebar(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -1010,7 +983,7 @@ fn parseSidebar(generation: *Generation, index: c_int, diagnostic: *DiagnosticTy
             diagnostic.set("config.client.sidebar.renderer must be a string", .{});
             return error.InvalidConfig;
         };
-        generation.snapshot.sidebar_rendering = SidebarRenderingType.parse(value) catch {
+        generation.snapshot.sidebar_rendering = sidebar_rendering.SidebarRendering.parse(value) catch {
             diagnostic.set("unknown sidebar renderer '{s}'", .{value});
             lua_value.pop(state, 1);
             return error.InvalidConfig;
@@ -1019,7 +992,7 @@ fn parseSidebar(generation: *Generation, index: c_int, diagnostic: *DiagnosticTy
     lua_value.pop(state, 1);
 }
 
-fn parseBindings(generation: *Generation, index: c_int, diagnostic: *DiagnosticType) !void {
+fn parseBindings(generation: *Generation, index: c_int, diagnostic: *data.Diagnostic) !void {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -1045,7 +1018,7 @@ fn parseBindings(generation: *Generation, index: c_int, diagnostic: *DiagnosticT
     generation.snapshot.binding_count = @intCast(count);
 }
 
-fn parseBinding(generation: *Generation, binding_input: BindingInput, diagnostic: *DiagnosticType) !ParsedBinding {
+fn parseBinding(generation: *Generation, binding_input: BindingInput, diagnostic: *data.Diagnostic) !ParsedBinding {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, binding_input.index);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
@@ -1084,7 +1057,7 @@ fn parseBinding(generation: *Generation, binding_input: BindingInput, diagnostic
         );
         return error.InvalidConfig;
     }
-    var keys: [config_model.max_binding_keys]KeyType = undefined;
+    var keys: [config_model.max_binding_keys]data.Key = undefined;
     const key_offset: usize = @intFromBool(prefixed);
     if (prefixed) {
         keys[0] = generation.snapshot.prefix;
@@ -1099,7 +1072,7 @@ fn parseBinding(generation: *Generation, binding_input: BindingInput, diagnostic
             );
             return error.InvalidConfig;
         };
-        keys[key_offset + key_index] = parseKey_module(name) catch |err| {
+        keys[key_offset + key_index] = data.chord.parseKey(name) catch |err| {
             lua_value.pop(state, 2);
             diagnostic.set(
                 "invalid keybinding {d}: {s}",
@@ -1156,7 +1129,7 @@ fn syncCallbackTriggers(generation: *Generation) void {
     };
 }
 
-fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *DiagnosticType) !ActionType {
+fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *data.Diagnostic) !data.Action {
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, action_input.index);
     if (lua_api.c.lua_type(state, absolute) == lua_api.c.LUA_TFUNCTION) {
@@ -1172,7 +1145,7 @@ fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *
             .expression = action_input.expression,
         };
         generation.callback_count += 1;
-        const reference: ClientInputCallbackRefCallbackRef = .{
+        const reference: data.InputCallbackRef = .{
             .generation = generation.number,
             .id = id,
         };
@@ -1187,7 +1160,7 @@ fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *
             diagnostic.set("expression binding action must be a Lua function", .{});
             return error.InvalidConfig;
         }
-        return ActionType.parse(name) catch {
+        return data.Action.parse(name) catch {
             diagnostic.set("unknown action '{s}'", .{name});
             return error.InvalidConfig;
         };
@@ -1213,7 +1186,7 @@ fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *
     if (std.mem.eql(u8, kind, "scroll-pane")) {
         try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "direction" }, .path = "action" }, diagnostic);
         const direction = try lua_value.requiredStringField(state, .{ .index = absolute, .name = "direction" }, diagnostic);
-        const parsed_direction: ScrollDirectionType = if (std.mem.eql(u8, direction, "up"))
+        const parsed_direction: data.ScrollDirection = if (std.mem.eql(u8, direction, "up"))
             .up
         else if (std.mem.eql(u8, direction, "down"))
             .down
@@ -1243,7 +1216,7 @@ fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *
     {
         try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{ "kind", "direction" }, .path = "action" }, diagnostic);
         const direction = try lua_value.requiredStringField(state, .{ .index = absolute, .name = "direction" }, diagnostic);
-        const parsed_direction: DirectionType = if (std.mem.eql(u8, direction, "left"))
+        const parsed_direction: data.InputDirection = if (std.mem.eql(u8, direction, "left"))
             .left
         else if (std.mem.eql(u8, direction, "right"))
             .right
@@ -1331,12 +1304,12 @@ fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *
         }
         const command_table = lua_api.c.lua_absindex(state, -1);
         const count = lua_api.c.lua_rawlen(state, command_table);
-        if (count == 0 or count > CommandTabType.max_arguments) {
-            diagnostic.set("command-tab command must contain 1..{d} arguments", .{CommandTabType.max_arguments});
+        if (count == 0 or count > data.CommandTab.max_arguments) {
+            diagnostic.set("command-tab command must contain 1..{d} arguments", .{data.CommandTab.max_arguments});
             return error.InvalidConfig;
         }
         try lua_value.ensureArrayOnly(state, .{ .index = command_table, .count = count, .path = "command-tab command" }, diagnostic);
-        var argument_storage: [CommandTabType.max_arguments][]const u8 = undefined;
+        var argument_storage: [data.CommandTab.max_arguments][]const u8 = undefined;
         for (1..count + 1) |item| {
             _ = lua_api.c.lua_rawgeti(state, command_table, @intCast(item));
             defer lua_value.pop(state, 1);
@@ -1362,7 +1335,7 @@ fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *
             }
         }
         defer lua_value.pop(state, 1);
-        return .{ .command_tab = CommandTabType.init(argument_storage[0..count], label) catch {
+        return .{ .command_tab = data.CommandTab.init(argument_storage[0..count], label) catch {
             diagnostic.set("command-tab command or label is invalid or too long", .{});
             return error.InvalidConfig;
         } };
@@ -1385,7 +1358,7 @@ fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *
         const title = try lua_value.requiredStringField(state, .{ .index = absolute, .name = "title" }, diagnostic);
         const body = try lua_value.optionalStringField(state, .{ .index = absolute, .name = "body", .default = "" }, diagnostic);
         const level_name = try lua_value.optionalStringField(state, .{ .index = absolute, .name = "level", .default = "info" }, diagnostic);
-        const level: NotificationLevelType = if (std.mem.eql(u8, level_name, "info"))
+        const level: core.NotificationLevel = if (std.mem.eql(u8, level_name, "info"))
             .info
         else if (std.mem.eql(u8, level_name, "success"))
             .success
@@ -1400,39 +1373,39 @@ fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *
         const duration = try lua_value.optionalIntegerField(state, .{
             .index = absolute,
             .name = "duration_ms",
-            .default = default_notification_duration_ms_module,
+            .default = core.default_notification_duration_ms,
         }, diagnostic);
-        if (duration < min_notification_duration_ms_module or
-            duration > max_notification_duration_ms_module)
+        if (duration < core.min_notification_duration_ms or
+            duration > core.max_notification_duration_ms)
         {
             diagnostic.set(
                 "notification duration_ms must be in {d}..{d}",
                 .{
-                    min_notification_duration_ms_module,
-                    max_notification_duration_ms_module,
+                    core.min_notification_duration_ms,
+                    core.max_notification_duration_ms,
                 },
             );
             return error.InvalidConfig;
         }
 
-        var target: NotificationTargetType = .none;
+        var target: core.NotificationTarget = .none;
         var target_count: u8 = 0;
         if (try lua_value.optionalPositiveId(state, .{ .index = absolute, .name = "pane_id" }, diagnostic)) |raw| {
-            target = .{ .pane = pane_module(raw) catch {
+            target = .{ .pane = core.pane(raw) catch {
                 diagnostic.set("notification pane_id is invalid", .{});
                 return error.InvalidConfig;
             } };
             target_count += 1;
         }
         if (try lua_value.optionalPositiveId(state, .{ .index = absolute, .name = "tab_id" }, diagnostic)) |raw| {
-            target = .{ .tab = tab_module(raw) catch {
+            target = .{ .tab = core.tab(raw) catch {
                 diagnostic.set("notification tab_id is invalid", .{});
                 return error.InvalidConfig;
             } };
             target_count += 1;
         }
         if (try lua_value.optionalPositiveId(state, .{ .index = absolute, .name = "workspace_id" }, diagnostic)) |raw| {
-            target = .{ .workspace = workspace_module(raw) catch {
+            target = .{ .workspace = core.workspace(raw) catch {
                 diagnostic.set("notification workspace_id is invalid", .{});
                 return error.InvalidConfig;
             } };
@@ -1442,7 +1415,7 @@ fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *
             diagnostic.set("notification accepts only one click target", .{});
             return error.InvalidConfig;
         }
-        return .{ .notification = NotificationType.init(.{
+        return .{ .notification = data.Notification.init(.{
             .level = level,
             .duration_ms = @intCast(duration),
             .target = target,
@@ -1462,11 +1435,11 @@ fn parseAction(generation: *Generation, action_input: ActionInput, diagnostic: *
         const plugin_name = try lua_value.requiredStringField(state, .{ .index = absolute, .name = "plugin" }, diagnostic);
         const action_name = try lua_value.requiredStringField(state, .{ .index = absolute, .name = "action" }, diagnostic);
         return .{ .plugin = .{
-            .plugin = stableId_module(plugin_name),
-            .action = stableId_module(action_name),
+            .plugin = core.stableId(plugin_name),
+            .action = core.stableId(action_name),
         } };
     }
-    const action = ActionType.parse(kind) catch {
+    const action = data.Action.parse(kind) catch {
         diagnostic.set("unknown action kind '{s}'", .{kind});
         return error.InvalidConfig;
     };

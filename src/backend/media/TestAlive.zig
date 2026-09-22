@@ -1,10 +1,10 @@
-const ImageKeyType = @import("telar-core").ImageKey;
+const core = @import("telar-core");
 const std = @import("std");
 const TestAlive = @This();
 
-keys: []const ImageKeyType,
+keys: []const core.ImageKey,
 
-pub fn holds(alive: TestAlive, key: ImageKeyType) bool {
+pub fn holds(alive: TestAlive, key: core.ImageKey) bool {
     for (alive.keys) |candidate| if (std.meta.eql(candidate, key)) return true;
     return false;
 }

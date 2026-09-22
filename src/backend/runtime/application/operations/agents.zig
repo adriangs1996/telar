@@ -1,10 +1,10 @@
 //! Runtime agents operations, reached from requests.dispatch.
 
+const agent_thread = @import("../commands/agent_thread.zig");
 const Application = @import("../Application.zig");
 const agent_history = @import("../agent_history.zig");
 const core = @import("telar-core");
 const Operation = @import("../commands/AgentThreadOperation.zig");
-const Action = @import("../commands/agent_thread.zig").Action;
 const AcknowledgeAgent = @import("../commands/AcknowledgeAgent.zig");
 const tracker_support = @import("../../../agent/tracker_support.zig");
 const PaneKeyType = @import("../../../pane/PaneKey.zig");
@@ -21,27 +21,16 @@ const report_agent_command = @import("../commands/report_agent_command.zig");
 const ReportAgentTitle = @import("../commands/ReportAgentTitle.zig");
 const report_agent_title = @import("../commands/report_agent_title.zig");
 const title_report_reply = @import("../../entrypoints/requests/report_agent_title.zig");
-const SuggestCommandType = @import("telar-core").SuggestCommand;
-const max_pane_text_bytes_module = @import("telar-core").max_pane_text_bytes;
 const suggestion = @import("../suggestion.zig");
 const types = @import("../../../engine/types.zig");
-const raw_module = @import("telar-core").raw;
 const PromptType = @import("../../../engine/Prompt.zig");
 const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
-const RequestIdType = @import("telar-core").RequestId;
-const SuggestionStatusType = @import("telar-core").SuggestionStatus;
-const AcknowledgeAgentType = @import("telar-core").AcknowledgeAgent;
 const std = @import("std");
-const QueryAgentsType = @import("telar-core").QueryAgents;
-const ReportAgentSessionType = @import("telar-core").ReportAgentSession;
-const ReportAgentType = @import("telar-core").ReportAgent;
 const sound_module = @import("../../../agent/sound.zig");
-const ReportAgentCommandType = @import("telar-core").ReportAgentCommand;
-const ReportAgentTitleType = @import("telar-core").ReportAgentTitle;
 const RequestContext = @import("../RequestContext.zig");
 
 /// Example: `try agents.routeSuggestCommand(request, command);`.
-pub fn routeSuggestCommand(request: *RequestContext, command: SuggestCommandType) !void {
+pub fn routeSuggestCommand(request: *RequestContext, command: core.SuggestCommand) !void {
     const application = request.application;
     const session = request.session;
     const service = application.engine_service orelse {
@@ -51,7 +40,7 @@ pub fn routeSuggestCommand(request: *RequestContext, command: SuggestCommandType
         return queueSuggestionStatus(&session.delivery.responses, command.request_id, .failed);
     };
 
-    var screen_storage: [max_pane_text_bytes_module]u8 = undefined;
+    var screen_storage: [core.max_pane_text_bytes]u8 = undefined;
     const dump = pane.dumpText(.{ .rows = suggestion.context_rows, .source = .screen }, &screen_storage);
     var prompt_buffer: [types.max_prompt_bytes]u8 = undefined;
     const prompt = suggestion.buildPrompt(.{
@@ -62,7 +51,7 @@ pub fn routeSuggestCommand(request: *RequestContext, command: SuggestCommandType
     const purpose: types.Purpose = .{ .suggestion = .{
         .client_id = session.key.id,
         .client_generation = session.key.generation,
-        .request_id = raw_module(command.request_id),
+        .request_id = core.raw(command.request_id),
     } };
     const queued = PromptType.init(purpose, prompt) catch null;
     if (queued == null or !service.submit(application.io, .{ .prompt = queued.? })) {
@@ -70,14 +59,14 @@ pub fn routeSuggestCommand(request: *RequestContext, command: SuggestCommandType
     }
 }
 
-fn queueSuggestionStatus(responses: *ResponseQueueType, request_id: RequestIdType, status: SuggestionStatusType) !void {
+fn queueSuggestionStatus(responses: *ResponseQueueType, request_id: core.RequestId, status: core.SuggestionStatus) !void {
     try responses.push(.{ .command_suggestion = .{ .request_id = request_id, .status = status } });
 }
 
 /// Example: `try agents.control(request, wire);`.
 pub fn control(request: *RequestContext, wire: anytype) !void {
     const T = @TypeOf(wire);
-    const action: Action = if (T == core.AgentPrompt)
+    const action: agent_thread.Action = if (T == core.AgentPrompt)
         .{ .prompt = .{ .text = wire.text, .options = wire.options, .images = wire.images } }
     else if (T == core.AgentInterrupt)
         .interrupt
@@ -127,20 +116,20 @@ pub fn routeQueryAgentHistory(request: *RequestContext, message: core.QueryAgent
 }
 
 /// Example: `try agents.routeAcknowledgeAgent(request, acknowledgement);`.
-pub fn routeAcknowledgeAgent(request: *RequestContext, acknowledgement: AcknowledgeAgentType) !void {
+pub fn routeAcknowledgeAgent(request: *RequestContext, acknowledgement: core.AcknowledgeAgent) !void {
     const now_ms = std.Io.Timestamp.now(request.application.io, .real).toMilliseconds();
 
     receiveAcknowledgeAgent(request, acknowledgement, now_ms);
 }
 
 /// Example: `try agents.routeQueryAgents(request, query);`.
-pub fn routeQueryAgents(request: *RequestContext, query: QueryAgentsType) !void {
+pub fn routeQueryAgents(request: *RequestContext, query: core.QueryAgents) !void {
     _ = query;
     request.session.delivery.requestAgentSnapshot();
 }
 
 /// Example: `try agents.routeReportAgentSession(request, report);`.
-pub fn routeReportAgentSession(request: *RequestContext, report: ReportAgentSessionType) !void {
+pub fn routeReportAgentSession(request: *RequestContext, report: core.ReportAgentSession) !void {
     const application = request.application;
     const now_ms = std.Io.Timestamp.now(application.io, .real).toMilliseconds();
 
@@ -150,7 +139,7 @@ pub fn routeReportAgentSession(request: *RequestContext, report: ReportAgentSess
 }
 
 /// Example: `try agents.routeReportAgent(request, report);`.
-pub fn routeReportAgent(request: *RequestContext, report: ReportAgentType) !void {
+pub fn routeReportAgent(request: *RequestContext, report: core.ReportAgent) !void {
     const application = request.application;
     const now_ms = std.Io.Timestamp.now(application.io, .real).toMilliseconds();
 
@@ -174,7 +163,7 @@ pub fn routeReportAgent(request: *RequestContext, report: ReportAgentType) !void
 }
 
 /// Example: `try agents.routeReportAgentCommand(request, report);`.
-pub fn routeReportAgentCommand(request: *RequestContext, report: ReportAgentCommandType) !void {
+pub fn routeReportAgentCommand(request: *RequestContext, report: core.ReportAgentCommand) !void {
     const application = request.application;
     const now_ms = std.Io.Timestamp.now(application.io, .real).toMilliseconds();
 
@@ -182,7 +171,7 @@ pub fn routeReportAgentCommand(request: *RequestContext, report: ReportAgentComm
 }
 
 /// Example: `try agents.routeReportAgentTitle(request, report);`.
-pub fn routeReportAgentTitle(request: *RequestContext, report: ReportAgentTitleType) !void {
+pub fn routeReportAgentTitle(request: *RequestContext, report: core.ReportAgentTitle) !void {
     const application = request.application;
 
     if (try receiveReportAgentTitle(request, report) == .recorded) {
@@ -199,7 +188,7 @@ fn acknowledgeAgent(request: *RequestContext, command: AcknowledgeAgent) tracker
     return request.application.model.agents.acknowledge(key, command.now_ms);
 }
 
-fn receiveAcknowledgeAgent(request: *RequestContext, acknowledgement: AcknowledgeAgentType, now_ms: i64) void {
+fn receiveAcknowledgeAgent(request: *RequestContext, acknowledgement: core.AcknowledgeAgent, now_ms: i64) void {
     const result = acknowledgeAgent(request, .{
         .pane_id = acknowledgement.pane_id,
         .pane_generation = acknowledgement.pane_generation,
@@ -224,7 +213,7 @@ fn reportAgentSession(request: *RequestContext, command: ReportAgentSession) rep
     return if (application.model.agents.observeSessionReference(identity, reference)) .recorded else .unchanged;
 }
 
-fn receiveReportAgentSession(request: *RequestContext, wire: ReportAgentSessionType, now_ms: i64) !session_report_reply.Outcome {
+fn receiveReportAgentSession(request: *RequestContext, wire: core.ReportAgentSession, now_ms: i64) !session_report_reply.Outcome {
     const result = reportAgentSession(request, .{
         .pane = .{ .id = wire.pane_id, .generation = wire.pane_generation },
         .session = wire.session,
@@ -294,7 +283,7 @@ fn reportAgent(request: *RequestContext, command: ReportAgent) ReportAgentResult
     };
 }
 
-fn receiveReportAgent(request: *RequestContext, wire: ReportAgentType, clock: ClockType) !ReportAgentResult {
+fn receiveReportAgent(request: *RequestContext, wire: core.ReportAgent, clock: ClockType) !ReportAgentResult {
     const result = reportAgent(request, .{
         .pane = .{ .id = wire.pane_id, .generation = wire.pane_generation },
         .state = wire.state,
@@ -349,7 +338,7 @@ fn reportAgentCommand(request: *RequestContext, report: ReportAgentCommand) repo
     return if (queued) .applied else .queue_full;
 }
 
-fn receiveReportAgentCommand(request: *RequestContext, wire: ReportAgentCommandType, now_ms: i64) !void {
+fn receiveReportAgentCommand(request: *RequestContext, wire: core.ReportAgentCommand, now_ms: i64) !void {
     const outcome = reportAgentCommand(request, .{
         .pane = .{ .id = wire.pane_id, .generation = wire.pane_generation },
         .phase = wire.phase,
@@ -389,7 +378,7 @@ pub fn reportAgentTitle(application: *Application, command: ReportAgentTitle) re
     return if (changed) .recorded else .unchanged;
 }
 
-fn receiveReportAgentTitle(request: *RequestContext, wire: ReportAgentTitleType) !title_report_reply.Outcome {
+fn receiveReportAgentTitle(request: *RequestContext, wire: core.ReportAgentTitle) !title_report_reply.Outcome {
     const result = reportAgentTitle(request.application, .{
         .pane = .{ .id = wire.pane_id, .generation = wire.pane_generation },
         .title = wire.title,
@@ -464,7 +453,7 @@ fn agentControl(request: *RequestContext, operation: Operation) !PaneKeyType {
         return error.AgentBusy;
     }
 
-    if (operation.action == .prompt and @import("telar-core").AgentCommand.parse(operation.action.prompt.text) == null) {
+    if (operation.action == .prompt and core.AgentCommand.parse(operation.action.prompt.text) == null) {
         if (if (request.application.agent_description_options != null) &request.application.model.agents else null) |tracker| {
             _ = tracker.observeSubmittedPrompt(agent_identity.fromPane(pane), operation.action.prompt.text);
         }

@@ -1,5 +1,6 @@
 //! One frame of the project and agent sidebar. Layout, cards, clipping and controls
 //! draw in device pixels; SidebarState owns scrolling and snapshot order.
+const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const SidebarState = @import("SidebarState.zig");
@@ -60,7 +61,7 @@ fn drawHeader(canvas: *Canvas, header: Rect, text: []const u8) !void {
     const title: Label = .{ .text = text, .color = palette.text, .bold = true, .face = .sans, .size = .body };
     const label_area: Rect = .{ .x = header.x + inset, .y = header.y, .width = @max(0, header.width - 2 * inset), .height = header.height };
     _ = try canvas.textAt(label_area, title);
-    if (@import("std").mem.eql(u8, text, "agents")) {
+    if (std.mem.eql(u8, text, "agents")) {
         const left = label_area.x + @min(label_area.width, try canvas.measure(title)) + canvas.chrome.px(10);
         try canvas.fillAt(.{ .x = left, .y = @floor(header.y + header.height / 2), .width = @max(0, label_area.x + label_area.width - left), .height = 1 }, palette.surface1);
     }

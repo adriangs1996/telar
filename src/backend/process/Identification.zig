@@ -1,14 +1,12 @@
-const AgentProviderType = @import("telar-core").AgentProvider;
-const max_foreground_name_bytes_module = @import("telar-core").max_foreground_name_bytes;
-const TableType = @import("telar-core").Table;
+const core = @import("telar-core");
 const process = @import("process.zig");
 const Identification = @This();
 
-provider: AgentProviderType = .unknown,
-name: [max_foreground_name_bytes_module]u8 = @splat(0),
+provider: core.AgentProvider = .unknown,
+name: [core.max_foreground_name_bytes]u8 = @splat(0),
 name_len: u8 = 0,
 
-pub fn init(table: *const TableType, provider: AgentProviderType, command: []const u8) Identification {
+pub fn init(table: *const core.Table, provider: core.AgentProvider, command: []const u8) Identification {
     var result: Identification = .{ .provider = provider };
     const value = process.applicationName(table, provider, command);
     @memcpy(result.name[0..value.len], value);

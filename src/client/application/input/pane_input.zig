@@ -1,11 +1,10 @@
 //! Application use case for delivering semantic user input to one pane.
 
+const data = @import("model");
+const core = @import("telar-core");
 const input_capability = @import("../../input/input_namespace.zig");
 
-const KeyType = @import("../../input/Key.zig");
-const max_history_command_bytes_module = @import("telar-core").max_history_command_bytes;
 const std = @import("std");
-const chord = @import("../../input/chord.zig");
 
 pub const max_bytes = input_capability.max_encoded_bytes;
 /// Keys one synthetic sequence may carry; each key encodes to at most 32 bytes.
@@ -19,7 +18,7 @@ pub const Source = enum {
 
 pub const Payload = union(enum) {
     bytes: []const u8,
-    key: KeyType,
+    key: data.Key,
 };
 
 pub const Command = @import("PaneInputCommand.zig");
@@ -38,7 +37,7 @@ pub const Delivery = @import("PaneInputDelivery.zig");
 /// Rejects terminal controls and unframed multiline text before history can send input.
 /// Example: `try validateHistoryText(command, modes.bracketed_paste);`.
 pub fn validateHistoryText(text: []const u8, bracketed_paste: bool) !void {
-    if (text.len == 0 or text.len > max_history_command_bytes_module) {
+    if (text.len == 0 or text.len > core.max_history_command_bytes) {
         return error.InvalidInputLength;
     }
 

@@ -1,17 +1,14 @@
+const core = @import("telar-core");
 const State = @import("State.zig");
 const PipelineType = @import("Pipeline.zig");
 const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
 const GraphicsLimitsType = @import("GraphicsLimits.zig");
 const std = @import("std");
 const Responses = @import("Responses.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
 const StatsType = @import("Stats.zig");
 const SharedFrameViewType = @import("SharedFrameView.zig");
 const FileQueryViewType = @import("FileQueryView.zig");
 const LiveImages = @import("LiveImages.zig");
-const ImageKeyType = @import("telar-core").ImageKey;
-const FormatType = @import("telar-core").Format;
-const ImageType = @import("telar-core").Image;
 const shared_transfer = @import("shared_transfer.zig");
 const PreparedTransferType = @import("PreparedTransfer.zig");
 const GraphicsIngest = @import("GraphicsIngest.zig");
@@ -25,7 +22,7 @@ graphics_storage_limit: usize,
 io: std.Io,
 responses: Responses,
 
-pub fn processMedia(processor: *Processor, current_size: TerminalSizeType, stats: *StatsType) void {
+pub fn processMedia(processor: *Processor, current_size: core.TerminalSize, stats: *StatsType) void {
     if (processor.media.sealedRequiresReset()) {
         processor.state.kitty_framing = .{};
         processor.state.kitty_loading_chunks = 0;
@@ -72,16 +69,16 @@ pub fn prepareSharedTransfers(processor: *Processor, stats: *StatsType) void {
     while (images.next()) |entry| {
         const image = entry.value_ptr;
         const pixels = processor.media_allocator.imagePixels(image.data.bytes()) orelse continue;
-        const image_key: ImageKeyType = .{ .image_id = image.id, .generation = image.generation };
+        const image_key: core.ImageKey = .{ .image_id = image.id, .generation = image.generation };
         if (processor.state.prepared_transfers.covers(image_key)) {
             continue;
         }
-        const format: FormatType = switch (image.format) {
+        const format: core.Format = switch (image.format) {
             .rgb => .rgb,
             .rgba => .rgba,
             else => continue,
         };
-        const metadata: ImageType = .{
+        const metadata: core.Image = .{
             .key = image_key,
             .format = format,
             .width = image.width,
@@ -130,7 +127,7 @@ fn ingestSharedFrame(processor: *Processor, frame: SharedFrameViewType) bool {
     }
     // The emulator stamps the generation on store; validate everything
     // else now with a placeholder that passes the identity check.
-    const metadata: ImageType = .{
+    const metadata: core.Image = .{
         .key = .{ .image_id = frame.image_id, .generation = 1 },
         .format = frame.format,
         .width = frame.width,

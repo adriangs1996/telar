@@ -1,18 +1,16 @@
-const PaneCommitType = @import("PaneCommit.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
+const core = @import("telar-core");
 const Pane = @import("Pane.zig");
 const std = @import("std");
 const PresentationCommit = @This();
 
-location: ?TabLocationType = null,
-panes: [max_panes_per_tab_module]PaneCommitType = undefined,
+location: ?core.TabLocation = null,
+panes: [core.max_panes_per_tab]PaneCommit = undefined,
 len: u8 = 0,
 
 pub const PaneCommit = @import("PaneCommit.zig");
 
 /// Borrows the exact completed pane identities. Example: for (commit.slice()) |pane| acknowledge(pane);
-pub fn slice(commit: *const PresentationCommit) []const PaneCommitType {
+pub fn slice(commit: *const PresentationCommit) []const PaneCommit {
     return commit.panes[0..commit.len];
 }
 

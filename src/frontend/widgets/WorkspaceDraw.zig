@@ -1,9 +1,9 @@
-const WorkspaceListSnapshot = @import("telar-client").WorkspaceListSnapshot;
-const RectType = @import("telar-core").Rect;
+const client = @import("telar-client");
+const core = @import("telar-core");
 const WorkspaceDraw = @This();
 
-snapshot: *const WorkspaceListSnapshot,
+snapshot: *const client.WorkspaceListSnapshot,
 index: usize,
 active_index: ?usize,
 active_name: []const u8,
-area: RectType,
+area: core.Rect,

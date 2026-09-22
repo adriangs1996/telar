@@ -1,5 +1,5 @@
+const core = @import("telar-core");
 const std = @import("std");
-const AgentProvider = @import("telar-core").AgentProvider;
 const ToolHookInput = @import("ToolHookInput.zig");
 const ReviewHookFiles = @This();
 
@@ -10,7 +10,7 @@ count: usize = 0,
 
 /// Reads only the tool's declared paths, never shell commands or source syntax.
 /// Example: `const files = try ReviewHookFiles.collect(.codex, input);`
-pub fn collect(provider: AgentProvider, input: ToolHookInput) !ReviewHookFiles {
+pub fn collect(provider: core.AgentProvider, input: ToolHookInput) !ReviewHookFiles {
     var self: ReviewHookFiles = .{};
     if (input.agent_id != null and input.agent_id.?.len != 0) {
         return self;

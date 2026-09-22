@@ -8,8 +8,6 @@ const types = @import("../../agent/types.zig");
 const request = @import("request_support.zig");
 const dialect_mod = @import("dialect.zig");
 const claude_transport = @import("claude_transport.zig");
-const ResponseObserverType = @import("ResponseObserver.zig");
-const ResponseStreamsType = @import("ResponseStreams.zig");
 const std = @import("std");
 const sse = @import("../sse.zig");
 const claude = @import("claude.zig");
@@ -37,7 +35,7 @@ const end_turn_event =
     "\n";
 
 test "response observer reports Claude completion exactly once" {
-    var observer = ResponseObserverType.init(.anthropic_messages);
+    var observer = ResponseObserver.init(.anthropic_messages);
     defer observer.deinit();
 
     try std.testing.expect(observer.feed(end_turn_event));
@@ -47,7 +45,7 @@ test "response observer reports Claude completion exactly once" {
 
 test "response observer preserves Claude SSE state across every split" {
     for (0..end_turn_event.len + 1) |split| {
-        var observer = ResponseObserverType.init(.anthropic_messages);
+        var observer = ResponseObserver.init(.anthropic_messages);
         defer observer.deinit();
 
         const completed_before_second_chunk = observer.feed(end_turn_event[0..split]);
@@ -59,7 +57,7 @@ test "response observer preserves Claude SSE state across every split" {
 }
 
 test "response observer ignores stream closure and tool continuation" {
-    var observer = ResponseObserverType.init(.anthropic_messages);
+    var observer = ResponseObserver.init(.anthropic_messages);
     defer observer.deinit();
 
     try std.testing.expect(!observer.feed(
@@ -70,7 +68,7 @@ test "response observer ignores stream closure and tool continuation" {
 }
 
 test "response observer ignores malformed and truncated SSE input" {
-    var observer = ResponseObserverType.init(.anthropic_messages);
+    var observer = ResponseObserver.init(.anthropic_messages);
     defer observer.deinit();
 
     try std.testing.expect(!observer.feed("event: message_delta\ndata: not-json\n\n"));
@@ -82,7 +80,7 @@ test "response observer ignores malformed and truncated SSE input" {
 
 test "response observer ignores unsupported providers" {
     inline for (.{ types.ApiDialect.unknown, types.ApiDialect.openai_responses }) |dialect| {
-        var observer = ResponseObserverType.init(dialect);
+        var observer = ResponseObserver.init(dialect);
         defer observer.deinit();
 
         try std.testing.expect(!observer.feed(end_turn_event));
@@ -92,7 +90,7 @@ test "response observer ignores unsupported providers" {
 test "response streams decode arbitrarily interleaved HTTP2 payloads independently" {
     const first_split = end_turn_event.len / 3;
     const second_split = 2 * end_turn_event.len / 3;
-    var streams = ResponseStreamsType.init(std.testing.allocator, .anthropic_messages);
+    var streams = ResponseStreams.init(std.testing.allocator, .anthropic_messages);
     defer streams.deinit();
 
     try std.testing.expect(!streams.feed(1, end_turn_event[0..first_split]));
@@ -105,7 +103,7 @@ test "response streams decode arbitrarily interleaved HTTP2 payloads independent
 }
 
 test "response streams discard finished state and allow stream-slot reuse" {
-    var streams = ResponseStreamsType.init(std.testing.allocator, .anthropic_messages);
+    var streams = ResponseStreams.init(std.testing.allocator, .anthropic_messages);
     defer streams.deinit();
 
     try std.testing.expect(!streams.feed(7, end_turn_event[0 .. end_turn_event.len / 2]));
@@ -116,11 +114,11 @@ test "response streams discard finished state and allow stream-slot reuse" {
 }
 
 test "response streams reject the connection sentinel and unsupported providers" {
-    var claude_streams = ResponseStreamsType.init(std.testing.allocator, .anthropic_messages);
+    var claude_streams = ResponseStreams.init(std.testing.allocator, .anthropic_messages);
     defer claude_streams.deinit();
     try std.testing.expect(!claude_streams.feed(0, end_turn_event));
 
-    var codex_streams = ResponseStreamsType.init(std.testing.allocator, .openai_responses);
+    var codex_streams = ResponseStreams.init(std.testing.allocator, .openai_responses);
     defer codex_streams.deinit();
     try std.testing.expect(!codex_streams.feed(1, end_turn_event));
 }
@@ -128,7 +126,7 @@ test "response streams reject the connection sentinel and unsupported providers"
 test "response stream allocation failure drops observation without retaining a slot" {
     var storage: [0]u8 = .{};
     var allocator = std.heap.FixedBufferAllocator.init(&storage);
-    var streams = ResponseStreamsType.init(allocator.allocator(), .anthropic_messages);
+    var streams = ResponseStreams.init(allocator.allocator(), .anthropic_messages);
     defer streams.deinit();
 
     try std.testing.expect(!streams.feed(1, end_turn_event));
@@ -136,7 +134,7 @@ test "response stream allocation failure drops observation without retaining a s
 }
 
 test "response streams degrade locally at their fixed concurrency bound" {
-    var streams = ResponseStreamsType.init(std.testing.allocator, .anthropic_messages);
+    var streams = ResponseStreams.init(std.testing.allocator, .anthropic_messages);
     defer streams.deinit();
 
     for (0..max_concurrent_responses) |index| {

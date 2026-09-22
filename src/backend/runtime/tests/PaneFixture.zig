@@ -1,5 +1,4 @@
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const TabLocationType = @import("telar-core").TabLocation;
+const core = @import("telar-core");
 const std = @import("std");
 const ServiceType = @import("../../history/Service.zig");
 const GraphicsBudgetType = @import("../../media/GraphicsBudget.zig");
@@ -7,16 +6,12 @@ const PaneType = @import("../../pane/Pane.zig");
 const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
 const TrackerType = @import("../../agent/Tracker.zig");
 const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
-const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
-const pane_module = @import("telar-core").pane;
-const PaneIdType = @import("telar-core").PaneId;
 const CommandType = @import("../../pty/Command.zig");
-const raw_module = @import("telar-core").raw;
 const support = @import("support.zig");
 const PaneFixture = @This();
 
-pub const initial_size: TerminalSizeType = .{ .cols = 20, .rows = 5 };
-pub const location: TabLocationType = .{
+pub const initial_size: core.TerminalSize = .{ .cols = 20, .rows = 5 };
+pub const location: core.TabLocation = .{
     .workspace = .{ .workspace = @enumFromInt(2) },
     .tab_id = @enumFromInt(5),
 };
@@ -50,8 +45,8 @@ pub fn init(fixture: *PaneFixture) !void {
         fixture.history_service.deinit(io);
     }
 
-    fixture.budget = GraphicsBudgetType.init(max_image_bytes_global_module);
-    fixture.pane = try fixture.createPane(try pane_module(7));
+    fixture.budget = GraphicsBudgetType.init(core.max_image_bytes_global);
+    fixture.pane = try fixture.createPane(try core.pane(7));
     errdefer {
         fixture.pane.session.shutdown();
         fixture.pane.destroy();
@@ -80,7 +75,7 @@ pub fn deinit(fixture: *PaneFixture) void {
 /// ```zig
 /// const second = try fixture.createPane(try schema.id.pane(8));
 /// ```
-pub fn createPane(fixture: *PaneFixture, pane_id: PaneIdType) !*PaneType {
+pub fn createPane(fixture: *PaneFixture, pane_id: core.PaneId) !*PaneType {
     const arguments = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&arguments);
     const pane = try PaneType.create(.{
@@ -89,7 +84,7 @@ pub fn createPane(fixture: *PaneFixture, pane_id: PaneIdType) !*PaneType {
         .history_service = &fixture.history_service,
         .graphics_budget = &fixture.budget,
     }, .{
-        .identity = .{ .id = pane_id, .generation = raw_module(pane_id) },
+        .identity = .{ .id = pane_id, .generation = core.raw(pane_id) },
         .location = location,
         .command = &command,
         .launch_cwd = "/",

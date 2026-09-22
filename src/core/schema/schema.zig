@@ -3,9 +3,14 @@
 //! The handshake selects this schema before either peer calls these decoders.
 //! Every function borrows input and caller-owned output memory; none allocates.
 
-const id_module = @import("id.zig");
+const pane_kind = @import("pane_kind.zig");
+const agent_thread_messages = @import("messages/agent_thread.zig");
+const agent_history_module = @import("messages/agent_history.zig");
+const clients = @import("messages/clients.zig");
+const client_actions = @import("messages/client_actions.zig");
+const client_commands = @import("messages/client_commands.zig");
+const change_review = @import("messages/change_review.zig");
 const types = @import("types.zig");
-const messages_module = @import("messages/messages.zig");
 const tags = @import("messages/tags.zig");
 const pane_module = @import("messages/pane.zig");
 const focus_module = @import("messages/focus.zig");
@@ -24,11 +29,11 @@ pub const graphics = @import("graphics.zig");
 
 pub const frame = @import("frame_support.zig");
 pub const id = @import("id.zig");
-pub const WorkspaceId = id_module.WorkspaceId;
-pub const WorktreeId = id_module.WorktreeId;
-pub const TabId = id_module.TabId;
-pub const PaneId = id_module.PaneId;
-pub const RequestId = id_module.RequestId;
+pub const WorkspaceId = id.WorkspaceId;
+pub const WorktreeId = id.WorktreeId;
+pub const TabId = id.TabId;
+pub const PaneId = id.PaneId;
+pub const RequestId = id.RequestId;
 
 pub const max_input_bytes = types.max_input_bytes;
 pub const max_cwd_bytes = types.max_cwd_bytes;
@@ -141,10 +146,10 @@ pub const messages = @import("messages/messages.zig");
 
 pub const ClientTag = tags.ClientTag;
 pub const ServerTag = tags.ServerTag;
-pub const ClientMessage = messages_module.ClientMessage;
-pub const ServerMessage = messages_module.ServerMessage;
-pub const decodeClient = messages_module.decodeClient;
-pub const decodeServer = messages_module.decodeServer;
+pub const ClientMessage = messages.ClientMessage;
+pub const ServerMessage = messages.ServerMessage;
+pub const decodeClient = messages.decodeClient;
+pub const decodeServer = messages.decodeServer;
 
 pub const LaunchView = @import("messages/LaunchView.zig");
 pub const ArgumentIterator = @import("messages/ArgumentIterator.zig");
@@ -333,7 +338,7 @@ pub const encodeClientLayoutUpdate = layout_module.encodeClientLayoutUpdate;
 pub const encodeClientLayoutSnapshot = layout_module.encodeClientLayoutSnapshot;
 
 pub const RequestCompleted = @import("messages/RequestCompleted.zig");
-pub const ConfigureTerminalColors = @import("TerminalColors.zig");
+pub const ConfigureTerminalColors = TerminalColors;
 pub const encodeConfigureTerminalColors = runtime_module.encodeConfigureTerminalColors;
 pub const RequestRuntimeState = @import("messages/RequestRuntimeState.zig");
 pub const RequestFailed = @import("messages/RequestFailed.zig");
@@ -361,12 +366,12 @@ pub const encodeGraphicsPlacement = messages_graphics.encodeGraphicsPlacement;
 pub const encodeGraphicsDeleteImage = messages_graphics.encodeGraphicsDeleteImage;
 pub const encodeGraphicsDeletePlacement = messages_graphics.encodeGraphicsDeletePlacement;
 
-pub const PaneKind = @import("pane_kind.zig").PaneKind;
+pub const PaneKind = pane_kind.PaneKind;
 pub const agent_thread = @import("../agent_thread.zig");
 pub const AgentThreadSnapshot = @import("../AgentThreadSnapshot.zig");
 pub const AgentModel = @import("../AgentModel.zig");
 pub const AgentEffort = @import("../AgentEffort.zig");
-pub const AgentAccess = @import("../agent_thread.zig").Access;
+pub const AgentAccess = agent_thread.Access;
 pub const AgentOptions = @import("../AgentOptions.zig");
 pub const AgentImagePaths = @import("../AgentImagePaths.zig");
 pub const AgentImages = @import("../AgentImages.zig");
@@ -380,44 +385,44 @@ pub const AgentResume = @import("messages/AgentResume.zig");
 pub const AgentApproval = @import("messages/AgentApproval.zig");
 pub const QueryAgentThread = @import("messages/QueryAgentThread.zig");
 pub const AgentThreadSnapshotView = @import("messages/AgentThreadSnapshotView.zig");
-pub const encodeAgentPrompt = @import("messages/agent_thread.zig").encodeAgentPrompt;
-pub const encodeAgentInterrupt = @import("messages/agent_thread.zig").encodeAgentInterrupt;
-pub const encodeAgentResume = @import("messages/agent_thread.zig").encodeAgentResume;
-pub const encodeAgentApproval = @import("messages/agent_thread.zig").encodeAgentApproval;
-pub const encodeQueryAgentThread = @import("messages/agent_thread.zig").encodeQueryAgentThread;
-pub const encodeAgentThreadSnapshot = @import("messages/agent_thread.zig").encodeAgentThreadSnapshot;
+pub const encodeAgentPrompt = agent_thread_messages.encodeAgentPrompt;
+pub const encodeAgentInterrupt = agent_thread_messages.encodeAgentInterrupt;
+pub const encodeAgentResume = agent_thread_messages.encodeAgentResume;
+pub const encodeAgentApproval = agent_thread_messages.encodeAgentApproval;
+pub const encodeQueryAgentThread = agent_thread_messages.encodeQueryAgentThread;
+pub const encodeAgentThreadSnapshot = agent_thread_messages.encodeAgentThreadSnapshot;
 
 pub const agent_history = @import("../agent_history.zig");
 pub const AgentHistoryCursor = @import("../AgentHistoryCursor.zig");
 pub const AgentHistoryPage = @import("../AgentHistoryPage.zig");
 pub const QueryAgentHistory = @import("messages/QueryAgentHistory.zig");
 pub const AgentHistoryPageView = @import("messages/AgentHistoryPageView.zig");
-pub const encodeQueryAgentHistory = @import("messages/agent_history.zig").encodeQueryAgentHistory;
-pub const encodeAgentHistoryPage = @import("messages/agent_history.zig").encodeAgentHistoryPage;
+pub const encodeQueryAgentHistory = agent_history_module.encodeQueryAgentHistory;
+pub const encodeAgentHistoryPage = agent_history_module.encodeAgentHistoryPage;
 
 pub const ClientDescriptor = @import("../ClientDescriptor.zig");
 pub const ClientList = @import("../ClientList.zig");
 pub const QueryClients = @import("messages/QueryClients.zig");
-pub const encodeQueryClients = @import("messages/clients.zig").encodeQueryClients;
-pub const encodeClientList = @import("messages/clients.zig").encodeClientList;
+pub const encodeQueryClients = clients.encodeQueryClients;
+pub const encodeClientList = clients.encodeClientList;
 
 pub const DetachClient = @import("messages/DetachClient.zig");
-pub const encodeDetachClient = @import("messages/clients.zig").encodeDetachClient;
+pub const encodeDetachClient = clients.encodeDetachClient;
 
 pub const ClientCommand = @import("messages/ClientCommand.zig");
-pub const ClientAction = @import("messages/client_actions.zig").Action;
-pub const encodeRequestClientCommand = @import("messages/client_commands.zig").encodeRequestClientCommand;
-pub const encodeCompleteClientCommand = @import("messages/client_commands.zig").encodeCompleteClientCommand;
-pub const encodeClientCommand = @import("messages/client_commands.zig").encodeClientCommand;
-pub const encodeClientCommandResult = @import("messages/client_commands.zig").encodeClientCommandResult;
+pub const ClientAction = client_actions.Action;
+pub const encodeRequestClientCommand = client_commands.encodeRequestClientCommand;
+pub const encodeCompleteClientCommand = client_commands.encodeCompleteClientCommand;
+pub const encodeClientCommand = client_commands.encodeClientCommand;
+pub const encodeClientCommandResult = client_commands.encodeClientCommandResult;
 pub const QueryChangeReview = @import("messages/QueryChangeReview.zig");
 pub const ChangeReviewCommand = @import("messages/ChangeReviewCommand.zig");
 pub const ReportChangeReviewSample = @import("messages/ReportChangeReviewSample.zig");
 pub const ChangeReviewSnapshotView = @import("messages/ChangeReviewSnapshotView.zig");
-pub const encodeQueryChangeReview = @import("messages/change_review.zig").encodeQueryChangeReview;
-pub const encodeChangeReviewCommand = @import("messages/change_review.zig").encodeChangeReviewCommand;
-pub const encodeReportChangeReviewSample = @import("messages/change_review.zig").encodeReportChangeReviewSample;
-pub const encodeChangeReviewSnapshot = @import("messages/change_review.zig").encodeChangeReviewSnapshot;
+pub const encodeQueryChangeReview = change_review.encodeQueryChangeReview;
+pub const encodeChangeReviewCommand = change_review.encodeChangeReviewCommand;
+pub const encodeReportChangeReviewSample = change_review.encodeReportChangeReviewSample;
+pub const encodeChangeReviewSnapshot = change_review.encodeChangeReviewSnapshot;
 pub const OpenEditor = @import("messages/OpenEditor.zig");
 pub const EditorOpened = @import("messages/EditorOpened.zig");
 const editor_codec = @import("messages/editor.zig");

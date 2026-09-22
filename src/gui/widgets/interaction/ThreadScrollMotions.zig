@@ -1,4 +1,5 @@
 //! Allocation-free trajectories, bounded by visible pane attachments.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -17,7 +18,10 @@ discarded_gesture: bool = false,
 /// A replaced attachment never inherits its predecessor's velocity.
 /// Example: `const entry = motions.obtain(pane, now_ns) orelse return;`
 pub fn obtain(motions: *Motions, pane: *const client.Pane, now_ns: u64) ?*Entry {
-    const key: client.AgentKey = .{ .pane_id = pane.id, .pane_generation = pane.attachment_generation };
+    const key: data.AgentKey = .{
+        .pane_id = pane.id,
+        .pane_generation = pane.attachment_generation,
+    };
     if (motions.find(key)) |entry| {
         entry.synchronize(pane, now_ns);
         return entry;
@@ -36,7 +40,7 @@ pub fn obtain(motions: *Motions, pane: *const client.Pane, now_ns: u64) ?*Entry 
 }
 
 /// Example: `const entry = motions.find(key) orelse return;`
-pub fn find(motions: *Motions, key: client.AgentKey) ?*Entry {
+pub fn find(motions: *Motions, key: data.AgentKey) ?*Entry {
     for (motions.entries[0..motions.len]) |*entry| {
         if (std.meta.eql(entry.key, key)) {
             return entry;

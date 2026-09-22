@@ -1,3 +1,5 @@
+const std = @import("std");
+const TextFit = @import("TextFit.zig");
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
 const Selector = @import("interaction/ComposerSelector.zig");
@@ -25,7 +27,7 @@ pub fn draw(trigger: Trigger, canvas: *Canvas) !void {
         const id = try state.dispatcher.add(target);
         const hovered = if (state.dispatcher.hovered) |hover| hover.eql(id) else false;
         const focused = if (state.dispatcher.focused) |focus| focus.eql(id) else false;
-        active = if (state.composer_menu.selector) |selector| @import("std").meta.eql(selector, trigger.selector) else false;
+        active = if (state.composer_menu.selector) |selector| std.meta.eql(selector, trigger.selector) else false;
         if (hovered or active or focused) {
             try canvas.fillRoundedAt(trigger.bounds, .{ .color = palette.surface1, .radius = canvas.chrome.px(8) });
         }
@@ -50,7 +52,7 @@ pub fn draw(trigger: Trigger, canvas: *Canvas) !void {
         text_bounds.width = @max(0, text_bounds.width - icon_width - inset);
     }
 
-    var storage: [@import("TextFit.zig").max_bytes]u8 = undefined;
+    var storage: [TextFit.max_bytes]u8 = undefined;
     var label: @import("Label.zig") = .{ .text = trigger.label, .face = .sans, .size = .body, .color = tint };
     label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = text_bounds.width }).fit(label, &storage);
     const width = try canvas.textAt(text_bounds, label);

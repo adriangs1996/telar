@@ -1,26 +1,18 @@
 //! The TUI consumer classifies inbox messages and delegates each transition.
 //! Presentation observes the latest committed state once per bounded turn.
 
-const client_layouts = @import("telar-client").client_layouts;
+const client_module = @import("telar-client");
+const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
-const host = TerminalClient.of;
 const std = @import("std");
-const Client = @import("telar-client").AttachedClient;
 const Resources = @import("Resources.zig");
-const enter_module = @import("telar-core").enter;
 const client_startup = @import("../controllers/session/client_startup.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const host_capabilities = @import("../controllers/host/host_capabilities.zig");
 const host_resizes = @import("../controllers/host/host_resizes.zig");
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
-const bar_updates = @import("telar-client").operations.bar_updates;
-const path_completions = @import("telar-client").operations.path_completions;
 const client_telemetry = @import("../resources/telemetry.zig");
-const config_reloads = @import("telar-client").operations.config_reloads;
-const plugin_actions = @import("telar-client").operations.plugin_actions;
-const clipboard_images = @import("telar-client").operations.clipboard_images;
-const PathType = @import("telar-core").Path;
 
 const EventTag = std.meta.Tag(TerminalClient.ClientEvent);
 
@@ -36,7 +28,7 @@ pub const Outcome = union(enum) {
 /// ```zig
 /// const outcome = try handle(client, event, resources);
 /// ```
-pub fn handle(client: *Client, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
+pub fn handle(client: *client_module.AttachedClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
     const outcome = try dispatch(client, event, resources);
     if (outcome == .keep_running) {
         try observe(client);
@@ -47,8 +39,8 @@ pub fn handle(client: *Client, event: TerminalClient.ClientEvent, resources: Res
 
 /// Consumes only this turn's admitted work, then derives one presentation.
 /// Example: `const outcome = try events.update(client, resources);`
-pub fn update(client: *Client, resources: Resources) !Outcome {
-    const inbox = &host(client).inbox;
+pub fn update(client: *client_module.AttachedClient, resources: Resources) !Outcome {
+    const inbox = &TerminalClient.of(client).inbox;
     var turn = try inbox.begin();
     defer inbox.end();
     while (try inbox.next(&turn)) |event| {
@@ -65,16 +57,16 @@ pub fn update(client: *Client, resources: Resources) !Outcome {
     return .keep_running;
 }
 
-fn observe(client: *Client) !void {
-    const path = enter_module(.interactive);
+fn observe(client: *client_module.AttachedClient) !void {
+    const path = core.enter(.interactive);
     defer path.restore();
-    try client_layouts.observe(client);
+    try client.synchronizeClientLayout();
     try presentation_lifecycle.observe(client);
     try presentation_lifecycle.pumpOutput(client);
 }
 
-fn dispatch(client: *Client, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
-    const path = enter_module(pathFor(@as(EventTag, event)));
+fn dispatch(client: *client_module.AttachedClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
+    const path = core.enter(pathFor(@as(EventTag, event)));
     defer path.restore();
 
     switch (event) {
@@ -108,26 +100,26 @@ fn dispatch(client: *Client, event: TerminalClient.ClientEvent, resources: Resou
         .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
         .host_written => |result| try presentation_lifecycle.handleWritten(client, result),
         .compression_done => |job| {
-            kitty_delivery.completeCompression(&host(client).graphics_store, job);
-            try host(client).presenter.requestMedia();
+            kitty_delivery.completeCompression(&TerminalClient.of(client).graphics_store, job);
+            try TerminalClient.of(client).presenter.requestMedia();
         },
         .sidebar_animation_tick => |result| _ = try client.completeSidebarAnimationTick(result),
         .notification_tick => |result| _ = try client.completeNotificationTick(result),
-        .bar_tick => |result| try bar_updates.handleTick(client, result),
-        .bar_command => |completion| try bar_updates.completeCommand(client, completion),
+        .bar_tick => |result| try client_module.operations.bar_updates.handleTick(client, result),
+        .bar_command => |completion| try client_module.operations.bar_updates.completeCommand(client, completion),
         .sound_played => |result| try client.completeAgentSound(result),
         .notified => |result| _ = result catch {},
         .telemetry_tick => |result| client_telemetry.handleTick(client, result, resources.heap.snapshot()),
         .telemetry_written => |result| client_telemetry.handleWritten(client, result),
-        .config_reload => |result| _ = try config_reloads.handle(client, result),
+        .config_reload => |result| _ = try client.completeConfigReload(result),
         .plugin_result => |result| {
-            if (try plugin_actions.complete(client, result)) {
+            if (try client.completePluginAction(result)) {
                 return .{ .exit = 0 };
             }
         },
-        .clipboard_image => |result| try clipboard_images.complete(client, result),
+        .clipboard_image => |result| try client.completeClipboardCapture(result),
         .link_opened => |result| try client.completeLinkOpening(result),
-        .path_completion => |completion| try path_completions.complete(client, completion),
+        .path_completion => |completion| try client.completePathCompletion(completion),
     }
 
     if (try client_startup.advance(client)) {
@@ -137,7 +129,7 @@ fn dispatch(client: *Client, event: TerminalClient.ClientEvent, resources: Resou
     return .keep_running;
 }
 
-fn pathFor(tag: EventTag) PathType {
+fn pathFor(tag: EventTag) core.Path {
     return switch (tag) {
         .input,
         .input_timeout,
@@ -195,12 +187,12 @@ test "client event paths preserve interactive media and observation budgets" {
     };
 
     for (interactive) |tag| {
-        try std.testing.expectEqual(PathType.interactive, pathFor(tag));
+        try std.testing.expectEqual(core.Path.interactive, pathFor(tag));
     }
     for (media) |tag| {
-        try std.testing.expectEqual(PathType.media, pathFor(tag));
+        try std.testing.expectEqual(core.Path.media, pathFor(tag));
     }
     for (observation) |tag| {
-        try std.testing.expectEqual(PathType.observation, pathFor(tag));
+        try std.testing.expectEqual(core.Path.observation, pathFor(tag));
     }
 }

@@ -1,8 +1,7 @@
-const RectType = @import("telar-core").Rect;
-const AgentType = @import("telar-client").Agent;
-const ColorType = @import("telar-core").Color;
+const core = @import("telar-core");
+const client = @import("telar-client");
 const AgentMetaInput = @This();
 
-area: RectType,
-agent: *const AgentType,
-background: ColorType,
+area: core.Rect,
+agent: *const client.Agent,
+background: core.Color,

@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const RouterConfigType = @import("RouterConfig.zig");
 /// The adapter's host input source: the client resumes it after transport
 /// backpressure, hands it replayed bytes a prompt must decode, and gives it
@@ -11,7 +12,7 @@ context: *anyopaque,
 resume_read_fn: *const fn (*anyopaque) anyerror!void,
 route_prompt_bytes_fn: *const fn (*anyopaque, []const u8) anyerror!void,
 adopt_bindings_fn: *const fn (*anyopaque, RouterConfigType) void,
-enter_thread_copy_mode_fn: ?*const fn (*anyopaque, @import("telar-core").PaneId) bool = null,
+enter_thread_copy_mode_fn: ?*const fn (*anyopaque, core.PaneId) bool = null,
 thread_copy_mode_active_fn: ?*const fn (*anyopaque) bool = null,
 leave_thread_copy_mode_fn: ?*const fn (*anyopaque) bool = null,
 
@@ -19,7 +20,7 @@ leave_thread_copy_mode_fn: ?*const fn (*anyopaque) bool = null,
 /// Unsupported hosts leave all state untouched. The adapter owns cancellation
 /// when another pane, editor or modal takes focus.
 /// Example: `_ = client.host_input_source.enterThreadCopyMode(pane_id);`
-pub fn enterThreadCopyMode(port: HostInputSource, pane_id: @import("telar-core").PaneId) bool {
+pub fn enterThreadCopyMode(port: HostInputSource, pane_id: core.PaneId) bool {
     const enter = port.enter_thread_copy_mode_fn orelse return false;
     return enter(port.context, pane_id);
 }

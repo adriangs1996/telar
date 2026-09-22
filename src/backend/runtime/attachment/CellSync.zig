@@ -1,37 +1,26 @@
-const BufferType = @import("telar-core").Buffer;
-const CursorType = @import("telar-core").Cursor;
-const MouseType = @import("telar-core").Mouse;
-const InputModesType = @import("telar-core").InputModes;
-const PointerShapeType = @import("telar-core").PointerShape;
-const ScrollType = @import("telar-core").Scroll;
+const TextMetadataCapture = @import("../../pane/TextMetadataCapture.zig");
+const core = @import("telar-core");
 const vt = @import("ghostty-vt");
 const Outstanding = @import("Outstanding.zig");
 const std = @import("std");
 const PaneType = @import("../../pane/Pane.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
-const enterTerminalAllocations_module = @import("telar-core").enterTerminalAllocations;
-const elapsed_module = @import("telar-core").elapsed;
 const Projection = @import("Projection.zig");
 const blit_module = @import("../../pane/blit.zig");
 const Preparation = @import("Preparation.zig");
-const now_module = @import("telar-core").now;
-const max_span_count_module = @import("telar-core").max_span_count;
-const SpanType = @import("telar-core").Span;
 const DiffType = @import("../../pane/Diff.zig");
 const damage_module = @import("../../pane/damage.zig");
-const enabled_module = @import("telar-core").enabled;
-const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
 const Sync = @This();
 
-acknowledged: BufferType,
+acknowledged: core.Buffer,
 acknowledged_text_revision: u64 = 0,
 acknowledged_text_projected: bool = false,
-acknowledged_cursor: CursorType = .{},
-acknowledged_mouse: MouseType = .{},
-acknowledged_input_modes: InputModesType = .{},
-acknowledged_pointer_shape: PointerShapeType = .default,
-acknowledged_scroll: ScrollType = .{ .total_rows = 1, .offset = 0 },
-projected: BufferType,
+acknowledged_cursor: core.Cursor = .{},
+acknowledged_mouse: core.Mouse = .{},
+acknowledged_input_modes: core.InputModes = .{},
+acknowledged_pointer_shape: core.PointerShape = .default,
+acknowledged_scroll: core.Scroll = .{ .total_rows = 1, .offset = 0 },
+projected: core.Buffer,
 projected_damage: []bool,
 projected_state: vt.RenderState = .empty,
 projected_text_metadata: @import("../../pane/TextMetadataCapture.zig"),
@@ -45,14 +34,14 @@ snapshot_pending: bool = true,
 gpa: std.mem.Allocator,
 
 pub fn init(gpa: std.mem.Allocator, pane: *PaneType) !Sync {
-    var acknowledged = try BufferType.init(gpa, pane.screen.w, pane.screen.h);
+    var acknowledged = try core.Buffer.init(gpa, pane.screen.w, pane.screen.h);
     errdefer acknowledged.deinit();
-    var projected = try BufferType.init(gpa, pane.screen.w, pane.screen.h);
+    var projected = try core.Buffer.init(gpa, pane.screen.w, pane.screen.h);
     errdefer projected.deinit();
     const projected_damage = try gpa.alloc(bool, pane.screen.h);
     errdefer gpa.free(projected_damage);
     @memset(projected_damage, false);
-    const projected_text_metadata = try @import("../../pane/TextMetadataCapture.zig").init(gpa, pane.screen.h);
+    const projected_text_metadata = try TextMetadataCapture.init(gpa, pane.screen.h);
     return .{
         .projected_text_metadata = projected_text_metadata,
         .acknowledged = acknowledged,
@@ -117,7 +106,7 @@ pub fn clearViewport(sync: *Sync, pane: *PaneType) void {
 /// const changed = try sync.setViewport(pane, requested_offset);
 /// ```
 pub fn setViewport(sync: *Sync, pane: *PaneType, requested: u32) !bool {
-    const terminal_allocations = enterTerminalAllocations_module();
+    const terminal_allocations = core.enterTerminalAllocations();
     defer terminal_allocations.restore();
 
     sync.syncViewportScreen(pane);
@@ -171,7 +160,7 @@ pub fn acknowledge(sync: *Sync, frame_id: u64, now_ns: u64) ?u64 {
     }
     sync.acknowledged_frame_id = frame_id;
     sync.outstanding = null;
-    return elapsed_module(outstanding.sent_ns, now_ns);
+    return core.elapsed(outstanding.sent_ns, now_ns);
 }
 
 pub fn project(sync: *Sync, pane: *PaneType, force: bool) !Projection {
@@ -184,7 +173,7 @@ pub fn project(sync: *Sync, pane: *PaneType, force: bool) !Projection {
         screen.scroll(.{ .pin = pin.* });
         defer screen.scroll(.{ .active = {} });
         {
-            const terminal_allocations = enterTerminalAllocations_module();
+            const terminal_allocations = core.enterTerminalAllocations();
             defer terminal_allocations.restore();
             try sync.projected_state.update(sync.gpa, &pane.terminal);
         }
@@ -215,7 +204,7 @@ pub fn project(sync: *Sync, pane: *PaneType, force: bool) !Projection {
     };
 }
 
-fn scrollState(value: anytype) ScrollType {
+fn scrollState(value: anytype) core.Scroll {
     return .{
         .total_rows = @intCast(@min(value.total, std.math.maxInt(u32))),
         .offset = @intCast(@min(value.offset, std.math.maxInt(u32))),
@@ -239,13 +228,13 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     if (!pane.output_done and pane.holdFrames(io)) {
         return null;
     }
-    const started = now_module(io);
+    const started = core.now(io);
     if (pane.render_pending) {
         try pane.render(false);
     }
     const projection = try sync.project(pane, force_snapshot);
     const source = projection.buffer;
-    var span_storage: [max_span_count_module]SpanType = undefined;
+    var span_storage: [core.max_span_count]core.Span = undefined;
     var snapshot = force_snapshot;
     const diff = if (snapshot)
         DiffType{}
@@ -274,14 +263,14 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     {
         sync.observeProjection(pane, projection);
 
-        if (comptime enabled_module) {
+        if (comptime core.enabled) {
             metrics.noop_frames += 1;
             metrics.damaged_rows += diff.damaged_rows;
             metrics.diff_scanned_cells += diff.scanned_cells;
             metrics.coalesced_spans += diff.coalesced_spans;
             metrics.bridged_cells += diff.bridged_cells;
             metrics.coalesced_bytes_saved += diff.bytes_saved;
-            metrics.encode.observe(elapsed_module(started, now_module(io)));
+            metrics.encode.observe(core.elapsed(started, core.now(io)));
         }
         return null;
     }
@@ -292,7 +281,7 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
 
     const frame_id = sync.next_frame_id;
     sync.next_frame_id += 1;
-    const payload = try encodePaneFrame_module(buffer, .{
+    const payload = try core.encodePaneFrame(buffer, .{
         .pane_id = pane.id,
         .frame_id = frame_id,
         .base_frame_id = if (snapshot) 0 else sync.acknowledged_frame_id,
@@ -322,8 +311,8 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     sync.acknowledged_pointer_shape = pane.pointer_shape;
     sync.acknowledged_scroll = projection.scroll;
     sync.observeProjection(pane, projection);
-    sync.outstanding = .{ .frame_id = frame_id, .sent_ns = now_module(io) };
-    if (comptime enabled_module) {
+    sync.outstanding = .{ .frame_id = frame_id, .sent_ns = core.now(io) };
+    if (comptime core.enabled) {
         var cell_count: u64 = 0;
         for (span_storage[0..span_count]) |span| cell_count += span.cells.len;
         metrics.frames += 1;
@@ -343,7 +332,7 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
             metrics.bridged_cells += diff.bridged_cells;
             metrics.coalesced_bytes_saved += diff.bytes_saved;
         }
-        metrics.encode.observe(elapsed_module(started, now_module(io)));
+        metrics.encode.observe(core.elapsed(started, core.now(io)));
     }
     return payload;
 }

@@ -1,21 +1,19 @@
 //! File evidence and cooperative feedback for agents in ordinary terminal panes.
+const core = @import("telar-core");
 const std = @import("std");
 const Session = @import("Session.zig");
 const PaneRef = @import("PaneRef.zig");
 const ReviewHookReport = @import("ReviewHookReport.zig");
 const ReviewHookFiles = @import("ReviewHookFiles.zig");
 const ReviewFileSample = @import("ReviewFileSample.zig");
-const review = @import("telar-core").change_review;
-const ChangeReviewCommand = @import("telar-core").ChangeReviewCommand;
-const paneId = @import("telar-core").pane;
 const control = @import("control.zig");
 
 /// Runs only inside the hook subprocess; failed evidence never becomes a diff.
 /// Example: `hook_review.capture(session, pane, report);`
 pub fn capture(session: *Session, pane: PaneRef, report: ReviewHookReport) void {
     const input = report.input;
-    const phase: review.SamplePhase = if (std.mem.eql(u8, input.event, "PreToolUse")) .before else if (std.mem.eql(u8, input.event, "PostToolUse")) .after else return;
-    if (input.session.len == 0 or input.session.len > review.max_identity_bytes or input.tool_call_id.len > review.max_identity_bytes) {
+    const phase: core.change_review.SamplePhase = if (std.mem.eql(u8, input.event, "PreToolUse")) .before else if (std.mem.eql(u8, input.event, "PostToolUse")) .after else return;
+    if (input.session.len == 0 or input.session.len > core.change_review.max_identity_bytes or input.tool_call_id.len > core.change_review.max_identity_bytes) {
         return;
     }
 
@@ -24,14 +22,14 @@ pub fn capture(session: *Session, pane: PaneRef, report: ReviewHookReport) void 
     for (files.paths[0..files.count]) |path| {
         const absolute = if (std.fs.path.isAbsolute(path)) session.gpa.dupe(u8, path) catch continue else std.fs.path.join(session.gpa, &.{ input.cwd, path }) catch continue;
         defer session.gpa.free(absolute);
-        if (absolute.len > review.max_path_bytes) {
+        if (absolute.len > core.change_review.max_path_bytes) {
             continue;
         }
 
         sample.read(session.io, absolute) catch continue;
         session.reportReviewSample(.{
             .request_id = .none,
-            .pane_id = paneId(pane.pane_id) catch return,
+            .pane_id = core.pane(pane.pane_id) catch return,
             .pane_generation = pane.pane_generation,
             .provider = report.provider,
             .session = input.session,
@@ -56,9 +54,9 @@ pub fn feedback(session: *Session, pane: PaneRef, report: ReviewHookReport) !voi
         return;
     }
 
-    var command = ChangeReviewCommand{
+    var command = core.ChangeReviewCommand{
         .request_id = .none,
-        .pane_id = try paneId(pane.pane_id),
+        .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .action = .feedback,
         .provider = report.provider,

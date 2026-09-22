@@ -1,5 +1,5 @@
-const Color = @import("telar-core").Color;
+const core = @import("telar-core");
 
-color: Color,
+color: core.Color,
 italic: bool = false,
 bold: bool = false,

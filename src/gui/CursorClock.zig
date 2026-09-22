@@ -1,10 +1,10 @@
+const client = @import("telar-client");
 const std = @import("std");
-const Config = @import("telar-client").GuiCursor;
 const Target = @import("CursorTarget.zig");
 const Clock = @This();
 
 target: Target = .{},
-config: Config = .{},
+config: client.GuiCursor = .{},
 focused: bool = true,
 started_ns: u64 = 0,
 

@@ -1,12 +1,12 @@
 //! Preview placement geometry and its committed Kitty output state.
 
+const core = @import("telar-core");
+const kitty_protocol = @import("kitty_protocol");
 const Size = @import("Size.zig");
-const RectType = @import("telar-core").Rect;
-const OutputPlacementType = @import("kitty_protocol").OutputPlacement;
 const std = @import("std");
 
 /// Example: `const placement = fitPlacement(image_size, cell_size, area);`.
-pub fn fitPlacement(image: Size, cell: Size, area: RectType) ?OutputPlacementType {
+pub fn fitPlacement(image: Size, cell: Size, area: core.Rect) ?kitty_protocol.OutputPlacement {
     if (area.isEmpty()) {
         return null;
     }
@@ -44,7 +44,7 @@ pub fn fitPlacement(image: Size, cell: Size, area: RectType) ?OutputPlacementTyp
     };
 }
 
-pub fn optionalPlacementEql(a: ?OutputPlacementType, b: ?OutputPlacementType) bool {
+pub fn optionalPlacementEql(a: ?kitty_protocol.OutputPlacement, b: ?kitty_protocol.OutputPlacement) bool {
     if (a == null or b == null) {
         return a == null and b == null;
     }

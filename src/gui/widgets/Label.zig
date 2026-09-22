@@ -1,7 +1,9 @@
-const Color = @import("telar-core").Color;
+const label_face = @import("label_face.zig");
+const label_size = @import("label_size.zig");
+const core = @import("telar-core");
 
 text: []const u8,
-color: Color = .default,
+color: core.Color = .default,
 bold: bool = false,
 italic: bool = false,
 faint: bool = false,
@@ -9,6 +11,6 @@ faint: bool = false,
 alpha: f32 = 1,
 underline: bool = false,
 strikethrough: bool = false,
-face: @import("label_face.zig").Face = .mono,
+face: label_face.Face = .mono,
 /// The chrome text size a sans label is set at; monospace labels keep the cell size.
-size: @import("label_size.zig").Size = .terminal,
+size: label_size.Size = .terminal,

@@ -1,3 +1,5 @@
+const native = @import("../native/native.zig");
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -16,7 +18,16 @@ test "update processes a horizontal split shortcut and its correlated runtime re
     const app = &gui.app;
     const before = app.model.version();
     const request_area = app.geometry().area;
-    try std.testing.expect(try gui.acceptInput(.{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true } } }));
+    try std.testing.expect(try gui.acceptInput(
+        .{
+            .key = .{
+                .code = data.keybind.default_prefix.code,
+                .mods = .{
+                    .ctrl = true,
+                },
+            },
+        },
+    ));
     try std.testing.expect(try gui.acceptInput(.{ .text = .{ .bytes = "%" } }));
 
     try std.testing.expectEqual(@as(?u8, null), try gui.update());
@@ -34,7 +45,7 @@ test "update processes a horizontal split shortcut and its correlated runtime re
         .location = request.location,
         .created = true,
     });
-    const response = try client.RuntimeMessage.decode(std.testing.io, payload);
+    const response = try data.RuntimeMessage.decode(std.testing.io, payload);
     try app.startRuntimeRead();
     try session.gui.driver.inbox.post(
         .{
@@ -56,9 +67,16 @@ test "update processes a horizontal split shortcut and its correlated runtime re
 }
 
 test "native semantic router resolves every TUI default action" {
-    const defaults = try client.default_bindings.load(client.default_prefix);
+    const defaults = try client.default_bindings.load(data.keybind.default_prefix);
     for (defaults) |binding| {
-        var router = try routing.build(.{ .prefix = client.default_prefix, .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
+        var router = try routing.build(
+            .{
+                .prefix = data.keybind.default_prefix,
+                .bindings = &.{},
+                .escape_timeout_ns = 1,
+                .sequence_timeout_ns = 1,
+            },
+        );
         var capture: ActionCapture = .{};
         for (binding.keys[0..binding.len]) |key| {
             switch (router.routeEvent(.{ .key = key, .raw = "", .now_ns = 1 }, .{})) {
@@ -95,7 +113,14 @@ test "native custom prefix navigates pane focus fullscreen and copy mode" {
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    session.gui.adoptBindings(.{ .prefix = try client.parseKey("ctrl+space"), .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
+    session.gui.adoptBindings(
+        .{
+            .prefix = try data.chord.parseKey("ctrl+space"),
+            .bindings = &.{},
+            .escape_timeout_ns = 1,
+            .sequence_timeout_ns = 1,
+        },
+    );
     const model = session.gui.app.model.activeTabModel().?;
     const second: core.PaneId = @enumFromInt(11);
     try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
@@ -176,10 +201,26 @@ test "native bindings preserve ownership through hot reload and matching release
     defer session.deinit();
     try session.bootstrap();
     const binding = try client.config_model.ConfiguredBinding.parse(&.{"ctrl+k"}, .toggle_workspace_list);
-    session.gui.adoptBindings(.{ .prefix = client.default_prefix, .bindings = &.{binding}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
+    session.gui.adoptBindings(
+        .{
+            .prefix = data.keybind.default_prefix,
+            .bindings = &.{
+                binding,
+            },
+            .escape_timeout_ns = 1,
+            .sequence_timeout_ns = 1,
+        },
+    );
     try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'k', .mods = 4, .physical = 9 });
     try input_support.pump(session.gui);
-    session.gui.adoptBindings(.{ .prefix = client.default_prefix, .bindings = &.{}, .escape_timeout_ns = 1, .sequence_timeout_ns = 1 });
+    session.gui.adoptBindings(
+        .{
+            .prefix = data.keybind.default_prefix,
+            .bindings = &.{},
+            .escape_timeout_ns = 1,
+            .sequence_timeout_ns = 1,
+        },
+    );
     try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'k', .physical = 9, .phase = 2 });
     try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'k', .physical = 9, .phase = 3 });
     try input_support.pump(session.gui);
@@ -199,9 +240,13 @@ test "native child release crosses a newly opened prompt only with its acquired 
     const pane = model.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
     const view = model.viewForPane(pane.id, session.gui.region.area).?;
-    const press: client.Mouse = .{ .x = view.content.x, .y = view.content.y, .kind = .press };
+    const press: data.Mouse = .{
+        .x = view.content.x,
+        .y = view.content.y,
+        .kind = .press,
+    };
     var capture = Capture.begin(app, press).?;
-    try std.testing.expect(client.operations.name_prompts.beginActiveTabRename(app));
+    try std.testing.expect(app.openNamePrompt(.rename_active_tab));
     try std.testing.expect(app.model.planPaneInput(.{ .pane = pane.id }) == null);
     var release = press;
     release.kind = .release;
@@ -404,7 +449,7 @@ fn prepareMouse(session: *Session) !void {
     session.gui.pointer.configure(session.gui.renderer.origin, session.gui.app.model.hostSize());
 }
 
-fn pointerPress(session: *Session) @import("../native/native.zig").InputEvent {
+fn pointerPress(session: *Session) native.InputEvent {
     const model = session.gui.app.model.activeTabModel().?;
     const view = model.viewForPane(Session.pane_id, session.gui.region.area).?;
     const size = session.gui.app.model.hostSize();
@@ -435,16 +480,15 @@ fn drainInput(session: *Session) !void {
 }
 
 test "native held keys repeat into legacy and Kitty children and stop after release" {
-    const Event = @import("../native/native.zig").InputEvent;
     const session = try Session.init();
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
     const fixtures = .{
-        .{ Event{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39 }, "jjj", "\x1b[106u\x1b[106;1:2u\x1b[106;1:2u\x1b[106;1:3u" },
-        .{ Event{ .kind = 3, .code = 6, .physical = 126 }, "\x1b[B\x1b[B\x1b[B", "\x1b[B\x1b[1;1:2B\x1b[1;1:2B\x1b[1;1:3B" },
-        .{ Event{ .kind = 3, .code = 3, .physical = 52 }, "\x7f\x7f\x7f", "\x1b[127u\x1b[127;1:2u\x1b[127;1:2u\x1b[127;1:3u" },
-        .{ Event{ .kind = 4, .code = 'j', .mods = 4, .physical = 39 }, "\n\n\n", "\x1b[106;5u\x1b[106;5:2u\x1b[106;5:2u\x1b[106;5:3u" },
+        .{ native.InputEvent{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39 }, "jjj", "\x1b[106u\x1b[106;1:2u\x1b[106;1:2u\x1b[106;1:3u" },
+        .{ native.InputEvent{ .kind = 3, .code = 6, .physical = 126 }, "\x1b[B\x1b[B\x1b[B", "\x1b[B\x1b[1;1:2B\x1b[1;1:2B\x1b[1;1:3B" },
+        .{ native.InputEvent{ .kind = 3, .code = 3, .physical = 52 }, "\x7f\x7f\x7f", "\x1b[127u\x1b[127;1:2u\x1b[127;1:2u\x1b[127;1:3u" },
+        .{ native.InputEvent{ .kind = 4, .code = 'j', .mods = 4, .physical = 39 }, "\n\n\n", "\x1b[106;5u\x1b[106;5:2u\x1b[106;5:2u\x1b[106;5:3u" },
     };
     inline for (.{ @as(u8, 0), @as(u8, 10) }) |flags| {
         session.gui.app.model.workspace.findPane(Session.pane_id).?.input_modes.kitty_keyboard_flags = flags;

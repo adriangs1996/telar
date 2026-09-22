@@ -1,4 +1,5 @@
 //! A child mouse gesture retains stable identity, never a borrowed pane.
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -13,7 +14,7 @@ cell_height: u16,
 
 /// A left press that starts selection belongs to copy mode, not this lease.
 /// Example: `const capture = Capture.begin(app, mouse);`
-pub fn begin(app: *client.AttachedClient, event: client.Mouse) ?Capture {
+pub fn begin(app: *client.AttachedClient, event: data.Mouse) ?Capture {
     const model = app.model.activeTabModel() orelse return null;
     const plan = model.planPaneMouse(event, app.geometry().area) orelse return null;
     if (!plan.protocol.sgr or plan.protocol.tracking == .none or plan.protocol.tracking == .x10) {
@@ -32,7 +33,7 @@ pub fn begin(app: *client.AttachedClient, event: client.Mouse) ?Capture {
 /// Visible panes update the captured geometry. Hidden panes keep their last
 /// rectangle so a tab or fullscreen change cannot strand an acquired press.
 /// Detachment still invalidates the lease. Example: `try capture.deliver(app, mouse);`
-pub fn deliver(capture: *Capture, app: *client.AttachedClient, event: client.Mouse) !void {
+pub fn deliver(capture: *Capture, app: *client.AttachedClient, event: data.Mouse) !void {
     const tab = app.model.workspace.find(capture.location.tab_id) orelse return;
     if (!std.meta.eql(tab.location, capture.location)) {
         return;
@@ -72,7 +73,7 @@ pub fn deliver(capture: *Capture, app: *client.AttachedClient, event: client.Mou
         return;
     }
 
-    try client.operations.pane_mouse_inputs.reportRetained(app, .{
+    try app.reportRetainedPaneMouse(.{
         .plan = plan,
         .command = .{ .event = projected, .exterior_pixels = true, .cell_width_px = capture.cell_width, .cell_height_px = capture.cell_height },
     });

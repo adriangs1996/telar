@@ -1,6 +1,6 @@
+const limits = @import("limits.zig");
 const std = @import("std");
 const LinkRun = @import("LinkRun.zig");
-const size = @import("limits.zig").run_size;
 const Runs = @This();
 
 bytes: []const u8,
@@ -12,7 +12,7 @@ pub fn next(runs: *Runs) ?LinkRun {
         return null;
     }
 
-    const bytes = runs.bytes[runs.index..][0..size];
-    runs.index += size;
+    const bytes = runs.bytes[runs.index..][0..limits.run_size];
+    runs.index += limits.run_size;
     return .{ .start = std.mem.readInt(u32, bytes[0..4], .little), .len = std.mem.readInt(u32, bytes[4..8], .little), .link_index = std.mem.readInt(u16, bytes[8..10], .little) };
 }

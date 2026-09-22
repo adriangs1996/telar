@@ -1,3 +1,6 @@
+const client = @import("telar-client");
+const view_module = @import("../diagrams/view.zig");
+const ImagePreview = @import("interaction/ImagePreview.zig");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
@@ -5,24 +8,24 @@ const Target = @import("interaction/Target.zig");
 const Widget = @This();
 
 bounds: Rect,
-thread: @import("telar-client").ThreadView,
+thread: client.ThreadView,
 index: u8,
 
 /// Keeps opening the preview separate from removing the attachment.
 /// Example: `try thumbnail.draw(canvas);`
 pub fn draw(widget: Widget, canvas: *Canvas) !void {
     const images = widget.thread.composer_images orelse return;
-    const request = @import("interaction/ImagePreview.zig").requestFor(.{
+    const request = ImagePreview.requestFor(.{
         .pane_id = widget.thread.pane_id,
         .generation = widget.thread.attachment_generation,
         .path = images.path(widget.index),
     });
-    const view: @import("../diagrams/view.zig").View = if (canvas.diagrams) |store| store.request(request) else .{ .failed = .unavailable };
+    const view: view_module.View = if (canvas.diagrams) |store| store.request(request) else .{ .failed = .unavailable };
     const area = widget.bounds;
     const palette = canvas.theme.palette;
     try canvas.fillRoundedAt(area, .{ .color = palette.surface0, .radius = canvas.chrome.px(8) });
     switch (view) {
-        .ready => |ready| try canvas.diagramAt(@import("interaction/ImagePreview.zig").fit(area, .{ ready.width, ready.height }), ready.slot),
+        .ready => |ready| try canvas.diagramAt(ImagePreview.fit(area, .{ ready.width, ready.height }), ready.slot),
         else => {
             var storage: [32]u8 = undefined;
             _ = try canvas.textAt(area, .{ .text = try std.fmt.bufPrint(&storage, "Image {d}", .{widget.index + 1}), .face = .sans, .size = .small, .color = palette.subtext0 });

@@ -1,11 +1,11 @@
 //! Pane command grammar and validated options.
 
-const PaneDirectionType = @import("telar-core").PaneDirection;
+const core = @import("telar-core");
 const std = @import("std");
 
 pub const PaneAction = enum { read, send_keys, focus, list, get, search, watch };
 
-pub fn parsePaneDirection(value: []const u8) ?PaneDirectionType {
+pub fn parsePaneDirection(value: []const u8) ?core.PaneDirection {
     if (std.mem.eql(u8, value, "left")) {
         return .left;
     }

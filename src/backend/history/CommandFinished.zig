@@ -1,21 +1,18 @@
+const core = @import("telar-core");
 const model = @import("model.zig");
-const PaneIdType = @import("telar-core").PaneId;
-const TabLocationType = @import("telar-core").TabLocation;
-const HistoryAuthorType = @import("telar-core").HistoryAuthor;
-const HistoryOriginType = @import("telar-core").HistoryOrigin;
 const std = @import("std");
 const CommandFinished = @This();
 
 session_id: model.SessionId,
-pane_id: PaneIdType,
-location: TabLocationType,
+pane_id: core.PaneId,
+location: core.TabLocation,
 sequence: u64,
 started_at_ms: i64,
 duration_ns: i64,
 exit_code: ?i32,
 status: model.CommandStatus,
-author: HistoryAuthorType,
-origin: HistoryOriginType = .pane,
+author: core.HistoryAuthor,
+origin: core.HistoryOrigin = .pane,
 cols: u16,
 rows: u16,
 command: []u8,

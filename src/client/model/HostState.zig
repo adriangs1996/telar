@@ -1,30 +1,25 @@
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const HostCapabilitiesType = @import("HostCapabilities.zig");
-const HostUpdateType = @import("HostUpdate.zig");
-const HostCommitType = @import("HostCommit.zig");
+const core = @import("telar-core");
+const model_data = @import("model");
 const std = @import("std");
-const HostCapabilitiesChangeType = @import("HostCapabilitiesChange.zig");
-const types = @import("types.zig");
-const HostResizeCommitType = @import("HostResizeCommit.zig");
 const State = @This();
 
-host_size: TerminalSizeType,
+host_size: core.TerminalSize,
 host_revision: u64 = 0,
-host_capabilities: HostCapabilitiesType,
+host_capabilities: model_data.HostCapabilities,
 host_capabilities_revision: u64 = 0,
 
 /// Example: `const result = state.hostSize(...);`.
-pub fn hostSize(state: *const State) TerminalSizeType {
+pub fn hostSize(state: *const State) core.TerminalSize {
     return state.host_size;
 }
 
 /// Example: `const result = state.hostCapabilities(...);`.
-pub fn hostCapabilities(state: *const State) HostCapabilitiesType {
+pub fn hostCapabilities(state: *const State) model_data.HostCapabilities {
     return state.host_capabilities;
 }
 
 /// Example: `const result = state.reconcileHost(...);`.
-pub fn reconcileHost(state: *State, update: HostUpdateType) !?HostCommitType {
+pub fn reconcileHost(state: *State, update: model_data.HostUpdate) !?model_data.HostCommit {
     try update.size.validate();
     const cell_size = update.capabilities.cellSize(update.size.cols, update.size.rows);
     if (update.size.cell_width_px != cell_size.width or
@@ -44,7 +39,7 @@ pub fn reconcileHost(state: *State, update: HostUpdateType) !?HostCommitType {
         state.host_capabilities = update.capabilities;
         state.host_capabilities_revision +%= 1;
 
-        break :changed HostCapabilitiesChangeType{
+        break :changed model_data.HostCapabilitiesChange{
             .previous = previous,
             .current = update.capabilities,
             .host_capabilities_revision = state.host_capabilities_revision,
@@ -59,7 +54,7 @@ pub fn reconcileHost(state: *State, update: HostUpdateType) !?HostCommitType {
 }
 
 /// Example: `const result = state.observeHostCapability(...);`.
-pub fn observeHostCapability(state: *State, observation: types.HostCapabilityObservation) !?HostCommitType {
+pub fn observeHostCapability(state: *State, observation: model_data.HostCapabilityObservation) !?model_data.HostCommit {
     const capabilities = state.host_capabilities.withObservation(observation);
     if (std.meta.eql(state.host_capabilities, capabilities)) {
         return null;
@@ -71,7 +66,7 @@ pub fn observeHostCapability(state: *State, observation: types.HostCapabilityObs
     });
 }
 
-fn resolveHostSize(state: *const State, capabilities: HostCapabilitiesType) TerminalSizeType {
+fn resolveHostSize(state: *const State, capabilities: model_data.HostCapabilities) core.TerminalSize {
     const cell_size = capabilities.cellSize(state.host_size.cols, state.host_size.rows);
 
     return .{
@@ -82,7 +77,7 @@ fn resolveHostSize(state: *const State, capabilities: HostCapabilitiesType) Term
     };
 }
 
-fn commitHostResize(state: *State, size: TerminalSizeType) HostResizeCommitType {
+fn commitHostResize(state: *State, size: core.TerminalSize) model_data.HostResizeCommit {
     const previous = state.host_size;
     state.host_size = size;
     state.host_revision +%= 1;

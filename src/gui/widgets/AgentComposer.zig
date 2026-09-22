@@ -1,3 +1,6 @@
+const ComposerLayout = @import("ComposerLayout.zig");
+const AgentCard = @import("AgentCard.zig");
+const TextFit = @import("TextFit.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -12,7 +15,7 @@ thread: client.ThreadView,
 /// Paints a native composer with the provider's real selectable options.
 /// Example: `try composer.draw(canvas);`
 pub fn draw(composer: Composer, canvas: *Canvas) !void {
-    var layout = @import("ComposerLayout.zig").resolve(canvas, composer.bounds);
+    var layout = ComposerLayout.resolve(canvas, composer.bounds);
     try composer.drawContext(canvas, layout.context);
     try (@import("ComposerSurface.zig"){ .bounds = layout.card, .radius = canvas.chrome.px(22), .focused = composer.thread.focused }).draw(canvas);
     try composer.drawImages(canvas, &layout.editor);
@@ -110,8 +113,8 @@ fn drawContext(composer: Composer, canvas: *Canvas, bounds: Rect) !void {
     const branch_width = if (composer.thread.branch.len > 0) @min(row.width * 0.4, try canvas.measure(.{ .text = composer.thread.branch, .face = .sans, .size = .small }) + canvas.chrome.px(28)) else 0;
     const folder_width = @max(0, row.width - branch_width - canvas.chrome.px(8));
     const icon_width = @min(canvas.chrome.px(22), folder_width / 4);
-    try canvas.iconAt(.{ .x = row.x, .y = row.y, .width = icon_width, .height = row.height }, .{ .text = @import("AgentCard.zig").project_glyph, .color = palette.subtext0, .size = .small });
-    var storage: [@import("TextFit.zig").max_bytes]u8 = undefined;
+    try canvas.iconAt(.{ .x = row.x, .y = row.y, .width = icon_width, .height = row.height }, .{ .text = AgentCard.project_glyph, .color = palette.subtext0, .size = .small });
+    var storage: [TextFit.max_bytes]u8 = undefined;
     const label: @import("Label.zig") = .{ .text = if (composer.thread.cwd.len > 0) std.fs.path.basename(composer.thread.cwd) else "", .face = .sans, .size = .small, .color = palette.subtext0 };
     const fitted = try (@import("TextFit.zig"){ .canvas = canvas, .width = @max(0, folder_width - icon_width) }).fit(label, &storage);
     _ = try canvas.textAt(.{ .x = row.x + icon_width, .y = row.y, .width = @max(0, folder_width - icon_width), .height = row.height }, .{ .text = fitted, .face = .sans, .size = .small, .color = palette.subtext0 });

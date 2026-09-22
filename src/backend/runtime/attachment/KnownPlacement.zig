@@ -1,4 +1,4 @@
-const PlacementType = @import("telar-core").Placement;
+const core = @import("telar-core");
 const KnownPlacement = @This();
 
-placement: PlacementType
+placement: core.Placement

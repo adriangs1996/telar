@@ -1,3 +1,4 @@
+const native = @import("../native/native.zig");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -5,7 +6,7 @@ const client = @import("telar-client");
 const Fixture = @import("ThreadSelectionFixture.zig");
 const reader = @import("../widgets/interaction/thread_selection.zig");
 
-fn copy(fixture: *Fixture) !@import("../native/native.zig").HostRequest {
+fn copy(fixture: *Fixture) !native.HostRequest {
     try fixture.send(.{ .key = .{ .code = .{ .char = .init("c") }, .mods = .{ .super = true } } });
     return fixture.clipboard();
 }

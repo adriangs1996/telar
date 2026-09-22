@@ -4,10 +4,10 @@
 //! connects to the forwarded socket, and shared-memory graphics are disabled
 //! because the runtime lives on another machine.
 
+const core = @import("telar-core");
 const std = @import("std");
 const Forward = @import("Forward.zig");
 const RuntimeConnector = @import("RuntimeConnector.zig");
-const SocketChannelType = @import("telar-core").SocketChannel;
 const Discovery = @import("Discovery.zig");
 const remote_discovery = @import("remote_discovery.zig");
 
@@ -75,7 +75,7 @@ pub fn establish(init: std.process.Init, destination: []const u8) !Forward {
 /// ```zig
 /// var connection = try connectForwarded(init, &connector);
 /// ```
-pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnector) !SocketChannelType {
+pub fn connectForwarded(init: std.process.Init, connector: *const RuntimeConnector) !core.SocketChannel {
     var attempt: usize = 0;
     while (attempt < connect_attempts) : (attempt += 1) {
         if (connector.connect()) |connection| {

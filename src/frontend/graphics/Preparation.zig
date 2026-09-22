@@ -1,10 +1,9 @@
-const RectType = @import("telar-core").Rect;
-const CenterType = @import("telar-client").Center;
-const PaletteType = @import("telar-client").Palette;
-const ThemeType = @import("telar-client").Theme;
+const core = @import("telar-core");
+const data = @import("model");
+const client = @import("telar-client");
 const Preparation = @This();
 
-area: RectType,
-center: *const CenterType,
-palette: *const PaletteType,
-icon_theme: ThemeType = .unicode,
+area: core.Rect,
+center: *const data.Center,
+palette: *const client.Palette,
+icon_theme: client.Theme = .unicode,

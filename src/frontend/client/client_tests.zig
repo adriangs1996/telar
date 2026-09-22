@@ -3,21 +3,16 @@
 //! This file is the capability's public namespace (ADR-0002); the files in
 //! this directory are implementation details behind it.
 
-const Client = @import("telar-client").AttachedClient;
+const client = @import("telar-client");
+const data = @import("model");
 const events = @import("entrypoints/events.zig");
 const run = @import("run.zig");
 const std = @import("std");
-const Action = @import("telar-client").Action;
-const parseKey_module = @import("telar-client").parseKey;
-const default_bindings = @import("telar-client").default_bindings;
-const DirectionType = @import("telar-client").Direction;
 const host_inputs = @import("controllers/input/host_inputs.zig");
-const encodeSgr_module = @import("telar-client").encodeSgr;
-const tracked_module = @import("telar-client").tracked;
 
 test {
     // The client capability's own files, collected for the suite.
-    _ = Client;
+    _ = client.AttachedClient;
     _ = @import("controllers/host/host_capabilities.zig");
     _ = @import("controllers/host/host_resizes.zig");
     _ = @import("controllers/input/host_inputs.zig");
@@ -49,28 +44,28 @@ test {
 }
 
 test "configured action names cover multiplexer operations" {
-    try std.testing.expectEqualDeep(Action.detach, try Action.parse("detach"));
+    try std.testing.expectEqualDeep(data.Action.detach, try data.Action.parse("detach"));
     try std.testing.expectEqualDeep(
-        Action{ .split_pane = .horizontal },
-        try Action.parse("split-horizontal"),
+        data.Action{ .split_pane = .horizontal },
+        try data.Action.parse("split-horizontal"),
     );
-    try std.testing.expectEqualDeep(Action.close_pane, try Action.parse("close-pane"));
+    try std.testing.expectEqualDeep(data.Action.close_pane, try data.Action.parse("close-pane"));
     try std.testing.expectEqualDeep(
-        Action{ .resize_pane = .left },
-        try Action.parse("resize-left"),
+        data.Action{ .resize_pane = .left },
+        try data.Action.parse("resize-left"),
     );
     try std.testing.expectEqualDeep(
-        Action.toggle_pane_fullscreen,
-        try Action.parse("toggle-pane-fullscreen"),
+        data.Action.toggle_pane_fullscreen,
+        try data.Action.parse("toggle-pane-fullscreen"),
     );
-    try std.testing.expectEqualDeep(Action.toggle_sidebar, try Action.parse("toggle-sidebar"));
-    try std.testing.expectError(error.UnknownAction, Action.parse("rename-pane"));
+    try std.testing.expectEqualDeep(data.Action.toggle_sidebar, try data.Action.parse("toggle-sidebar"));
+    try std.testing.expectError(error.UnknownAction, data.Action.parse("rename-pane"));
 }
 
 test "default bindings compile without ambiguous prefixes" {
-    const prefix = try parseKey_module("ctrl+s");
-    var bindings = try default_bindings.load(prefix);
-    var resize_directions: std.EnumSet(DirectionType) = .initEmpty();
+    const prefix = try data.chord.parseKey("ctrl+s");
+    var bindings = try client.default_bindings.load(prefix);
+    var resize_directions: std.EnumSet(data.InputDirection) = .initEmpty();
     var fullscreen = false;
     for (bindings) |binding| {
         try std.testing.expectEqualDeep(prefix, binding.keys[0]);
@@ -89,21 +84,21 @@ test "pane mouse reports preserve SGR buttons and pane-relative coordinates" {
     var buffer: [64]u8 = undefined;
     try std.testing.expectEqualStrings(
         "\x1b[<0;3;5M",
-        try encodeSgr_module(&buffer, .{
+        try client.encodeSgr(&buffer, .{
             .event = .{ .x = 20, .y = 30, .kind = .press, .button = 0 },
             .pane_position = .{ .x = 2, .y = 4 },
         }),
     );
     try std.testing.expectEqualStrings(
         "\x1b[<0;3;5m",
-        try encodeSgr_module(&buffer, .{
+        try client.encodeSgr(&buffer, .{
             .event = .{ .x = 20, .y = 30, .kind = .release, .button = 0 },
             .pane_position = .{ .x = 2, .y = 4 },
         }),
     );
     try std.testing.expectEqualStrings(
         "\x1b[<0;26;91M",
-        try encodeSgr_module(&buffer, .{
+        try client.encodeSgr(&buffer, .{
             .event = .{ .x = 20, .y = 30, .kind = .press, .button = 0 },
             .pane_position = .{ .x = 2, .y = 4 },
             .pixels = .{ .cell = .{ .width = 10, .height = 20 } },
@@ -111,7 +106,7 @@ test "pane mouse reports preserve SGR buttons and pane-relative coordinates" {
     );
     try std.testing.expectEqualStrings(
         "\x1b[<0;8;10M",
-        try encodeSgr_module(&buffer, .{
+        try client.encodeSgr(&buffer, .{
             .event = .{ .x = 20, .y = 30, .kind = .press, .button = 0 },
             .pane_position = .{ .x = 2, .y = 4 },
             .pixels = .{
@@ -120,8 +115,8 @@ test "pane mouse reports preserve SGR buttons and pane-relative coordinates" {
             },
         }),
     );
-    try std.testing.expect(tracked_module(.any, .move));
-    try std.testing.expect(!tracked_module(.button, .move));
-    try std.testing.expect(tracked_module(.x10, .press));
-    try std.testing.expect(!tracked_module(.x10, .release));
+    try std.testing.expect(client.tracked(.any, .move));
+    try std.testing.expect(!client.tracked(.button, .move));
+    try std.testing.expect(client.tracked(.x10, .press));
+    try std.testing.expect(!client.tracked(.x10, .release));
 }

@@ -1,5 +1,6 @@
 //! Fixed fallback order for resident faces; installed-font discovery runs
 //! only where a run is first shaped, never while painting a warm frame.
+const font_id = @import("font_id.zig");
 const std = @import("std");
 const freetype = @import("freetype");
 const assets = @import("assets");
@@ -10,7 +11,6 @@ const FallbackPool = @import("FallbackPool.zig");
 const GraphemeMisses = @import("GraphemeMisses.zig");
 const AtlasOptions = @import("AtlasOptions.zig");
 const FontMatch = @import("../native/FontMatch.zig").FontMatch;
-const Id = @import("font_id.zig").Id;
 const FontSet = @This();
 
 var next_identity: std.atomic.Value(u64) = .init(1);
@@ -95,7 +95,7 @@ pub fn deinit(fonts: *FontSet, allocator: std.mem.Allocator) void {
 /// terminal chain: configured font, embedded text font, symbols, discovered
 /// faces in discovery order. Reads only resident faces and allocates nothing.
 /// Example: `const id = fonts.source("\u{f07b}", .sans);`
-pub fn source(fonts: *const FontSet, text: []const u8, preferred: Id) Id {
+pub fn source(fonts: *const FontSet, text: []const u8, preferred: font_id.Id) font_id.Id {
     if (preferred != .primary and fonts.borrow(preferred).covers(text)) {
         return preferred;
     }
@@ -114,7 +114,7 @@ pub fn source(fonts: *const FontSet, text: []const u8, preferred: Id) Id {
         return .symbols;
     }
 
-    return if (fonts.pool.covering(text)) |slot| Id.fallback(slot) else .primary;
+    return if (fonts.pool.covering(text)) |slot| font_id.Id.fallback(slot) else .primary;
 }
 
 /// Asks the platform for an installed face covering a grapheme the chain
@@ -173,7 +173,7 @@ pub fn addFallback(fonts: *FontSet, face: FallbackFace) ?u3 {
     return slot;
 }
 
-pub fn get(fonts: *FontSet, id: Id) *FontFace {
+pub fn get(fonts: *FontSet, id: font_id.Id) *FontFace {
     return switch (id) {
         .primary => &fonts.primary,
         .text => &fonts.text.?,
@@ -184,7 +184,7 @@ pub fn get(fonts: *FontSet, id: Id) *FontFace {
     };
 }
 
-fn borrow(fonts: *const FontSet, id: Id) *const FontFace {
+fn borrow(fonts: *const FontSet, id: font_id.Id) *const FontFace {
     return switch (id) {
         .primary => &fonts.primary,
         .text => &fonts.text.?,

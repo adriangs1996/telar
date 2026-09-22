@@ -1,6 +1,6 @@
-const PaneSplit = @import("PaneSplit.zig");
-const RectType = @import("telar-core").Rect;
+const data = @import("model");
+const core = @import("telar-core");
 const RecoverPaneSplit = @This();
 
-split: PaneSplit,
-area: RectType,
+split: data.PaneSplit,
+area: core.Rect,

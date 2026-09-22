@@ -6,18 +6,15 @@
 //! without being an aggregate of its own, so it waits here keyed by the exact
 //! pane generation and is consumed by the first aggregate created for it.
 
+const core = @import("telar-core");
 const RestoredAgents = @import("RestoredAgents.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
-const pane_module = @import("telar-core").pane;
 const SessionTitle = @import("SessionTitle.zig");
 const std = @import("std");
-const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
-const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
 
 test "restored titles wait for their exact pane generation and are consumed once" {
     var titles: RestoredAgents = .{};
-    const key: PaneKey = .{ .id = try pane_module(4), .generation = 2 };
+    const key: PaneKey = .{ .id = try core.pane(4), .generation = 2 };
     const first = try SessionTitle.init("Fix the proxy", .generated);
     const second = try SessionTitle.init("Fix the proxy again", .manual);
 
@@ -26,7 +23,7 @@ test "restored titles wait for their exact pane generation and are consumed once
     try std.testing.expect(titles.take(.{ .id = key.id, .generation = 3 }) == null);
     const taken = titles.take(key).?.title.?;
     try std.testing.expectEqualStrings("Fix the proxy again", taken.slice());
-    try std.testing.expectEqual(AgentTitleSourceType.manual, taken.source);
+    try std.testing.expectEqual(core.AgentTitleSource.manual, taken.source);
     try std.testing.expect(titles.take(key) == null);
 }
 
@@ -35,11 +32,11 @@ test "restored titles refuse to grow past the agent record bound" {
     const title = try SessionTitle.init("Bounded", .generated);
     var index: u32 = 1;
 
-    while (index <= max_agent_snapshot_entries) : (index += 1) {
-        try std.testing.expect(titles.putTitle(.{ .id = try pane_module(index), .generation = 1 }, title));
+    while (index <= core.max_agent_snapshot_entries) : (index += 1) {
+        try std.testing.expect(titles.putTitle(.{ .id = try core.pane(index), .generation = 1 }, title));
     }
 
-    try std.testing.expect(!titles.putTitle(.{ .id = try pane_module(index), .generation = 1 }, title));
+    try std.testing.expect(!titles.putTitle(.{ .id = try core.pane(index), .generation = 1 }, title));
 }
 
 test "session titles accept only durable sources and printable text" {
@@ -47,7 +44,7 @@ test "session titles accept only durable sources and printable text" {
     try std.testing.expectError(error.InvalidSessionTitle, SessionTitle.init("window", .terminal));
     try std.testing.expectError(error.InvalidSessionTitle, SessionTitle.init("", .generated));
     try std.testing.expectError(error.InvalidSessionTitle, SessionTitle.init("a\x1bb", .generated));
-    try std.testing.expectError(error.InvalidSessionTitle, SessionTitle.init("x" ** (max_agent_session_title_bytes_module + 1), .manual));
+    try std.testing.expectError(error.InvalidSessionTitle, SessionTitle.init("x" ** (core.max_agent_session_title_bytes + 1), .manual));
     const title = try SessionTitle.init("Review proxy lifecycle", .generated);
     try std.testing.expectEqualStrings("Review proxy lifecycle", title.slice());
 }

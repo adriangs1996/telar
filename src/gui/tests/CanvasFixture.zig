@@ -1,4 +1,6 @@
 //! A chrome canvas over the embedded JetBrains Mono atlas, without a session.
+const assets = @import("assets");
+const ChromeMetrics = @import("../widgets/ChromeMetrics.zig");
 const std = @import("std");
 const client = @import("telar-client");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
@@ -10,7 +12,7 @@ atlas: GlyphAtlas,
 quads: QuadList,
 
 pub fn init() !Fixture {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     errdefer atlas.deinit();
     return .{ .atlas = atlas, .quads = QuadList.init(std.testing.allocator) };
 }
@@ -30,6 +32,6 @@ pub fn canvas(fixture: *Fixture) Canvas {
         .origin = .{ 8, 12 },
         .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 },
         .theme = client.theme_support.default_theme,
-        .chrome = @import("../widgets/ChromeMetrics.zig").resolve(.{}, 1),
+        .chrome = ChromeMetrics.resolve(.{}, 1),
     };
 }

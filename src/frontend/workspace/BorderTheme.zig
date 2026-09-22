@@ -1,7 +1,7 @@
-const ColorType = @import("telar-core").Color;
+const core = @import("telar-core");
 const BorderTheme = @This();
 
-focused: ColorType,
-unfocused: ColorType,
-tab_text: ColorType,
-selected_tab_text: ColorType,
+focused: core.Color,
+unfocused: core.Color,
+tab_text: core.Color,
+selected_tab_text: core.Color,

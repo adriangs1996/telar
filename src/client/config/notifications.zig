@@ -1,12 +1,11 @@
 //! Compiler for client notification delivery.
 
+const data = @import("model");
 const lua_api = @import("lua-api");
 const SnapshotType = @import("Snapshot.zig");
-const DiagnosticType = @import("Diagnostic.zig");
 const value = @import("lua_value.zig");
-const Delivery = @import("../notifications/notifications.zig").Delivery;
 
-pub fn parse(state: *lua_api.c.lua_State, snapshot: *SnapshotType, diagnostic: *DiagnosticType) !void {
+pub fn parse(state: *lua_api.c.lua_State, snapshot: *SnapshotType, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.client.notifications must be a table", .{});
@@ -28,7 +27,7 @@ pub fn parse(state: *lua_api.c.lua_State, snapshot: *SnapshotType, diagnostic: *
         diagnostic.set("config.client.notifications.delivery must be a string", .{});
         return error.InvalidConfig;
     };
-    snapshot.notification_delivery = Delivery.parse(delivery) orelse {
+    snapshot.notification_delivery = data.NotificationDelivery.parse(delivery) orelse {
         diagnostic.set("config.client.notifications.delivery must be telar, terminal or system", .{});
         return error.InvalidConfig;
     };

@@ -1,5 +1,6 @@
 //! Compact numbered project marks in runtime order, with no tab-like surfaces.
 //! Overflow is used only when the available pixels cannot hold every project.
+const AgentCard = @import("AgentCard.zig");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -112,7 +113,7 @@ fn workspace(indicators: WorkspaceIndicators, canvas: *Canvas, index: usize) !vo
     if (sprite) |value| {
         try canvas.spriteTintedAt(icon, .{ .sprite = value, .alpha = if (selected or hovered) 1 else 0.6 });
     } else {
-        try canvas.iconAt(icon, .{ .text = @import("AgentCard.zig").project_glyph, .color = ink, .face = .sans, .size = .small });
+        try canvas.iconAt(icon, .{ .text = AgentCard.project_glyph, .color = ink, .face = .sans, .size = .small });
     }
 
     if (selected) {

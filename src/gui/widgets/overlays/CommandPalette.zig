@@ -1,6 +1,9 @@
 //! The native command palette: one rounded surface with the prefixed field,
 //! up to sixteen result rows and the prefix legend. It reads the client's
 //! canonical results for every mode and never scores anything itself.
+const TextField = @import("../TextField.zig");
+const router_module = @import("../../input/router.zig");
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -11,7 +14,6 @@ const PaletteRow = @import("PaletteRow.zig");
 const SuggestionPanel = @import("SuggestionPanel.zig");
 const Label = @import("../Label.zig");
 const key_label = @import("key_label.zig");
-const Router = @import("../../input/router.zig").Type;
 const CommandPalette = @This();
 
 pub const max_rows = PaletteHits.capacity;
@@ -30,7 +32,7 @@ hits: *PaletteHits,
 modal: *?core.Rect,
 /// The native keymap that prints bound chords next to actions; absent in
 /// fixtures without a window.
-router: ?*const Router,
+router: ?*const router_module.Type,
 scale: f32,
 
 /// Cells the palette occupies for `rows` visible results, centered
@@ -64,14 +66,14 @@ pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
     const colors = canvas.theme.palette;
     const scale = if (palette.scale > 0) palette.scale else 1;
     var goto_results: client.Results = .{};
-    var action_results: client.CommandResults = .{};
+    var action_results: data.CommandResults = .{};
     const total: u16 = switch (prompt.paletteMode()) {
         .goto => blk: {
             client.collect(palette.sources(), prompt.paletteQuery(), &goto_results);
             break :blk goto_results.len;
         },
         .actions => blk: {
-            client.command_palette.collect(prompt.paletteQuery(), &action_results);
+            data.command_palette.collect(prompt.paletteQuery(), &action_results);
             break :blk action_results.len;
         },
         .suggest => 1,
@@ -127,13 +129,13 @@ pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
 }
 
 // Keys in the monospace face, words in sans; the active prefix in accent.
-fn drawLegend(canvas: *Canvas, row: core.Rect, mode: client.command_palette.Prefix) !void {
+fn drawLegend(canvas: *Canvas, row: core.Rect, mode: data.command_palette.Prefix) !void {
     const colors = canvas.theme.palette;
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     var remaining = row;
     for (legend, 0..) |token, index| {
         const is_key = index % 2 == 0;
-        const active = token.len == 1 and client.command_palette.Prefix.parse(token[0]) == mode;
+        const active = token.len == 1 and data.command_palette.Prefix.parse(token[0]) == mode;
         const label: Label = .{ .text = token, .color = if (active) colors.accent else colors.subtext0, .bold = active, .face = if (is_key) .mono else .sans, .size = .body };
         const used: u16 = @intFromFloat(@ceil(try canvas.measure(label) / cell));
         if (used + 1 > remaining.w) {
@@ -151,12 +153,12 @@ fn sources(palette: CommandPalette) client.Sources {
 
 // The prefix byte is painted over the field text in the accent color; the
 // field keeps it as ordinary text so editing never needs a second cursor.
-fn drawField(canvas: *Canvas, row: core.Rect, prompt: client.Prompt) !void {
+fn drawField(canvas: *Canvas, row: core.Rect, prompt: data.Prompt) !void {
     const colors = canvas.theme.palette;
     var field = prompt.field;
     const view = field.view(row.w);
-    try @import("../TextField.zig").fromPrompt(&prompt, canvas.rect(row), .name).draw(canvas);
-    if (!view.clipped_left and view.text.len != 0 and client.command_palette.Prefix.parse(view.text[0]) != null) {
+    try TextField.fromPrompt(&prompt, canvas.rect(row), .name).draw(canvas);
+    if (!view.clipped_left and view.text.len != 0 and data.command_palette.Prefix.parse(view.text[0]) != null) {
         const cell = row.splitLeft(1)[0];
         try canvas.fill(cell, colors.surface0);
         try canvas.text(cell, .{ .text = view.text[0..1], .color = colors.accent, .bold = true });
@@ -180,7 +182,7 @@ fn pickerRow(palette: CommandPalette, item: client.ModelGotoPickerItem, storage:
 }
 
 fn actionRow(palette: CommandPalette, index: u8, storage: *[key_label.max_bytes]u8) PaletteRow {
-    const entry = client.command_palette.entries[index];
+    const entry = data.command_palette.entries[index];
     const hint: []const u8 = if (palette.router) |router| blk: {
         const key = router.prefixedKeyForAction(entry.action) orelse break :blk "";
         break :blk key_label.chord(storage, router.prefix, key);

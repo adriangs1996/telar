@@ -1,21 +1,20 @@
 const std = @import("std");
 const core = @import("telar-core");
-const limits = core.change_review;
 const Edition = @This();
 
 id: u64 = 0,
 revision: u64 = 1,
-source: limits.Source = .provider_patch,
-patch: [limits.max_patch_bytes]u8 = undefined,
+source: core.change_review.Source = .provider_patch,
+patch: [core.change_review.max_patch_bytes]u8 = undefined,
 patch_len: u32 = 0,
 identity: [32]u8 = @splat(0),
-comment_storage: [limits.max_comments]Comment = @splat(.{}),
+comment_storage: [core.change_review.max_comments]Comment = @splat(.{}),
 comment_count: u8 = 0,
 next_comment: u64 = 1,
 reviewed: bool = false,
-delivery: limits.Delivery = .idle,
+delivery: core.change_review.Delivery = .idle,
 feedback_id: u64 = 0,
-feedback: [limits.max_feedback_bytes]u8 = undefined,
+feedback: [core.change_review.max_feedback_bytes]u8 = undefined,
 feedback_len: u16 = 0,
 
 const Comment = @import("Comment.zig");
@@ -91,7 +90,7 @@ pub fn apply(self: *Edition, command: core.ChangeReviewCommand) !void {
             if (command.comment_id != 0 and index == null) {
                 return error.CommentNotFound;
             }
-            if (index == null and self.comment_count == limits.max_comments) {
+            if (index == null and self.comment_count == core.change_review.max_comments) {
                 return error.ReviewCapacity;
             }
             const at = index orelse self.comment_count;

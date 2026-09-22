@@ -1,12 +1,10 @@
+const headless_event = @import("headless_event.zig");
+const model_data = @import("model");
 const Client = @import("../AttachedClient.zig");
 const core = @import("telar-core");
-const pane_inputs = @import("../operations/input/pane_inputs.zig");
 const presentation_delivery = @import("../operations/session/presentation_delivery.zig");
 const TransportState = @import("../connection/RuntimeTransportState.zig");
-const Target = @import("../attachments/AttachmentTarget.zig");
 const Credit = @import("../graphics/Credit.zig");
-const Region = @import("../workspace/Region.zig");
-const pane_graphics = @import("../application/panes/pane_graphics.zig");
 const ModelType = @import("../model/Model.zig");
 const AdapterType = @import("HeadlessAdapter.zig");
 const OutboxType = @import("../connection/Outbox.zig");
@@ -17,11 +15,7 @@ const headless_tests = @import("headless_tests.zig");
 const ProjectionType = @import("Projection.zig");
 const projection_support = @import("projection_support.zig");
 const lifecycle_module = @import("lifecycle.zig");
-const RuntimeMessage = @import("../connection/RuntimeMessage.zig");
 const GenericInbox = @import("../execution/GenericInbox.zig").Type;
-const Message = @import("headless_event.zig").Message;
-const PaneIdType = @import("telar-core").PaneId;
-const KeyType = @import("../input/Key.zig");
 const Fixture = @This();
 
 app: Client,
@@ -29,9 +23,9 @@ model: *ModelType,
 connection: core.SocketChannel,
 peer: core.SocketChannel,
 pending: ?[]const u8 = null,
-inbox: GenericInbox(Message),
+inbox: GenericInbox(headless_event.Message),
 receive_buffer: [64 * 1024]u8 = undefined,
-received: RuntimeMessage = undefined,
+received: model_data.RuntimeMessage = undefined,
 receive_pending: bool = false,
 adapter: AdapterType = .{},
 outbox: *OutboxType,
@@ -138,7 +132,7 @@ pub fn postFrame(fixture: *Fixture, bytes: []const u8) !void {
     const ticket = try fixture.inbox.reserve();
     errdefer fixture.inbox.release(ticket);
     @memcpy(fixture.receive_buffer[0..bytes.len], bytes);
-    fixture.received = try RuntimeMessage.decode(std.testing.io, fixture.receive_buffer[0..bytes.len]);
+    fixture.received = try model_data.RuntimeMessage.decode(std.testing.io, fixture.receive_buffer[0..bytes.len]);
     fixture.receive_pending = true;
     std.debug.assert(fixture.inbox.publish(ticket, .{ .server = &fixture.received }));
 }
@@ -160,23 +154,23 @@ pub fn drain(fixture: *Fixture) !void {
     }
 }
 
-fn visible(context: *anyopaque, id: PaneIdType) bool {
+fn visible(context: *anyopaque, id: core.PaneId) bool {
     const fixture: *Fixture = @ptrCast(@alignCast(context));
     return fixture.graphics.paneVisible(id);
 }
 
-fn setVisible(context: *anyopaque, id: PaneIdType, value: bool) !void {
+fn setVisible(context: *anyopaque, id: core.PaneId, value: bool) !void {
     const fixture: *Fixture = @ptrCast(@alignCast(context));
     try fixture.graphics.setPaneVisible(id, value);
 }
 
-fn syncTarget(context: *anyopaque, _: ?Target) bool {
+fn syncTarget(context: *anyopaque, _: ?model_data.AttachmentTarget) bool {
     const fixture: *Fixture = @ptrCast(@alignCast(context));
     fixture.resource_syncs += 1;
     return false;
 }
 
-fn noTarget(_: *anyopaque) ?Target {
+fn noTarget(_: *anyopaque) ?model_data.AttachmentTarget {
     return null;
 }
 
@@ -192,21 +186,21 @@ fn startSend(context: *anyopaque, _: *TransportState, bytes: []const u8) !void {
 
 fn resumeRead(_: *anyopaque) !void {}
 
-fn region(context: *anyopaque) Region {
+fn region(context: *anyopaque) model_data.Region {
     const fixture: *Fixture = @ptrCast(@alignCast(context));
     return fixture.geometry.current;
 }
 
-fn unsupportedGraphics(_: *anyopaque, _: pane_graphics.Command) !void {
+fn unsupportedGraphics(_: *anyopaque, _: model_data.PaneGraphicsCommand) !void {
     return error.HeadlessGraphicsUnsupported;
 }
 
-fn clearPane(context: *anyopaque, id: PaneIdType) void {
+fn clearPane(context: *anyopaque, id: core.PaneId) void {
     const fixture: *Fixture = @ptrCast(@alignCast(context));
     fixture.graphics.clearPane(id);
 }
 
-fn hasGraphics(context: *anyopaque, id: PaneIdType) bool {
+fn hasGraphics(context: *anyopaque, id: core.PaneId) bool {
     const fixture: *Fixture = @ptrCast(@alignCast(context));
     return fixture.graphics.hasPaneGraphics(id);
 }
@@ -226,13 +220,21 @@ fn consumeCredit(context: *anyopaque, credit: Credit) void {
     fixture.graphics.consumeCredit(credit);
 }
 
-pub fn key(fixture: *Fixture, value: KeyType) !void {
+pub fn key(fixture: *Fixture, value: model_data.Key) !void {
     try fixture.inbox.post(.{ .key = value });
     try fixture.drain();
 }
 
-fn applyKey(fixture: *Fixture, value: KeyType) !void {
-    _ = try pane_inputs.send(&fixture.app, .{ .target = .focused, .source = .host, .payload = .{ .key = value } });
+fn applyKey(fixture: *Fixture, value: model_data.Key) !void {
+    _ = try fixture.app.sendPaneInput(
+        .{
+            .target = .focused,
+            .source = .host,
+            .payload = .{
+                .key = value,
+            },
+        },
+    );
 }
 
 pub fn expectAck(fixture: *Fixture, frame_id: u64) !void {

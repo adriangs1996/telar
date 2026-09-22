@@ -1,16 +1,12 @@
+const core = @import("telar-core");
+const client = @import("telar-client");
+const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
 const RasterizerType = @import("Rasterizer.zig");
 const PlanType = @import("../presentation/Plan.zig");
 const Key = @import("Key.zig");
-const RectType = @import("telar-core").Rect;
 const pill = @import("pill.zig");
-const ConfigurationType = @import("telar-client").SidebarRendererInput;
-const PaletteType = @import("telar-client").Palette;
-const writeDeletePlacement_module = @import("kitty_protocol").writeDeletePlacement;
-const writeTransmissionAbort_module = @import("kitty_protocol").writeTransmissionAbort;
-const writeDeleteImage_module = @import("kitty_protocol").writeDeleteImage;
 const kitty_codec = @import("kitty_codec.zig");
-const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
 const labels = @import("../presentation/pane_labels.zig");
 const SurfaceType = @import("Surface.zig");
 const rounded = @import("rounded_rectangle.zig");
@@ -27,8 +23,8 @@ key: ?Key = null,
 failed: bool = false,
 generation: u64 = 0,
 emitted_generation: u64 = 0,
-desired: ?RectType = null,
-emitted: ?RectType = null,
+desired: ?core.Rect = null,
+emitted: ?core.Rect = null,
 emitted_plan: PlanType = .{},
 emitted_key: ?Key = null,
 emitted_image_id: u32 = pill.image_id,
@@ -56,7 +52,7 @@ pub fn retainedBytes(renderer: *const Renderer) usize {
 
 /// Invalidates geometry without allocating on the input path.
 /// Example: `_ = renderer.configure(configuration);`.
-pub fn configure(renderer: *Renderer, configuration: ConfigurationType) bool {
+pub fn configure(renderer: *Renderer, configuration: client.SidebarRendererInput) bool {
     const supported = configuration.support == .supported;
     if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
         renderer.cell_height == configuration.cell_height)
@@ -76,7 +72,7 @@ pub fn configure(renderer: *Renderer, configuration: ConfigurationType) bool {
 /// Rasterizes the bounded, owned label snapshot only on the media pass.
 /// Position-only changes reuse the image; text, focus or theme replace it.
 /// Example: `renderer.prepare(plan, palette);`.
-pub fn prepare(renderer: *Renderer, plan: *const PlanType, palette: *const PaletteType) void {
+pub fn prepare(renderer: *Renderer, plan: *const PlanType, palette: *const client.Palette) void {
     const key = renderer.renderKey(plan, palette) orelse {
         renderer.hide();
         return;
@@ -111,32 +107,32 @@ pub fn prepare(renderer: *Renderer, plan: *const PlanType, palette: *const Palet
 
 /// Only exact text, focus, theme and geometry may replace fallback cells.
 /// Example: `if (renderer.covers(plan, palette)) hideCellLabels();`.
-pub fn covers(renderer: *const Renderer, plan: *const PlanType, palette: *const PaletteType) bool {
+pub fn covers(renderer: *const Renderer, plan: *const PlanType, palette: *const client.Palette) bool {
     const key = renderer.renderKey(plan, palette) orelse return false;
     return renderer.matches(plan, key) and !renderer.failed and !renderer.transferInProgress() and
         renderer.image_emitted and !renderer.image_dirty and renderer.generation == renderer.emitted_generation and
-        std.meta.eql(renderer.desired, @as(?RectType, plan.area)) and
-        std.meta.eql(renderer.emitted, @as(?RectType, plan.area));
+        std.meta.eql(renderer.desired, @as(?core.Rect, plan.area)) and
+        std.meta.eql(renderer.emitted, @as(?core.Rect, plan.area));
 }
 
 /// Keeps small-font text visible while only its selection is being replaced.
 /// Unlike covers, this permits the previous focus but never stale text or geometry.
 /// Example: `if (renderer.coversText(plan, palette)) hideCellLabels();`.
-pub fn coversText(renderer: *const Renderer, plan: *const PlanType, palette: *const PaletteType) bool {
+pub fn coversText(renderer: *const Renderer, plan: *const PlanType, palette: *const client.Palette) bool {
     const key = renderer.renderKey(plan, palette) orelse return false;
     return !renderer.failed and renderer.image_emitted and
-        std.meta.eql(renderer.desired, @as(?RectType, plan.area)) and renderer.emittedTextMatches(plan, key);
+        std.meta.eql(renderer.desired, @as(?core.Rect, plan.area)) and renderer.emittedTextMatches(plan, key);
 }
 
 /// Retires stale text before the next cell frame, without rasterization.
 /// Example: `renderer.observe(plan, palette);`.
-pub fn observe(renderer: *Renderer, plan: *const PlanType, palette: *const PaletteType) void {
+pub fn observe(renderer: *Renderer, plan: *const PlanType, palette: *const client.Palette) void {
     const key = renderer.renderKey(plan, palette) orelse {
         renderer.hide();
         return;
     };
     if ((!renderer.matches(plan, key) and !renderer.coversText(plan, palette)) or
-        !std.meta.eql(renderer.desired, @as(?RectType, plan.area)))
+        !std.meta.eql(renderer.desired, @as(?core.Rect, plan.area)))
     {
         renderer.hide();
     }
@@ -159,7 +155,7 @@ pub fn writeRetirements(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writ
         return 0;
     }
 
-    const written = try writeDeletePlacement_module(writer, renderer.emitted_image_id, pill.placement_id);
+    const written = try kitty_protocol.writeDeletePlacement(writer, renderer.emitted_image_id, pill.placement_id);
     renderer.emitted = null;
     return written;
 }
@@ -180,7 +176,7 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
 
     var written: usize = 0;
     if (renderer.abort_pending) {
-        written += try writeTransmissionAbort_module(writer);
+        written += try kitty_protocol.writeTransmissionAbort(writer);
         renderer.abort_pending = false;
     }
     // A live continuation must finish before another graphics command.
@@ -188,7 +184,7 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
         written += try renderer.writeRetirements(writer);
     }
     if (!renderer.supported and renderer.image_emitted) {
-        written += try writeDeleteImage_module(writer, renderer.emitted_image_id);
+        written += try kitty_protocol.writeDeleteImage(writer, renderer.emitted_image_id);
         renderer.image_emitted = false;
     }
 
@@ -248,7 +244,7 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
 
     // Place first, then delete the old image and its placement in the same frame.
     if (replaced_image_id) |previous| {
-        written += try writeDeleteImage_module(writer, previous);
+        written += try kitty_protocol.writeDeleteImage(writer, previous);
     }
 
     renderer.emitted = area;
@@ -269,16 +265,16 @@ fn hide(renderer: *Renderer) void {
 
 fn emittedTextMatches(renderer: *const Renderer, plan: *const PlanType, key: Key) bool {
     return renderer.emitted_key != null and std.meta.eql(renderer.emitted_key.?, key) and
-        std.meta.eql(renderer.emitted, @as(?RectType, plan.area)) and renderer.emitted_plan.sameText(plan);
+        std.meta.eql(renderer.emitted, @as(?core.Rect, plan.area)) and renderer.emitted_plan.sameText(plan);
 }
 
 fn matches(renderer: *const Renderer, plan: *const PlanType, key: Key) bool {
     return renderer.key != null and std.meta.eql(renderer.key.?, key) and renderer.plan.sameContent(plan);
 }
 
-fn renderKey(renderer: *const Renderer, plan: *const PlanType, palette: *const PaletteType) ?Key {
+fn renderKey(renderer: *const Renderer, plan: *const PlanType, palette: *const client.Palette) ?Key {
     if (!renderer.supported or renderer.cell_width == 0 or renderer.cell_height < 8 or renderer.cell_height > 256 or
-        plan.len == 0 or plan.len > max_panes_per_tab or plan.area.h != 1 or plan.area.w == 0 or
+        plan.len == 0 or plan.len > core.max_panes_per_tab or plan.area.h != 1 or plan.area.w == 0 or
         palette.accent != .rgb or palette.surface_dim != .rgb or palette.subtext0 != .rgb)
     {
         return null;

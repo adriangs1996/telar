@@ -1,6 +1,6 @@
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const AcknowledgeAgent = @This();
 
-pane_id: PaneIdType,
+pane_id: core.PaneId,
 pane_generation: u64,
 now_ms: i64,

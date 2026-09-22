@@ -1,10 +1,9 @@
-const PluginManifest = @import("telar-core").PluginManifest;
-const DigestType = @import("telar-core").Digest;
+const core = @import("telar-core");
 const std = @import("std");
 const Package = @This();
 
-manifest: PluginManifest,
-digest: DigestType,
+manifest: core.PluginManifest,
+digest: core.Digest,
 root_bytes: [std.fs.max_path_bytes]u8 = undefined,
 root_len: u16,
 

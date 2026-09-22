@@ -1,26 +1,12 @@
-const GraphicsCountsType = @import("GraphicsCounts.zig");
-const CellPreparationType = @import("CellPreparation.zig");
-const GraphicsPreparationType = @import("GraphicsPreparation.zig");
-const PreparedType = @import("Prepared.zig");
-const CommitEffectType = @import("CommitEffect.zig");
+const core = @import("telar-core");
 const PaneType = @import("../../pane/Pane.zig");
 const CellSync = @import("CellSync.zig");
 const GraphicsSync = @import("GraphicsSync.zig");
 const std = @import("std");
 const RangeType = @import("Range.zig");
 const selection = @import("selection.zig");
-const encodePaneCwd_module = @import("telar-core").encodePaneCwd;
-const encodePaneTitle_module = @import("telar-core").encodePaneTitle;
-const encodePaneForeground_module = @import("telar-core").encodePaneForeground;
-const encodePaneProgress_module = @import("telar-core").encodePaneProgress;
-const encodePaneExited_module = @import("telar-core").encodePaneExited;
-const max_image_bytes_per_pane_module = @import("telar-core").max_image_bytes_per_pane;
 const attachment_namespace = @import("attachment_namespace.zig");
-const Pacer = @import("telar-core").Pacer;
-const monotonic = @import("telar-core").monotonic;
-const encodeChangeReviewChanged = @import("telar-core").encodeChangeReviewChanged;
 const ReviewContext = @import("../../change_review/Context.zig");
-const decodeServer = @import("telar-core").decodeServer;
 /// Per-client rendering state. It is disposable: reconnecting creates a fresh
 /// baseline while the pane and its PTY continue to exist.
 const Attachment = @This();
@@ -34,7 +20,7 @@ pub const CommitEffect = @import("CommitEffect.zig");
 pane: *PaneType,
 cells: CellSync,
 graphics: GraphicsSync,
-cell_pacer: Pacer = .{},
+cell_pacer: core.Pacer = .{},
 cell_deadline_ns: ?u64 = null,
 observed_cwd_revision: u64 = 0,
 observed_foreground_revision: u64 = 0,
@@ -89,13 +75,13 @@ pub fn acknowledgeFrame(attachment: *Attachment, frame_id: u64, now_ns: u64) ?u6
     return attachment.cells.acknowledge(frame_id, now_ns);
 }
 
-pub fn prepareCwd(attachment: *Attachment, buffer: []u8) !?PreparedType {
+pub fn prepareCwd(attachment: *Attachment, buffer: []u8) !?Prepared {
     const pane = attachment.pane;
     if (attachment.observed_cwd_revision == pane.cwd.revision) {
         return null;
     }
     return .{
-        .bytes = try encodePaneCwd_module(buffer, .{
+        .bytes = try core.encodePaneCwd(buffer, .{
             .pane_id = pane.id,
             .cwd = pane.cwd.slice(),
         }),
@@ -105,14 +91,14 @@ pub fn prepareCwd(attachment: *Attachment, buffer: []u8) !?PreparedType {
 
 /// Replays retained review availability for each fresh attachment and coalesces live changes.
 /// Example: `const prepared = try attachment.prepareReview(buffer);`.
-pub fn prepareReview(self: *Attachment, buffer: []u8) !?PreparedType {
+pub fn prepareReview(self: *Attachment, buffer: []u8) !?Prepared {
     const availability = &self.pane.review_availability;
     if (self.observed_review_revision == availability.revision) {
         return null;
     }
 
     const change = availability.view() orelse return null;
-    return .{ .bytes = try encodeChangeReviewChanged(buffer, change), .effect = .{ .review = availability.revision } };
+    return .{ .bytes = try core.encodeChangeReviewChanged(buffer, change), .effect = .{ .review = availability.revision } };
 }
 
 test "review discovery replays on attach and reconnect without losing changes during send" {
@@ -126,34 +112,34 @@ test "review discovery replays on attach and reconnect without losing changes du
     try std.testing.expect(try first.prepareReview(&buffer) == null);
     pane.review_availability.record(context, 2);
     const pending = (try first.prepareReview(&buffer)).?;
-    const initial = (try decodeServer(pending.bytes)).change_review_changed;
+    const initial = (try core.decodeServer(pending.bytes)).change_review_changed;
     try std.testing.expectEqualStrings("hook-session", initial.session);
     try std.testing.expectEqual(@as(u64, 2), initial.latest_edition_id);
     pane.review_availability.record(context, 5);
     _ = first.commitPrepared(pending);
     const newer = (try first.prepareReview(&buffer)).?;
-    try std.testing.expectEqual(@as(u64, 5), (try decodeServer(newer.bytes)).change_review_changed.latest_edition_id);
+    try std.testing.expectEqual(@as(u64, 5), (try core.decodeServer(newer.bytes)).change_review_changed.latest_edition_id);
     _ = first.commitPrepared(newer);
     try std.testing.expect(try first.prepareReview(&buffer) == null);
     var reconnect: Attachment = undefined;
     reconnect.pane = &pane;
     reconnect.observed_review_revision = 0;
     const replayed = (try reconnect.prepareReview(&buffer)).?;
-    try std.testing.expectEqual(@as(u64, 5), (try decodeServer(replayed.bytes)).change_review_changed.latest_edition_id);
+    try std.testing.expectEqual(@as(u64, 5), (try core.decodeServer(replayed.bytes)).change_review_changed.latest_edition_id);
     _ = reconnect.commitPrepared(replayed);
     pane.review_availability.invalidate();
     const cleared = (try first.prepareReview(&buffer)).?;
-    try std.testing.expectEqual(@as(u64, 0), (try decodeServer(cleared.bytes)).change_review_changed.latest_edition_id);
+    try std.testing.expectEqual(@as(u64, 0), (try core.decodeServer(cleared.bytes)).change_review_changed.latest_edition_id);
     try std.testing.expect(try reconnect.prepareReview(&buffer) != null);
 }
 
-pub fn prepareTitle(attachment: *Attachment, buffer: []u8) !?PreparedType {
+pub fn prepareTitle(attachment: *Attachment, buffer: []u8) !?Prepared {
     const pane = attachment.pane;
     if (attachment.observed_title_revision == pane.title.revision) {
         return null;
     }
     return .{
-        .bytes = try encodePaneTitle_module(buffer, .{
+        .bytes = try core.encodePaneTitle(buffer, .{
             .pane_id = pane.id,
             .title = pane.title.slice(),
         }),
@@ -161,13 +147,13 @@ pub fn prepareTitle(attachment: *Attachment, buffer: []u8) !?PreparedType {
     };
 }
 
-pub fn prepareForeground(attachment: *Attachment, buffer: []u8) !?PreparedType {
+pub fn prepareForeground(attachment: *Attachment, buffer: []u8) !?Prepared {
     const pane = attachment.pane;
     if (attachment.observed_foreground_revision == pane.foreground_revision) {
         return null;
     }
     return .{
-        .bytes = try encodePaneForeground_module(buffer, .{
+        .bytes = try core.encodePaneForeground(buffer, .{
             .pane_id = pane.id,
             .name = pane.agent_process_cache.name(),
         }),
@@ -180,14 +166,14 @@ pub fn prepareForeground(attachment: *Attachment, buffer: []u8) !?PreparedType {
 /// ```zig
 /// const prepared = try attachment.prepareProgress(buffer);
 /// ```
-pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?PreparedType {
+pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?Prepared {
     const pane = attachment.pane;
     if (attachment.observed_progress_revision == pane.progress_revision) {
         return null;
     }
 
     return .{
-        .bytes = try encodePaneProgress_module(buffer, .{
+        .bytes = try core.encodePaneProgress(buffer, .{
             .pane_id = pane.id,
             .state = pane.progress_state,
             .percent = pane.progress_percent,
@@ -203,7 +189,7 @@ pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?PreparedType {
 /// ```zig
 /// const prepared = try attachment.prepareNextCells(.{ .io = io, .buffer = buffer, .metrics = metrics });
 /// ```
-pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparationType) !?PreparedType {
+pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparation) !?Prepared {
     const pane = attachment.pane;
     const scheduled_deadline = attachment.cell_deadline_ns;
     attachment.cell_deadline_ns = null;
@@ -230,7 +216,7 @@ pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparationTyp
         return null;
     }
 
-    const now_ns = monotonic(preparation.io);
+    const now_ns = core.monotonic(preparation.io);
     if (pane.cell_input_ns) |input_ns| {
         if (attachment.cell_pacer.last_input_ns != input_ns) {
             attachment.cell_pacer.noteInput(input_ns);
@@ -268,7 +254,7 @@ pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparationTyp
     return if (payload) |bytes| .{ .bytes = bytes, .effect = .cells } else null;
 }
 
-pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?PreparedType {
+pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?Prepared {
     const pane = attachment.pane;
     if (pane.ingest_pending or attachment.exit_sent or !pane.output_done or
         pane.exit == null or attachment.outstandingFrameId() != 0 or
@@ -279,7 +265,7 @@ pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?PreparedType {
     }
     const exit = pane.exit.?;
     return .{
-        .bytes = try encodePaneExited_module(buffer, .{
+        .bytes = try core.encodePaneExited(buffer, .{
             .pane_id = pane.id,
             .kind = switch (exit) {
                 .exited => .exited,
@@ -307,7 +293,7 @@ pub fn configureGraphics(attachment: *Attachment, shared: bool) void {
 }
 
 pub fn returnGraphicsCredit(attachment: *Attachment, bytes: usize) bool {
-    const available = max_image_bytes_per_pane_module -| attachment.graphics.credit;
+    const available = core.max_image_bytes_per_pane -| attachment.graphics.credit;
     if (bytes == 0 or bytes > available) {
         return false;
     }
@@ -336,7 +322,7 @@ pub fn hasGraphicsWork(attachment: *const Attachment) bool {
 /// ```zig
 /// const prepared = try attachment.prepareNextGraphics(.{ .buffer = buffer, .global_credit = credit, .live_storage_available = true });
 /// ```
-pub fn prepareNextGraphics(attachment: *Attachment, preparation: GraphicsPreparationType) !?PreparedType {
+pub fn prepareNextGraphics(attachment: *Attachment, preparation: GraphicsPreparation) !?Prepared {
     const payload = (try attachment_namespace.encodeNextGraphics(attachment, preparation)) orelse return null;
 
     return .{
@@ -349,8 +335,8 @@ pub fn abandonGraphics(attachment: *Attachment) void {
     attachment_namespace.abandonGraphicsBatch(attachment);
 }
 
-pub fn takeGraphicsCounts(attachment: *Attachment) GraphicsCountsType {
-    const result: GraphicsCountsType = .{
+pub fn takeGraphicsCounts(attachment: *Attachment) GraphicsCounts {
+    const result: GraphicsCounts = .{
         .images = attachment.graphics.sent_images,
         .placements = attachment.graphics.sent_placements,
         .stage_blocked = attachment.graphics.stage_blocked,
@@ -378,7 +364,7 @@ pub fn graphicsTransferBytes(attachment: *const Attachment) usize {
     return if (attachment.graphics.transfer) |transfer| transfer.reserved_len else 0;
 }
 
-pub fn commitPrepared(attachment: *Attachment, prepared: PreparedType) CommitEffectType {
+pub fn commitPrepared(attachment: *Attachment, prepared: Prepared) CommitEffect {
     return switch (prepared.effect) {
         .cwd => |revision| effect: {
             attachment.observed_cwd_revision = revision;

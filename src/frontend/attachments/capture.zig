@@ -1,19 +1,16 @@
 //! Clipboard platform adapter; no preview store or terminal rendering.
 
+const client = @import("telar-client");
+const data = @import("model");
 const builtin = @import("builtin");
 const std = @import("std");
-const CaptureRequest = @import("telar-client").CaptureRequest;
-const Capture = @import("telar-client").Capture;
 const ClipboardImage = @import("ClipboardImage.zig");
-const max_source_bytes = @import("telar-client").max_source_bytes;
-const max_png_bytes = @import("telar-client").max_png_bytes;
-const max_pixels = @import("telar-client").max_pixels;
 
 pub fn platformSupported() bool {
     return builtin.os.tag == .macos;
 }
 
-pub fn captureClipboard(gpa: std.mem.Allocator, request: CaptureRequest, orphan: *?*Capture) !*Capture {
+pub fn captureClipboard(gpa: std.mem.Allocator, request: client.CaptureRequest, orphan: *?*client.Capture) !*client.Capture {
     try request.target.validate();
     std.debug.assert(orphan.* == null);
     const image = try readClipboardPng(gpa);
@@ -21,7 +18,7 @@ pub fn captureClipboard(gpa: std.mem.Allocator, request: CaptureRequest, orphan:
         std.crypto.secureZero(u8, image.png);
         gpa.free(image.png);
     }
-    const capture = try gpa.create(Capture);
+    const capture = try gpa.create(client.Capture);
     capture.* = .{
         .request = request,
         .png = image.png,
@@ -46,12 +43,12 @@ fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
         &len,
         &width,
         &height,
-        max_source_bytes,
-        max_png_bytes,
-        max_pixels,
+        data.attachment_types.max_source_bytes,
+        data.attachment_types.max_png_bytes,
+        data.attachment_types.max_pixels,
     );
     defer if (bytes) |value| {
-        if (len <= max_png_bytes) {
+        if (len <= data.attachment_types.max_png_bytes) {
             std.crypto.secureZero(u8, value[0..len]);
         }
         std.c.free(@ptrCast(value));
@@ -63,12 +60,12 @@ fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
         else => return error.ClipboardReadFailed,
     }
     const source = bytes orelse return error.ClipboardReadFailed;
-    if (len == 0 or len > max_png_bytes or width == 0 or height == 0) {
+    if (len == 0 or len > data.attachment_types.max_png_bytes or width == 0 or height == 0) {
         return error.InvalidClipboardImage;
     }
     const pixels = std.math.mul(u64, width, height) catch
         return error.ClipboardImageTooLarge;
-    if (pixels > max_pixels) {
+    if (pixels > data.attachment_types.max_pixels) {
         return error.ClipboardImageTooLarge;
     }
     const png = try gpa.alloc(u8, len);

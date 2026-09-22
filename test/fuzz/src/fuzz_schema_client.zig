@@ -1,16 +1,14 @@
-const decodeClient_module = @import("telar-core").decodeClient;
-const ClientMessageType = @import("telar-core").ClientMessage;
+const core = @import("telar-core");
 const std = @import("std");
-const LaunchViewType = @import("telar-core").LaunchView;
 
 pub export fn zig_fuzz_init() callconv(.c) void {}
 
 pub export fn zig_fuzz_test(buf: [*]const u8, len: usize) callconv(.c) void {
-    const message = decodeClient_module(buf[0..len]) catch return;
+    const message = core.decodeClient(buf[0..len]) catch return;
     exercise(message) catch return;
 }
 
-fn exercise(message: ClientMessageType) !void {
+fn exercise(message: core.ClientMessage) !void {
     std.mem.doNotOptimizeAway(message);
     switch (message) {
         .open_pane => |payload| if (payload.launch) |launch| try exhaustLaunch(launch),
@@ -21,7 +19,7 @@ fn exercise(message: ClientMessageType) !void {
     }
 }
 
-fn exhaustLaunch(launch: LaunchViewType) !void {
+fn exhaustLaunch(launch: core.LaunchView) !void {
     var arguments = launch.arguments();
     while (try arguments.next()) |argument| {
         std.mem.doNotOptimizeAway(argument);

@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const DeliveryType = @import("../delivery/Delivery.zig");
 const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
 const PaneStoreType = @import("../../pane/PaneStore.zig");
@@ -8,8 +9,6 @@ const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
 const std = @import("std");
 const SourcesType = @import("../delivery/Sources.zig");
 const ReaderType = @import("../../workspace/Reader.zig");
-const ServerMessageType = @import("telar-core").ServerMessage;
-const decodeServer_module = @import("telar-core").decodeServer;
 const RuntimeStateFixture = @This();
 
 delivery: DeliveryType,
@@ -55,14 +54,14 @@ fn sources(fixture: *RuntimeStateFixture) SourcesType {
     };
 }
 
-pub fn next(fixture: *RuntimeStateFixture) !?ServerMessageType {
+pub fn next(fixture: *RuntimeStateFixture) !?core.ServerMessage {
     const prepared = (try fixture.delivery.prepare(.{
         .io = std.testing.io,
         .attachments = &fixture.attachments,
         .sources = fixture.sources(),
         .metrics = &fixture.metrics,
     })) orelse return null;
-    const message = try decodeServer_module(prepared.payload);
+    const message = try core.decodeServer(prepared.payload);
     fixture.delivery.commit(.{
         .prepared = prepared,
         .attachments = &fixture.attachments,

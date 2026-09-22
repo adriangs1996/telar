@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const requests = @import("requests.zig");
 const events = @import("events.zig");
 const ReviewJobs = @import("../../change_review/Jobs.zig");
@@ -6,11 +7,9 @@ const AdmittedReview = @import("../../change_review/Admitted.zig");
 const change_review = @import("change_review.zig");
 const EditorOpenState = @import("../../editors/State.zig");
 const std = @import("std");
-const HeapType = @import("telar-core").Heap;
 const event = @import("../event.zig");
 const ServiceType = @import("../../history/Service.zig");
 const ChildEnvironmentType = @import("../../pty/ChildEnvironment.zig");
-const TableType = @import("telar-core").Table;
 const ProxyRuntime = @import("../resources/ProxyRuntime.zig");
 const PluginsService = @import("../../plugins/Service.zig");
 const AgentDescriptionOptionsType = @import("../AgentDescriptionOptions.zig");
@@ -27,7 +26,6 @@ const SamplerType = @import("../observability/Sampler.zig");
 const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
 const ApplicationState = @import("State.zig");
 const Initialization = @import("Initialization.zig");
-const now_module = @import("telar-core").now;
 const PaneType = @import("../../pane/Pane.zig");
 const Repository = @import("../../workspace/Repository.zig");
 const ReaderType = @import("../../workspace/Reader.zig");
@@ -36,29 +34,19 @@ const GenericPaneLauncher = @import("GenericPaneLauncher.zig").Type;
 const SessionTitleType = @import("../../agent/SessionTitle.zig");
 const CompletionType = @import("../resources/Completion.zig");
 const AgentCompletion = @import("../../agent/Completion.zig");
-const raw_module = @import("telar-core").raw;
 const commands = @import("../../workspace/commands.zig");
 const ClientKeyType = @import("../../history/ClientKey.zig");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const TerminalColorsType = @import("telar-core").TerminalColors;
 const WorkspaceChange = @import("WorkspaceChange.zig");
 const Session = @import("../client/Session.zig");
-const PaneIdType = @import("telar-core").PaneId;
 const PaneDetachedType = @import("../attachment/PaneDetached.zig");
 const TabRemovedType = @import("../../workspace/TabRemoved.zig");
-const NotificationType = @import("telar-core").Notification;
 const PendingNotificationType = @import("../delivery/PendingNotification.zig");
-const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
-const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
-const ClientMessageType = @import("telar-core").ClientMessage;
-const DeadlineScheduler = @import("telar-core").DeadlineScheduler;
-const deadline_timer = @import("telar-core").deadline_timer;
 /// Owns the live model and application state used by requests and actors.
 const Application = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
-heap: *HeapType,
+heap: *core.Heap,
 select: *std.Io.Select(event.Event),
 history_service: *ServiceType,
 child_environment: *const ChildEnvironmentType,
@@ -66,7 +54,7 @@ inherited_environment: std.process.Environ,
 socket_path: []const u8,
 executable_path: [std.fs.max_path_bytes]u8 = undefined,
 executable_path_len: usize,
-agent_manifests: *const TableType,
+agent_manifests: *const core.Table,
 proxy_runtime: *ProxyRuntime,
 plugin_service: *PluginsService,
 agent_description_options: ?AgentDescriptionOptionsType,
@@ -87,10 +75,10 @@ session_name_probe_in_flight: bool = false,
 agent_history_jobs: @import("AgentHistoryJobs.zig") = .{},
 review_jobs: ReviewJobs = .{},
 review_service: ?*ReviewService = null,
-review_admitted: [max_panes_per_tab]?AdmittedReview = @splat(null),
+review_admitted: [core.max_panes_per_tab]?AdmittedReview = @splat(null),
 editor_open: EditorOpenState = .{},
 input_sequence: u64 = 0,
-cell_timer: DeadlineScheduler = .{},
+cell_timer: core.DeadlineScheduler = .{},
 
 /// Composes application state from stable, runtime-owned capabilities.
 ///
@@ -132,7 +120,7 @@ pub fn init(self: *Application, initialization: Initialization) !void {
             },
             .client_layouts = try .init(initialization.gpa),
         },
-        .metrics = .{ .started_ns = now_module(initialization.io) },
+        .metrics = .{ .started_ns = core.now(initialization.io) },
     };
 }
 
@@ -390,7 +378,7 @@ fn collectFinished(application: *Application) void {
             }
         } else {
             const location = pane.location;
-            store.index.remove(raw_module(pane.id));
+            store.index.remove(core.raw(pane.id));
             store.exited_count -= 1;
             slot.* = null;
             store.count -= 1;
@@ -498,7 +486,7 @@ pub fn finalizeClient(application: *Application, key: ClientKeyType) void {
 /// ```zig
 /// if (!application.holdsGeometry(client, workspace)) return error.GeometryUnavailable;
 /// ```
-pub fn holdsGeometry(application: *Application, key: ClientKeyType, workspace: WorkspaceLocationType) bool {
+pub fn holdsGeometry(application: *Application, key: ClientKeyType, workspace: core.WorkspaceLocation) bool {
     for (&application.geometry_leases) |*slot| {
         const lease = slot.* orelse continue;
 
@@ -524,7 +512,7 @@ pub fn holdsGeometry(application: *Application, key: ClientKeyType, workspace: W
 
 /// Queries authority without acquiring an unowned workspace.
 /// Example: `const owner = application.geometryOwner(workspace) orelse return;`.
-pub fn geometryOwner(application: *const Application, workspace: WorkspaceLocationType) ?ClientKeyType {
+pub fn geometryOwner(application: *const Application, workspace: core.WorkspaceLocation) ?ClientKeyType {
     for (application.geometry_leases) |slot| {
         const lease = slot orelse continue;
         if (std.meta.eql(lease.workspace, workspace)) {
@@ -535,7 +523,7 @@ pub fn geometryOwner(application: *const Application, workspace: WorkspaceLocati
     return null;
 }
 
-pub fn workspaceTerminalColors(application: *Application, workspace: WorkspaceLocationType) TerminalColorsType {
+pub fn workspaceTerminalColors(application: *Application, workspace: core.WorkspaceLocation) core.TerminalColors {
     const owner = application.geometryOwner(workspace) orelse return .{};
     const session = application.clients.resolve(owner) orelse return .{};
     return session.terminal_colors;
@@ -552,7 +540,7 @@ pub fn refreshTerminalColors(application: *Application, key: ClientKeyType) void
     }
 }
 
-fn applyWorkspaceTerminalColors(application: *Application, workspace: WorkspaceLocationType, key: ClientKeyType) void {
+fn applyWorkspaceTerminalColors(application: *Application, workspace: core.WorkspaceLocation, key: ClientKeyType) void {
     const session = application.clients.resolve(key) orelse return;
     for (application.model.panes.items) |slot| {
         const pane = slot orelse continue;
@@ -584,7 +572,7 @@ fn releaseGeometry(application: *Application, key: ClientKeyType) void {
 /// ```zig
 /// application.releaseGeometryFor(client, workspace);
 /// ```
-pub fn releaseGeometryFor(application: *Application, key: ClientKeyType, workspace: WorkspaceLocationType) void {
+pub fn releaseGeometryFor(application: *Application, key: ClientKeyType, workspace: core.WorkspaceLocation) void {
     for (&application.geometry_leases) |*slot| {
         const lease = slot.* orelse continue;
         if (std.meta.eql(lease.owner, key) and std.meta.eql(lease.workspace, workspace)) {
@@ -599,7 +587,7 @@ pub fn releaseGeometryFor(application: *Application, key: ClientKeyType, workspa
 /// ```zig
 /// application.notifyWorkspaceChanged(origin, workspace);
 /// ```
-pub fn notifyWorkspaceChanged(application: *Application, origin: ClientKeyType, workspace: WorkspaceLocationType) void {
+pub fn notifyWorkspaceChanged(application: *Application, origin: ClientKeyType, workspace: core.WorkspaceLocation) void {
     application.notifyWorkspaceChange(.{ .origin = origin, .workspace = workspace });
 }
 
@@ -632,7 +620,7 @@ fn notifyWorkspaceChange(application: *Application, change: WorkspaceChange) voi
 /// ```zig
 /// const detached = application.detachSessionPane(session, pane_id);
 /// ```
-pub fn detachSessionPane(application: *Application, session: *Session, pane_id: PaneIdType) ?PaneDetachedType {
+pub fn detachSessionPane(application: *Application, session: *Session, pane_id: core.PaneId) ?PaneDetachedType {
     const detached = session.attachments.detach(pane_id) orelse return null;
     application.completeSessionWorkspaceDeparture(session, detached);
     return detached;
@@ -655,7 +643,7 @@ fn completeSessionWorkspaceDeparture(application: *Application, session: *Sessio
 
 /// Completes departures deferred by `pane_exited` only after every pane
 /// that can still publish lifecycle changes for the workspace is reaped.
-fn completeEmptyWorkspaceDepartures(application: *Application, workspace: WorkspaceLocationType) void {
+fn completeEmptyWorkspaceDepartures(application: *Application, workspace: core.WorkspaceLocation) void {
     if (application.hasPendingExitedPane(workspace)) {
         return;
     }
@@ -676,7 +664,7 @@ fn completeEmptyWorkspaceDepartures(application: *Application, workspace: Worksp
     }
 }
 
-fn hasPendingExitedPane(application: *const Application, workspace: WorkspaceLocationType) bool {
+fn hasPendingExitedPane(application: *const Application, workspace: core.WorkspaceLocation) bool {
     for (application.model.panes.items) |slot| {
         const pane = slot orelse continue;
 
@@ -712,7 +700,7 @@ fn publishLifecycleTabRemoved(application: *Application, removed: TabRemovedType
 /// ```zig
 /// const recipients = application.publishNotification(notification);
 /// ```
-pub fn publishNotification(application: *Application, notification: NotificationType) u8 {
+pub fn publishNotification(application: *Application, notification: core.Notification) u8 {
     const pending = PendingNotificationType.init(notification);
     var delivered: u8 = 0;
 
@@ -736,7 +724,7 @@ pub fn publishNotification(application: *Application, notification: Notification
 /// ```zig
 /// application.publishAgentSound(notification);
 /// ```
-pub fn publishAgentSound(application: *Application, notification: AgentSoundNotificationType) void {
+pub fn publishAgentSound(application: *Application, notification: core.AgentSoundNotification) void {
     for (&application.clients.items) |*slot| {
         const recipient = slot.* orelse continue;
 
@@ -840,7 +828,7 @@ pub fn pump(application: *Application, session: *Session) !void {
         session.delivery.abort(prepared);
     };
 
-    for (0..max_panes_per_tab) |index| {
+    for (0..core.max_panes_per_tab) |index| {
         const attachment = session.attachments.at(index) orelse continue;
         if (attachment.pane.media.hasPending()) {
             try events.panes.Projection.scheduleMedia(application, attachment.pane);
@@ -882,7 +870,7 @@ fn scheduleCellPublication(application: *Application) !void {
         return;
     }
 
-    application.select.concurrent(.cell_publication_due, deadline_timer.wait, .{ application.io, &application.cell_timer }) catch |err| {
+    application.select.concurrent(.cell_publication_due, core.deadline_timer.wait, .{ application.io, &application.cell_timer }) catch |err| {
         application.cell_timer.schedulingFailed();
         return err;
     };
@@ -900,6 +888,6 @@ pub fn cellPublicationDue(application: *Application, result: anyerror!void) !voi
 /// ```zig
 /// try application.dispatchClientMessage(session, message);
 /// ```
-pub fn dispatchClientMessage(application: *Application, session: *Session, message: ClientMessageType) !void {
+pub fn dispatchClientMessage(application: *Application, session: *Session, message: core.ClientMessage) !void {
     return requests.dispatch(application, session, message);
 }

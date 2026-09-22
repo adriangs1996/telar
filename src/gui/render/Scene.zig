@@ -1,4 +1,5 @@
 //! Composes and draws one widget list during a synchronous semantic-model borrow.
+const ImagePreview = @import("../widgets/overlays/ImagePreview.zig");
 const client = @import("telar-client");
 const Canvas = @import("../widgets/Canvas.zig");
 const Composition = @import("../widgets/Composition.zig");
@@ -43,7 +44,7 @@ pub fn prepare(scene: *Scene, projection: client.Projection) !client.Presentatio
         try review.draw(&canvas);
     } else if (scene.widgets) |state| {
         try state.overlays(&canvas, scene.overlays);
-        try @import("../widgets/overlays/ImagePreview.zig").drawCurrent(&canvas);
+        try ImagePreview.drawCurrent(&canvas);
         if (state.message_link_preview) |*preview| {
             try preview.draw(&canvas);
         }

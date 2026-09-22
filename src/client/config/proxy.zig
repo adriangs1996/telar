@@ -1,17 +1,15 @@
 //! Compiler for `config.runtime.proxy`.
 
+const data = @import("model");
+const core = @import("telar-core");
 const lua_api = @import("lua-api");
 const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
-const DiagnosticType = @import("Diagnostic.zig");
 const value = @import("lua_value.zig");
 const config_model = @import("model.zig");
 const std = @import("std");
-const max_intercept_hosts = @import("telar-core").max_intercept_hosts;
-const max_intercept_bytes = @import("telar-core").max_intercept_bytes;
 const PositiveField = @import("PositiveField.zig");
-const max_hostname_bytes_module = @import("telar-core").max_hostname_bytes;
 
-pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *DiagnosticType) !void {
+pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.proxy must be a table", .{});
@@ -72,10 +70,10 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnos
 
     const hosts = lua_api.c.lua_absindex(state, -1);
     const count = lua_api.c.lua_rawlen(state, hosts);
-    if (count > max_intercept_hosts) {
+    if (count > core.max_intercept_hosts) {
         diagnostic.set(
             "config.runtime.proxy.intercept_hosts exceeds {d} entries",
-            .{max_intercept_hosts},
+            .{core.max_intercept_hosts},
         );
         return error.InvalidConfig;
     }
@@ -108,7 +106,7 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnos
         runtime.proxy_intercept_hosts.append(host) catch {
             diagnostic.set(
                 "config.runtime.proxy.intercept_hosts exceeds its {d}-byte budget",
-                .{max_intercept_bytes},
+                .{core.max_intercept_bytes},
             );
             return error.InvalidConfig;
         };
@@ -116,7 +114,7 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnos
     runtime.proxy_intercept_hosts.sortAndDeduplicate();
 }
 
-fn parseCapture(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *DiagnosticType) !void {
+fn parseCapture(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.proxy.capture must be a table", .{});
@@ -176,7 +174,7 @@ fn parseCapture(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diag
     }
 }
 
-fn positiveBytesField(state: *lua_api.c.lua_State, field: PositiveField, diagnostic: *DiagnosticType) !usize {
+fn positiveBytesField(state: *lua_api.c.lua_State, field: PositiveField, diagnostic: *data.Diagnostic) !usize {
     _ = lua_api.c.lua_getfield(state, field.table, field.name);
     defer value.pop(state, 1);
     if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {
@@ -196,7 +194,7 @@ fn positiveBytesField(state: *lua_api.c.lua_State, field: PositiveField, diagnos
 }
 
 fn validHostname(host: []const u8) bool {
-    if (host.len == 0 or host.len > max_hostname_bytes_module) {
+    if (host.len == 0 or host.len > core.max_hostname_bytes) {
         return false;
     }
 
@@ -273,5 +271,5 @@ test "host validation accepts exact and leading wildcard DNS labels" {
     try std.testing.expect(!validHostname("*."));
     try std.testing.expect(!validHostname("openai.com:443"));
     try std.testing.expect(!validHostname("a" ** 64 ++ ".com"));
-    try std.testing.expectEqual(max_hostname_bytes_module, max_hostname_bytes_module);
+    try std.testing.expectEqual(core.max_hostname_bytes, core.max_hostname_bytes);
 }

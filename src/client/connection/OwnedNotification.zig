@@ -1,21 +1,16 @@
-const RequestIdType = @import("telar-core").RequestId;
-const NotificationLevelType = @import("telar-core").NotificationLevel;
-const NotificationTargetType = @import("telar-core").NotificationTarget;
-const max_notification_title_bytes_module = @import("telar-core").max_notification_title_bytes;
-const max_notification_message_bytes_module = @import("telar-core").max_notification_message_bytes;
-const ShowNotificationType = @import("telar-core").ShowNotification;
+const core = @import("telar-core");
 const OwnedNotification = @This();
 
-request_id: RequestIdType,
-level: NotificationLevelType,
+request_id: core.RequestId,
+level: core.NotificationLevel,
 duration_ms: u32,
-target: NotificationTargetType,
-title: [max_notification_title_bytes_module]u8 = undefined,
+target: core.NotificationTarget,
+title: [core.max_notification_title_bytes]u8 = undefined,
 title_len: u8,
-message: [max_notification_message_bytes_module]u8 = undefined,
+message: [core.max_notification_message_bytes]u8 = undefined,
 message_len: u8,
 
-pub fn view(value: *const OwnedNotification) ShowNotificationType {
+pub fn view(value: *const OwnedNotification) core.ShowNotification {
     return .{
         .request_id = value.request_id,
         .notification = .{

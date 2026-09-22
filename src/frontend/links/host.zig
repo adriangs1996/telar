@@ -1,2 +1,3 @@
 //! TUI and GUI use the same bounded host URL worker.
-pub const open = @import("telar-client").openHostLink;
+const client = @import("telar-client");
+pub const open = client.openHostLink;

@@ -44,11 +44,12 @@ ports bind to `NativeLoop`, and the configuration watcher binds to `Configuratio
 | Pane attachment | `AttachedClient.attachVisiblePanes` | `pane_opened` → private `confirmPaneAttachment`; failure → private `recoverPaneAttachment` |
 | Request correlation | `LifecycleState.nextId` and `AttachedClient.sendRuntimeRequest` or owned-payload send methods | `Tracker.take` consumes once; rejected delivery removes its own registration |
 | Pane frames and closure | `AttachedClient.applyPaneFrame`, `requestPaneClose`, `applyPaneExit` | Private frame application owns ACK ordering and recovery; retirement releases pane resources even for repeated exits |
-| Tab / workspace changes | [`AttachedClient`](../src/client/AttachedClient.zig), remaining tab selection operations | `AttachedClient` owns tab creation, rename, move, close and tab/workspace snapshot completion; request identity is consumed once |
+| Tab / workspace changes | `AttachedClient.selectTab` and private tab operations | `AttachedClient` owns tab creation, rename, move, close and tab/workspace snapshot completion; request identity is consumed once |
 | Workspace switch / creation | `AttachedClient.selectWorkspace`, `requestWorkspace`, `requestWorkspacePane`, `requestWorkspaceCreation` | `pane_opened` → private arrival or replacement → resource activation; `request_failed` → private bounded fallback |
-| Keyboard, mouse, paste and prompts | [`operations/input`](../src/client/operations/input/) | Direct policy over the client model and actual host/transport ports |
+| Keyboard, mouse, paste and prompts | `AttachedClient.routeKeyInput`, `sendPaneInput`, `inputPaneMouse`, `startPanePaste`, `inputPrompt` | Private methods own leases, paste targets, viewport effects and prompt submission; reusable policy and encoders receive values or model state |
+| Directory completion | `AttachedClient.inputPrompt` → private `refreshPathCompletion`; host completion → `completePathCompletion` | One listing at a time; newer queries replace queued work and obsolete results are released |
 | Links and editor reuse | `AttachedClient.openLink`, `openMessageFile` | Host `link_opened` → `completeLinkOpening`; runtime `editor_opened` → private `completeEditorOpen`, validating the originating attachment before focus or split |
-| Configuration / Lua / plugins / clipboard | [`operations/configuration`](../src/client/operations/configuration/), [`operations/host`](../src/client/operations/host/) | VM, OS and worker completions keep their existing lifetime and generation boundaries |
+| Configuration / Lua / plugins / clipboard | `AttachedClient.completeConfigReload`, `completePluginAction`, `completeClipboardCapture`; `executeAction` dispatches private starts | The client transfers ownership, validates generation or execution identity, applies effects and publishes failures; workers remain asynchronous |
 | Agent state and history | [`AttachedClient`](../src/client/AttachedClient.zig), [`Model`](../src/client/model/Model.zig), [`agent_reading`](../src/client/application/agents/agent_reading.zig) | `AttachedClient` owns prompt and history request lifecycles; `Model` applies thread snapshots and composer changes; bounded `agent_reading` algorithms receive the model directly |
 | Metadata, metrics, suggestions and history output | `handleServerMessage` calls the model or its owned state directly | No forwarding operation receives the whole client |
 | Copy mode and history browser | `AttachedClient.applyCopyMode`, `queryHistory`, `applyHistoryResults`, `completeHistoryPrune` | Algorithms retain model dependencies; the client owns host and transport effects |
@@ -88,6 +89,20 @@ These are successive event turns, not one synchronous stack. Follow `.create_pan
 and `.pane_opened` across the wire. No internal executor or callback registry
 selects the split implementation.
 
+## Reading the shared owner
+
+`AttachedClient.zig` lists state and imports first, then public adapter operations,
+then private implementation. A private method owns the continuation of an
+operation. The input, prompt, reload, plugin and clipboard flows use local values
+instead of temporary contexts containing a pointer back to the client.
+For example, configuration completion resolves the worker result, adopts resources,
+delivers the committed layout, publishes its outcome and rearms the watcher.
+
+Shared helpers retain concrete inputs: layout serialization takes `Model` and
+caller buffers, mouse encoding takes a report, configuration queries take a
+snapshot and writer, and Lua batch validation takes a registry and diagnostic.
+These helpers do not receive `AttachedClient`. Test bodies stay in separate files.
+
 ## Boundaries that remain
 
 - GUI/TUI host ports implement genuinely different drawing, clipboard, input,
@@ -106,3 +121,10 @@ stage. No SoA conversion or performance claim is part of this refactor.
 
 Validation and test migration are recorded in
 [global-direct-operations](validation/global-direct-operations/README.md).
+
+## Shared values
+
+[`model`](../src/model/README.md) exposes shared value definitions through
+[`model.zig`](../src/model/model.zig). Operations still start at the process
+owner; the module supplies their data contracts and bounded state, not another
+dispatch layer.

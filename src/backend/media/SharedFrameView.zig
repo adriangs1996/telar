@@ -1,4 +1,4 @@
-const FormatType = @import("telar-core").Format;
+const core = @import("telar-core");
 const media = @import("media.zig");
 /// One complete shared-memory frame the filter selected, handed to a sink
 /// that can load it without the emulator's parser. `bytes` spans the whole
@@ -15,7 +15,7 @@ apc_end: usize,
 encoded_name: []const u8,
 image_id: u32,
 placement_id: u32,
-format: FormatType,
+format: core.Format,
 width: u32,
 height: u32,
 byte_len: usize,

@@ -1,22 +1,18 @@
-const NotificationLevelType = @import("telar-core").NotificationLevel;
-const NotificationTargetType = @import("telar-core").NotificationTarget;
-const max_notification_title_bytes_module = @import("telar-core").max_notification_title_bytes;
-const max_notification_message_bytes_module = @import("telar-core").max_notification_message_bytes;
-const NotificationType = @import("telar-core").Notification;
+const core = @import("telar-core");
 const std = @import("std");
 const PendingNotification = @This();
 
-level: NotificationLevelType,
+level: core.NotificationLevel,
 duration_ms: u32,
-target: NotificationTargetType,
-title_bytes: [max_notification_title_bytes_module]u8 = undefined,
+target: core.NotificationTarget,
+title_bytes: [core.max_notification_title_bytes]u8 = undefined,
 title_len: u8,
-message_bytes: [max_notification_message_bytes_module]u8 = undefined,
+message_bytes: [core.max_notification_message_bytes]u8 = undefined,
 message_len: u8,
 
-pub fn init(notification: NotificationType) PendingNotification {
-    std.debug.assert(notification.title.len <= max_notification_title_bytes_module);
-    std.debug.assert(notification.message.len <= max_notification_message_bytes_module);
+pub fn init(notification: core.Notification) PendingNotification {
+    std.debug.assert(notification.title.len <= core.max_notification_title_bytes);
+    std.debug.assert(notification.message.len <= core.max_notification_message_bytes);
     var pending: PendingNotification = .{
         .level = notification.level,
         .duration_ms = notification.duration_ms,
@@ -29,7 +25,7 @@ pub fn init(notification: NotificationType) PendingNotification {
     return pending;
 }
 
-pub fn view(notification: *const PendingNotification) NotificationType {
+pub fn view(notification: *const PendingNotification) core.Notification {
     return .{
         .level = notification.level,
         .duration_ms = notification.duration_ms,

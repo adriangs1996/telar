@@ -8,16 +8,14 @@
 //! per image generation, and every byte reserved against the pane budget
 //! before the object exists.
 
+const core = @import("telar-core");
 const builtin = @import("builtin");
 const std = @import("std");
-const ShmNameType = @import("telar-core").ShmName;
-const max_shm_name_bytes_module = @import("telar-core").max_shm_name_bytes;
 const ChildObject = @import("ChildObject.zig");
 const PreparedTransfer = @import("PreparedTransfer.zig");
 const GraphicsBudgetType = @import("GraphicsBudget.zig");
 const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 const PreparedTransfers = @import("PreparedTransfers.zig");
-const ImageKeyType = @import("telar-core").ImageKey;
 const TestAlive = @import("TestAlive.zig");
 
 const native = @cImport({
@@ -55,7 +53,7 @@ pub fn initSharedFreezeNonce(io: std.Io) void {
 /// ```zig
 /// const name = freezeSharedPixels(pixels) orelse return error.SharedMemoryUnavailable;
 /// ```
-pub fn freezeSharedPixels(pixels: []const u8) ?ShmNameType {
+pub fn freezeSharedPixels(pixels: []const u8) ?core.ShmName {
     if (comptime !shm_supported) {
         return null;
     }
@@ -65,10 +63,10 @@ pub fn freezeSharedPixels(pixels: []const u8) ?ShmNameType {
         shared_freeze_nonce.store(nonce, .monotonic);
     }
     const sequence = shared_freeze_sequence.fetchAdd(1, .monotonic);
-    var text: [max_shm_name_bytes_module]u8 = undefined;
+    var text: [core.max_shm_name_bytes]u8 = undefined;
     const printed = std.fmt.bufPrint(&text, "/tlr{x:0>8}{x}", .{ nonce, sequence }) catch
         return null;
-    const name = ShmNameType.init(printed) catch return null;
+    const name = core.ShmName.init(printed) catch return null;
     const fd = std.c.shm_open(
         name.sliceZ(),
         @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
@@ -217,7 +215,7 @@ pub fn mapChildFile(encoded_path: []const u8, byte_len: usize) ?ChildObject {
 /// ```zig
 /// const storage = mapOwnObject(name, byte_len) orelse return false;
 /// ```
-pub fn mapOwnObject(name: ShmNameType, byte_len: usize) ?[]align(std.heap.page_size_min) u8 {
+pub fn mapOwnObject(name: core.ShmName, byte_len: usize) ?[]align(std.heap.page_size_min) u8 {
     if (comptime !shm_supported) {
         return null;
     }
@@ -243,7 +241,7 @@ fn testTransfer(image_id: u32, generation: u64, pixels: []const u8) !PreparedTra
     };
 }
 
-fn objectExists(name: ShmNameType) bool {
+fn objectExists(name: core.ShmName) bool {
     const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
     if (std.posix.errno(fd) != .SUCCESS) {
         return false;
@@ -345,7 +343,7 @@ test "parking is bounded and releases what the emulator dropped" {
     defer prepared.discardAll(&media);
     const pixels = [_]u8{ 1, 2, 3, 255 };
 
-    var names: [max_prepared + 1]ShmNameType = undefined;
+    var names: [max_prepared + 1]core.ShmName = undefined;
     for (0..max_prepared + 1) |index| {
         const transfer = try testTransfer(@intCast(index + 1), 1, &pixels);
         names[index] = transfer.name;
@@ -360,7 +358,7 @@ test "parking is bounded and releases what the emulator dropped" {
     try std.testing.expectEqual(max_prepared * pixels.len, media.used);
     try std.testing.expect(!objectExists(names[max_prepared]));
 
-    const survivors = [_]ImageKeyType{.{ .image_id = 2, .generation = 1 }};
+    const survivors = [_]core.ImageKey{.{ .image_id = 2, .generation = 1 }};
     prepared.retain(TestAlive{ .keys = &survivors }, &media);
     try std.testing.expectEqual(pixels.len, media.used);
     try std.testing.expect(!objectExists(names[0]));

@@ -4,44 +4,21 @@
 //! event loop drives these panes through `PaneStore`. Actor results cross back
 //! into that owner as `PaneKey` values, never as mutable pane pointers.
 
-const GraphicsLimitsType = @import("../media/GraphicsLimits.zig");
-const GraphicsBudgetType = @import("../media/GraphicsBudget.zig");
-const PaneMediaAllocatorType = @import("../media/PaneMediaAllocator.zig");
-const PtyResponseQueueType = @import("PtyResponseQueue.zig");
-const PaneInputQueueType = @import("PaneInputQueue.zig");
-const CwdStateType = @import("CwdState.zig");
-const LaunchRecordType = @import("LaunchRecord.zig");
+const core = @import("telar-core");
 const text_search = @import("text_search.zig");
-const PaneType = @import("Pane.zig");
-const ScreenResizeType = @import("ScreenResize.zig");
-const GenericSlotIndex = @import("telar-core").GenericSlotIndex;
-const PaneStoreType = @import("PaneStore.zig");
 const std = @import("std");
-const max_pane_title_bytes_module = @import("telar-core").max_pane_title_bytes;
 const ClockType = @import("../history/Clock.zig");
 const vt = @import("ghostty-vt");
 const ServiceType = @import("../history/Service.zig");
 const model_module = @import("../history/model.zig");
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
-const raw_module = @import("telar-core").raw;
-const pane_module = @import("telar-core").pane;
-const TabLocationType = @import("telar-core").TabLocation;
-const workspace_module = @import("telar-core").workspace;
-const tab_module = @import("telar-core").tab;
 const CommandType = @import("../pty/Command.zig");
-const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
-const PaneProgressStateType = @import("telar-core").PaneProgressState;
-const PointerShapeType = @import("telar-core").PointerShape;
-const BufferType = @import("telar-core").Buffer;
-const max_input_bytes_module = @import("telar-core").max_input_bytes;
-const EncoderType = @import("telar-core").Encoder;
 
 pub const blit = @import("blit.zig");
 pub const damage = @import("damage.zig");
 
 pub const shared_transfer = @import("../media/shared_transfer.zig");
 
-pub const max_panes = @import("telar-core").max_panes_per_tab;
+pub const max_panes = core.max_panes_per_tab;
 
 pub const output_chunk_size = 16 * 1024;
 
@@ -115,7 +92,7 @@ pub const CwdState = @import("CwdState.zig");
 
 pub const TitleState = @import("TitleState.zig");
 
-pub fn sanitizeTitle(storage: *[max_pane_title_bytes_module]u8, raw: []const u8) usize {
+pub fn sanitizeTitle(storage: *[core.max_pane_title_bytes]u8, raw: []const u8) usize {
     var len: usize = 0;
     var view = std.unicode.Utf8View.initUnchecked(raw);
     var iterator = view.iterator();
@@ -163,7 +140,7 @@ pub const ScreenResize = @import("ScreenResize.zig");
 /// ```zig
 /// try resizeScreenStorage(.{ .gpa = gpa, .screen = screen, .damaged_rows = damaged, .cols = cols, .rows = rows });
 /// ```
-pub fn resizeScreenStorage(resize_request: ScreenResizeType) !void {
+pub fn resizeScreenStorage(resize_request: ScreenResize) !void {
     const gpa = resize_request.gpa;
     const screen = resize_request.screen;
     const damaged_rows = resize_request.damaged_rows;
@@ -193,13 +170,13 @@ pub fn historyClock(io: std.Io) ClockType {
 
 test "pane color defaults answer fragmented OSC queries and preserve overrides" {
     const gpa = std.testing.allocator;
-    var pane: PaneType = undefined;
+    var pane: Pane = undefined;
     pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 4, .rows = 2 });
     defer pane.terminal.deinit(gpa);
     pane.ingest_pending = false;
     pane.pty_responses = .{};
     var handler = pane.terminal.vtHandler();
-    handler.effects.write_pty = PaneType.writePty;
+    handler.effects.write_pty = Pane.writePty;
     pane.stream = vt.TerminalStream.init(.{ .allocator = gpa, .handler = handler });
     defer pane.stream.deinit();
     pane.setTerminalColors(.{ .foreground = .{ 255, 255, 255 }, .background = .{ 16, 16, 16 } });
@@ -252,9 +229,8 @@ test "pane color defaults answer fragmented OSC queries and preserve overrides" 
 }
 
 test "pane frames follow VT cursor style blink and visibility across every read boundary" {
-    const Cursor = @import("telar-core").Cursor;
     const gpa = std.testing.allocator;
-    var pane: PaneType = undefined;
+    var pane: Pane = undefined;
     pane.gpa = gpa;
     pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 4, .rows = 2, .default_cursor_blink = true });
     defer pane.terminal.deinit(gpa);
@@ -264,13 +240,13 @@ test "pane frames follow VT cursor style blink and visibility across every read 
     defer pane.text_metadata.deinit(gpa);
     pane.render_state = .empty;
     defer pane.render_state.deinit(gpa);
-    pane.screen = try BufferType.init(gpa, 4, 2);
+    pane.screen = try core.Buffer.init(gpa, 4, 2);
     defer pane.screen.deinit();
     var rows: [2]bool = @splat(false);
     pane.damaged_rows = &rows;
     pane.semantic_colors_dirty = false;
     pane.cell_revision = 0;
-    const shapes = [_]Cursor.Shape{ .default, .block, .block, .underline, .underline, .bar, .bar };
+    const shapes = [_]core.Cursor.Shape{ .default, .block, .block, .underline, .underline, .bar, .bar };
     for (shapes, 0..) |shape, number| {
         var bytes: [16]u8 = undefined;
         const command = try std.fmt.bufPrint(&bytes, "\x1b[{d} q", .{number});
@@ -293,7 +269,7 @@ test "pane frames follow VT cursor style blink and visibility across every read 
     try std.testing.expect(!pane.cursor.appearance.blink);
     stream.nextSlice("\x1bc");
     try pane.render(false);
-    try std.testing.expectEqual(Cursor.Shape.default, pane.cursor.appearance.shape);
+    try std.testing.expectEqual(core.Cursor.Shape.default, pane.cursor.appearance.shape);
     try std.testing.expect(pane.cursor.appearance.blink);
 }
 
@@ -301,7 +277,7 @@ test "agent reports capture runtime geometry without accessing the observation t
     const io = std.testing.io;
     var service = try ServiceType.init(std.testing.allocator, .{ .database_path = ":memory:" });
     defer service.deinit(io);
-    const pane = try std.testing.allocator.create(PaneType);
+    const pane = try std.testing.allocator.create(Pane);
     defer std.testing.allocator.destroy(pane);
     pane.io = io;
     pane.history_service = &service;
@@ -326,7 +302,7 @@ test "agent reports capture runtime geometry without accessing the observation t
 }
 
 test "cwd state is bounded and advances only for a new valid path" {
-    var state = try CwdStateType.init("/work/telar");
+    var state = try CwdState.init("/work/telar");
     try std.testing.expectEqualStrings("/work/telar", state.slice());
     try std.testing.expectEqual(@as(u64, 1), state.revision);
     try std.testing.expect(!state.update("/work/telar"));
@@ -338,15 +314,15 @@ test "cwd state is bounded and advances only for a new valid path" {
 
     try std.testing.expect(!state.update(""));
     try std.testing.expect(!state.update("/work\x00hidden"));
-    const oversized = [_]u8{'x'} ** (max_cwd_bytes_module + 1);
+    const oversized = [_]u8{'x'} ** (core.max_cwd_bytes + 1);
     try std.testing.expect(!state.update(&oversized));
     try std.testing.expectEqualStrings("/work/agents", state.slice());
-    try std.testing.expectError(error.InvalidCwd, CwdStateType.init(""));
+    try std.testing.expectError(error.InvalidCwd, CwdState.init(""));
 }
 
 test "pane store rejects an event from another generation" {
-    var store: PaneStoreType = .{};
-    var pane: PaneType = undefined;
+    var store: PaneStore = .{};
+    var pane: Pane = undefined;
     pane.id = @enumFromInt(7);
     pane.generation = 11;
     try store.insert(&pane);
@@ -360,15 +336,15 @@ test "pane store rejects an event from another generation" {
         .generation = pane.generation + 1,
     }) == null);
 
-    store.index.remove(raw_module(pane.id));
+    store.index.remove(core.raw(pane.id));
     store.items = @splat(null);
     store.count = 0;
 }
 
 test "graphics allocator reserves pane and global bytes before allocation" {
-    var budget = GraphicsBudgetType.init(64);
-    var first = PaneMediaAllocatorType.init(std.testing.allocator, &budget, 48);
-    var second = PaneMediaAllocatorType.init(std.testing.allocator, &budget, 48);
+    var budget = GraphicsBudget.init(64);
+    var first = PaneMediaAllocator.init(std.testing.allocator, &budget, 48);
+    var second = PaneMediaAllocator.init(std.testing.allocator, &budget, 48);
     const first_allocator = first.allocator();
     const second_allocator = second.allocator();
 
@@ -383,8 +359,8 @@ test "graphics allocator reserves pane and global bytes before allocation" {
 }
 
 test "frozen graphics transfers use the same reservation as VT media" {
-    var budget = GraphicsBudgetType.init(64);
-    var media = PaneMediaAllocatorType.init(std.testing.allocator, &budget, 64);
+    var budget = GraphicsBudget.init(64);
+    var media = PaneMediaAllocator.init(std.testing.allocator, &budget, 64);
     const allocator = media.allocator();
     const decoded = try allocator.alloc(u8, 40);
     defer allocator.free(decoded);
@@ -396,7 +372,7 @@ test "frozen graphics transfers use the same reservation as VT media" {
 }
 
 test "the slot index survives collisions, removals, and slot reuse" {
-    var index: GenericSlotIndex(8) = .{};
+    var index: core.GenericSlotIndex(8) = .{};
     // More keys than buckets divided by two forces probe chains.
     index.put(1, 0);
     index.put(9, 1);
@@ -433,12 +409,12 @@ test "pane launch state settles exactly once" {
 }
 
 test "PaneStore discovers only committed launches" {
-    const pane_id = try pane_module(1);
-    const location: TabLocationType = .{
-        .workspace = .{ .workspace = try workspace_module(1) },
-        .tab_id = try tab_module(1),
+    const pane_id = try core.pane(1);
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = try core.workspace(1) },
+        .tab_id = try core.tab(1),
     };
-    var pane: PaneType = undefined;
+    var pane: Pane = undefined;
     pane.id = pane_id;
     pane.generation = 1;
     pane.location = location;
@@ -446,7 +422,7 @@ test "PaneStore discovers only committed launches" {
     pane.close_requested = false;
     pane.exit = null;
 
-    var store: PaneStoreType = .{};
+    var store: PaneStore = .{};
     try store.insert(&pane);
     try std.testing.expect(store.find(pane_id) == &pane);
     try std.testing.expect(store.findRunning(pane_id) == null);
@@ -467,14 +443,14 @@ test "pane creation releases every partial allocation" {
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{"/usr/bin/true"};
     const command = try CommandType.fromArgv(&argv);
-    const limits: GraphicsLimitsType = .{};
+    const limits: GraphicsLimits = .{};
     var fail_index: usize = 0;
     var completed = false;
     while (!completed) : (fail_index += 1) {
         try std.testing.expect(fail_index < 256);
         var failing: std.testing.FailingAllocator = .init(gpa, .{ .fail_index = fail_index });
-        var budget = GraphicsBudgetType.init(limits.global_bytes);
-        const result = PaneType.create(.{
+        var budget = GraphicsBudget.init(limits.global_bytes);
+        const result = Pane.create(.{
             .io = io,
             .gpa = failing.allocator(),
             .history_service = &history_service,
@@ -509,8 +485,8 @@ test "pane keeps launch cwd separate from workspace path" {
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&argv);
-    var budget = GraphicsBudgetType.init(max_image_bytes_global_module);
-    const pane = try PaneType.create(.{
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
+    const pane = try Pane.create(.{
         .io = io,
         .gpa = gpa,
         .history_service = &history_service,
@@ -542,8 +518,8 @@ test "pane retains OSC 9 progress without painting it into terminal cells" {
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&argv);
-    var budget = GraphicsBudgetType.init(max_image_bytes_global_module);
-    const pane = try PaneType.create(.{
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
+    const pane = try Pane.create(.{
         .io = io,
         .gpa = gpa,
         .history_service = &history_service,
@@ -568,12 +544,12 @@ test "pane retains OSC 9 progress without painting it into terminal cells" {
     const initial_revision = pane.progress_revision;
     _ = try pane.ingest(io, "\x1b]9;4;1;42\x1b\\");
 
-    try std.testing.expectEqual(PaneProgressStateType.set, pane.progress_state);
+    try std.testing.expectEqual(core.PaneProgressState.set, pane.progress_state);
     try std.testing.expectEqual(@as(?u8, 42), pane.progress_percent);
     try std.testing.expectEqual(initial_revision + 1, pane.progress_revision);
 
     _ = try pane.ingest(io, "\x1b]9;4;0\x1b\\");
-    try std.testing.expectEqual(PaneProgressStateType.remove, pane.progress_state);
+    try std.testing.expectEqual(core.PaneProgressState.remove, pane.progress_state);
     try std.testing.expectEqual(@as(?u8, null), pane.progress_percent);
 }
 
@@ -584,8 +560,8 @@ test "shell regaining the terminal expires the job's progress report" {
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&argv);
-    var budget = GraphicsBudgetType.init(max_image_bytes_global_module);
-    const pane = try PaneType.create(.{
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
+    const pane = try Pane.create(.{
         .io = io,
         .gpa = gpa,
         .history_service = &history_service,
@@ -611,11 +587,11 @@ test "shell regaining the terminal expires the job's progress report" {
     const reported_revision = pane.progress_revision;
 
     pane.expireProgress(false);
-    try std.testing.expectEqual(PaneProgressStateType.indeterminate, pane.progress_state);
+    try std.testing.expectEqual(core.PaneProgressState.indeterminate, pane.progress_state);
     try std.testing.expectEqual(reported_revision, pane.progress_revision);
 
     pane.expireProgress(true);
-    try std.testing.expectEqual(PaneProgressStateType.remove, pane.progress_state);
+    try std.testing.expectEqual(core.PaneProgressState.remove, pane.progress_state);
     try std.testing.expectEqual(@as(?u8, null), pane.progress_percent);
     try std.testing.expectEqual(reported_revision + 1, pane.progress_revision);
 
@@ -630,8 +606,8 @@ test "pane close requests shut down the PTY exactly once" {
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&argv);
-    var budget = GraphicsBudgetType.init(max_image_bytes_global_module);
-    const pane = try PaneType.create(.{
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
+    const pane = try Pane.create(.{
         .io = io,
         .gpa = gpa,
         .history_service = &history_service,
@@ -656,7 +632,7 @@ test "pane close requests shut down the PTY exactly once" {
 }
 
 test "a pane is destroyable only when no actor can still borrow it" {
-    var pane: PaneType = undefined;
+    var pane: Pane = undefined;
     pane.exit = .{ .exited = 0 };
     pane.output_done = true;
     pane.actor_count = 0;
@@ -687,7 +663,7 @@ test "a pane is destroyable only when no actor can still borrow it" {
 test "a child's synchronized-output block holds frames until it closes or expires" {
     const gpa = std.testing.allocator;
     const io = std.testing.io;
-    var pane: PaneType = undefined;
+    var pane: Pane = undefined;
     pane.terminal = try vt.Terminal.init(io, gpa, .{ .cols = 10, .rows = 4 });
     defer pane.terminal.deinit(gpa);
     pane.sync_hold_started_ns = null;
@@ -717,7 +693,7 @@ test "a child's synchronized-output block holds frames until it closes or expire
 test "inline output admits only a bounded simple row run without allocation" {
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{});
     const gpa = failing.allocator();
-    var pane: PaneType = undefined;
+    var pane: Pane = undefined;
     pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 80, .rows = 4 });
     defer pane.terminal.deinit(gpa);
     pane.stream = pane.terminal.vtStream();
@@ -746,7 +722,7 @@ test "inline output never completes a partial control or UTF-8 sequence" {
     const sequences = [_][]const u8{ "\x1b[31m", "\x1b]2;title\x1b\\", "\x1b_Ga=d\x1b\\", "\xf0\x9f\x98\x80" };
     for (sequences) |sequence| {
         for (1..sequence.len) |split| {
-            var pane: PaneType = undefined;
+            var pane: Pane = undefined;
             pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 80, .rows = 4 });
             defer pane.terminal.deinit(gpa);
             pane.stream = pane.terminal.vtStream();
@@ -767,7 +743,7 @@ test "inline output defers wrapping and complex terminal state to its actor" {
         "\x1b]8;;https://example.com\x1b\\", "\x1b]8;;https://example.com\x1b\\x\x1b]8;;\x1b\\\r",
     };
     for (sequences) |sequence| {
-        var pane: PaneType = undefined;
+        var pane: Pane = undefined;
         pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 80, .rows = 4 });
         defer pane.terminal.deinit(gpa);
         pane.stream = pane.terminal.vtStream();
@@ -780,7 +756,7 @@ test "inline output defers wrapping and complex terminal state to its actor" {
 
 test "pane input modes expose child focus reporting" {
     const gpa = std.testing.allocator;
-    var pane: PaneType = undefined;
+    var pane: Pane = undefined;
     pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 2, .rows = 1 });
     defer pane.terminal.deinit(gpa);
 
@@ -792,16 +768,16 @@ test "pane input modes expose child focus reporting" {
 test "pane pointer shapes follow every VT shape across every OSC read boundary" {
     var allocator = std.testing.FailingAllocator.init(std.testing.allocator, .{});
     const gpa = allocator.allocator();
-    var pane: PaneType = undefined;
+    var pane: Pane = undefined;
     pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 2, .rows = 1 });
     defer pane.terminal.deinit(gpa);
     var stream = pane.terminal.vtStream();
     defer stream.deinit();
-    try std.testing.expectEqual(PointerShapeType.text, pane.pointerShape());
+    try std.testing.expectEqual(core.PointerShape.text, pane.pointerShape());
     allocator.fail_index = allocator.alloc_index;
     allocator.resize_fail_index = allocator.resize_index;
 
-    for (std.meta.tags(PointerShapeType)) |shape| {
+    for (std.meta.tags(core.PointerShape)) |shape| {
         var buffer: [64]u8 = undefined;
         const command = try std.fmt.bufPrint(&buffer, "\x1b]22;{s}\x1b\\", .{@tagName(shape)});
         for (command) |*byte| {
@@ -814,7 +790,7 @@ test "pane pointer shapes follow every VT shape across every OSC read boundary" 
             stream.nextSlice("\x1b]22;default\x1b\\");
             stream.nextSlice(command[0..split]);
             if (split < command.len - 1) {
-                try std.testing.expectEqual(PointerShapeType.default, pane.pointerShape());
+                try std.testing.expectEqual(core.PointerShape.default, pane.pointerShape());
             }
 
             stream.nextSlice(command[split..]);
@@ -823,16 +799,16 @@ test "pane pointer shapes follow every VT shape across every OSC read boundary" 
     }
 
     stream.nextSlice("\x1b]22;hand\x07");
-    try std.testing.expectEqual(PointerShapeType.pointer, pane.pointerShape());
+    try std.testing.expectEqual(core.PointerShape.pointer, pane.pointerShape());
     stream.nextSlice("\x1b]22;not-a-cursor\x1b\\");
-    try std.testing.expectEqual(PointerShapeType.pointer, pane.pointerShape());
+    try std.testing.expectEqual(core.PointerShape.pointer, pane.pointerShape());
     stream.nextSlice("\x1b]22;default\x1b\\");
-    try std.testing.expectEqual(PointerShapeType.default, pane.pointerShape());
+    try std.testing.expectEqual(core.PointerShape.default, pane.pointerShape());
 }
 
 test "pane keyboard modes follow VT negotiation and screen-local stacks" {
     const gpa = std.testing.allocator;
-    var pane: PaneType = undefined;
+    var pane: Pane = undefined;
     pane.terminal = try vt.Terminal.init(std.testing.io, gpa, .{ .cols = 2, .rows = 1 });
     defer pane.terminal.deinit(gpa);
     var stream = pane.terminal.vtStream();
@@ -866,7 +842,7 @@ test "a failed resize cannot split the screen from its damage flags" {
         try std.testing.expect(fail_index < 64);
         var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = fail_index });
         const allocator = failing.allocator();
-        var screen = BufferType.init(allocator, 10, 4) catch continue;
+        var screen = core.Buffer.init(allocator, 10, 4) catch continue;
         defer screen.deinit();
         var damaged = allocator.alloc(bool, 4) catch continue;
         defer allocator.free(damaged);
@@ -886,7 +862,7 @@ test "a failed resize cannot split the screen from its damage flags" {
 }
 
 test "the PTY response queue bounds depth and entry size" {
-    var queue: PtyResponseQueueType = .{};
+    var queue: PtyResponseQueue = .{};
     try std.testing.expect(queue.push("first"));
     try std.testing.expect(queue.push("second"));
     try std.testing.expectEqualStrings("first", queue.peek().?);
@@ -906,27 +882,27 @@ test "the PTY response queue bounds depth and entry size" {
 }
 
 test "the pane input queue reports whole-message loss" {
-    var queue: PaneInputQueueType = .{};
-    const first = [_]u8{'a'} ** max_input_bytes_module;
-    const second = [_]u8{'b'} ** max_input_bytes_module;
+    var queue: PaneInputQueue = .{};
+    const first = [_]u8{'a'} ** core.max_input_bytes;
+    const second = [_]u8{'b'} ** core.max_input_bytes;
     try std.testing.expect(queue.push(&first));
     try std.testing.expect(queue.push(&second));
     try std.testing.expect(!queue.push("lost"));
     try std.testing.expectEqual(@as(u64, 4), queue.dropped_bytes);
-    try std.testing.expectEqual(@as(usize, PaneInputQueueType.capacity), queue.len);
+    try std.testing.expectEqual(@as(usize, PaneInputQueue.capacity), queue.len);
 
-    queue.consume(max_input_bytes_module);
+    queue.consume(core.max_input_bytes);
     try std.testing.expect(queue.push("kept"));
     try std.testing.expectEqualStrings(second[0..], queue.nextChunk().?);
 }
 
 test "launch records keep restorable commands and reject the rest" {
     var arguments_buffer: [128]u8 = undefined;
-    var encoder = EncoderType.init(&arguments_buffer);
+    var encoder = core.Encoder.init(&arguments_buffer);
     try encoder.writeSized16("/bin/zsh");
     try encoder.writeSized16("-l");
     const encoded = encoder.finish();
-    var record: LaunchRecordType = .{};
+    var record: LaunchRecord = .{};
 
     record.capture(.{
         .cwd = "/work",
@@ -951,7 +927,7 @@ test "launch records keep restorable commands and reject the rest" {
 }
 
 test "restored pane keys are reserved in order and counters only advance" {
-    var store: PaneStoreType = .{};
+    var store: PaneStore = .{};
 
     try store.reserveRestoredKey(4, 9);
     try std.testing.expectEqual(@as(u64, 4), store.next_id);

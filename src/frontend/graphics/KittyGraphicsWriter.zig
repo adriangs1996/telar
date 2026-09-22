@@ -1,24 +1,17 @@
-const StatsType = @import("Stats.zig");
+const data = @import("model");
+const kitty_protocol = @import("kitty_protocol");
+const client = @import("telar-client");
+const core = @import("telar-core");
 const delivery = @import("kitty_delivery.zig");
-const LayoutSnapshot = @import("telar-client").LayoutSnapshot;
 const kitty_codec = @import("kitty_codec.zig");
 const std = @import("std");
 const kitty = @import("kitty.zig");
-const writeTransmissionAbort_module = @import("kitty_protocol").writeTransmissionAbort;
-const writeDeleteImage_module = @import("kitty_protocol").writeDeleteImage;
-const writeDeleteImageRange_module = @import("kitty_protocol").writeDeleteImageRange;
-const writeDeletePlacement_module = @import("kitty_protocol").writeDeletePlacement;
-const identity_module = @import("telar-client").identity;
 const FallbackFrame = @import("FallbackFrame.zig");
-const PlacementIdentityType = @import("telar-client").PlacementIdentity;
 const PlacementGeometry = @import("PlacementGeometry.zig");
-const OutputPlacementType = @import("kitty_protocol").OutputPlacement;
-const RectType = @import("telar-core").RectRect;
-const clipScaled_module = @import("telar-core").clipScaled;
 const KittyGraphicsWriter = @This();
 
 store: *delivery.Store,
-layout_snapshot: *const LayoutSnapshot,
+layout_snapshot: *const data.LayoutSnapshot,
 cell_width: u16,
 cell_height: u16,
 /// Encoded-byte budget for this pass. The client boosts it while host
@@ -26,7 +19,7 @@ cell_height: u16,
 budget: usize = kitty_codec.transmission_budget_per_frame,
 /// Emission counts accumulated across this writer's passes; the client
 /// folds them into its telemetry after each flush.
-stats: StatsType = .{},
+stats: Stats = .{},
 /// Monotonic time of this pass, for retire latency. Zero disables it.
 now_ns: u64 = 0,
 /// Which escapes this pass may emit. `control` rides inside a cell frame
@@ -78,8 +71,8 @@ pub fn write(self: *KittyGraphicsWriter, writer: *std.Io.Writer) std.Io.Writer.E
             // The image was replaced or deleted mid-transfer. An empty
             // final chunk closes the stream; the length mismatch makes
             // the terminal discard it, silently under q=2.
-            written += try writeTransmissionAbort_module(writer);
-            written += try writeDeleteImage_module(writer, partial.external_id);
+            written += try kitty_protocol.writeTransmissionAbort(writer);
+            written += try kitty_protocol.writeDeleteImage(writer, partial.external_id);
             self.store.delivery.partial = null;
         } else {
             const entry = self.store.images.getPtr(partial.key).?;
@@ -113,12 +106,12 @@ pub fn write(self: *KittyGraphicsWriter, writer: *std.Io.Writer) std.Io.Writer.E
         }
     }
     if (self.store.delivery.delete_overflow) {
-        written += try writeDeleteImageRange_module(writer, 1, 0x3fffffff);
+        written += try kitty_protocol.writeDeleteImageRange(writer, 1, 0x3fffffff);
         delivery.recoverDeleteOverflow(self.store);
     }
     while (delivery.popDelete(self.store)) |deletion| written += switch (deletion) {
-        .image => |image_id| try writeDeleteImage_module(writer, image_id),
-        .placement => |placement| try writeDeletePlacement_module(
+        .image => |image_id| try kitty_protocol.writeDeleteImage(writer, image_id),
+        .placement => |placement| try kitty_protocol.writeDeletePlacement(
             writer,
             placement.image_id,
             placement.placement_id,
@@ -205,7 +198,7 @@ pub fn write(self: *KittyGraphicsWriter, writer: *std.Io.Writer) std.Io.Writer.E
         if (!placement.delivery.dirty) {
             continue;
         }
-        const image = self.store.images.get(identity_module(
+        const image = self.store.images.get(client.identity(
             entry.key_ptr.pane_id,
             placement.placement.key,
         )) orelse continue;
@@ -218,7 +211,7 @@ pub fn write(self: *KittyGraphicsWriter, writer: *std.Io.Writer) std.Io.Writer.E
             .image = image.metadata,
         }) orelse {
             if (placement.delivery.emitted_image_id) |previous_image_id| {
-                written += try writeDeletePlacement_module(
+                written += try kitty_protocol.writeDeletePlacement(
                     writer,
                     previous_image_id,
                     placement.delivery.external_id,
@@ -240,7 +233,7 @@ pub fn write(self: *KittyGraphicsWriter, writer: *std.Io.Writer) std.Io.Writer.E
         });
         if (placement.delivery.emitted_image_id) |previous_image_id| {
             if (previous_image_id != image.delivery.external_id) {
-                written += try writeDeletePlacement_module(
+                written += try kitty_protocol.writeDeletePlacement(
                     writer,
                     previous_image_id,
                     placement.delivery.external_id,
@@ -268,7 +261,7 @@ fn writeFallbackPlacements(self: *KittyGraphicsWriter, writer: *std.Io.Writer, f
     }
     var written: usize = 0;
     for (frame.partial.fallbacks[0..frame.partial.fallback_count]) |fallback| {
-        const key: PlacementIdentityType = .{
+        const key: client.PlacementIdentity = .{
             .pane_id = frame.partial.key.pane_id,
             .virtual_id = fallback.placement.virtual_id,
         };
@@ -292,7 +285,7 @@ fn writeFallbackPlacements(self: *KittyGraphicsWriter, writer: *std.Io.Writer, f
         });
         if (placement.delivery.emitted_image_id) |previous_image_id| {
             if (previous_image_id != frame.image.delivery.external_id) {
-                written += try writeDeletePlacement_module(
+                written += try kitty_protocol.writeDeletePlacement(
                     writer,
                     previous_image_id,
                     placement.delivery.external_id,
@@ -305,7 +298,7 @@ fn writeFallbackPlacements(self: *KittyGraphicsWriter, writer: *std.Io.Writer, f
     return written;
 }
 
-fn geometry(self: *const KittyGraphicsWriter, geometry_input: PlacementGeometry) ?OutputPlacementType {
+fn geometry(self: *const KittyGraphicsWriter, geometry_input: PlacementGeometry) ?kitty_protocol.OutputPlacement {
     const view = self.layout_snapshot.find(geometry_input.pane_id) orelse return null;
     const source = geometry_input.placement.sourceRect(geometry_input.image) catch return null;
     const source_width: u32 = @intCast(source.width);
@@ -320,19 +313,19 @@ fn geometry(self: *const KittyGraphicsWriter, geometry_input: PlacementGeometry)
     if (width == 0 or height == 0) {
         return null;
     }
-    const destination: RectType = .{
+    const destination: core.RectRect = .{
         .x = (@as(i64, view.content.x) + geometry_input.placement.x) * self.cell_width + geometry_input.placement.offset_x,
         .y = (@as(i64, view.content.y) + geometry_input.placement.y) * self.cell_height + geometry_input.placement.offset_y,
         .width = width,
         .height = height,
     };
-    const bounds: RectType = .{
+    const bounds: core.RectRect = .{
         .x = @as(i64, view.content.x) * self.cell_width,
         .y = @as(i64, view.content.y) * self.cell_height,
         .width = @as(u64, view.content.w) * self.cell_width,
         .height = @as(u64, view.content.h) * self.cell_height,
     };
-    const clipped = clipScaled_module(destination, .{
+    const clipped = core.clipScaled(destination, .{
         .x = source.x,
         .y = source.y,
         .width = source_width,

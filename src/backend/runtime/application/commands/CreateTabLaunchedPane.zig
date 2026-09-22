@@ -1,8 +1,8 @@
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 /// Stable identity returned after the runtime commits the root pane.
 const LaunchedPane = @This();
 
-id: PaneIdType,
+id: core.PaneId,
 
-kind: @import("telar-core").PaneKind = .terminal,
+kind: core.PaneKind = .terminal,
 pane_generation: u64 = 0,

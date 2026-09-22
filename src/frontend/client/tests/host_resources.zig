@@ -1,4 +1,5 @@
 //! Exercises host policy through the client and actual host port boundary.
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -157,5 +158,5 @@ test "host resources retain graphics capabilities when sidebar setup fails" {
     ));
     try std.testing.expectEqualSlices(Probe.Event, &.{.sidebar}, probe.slice());
     try std.testing.expect(probe.committed);
-    try std.testing.expectEqual(client.Support.supported, app.model.hostCapabilities().images);
+    try std.testing.expectEqual(data.environment.Support.supported, app.model.hostCapabilities().images);
 }

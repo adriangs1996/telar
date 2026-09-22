@@ -1,7 +1,7 @@
 //! Application command for text sent to one exact pane generation by a
 //! control client that holds no attachment.
 
-const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
+const core = @import("telar-core");
 const std = @import("std");
 
 const paste_start = "\x1b[200~";
@@ -22,8 +22,8 @@ pub const SendPaneTextResult = enum {
 /// ```zig
 /// const bytes = promptBytes(&storage, "hello", true);
 /// ```
-pub fn promptBytes(storage: *[max_pane_text_input_bytes_module + prompt_overhead]u8, text: []const u8, bracketed: bool) []const u8 {
-    std.debug.assert(text.len <= max_pane_text_input_bytes_module);
+pub fn promptBytes(storage: *[core.max_pane_text_input_bytes + prompt_overhead]u8, text: []const u8, bracketed: bool) []const u8 {
+    std.debug.assert(text.len <= core.max_pane_text_input_bytes);
     var len: usize = 0;
 
     if (bracketed) {
@@ -45,7 +45,7 @@ pub fn promptBytes(storage: *[max_pane_text_input_bytes_module + prompt_overhead
 }
 
 test "promptBytes frames a paste only when the child asked for it" {
-    var storage: [max_pane_text_input_bytes_module + prompt_overhead]u8 = undefined;
+    var storage: [core.max_pane_text_input_bytes + prompt_overhead]u8 = undefined;
 
     try std.testing.expectEqualStrings("hello\r", promptBytes(&storage, "hello", false));
     try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~\r", promptBytes(&storage, "hello", true));

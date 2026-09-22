@@ -1,5 +1,7 @@
 //! CLI command selection; each grammar owns its options and validation.
 
+const client_module = @import("telar-client");
+const core = @import("telar-core");
 const DiagnosticsOptions = @import("arguments/DiagnosticsOptions.zig");
 const ServerOptions = @import("arguments/ServerOptions.zig");
 const RuntimeOptions = @import("arguments/RuntimeOptions.zig");
@@ -25,24 +27,14 @@ const RunOptions = @import("arguments/RunOptions.zig");
 const GuiOptions = @import("arguments/GuiOptions.zig");
 const CliOptions = @import("arguments/CliOptions.zig");
 const std = @import("std");
-const BuiltinType = @import("telar-client").theme_support.Builtin;
-const SidebarRenderingType = @import("telar-client").SidebarRendering;
 const server_module = @import("arguments/server.zig");
 const plugin_module = @import("arguments/plugin.zig");
-const CapabilityType = @import("telar-core").Capability;
 const history_module = @import("arguments/history.zig");
-const HistoryScopeType = @import("telar-core").HistoryScope;
-const NotificationLevelType = @import("telar-core").NotificationLevel;
-const PaneIdType = @import("telar-core").PaneId;
 const agent_module = @import("arguments/agent.zig");
-const AgentStatusType = @import("telar-core").AgentStatus;
-const PaneTextSourceType = @import("telar-core").PaneTextSource;
 const pane_module = @import("arguments/pane.zig");
-const PaneDirectionType = @import("telar-core").PaneDirection;
 const values_module = @import("arguments/values.zig");
 const integration_module = @import("arguments/integration.zig");
 const proxy_module = @import("arguments/proxy.zig");
-const HistoryAuthorFilterType = @import("telar-core").HistoryAuthorFilter;
 
 pub const Cli = union(enum) {
     help,
@@ -187,7 +179,7 @@ test "CLI defaults to the configured shell" {
     const cli = try Cli.parse(&args, .empty);
     try std.testing.expect(cli == .run);
     try std.testing.expect(cli.run.command.argv[0] != null);
-    try std.testing.expectEqual(BuiltinType.shade, cli.run.theme.base);
+    try std.testing.expectEqual(client_module.theme_support.Builtin.shade, cli.run.theme.base);
 }
 
 test "CLI forwards a command without a shell" {
@@ -208,14 +200,14 @@ test "CLI delimiter permits option-shaped commands" {
 test "CLI selects a built-in theme before the command" {
     const args = [_][*:0]const u8{ "telar", "--theme=catppuccin", "/bin/sh" };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(BuiltinType.catppuccin, cli.run.theme.base);
+    try std.testing.expectEqual(client_module.theme_support.Builtin.catppuccin, cli.run.theme.base);
     try std.testing.expectEqualStrings("/bin/sh", std.mem.span(cli.run.command.file));
 }
 
 test "CLI runs the default shell when only a theme is provided" {
     const args = [_][*:0]const u8{ "telar", "--theme", "tokyonight" };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(BuiltinType.tokyo_night, cli.run.theme.base);
+    try std.testing.expectEqual(client_module.theme_support.Builtin.tokyo_night, cli.run.theme.base);
     try std.testing.expect(cli.run.command.argv[0] != null);
 }
 
@@ -235,7 +227,7 @@ test "CLI rejects unknown and duplicate themes" {
 test "CLI selects and validates the sidebar renderer" {
     const args = [_][*:0]const u8{ "telar", "--sidebar-renderer=kitty-hybrid", "/bin/sh" };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(SidebarRenderingType.kitty_hybrid, cli.run.sidebar_rendering);
+    try std.testing.expectEqual(client_module.SidebarRendering.kitty_hybrid, cli.run.sidebar_rendering);
 
     const invalid = [_][*:0]const u8{ "telar", "--sidebar-renderer", "sixel" };
     try std.testing.expectError(error.UnknownSidebarRenderer, Cli.parse(&invalid, .empty));
@@ -296,7 +288,7 @@ test "CLI keeps plugin inspection installation and trust separate" {
     };
     const parsed_trust = try Cli.parse(&trust, .empty);
     try std.testing.expectEqual(plugin_module.PluginCommand.trust, parsed_trust.plugin.command);
-    try std.testing.expectEqual(CapabilityType.history_read, parsed_trust.plugin.capabilities[0]);
+    try std.testing.expectEqual(core.Capability.history_read, parsed_trust.plugin.capabilities[0]);
 }
 
 test "CLI parses the isolated plugin worker context" {
@@ -396,7 +388,7 @@ test "CLI parses history search filters" {
     try std.testing.expect(cli == .history);
     try std.testing.expectEqual(history_module.HistoryAction.search, cli.history.action);
     try std.testing.expectEqualStrings("git commit", std.mem.span(cli.history.query.?));
-    try std.testing.expectEqual(HistoryScopeType.workspace, cli.history.scope);
+    try std.testing.expectEqual(core.HistoryScope.workspace, cli.history.scope);
     try std.testing.expectEqualStrings("/work/telar", std.mem.span(cli.history.scope_value.?));
     try std.testing.expect(cli.history.failed_only);
     try std.testing.expectEqual(@as(u16, 40), cli.history.limit);
@@ -423,9 +415,9 @@ test "CLI parses clickable notification commands" {
     try std.testing.expect(parsed == .notification);
     try std.testing.expectEqualStrings("Build complete", std.mem.span(parsed.notification.title));
     try std.testing.expectEqualStrings("Open the pane", std.mem.span(parsed.notification.body.?));
-    try std.testing.expectEqual(NotificationLevelType.success, parsed.notification.level);
+    try std.testing.expectEqual(core.NotificationLevel.success, parsed.notification.level);
     try std.testing.expectEqual(@as(u32, 2500), parsed.notification.duration_ms);
-    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(42)), parsed.notification.target.pane);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(42)), parsed.notification.target.pane);
     try std.testing.expectEqualStrings("/tmp/telar.sock", std.mem.span(parsed.notification.socket.?));
 }
 
@@ -466,7 +458,7 @@ test "CLI parses agent commands with their targets and options" {
     const wait_cli = try Cli.parse(&wait, .empty);
     try std.testing.expectEqual(agent_module.AgentAction.wait, wait_cli.agent.action);
     try std.testing.expectEqual(@as(u64, 7), wait_cli.agent.target.?.pane);
-    try std.testing.expectEqual(AgentStatusType.blocked, wait_cli.agent.until);
+    try std.testing.expectEqual(core.AgentStatus.blocked, wait_cli.agent.until);
     try std.testing.expectEqual(@as(u32, 90), wait_cli.agent.timeout_seconds);
 
     const prompt = [_][*:0]const u8{ "telar", "agent", "prompt", "--current", "run the tests", "--wait" };
@@ -479,7 +471,7 @@ test "CLI parses agent commands with their targets and options" {
     const read_cli = try Cli.parse(&read, .empty);
     try std.testing.expectEqualStrings("Investigate proxy", std.mem.span(read_cli.agent.target.?.name));
     try std.testing.expectEqual(@as(u16, 25), read_cli.agent.lines);
-    try std.testing.expectEqual(PaneTextSourceType.screen, read_cli.agent.source);
+    try std.testing.expectEqual(core.PaneTextSource.screen, read_cli.agent.source);
 }
 
 test "CLI rejects malformed agent commands" {
@@ -517,7 +509,7 @@ test "CLI parses pane commands and refuses names as pane ids" {
     const focus_cli = try Cli.parse(&focus, .empty);
     try std.testing.expectEqual(pane_module.PaneAction.focus, focus_cli.pane.action);
     try std.testing.expect(focus_cli.pane.target == .current);
-    try std.testing.expectEqual(PaneDirectionType.left, focus_cli.pane.direction.?);
+    try std.testing.expectEqual(core.PaneDirection.left, focus_cli.pane.direction.?);
     try std.testing.expect(focus_cli.pane.json);
 
     const inexact_focus = [_][*:0]const u8{ "telar", "pane", "focus", "4", "--direction", "left" };
@@ -628,7 +620,7 @@ test "workspace create parses worktree flags and rejects unsafe branches" {
 test "history author filter parses and rejects unknown values" {
     const agent_only = [_][*:0]const u8{ "telar", "history", "list", "--author", "agent" };
     const cli = try Cli.parse(&agent_only, .empty);
-    try std.testing.expectEqual(HistoryAuthorFilterType.agent, cli.history.author);
+    try std.testing.expectEqual(core.HistoryAuthorFilter.agent, cli.history.author);
 
     const invalid = [_][*:0]const u8{ "telar", "history", "list", "--author", "robot" };
     try std.testing.expectError(error.InvalidHistoryAuthor, Cli.parse(&invalid, .empty));

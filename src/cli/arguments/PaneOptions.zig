@@ -1,11 +1,8 @@
-const max_search_needle_bytes = @import("telar-core").max_search_needle_bytes;
+const core = @import("telar-core");
 const pane = @import("pane.zig");
 const entity_target = @import("entity_target.zig");
 const values = @import("values.zig");
-const PaneTextSourceType = @import("telar-core").PaneTextSource;
-const PaneDirectionType = @import("telar-core").PaneDirection;
 const std = @import("std");
-const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
 const Cursor = @import("Cursor.zig");
 const PaneOptions = @This();
 
@@ -16,10 +13,10 @@ tab: ?entity_target.Target = null,
 text: ?[*:0]const u8 = null,
 enter: bool = false,
 lines: u16 = 40,
-source: PaneTextSourceType = .recent,
+source: core.PaneTextSource = .recent,
 json: bool = false,
 socket: ?[*:0]const u8 = null,
-direction: ?PaneDirectionType = null,
+direction: ?core.PaneDirection = null,
 count: ?u32 = null,
 interval_ms: u32 = 250,
 
@@ -68,7 +65,7 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
 
         options.text = args[2];
         const text = std.mem.span(options.text.?);
-        if (text.len == 0 or text.len > max_search_needle_bytes or !std.unicode.utf8ValidateSlice(text)) {
+        if (text.len == 0 or text.len > core.max_search_needle_bytes or !std.unicode.utf8ValidateSlice(text)) {
             return error.InvalidSearchText;
         }
 
@@ -81,7 +78,7 @@ pub fn parse(args: []const [*:0]const u8) !PaneOptions {
         }
 
         options.text = args[2];
-        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > max_pane_text_input_bytes_module) {
+        if (std.mem.span(options.text.?).len == 0 or std.mem.span(options.text.?).len > core.max_pane_text_input_bytes) {
             return error.InvalidSendText;
         }
 

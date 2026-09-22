@@ -1,18 +1,19 @@
 //! Test native admission through the same owner and notification path as the host.
+const native = @import("../native/native.zig");
+const event_module = @import("../input/event.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
-const NativeEvent = @import("../native/native.zig").InputEvent;
-const Event = @import("../input/event.zig").Event;
 const decode_input = @import("../native/decode_input.zig");
 
 /// Example: `try input_support.acceptNative(gui, native_event);`
-pub fn acceptNative(gui: *GuiClient, event: NativeEvent) !void {
+pub fn acceptNative(gui: *GuiClient, event: native.InputEvent) !void {
     try accept(gui, try decode_input.decode(event));
 }
 
 /// Example: `try input_support.accept(gui, .{ .paste = "text" });`
-pub fn accept(gui: *GuiClient, event: Event) !void {
+pub fn accept(gui: *GuiClient, event: event_module.Event) !void {
     if (!try gui.acceptInput(event)) {
         return error.InputRejected;
     }
@@ -54,10 +55,10 @@ pub fn bindingExpired(gui: *GuiClient) !void {
 
 /// Trigger a configured binding through host admission instead of invoking an
 /// internal action directly. Example: `_ = try input_support.action(gui, .toggle_sidebar);`
-pub fn action(gui: *GuiClient, value: client.Action) !client.Control {
+pub fn action(gui: *GuiClient, value: data.actions.Action) !data.keybind.Control {
     const binding = try client.config_model.ConfiguredBinding.parse(&.{"alt+z"}, value);
     gui.adoptBindings(.{
-        .prefix = client.default_prefix,
+        .prefix = data.keybind.default_prefix,
         .bindings = &.{binding},
         .escape_timeout_ns = std.time.ns_per_s,
         .sequence_timeout_ns = std.time.ns_per_s,

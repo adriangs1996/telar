@@ -1,5 +1,6 @@
 //! A drag retains the delivered slots at press so moving labels cannot chase
 //! the pointer or oscillate between insertion positions beneath it.
+const std = @import("std");
 const core = @import("telar-core");
 const Slot = @import("../TabSlot.zig");
 const Registry = @import("Registry.zig");
@@ -23,9 +24,9 @@ pub fn capture(slots: *TabDropSlots, registry: *const Registry) void {
 /// Example: `const destination = slots.at(pointer);`
 pub fn at(slots: *const TabDropSlots, pointer: Pointer) ?core.TabMoveTarget {
     var nearest: ?Slot = null;
-    var distance: f64 = @import("std").math.inf(f64);
-    var left: f64 = @import("std").math.inf(f64);
-    var right: f64 = -@import("std").math.inf(f64);
+    var distance: f64 = std.math.inf(f64);
+    var left: f64 = std.math.inf(f64);
+    var right: f64 = -std.math.inf(f64);
     for (slots.entries[0..slots.len]) |slot| {
         if (pointer.y < slot.bounds.y or pointer.y >= slot.bounds.y + slot.bounds.height) {
             continue;

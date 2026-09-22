@@ -1,14 +1,12 @@
+const core = @import("telar-core");
+const client = @import("telar-client");
 const std = @import("std");
-const LocalType = @import("telar-core").Local;
 const runtime_connection = @import("runtime_connection.zig");
-const SocketChannelType = @import("telar-core").SocketChannel;
-const connect_module = @import("telar-client").connect;
 const RuntimeConfigSelection = @import("RuntimeConfigSelection.zig");
-const perform_module = @import("telar-client").perform;
 const RuntimeConnector = @This();
 
 process: std.process.Init,
-endpoint: LocalType,
+endpoint: core.Local,
 
 /// Resolves the local runtime endpoint from an explicit socket or the
 /// process environment. It does not access the filesystem or connect yet.
@@ -71,8 +69,8 @@ pub fn prepareServerDirectory(connector: *const RuntimeConnector) !void {
 /// var connection = try connector.connect();
 /// defer connection.deinit(process_init.io);
 /// ```
-pub fn connect(connector: *const RuntimeConnector) !SocketChannelType {
-    const connection = try connect_module(connector.process.io, connector.endpoint.path());
+pub fn connect(connector: *const RuntimeConnector) !core.SocketChannel {
+    const connection = try client.connect(connector.process.io, connector.endpoint.path());
     return connector.finishHandshake(connection);
 }
 
@@ -83,8 +81,8 @@ pub fn connect(connector: *const RuntimeConnector) !SocketChannelType {
 /// var connection = try connector.connectOrStart(.{});
 /// defer connection.deinit(process_init.io);
 /// ```
-pub fn connectOrStart(connector: *const RuntimeConnector, config: RuntimeConfigSelection) !SocketChannelType {
-    const first = connect_module(connector.process.io, connector.endpoint.path()) catch |err| switch (err) {
+pub fn connectOrStart(connector: *const RuntimeConnector, config: RuntimeConfigSelection) !core.SocketChannel {
+    const first = client.connect(connector.process.io, connector.endpoint.path()) catch |err| switch (err) {
         error.PermissionDenied,
         error.NotDir,
         error.SymLinkLoop,
@@ -107,7 +105,7 @@ pub fn connectOrStart(connector: *const RuntimeConnector, config: RuntimeConfigS
     try connector.prepareServerDirectory();
     try connector.startRuntime(config);
     for (0..runtime_connection.runtime_start_attempts) |_| {
-        if (connect_module(connector.process.io, connector.endpoint.path())) |connection| {
+        if (client.connect(connector.process.io, connector.endpoint.path())) |connection| {
             return connector.finishHandshake(connection);
         } else |_| {
             connector.process.io.sleep(.fromMilliseconds(runtime_connection.runtime_start_interval_ms), .awake) catch {};
@@ -159,11 +157,11 @@ fn startRuntime(connector: *const RuntimeConnector, config: RuntimeConfigSelecti
     }
 }
 
-fn finishHandshake(connector: *const RuntimeConnector, connection: SocketChannelType) !SocketChannelType {
+fn finishHandshake(connector: *const RuntimeConnector, connection: core.SocketChannel) !core.SocketChannel {
     var result = connection;
     errdefer result.deinit(connector.process.io);
 
-    const response = try perform_module(connector.process.io, &result);
+    const response = try client.perform(connector.process.io, &result);
     switch (response) {
         .accepted => return result,
         .rejected => |rejected| {

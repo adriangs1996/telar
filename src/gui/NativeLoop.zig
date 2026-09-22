@@ -1,15 +1,15 @@
 //! Native wake endpoint and producers of the shared bounded inbox.
+const gui_event = @import("gui_event.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const native = @import("native/native.zig");
-const Inbox = @import("gui_event.zig").Inbox;
 const Loop = @This();
 const FramePacer = @import("FramePacer.zig");
 
 io: std.Io,
 fds: [2]c_int,
-inbox: Inbox,
+inbox: gui_event.Inbox,
 configuration: @import("ConfigurationReload.zig"),
 frame_pacer: FramePacer = .{},
 

@@ -1,9 +1,10 @@
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const StatusAge = @This();
 
-key: client.AgentKey,
+key: data.AgentKey,
 status: core.AgentStatus,
 provider: core.AgentProvider,
 reported_s: u32,

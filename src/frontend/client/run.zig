@@ -1,21 +1,19 @@
 //! Client process adapter: opens the real terminal, constructs and starts one
 //! client, then lends each completed event to the dispatcher.
 
+const core = @import("telar-core");
+const client_module = @import("telar-client");
 const TerminalClient = @import("TerminalClient.zig");
 const std = @import("std");
-const SocketChannelType = @import("telar-core").SocketChannel;
-const Options = @import("telar-client").Options;
-const HeapType = @import("telar-core").Heap;
 const platform = @import("../platform/platform.zig");
 const sequences = @import("../platform/sequences.zig");
 const host_resizes = @import("controllers/host/host_resizes.zig");
 const client_startup = @import("controllers/session/client_startup.zig");
 const client_events = @import("entrypoints/events.zig");
-const ClientIdentityType = @import("telar-core").ClientIdentity;
 
-pub fn run(init: std.process.Init, connection: *SocketChannelType, options: Options) !u8 {
+pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: client_module.Options) !u8 {
     const io = init.io;
-    var heap = HeapType.init(init.gpa);
+    var heap = core.Heap.init(init.gpa);
     const gpa = heap.allocator();
 
     // `TerminalClient.init` adopts the configuration generation, plugin registry and
@@ -101,7 +99,7 @@ pub fn run(init: std.process.Init, connection: *SocketChannelType, options: Opti
     }
 }
 
-fn terminalIdentity(environ: std.process.Environ, tty: *const platform.Tty) !ClientIdentityType {
+fn terminalIdentity(environ: std.process.Environ, tty: *const platform.Tty) !core.ClientIdentity {
     const keys = [_][]const u8{
         "TERM_SESSION_ID",
         "WT_SESSION",

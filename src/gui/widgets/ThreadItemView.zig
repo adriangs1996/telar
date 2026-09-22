@@ -1,8 +1,9 @@
 //! A synchronous item borrow. Interaction targets copy only its stable identity.
+const client = @import("telar-client");
 const core = @import("telar-core");
 const View = @This();
 
-thread: @import("telar-client").ThreadView,
+thread: client.ThreadView,
 item: *const core.AgentThreadItem,
 bounds: @import("../render/Rect.zig"),
 viewport: @import("../render/Rect.zig"),
@@ -19,7 +20,7 @@ pub fn control(view: View) @import("interaction/ThreadItemControl.zig") {
         return .{ .pane_id = view.thread.pane_id, .attachment_generation = view.thread.attachment_generation, .identity = view.item.identity, .source_key = view.work_key, .operation = .toggle_work };
     }
 
-    return .{ .pane_id = view.thread.pane_id, .attachment_generation = view.thread.attachment_generation, .identity = view.item.identity, .source_key = if (view.item.sourceId(view.thread.transcript.?).len > 0) @import("telar-client").AgentHistoryWindow.itemKey(view.thread.transcript.?, view.item) else 0 };
+    return .{ .pane_id = view.thread.pane_id, .attachment_generation = view.thread.attachment_generation, .identity = view.item.identity, .source_key = if (view.item.sourceId(view.thread.transcript.?).len > 0) client.AgentHistoryWindow.itemKey(view.thread.transcript.?, view.item) else 0 };
 }
 
 /// Example: `if (view.active()) drawLiveStatus();`

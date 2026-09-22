@@ -1,13 +1,11 @@
-const TabLocationType = @import("telar-core").TabLocation;
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const LaunchViewType = @import("telar-core").LaunchView;
+const core = @import("telar-core");
 const LaunchRequest = @This();
 
-location: TabLocationType,
-size: TerminalSizeType,
-launch: LaunchViewType,
+location: core.TabLocation,
+size: core.TerminalSize,
+launch: core.LaunchView,
 launch_cwd: []const u8,
 workspace_path: []const u8,
 
-kind: @import("telar-core").PaneKind = .terminal,
-restore_conversation: ?@import("telar-core").RecentConversation = null,
+kind: core.PaneKind = .terminal,
+restore_conversation: ?core.RecentConversation = null,

@@ -1,5 +1,6 @@
 //! Owns the frame-local context borrowed by its widget list. Keep this value
 //! and its projection at stable addresses until the list finishes drawing.
+const data = @import("model");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
@@ -22,7 +23,7 @@ pub fn render(composition: *Composition, projection: *const client.Projection) !
     composition.commit = .{};
     if (projection.model) |model| {
         composition.commit.location = model.location;
-        var layout: client.LayoutSnapshot = .{};
+        var layout: data.LayoutSnapshot = .{};
         model.layout.snapshot(projection.geometry.area, &layout);
         for (layout.views()) |view| {
             if (view.surface != .terminal) {

@@ -1,10 +1,10 @@
 //! One inbox observation task per GUI. Shutdown joins it before releasing state.
+const gui_event = @import("../gui_event.zig");
 const std = @import("std");
 const Store = @import("Store.zig");
 const Job = @import("Job.zig");
 const Result = @import("Result.zig");
 const DiffHighlighter = @import("DiffHighlighter.zig");
-const Inbox = @import("../gui_event.zig").Inbox;
 const Self = @This();
 
 allocator: std.mem.Allocator,
@@ -26,7 +26,7 @@ pub fn beginFrame(self: *Self) void {
 
 /// Called after painting has submitted its bounded requests.
 /// Example: `service.start(&loop.inbox);`
-pub fn start(self: *Self, inbox: *Inbox) void {
+pub fn start(self: *Self, inbox: *gui_event.Inbox) void {
     if (self.job != null) {
         return;
     }

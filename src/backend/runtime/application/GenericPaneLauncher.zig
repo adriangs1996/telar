@@ -1,10 +1,10 @@
+const agent_threads = @import("agent_threads.zig");
+const core = @import("telar-core");
 const std = @import("std");
 const ServiceType = @import("../../history/Service.zig");
-const TableType = @import("telar-core").Table;
 const ProxyType = @import("../../proxy/Proxy.zig");
 const PaneStoreType = @import("../../pane/PaneStore.zig");
 const LaunchTestFault = @import("LaunchTestFault.zig");
-const TerminalColorsType = @import("telar-core").TerminalColors;
 const LaunchRequest = @import("LaunchRequest.zig");
 const PaneType = @import("../../pane/Pane.zig");
 const PaneOverrides = @import("PaneOverrides.zig");
@@ -27,11 +27,11 @@ pub fn Type(comptime RuntimeEvent: type) type {
         inherited_environment: std.process.Environ,
         socket_path: []const u8,
         executable_path: []const u8,
-        manifests: *const TableType,
+        manifests: *const core.Table,
         proxy: ?*ProxyType,
         panes: *PaneStoreType,
         launch_fault: ?*LaunchTestFault,
-        terminal_colors: TerminalColorsType = .{},
+        terminal_colors: core.TerminalColors = .{},
 
         /// Executes one pane-launch transaction and returns only after both
         /// runtime observation actors own their work.
@@ -193,7 +193,7 @@ pub fn Type(comptime RuntimeEvent: type) type {
             errdefer launcher.panes.removeAndDestroy(pane);
             _ = pane.beginExitWait();
             errdefer pane.cancelExitWait();
-            try launcher.select.concurrent(.agent_thread_changed, @import("agent_threads.zig").waitForChange, .{ launcher.io, pane });
+            try launcher.select.concurrent(.agent_thread_changed, agent_threads.waitForChange, .{ launcher.io, pane });
             pane.commitLaunch("codex app-server");
             return pane;
         }

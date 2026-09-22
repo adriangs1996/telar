@@ -1,8 +1,9 @@
+const composer_menu = @import("composer_menu.zig");
+const event_module = @import("../../input/event.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const GuiClient = @import("../../GuiClient.zig");
-const Event = @import("../../input/event.zig").Event;
 const Target = @import("Target.zig");
 
 /// Revalidates draft and catalog identities before using delivered suggestions.
@@ -26,7 +27,7 @@ pub fn refresh(gui: *GuiClient) void {
 
 /// Completion rows never take the IME target away from the composer.
 /// Example: `if (try completions.route(gui, event, decision)) return true;`
-pub fn route(gui: *GuiClient, event: Event, decision: @import("Route.zig")) !bool {
+pub fn route(gui: *GuiClient, event: event_module.Event, decision: @import("Route.zig")) !bool {
     const state = &gui.widgets.completions;
     if (!state.open) {
         return decision.target != null and decision.target.?.action == .composer_completion;
@@ -185,7 +186,7 @@ pub fn submit(gui: *GuiClient, pane_id: core.PaneId) !void {
                     const kind: @FieldType(@import("ComposerSelector.zig"), "kind") = if (action.kind == .model) .model else .access;
                     for (gui.widgets.dispatcher.maps.presented().targets[0..gui.widgets.dispatcher.maps.presented().len]) |target| {
                         if (target.action == .composer_selector and target.action.composer_selector.pane_id == pane_id and target.action.composer_selector.kind == kind) {
-                            if (!@import("composer_menu.zig").eligible(gui, target)) {
+                            if (!composer_menu.eligible(gui, target)) {
                                 return;
                             }
 
@@ -202,7 +203,7 @@ pub fn submit(gui: *GuiClient, pane_id: core.PaneId) !void {
                                 },
                             );
                             gui.widgets.completions.dismiss();
-                            try @import("composer_menu.zig").activate(gui, target);
+                            try composer_menu.activate(gui, target);
                             return;
                         }
                     }

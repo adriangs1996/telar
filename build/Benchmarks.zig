@@ -3,6 +3,7 @@ const Application = @import("Application.zig");
 const lua_build = @import("lua.zig");
 const freetype_build = @import("freetype.zig");
 const assets_build = @import("assets.zig");
+const model_build = @import("model.zig");
 const client_build = @import("client.zig");
 
 benchmarks: *std.Build.Step.Compile,
@@ -59,7 +60,18 @@ pub fn init(b: *std.Build, app: Application) @This() {
         .target = app.modules.target,
         .optimize = bench_optimize,
     });
-    const bench_client = client_build.add(b, bench_core, .{ .api = bench_lua_api, .telar = bench_lua });
+    const bench_data = model_build.create(b, bench_core);
+    const bench_client = client_build.add(
+        b,
+        .{
+            .core = bench_core,
+            .data = bench_data,
+            .lua = .{
+                .api = bench_lua_api,
+                .telar = bench_lua,
+            },
+        },
+    );
     const bench_frontend = b.createModule(.{
         .root_source_file = b.path("src/frontend/frontend.zig"),
         .target = app.modules.target,
@@ -69,6 +81,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
     const bench_freetype = freetype_build.add(b, .{ .target = app.modules.target, .optimize = bench_optimize, .disable_coverage = false });
     bench_frontend.addImport("telar-core", bench_core);
     bench_frontend.addImport("telar-client", bench_client);
+    bench_frontend.addImport("model", bench_data);
     bench_frontend.addImport("kitty_protocol", bench_kitty_protocol);
     bench_frontend.addImport("lua-api", bench_lua_api);
     bench_frontend.addImport("telar-lua", bench_lua);
@@ -88,6 +101,7 @@ pub fn init(b: *std.Build, app: Application) @This() {
     benchmarks.root_module.addImport("telar-backend", bench_backend);
     benchmarks.root_module.addImport("telar-frontend", bench_frontend);
     benchmarks.root_module.addImport("telar-client", bench_client);
+    benchmarks.root_module.addImport("model", bench_data);
 
     const echo_probe = b.addExecutable(.{
         .name = "echo-probe",
@@ -102,6 +116,10 @@ pub fn init(b: *std.Build, app: Application) @This() {
                 .{ .name = "telar-frontend", .module = bench_frontend },
                 .{ .name = "telar-core", .module = bench_core },
                 .{ .name = "telar-client", .module = bench_client },
+                .{
+                    .name = "model",
+                    .module = bench_data,
+                },
             },
         }),
     });

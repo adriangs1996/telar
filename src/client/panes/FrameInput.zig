@@ -1,7 +1,7 @@
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const FrameInput = @This();
 
-pane_id: PaneIdType = @enumFromInt(1),
+pane_id: core.PaneId = @enumFromInt(1),
 id: u64 = 1,
 base: u64 = 0,
 cols: u16 = 2,

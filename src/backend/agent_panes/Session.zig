@@ -1,3 +1,4 @@
+const command_module = @import("command.zig");
 const ReviewService = @import("../change_review/Service.zig");
 const ReviewContext = @import("../change_review/Context.zig");
 const ItemNormalizer = @import("ItemNormalizer.zig");
@@ -7,7 +8,6 @@ const Options = @import("Options.zig");
 const Codex = @import("Codex.zig");
 const Stream = @import("Stream.zig");
 const protocol = @import("protocol.zig");
-const Command = @import("command.zig").Command;
 const Prompt = @import("Prompt.zig");
 const ThreadMetadata = @import("ThreadMetadata.zig");
 const HistoryOptions = @import("HistoryOptions.zig");
@@ -18,8 +18,8 @@ review_service: ?*ReviewService = null,
 history_options: *HistoryOptions,
 startup_timeout_ms: u32,
 worker: ?std.Io.Future(void) = null,
-commands: std.Io.Queue(Command) = undefined,
-command_storage: [protocol.queue_depth]Command = undefined,
+commands: std.Io.Queue(command_module.Command) = undefined,
+command_storage: [protocol.queue_depth]command_module.Command = undefined,
 changes: std.Io.Queue(u8) = undefined,
 change_storage: [1]u8 = undefined,
 stopping: std.atomic.Value(bool) = .init(false),
@@ -247,7 +247,7 @@ pub fn close(session: *Session, io: std.Io) void {
     gpa.destroy(session);
 }
 
-fn enqueue(session: *Session, io: std.Io, command: Command) bool {
+fn enqueue(session: *Session, io: std.Io, command: command_module.Command) bool {
     if (session.stopping.load(.acquire)) {
         return false;
     }
@@ -255,7 +255,7 @@ fn enqueue(session: *Session, io: std.Io, command: Command) bool {
     return (session.commands.put(io, &.{command}, 0) catch 0) == 1;
 }
 
-fn receiveCommand(session: *Session, io: std.Io) anyerror!Command {
+fn receiveCommand(session: *Session, io: std.Io) anyerror!command_module.Command {
     return session.commands.getOne(io);
 }
 

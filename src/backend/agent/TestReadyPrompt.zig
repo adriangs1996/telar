@@ -1,5 +1,5 @@
-const AgentProviderType = @import("telar-core").AgentProvider;
+const core = @import("telar-core");
 const TestReadyPrompt = @This();
 
-provider: AgentProviderType,
+provider: core.AgentProvider,
 observed_at_ms: i64,

@@ -1,5 +1,6 @@
 //! Window-thread requests with owned payloads and exact completion identity.
 //! Backend callbacks only drain requests; native results reenter the input queue.
+const event = @import("../input/event.zig");
 const std = @import("std");
 const native = @import("../native/native.zig");
 const Result = @import("../input/ClipboardResult.zig");
@@ -32,7 +33,7 @@ pub fn write(services: *Services, bytes: []const u8) !u64 {
 /// Correlates a write with the editor awaiting its outcome, for transactional
 /// cut. Example: `const request_id = try host.writeOwned(owner, selection);`
 pub fn writeOwned(services: *Services, owner: Owner, bytes: []const u8) !u64 {
-    if (bytes.len > @import("../input/event.zig").max_text_bytes) {
+    if (bytes.len > event.max_text_bytes) {
         return error.ClipboardTooLarge;
     }
 

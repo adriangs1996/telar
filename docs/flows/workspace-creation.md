@@ -4,7 +4,7 @@ Creation is a runtime transaction followed by one atomic client replacement.
 The client owns its prompt, navigation history and disposable projection.
 
 ```text
-operations/input/name_prompts.handleInput
+AttachedClient.inputPrompt
   -> AttachedClient.requestWorkspaceCreation
      -> idle gate, validate name, choose CWD source, retain request size
      -> AttachedClient.sendCreateWorkspaceRequest

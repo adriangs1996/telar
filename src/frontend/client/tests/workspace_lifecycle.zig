@@ -1,21 +1,12 @@
 //! Client integration tests for workspace lifecycle.
 
+const core = @import("telar-core");
+const data = @import("model");
 const TerminalClient = @import("../TerminalClient.zig");
-const host = TerminalClient.of;
 const TestHarness = @import("TestHarness.zig");
-const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-const LayoutSnapshot = @import("telar-client").LayoutSnapshot;
-const TabLocationType = @import("telar-core").TabLocation;
-const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
-const decodeServer_module = @import("telar-core").decodeServer;
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const support = @import("support.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const PaneTargetType = @import("telar-core").PaneTarget;
-const RequestIdType = @import("telar-core").RequestId;
-const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
-const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
 
 test "a created workspace bookmarks and replaces the prior layout" {
     var harness: TestHarness = undefined;
@@ -26,9 +17,9 @@ test "a created workspace bookmarks and replaces the prior layout" {
 
     const prior_location = TestHarness.bootstrap_location;
     const left = TestHarness.bootstrap_pane;
-    const top_right: PaneIdType = @enumFromInt(11);
-    const bottom_right: PaneIdType = @enumFromInt(12);
-    const workbench = host(client).view.workbench();
+    const top_right: core.PaneId = @enumFromInt(11);
+    const bottom_right: core.PaneId = @enumFromInt(12);
+    const workbench = TerminalClient.of(client).view.workbench();
     const prior_model = &client.model.workspace.active().?.model;
     try prior_model.split(.{ .existing_pane = left, .new_pane = top_right, .location = prior_location, .axis = .horizontal, .area = workbench });
     try prior_model.split(.{ .existing_pane = top_right, .new_pane = bottom_right, .location = prior_location, .axis = .vertical, .area = workbench });
@@ -36,28 +27,28 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try std.testing.expect(prior_model.focusPane(left));
     _ = client.model.syncReportedPaneFocus().?;
     try std.testing.expect(prior_model.focusPane(bottom_right));
-    var expected_geometry: LayoutSnapshot = .{};
+    var expected_geometry: data.LayoutSnapshot = .{};
     prior_model.layout.snapshot(workbench, &expected_geometry);
 
-    const new_location: TabLocationType = .{
+    const new_location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(5),
     };
     const version_before_creation = client.model.version();
-    const pending_updates_before_creation = host(client).presenter.pending_updates;
+    const pending_updates_before_creation = TerminalClient.of(client).presenter.pending_updates;
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
     var payload: [128]u8 = undefined;
-    const opened = try encodePaneOpened_module(&payload, .{
+    const opened = try core.encodePaneOpened(&payload, .{
         .request_id = @enumFromInt(4),
         .pane_id = @enumFromInt(30),
         .location = new_location,
         .created = true,
     });
-    _ = try client.handleServerMessage(try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try core.decodeServer(opened));
 
     try std.testing.expect(!client.notification_scheduler.pending);
     try std.testing.expectEqualDeep(
-        @as(?WorkspaceLocationType, new_location.workspace),
+        @as(?core.WorkspaceLocation, new_location.workspace),
         client.model.workspace.workspace,
     );
     const created_pane = client.model.workspace.findPane(@enumFromInt(30)).?;
@@ -68,23 +59,23 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try std.testing.expectEqual(version_before_creation.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_creation.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version_before_creation.panes + 1, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates_before_creation, host(client).presenter.pending_updates);
-    try std.testing.expectEqual(@as(?PaneIdType, @enumFromInt(30)), support.reportedPaneId(client));
+    try std.testing.expectEqual(pending_updates_before_creation, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(@as(?core.PaneId, @enumFromInt(30)), support.reportedPaneId(client));
 
     const bookmark = client.navigation_history.find(prior_location.workspace).?;
     try std.testing.expectEqual(prior_location, bookmark.location);
     try std.testing.expectEqual(bottom_right, bookmark.pane_id);
     const saved_layout = bookmark.tab_layout.?;
-    var saved_geometry: LayoutSnapshot = .{};
+    var saved_geometry: data.LayoutSnapshot = .{};
     saved_layout.snapshot(workbench, &saved_geometry);
-    for ([_]PaneIdType{ left, top_right, bottom_right }) |pane_id|
+    for ([_]core.PaneId{ left, top_right, bottom_right }) |pane_id|
         try std.testing.expectEqual(
             expected_geometry.find(pane_id).?.outer,
             saved_geometry.find(pane_id).?.outer,
         );
 
     try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates_before_creation + 1, host(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_creation + 1, TerminalClient.of(client).presenter.pending_updates);
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
     const workspace_snapshot = try harness.nextClientMessage(&message_buffer);
@@ -94,7 +85,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try std.testing.expect(tab_snapshot == .request_tab_snapshot);
     try std.testing.expectEqualDeep(new_location, tab_snapshot.request_tab_snapshot.location);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), host(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
 
     // Return through the same runtime handoff used by workspace selection.
     client.request_lifecycle.tracker = .{};
@@ -102,21 +93,21 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try harness.settle();
     const detached = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(detached == .detach_pane);
-    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(30)), detached.detach_pane.pane_id);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(30)), detached.detach_pane.pane_id);
     const open = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(open == .open_pane);
-    try std.testing.expectEqualDeep(PaneTargetType{ .pane = bottom_right }, open.open_pane.target);
+    try std.testing.expectEqualDeep(core.PaneTarget{ .pane = bottom_right }, open.open_pane.target);
     const open_request = open.open_pane.request_id;
 
-    const reopened = try encodePaneOpened_module(&payload, .{
+    const reopened = try core.encodePaneOpened(&payload, .{
         .request_id = open_request,
         .pane_id = bottom_right,
         .location = prior_location,
         .created = false,
     });
-    _ = try client.handleServerMessage(try decodeServer_module(reopened));
+    _ = try client.handleServerMessage(try core.decodeServer(reopened));
     try harness.settle();
-    var snapshot_request: RequestIdType = .none;
+    var snapshot_request: core.RequestId = .none;
     while (snapshot_request == .none) switch (try harness.nextClientMessage(&message_buffer)) {
         .request_workspace_snapshot => {},
         .request_tab_snapshot => |request| {
@@ -126,7 +117,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
         else => return error.UnexpectedClientMessage,
     };
     var snapshot_payload: [256]u8 = undefined;
-    const snapshot = try encodeTabSnapshot_module(&snapshot_payload, .{
+    const snapshot = try core.encodeTabSnapshot(&snapshot_payload, .{
         .request_id = snapshot_request,
         .location = prior_location,
         .panes = &.{
@@ -135,11 +126,11 @@ test "a created workspace bookmarks and replaces the prior layout" {
             .{ .pane_id = bottom_right, .lifecycle = .running },
         },
     });
-    _ = try client.handleServerMessage(try decodeServer_module(snapshot));
+    _ = try client.handleServerMessage(try core.decodeServer(snapshot));
 
-    var restored_geometry: LayoutSnapshot = .{};
+    var restored_geometry: data.LayoutSnapshot = .{};
     client.model.workspace.activeConst().?.model.layout.snapshot(workbench, &restored_geometry);
-    for ([_]PaneIdType{ left, top_right, bottom_right }) |pane_id|
+    for ([_]core.PaneId{ left, top_right, bottom_right }) |pane_id|
         try std.testing.expectEqual(
             expected_geometry.find(pane_id).?.outer,
             restored_geometry.find(pane_id).?.outer,
@@ -158,12 +149,12 @@ test "a failed workspace creation preserves the current projection" {
 
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
     var payload: [256]u8 = undefined;
-    const failed = try encodeRequestFailed_module(&payload, .{
+    const failed = try core.encodeRequestFailed(&payload, .{
         .request_id = @enumFromInt(4),
         .code = .spawn_failed,
         .message = "shell launch failed",
     });
-    _ = try client.handleServerMessage(try decodeServer_module(failed));
+    _ = try client.handleServerMessage(try core.decodeServer(failed));
 
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
@@ -238,21 +229,21 @@ test "canonical workspace replacement survives failure to deliver activation sna
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
-    const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(5) };
+    const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(5) };
     var payload: [128]u8 = undefined;
-    const opened = try encodePaneOpened_module(&payload, .{
+    const opened = try core.encodePaneOpened(&payload, .{
         .request_id = @enumFromInt(4),
         .pane_id = @enumFromInt(30),
         .location = location,
         .created = true,
     });
 
-    try std.testing.expectError(error.ClientOutboxFull, client.handleServerMessage(try decodeServer_module(opened)));
+    try std.testing.expectError(error.ClientOutboxFull, client.handleServerMessage(try core.decodeServer(opened)));
 
     try std.testing.expectEqualDeep(location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.workspace.findPane(@enumFromInt(30)).?.attached);
     try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.navigation_history.find(TestHarness.bootstrap_location.workspace).?.location);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedRequest, client.handleServerMessage(try decodeServer_module(opened)));
+    try std.testing.expectError(error.UnexpectedRequest, client.handleServerMessage(try core.decodeServer(opened)));
 }

@@ -1,7 +1,7 @@
-const RectType = @import("telar-core").Rect;
-const CenterType = @import("telar-client").Center;
+const core = @import("telar-core");
+const data = @import("model");
 const RenderMode = @This();
 
-area: RectType,
-center: *const CenterType,
+area: core.Rect,
+center: *const data.Center,
 paint: bool,

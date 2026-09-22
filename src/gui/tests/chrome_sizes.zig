@@ -1,6 +1,8 @@
 //! Slice 7 of the GUI visual language: three chrome text sizes derived from
 //! the terminal size, scaled by `gui.chrome.scale`, shaped side by side in
 //! one atlas without touching the cell grid.
+const QuadList = @import("../render/QuadList.zig");
+const label_size = @import("../widgets/label_size.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -10,10 +12,9 @@ const ChromeMetrics = @import("../widgets/ChromeMetrics.zig");
 const CardGeometry = @import("../widgets/CardGeometry.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const Label = @import("../widgets/Label.zig");
-const Size = @import("../widgets/label_size.zig").Size;
 const Quad = @import("../render/Quad.zig").Quad;
 
-const roles = [_]Size{ .terminal, .title, .body, .small };
+const roles = [_]label_size.Size{ .terminal, .title, .body, .small };
 
 test {
     _ = @import("../widgets/label_size.zig");
@@ -103,7 +104,7 @@ test "the chrome scale enlarges chrome labels and cards but not the PTY grid" {
         const base_size = try renderer.measure(.{ .width = 1000, .height = 700, .scale = scale });
         const base = renderer.chrome;
         const base_card = CardGeometry.derive(base, renderer.metrics);
-        var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
+        var quads = QuadList.init(std.testing.allocator);
         defer quads.deinit();
         var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = client.theme_support.default_theme, .chrome = base, .viewport = renderer.viewport };
         const base_width = try canvas.measure(.{ .text = "agents", .face = .sans, .size = .body });

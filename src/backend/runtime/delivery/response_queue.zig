@@ -1,66 +1,51 @@
 //! Bounded, priority-aware responses awaiting one client session's writer.
-const EditorOpened = @import("telar-core").EditorOpened;
+const core = @import("telar-core");
 
-const ClientCommand = @import("telar-core").ClientCommand;
-const ClientList = @import("telar-core").ClientList;
 const ReviewResult = @import("../../change_review/Result.zig");
-const max_panes_per_tab = @import("telar-core").max_panes_per_tab;
-const PaneOpenedType = @import("telar-core").PaneOpened;
 const PendingFailure = @import("PendingFailure.zig");
 const PendingTabSnapshot = @import("PendingTabSnapshot.zig");
 const PendingWorkspaceSnapshot = @import("PendingWorkspaceSnapshot.zig");
 const PendingTabCreated = @import("PendingTabCreated.zig");
 const PendingTabRenamed = @import("PendingTabRenamed.zig");
-const TabClosedType = @import("telar-core").TabClosed;
-const TabMovedType = @import("telar-core").TabMoved;
 const PendingNotification = @import("PendingNotification.zig");
-const NotificationShownType = @import("telar-core").NotificationShown;
-const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
 const QueryResultType = @import("../../history/QueryResult.zig");
-const RequestCompletedType = @import("telar-core").RequestCompleted;
 const PendingPaneText = @import("PendingPaneText.zig");
 const PendingPaneMatches = @import("PendingPaneMatches.zig");
-const HistoryPrunedType = @import("telar-core").HistoryPruned;
 const OutputResultType = @import("../../history/OutputResult.zig");
 const StatsResultType = @import("../../history/StatsResult.zig");
-const PaneFocusCommandType = @import("telar-core").PaneFocusCommand;
-const PaneFocusResultType = @import("telar-core").PaneFocusResult;
 const PendingSuggestion = @import("PendingSuggestion.zig");
 const ResponseQueue = @import("ResponseQueue.zig");
 const std = @import("std");
-const TabLocationType = @import("telar-core").TabLocation;
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
-const RequestIdType = @import("telar-core").RequestId;
 
-pub const capacity = max_panes_per_tab * 2;
+pub const capacity = core.max_panes_per_tab * 2;
 
 pub const PendingResponse = union(enum) {
-    client_command: ClientCommand,
-    client_command_result: ClientCommand,
-    client_list: ClientList,
-    editor_opened: EditorOpened,
-    pane_opened: PaneOpenedType,
+    client_command: core.ClientCommand,
+    client_command_result: core.ClientCommand,
+    client_list: core.ClientList,
+    editor_opened: core.EditorOpened,
+    pane_opened: core.PaneOpened,
     request_failed: PendingFailure,
     tab_snapshot: PendingTabSnapshot,
     workspace_snapshot: PendingWorkspaceSnapshot,
     tab_created: PendingTabCreated,
     tab_renamed: PendingTabRenamed,
-    tab_closed: TabClosedType,
-    tab_moved: TabMovedType,
+    tab_closed: core.TabClosed,
+    tab_moved: core.TabMoved,
     notification: PendingNotification,
-    notification_shown: NotificationShownType,
-    agent_sound: AgentSoundNotificationType,
+    notification_shown: core.NotificationShown,
+    agent_sound: core.AgentSoundNotification,
     history_result: *QueryResultType,
     change_review: *ReviewResult,
     agent_history_page: *@import("OwnedAgentHistoryPage.zig"),
-    request_completed: RequestCompletedType,
+    request_completed: core.RequestCompleted,
     pane_text: PendingPaneText,
     pane_matches: PendingPaneMatches,
-    history_pruned: HistoryPrunedType,
+    history_pruned: core.HistoryPruned,
     history_output: *OutputResultType,
     history_stats: *StatsResultType,
-    pane_focus_command: PaneFocusCommandType,
-    pane_focus_result: PaneFocusResultType,
+    pane_focus_command: core.PaneFocusCommand,
+    pane_focus_result: core.PaneFocusResult,
     command_suggestion: PendingSuggestion,
 };
 
@@ -101,7 +86,7 @@ test "queue records lifetime high water" {
 
 test "a dropped workspace close preserves its handoff target" {
     var queue: ResponseQueue = .{};
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
@@ -119,7 +104,7 @@ test "a dropped workspace close preserves its handoff target" {
 
     try std.testing.expectEqualDeep(location.workspace, queue.resync_workspace.?);
     try std.testing.expectEqual(
-        @as(WorkspaceIdType, @enumFromInt(6)),
+        @as(core.WorkspaceId, @enumFromInt(6)),
         queue.resync_previous_workspace.?,
     );
     queue.len = 0;
@@ -127,7 +112,7 @@ test "a dropped workspace close preserves its handoff target" {
 
 test "a dropped tab move preserves the workspace that must be resynchronized" {
     var queue: ResponseQueue = .{};
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
@@ -155,7 +140,7 @@ test "a dropped tab move preserves the workspace that must be resynchronized" {
 
 test "notification reservations remain exact when request IDs repeat" {
     var queue: ResponseQueue = .{};
-    const request_id: RequestIdType = @enumFromInt(7);
+    const request_id: core.RequestId = @enumFromInt(7);
     for (0..queue.items.len - 1) |_| {
         try queue.push(.{ .notification_shown = .{
             .request_id = .none,

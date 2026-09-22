@@ -1,20 +1,17 @@
-const RectType = @import("telar-core").Rect;
-const TabLocationType = @import("telar-core").TabLocation;
-const WorkspaceListSnapshot = @import("telar-client").WorkspaceListSnapshot;
-const ProxyScopeType = @import("telar-core").ProxyScope;
-const SlotType = @import("telar-client").Slot;
+const core = @import("telar-core");
+const client = @import("telar-client");
 const top_bar = @import("top_bar.zig");
 const MetricsType = @import("Metrics.zig");
 const Input = @This();
 
-area: RectType,
+area: core.Rect,
 sidebar_visible: bool,
-location: ?TabLocationType,
+location: ?core.TabLocation,
 workspace_name: []const u8,
-workspaces: *const WorkspaceListSnapshot,
+workspaces: *const client.WorkspaceListSnapshot,
 collapsed: bool,
 proxy_tls_active: bool,
-proxy_tls_scope: ProxyScopeType = .exact,
+proxy_tls_scope: core.ProxyScope = .exact,
 proxy_system_trusted: bool = false,
-right: *const SlotType = &top_bar.empty_right,
+right: *const client.Slot = &top_bar.empty_right,
 system_metrics: ?MetricsType = null,

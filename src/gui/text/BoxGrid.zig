@@ -20,9 +20,10 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+const box_lines = @import("box_lines.zig");
+const BoxLines = @import("BoxLines.zig");
 const std = @import("std");
 const Rect = @import("../render/Rect.zig");
-const Lines = @import("BoxLines.zig").Lines;
 const Box = @import("BoxDrawing.zig");
 const Grid = @This();
 
@@ -51,7 +52,7 @@ pub fn init(cell: Rect, thickness: f32) !Grid {
 /// Emits the specified arms or dash pattern; curves are rasterized separately.
 /// Example: `grid.draw(box);`
 pub fn draw(grid: *Grid, box: Box) void {
-    if (@import("box_lines.zig").get(box.codepoint)) |lines| {
+    if (box_lines.get(box.codepoint)) |lines| {
         var resolved = lines;
         if (@min(grid.width, grid.height) < 3 * grid.light) {
             // Two strokes and their gap need three units; a single stroke keeps
@@ -108,7 +109,7 @@ fn add(grid: *Grid, edges: [4]f32) void {
     grid.count += 1;
 }
 
-fn intersection(grid: *Grid, lines: Lines) void {
+fn intersection(grid: *Grid, lines: BoxLines.Lines) void {
     const light_px = grid.light;
     const heavy_px = grid.heavy;
 

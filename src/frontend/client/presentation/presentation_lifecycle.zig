@@ -1,14 +1,11 @@
 //! Presentation event adaptation for one disposable client. The presenter
 //! decides when and what to paint. This adapter releases async tokens and
 //! supplies concrete effects to the application delivery policy.
+const core = @import("telar-core");
 const common = @import("telar-client");
 
 const TerminalClient = @import("../TerminalClient.zig");
-const host = TerminalClient.of;
-const Client = @import("telar-client").AttachedClient;
 const presentation_projection = @import("presentation_projection.zig");
-const mark_module = @import("telar-core").mark;
-const TokenType = @import("telar-client").Token;
 const OutputType = @import("../resources/Output.zig");
 
 /// Publishes every revision the presenter uses after one client event commits.
@@ -16,8 +13,8 @@ const OutputType = @import("../resources/Output.zig");
 /// ```zig
 /// try presentation_lifecycle.observe(client);
 /// ```
-pub fn observe(client: *Client) !void {
-    try host(client).presenter.observe(presentation_projection.observation(client));
+pub fn observe(client: *common.AttachedClient) !void {
+    try TerminalClient.of(client).presenter.observe(presentation_projection.observation(client));
 }
 
 /// Completes one paced draw. Damage is retired only after the host terminal
@@ -26,8 +23,8 @@ pub fn observe(client: *Client) !void {
 /// ```zig
 /// try presentation_lifecycle.handleDraw(client, result);
 /// ```
-pub fn handleDraw(client: *Client, result: anyerror!void) !void {
-    try host(client).presenter.completeDraw(result);
+pub fn handleDraw(client: *common.AttachedClient, result: anyerror!void) !void {
+    try TerminalClient.of(client).presenter.completeDraw(result);
     try presentNow(client);
 }
 
@@ -38,24 +35,24 @@ pub fn handleDraw(client: *Client, result: anyerror!void) !void {
 /// ```zig
 /// try presentation_lifecycle.presentNow(client);
 /// ```
-pub fn presentNow(client: *Client) !void {
-    mark_module(client.io, .compose_start);
-    if (host(client).output) |*output| {
+pub fn presentNow(client: *common.AttachedClient) !void {
+    core.mark(client.io, .compose_start);
+    if (TerminalClient.of(client).output) |*output| {
         if (output.pending) {
             output.draw_deferred = true;
             return;
         }
 
-        try output.prepareFrame(@as(usize, host(client).presenter.screen.back.w) * host(client).presenter.screen.back.h);
+        try output.prepareFrame(@as(usize, TerminalClient.of(client).presenter.screen.back.w) * TerminalClient.of(client).presenter.screen.back.h);
     }
 
-    const delivery = try host(client).presenter.presentDue(
+    const delivery = try TerminalClient.of(client).presenter.presentDue(
         presentation_projection.projection(client),
         presentation_projection.resources(client),
     ) orelse return;
-    errdefer _ = host(client).presenter.presentation_state.complete(delivery, .failed);
+    errdefer _ = TerminalClient.of(client).presenter.presentation_state.complete(delivery, .failed);
 
-    if (host(client).output) |*output| {
+    if (TerminalClient.of(client).output) |*output| {
         if (output.writer.end != 0) {
             output.delivery = delivery;
             try pumpOutput(client);
@@ -66,13 +63,13 @@ pub fn presentNow(client: *Client) !void {
     try deliver(client, delivery);
 }
 
-fn deliver(client: *Client, token: TokenType) !void {
-    const delivery = host(client).presenter.presentation_state.complete(token, .delivered) orelse return;
+fn deliver(client: *common.AttachedClient, token: common.Token) !void {
+    const delivery = TerminalClient.of(client).presenter.presentation_state.complete(token, .delivered) orelse return;
     const geometry = client.presentation.deliveredGeometry();
-    host(client).view.tab_drag.present(&host(client).view.hits, if (geometry) |value| if (value.location) |location| location.workspace else null else null);
+    TerminalClient.of(client).view.tab_drag.present(&TerminalClient.of(client).view.hits, if (geometry) |value| if (value.location) |location| location.workspace else null else null);
     try common.presentation_delivery.apply(client, delivery.commit);
     if (delivery.media_pending) {
-        try host(client).presenter.requestMedia();
+        try TerminalClient.of(client).presenter.requestMedia();
     }
 }
 
@@ -81,18 +78,18 @@ fn deliver(client: *Client, token: TokenType) !void {
 /// ```zig
 /// try presentation_lifecycle.handleMediaTick(client, result);
 /// ```
-pub fn handleMediaTick(client: *Client, result: anyerror!void) !void {
-    try host(client).presenter.completeMediaTick(result);
-    if (host(client).output) |*output| {
+pub fn handleMediaTick(client: *common.AttachedClient, result: anyerror!void) !void {
+    try TerminalClient.of(client).presenter.completeMediaTick(result);
+    if (TerminalClient.of(client).output) |*output| {
         if (output.pending) {
             output.media_deferred = true;
             return;
         }
 
-        try output.prepareFrame(@as(usize, host(client).presenter.screen.back.w) * host(client).presenter.screen.back.h);
+        try output.prepareFrame(@as(usize, TerminalClient.of(client).presenter.screen.back.w) * TerminalClient.of(client).presenter.screen.back.h);
     }
 
-    try host(client).presenter.presentMedia(
+    try TerminalClient.of(client).presenter.presentMedia(
         presentation_projection.projection(client),
         presentation_projection.resources(client),
     );
@@ -100,28 +97,28 @@ pub fn handleMediaTick(client: *Client, result: anyerror!void) !void {
 
 /// Starts one host write without lending model or presentation state.
 /// Example: `try pumpOutput(client);`.
-pub fn pumpOutput(client: *Client) anyerror!void {
-    const output = if (host(client).output) |*output| output else return;
+pub fn pumpOutput(client: *common.AttachedClient) anyerror!void {
+    const output = if (TerminalClient.of(client).output) |*output| output else return;
     const pending = output.begin() orelse return;
-    mark_module(client.io, .host_flush_start);
+    core.mark(client.io, .host_flush_start);
     const work = try output.tryWrite(pending);
     if (work.bytes.len == 0) {
         try handleWritten(client, {});
         return;
     }
 
-    try host(client).inbox.start(.host_written, .{ OutputType.write, .{work} });
+    try TerminalClient.of(client).inbox.start(.host_written, .{ OutputType.write, .{work} });
 }
 
 /// Commits only the presentation whose bytes reached the host, then folds work.
 /// Example: `try handleWritten(client, result);`.
-pub fn handleWritten(client: *Client, result: anyerror!void) !void {
-    mark_module(client.io, .host_flush_done);
-    const output = if (host(client).output) |*output| output else unreachable;
+pub fn handleWritten(client: *common.AttachedClient, result: anyerror!void) !void {
+    core.mark(client.io, .host_flush_done);
+    const output = if (TerminalClient.of(client).output) |*output| output else unreachable;
     const token = output.delivery;
     const completed = output.complete(result) catch |err| {
         if (token) |value| {
-            _ = host(client).presenter.presentation_state.complete(value, .failed);
+            _ = TerminalClient.of(client).presenter.presentation_state.complete(value, .failed);
         }
         return err;
     };
@@ -131,11 +128,11 @@ pub fn handleWritten(client: *Client, result: anyerror!void) !void {
 
     if (output.draw_deferred) {
         output.draw_deferred = false;
-        try host(client).presenter.requestDraw();
+        try TerminalClient.of(client).presenter.requestDraw();
     }
     if (output.media_deferred) {
         output.media_deferred = false;
-        try host(client).presenter.requestMedia();
+        try TerminalClient.of(client).presenter.requestMedia();
     }
 
     try pumpOutput(client);

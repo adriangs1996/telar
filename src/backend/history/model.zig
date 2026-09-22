@@ -1,14 +1,10 @@
 //! Owned values exchanged with the history worker.
 
+const core = @import("telar-core");
 const SessionTitle = @import("SessionTitle.zig");
 const std = @import("std");
 const Query = @import("Query.zig");
-const RequestIdType = @import("telar-core").RequestId;
-const HistoryScopeType = @import("telar-core").HistoryScope;
 const QueryOrigin = @import("QueryOrigin.zig");
-const max_history_query_bytes_module = @import("telar-core").max_history_query_bytes;
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
-const max_history_results_module = @import("telar-core").max_history_results;
 const LaunchAttempt = @import("LaunchAttempt.zig");
 const SessionStarted = @import("SessionStarted.zig");
 const SessionFinished = @import("SessionFinished.zig");
@@ -79,11 +75,11 @@ test "history queries own request text and scope bytes" {
 
     try std.testing.expectEqualStrings("git", query.textSlice());
     try std.testing.expectEqualStrings("/work", query.scopeSlice());
-    try std.testing.expectEqual(@as(RequestIdType, @enumFromInt(7)), query.request_id);
+    try std.testing.expectEqual(@as(core.RequestId, @enumFromInt(7)), query.request_id);
     try std.testing.expectEqual(@as(u64, 3), query.origin.client.id);
     try std.testing.expectEqual(@as(u64, 4), query.origin.client.generation);
     try std.testing.expect(query.origin.close_after_reply);
-    try std.testing.expectEqual(HistoryScopeType.workspace, query.scope);
+    try std.testing.expectEqual(core.HistoryScope.workspace, query.scope);
     try std.testing.expect(query.failed_only);
     try std.testing.expectEqual(@as(u16, 9), query.limit);
 }
@@ -93,8 +89,8 @@ test "history query validation rejects values that cannot enter the worker" {
         .client = .{ .id = 1, .generation = 2 },
         .close_after_reply = false,
     };
-    const long_text = [_]u8{'q'} ** (max_history_query_bytes_module + 1);
-    const long_scope = [_]u8{'s'} ** (max_cwd_bytes_module + 1);
+    const long_text = [_]u8{'q'} ** (core.max_history_query_bytes + 1);
+    const long_scope = [_]u8{'s'} ** (core.max_cwd_bytes + 1);
 
     try std.testing.expectError(error.QueryTooLong, Query.init(.{
         .request_id = @enumFromInt(1),
@@ -114,7 +110,7 @@ test "history query validation rejects values that cannot enter the worker" {
     try std.testing.expectError(error.InvalidLimit, Query.init(.{
         .request_id = @enumFromInt(1),
         .origin = origin,
-        .limit = max_history_results_module + 1,
+        .limit = core.max_history_results + 1,
     }));
     try std.testing.expectError(error.InvalidPaneId, Query.init(.{
         .request_id = @enumFromInt(1),

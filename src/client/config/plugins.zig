@@ -1,13 +1,13 @@
 //! Compiler for declarative plugin specifications.
 
+const data = @import("model");
 const lua_api = @import("lua-api");
 const SnapshotType = @import("Snapshot.zig");
-const DiagnosticType = @import("Diagnostic.zig");
 const config_model = @import("model.zig");
 const value = @import("lua_value.zig");
 const PluginSpecType = @import("PluginSpec.zig");
 
-pub fn parse(state: *lua_api.c.lua_State, snapshot: *SnapshotType, diagnostic: *DiagnosticType) !void {
+pub fn parse(state: *lua_api.c.lua_State, snapshot: *SnapshotType, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.plugins must be an array", .{});

@@ -1,14 +1,12 @@
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const core = @import("telar-core");
+const data = @import("model");
 const Agent = @import("Agent.zig");
 const SnapshotInput = @import("SnapshotInput.zig");
 const std = @import("std");
-const AgentKey = @import("AgentKey.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const PaneIdType = @import("telar-core").PaneId;
 const Snapshot = @This();
 
 revision: u64 = 0,
-items: [max_agent_snapshot_entries]Agent = undefined,
+items: [core.max_agent_snapshot_entries]Agent = undefined,
 count: u8 = 0,
 
 /// Atomically owns one newer runtime snapshot. Stale revisions and a
@@ -21,7 +19,7 @@ pub fn replace(snapshot: *Snapshot, input: SnapshotInput) !bool {
     if (input.revision <= snapshot.revision) {
         return false;
     }
-    if (input.agents.len > max_agent_snapshot_entries) {
+    if (input.agents.len > core.max_agent_snapshot_entries) {
         return error.TooManyAgents;
     }
 
@@ -57,7 +55,7 @@ pub fn slice(snapshot: *const Snapshot) []const Agent {
 /// ```zig
 /// const agent = snapshot.find(key) orelse return;
 /// ```
-pub fn find(snapshot: *const Snapshot, key: AgentKey) ?*const Agent {
+pub fn find(snapshot: *const Snapshot, key: data.AgentKey) ?*const Agent {
     for (snapshot.slice()) |*agent| {
         if (std.meta.eql(agent.key, key)) {
             return agent;
@@ -72,7 +70,7 @@ pub fn find(snapshot: *const Snapshot, key: AgentKey) ?*const Agent {
 /// ```zig
 /// const key = snapshot.keyForPane(location, pane_id) orelse return;
 /// ```
-pub fn keyForPane(snapshot: *const Snapshot, location: TabLocationType, pane_id: PaneIdType) ?AgentKey {
+pub fn keyForPane(snapshot: *const Snapshot, location: core.TabLocation, pane_id: core.PaneId) ?data.AgentKey {
     for (snapshot.slice()) |agent| {
         if (agent.key.pane_id == pane_id and std.meta.eql(agent.location, location)) {
             return agent.key;

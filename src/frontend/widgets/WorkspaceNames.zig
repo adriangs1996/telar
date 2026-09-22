@@ -1,6 +1,6 @@
-const WorkspaceListSnapshot = @import("telar-client").WorkspaceListSnapshot;
+const client = @import("telar-client");
 const WorkspaceNames = @This();
 
-snapshot: *const WorkspaceListSnapshot,
+snapshot: *const client.WorkspaceListSnapshot,
 active_index: ?usize,
 active_name: []const u8,

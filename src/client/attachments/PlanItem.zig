@@ -1,6 +1,6 @@
-const types = @import("types.zig");
-const RectType = @import("telar-core").Rect;
+const core = @import("telar-core");
+const model_data = @import("model");
 const PlanItem = @This();
 
-id: types.Id,
-area: RectType,
+id: model_data.AttachmentId,
+area: core.Rect,

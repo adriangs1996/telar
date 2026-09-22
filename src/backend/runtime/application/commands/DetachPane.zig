@@ -1,4 +1,4 @@
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const DetachPane = @This();
 
-pane_id: PaneIdType,
+pane_id: core.PaneId,

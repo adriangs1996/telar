@@ -1,50 +1,45 @@
 //! Adapts terminal protocol replies and probe expiry to client host state.
 
+const client_module = @import("telar-client");
+const data = @import("model");
 const TerminalClient = @import("../../TerminalClient.zig");
-const host = TerminalClient.of;
-const Client = @import("telar-client").AttachedClient;
 const capabilities_module = @import("../../../graphics/capabilities.zig");
 const negotiation = @import("../../resources/host_negotiation.zig");
-const monotonic_module = @import("telar-client").monotonic;
-const wait_module = @import("telar-client").wait;
-const HostCommitType = @import("telar-client").HostCommit;
 const term = @import("../../../presentation/screen_support.zig");
 const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
-const HostCapabilityObservationType = @import("telar-client").HostCapabilityObservation;
-const HostCapabilitySupportType = @import("telar-client").HostCapabilitySupport;
 const std = @import("std");
 
 /// Starts the exterior-terminal probes through one owner.
 /// Example: `try begin(client);`.
-pub fn begin(client: *Client) !void {
-    try host(client).writer.writeAll(capabilities_module.query);
+pub fn begin(client: *client_module.AttachedClient) !void {
+    try TerminalClient.of(client).writer.writeAll(capabilities_module.query);
     try queryColors(client);
-    try host(client).writer.flush();
+    try TerminalClient.of(client).writer.flush();
 }
 
 /// Coalesces overlapping color probes. A resize needs no protocol details.
 /// Example: `try refresh(client);`.
-pub fn refresh(client: *Client) !void {
-    try host(client).writer.writeAll(negotiation.pixel_query);
+pub fn refresh(client: *client_module.AttachedClient) !void {
+    try TerminalClient.of(client).writer.writeAll(negotiation.pixel_query);
     try queryColors(client);
-    try host(client).writer.flush();
+    try TerminalClient.of(client).writer.flush();
 }
 
-fn queryColors(client: *Client) !void {
-    if (!host(client).host_negotiation.begin(monotonic_module(client.io))) {
+fn queryColors(client: *client_module.AttachedClient) !void {
+    if (!TerminalClient.of(client).host_negotiation.begin(client_module.monotonic(client.io))) {
         return;
     }
 
-    try host(client).writer.writeAll(negotiation.color_query);
+    try TerminalClient.of(client).writer.writeAll(negotiation.color_query);
     try scheduleExpiry(client);
 }
 
 /// Example: `try scheduleExpiry(client);`.
-pub fn scheduleExpiry(client: *Client) !void {
-    const state = &host(client).host_negotiation;
+pub fn scheduleExpiry(client: *client_module.AttachedClient) !void {
+    const state = &TerminalClient.of(client).host_negotiation;
     switch (state.timer.update(client.io, state.deadline_ns)) {
         .idle, .retained => {},
-        .schedule => host(client).inbox.start(.capability_timeout, .{ wait_module, .{
+        .schedule => TerminalClient.of(client).inbox.start(.capability_timeout, .{ client_module.wait, .{
             client.io, &state.timer,
         } }) catch |err| {
             state.timer.schedulingFailed();
@@ -58,9 +53,9 @@ pub fn scheduleExpiry(client: *Client) !void {
 /// ```zig
 /// _ = try handleExpiry(client, result);
 /// ```
-pub fn handleExpiry(client: *Client, result: anyerror!void) !?HostCommitType {
-    try host(client).host_negotiation.timer.complete(result);
-    if (!host(client).host_negotiation.expire(monotonic_module(client.io))) {
+pub fn handleExpiry(client: *client_module.AttachedClient, result: anyerror!void) !?data.HostCommit {
+    try TerminalClient.of(client).host_negotiation.timer.complete(result);
+    if (!TerminalClient.of(client).host_negotiation.expire(client_module.monotonic(client.io))) {
         try scheduleExpiry(client);
         return null;
     }
@@ -73,21 +68,21 @@ pub fn handleExpiry(client: *Client, result: anyerror!void) !?HostCommitType {
 /// ```zig
 /// _ = try observe(client, response);
 /// ```
-pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?HostCommitType {
+pub fn observe(client: *client_module.AttachedClient, response: term.Event.TerminalResponse) !?data.HostCommit {
     const color: ?negotiation.Color = switch (response) {
         .foreground_color => .foreground,
         .background_color => .background,
         else => null,
     };
     if (color) |target| {
-        if (!host(client).host_negotiation.accept(target, monotonic_module(client.io))) {
+        if (!TerminalClient.of(client).host_negotiation.accept(target, client_module.monotonic(client.io))) {
             return null;
         }
     }
 
     if (response == .kitty_graphics and response.kitty_graphics.image_id == capabilities_module.zlib_query_image_id) {
-        host(client).host_negotiation.zlib_support = if (response.kitty_graphics.supported) .supported else .unsupported;
-        kitty_delivery.setHostZlib(&host(client).graphics_store, response.kitty_graphics.supported);
+        TerminalClient.of(client).host_negotiation.zlib_support = if (response.kitty_graphics.supported) .supported else .unsupported;
+        kitty_delivery.setHostZlib(&TerminalClient.of(client).graphics_store, response.kitty_graphics.supported);
         return null;
     }
 
@@ -100,11 +95,11 @@ pub fn observe(client: *Client, response: term.Event.TerminalResponse) !?HostCom
 /// ```zig
 /// _ = try expire(client);
 /// ```
-pub fn expire(client: *Client) !?HostCommitType {
+pub fn expire(client: *client_module.AttachedClient) !?data.HostCommit {
     const capabilities = negotiation.settledCapabilities(client.model.hostCapabilities());
 
-    if (host(client).host_negotiation.zlib_support == .unknown) {
-        host(client).host_negotiation.zlib_support = .unsupported;
+    if (TerminalClient.of(client).host_negotiation.zlib_support == .unknown) {
+        TerminalClient.of(client).host_negotiation.zlib_support = .unsupported;
     }
 
     return client.reconcileHostCapabilities(capabilities);
@@ -115,7 +110,7 @@ pub fn expire(client: *Client) !?HostCommitType {
 /// ```zig
 /// const observation = translate(response) orelse return;
 /// ```
-pub fn translate(response: term.Event.TerminalResponse) ?HostCapabilityObservationType {
+pub fn translate(response: term.Event.TerminalResponse) ?data.HostCapabilityObservation {
     return switch (response) {
         .kitty_graphics => |reply| if (reply.image_id == capabilities_module.query_image_id)
             .{ .images = support(reply.supported) }
@@ -136,13 +131,13 @@ pub fn translate(response: term.Event.TerminalResponse) ?HostCapabilityObservati
     };
 }
 
-fn support(supported: bool) HostCapabilitySupportType {
+fn support(supported: bool) data.HostCapabilitySupport {
     return if (supported) .supported else .unsupported;
 }
 
 test "Kitty probe replies translate by reserved image identity" {
     try std.testing.expectEqual(
-        HostCapabilityObservationType{ .images = .supported },
+        data.HostCapabilityObservation{ .images = .supported },
         translate(.{ .kitty_graphics = .{
             .image_id = capabilities_module.query_image_id,
             .supported = true,
@@ -160,21 +155,21 @@ test "Kitty probe replies translate by reserved image identity" {
 
 test "Geometry and mouse replies translate without protocol types" {
     try std.testing.expectEqual(
-        HostCapabilityObservationType{ .window_pixels = .{
+        data.HostCapabilityObservation{ .window_pixels = .{
             .width = 1200,
             .height = 800,
         } },
         translate(.{ .window_pixels = .{ .width = 1200, .height = 800 } }).?,
     );
     try std.testing.expectEqual(
-        HostCapabilityObservationType{ .cell_pixels = .{
+        data.HostCapabilityObservation{ .cell_pixels = .{
             .width = 10,
             .height = 20,
         } },
         translate(.{ .cell_pixels = .{ .width = 10, .height = 20 } }).?,
     );
     try std.testing.expectEqual(
-        HostCapabilityObservationType{ .pointer_pixels = .supported },
+        data.HostCapabilityObservation{ .pointer_pixels = .supported },
         translate(.{ .mouse_pixels = .{ .supported = true } }).?,
     );
     try std.testing.expect(translate(.primary_device_attributes) == null);

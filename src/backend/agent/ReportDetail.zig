@@ -2,9 +2,9 @@
 //! and one line naming the moment. It is shown only while that report is
 //! the evidence the projection follows.
 
-const AgentBlockedReasonType = @import("telar-core").AgentBlockedReason;
+const core = @import("telar-core");
 const EventLine = @import("EventLine.zig");
 const ReportDetail = @This();
 
-blocked_reason: AgentBlockedReasonType = .none,
+blocked_reason: core.AgentBlockedReason = .none,
 event: EventLine = .{},

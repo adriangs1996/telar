@@ -2,12 +2,12 @@
 //! copy: the child's object lands in a runtime-owned object whose mapping is
 //! the emulator's storage and, for local clients, the parked transfer.
 
+const core = @import("telar-core");
 const std = @import("std");
 const PaneFixtureType = @import("PaneFixture.zig");
 const StatsType = @import("../../media/Stats.zig");
 const shared_transfer_module = @import("../../media/shared_transfer.zig");
 const Frame = @import("Frame.zig");
-const ImageKeyType = @import("telar-core").ImageKey;
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const media_projection = @import("../entrypoints/events/pane/media_projection.zig");
 
@@ -95,7 +95,7 @@ test "a shared frame is copied once into the object that becomes emulator storag
     try std.testing.expect(fixture.pane.media_allocator.used >= used_before + pixels.len);
     const used_after_first = fixture.pane.media_allocator.used;
 
-    const key: ImageKeyType = .{ .image_id = 7, .generation = image.generation };
+    const key: core.ImageKey = .{ .image_id = 7, .generation = image.generation };
     try std.testing.expect(fixture.pane.media_ingestion.prepared_transfers.holds(key));
     const parked = fixture.pane.media_ingestion.prepared_transfers.items[0].?;
     try std.testing.expectEqual(@as(usize, 0), parked.reserved_len);

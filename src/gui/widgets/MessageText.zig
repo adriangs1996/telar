@@ -1,4 +1,11 @@
 //! Markdown conversation text with one layout path for measurement and paint.
+const MessageTable = @import("MessageTable.zig");
+const Theme = @import("../diagrams/Theme.zig");
+const TextFit = @import("TextFit.zig");
+const GlyphAtlas = @import("../text/GlyphAtlas.zig");
+const assets = @import("assets");
+const QuadList = @import("../render/QuadList.zig");
+const client = @import("telar-client");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
@@ -54,7 +61,7 @@ fn layout(widget: Text, canvas: *Canvas, paint: bool) !f32 {
         }
 
         if (block.kind == .table) {
-            y += try (@import("MessageTablePaint.zig"){ .bounds = .{ .x = widget.bounds.x, .y = widget.bounds.y + y, .width = widget.bounds.width, .height = 0 }, .viewport = widget.viewport, .table = @import("MessageTable.zig").parse(block.text).?, .owner = widget.owner, .source_start = @intFromPtr(widget.text.ptr), .muted = widget.muted }).layout(canvas, paint);
+            y += try (@import("MessageTablePaint.zig"){ .bounds = .{ .x = widget.bounds.x, .y = widget.bounds.y + y, .width = widget.bounds.width, .height = 0 }, .viewport = widget.viewport, .table = MessageTable.parse(block.text).?, .owner = widget.owner, .source_start = @intFromPtr(widget.text.ptr), .muted = widget.muted }).layout(canvas, paint);
             continue;
         }
 
@@ -90,7 +97,7 @@ fn codeBlock(widget: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig
     }
 
     const MermaidBlock = @import("MermaidBlock.zig");
-    const diagram: ?MermaidBlock = if (input.block.isMermaid() and widget.owner != null) .{ .bounds = widget.bounds, .request = .{ .owner = widget.owner.?, .block_offset = input.block.source_offset, .text = input.block.text, .theme = @import("../diagrams/Theme.zig").init(canvas.theme), .scale = canvas.chrome.ratio } } else null;
+    const diagram: ?MermaidBlock = if (input.block.isMermaid() and widget.owner != null) .{ .bounds = widget.bounds, .request = .{ .owner = widget.owner.?, .block_offset = input.block.source_offset, .text = input.block.text, .theme = Theme.init(canvas.theme), .scale = canvas.chrome.ratio } } else null;
     var diagram_view = if (diagram) |value| value.lookup(canvas) else null;
     if (diagram_view) |view| {
         if (view == .ready) {
@@ -123,7 +130,7 @@ fn codeBlock(widget: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig
     const card: Rect = .{ .x = widget.bounds.x, .y = widget.bounds.y + canvas.chrome.px(4), .width = widget.bounds.width, .height = height };
     try canvas.fillRoundedAt(card, .{ .color = canvas.theme.palette.surface0, .radius = canvas.chrome.px(8) });
     try canvas.ringAt(card, .{ .color = canvas.theme.palette.overlay0, .width = 1, .radius = canvas.chrome.px(8), .alpha = 0.4 });
-    var storage: [@import("TextFit.zig").max_bytes]u8 = undefined;
+    var storage: [TextFit.max_bytes]u8 = undefined;
     var label: Label = .{ .text = if (diagram != null) MermaidBlock.label(diagram_view) else if (input.block.language.len > 0) input.block.language else "Code", .face = .sans, .size = .small, .color = canvas.theme.palette.subtext0 };
     label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = @max(0, card.width - 2 * inset) }).fit(label, &storage);
     if (widget.visible(card.y, header)) {
@@ -158,13 +165,13 @@ fn visible(widget: Text, y: f32, height: f32) bool {
 }
 
 test "offscreen Markdown decorations cannot exhaust the visible frame quad budget" {
-    var atlas = try @import("../text/GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
-    var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
+    var quads = QuadList.init(std.testing.allocator);
     defer quads.deinit();
     try quads.quads.ensureTotalCapacity(std.testing.allocator, 96);
     quads.limit = 96;
-    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = @import("telar-client").theme_support.default_theme, .chrome = .{ .body = 16, .title = 18, .small = 12 } };
+    var canvas: Canvas = .{ .atlas = &atlas, .quads = &quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 }, .theme = client.theme_support.default_theme, .chrome = .{ .body = 16, .title = 18, .small = 12 } };
     var storage: [48 * 1024]u8 = undefined;
     const pattern = "---\n- bullet\n> quote\n```zig\ncode\n```\n";
     var len: usize = 0;

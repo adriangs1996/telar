@@ -1,14 +1,14 @@
 //! Native unified diffs share one measured flow with their visible text geometry.
+const TextFit = @import("TextFit.zig");
+const core = @import("telar-core");
+const client = @import("telar-client");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Label = @import("Label.zig");
-const Line = @import("telar-core").ChangeReviewDiffLine;
-const Lines = @import("telar-core").ChangeReviewDiffLines;
 const SyntaxPaint = @import("SyntaxPaint.zig");
 const DiffAnnotations = @import("DiffAnnotations.zig");
 const DiffRow = @import("DiffRow.zig");
-const SyntaxRole = @import("telar-client").SyntaxRole;
 const Paint = @This();
 
 canvas: *Canvas,
@@ -21,7 +21,7 @@ paint: bool,
 y: f32 = 0,
 digits: usize = 3,
 syntax_paint: SyntaxPaint = .{},
-roles: ?[]const SyntaxRole = null,
+roles: ?[]const client.SyntaxRole = null,
 annotations: ?DiffAnnotations = null,
 
 /// Measures all lines but paints and retains selectable geometry only in view.
@@ -30,7 +30,7 @@ pub fn layout(widget: *Paint) !f32 {
     widget.y = widget.bounds.y;
     widget.digits = 3;
     widget.syntax_paint = .{ .source = widget.text, .roles = widget.roles orelse if (widget.paint) (if (widget.canvas.syntax) |store| store.request(widget.text) else null) else null };
-    var scan: Lines = .{ .text = widget.text };
+    var scan: core.ChangeReviewDiffLines = .{ .text = widget.text };
     var maximum: u32 = 0;
     while (scan.next()) |line| {
         maximum = @max(maximum, @max(line.old orelse 0, line.new orelse 0));
@@ -44,7 +44,7 @@ pub fn layout(widget: *Paint) !f32 {
     defer if (widget.paint) {
         widget.canvas.quads.clipFrom(first, widget.viewport);
     };
-    var lines: Lines = .{ .text = widget.text };
+    var lines: core.ChangeReviewDiffLines = .{ .text = widget.text };
     var started = false;
     while (lines.next()) |line| {
         if (line.kind == .file) {
@@ -58,7 +58,7 @@ pub fn layout(widget: *Paint) !f32 {
         }
 
         if (!started) {
-            try widget.header(.{ .kind = .file, .text = "Changes" }, (Lines{ .text = widget.text }).counts());
+            try widget.header(.{ .kind = .file, .text = "Changes" }, (core.ChangeReviewDiffLines{ .text = widget.text }).counts());
             started = true;
         }
 
@@ -72,7 +72,7 @@ pub fn layout(widget: *Paint) !f32 {
     return widget.y - widget.bounds.y + widget.canvas.chrome.px(10);
 }
 
-fn header(widget: *Paint, line: Line, counts: [2]u32) !void {
+fn header(widget: *Paint, line: core.ChangeReviewDiffLine, counts: [2]u32) !void {
     const canvas = widget.canvas;
     const name = line.text[(if (std.mem.lastIndexOfScalar(u8, line.text, '/')) |at| at + 1 else 0)..];
     const has_path = !std.mem.eql(u8, line.text, name);
@@ -101,7 +101,7 @@ fn header(widget: *Paint, line: Line, counts: [2]u32) !void {
     }
 }
 
-fn hunk(widget: *Paint, line: Line) !void {
+fn hunk(widget: *Paint, line: core.ChangeReviewDiffLine) !void {
     const height = widget.canvas.chrome.px(28);
     defer widget.y += height;
     if (!widget.visible(height)) {
@@ -117,7 +117,7 @@ fn hunk(widget: *Paint, line: Line) !void {
     try widget.fitted(.{ .x = area.x + inset, .y = area.y, .width = @max(0, area.width - 2 * inset), .height = height }, .{ .text = line.text, .face = .sans, .size = .small, .color = canvas.theme.palette.subtext0 });
 }
 
-fn code(widget: *Paint, line: Line) !void {
+fn code(widget: *Paint, line: core.ChangeReviewDiffLine) !void {
     const canvas = widget.canvas;
     const cell: f32 = @floatFromInt(canvas.metrics.cell_width);
     const row = @max(canvas.chrome.px(22), @as(f32, @floatFromInt(canvas.metrics.cell_height)));
@@ -198,7 +198,7 @@ fn literal(widget: *Paint, area: Rect, text: []const u8) !void {
 }
 
 fn fitted(widget: *Paint, area: Rect, original: Label) !void {
-    var buffer: [@import("TextFit.zig").max_bytes]u8 = undefined;
+    var buffer: [TextFit.max_bytes]u8 = undefined;
     var label = original;
     label.text = try (@import("TextFit.zig"){ .canvas = widget.canvas, .width = area.width }).fit(label, &buffer);
     _ = try widget.canvas.textAt(area, label);

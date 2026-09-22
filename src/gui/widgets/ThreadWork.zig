@@ -1,4 +1,5 @@
 //! One disclosure for the work between a prompt and its final response.
+const TextFit = @import("TextFit.zig");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Work = @This();
@@ -23,7 +24,7 @@ pub fn draw(work: Work, canvas: *Canvas) !void {
     var storage: [96]u8 = undefined;
     const text = try std.fmt.bufPrint(&storage, "{s} · {d} {s}", .{ if (view.work_active) @as([]const u8, "Working") else "Agent work", view.work_count, if (view.work_count == 1) @as([]const u8, "activity") else "activities" });
     const bounds: @import("../render/Rect.zig") = .{ .x = view.bounds.x + icon_width + gap, .y = view.bounds.y, .width = @max(0, view.bounds.width - icon_width - gap), .height = row };
-    var fitted: [@import("TextFit.zig").max_bytes]u8 = undefined;
+    var fitted: [TextFit.max_bytes]u8 = undefined;
     var label: @import("Label.zig") = .{ .text = text, .face = .sans, .size = .small, .color = palette.subtext0 };
     label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = bounds.width }).fit(label, &fitted);
     try (@import("ActivityText.zig"){ .bounds = bounds, .label = label, .active = view.work_active }).draw(canvas);

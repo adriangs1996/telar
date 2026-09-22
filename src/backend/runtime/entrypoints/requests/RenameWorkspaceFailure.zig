@@ -1,5 +1,5 @@
-const FailureCodeType = @import("telar-core").FailureCode;
+const core = @import("telar-core");
 const Failure = @This();
 
-code: FailureCodeType,
+code: core.FailureCode,
 message: []const u8,

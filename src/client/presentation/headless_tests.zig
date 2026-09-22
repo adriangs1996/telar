@@ -1,19 +1,14 @@
-const PaneIdType = @import("telar-core").PaneId;
-const TabLocationType = @import("telar-core").TabLocation;
+const core = @import("telar-core");
+const data = @import("model");
 const Fixture = @import("Fixture.zig");
 const FrameInput = @import("FrameInput.zig");
-const CellType = @import("telar-core").Cell;
-const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
 const std = @import("std");
-const decodeClient_module = @import("telar-core").decodeClient;
 const GeometryType = @import("Geometry.zig");
-const ImageType = @import("telar-core").Image;
 const retained = @import("../graphics/retained.zig");
 const store = @import("../graphics/store.zig");
-const PaneAttachmentType = @import("../model/PaneAttachment.zig");
 
-pub const pane_id: PaneIdType = @enumFromInt(1);
-pub const location: TabLocationType = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
+pub const pane_id: core.PaneId = @enumFromInt(1);
+pub const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
 
 pub const Outcome = enum { applied, ignored, exit };
 
@@ -21,9 +16,9 @@ pub const Outcome = enum { applied, ignored, exit };
 
 fn sendFrame(fixture: *Fixture, input: FrameInput) !void {
     var wire: [1024]u8 = undefined;
-    var cells: [4]CellType = @splat(.{});
+    var cells: [4]core.Cell = @splat(.{});
     cells[0].bytes[0] = input.text;
-    const bytes = try encodePaneFrame_module(&wire, .{
+    const bytes = try core.encodePaneFrame(&wire, .{
         .pane_id = pane_id,
         .frame_id = input.frame_id,
         .base_frame_id = input.base,
@@ -44,9 +39,9 @@ test "headless inbox owns delayed wire state and preserves patches before depend
     try fixture.expectAck(1);
     const token = try fixture.prepare();
     var wire: [1024]u8 = undefined;
-    var cells: [1]CellType = @splat(.{});
+    var cells: [1]core.Cell = @splat(.{});
     cells[0].bytes[0] = 'B';
-    const bytes = try encodePaneFrame_module(&wire, .{
+    const bytes = try core.encodePaneFrame(&wire, .{
         .pane_id = pane_id,
         .frame_id = 2,
         .base_frame_id = 1,
@@ -69,7 +64,7 @@ test "headless inbox owns delayed wire state and preserves patches before depend
 
     try fixture.expectAck(2);
     const input = fixture.pending.?;
-    try std.testing.expectEqualStrings("\x1b[A", (try decodeClient_module(input)).pane_input.bytes);
+    try std.testing.expectEqualStrings("\x1b[A", (try core.decodeClient(input)).pane_input.bytes);
     try fixture.sendOne();
     try std.testing.expectEqual(@as(u64, 2), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
     const latest = try fixture.prepare();
@@ -114,7 +109,7 @@ test "applied patches are acknowledged and coalesced while headless delivery own
     try std.testing.expect(fixture.adapter.frame.panes[0].input_modes.cursor_keys);
     try fixture.key(.{ .code = .up });
     const sent = fixture.pending.?;
-    try std.testing.expectEqualStrings("\x1b[A", (try decodeClient_module(sent)).pane_input.bytes);
+    try std.testing.expectEqualStrings("\x1b[A", (try core.decodeClient(sent)).pane_input.bytes);
     try fixture.sendOne();
     try fixture.complete(first, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
@@ -201,7 +196,7 @@ test "cell acknowledgement does not return credits for graphics still leased by 
     defer fixture.deinit();
     try sendFrame(fixture, .{});
     try fixture.expectAck(1);
-    const image: ImageType = .{ .key = .{ .image_id = 1, .generation = 1 }, .format = .rgb, .width = 1, .height = 1, .byte_len = 3 };
+    const image: core.Image = .{ .key = .{ .image_id = 1, .generation = 1 }, .format = .rgb, .width = 1, .height = 1, .byte_len = 3 };
     try fixture.graphics.applyImage(.{ .pane_id = pane_id, .revision = 1, .image = image });
     try fixture.graphics.applyChunk(.{ .pane_id = pane_id, .revision = 1, .key = image.key, .offset = 0, .bytes = "rgb" });
     const lease = try retained.retain(&fixture.graphics, store.identity(pane_id, image.key));
@@ -229,7 +224,7 @@ test "reattachment prevents old presentation completion from retiring replacemen
     try fixture.expectAck(1);
     const old = try fixture.prepare();
     try fixture.model.commitTabDetachment(try fixture.model.planTabDetachment(location));
-    const attachment: PaneAttachmentType = .{ .pane_id = pane_id, .location = location };
+    const attachment: data.PaneAttachment = .{ .pane_id = pane_id, .location = location };
     const request_id = try fixture.app.request_lifecycle.nextId();
     try fixture.app.request_lifecycle.tracker.add(
         request_id,

@@ -1,8 +1,8 @@
 //! A retained diagram image with the same measured geometry at every scale.
+const view_module = @import("../diagrams/view.zig");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Ready = @import("../diagrams/Ready.zig");
-const View = @import("../diagrams/view.zig").View;
 const Mermaid = @This();
 
 bounds: Rect,
@@ -10,14 +10,14 @@ request: @import("../diagrams/Request.zig"),
 
 /// Consults frame-stable results without admitting work from measurement.
 /// Example: `const result = mermaid.lookup(canvas);`
-pub fn lookup(widget: Mermaid, canvas: *Canvas) ?View {
+pub fn lookup(widget: Mermaid, canvas: *Canvas) ?view_module.View {
     const store = canvas.diagrams orelse return .{ .failed = .unavailable };
     return store.lookup(widget.request);
 }
 
 /// Copies a visible source into the bounded queue; the host starts work later.
 /// Example: `const result = mermaid.enqueue(canvas);`
-pub fn enqueue(widget: Mermaid, canvas: *Canvas) View {
+pub fn enqueue(widget: Mermaid, canvas: *Canvas) view_module.View {
     const store = canvas.diagrams orelse return .{ .failed = .unavailable };
     return store.request(widget.request);
 }
@@ -46,7 +46,7 @@ pub fn draw(widget: Mermaid, canvas: *Canvas, ready: Ready) !void {
 
 /// Gives the code fallback a concise reason without replacing source bytes.
 /// Example: `block.language = MermaidBlock.label(result);`
-pub fn label(view: ?View) []const u8 {
+pub fn label(view: ?view_module.View) []const u8 {
     return switch (view orelse .pending) {
         .pending => "Mermaid · Rendering diagram",
         .ready => "Mermaid",

@@ -1,6 +1,6 @@
-const types = @import("types.zig");
+const model_data = @import("model");
 const PaneSplitCommitState = @This();
 
-disposition: types.PaneSplitDisposition,
-change: types.Change,
+disposition: model_data.PaneSplitDisposition,
+change: model_data.Change,
 layout_revision: u64,

@@ -1,11 +1,6 @@
-const EntryType = @import("Entry.zig");
+const core = @import("telar-core");
 const response_queue = @import("response_queue.zig");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
 const PendingNotification = @import("PendingNotification.zig");
-const AgentSoundNotificationType = @import("telar-core").AgentSoundNotification;
-const RequestIdType = @import("telar-core").RequestId;
-const NotificationShownType = @import("telar-core").NotificationShown;
 const std = @import("std");
 const ResponseQueue = @This();
 
@@ -14,8 +9,8 @@ head: u8 = 0,
 len: u8 = 0,
 high_water: u8 = 0,
 dropped: u64 = 0,
-resync_workspace: ?WorkspaceLocationType = null,
-resync_previous_workspace: ?WorkspaceIdType = null,
+resync_workspace: ?core.WorkspaceLocation = null,
+resync_previous_workspace: ?core.WorkspaceId = null,
 
 pub const Entry = @import("Entry.zig");
 
@@ -66,7 +61,7 @@ pub fn pushNotification(queue: *ResponseQueue, notification: PendingNotification
     return true;
 }
 
-pub fn pushAgentSound(queue: *ResponseQueue, sound: AgentSoundNotificationType) bool {
+pub fn pushAgentSound(queue: *ResponseQueue, sound: core.AgentSoundNotification) bool {
     queue.push(.{ .agent_sound = sound }) catch {
         queue.dropped += 1;
         return false;
@@ -82,7 +77,7 @@ pub fn pushAgentSound(queue: *ResponseQueue, sound: AgentSoundNotificationType) 
 /// const shown = try queue.reserveNotificationShown(request_id);
 /// shown.delivered_clients = delivered;
 /// ```
-pub fn reserveNotificationShown(queue: *ResponseQueue, request_id: RequestIdType) !*NotificationShownType {
+pub fn reserveNotificationShown(queue: *ResponseQueue, request_id: core.RequestId) !*core.NotificationShown {
     try queue.push(.{ .notification_shown = .{
         .request_id = request_id,
         .delivered_clients = 0,
@@ -123,7 +118,7 @@ pub fn peek(queue: *ResponseQueue) ?*response_queue.PendingResponse {
     return &queue.items[queue.head];
 }
 
-pub fn peekManagement(queue: *ResponseQueue) ?EntryType {
+pub fn peekManagement(queue: *ResponseQueue) ?Entry {
     for (0..queue.len) |offset| {
         const index = (@as(usize, queue.head) + offset) % queue.items.len;
 
@@ -136,7 +131,7 @@ pub fn peekManagement(queue: *ResponseQueue) ?EntryType {
     return null;
 }
 
-pub fn peekObservation(queue: *ResponseQueue) ?EntryType {
+pub fn peekObservation(queue: *ResponseQueue) ?Entry {
     for (0..queue.len) |offset| {
         const index = (@as(usize, queue.head) + offset) % queue.items.len;
 

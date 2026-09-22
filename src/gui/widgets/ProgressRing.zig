@@ -1,4 +1,6 @@
 //! A circular progress stroke composed from bounded, antialiased round quads.
+const QuadList = @import("../render/QuadList.zig");
+const client = @import("telar-client");
 const std = @import("std");
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
@@ -59,10 +61,10 @@ fn points() [segments][2]f32 {
 }
 
 test "progress arcs stay bounded at every fraction scale and rotation without allocating" {
-    var quads = @import("../render/QuadList.zig").init(std.testing.allocator);
+    var quads = QuadList.init(std.testing.allocator);
     defer quads.deinit();
     try quads.reserve(segments + 2);
-    var canvas: Canvas = .{ .atlas = undefined, .quads = &quads, .metrics = .{ .cell_width = 10, .cell_height = 20, .pixel_height = 16, .baseline = 15 }, .origin = .{ 0, 0 }, .theme = @import("telar-client").theme_support.default_theme };
+    var canvas: Canvas = .{ .atlas = undefined, .quads = &quads, .metrics = .{ .cell_width = 10, .cell_height = 20, .pixel_height = 16, .baseline = 15 }, .origin = .{ 0, 0 }, .theme = client.theme_support.default_theme };
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     quads.allocator = failing.allocator();
     defer quads.allocator = std.testing.allocator;

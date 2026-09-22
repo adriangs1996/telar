@@ -1,6 +1,6 @@
-const PluginExecutionIdType = @import("../model/types.zig").PluginExecutionId;
+const data = @import("model");
 const WorkerResultType = @import("WorkerResult.zig");
 const Completion = @This();
 
-execution_id: PluginExecutionIdType,
+execution_id: data.PluginExecutionId,
 result: anyerror!WorkerResultType,

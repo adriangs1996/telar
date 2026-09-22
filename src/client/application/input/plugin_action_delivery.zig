@@ -1,11 +1,10 @@
 //! Application policy for delivering one classified plugin action outcome.
 
+const data = @import("model");
 const plugin_action = @import("plugin_action.zig");
-const FailurePublication = @import("FailurePublication.zig");
 const client_diagnostic = @import("../configuration/client_diagnostic.zig");
-const std = @import("std");
 
-pub fn startFailurePublication(outcome: plugin_action.StartOutcome) ?FailurePublication {
+pub fn startFailurePublication(outcome: plugin_action.StartOutcome) ?data.FailurePublication {
     return switch (outcome) {
         .started, .busy, .unavailable => null,
         .rejected => |err| .{
@@ -18,7 +17,7 @@ pub fn startFailurePublication(outcome: plugin_action.StartOutcome) ?FailurePubl
     };
 }
 
-pub fn completionFailurePublication(outcome: plugin_action.CompletionOutcome) ?FailurePublication {
+pub fn completionFailurePublication(outcome: plugin_action.CompletionOutcome) ?data.FailurePublication {
     return switch (outcome) {
         .applied, .exit, .stale, .ignored => null,
         .worker_failed => |err| .{

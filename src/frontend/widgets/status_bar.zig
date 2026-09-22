@@ -4,26 +4,18 @@
 //! ClientModel caches the latest values. Rendering only formats what is
 //! already in memory, in fixed buffers, so the frame stays allocation free.
 
+const core = @import("telar-core");
+const client = @import("telar-client");
+const data = @import("model");
 const ContextType = @import("Context.zig");
-const RectType = @import("telar-core").Rect;
 const Metrics = @import("Metrics.zig");
-const StyleType = @import("telar-core").Style;
 const std = @import("std");
 const icons_module = @import("../ui/icons.zig");
-const measure_module = @import("telar-core").measure;
-const IconType = @import("telar-client").Icon;
-const Mode = @import("telar-client").Mode;
-const Hints = @import("telar-client").Hints;
 const PairInput = @import("PairInput.zig");
 const WriteInput = @import("WriteInput.zig");
-const KeyType = @import("telar-client").Key;
-const ColorType = @import("telar-core").Color;
-const BufferType = @import("telar-core").Buffer;
 const widget = @import("context_support.zig");
-const theme_support = @import("telar-client").theme_support;
-const parseKey_module = @import("telar-client").parseKey;
 
-pub fn render(context: *ContextType, area: RectType, metrics: ?Metrics) void {
+pub fn render(context: *ContextType, area: core.Rect, metrics: ?Metrics) void {
     if (area.isEmpty()) {
         return;
     }
@@ -31,7 +23,7 @@ pub fn render(context: *ContextType, area: RectType, metrics: ?Metrics) void {
     var x = area.x + 1;
     const background = context.palette.panel_bg;
 
-    const cpu_style: StyleType = .{
+    const cpu_style: core.Style = .{
         .fg = cpuColor(context, values.cpu_percent),
         .bg = background,
     };
@@ -41,7 +33,7 @@ pub fn render(context: *ContextType, area: RectType, metrics: ?Metrics) void {
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = cpu, .style = cpu_style });
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "  ", .style = .{ .bg = background } });
 
-    const memory_style: StyleType = .{
+    const memory_style: core.Style = .{
         .fg = context.palette.mauve,
         .bg = background,
     };
@@ -56,7 +48,7 @@ pub fn render(context: *ContextType, area: RectType, metrics: ?Metrics) void {
     // Machines without a battery show nothing rather than a fake 0%.
     if (values.battery_percent) |battery| {
         x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = "  ", .style = .{ .bg = background } });
-        const battery_style: StyleType = .{
+        const battery_style: core.Style = .{
             .fg = if (battery < 20) context.palette.red else context.palette.green,
             .bg = background,
         };
@@ -76,21 +68,21 @@ pub fn desiredWidth(metrics: ?Metrics) u16 {
         values.memory_used_decigib / 10,
         values.memory_used_decigib % 10,
     }) catch return 0;
-    var width: u16 = 1 + iconWidth(.cpu) + measure_module(cpu) + 2 + iconWidth(.memory) + measure_module(memory);
+    var width: u16 = 1 + iconWidth(.cpu) + core.measure(cpu) + 2 + iconWidth(.memory) + core.measure(memory);
     if (values.battery_percent) |battery| {
         var battery_buffer: [10]u8 = undefined;
         const text = std.fmt.bufPrint(&battery_buffer, "{d}%", .{battery}) catch return width;
-        width +|= 2 + iconWidth(icons_module.battery(battery)) + measure_module(text);
+        width +|= 2 + iconWidth(icons_module.battery(battery)) + core.measure(text);
     }
 
     return width;
 }
 
-fn iconWidth(icon: IconType) u16 {
-    return @max(@as(u16, 1), measure_module(icon.unicodeGlyph()));
+fn iconWidth(icon: client.Icon) u16 {
+    return @max(@as(u16, 1), core.measure(icon.unicodeGlyph()));
 }
 
-pub fn renderMode(context: *ContextType, area: RectType, mode: Mode) void {
+pub fn renderMode(context: *ContextType, area: core.Rect, mode: client.Mode) void {
     if (area.isEmpty() or mode == .normal) {
         return;
     }
@@ -102,7 +94,7 @@ pub fn renderMode(context: *ContextType, area: RectType, mode: Mode) void {
     }
 }
 
-fn renderPrefix(context: *ContextType, area: RectType, hints: *const Hints) void {
+fn renderPrefix(context: *ContextType, area: core.Rect, hints: *const client.Hints) void {
     var x = renderModeLabel(context, area, " PREFIX ");
     renderPair(context, .{ .area = area, .x = &x, .key = "Esc", .label = "cancel" });
     for (hints.slice()) |hint| {
@@ -111,7 +103,7 @@ fn renderPrefix(context: *ContextType, area: RectType, hints: *const Hints) void
     }
 }
 
-fn renderCopy(context: *ContextType, area: RectType) void {
+fn renderCopy(context: *ContextType, area: core.Rect) void {
     var x = renderModeLabel(context, area, " COPY ");
     renderPair(context, .{ .area = area, .x = &x, .key = "h/j/k/l", .label = "move" });
     renderPair(context, .{ .area = area, .x = &x, .key = "w/b/e", .label = "word" });
@@ -123,7 +115,7 @@ fn renderCopy(context: *ContextType, area: RectType) void {
     renderPair(context, .{ .area = area, .x = &x, .key = "q/Esc", .label = "exit" });
 }
 
-fn renderModeLabel(context: *ContextType, area: RectType, label: []const u8) u16 {
+fn renderModeLabel(context: *ContextType, area: core.Rect, label: []const u8) u16 {
     return area.x + context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = label, .max_width = area.w, .style = .{
         .fg = context.palette.surface_dim,
         .bg = context.palette.accent,
@@ -172,7 +164,7 @@ fn write(context: *ContextType, input_write: WriteInput) void {
     });
 }
 
-fn formatKey(buffer: *[32]u8, key: KeyType) []const u8 {
+fn formatKey(buffer: *[32]u8, key: data.Key) []const u8 {
     var len: usize = 0;
     if (key.mods.ctrl) {
         append(buffer, &len, "Ctrl+");
@@ -210,7 +202,7 @@ fn append(buffer: *[32]u8, len: *usize, text: []const u8) void {
     len.* += take;
 }
 
-fn cpuColor(context: *const ContextType, cpu_percent: u8) ColorType {
+fn cpuColor(context: *const ContextType, cpu_percent: u8) core.Color {
     if (cpu_percent > 90) {
         return context.palette.red;
     }
@@ -221,17 +213,17 @@ fn cpuColor(context: *const ContextType, cpu_percent: u8) ColorType {
 }
 
 test "mode bars render prefix and copy hints" {
-    var buffer = try BufferType.init(std.testing.allocator, 120, 1);
+    var buffer = try core.Buffer.init(std.testing.allocator, 120, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
-        .palette = &theme_support.default_theme.palette,
+        .palette = &client.theme_support.default_theme.palette,
         .hovered = null,
     };
-    var hints: Hints = .{};
-    hints.append(.{ .key = try parseKey_module("N"), .label = "new workspace" });
+    var hints: client.Hints = .{};
+    hints.append(.{ .key = try data.chord.parseKey("N"), .label = "new workspace" });
 
     renderMode(&context, buffer.area(), .{ .prefix = hints });
     try std.testing.expectEqualStrings("P", buffer.at(1, 0).?.text());
@@ -246,6 +238,6 @@ test "key labels preserve modifiers and special keys" {
     var buffer: [32]u8 = undefined;
     try std.testing.expectEqualStrings(
         "Ctrl+Alt+Left",
-        formatKey(&buffer, try parseKey_module("ctrl+alt+left")),
+        formatKey(&buffer, try data.chord.parseKey("ctrl+alt+left")),
     );
 }

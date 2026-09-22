@@ -1,5 +1,7 @@
 //! Tab lifecycle inside a workspace and the per-tab pane snapshot.
 
+const pane_kind = @import("../pane_kind.zig");
+const std = @import("std");
 const RequestTabSnapshot = @import("RequestTabSnapshot.zig");
 const codec = @import("../codec.zig");
 const tags = @import("tags.zig");
@@ -212,6 +214,6 @@ pub fn encodeTabMoved(buffer: []u8, message: TabMoved) ![]const u8 {
 }
 
 /// Example: `const kind = try decodePaneKind(tag);`
-pub fn decodePaneKind(value: u8) !@import("../pane_kind.zig").PaneKind {
-    return @import("std").enums.fromInt(@import("../pane_kind.zig").PaneKind, value) orelse error.InvalidPaneKind;
+pub fn decodePaneKind(value: u8) !pane_kind.PaneKind {
+    return std.enums.fromInt(pane_kind.PaneKind, value) orelse error.InvalidPaneKind;
 }

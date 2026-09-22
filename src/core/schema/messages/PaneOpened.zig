@@ -1,3 +1,4 @@
+const pane_kind = @import("../pane_kind.zig");
 const id = @import("../id.zig");
 const TabLocationType = @import("../TabLocation.zig");
 const PaneOpened = @This();
@@ -7,5 +8,5 @@ pane_id: id.PaneId,
 location: TabLocationType,
 created: bool,
 
-kind: @import("../pane_kind.zig").PaneKind = .terminal,
+kind: pane_kind.PaneKind = .terminal,
 pane_generation: u64 = 0,

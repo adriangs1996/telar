@@ -1,18 +1,16 @@
+const core = @import("telar-core");
+const backend = @import("telar-backend");
 const std = @import("std");
-const SocketChannelType = @import("telar-core").SocketChannel;
-const SchemaIdType = @import("telar-core").SchemaId;
-const ServerResponseType = @import("telar-core").ServerResponse;
-const performSchema_module = @import("telar-backend").performSchema;
 const HandshakeWorker = @This();
 
 io: std.Io,
-connection: *SocketChannelType,
-supported: SchemaIdType,
-response: ?ServerResponseType = null,
+connection: *core.SocketChannel,
+supported: core.SchemaId,
+response: ?core.ServerResponse = null,
 failure: ?anyerror = null,
 
 pub fn run(worker: *@This()) void {
-    worker.response = performSchema_module(
+    worker.response = backend.performSchema(
         worker.io,
         worker.connection,
         worker.supported,

@@ -1,25 +1,14 @@
 //! Composition root for one long-lived backend runtime.
 
+const core = @import("telar-core");
 const std = @import("std");
 const Options = @import("Options.zig");
 const Runtime = @import("Runtime.zig");
-const LaunchViewType = @import("telar-core").LaunchView;
-const EncoderType = @import("telar-core").Encoder;
 const Initialization = @import("Initialization.zig");
-const TabLocationType = @import("telar-core").TabLocation;
 const commands = @import("../workspace/commands.zig");
 const agent_identity = @import("application/coordinators/agent_identity.zig");
 const SessionReferenceType = @import("../agent/SessionReference.zig");
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
-const AgentSnapshotEntryType = @import("telar-core").AgentSnapshotEntry;
-const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
-const AgentTitleStateType = @import("telar-core").AgentTitleState;
-const raw_module = @import("telar-core").raw;
 const PersistenceEncoder = @import("../persistence/Encoder.zig");
-const ClientTabLayoutType = @import("telar-core").ClientTabLayout;
-const ClientLayoutNodeType = @import("telar-core").ClientLayoutNode;
-const encodeClientLayoutUpdate = @import("telar-core").encodeClientLayoutUpdate;
-const decodeClient = @import("telar-core").decodeClient;
 
 /// Runs one runtime instance until a stop event or fatal runtime error.
 /// `options` is borrowed for the duration of the call.
@@ -114,12 +103,12 @@ test "runtime composition keeps every borrowed capability at a stable address" {
     try expectRuntimeEndpointRemoved(io, endpoint);
 }
 
-fn sleepLaunch(buffer: []u8) !LaunchViewType {
+fn sleepLaunch(buffer: []u8) !core.LaunchView {
     return sleepLaunchIn(buffer, "/");
 }
 
-fn sleepLaunchIn(buffer: []u8, cwd: []const u8) !LaunchViewType {
-    var encoder = EncoderType.init(buffer);
+fn sleepLaunchIn(buffer: []u8, cwd: []const u8) !core.LaunchView {
+    var encoder = core.Encoder.init(buffer);
     try encoder.writeSized16("/bin/sleep");
     try encoder.writeSized16("600");
     return .{
@@ -168,7 +157,7 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
     const logs_tab = try repository.nextTabId();
     _ = try repository.find(kept.location.workspace).?.createTab(logs_tab, "logs");
     repository.recordTabCreated(logs_tab);
-    const logs_location: TabLocationType = .{ .workspace = kept.location.workspace, .tab_id = logs_tab };
+    const logs_location: core.TabLocation = .{ .workspace = kept.location.workspace, .tab_id = logs_tab };
     var logs_buffer: [64]u8 = undefined;
     _ = try first.application.launchPane(.{
         .location = logs_location,
@@ -285,13 +274,13 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
         .process_id = 100,
         .observed_at_ms = 2_000,
     }));
-    var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+    var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
     const agents = second.application.model.agents.snapshot(&entries, 0);
     try std.testing.expectEqual(@as(usize, 1), agents.len);
     try std.testing.expectEqualStrings("Investigate proxy lifecycle", agents[0].session_title);
-    try std.testing.expectEqual(AgentTitleSourceType.manual, agents[0].title_source);
-    try std.testing.expectEqual(AgentTitleStateType.ready, agents[0].title_state);
-    try std.testing.expect(second.application.model.workspaces.next_tab_id > raw_module(logs_tab));
+    try std.testing.expectEqual(core.AgentTitleSource.manual, agents[0].title_source);
+    try std.testing.expectEqual(core.AgentTitleState.ready, agents[0].title_state);
+    try std.testing.expect(second.application.model.workspaces.next_tab_id > core.raw(logs_tab));
 }
 
 test "a restart restores every workspace and tab from unordered pane records" {
@@ -316,8 +305,8 @@ test "a restart restores every workspace and tab from unordered pane records" {
     try encoder.tab(.{ .workspace_id = 1, .tab_id = 2, .label = "logs" });
     try encoder.workspace(.{ .id = 2, .path = directory, .name = "api", .first_tab_id = 3, .first_tab_label = "agent" });
 
-    var tabs: [3]ClientTabLayoutType = undefined;
-    var nodes: [3]ClientLayoutNodeType = undefined;
+    var tabs: [3]core.ClientTabLayout = undefined;
+    var nodes: [3]core.ClientLayoutNode = undefined;
     // A replacement occupies the first free slot, ahead of surviving panes.
     for ([_]u64{ 4, 2, 3 }, 0..) |pane_id, index| {
         try encoder.pane(.{
@@ -341,7 +330,7 @@ test "a restart restores every workspace and tab from unordered pane records" {
     }
 
     var layout_buffer: [1024]u8 = undefined;
-    try encoder.layout(.{ .identity = 42, .last_used = 1, .payload = try encodeClientLayoutUpdate(&layout_buffer, .{
+    try encoder.layout(.{ .identity = 42, .last_used = 1, .payload = try core.encodeClientLayoutUpdate(&layout_buffer, .{
         .sidebar_visible = true,
         .sidebar_width = 27,
         .workspace_list_collapsed = false,
@@ -364,13 +353,13 @@ test "a restart restores every workspace and tab from unordered pane records" {
     try std.testing.expectEqual(@as(usize, 2), reader.count());
     for ([_]u64{ 4, 2, 3 }, 0..) |pane_id, index| {
         const pane = runtime.application.model.panes.find(@enumFromInt(pane_id)).?;
-        try std.testing.expectEqual(@as(u64, index + 1), raw_module(pane.location.tab_id));
+        try std.testing.expectEqual(@as(u64, index + 1), core.raw(pane.location.tab_id));
         try std.testing.expect(pane.generation >= 9);
         try std.testing.expect(reader.contains(pane.location));
     }
 
     const exported = (try runtime.application.model.client_layouts.exportRecord(0, &layout_buffer)).?;
-    const restored_layout = (try decodeClient(exported.payload)).update_client_layout;
+    const restored_layout = (try core.decodeClient(exported.payload)).update_client_layout;
     try std.testing.expectEqual(@as(u16, 27), restored_layout.sidebar_width);
     try std.testing.expectEqual(tabs[1].location, restored_layout.active_tab);
     var restored_tabs = restored_layout.tabs();
@@ -406,10 +395,10 @@ test "repeated restarts preserve pending agent resumes and reject duplicate sess
             .rows = 5,
             .arguments = "/bin/sleep\x00600\x00",
             .argument_count = 2,
-            .agent_provider = @intFromEnum(@import("telar-core").AgentProvider.claude),
+            .agent_provider = @intFromEnum(core.AgentProvider.claude),
             .agent_session = reference,
             .agent_title = "Preserve pending resume",
-            .agent_title_source = @intFromEnum(AgentTitleSourceType.manual),
+            .agent_title_source = @intFromEnum(core.AgentTitleSource.manual),
         });
     }
 
@@ -428,7 +417,7 @@ test "repeated restarts preserve pending agent resumes and reject duplicate sess
         try std.testing.expectEqualStrings(reference, runtime.application.model.agents.resumeSession(pane.key()).?.reference.slice());
         try std.testing.expectEqualStrings("Preserve pending resume", runtime.application.model.agents.checkpointTitle(pane.key()).?.slice());
         try std.testing.expect(runtime.application.model.panes.find(@enumFromInt(2)).?.input_queue.nextChunk() == null);
-        var entries: [max_agent_snapshot_entries]AgentSnapshotEntryType = undefined;
+        var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
         try std.testing.expectEqual(@as(usize, 0), runtime.application.model.agents.snapshot(&entries, 0).len);
     }
 }
@@ -464,7 +453,7 @@ test "direct agent restore launches resume argv and preserves the original comma
         .rows = 5,
         .arguments = arguments,
         .argument_count = 2,
-        .agent_provider = @intFromEnum(@import("telar-core").AgentProvider.claude),
+        .agent_provider = @intFromEnum(core.AgentProvider.claude),
         .agent_session = reference,
     });
     try temp.dir.writeFile(io, .{ .sub_path = "session.ckpt", .data = try encoder.finish() });

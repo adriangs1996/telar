@@ -1,5 +1,6 @@
 //! Runtime workspaces operations, reached from requests.dispatch.
 
+const core = @import("telar-core");
 const Application = @import("../Application.zig");
 const CreateWorkspace = @import("../commands/CreateWorkspace.zig");
 const CreateWorkspaceResult = @import("../commands/CreateWorkspaceResult.zig");
@@ -10,10 +11,6 @@ const commands = @import("../../../workspace/commands.zig");
 const RenameWorkspaceFailure = @import("../../entrypoints/requests/RenameWorkspaceFailure.zig");
 const WorkspaceSnapshotRequest = @import("../queries/WorkspaceSnapshotRequest.zig");
 const WorkspaceSnapshotResult = @import("../queries/WorkspaceSnapshotResult.zig");
-const RequestIdType = @import("telar-core").RequestId;
-const RequestWorkspaceSnapshotType = @import("telar-core").RequestWorkspaceSnapshot;
-const CreateWorkspaceViewType = @import("telar-core").CreateWorkspaceView;
-const RenameWorkspaceType = @import("telar-core").RenameWorkspace;
 const launch_cwd_module = @import("../../client/launch_cwd.zig");
 const CreateWorkspacePrepareLaunch = @import("../commands/CreateWorkspacePrepareLaunch.zig");
 const CreateWorkspaceLaunchPane = @import("../commands/CreateWorkspaceLaunchPane.zig");
@@ -23,7 +20,7 @@ const WorkspaceCreatedType = @import("../../../workspace/WorkspaceCreated.zig");
 const RequestContext = @import("../RequestContext.zig");
 
 /// Example: `try workspaces.routeRequestWorkspaceSnapshot(request, wire);`.
-pub fn routeRequestWorkspaceSnapshot(request: *RequestContext, wire: RequestWorkspaceSnapshotType) !void {
+pub fn routeRequestWorkspaceSnapshot(request: *RequestContext, wire: core.RequestWorkspaceSnapshot) !void {
     const snapshot = requestWorkspaceSnapshot(request, .{ .location = wire.workspace }) catch |err| {
         if (err == error.WorkspaceNotFound) {
             try request.session.delivery.responses.push(.{ .request_failed = .{
@@ -44,7 +41,7 @@ pub fn routeRequestWorkspaceSnapshot(request: *RequestContext, wire: RequestWork
 }
 
 /// Example: `try workspaces.routeCreateWorkspace(request, wire);`.
-pub fn routeCreateWorkspace(request: *RequestContext, wire: CreateWorkspaceViewType) !void {
+pub fn routeCreateWorkspace(request: *RequestContext, wire: core.CreateWorkspaceView) !void {
     const result = createWorkspace(request, .{
         .name = wire.name,
         .size = wire.size,
@@ -75,7 +72,7 @@ pub fn routeCreateWorkspace(request: *RequestContext, wire: CreateWorkspaceViewT
 }
 
 /// Example: `try workspaces.routeRenameWorkspace(request, wire);`.
-pub fn routeRenameWorkspace(request: *RequestContext, wire: RenameWorkspaceType) !void {
+pub fn routeRenameWorkspace(request: *RequestContext, wire: core.RenameWorkspace) !void {
     const renamed = renameWorkspace(request, .{
         .location = wire.workspace,
         .name = wire.name,
@@ -196,7 +193,7 @@ fn createWorkspace(request: *RequestContext, command: CreateWorkspace) anyerror!
     };
 }
 
-fn createWorkspaceQueueFailure(request: *RequestContext, request_id: RequestIdType, failure: CreateWorkspaceFailure) !void {
+fn createWorkspaceQueueFailure(request: *RequestContext, request_id: core.RequestId, failure: CreateWorkspaceFailure) !void {
     try request.session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,
@@ -215,7 +212,7 @@ fn renameWorkspace(request: *RequestContext, command: RenameWorkspace) anyerror!
     return renamed;
 }
 
-fn renameWorkspaceQueueFailure(request: *RequestContext, request_id: RequestIdType, failure: RenameWorkspaceFailure) !void {
+fn renameWorkspaceQueueFailure(request: *RequestContext, request_id: core.RequestId, failure: RenameWorkspaceFailure) !void {
     try request.session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,

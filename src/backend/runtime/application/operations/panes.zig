@@ -1,25 +1,22 @@
 //! Runtime panes operations, reached from requests.dispatch.
 
+const core = @import("telar-core");
 const Application = @import("../Application.zig");
 const PaneResize = @import("../commands/PaneResize.zig");
 const pane_resize = @import("../commands/pane_resize.zig");
 const AcknowledgeFrame = @import("../commands/AcknowledgeFrame.zig");
 const frame_ack = @import("../commands/frame_ack.zig");
-const now_module = @import("telar-core").now;
 const RequestCellSnapshot = @import("../commands/RequestCellSnapshot.zig");
 const request_snapshot = @import("../commands/request_snapshot.zig");
 const SetPaneViewport = @import("../commands/SetPaneViewport.zig");
 const pane_viewport = @import("../commands/pane_viewport.zig");
 const SendPaneText = @import("../commands/SendPaneText.zig");
 const send_pane_text = @import("../commands/send_pane_text.zig");
-const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
 const PendingFailureType = @import("../../delivery/PendingFailure.zig");
 const CopySelection = @import("../commands/CopySelection.zig");
 const copy_selection = @import("../commands/copy_selection.zig");
 const selection_policy = @import("../../attachment/selection.zig");
-const mark_module = @import("telar-core").mark;
 const pane_mod = @import("../../../pane/pane_namespace.zig");
-const monotonic = @import("telar-core").monotonic;
 const OpenPane = @import("../commands/OpenPane.zig");
 const OpenPaneResult = @import("../commands/OpenPaneResult.zig");
 const Proposal = @import("../../../workspace/Proposal.zig");
@@ -27,30 +24,12 @@ const OpenPaneFailure = @import("../../entrypoints/requests/OpenPaneFailure.zig"
 const CreatePane = @import("../commands/CreatePane.zig");
 const create_pane = @import("../commands/create_pane.zig");
 const CreatePaneFailure = @import("../../entrypoints/requests/CreatePaneFailure.zig");
-const enabled_module = @import("telar-core").enabled;
 const DetachPane = @import("../commands/DetachPane.zig");
 const detach_pane = @import("../commands/detach_pane.zig");
 const Session = @import("../../client/Session.zig");
-const OpenPaneViewType = @import("telar-core").OpenPaneView;
-const PaneInputType = @import("telar-core").PaneInput;
-const PaneIdType = @import("telar-core").PaneId;
-const PaneResizeType = @import("telar-core").PaneResize;
-const FrameAckType = @import("telar-core").FrameAck;
-const RequestSnapshotType = @import("telar-core").RequestSnapshot;
-const DetachPaneType = @import("telar-core").DetachPane;
-const CreatePaneViewType = @import("telar-core").CreatePaneView;
-const ClosePaneType = @import("telar-core").ClosePane;
-const RequestIdType = @import("telar-core").RequestId;
-const SetPaneViewportType = @import("telar-core").SetPaneViewport;
 const std = @import("std");
-const ReadPaneType = @import("telar-core").ReadPane;
-const SendPaneTextType = @import("telar-core").SendPaneText;
-const SearchPaneType = @import("telar-core").SearchPane;
 const pane_search = @import("../pane_search.zig");
-const CopySelectionType = @import("telar-core").CopySelection;
 const PaneType = @import("../../../pane/Pane.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const PaneLaunchedType = @import("../../../pane/PaneLaunched.zig");
 const launch_cwd_module = @import("../../client/launch_cwd.zig");
 const open_pane_commands = @import("../commands/open_pane.zig");
@@ -58,7 +37,7 @@ const RequestContext = @import("../RequestContext.zig");
 const events = @import("../events.zig");
 
 /// Example: `try panes.routeOpenPane(request, wire);`.
-pub fn routeOpenPane(request: *RequestContext, wire: OpenPaneViewType) !void {
+pub fn routeOpenPane(request: *RequestContext, wire: core.OpenPaneView) !void {
     const result = openPane(request, .{
         .target = wire.target,
         .size = wire.size,
@@ -94,7 +73,7 @@ pub fn routeOpenPane(request: *RequestContext, wire: OpenPaneViewType) !void {
 }
 
 /// Example: `try panes.routePaneInput(request, input);`.
-pub fn routePaneInput(request: *RequestContext, input: PaneInputType) !void {
+pub fn routePaneInput(request: *RequestContext, input: core.PaneInput) !void {
     const attachment = request.session.attachments.find(input.pane_id) orelse {
         request.application.metrics.stale_client_messages += 1;
         return;
@@ -109,7 +88,7 @@ pub fn routePaneInput(request: *RequestContext, input: PaneInputType) !void {
     notePaneInput(request.application, request.session, input.pane_id);
 }
 
-fn notePaneInput(application: *Application, session: *Session, pane_id: PaneIdType) void {
+fn notePaneInput(application: *Application, session: *Session, pane_id: core.PaneId) void {
     application.input_sequence +%= 1;
     if (application.input_sequence == 0) {
         for (&application.clients.items) |*slot| {
@@ -124,7 +103,7 @@ fn notePaneInput(application: *Application, session: *Session, pane_id: PaneIdTy
 }
 
 /// Example: `try panes.routePaneResize(request, wire);`.
-pub fn routePaneResize(request: *RequestContext, wire: PaneResizeType) !void {
+pub fn routePaneResize(request: *RequestContext, wire: core.PaneResize) !void {
     const result = try paneResize(request, .{
         .pane_id = wire.pane_id,
         .size = wire.size,
@@ -138,16 +117,16 @@ pub fn routePaneResize(request: *RequestContext, wire: PaneResizeType) !void {
 }
 
 /// Example: `try panes.routeFrameAck(request, ack);`.
-pub fn routeFrameAck(request: *RequestContext, ack: FrameAckType) !void {
+pub fn routeFrameAck(request: *RequestContext, ack: core.FrameAck) !void {
     const result = try frameAck(request, .{
         .pane_id = ack.pane_id,
         .frame_id = ack.frame_id,
-        .received_at_ns = now_module(request.application.io),
+        .received_at_ns = core.now(request.application.io),
     });
 
     switch (result) {
         .acknowledged => |elapsed| {
-            if (comptime enabled_module) {
+            if (comptime core.enabled) {
                 request.application.metrics.ack.observe(elapsed);
             }
         },
@@ -156,7 +135,7 @@ pub fn routeFrameAck(request: *RequestContext, ack: FrameAckType) !void {
 }
 
 /// Example: `try panes.routeRequestSnapshot(request, wire);`.
-pub fn routeRequestSnapshot(request: *RequestContext, wire: RequestSnapshotType) !void {
+pub fn routeRequestSnapshot(request: *RequestContext, wire: core.RequestSnapshot) !void {
     _ = wire.known_frame_id;
     const result = try requestSnapshot(request, .{ .pane_id = wire.pane_id });
 
@@ -166,7 +145,7 @@ pub fn routeRequestSnapshot(request: *RequestContext, wire: RequestSnapshotType)
 }
 
 /// Example: `try panes.routeDetachPane(request, wire);`.
-pub fn routeDetachPane(request: *RequestContext, wire: DetachPaneType) !void {
+pub fn routeDetachPane(request: *RequestContext, wire: core.DetachPane) !void {
     const result = try detachPane(request, .{ .pane_id = wire.pane_id });
 
     if (result == .not_attached) {
@@ -175,7 +154,7 @@ pub fn routeDetachPane(request: *RequestContext, wire: DetachPaneType) !void {
 }
 
 /// Example: `try panes.routeCreatePane(request, wire);`.
-pub fn routeCreatePane(request: *RequestContext, wire: CreatePaneViewType) !void {
+pub fn routeCreatePane(request: *RequestContext, wire: core.CreatePaneView) !void {
     const launched = createPane(request, .{
         .location = wire.location,
         .size = wire.size,
@@ -204,7 +183,7 @@ pub fn routeCreatePane(request: *RequestContext, wire: CreatePaneViewType) !void
 }
 
 /// Example: `try panes.routeClosePane(request, wire);`.
-pub fn routeClosePane(request: *RequestContext, wire: ClosePaneType) !void {
+pub fn routeClosePane(request: *RequestContext, wire: core.ClosePane) !void {
     const attachment = request.session.attachments.find(wire.pane_id) orelse {
         try request.session.delivery.responses.push(.{ .request_failed = .{
             .request_id = wire.request_id,
@@ -218,7 +197,7 @@ pub fn routeClosePane(request: *RequestContext, wire: ClosePaneType) !void {
 }
 
 /// Example: `try panes.routeSetPaneViewport(request, viewport);`.
-pub fn routeSetPaneViewport(request: *RequestContext, viewport: SetPaneViewportType) !void {
+pub fn routeSetPaneViewport(request: *RequestContext, viewport: core.SetPaneViewport) !void {
     const result = try setPaneViewport(request, .{
         .pane_id = viewport.pane_id,
         .offset = viewport.offset,
@@ -230,7 +209,7 @@ pub fn routeSetPaneViewport(request: *RequestContext, viewport: SetPaneViewportT
 }
 
 /// Example: `try panes.routeReadPane(request, read);`.
-pub fn routeReadPane(request: *RequestContext, read: ReadPaneType) !void {
+pub fn routeReadPane(request: *RequestContext, read: core.ReadPane) !void {
     try request.session.delivery.responses.push(.{ .pane_text = .{
         .request_id = read.request_id,
         .pane = .{ .id = read.pane_id, .generation = read.pane_generation },
@@ -240,7 +219,7 @@ pub fn routeReadPane(request: *RequestContext, read: ReadPaneType) !void {
 }
 
 /// Example: `try panes.routeSendPaneText(request, wire);`.
-pub fn routeSendPaneText(request: *RequestContext, wire: SendPaneTextType) !void {
+pub fn routeSendPaneText(request: *RequestContext, wire: core.SendPaneText) !void {
     const result = try sendPaneText(request, .{
         .pane = .{ .id = wire.pane_id, .generation = wire.pane_generation },
         .mode = wire.mode,
@@ -275,16 +254,16 @@ pub fn routeSendPaneText(request: *RequestContext, wire: SendPaneTextType) !void
 }
 
 /// Example: `try panes.routeSearchPane(request, search);`.
-pub fn routeSearchPane(request: *RequestContext, search: SearchPaneType) !void {
+pub fn routeSearchPane(request: *RequestContext, search: core.SearchPane) !void {
     try pane_search.start(request.application, request.session, search);
 }
 
 /// Example: `try panes.routeCopySelection(request, selection);`.
-pub fn routeCopySelection(request: *RequestContext, selection: CopySelectionType) !void {
+pub fn routeCopySelection(request: *RequestContext, selection: core.CopySelection) !void {
     receiveCopySelection(request, selection);
 }
 
-fn findOpenPane(request: *RequestContext, pane_id: PaneIdType) ?*PaneType {
+fn findOpenPane(request: *RequestContext, pane_id: core.PaneId) ?*PaneType {
     const pane = request.application.model.panes.findRunning(pane_id) orelse return null;
     if (pane.close_requested or pane.exit != null) {
         return null;
@@ -298,9 +277,9 @@ fn openPane(request: *RequestContext, command: OpenPane) anyerror!OpenPaneResult
     const active = switch (command.target) {
         .pane => |pane_id| findOpenPane(request, pane_id) orelse return error.PaneNotFound,
         .workspace => |workspace_id| workspace: {
-            const workspace_location: WorkspaceLocationType = .{ .workspace = workspace_id };
+            const workspace_location: core.WorkspaceLocation = .{ .workspace = workspace_id };
             const tab_id = request.workspaces.reader().defaultTab(workspace_location) orelse return error.WorkspaceNotFound;
-            const location: TabLocationType = .{
+            const location: core.TabLocation = .{
                 .workspace = workspace_location,
                 .tab_id = tab_id,
             };
@@ -375,7 +354,7 @@ fn openPaneOpenDefault(request: *RequestContext, command: OpenPane, created: *bo
     return launched;
 }
 
-fn openPaneQueueFailure(request: *RequestContext, request_id: RequestIdType, failure: OpenPaneFailure) !void {
+fn openPaneQueueFailure(request: *RequestContext, request_id: core.RequestId, failure: OpenPaneFailure) !void {
     try request.session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,
@@ -413,7 +392,7 @@ fn createPane(request: *RequestContext, command: CreatePane) anyerror!PaneLaunch
     return .{ .key = launched.key(), .location = launched.location, .kind = launched.kind };
 }
 
-fn createPaneQueueFailure(request: *RequestContext, request_id: RequestIdType, failure: CreatePaneFailure) !void {
+fn createPaneQueueFailure(request: *RequestContext, request_id: core.RequestId, failure: CreatePaneFailure) !void {
     try request.session.delivery.responses.push(.{ .request_failed = .{
         .request_id = request_id,
         .code = failure.code,
@@ -470,7 +449,7 @@ fn paneResize(request: *RequestContext, command: PaneResize) anyerror!pane_resiz
     return .handled;
 }
 
-fn paneResizeDetachFailedProjection(request: *RequestContext, pane_id: PaneIdType) void {
+fn paneResizeDetachFailedProjection(request: *RequestContext, pane_id: core.PaneId) void {
     const session = request.session;
 
     const detached = session.attachments.detach(pane_id) orelse return;
@@ -529,7 +508,7 @@ fn sendPaneText(request: *RequestContext, command: SendPaneText) anyerror!send_p
         return .pane_exited;
     }
 
-    var storage: [max_pane_text_input_bytes_module + send_pane_text.prompt_overhead]u8 = undefined;
+    var storage: [core.max_pane_text_input_bytes + send_pane_text.prompt_overhead]u8 = undefined;
     const bytes = switch (command.mode) {
         .raw => command.text,
         .prompt => prompt: {
@@ -572,7 +551,7 @@ fn copySelection(request: *RequestContext, command: CopySelection, scratch: []u8
     };
 }
 
-fn receiveCopySelection(request: *RequestContext, wire: CopySelectionType) void {
+fn receiveCopySelection(request: *RequestContext, wire: core.CopySelection) void {
     var scratch: [selection_policy.scratch_bytes]u8 = undefined;
 
     const result = copySelection(request, .{
@@ -595,8 +574,8 @@ fn receiveCopySelection(request: *RequestContext, wire: CopySelectionType) void 
 }
 
 fn forwardInput(application: *Application, pane: *PaneType, bytes: []const u8) !void {
-    mark_module(application.io, .input_forward);
-    if (comptime enabled_module) {
+    core.mark(application.io, .input_forward);
+    if (comptime core.enabled) {
         application.metrics.input_events += 1;
         application.metrics.input_bytes += bytes.len;
     }
@@ -605,19 +584,19 @@ fn forwardInput(application: *Application, pane: *PaneType, bytes: []const u8) !
         _ = tracker.observeInput(pane.key(), bytes);
     }
 
-    mark_module(application.io, .foreground_start);
+    core.mark(application.io, .foreground_start);
     const foreground = pane.session.shellForeground() orelse false;
-    mark_module(application.io, .foreground_done);
+    core.mark(application.io, .foreground_done);
     pane.queueHistoryInput(.{
         .bytes = bytes,
         .shell_foreground = foreground,
         .clock = pane_mod.historyClock(application.io),
     });
-    mark_module(application.io, .input_observed);
+    core.mark(application.io, .input_observed);
     try events.panes.Projection.scheduleObservation(application, pane);
 
     if (pane.queuePtyInput(bytes) and bytes.len != 0) {
-        pane.cell_input_ns = monotonic(application.io);
+        pane.cell_input_ns = core.monotonic(application.io);
     }
 
     try events.panes.Io.scheduleInput(application, pane);

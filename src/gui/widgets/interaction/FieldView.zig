@@ -1,4 +1,5 @@
 //! A synchronous read of the authoritative prompt field, never retained.
+const shared_model = @import("model");
 const client = @import("telar-client");
 const Target = @import("Target.zig");
 const FieldView = @This();
@@ -9,7 +10,7 @@ anchor: u32,
 
 /// Rejects a retired prompt generation before borrowing its replacement.
 /// Example: `const field = FieldView.capture(prompt, target) orelse return;`
-pub fn capture(prompt: *const client.Prompt, target: Target) ?FieldView {
+pub fn capture(prompt: *const shared_model.Prompt, target: Target) ?FieldView {
     if (target.action != .text_field or prompt.generation != target.id.generation) {
         return null;
     }

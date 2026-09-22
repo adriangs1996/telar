@@ -1,10 +1,13 @@
+const client = @import("telar-client");
+const ComposerMenuState = @import("interaction/ComposerMenuState.zig");
+const TextFit = @import("TextFit.zig");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Target = @import("interaction/Target.zig");
 const Menu = @This();
 
-thread: @import("telar-client").ThreadView,
+thread: client.ThreadView,
 pane_bounds: Rect,
 
 /// Popovers borrow catalog labels for this frame; targets own only revisions and indices.
@@ -24,7 +27,7 @@ pub fn draw(menu: Menu, canvas: *Canvas) !void {
     }
 
     const padding = @min(canvas.chrome.px(8), menu.pane_bounds.width / 10);
-    const rows = @min(count, @import("interaction/ComposerMenuState.zig").visible_rows);
+    const rows = @min(count, ComposerMenuState.visible_rows);
     const row_height = @min(canvas.chrome.px(if (selector.kind == .access or selector.kind == .recent) @as(f32, 54) else 36), @max(0, menu.pane_bounds.height - 2 * padding - canvas.chrome.px(36)) / @as(f32, @floatFromInt(rows)));
     const width = @min(canvas.chrome.px(if (selector.kind == .access or selector.kind == .recent) @as(f32, 370) else 300), @max(0, menu.pane_bounds.width - 2 * padding));
     const height = row_height * @as(f32, @floatFromInt(rows)) + canvas.chrome.px(36);
@@ -55,7 +58,7 @@ pub fn draw(menu: Menu, canvas: *Canvas) !void {
 
         const detail = options.detail(index);
         const text: Rect = .{ .x = row.x + canvas.chrome.px(10), .y = row.y, .width = @max(0, row.width - canvas.chrome.px(40)), .height = if (detail.len > 0) row.height * 0.55 else row.height };
-        var storage: [@import("TextFit.zig").max_bytes]u8 = undefined;
+        var storage: [TextFit.max_bytes]u8 = undefined;
         const label = try (@import("TextFit.zig"){ .canvas = canvas, .width = text.width }).fit(.{ .text = options.label(index), .face = .sans, .size = .body }, &storage);
         _ = try canvas.textAt(text, .{ .text = label, .face = .sans, .size = .body, .color = palette.text });
         if (detail.len > 0) {

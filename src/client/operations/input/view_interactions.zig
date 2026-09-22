@@ -6,13 +6,7 @@ const MultiplexerModel = @import("../../workspace/MultiplexerModel.zig");
 const ViewInteractionCommand = @import("../../application/input/ViewInteractionCommand.zig");
 const ViewInteractionOutcome = @import("../../application/input/ViewInteractionOutcome.zig");
 const ViewInteractionsContext = @import("ViewInteractionsContext.zig");
-const IntentType = @import("../../application/input/view_interaction.zig").Intent;
 const IntentOutcomeType = @import("../../application/input/IntentOutcome.zig");
-const sidebar_toggles = @import("../notifications/sidebar_toggles.zig");
-const agent_navigation = @import("../agents/agent_navigation.zig");
-const tab_selections = @import("../tabs/tab_selections.zig");
-const name_prompts = @import("name_prompts.zig");
-const attachment_prompts = @import("attachment_prompts.zig");
 
 /// Applies one interaction emitted by the view and returns its pane-input
 /// routing decision.
@@ -44,24 +38,34 @@ pub fn apply(client: *Client, model: *MultiplexerModel, interaction: ViewInterac
     };
 }
 
-fn applyIntent(context: *ViewInteractionsContext, intent: IntentType) !IntentOutcomeType {
+fn applyIntent(context: *ViewInteractionsContext, intent: view_interaction.Intent) !IntentOutcomeType {
     const client = context.client;
     var outcome: IntentOutcomeType = .{};
 
     switch (intent) {
         .none => {},
         .toggle_sidebar => {
-            _ = try sidebar_toggles.toggle(client);
+            _ = try client.toggleSidebar();
         },
         .resize_sidebar => |width| {
-            _ = try sidebar_toggles.resize(client, .{ .exact = width });
+            _ = try client.resizeSidebar(
+                .{
+                    .exact = width,
+                },
+            );
         },
         .toggle_workspace_list => {
             _ = client.model.toggleWorkspaceList();
         },
-        .focus_agent => |key| _ = try agent_navigation.apply(client, key),
+        .focus_agent => |key| _ = try client.navigateAgent(key),
         .select_tab => |tab_id| {
-            _ = try tab_selections.select(client, .{ .target = .{ .tab_id = tab_id } });
+            _ = try client.selectTab(
+                .{
+                    .target = .{
+                        .tab_id = tab_id,
+                    },
+                },
+            );
         },
         .focus_pane => |pane_id| {
             _ = try client.applyPaneFocus(.{
@@ -78,7 +82,11 @@ fn applyIntent(context: *ViewInteractionsContext, intent: IntentType) !IntentOut
                 },
             );
         },
-        .rename_tab => |tab_id| _ = name_prompts.beginTabRename(client, tab_id),
+        .rename_tab => |tab_id| _ = client.openNamePrompt(
+            .{
+                .rename_tab = tab_id,
+            },
+        ),
         .create_tab => {
             _ = try client.requestTabCreation(
                 .{},
@@ -91,8 +99,8 @@ fn applyIntent(context: *ViewInteractionsContext, intent: IntentType) !IntentOut
         ),
         .notification_activate => |id| _ = try client.activateNotificationNow(id),
         .notification_dismiss => |id| _ = try client.dismissNotificationNow(id),
-        .attachment_dismiss => |id| outcome.layout_changed = try attachment_prompts.dismiss(client, id),
-        .prompt_row => |index| try name_prompts.chooseRow(client, index),
+        .attachment_dismiss => |id| outcome.layout_changed = try client.dismissAttachment(id),
+        .prompt_row => |index| try client.choosePromptRow(index),
     }
 
     return outcome;

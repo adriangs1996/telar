@@ -1,5 +1,6 @@
 //! Sandboxed Lua host executed by the internal `tap-worker` subcommand.
 
+const core = @import("telar-core");
 const std = @import("std");
 const Host = @import("Host.zig");
 const protocol = @import("protocol.zig");
@@ -7,14 +8,8 @@ const effects = @import("effects.zig");
 const lua_api = @import("lua-api");
 const ExchangeType = @import("Exchange.zig");
 const LuaTable = @import("LuaTable.zig");
-const raw_module = @import("telar-core").raw;
 const HalfType = @import("Half.zig");
 const BatchType = @import("Batch.zig");
-const pane_module = @import("telar-core").pane;
-const default_notification_duration_ms_module = @import("telar-core").default_notification_duration_ms;
-const AgentReportStateType = @import("telar-core").AgentReportState;
-const NotificationLevelType = @import("telar-core").NotificationLevel;
-const looksLikeSecret_module = @import("telar-core").looksLikeSecret;
 const types = @import("../agent/types.zig");
 
 const max_frame_bytes = 128 * 1024 * 1024;
@@ -71,7 +66,7 @@ pub fn pushExchange(state: *lua_api.c.lua_State, exchange: ExchangeType) void {
     lua_api.c.lua_createtable(state, 0, 14);
     const destination = LuaTable.init(state, -1);
     destination.setInteger("id", exchange.id);
-    destination.setInteger("pane", raw_module(exchange.pane));
+    destination.setInteger("pane", core.raw(exchange.pane));
     destination.setInteger("pane_generation", exchange.pane_generation);
     destination.setString("host", exchange.host);
     destination.setString("protocol", @tagName(exchange.protocol));
@@ -172,14 +167,14 @@ pub fn parseEffects(state: *lua_api.c.lua_State, index: c_int) !BatchType {
             } }
         else if (std.mem.eql(u8, kind, "agent_evidence"))
             .{ .agent_evidence = .{
-                .pane = pane_module(@intCast(try effect.integer("pane", 0))) catch return error.InvalidEffect,
+                .pane = core.pane(@intCast(try effect.integer("pane", 0))) catch return error.InvalidEffect,
                 .state = try agentState(try effect.string("state", true)),
                 .confidence = try confidence(try effect.string("confidence", true)),
             } }
         else if (std.mem.eql(u8, kind, "notification"))
             .{ .notification = .{
                 .level = try notificationLevel(try effect.string("level", false)),
-                .duration_ms = @intCast(try effect.integer("duration_ms", default_notification_duration_ms_module)),
+                .duration_ms = @intCast(try effect.integer("duration_ms", core.default_notification_duration_ms)),
                 .title = try effect.string("title", true),
                 .message = try effect.string("message", false),
             } }
@@ -189,7 +184,7 @@ pub fn parseEffects(state: *lua_api.c.lua_State, index: c_int) !BatchType {
     return batch;
 }
 
-fn agentState(value: []const u8) !AgentReportStateType {
+fn agentState(value: []const u8) !core.AgentReportState {
     if (std.mem.eql(u8, value, "working")) {
         return .working;
     }
@@ -212,7 +207,7 @@ fn confidence(value: []const u8) !effects.Confidence {
     return error.InvalidEffect;
 }
 
-fn notificationLevel(value: []const u8) !NotificationLevelType {
+fn notificationLevel(value: []const u8) !core.NotificationLevel {
     if (value.len == 0 or std.mem.eql(u8, value, "info")) {
         return .info;
     }
@@ -293,7 +288,7 @@ pub fn requireLocal(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
 pub fn redactSecrets(state_optional: ?*lua_api.c.lua_State) callconv(.c) c_int {
     const state = state_optional.?;
     const input = luaString(state, 1) orelse return raise(state, "redact.secrets expects a string");
-    const output = if (looksLikeSecret_module(input)) "[REDACTED]" else input;
+    const output = if (core.looksLikeSecret(input)) "[REDACTED]" else input;
     _ = lua_api.c.lua_pushlstring(state, output.ptr, output.len);
     return 1;
 }

@@ -1,5 +1,5 @@
+const model_data = @import("model");
 const PluginExecutionType = @import("PluginExecution.zig");
-const types = @import("types.zig");
 const State = @This();
 
 plugin_execution: ?PluginExecutionType = null,
@@ -30,7 +30,7 @@ pub fn beginPluginExecution(state: *State, configuration_generation: u64) !?Plug
 }
 
 /// Example: `const result = state.finishPluginExecution(...);`.
-pub fn finishPluginExecution(state: *State, id: types.PluginExecutionId) ?PluginExecutionType {
+pub fn finishPluginExecution(state: *State, id: model_data.PluginExecutionId) ?PluginExecutionType {
     const execution = state.plugin_execution orelse return null;
     if (execution.id != id) {
         return null;

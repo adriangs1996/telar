@@ -1,8 +1,7 @@
-const RectType = @import("telar-core").Rect;
-const StyleType = @import("telar-core").Style;
+const core = @import("telar-core");
 const WriteInput = @This();
 
-area: RectType,
+area: core.Rect,
 x: *u16,
 text: []const u8,
-style: StyleType,
+style: core.Style,

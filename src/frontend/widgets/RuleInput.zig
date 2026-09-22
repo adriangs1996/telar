@@ -1,7 +1,6 @@
-const RectType = @import("telar-core").Rect;
-const ColorType = @import("telar-core").Color;
+const core = @import("telar-core");
 const RuleInput = @This();
 
-area: RectType,
+area: core.Rect,
 y: u16,
-background: ColorType,
+background: core.Color,

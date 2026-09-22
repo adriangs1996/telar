@@ -1,7 +1,5 @@
 //! TLS termination towards the child and the real origin.
 
-const InterceptOptionsType = @import("InterceptOptions.zig");
-const SessionType = @import("Session.zig");
 const std = @import("std");
 const tlsz = @import("tls");
 const Cursor = @import("Cursor.zig");
@@ -32,8 +30,8 @@ pub const Session = @import("Session.zig");
 /// const session = try intercept(options);
 /// defer session.deinit();
 /// ```
-pub fn intercept(options: InterceptOptionsType) Error!*SessionType {
-    const session = options.gpa.create(SessionType) catch return error.ContextFailed;
+pub fn intercept(options: InterceptOptions) Error!*Session {
+    const session = options.gpa.create(Session) catch return error.ContextFailed;
     errdefer {
         std.crypto.secureZero(u8, std.mem.asBytes(session));
         options.gpa.destroy(session);

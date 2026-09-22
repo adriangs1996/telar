@@ -1,11 +1,9 @@
-const PaneIdType = @import("telar-core").PaneId;
-const TabLocationType = @import("telar-core").TabLocation;
-const layout_mod = @import("layout_support.zig");
-const RectType = @import("telar-core").Rect;
+const core = @import("telar-core");
+const model_data = @import("model");
 const PaneSplit = @This();
 
-existing_pane: PaneIdType,
-new_pane: PaneIdType,
-location: TabLocationType,
-axis: layout_mod.Axis,
-area: RectType,
+existing_pane: core.PaneId,
+new_pane: core.PaneId,
+location: core.TabLocation,
+axis: model_data.LayoutAxis,
+area: core.Rect,

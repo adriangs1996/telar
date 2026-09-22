@@ -1,4 +1,4 @@
-const TerminalSizeType = @import("telar-core").TerminalSize;
+const core = @import("telar-core");
 const MediaProcessingBorrow = @This();
 
-current_size: TerminalSizeType,
+current_size: core.TerminalSize,

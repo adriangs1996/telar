@@ -1,7 +1,6 @@
-const BufferType = @import("telar-core").Buffer;
-const RectType = @import("telar-core").Rect;
+const core = @import("telar-core");
 const PaintedLabel = @This();
 
-buffer: *const BufferType,
-area: RectType,
+buffer: *const core.Buffer,
+area: core.Rect,
 selected: bool,

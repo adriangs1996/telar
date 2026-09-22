@@ -1,5 +1,5 @@
+const core = @import("telar-core");
 const ConfigType = @import("../config/SoundPolicy.zig");
-const AgentSound = @import("telar-core").AgentSound;
 const playback_support = @import("sound_playback_support.zig");
 const std = @import("std");
 const Snapshot = @import("SoundSnapshot.zig");
@@ -7,7 +7,7 @@ const SoundPlayback = @This();
 
 configuration: ConfigType,
 active: bool = false,
-queued: ?AgentSound = null,
+queued: ?core.AgentSound = null,
 
 /// Creates an idle playback queue with one validated configuration.
 ///
@@ -23,7 +23,7 @@ pub fn init(configuration: ConfigType) SoundPlayback {
 /// ```zig
 /// const outcome = playback.request(.needs_input);
 /// ```
-pub fn request(playback: *SoundPlayback, kind: AgentSound) playback_support.RequestOutcome {
+pub fn request(playback: *SoundPlayback, kind: core.AgentSound) playback_support.RequestOutcome {
     if (!playback.configuration.allows(kind)) {
         return .ignored;
     }
@@ -44,7 +44,7 @@ pub fn request(playback: *SoundPlayback, kind: AgentSound) playback_support.Requ
 /// ```zig
 /// const next = playback.complete();
 /// ```
-pub fn complete(playback: *SoundPlayback) ?AgentSound {
+pub fn complete(playback: *SoundPlayback) ?core.AgentSound {
     std.debug.assert(playback.active);
     playback.active = false;
     const queued = playback.queued;

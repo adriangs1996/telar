@@ -1,18 +1,15 @@
-const FramePane = @import("FramePane.zig");
+const core = @import("telar-core");
 const headless = @import("headless.zig");
-const CellType = @import("telar-core").Cell;
-const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
 const VersionType = @import("../model/Version.zig");
-const PaneIdType = @import("telar-core").PaneId;
 const GeometryType = @import("Geometry.zig");
 const Frame = @This();
 
-cells: [headless.cell_capacity]CellType = undefined,
+cells: [headless.cell_capacity]core.Cell = undefined,
 cell_count: usize = 0,
-panes: [max_panes_per_tab_module]FramePane = undefined,
+panes: [core.max_panes_per_tab]Pane = undefined,
 pane_count: usize = 0,
 version: VersionType = .{},
-focused: ?PaneIdType = null,
+focused: ?core.PaneId = null,
 geometry: GeometryType = .{},
 
 pub const Pane = @import("FramePane.zig");

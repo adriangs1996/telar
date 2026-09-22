@@ -1,29 +1,26 @@
 //! Application policy for opening one bounded name prompt from current client
 //! authority and canonical model state.
+const core = @import("telar-core");
+const model_data = @import("model");
 
-const TabIdType = @import("telar-core").TabId;
-const copy_mode = @import("../../input/copy_mode.zig");
-const name_prompt = @import("../../model/name_prompt.zig");
 const ModelType = @import("../../model/Model.zig");
-const command_palette = @import("../../model/command_palette.zig");
-const std = @import("std");
 
 pub const Intent = union(enum) {
     create_workspace,
     rename_workspace,
     rename_active_tab,
-    rename_tab: TabIdType,
+    rename_tab: core.TabId,
     /// Copy-mode search input; the only prompt allowed while copy mode is
     /// active, and meaningless outside it.
-    copy_search: copy_mode.Direction,
+    copy_search: model_data.CopyModeDirection,
     goto_picker,
     history_palette,
     suggest_palette,
     /// The command palette with its prefix already typed.
-    palette: command_palette.Prefix,
+    palette: model_data.CommandPalettePrefix,
 };
 
-pub fn renameTab(tab_id: TabIdType, label: []const u8) name_prompt.Begin {
+pub fn renameTab(tab_id: core.TabId, label: []const u8) model_data.PromptBegin {
     return .{ .rename_tab = .{
         .tab_id = tab_id,
         .label = label,

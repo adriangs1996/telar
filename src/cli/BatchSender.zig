@@ -1,22 +1,16 @@
+const core = @import("telar-core");
 const std = @import("std");
-const SocketChannelType = @import("telar-core").SocketChannel;
-const max_import_entries = @import("telar-core").max_import_entries;
-const ImportEntryType = @import("telar-core").ImportEntry;
 const history = @import("history.zig");
 const ImportedEntry = @import("ImportedEntry.zig");
-const max_import_command_bytes_module = @import("telar-core").max_import_command_bytes;
-const RequestIdType = @import("telar-core").RequestId;
-const encodeImportHistory_module = @import("telar-core").encodeImportHistory;
-const decodeServer_module = @import("telar-core").decodeServer;
 /// Accumulates entries and sends one bounded import_history request per
 /// batch, waiting for each acknowledgement before the next batch.
 const BatchSender = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
-connection: *SocketChannelType,
+connection: *core.SocketChannel,
 source: []const u8,
-entries: [max_import_entries]ImportEntryType = undefined,
+entries: [core.max_import_entries]core.ImportEntry = undefined,
 storage: [history.max_batch_payload]u8 = undefined,
 used: usize = 0,
 count: usize = 0,
@@ -25,10 +19,10 @@ total: u64 = 0,
 next_request: u64 = 1,
 
 pub fn push(sender: *BatchSender, entry: ImportedEntry) !void {
-    if (entry.command.len == 0 or entry.command.len > max_import_command_bytes_module) {
+    if (entry.command.len == 0 or entry.command.len > core.max_import_command_bytes) {
         return;
     }
-    if (sender.count == max_import_entries or entry.command.len > sender.storage.len - sender.used) {
+    if (sender.count == core.max_import_entries or entry.command.len > sender.storage.len - sender.used) {
         try sender.finish();
     }
 
@@ -45,9 +39,9 @@ pub fn finish(sender: *BatchSender) !void {
     }
 
     var send_buffer: [history.max_batch_payload + 1024]u8 = undefined;
-    const request_id: RequestIdType = @enumFromInt(sender.next_request);
+    const request_id: core.RequestId = @enumFromInt(sender.next_request);
     sender.next_request += 1;
-    try sender.connection.send(sender.io, try encodeImportHistory_module(&send_buffer, .{
+    try sender.connection.send(sender.io, try core.encodeImportHistory(&send_buffer, .{
         .request_id = request_id,
         .source = sender.source,
         .base_sequence = sender.sequence,
@@ -55,7 +49,7 @@ pub fn finish(sender: *BatchSender) !void {
     }));
 
     var receive_buffer: [1024]u8 = undefined;
-    const response = try decodeServer_module(try sender.connection.receive(sender.io, &receive_buffer));
+    const response = try core.decodeServer(try sender.connection.receive(sender.io, &receive_buffer));
     switch (response) {
         .request_completed => {},
         .request_failed => |failure| {

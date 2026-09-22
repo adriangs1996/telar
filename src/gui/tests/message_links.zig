@@ -1,3 +1,4 @@
+const cell_colors = @import("../render/cell_colors.zig");
 const std = @import("std");
 const Fixture = @import("ConversationFixture.zig");
 const Text = @import("../widgets/MessageText.zig");
@@ -45,7 +46,7 @@ test "Markdown links retain nested label styles and exact owned destination coor
     try std.testing.expectApproxEqAbs(@as(f32, 45), registry.targets[2].bounds.width, 0.01);
     try std.testing.expect(registry.at(.{ registry.targets[1].bounds.x + registry.targets[1].bounds.width + 0.1, registry.targets[1].bounds.y + 12 }) == null);
     var underlines: usize = 0;
-    const accent = @import("../render/cell_colors.zig").withPalette(canvas.theme.palette.accent, .white, &canvas.theme.terminal.palette);
+    const accent = cell_colors.withPalette(canvas.theme.palette.accent, .white, &canvas.theme.terminal.palette);
     for (fixture.quads.items()) |quad| {
         if (quad.texture == 0 and quad.height == 1 and quad.r == accent.r and quad.g == accent.g and quad.b == accent.b and quad.a == accent.a) {
             underlines += 1;

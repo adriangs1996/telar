@@ -1,11 +1,10 @@
 //! Contract and integration tests for the proxy service.
 
+const core = @import("telar-core");
 const std = @import("std");
 const CredentialType = @import("../Credential.zig");
-const raw_module = @import("telar-core").raw;
 const TestServiceFixture = @import("TestServiceFixture.zig");
 const Pane = @import("Pane.zig");
-const pane_module = @import("telar-core").pane;
 const HeadersType = @import("../Headers.zig");
 const TestOrigin = @import("TestOrigin.zig");
 const Service = @import("Service.zig");
@@ -18,7 +17,7 @@ const basic_encoded_capacity = std.base64.standard.Encoder.calcSize(basic_raw_ca
 
 fn encodeBasic(credential: *const CredentialType, raw_buffer: *[basic_raw_capacity]u8, encoded_buffer: *[basic_encoded_capacity]u8) ![]const u8 {
     const raw = try std.fmt.bufPrint(raw_buffer, "telar:{d}.{d}.{x}", .{
-        raw_module(credential.pane_id),
+        core.raw(credential.pane_id),
         credential.pane_generation,
         credential.token,
     });
@@ -33,7 +32,7 @@ test "pane registration creates one live capability for the requested generation
     try fixture.init(io, std.testing.allocator);
     defer fixture.deinit();
     const service = fixture.service.?;
-    const pane: Pane = .{ .id = try pane_module(7), .generation = 3 };
+    const pane: Pane = .{ .id = try core.pane(7), .generation = 3 };
 
     var credential = try service.registerPane(pane);
     defer std.crypto.secureZero(u8, &credential.token);
@@ -153,7 +152,7 @@ test "non-whitelisted CONNECT relays bytes with a saturated observation queue" {
         .intercept_hosts = &.{"api.openai.com"},
     });
     defer service.destroy();
-    var credential = try service.registerPane(.{ .id = try pane_module(7), .generation = 12 });
+    var credential = try service.registerPane(.{ .id = try core.pane(7), .generation = 12 });
     defer std.crypto.secureZero(u8, &credential.token);
     const observation: MiddlewareEvent = .{
         .credential = credential,
@@ -243,7 +242,7 @@ test "intercepted CONNECT publishes and counts an upstream TLS failure" {
     });
     defer service.destroy();
 
-    var credential = try service.registerPane(.{ .id = try pane_module(9), .generation = 4 });
+    var credential = try service.registerPane(.{ .id = try core.pane(9), .generation = 4 });
     defer std.crypto.secureZero(u8, &credential.token);
     var worker = try service.start();
     defer service.cancel(&worker);
@@ -316,7 +315,7 @@ test "receive discards observations queued before pane revocation" {
     });
     defer service.destroy();
 
-    var current = try service.registerPane(.{ .id = try pane_module(7), .generation = 2 });
+    var current = try service.registerPane(.{ .id = try core.pane(7), .generation = 2 });
     defer std.crypto.secureZero(u8, &current.token);
     service.observations.pipeline().publish(io, .{
         .credential = current,
@@ -427,7 +426,7 @@ test "loopback service maps CONNECT authentication and target rejections" {
         service.metrics().rejected_connections,
     );
 
-    var credential = try service.registerPane(.{ .id = try pane_module(7), .generation = 12 });
+    var credential = try service.registerPane(.{ .id = try core.pane(7), .generation = 12 });
     defer std.crypto.secureZero(u8, &credential.token);
     var registered_raw_buffer: [basic_raw_capacity]u8 = undefined;
     defer std.crypto.secureZero(u8, &registered_raw_buffer);

@@ -1,4 +1,3 @@
-const ServiceConfig = @import("../../history/ServiceConfig.zig");
 const history = @import("history.zig");
 const std = @import("std");
 const HistoryRuntimeState = @import("HistoryRuntimeState.zig");
@@ -16,7 +15,7 @@ pub const Config = @import("../../history/ServiceConfig.zig");
 /// var history_runtime = try Runtime.init(io, gpa, .{ .database_path = ":memory:" });
 /// defer history_runtime.deinit();
 /// ```
-pub fn init(io: std.Io, gpa: std.mem.Allocator, config: ServiceConfig) !Runtime {
+pub fn init(io: std.Io, gpa: std.mem.Allocator, config: Config) !Runtime {
     const state = try gpa.create(HistoryRuntimeState);
     const history_service = ServiceType.init(gpa, config) catch |err| {
         gpa.destroy(state);

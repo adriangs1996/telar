@@ -1,53 +1,17 @@
-const PaneRefType = @import("PaneRef.zig");
-const TextType = @import("Text.zig");
-const ReadOptionsType = @import("ReadOptions.zig");
-const TextInputType = @import("TextInput.zig");
-const AgentReportType = @import("AgentReport.zig");
-const WorkspaceCreationType = @import("WorkspaceCreation.zig");
 const std = @import("std");
-const SocketChannelType = @import("telar-core").SocketChannel;
 const RuntimeConnectorType = @import("RuntimeConnector.zig");
-const max_frame_size_module = @import("telar-core").max_frame_size;
-const RequestIdType = @import("telar-core").RequestId;
 const Snapshot = @import("Snapshot.zig");
-const encodeQueryAgents_module = @import("telar-core").encodeQueryAgents;
-const decodeServer_module = @import("telar-core").decodeServer;
 const control = @import("control.zig");
 const ControlAgent = @import("ControlAgent.zig");
-const encodeReadPane_module = @import("telar-core").encodeReadPane;
-const pane_module = @import("telar-core").pane;
-const max_pane_text_input_bytes_module = @import("telar-core").max_pane_text_input_bytes;
-const encodeSendPaneText_module = @import("telar-core").encodeSendPaneText;
-const PaneDirectionType = @import("telar-core").PaneDirection;
-const PaneFocusResultType = @import("telar-core").PaneFocusResult;
-const encodeRequestPaneFocus_module = @import("telar-core").encodeRequestPaneFocus;
-const max_agent_session_reference_bytes_module = @import("telar-core").max_agent_session_reference_bytes;
-const encodeReportAgentSession_module = @import("telar-core").encodeReportAgentSession;
-const max_agent_session_file_bytes_module = @import("telar-core").max_agent_session_file_bytes;
-const max_agent_last_event_bytes_module = @import("telar-core").max_agent_last_event_bytes;
-const encodeReportAgent_module = @import("telar-core").encodeReportAgent;
 const AgentCommandReport = @import("AgentCommandReport.zig");
-const max_history_command_bytes_module = @import("telar-core").max_history_command_bytes;
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
-const encodeReportAgentCommand_module = @import("telar-core").encodeReportAgentCommand;
-const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
-const encodeReportAgentTitle_module = @import("telar-core").encodeReportAgentTitle;
-const encodeCreateWorkspace_module = @import("telar-core").encodeCreateWorkspace;
-const raw_module = @import("telar-core").raw;
 const core = @import("telar-core");
-const ChangeReviewCommand = @import("telar-core").ChangeReviewCommand;
-const ChangeReviewSnapshotView = @import("telar-core").ChangeReviewSnapshotView;
-const ReportChangeReviewSample = @import("telar-core").ReportChangeReviewSample;
-const encodeQueryChangeReview = @import("telar-core").encodeQueryChangeReview;
-const encodeChangeReviewCommand = @import("telar-core").encodeChangeReviewCommand;
-const encodeReportChangeReviewSample = @import("telar-core").encodeReportChangeReviewSample;
 const ReviewSelection = @import("ReviewSelection.zig");
 /// One connected control session with its owned receive buffer.
 const Session = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
-connection: SocketChannelType,
+connection: core.SocketChannel,
 receive_buffer: []u8,
 next_request: u64 = 1,
 review_failure: ?[]const u8 = null,
@@ -78,10 +42,10 @@ pub fn attach(init: std.process.Init, socket: ?[*:0]const u8) !Session {
     return adopt(init, try connector.connect());
 }
 
-fn adopt(init: std.process.Init, connection: SocketChannelType) !Session {
+fn adopt(init: std.process.Init, connection: core.SocketChannel) !Session {
     var owned = connection;
     errdefer owned.deinit(init.io);
-    const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
+    const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
 
     return .{
         .io = init.io,
@@ -96,8 +60,8 @@ pub fn close(session: *Session) void {
     session.gpa.free(session.receive_buffer);
 }
 
-fn requestId(session: *Session) RequestIdType {
-    const request_id: RequestIdType = @enumFromInt(session.next_request);
+fn requestId(session: *Session) core.RequestId {
+    const request_id: core.RequestId = @enumFromInt(session.next_request);
     session.next_request += 1;
     return request_id;
 }
@@ -180,13 +144,13 @@ pub fn nextEvent(self: *Session) !core.ServerMessage {
 
 /// Reads one immutable edition; returned strings borrow the next receive buffer.
 /// Example: `const review = try session.fetchReview(pane, .{});`
-pub fn fetchReview(self: *Session, pane: PaneRefType, selection: ReviewSelection) !ChangeReviewSnapshotView {
+pub fn fetchReview(self: *Session, pane: PaneRef, selection: ReviewSelection) !core.ChangeReviewSnapshotView {
     self.review_failure = null;
     const id = self.requestId();
     var buffer: [256]u8 = undefined;
-    try self.connection.send(self.io, try encodeQueryChangeReview(&buffer, .{
+    try self.connection.send(self.io, try core.encodeQueryChangeReview(&buffer, .{
         .request_id = id,
-        .pane_id = try pane_module(pane.pane_id),
+        .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .edition_id = selection.edition,
         .session = selection.session,
@@ -196,23 +160,23 @@ pub fn fetchReview(self: *Session, pane: PaneRefType, selection: ReviewSelection
 
 /// Issues an explicit review action, replacing only its transport request ID.
 /// Example: `const review = try session.commandReview(command);`
-pub fn commandReview(self: *Session, command: ChangeReviewCommand) !ChangeReviewSnapshotView {
+pub fn commandReview(self: *Session, command: core.ChangeReviewCommand) !core.ChangeReviewSnapshotView {
     self.review_failure = null;
     var request = command;
     request.request_id = self.requestId();
     var buffer: [16 * 1024]u8 = undefined;
-    try self.connection.send(self.io, try encodeChangeReviewCommand(&buffer, request));
+    try self.connection.send(self.io, try core.encodeChangeReviewCommand(&buffer, request));
     return self.receiveReview(request.request_id);
 }
 
 /// Records evidence already read by the hook process, without runtime file I/O.
 /// Example: `try session.reportReviewSample(sample);`
-pub fn reportReviewSample(self: *Session, sample: ReportChangeReviewSample) !void {
+pub fn reportReviewSample(self: *Session, sample: core.ReportChangeReviewSample) !void {
     var request = sample;
     request.request_id = self.requestId();
     var buffer: [32 * 1024]u8 = undefined;
-    try self.connection.send(self.io, try encodeReportChangeReviewSample(&buffer, request));
-    const response = try decodeServer_module(try self.connection.receive(self.io, self.receive_buffer));
+    try self.connection.send(self.io, try core.encodeReportChangeReviewSample(&buffer, request));
+    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
     switch (response) {
         .request_completed => |completed| if (completed.request_id != request.request_id) {
             return error.UnexpectedRuntimeResponse;
@@ -222,8 +186,8 @@ pub fn reportReviewSample(self: *Session, sample: ReportChangeReviewSample) !voi
     }
 }
 
-fn receiveReview(self: *Session, id: RequestIdType) !ChangeReviewSnapshotView {
-    const response = try decodeServer_module(try self.connection.receive(self.io, self.receive_buffer));
+fn receiveReview(self: *Session, id: core.RequestId) !core.ChangeReviewSnapshotView {
+    const response = try core.decodeServer(try self.connection.receive(self.io, self.receive_buffer));
     const review = switch (response) {
         .change_review_snapshot => |view| view,
         .request_failed => |failure| {
@@ -247,11 +211,11 @@ fn receiveReview(self: *Session, id: RequestIdType) !ChangeReviewSnapshotView {
 /// ```
 pub fn fetchAgents(session: *Session, snapshot: *Snapshot) !void {
     var send_buffer: [16]u8 = undefined;
-    try session.connection.send(session.io, try encodeQueryAgents_module(&send_buffer, .{
+    try session.connection.send(session.io, try core.encodeQueryAgents(&send_buffer, .{
         .request_id = session.requestId(),
     }));
 
-    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try core.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
     const view = switch (response) {
         .agent_snapshot => |view| view,
         .request_failed => |failure| return control.failureError(failure),
@@ -285,17 +249,17 @@ pub const TextInput = @import("TextInput.zig");
 /// ```zig
 /// const text = try session.readPane(pane, .{ .rows = 40, .source = .recent });
 /// ```
-pub fn readPane(session: *Session, pane: PaneRefType, options: ReadOptionsType) !TextType {
+pub fn readPane(session: *Session, pane: PaneRef, options: ReadOptions) !Text {
     var send_buffer: [64]u8 = undefined;
-    try session.connection.send(session.io, try encodeReadPane_module(&send_buffer, .{
+    try session.connection.send(session.io, try core.encodeReadPane(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try pane_module(pane.pane_id),
+        .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .rows = options.rows,
         .source = options.source,
     }));
 
-    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try core.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
     return switch (response) {
         .pane_text => |text| .{ .pane_id = pane.pane_id, .truncated = text.truncated, .text = text.text },
         .request_failed => |failure| control.failureError(failure),
@@ -308,17 +272,17 @@ pub fn readPane(session: *Session, pane: PaneRefType, options: ReadOptionsType) 
 /// ```zig
 /// try session.sendText(pane, .{ .mode = .prompt, .text = "run the tests" });
 /// ```
-pub fn sendText(session: *Session, pane: PaneRefType, input: TextInputType) !void {
-    var send_buffer: [max_pane_text_input_bytes_module + 64]u8 = undefined;
-    try session.connection.send(session.io, try encodeSendPaneText_module(&send_buffer, .{
+pub fn sendText(session: *Session, pane: PaneRef, input: TextInput) !void {
+    var send_buffer: [core.max_pane_text_input_bytes + 64]u8 = undefined;
+    try session.connection.send(session.io, try core.encodeSendPaneText(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try pane_module(pane.pane_id),
+        .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .mode = input.mode,
         .text = input.text,
     }));
 
-    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try core.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
         .request_completed => {},
         .request_failed => |failure| return control.failureError(failure),
@@ -331,16 +295,16 @@ pub fn sendText(session: *Session, pane: PaneRefType, input: TextInputType) !voi
 /// ```zig
 /// const result = try session.focusPane(pane, .left);
 /// ```
-pub fn focusPane(session: *Session, pane: PaneRefType, direction: PaneDirectionType) !PaneFocusResultType {
+pub fn focusPane(session: *Session, pane: PaneRef, direction: core.PaneDirection) !core.PaneFocusResult {
     var send_buffer: [64]u8 = undefined;
-    try session.connection.send(session.io, try encodeRequestPaneFocus_module(&send_buffer, .{
+    try session.connection.send(session.io, try core.encodeRequestPaneFocus(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try pane_module(pane.pane_id),
+        .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .direction = direction,
     }));
 
-    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try core.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
     return switch (response) {
         .pane_focus_result => |result| result,
         .request_failed => |failure| control.failureError(failure),
@@ -353,16 +317,16 @@ pub fn focusPane(session: *Session, pane: PaneRefType, direction: PaneDirectionT
 /// ```zig
 /// try session.reportSession(pane, "0192...");
 /// ```
-pub fn reportSession(session: *Session, pane: PaneRefType, reference: []const u8) !void {
-    var send_buffer: [max_agent_session_reference_bytes_module + 64]u8 = undefined;
-    try session.connection.send(session.io, try encodeReportAgentSession_module(&send_buffer, .{
+pub fn reportSession(session: *Session, pane: PaneRef, reference: []const u8) !void {
+    var send_buffer: [core.max_agent_session_reference_bytes + 64]u8 = undefined;
+    try session.connection.send(session.io, try core.encodeReportAgentSession(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try pane_module(pane.pane_id),
+        .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .session = reference,
     }));
 
-    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try core.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
         .request_completed => {},
         .request_failed => |failure| return control.failureError(failure),
@@ -377,11 +341,11 @@ pub const AgentReport = @import("AgentReport.zig");
 /// ```zig
 /// try session.reportAgent(pane, .{ .state = .working });
 /// ```
-pub fn reportAgent(session: *Session, pane: PaneRefType, report: AgentReportType) !void {
-    var send_buffer: [max_agent_session_reference_bytes_module + max_agent_session_file_bytes_module + max_agent_last_event_bytes_module + 64]u8 = undefined;
-    try session.connection.send(session.io, try encodeReportAgent_module(&send_buffer, .{
+pub fn reportAgent(session: *Session, pane: PaneRef, report: AgentReport) !void {
+    var send_buffer: [core.max_agent_session_reference_bytes + core.max_agent_session_file_bytes + core.max_agent_last_event_bytes + 64]u8 = undefined;
+    try session.connection.send(session.io, try core.encodeReportAgent(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try pane_module(pane.pane_id),
+        .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .state = report.state,
         .blocked_reason = report.blocked_reason,
@@ -391,7 +355,7 @@ pub fn reportAgent(session: *Session, pane: PaneRefType, report: AgentReportType
         .session_file_kind = report.session_file_kind,
     }));
 
-    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try core.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
         .request_completed => {},
         .request_failed => |failure| return control.failureError(failure),
@@ -404,11 +368,11 @@ pub fn reportAgent(session: *Session, pane: PaneRefType, report: AgentReportType
 /// ```zig
 /// try session.reportAgentCommand(pane, command);
 /// ```
-pub fn reportAgentCommand(session: *Session, pane: PaneRefType, command: AgentCommandReport) !void {
-    var send_buffer: [max_history_command_bytes_module + max_cwd_bytes_module + 1024]u8 = undefined;
-    try session.connection.send(session.io, try encodeReportAgentCommand_module(&send_buffer, .{
+pub fn reportAgentCommand(session: *Session, pane: PaneRef, command: AgentCommandReport) !void {
+    var send_buffer: [core.max_history_command_bytes + core.max_cwd_bytes + 1024]u8 = undefined;
+    try session.connection.send(session.io, try core.encodeReportAgentCommand(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try pane_module(pane.pane_id),
+        .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .phase = command.phase,
         .provider = command.provider,
@@ -419,7 +383,7 @@ pub fn reportAgentCommand(session: *Session, pane: PaneRefType, command: AgentCo
         .exit_code = command.exit_code,
     }));
 
-    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try core.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
         .request_completed => {},
         .request_failed => |failure| return control.failureError(failure),
@@ -432,16 +396,16 @@ pub fn reportAgentCommand(session: *Session, pane: PaneRefType, command: AgentCo
 /// ```zig
 /// try session.reportAgentTitle(pane, "Fix proxy");
 /// ```
-pub fn reportAgentTitle(session: *Session, pane: PaneRefType, title: []const u8) !void {
-    var send_buffer: [max_agent_session_title_bytes_module + 64]u8 = undefined;
-    try session.connection.send(session.io, try encodeReportAgentTitle_module(&send_buffer, .{
+pub fn reportAgentTitle(session: *Session, pane: PaneRef, title: []const u8) !void {
+    var send_buffer: [core.max_agent_session_title_bytes + 64]u8 = undefined;
+    try session.connection.send(session.io, try core.encodeReportAgentTitle(&send_buffer, .{
         .request_id = session.requestId(),
-        .pane_id = try pane_module(pane.pane_id),
+        .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .title = title,
     }));
 
-    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try core.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
         .request_completed => {},
         .request_failed => |failure| return control.failureError(failure),
@@ -458,18 +422,18 @@ pub const WorkspaceCreation = @import("WorkspaceCreation.zig");
 /// ```zig
 /// const id = try session.createWorkspace(.{ .name = "fix", .cwd = "/src/fix", .arguments = &.{"/bin/sh"} });
 /// ```
-pub fn createWorkspace(session: *Session, request: WorkspaceCreationType) !u64 {
+pub fn createWorkspace(session: *Session, request: WorkspaceCreation) !u64 {
     var send_buffer: [8192]u8 = undefined;
-    try session.connection.send(session.io, try encodeCreateWorkspace_module(&send_buffer, .{
+    try session.connection.send(session.io, try core.encodeCreateWorkspace(&send_buffer, .{
         .request_id = session.requestId(),
         .size = .{ .cols = 80, .rows = 24 },
         .name = request.name,
         .launch = .{ .cwd = request.cwd, .arguments = request.arguments },
     }));
 
-    const response = try decodeServer_module(try session.connection.receive(session.io, session.receive_buffer));
+    const response = try core.decodeServer(try session.connection.receive(session.io, session.receive_buffer));
     switch (response) {
-        .pane_opened => |opened| return raw_module(opened.location.workspace.workspace),
+        .pane_opened => |opened| return core.raw(opened.location.workspace.workspace),
         .request_failed => |failure| return control.failureError(failure),
         else => return error.UnexpectedRuntimeResponse,
     }
@@ -484,7 +448,7 @@ pub fn sleepMs(session: *const Session, milliseconds: u32) void {
 }
 
 /// Sends a seen marker; a following query acts as an ordering barrier. Example: `try session.acknowledge(pane);`
-pub fn acknowledge(self: *Session, pane: PaneRefType) !void {
+pub fn acknowledge(self: *Session, pane: PaneRef) !void {
     var buffer: [64]u8 = undefined;
     try self.connection.send(self.io, try core.encodeAcknowledgeAgent(&buffer, .{
         .pane_id = try core.pane(pane.pane_id),

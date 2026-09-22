@@ -1,6 +1,8 @@
 //! The sidebar as a pixel band: its width from the configuration, the grid
 //! it leaves beside it, the pointer targets inside it and the drag, keyboard
 //! and reload paths that move it.
+const native = @import("../native/native.zig");
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -16,7 +18,7 @@ test {
     _ = @import("../SidebarPreference.zig");
 }
 
-const agents_input = [_]client.AgentInput{
+const agents_input = [_]data.AgentInput{
     .{ .key = .{ .pane_id = Session.pane_id, .pane_generation = 1 }, .location = Session.location, .pane_index = 1, .provider = .claude, .status = .ready, .workspace_label = "telar", .session_title = "idle shell" },
     .{ .key = .{ .pane_id = @enumFromInt(52), .pane_generation = 1 }, .location = Session.location, .pane_index = 2, .provider = .codex, .status = .working, .workspace_label = "telar", .session_title = "fix proxy tests" },
 };
@@ -124,7 +126,7 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     const renderer = &fixture.session.gui.renderer;
     const shared = gui.app.model.sidebarWidth();
     const revision = gui.chrome.revision;
-    try std.testing.expectEqual(client.Control.continue_routing, try input_support.action(
+    try std.testing.expectEqual(data.keybind.Control.continue_routing, try input_support.action(
         gui,
         .{
             .resize_sidebar = .right,
@@ -132,13 +134,13 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     ));
     try std.testing.expectEqual(@as(f32, 300), gui.sidebar.logical);
     try std.testing.expect(gui.chrome.revision != revision);
-    try std.testing.expectEqual(client.Control.continue_routing, try input_support.action(
+    try std.testing.expectEqual(data.keybind.Control.continue_routing, try input_support.action(
         gui,
         .{
             .resize_sidebar = .left,
         },
     ));
-    try std.testing.expectEqual(client.Control.continue_routing, try input_support.action(
+    try std.testing.expectEqual(data.keybind.Control.continue_routing, try input_support.action(
         gui,
         .{
             .resize_sidebar = .left,
@@ -190,7 +192,7 @@ test "a configuration reload applies a new sidebar width without changing the PT
     defer fixture.deinit();
     const session = fixture.session;
     const reload = &session.gui.driver.configuration;
-    const viewport: @import("../native/native.zig").Viewport = .{ .width = 1400, .height = 800, .scale = 1 };
+    const viewport: native.Viewport = .{ .width = 1400, .height = 800, .scale = 1 };
     const before = try session.gui.resizeViewport(viewport);
     try session.gui.resize(before, session.gui.renderer.theme);
     try session.settle();

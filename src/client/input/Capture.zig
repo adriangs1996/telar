@@ -1,20 +1,19 @@
+const model_data = @import("model");
 const routing_tests = @import("routing_tests.zig");
-const KeyType = @import("Key.zig");
-const keybind_module = @import("keybind.zig");
 const Capture = @This();
 
 actions: [8]routing_tests.Action = undefined,
 action_count: usize = 0,
-keys: [8]KeyType = undefined,
+keys: [8]model_data.Key = undefined,
 key_count: usize = 0,
 
-pub fn action(capture: *Capture, value: routing_tests.Action) !keybind_module.Control {
+pub fn action(capture: *Capture, value: routing_tests.Action) !model_data.KeybindControl {
     capture.actions[capture.action_count] = value;
     capture.action_count += 1;
     return .continue_routing;
 }
 
-pub fn key(capture: *Capture, value: KeyType) !void {
+pub fn key(capture: *Capture, value: model_data.Key) !void {
     capture.keys[capture.key_count] = value;
     capture.key_count += 1;
 }
@@ -26,7 +25,7 @@ pub fn forward(_: *Capture, _: []const u8) !void {
 const GenericRouter = @import("GenericRouter.zig").Type;
 const Router = GenericRouter(routing_tests.Action, .{ .max_bindings = 8, .max_keys = 4, .input_capacity = 64, .held_capacity = 32 }, void);
 
-pub fn apply(self: *Capture, decision: Router.Decision) !keybind_module.Control {
+pub fn apply(self: *Capture, decision: Router.Decision) !model_data.KeybindControl {
     switch (decision) {
         .forward => |value| try self.key(value.key),
         .replay => |value| {

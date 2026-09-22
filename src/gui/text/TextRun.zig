@@ -1,5 +1,6 @@
 //! One line of text to place: UTF-8 bytes, a baseline origin in device pixels
 //! and a color.
+const font_id = @import("font_id.zig");
 const Color = @import("../render/Color.zig");
 
 text: []const u8,
@@ -16,4 +17,4 @@ bold: bool = false,
 italic: bool = false,
 /// The face to shape with; graphemes it lacks fall back through the terminal
 /// chain. Terminal cells keep `.primary`.
-face: @import("font_id.zig").Id = .primary,
+face: font_id.Id = .primary,

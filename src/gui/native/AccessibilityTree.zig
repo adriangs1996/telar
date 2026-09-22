@@ -1,5 +1,6 @@
+const AccessibilityNode = @import("AccessibilityNode.zig");
 pub const AccessibilityTree = extern struct {
     revision: u64 = 0,
-    nodes: ?[*]const @import("AccessibilityNode.zig").AccessibilityNode = null,
+    nodes: ?[*]const AccessibilityNode.AccessibilityNode = null,
     count: u32 = 0,
 };

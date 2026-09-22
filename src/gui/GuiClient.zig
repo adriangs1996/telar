@@ -1,4 +1,8 @@
 //! One native connection's shared model and disposable host resources.
+const gui_event = @import("gui_event.zig");
+const event_module = @import("input/event.zig");
+const graphics_delivery = @import("graphics_delivery.zig");
+const shared_model = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -18,8 +22,6 @@ const State = @import("widgets/interaction/State.zig");
 const Chrome = @import("widgets/Chrome.zig");
 const SyntaxService = @import("syntax/Service.zig");
 const ReviewPanel = @import("change_review/Panel.zig");
-const Message = @import("gui_event.zig").Message;
-const InputEvent = @import("input/event.zig").Event;
 const review_dispatch = @import("change_review/dispatch.zig");
 
 const input_routing = @import("input/router.zig");
@@ -33,7 +35,6 @@ const PasteChunk = @import("PasteChunk.zig");
 const HostServices = @import("host/Services.zig");
 const SidebarPreference = @import("SidebarPreference.zig");
 const Overlays = @import("widgets/overlays/Overlays.zig");
-const GraphicsStore = @import("graphics_delivery.zig").Store;
 const DiagramService = @import("diagrams/Service.zig");
 const ClipboardOwner = @import("host/Owner.zig");
 const CursorTarget = @import("CursorTarget.zig");
@@ -94,7 +95,7 @@ host: HostServices = .{},
 input_revision: u64 = 0,
 focused: bool = true,
 widgets: State = .{},
-region: client.Region,
+region: shared_model.Region,
 theme: client.ColorTheme,
 chrome: Chrome = .{},
 
@@ -102,7 +103,7 @@ chrome: Chrome = .{},
 sidebar: SidebarPreference = .{},
 overlays: Overlays = .{},
 lifecycle: client.PresentationLifecycleState = .{},
-graphics_store: GraphicsStore,
+graphics_store: graphics_delivery.Store,
 diagrams: DiagramService,
 syntax: SyntaxService,
 review: *ReviewPanel,
@@ -318,6 +319,7 @@ pub fn draw(self: *GuiClient, viewport: native.Viewport) !u64 {
     }
 
     self.driver.configuration.observe(self.renderer.config, viewport);
+
     if (try self.driver.configuration.apply(self, &self.renderer)) {
         self.cursor_clock.config = self.renderer.config.cursor;
         self.cursor_clock.reset(self.now());
@@ -327,11 +329,13 @@ pub fn draw(self: *GuiClient, viewport: native.Viewport) !u64 {
         error.InvalidTerminalSize => return 0,
         else => return err,
     };
+
     const now_ns = self.now();
     self.cursor_clock.observe(self.cursorTarget(), now_ns);
     self.renderer.cursor_on = self.cursor_clock.shown(now_ns);
     self.renderer.focused = self.cursor_clock.focused;
     const token = try self.prepare(&self.renderer);
+
     if (token != 0) {
         self.driver.frame_pacer.record(self.lifecycle.active.?.delivery.commit.slice(), now_ns);
     }
@@ -341,7 +345,7 @@ pub fn draw(self: *GuiClient, viewport: native.Viewport) !u64 {
 
 /// Admits native input once ready, retaining pre-start focus transitions.
 /// Example: `_ = try gui.input(decoded);`
-pub fn input(self: *GuiClient, event: InputEvent) !bool {
+pub fn input(self: *GuiClient, event: event_module.Event) !bool {
     if (!self.started) {
         if (event == .focus) {
             try self.driver.inbox.post(
@@ -393,7 +397,7 @@ pub fn frameDelayNs(self: *GuiClient) u64 {
     var visible: [core.max_panes_per_tab]FramePacer.Pane = undefined;
     var count: usize = 0;
     if (self.app.model.activeTabModelConst()) |model| {
-        var layout: client.LayoutSnapshot = .{};
+        var layout: shared_model.LayoutSnapshot = .{};
         model.layout.snapshot(self.region.area, &layout);
         for (layout.views()) |view| {
             if (view.surface != .terminal or view.content.w == 0 or view.content.h == 0) {
@@ -485,7 +489,7 @@ fn start(self: *GuiClient, colors: core.TerminalColors) !void {
 
 /// Copies borrowed input before the host callback returns. A full input queue
 /// rejects admission; inbox failures propagate to the host. Example: `_ = try gui.acceptInput(event);`
-pub fn acceptInput(self: *GuiClient, event: InputEvent) !bool {
+pub fn acceptInput(self: *GuiClient, event: event_module.Event) !bool {
     if (event == .focus) {
         // Focus transitions must remain ordered even when native input coalesces.
         try self.driver.inbox.post(
@@ -533,7 +537,7 @@ pub fn update(self: *GuiClient) !?u8 {
         }
 
         if (batch.processed != 0) {
-            try client.client_layouts.observe(&self.app);
+            try self.app.synchronizeClientLayout();
         }
 
         try loop.configuration.poll(&self.app);
@@ -564,7 +568,7 @@ pub fn update(self: *GuiClient) !?u8 {
     return status;
 }
 
-fn dispatch(self: *GuiClient, event: Message) !?u8 {
+fn dispatch(self: *GuiClient, event: gui_event.Message) !?u8 {
     switch (event) {
         .server => |result| return self.receive(result),
         .sent => |result| try self.app.completeRuntimeSend(result),
@@ -579,13 +583,13 @@ fn dispatch(self: *GuiClient, event: Message) !?u8 {
         .bar_tick => |result| try client.operations.bar_updates.handleTick(&self.app, result),
         .bar_command => |result| try client.operations.bar_updates.completeCommand(&self.app, result),
         .link_opened => |result| try self.app.completeLinkOpening(result),
-        .path_completion => |result| try client.operations.path_completions.complete(&self.app, result),
+        .path_completion => |result| try self.app.completePathCompletion(result),
         .favicon => |result| self.landFavicon(result),
         .diagram_ready => self.landDiagram(),
         .syntax_ready => self.landSyntax(),
         .change_review_ready => self.landChangeReview(),
         .plugin_result => |result| {
-            if (try client.operations.plugin_actions.complete(&self.app, result)) {
+            if (try self.app.completePluginAction(result)) {
                 return 0;
             }
         },
@@ -594,7 +598,7 @@ fn dispatch(self: *GuiClient, event: Message) !?u8 {
     return if (self.stopped) @as(u8, 0) else null;
 }
 
-fn pathFor(event: Message) core.Path {
+fn pathFor(event: gui_event.Message) core.Path {
     return switch (event) {
         .configuration_ready,
         .notification_tick,
@@ -613,7 +617,7 @@ fn pathFor(event: Message) core.Path {
 }
 
 /// Applies one validated runtime message before releasing its receive borrow.
-fn receive(self: *GuiClient, result: anyerror!*const client.RuntimeMessage) !?u8 {
+fn receive(self: *GuiClient, result: anyerror!*const shared_model.RuntimeMessage) !?u8 {
     if (try self.app.receiveRuntime(result)) |status| {
         return status;
     }
@@ -663,7 +667,7 @@ fn statusMode(self: *const GuiClient) client.Mode {
     }
 
     var hints: client.Hints = .{};
-    const actions = [_]client.Action{
+    const actions = [_]shared_model.actions.Action{
         .{
             .split_pane = .horizontal,
         },
@@ -842,7 +846,7 @@ fn drainInput(self: *GuiClient) !void {
 
 /// Resolve and execute one semantic key before accepting the next event.
 /// Example: `_ = try gui.routeKey(event);`
-pub fn routeKey(self: *GuiClient, event: input_routing.Type.KeyInput) !client.Control {
+pub fn routeKey(self: *GuiClient, event: input_routing.Type.KeyInput) !shared_model.keybind.Control {
     errdefer self.router.eventFailed(event.key);
 
     defer {
@@ -854,7 +858,7 @@ pub fn routeKey(self: *GuiClient, event: input_routing.Type.KeyInput) !client.Co
     const decision = self.router.routeEvent(
         event,
         .{
-            .captures_keys = client.captures(self.app.keyRoutingAuthority()),
+            .captures_keys = shared_model.key_routing.captures(self.app.keyRoutingAuthority()),
             .repeat_policy = if (self.router.repeatAction()) |held| client.repeatPolicy(held, self.app.repeatPane()) else null,
         },
     );
@@ -865,11 +869,10 @@ pub fn routeKey(self: *GuiClient, event: input_routing.Type.KeyInput) !client.Co
     return control;
 }
 
-fn applyInputDecision(self: *GuiClient, decision: input_routing.Type.Decision) !client.Control {
+fn applyInputDecision(self: *GuiClient, decision: input_routing.Type.Decision) !shared_model.keybind.Control {
     switch (decision) {
         .forward => |value| {
-            _ = try client.operations.key_routing.apply(
-                &self.app,
+            _ = try self.app.routeKeyInput(
                 .{
                     .key = value.key,
                 },
@@ -881,9 +884,8 @@ fn applyInputDecision(self: *GuiClient, decision: input_routing.Type.Decision) !
             }
 
             if (value.current_key) |current| {
-                if (client.captures(self.app.keyRoutingAuthority())) {
-                    _ = try client.operations.key_routing.apply(
-                        &self.app,
+                if (shared_model.key_routing.captures(self.app.keyRoutingAuthority())) {
+                    _ = try self.app.routeKeyInput(
                         .{
                             .key = current,
                         },
@@ -908,7 +910,7 @@ fn applyInputDecision(self: *GuiClient, decision: input_routing.Type.Decision) !
     return .continue_routing;
 }
 
-fn deliverKey(self: *GuiClient, value: client.Key) !void {
+fn deliverKey(self: *GuiClient, value: shared_model.Key) !void {
     if (self.binding_target) |owner| {
         if (value.phase == .press) {
             try widget_routing.replayBindingKey(
@@ -921,8 +923,7 @@ fn deliverKey(self: *GuiClient, value: client.Key) !void {
         }
     }
 
-    _ = try client.operations.key_routing.apply(
-        &self.app,
+    _ = try self.app.routeKeyInput(
         .{
             .key = value,
         },
@@ -933,14 +934,14 @@ fn deliverKey(self: *GuiClient, value: client.Key) !void {
 /// keys open the native palette already prefixed, and sidebar resize uses
 /// this window's pixel preference. Other actions keep the shared routing.
 /// Copy mode retires first, as the shared native action policy does.
-fn executeAction(self: *GuiClient, value: client.Action) !client.Control {
+fn executeAction(self: *GuiClient, value: shared_model.actions.Action) !shared_model.keybind.Control {
     if (value == .scroll_pane) {
         if (try widget_routing.scrollFocusedThread(self, value.scroll_pane)) {
             return .continue_routing;
         }
     }
 
-    const prefix: client.command_palette.Prefix = switch (value) {
+    const prefix: shared_model.command_palette.Prefix = switch (value) {
         .goto_picker => .goto,
         .suggest_command => .suggest,
         .resize_sidebar => |direction| {
@@ -959,7 +960,7 @@ fn executeAction(self: *GuiClient, value: client.Action) !client.Control {
         _ = try self.app.leaveCopyMode();
     }
 
-    _ = client.operations.name_prompts.beginPalette(&self.app, prefix);
+    _ = self.app.beginCommandPalette(prefix);
 
     return .continue_routing;
 }
@@ -1075,7 +1076,7 @@ fn dispatchClipboard(self: *GuiClient, result: ClipboardResult) !bool {
         }
 
         _ = try self.applyInputDecision(self.router.interrupt());
-        _ = try client.operations.pane_pastes.start(&self.app);
+        _ = try self.app.startPanePaste();
         self.terminal_clipboard.offset = 0;
 
         return false;
@@ -1085,13 +1086,13 @@ fn dispatchClipboard(self: *GuiClient, result: ClipboardResult) !bool {
 
     if (offset < result.text.len) {
         const count = PasteChunk.nextSize(result.text[offset..]);
-        _ = try client.operations.pane_pastes.content(&self.app, result.text[offset..][0..count]);
+        _ = try self.app.appendPanePaste(result.text[offset..][0..count]);
         self.terminal_clipboard.offset = offset + count;
 
         return false;
     }
 
-    _ = try client.operations.pane_pastes.finish(&self.app);
+    _ = try self.app.finishPanePaste();
     self.terminal_clipboard.offset = null;
 
     return true;
@@ -1500,9 +1501,9 @@ fn cursorTarget(self: *const GuiClient) CursorTarget {
     const model = self.app.model.activeTabModelConst() orelse return .{};
     const pane = model.focusedPaneConst() orelse return .{};
     const copy = self.app.model.copyModeProjection();
-    const copy_view: ?client.CopyModeView = if (copy) |value| if (value.pane_id == pane.id) value.view else null else null;
+    const copy_view: ?shared_model.CopyModeView = if (copy) |value| if (value.pane_id == pane.id) value.view else null else null;
     const cursor = selection.cursor(pane, copy_view);
-    var layout: client.LayoutSnapshot = .{};
+    var layout: shared_model.LayoutSnapshot = .{};
 
     model.layout.snapshot(self.region.area, &layout);
 
@@ -1627,7 +1628,7 @@ fn complete(self: *GuiClient, token: u64, delivered: bool) !void {
 
 /// Applies runtime graphics commands to this connection's retained resources.
 /// Example: `try gui.applyGraphics(command);`
-pub fn applyGraphics(self: *GuiClient, command: client.ApplicationPanesPaneGraphicsCommand) !void {
+pub fn applyGraphics(self: *GuiClient, command: shared_model.application_panes_pane_graphics.Command) !void {
     return switch (command) {
         .snapshot => |value| self.graphics_store.applySnapshot(value),
         .image => |value| self.graphics_store.applyImage(value),
@@ -1812,7 +1813,7 @@ fn ingress(self: *const GuiClient) client.PresentationIngress {
 }
 
 /// Routes delivered widget targets before falling back to terminal input.
-fn widgetInput(self: *GuiClient, event: InputEvent) !bool {
+fn widgetInput(self: *GuiClient, event: event_module.Event) !bool {
     if (self.review.active) {
         if (try widget_routing.continueFallback(self, event)) {
             return true;

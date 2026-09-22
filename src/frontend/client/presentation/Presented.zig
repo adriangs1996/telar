@@ -1,5 +1,5 @@
-const PresentationCommitType = @import("telar-client").PresentationCommit;
+const client = @import("telar-client");
 const Presented = @This();
 
 presented_ns: u64,
-commit: PresentationCommitType,
+commit: client.PresentationCommit,

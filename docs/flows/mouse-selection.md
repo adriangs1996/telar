@@ -20,7 +20,7 @@ InputHandler.mouse
     -> copy_mode_pointer.apply: captured gesture first
     -> view_interactions: focus the clicked pane
     -> link_openings: ordinary links retain priority
-    -> pane_mouse_inputs.apply: choose selection or child report
+    -> AttachedClient.inputPaneMouse: choose selection or child report
     -> Model.beginPointerSelection -> Model.beginPointerSelection
     -> ClientModel.beginPointerSelection
 
@@ -40,7 +40,7 @@ runtime copy_selection
 The client owns the range, click tracker and physical gesture. Mouse selection
 reuses `copy_state` and its immutable projection but does not enter keyboard
 copy mode, move the child cursor or restore the entry viewport. Typing and
-pasting clear highlighting through `pane_inputs.send` and still reach the child.
+pasting clear highlighting through `AttachedClient.sendPaneInput` and still reach the child.
 A new press or mouse wheel clears a completed selection before normal routing.
 
 `selection_gesture` retains only the pane ID from the press. It survives clearing
@@ -81,9 +81,9 @@ soft-wrapped rows. Clipboard delivery still depends on host OSC 52 permission.
 
 - `src/core/select.zig`: word boundaries, whitespace, wide glyph continuations
   and saturated click counts.
-- `src/client/input/copy_mode.zig`: reverse word drags, clipping, wide glyph
+- `src/model/input/copy_mode.zig`: reverse word drags, clipping, wide glyph
   endpoints, bare clicks and retained-history reconciliation.
-- `src/client/application/input/copy_mode.zig`: double/triple click
+- `src/model/application/input/copy_mode.zig`: double/triple click
   copying, single delivery, unchanged viewport and failed-copy capture release.
 - `src/client/application/input/copy_mode_pointer.zig`: matching-button
   ownership and cancellation when geometry disappears.

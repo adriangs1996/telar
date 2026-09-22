@@ -8,9 +8,9 @@
 //! manifest table. Each scan is one function tagged with the agent it reads;
 //! a configured agent has none and relies on its manifest phrases.
 
+const core = @import("telar-core");
 const Scan = @import("Scan.zig");
 const vt = @import("ghostty-vt");
-const Signal = @import("telar-core").Signal;
 const std = @import("std");
 
 const scans = [_]Scan{
@@ -24,7 +24,7 @@ const scans = [_]Scan{
 /// ```zig
 /// const screen_signal = prompt_scan.scanReadyPrompt(&observer.terminal);
 /// ```
-pub fn scanReadyPrompt(terminal: *const vt.Terminal) ?Signal {
+pub fn scanReadyPrompt(terminal: *const vt.Terminal) ?core.Signal {
     for (scans) |scan| {
         if (!scan.ready(terminal)) {
             continue;

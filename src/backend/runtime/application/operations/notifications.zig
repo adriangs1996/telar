@@ -1,8 +1,8 @@
 //! Runtime notifications operations, reached from requests.dispatch.
 
+const core = @import("telar-core");
 const Application = @import("../Application.zig");
 const std = @import("std");
-const ShowNotificationType = @import("telar-core").ShowNotification;
 const StopRequestedType = @import("../../lifecycle/StopRequested.zig");
 const RequestContext = @import("../RequestContext.zig");
 
@@ -13,7 +13,7 @@ pub fn routeRuntimeStop(request: *RequestContext) !void {
 }
 
 /// Example: `try notifications.routeShowNotification(request, notification);`.
-pub fn routeShowNotification(request: *RequestContext, notification: ShowNotificationType) !void {
+pub fn routeShowNotification(request: *RequestContext, notification: core.ShowNotification) !void {
     const confirmation = try request.session.delivery.responses.reserveNotificationShown(notification.request_id);
     confirmation.delivered_clients = request.application.publishNotification(notification.notification);
     request.application.pumpAll();

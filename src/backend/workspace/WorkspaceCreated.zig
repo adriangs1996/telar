@@ -1,8 +1,8 @@
-const TabLocationType = @import("telar-core").TabLocation;
+const core = @import("telar-core");
 const events = @import("events.zig");
 const WorkspaceCreated = @This();
 
-location: TabLocationType,
+location: core.TabLocation,
 name: events.OwnedCreatedWorkspaceName,
 
 /// Creates a committed workspace event that owns its canonical name.
@@ -10,7 +10,7 @@ name: events.OwnedCreatedWorkspaceName,
 /// ```zig
 /// const event = try WorkspaceCreated.init(location, "backend");
 /// ```
-pub fn init(location: TabLocationType, name: []const u8) !WorkspaceCreated {
+pub fn init(location: core.TabLocation, name: []const u8) !WorkspaceCreated {
     return .{ .location = location, .name = try .init(name) };
 }
 

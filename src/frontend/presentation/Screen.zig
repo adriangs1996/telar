@@ -1,14 +1,7 @@
-const GraphicsEffectType = @import("GraphicsEffect.zig");
-const PositionType = @import("Position.zig");
-const ScreenStats = @import("ScreenStats.zig");
-const BufferType = @import("telar-core").Buffer;
-const DamageRowType = @import("telar-client").DamageRow;
+const core = @import("telar-core");
+const client = @import("telar-client");
 const std = @import("std");
-const PointerShape = @import("telar-core").PointerShape;
-const CellType = @import("telar-core").Cell;
-const markRows_module = @import("telar-client").markRows;
 const pointer = @import("pointer.zig");
-const StyleType = @import("telar-core").Style;
 const screen_support = @import("screen_support.zig");
 /// Two buffers and the difference between them.
 ///
@@ -19,9 +12,9 @@ const screen_support = @import("screen_support.zig");
 /// ended up visible.
 const Screen = @This();
 
-front: BufferType,
-back: BufferType,
-damage_rows: []DamageRowType,
+front: core.Buffer,
+back: core.Buffer,
+damage_rows: []client.DamageRow,
 full_damage: bool = true,
 gpa: std.mem.Allocator,
 
@@ -32,12 +25,12 @@ gpa: std.mem.Allocator,
 /// field is the exception: the real cursor is what screen readers follow
 /// and what a terminal's own input method composes against, so a field that
 /// paints a block instead is invisible to both. It also blinks for free.
-cursor: ?PositionType = null,
+cursor: ?Position = null,
 /// Desired host mouse pointer and the last shape confirmed by a successful
 /// flush. `null` forces recovery to re-emit the desired shape.
-mouse_pointer: PointerShape = .default,
-presented_mouse_pointer: ?PointerShape = null,
-graphics: ?GraphicsEffectType = null,
+mouse_pointer: core.PointerShape = .default,
+presented_mouse_pointer: ?core.PointerShape = null,
+graphics: ?GraphicsEffect = null,
 
 pub const GraphicsEffect = @import("GraphicsEffect.zig");
 
@@ -46,11 +39,11 @@ pub const Position = @import("Position.zig");
 pub const Stats = @import("ScreenStats.zig");
 
 pub fn init(gpa: std.mem.Allocator, w: u16, h: u16) !Screen {
-    var front = try BufferType.init(gpa, w, h);
+    var front = try core.Buffer.init(gpa, w, h);
     errdefer front.deinit();
-    var back = try BufferType.init(gpa, w, h);
+    var back = try core.Buffer.init(gpa, w, h);
     errdefer back.deinit();
-    const damage_rows = try gpa.alloc(DamageRowType, h);
+    const damage_rows = try gpa.alloc(client.DamageRow, h);
     @memset(damage_rows, .{});
 
     var s: Screen = .{
@@ -91,7 +84,7 @@ pub fn deinit(s: *Screen) void {
 /// Arbitrary drawing cannot prove which cells it will touch, so borrowing
 /// the buffer marks the whole screen. Protocol patches use `patchCells`
 /// instead and retain exact damage.
-pub fn buffer(s: *Screen) *BufferType {
+pub fn buffer(s: *Screen) *core.Buffer {
     s.full_damage = true;
     return &s.back;
 }
@@ -102,7 +95,7 @@ pub fn sizeMatches(s: *const Screen, w: u16, h: u16) bool {
 
 /// Returns a writable linear patch and records the rows it intersects.
 /// The returned slice is valid until resize, like the backing buffer.
-pub fn patchCells(s: *Screen, start: u32, count: u32) ![]CellType {
+pub fn patchCells(s: *Screen, start: u32, count: u32) ![]core.Cell {
     const first: usize = start;
     const len: usize = count;
     const end = std.math.add(usize, first, len) catch return error.PatchOutOfBounds;
@@ -110,12 +103,12 @@ pub fn patchCells(s: *Screen, start: u32, count: u32) ![]CellType {
         return error.PatchOutOfBounds;
     }
 
-    markRows_module(s.damage_rows, s.back.w, .{ .start = first, .count = len });
+    client.markRows(s.damage_rows, s.back.w, .{ .start = first, .count = len });
     return s.back.cells[first..end];
 }
 
 pub fn resize(s: *Screen, w: u16, h: u16) !void {
-    const damage_rows = try s.gpa.alloc(DamageRowType, h);
+    const damage_rows = try s.gpa.alloc(client.DamageRow, h);
     errdefer s.gpa.free(damage_rows);
     @memset(damage_rows, .{});
     try s.back.resize(w, h);
@@ -127,13 +120,13 @@ pub fn resize(s: *Screen, w: u16, h: u16) !void {
 }
 
 /// Sends the difference to `w`.
-pub fn flush(s: *Screen, w: *std.Io.Writer) !ScreenStats {
+pub fn flush(s: *Screen, w: *std.Io.Writer) !Stats {
     // The diff commits cells into `front` as it emits them. If the writer
     // fails partway, `front` claims cells the terminal never received, so
     // the only honest recovery is to forget the terminal's contents and
     // repaint everything on the next flush.
     errdefer s.invalidate();
-    var stats: ScreenStats = .{};
+    var stats: Stats = .{};
     const before = w.end;
 
     // Synchronised output: the terminal is told to hold the frame until it
@@ -147,7 +140,7 @@ pub fn flush(s: *Screen, w: *std.Io.Writer) !ScreenStats {
         try w.writeAll(pointer.sequence(s.mouse_pointer));
     }
 
-    var last_style: ?StyleType = null;
+    var last_style: ?core.Style = null;
     var cursor: ?struct { x: u16, y: u16 } = null;
 
     var y: u16 = 0;

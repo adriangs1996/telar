@@ -1,7 +1,6 @@
-const ClientIdentityType = @import("telar-core").ClientIdentity;
-const TerminalColorsType = @import("telar-core").TerminalColors;
+const core = @import("telar-core");
 const Bootstrap = @This();
 
 graphics_shared: bool,
-client_identity: ClientIdentityType,
-terminal_colors: TerminalColorsType = .{},
+client_identity: core.ClientIdentity,
+terminal_colors: core.TerminalColors = .{},

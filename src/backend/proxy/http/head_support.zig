@@ -5,8 +5,6 @@
 //! into the input.
 
 const types = @import("types.zig");
-const HeadType = @import("Head.zig");
-const AnalyzeOptionsType = @import("AnalyzeOptions.zig");
 const SessionType = @import("../Session.zig");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
@@ -63,7 +61,7 @@ pub fn read(session: anytype, side: SessionType.Side, buffer: []u8) ?usize {
 ///     .dialect = .anthropic_messages,
 /// });
 /// ```
-pub fn analyze(bytes: []const u8, options: AnalyzeOptionsType) ?HeadType {
+pub fn analyze(bytes: []const u8, options: AnalyzeOptions) ?Head {
     const first_line_end = std.mem.indexOf(u8, bytes, "\r\n") orelse return null;
     const start_line = bytes[0..first_line_end];
     const status_code: u16 = if (options.is_response) parseStatus(start_line) orelse return null else 0;
@@ -259,7 +257,7 @@ fn parseStatus(line: []const u8) ?u16 {
     return if (status >= 100 and status <= 599) status else null;
 }
 
-fn analyzeRequest(bytes: []const u8, dialect: types_module.ApiDialect) ?HeadType {
+fn analyzeRequest(bytes: []const u8, dialect: types_module.ApiDialect) ?Head {
     return analyze(bytes, .{
         .is_response = false,
         .response_to_head = false,
@@ -267,7 +265,7 @@ fn analyzeRequest(bytes: []const u8, dialect: types_module.ApiDialect) ?HeadType
     });
 }
 
-fn analyzeResponse(bytes: []const u8, response_to_head: bool) ?HeadType {
+fn analyzeResponse(bytes: []const u8, response_to_head: bool) ?Head {
     return analyze(bytes, .{
         .is_response = true,
         .response_to_head = response_to_head,

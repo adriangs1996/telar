@@ -3,6 +3,7 @@
 //! The band is the pane's border row, so it is as tall as one cell and never
 //! covers a terminal row; `ChromeMetrics.pane_header` caps the text band
 //! inside it. The cwd no longer appears here; the top bar shows location.
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
@@ -102,7 +103,22 @@ fn workingLabel(storage: []u8, seconds: u32) []const u8 {
 
 test "pane header duration advances with the card clock between runtime reports" {
     var agents: client.AgentSnapshot = .{};
-    const input: client.AgentInput = .{ .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 }, .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) }, .pane_index = 1, .provider = .codex, .status = .working, .status_age_s = 5 };
+    const input: data.AgentInput = .{
+        .key = .{
+            .pane_id = @enumFromInt(1),
+            .pane_generation = 1,
+        },
+        .location = .{
+            .workspace = .{
+                .workspace = @enumFromInt(1),
+            },
+            .tab_id = @enumFromInt(1),
+        },
+        .pane_index = 1,
+        .provider = .codex,
+        .status = .working,
+        .status_age_s = 5,
+    };
     _ = try agents.replace(.{ .revision = 1, .agents = &.{input} });
     var ages: @import("AgentAges.zig") = .{};
     const context: Context = .{ .hits = undefined, .bands = undefined, .projection = undefined, .hovered = null, .ages = &ages };

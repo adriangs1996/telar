@@ -1,9 +1,9 @@
 //! Native conversation selection shares delivered geometry with keyboard copy mode.
+const event_module = @import("../../input/event.zig");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const GuiClient = @import("../../GuiClient.zig");
-const Event = @import("../../input/event.zig").Event;
 const Target = @import("Target.zig");
 const Position = @import("ThreadTextPosition.zig");
 const Geometry = @import("ThreadTextGeometry.zig");
@@ -140,7 +140,7 @@ pub fn delivered(gui: *GuiClient) void {
 
 /// Routes only gestures and keys owned by the delivered conversation target.
 /// Example: `if (try thread_selection.route(gui, event, decision)) return true;`
-pub fn route(gui: *GuiClient, event: Event, decision: @import("Route.zig")) !bool {
+pub fn route(gui: *GuiClient, event: event_module.Event, decision: @import("Route.zig")) !bool {
     const selection = &gui.widgets.thread_selection;
     if (event == .focus and !event.focus) {
         cancel(gui);
@@ -395,7 +395,7 @@ fn copy(gui: *GuiClient, exit_after: bool) void {
     }
     const owner = selection.owner orelse return;
     const target = transcript(gui, owner.pane_id) orelse return;
-    var bytes: [@import("../../input/event.zig").max_text_bytes]u8 = undefined;
+    var bytes: [event_module.max_text_bytes]u8 = undefined;
     var writer: std.Io.Writer = .fixed(&bytes);
     (@import("ThreadSelectionCopy.zig"){ .gui = gui, .range = selection.range().?, .writer = &writer }).write() catch |err| {
         selection.problem = if (err == error.WriteFailed) .copy_limit else if (err == error.SelectionGeometryLimit) .geometry_limit else .copy_failed;

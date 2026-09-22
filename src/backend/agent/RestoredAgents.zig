@@ -1,11 +1,11 @@
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const core = @import("telar-core");
 const RestoredAgent = @import("RestoredAgent.zig");
 const PaneKeyType = @import("../pane/PaneKey.zig");
 const SessionTitleType = @import("SessionTitle.zig");
 const ResumeSession = @import("ResumeSession.zig");
 const RestoredAgents = @This();
 
-slots: [max_agent_snapshot_entries]?RestoredAgent = .{null} ** max_agent_snapshot_entries,
+slots: [core.max_agent_snapshot_entries]?RestoredAgent = .{null} ** core.max_agent_snapshot_entries,
 
 /// Stores one title for a pane generation, replacing an earlier one for the
 /// same generation. Returns `false` when every slot is taken.

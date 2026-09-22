@@ -1,5 +1,5 @@
-const PaneTextModeType = @import("telar-core").PaneTextMode;
+const core = @import("telar-core");
 const TextInput = @This();
 
-mode: PaneTextModeType,
+mode: core.PaneTextMode,
 text: []const u8,

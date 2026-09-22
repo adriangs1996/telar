@@ -1,17 +1,20 @@
 //! Public entrypoint for kitty_protocol.
 
+const deletion = @import("deletion.zig");
+const placement = @import("placement.zig");
+const transmission_support = @import("transmission_support.zig");
 pub const ChunkProgress = @import("ChunkProgress.zig");
 pub const Image = @import("Image.zig");
 pub const OutputPlacement = @import("OutputPlacement.zig");
-pub const writeDeleteImage = @import("deletion.zig").writeDeleteImage;
-pub const writeDeleteImageRange = @import("deletion.zig").writeDeleteImageRange;
-pub const writeDeletePlacement = @import("deletion.zig").writeDeletePlacement;
-pub const writePlacement = @import("placement.zig").writePlacement;
-pub const writePngTransmissionChunks = @import("transmission_support.zig").writePngTransmissionChunks;
-pub const writeSharedTransmission = @import("transmission_support.zig").writeSharedTransmission;
-pub const writeTransmission = @import("transmission_support.zig").writeTransmission;
-pub const writeTransmissionAbort = @import("transmission_support.zig").writeTransmissionAbort;
-pub const writeTransmissionChunks = @import("transmission_support.zig").writeTransmissionChunks;
+pub const writeDeleteImage = deletion.writeDeleteImage;
+pub const writeDeleteImageRange = deletion.writeDeleteImageRange;
+pub const writeDeletePlacement = deletion.writeDeletePlacement;
+pub const writePlacement = placement.writePlacement;
+pub const writePngTransmissionChunks = transmission_support.writePngTransmissionChunks;
+pub const writeSharedTransmission = transmission_support.writeSharedTransmission;
+pub const writeTransmission = transmission_support.writeTransmission;
+pub const writeTransmissionAbort = transmission_support.writeTransmissionAbort;
+pub const writeTransmissionChunks = transmission_support.writeTransmissionChunks;
 
 test {
     _ = @import("deletion.zig");

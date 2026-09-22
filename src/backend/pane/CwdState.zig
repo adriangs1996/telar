@@ -1,8 +1,8 @@
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const core = @import("telar-core");
 const std = @import("std");
 const CwdState = @This();
 
-bytes: [max_cwd_bytes_module]u8 = undefined,
+bytes: [core.max_cwd_bytes]u8 = undefined,
 len: u16 = 0,
 revision: u64 = 1,
 
@@ -49,6 +49,6 @@ fn set(state: *CwdState, path: []const u8) bool {
 }
 
 fn validCwd(path: []const u8) bool {
-    return path.len != 0 and path.len <= max_cwd_bytes_module and
+    return path.len != 0 and path.len <= core.max_cwd_bytes and
         std.mem.indexOfScalar(u8, path, 0) == null;
 }

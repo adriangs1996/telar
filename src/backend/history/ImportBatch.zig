@@ -1,23 +1,21 @@
+const core = @import("telar-core");
 const model = @import("model.zig");
-const PaneIdType = @import("telar-core").PaneId;
-const TabLocationType = @import("telar-core").TabLocation;
 const std = @import("std");
-const ImportHistoryViewType = @import("telar-core").ImportHistoryView;
 /// One owned batch of imported foreign history. The session identity is
 /// derived deterministically from the source label, so re-imports reuse the
 /// same session and `INSERT OR IGNORE` keeps them idempotent.
 const ImportBatch = @This();
 
 session_id: model.SessionId,
-pane_id: PaneIdType,
-location: TabLocationType,
+pane_id: core.PaneId,
+location: core.TabLocation,
 base_sequence: u64,
 started_at_ms: i64,
 source: []u8,
 times: []i64,
 commands: [][]u8,
 
-pub fn init(gpa: std.mem.Allocator, view: ImportHistoryViewType) !*ImportBatch {
+pub fn init(gpa: std.mem.Allocator, view: core.ImportHistoryView) !*ImportBatch {
     const batch = try gpa.create(ImportBatch);
     errdefer gpa.destroy(batch);
     const seed_low = std.hash.Wyhash.hash(0x74656c6172_696d70, view.source);

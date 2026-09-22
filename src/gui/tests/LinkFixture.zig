@@ -1,4 +1,6 @@
 //! Native gesture fixture whose opener captures targets instead of launching apps.
+const hover_target = @import("../input/hover_target.zig");
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -8,7 +10,7 @@ const Event = @import("../native/InputEvent.zig").InputEvent;
 const Fixture = @This();
 
 session: *Session,
-opened: ?client.LinkTarget = null,
+opened: ?data.LinkTarget = null,
 open_count: usize = 0,
 
 pub fn init() !*Fixture {
@@ -58,7 +60,7 @@ pub fn event(fixture: *Fixture, code: u32) Event {
     return .{
         .kind = 6,
         .code = code,
-        .mods = @import("../input/hover_target.zig").link_modifier,
+        .mods = hover_target.link_modifier,
         .x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[0])) + 1,
         .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[1])) + 1,
     };
@@ -70,7 +72,7 @@ pub fn send(fixture: *Fixture, value: Event) !void {
     try fixture.session.settle();
 }
 
-fn open(context: *anyopaque, target: client.LinkTarget) !void {
+fn open(context: *anyopaque, target: data.LinkTarget) !void {
     const fixture: *Fixture = @ptrCast(@alignCast(context));
     fixture.opened = target;
     fixture.open_count += 1;

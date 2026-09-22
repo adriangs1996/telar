@@ -1,9 +1,10 @@
 //! Slice 1 of the GUI visual language: rounded quads, rings and the sans chrome face.
+const freetype = @import("freetype");
+const font_id = @import("../text/font_id.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const QuadList = @import("../render/QuadList.zig");
 const Quad = @import("../render/Quad.zig").Quad;
-const Id = @import("../text/font_id.zig").Id;
 
 const Fixture = @import("CanvasFixture.zig");
 
@@ -131,25 +132,25 @@ test "bold sans selects the SemiBold face without synthetic emboldening" {
     try std.testing.expectEqual(regular.len, semibold.len);
     try std.testing.expect(regular[0].u0 != semibold[0].u0 or regular[0].v0 != semibold[0].v0);
     try std.testing.expect(try canvas.measure(.{ .text = "agents", .face = .sans, .bold = true }) > try canvas.measure(.{ .text = "agents", .face = .sans }));
-    try std.testing.expectEqual(Id.sans, fixture.atlas.shaping_cache.find(.{ .text = "agents", .face = .sans, .pixel_height = 16 }).?.font);
-    try std.testing.expectEqual(Id.sans_semibold, fixture.atlas.shaping_cache.find(.{ .text = "agents", .face = .sans_semibold, .pixel_height = 16 }).?.font);
+    try std.testing.expectEqual(font_id.Id.sans, fixture.atlas.shaping_cache.find(.{ .text = "agents", .face = .sans, .pixel_height = 16 }).?.font);
+    try std.testing.expectEqual(font_id.Id.sans_semibold, fixture.atlas.shaping_cache.find(.{ .text = "agents", .face = .sans_semibold, .pixel_height = 16 }).?.font);
     var keys = fixture.atlas.glyphs.keyIterator();
     while (keys.next()) |key| {
         try std.testing.expectEqual(@as(u64, 0), key.* & 1);
     }
 
-    const semibold_name = std.mem.span(@import("freetype").c.FT_Get_Postscript_Name(fixture.atlas.fonts.sans_semibold.face));
+    const semibold_name = std.mem.span(freetype.c.FT_Get_Postscript_Name(fixture.atlas.fonts.sans_semibold.face));
     try std.testing.expectEqualStrings("IBMPlexSans-SmBld", semibold_name);
-    try std.testing.expectEqualStrings("IBMPlexSans", std.mem.span(@import("freetype").c.FT_Get_Postscript_Name(fixture.atlas.fonts.sans.face)));
+    try std.testing.expectEqualStrings("IBMPlexSans", std.mem.span(freetype.c.FT_Get_Postscript_Name(fixture.atlas.fonts.sans.face)));
 }
 
 test "terminal cells never select the sans face and sans glyphs never alias mono glyphs" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     var canvas = fixture.canvas();
-    try std.testing.expectEqual(Id.primary, fixture.atlas.fonts.source("A", .primary));
-    try std.testing.expectEqual(Id.sans, fixture.atlas.fonts.source("A", .sans));
-    try std.testing.expectEqual(Id.symbols, fixture.atlas.fonts.source("\u{f07b}", .sans));
+    try std.testing.expectEqual(font_id.Id.primary, fixture.atlas.fonts.source("A", .primary));
+    try std.testing.expectEqual(font_id.Id.sans, fixture.atlas.fonts.source("A", .sans));
+    try std.testing.expectEqual(font_id.Id.symbols, fixture.atlas.fonts.source("\u{f07b}", .sans));
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     _ = try fixture.atlas.place(.{ .text = "A", .x = 0, .y = 16, .color = .white, .pixel_height = 16 }, &list);

@@ -25,13 +25,13 @@ key_routing / pointer_routing                   AttachedClient.executeAction
       |                                                      |
 physical lease / owner selection             binding authority / copy-mode preflight
       |                                                      |
-pane_inputs when child-owned                  native / Lua / plugin action
+AttachedClient.sendPaneInput                  native / Lua / plugin action
       |                                                      |
-pane_inputs.send                                      consumed by Telar
+AttachedClient.sendPaneInput                                      consumed by Telar
       |
 ClientModel.planPaneInput -> input.encoding.encodeKey
       |
-pane_viewports.apply(.bottom)
+AttachedClient.applyPaneViewport(.bottom)
       |
 AttachedClient.sendRuntimeInput
       |
@@ -122,9 +122,9 @@ repeat state, using the resulting application's repeat policy.
 selects the operation directly:
 
 - built-in actions perform the copy-mode preflight before dispatching;
-- explicit Lua callbacks go through `lua_actions` and `lua_actions.execute`, then
+- explicit Lua callbacks go through `lua_actions` and `AttachedClient.evaluateLuaAction`, then
   return semantic effects or semantic input;
-- plugin actions enter `plugin_actions.start`, then apply a current authorized
+- plugin actions enter `AttachedClient.startPluginAction`, then apply a current authorized
   semantic batch through the same dispatcher after `.plugin_result`. See
   [Plugin action](plugin-action.md) for its lifecycle and authority checks.
 
@@ -134,7 +134,7 @@ Validated Lua batches, authorized plugin batches and palette selections enter
 caller. Both origins share the native action switch: active copy mode exits
 before every native action except copy-mode entry. A Lua expression may return
 semantic keys or bounded paste. Keys re-enter
-`key_routing.apply`; paste enters `pane_inputs.send` only when copy mode is not
+`AttachedClient.routeKeyInput`; paste enters `AttachedClient.sendPaneInput` only when copy mode is not
 active. The adapter retains no returned slice after the synchronous call.
 Re-entered owners publish their own semantic or disposable revision.
 
@@ -142,7 +142,7 @@ The Lua branch does not expose the VM, registry or diagnostic storage to input
 routing. See [Lua action](lua-action.md) for callback context, complete batch
 validation, expression routing and failure presentation.
 
-The detach action delegates to `client_detachments.apply`, which closes
+The detach action delegates to `AttachedClient.detachAllTabs`, which closes
 tab-owned paste and focus state before detaching every runtime pane. See
 [Client detach](client-detach.md) for ordering and failure semantics.
 
@@ -168,14 +168,14 @@ that the matched branch is consumed.
 ## 2B. Key and pane input branch
 
 An unmatched or replayed semantic key reaches `host_inputs.key`, which
-delegates it to `key_routing`. `key_routing.apply` selects one attachment
+delegates it to `AttachedClient.routeKeyInput`. That method selects one attachment
 modal, name prompt, copy-mode or pane owner. A second fixed lease retains that
 application owner for the physical lifecycle; pane ownership stores the exact
 `PaneId`, not current focus. Only a pane-owned value enters
-`pane_inputs.send`. See [Key routing](key-routing.md) for capture, priority,
+`AttachedClient.sendPaneInput`. See [Key routing](key-routing.md) for capture, priority,
 failure and `Ctrl+V` follow-up policy.
 
-`pane_inputs.send` resolves an attached target through
+`AttachedClient.sendPaneInput` resolves an attached target through
 `ClientModel.planPaneInput` and calls `input.encoding.encodeKey` from
 `src/client/input/encoding_support.zig` for semantic keys. Encoding uses the pane's most
 recently applied cursor/application, modify-key and bracketed-paste modes, even
@@ -186,7 +186,7 @@ enter the bounded pane-input bytes path.
 The pane-input boundary also owns raw routed chunks, Lua paste,
 alternate-scroll cursor sequences and SGR mouse reports. Streamed paste first
 passes through `paste_routing`, which assigns every phase to one prompt
-or pane owner. A pane-owned start then enters `pane_pastes`, which captures
+or pane owner. A pane-owned start then enters `AttachedClient.startPanePaste`, which captures
 one pane and reuses pane input for every chunk and marker. See
 [Pane input](pane-input.md) for ownership, target, session, viewport, failure
 and telemetry policy.
@@ -242,7 +242,7 @@ effect fails, dispatch stops before later effects and the input entrypoint does 
 forward the event. Otherwise pointer routing forwards only events that remain
 inside the workbench. It delegates them to `pane_mouse_inputs` without reading
 pane geometry or child mouse modes. `multiplexer.Model.planPaneMouse` resolves
-the pane snapshot, `pane_mouse_inputs.apply` chooses one viewport, alternate-scroll
+the pane snapshot, `AttachedClient.inputPaneMouse` chooses one viewport, alternate-scroll
 or report effect, and the adapter applies it through the existing viewport and
 pane-input use cases. See [Pane mouse input](pane-mouse-input.md).
 
@@ -323,7 +323,7 @@ The encodings follow the
 
 ### Enqueueing input
 
-For keyboard presses, repeats and paste sources, `pane_inputs.send` plans and
+For keyboard presses, repeats and paste sources, `AttachedClient.sendPaneInput` plans and
 encodes input before applying the optional `.bottom` viewport intent. A changed
 viewport commits, updates graphics visibility and queues `set_pane_viewport`.
 The concrete input operation then calls `AttachedClient.sendRuntimeInput` directly.
@@ -473,8 +473,8 @@ They update the same model; the next preparation captures its latest state.
 ## Native input and drawing cadence
 
 The GUI admits native events through `GuiClient.input`, then the window
-thread drains `InputQueue` into the shared router. After `pane_inputs.send`
-successfully admits nonempty child input, `pane_inputs.record` calls the
+thread drains `InputQueue` into the shared router. After `AttachedClient.sendPaneInput`
+successfully admits nonempty child input, `AttachedClient.recordPaneInput` calls the
 optional `HostPresentation.notePaneInput` port. Local shortcuts, suppressed
 releases and rejected outbox writes grant no terminal drawing grace.
 

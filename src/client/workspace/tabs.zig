@@ -1,23 +1,13 @@
 //! Disposable client state for the ordered tabs of one workspace.
 
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
+const core = @import("telar-core");
+const data = @import("model");
+const icons = @import("../layout/icons.zig");
 const std = @import("std");
 const TabsModel = @import("TabsModel.zig");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const TabIdType = @import("telar-core").TabId;
-const TabLocationType = @import("telar-core").TabLocation;
-const PaneIdType = @import("telar-core").PaneId;
 const multiplexer = @import("multiplexer.zig");
-const WorkspaceTabInput = @import("WorkspaceTabInput.zig");
 const WorkspaceSnapshotInput = @import("WorkspaceSnapshotInput.zig");
-const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
-const max_panes_per_tab_module = @import("telar-core").max_panes_per_tab;
-const max_workspace_name_bytes_module = @import("telar-core").max_workspace_name_bytes;
 const PaneSnapshot = @import("PaneSnapshot.zig");
-const RectType = @import("telar-core").Rect;
-const LayoutType = @import("WorkspaceLayout.zig");
-const LayoutSnapshot = @import("LayoutSnapshot.zig");
-const IconType = @import("../layout/icons.zig").Icon;
 
 pub const PositionChange = enum {
     unchanged,
@@ -29,26 +19,10 @@ pub const LabelChange = enum {
     changed,
 };
 
-pub fn validateLabel(label: []const u8) !void {
-    if (label.len == 0 or label.len > max_tab_label_bytes_module) {
-        return error.InvalidTabLabel;
-    }
-
-    if (!std.unicode.utf8ValidateSlice(label)) {
-        return error.InvalidUtf8;
-    }
-
-    for (label) |byte| {
-        if (byte < 0x20 or byte == 0x7f) {
-            return error.InvalidTabLabel;
-        }
-    }
-}
-
 test "selection wraps and moving tabs preserves the active identity" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
@@ -60,16 +34,16 @@ test "selection wraps and moving tabs preserves the active identity" {
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.selectOffset(1));
-    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(1)), model.activeConst().?.location.tab_id);
+    try std.testing.expectEqual(@as(core.TabId, @enumFromInt(1)), model.activeConst().?.location.tab_id);
     try std.testing.expect(!model.selectOffset(0));
     try std.testing.expect(!model.selectOffset(2));
     try std.testing.expect(model.selectOffset(std.math.maxInt(isize)));
-    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(2)), model.activeConst().?.location.tab_id);
+    try std.testing.expectEqual(@as(core.TabId, @enumFromInt(2)), model.activeConst().?.location.tab_id);
     try std.testing.expect(!model.selectOffset(std.math.minInt(isize)));
     const original_pane = model.findPane(@enumFromInt(1)).?;
     try std.testing.expectEqual(PositionChange.changed, try model.applyPosition(@enumFromInt(1), 1));
     try std.testing.expectEqual(original_pane, model.findPane(@enumFromInt(1)).?);
-    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(2)), model.activeConst().?.location.tab_id);
+    try std.testing.expectEqual(@as(core.TabId, @enumFromInt(2)), model.activeConst().?.location.tab_id);
     try std.testing.expectEqual(PositionChange.unchanged, try model.applyPosition(@enumFromInt(1), 1));
     try std.testing.expectError(error.TabNotFound, model.applyPosition(@enumFromInt(9), 0));
     try std.testing.expectError(error.InvalidTabPosition, model.applyPosition(@enumFromInt(1), 2));
@@ -79,7 +53,7 @@ test "canonical tab labels distinguish changes and reject invalid values" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -99,29 +73,29 @@ test "canonical tab labels distinguish changes and reject invalid values" {
 test "automatic tab labels follow foreground focus until explicitly renamed" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const first: PaneIdType = @enumFromInt(1);
-    const second: PaneIdType = @enumFromInt(2);
+    const first: core.PaneId = @enumFromInt(1);
+    const second: core.PaneId = @enumFromInt(2);
     try model.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     const tab = model.active().?;
 
     try std.testing.expect(tab.isAutomatic());
     try std.testing.expectEqualStrings("", tab.canonicalLabel());
     try std.testing.expectEqualStrings("shell", tab.labelSlice());
-    try std.testing.expectEqual(IconType.app_terminal, tab.labelIcon().?);
+    try std.testing.expectEqual(icons.Icon.app_terminal, tab.labelIcon().?);
 
     _ = tab.model.setPaneForeground(first, "zsh");
     try std.testing.expectEqualStrings("zsh", tab.labelSlice());
     _ = tab.model.setPaneForeground(first, "nvim");
     try std.testing.expectEqualStrings("nvim", tab.labelSlice());
-    try std.testing.expectEqual(IconType.app_editor, tab.labelIcon().?);
+    try std.testing.expectEqual(icons.Icon.app_editor, tab.labelIcon().?);
     try tab.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 10 } });
     _ = tab.model.setPaneForeground(second, "codex");
     try std.testing.expectEqualStrings("codex", tab.labelSlice());
-    try std.testing.expectEqual(IconType.provider_codex, tab.labelIcon().?);
+    try std.testing.expectEqual(icons.Icon.provider_codex, tab.labelIcon().?);
     try std.testing.expect(tab.model.focusPane(first));
     try std.testing.expectEqualStrings("nvim", tab.labelSlice());
 
@@ -138,10 +112,10 @@ test "automatic tab labels follow foreground focus until explicitly renamed" {
 test "automatic and manual tab labels survive canonical workspace snapshots" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabIdType = @enumFromInt(1);
-    const second: TabIdType = @enumFromInt(2);
-    const pane: PaneIdType = @enumFromInt(1);
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabId = @enumFromInt(1);
+    const second: core.TabId = @enumFromInt(2);
+    const pane: core.PaneId = @enumFromInt(1);
     try model.bootstrap(.{ .pane_id = pane, .location = .{ .workspace = workspace, .tab_id = first }, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.addCreated(.{
         .location = .{ .workspace = workspace, .tab_id = second },
@@ -164,7 +138,7 @@ test "automatic and manual tab labels survive canonical workspace snapshots" {
 
     try std.testing.expect(model.find(first).?.isAutomatic());
     try std.testing.expectEqualStrings("claude", model.find(first).?.labelSlice());
-    try std.testing.expectEqual(IconType.provider_claude, model.find(first).?.labelIcon().?);
+    try std.testing.expectEqual(icons.Icon.provider_claude, model.find(first).?.labelIcon().?);
     try std.testing.expect(!model.find(second).?.isAutomatic());
     try std.testing.expectEqualStrings("tab 45", model.find(second).?.labelSlice());
 }
@@ -172,8 +146,8 @@ test "automatic and manual tab labels survive canonical workspace snapshots" {
 test "failed tab construction does not publish a shifted slot" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
@@ -196,16 +170,16 @@ test "failed tab construction does not publish a shifted slot" {
 test "root replacement constructs before retiring the current workspace" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const previous: TabLocationType = .{
+    const previous: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const replacement: TabLocationType = .{
+    const replacement: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = @enumFromInt(2),
     };
-    const previous_pane: PaneIdType = @enumFromInt(1);
-    const replacement_pane: PaneIdType = @enumFromInt(2);
+    const previous_pane: core.PaneId = @enumFromInt(1);
+    const replacement_pane: core.PaneId = @enumFromInt(2);
     try model.bootstrap(.{ .pane_id = previous_pane, .location = previous, .size = .{ .cols = 20, .rows = 5 } });
     var failing: std.testing.FailingAllocator = .init(std.testing.allocator, .{ .fail_index = 0 });
     model.gpa = failing.allocator();
@@ -236,7 +210,7 @@ test "root replacement constructs before retiring the current workspace" {
 test "displayed workspace name stays canonical when pane cwd changes" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
@@ -265,7 +239,7 @@ test "pane gap configuration reaches current and future tabs" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
     model.setPaneGaps(false);
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
@@ -289,7 +263,7 @@ test "host cell geometry reaches current and future tabs" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
     model.setCellSize(8, 16);
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
@@ -329,7 +303,7 @@ test "host cell geometry reaches current and future tabs" {
 test "workspace snapshots restore labels and order without losing pane layouts" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(7), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
@@ -337,7 +311,7 @@ test "workspace snapshots restore labels and order without losing pane layouts" 
     var workspace_name = [_]u8{ 't', 'e', 'l', 'a', 'r' };
     var logs_label = [_]u8{ 'l', 'o', 'g', 's' };
     var main_label = [_]u8{ 'm', 'a', 'i', 'n' };
-    const descriptors = [_]WorkspaceTabInput{
+    const descriptors = [_]data.WorkspaceTabInput{
         .{ .tab_id = @enumFromInt(2), .pane_count = 1, .label = &logs_label },
         .{ .tab_id = @enumFromInt(1), .pane_count = 1, .label = &main_label },
     };
@@ -352,7 +326,7 @@ test "workspace snapshots restore labels and order without losing pane layouts" 
     @memset(&main_label, 'x');
 
     try std.testing.expectEqualStrings("telar", model.workspaceName());
-    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(2)), model.items[0].?.location.tab_id);
+    try std.testing.expectEqual(@as(core.TabId, @enumFromInt(2)), model.items[0].?.location.tab_id);
     try std.testing.expectEqualStrings("logs", model.items[0].?.labelSlice());
     try std.testing.expectEqualStrings("main", model.items[1].?.labelSlice());
     try std.testing.expect(model.find(@enumFromInt(1)).?.model.find(@enumFromInt(7)) != null);
@@ -362,9 +336,9 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const root_tab: TabIdType = @enumFromInt(1);
-    const root_pane: PaneIdType = @enumFromInt(7);
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const root_tab: core.TabId = @enumFromInt(1);
+    const root_pane: core.PaneId = @enumFromInt(7);
     try model.bootstrap(.{ .pane_id = root_pane, .location = .{
         .workspace = workspace,
         .tab_id = root_tab,
@@ -377,7 +351,7 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
     };
     try std.testing.expectError(error.WorkspaceHasNoTabs, model.reconcileWorkspace(empty));
 
-    var excessive_tabs: [max_tabs_per_workspace_module + 1]WorkspaceTabInput = undefined;
+    var excessive_tabs: [core.max_tabs_per_workspace + 1]data.WorkspaceTabInput = undefined;
     for (&excessive_tabs, 0..) |*tab, index| {
         tab.* = .{
             .tab_id = @enumFromInt(@as(u64, @intCast(index + 1))),
@@ -414,7 +388,7 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
         .name = "project",
         .tabs = &.{.{
             .tab_id = root_tab,
-            .pane_count = max_panes_per_tab_module + 1,
+            .pane_count = core.max_panes_per_tab + 1,
             .label = "main",
         }},
     };
@@ -441,7 +415,7 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
     };
     try std.testing.expectError(error.InvalidWorkspaceName, model.reconcileWorkspace(embedded_nul));
 
-    const oversized_name: [max_workspace_name_bytes_module + 1]u8 = @splat('x');
+    const oversized_name: [core.max_workspace_name_bytes + 1]u8 = @splat('x');
     const oversized: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = &oversized_name,
@@ -459,12 +433,12 @@ test "workspace reconciliation replaces a tab at full capacity" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try model.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     }, .size = .{ .cols = 2, .rows = 1 } });
-    for (1..max_tabs_per_workspace_module) |index| {
+    for (1..core.max_tabs_per_workspace) |index| {
         const raw_id = index + 1;
         _ = try model.addCreated(.{
             .location = .{
@@ -477,7 +451,7 @@ test "workspace reconciliation replaces a tab at full capacity" {
         }, .{ .cols = 2, .rows = 1 });
     }
 
-    var descriptors: [max_tabs_per_workspace_module]WorkspaceTabInput = undefined;
+    var descriptors: [core.max_tabs_per_workspace]data.WorkspaceTabInput = undefined;
     for (&descriptors, 0..) |*descriptor, index| {
         descriptor.* = .{
             .tab_id = @enumFromInt(index + 2),
@@ -493,20 +467,20 @@ test "workspace reconciliation replaces a tab at full capacity" {
 
     try model.reconcileWorkspace(snapshot);
 
-    try std.testing.expectEqual(@as(usize, max_tabs_per_workspace_module), model.count);
+    try std.testing.expectEqual(@as(usize, core.max_tabs_per_workspace), model.count);
     try std.testing.expect(model.find(@enumFromInt(1)) == null);
-    try std.testing.expect(model.find(@enumFromInt(max_tabs_per_workspace_module + 1)) != null);
-    try std.testing.expectEqual(@as(TabIdType, @enumFromInt(max_tabs_per_workspace_module)), model.activeConst().?.location.tab_id);
+    try std.testing.expect(model.find(@enumFromInt(core.max_tabs_per_workspace + 1)) != null);
+    try std.testing.expectEqual(@as(core.TabId, @enumFromInt(core.max_tabs_per_workspace)), model.activeConst().?.location.tab_id);
 }
 
 test "tab reconciliation preserves the pane selected for workspace restoration" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const restored: PaneIdType = @enumFromInt(42);
+    const restored: core.PaneId = @enumFromInt(42);
     try model.bootstrap(.{ .pane_id = restored, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     const snapshot: PaneSnapshot = .{
         .location = location,
@@ -524,12 +498,12 @@ test "tab reconciliation preserves the pane selected for workspace restoration" 
 test "initial tab reconciliation replaces a vanished focused pane" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const vanished: PaneIdType = @enumFromInt(10);
-    const replacement: PaneIdType = @enumFromInt(42);
+    const vanished: core.PaneId = @enumFromInt(10);
+    const replacement: core.PaneId = @enumFromInt(42);
     try model.bootstrap(.{ .pane_id = vanished, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     const snapshot: PaneSnapshot = .{
         .location = location,
@@ -547,11 +521,11 @@ test "tab reconciliation rejects duplicate pane membership atomically" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const root_pane: PaneIdType = @enumFromInt(10);
+    const root_pane: core.PaneId = @enumFromInt(10);
     try model.bootstrap(.{ .pane_id = root_pane, .location = location, .size = .{ .cols = 30, .rows = 8 } });
     const snapshot: PaneSnapshot = .{
         .location = location,
@@ -569,16 +543,16 @@ test "tab reconciliation rejects duplicate pane membership atomically" {
 test "tab reconciliation restores a bookmarked nested split tree" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const left: PaneIdType = @enumFromInt(10);
-    const top_right: PaneIdType = @enumFromInt(42);
-    const bottom_right: PaneIdType = @enumFromInt(77);
-    const area: RectType = .{ .w = 60, .h = 20 };
+    const left: core.PaneId = @enumFromInt(10);
+    const top_right: core.PaneId = @enumFromInt(42);
+    const bottom_right: core.PaneId = @enumFromInt(77);
+    const area: core.Rect = .{ .w = 60, .h = 20 };
 
-    var saved: LayoutType = .{};
+    var saved: data.WorkspaceLayout = .{};
     try saved.addRoot(left);
     try saved.split(.{ .existing_pane = left, .new_pane = top_right, .axis = .horizontal });
     try saved.split(.{ .existing_pane = top_right, .new_pane = bottom_right, .axis = .vertical });
@@ -586,7 +560,7 @@ test "tab reconciliation restores a bookmarked nested split tree" {
     try std.testing.expect(saved.resizeFocused(.right, area));
     try std.testing.expect(saved.focusPane(top_right));
     try std.testing.expect(saved.resizeFocused(.down, area));
-    var expected: LayoutSnapshot = .{};
+    var expected: data.LayoutSnapshot = .{};
     saved.snapshot(area, &expected);
 
     try model.bootstrap(.{ .pane_id = top_right, .location = location, .size = .{ .cols = 30, .rows = 8 } });
@@ -597,9 +571,9 @@ test "tab reconciliation restores a bookmarked nested split tree" {
     };
 
     const restored = try model.reconcileTab(snapshot, area);
-    var actual: LayoutSnapshot = .{};
+    var actual: data.LayoutSnapshot = .{};
     restored.model.layout.snapshot(area, &actual);
-    for ([_]PaneIdType{ left, top_right, bottom_right }) |pane_id|
+    for ([_]core.PaneId{ left, top_right, bottom_right }) |pane_id|
         try std.testing.expectEqual(expected.find(pane_id).?.outer, actual.find(pane_id).?.outer);
     try std.testing.expectEqual(top_right, restored.model.layout.focused().?);
 }
@@ -607,13 +581,13 @@ test "tab reconciliation restores a bookmarked nested split tree" {
 test "client layout reconciliation restores its saved pane focus" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const left: PaneIdType = @enumFromInt(10);
-    const right: PaneIdType = @enumFromInt(42);
-    var saved: LayoutType = .{};
+    const left: core.PaneId = @enumFromInt(10);
+    const right: core.PaneId = @enumFromInt(42);
+    var saved: data.WorkspaceLayout = .{};
     try saved.addRoot(left);
     try saved.split(.{ .existing_pane = left, .new_pane = right, .axis = .horizontal });
     try std.testing.expect(saved.focusPane(left));
@@ -633,12 +607,12 @@ test "client layout reconciliation restores its saved pane focus" {
 test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const selected: PaneIdType = @enumFromInt(42);
-    var saved: LayoutType = .{};
+    const selected: core.PaneId = @enumFromInt(42);
+    var saved: data.WorkspaceLayout = .{};
     try saved.addRoot(@enumFromInt(10));
     try saved.split(.{ .existing_pane = @enumFromInt(10), .new_pane = selected, .axis = .horizontal });
     try saved.split(.{ .existing_pane = selected, .new_pane = @enumFromInt(77), .axis = .vertical });
@@ -660,7 +634,7 @@ test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
 test "later tab reconciliation preserves the client layout order" {
     var model = TabsModel.init(std.testing.allocator);
     defer model.deinit();
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };

@@ -1,3 +1,5 @@
+const Quad = @import("../render/Quad.zig");
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -42,7 +44,7 @@ test "project and agent scrolling are independent and clipped to their delivered
     try projects(&fixture, core.max_workspace_list_entries);
     try fixture.measure(.{ .width = 1100, .height = 360, .scale = 1 });
     var agents: client.AgentSnapshot = .{};
-    var entries: [8]client.AgentInput = undefined;
+    var entries: [8]data.AgentInput = undefined;
     for (&entries, 0..) |*entry, index| {
         entry.* = .{ .key = .{ .pane_id = @enumFromInt(index + 100), .pane_generation = 1 }, .location = Session.location, .pane_index = @intCast(index + 1), .provider = .codex, .status = .working };
     }
@@ -180,7 +182,7 @@ test "projects use text contrast for selection and a card background only on hov
                 }
             }
 
-            if (quad.x > hit.x + hit.width - renderer.chrome.px(40) and quad.x + quad.width < hit.x + hit.width and quad.y > hit.y and quad.y + quad.height < hit.y + hit.height and quad.texture == @import("../render/Quad.zig").atlas_texture and quad.u0 != quad.u1) {
+            if (quad.x > hit.x + hit.width - renderer.chrome.px(40) and quad.x + quad.width < hit.x + hit.width and quad.y > hit.y and quad.y + quad.height < hit.y + hit.height and quad.texture == Quad.atlas_texture and quad.u0 != quad.u1) {
                 attention_mark = true;
             }
         }

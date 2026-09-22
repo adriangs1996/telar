@@ -1,6 +1,6 @@
 //! Bounded content cache. Source bytes, not theme or addresses, identify a job.
+const client = @import("telar-client");
 const std = @import("std");
-const Role = @import("telar-client").SyntaxRole;
 const Entry = @import("Entry.zig");
 const Job = @import("Job.zig");
 const Result = @import("Result.zig");
@@ -24,7 +24,7 @@ pub fn beginFrame(self: *Self) void {
 /// Frame preparation copies bounded source; it never calls the parser or allocates.
 /// Returned roles remain borrowed only for synchronous painting.
 /// Example: `const roles = store.request(diff);`
-pub fn request(self: *Self, text: []const u8) ?[]const Role {
+pub fn request(self: *Self, text: []const u8) ?[]const client.SyntaxRole {
     if (text.len == 0 or text.len > limits.source_bytes or self.next_id == std.math.maxInt(u64)) {
         return null;
     }

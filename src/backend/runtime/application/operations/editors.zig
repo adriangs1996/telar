@@ -4,12 +4,11 @@ const Application = @import("../Application.zig");
 const core = @import("telar-core");
 const Request = @import("../commands/EditorOpenRequest.zig");
 const EditorOpenJob = @import("../../../editors/Job.zig");
-const OpenEditor = @import("telar-core").OpenEditor;
 const std = @import("std");
 const RequestContext = @import("../RequestContext.zig");
 
 /// Example: `try editors.routeOpenEditor(request, message);`.
-pub fn routeOpenEditor(request: *RequestContext, message: OpenEditor) !void {
+pub fn routeOpenEditor(request: *RequestContext, message: core.OpenEditor) !void {
     admitEditorOpen(request, .{ .client = request.session.key, .message = message }) catch |err| {
         try request.session.delivery.responses.push(.{ .request_failed = .{
             .request_id = message.request_id,

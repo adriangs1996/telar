@@ -21,15 +21,15 @@ from `completion/path_expansion.zig`).
 ### Directory completion
 
 ```text
-directory edit -> name_prompts.handleInput
+directory edit -> AttachedClient.inputPrompt
         |
-path_completions.refresh (expand, compare with the wanted query)
+AttachedClient.refreshPathCompletion (expand, compare with the wanted query)
         |
 PathCompletionRunner.start (adapter inbox producer, observation path)
         |
 completion/path_completion.run: one listing, <= 64 directories, <= 4096 B per path
         |
-path_completion event -> path_completions.complete
+path_completion event -> AttachedClient.completePathCompletion
         |
 ClientModel.path_completion (PathCompletionState, Version.path_completion)
 ```
@@ -56,9 +56,7 @@ the completion names); the GUI paints a modal with the list.
 ```text
 native action or tab-bar intent
         |
-name_prompts.begin*
-        |
-name_prompts
+AttachedClient.openNamePrompt
         |
 name_prompt.State.begin
         |
@@ -66,22 +64,22 @@ ClientModel.Version.prompt
 
 host key input                     streamed paste phase
         |                                  |
-key_routing.apply                 paste_routing adapter
+AttachedClient.routeKeyInput                 paste_routing adapter
         |                                  |
-key_routing.apply -> prompt    paste_routing -> prompt owner
+AttachedClient.routeKeyInput -> prompt    paste_routing -> prompt owner
         |                                  |
 key or replayed bytes -> term.parse       paste_start / paste_text / paste_end
         |                                  |
         +----------------+-----------------+
                          |
-             name_prompts.handleInput(Input)
+             AttachedClient.inputPrompt(Input)
                          |
                   semantic Command
         |
-name_prompts.handleInput -> name_prompt.State.apply
+AttachedClient.inputPrompt -> name_prompt.State.apply
 ```
 
-`name_prompts` owns opening eligibility and canonical initialization.
+`AttachedClient.openNamePrompt` owns opening eligibility and canonical initialization.
 It rejects every intent while copy mode or a pane paste owns input, resolves
 the current workspace or requested tab and copies its canonical name into the
 bounded field. Workspace creation also requires no pending request and an
@@ -93,7 +91,7 @@ and mutate the prompt through the model.
 paste, `paste_routing` snapshots those modes plus the attachment modal and
 `paste_routing` selects one owner. A paste that starts in the prompt
 records `Prompt.pasting`; its later chunks and closing boundary stay with that
-editor. For normal host keys, `key_routing.apply` selects prompt authority
+editor. For normal host keys, `AttachedClient.routeKeyInput` selects prompt authority
 before copy mode or pane input. `capturesKeys` bypasses configured bindings
 while the prompt is active. Mouse input and configured actions are suppressed
 in that interval. `pointer_routing.apply` receives no pointer authority, while
@@ -113,9 +111,9 @@ name_prompt.State.apply(.submit)
         |
 borrowed Submission(target, name)
         |
-name_prompts.handleInput
+AttachedClient.inputPrompt
         |
-name_prompts submit effect
+AttachedClient.submitPrompt
         |
 create_workspace, rename_workspace or rename_tab request use case
         |
@@ -148,13 +146,14 @@ latest model state.
 
 ## Validation
 
-- `src/client/model/name_prompt.zig` proves bounded editing, revisions,
+- `src/model/state/name_prompt.zig` proves bounded editing, revisions,
   cancellation and exact-target completion.
-- `src/client/application/input/name_prompt.zig` proves effect ordering and
+- `src/model/application/input/name_prompt.zig` proves effect ordering and
   prompt retention after blocked or failed submissions.
 - `src/client/application/input/name_prompt_opening.zig` proves input
   authority, workspace-creation gating, target resolution and canonical text.
-- `src/client/operations/input/name_prompts.zig` proves terminal parsing, bracketed
+- `src/client/operations/input/name_prompts.zig` maps semantic host events to commands.
+- `src/frontend/client/tests/` covers terminal parsing, bracketed
   paste handling and the zero-length incomplete-sequence regression.
 - `src/client/application/input/paste_routing.zig` proves exclusive prompt
   or pane ownership and ignored unowned phases.

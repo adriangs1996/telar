@@ -1,16 +1,12 @@
-const PaneIdType = @import("telar-core").PaneId;
-const CursorType = @import("telar-core").Cursor;
-const InputModesType = @import("telar-core").InputModes;
-const ScrollType = @import("telar-core").Scroll;
-const CellType = @import("telar-core").Cell;
+const core = @import("telar-core");
 const TestingPaneFrame = @This();
 
-pane_id: PaneIdType,
+pane_id: core.PaneId,
 frame_id: u64 = 1,
 base_frame_id: u64 = 0,
 cols: u16 = 2,
 rows: u16 = 2,
-cursor: CursorType = .{},
-input_modes: InputModesType = .{},
-scroll: ScrollType = .{ .total_rows = 2, .offset = 0 },
-cells: ?[]const CellType = null,
+cursor: core.Cursor = .{},
+input_modes: core.InputModes = .{},
+scroll: core.Scroll = .{ .total_rows = 2, .offset = 0 },
+cells: ?[]const core.Cell = null,

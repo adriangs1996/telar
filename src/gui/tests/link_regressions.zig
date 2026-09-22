@@ -1,4 +1,5 @@
 //! Native hover and link ownership across asynchronous state transitions.
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -150,7 +151,14 @@ fn prefixAfterPointer(code: u32) !void {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    gui.adoptBindings(.{ .prefix = try client.parseKey("ctrl+space"), .bindings = &.{}, .escape_timeout_ns = std.time.ns_per_s, .sequence_timeout_ns = 10 * std.time.ns_per_s });
+    gui.adoptBindings(
+        .{
+            .prefix = try data.chord.parseKey("ctrl+space"),
+            .bindings = &.{},
+            .escape_timeout_ns = std.time.ns_per_s,
+            .sequence_timeout_ns = 10 * std.time.ns_per_s,
+        },
+    );
     try fixture.send(.{ .kind = 4, .code = ' ', .mods = 4, .physical = 50 });
     try fixture.send(.{ .kind = 4, .code = ' ', .physical = 50, .phase = 3 });
     try std.testing.expect(gui.router.prefixPending());
@@ -312,7 +320,17 @@ test "native one-row panes keep links visible without a self-covering preview" {
         .location = Session.location,
         .content = .{ .x = 2, .y = 3, .w = 20, .h = 1 },
         .area = .{ .x = 2, .y = 3, .w = 11, .h = 1 },
-        .match = .{ .target = try client.LinkTarget.init("https://a.b"), .start = .{ .x = 0, .y = 0 }, .end = .{ .x = 11, .y = 0 } },
+        .match = .{
+            .target = try data.LinkTarget.init("https://a.b"),
+            .start = .{
+                .x = 0,
+                .y = 0,
+            },
+            .end = .{
+                .x = 11,
+                .y = 0,
+            },
+        },
     };
     try std.testing.expect(hit.previewArea() == null);
     var hover: @import("../input/PointerHover.zig") = .{ .link = hit };

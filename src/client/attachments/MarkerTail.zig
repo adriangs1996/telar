@@ -1,5 +1,5 @@
-const PointType = @import("telar-core").Point;
+const core = @import("telar-core");
 const MarkerTail = @This();
 
 number: u16,
-end: PointType,
+end: core.Point,

@@ -1,15 +1,16 @@
 //! Composition of the interactive Telar client process.
 
+const gui = @import("telar-gui");
+const client = @import("telar-client");
+const core = @import("telar-core");
+const frontend = @import("telar-frontend");
 const std = @import("std");
 const builtin = @import("builtin");
 const RunOptions = @import("arguments/RunOptions.zig");
-const OptionsType = @import("telar-client").Options;
-const SocketChannelType = @import("telar-core").SocketChannel;
 const ForwardType = @import("Forward.zig");
 const remote = @import("remote.zig");
 const RuntimeConnector = @import("RuntimeConnector.zig");
 const ClientLaunch = @import("ClientLaunch.zig");
-const ClientRunRun = @import("telar-frontend").ClientRun;
 const TestEnvironment = @import("TestEnvironment.zig");
 
 /// Connects to the selected runtime, prepares the local client configuration
@@ -19,7 +20,7 @@ const TestEnvironment = @import("TestEnvironment.zig");
 /// const exit_code = try client.run(process_init, options);
 /// ```
 pub fn run(init: std.process.Init, options: RunOptions) !u8 {
-    return launch(init, options, ClientRunRun);
+    return launch(init, options, frontend.ClientRun);
 }
 
 /// The same runtime connection and configuration as `run`, presented by the
@@ -34,12 +35,12 @@ pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
         return error.UnsupportedPlatform;
     }
 
-    return launch(init, options, @import("telar-gui").run);
+    return launch(init, options, gui.run);
 }
 
 /// One presentation adapter's entrypoint: it adopts the resources `Options`
 /// carries and runs until the user leaves.
-pub const Adapter = *const fn (std.process.Init, *SocketChannelType, OptionsType) anyerror!u8;
+pub const Adapter = *const fn (std.process.Init, *core.SocketChannel, client.Options) anyerror!u8;
 
 fn launch(init: std.process.Init, options: RunOptions, adapter: Adapter) !u8 {
     var forward: ?ForwardType = null;

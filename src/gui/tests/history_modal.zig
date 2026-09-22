@@ -1,10 +1,11 @@
+const ModalMotion = @import("../widgets/overlays/ModalMotion.zig");
+const event_module = @import("../input/event.zig");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
 const Target = @import("../widgets/interaction/Target.zig");
-const Event = @import("../input/event.zig").Event;
 const Fixture = @import("OverlayFixture.zig");
 const Rect = @import("../render/Rect.zig");
 
@@ -50,7 +51,7 @@ fn publish(session: *Session) !void {
     try session.settle();
 }
 
-fn send(session: *Session, event: Event) !void {
+fn send(session: *Session, event: event_module.Event) !void {
     try input_support.accept(session.gui, event);
     try input_support.pump(session.gui);
 }
@@ -310,9 +311,8 @@ test "native history entrance publishes animated hit and editor geometry only af
     const initial = fixture.overlays.presented().native_modal.?;
     const editor = fixture.widgets.editors.presented().items[0];
     const id = editor.id;
-    const duration = @import("../widgets/overlays/ModalMotion.zig").duration_ns;
     try std.testing.expect(fixture.animation.?.deadline_ns != null);
-    fixture.animation.?.begin(duration / 2);
+    fixture.animation.?.begin(ModalMotion.duration_ns / 2);
     _ = fixture.model.name_prompt.apply(.{ .insert = "zig" });
     try fixture.prepare();
     const moved = fixture.overlays.prepared().native_modal.?;
@@ -322,14 +322,14 @@ test "native history entrance publishes animated hit and editor geometry only af
     fixture.present(false);
     try std.testing.expectEqual(initial, fixture.overlays.presented().native_modal.?);
     try std.testing.expectEqual(editor.bounds, fixture.widgets.editors.presented().find(id).?.bounds);
-    fixture.animation.?.begin(duration);
+    fixture.animation.?.begin(ModalMotion.duration_ns);
     try fixture.paint();
     const settled = fixture.overlays.presented().native_modal.?;
     try std.testing.expect(settled.y < moved.y);
     try std.testing.expectEqual(@as(?u64, null), fixture.animation.?.deadline_ns);
     try std.testing.expectApproxEqAbs(settled.y - initial.y, fixture.widgets.editors.presented().find(id).?.bounds.y - editor.bounds.y, 0.001);
     fixture.model.name_prompt.begin(.history_palette);
-    fixture.animation.?.begin(duration + 1);
+    fixture.animation.?.begin(ModalMotion.duration_ns + 1);
     try fixture.paint();
     try std.testing.expect(fixture.overlays.presented().native_modal.?.y > settled.y);
     try std.testing.expect(fixture.widgets.editors.presented().find(id) == null);

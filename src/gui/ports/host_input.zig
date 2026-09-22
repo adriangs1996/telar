@@ -1,3 +1,5 @@
+const core = @import("telar-core");
+const thread_selection = @import("../widgets/interaction/thread_selection.zig");
 const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
 const thread_items = @import("../widgets/interaction/thread_items.zig");
@@ -14,7 +16,11 @@ fn resumeRead(context: *anyopaque) !void {
 
 fn promptBytes(context: *anyopaque, bytes: []const u8) !void {
     const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    _ = try client.operations.name_prompts.handleInput(app, .{ .paste_text = bytes });
+    _ = try app.inputPrompt(
+        .{
+            .paste_text = bytes,
+        },
+    );
 }
 
 fn adopt(context: *anyopaque, config: client.RouterConfig) void {
@@ -22,19 +28,19 @@ fn adopt(context: *anyopaque, config: client.RouterConfig) void {
     GuiClient.of(app).adoptBindings(config);
 }
 
-fn enterCopy(context: *anyopaque, pane_id: @import("telar-core").PaneId) bool {
+fn enterCopy(context: *anyopaque, pane_id: core.PaneId) bool {
     const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    return @import("../widgets/interaction/thread_selection.zig").enter(GuiClient.of(app), pane_id);
+    return thread_selection.enter(GuiClient.of(app), pane_id);
 }
 
 fn copyActive(context: *anyopaque) bool {
     const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    return @import("../widgets/interaction/thread_selection.zig").active(GuiClient.of(app));
+    return thread_selection.active(GuiClient.of(app));
 }
 
 fn leaveCopy(context: *anyopaque) bool {
     const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    return @import("../widgets/interaction/thread_selection.zig").leave(GuiClient.of(app));
+    return thread_selection.leave(GuiClient.of(app));
 }
 
 fn setExpansion(context: *anyopaque, request: client.ThreadExpansion) !void {

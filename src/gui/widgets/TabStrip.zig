@@ -1,5 +1,6 @@
 //! The right-aligned tab group inside navigation. The active tab always fits
 //! and uses a neutral open-bottom shape, with attention represented by dots.
+const action_module = @import("action.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -150,7 +151,7 @@ fn tab(strip: TabStrip, canvas: *Canvas, entry: TabEntry) !void {
     const palette = canvas.theme.palette;
     const chrome = canvas.chrome;
     const active = index == context.projection.tabs.active_index;
-    const action: @import("action.zig").Action = .{ .intent = .{ .select_tab = value.location.tab_id } };
+    const action: action_module.Action = .{ .intent = .{ .select_tab = value.location.tab_id } };
     const hovered = if (context.hovered) |current| std.meta.eql(current, action) else false;
     const surface: TabSurface = .{ .bounds = bounds, .active = active, .hovered = hovered };
     try surface.draw(canvas);

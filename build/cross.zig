@@ -2,6 +2,7 @@ const std = @import("std");
 const lua_build = @import("lua.zig");
 const freetype_build = @import("freetype.zig");
 const assets_build = @import("assets.zig");
+const model_build = @import("model.zig");
 const client_build = @import("client.zig");
 
 /// Register portability checks: `cross.add(b)`.
@@ -44,7 +45,18 @@ pub fn add(b: *std.Build) *std.Build.Step {
             .link_libc = true,
         });
         cross_telar_lua.addImport("lua-api", cross_lua_api);
-        const cross_client = client_build.add(b, cross_core, .{ .api = cross_lua_api, .telar = cross_telar_lua });
+        const cross_data = model_build.create(b, cross_core);
+        const cross_client = client_build.add(
+            b,
+            .{
+                .core = cross_core,
+                .data = cross_data,
+                .lua = .{
+                    .api = cross_lua_api,
+                    .telar = cross_telar_lua,
+                },
+            },
+        );
         const check = b.addObject(.{
             .name = b.fmt("platform-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
             .root_module = b.createModule(.{
@@ -54,6 +66,7 @@ pub fn add(b: *std.Build) *std.Build.Step {
             }),
         });
         check.root_module.addImport("telar-client", cross_client);
+        check.root_module.addImport("model", cross_data);
         cross_step.dependOn(&check.step);
         const raster_check = b.addLibrary(.{
             .name = b.fmt("text-rasterizer-{s}-{s}", .{ @tagName(query.os_tag.?), @tagName(query.cpu_arch.?) }),
@@ -81,6 +94,7 @@ pub fn add(b: *std.Build) *std.Build.Step {
         });
         sound_check.root_module.addImport("telar-core", cross_core);
         sound_check.root_module.addImport("telar-client", cross_client);
+        sound_check.root_module.addImport("model", cross_data);
         if (query.os_tag.? == .windows) {
             sound_check.root_module.linkSystemLibrary("user32", .{});
         }

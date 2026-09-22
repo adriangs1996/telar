@@ -1,20 +1,14 @@
+const core = @import("telar-core");
+const data = @import("model");
 const TerminalClient = @import("../TerminalClient.zig");
-const host = TerminalClient.of;
 const TestHarnessType = @import("TestHarness.zig");
-const PaneDescriptorType = @import("telar-core").PaneDescriptor;
-const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
-const decodeServer_module = @import("telar-core").decodeServer;
-const PaneIdType = @import("telar-core").PaneId;
 const std = @import("std");
-const PaneTargetType = @import("telar-core").PaneTarget;
-const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
 const host_inputs = @import("../controllers/input/host_inputs.zig");
-const parseKey_module = @import("telar-client").parseKey;
 const FullscreenReattachment = @This();
 
 harness: *TestHarnessType,
 
-pub fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const PaneDescriptorType) !void {
+pub fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const core.PaneDescriptor) !void {
     const client = scenario.harness.client;
     _ = try client.executeAction(
         .{
@@ -31,40 +25,40 @@ pub fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const Pan
             else => return error.UnexpectedClientMessage,
         }
     };
-    const snapshot = try encodeTabSnapshot_module(&buffer, .{
+    const snapshot = try core.encodeTabSnapshot(&buffer, .{
         .request_id = request.request_id,
         .location = request.location,
         .panes = panes,
     });
-    _ = try client.handleServerMessage(try decodeServer_module(snapshot));
+    _ = try client.handleServerMessage(try core.decodeServer(snapshot));
     try scenario.confirmAttachment(client.model.workspace.active().?.model.layout.focused().?);
 }
 
-pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: PaneIdType) !void {
+pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: core.PaneId) !void {
     const client = scenario.harness.client;
     try std.testing.expect(client.request_lifecycle.tracker.hasPane(.attachment, pane_id));
     try scenario.harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try scenario.harness.nextClientMessage(&buffer);
     try std.testing.expect(message == .open_pane);
-    try std.testing.expectEqualDeep(PaneTargetType{ .pane = pane_id }, message.open_pane.target);
+    try std.testing.expectEqualDeep(core.PaneTarget{ .pane = pane_id }, message.open_pane.target);
     try std.testing.expectEqualDeep(
-        client.model.workspace.active().?.model.contentSize(pane_id, host(client).view.workbench()).?,
+        client.model.workspace.active().?.model.contentSize(pane_id, TerminalClient.of(client).view.workbench()).?,
         message.open_pane.size,
     );
-    const opened = try encodePaneOpened_module(&buffer, .{
+    const opened = try core.encodePaneOpened(&buffer, .{
         .request_id = message.open_pane.request_id,
         .pane_id = pane_id,
         .location = client.model.activeTabLocation().?,
         .created = false,
     });
-    _ = try client.handleServerMessage(try decodeServer_module(opened));
+    _ = try client.handleServerMessage(try core.decodeServer(opened));
     try std.testing.expect(client.model.workspace.findPane(pane_id).?.attached);
 }
 
-pub fn expectInput(scenario: FullscreenReattachment, pane_id: PaneIdType) !void {
+pub fn expectInput(scenario: FullscreenReattachment, pane_id: core.PaneId) !void {
     try std.testing.expectEqual(pane_id, scenario.harness.client.model.planPaneInput(.focused).?.pane_id);
-    try host_inputs.key(scenario.harness.client, try parseKey_module("x"));
+    try host_inputs.key(scenario.harness.client, try data.chord.parseKey("x"));
     try scenario.harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try scenario.harness.nextClientMessage(&buffer);

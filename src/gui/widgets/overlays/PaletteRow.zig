@@ -1,7 +1,6 @@
 //! What one palette row shows: an icon column, a proportional label, muted
 //! secondary text and a right-aligned monospace hint.
 const core = @import("telar-core");
-const Color = core.Color;
 const Canvas = @import("../Canvas.zig");
 const Label = @import("../Label.zig");
 const PaletteRow = @This();
@@ -14,7 +13,7 @@ hint: []const u8 = "",
 /// Commands and paths keep the monospace face.
 mono: bool = false,
 /// Overrides the label color, for failures.
-color: ?Color = null,
+color: ?core.Color = null,
 
 /// Reserves hint cells before clipping the primary and secondary labels.
 /// Example: `try row.draw(canvas);`

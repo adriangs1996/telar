@@ -1,6 +1,5 @@
-const RectType = @import("telar-core").Rect;
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
+const core = @import("telar-core");
 const ListInput = @This();
 
-area: RectType,
-active_id: ?WorkspaceIdType,
+area: core.Rect,
+active_id: ?core.WorkspaceId,

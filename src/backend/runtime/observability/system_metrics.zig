@@ -12,8 +12,6 @@
 //! compiler, so macOS reports no battery for now. Linux reads procfs and
 //! sysfs, battery included.
 
-const SystemMetricsSample = @import("SystemMetricsSample.zig");
-const SamplerType = @import("Sampler.zig");
 const std = @import("std");
 const CpuTicks = @import("CpuTicks.zig");
 const Raw = @import("Raw.zig");
@@ -26,7 +24,7 @@ pub const Sample = @import("SystemMetricsSample.zig");
 
 /// Samples a value-owned copy without borrowing runtime state.
 /// Example: `const result = sampleOwned(io, previous);`.
-pub fn sampleOwned(io: std.Io, previous: SamplerType) SystemMetricsSample {
+pub fn sampleOwned(io: std.Io, previous: Sampler) Sample {
     const started = std.Io.Clock.awake.now(io).nanoseconds;
     var sampler = previous;
     sampler.sample();
@@ -195,7 +193,7 @@ test "memory converts to tenths of a GiB" {
 }
 
 test "the revision moves only when a visible value changes" {
-    var sampler: SamplerType = .{};
+    var sampler: Sampler = .{};
     sampler.apply(.{
         .busy_ticks = 100,
         .total_ticks = 1000,

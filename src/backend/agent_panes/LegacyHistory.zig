@@ -1,3 +1,4 @@
+const historical_item = @import("historical_item.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const protocol = @import("protocol.zig");
@@ -60,7 +61,7 @@ pub fn fill(history: *LegacyHistory, output: *core.AgentHistoryPage, thread_id: 
     while (index >= 0 and index < history.count) : (index += if (older) @as(i64, -1) else 1) {
         const entry = history.entries[@intCast(index)];
         var normalizer: @import("ItemNormalizer.zig") = .{ .body_buffer = history.body, .include_history_details = true };
-        var update = try @import("historical_item.zig").normalize(&normalizer, entry.value);
+        var update = try historical_item.normalize(&normalizer, entry.value);
         if (update.truncated or !std.unicode.utf8ValidateSlice(update.text)) {
             return error.HistoryItemNotRepresentable;
         }

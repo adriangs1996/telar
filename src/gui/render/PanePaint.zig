@@ -1,4 +1,6 @@
-pane: *const @import("telar-client").Pane,
-view: @import("telar-client").LayoutView,
-copy: ?@import("telar-client").CopyModeView = null,
+const client = @import("telar-client");
+const data = @import("model");
+pane: *const client.Pane,
+view: data.LayoutView,
+copy: ?data.CopyModeView = null,
 hide_cursor: bool = false,

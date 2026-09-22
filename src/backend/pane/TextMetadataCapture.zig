@@ -1,4 +1,5 @@
 //! Captures links before blit consumes dirty flags or the VT can move its pages.
+const blit = @import("blit.zig");
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const core = @import("telar-core");
@@ -162,7 +163,7 @@ test "text metadata captures soft wrap and wide padding before blit clears damag
     try std.testing.expect(!view.rows[2].continuation);
     var buffer = try core.Buffer.init(std.testing.allocator, 12, 4);
     defer buffer.deinit();
-    _ = @import("blit.zig").blit(.{ .buffer = &buffer, .area = buffer.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
+    _ = blit.blit(.{ .buffer = &buffer, .area = buffer.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
     try std.testing.expectEqual(.false, pane.state.dirty);
     const revision = capture.revision;
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });

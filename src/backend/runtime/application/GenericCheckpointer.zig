@@ -1,35 +1,21 @@
+const core = @import("telar-core");
 const WriteJob = @import("WriteJob.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const std = @import("std");
 const checkpoint = @import("../../persistence/checkpoint.zig");
 const ReaderType = @import("../../persistence/Reader.zig");
-const workspace_module = @import("telar-core").workspace;
-const tab_module = @import("telar-core").tab;
 const commands = @import("../../workspace/commands.zig");
 const WorkspaceReader = @import("../../workspace/Reader.zig");
 const PaneStoreType = @import("../../pane/PaneStore.zig");
-const TabLocationType = @import("telar-core").TabLocation;
 const state_support = @import("../../workspace/state_support.zig");
-const WorkspaceListEntryType = @import("telar-core").WorkspaceListEntry;
-const max_tabs_per_workspace_module = @import("telar-core").max_tabs_per_workspace;
-const TabDescriptorType = @import("telar-core").TabDescriptor;
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const CountersType = @import("../../persistence/Counters.zig");
 const PaneRecordType = @import("../../persistence/PaneRecord.zig");
-const EncoderType = @import("telar-core").Encoder;
 const ArgumentIteratorType = @import("../../persistence/ArgumentIterator.zig");
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const LaunchView = @import("telar-core").LaunchView;
 const SessionTitleType = @import("../../agent/SessionTitle.zig");
 const ResumeSession = @import("../../agent/ResumeSession.zig");
 const SessionReference = @import("../../agent/SessionReference.zig");
-const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
 const LayoutRecordType = @import("../../persistence/LayoutRecord.zig");
-const decodeClient_module = @import("telar-core").decodeClient;
 const PersistenceEncoder = @import("../../persistence/Encoder.zig");
-const raw_module = @import("telar-core").raw;
-const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
-const max_panes = @import("telar-core").max_panes_per_tab;
 
 /// Binds checkpointing to one application type. `Application` provides
 /// `io`, `gpa`, `session`, `model`, `select`, `workspaceRepository()`,
@@ -143,7 +129,7 @@ pub fn Type(comptime Application: type) type {
             while (try reader.next()) |record| {
                 if (record == .pane) {
                     pane_count += 1;
-                    if (pane_count > max_panes) {
+                    if (pane_count > core.max_panes_per_tab) {
                         return error.InvalidCheckpoint;
                     }
                 }
@@ -154,25 +140,25 @@ pub fn Type(comptime Application: type) type {
             var reader = try ReaderType.init(bytes);
             var repository = application.workspaceRepository();
             const panes = &application.model.panes;
-            var pane_records: [max_panes]PaneRecordType = undefined;
+            var pane_records: [core.max_panes_per_tab]PaneRecordType = undefined;
             var pane_count: usize = 0;
 
             while (try reader.next()) |record| switch (record) {
                 .workspace => |workspace| {
                     _ = repository.restoreWorkspace(.{
-                        .id = try workspace_module(workspace.id),
+                        .id = try core.workspace(workspace.id),
                         .path = workspace.path,
                         .explicit_name = if (workspace.name.len != 0) workspace.name else null,
-                        .first_tab_id = try tab_module(workspace.first_tab_id),
+                        .first_tab_id = try core.tab(workspace.first_tab_id),
                         .first_tab_label = workspace.first_tab_label,
                     }) catch continue;
                     application.session.restored_workspaces +|= 1;
                 },
                 .tab => |tab| {
-                    const workspace_id = try workspace_module(tab.workspace_id);
+                    const workspace_id = try core.workspace(tab.workspace_id);
                     repository.restoreTab(.{
                         .workspace = .{ .workspace = workspace_id },
-                        .tab_id = try tab_module(tab.tab_id),
+                        .tab_id = try core.tab(tab.tab_id),
                     }, tab.label) catch continue;
                 },
                 .pane => |pane| {
@@ -222,14 +208,14 @@ pub fn Type(comptime Application: type) type {
             }
         }
 
-        fn findEmptyTab(reader: WorkspaceReader, panes: *const PaneStoreType) ?TabLocationType {
-            var entries: [state_support.max_workspaces]WorkspaceListEntryType = undefined;
-            var tabs: [max_tabs_per_workspace_module]TabDescriptorType = undefined;
+        fn findEmptyTab(reader: WorkspaceReader, panes: *const PaneStoreType) ?core.TabLocation {
+            var entries: [state_support.max_workspaces]core.WorkspaceListEntry = undefined;
+            var tabs: [core.max_tabs_per_workspace]core.TabDescriptor = undefined;
             for (reader.listEntries(&entries)) |entry| {
-                const workspace: WorkspaceLocationType = .{ .workspace = entry.workspace };
+                const workspace: core.WorkspaceLocation = .{ .workspace = entry.workspace };
                 const snapshot = reader.descriptors(workspace, &tabs) orelse continue;
                 for (snapshot.tabs) |tab| {
-                    const location: TabLocationType = .{ .workspace = workspace, .tab_id = tab.tab_id };
+                    const location: core.TabLocation = .{ .workspace = workspace, .tab_id = tab.tab_id };
                     if (!panes.hasAt(location)) {
                         return location;
                     }
@@ -240,10 +226,10 @@ pub fn Type(comptime Application: type) type {
         }
 
         fn restorePane(application: *Application, counters: CountersType, record: PaneRecordType) !void {
-            const workspace_id = try workspace_module(record.workspace_id);
-            const location: TabLocationType = .{
+            const workspace_id = try core.workspace(record.workspace_id);
+            const location: core.TabLocation = .{
                 .workspace = .{ .workspace = workspace_id },
-                .tab_id = try tab_module(record.tab_id),
+                .tab_id = try core.tab(record.tab_id),
             };
             const reader = application.workspaceReader();
             if (!reader.contains(location)) {
@@ -256,7 +242,7 @@ pub fn Type(comptime Application: type) type {
             }
 
             var argument_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
-            var encoder = EncoderType.init(&argument_buffer);
+            var encoder = core.Encoder.init(&argument_buffer);
             const resumable = resumeForPane(application, record);
             var arguments = ArgumentIteratorType.init(record.arguments);
             const executable = arguments.next() orelse return error.InvalidLaunch;
@@ -265,7 +251,7 @@ pub fn Type(comptime Application: type) type {
                 try encoder.writeSized16(argument);
             }
 
-            const original_launch: LaunchView = .{
+            const original_launch: core.LaunchView = .{
                 .cwd = record.cwd,
                 .argument_count = record.argument_count,
                 .encoded_arguments = encoder.finish(),
@@ -274,12 +260,12 @@ pub fn Type(comptime Application: type) type {
                 .encoded_environment = "",
             };
             var direct_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
-            var direct_encoder = EncoderType.init(&direct_buffer);
+            var direct_encoder = core.Encoder.init(&direct_buffer);
             const direct_count = if (resumable) |session|
                 try session_checkpoint.directResumeArguments(&direct_encoder, executable, session)
             else
                 null;
-            const size: TerminalSizeType = .{
+            const size: core.TerminalSize = .{
                 .cols = if (record.cols == 0) 80 else record.cols,
                 .rows = if (record.rows == 0) 24 else record.rows,
             };
@@ -322,7 +308,7 @@ pub fn Type(comptime Application: type) type {
 
         fn restoreAgentPane(application: *Application, counters: CountersType, record: PaneRecordType) !void {
             const conversation = if (application.session.resume_agents and record.agent_session.len != 0)
-                try @import("telar-core").RecentConversation.init(record.agent_session, record.agent_title)
+                try core.RecentConversation.init(record.agent_session, record.agent_title)
             else
                 null;
             if (conversation) |value| {
@@ -338,9 +324,9 @@ pub fn Type(comptime Application: type) type {
                 } else |_| {}
             }
 
-            const location: TabLocationType = .{
-                .workspace = .{ .workspace = try workspace_module(record.workspace_id) },
-                .tab_id = try tab_module(record.tab_id),
+            const location: core.TabLocation = .{
+                .workspace = .{ .workspace = try core.workspace(record.workspace_id) },
+                .tab_id = try core.tab(record.tab_id),
             };
             const workspace_path = application.workspaceReader().workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
             try application.model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
@@ -396,12 +382,12 @@ pub fn Type(comptime Application: type) type {
                 return null;
             }
 
-            const source = std.enums.fromInt(AgentTitleSourceType, record.agent_title_source) orelse return null;
+            const source = std.enums.fromInt(core.AgentTitleSource, record.agent_title_source) orelse return null;
             return SessionTitleType.init(record.agent_title, source) catch null;
         }
 
         fn restoreLayout(application: *Application, record: LayoutRecordType) !void {
-            const message = try decodeClient_module(record.payload);
+            const message = try core.decodeClient(record.payload);
             const update = switch (message) {
                 .update_client_layout => |view| view,
                 else => return error.InvalidCheckpoint,
@@ -437,25 +423,25 @@ pub fn Type(comptime Application: type) type {
                 .next_pane_generation = panes.next_generation,
             });
 
-            var entries: [state_support.max_workspaces]WorkspaceListEntryType = undefined;
-            var descriptor_storage: [max_tabs_per_workspace_module]TabDescriptorType = undefined;
+            var entries: [state_support.max_workspaces]core.WorkspaceListEntry = undefined;
+            var descriptor_storage: [core.max_tabs_per_workspace]core.TabDescriptor = undefined;
             for (reader.listEntries(&entries)) |entry| {
-                const location: WorkspaceLocationType = .{ .workspace = entry.workspace };
+                const location: core.WorkspaceLocation = .{ .workspace = entry.workspace };
                 const snapshot = reader.descriptors(location, &descriptor_storage) orelse continue;
                 if (snapshot.tabs.len == 0) {
                     continue;
                 }
                 try encoder.workspace(.{
-                    .id = raw_module(entry.workspace),
+                    .id = core.raw(entry.workspace),
                     .path = entry.path,
                     .name = reader.explicitName(location) orelse "",
-                    .first_tab_id = raw_module(snapshot.tabs[0].tab_id),
+                    .first_tab_id = core.raw(snapshot.tabs[0].tab_id),
                     .first_tab_label = snapshot.tabs[0].label,
                 });
                 for (snapshot.tabs[1..]) |tab| {
                     try encoder.tab(.{
-                        .workspace_id = raw_module(entry.workspace),
-                        .tab_id = raw_module(tab.tab_id),
+                        .workspace_id = core.raw(entry.workspace),
+                        .tab_id = core.raw(tab.tab_id),
                         .label = tab.label,
                     });
                 }
@@ -483,22 +469,22 @@ pub fn Type(comptime Application: type) type {
                 } else if (resumable != null) application.model.agents.checkpointTitle(pane.key()) else null;
                 try encoder.pane(.{
                     .kind = pane.kind,
-                    .pane_id = raw_module(pane.id),
-                    .workspace_id = raw_module(pane.location.workspace.workspace),
-                    .tab_id = raw_module(pane.location.tab_id),
+                    .pane_id = core.raw(pane.id),
+                    .workspace_id = core.raw(pane.location.workspace.workspace),
+                    .tab_id = core.raw(pane.location.tab_id),
                     .cwd = pane.cwd.slice(),
                     .cols = pane.size.cols,
                     .rows = pane.size.rows,
                     .arguments = if (pane.kind == .agent) "" else pane.launch_record.slice(),
                     .argument_count = if (pane.kind == .agent) 0 else pane.launch_record.count,
-                    .agent_provider = if (pane.kind == .agent) @intFromEnum(@import("telar-core").AgentProvider.codex) else if (resumable) |session| @intFromEnum(session.provider) else 0,
+                    .agent_provider = if (pane.kind == .agent) @intFromEnum(core.AgentProvider.codex) else if (resumable) |session| @intFromEnum(session.provider) else 0,
                     .agent_session = if (conversation) |*value| value.idSlice() else if (resumable) |session| session.reference.slice() else "",
                     .agent_title = if (title) |value| value.slice() else "",
                     .agent_title_source = if (title) |value| @intFromEnum(value.source) else 0,
                 });
             }
 
-            var layout_buffer: [max_client_layout_wire_bytes_module]u8 = undefined;
+            var layout_buffer: [core.max_client_layout_wire_bytes]u8 = undefined;
             const store = &application.model.client_layouts;
             var index: usize = 0;
             while (index < store.capacity()) : (index += 1) {
@@ -522,7 +508,7 @@ pub fn Type(comptime Application: type) type {
 test "checkpoint pane records fit the bounded restore storage before application" {
     const Checkpointer = Type(void);
     var buffer: [16384]u8 = undefined;
-    for ([_]usize{ max_panes, max_panes + 1 }) |count| {
+    for ([_]usize{ core.max_panes_per_tab, core.max_panes_per_tab + 1 }) |count| {
         var encoder = try PersistenceEncoder.init(&buffer, .{
             .next_workspace_id = 2,
             .next_tab_id = 2,
@@ -543,7 +529,7 @@ test "checkpoint pane records fit the bounded restore storage before application
         }
 
         const bytes = try encoder.finish();
-        if (count <= max_panes) {
+        if (count <= core.max_panes_per_tab) {
             try Checkpointer.validate(bytes);
         } else {
             try std.testing.expectError(error.InvalidCheckpoint, Checkpointer.validate(bytes));

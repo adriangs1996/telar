@@ -1,3 +1,7 @@
+const thread_scroll = @import("../widgets/interaction/thread_scroll.zig");
+const ClipboardResult = @import("../input/ClipboardResult.zig");
+const event_module = @import("../input/event.zig");
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -5,10 +9,8 @@ const client = @import("telar-client");
 const thread_items = @import("../widgets/interaction/thread_items.zig");
 const Dispatcher = @import("../widgets/interaction/Dispatcher.zig");
 const Target = @import("../widgets/interaction/Target.zig");
-const Id = @import("../widgets/interaction/Id.zig");
 const Session = @import("Session.zig");
 const native = @import("../native/native.zig");
-const Event = @import("../input/event.zig").Event;
 const routing = @import("../widgets/interaction/routing.zig");
 
 fn control(value: u64, x: f32) Target {
@@ -112,7 +114,7 @@ fn settleConversationScroll(session: *Session) !void {
         now_ns = @max(now_ns, entry.motion.timestamp_ns);
     }
 
-    try @import("../widgets/interaction/thread_scroll.zig").advance(session.gui, now_ns + std.time.ns_per_s);
+    try thread_scroll.advance(session.gui, now_ns + std.time.ns_per_s);
 }
 
 fn initSession() !*Session {
@@ -132,7 +134,7 @@ fn initSession() !*Session {
     return session;
 }
 
-fn send(session: *Session, event: Event) !void {
+fn send(session: *Session, event: event_module.Event) !void {
     try input_support.accept(session.gui, event);
     try input_support.pump(session.gui);
 }
@@ -238,7 +240,11 @@ test "whole widget paste preserves selection when its bounded field cannot hold 
     const gui = session.gui;
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "keep" } });
     try publish(session);
-    _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
+    _ = try gui.app.inputPrompt(
+        .{
+            .command = .select_all,
+        },
+    );
     try send(session, .{ .paste = "a" ** 8192 ++ "tail" });
     const prompt = gui.app.model.name_prompt.currentConst().?;
     try std.testing.expectEqualStrings("keep", prompt.field.text());
@@ -303,7 +309,7 @@ test "native byte ranges reject partial scalars and preserve backwards selection
 }
 
 test "atomic field replacement protects selected text from invalid input capacity and aliasing" {
-    var field: client.GenericField(8) = .init("a界b");
+    var field: data.GenericField(8) = .init("a界b");
     _ = field.selectRange(.{ 4, 1 });
     try std.testing.expect(!field.replace(.{ 1, 4 }, "01234567"));
     try std.testing.expectEqualStrings("a界b", field.text());
@@ -322,8 +328,12 @@ test "cut waits for matching host success and preserves text on failure or inter
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "keep" } });
     try publish(session);
     const target = try editorTarget(session, .name);
-    for ([_]@import("../input/ClipboardResult.zig").Status{ .unavailable, .cancelled, .success }) |status| {
-        _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
+    for ([_]ClipboardResult.Status{ .unavailable, .cancelled, .success }) |status| {
+        _ = try gui.app.inputPrompt(
+            .{
+                .command = .select_all,
+            },
+        );
         try send(session, .{ .key = .{ .code = .{ .char = .init("x") }, .mods = .{ .super = true } } });
         try std.testing.expectEqualStrings("keep", gui.app.model.name_prompt.currentConst().?.field.text());
         var request: native.HostRequest = .{};
@@ -335,7 +345,11 @@ test "cut waits for matching host success and preserves text on failure or inter
     }
 
     try send(session, .{ .text = .{ .bytes = "original" } });
-    _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
+    _ = try gui.app.inputPrompt(
+        .{
+            .command = .select_all,
+        },
+    );
     try send(session, .{ .key = .{ .code = .{ .char = .init("x") }, .mods = .{ .ctrl = true } } });
     var request: native.HostRequest = .{};
     try std.testing.expect(gui.host.next(&request));
@@ -358,7 +372,11 @@ test "clipboard capacity leaves cut selection intact and composition follows out
         try gui.requestClipboardRead(target.id.target_id, target.id.generation);
     }
 
-    _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .select_all });
+    _ = try gui.app.inputPrompt(
+        .{
+            .command = .select_all,
+        },
+    );
     try send(session, .{ .key = .{ .code = .{ .char = .init("x") }, .mods = .{ .ctrl = true } } });
     try std.testing.expectEqualStrings("keep", gui.app.model.name_prompt.currentConst().?.field.selected());
     try send(session, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "temp", .selection_start = 4, .selection_end = 4 } });
@@ -449,7 +467,11 @@ test "accessibility widget focus cancels terminal prefix without transferring it
     try std.testing.expectEqual(@as(usize, 0), gui.router.leases.len);
     try input_support.focus(gui, false);
     try input_support.focus(gui, true);
-    _ = try client.operations.name_prompts.handleInput(&gui.app, .{ .command = .cancel });
+    _ = try gui.app.inputPrompt(
+        .{
+            .command = .cancel,
+        },
+    );
     try publish(session);
     try send(session, .{ .text = .{ .bytes = "c" } });
     try session.settle();
@@ -503,7 +525,7 @@ test "context folder clicks complete without submitting and reject stale listing
     _ = gui.app.model.name_prompt.apply(.tab);
     _ = gui.app.model.name_prompt.apply(.{ .insert = "/work/te" });
     _ = gui.app.path_completions.want("/work/te");
-    var result: client.PathCompletionResult = .{};
+    var result: data.PathCompletionResult = .{};
     try result.setBase("/work");
     try result.append("telar");
     try result.append("tests");
@@ -580,7 +602,7 @@ test "context folder scrolling accumulates precise deltas and clamps at the last
     const gui = session.gui;
     gui.app.model.name_prompt.begin(.create_workspace);
     _ = gui.app.model.name_prompt.apply(.tab);
-    var result: client.PathCompletionResult = .{};
+    var result: data.PathCompletionResult = .{};
     for ([_][]const u8{ "api", "dashboard", "docs", "mobile", "platform", "web" }) |name| {
         try result.append(name);
     }
@@ -683,7 +705,7 @@ test "native tab drag cancels on Escape focus loss and outside drops without pan
     const source = try tabTarget(session, @enumFromInt(3));
     const target = try tabTarget(session, Session.location.tab_id);
     const y = source.bounds.y + source.bounds.height / 2;
-    const cancellations = [_]Event{ .{ .key = .{ .code = .escape } }, .{ .focus = false }, .{ .pointer = .{ .kind = .drag, .x = 500, .y = 200 } } };
+    const cancellations = [_]event_module.Event{ .{ .key = .{ .code = .escape } }, .{ .focus = false }, .{ .pointer = .{ .kind = .drag, .x = 500, .y = 200 } } };
     for (cancellations) |cancel| {
         try input_support.focus(session.gui, true);
         try send(session, .{ .pointer = .{ .kind = .press, .x = source.bounds.x + 10, .y = y } });
@@ -1587,7 +1609,16 @@ test "conversation controls focus their pane and stale controls cannot focus a r
 }
 
 fn adoptAgentBinding(session: *Session, binding: client.config_model.ConfiguredBinding) void {
-    session.gui.adoptBindings(.{ .prefix = client.default_prefix, .bindings = &.{binding}, .escape_timeout_ns = std.time.ns_per_s, .sequence_timeout_ns = std.time.ns_per_hour });
+    session.gui.adoptBindings(
+        .{
+            .prefix = data.keybind.default_prefix,
+            .bindings = &.{
+                binding,
+            },
+            .escape_timeout_ns = std.time.ns_per_s,
+            .sequence_timeout_ns = std.time.ns_per_hour,
+        },
+    );
 }
 
 fn expectReleasedKeys(session: *Session) !void {
@@ -1604,9 +1635,33 @@ test "agent scroll bindings move the focused transcript without editing the comp
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
     const terminal_scroll = pane.scroll;
 
-    try send(session, .{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true }, .physical = .{ .value = 103 } } });
+    try send(
+        session,
+        .{
+            .key = .{
+                .code = data.keybind.default_prefix.code,
+                .mods = .{
+                    .ctrl = true,
+                },
+                .physical = .{
+                    .value = 103,
+                },
+            },
+        },
+    );
     try std.testing.expect(session.gui.router.prefixPending());
-    try send(session, .{ .key = .{ .code = client.default_prefix.code, .physical = .{ .value = 103 }, .phase = .release } });
+    try send(
+        session,
+        .{
+            .key = .{
+                .code = data.keybind.default_prefix.code,
+                .physical = .{
+                    .value = 103,
+                },
+                .phase = .release,
+            },
+        },
+    );
     try send(session, .{ .text = .{ .bytes = "-", .physical = .{ .value = 104 } } });
     try send(session, .{ .text = .{ .bytes = "-", .physical = .{ .value = 104 }, .phase = .release } });
     try settleConversationScroll(session);
@@ -1615,8 +1670,32 @@ test "agent scroll bindings move the focused transcript without editing the comp
     try settleConversationScroll(session);
     try std.testing.expectEqual(@as(u32, 3), pane.transcript_scroll);
 
-    try send(session, .{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true }, .physical = .{ .value = 103 } } });
-    try send(session, .{ .key = .{ .code = client.default_prefix.code, .physical = .{ .value = 103 }, .phase = .release } });
+    try send(
+        session,
+        .{
+            .key = .{
+                .code = data.keybind.default_prefix.code,
+                .mods = .{
+                    .ctrl = true,
+                },
+                .physical = .{
+                    .value = 103,
+                },
+            },
+        },
+    );
+    try send(
+        session,
+        .{
+            .key = .{
+                .code = data.keybind.default_prefix.code,
+                .physical = .{
+                    .value = 103,
+                },
+                .phase = .release,
+            },
+        },
+    );
     try send(session, .{ .text = .{ .bytes = "=", .physical = .{ .value = 105 } } });
     try send(session, .{ .text = .{ .bytes = "=", .physical = .{ .value = 105 }, .phase = .release } });
     try settleConversationScroll(session);
@@ -1636,7 +1715,17 @@ test "held agent scroll bindings pace transcript movement and stop on release" {
     try publish(session);
     adoptAgentBinding(session, try client.config_model.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up }));
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
-    var key: client.Key = .{ .code = .{ .char = .init("-") }, .mods = .{ .alt = true }, .physical = .{ .value = 45 } };
+    var key: data.Key = .{
+        .code = .{
+            .char = .init("-"),
+        },
+        .mods = .{
+            .alt = true,
+        },
+        .physical = .{
+            .value = 45,
+        },
+    };
 
     _ = try session.gui.routeKey(.{ .key = key, .raw = "", .now_ns = 0 });
     try settleConversationScroll(session);
@@ -1954,7 +2043,7 @@ test "agent default prefix works from closed selectors and conversation controls
         try send(session, .{ .accessibility = .{ .target_id = target.id.target_id, .generation = target.id.generation, .action = .focus } });
         try std.testing.expect(target.id.eql(session.gui.widgets.dispatcher.focused.?));
         try std.testing.expect(session.gui.widgets.composer_menu.selector == null);
-        const defaults = try client.default_bindings.load(client.default_prefix);
+        const defaults = try client.default_bindings.load(data.keybind.default_prefix);
         const binding = defaults[0];
         try std.testing.expectEqual(.new_agent_tab, std.meta.activeTag(binding.action));
         try send(session, .{ .key = .{ .code = binding.keys[0].code, .mods = .{ .ctrl = binding.keys[0].mods.ctrl }, .physical = .{ .value = 103 } } });
@@ -2594,7 +2683,7 @@ test "programmatic disclosure is idempotent and rejects missing visible items" {
 test "clicking an agent file link creates an editor pane in its source tab" {
     const session = try agentSession();
     defer session.deinit();
-    var diagnostic: client.Diagnostic = .{};
+    var diagnostic: data.Diagnostic = .{};
     session.gui.app.lua_generation = try client.Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = "return { api_version = 2, client = { editor = '/usr/bin/nvim' } }", .source_name = "@config.lua", .number = 1 });
     try std.testing.expectEqualStrings("", session.gui.app.options.editor);
     try linkSnapshot(session, "Read [design](</tmp/a b '$(touch nope).md>).");
@@ -2804,15 +2893,15 @@ test "managed review has exactly one action across single split and fullscreen l
     try std.testing.expectEqual(@as(usize, 2), reviewControlCount(session));
 }
 
-fn captureMessageLink(context: *anyopaque, target: client.LinkTarget) !void {
-    const captured: *?client.LinkTarget = @ptrCast(@alignCast(context));
+fn captureMessageLink(context: *anyopaque, target: data.LinkTarget) !void {
+    const captured: *?data.LinkTarget = @ptrCast(@alignCast(context));
     captured.* = target;
 }
 
 test "agent web links use the host opener with decoded Markdown destinations" {
     const session = try agentSession();
     defer session.deinit();
-    var opened: ?client.LinkTarget = null;
+    var opened: ?data.LinkTarget = null;
     session.gui.app.link_opener = .{ .context = &opened, .open = captureMessageLink };
     try linkSnapshot(session, "[site](https://example.com/?a=1&amp;b=2)");
     try publish(session);
@@ -2825,7 +2914,7 @@ test "right clicking agent links copies destinations without opening them" {
     for ([_][]const u8{ "/tmp/a b.md", "https://example.com/?a=1&b=2", "custom:destination" }) |destination| {
         const session = try agentSession();
         defer session.deinit();
-        var opened: ?client.LinkTarget = null;
+        var opened: ?data.LinkTarget = null;
         session.gui.app.link_opener = .{ .context = &opened, .open = captureMessageLink };
         var source: [256]u8 = undefined;
         try linkSnapshot(session, try std.fmt.bufPrint(&source, "[label](<{s}>)", .{destination}));
@@ -2995,7 +3084,7 @@ test "editor reuse replies cannot act on a replaced source pane" {
 test "review hides underlying message links before delivery and restores them after closing" {
     const session = try agentSession();
     defer session.deinit();
-    var opened: ?client.LinkTarget = null;
+    var opened: ?data.LinkTarget = null;
     session.gui.app.link_opener = .{ .context = &opened, .open = captureMessageLink };
     try linkSnapshot(session, "[site](https://example.com)");
     try publish(session);

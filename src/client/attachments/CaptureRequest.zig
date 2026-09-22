@@ -1,7 +1,6 @@
-const Target = @import("AttachmentTarget.zig");
-const types = @import("types.zig");
+const model_data = @import("model");
 const CaptureRequest = @This();
 
-target: Target,
+target: model_data.AttachmentTarget,
 sequence: u64,
-marker_policy: types.MarkerPolicy = .ordered,
+marker_policy: model_data.AttachmentMarkerPolicy = .ordered,

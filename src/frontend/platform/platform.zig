@@ -13,12 +13,12 @@
 //! them once the console is asked to, which is step 2's job, so the same bytes
 //! drive every platform and the emitter never branches.
 
+const client = @import("telar-client");
 const builtin = @import("builtin");
 const windows_module = @import("windows.zig");
 const posix = @import("posix.zig");
 const Size = @import("Size.zig");
 const std = @import("std");
-const LocalTime = @import("telar-client").LocalTime;
 const sequences = @import("sequences.zig");
 
 const impl = switch (builtin.os.tag) {
@@ -93,7 +93,7 @@ comptime {
     if (!@hasDecl(impl, "localTime")) {
         @compileError("platform is missing localTime");
     }
-    assertFn(impl, "localTime", fn () LocalTime);
+    assertFn(impl, "localTime", fn () client.LocalTime);
 }
 
 test "host keyboard enhancements stay inside the alternate screen" {

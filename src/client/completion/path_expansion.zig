@@ -5,11 +5,11 @@
 //! result is the path the workspace will show, not what was typed. Output
 //! is bounded by `max_path_bytes`.
 
+const data = @import("model");
 const std = @import("std");
-const max_path_bytes_module = @import("../model/PathCompletionResult.zig").max_path_bytes;
 const ExpansionInput = @import("ExpansionInput.zig");
 
-pub const max_path_bytes = max_path_bytes_module;
+pub const max_path_bytes = data.PathCompletionResult.max_path_bytes;
 
 /// ```zig
 /// const path = try expand(.{ .text = "~/sandbox/$PROJECT", .environ = environ, .base = pane_cwd }, &buffer);

@@ -1,29 +1,17 @@
 //! The `telar history` command and its terminal-safe text presentation.
 
-const max_history_query_bytes_module = @import("telar-core").max_history_query_bytes;
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
+const core = @import("telar-core");
 const std = @import("std");
 const HistoryOptions = @import("arguments/HistoryOptions.zig");
 const RuntimeConnector = @import("RuntimeConnector.zig");
-const encodeQueryHistory_module = @import("telar-core").encodeQueryHistory;
-const max_frame_size_module = @import("telar-core").max_frame_size;
-const decodeServer_module = @import("telar-core").decodeServer;
-const HistoryResultsViewType = @import("telar-core").HistoryResultsView;
 const UtcTimestamp = @import("UtcTimestamp.zig");
-const max_import_source_bytes_module = @import("telar-core").max_import_source_bytes;
 const BatchSender = @import("BatchSender.zig");
 const ImportParser = @import("ImportParser.zig");
 const ResolvedImport = @import("ResolvedImport.zig");
 const history = @import("arguments/history.zig");
 const ImportedEntry = @import("ImportedEntry.zig");
-const encodeDeleteHistory_module = @import("telar-core").encodeDeleteHistory;
-const max_history_results_module = @import("telar-core").max_history_results;
-const encodePruneHistory_module = @import("telar-core").encodePruneHistory;
-const SocketChannelType = @import("telar-core").SocketChannel;
-const encodeReadHistoryOutput_module = @import("telar-core").encodeReadHistoryOutput;
-const encodeHistoryStatsQuery_module = @import("telar-core").encodeHistoryStatsQuery;
 
-const request_buffer_size = max_history_query_bytes_module + max_cwd_bytes_module + 64;
+const request_buffer_size = core.max_history_query_bytes + core.max_cwd_bytes + 64;
 
 /// Queries the local runtime using the selected history filters and writes
 /// escaped, line-oriented results to stdout.
@@ -61,7 +49,7 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
     const query = if (options.query) |value| std.mem.span(value) else "";
 
     var send_buffer: [request_buffer_size]u8 = undefined;
-    try connection.send(init.io, try encodeQueryHistory_module(&send_buffer, .{
+    try connection.send(init.io, try core.encodeQueryHistory(&send_buffer, .{
         .request_id = @enumFromInt(1),
         .query = query,
         .scope = options.scope,
@@ -72,9 +60,9 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
         .limit = options.limit,
     }));
 
-    const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
+    const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
     defer init.gpa.free(receive_buffer);
-    const response = try decodeServer_module(try connection.receive(init.io, receive_buffer));
+    const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
     switch (response) {
         .history_results => |results| try print(init.io, results),
         .request_failed => |failure| {
@@ -85,7 +73,7 @@ pub fn run(init: std.process.Init, options: HistoryOptions) !void {
     }
 }
 
-fn print(io: std.Io, results: HistoryResultsViewType) !void {
+fn print(io: std.Io, results: core.HistoryResultsView) !void {
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(io, &output_buffer);
     const writer = &output.interface;
@@ -215,7 +203,7 @@ fn runImport(init: std.process.Init, options: HistoryOptions) !void {
     var connection = try connector.connectOrStart(.{});
     defer connection.deinit(init.io);
 
-    var source_buffer: [max_import_source_bytes_module]u8 = undefined;
+    var source_buffer: [core.max_import_source_bytes]u8 = undefined;
     const source = try std.fmt.bufPrint(&source_buffer, "{s}:{s}", .{ @tagName(resolved.kind), resolved.path });
 
     var sender: BatchSender = .{
@@ -339,7 +327,7 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
 
     var send_buffer: [4096]u8 = undefined;
     if (options.action == .delete) {
-        try connection.send(init.io, try encodeDeleteHistory_module(&send_buffer, .{
+        try connection.send(init.io, try core.encodeDeleteHistory(&send_buffer, .{
             .request_id = @enumFromInt(1),
             .id = options.delete_id,
         }));
@@ -361,18 +349,18 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
     const match = if (options.query) |value| std.mem.span(value) else "";
 
     if (options.dry_run or !options.assume_yes) {
-        try connection.send(init.io, try encodeQueryHistory_module(&send_buffer, .{
+        try connection.send(init.io, try core.encodeQueryHistory(&send_buffer, .{
             .request_id = @enumFromInt(1),
             .query = match,
             .scope = options.scope,
             .scope_value = scope_value,
             .pane_id = options.pane_id,
             .failed_only = options.failed_only,
-            .limit = max_history_results_module,
+            .limit = core.max_history_results,
         }));
-        const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
+        const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
         defer init.gpa.free(receive_buffer);
-        const response = try decodeServer_module(try connection.receive(init.io, receive_buffer));
+        const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
         const results = switch (response) {
             .history_results => |results| results,
             .request_failed => |failure| {
@@ -384,7 +372,7 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
         if (options.before_ms != 0) {
             try writer.print("{d} newest entries match the text/scope filters; --before applies on top and is not previewable\n", .{results.entry_count});
         } else {
-            try writer.print("would remove {d} entries (counting at most the newest {d})\n", .{ results.entry_count, max_history_results_module });
+            try writer.print("would remove {d} entries (counting at most the newest {d})\n", .{ results.entry_count, core.max_history_results });
         }
         try writer.flush();
         if (options.dry_run) {
@@ -405,7 +393,7 @@ fn runPrune(init: std.process.Init, options: HistoryOptions) !void {
         connection = try connector.connectOrStart(.{});
     }
 
-    try connection.send(init.io, try encodePruneHistory_module(&send_buffer, .{
+    try connection.send(init.io, try core.encodePruneHistory(&send_buffer, .{
         .request_id = @enumFromInt(2),
         .scope = options.scope,
         .scope_value = scope_value,
@@ -441,9 +429,9 @@ test "history prune confirmation rejects any other line" {
     try std.testing.expect(!confirmPrune(&empty));
 }
 
-fn receivePruned(init: std.process.Init, connection: *SocketChannelType) !u64 {
+fn receivePruned(init: std.process.Init, connection: *core.SocketChannel) !u64 {
     var receive_buffer: [1024]u8 = undefined;
-    const response = try decodeServer_module(try connection.receive(init.io, &receive_buffer));
+    const response = try core.decodeServer(try connection.receive(init.io, &receive_buffer));
     return switch (response) {
         .history_pruned => |pruned| pruned.removed,
         .request_failed => |failure| blk: {
@@ -461,14 +449,14 @@ fn runShow(init: std.process.Init, options: HistoryOptions) !void {
     defer connection.deinit(init.io);
 
     var send_buffer: [64]u8 = undefined;
-    try connection.send(init.io, try encodeReadHistoryOutput_module(&send_buffer, .{
+    try connection.send(init.io, try core.encodeReadHistoryOutput(&send_buffer, .{
         .request_id = @enumFromInt(1),
         .id = options.delete_id,
     }));
 
-    const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
+    const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
     defer init.gpa.free(receive_buffer);
-    const response = try decodeServer_module(try connection.receive(init.io, receive_buffer));
+    const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
     const output = switch (response) {
         .history_output => |value| value,
         .request_failed => |failure| {
@@ -513,7 +501,7 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
         std.Io.Timestamp.now(init.io, .real).toMilliseconds() - @as(i64, options.period_days) * 86_400_000;
 
     var send_buffer: [4096]u8 = undefined;
-    try connection.send(init.io, try encodeHistoryStatsQuery_module(&send_buffer, .{
+    try connection.send(init.io, try core.encodeHistoryStatsQuery(&send_buffer, .{
         .request_id = @enumFromInt(1),
         .scope = options.scope,
         .scope_value = scope_value,
@@ -521,9 +509,9 @@ fn runStats(init: std.process.Init, options: HistoryOptions) !void {
         .since_ms = since_ms,
     }));
 
-    const receive_buffer = try init.gpa.alloc(u8, max_frame_size_module);
+    const receive_buffer = try init.gpa.alloc(u8, core.max_frame_size);
     defer init.gpa.free(receive_buffer);
-    const response = try decodeServer_module(try connection.receive(init.io, receive_buffer));
+    const response = try core.decodeServer(try connection.receive(init.io, receive_buffer));
     const stats = switch (response) {
         .history_stats_result => |value| value,
         .request_failed => |failure| {

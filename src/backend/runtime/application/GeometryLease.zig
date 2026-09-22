@@ -1,6 +1,6 @@
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
+const core = @import("telar-core");
 const ClientKeyType = @import("../../history/ClientKey.zig");
 const GeometryLease = @This();
 
-workspace: WorkspaceLocationType,
+workspace: core.WorkspaceLocation,
 owner: ClientKeyType,

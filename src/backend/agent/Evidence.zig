@@ -1,6 +1,4 @@
-const AgentProviderType = @import("telar-core").AgentProvider;
-const AgentStatusType = @import("telar-core").AgentStatus;
-const AgentSourceType = @import("telar-core").AgentSource;
+const core = @import("telar-core");
 const ProcessObservationType = @import("ProcessObservation.zig");
 const std = @import("std");
 const ProxyObservationType = @import("ProxyObservation.zig");
@@ -9,9 +7,9 @@ const ScreenObservationType = @import("ScreenObservation.zig");
 const ReportObservationType = @import("ReportObservation.zig");
 const Evidence = @This();
 
-provider: AgentProviderType,
-status: AgentStatusType,
-source: AgentSourceType,
+provider: core.AgentProvider,
+status: core.AgentStatus,
+source: core.AgentSource,
 confidence: u8,
 observed_at_ms: i64,
 observed_at_ns: ?i64 = null,
@@ -39,7 +37,7 @@ pub fn fromProcess(observation: *const ProcessObservationType) Evidence {
 /// ```zig
 /// const evidence = Evidence.fromProxy(&observation, .working);
 /// ```
-pub fn fromProxy(observation: *const ProxyObservationType, status: AgentStatusType) Evidence {
+pub fn fromProxy(observation: *const ProxyObservationType, status: core.AgentStatus) Evidence {
     std.debug.assert(status == .working or status == .ready or status == .failed);
 
     return .{
@@ -66,7 +64,7 @@ pub fn fromProxy(observation: *const ProxyObservationType, status: AgentStatusTy
 /// ```zig
 /// const evidence = Evidence.fromScreen(.claude, &observation);
 /// ```
-pub fn fromScreen(provider: AgentProviderType, observation: *const ScreenObservationType) Evidence {
+pub fn fromScreen(provider: core.AgentProvider, observation: *const ScreenObservationType) Evidence {
     return .{
         .provider = provider,
         .status = switch (observation.signal.status) {
@@ -92,9 +90,9 @@ pub fn fromScreen(provider: AgentProviderType, observation: *const ScreenObserva
 /// ```zig
 /// const evidence = Evidence.fromReport(.claude, &observation);
 /// ```
-pub fn fromReport(provider: AgentProviderType, observation: *const ReportObservationType) Evidence {
+pub fn fromReport(provider: core.AgentProvider, observation: *const ReportObservationType) Evidence {
     std.debug.assert(observation.state != .exited);
-    const status: AgentStatusType = switch (observation.state) {
+    const status: core.AgentStatus = switch (observation.state) {
         .working, .settling => .working,
         .blocked => .blocked,
         .ready => .ready,

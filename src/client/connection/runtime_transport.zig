@@ -1,13 +1,12 @@
 //! Owns one client's bounded I/O lifecycle with the runtime process.
 
-const SocketChannelType = @import("telar-core").SocketChannel;
+const data = @import("model");
+const core_module = @import("telar-core");
 const std = @import("std");
 const RuntimeTransportState = @import("RuntimeTransportState.zig");
-const decodeClient_module = @import("telar-core").decodeClient;
-const ClientIdentityType = @import("telar-core").ClientIdentity;
 const GenericInbox = @import("../execution/GenericInbox.zig").Type;
 
-fn testingSocketPair() ![2]SocketChannelType {
+fn testingSocketPair() ![2]core_module.SocketChannel {
     var sockets: [2]std.c.fd_t = undefined;
     if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0) {
         return error.SocketPairFailed;
@@ -26,13 +25,13 @@ fn testingSocketPair() ![2]SocketChannelType {
 }
 
 fn initWithTestingAllocator(gpa: std.mem.Allocator) !void {
-    var connection: SocketChannelType = undefined;
+    var connection: core_module.SocketChannel = undefined;
     var state = try RuntimeTransportState.init(gpa, &connection);
     defer state.deinit(gpa);
 }
 
 test "read reservation survives duplicate scheduling and releases on error" {
-    var connection: SocketChannelType = undefined;
+    var connection: core_module.SocketChannel = undefined;
     var state = try RuntimeTransportState.init(std.testing.allocator, &connection);
     defer state.deinit(std.testing.allocator);
     try std.testing.expect(state.beginRead());
@@ -65,24 +64,24 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
         .client_identity = @enumFromInt(9),
     });
 
-    const configure = try decodeClient_module((try state.prepareSend()).?);
+    const configure = try core_module.decodeClient((try state.prepareSend()).?);
     try std.testing.expect(configure == .configure_graphics);
     try std.testing.expect(configure.configure_graphics.shared);
 
     try state.outbox.finishSend({});
-    const colors = try decodeClient_module((try state.prepareSend()).?);
+    const colors = try core_module.decodeClient((try state.prepareSend()).?);
     try std.testing.expect(colors == .configure_terminal_colors);
     try state.outbox.finishSend({});
 
-    const runtime_state = try decodeClient_module((try state.prepareSend()).?);
+    const runtime_state = try core_module.decodeClient((try state.prepareSend()).?);
     try std.testing.expect(runtime_state == .request_runtime_state);
-    try std.testing.expectEqual(@as(ClientIdentityType, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
+    try std.testing.expectEqual(@as(core_module.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
 }
 
 test "a non-reading peer cannot block receive admission or local input and shutdown joins both actors" {
     const core = @import("telar-core");
     const Event = union(enum) {
-        server: anyerror!*const @import("RuntimeMessage.zig"),
+        server: anyerror!*const data.RuntimeMessage,
         sent: anyerror!void,
         input: u8,
     };

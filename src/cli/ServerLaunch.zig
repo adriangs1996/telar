@@ -1,46 +1,33 @@
+const client = @import("telar-client");
+const core = @import("telar-core");
+const backend = @import("telar-backend");
 const std = @import("std");
 const ServerOptionsType = @import("arguments/ServerOptions.zig");
 const RuntimeConnectorType = @import("RuntimeConnector.zig");
-const GenerationType = @import("telar-client").Generation;
-const max_intercept_hosts = @import("telar-core").max_intercept_hosts;
-const max_agent_description_command_args_module = @import("telar-client").max_agent_description_command_args;
-const AgentDescriptionOptionsType = @import("telar-backend").AgentDescriptionOptions;
-const Options = @import("telar-backend").Options;
-const TableType = @import("telar-core").Table;
-const builtin_table_module = @import("telar-core").builtin_table;
-const FiltersType = @import("telar-core").Filters;
 const HistoryPath = @import("HistoryPath.zig");
-const Config = @import("telar-backend").Config;
-const ConfigType = @import("telar-backend").ProxyCaptureConfig;
-const max_workers_module = @import("telar-backend").max_workers;
-const ServiceSpec = @import("telar-backend").ServiceSpec;
 const ServerPreparation = @import("ServerPreparation.zig");
 const config = @import("config.zig");
 const server = @import("server.zig");
 const proxy_cli = @import("proxy.zig");
 const plugin_cli = @import("plugin.zig");
-const RegistryType = @import("telar-client").Registry;
-const installPackage_module = @import("telar-client").installPackage;
-const inspectPackage_module = @import("telar-client").inspectPackage;
-const InitializationType = @import("telar-backend").Initialization;
 const Launch = @This();
 
 process: std.process.Init,
 options: ServerOptionsType,
 connector: RuntimeConnectorType,
-config_generation: ?*GenerationType = null,
+config_generation: ?*client.Generation = null,
 config_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
 configured_history_buffer: [std.fs.max_path_bytes]u8 = undefined,
 configured_history_path: ?[:0]const u8 = null,
 configured_proxy_directory: ?[]u8 = null,
-proxy_intercept_host_storage: [max_intercept_hosts][]const u8 = undefined,
+proxy_intercept_host_storage: [core.max_intercept_hosts][]const u8 = undefined,
 proxy_intercept_hosts: []const []const u8 = &.{},
-description_arguments: [max_agent_description_command_args_module][]const u8 = undefined,
-agent_description_options: ?AgentDescriptionOptionsType = null,
-engine_arguments: [max_agent_description_command_args_module][]const u8 = undefined,
-engine_options: ?Options = null,
-agent_manifests: TableType = builtin_table_module,
-history_filters: FiltersType = .{},
+description_arguments: [client.max_agent_description_command_args][]const u8 = undefined,
+agent_description_options: ?backend.AgentDescriptionOptions = null,
+engine_arguments: [client.max_agent_description_command_args][]const u8 = undefined,
+engine_options: ?backend.Options = null,
+agent_manifests: core.Table = core.builtin_table,
+history_filters: core.Filters = .{},
 history_output_capture: bool = false,
 session_persist: bool = true,
 session_resume_agents: bool = true,
@@ -55,10 +42,10 @@ default_proxy_directory: ?[]u8 = null,
 proxy_key_buffer: [std.fs.max_path_bytes]u8 = undefined,
 proxy_cert_buffer: [std.fs.max_path_bytes]u8 = undefined,
 proxy_bundle_buffer: [std.fs.max_path_bytes]u8 = undefined,
-proxy_options: ?Config = null,
+proxy_options: ?backend.Config = null,
 proxy_system_trusted: bool = false,
-proxy_capture: ConfigType = .{},
-tap_specs: [max_workers_module]ServiceSpec = undefined,
+proxy_capture: backend.ProxyCaptureConfig = .{},
+tap_specs: [backend.max_workers]backend.ServiceSpec = undefined,
 tap_spec_count: u8 = 0,
 tap_snapshot_buffer: [std.fs.max_path_bytes]u8 = undefined,
 tap_snapshot_directory: ?[]const u8 = null,
@@ -95,7 +82,7 @@ pub fn prepare(launch: *Launch, preparation: ServerPreparation) !void {
     }
 }
 
-fn applyConfig(launch: *Launch, generation: *GenerationType) !void {
+fn applyConfig(launch: *Launch, generation: *client.Generation) !void {
     const runtime_config = &generation.snapshot.runtime;
     launch.agent_manifests = runtime_config.agent_manifests;
     launch.history_filters = runtime_config.history_filters;
@@ -189,10 +176,10 @@ fn prepareRuntimeStorage(launch: *Launch) !void {
     }
 }
 
-fn prepareTapPlugins(launch: *Launch, generation: *GenerationType) !void {
+fn prepareTapPlugins(launch: *Launch, generation: *client.Generation) !void {
     const trust_path = try plugin_cli.trustPath(launch.process.minimal.environ, &launch.trust_path_buffer);
     const trust = try plugin_cli.loadTrustStore(launch.process, trust_path);
-    const registry = try RegistryType.loadWithTrust(
+    const registry = try client.Registry.loadWithTrust(
         .{
             .gpa = launch.process.gpa,
             .io = launch.process.io,
@@ -210,23 +197,23 @@ fn prepareTapPlugins(launch: *Launch, generation: *GenerationType) !void {
         if (!granted.contains(.proxy_tap)) {
             continue;
         }
-        if (launch.tap_spec_count == max_workers_module) {
+        if (launch.tap_spec_count == backend.max_workers) {
             return error.TooManyTapPlugins;
         }
         const snapshot_root = try launch.ensureTapSnapshot();
         var package_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const package_path = try std.fmt.bufPrint(&package_buffer, "{s}/package-{d}", .{ snapshot_root, launch.tap_spec_count });
-        try installPackage_module(launch.process.gpa, launch.process.io, .{
+        try client.installPackage(launch.process.gpa, launch.process.io, .{
             .package = package,
             .destination = package_path,
         });
-        const copied = try inspectPackage_module(launch.process.gpa, launch.process.io, package_path);
+        const copied = try client.inspectPackage(launch.process.gpa, launch.process.io, package_path);
         if (!std.mem.eql(u8, &copied.digest, &package.digest)) {
             return error.PluginChangedDuringInstall;
         }
         var entry_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const entry = try std.fmt.bufPrint(&entry_buffer, "{s}/{s}", .{ package_path, copied.manifest.entry() });
-        launch.tap_specs[launch.tap_spec_count] = try ServiceSpec.init(launch.tap_spec_count, generation.number, .{
+        launch.tap_specs[launch.tap_spec_count] = try backend.ServiceSpec.init(launch.tap_spec_count, generation.number, .{
             .id = copied.manifest.id(),
             .entry = entry,
             .digest = copied.digest,
@@ -250,7 +237,7 @@ fn ensureTapSnapshot(launch: *Launch) ![]const u8 {
     return path;
 }
 
-pub fn runtimeInitialization(launch: *const Launch) InitializationType {
+pub fn runtimeInitialization(launch: *const Launch) backend.Initialization {
     return .{
         .dependencies = .{
             .io = launch.process.io,

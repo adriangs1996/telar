@@ -2,9 +2,8 @@
 //! projections for the goto picker. Deterministic for one (sources, query)
 //! pair, so the renderer and the submit path always agree on ordering.
 
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
-const TabIdType = @import("telar-core").TabId;
-const AgentKeyType = @import("../agents/AgentKey.zig");
+const core = @import("telar-core");
+const data = @import("model");
 const Sources = @import("Sources.zig");
 const Results = @import("Results.zig");
 const Scorer = @import("Scorer.zig");
@@ -16,9 +15,9 @@ pub const max_results = 64;
 pub const max_label_bytes = 160;
 
 pub const Item = union(enum) {
-    workspace: WorkspaceIdType,
-    tab: TabIdType,
-    agent: AgentKeyType,
+    workspace: core.WorkspaceId,
+    tab: core.TabId,
+    agent: data.AgentKey,
 };
 
 /// Fills `results` with every candidate matching `query`, best score first.

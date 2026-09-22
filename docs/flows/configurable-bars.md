@@ -13,7 +13,7 @@ Generation.parseBars
           |
 bars.Configuration + callback registry
           |
-config_reloads / client_startup
+AttachedClient.completeConfigReload / client_startup
           |
 bars.Layout -> ClientModel.bars
           |                 |

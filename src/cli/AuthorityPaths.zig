@@ -1,6 +1,6 @@
+const backend = @import("telar-backend");
 const std = @import("std");
 const proxy = @import("proxy.zig");
-const AuthorityFilesType = @import("telar-backend").AuthorityFiles;
 const AuthorityPaths = @This();
 
 key: [std.fs.max_path_bytes]u8 = undefined,
@@ -18,7 +18,7 @@ pub fn init(directory: []const u8) !AuthorityPaths {
     return paths;
 }
 
-pub fn files(paths: *const AuthorityPaths) AuthorityFilesType {
+pub fn files(paths: *const AuthorityPaths) backend.AuthorityFiles {
     return .{ .key = paths.key[0..paths.key_len], .certificate = paths.certificate[0..paths.certificate_len] };
 }
 

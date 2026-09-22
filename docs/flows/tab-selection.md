@@ -5,7 +5,7 @@ All sources resolve their intent through one concrete operation:
 
 ```text
 AttachedClient.executeAction, delivered tab click or agent navigation
-  -> operations/tabs/tab_selections.select
+  -> AttachedClient.selectTab
      -> reject a pending tab snapshot
      -> Model.selectTab
      -> AttachedClient.detachTab(previous)
@@ -37,7 +37,7 @@ then propagates to the client loop. Reconnect rebuilds disposable resources;
 runtime tabs and PTYs remain alive. Presentation follows the active-tab revision
 and is scheduled only by the host adapter.
 
-Source: `src/client/operations/tabs/tab_selections.zig` and
+Source: `src/client/AttachedClient.zig` and
 `AttachedClient.zig` in the same directory.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`, `pane_lifecycle.zig`,
 `src/client/model/tests/tabs.zig`, and `src/client/workspace/` tests cover target

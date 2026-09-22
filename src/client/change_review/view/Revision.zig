@@ -1,5 +1,5 @@
+const core = @import("telar-core");
 const std = @import("std");
-const Lines = @import("telar-core").ChangeReviewDiffLines;
 const File = @import("ReviewFile.zig");
 const Row = @import("ReviewLine.zig");
 const limits = @import("limits.zig");
@@ -16,7 +16,7 @@ row_count: usize = 0,
 pub fn load(self: *Self, source: []const u8) !void {
     self.* = .{ .source = source };
     errdefer self.* = .{};
-    var lines: Lines = .{ .text = source };
+    var lines: core.ChangeReviewDiffLines = .{ .text = source };
     var hunk: usize = 0;
     while (true) {
         const start = lines.index;

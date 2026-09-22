@@ -1,3 +1,4 @@
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -119,7 +120,7 @@ test "shared routing queries distinguish key capture from eligible repetition" {
     const session = try Session.init();
     defer session.deinit();
     const app = &session.gui.app;
-    try std.testing.expect(!client.captures(app.keyRoutingAuthority()));
+    try std.testing.expect(!data.key_routing.captures(app.keyRoutingAuthority()));
     try std.testing.expect(app.repeatPane() == null);
     try session.bootstrap();
     try session.receiveFrame(1);
@@ -139,16 +140,16 @@ test "shared routing queries distinguish key capture from eligible repetition" {
     try std.testing.expectEqual(second, app.repeatPane().?);
     pane.attached = false;
     try std.testing.expect(app.repeatPane() == null);
-    try std.testing.expect(!client.captures(app.keyRoutingAuthority()));
+    try std.testing.expect(!data.key_routing.captures(app.keyRoutingAuthority()));
     pane.attached = true;
 
     app.model.name_prompt.begin(.create_workspace);
-    try std.testing.expect(client.captures(app.keyRoutingAuthority()));
+    try std.testing.expect(data.key_routing.captures(app.keyRoutingAuthority()));
     try std.testing.expect(app.repeatPane() == null);
     _ = app.model.name_prompt.apply(.cancel);
     try std.testing.expectEqual(second, app.repeatPane().?);
 
     try std.testing.expect(app.model.enterCopyMode());
-    try std.testing.expect(!client.captures(app.keyRoutingAuthority()));
+    try std.testing.expect(!data.key_routing.captures(app.keyRoutingAuthority()));
     try std.testing.expect(app.repeatPane() == null);
 }

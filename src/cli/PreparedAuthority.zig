@@ -1,17 +1,16 @@
-const AuthorityType = @import("telar-backend").Authority;
+const backend = @import("telar-backend");
 const std = @import("std");
 const AuthorityPaths = @import("AuthorityPaths.zig");
-const AuthorityFilesType = @import("telar-backend").AuthorityFiles;
 const PreparedAuthority = @This();
 
-authority: AuthorityType,
+authority: backend.Authority,
 temporary_key: [std.fs.max_path_bytes]u8 = undefined,
 temporary_key_len: usize = 0,
 temporary_certificate: [std.fs.max_path_bytes]u8 = undefined,
 temporary_certificate_len: usize = 0,
 temporary: bool = false,
 
-pub fn files(prepared: *const PreparedAuthority, canonical: *const AuthorityPaths) AuthorityFilesType {
+pub fn files(prepared: *const PreparedAuthority, canonical: *const AuthorityPaths) backend.AuthorityFiles {
     if (!prepared.temporary) {
         return canonical.files();
     }

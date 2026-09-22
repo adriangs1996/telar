@@ -1,6 +1,6 @@
-const ClientIdentityType = @import("telar-core").ClientIdentity;
+const core = @import("telar-core");
 const Sources = @import("Sources.zig");
 const SnapshotQuery = @This();
 
-identity: ClientIdentityType,
+identity: core.ClientIdentity,
 sources: Sources,

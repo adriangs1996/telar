@@ -1,4 +1,6 @@
 //! The visible conversation window owns no provider state or asynchronous work.
+const std = @import("std");
+const TextFit = @import("TextFit.zig");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
@@ -47,7 +49,7 @@ pub fn draw(widget: Transcript, source: *Canvas) !void {
             return;
         }
         var error_text: [320]u8 = undefined;
-        const label = @import("std").fmt.bufPrint(&error_text, "{s} · scroll again to retry", .{window.failureMessage()}) catch window.failureMessage();
+        const label = std.fmt.bufPrint(&error_text, "{s} · scroll again to retry", .{window.failureMessage()}) catch window.failureMessage();
         const height = canvas.chrome.px(22);
         try canvas.fillAt(.{ .x = widget.bounds.x, .y = widget.bounds.y, .width = widget.bounds.width, .height = height }, canvas.theme.palette.surface_dim);
         _ = try canvas.textAt(.{ .x = widget.bounds.x, .y = widget.bounds.y, .width = widget.bounds.width, .height = height }, .{ .text = label, .face = .sans, .size = .small, .color = canvas.theme.palette.overlay1 });
@@ -90,7 +92,7 @@ fn empty(widget: Transcript, canvas: *Canvas) !void {
         .{ .text = "Describe a task, ask a question, or explore your project.", .face = .sans, .size = .body, .color = canvas.theme.palette.subtext0 },
     };
     for (labels, 0..) |value, row| {
-        var storage: [@import("TextFit.zig").max_bytes]u8 = undefined;
+        var storage: [TextFit.max_bytes]u8 = undefined;
         var label = value;
         label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = area.width }).fit(value, &storage);
         _ = try canvas.textAt(.{ .x = area.x, .y = y + @as(f32, @floatFromInt(row)) * height, .width = area.width, .height = height }, label);

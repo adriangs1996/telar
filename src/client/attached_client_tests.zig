@@ -1,17 +1,13 @@
 //! Test bodies for AttachedClient. Private implementations are supplied by the
 //! owner's test declarations as concrete compile-time functions.
-const Notification = @import("input/Notification.zig");
+const data = @import("model");
+const input_namespace = @import("input/input_namespace.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const AttachedClient = @import("AttachedClient.zig");
 const ModelType = @import("model/Model.zig");
-const HostCommit = @import("model/HostCommit.zig");
 const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
 const TransportDriverType = @import("connection/TransportDriver.zig");
-const ChangeReviewOperation = @import("connection/ChangeReviewOperation.zig");
-const RequestContinuation = @import("connection/requests.zig").Continuation;
-const AgentOperation = @import("connection/AgentOperation.zig");
-const max_encoded_bytes = @import("input/input_namespace.zig").max_encoded_bytes;
 
 /// Layout export decodes to the same active pane and split tree.
 /// Example: `try attached_client_tests.layoutRoundTrip(writeCommandLayout);`
@@ -57,7 +53,7 @@ pub fn layoutRoundTrip(comptime write_layout: fn (*const AttachedClient, *core.C
 
 /// Host resources reject empty and stale commits before calling ports.
 /// Example: `try attached_client_tests.rejectStaleHostCommits(deliverHostCommit);`
-pub fn rejectStaleHostCommits(comptime deliver: fn (*AttachedClient, HostCommit) anyerror!void) !void {
+pub fn rejectStaleHostCommits(comptime deliver: fn (*AttachedClient, data.HostCommit) anyerror!void) !void {
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
     // Only the model is initialized: invalid commits must never reach a host port.
@@ -249,7 +245,7 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
         .start_send_fn = Driver.send,
     };
 
-    var send_buffer: [max_encoded_bytes + 64]u8 = undefined;
+    var send_buffer: [input_namespace.max_encoded_bytes + 64]u8 = undefined;
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
     app.transport_driver = driver;
@@ -264,7 +260,7 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
     const pane: core.PaneId = @enumFromInt(1);
     var source = [_]u8{
         'x',
-    } ** (max_encoded_bytes + 1);
+    } ** (input_namespace.max_encoded_bytes + 1);
 
     try std.testing.expectError(error.DriverBusy, app.sendRuntimeInput(
         .{
@@ -287,7 +283,7 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
     const first = try core.decodeClient(capture.payload);
     try std.testing.expect(first == .pane_input);
     try std.testing.expectEqual(pane, first.pane_input.pane_id);
-    try std.testing.expectEqualStrings("x" ** max_encoded_bytes, first.pane_input.bytes);
+    try std.testing.expectEqualStrings("x" ** input_namespace.max_encoded_bytes, first.pane_input.bytes);
     try state.outbox.finishSend({});
     try start_send(app);
     const second = try core.decodeClient(capture.payload);
@@ -325,7 +321,7 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
 
 /// Change review operation accepts terminal panes and rejects replaced attachments.
 /// Example: `try attached_client_tests.rejectReplacedReviewAttachment(openChangeReviewSession, changeReviewOperation, applyChangeReviewResponse);`
-pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient, core.PaneId) anyerror!void, comptime operation: fn (*AttachedClient, u64) anyerror!ChangeReviewOperation, comptime apply_response: fn (*AttachedClient, ChangeReviewOperation, core.ChangeReviewSnapshotView) anyerror!bool) !void {
+pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient, core.PaneId) anyerror!void, comptime operation: fn (*AttachedClient, u64) anyerror!data.ChangeReviewOperation, comptime apply_response: fn (*AttachedClient, data.ChangeReviewOperation, core.ChangeReviewSnapshotView) anyerror!bool) !void {
     const app = try std.testing.allocator.create(AttachedClient);
     const model = &app.model;
     defer std.testing.allocator.destroy(app);
@@ -441,7 +437,7 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
 
 /// Owned request deliveries roll back only their own correlation when the outbox is full.
 /// Example: `try attached_client_tests.rollBackFullOutbox(sendTabRenameRequest, sendCreateTabRequest, sendAgentPromptRequest);`
-pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameTab, RequestContinuation) anyerror!void, comptime create_tab: fn (*AttachedClient, core.CreateTab) anyerror!void, comptime prompt: fn (*AttachedClient, core.AgentPrompt, AgentOperation) anyerror!void) !void {
+pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameTab, data.RequestsContinuation) anyerror!void, comptime create_tab: fn (*AttachedClient, core.CreateTab) anyerror!void, comptime prompt: fn (*AttachedClient, core.AgentPrompt, data.AgentOperation) anyerror!void) !void {
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
     app.model = ModelType.init(std.testing.allocator, true);
@@ -540,7 +536,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
             .notification => block: {
                 _ = app.executeAction(
                     .{
-                        .notification = try Notification.init(
+                        .notification = try data.Notification.init(
                             .{
                                 .title = "finished",
                                 .message = "",
@@ -560,4 +556,25 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
     }
 
     try std.testing.expect(app.request_lifecycle.tracker.take(retained).? == .notification);
+}
+
+/// Stale sidebar commits must fail before accessing any host resource.
+/// Example: `try attached_client_tests.rejectStaleSidebarCommits(deliverSidebarLayout);`
+pub fn rejectStaleSidebarCommits(comptime deliver: fn (*AttachedClient, data.SidebarLayout) anyerror!void) !void {
+    const app = try std.testing.allocator.create(AttachedClient);
+    defer std.testing.allocator.destroy(app);
+    // Uninitialized ports make accidental delivery of a rejected commit invalid.
+    app.model = ModelType.init(std.testing.allocator, true);
+    defer app.model.deinit();
+    const committed = app.model.toggleSidebar();
+
+    var stale = committed;
+    stale.chrome_revision -= 1;
+    try std.testing.expectError(error.StaleSidebarLayout, deliver(app, stale));
+    stale = committed;
+    stale.visible = !committed.visible;
+    try std.testing.expectError(error.StaleSidebarLayout, deliver(app, stale));
+    stale = committed;
+    stale.width += 1;
+    try std.testing.expectError(error.StaleSidebarLayout, deliver(app, stale));
 }

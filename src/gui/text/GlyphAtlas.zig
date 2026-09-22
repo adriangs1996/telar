@@ -5,6 +5,11 @@
 //! three chrome sizes shape and rasterize side by side without invalidating
 //! one another. Texel (0, 0) stays opaque white so solid rectangles are
 //! quads too. Configured and fallback faces share the page.
+const BoxInk = @import("BoxInk.zig");
+const GlyphRaster = @import("../native/GlyphRaster.zig");
+const assets = @import("assets");
+const builtin = @import("builtin");
+const font_id = @import("font_id.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const freetype = @import("freetype");
@@ -21,7 +26,6 @@ const FontSet = @import("FontSet.zig");
 const FontRuns = @import("FontRuns.zig");
 const FontRun = @import("FontRun.zig");
 const ShapedText = @import("ShapedText.zig");
-const Id = @import("font_id.zig").Id;
 const GlyphTransform = @import("GlyphTransform.zig");
 const GlyphFailures = @import("GlyphFailures.zig");
 const Braille = @import("Braille.zig");
@@ -145,7 +149,7 @@ pub fn lineHeight(atlas: *GlyphAtlas, pixel_height: u16) !u32 {
 /// natural line box in a row of any height. Resident heights allocate
 /// nothing; a new height creates its sized instance once.
 /// Example: `const box = try atlas.lineBox(.sans, chrome.body);`
-pub fn lineBox(atlas: *GlyphAtlas, face: Id, pixel_height: u16) !LineBox {
+pub fn lineBox(atlas: *GlyphAtlas, face: font_id.Id, pixel_height: u16) !LineBox {
     const size = try atlas.fonts.get(face).sized(pixel_height);
     return .{ .ascender = @floatFromInt(size.ascender()), .height = @floatFromInt(size.lineHeight()) };
 }
@@ -418,7 +422,7 @@ fn paintBox(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         });
     } else {
         grid.draw(box);
-        const ink = try @import("BoxInk.zig").init(&grid);
+        const ink = try BoxInk.init(&grid);
         try ink.paint(current, list);
     }
 
@@ -481,8 +485,8 @@ fn paint(atlas: *GlyphAtlas, text: ShapedText, list: *QuadList) !f32 {
     for (shaped.glyphs, shaped.positions) |info, position| {
         const placed = try atlas.visibleSlot(.{ .font = shaped.font, .index = info.codepoint }, run);
         if (placed.width > 0 and placed.height > 0) {
-            const x = round26(pen_x - (if (natural) @as(i64, 0) else origin) + position.x_offset) + placed.left;
-            const y = -round26(position.y_offset) - placed.top;
+            const x = FontSize.round26(pen_x - (if (natural) @as(i64, 0) else origin) + position.x_offset) + placed.left;
+            const y = -FontSize.round26(position.y_offset) - placed.top;
             try list.push(.{
                 .x = if (natural) @floatFromInt(x) else run.x + @as(f32, @floatFromInt(x)) * placement.scale + placement.x,
                 .y = if (natural) @round(run.y) + @as(f32, @floatFromInt(y)) else run.y + @as(f32, @floatFromInt(y)) * placement.scale + placement.y,
@@ -517,7 +521,7 @@ fn penAdvance(atlas: *GlyphAtlas, text: ShapedText) !f32 {
         pen_x += position.x_advance;
     }
 
-    return @floatFromInt(round26(pen_x));
+    return @floatFromInt(FontSize.round26(pen_x));
 }
 
 // Only fallback ink is fitted; configured and chrome faces keep their exact metrics.
@@ -534,8 +538,8 @@ fn transform(atlas: *GlyphAtlas, text: ShapedText) !GlyphTransform {
     for (text.shaped.glyphs, text.shaped.positions) |info, position| {
         const placed = try atlas.visibleSlot(.{ .font = text.shaped.font, .index = info.codepoint }, text.run);
         if (placed.width > 0 and placed.height > 0) {
-            const x: f32 = @floatFromInt(round26(pen_x + position.x_offset) + placed.left);
-            const y: f32 = @floatFromInt(-round26(position.y_offset) - placed.top);
+            const x: f32 = @floatFromInt(FontSize.round26(pen_x + position.x_offset) + placed.left);
+            const y: f32 = @floatFromInt(-FontSize.round26(position.y_offset) - placed.top);
             left = @min(left, x);
             right = @max(right, x + @as(f32, @floatFromInt(placed.width)));
             top = @min(top, y);
@@ -638,7 +642,7 @@ fn slot(atlas: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRun) !Gly
     return atlas.remember(glyph_key, .{ .index = index, .style = 0, .x = origin[0], .y = origin[1], .width = bitmap.width, .height = bitmap.rows, .left = glyph.*.bitmap_left, .top = glyph.*.bitmap_top });
 }
 
-fn remember(atlas: *GlyphAtlas, key: u64, glyph: @import("../native/GlyphRaster.zig").GlyphRaster) !GlyphSlot {
+fn remember(atlas: *GlyphAtlas, key: u64, glyph: GlyphRaster.GlyphRaster) !GlyphSlot {
     const scale: f32 = 1.0 / @as(f32, @floatFromInt(side));
     const placed: GlyphSlot = .{
         .u0 = @as(f32, @floatFromInt(glyph.x)) * scale,
@@ -753,10 +757,8 @@ fn syncFontRevision(atlas: *GlyphAtlas) void {
     atlas.shaping_revision = atlas.fonts.revision;
 }
 
-const round26 = FontSize.round26;
-
 test "editor caret positions preserve kerning ligatures and combining graphemes" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 32 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 32 });
     defer atlas.deinit();
     var run: TextRun = .{ .text = "AV", .x = 0, .y = 0, .color = .white, .face = .sans, .pixel_height = 32 };
     var positions: [32]u32 = undefined;
@@ -788,7 +790,7 @@ test "editor caret positions preserve kerning ligatures and combining graphemes"
 }
 
 test "editor caret positions preserve fractional advances across mixed font spans" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     const text = "A\u{2801}\u{f07b}V\u{2801}" ** 3 ++ "AV";
     const run: TextRun = .{ .text = text, .x = 0, .y = 20, .color = .white, .face = .sans, .pixel_height = 16, .cell_bounds = .{ .x = 0, .y = -16, .width = 10.25, .height = 20 } };
@@ -802,7 +804,7 @@ test "editor caret positions preserve fractional advances across mixed font span
 }
 
 test "editor caret follows a prepared replacement without poisoning unseen fallback lookup" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     const text = "A🐟V";
     const run: TextRun = .{ .text = text, .x = 0, .y = 20, .color = .white, .face = .sans, .pixel_height = 16 };
@@ -823,7 +825,7 @@ test "editor caret follows a prepared replacement without poisoning unseen fallb
 }
 
 test "the page reserves an opaque white block at its origin" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
 
     try std.testing.expectEqual(@as(u8, 255), atlas.pixels[0]);
@@ -832,7 +834,7 @@ test "the page reserves an opaque white block at its origin" {
 }
 
 test "placing text emits one quad per visible glyph and paints the page once per new glyph" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
@@ -852,7 +854,7 @@ test "placing text emits one quad per visible glyph and paints the page once per
 }
 
 test "the same glyph at another size is rasterized again on the same page" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
@@ -869,7 +871,7 @@ test "the same glyph at another size is rasterized again on the same page" {
 }
 
 test "alternating heights keep both shaping results and every sized face resident" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
@@ -904,7 +906,7 @@ test "alternating heights keep both shaping results and every sized face residen
 }
 
 test "a page that cannot hold another glyph fails instead of wrapping" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
 
     atlas.shelf_y = side - 4;
@@ -913,7 +915,7 @@ test "a page that cannot hold another glyph fails instead of wrapping" {
 }
 
 test "full glyphs are remembered without rejecting smaller glyphs or changing retained coordinates" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     try atlas.prepareFallbacks();
     var list = QuadList.init(std.testing.allocator);
@@ -955,7 +957,7 @@ test "full glyphs are remembered without rejecting smaller glyphs or changing re
     _ = try atlas.place(existing, &list);
     try std.testing.expectEqualDeep(retained, list.items()[0]);
 
-    var replacement = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var replacement = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer replacement.deinit();
     try replacement.prepareFallbacks();
     list.clear();
@@ -973,7 +975,7 @@ pub fn prepareFallbacks(atlas: *GlyphAtlas) !void {
 }
 
 test "a full terminal atlas uses its prepared replacement instead of losing the frame" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     try atlas.prepareFallbacks();
     atlas.shelf_y = side;
@@ -984,7 +986,7 @@ test "a full terminal atlas uses its prepared replacement instead of losing the 
 }
 
 test "shaping reuse preserves Unicode positions and stays independent of paint styling" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
@@ -1013,9 +1015,9 @@ test "shaping reuse preserves Unicode positions and stays independent of paint s
 }
 
 test "shaping cache eviction and size changes match uncached geometry" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
-    var reference = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var reference = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer reference.deinit();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
@@ -1035,7 +1037,7 @@ test "shaping cache eviction and size changes match uncached geometry" {
 }
 
 test "single ASCII glyphs remain cached while Unicode runs replace hashed entries" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
@@ -1076,7 +1078,7 @@ test "configured non Nerd font falls back across BMP and supplementary icons wit
     var family: client.FontFamily = .{};
     try family.set("DejaVu Sans Mono");
     var source = Source.load(std.testing.allocator, std.testing.io, &family) catch |err| fallback: {
-        if (@import("builtin").os.tag != .macos or err != error.FontFamilyNotFound) {
+        if (builtin.os.tag != .macos or err != error.FontFamilyNotFound) {
             return err;
         }
 
@@ -1093,9 +1095,9 @@ test "configured non Nerd font falls back across BMP and supplementary icons wit
     for (texts, 0..) |text, index| {
         if (index >= 2) {
             try std.testing.expect(!atlas.fonts.primary.covers(text));
-            try std.testing.expectEqual(Id.symbols, atlas.fonts.source(text, .primary));
+            try std.testing.expectEqual(font_id.Id.symbols, atlas.fonts.source(text, .primary));
         } else {
-            try std.testing.expectEqual(Id.primary, atlas.fonts.source(text, .primary));
+            try std.testing.expectEqual(font_id.Id.primary, atlas.fonts.source(text, .primary));
         }
 
         for (0..4) |style| {
@@ -1112,7 +1114,7 @@ test "configured non Nerd font falls back across BMP and supplementary icons wit
                 }
 
                 const shaped = atlas.shaping_cache.find(.{ .text = text, .pixel_height = 44 }).?;
-                try std.testing.expectEqual(Id.symbols, shaped.font);
+                try std.testing.expectEqual(font_id.Id.symbols, shaped.font);
                 for (shaped.glyphs) |glyph| {
                     try std.testing.expect(glyph.codepoint != 0);
                 }
@@ -1148,7 +1150,7 @@ test "configured non Nerd font falls back across BMP and supplementary icons wit
 }
 
 test "equal glyph indices in different faces never alias retained atlas coordinates" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 32 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 32 });
     defer atlas.deinit();
     var letter: [1]u8 = .{'A'};
     var candidate_index: freetype.c.FT_UInt = 0;
@@ -1170,7 +1172,7 @@ test "equal glyph indices in different faces never alias retained atlas coordina
     var bytes: [4]u8 = undefined;
     const length = try std.unicode.utf8Encode(@intCast(codepoint), &bytes);
     const icon = bytes[0..length];
-    try std.testing.expectEqual(Id.symbols, atlas.fonts.source(icon, .primary));
+    try std.testing.expectEqual(font_id.Id.symbols, atlas.fonts.source(icon, .primary));
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     const text: TextRun = .{ .text = &letter, .x = 0, .y = 32, .color = .white, .pixel_height = 32 };
@@ -1189,10 +1191,10 @@ test "equal glyph indices in different faces never alias retained atlas coordina
 }
 
 test "fallback text and configured symbols keep one grid and refresh correctly at another size" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").nerd_symbols, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.nerd_symbols, .pixel_height = 16 });
     defer atlas.deinit();
-    try std.testing.expectEqual(Id.text, atlas.fonts.source("A", .primary));
-    try std.testing.expectEqual(Id.primary, atlas.fonts.source("\u{f07b}", .primary));
+    try std.testing.expectEqual(font_id.Id.text, atlas.fonts.source("A", .primary));
+    try std.testing.expectEqual(font_id.Id.primary, atlas.fonts.source("\u{f07b}", .primary));
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
     const run: TextRun = .{ .text = "A\u{f07b}B", .x = 0, .y = 16, .color = .white, .pixel_height = 16 };
@@ -1216,7 +1218,7 @@ test "fallback text and configured symbols keep one grid and refresh correctly a
 }
 
 test "mixed primary text and repeated icons use primary cell advances and preserve Unicode shaping" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 32 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 32 });
     defer atlas.deinit();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
@@ -1238,7 +1240,7 @@ test "mixed primary text and repeated icons use primary cell advances and preser
 }
 
 test "Braille never shapes or mutates the atlas even cold and across explicit cell sizes" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16, .thicken = true });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16, .thicken = true });
     defer atlas.deinit();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
@@ -1269,7 +1271,7 @@ test "Braille never shapes or mutates the atlas even cold and across explicit ce
 }
 
 test "mixed text retains contextual shaping around procedural Braille" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     var mixed = QuadList.init(std.testing.allocator);
     defer mixed.deinit();
@@ -1297,7 +1299,7 @@ test "mixed text retains contextual shaping around procedural Braille" {
 }
 
 test "Braille uses natural metrics when callers omit cell bounds" {
-    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();

@@ -1,4 +1,5 @@
 //! Disposable reader selection; source ownership remains in the pinned window.
+const core = @import("telar-core");
 const Selection = @This();
 const Position = @import("ThreadTextPosition.zig");
 const MessageLinkControl = @import("MessageLinkControl.zig");
@@ -29,7 +30,7 @@ pub fn selected(selection: *const Selection) bool {
 }
 
 /// Example: `if (selection.retains(pane_id)) keepPages();`
-pub fn retains(selection: *const Selection, pane_id: @import("telar-core").PaneId) bool {
+pub fn retains(selection: *const Selection, pane_id: core.PaneId) bool {
     const owner = selection.owner orelse return false;
     return owner.pane_id == pane_id and (selection.dragging or selection.keyboard or selection.selected());
 }

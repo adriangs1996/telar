@@ -3,6 +3,7 @@
 //! `Attachment` is the supported seam. Cell projection and graphics transfer
 //! remain private synchronization modules with independent state and budgets.
 
+const core = @import("telar-core");
 const std = @import("std");
 const shared_transfer = @import("../../media/shared_transfer.zig");
 const Pane = @import("../../pane/Pane.zig");
@@ -10,38 +11,16 @@ const vt = @import("ghostty-vt");
 const Attachment = @import("Attachment.zig");
 const GraphicsPreparationType = @import("GraphicsPreparation.zig");
 const KnownImageType = @import("KnownImage.zig");
-const max_images_per_pane_module = @import("telar-core").max_images_per_pane;
 const KnownPlacementType = @import("KnownPlacement.zig");
-const max_placements_per_pane_module = @import("telar-core").max_placements_per_pane;
-const encodeGraphicsSnapshot_module = @import("telar-core").encodeGraphicsSnapshot;
-const encodeGraphicsSharedImage_module = @import("telar-core").encodeGraphicsSharedImage;
-const encodeGraphicsImage_module = @import("telar-core").encodeGraphicsImage;
-const max_ipc_chunk_bytes_module = @import("telar-core").max_ipc_chunk_bytes;
-const encodeGraphicsImageChunk_module = @import("telar-core").encodeGraphicsImageChunk;
-const encodeGraphicsPlacement_module = @import("telar-core").encodeGraphicsPlacement;
-const encodeGraphicsDeleteImage_module = @import("telar-core").encodeGraphicsDeleteImage;
-const encodeGraphicsDeletePlacement_module = @import("telar-core").encodeGraphicsDeletePlacement;
-const ImageKeyType = @import("telar-core").ImageKey;
-const FormatType = @import("telar-core").Format;
-const ImageType = @import("telar-core").Image;
 const TransferType = @import("Transfer.zig");
-const PlacementType = @import("telar-core").Placement;
 const media_mod = @import("../../media/media.zig");
 const PlacementSourceType = @import("../../media/PlacementSource.zig");
 const ServiceType = @import("../../history/Service.zig");
 const GraphicsBudget = @import("../../media/GraphicsBudget.zig");
-const max_image_bytes_global_module = @import("telar-core").max_image_bytes_global;
 const CommandType = @import("../../pty/Command.zig");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const workspace_module = @import("telar-core").workspace;
-const pane_module = @import("telar-core").pane;
-const tab_module = @import("telar-core").tab;
 const AttachmentStore = @import("AttachmentStore.zig");
 const support_module = @import("../tests/support.zig");
 const CellPreparationType = @import("CellPreparation.zig");
-const decodeServer_module = @import("telar-core").decodeServer;
-const PointerShapeType = @import("telar-core").PointerShape;
-const TabLocationType = @import("telar-core").TabLocation;
 const graphics = @import("graphics.zig");
 
 pub fn initSharedFreezeNonce(io: std.Io) void {
@@ -138,11 +117,11 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
     const revision = attachment.graphics.revision;
 
     if (attachment.graphics.snapshot == .begin_pending) {
-        attachment.graphics.known_images = [_]?KnownImageType{null} ** max_images_per_pane_module;
-        attachment.graphics.known_placements = [_]?KnownPlacementType{null} ** max_placements_per_pane_module;
+        attachment.graphics.known_images = [_]?KnownImageType{null} ** core.max_images_per_pane;
+        attachment.graphics.known_placements = [_]?KnownPlacementType{null} ** core.max_placements_per_pane;
         attachment.freeTransfer();
         attachment.graphics.snapshot = .open;
-        return try encodeGraphicsSnapshot_module(buffer, .{
+        return try core.encodeGraphicsSnapshot(buffer, .{
             .pane_id = pane.id,
             .revision = revision,
             .phase = .begin,
@@ -154,7 +133,7 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
             // The flag flips only after a successful encode; on failure the
             // abandon path still owns the shared object and unlinks it.
             if (transfer.shared_name) |name| {
-                const payload = try encodeGraphicsSharedImage_module(buffer, .{
+                const payload = try core.encodeGraphicsSharedImage(buffer, .{
                     .pane_id = pane.id,
                     .revision = revision,
                     .image = transfer.metadata,
@@ -164,7 +143,7 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
                 attachment.graphics.sent_images +|= 1;
                 return payload;
             }
-            const payload = try encodeGraphicsImage_module(buffer, .{
+            const payload = try core.encodeGraphicsImage(buffer, .{
                 .pane_id = pane.id,
                 .revision = revision,
                 .image = transfer.metadata,
@@ -175,10 +154,10 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
         }
         if (transfer.offset < transfer.pixels.len) {
             const remaining = transfer.pixels[transfer.offset..];
-            const take = @min(remaining.len, max_ipc_chunk_bytes_module);
+            const take = @min(remaining.len, core.max_ipc_chunk_bytes);
             const offset = transfer.offset;
             transfer.offset += take;
-            return try encodeGraphicsImageChunk_module(buffer, .{
+            return try core.encodeGraphicsImageChunk(buffer, .{
                 .pane_id = pane.id,
                 .revision = revision,
                 .key = transfer.metadata.key,
@@ -196,7 +175,7 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
                 try rememberPlacement(attachment, placement);
             }
             attachment.graphics.sent_placements +|= 1;
-            return try encodeGraphicsPlacement_module(buffer, .{
+            return try core.encodeGraphicsPlacement(buffer, .{
                 .pane_id = pane.id,
                 .revision = revision,
                 .placement = placement,
@@ -232,7 +211,7 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
         }
         slot.* = null;
         forgetPlacementsForImage(attachment, known.key);
-        return try encodeGraphicsDeleteImage_module(buffer, .{
+        return try core.encodeGraphicsDeleteImage(buffer, .{
             .pane_id = pane.id,
             .revision = revision,
             .key = known.key,
@@ -251,7 +230,7 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
             continue;
         }
         slot.* = null;
-        return try encodeGraphicsDeletePlacement_module(buffer, .{
+        return try core.encodeGraphicsDeletePlacement(buffer, .{
             .pane_id = pane.id,
             .revision = revision,
             .key = known.placement.key,
@@ -277,7 +256,7 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
             try rememberPlacement(attachment, placement);
         }
         attachment.graphics.sent_placements +|= 1;
-        return try encodeGraphicsPlacement_module(buffer, .{
+        return try core.encodeGraphicsPlacement(buffer, .{
             .pane_id = pane.id,
             .revision = revision,
             .placement = placement,
@@ -288,7 +267,7 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
     attachment.graphics.batch_active = false;
     if (attachment.graphics.snapshot == .open) {
         attachment.graphics.snapshot = .idle;
-        return try encodeGraphicsSnapshot_module(buffer, .{
+        return try core.encodeGraphicsSnapshot(buffer, .{
             .pane_id = pane.id,
             .revision = revision,
             .phase = .end,
@@ -337,14 +316,14 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
     while (image_iterator.next()) |entry| {
         const image = entry.value_ptr;
         const pixels = pane.media_allocator.imagePixels(image.data.bytes()) orelse continue;
-        const key: ImageKeyType = .{
+        const key: core.ImageKey = .{
             .image_id = image.id,
             .generation = image.generation,
         };
         if (knowsImage(attachment, key)) {
             continue;
         }
-        const format: FormatType = switch (image.format) {
+        const format: core.Format = switch (image.format) {
             .rgb => .rgb,
             .rgba => .rgba,
             // Formats an internal decode path may store but the wire schema
@@ -353,7 +332,7 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
             // a reconnect loop, since the image outlives the connection.
             else => continue,
         };
-        const metadata: ImageType = .{
+        const metadata: core.Image = .{
             .key = key,
             .format = format,
             .width = image.width,
@@ -409,7 +388,7 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
                 .image = image.*,
             }) orelse continue;
             const index = attachment.graphics.transfer.?.placement_count;
-            if (index == max_placements_per_pane_module) {
+            if (index == core.max_placements_per_pane) {
                 break;
             }
             attachment.graphics.transfer.?.placements[index] = placement;
@@ -420,7 +399,7 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
     return .idle;
 }
 
-pub fn knowsImage(attachment: *const Attachment, key: ImageKeyType) bool {
+pub fn knowsImage(attachment: *const Attachment, key: core.ImageKey) bool {
     for (attachment.graphics.known_images) |slot| if (slot) |known| {
         if (std.meta.eql(known.key, key)) {
             return true;
@@ -429,7 +408,7 @@ pub fn knowsImage(attachment: *const Attachment, key: ImageKeyType) bool {
     return false;
 }
 
-pub fn rememberImage(attachment: *Attachment, key: ImageKeyType) !void {
+pub fn rememberImage(attachment: *Attachment, key: core.ImageKey) !void {
     if (knowsImage(attachment, key)) {
         return;
     }
@@ -443,7 +422,7 @@ pub fn rememberImage(attachment: *Attachment, key: ImageKeyType) !void {
 /// Once a replacement and all of its placements have crossed the transport,
 /// older generations of the same logical image no longer need attachment
 /// slots. The client retires them as part of the same atomic handoff.
-fn forgetReplacedGenerations(attachment: *Attachment, current: ImageKeyType) void {
+fn forgetReplacedGenerations(attachment: *Attachment, current: core.ImageKey) void {
     for (&attachment.graphics.known_images) |*slot| {
         const known = slot.* orelse continue;
         if (known.key.image_id == current.image_id and
@@ -454,7 +433,7 @@ fn forgetReplacedGenerations(attachment: *Attachment, current: ImageKeyType) voi
     }
 }
 
-pub fn forgetPlacementsForImage(attachment: *Attachment, key: ImageKeyType) void {
+pub fn forgetPlacementsForImage(attachment: *Attachment, key: core.ImageKey) void {
     for (&attachment.graphics.known_placements) |*slot| {
         const known = slot.* orelse continue;
         if (std.meta.eql(known.placement.key, key)) {
@@ -473,7 +452,7 @@ pub fn knownPlacement(attachment: *Attachment, virtual_id: u64) ?*KnownPlacement
     return null;
 }
 
-pub fn rememberPlacement(attachment: *Attachment, placement: PlacementType) !void {
+pub fn rememberPlacement(attachment: *Attachment, placement: core.Placement) !void {
     for (&attachment.graphics.known_placements) |*slot| if (slot.* == null) {
         slot.* = .{ .placement = placement };
         return;
@@ -495,7 +474,7 @@ pub fn findPlacement(storage: *vt.kitty.graphics.ImageStorage, virtual_id: u64) 
     return null;
 }
 
-fn placementValue(pane: *Pane, source: PlacementSourceType) ?PlacementType {
+fn placementValue(pane: *Pane, source: PlacementSourceType) ?core.Placement {
     return media_mod.placementValue(&pane.media.terminal, source);
 }
 
@@ -507,18 +486,18 @@ test "attachment store reports and commits workspace departure on the last pane"
         service.stop(io);
         service.deinit(io);
     }
-    var budget = GraphicsBudget.init(max_image_bytes_global_module);
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&args);
-    const workspace: WorkspaceLocationType = .{ .workspace = try workspace_module(1) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = try core.workspace(1) };
     const first = try Pane.create(.{
         .io = io,
         .gpa = gpa,
         .history_service = &service,
         .graphics_budget = &budget,
     }, .{
-        .identity = .{ .id = try pane_module(1), .generation = 1 },
-        .location = .{ .workspace = workspace, .tab_id = try tab_module(1) },
+        .identity = .{ .id = try core.pane(1), .generation = 1 },
+        .location = .{ .workspace = workspace, .tab_id = try core.tab(1) },
         .command = &command,
         .launch_cwd = "/",
         .workspace_path = "/",
@@ -535,8 +514,8 @@ test "attachment store reports and commits workspace departure on the last pane"
         .history_service = &service,
         .graphics_budget = &budget,
     }, .{
-        .identity = .{ .id = try pane_module(2), .generation = 2 },
-        .location = .{ .workspace = workspace, .tab_id = try tab_module(1) },
+        .identity = .{ .id = try core.pane(2), .generation = 2 },
+        .location = .{ .workspace = workspace, .tab_id = try core.tab(1) },
         .command = &command,
         .launch_cwd = "/",
         .workspace_path = "/",
@@ -555,7 +534,7 @@ test "attachment store reports and commits workspace departure on the last pane"
     _ = try store.attach(gpa, second);
 
     try std.testing.expect(!store.leaveWorkspace(workspace));
-    try std.testing.expect(store.detach(try pane_module(99)) == null);
+    try std.testing.expect(store.detach(try core.pane(99)) == null);
 
     const first_detached = store.detach(first.id).?;
 
@@ -572,7 +551,7 @@ test "attachment store reports and commits workspace departure on the last pane"
     try std.testing.expect(second_detached.last_attachment);
     try std.testing.expectEqual(@as(usize, 0), store.len());
     try std.testing.expect(store.observes(workspace));
-    try std.testing.expect(!store.leaveWorkspace(.{ .workspace = try workspace_module(2) }));
+    try std.testing.expect(!store.leaveWorkspace(.{ .workspace = try core.workspace(2) }));
     try std.testing.expect(store.leaveWorkspace(workspace));
     try std.testing.expect(store.currentWorkspace() == null);
     try std.testing.expect(!store.observes(workspace));
@@ -590,14 +569,14 @@ test "pointer-only frames coalesce independently and survive snapshot recovery" 
     var buffer: [4096]u8 = undefined;
     const preparation: CellPreparationType = .{ .io = std.testing.io, .buffer = &buffer, .metrics = &fixture.metrics };
 
-    const initial = (try decodeServer_module((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
-    try std.testing.expectEqual(PointerShapeType.text, initial.pointer_shape);
+    const initial = (try core.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(core.PointerShape.text, initial.pointer_shape);
     _ = first.acknowledgeFrame(initial.frame_id, 0);
-    const slow = (try decodeServer_module((try second.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    const slow = (try core.decodeServer((try second.prepareNextCells(preparation)).?.bytes)).pane_frame;
     const slow_id = slow.frame_id;
     _ = try fixture.pane.ingest(std.testing.io, "\x1b]22;pointer\x1b\\");
-    const changed = (try decodeServer_module((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
-    try std.testing.expectEqual(PointerShapeType.pointer, changed.pointer_shape);
+    const changed = (try core.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(core.PointerShape.pointer, changed.pointer_shape);
     try std.testing.expectEqual(@as(u16, 0), changed.span_count);
     try std.testing.expectEqual(initial.frame_id, changed.base_frame_id);
     _ = first.acknowledgeFrame(changed.frame_id, 0);
@@ -605,25 +584,25 @@ test "pointer-only frames coalesce independently and survive snapshot recovery" 
     try std.testing.expect((try second.prepareNextCells(preparation)) == null);
 
     _ = try fixture.pane.ingest(std.testing.io, "\x1b]22;wait\x1b\\\x1b]22;zoom-in\x1b\\");
-    const latest = (try decodeServer_module((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
-    try std.testing.expectEqual(PointerShapeType.zoom_in, latest.pointer_shape);
+    const latest = (try core.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(core.PointerShape.zoom_in, latest.pointer_shape);
     try std.testing.expectEqual(@as(u16, 0), latest.span_count);
     _ = first.acknowledgeFrame(latest.frame_id, 0);
     try std.testing.expect((try second.prepareNextCells(preparation)) == null);
     _ = second.acknowledgeFrame(slow_id, 0);
-    const caught_up = (try decodeServer_module((try second.prepareNextCells(preparation)).?.bytes)).pane_frame;
-    try std.testing.expectEqual(PointerShapeType.zoom_in, caught_up.pointer_shape);
+    const caught_up = (try core.decodeServer((try second.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(core.PointerShape.zoom_in, caught_up.pointer_shape);
     try std.testing.expectEqual(@as(u16, 0), caught_up.span_count);
     try std.testing.expectEqual(slow_id, caught_up.base_frame_id);
 
     first.requestCellSnapshot();
-    const recovered = (try decodeServer_module((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
-    try std.testing.expectEqual(PointerShapeType.zoom_in, recovered.pointer_shape);
+    const recovered = (try core.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(core.PointerShape.zoom_in, recovered.pointer_shape);
     try std.testing.expect(recovered.isSnapshot());
     var reconnected = try Attachment.init(std.testing.allocator, fixture.pane);
     defer reconnected.deinit();
-    const restored = (try decodeServer_module((try reconnected.prepareNextCells(preparation)).?.bytes)).pane_frame;
-    try std.testing.expectEqual(PointerShapeType.zoom_in, restored.pointer_shape);
+    const restored = (try core.decodeServer((try reconnected.prepareNextCells(preparation)).?.bytes)).pane_frame;
+    try std.testing.expectEqual(core.PointerShape.zoom_in, restored.pointer_shape);
     try std.testing.expect(restored.isSnapshot());
 }
 
@@ -635,7 +614,7 @@ test "attachments keep independent scrollback viewports" {
         service.stop(io);
         service.deinit(io);
     }
-    var budget = GraphicsBudget.init(max_image_bytes_global_module);
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&args);
     const pane = try Pane.create(.{
@@ -644,10 +623,10 @@ test "attachments keep independent scrollback viewports" {
         .history_service = &service,
         .graphics_budget = &budget,
     }, .{
-        .identity = .{ .id = try pane_module(1), .generation = 1 },
+        .identity = .{ .id = try core.pane(1), .generation = 1 },
         .location = .{
-            .workspace = .{ .workspace = try workspace_module(1) },
-            .tab_id = try tab_module(1),
+            .workspace = .{ .workspace = try core.workspace(1) },
+            .tab_id = try core.tab(1),
         },
         .command = &command,
         .launch_cwd = "/",
@@ -689,12 +668,12 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
         service.stop(io);
         service.deinit(io);
     }
-    var budget = GraphicsBudget.init(max_image_bytes_global_module);
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&args);
-    const location: TabLocationType = .{
-        .workspace = .{ .workspace = try workspace_module(1) },
-        .tab_id = try tab_module(1),
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = try core.workspace(1) },
+        .tab_id = try core.tab(1),
     };
     const pane = try Pane.create(.{
         .io = io,
@@ -702,7 +681,7 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
         .history_service = &service,
         .graphics_budget = &budget,
     }, .{
-        .identity = .{ .id = try pane_module(1), .generation = 1 },
+        .identity = .{ .id = try core.pane(1), .generation = 1 },
         .location = location,
         .command = &command,
         .launch_cwd = "/",
@@ -737,7 +716,7 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
     var messages: usize = 0;
     while (try encodeNextGraphics(&attachment, .{
         .buffer = buffer,
-        .global_credit = max_image_bytes_global_module,
+        .global_credit = core.max_image_bytes_global,
         .live_storage_available = true,
     })) |_| {
         messages += 1;
@@ -763,12 +742,12 @@ test "graphics transfers wait for pane and client memory credit" {
         service.stop(io);
         service.deinit(io);
     }
-    var budget = GraphicsBudget.init(max_image_bytes_global_module);
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&args);
-    const location: TabLocationType = .{
-        .workspace = .{ .workspace = try workspace_module(1) },
-        .tab_id = try tab_module(1),
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = try core.workspace(1) },
+        .tab_id = try core.tab(1),
     };
     const pane = try Pane.create(.{
         .io = io,
@@ -776,7 +755,7 @@ test "graphics transfers wait for pane and client memory credit" {
         .history_service = &service,
         .graphics_budget = &budget,
     }, .{
-        .identity = .{ .id = try pane_module(1), .generation = 1 },
+        .identity = .{ .id = try core.pane(1), .generation = 1 },
         .location = location,
         .command = &command,
         .launch_cwd = "/",
@@ -819,7 +798,7 @@ test "graphics transfers wait for pane and client memory credit" {
     try std.testing.expect(try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = 4, .live_storage_available = true }) == null);
     support_module.processMediaTurn(pane);
     const payload = (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = 4, .live_storage_available = true })).?;
-    try std.testing.expect((try decodeServer_module(payload)) == .graphics_image);
+    try std.testing.expect((try core.decodeServer(payload)) == .graphics_image);
     try std.testing.expectEqual(@as(usize, 0), attachment.graphics.credit);
     try std.testing.expect(attachment.graphics.transfer != null);
 }
@@ -832,12 +811,12 @@ test "a staged transfer drains while the media actor stays busy" {
         service.stop(io);
         service.deinit(io);
     }
-    var budget = GraphicsBudget.init(max_image_bytes_global_module);
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&args);
-    const location: TabLocationType = .{
-        .workspace = .{ .workspace = try workspace_module(1) },
-        .tab_id = try tab_module(1),
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = try core.workspace(1) },
+        .tab_id = try core.tab(1),
     };
     const pane = try Pane.create(.{
         .io = io,
@@ -845,7 +824,7 @@ test "a staged transfer drains while the media actor stays busy" {
         .history_service = &service,
         .graphics_budget = &budget,
     }, .{
-        .identity = .{ .id = try pane_module(1), .generation = 1 },
+        .identity = .{ .id = try core.pane(1), .generation = 1 },
         .location = location,
         .command = &command,
         .launch_cwd = "/",
@@ -874,12 +853,12 @@ test "a staged transfer drains while the media actor stays busy" {
     var attachment = try Attachment.init(gpa, pane);
     defer attachment.deinit();
     var buffer: [1024]u8 = undefined;
-    const credit = max_image_bytes_global_module;
+    const credit = core.max_image_bytes_global;
 
     // Staging refuses to outrun the snapshot begin, which resets the state
     // it would have written.
     try std.testing.expectEqual(StageResult.idle, try stageNextTransfer(&attachment, credit));
-    try std.testing.expect((try decodeServer_module(
+    try std.testing.expect((try core.decodeServer(
         (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = credit, .live_storage_available = true })).?,
     )) == .graphics_snapshot);
 
@@ -888,10 +867,10 @@ test "a staged transfer drains while the media actor stays busy" {
     support_module.processMediaTurn(pane);
     try std.testing.expectEqual(StageResult.staged, try stageNextTransfer(&attachment, credit));
     try std.testing.expect(attachment.graphics.transfer != null);
-    try std.testing.expect((try decodeServer_module(
+    try std.testing.expect((try core.decodeServer(
         (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = credit, .live_storage_available = false })).?,
     )) == .graphics_image);
-    try std.testing.expect((try decodeServer_module(
+    try std.testing.expect((try core.decodeServer(
         (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = credit, .live_storage_available = false })).?,
     )) == .graphics_image_chunk);
     try std.testing.expectEqual(@as(u32, 1), attachment.graphics.sent_images);
@@ -905,7 +884,7 @@ test "a staged transfer drains while the media actor stays busy" {
     // Once the media actor rests, the batch completes normally.
     var closed = false;
     while (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = credit, .live_storage_available = true })) |payload| {
-        const message = try decodeServer_module(payload);
+        const message = try core.decodeServer(payload);
         if (message == .graphics_snapshot and message.graphics_snapshot.phase == .end) {
             closed = true;
         }
@@ -917,11 +896,11 @@ test "a staged transfer drains while the media actor stays busy" {
 test "completed replacements do not exhaust attachment image slots" {
     var attachment: Attachment = undefined;
     attachment.graphics.known_images =
-        [_]?KnownImageType{null} ** max_images_per_pane_module;
+        [_]?KnownImageType{null} ** core.max_images_per_pane;
 
-    const replacements = max_images_per_pane_module * 2;
+    const replacements = core.max_images_per_pane * 2;
     for (1..replacements + 1) |generation| {
-        const key: ImageKeyType = .{
+        const key: core.ImageKey = .{
             .image_id = 7,
             .generation = generation,
         };
@@ -943,12 +922,12 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
         service.stop(io);
         service.deinit(io);
     }
-    var budget = GraphicsBudget.init(max_image_bytes_global_module);
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&args);
-    const location: TabLocationType = .{
-        .workspace = .{ .workspace = try workspace_module(1) },
-        .tab_id = try tab_module(1),
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = try core.workspace(1) },
+        .tab_id = try core.tab(1),
     };
     const pane = try Pane.create(.{
         .io = io,
@@ -956,7 +935,7 @@ test "graphics quota enforcement evicts oldest images on the ingested pane" {
         .history_service = &service,
         .graphics_budget = &budget,
     }, .{
-        .identity = .{ .id = try pane_module(1), .generation = 1 },
+        .identity = .{ .id = try core.pane(1), .generation = 1 },
         .location = location,
         .command = &command,
         .launch_cwd = "/",
@@ -1002,12 +981,12 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
         service.stop(io);
         service.deinit(io);
     }
-    var budget = GraphicsBudget.init(max_image_bytes_global_module);
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&args);
-    const location: TabLocationType = .{
-        .workspace = .{ .workspace = try workspace_module(1) },
-        .tab_id = try tab_module(1),
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = try core.workspace(1) },
+        .tab_id = try core.tab(1),
     };
     const pane = try Pane.create(.{
         .io = io,
@@ -1015,7 +994,7 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
         .history_service = &service,
         .graphics_budget = &budget,
     }, .{
-        .identity = .{ .id = try pane_module(1), .generation = 1 },
+        .identity = .{ .id = try core.pane(1), .generation = 1 },
         .location = location,
         .command = &command,
         .launch_cwd = "/",
@@ -1048,13 +1027,13 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
     var buffer: [1024]u8 = undefined;
 
     // Snapshot begin, then the complete image as one small named message.
-    try std.testing.expect((try decodeServer_module(
-        (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = max_image_bytes_global_module, .live_storage_available = true })).?,
+    try std.testing.expect((try core.decodeServer(
+        (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = core.max_image_bytes_global, .live_storage_available = true })).?,
     )) == .graphics_snapshot);
-    try std.testing.expect(try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = max_image_bytes_global_module, .live_storage_available = true }) == null);
+    try std.testing.expect(try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = core.max_image_bytes_global, .live_storage_available = true }) == null);
     support_module.processMediaTurn(pane);
-    const message = (try decodeServer_module(
-        (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = max_image_bytes_global_module, .live_storage_available = true })).?,
+    const message = (try core.decodeServer(
+        (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = core.max_image_bytes_global, .live_storage_available = true })).?,
     )).graphics_shared_image;
     try std.testing.expectEqual(@as(u64, 4), message.image.byte_len);
 
@@ -1080,8 +1059,8 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
 
     // Draining the batch never emits a pixel chunk; ownership of the object
     // has passed to the client, so it survives the completed transfer.
-    while (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = max_image_bytes_global_module, .live_storage_available = true })) |payload| {
-        try std.testing.expect((try decodeServer_module(payload)) != .graphics_image_chunk);
+    while (try encodeNextGraphics(&attachment, .{ .buffer = &buffer, .global_credit = core.max_image_bytes_global, .live_storage_available = true })) |payload| {
+        try std.testing.expect((try core.decodeServer(payload)) != .graphics_image_chunk);
     }
     const probe = std.c.shm_open(
         message.name.sliceZ(),
@@ -1104,12 +1083,12 @@ test "an abandoned unsent shared transfer unlinks its object" {
         service.stop(io);
         service.deinit(io);
     }
-    var budget = GraphicsBudget.init(max_image_bytes_global_module);
+    var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try CommandType.fromArgv(&args);
-    const location: TabLocationType = .{
-        .workspace = .{ .workspace = try workspace_module(1) },
-        .tab_id = try tab_module(1),
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = try core.workspace(1) },
+        .tab_id = try core.tab(1),
     };
     const pane = try Pane.create(.{
         .io = io,
@@ -1117,7 +1096,7 @@ test "an abandoned unsent shared transfer unlinks its object" {
         .history_service = &service,
         .graphics_budget = &budget,
     }, .{
-        .identity = .{ .id = try pane_module(2), .generation = 1 },
+        .identity = .{ .id = try core.pane(2), .generation = 1 },
         .location = location,
         .command = &command,
         .launch_cwd = "/",

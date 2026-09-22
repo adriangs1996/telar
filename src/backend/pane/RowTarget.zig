@@ -1,7 +1,6 @@
-const BufferType = @import("telar-core").Buffer;
-const RectType = @import("telar-core").Rect;
+const core = @import("telar-core");
 const RowTarget = @This();
 
-buffer: *BufferType,
-area: RectType,
+buffer: *core.Buffer,
+area: core.Rect,
 y: u16,

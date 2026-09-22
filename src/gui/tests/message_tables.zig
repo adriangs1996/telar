@@ -1,3 +1,4 @@
+const MessageTable = @import("../widgets/MessageTable.zig");
 const std = @import("std");
 const Fixture = @import("ConversationFixture.zig");
 const Text = @import("../widgets/MessageText.zig");
@@ -50,7 +51,7 @@ test "tables wrap long headers and Unicode cells and share measured and painted 
     text.viewport.width = 270;
     const narrow = try text.measure(&canvas);
     try std.testing.expect(narrow > wide);
-    const table: TablePaint = .{ .bounds = text.bounds, .viewport = text.viewport, .table = @import("../widgets/MessageTable.zig").parse(text.text).?, .owner = text.owner, .source_start = @intFromPtr(text.text.ptr) };
+    const table: TablePaint = .{ .bounds = text.bounds, .viewport = text.viewport, .table = MessageTable.parse(text.text).?, .owner = text.owner, .source_start = @intFromPtr(text.text.ptr) };
     try std.testing.expectApproxEqAbs(narrow, try table.layout(&canvas, true), 0.01);
     _ = try render(&fixture, text);
     for (fixture.quads.items()) |quad| {

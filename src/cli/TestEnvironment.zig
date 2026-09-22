@@ -1,4 +1,3 @@
-const EntryType = @import("Entry.zig");
 const std = @import("std");
 /// Process environment built from literal entries for tests that resolve
 /// paths or capabilities from environment variables.
@@ -15,7 +14,7 @@ block: std.process.Environ.PosixBlock,
 
 pub const Entry = @import("Entry.zig");
 
-pub fn init(entries: []const EntryType) !TestEnvironment {
+pub fn init(entries: []const Entry) !TestEnvironment {
     var map = std.process.Environ.Map.init(std.testing.allocator);
     errdefer map.deinit();
 

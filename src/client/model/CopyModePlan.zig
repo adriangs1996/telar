@@ -1,16 +1,13 @@
-const StateType = @import("../input/State.zig");
-const CopySelectionType = @import("telar-core").CopySelection;
-const SetPaneViewportType = @import("telar-core").SetPaneViewport;
-const copy_mode_module = @import("../input/copy_mode.zig");
-const TargetType = @import("../links/LinkTarget.zig");
+const core = @import("telar-core");
+const model_data = @import("model");
 const CopyModePlan = @This();
 
 expected_revision: u64,
-previous: StateType,
-next: ?StateType,
-selection: ?CopySelectionType = null,
-viewport: ?SetPaneViewportType = null,
+previous: model_data.State,
+next: ?model_data.State,
+selection: ?core.CopySelection = null,
+viewport: ?core.SetPaneViewport = null,
 /// Open the search input in this direction after the commit.
-search: ?copy_mode_module.Direction = null,
+search: ?model_data.CopyModeDirection = null,
 /// Open this immutable target without committing copy-mode state.
-open_link: ?TargetType = null,
+open_link: ?model_data.LinkTarget = null,

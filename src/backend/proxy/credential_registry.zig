@@ -1,11 +1,10 @@
 //! Bounded registry for the proxy capabilities issued to pane generations.
 
+const core = @import("telar-core");
 const CredentialType = @import("Credential.zig");
 const std = @import("std");
 const identity = @import("identity.zig");
-const pane_module = @import("telar-core").pane;
 const Registry = @import("Registry.zig");
-const max_agent_snapshot_entries_module = @import("telar-core").max_agent_snapshot_entries;
 
 pub fn erase(slot: *?CredentialType, credential: *CredentialType) void {
     std.crypto.secureZero(u8, &credential.token);
@@ -22,7 +21,7 @@ pub fn sameCredential(left: *const CredentialType, right: *const CredentialType)
 
 fn testCredential(pane_id: u32, generation: u64, token: u8) !CredentialType {
     return .{
-        .pane_id = try pane_module(pane_id),
+        .pane_id = try core.pane(pane_id),
         .pane_generation = generation,
         .token = .{token} ** identity.token_bytes,
     };
@@ -78,11 +77,11 @@ test "registry rejects insertion beyond its fixed capacity" {
     const io = std.testing.io;
     var registry: Registry = .{};
 
-    for (0..max_agent_snapshot_entries_module) |index| {
+    for (0..core.max_agent_snapshot_entries) |index| {
         const credential = try testCredential(7, index, @truncate(index));
         try registry.register(io, &credential);
     }
 
-    const overflow = try testCredential(7, max_agent_snapshot_entries_module, 0xff);
+    const overflow = try testCredential(7, core.max_agent_snapshot_entries, 0xff);
     try std.testing.expectError(error.TooManyProxyCredentials, registry.register(io, &overflow));
 }

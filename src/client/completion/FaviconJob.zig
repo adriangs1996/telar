@@ -1,15 +1,14 @@
 //! One favicon lookup the adapter runs off the interactive path: the
 //! workspace root is copied in full so the worker borrows nothing.
-const ExecutionIdType = @import("../operations/workspaces/FaviconsState.zig").ExecutionId;
-const WorkspaceIdType = @import("telar-core").WorkspaceId;
-const max_cwd_bytes = @import("telar-core").max_cwd_bytes;
+const FaviconsState = @import("../operations/workspaces/FaviconsState.zig");
+const core = @import("telar-core");
 const Job = @This();
 
-execution_id: ExecutionIdType,
-workspace: WorkspaceIdType,
+execution_id: FaviconsState.ExecutionId,
+workspace: core.WorkspaceId,
 /// Side of the sprite cell the image is resized to.
 cell: u16,
-cwd: [max_cwd_bytes]u8 = undefined,
+cwd: [core.max_cwd_bytes]u8 = undefined,
 cwd_len: u16 = 0,
 
 /// Example: `const job: Job = .init(.{ .execution_id = id, .workspace = workspace, .cell = 32 }, "/home/me/telar");`

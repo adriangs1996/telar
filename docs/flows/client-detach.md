@@ -5,7 +5,7 @@ available for another attachment.
 
 ```text
 AttachedClient.executeAction(.detach)
-  -> operations/session/client_detachments.apply
+  -> AttachedClient.detachAllTabs
      -> capture bounded stable TabLocation list
      -> AttachedClient.detachTab for each location
         -> finish tab-owned paste
@@ -15,7 +15,7 @@ AttachedClient.executeAction(.detach)
   -> return Control.stop to the event loop
 ```
 
-`client_detachments.apply` captures tab locations before the first effect and
+`AttachedClient.detachAllTabs` captures tab locations before the first effect and
 walks them in stable client order. `AttachedClient.detachTab` plans one exact tab,
 then applies its effects in paste/focus/pane order. Pending opens also receive a
 detach and their continuations become ignored, so late confirmations cannot
@@ -32,7 +32,7 @@ applied; a partially processed tab does not claim all its flags detached. The
 normal error path terminates the client and destroys disposable resources while
 the runtime continues.
 
-Source: `src/client/operations/session/client_detachments.zig` and
+Source: `src/client/AttachedClient.zig` and
 `src/client/AttachedClient.zig`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig` covers stable multi-tab
 wire order, local attachment cleanup, exact paste/focus ownership, version

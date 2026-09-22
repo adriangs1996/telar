@@ -1,4 +1,3 @@
-const PluginsRuntimeInitOptions = @import("PluginsRuntimeInitOptions.zig");
 const ServiceType = @import("../../plugins/Service.zig");
 const Runtime = @This();
 
@@ -12,7 +11,7 @@ pub const InitOptions = @import("PluginsRuntimeInitOptions.zig");
 /// var runtime: Runtime = undefined;
 /// try runtime.init(.{ .io = io, .gpa = gpa, .specs = specs });
 /// ```
-pub fn init(runtime: *Runtime, options: PluginsRuntimeInitOptions) !void {
+pub fn init(runtime: *Runtime, options: InitOptions) !void {
     try runtime.service_value.init(.{ .io = options.io, .gpa = options.gpa, .specs = options.specs });
 }
 

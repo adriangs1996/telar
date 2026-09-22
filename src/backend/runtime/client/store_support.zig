@@ -1,10 +1,10 @@
 //! Fixed-capacity ownership and generation-safe lookup of client sessions.
 
+const core = @import("telar-core");
 const Store = @import("Store.zig");
 const std = @import("std");
 
-const ClientList = @import("telar-core").ClientList;
-pub const max_clients = ClientList.capacity;
+pub const max_clients = core.ClientList.capacity;
 
 test "Store rejects exhausted identities before allocating a session" {
     var store: Store = .{ .next_id = std.math.maxInt(u64) };

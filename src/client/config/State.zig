@@ -1,10 +1,10 @@
-const Vm = @import("telar-lua").Vm;
+const lua = @import("telar-lua");
 const std = @import("std");
 const lua_api = @import("lua-api");
 const local_modules = @import("local_modules.zig");
 const State = @This();
 
-vm: *Vm,
+vm: *lua.Vm,
 config_dir: [std.fs.max_path_bytes]u8 = undefined,
 config_dir_len: u16 = 0,
 module_cache_ref: c_int = lua_api.c.LUA_NOREF,
@@ -15,7 +15,7 @@ dependency_count: u8 = 0,
 
 /// Creates the loader before any closure can borrow its stable address.
 /// Example: `modules = try State.init(vm, config_dir);`.
-pub fn init(vm: *Vm, path: []const u8) !State {
+pub fn init(vm: *lua.Vm, path: []const u8) !State {
     var modules: State = .{ .vm = vm };
     if (path.len > modules.config_dir.len) {
         return error.NameTooLong;

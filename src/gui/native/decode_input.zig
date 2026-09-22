@@ -1,4 +1,6 @@
 //! One checked translation of the native ABI into synchronous semantic input.
+const AccessibilityAction = @import("../input/AccessibilityAction.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const NativeEvent = @import("InputEvent.zig").InputEvent;
@@ -33,8 +35,10 @@ pub fn decode(native: NativeEvent) !events.Event {
         return error.InvalidUtf8;
     }
 
-    const phase: client.Key.Phase = if (native.kind <= 4) @enumFromInt(native.phase) else .press;
-    const physical: ?client.Key.Physical = if (native.physical == 0) null else .{ .value = native.physical };
+    const phase: data.Key.Phase = if (native.kind <= 4) @enumFromInt(native.phase) else .press;
+    const physical: ?data.Key.Physical = if (native.physical == 0) null else .{
+        .value = native.physical,
+    };
     switch (native.kind) {
         1 => {
             if (native.target_id != 0) {
@@ -45,7 +49,21 @@ pub fn decode(native: NativeEvent) !events.Event {
         },
         2 => return .{ .paste = text },
         3 => {
-            const codes = [_]client.Key.Code{ .enter, .tab, .backspace, .escape, .up, .down, .left, .right, .home, .end, .delete, .page_up, .page_down };
+            const codes = [_]data.Key.Code{
+                .enter,
+                .tab,
+                .backspace,
+                .escape,
+                .up,
+                .down,
+                .left,
+                .right,
+                .home,
+                .end,
+                .delete,
+                .page_up,
+                .page_down,
+            };
             var key: KeyInput = .{
                 .code = if (native.code >= 1 and native.code <= codes.len) codes[native.code - 1] else return error.InvalidNativeKey,
                 .mods = @bitCast(@as(u4, @intCast(native.mods))),
@@ -116,7 +134,7 @@ pub fn decode(native: NativeEvent) !events.Event {
                 return error.InvalidNativeAccessibility;
             }
 
-            const action = std.enums.fromInt(@import("../input/AccessibilityAction.zig").Action, native.code) orelse return error.InvalidNativeAccessibility;
+            const action = std.enums.fromInt(AccessibilityAction.Action, native.code) orelse return error.InvalidNativeAccessibility;
             if (action == .replace_range) {
                 try replacementRange(native);
                 if (native.revision == 0 or native.replacement_start == std.math.maxInt(u32)) {
@@ -159,7 +177,11 @@ fn selectionRange(text: []const u8, start: u32, end: u32) !void {
 }
 
 test "semantic native decoder preserves held keys committed text and focus" {
-    for ([_]client.Key.Phase{ .press, .repeat, .release }) |phase| {
+    for ([_]data.Key.Phase{
+        .press,
+        .repeat,
+        .release,
+    }) |phase| {
         const key = (try decode(.{ .kind = 3, .code = 5, .physical = 127, .phase = @intFromEnum(phase) })).key;
         try std.testing.expectEqual(phase, key.phase);
         try std.testing.expectEqual(@as(u32, 127), key.physical.?.value);

@@ -1,8 +1,8 @@
+const core = @import("telar-core");
 const std = @import("std");
-const review = @import("telar-core").change_review;
 const ReviewFileSample = @This();
 
-pub const capacity = review.max_sample_bytes;
+pub const capacity = core.change_review.max_sample_bytes;
 
 storage: [capacity + 1]u8 = undefined,
 len: usize = 0,

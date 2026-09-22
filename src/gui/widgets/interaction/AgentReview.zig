@@ -1,5 +1,5 @@
+const client = @import("telar-client");
 const core = @import("telar-core");
-const ThreadView = @import("telar-client").ThreadView;
 const Review = @This();
 
 pane_id: core.PaneId,
@@ -8,7 +8,7 @@ approval_id: u64,
 
 /// Rendering and input use the same current approval authority.
 /// Example: `const pending = review.request(thread) orelse return;`
-pub fn request(review: Review, thread: ThreadView) ?*const core.AgentApprovalRequest {
+pub fn request(review: Review, thread: client.ThreadView) ?*const core.AgentApprovalRequest {
     if (thread.kind != .agent or review.pane_id != thread.pane_id or review.generation != thread.attachment_generation) {
         return null;
     }

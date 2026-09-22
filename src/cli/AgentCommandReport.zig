@@ -1,7 +1,7 @@
-const AgentCommandPhaseType = @import("telar-core").AgentCommandPhase;
+const core = @import("telar-core");
 const AgentCommandReport = @This();
 
-phase: AgentCommandPhaseType,
+phase: core.AgentCommandPhase,
 provider: []const u8,
 tool_call_id: []const u8,
 command: []const u8,

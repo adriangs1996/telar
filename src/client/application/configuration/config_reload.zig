@@ -2,7 +2,6 @@
 
 const ModelType = @import("../../model/Model.zig");
 const client_diagnostic = @import("client_diagnostic.zig");
-const std = @import("std");
 
 pub const Event = enum {
     adopt_resources,

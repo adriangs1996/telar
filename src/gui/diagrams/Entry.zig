@@ -1,4 +1,6 @@
 //! A bounded cache slot; source identity never relies on a hash alone.
+const view = @import("view.zig");
+const source_kind = @import("source_kind.zig");
 source: ?[]u8 = null,
 owner: @import("../widgets/MessageLayoutOwner.zig") = undefined,
 block_offset: u32 = 0,
@@ -7,7 +9,7 @@ scale: f32 = 1,
 id: u64 = 0,
 frame: u64 = 0,
 status: enum { pending, running, ready, failed } = .pending,
-failure: @import("view.zig").Failure = .invalid,
+failure: view.Failure = .invalid,
 image: ?@import("Image.zig") = null,
 
-kind: @import("source_kind.zig").Kind = .mermaid,
+kind: source_kind.Kind = .mermaid,

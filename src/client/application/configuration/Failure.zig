@@ -1,5 +1,5 @@
-const DiagnosticType = @import("../../config/Diagnostic.zig");
+const data = @import("model");
 const Failure = @This();
 
 reason: anyerror,
-diagnostic: DiagnosticType,
+diagnostic: data.Diagnostic,

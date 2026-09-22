@@ -1,4 +1,6 @@
 //! Wrapping shared by composer drawing, pointer selection and native IME.
+const GlyphAtlas = @import("../../text/GlyphAtlas.zig");
+const assets = @import("assets");
 const core = @import("telar-core");
 const WrappedLines = @import("EditorLines.zig");
 const Layout = @This();
@@ -80,7 +82,7 @@ test "wrapped composer caret and pointer agree at UTF8 and newline boundaries" {
 
 test "proportional composer shares measured word wrapping and grapheme hit positions" {
     const std = @import("std");
-    var atlas = try @import("../../text/GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     const font: @import("EditorFont.zig") = .{ .atlas = &atlas, .pixel_height = 16 };
     try font.prepare("WWW iii café e\u{301}");
@@ -116,7 +118,7 @@ test "a full last line keeps its caret visible and distinct from the next hard l
 
 test "shaped editor lines share kerning and internal ligature carets with pointer selection" {
     const std = @import("std");
-    var atlas = try @import("../../text/GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     const font: @import("EditorFont.zig") = .{ .atlas = &atlas, .pixel_height = 16 };
     const text = "AV office fi e\u{301}x\nAV office fi";
@@ -137,7 +139,7 @@ test "shaped editor lines share kerning and internal ligature carets with pointe
 
 test "maximum composer shaped queries keep native allocations discovery and raster work at zero" {
     const std = @import("std");
-    var atlas = try @import("../../text/GlyphAtlas.zig").init(std.testing.allocator, .{ .font = @import("assets").jetbrains_mono, .pixel_height = 16 });
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
     const font: @import("EditorFont.zig") = .{ .atlas = &atlas, .pixel_height = 16 };
     const text = "AV office café " ** 256;

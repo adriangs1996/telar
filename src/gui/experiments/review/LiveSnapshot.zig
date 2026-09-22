@@ -2,16 +2,14 @@
 const std = @import("std");
 const client = @import("telar-client");
 const LiveResponse = @import("LiveResponse.zig");
-const Revision = @import("telar-client").ChangeReviewRevision;
 const DiffHighlighter = @import("../../syntax/DiffHighlighter.zig");
 const syntax_limits = @import("../../syntax/limits.zig");
-const limits = @import("telar-client").change_review_limits;
 const Self = @This();
 
 pub const max_bytes = 256 * 1024;
 allocator: std.mem.Allocator,
 parsed: std.json.Parsed(LiveResponse),
-revisions: [2]Revision = @splat(.{}),
+revisions: [2]client.ChangeReviewRevision = @splat(.{}),
 roles: [2][syntax_limits.source_bytes]client.SyntaxRole = undefined,
 
 /// Retains all JSON strings and computes syntax before publishing the snapshot.
@@ -24,7 +22,7 @@ pub fn parse(io: std.Io, allocator: std.mem.Allocator, bytes: []const u8) !*Self
     const parsed = try std.json.parseFromSlice(LiveResponse, allocator, bytes, .{ .allocate = .alloc_always });
     errdefer parsed.deinit();
     const value = parsed.value;
-    if (value.schema != 1 or value.session_id.len == 0 or value.session_id.len > 64 or value.revisions.len == 0 or value.revisions.len > 2 or value.comments.len > limits.comments) {
+    if (value.schema != 1 or value.session_id.len == 0 or value.session_id.len > 64 or value.revisions.len == 0 or value.revisions.len > 2 or value.comments.len > client.change_review_limits.comments) {
         return error.InvalidReviewResponse;
     }
 
@@ -53,7 +51,7 @@ pub fn parse(io: std.Io, allocator: std.mem.Allocator, bytes: []const u8) !*Self
     }
 
     for (value.comments) |comment| {
-        if (comment.file.len == 0 or comment.file.len > std.fs.max_path_bytes or comment.body.len == 0 or comment.body.len > limits.comment_bytes or !std.unicode.utf8ValidateSlice(comment.body) or comment.first_line == 0 or comment.last_line < comment.first_line) {
+        if (comment.file.len == 0 or comment.file.len > std.fs.max_path_bytes or comment.body.len == 0 or comment.body.len > client.change_review_limits.comment_bytes or !std.unicode.utf8ValidateSlice(comment.body) or comment.first_line == 0 or comment.last_line < comment.first_line) {
             return error.InvalidReviewComment;
         }
     }

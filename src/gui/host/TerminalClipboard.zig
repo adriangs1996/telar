@@ -1,7 +1,7 @@
 //! Identity of an asynchronous terminal paste and progress of its delivery.
-const PaneId = @import("telar-core").PaneId;
+const core = @import("telar-core");
 
 request_id: u64 = 0,
-pane_id: ?PaneId = null,
+pane_id: ?core.PaneId = null,
 generation: u64 = 0,
 offset: ?usize = null,

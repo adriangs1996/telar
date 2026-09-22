@@ -1,10 +1,5 @@
 const InitialType = @import("Initial.zig");
 const FrameInput = @import("FrameInput.zig");
-const FrameViewType = @import("telar-core").FrameView;
-const CellType = @import("telar-core").Cell;
-const SpanType = @import("telar-core").Span;
-const encodePaneFrame_module = @import("telar-core").encodePaneFrame;
-const decodeServer_module = @import("telar-core").decodeServer;
 const Pane = @import("Pane.zig");
 const std = @import("std");
 const PresentationCommitType = @import("PresentationCommit.zig");
@@ -100,12 +95,12 @@ test "change review availability follows managed conversation identity without w
     try std.testing.expect(!pane.hasChangeReview());
 }
 
-fn frame(storage: []u8, input: FrameInput) !FrameViewType {
-    var cells = [_]CellType{.{}} ** 9;
+fn frame(storage: []u8, input: FrameInput) !core.FrameView {
+    var cells = [_]core.Cell{.{}} ** 9;
     cells[0].bytes[0] = input.character;
     const count = if (input.base == 0) @as(usize, input.cols) * input.rows else 1;
-    const spans = [_]SpanType{.{ .start = 0, .cells = cells[0..count] }};
-    const bytes = try encodePaneFrame_module(storage, .{
+    const spans = [_]core.Span{.{ .start = 0, .cells = cells[0..count] }};
+    const bytes = try core.encodePaneFrame(storage, .{
         .pane_id = input.pane_id,
         .frame_id = input.id,
         .base_frame_id = input.base,
@@ -118,7 +113,7 @@ fn frame(storage: []u8, input: FrameInput) !FrameViewType {
         .scroll = .{ .total_rows = input.rows, .offset = 0 },
         .spans = &spans,
     });
-    return (try decodeServer_module(bytes)).pane_frame;
+    return (try core.decodeServer(bytes)).pane_frame;
 }
 
 test "pane snapshot owns cells and child modes independently of the receive buffer" {
@@ -176,7 +171,7 @@ test "only a snapshot can resize pane storage" {
 }
 
 test "same-size frame admission allocates no additional storage" {
-    var storage: [4096 + @sizeOf(Pane.ComposerField) + @import("telar-core").text_metadata_limits.capacity(initial.spec.size.rows)]u8 = undefined;
+    var storage: [4096 + @sizeOf(Pane.ComposerField) + core.text_metadata_limits.capacity(initial.spec.size.rows)]u8 = undefined;
     var allocator = std.heap.FixedBufferAllocator.init(&storage);
     var pane = try Pane.init(allocator.allocator(), initial);
     defer pane.deinit();

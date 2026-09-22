@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const client = @import("telar-client");
 const Modal = @import("Modal.zig");
 const TextField = @import("../TextField.zig");
@@ -5,7 +6,7 @@ const TextField = @import("../TextField.zig");
 const Canvas = @import("../Canvas.zig");
 const SuggestionModal = @This();
 
-area: @import("telar-core").Rect,
+area: core.Rect,
 projection: *const client.Projection,
 
 /// Paints the engine's owned response without running engine work in the GUI.

@@ -1,14 +1,13 @@
-const IdType = @import("telar-client").Id;
-const LevelType = @import("telar-client").Level;
-const ThemeType = @import("telar-client").Theme;
+const data = @import("model");
+const client = @import("telar-client");
 const RenderKey = @This();
 
-id: IdType,
-level: LevelType,
+id: data.NotificationId,
+level: data.NotificationLevel,
 cell_width: u16,
 cell_height: u16,
 card_columns: u16,
-icon_theme: ThemeType,
+icon_theme: client.Theme,
 background: [3]u8,
 accent: [3]u8,
 text: [3]u8,

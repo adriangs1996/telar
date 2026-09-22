@@ -3,7 +3,6 @@
 //! The relay preserves wire bytes exactly. It uses the framing already derived
 //! from the head and keeps all buffers fixed-size.
 
-const RouteType = @import("Route.zig");
 const Direction = @import("Direction.zig");
 const Exact = @import("Exact.zig");
 const std = @import("std");
@@ -28,7 +27,7 @@ pub const Fragment = @import("Fragment.zig");
 /// const route: Route = .{ .from = .origin, .to = .child, .framing = .chunked };
 /// const forwarded = relay(session, route, &observer);
 /// ```
-pub fn relay(session: anytype, route: RouteType, observer: anytype) bool {
+pub fn relay(session: anytype, route: Route, observer: anytype) bool {
     const direction: Direction = .{ .from = route.from, .to = route.to };
 
     return switch (route.framing) {
@@ -174,7 +173,7 @@ test "an incomplete chunk line forwards its prefix once" {
     try std.testing.expectEqual(@as(usize, 1), fake.write_calls);
 }
 
-fn testRoute(from: SessionType.Side, to: SessionType.Side, framing: types.BodyPlan) RouteType {
+fn testRoute(from: SessionType.Side, to: SessionType.Side, framing: types.BodyPlan) Route {
     return .{ .from = from, .to = to, .framing = framing };
 }
 

@@ -1,4 +1,4 @@
-const InputScannerType = @import("telar-backend").InputScanner;
+const backend = @import("telar-backend");
 const HistoryInputContext = @This();
 
-scanner: InputScannerType = .{},
+scanner: backend.InputScanner = .{},

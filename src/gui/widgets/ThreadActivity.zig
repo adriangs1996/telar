@@ -1,4 +1,5 @@
 //! Compact tool rows and stable subagent cards share the same typed lifecycle.
+const TextFit = @import("TextFit.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
@@ -51,7 +52,7 @@ pub fn draw(activity: Activity, canvas: *Canvas) !void {
     const chevron_width = if (activity.expandable()) canvas.chrome.px(22) else 0;
     const title_x = icon_bounds.x + icon_side + canvas.chrome.px(8);
     const title_bounds: Rect = .{ .x = title_x, .y = header.y, .width = @max(0, header.x + header.width - inset - status_width - chevron_width - title_x), .height = row };
-    var storage: [@import("TextFit.zig").max_bytes]u8 = undefined;
+    var storage: [TextFit.max_bytes]u8 = undefined;
     var label: Label = .{ .text = activity.title(), .face = .sans, .size = .body, .bold = child or dispatch, .color = if (view.item.status == .failed) palette.red else if (child or dispatch) palette.text else palette.subtext0 };
     label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = title_bounds.width }).fit(label, &storage);
     try (@import("ActivityText.zig"){ .bounds = title_bounds, .label = label, .active = view.active() and title_bounds.y + title_bounds.height > view.viewport.y and title_bounds.y < view.viewport.y + view.viewport.height }).draw(canvas);
@@ -196,7 +197,7 @@ fn dispatchSummary(activity: Activity, buffer: []u8) []const u8 {
 }
 
 fn fitted(_: Activity, canvas: *Canvas, input: @import("ThreadLabelPaint.zig")) !void {
-    var storage: [@import("TextFit.zig").max_bytes]u8 = undefined;
+    var storage: [TextFit.max_bytes]u8 = undefined;
     var label = input.label;
     label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = input.bounds.width }).fit(label, &storage);
     _ = try canvas.textAt(input.bounds, label);

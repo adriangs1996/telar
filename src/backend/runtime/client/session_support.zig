@@ -1,11 +1,10 @@
 //! One disposable runtime-side client connection and its delivery state.
 
+const core = @import("telar-core");
 const Session = @import("Session.zig");
 const ClientKeyType = @import("../../history/ClientKey.zig");
 const PendingPaneFocus = @import("PendingPaneFocus.zig");
 const std = @import("std");
-const CompletePaneFocusType = @import("telar-core").CompletePaneFocus;
-const max_frame_size_module = @import("telar-core").max_frame_size;
 
 pub const Role = enum { undecided, ui, control };
 
@@ -16,7 +15,7 @@ test "focus exchange rejects duplicate reservations and stale UI completions" {
     const pending: PendingPaneFocus = .{ .request_id = @enumFromInt(4), .pane_id = @enumFromInt(5), .pane_generation = 6, .target = target };
     try session.reserveFocus(pending);
     try std.testing.expectError(error.FocusAlreadyPending, session.reserveFocus(pending));
-    var reply: CompletePaneFocusType = .{
+    var reply: core.CompletePaneFocus = .{
         .requester = .{ .id = 1, .generation = 1 },
         .request_id = pending.request_id,
         .pane_id = pending.pane_id,
@@ -48,6 +47,6 @@ test "Session keeps its bounded buffers outside client store storage" {
     }
 
     try std.testing.expectEqual(@as(u64, 1), session.key.id);
-    try std.testing.expectEqual(max_frame_size_module, session.receive_buffer.len);
-    try std.testing.expectEqual(max_frame_size_module, session.delivery.send_buffer.len);
+    try std.testing.expectEqual(core.max_frame_size, session.receive_buffer.len);
+    try std.testing.expectEqual(core.max_frame_size, session.delivery.send_buffer.len);
 }

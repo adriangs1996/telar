@@ -1,8 +1,11 @@
 //! The complete GUI frame. Native backends only see the quads these values draw.
+const core = @import("telar-core");
+const Notifications = @import("overlays/Notifications.zig");
+const modal_widget = @import("overlays/modal_widget.zig");
 const Canvas = @import("Canvas.zig");
 const GenericWidgetList = @import("GenericWidgetList.zig").Type;
 
-pub const capacity = @import("telar-core").max_panes_per_tab + 1 + 4 + 1 + @import("overlays/Notifications.zig").max_visible + 1;
+pub const capacity = core.max_panes_per_tab + 1 + 4 + 1 + Notifications.max_visible + 1;
 pub const List = GenericWidgetList(Widget, capacity);
 
 pub const Widget = union(enum) {
@@ -15,7 +18,7 @@ pub const Widget = union(enum) {
     panes: @import("PaneDecorations.zig"),
     chrome_focus: @import("ChromeFocus.zig"),
     notification: @import("overlays/NotificationCard.zig"),
-    modal: @import("overlays/modal_widget.zig").Widget,
+    modal: modal_widget.Widget,
 
     /// Example: `try widget.draw(canvas);`
     pub fn draw(widget: Widget, canvas: *Canvas) !void {

@@ -1,13 +1,11 @@
-const RectType = @import("telar-core").Rect;
-const PointType = @import("telar-core").Point;
-const IconType = @import("telar-client").Icon;
-const StyleType = @import("telar-core").Style;
+const core = @import("telar-core");
+const client = @import("telar-client");
 const IconDraw = @This();
 
-area: RectType,
-point: PointType,
-icon: IconType,
-style: StyleType,
+area: core.Rect,
+point: core.Point,
+icon: client.Icon,
+style: core.Style,
 /// Cells the graphical mark may span sideways. The fallback glyph still
 /// takes the first cell only; the caller blanks the rest.
 columns: u16 = 1,

@@ -1,7 +1,6 @@
-const PaneIdType = @import("telar-core").PaneId;
-const ScrollType = @import("telar-core").Scroll;
+const core = @import("telar-core");
 const CopyModeFrame = @This();
 
-pane_id: PaneIdType,
+pane_id: core.PaneId,
 previous_offset: u32,
-scroll: ScrollType,
+scroll: core.Scroll,

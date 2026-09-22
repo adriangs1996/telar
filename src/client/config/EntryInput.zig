@@ -1,6 +1,6 @@
-const AgentManifest = @import("telar-core").AgentManifest;
+const core = @import("telar-core");
 const EntryInput = @This();
 
 entry: c_int,
-manifest: *AgentManifest,
+manifest: *core.AgentManifest,
 position: usize,

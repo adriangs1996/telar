@@ -1,7 +1,7 @@
-const PositionType = @import("../../bars/model.zig").Position;
+const model = @import("../../bars/model.zig");
 const Failure = @This();
 
 generation: u64,
-position: PositionType,
+position: model.Position,
 reason: anyerror,
 kind: []const u8,

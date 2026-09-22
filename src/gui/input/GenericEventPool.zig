@@ -1,13 +1,13 @@
 //! Bounded storage for borrowed text in whole composition/clipboard events.
 //! The queue stores slot indices; slices are rebuilt only for synchronous drain.
+const event_module = @import("event.zig");
 const std = @import("std");
-const Event = @import("event.zig").Event;
 
 pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
     return struct {
         const Pool = @This();
         const Slot = struct {
-            event: Event = .{ .focus = false },
+            event: event_module.Event = .{ .focus = false },
             bytes: [byte_capacity]u8 = undefined,
             len: usize = 0,
             used: bool = false,
@@ -17,7 +17,7 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
 
         /// Copies before admission completes, without retaining native pointers.
         /// Example: `const slot = try pool.admit(event);`
-        pub fn admit(pool: *Pool, event: Event) !u8 {
+        pub fn admit(pool: *Pool, event: event_module.Event) !u8 {
             const bytes = payload(event);
             if (bytes.len > byte_capacity) {
                 return error.InputTooLarge;
@@ -43,7 +43,7 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
         }
 
         /// Example: `try dispatch(pool.view(index));`
-        pub fn view(pool: *const Pool, index: u8) Event {
+        pub fn view(pool: *const Pool, index: u8) event_module.Event {
             const slot = &pool.slots[index];
             std.debug.assert(slot.used);
             return withPayload(slot.event, slot.bytes[0..slot.len]);
@@ -55,7 +55,7 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
             pool.slots[index].used = false;
         }
 
-        fn payload(event: Event) []const u8 {
+        fn payload(event: event_module.Event) []const u8 {
             return switch (event) {
                 .text => |value| value.bytes,
                 .paste => |value| value,
@@ -66,7 +66,7 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
             };
         }
 
-        fn withPayload(event: Event, bytes: []const u8) Event {
+        fn withPayload(event: event_module.Event, bytes: []const u8) event_module.Event {
             var result = event;
             switch (result) {
                 .text => |*value| value.bytes = bytes,

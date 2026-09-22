@@ -1,3 +1,4 @@
+const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
@@ -75,7 +76,7 @@ test "native terminal key release without encoded bytes grants no input grace" {
     const session = try Session.init();
     defer session.deinit();
     try begin(session);
-    const delivery = try client.operations.pane_inputs.send(&session.gui.app, .{
+    const delivery = try session.gui.app.sendPaneInput(.{
         .target = .focused,
         .source = .host,
         .payload = .{ .key = .{ .code = .{ .char = .init("x") }, .phase = .release } },
@@ -99,7 +100,7 @@ test "native rejected outbox input grants no frame grace" {
         try session.gui.app.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = Session.pane_id } });
     }
 
-    try std.testing.expectError(error.ClientOutboxFull, client.operations.pane_inputs.send(&session.gui.app, .{
+    try std.testing.expectError(error.ClientOutboxFull, session.gui.app.sendPaneInput(.{
         .target = .focused,
         .source = .host,
         .payload = .{ .key = .{ .code = .{ .char = .init("x") } } },
@@ -116,7 +117,17 @@ test "native local prefix shortcut grants no terminal frame grace" {
     const session = try Session.init();
     defer session.deinit();
     try begin(session);
-    try input_support.accept(session.gui, .{ .key = .{ .code = client.default_prefix.code, .mods = .{ .ctrl = true } } });
+    try input_support.accept(
+        session.gui,
+        .{
+            .key = .{
+                .code = data.keybind.default_prefix.code,
+                .mods = .{
+                    .ctrl = true,
+                },
+            },
+        },
+    );
     try input_support.pump(session.gui);
     try session.settle();
     try std.testing.expect(session.gui.projection().status_mode == .prefix);

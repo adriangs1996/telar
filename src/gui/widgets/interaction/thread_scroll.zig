@@ -1,5 +1,8 @@
 //! Native motion advances before projection; drawing and hit testing share the
 //! same model offset. Page delivery rebases the trajectory without an impulse.
+const routing = @import("routing.zig");
+const message_links = @import("message_links.zig");
+const core = @import("telar-core");
 const client = @import("telar-client");
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
@@ -24,7 +27,7 @@ pub fn captured(gui: *GuiClient, event: Event) !bool {
 
     const owner = motions.gesture orelse return false;
     const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return true;
-    if (!@import("routing.zig").eligible(gui, target)) {
+    if (!routing.eligible(gui, target)) {
         return true;
     }
 
@@ -73,7 +76,7 @@ pub fn input(gui: *GuiClient, target: Target, event: Event) !void {
     normalized.delta_y = -event.delta_y * (if (event.precise) @as(f64, 1) else entry.step);
     if (!cancelled and normalized.delta_y != 0) {
         gui.widgets.thread_anchor.cancel(pane_id);
-        @import("message_links.zig").clear(gui);
+        message_links.clear(gui);
     }
     entry.input(normalized, now_ns);
     try apply(gui, entry);
@@ -187,7 +190,7 @@ fn navigate(gui: *GuiClient, entry: *const Entry, delta: f64) void {
     }
 }
 
-fn reviewing(gui: *const GuiClient, pane_id: @import("telar-core").PaneId) bool {
+fn reviewing(gui: *const GuiClient, pane_id: core.PaneId) bool {
     const review = gui.widgets.approval_review orelse return false;
     const model = gui.app.model.activeTabModelConst() orelse return false;
     const thread = client.ThreadView.capture(model, null, pane_id) orelse return false;

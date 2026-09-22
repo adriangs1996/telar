@@ -1,13 +1,11 @@
-const PaneIdType = @import("telar-core").PaneId;
-const PaneProgressStateType = @import("telar-core").PaneProgressState;
-const PaneSurfaceType = @import("telar-core").PaneSurface;
+const core = @import("telar-core");
 const PaneProjection = @This();
 
-pane_id: PaneIdType,
-surface: PaneSurfaceType,
+pane_id: core.PaneId,
+surface: core.PaneSurface,
 cols: u16,
 rows: u16,
 scroll_offset: u32,
 graphics_placeholder: bool,
-progress_state: PaneProgressStateType,
+progress_state: core.PaneProgressState,
 progress_percent: ?u8,

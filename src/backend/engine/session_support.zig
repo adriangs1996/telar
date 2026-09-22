@@ -6,7 +6,6 @@
 //! last assistant text. Every failure surfaces as a `Status`; what happens
 //! to the child afterwards is the actor's decision, never the session's.
 
-const SessionType = @import("Session.zig");
 const std = @import("std");
 const types = @import("types.zig");
 const fakes = @import("testing.zig");
@@ -23,7 +22,7 @@ pub fn nowMs(io: std.Io) i64 {
 }
 
 fn askOnce(io: std.Io, arguments: []const []const u8, timeout_ms: u32) !types.Status {
-    const session = try SessionType.open(io, std.testing.allocator, fakes.options(arguments, timeout_ms, 60_000));
+    const session = try Session.open(io, std.testing.allocator, fakes.options(arguments, timeout_ms, 60_000));
     defer session.close(io);
 
     var response: Response = .{ .purpose = fakes.purpose, .status = .failed };
@@ -32,7 +31,7 @@ fn askOnce(io: std.Io, arguments: []const []const u8, timeout_ms: u32) !types.St
 
 test "a session answers a prompt with the settled assistant text" {
     const io = std.testing.io;
-    const session = try SessionType.open(io, std.testing.allocator, fakes.options(&.{ "/bin/sh", "-c", fakes.fake_engine }, 5000, 60_000));
+    const session = try Session.open(io, std.testing.allocator, fakes.options(&.{ "/bin/sh", "-c", fakes.fake_engine }, 5000, 60_000));
     defer session.close(io);
 
     var response: Response = .{ .purpose = fakes.purpose, .status = .failed };
@@ -70,5 +69,5 @@ test "oversized records are dropped and an oversized reply is invalid" {
 
 test "a session without a command cannot open" {
     const io = std.testing.io;
-    try std.testing.expectError(error.FileNotFound, SessionType.open(io, std.testing.allocator, fakes.options(&.{}, 1000, 60_000)));
+    try std.testing.expectError(error.FileNotFound, Session.open(io, std.testing.allocator, fakes.options(&.{}, 1000, 60_000)));
 }

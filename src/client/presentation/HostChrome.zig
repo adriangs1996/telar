@@ -1,10 +1,9 @@
+const icons = @import("../layout/icons.zig");
+const data = @import("model");
+const sidebar_rendering = @import("../config/sidebar_rendering.zig");
 const ColorThemeType = @import("../appearance/Theme.zig");
-const IconThemeType = @import("../layout/icons.zig").Theme;
 const SidebarRendererInputType = @import("../layout/SidebarRendererInput.zig");
-const MouseType = @import("../input/Mouse.zig");
 const ViewInteractionCommandType = @import("../application/input/ViewInteractionCommand.zig");
-const SidebarRenderingType = @import("../config/sidebar_rendering.zig").SidebarRendering;
-const RegionType = @import("../workspace/Region.zig");
 /// The adapter's chrome as the client application drives it: appearance,
 /// sidebar renderer, size, committed chrome layout and pointer hit testing.
 /// Reads of chrome geometry go through `Region`; this port only pushes.
@@ -12,23 +11,23 @@ const HostChrome = @This();
 
 context: *anyopaque,
 set_theme_fn: *const fn (*anyopaque, ColorThemeType) void,
-set_icon_theme_fn: *const fn (*anyopaque, IconThemeType) void,
+set_icon_theme_fn: *const fn (*anyopaque, icons.Theme) void,
 configure_sidebar_fn: *const fn (*anyopaque, SidebarRendererInputType) anyerror!void,
 resize_fn: *const fn (*anyopaque, u16, u16) anyerror!void,
 set_sidebar_layout_fn: *const fn (*anyopaque, bool, u16) void,
 set_workspace_list_collapsed_fn: *const fn (*anyopaque, bool) void,
-pointer_fn: *const fn (*anyopaque, MouseType) ViewInteractionCommandType,
-sidebar_renderer_fn: *const fn (*anyopaque) SidebarRenderingType,
-adopt_sidebar_renderer_fn: *const fn (*anyopaque, SidebarRenderingType) void,
-region_fn: *const fn (*anyopaque) RegionType,
+pointer_fn: *const fn (*anyopaque, data.Mouse) ViewInteractionCommandType,
+sidebar_renderer_fn: *const fn (*anyopaque) sidebar_rendering.SidebarRendering,
+adopt_sidebar_renderer_fn: *const fn (*anyopaque, sidebar_rendering.SidebarRendering) void,
+region_fn: *const fn (*anyopaque) data.Region,
 inspection_scroll_limit_fn: *const fn (*anyopaque) ?u32,
-link_pointer_fn: ?*const fn (*anyopaque, MouseType) bool = null,
+link_pointer_fn: ?*const fn (*anyopaque, data.Mouse) bool = null,
 
 pub fn setTheme(port: HostChrome, theme: ColorThemeType) void {
     port.set_theme_fn(port.context, theme);
 }
 
-pub fn setIconTheme(port: HostChrome, theme: IconThemeType) void {
+pub fn setIconTheme(port: HostChrome, theme: icons.Theme) void {
     port.set_icon_theme_fn(port.context, theme);
 }
 
@@ -54,29 +53,29 @@ pub fn setWorkspaceListCollapsed(port: HostChrome, collapsed: bool) void {
 
 /// Resolves one pointer event against the adapter's chrome hit map.
 /// Example: `const interaction = client.chrome.pointer(event);`.
-pub fn pointer(port: HostChrome, event: MouseType) ViewInteractionCommandType {
+pub fn pointer(port: HostChrome, event: data.Mouse) ViewInteractionCommandType {
     return port.pointer_fn(port.context, event);
 }
 
 /// Lets an adapter own its native link gesture. Null retains shared routing.
 /// Example: `if (client.chrome.linkPointer(event)) |consumed| return consumed;`
-pub fn linkPointer(port: HostChrome, event: MouseType) ?bool {
+pub fn linkPointer(port: HostChrome, event: data.Mouse) ?bool {
     const callback = port.link_pointer_fn orelse return null;
     return callback(port.context, event);
 }
 
 /// The renderer the adapter currently requests for its sidebar.
-pub fn sidebarRenderer(port: HostChrome) SidebarRenderingType {
+pub fn sidebarRenderer(port: HostChrome) sidebar_rendering.SidebarRendering {
     return port.sidebar_renderer_fn(port.context);
 }
 
 /// Adopts the renderer a reloaded configuration selected.
-pub fn adoptSidebarRenderer(port: HostChrome, value: SidebarRenderingType) void {
+pub fn adoptSidebarRenderer(port: HostChrome, value: sidebar_rendering.SidebarRendering) void {
     port.adopt_sidebar_renderer_fn(port.context, value);
 }
 
 /// The workbench cell grid the adapter currently publishes.
-pub fn region(port: HostChrome) RegionType {
+pub fn region(port: HostChrome) data.Region {
     return port.region_fn(port.context);
 }
 

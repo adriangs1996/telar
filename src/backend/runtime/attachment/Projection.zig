@@ -1,12 +1,10 @@
-const BufferType = @import("telar-core").Buffer;
-const CursorType = @import("telar-core").Cursor;
-const ScrollType = @import("telar-core").Scroll;
+const core = @import("telar-core");
 const Projection = @This();
 
-buffer: *const BufferType,
+buffer: *const core.Buffer,
 damaged_rows: []const bool,
-cursor: CursorType,
-scroll: ScrollType,
+cursor: core.Cursor,
+scroll: core.Scroll,
 
-text_metadata: @import("telar-core").TextMetadataView,
+text_metadata: core.TextMetadataView,
 text_revision: u64,

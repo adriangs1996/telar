@@ -1,3 +1,4 @@
+const transport_integration_test = @import("transport_integration_test.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Channel = @import("RuntimeTestChannel.zig");
@@ -10,7 +11,7 @@ receive_buffer: [128 * 1024]u8 = undefined,
 
 /// Example: `var peer = try AgentRuntimePeer.init(io, path);`
 pub fn init(io: std.Io, path: []const u8) !@This() {
-    return .{ .io = io, .channel = try @import("transport_integration_test.zig").connectRuntimeForTest(io, path) };
+    return .{ .io = io, .channel = try transport_integration_test.connectRuntimeForTest(io, path) };
 }
 
 /// Example: `peer.deinit();`

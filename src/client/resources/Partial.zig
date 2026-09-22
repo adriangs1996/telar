@@ -1,5 +1,5 @@
+const core = @import("telar-core");
 const GenerationType = @import("../config/Generation.zig");
-const TrustStoreType = @import("telar-core").TrustStore;
 const RegistryType = @import("../plugins/Registry.zig");
 const std = @import("std");
 const Orphans = @import("Orphans.zig");
@@ -8,7 +8,7 @@ const Orphans = @import("Orphans.zig");
 const Partial = @This();
 
 generation: *GenerationType,
-trust: ?*TrustStoreType = null,
+trust: ?*core.TrustStore = null,
 registry: ?*RegistryType = null,
 
 pub fn abandon(partial: Partial, gpa: std.mem.Allocator, orphans: *Orphans) void {

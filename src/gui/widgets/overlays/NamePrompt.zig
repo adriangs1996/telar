@@ -1,4 +1,5 @@
 //! A concrete single-field prompt selected during scene composition.
+const shared_model = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const Canvas = @import("../Canvas.zig");
@@ -7,7 +8,7 @@ const TextField = @import("../TextField.zig");
 const NamePrompt = @This();
 
 area: core.Rect,
-prompt: *const client.Prompt,
+prompt: *const shared_model.Prompt,
 title: []const u8,
 
 /// Example: `try prompt.draw(canvas);`

@@ -1,6 +1,5 @@
 //! Runtime-owned loopback ProxyTLS service.
 
-const ServiceType = @import("Service.zig");
 const std = @import("std");
 const GenericConnectionAdmissionPort = @import("../GenericConnectionAdmissionPort.zig").Type;
 const GenericRunner = @import("../GenericRunner.zig").Type;
@@ -19,7 +18,7 @@ pub const Worker = std.Io.Future(anyerror!void);
 
 pub const Service = @import("Service.zig");
 
-const connection_admission_port: GenericConnectionAdmissionPort(ServiceType, std.Io.net.Stream) = .{
+const connection_admission_port: GenericConnectionAdmissionPort(Service, std.Io.net.Stream) = .{
     .accept = acceptConnection,
     .acquire = acquireConnection,
     .start = startConnection,
@@ -28,21 +27,21 @@ const connection_admission_port: GenericConnectionAdmissionPort(ServiceType, std
     .cancel = cancelConnections,
 };
 
-pub const ConnectionAdmission = GenericRunner(ServiceType, std.Io.net.Stream, connection_admission_port);
+pub const ConnectionAdmission = GenericRunner(Service, std.Io.net.Stream, connection_admission_port);
 
-fn acceptConnection(service: *ServiceType) !std.Io.net.Stream {
+fn acceptConnection(service: *Service) !std.Io.net.Stream {
     return service.listener.accept(service.io);
 }
 
-fn acquireConnection(service: *ServiceType) bool {
+fn acquireConnection(service: *Service) bool {
     return service.connection_slots.acquire();
 }
 
-fn startConnection(service: *ServiceType, connections: *std.Io.Group, stream: std.Io.net.Stream) !void {
+fn startConnection(service: *Service, connections: *std.Io.Group, stream: std.Io.net.Stream) !void {
     try connections.concurrent(service.io, serveConnection, .{ service, stream });
 }
 
-fn serveConnection(service: *ServiceType, stream: std.Io.net.Stream) std.Io.Cancelable!void {
+fn serveConnection(service: *Service, stream: std.Io.net.Stream) std.Io.Cancelable!void {
     defer service.connection_slots.release();
     const configuration = service.configuration.view();
 
@@ -62,19 +61,19 @@ fn serveConnection(service: *ServiceType, stream: std.Io.net.Stream) std.Io.Canc
     return tunnel.run();
 }
 
-fn releaseConnection(service: *ServiceType) void {
+fn releaseConnection(service: *Service) void {
     service.connection_slots.release();
 }
 
-fn closeConnection(service: *ServiceType, stream: std.Io.net.Stream) void {
+fn closeConnection(service: *Service, stream: std.Io.net.Stream) void {
     stream.close(service.io);
 }
 
-fn cancelConnections(service: *ServiceType, connections: *std.Io.Group) void {
+fn cancelConnections(service: *Service, connections: *std.Io.Group) void {
     connections.cancel(service.io);
 }
 
 pub fn observationCredentialIsLive(context: *anyopaque, credential: *const CredentialType) bool {
-    const service: *ServiceType = @ptrCast(@alignCast(context));
+    const service: *Service = @ptrCast(@alignCast(context));
     return service.credentials.contains(service.io, credential);
 }

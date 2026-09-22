@@ -1,14 +1,14 @@
 //! Compiler for `config.runtime.session`.
 
+const data = @import("model");
 const lua_api = @import("lua-api");
 const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
-const DiagnosticType = @import("Diagnostic.zig");
 const value = @import("lua_value.zig");
 const config_model = @import("model.zig");
 const std = @import("std");
 const OptionalBoolean = @import("OptionalBoolean.zig");
 
-pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *DiagnosticType) !void {
+pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.session must be a table", .{});
@@ -51,7 +51,7 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnos
     runtime.session_path_len = @intCast(path.len);
 }
 
-fn optionalBoolean(state: *lua_api.c.lua_State, input: OptionalBoolean, diagnostic: *DiagnosticType) !bool {
+fn optionalBoolean(state: *lua_api.c.lua_State, input: OptionalBoolean, diagnostic: *data.Diagnostic) !bool {
     _ = lua_api.c.lua_getfield(state, input.table, input.field);
     defer value.pop(state, 1);
     if (lua_api.c.lua_type(state, -1) == lua_api.c.LUA_TNIL) {

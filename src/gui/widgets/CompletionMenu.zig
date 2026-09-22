@@ -1,10 +1,13 @@
+const client = @import("telar-client");
+const CompletionState = @import("interaction/CompletionState.zig");
+const TextFit = @import("TextFit.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Target = @import("interaction/Target.zig");
 
-thread: @import("telar-client").ThreadView,
+thread: client.ThreadView,
 anchor: Rect,
 pane_bounds: Rect,
 
@@ -31,7 +34,7 @@ pub fn draw(menu: @This(), canvas: *Canvas) !void {
     const partial = menu.thread.transcript != null and menu.thread.transcript.?.skills.truncated;
     const notice_height: f32 = if (partial) canvas.chrome.px(22) else 0;
     const available = @max(0, menu.anchor.y - menu.pane_bounds.y - padding);
-    const rows: u8 = @intFromFloat(@min(@as(f32, @floatFromInt(@max(1, @min(state.count, @import("interaction/CompletionState.zig").visible_rows)))), @floor(@max(0, available - padding * 2 - notice_height) / canvas.chrome.px(34))));
+    const rows: u8 = @intFromFloat(@min(@as(f32, @floatFromInt(@max(1, @min(state.count, CompletionState.visible_rows)))), @floor(@max(0, available - padding * 2 - notice_height) / canvas.chrome.px(34))));
     if (rows == 0) {
         return;
     }
@@ -100,7 +103,7 @@ pub fn draw(menu: @This(), canvas: *Canvas) !void {
 }
 
 fn fitted(canvas: *Canvas, bounds: Rect, label: @import("Label.zig")) !void {
-    var buffer: [@import("TextFit.zig").max_bytes]u8 = undefined;
+    var buffer: [TextFit.max_bytes]u8 = undefined;
     var value = label;
     value.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = bounds.width }).fit(label, &buffer);
     _ = try canvas.textAt(bounds, value);

@@ -1,11 +1,9 @@
-const EncoderType = @import("telar-core").Encoder;
+const core = @import("telar-core");
 const Counters = @import("Counters.zig");
 const checkpoint = @import("checkpoint.zig");
 const WorkspaceRecord = @import("WorkspaceRecord.zig");
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
 const TabRecord = @import("TabRecord.zig");
 const PaneRecord = @import("PaneRecord.zig");
-const max_agent_session_reference_bytes_module = @import("telar-core").max_agent_session_reference_bytes;
 const LayoutRecord = @import("LayoutRecord.zig");
 /// Appends records to a fixed buffer. `finish` closes the stream.
 ///
@@ -16,10 +14,10 @@ const LayoutRecord = @import("LayoutRecord.zig");
 /// ```
 const Encoder = @This();
 
-inner: EncoderType,
+inner: core.Encoder,
 
 pub fn init(buffer: []u8, counters: Counters) !Encoder {
-    var encoder: Encoder = .{ .inner = EncoderType.init(buffer) };
+    var encoder: Encoder = .{ .inner = core.Encoder.init(buffer) };
     try encoder.inner.writeBytes(checkpoint.magic);
     try encoder.inner.writeInt(u16, checkpoint.version);
     try encoder.inner.writeInt(u64, counters.next_workspace_id);
@@ -32,7 +30,7 @@ pub fn init(buffer: []u8, counters: Counters) !Encoder {
 pub fn workspace(encoder: *Encoder, record: WorkspaceRecord) !void {
     try checkpoint.validatePath(record.path);
     try encoder.inner.writeByte(@intFromEnum(checkpoint.Kind.workspace));
-    if (record.first_tab_label.len > max_tab_label_bytes_module or record.name.len > max_tab_label_bytes_module) {
+    if (record.first_tab_label.len > core.max_tab_label_bytes or record.name.len > core.max_tab_label_bytes) {
         return error.InvalidCheckpoint;
     }
     try encoder.inner.writeInt(u64, record.id);
@@ -63,7 +61,7 @@ pub fn pane(encoder: *Encoder, record: PaneRecord) !void {
     try encoder.inner.writeInt(u16, record.rows);
     try encoder.inner.writeInt(u16, record.argument_count);
     try encoder.inner.writeSized16(record.arguments);
-    if (record.agent_session.len > max_agent_session_reference_bytes_module) {
+    if (record.agent_session.len > core.max_agent_session_reference_bytes) {
         return error.InvalidCheckpoint;
     }
     try encoder.inner.writeByte(record.agent_provider);

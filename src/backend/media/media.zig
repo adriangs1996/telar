@@ -6,14 +6,13 @@
 //! payloads, keeps cursor-relative placements and scroll pins equivalent to
 //! the interactive terminal without sharing mutable emulator state.
 
+const core = @import("telar-core");
 const png_test = @import("png_test.zig");
 const vt = @import("ghostty-vt");
-const TerminalSizeType = @import("telar-core").TerminalSize;
 const std = @import("std");
 const FileQueryControl = @import("FileQueryControl.zig");
 const FilterInput = @import("FilterInput.zig");
 const FilterStats = @import("FilterStats.zig");
-const max_placements_per_pane_module = @import("telar-core").max_placements_per_pane;
 const SelectedSharedFrame = @import("SelectedSharedFrame.zig");
 const SharedFrame = @import("SharedFrame.zig");
 const SharedFrameKey = @import("SharedFrameKey.zig");
@@ -21,16 +20,12 @@ const FrameResource = @import("FrameResource.zig");
 const builtin = @import("builtin");
 const SharedFrameControl = @import("SharedFrameControl.zig");
 const PlacementSource = @import("PlacementSource.zig");
-const PlacementType = @import("telar-core").Placement;
 const TestOutput = @import("TestOutput.zig");
-const FormatType = @import("telar-core").Format;
 const Pipeline = @import("Pipeline.zig");
 const SharedFrameView = @import("SharedFrameView.zig");
 const FileQueryView = @import("FileQueryView.zig");
 const Stats = @import("Stats.zig");
 const Batch = @import("Batch.zig");
-const max_image_bytes_per_screen_module = @import("telar-core").max_image_bytes_per_screen;
-const max_encoded_chunk_bytes_module = @import("telar-core").max_encoded_chunk_bytes;
 
 test {
     _ = png_test;
@@ -57,7 +52,7 @@ const atomic_shared_suffix = "\x1b\\\x1b[?2026l";
 
 pub const Event = union(enum) {
     output: struct { offset: u32, len: u32 },
-    resize: TerminalSizeType,
+    resize: core.TerminalSize,
 };
 
 /// Removes `a=q,t=f` queries the sink answered from `bytes`, so the emulator
@@ -173,7 +168,7 @@ pub fn filterAtomicSharedFrames(input: FilterInput, sink: anytype, availability:
     var filtered: FilterStats = .{};
 
     while (findSharedFrame(bytes, search_from)) |first| {
-        var selected: [max_placements_per_pane_module]SelectedSharedFrame = undefined;
+        var selected: [core.max_placements_per_pane]SelectedSharedFrame = undefined;
         var selected_count: usize = 0;
         var group_end = first.end;
         var overflow = !recordSharedFrame(&selected, &selected_count, first);
@@ -492,7 +487,7 @@ pub fn placementVirtualId(key: vt.kitty.graphics.ImageStorage.PlacementKey) u64 
 /// ```zig
 /// const placement = placementValue(terminal, source) orelse return;
 /// ```
-pub fn placementValue(terminal: *vt.Terminal, source_value: PlacementSource) ?PlacementType {
+pub fn placementValue(terminal: *vt.Terminal, source_value: PlacementSource) ?core.Placement {
     const pin = switch (source_value.placement.location) {
         .pin => |value| value,
         .virtual => return null,
@@ -528,7 +523,7 @@ pub fn placementValue(terminal: *vt.Terminal, source_value: PlacementSource) ?Pl
     };
 }
 
-pub fn vtResize(size: TerminalSizeType) vt.Terminal.Resize {
+pub fn vtResize(size: core.TerminalSize) vt.Terminal.Resize {
     return .{
         .cols = size.cols,
         .rows = size.rows,
@@ -591,7 +586,7 @@ test "a sink that loads shared frames itself receives the parsed frame instead o
     try std.testing.expectEqualStrings("L3B4LTE=", view.encoded_name);
     try std.testing.expectEqual(@as(u32, 7), view.image_id);
     try std.testing.expectEqual(@as(u32, 3), view.placement_id);
-    try std.testing.expectEqual(FormatType.rgba, view.format);
+    try std.testing.expectEqual(core.Format.rgba, view.format);
     try std.testing.expectEqual(@as(u32, 2), view.width);
     try std.testing.expectEqual(@as(usize, 8), view.byte_len);
 }
@@ -665,7 +660,7 @@ test "unavailable shared frames cannot delete the current image" {
 }
 
 test "media terminal preserves cursor-relative KGP placement" {
-    const size: TerminalSizeType = .{
+    const size: core.TerminalSize = .{
         .cols = 40,
         .rows = 8,
         .cell_width_px = 10,
@@ -761,7 +756,7 @@ test "media terminal loads KGP pixels from POSIX shared memory" {
     @memcpy(map[0..pixels.len], &pixels);
     std.posix.munmap(map);
 
-    const size: TerminalSizeType = .{
+    const size: core.TerminalSize = .{
         .cols = 40,
         .rows = 8,
         .cell_width_px = 10,
@@ -802,7 +797,7 @@ test "media terminal loads KGP pixels from POSIX shared memory" {
 }
 
 test "overflow replaces obsolete media and requests a reset" {
-    const size: TerminalSizeType = .{
+    const size: core.TerminalSize = .{
         .cols = 40,
         .rows = 8,
         .cell_width_px = 0,
@@ -878,13 +873,13 @@ test "graphics terminal answers KGP queries and rejects unsupported payloads" {
     var terminal = try vt.Terminal.init(std.testing.io, std.testing.allocator, .{
         .cols = 10,
         .rows = 5,
-        .kitty_image_storage_limit = max_image_bytes_per_screen_module,
+        .kitty_image_storage_limit = core.max_image_bytes_per_screen,
         .kitty_image_loading_limits = .direct,
     });
     defer terminal.deinit(std.testing.allocator);
 
     var handler = terminal.vtHandler();
-    handler.apc_handler.max_bytes.put(.kitty, max_encoded_chunk_bytes_module);
+    handler.apc_handler.max_bytes.put(.kitty, core.max_encoded_chunk_bytes);
     handler.effects.write_pty = Capture.writePty;
     var stream = vt.TerminalStream.init(.{
         .allocator = std.testing.allocator,

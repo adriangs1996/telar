@@ -1,4 +1,5 @@
 //! Native runtime review controls, including cooperative feedback without PTY input.
+const core = @import("telar-core");
 const std = @import("std");
 const Options = @import("arguments/ReviewOptions.zig");
 const Session = @import("Session.zig");
@@ -6,11 +7,6 @@ const Snapshot = @import("Snapshot.zig");
 const PaneRef = @import("PaneRef.zig");
 const Context = @import("ExecutionContext.zig");
 const control = @import("control.zig");
-const ReviewView = @import("telar-core").ChangeReviewSnapshotView;
-const ReviewCommand = @import("telar-core").ChangeReviewCommand;
-const paneId = @import("telar-core").pane;
-const rawId = @import("telar-core").raw;
-const max_identity_bytes = @import("telar-core").change_review.max_identity_bytes;
 
 const max_listed_editions = 32;
 
@@ -45,9 +41,9 @@ fn execute(session: *Session, options: Options, context: Context) !void {
         return;
     }
 
-    var command: ReviewCommand = .{
+    var command: core.ChangeReviewCommand = .{
         .request_id = .none,
-        .pane_id = try paneId(pane.pane_id),
+        .pane_id = try core.pane(pane.pane_id),
         .pane_generation = pane.pane_generation,
         .edition_id = options.edition,
         .expected_revision = options.expected_revision orelse 0,
@@ -108,7 +104,7 @@ fn list(session: *Session, options: Options, context: Context) !void {
     }
 
     var edition: u64 = options.edition;
-    var owner: [max_identity_bytes]u8 = undefined;
+    var owner: [core.change_review.max_identity_bytes]u8 = undefined;
     var owner_len: usize = options.session.len;
     @memcpy(owner[0..owner_len], options.session);
     var count: usize = 0;
@@ -148,7 +144,7 @@ fn list(session: *Session, options: Options, context: Context) !void {
     }
 }
 
-fn writeResult(writer: *std.Io.Writer, view: *const ReviewView, json: bool) !void {
+fn writeResult(writer: *std.Io.Writer, view: *const core.ChangeReviewSnapshotView, json: bool) !void {
     if (json) {
         try writeJson(writer, view);
         return;
@@ -161,7 +157,7 @@ fn writeResult(writer: *std.Io.Writer, view: *const ReviewView, json: bool) !voi
     }
 }
 
-fn writeFeedback(writer: *std.Io.Writer, view: *const ReviewView, json: bool) !void {
+fn writeFeedback(writer: *std.Io.Writer, view: *const core.ChangeReviewSnapshotView, json: bool) !void {
     if (json) {
         try writer.print("{{\"feedback_id\":{d},\"feedback\":", .{view.feedback_id});
         try control.writeJsonString(writer, view.feedback);
@@ -171,8 +167,8 @@ fn writeFeedback(writer: *std.Io.Writer, view: *const ReviewView, json: bool) !v
     }
 }
 
-fn writeJson(writer: *std.Io.Writer, view: *const ReviewView) !void {
-    try writer.print("{{\"pane_id\":{d},\"pane_generation\":{d},\"edition_id\":{d},\"latest_edition_id\":{d},\"revision\":{d},\"source\":\"{s}\",\"delivery\":\"{s}\",\"reviewed\":{},\"status\":", .{ rawId(view.pane_id), view.pane_generation, view.edition_id, view.latest_edition_id, view.revision, @tagName(view.source), @tagName(view.delivery), view.reviewed });
+fn writeJson(writer: *std.Io.Writer, view: *const core.ChangeReviewSnapshotView) !void {
+    try writer.print("{{\"pane_id\":{d},\"pane_generation\":{d},\"edition_id\":{d},\"latest_edition_id\":{d},\"revision\":{d},\"source\":\"{s}\",\"delivery\":\"{s}\",\"reviewed\":{},\"status\":", .{ core.raw(view.pane_id), view.pane_generation, view.edition_id, view.latest_edition_id, view.revision, @tagName(view.source), @tagName(view.delivery), view.reviewed });
     try control.writeJsonString(writer, view.status);
     try writer.writeAll(",\"session\":");
     try control.writeJsonString(writer, view.session);
@@ -197,7 +193,7 @@ fn writeJson(writer: *std.Io.Writer, view: *const ReviewView) !void {
 test "review CLI JSON preserves line anchors and marks observed snapshots explicitly" {
     var writer: std.Io.Writer.Allocating = .init(std.testing.allocator);
     defer writer.deinit();
-    var view: ReviewView = .{ .request_id = @enumFromInt(1), .pane_id = try paneId(1), .pane_generation = 3, .edition_id = 8, .revision = 9, .source = .observed_snapshot, .patch = "@@ -1 +1 @@\n-a\n+b\n", .comment_count = 1 };
+    var view: core.ChangeReviewSnapshotView = .{ .request_id = @enumFromInt(1), .pane_id = try core.pane(1), .pane_generation = 3, .edition_id = 8, .revision = 9, .source = .observed_snapshot, .patch = "@@ -1 +1 @@\n-a\n+b\n", .comment_count = 1 };
     view.comment_storage[0] = .{ .id = 2, .path = "file.go", .first_line = 3, .last_line = 5, .body = "café\nnext" };
     try writeJson(&writer.writer, &view);
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, writer.written(), .{});

@@ -1,16 +1,17 @@
 //! Terminal gesture capture around the shared semantic tab move.
+const TerminalClient = @import("../../TerminalClient.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
-const host = @import("../../TerminalClient.zig").of;
 
 /// Called by chrome after existing pane-selection and modal owners.
 /// Example: `const command = tab_drag.press(app, mouse) orelse view.handleMouse(mouse);`
-pub fn press(app: *client.AttachedClient, mouse: client.Mouse) ?client.ViewInteractionCommand {
+pub fn press(app: *client.AttachedClient, mouse: data.Mouse) ?client.ViewInteractionCommand {
     if (mouse.kind != .press) {
         return null;
     }
 
-    const view = &host(app).view;
+    const view = &TerminalClient.of(app).view;
     const tabs = &view.tab_drag;
     const tab_id = tabs.hits.at(mouse.x, mouse.y) orelse return null;
     const delivered = app.presentation.deliveredGeometry() orelse return .{ .consumed = true };
@@ -40,8 +41,8 @@ pub fn press(app: *client.AttachedClient, mouse: client.Mouse) ?client.ViewInter
 
 /// Retained events bypass other owners, including prompts opened mid-drag.
 /// Example: `if (try tab_drag.retained(app, mouse)) return;`
-pub fn retained(app: *client.AttachedClient, event: client.Mouse) !bool {
-    const view = &host(app).view;
+pub fn retained(app: *client.AttachedClient, event: data.Mouse) !bool {
+    const view = &TerminalClient.of(app).view;
     const tabs = &view.tab_drag;
     if (!tabs.gesture.captured or (event.kind != .drag and event.kind != .release) or (event.button & 3 != 0 and !(event.kind == .release and event.button & 3 == 3))) {
         return false;
@@ -74,7 +75,7 @@ pub fn retained(app: *client.AttachedClient, event: client.Mouse) !bool {
 
 /// Example: `if (tab_drag.cancel(app)) return;`
 pub fn cancel(app: *client.AttachedClient) bool {
-    const view = &host(app).view;
+    const view = &TerminalClient.of(app).view;
     if (!view.tab_drag.gesture.captured) {
         return false;
     }

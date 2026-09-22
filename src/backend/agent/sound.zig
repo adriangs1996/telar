@@ -1,11 +1,10 @@
 //! Audible policy for committed agent status transitions.
 
-const AgentStatusType = @import("telar-core").AgentStatus;
-const AgentSoundType = @import("telar-core").AgentSound;
+const core = @import("telar-core");
 
 /// Maps a committed transition to optional host sound.
 /// Example: `const sound = soundForTransition(.working, .ready);`.
-pub fn soundForTransition(previous: ?AgentStatusType, current: ?AgentStatusType) ?AgentSoundType {
+pub fn soundForTransition(previous: ?core.AgentStatus, current: ?core.AgentStatus) ?core.AgentSound {
     if (previous != .working) {
         return null;
     }

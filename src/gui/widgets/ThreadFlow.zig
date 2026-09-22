@@ -1,14 +1,16 @@
 //! Frame-local geometry for a bounded conversation. Row identity never is position.
+const ThreadOrder = @import("ThreadOrder.zig");
+const ThreadWork = @import("ThreadWork.zig");
+const client = @import("telar-client");
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const View = @import("ThreadItemView.zig");
-const Window = @import("telar-client").AgentHistoryWindow;
 const Flow = @This();
 
 bounds: Rect,
-thread: @import("telar-client").ThreadView,
-rows: [2 * Window.capacity * core.agent_thread.max_items]View = undefined,
+thread: client.ThreadView,
+rows: [2 * client.AgentHistoryWindow.capacity * core.agent_thread.max_items]View = undefined,
 len: usize = 0,
 height: f32 = 0,
 scroll_limit: f64 = 0,
@@ -31,7 +33,7 @@ pub fn resolve(flow: *Flow, canvas: *Canvas) !void {
 
     for (0..page_count) |page_index| {
         const snapshot = if (flow.thread.history) |window| &window.pages[page_index].snapshot else live;
-        const order = @import("ThreadOrder.zig").resolve(snapshot.items());
+        const order = ThreadOrder.resolve(snapshot.items());
 
         for (order.indices[0..order.len]) |index| {
             const item = &snapshot.items()[index];
@@ -59,7 +61,7 @@ pub fn resolve(flow: *Flow, canvas: *Canvas) !void {
             view.bounds.x = flow.bounds.x;
             view.bounds.width = flow.bounds.width;
         }
-        view.bounds.height = if (view.work_count != 0) @import("ThreadWork.zig").measure(canvas) else if (message(view.item)) try (@import("ThreadMessage.zig"){ .view = view.* }).measure(canvas) else if (notice(view.item)) try noticeText(view.*).measure(canvas) + canvas.chrome.px(20) else try (@import("ThreadActivity.zig"){ .view = view.* }).measure(canvas);
+        view.bounds.height = if (view.work_count != 0) ThreadWork.measure(canvas) else if (message(view.item)) try (@import("ThreadMessage.zig"){ .view = view.* }).measure(canvas) else if (notice(view.item)) try noticeText(view.*).measure(canvas) + canvas.chrome.px(20) else try (@import("ThreadActivity.zig"){ .view = view.* }).measure(canvas);
         flow.height += view.bounds.height;
         if (canvas.widgets) |state| {
             if (view.work_count == 0) {
@@ -244,24 +246,24 @@ fn itemKey(view: View) u64 {
         return view.work_key;
     }
 
-    return @import("telar-client").AgentHistoryWindow.itemKey(view.thread.transcript.?, view.item);
+    return client.AgentHistoryWindow.itemKey(view.thread.transcript.?, view.item);
 }
 
-fn uniqueItems(window: *const Window) [Window.capacity]u64 {
+fn uniqueItems(window: *const client.AgentHistoryWindow) [client.AgentHistoryWindow.capacity]u64 {
     const page_size = core.agent_thread.max_items;
-    var masks: [Window.capacity]u64 = @splat(0);
-    var slots: [2 * Window.capacity * page_size]u16 = @splat(0);
+    var masks: [client.AgentHistoryWindow.capacity]u64 = @splat(0);
+    var slots: [2 * client.AgentHistoryWindow.capacity * page_size]u16 = @splat(0);
     var page_index: usize = window.count;
     while (page_index > 0) {
         page_index -= 1;
         const snapshot = &window.pages[page_index].snapshot;
         for (snapshot.items(), 0..) |*item, index| {
             if (item.source_len != 0) {
-                var slot: usize = @intCast(Window.itemKey(snapshot, item) % slots.len);
+                var slot: usize = @intCast(client.AgentHistoryWindow.itemKey(snapshot, item) % slots.len);
                 const repeated = while (slots[slot] != 0) : (slot = (slot + 1) % slots.len) {
                     const previous = slots[slot] - 1;
                     const newer = &window.pages[previous / page_size].snapshot;
-                    if (Window.sameFragment(.{ .snapshot = snapshot, .item = item }, .{ .snapshot = newer, .item = &newer.items()[previous % page_size] })) {
+                    if (client.AgentHistoryWindow.sameFragment(.{ .snapshot = snapshot, .item = item }, .{ .snapshot = newer, .item = &newer.items()[previous % page_size] })) {
                         break true;
                     }
                 } else false;

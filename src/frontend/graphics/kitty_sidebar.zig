@@ -1,6 +1,6 @@
 //! Sidebar media assets and rasterization, independent of the pane image store.
 
-const AgentProviderType = @import("telar-core").AgentProvider;
+const core = @import("telar-core");
 const SidebarProviderPlacement = @import("SidebarProviderPlacement.zig");
 const std = @import("std");
 const SizeType = @import("Size.zig");
@@ -8,7 +8,6 @@ const ProviderAtlasInput = @import("ProviderAtlasInput.zig");
 const BitmapType = @import("Bitmap.zig");
 const KittySidebarRenderer = @import("KittySidebarRenderer.zig");
 const bitmap = @import("bitmap_support.zig");
-const RectType = @import("telar-core").Rect;
 const SidebarFocus = @import("SidebarFocus.zig");
 
 /// Column of the shipped provider-mark atlas. Only built-in agents have
@@ -21,7 +20,7 @@ pub const SidebarProvider = enum {
     /// ```zig
     /// const column = SidebarProvider.fromAgent(mark.provider) orelse continue;
     /// ```
-    pub fn fromAgent(provider: AgentProviderType) ?SidebarProvider {
+    pub fn fromAgent(provider: core.AgentProvider) ?SidebarProvider {
         return switch (provider) {
             .claude => .claude,
             .codex => .codex,
@@ -160,7 +159,7 @@ test "sidebar theme changes recolor OpenAI without reallocating or changing othe
 test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
     var renderer = KittySidebarRenderer.init(std.testing.allocator);
     defer renderer.deinit();
-    const area: RectType = .{ .x = 1, .y = 1, .w = 8, .h = 8 };
+    const area: core.Rect = .{ .x = 1, .y = 1, .w = 8, .h = 8 };
     const providers = [_]SidebarProviderPlacement{
         .{
             .area = .{ .x = 3, .y = 5, .w = 2, .h = 2 },
@@ -209,7 +208,7 @@ test "sidebar provider marks preserve aspect ratio and reuse their atlas" {
 test "sidebar focused card is rounded bounded and moves without retransmission" {
     var renderer = KittySidebarRenderer.init(std.testing.allocator);
     defer renderer.deinit();
-    const area: RectType = .{ .x = 1, .y = 1, .w = 60, .h = 20 };
+    const area: core.Rect = .{ .x = 1, .y = 1, .w = 60, .h = 20 };
     const color = [3]u8{ 35, 35, 35 };
     const first: SidebarFocus = .{
         .area = .{ .x = 2, .y = 4, .w = 57, .h = 3 },

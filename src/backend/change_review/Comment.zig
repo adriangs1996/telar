@@ -1,20 +1,19 @@
 const std = @import("std");
 const core = @import("telar-core");
-const limits = core.change_review;
 const Comment = @This();
 
 id: u64 = 0,
-path: [limits.max_path_bytes]u8 = undefined,
+path: [core.change_review.max_path_bytes]u8 = undefined,
 path_len: u16 = 0,
 first_line: u32 = 0,
 last_line: u32 = 0,
-side: limits.Side = .after,
-body: [limits.max_comment_bytes]u8 = undefined,
+side: core.change_review.Side = .after,
+body: [core.change_review.max_comment_bytes]u8 = undefined,
 body_len: u16 = 0,
 draft: bool = false,
 
 pub fn init(id: u64, command: core.ChangeReviewCommand) !Comment {
-    if (command.path.len > limits.max_path_bytes or command.body.len > limits.max_comment_bytes or !std.unicode.utf8ValidateSlice(command.body) or !std.unicode.utf8ValidateSlice(command.path) or std.mem.indexOfScalar(u8, command.body, 0) != null or std.mem.indexOfScalar(u8, command.path, 0) != null) {
+    if (command.path.len > core.change_review.max_path_bytes or command.body.len > core.change_review.max_comment_bytes or !std.unicode.utf8ValidateSlice(command.body) or !std.unicode.utf8ValidateSlice(command.path) or std.mem.indexOfScalar(u8, command.body, 0) != null or std.mem.indexOfScalar(u8, command.path, 0) != null) {
         return error.InvalidReviewComment;
     }
     var result: Comment = .{ .id = id, .path_len = @intCast(command.path.len), .body_len = @intCast(command.body.len), .first_line = command.first_line, .last_line = command.last_line, .side = command.side, .draft = command.draft };

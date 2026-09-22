@@ -1,11 +1,11 @@
+const core = @import("telar-core");
 const plugin = @import("plugin.zig");
-const CapabilityType = @import("telar-core").Capability;
 const std = @import("std");
 const PluginOptions = @This();
 
 command: plugin.PluginCommand,
 path: [*:0]const u8,
-capabilities: [@typeInfo(CapabilityType).@"enum".fields.len]CapabilityType = undefined,
+capabilities: [@typeInfo(core.Capability).@"enum".fields.len]core.Capability = undefined,
 capability_count: u8 = 0,
 
 /// Example: `const options = try PluginOptions.parse(args);`.
@@ -37,7 +37,7 @@ pub fn parse(args: []const [*:0]const u8) !PluginOptions {
         }
 
         plugin_options.capabilities[plugin_options.capability_count] =
-            try CapabilityType.parse(std.mem.span(args[plugin_arg + 1]));
+            try core.Capability.parse(std.mem.span(args[plugin_arg + 1]));
         plugin_options.capability_count += 1;
         plugin_arg += 2;
     }

@@ -7,16 +7,6 @@
 
 const framing = @import("framing.zig");
 const stream_state = @import("streams.zig");
-const StatsType = @import("Stats.zig");
-const LifecycleType = @import("Lifecycle.zig");
-const RequestBodyType = @import("RequestBody.zig");
-const RequestFinishedType = @import("RequestFinished.zig");
-const ResponseBodyType = @import("ResponseBody.zig");
-const HeaderFieldType = @import("HeaderField.zig");
-const HeaderBlockType = @import("HeaderBlock.zig");
-const PeerSettingsType = @import("PeerSettings.zig");
-const RelayRoute = @import("RelayRoute.zig");
-const TransformedRouteType = @import("TransformedRoute.zig");
 const GenericTranscodePort = @import("GenericTranscodePort.zig").Type;
 const Observer = @import("Observer.zig");
 const std = @import("std");
@@ -71,12 +61,12 @@ pub const HeaderBlock = @import("HeaderBlock.zig");
 
 /// One borrowed observation produced while relaying HTTP/2 frames.
 pub const Event = union(enum) {
-    lifecycle: LifecycleType,
-    request_headers: HeaderBlockType,
-    request_body: RequestBodyType,
-    request_finished: RequestFinishedType,
-    response_headers: HeaderBlockType,
-    response_body: ResponseBodyType,
+    lifecycle: Lifecycle,
+    request_headers: HeaderBlock,
+    request_body: RequestBody,
+    request_finished: RequestFinished,
+    response_headers: HeaderBlock,
+    response_body: ResponseBody,
 };
 
 pub const PeerSettings = @import("PeerSettings.zig");
@@ -96,7 +86,7 @@ fn transcodePort(session: anytype, sink: anytype) GenericTranscodePort(@TypeOf(s
 /// ```zig
 /// const stats = relay(session, route, &sink);
 /// ```
-pub fn relay(session: anytype, route: RelayRoute, sink: anytype) StatsType {
+pub fn relay(session: anytype, route: Route, sink: anytype) Stats {
     var observer = Observer.init(route.dialect, route.direction);
     defer observer.deinit();
     var preface_offset: usize = 0;
@@ -145,7 +135,7 @@ pub fn relay(session: anytype, route: RelayRoute, sink: anytype) StatsType {
 /// ```zig
 /// const stats = relayTransformed(session, route, &sink);
 /// ```
-pub fn relayTransformed(session: anytype, transformed_route: TransformedRouteType, sink: anytype) StatsType {
+pub fn relayTransformed(session: anytype, transformed_route: TransformedRoute, sink: anytype) Stats {
     const route = transformed_route.route;
     const configuration: TranscodeConfiguration = .{
         .direction = route.direction,
@@ -455,7 +445,7 @@ pub fn writeFrameHeader(buffer: *[framing.header_bytes]u8, header: FrameHeader) 
 
 pub fn emitHeaders(port: anytype, emission: HeaderEmission) void {
     for (emission.headers.fields[0..emission.headers.len]) |field| {
-        const fields = [_]HeaderFieldType{.{
+        const fields = [_]HeaderField{.{
             .name = emission.headers.name(field),
             .value = emission.headers.value(field),
         }};
@@ -466,7 +456,7 @@ pub fn emitHeaders(port: anytype, emission: HeaderEmission) void {
     }
 }
 
-fn lifecycle(event: Event) ?LifecycleType {
+fn lifecycle(event: Event) ?Lifecycle {
     return switch (event) {
         .lifecycle => |value| value,
         .request_headers => null,
@@ -939,8 +929,8 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
         }
     };
     var collector: Collector = .{ .session = &session };
-    var source_settings: PeerSettingsType = .{};
-    var target_settings: PeerSettingsType = .{};
+    var source_settings: PeerSettings = .{};
+    var target_settings: PeerSettings = .{};
     target_settings.header_table_size.store(8192, .seq_cst);
     var transcoder = initTestTranscoder(.{ .dialect = .openai_responses, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
@@ -1036,8 +1026,8 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettingsType = .{};
-    var target_settings: PeerSettingsType = .{};
+    var source_settings: PeerSettings = .{};
+    var target_settings: PeerSettings = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
@@ -1162,8 +1152,8 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettingsType = .{};
-    var target_settings: PeerSettingsType = .{};
+    var source_settings: PeerSettings = .{};
+    var target_settings: PeerSettings = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     var input_offset: usize = 0;
@@ -1231,8 +1221,8 @@ test "HTTP2 SETTINGS update the opposite encoder bounds without changing wire by
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var child_settings: PeerSettingsType = .{};
-    var origin_settings: PeerSettingsType = .{};
+    var child_settings: PeerSettings = .{};
+    var origin_settings: PeerSettings = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &child_settings, .target_settings = &origin_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
@@ -1286,8 +1276,8 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     var collector: BodyCollector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettingsType = .{};
-    var target_settings: PeerSettingsType = .{};
+    var source_settings: PeerSettings = .{};
+    var target_settings: PeerSettings = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
@@ -1329,8 +1319,8 @@ test "HTTP2 transform mode exposes unpadded response DATA without changing wire 
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
         var session: FakeWriteSession = .{};
-        var source_settings: PeerSettingsType = .{};
-        var target_settings: PeerSettingsType = .{};
+        var source_settings: PeerSettings = .{};
+        var target_settings: PeerSettings = .{};
         var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
         defer transcoder.deinit();
 
@@ -1368,8 +1358,8 @@ test "HTTP2 transform mode exposes request DATA without changing wire bytes" {
     for (0..wire.len + 1) |split| {
         var collector: BodyCollector = .{};
         var session: FakeWriteSession = .{};
-        var source_settings: PeerSettingsType = .{};
-        var target_settings: PeerSettingsType = .{};
+        var source_settings: PeerSettings = .{};
+        var target_settings: PeerSettings = .{};
         var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
         defer transcoder.deinit();
 
@@ -1414,8 +1404,8 @@ test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
 
     var collector: BodyCollector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettingsType = .{};
-    var target_settings: PeerSettingsType = .{};
+    var source_settings: PeerSettings = .{};
+    var target_settings: PeerSettings = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
@@ -1445,8 +1435,8 @@ test "HTTP2 transform mode relays DATA and control frames byte for byte" {
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettingsType = .{};
-    var target_settings: PeerSettingsType = .{};
+    var source_settings: PeerSettings = .{};
+    var target_settings: PeerSettings = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
 
@@ -1517,8 +1507,8 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettingsType = .{};
-    var target_settings: PeerSettingsType = .{};
+    var source_settings: PeerSettings = .{};
+    var target_settings: PeerSettings = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .request, .to = .origin, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     try std.testing.expect(transcoder.process(
@@ -1587,8 +1577,8 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
     };
     var collector: Collector = .{};
     var session: FakeWriteSession = .{};
-    var source_settings: PeerSettingsType = .{};
-    var target_settings: PeerSettingsType = .{};
+    var source_settings: PeerSettings = .{};
+    var target_settings: PeerSettings = .{};
     var transcoder = initTestTranscoder(.{ .dialect = .anthropic_messages, .direction = .response, .to = .child, .source_settings = &source_settings, .target_settings = &target_settings, .pipeline = &pipeline });
     defer transcoder.deinit();
     try std.testing.expect(transcoder.process(

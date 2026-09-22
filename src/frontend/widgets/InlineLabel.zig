@@ -1,9 +1,8 @@
 //! One clipped label written at a column of a single-row area.
-const RectType = @import("telar-core").Rect;
-const StyleType = @import("telar-core").Style;
+const core = @import("telar-core");
 const InlineLabel = @This();
 
-area: RectType,
+area: core.Rect,
 x: u16,
 text: []const u8,
-style: StyleType,
+style: core.Style,

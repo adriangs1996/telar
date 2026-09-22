@@ -1,19 +1,17 @@
+const icons = @import("../../layout/icons.zig");
+const core = @import("telar-core");
+const model_data = @import("model");
 const ModelType = @import("../Model.zig");
 const std = @import("std");
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const TabLocationType = @import("telar-core").TabLocation;
-const types = @import("../types.zig");
 const VersionType = @import("../Version.zig");
-const PaneIdType = @import("telar-core").PaneId;
-const TerminalSizeType = @import("telar-core").TerminalSize;
 const WorkspaceSnapshotInput = @import("../../workspace/WorkspaceSnapshotInput.zig");
 
 test "fresh workspace snapshots name inactive automatic tabs before pane attachment" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     var name = "codex".*;
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     const snapshot: WorkspaceSnapshotInput = .{
@@ -28,7 +26,7 @@ test "fresh workspace snapshots name inactive automatic tabs before pane attachm
     _ = try model.reconcileWorkspace(snapshot);
     const inactive = model.workspace.find(second.tab_id).?;
     try std.testing.expectEqualStrings("codex", inactive.labelSlice());
-    try std.testing.expectEqual(@import("../../layout/icons.zig").Icon.provider_codex, inactive.labelIcon().?);
+    try std.testing.expectEqual(icons.Icon.provider_codex, inactive.labelIcon().?);
     try std.testing.expectEqualStrings("", inactive.canonicalLabel());
     try std.testing.expectEqual(@as(usize, 0), inactive.model.pane_count);
     try std.testing.expect(!inactive.snapshot_loaded);
@@ -61,11 +59,11 @@ test "workspace return names inactive tabs using each client's saved pane focus"
     defer std.testing.allocator.destroy(fresh);
     fresh.* = .init(std.testing.allocator, true);
     defer fresh.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
-    const size: TerminalSizeType = .{ .cols = 40, .rows = 10 };
-    const area = @import("telar-core").Rect{ .w = 40, .h = 10 };
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const size: core.TerminalSize = .{ .cols = 40, .rows = 10 };
+    const area = core.Rect{ .w = 40, .h = 10 };
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = size });
     _ = try model.reconcileTab(.{ .location = first, .panes = &.{@enumFromInt(1)} }, area);
     const inactive = try model.workspace.addCreated(.{ .location = second, .position = 1, .label = "", .root_pane_id = @enumFromInt(2) }, size);
@@ -103,10 +101,10 @@ test "workspace return names inactive tabs using each client's saved pane focus"
 test "inactive automatic tabs publish foreground changes without changing canonical snapshots" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
-    const second: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
-    const pane: PaneIdType = @enumFromInt(1);
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
+    const second: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
+    const pane: core.PaneId = @enumFromInt(1);
     try model.workspace.bootstrap(.{ .pane_id = pane, .location = first, .size = .{ .cols = 20, .rows = 5 } });
     _ = try model.workspace.addCreated(.{
         .location = second,
@@ -144,12 +142,12 @@ test "tab position commits version semantic changes only" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: TabLocationType = .{
+    const second: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -162,12 +160,12 @@ test "tab position commits version semantic changes only" {
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.workspace.select(first.tab_id));
 
-    try std.testing.expectEqual(types.Change.changed, try model.applyTabPosition(first, 1));
+    try std.testing.expectEqual(model_data.Change.changed, try model.applyTabPosition(first, 1));
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 0), model.version().active_tab);
     try std.testing.expectEqual(first, model.activeTabLocation().?);
 
-    try std.testing.expectEqual(types.Change.unchanged, try model.applyTabPosition(first, 1));
+    try std.testing.expectEqual(model_data.Change.unchanged, try model.applyTabPosition(first, 1));
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
 }
 
@@ -175,14 +173,14 @@ test "rejected tab positions do not advance the model" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const location: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const location: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
-    const other_workspace: TabLocationType = .{
+    const other_workspace: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = location.tab_id,
     };
@@ -199,12 +197,12 @@ test "tab rename advances only the collection revision for a semantic change" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: TabLocationType = .{
+    const second: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -217,7 +215,7 @@ test "tab rename advances only the collection revision for a semantic change" {
     }, .{ .cols = 20, .rows = 5 });
     try std.testing.expect(model.workspace.select(first.tab_id));
 
-    try std.testing.expectEqual(types.Change.changed, try model.renameTab(.{
+    try std.testing.expectEqual(model_data.Change.changed, try model.renameTab(.{
         .location = second,
         .label = "server",
     }));
@@ -226,7 +224,7 @@ test "tab rename advances only the collection revision for a semantic change" {
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 0), model.version().active_tab);
 
-    try std.testing.expectEqual(types.Change.unchanged, try model.renameTab(.{
+    try std.testing.expectEqual(model_data.Change.unchanged, try model.renameTab(.{
         .location = second,
         .label = "server",
     }));
@@ -237,8 +235,8 @@ test "rejected tab renames preserve labels and revisions" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const location: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const location: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
@@ -268,12 +266,12 @@ test "tab creation advances collection and active identity revisions" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: TabLocationType = .{
+    const second: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -291,7 +289,7 @@ test "tab creation advances collection and active identity revisions" {
 
     try std.testing.expectEqualDeep(first, creation.previous);
     try std.testing.expectEqualDeep(second, creation.created);
-    try std.testing.expectEqual(@as(PaneIdType, @enumFromInt(2)), creation.created_root_pane_id);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(2)), creation.created_root_pane_id);
     try std.testing.expectEqual(@as(u16, 0), creation.created_position);
     try std.testing.expectEqual(
         model.workspace.find(first.tab_id).?.model.layout.currentRevision(),
@@ -320,12 +318,12 @@ test "tab creation captures invalid copy-mode release" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: TabLocationType = .{
+    const second: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -353,13 +351,13 @@ test "rejected tab creations preserve state and revisions" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-    const size: TerminalSizeType = .{ .cols = 20, .rows = 5 };
+    const size: core.TerminalSize = .{ .cols = 20, .rows = 5 };
 
     try std.testing.expectError(error.UnexpectedWorkspace, model.createTab(.{
         .created = .{
@@ -410,12 +408,12 @@ test "active tab removal advances collection and active identity revisions" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: TabLocationType = .{
+    const second: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -438,7 +436,7 @@ test "active tab removal advances collection and active identity revisions" {
     try std.testing.expectEqualDeep(first, removal.removed);
     try std.testing.expect(removal.was_active);
     try std.testing.expectEqualDeep(second, removal.active.?);
-    try std.testing.expectEqualSlices(PaneIdType, &.{@enumFromInt(1)}, removal.panes.slice());
+    try std.testing.expectEqualSlices(core.PaneId, &.{@enumFromInt(1)}, removal.panes.slice());
     try std.testing.expectEqual(
         model.workspace.activeConst().?.model.layout.currentRevision(),
         removal.active_layout_revision,
@@ -459,12 +457,12 @@ test "inactive tab removal preserves the active identity revision" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: TabLocationType = .{
+    const second: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
@@ -502,7 +500,7 @@ test "workspace closure is validated before the last tab is removed" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
@@ -539,12 +537,12 @@ test "missing tab removal captures exact tab and workspace absence" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    const missing: TabLocationType = .{
+    const missing: core.TabLocation = .{
         .workspace = location.workspace,
         .tab_id = @enumFromInt(9),
     };
@@ -556,14 +554,14 @@ test "missing tab removal captures exact tab and workspace absence" {
 
     try std.testing.expect(missing_tab == .stale);
     try std.testing.expectEqualDeep(missing, missing_tab.stale.location);
-    try std.testing.expectEqual(types.TabRemovalAbsence.tab, missing_tab.stale.absence);
+    try std.testing.expectEqual(model_data.TabRemovalAbsence.tab, missing_tab.stale.absence);
     try std.testing.expectEqual(model.version().workspace, missing_tab.stale.workspace_revision);
     try std.testing.expectEqual(model.version().tabs, missing_tab.stale.tabs_revision);
     try std.testing.expectEqual(model.version().active_tab, missing_tab.stale.active_tab_revision);
     try std.testing.expectEqual(model.version().panes, missing_tab.stale.panes_revision);
     try std.testing.expectEqual(model.version().copy, missing_tab.stale.copy_revision);
 
-    const foreign: TabLocationType = .{
+    const foreign: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
         .tab_id = location.tab_id,
     };
@@ -574,7 +572,7 @@ test "missing tab removal captures exact tab and workspace absence" {
 
     try std.testing.expect(missing_workspace == .stale);
     try std.testing.expectEqualDeep(foreign, missing_workspace.stale.location);
-    try std.testing.expectEqual(types.TabRemovalAbsence.workspace, missing_workspace.stale.absence);
+    try std.testing.expectEqual(model_data.TabRemovalAbsence.workspace, missing_workspace.stale.absence);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
@@ -582,12 +580,12 @@ test "tab selection resolves identity position and wrapping offset" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    const workspace: WorkspaceLocationType = .{ .workspace = @enumFromInt(1) };
-    const first: TabLocationType = .{
+    const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
+    const first: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    const second: TabLocationType = .{
+    const second: core.TabLocation = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };

@@ -1,6 +1,6 @@
-const ChildFailureStage = @import("spawn.zig").ChildFailureStage;
+const spawn = @import("spawn.zig");
 
 pub const ChildFailure = extern struct {
-    stage: ChildFailureStage,
+    stage: spawn.ChildFailureStage,
     errno_code: c_int,
 };

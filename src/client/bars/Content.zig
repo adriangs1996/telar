@@ -1,7 +1,7 @@
+const core = @import("telar-core");
 const model = @import("model.zig");
 const Segment = @import("Segment.zig");
 const SegmentInput = @import("SegmentInput.zig");
-const measure_module = @import("telar-core").measure;
 const std = @import("std");
 const Content = @This();
 
@@ -55,9 +55,9 @@ pub fn width(content: *const Content) u16 {
     var result: u16 = 0;
     for (content.slice()) |segment| {
         if (segment.icon) |icon| {
-            result +|= @max(@as(u16, 1), measure_module(icon.unicodeGlyph()));
+            result +|= @max(@as(u16, 1), core.measure(icon.unicodeGlyph()));
         }
-        result +|= measure_module(content.text(segment));
+        result +|= core.measure(content.text(segment));
     }
 
     return result;

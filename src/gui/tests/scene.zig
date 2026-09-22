@@ -1,10 +1,12 @@
+const ChromeFixture = @import("ChromeFixture.zig");
+const model_data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const Session = @import("Session.zig");
 
 test "native theme backgrounds share window opacity across bands and pane headers" {
     const client = @import("telar-client");
-    var fixture = try @import("ChromeFixture.zig").init();
+    var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     const renderer = &fixture.session.gui.renderer;
     const model = &fixture.session.gui.app.model;
@@ -30,7 +32,7 @@ test "native theme backgrounds share window opacity across bands and pane header
                 try std.testing.expectApproxEqAbs(opacity, (try backgroundColor(renderer, point))[3], 0.0001);
             }
 
-            var layout: client.LayoutSnapshot = .{};
+            var layout: model_data.LayoutSnapshot = .{};
             panes.layout.snapshot(projection.geometry.area, &layout);
             for (layout.views()) |view| {
                 const header = renderer.metrics.rect(renderer.origin, view.outer.row(0));
@@ -49,7 +51,7 @@ test "native theme backgrounds share window opacity across bands and pane header
 
 test "agent and terminal panes share the configured theme background opacity and blur" {
     const client = @import("telar-client");
-    var fixture = try @import("ChromeFixture.zig").init();
+    var fixture = try ChromeFixture.init();
     defer fixture.deinit();
     const renderer = &fixture.session.gui.renderer;
     const model = &fixture.session.gui.app.model;
@@ -69,7 +71,7 @@ test "agent and terminal panes share the configured theme background opacity and
         for ([_]f32{ 0.5, 0, 0.95, 1 }) |opacity| {
             renderer.config.window.background_opacity = opacity;
             const projection = fixture.projection();
-            var layout: client.LayoutSnapshot = .{};
+            var layout: model_data.LayoutSnapshot = .{};
             panes.layout.snapshot(projection.geometry.area, &layout);
             for (layout.views()) |view| {
                 _ = panes.focusPane(view.pane_id);

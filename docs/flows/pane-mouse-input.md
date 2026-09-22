@@ -47,7 +47,7 @@ unowned only
         |
 pane_mouse_inputs adapter
         |
-pane_mouse_inputs.apply
+AttachedClient.inputPaneMouse
         |
 multiplexer.Model.planPaneMouse
         |
@@ -55,11 +55,11 @@ multiplexer.Model.planPaneMouse
         |                   |                    |
  viewport effect    alternate-scroll effect   report effect
         |                   |                    |
-pane_viewports       three cursor keys       SGR encoding
+applyPaneViewport    three cursor keys       SGR encoding
         |                   |                    |
-pane_viewports.apply      +---------+----------+
+AttachedClient.applyPaneViewport      +---------+----------+
                                       |
-                              pane_inputs.send
+                              AttachedClient.sendPaneInput
                                       |
                               runtime attachment
 ```
@@ -109,9 +109,9 @@ applyInputDecision / applyDecision -> action_routing -> actions
         |
 AttachedClient.executeAction, then scroll_pane dispatch
         |
-pane_mouse_inputs.apply(.focused_scroll)
+AttachedClient.inputPaneMouse(.focused_scroll)
         |
-pane_mouse_inputs.apply -> Plans.resolve(Command)
+AttachedClient.inputPaneMouse -> Plans.resolve(Command)
         |
 planFocusedPaneMouse -> Resolved { plan, pointer }
         |
@@ -132,7 +132,7 @@ reject `scroll_pane`; client Lua bindings and callbacks use native dispatch.
 
 ## Application policy
 
-`pane_mouse_inputs.apply` resolves a plan and normalized pointer command, then chooses
+`AttachedClient.inputPaneMouse` resolves a plan and normalized pointer command, then chooses
 at most one effect. Its policy does not distinguish physical and synthetic
 wheel events.
 
@@ -145,15 +145,15 @@ wheel events.
 - Every other untracked wheel moves the client viewport by three rows.
 - Other untracked non-wheel events are ignored.
 
-`pane_mouse_inputs.apply` selects the effect and delivers it through concrete
+`AttachedClient.inputPaneMouse` selects the effect and delivers it through concrete
 viewport, copy-selection and pane-input operations. Mouse encoding remains in
 the bounded protocol helper; it does not mutate model state.
 
 ## Effects and coordinates
 
 `pane_mouse_inputs` applies the selected effect through existing use cases.
-Viewport movement goes through `pane_viewports.apply`. Alternate-screen keys
-and reports go through `pane_inputs.send` with the mouse source, so neither
+Viewport movement goes through `AttachedClient.applyPaneViewport`. Alternate-screen keys
+and reports go through `AttachedClient.sendPaneInput` with the mouse source, so neither
 restores scrollback.
 
 Cell reports use coordinates relative to the pane content. If the child asks
@@ -179,7 +179,7 @@ recomposes the affected projection. No use case requests a draw directly.
   rejection and value-copy planning.
 - `src/client/application/input/pointer_routing.zig` proves exclusive owner
   order, workbench gating and selected-effect failure boundaries.
-- `src/client/application/input/pane_mouse.zig` proves tracked-event,
+- `src/model/application/input/pane_mouse.zig` proves tracked-event,
   viewport and alternate-scroll selection, the live-bottom gate, ignored
   events and effect failure propagation.
 - `src/client/operations/input/pane_mouse_inputs.zig` proves exact

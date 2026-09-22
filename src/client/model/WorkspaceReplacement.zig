@@ -1,6 +1,5 @@
-const WorkspaceDeparture = @import("WorkspaceDeparture.zig");
-const WorkspaceActivation = @import("WorkspaceActivation.zig");
+const data = @import("model");
 const WorkspaceReplacement = @This();
 
-departure: WorkspaceDeparture,
-activation: WorkspaceActivation,
+departure: data.WorkspaceDeparture,
+activation: data.WorkspaceActivation,

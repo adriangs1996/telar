@@ -1,4 +1,4 @@
-const PaneIdType = @import("telar-core").PaneId;
+const core = @import("telar-core");
 const middleware = @import("../proxy/middleware.zig");
 const types = @import("../agent/types.zig");
 const Half = @import("Half.zig");
@@ -6,7 +6,7 @@ const Exchange = @This();
 
 id: u64,
 generation: u64,
-pane: PaneIdType,
+pane: core.PaneId,
 pane_generation: u64,
 host: []const u8,
 protocol: middleware.Protocol,

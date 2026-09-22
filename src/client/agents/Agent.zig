@@ -1,48 +1,32 @@
-const AgentKey = @import("AgentKey.zig");
-const TabLocationType = @import("telar-core").TabLocation;
-const max_agent_workspace_label_bytes_module = @import("telar-core").max_agent_workspace_label_bytes;
-const max_tab_label_bytes_module = @import("telar-core").max_tab_label_bytes;
-const max_agent_session_title_bytes_module = @import("telar-core").max_agent_session_title_bytes;
-const AgentTitleSourceType = @import("telar-core").AgentTitleSource;
-const AgentTitleStateType = @import("telar-core").AgentTitleState;
-const max_agent_cwd_label_bytes_module = @import("telar-core").max_agent_cwd_label_bytes;
-const max_agent_provider_name_bytes_module = @import("telar-core").max_agent_provider_name_bytes;
-const max_agent_display_name_bytes_module = @import("telar-core").max_agent_display_name_bytes;
-const max_agent_icon_bytes_module = @import("telar-core").max_agent_icon_bytes;
-const AgentAttachmentMarkersType = @import("telar-core").AgentAttachmentMarkers;
-const AgentProviderType = @import("telar-core").AgentProvider;
-const AgentStatusType = @import("telar-core").AgentStatus;
-const AgentBlockedReasonType = @import("telar-core").AgentBlockedReason;
-const max_agent_last_event_bytes_module = @import("telar-core").max_agent_last_event_bytes;
-const generic_display_name_module = @import("telar-core").generic_display_name;
-const AgentInput = @import("AgentInput.zig");
+const data = @import("model");
+const core = @import("telar-core");
 const snapshot_support = @import("snapshot_support.zig");
 const Agent = @This();
 
-key: AgentKey,
-location: TabLocationType,
+key: data.AgentKey,
+location: core.TabLocation,
 pane_index: u16,
-workspace_label: [max_agent_workspace_label_bytes_module]u8 = undefined,
+workspace_label: [core.max_agent_workspace_label_bytes]u8 = undefined,
 workspace_label_len: u8 = 0,
-tab_label: [max_tab_label_bytes_module]u8 = undefined,
+tab_label: [core.max_tab_label_bytes]u8 = undefined,
 tab_label_len: u8 = 0,
-session_title: [max_agent_session_title_bytes_module]u8 = undefined,
+session_title: [core.max_agent_session_title_bytes]u8 = undefined,
 session_title_len: u8 = 0,
-title_source: AgentTitleSourceType,
-title_state: AgentTitleStateType,
-cwd_label: [max_agent_cwd_label_bytes_module]u8 = undefined,
+title_source: core.AgentTitleSource,
+title_state: core.AgentTitleState,
+cwd_label: [core.max_agent_cwd_label_bytes]u8 = undefined,
 cwd_label_len: u8 = 0,
-provider_name: [max_agent_provider_name_bytes_module]u8 = undefined,
+provider_name: [core.max_agent_provider_name_bytes]u8 = undefined,
 provider_name_len: u8 = 0,
-display_name: [max_agent_display_name_bytes_module]u8 = undefined,
+display_name: [core.max_agent_display_name_bytes]u8 = undefined,
 display_name_len: u8 = 0,
-icon: [max_agent_icon_bytes_module]u8 = undefined,
+icon: [core.max_agent_icon_bytes]u8 = undefined,
 icon_len: u8 = 0,
-attachments: AgentAttachmentMarkersType,
-provider: AgentProviderType,
-status: AgentStatusType,
-blocked_reason: AgentBlockedReasonType,
-last_event: [max_agent_last_event_bytes_module]u8 = undefined,
+attachments: core.AgentAttachmentMarkers,
+provider: core.AgentProvider,
+status: core.AgentStatus,
+blocked_reason: core.AgentBlockedReason,
+last_event: [core.max_agent_last_event_bytes]u8 = undefined,
 last_event_len: u8 = 0,
 /// Seconds the status had held when the runtime encoded this revision.
 status_age_s: u32,
@@ -72,7 +56,7 @@ pub fn displayName(agent: *const Agent) []const u8 {
         return agent.display_name[0..agent.display_name_len];
     }
 
-    return generic_display_name_module;
+    return core.generic_display_name;
 }
 
 /// Configured sidebar glyph; empty when the client should use its own
@@ -85,7 +69,7 @@ pub fn iconGlyph(agent: *const Agent) []const u8 {
     return agent.icon[0..agent.icon_len];
 }
 
-pub fn init(input: AgentInput) !Agent {
+pub fn init(input: data.AgentInput) !Agent {
     var agent: Agent = .{
         .key = input.key,
         .location = input.location,
@@ -126,7 +110,7 @@ pub fn lastEvent(agent: *const Agent) []const u8 {
 /// ```zig
 /// if (agent.blockedReason() == .permission) drawPermissionIcon();
 /// ```
-pub fn blockedReason(agent: *const Agent) AgentBlockedReasonType {
+pub fn blockedReason(agent: *const Agent) core.AgentBlockedReason {
     return agent.blocked_reason;
 }
 

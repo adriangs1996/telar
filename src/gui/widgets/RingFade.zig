@@ -1,3 +1,4 @@
 //! One attachment's attention transition; never borrows a pane or model.
-key: @import("telar-client").AgentKey,
+const data = @import("model");
+key: data.AgentKey,
 transition: @import("../animation/Transition.zig"),

@@ -1,11 +1,11 @@
+const Coord = @import("Coord.zig");
+const SmallRect = @import("SmallRect.zig");
 const std = @import("std");
-const COORD = @import("Coord.zig").COORD;
-const SMALL_RECT = @import("SmallRect.zig").SMALL_RECT;
 
 pub const CONSOLE_SCREEN_BUFFER_INFO = extern struct {
-    dwSize: COORD,
-    dwCursorPosition: COORD,
+    dwSize: Coord.COORD,
+    dwCursorPosition: Coord.COORD,
     wAttributes: std.os.windows.WORD,
-    srWindow: SMALL_RECT,
-    dwMaximumWindowSize: COORD,
+    srWindow: SmallRect.SMALL_RECT,
+    dwMaximumWindowSize: Coord.COORD,
 };

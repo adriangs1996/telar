@@ -1,7 +1,7 @@
+const core = @import("telar-core");
+const data = @import("model");
 const std = @import("std");
-const Color = @import("telar-core").Color;
 const Generation = @import("Generation.zig");
-const Diagnostic = @import("Diagnostic.zig");
 const themes = @import("../appearance/theme_support.zig");
 
 test "one theme name supplies chrome terminal palette and cursor defaults" {
@@ -36,7 +36,7 @@ test "theme overrides inherit through profiles and selecting a preset replaces t
     const custom = try load(source, "custom");
     defer custom.deinit();
     const snapshot = &custom.snapshot;
-    try std.testing.expectEqualDeep(@import("telar-core").Color{ .rgb = .{ 1, 2, 3 } }, snapshot.theme.palette.accent);
+    try std.testing.expectEqualDeep(core.Color{ .rgb = .{ 1, 2, 3 } }, snapshot.theme.palette.accent);
     try std.testing.expect(snapshot.theme.palette.text == .default);
     try std.testing.expectEqual([3]u8{ 0xab, 0xcd, 0xef }, snapshot.theme.terminal.foreground);
     try std.testing.expectEqual([3]u8{ 0x44, 0x55, 0x66 }, snapshot.theme.terminal.background);
@@ -99,8 +99,8 @@ test "syntax styles inherit through profiles independently of chrome and termina
     const generation = try load(source, "custom");
     defer generation.deinit();
     const theme = generation.snapshot.theme;
-    try std.testing.expectEqualDeep(Color{ .rgb = .{ 0x11, 0x22, 0x33 } }, theme.syntax(.keyword));
-    try std.testing.expectEqualDeep(Color{ .rgb = .{ 0x44, 0x55, 0x66 } }, theme.syntax(.parameter));
+    try std.testing.expectEqualDeep(core.Color{ .rgb = .{ 0x11, 0x22, 0x33 } }, theme.syntax(.keyword));
+    try std.testing.expectEqualDeep(core.Color{ .rgb = .{ 0x44, 0x55, 0x66 } }, theme.syntax(.parameter));
     try std.testing.expect(!theme.syntaxStyle(.parameter).italic);
     try std.testing.expect(theme.syntaxStyle(.comment).bold);
     try std.testing.expectEqualDeep(themes.builtin(.shade).syntax(.comment), theme.syntax(.comment));
@@ -131,13 +131,13 @@ test "invalid or ambiguous themes reject the whole generation including unused p
     for (invalid) |fields| {
         var buffer: [512]u8 = undefined;
         const source = try std.fmt.bufPrint(&buffer, "return {{ api_version = 2, {s} }}", .{fields});
-        var diagnostic: Diagnostic = .{};
+        var diagnostic: data.Diagnostic = .{};
         try std.testing.expectError(error.InvalidConfig, Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@theme.lua", .number = 1 }));
         try std.testing.expect(diagnostic.message().len > 0);
     }
 }
 
 fn load(source: []const u8, profile: ?[]const u8) !*Generation {
-    var diagnostic: Diagnostic = .{};
+    var diagnostic: data.Diagnostic = .{};
     return Generation.loadSource(.{ .gpa = std.testing.allocator, .io = std.testing.io, .diagnostic = &diagnostic }, .{ .source = source, .source_name = "@theme.lua", .number = 1, .profile = profile });
 }

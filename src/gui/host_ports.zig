@@ -1,70 +1,44 @@
 //! Native adapter port assembly. Capabilities own their service implementations.
-const Client = @import("telar-client").AttachedClient;
-const SoundPortType = @import("telar-client").SoundPort;
-const HostNotifierType = @import("telar-client").HostNotifier;
-const CapturePortType = @import("telar-client").CapturePort;
-const HostClipboardType = @import("telar-client").HostClipboard;
-const HostGraphicsType = @import("telar-client").HostGraphics;
-const GraphicsRetentionType = @import("telar-client").GraphicsRetention;
-const GraphicsCreditType = @import("telar-client").GraphicsCredit;
-const PaneGraphicsCommand = @import("telar-client").ApplicationPanesPaneGraphicsCommand;
-const PaneIdType = @import("telar-core").PaneId;
-const AttachmentCatalogPortType = @import("telar-client").AttachmentCatalogPort;
-const AttachmentShelfType = @import("telar-client").AttachmentShelf;
-const AttachmentTargetType = @import("telar-client").AttachmentTarget;
-const AttachmentIdType = @import("telar-client").AttachmentId;
-const MarkerScreenType = @import("telar-client").MarkerScreen;
-const MarkerRemovalType = @import("telar-client").MarkerRemoval;
-const MarkerDeletionType = @import("telar-client").MarkerDeletion;
-const DeletionProbeType = @import("telar-client").DeletionProbe;
-const PaneBottomReservationType = @import("telar-client").PaneBottomReservation;
-const HostPresentationType = @import("telar-client").HostPresentation;
-const GeometryType = @import("telar-client").Geometry;
-const HostClockType = @import("telar-client").HostClock;
-const LocalTimeType = @import("telar-client").LocalTime;
-const TransportDriverType = @import("telar-client").TransportDriver;
-const RuntimeTransportStateType = @import("telar-client").RuntimeTransportState;
-const ConfigReloadWatcherType = @import("telar-client").ConfigReloadWatcher;
-const ConfigWaitArgsType = @import("telar-client").ConfigWaitArgs;
-const DeliveryType = @import("telar-client").Delivery;
-const InputType = @import("telar-client").NotificationInput;
-const AgentSoundType = @import("telar-core").AgentSound;
-const CaptureRequestType = @import("telar-client").CaptureRequest;
-const CaptureType = @import("telar-client").Capture;
+const client_module = @import("telar-client");
+const data = @import("model");
+const core = @import("telar-core");
+const chrome_module = @import("ports/chrome.zig");
+const host_input = @import("ports/host_input.zig");
+const workers = @import("ports/workers.zig");
+const services = @import("ports/services.zig");
 const std = @import("std");
 const GuiClient = @import("GuiClient.zig");
 const NativeLoop = @import("NativeLoop.zig");
 const ConfigurationReload = @import("ConfigurationReload.zig");
-const host = GuiClient.of;
 const native = @import("native/native.zig");
 
 /// Example: `const port = sound(app);`.
-pub fn sound(client: *Client) SoundPortType {
+pub fn sound(client: *client_module.AttachedClient) client_module.SoundPort {
     return .{ .context = client, .play = playSound };
 }
 
 /// Example: `const port = notifier(app);`.
-pub fn notifier(client: *Client) HostNotifierType {
+pub fn notifier(client: *client_module.AttachedClient) client_module.HostNotifier {
     return .{ .context = client, .deliver = deliverNotification };
 }
 
 /// Example: `const port = capture(app);`.
-pub fn capture(client: *Client) CapturePortType {
+pub fn capture(client: *client_module.AttachedClient) client_module.CapturePort {
     return .{ .context = client, .supported = captureSupported, .start = startCapture };
 }
 
 /// Example: `const port = clipboard(app);`.
-pub fn clipboard(client: *Client) HostClipboardType {
+pub fn clipboard(client: *client_module.AttachedClient) client_module.HostClipboard {
     return .{ .context = client, .set = setClipboard };
 }
 
 /// Example: `const port = graphics(app);`.
-pub fn graphics(client: *Client) HostGraphicsType {
+pub fn graphics(client: *client_module.AttachedClient) client_module.HostGraphics {
     return .{ .context = client, .invalidate_placements = invalidatePlacements };
 }
 
 /// Example: `const port = graphicsRetention(app);`.
-pub fn graphicsRetention(client: *Client) GraphicsRetentionType {
+pub fn graphicsRetention(client: *client_module.AttachedClient) client_module.GraphicsRetention {
     return .{
         .context = client,
         .apply_fn = applyGraphics,
@@ -79,7 +53,7 @@ pub fn graphicsRetention(client: *Client) GraphicsRetentionType {
 }
 
 /// Example: `const port = attachmentCatalog(app);`.
-pub fn attachmentCatalog(client: *Client) AttachmentCatalogPortType {
+pub fn attachmentCatalog(client: *client_module.AttachedClient) client_module.AttachmentCatalogPort {
     return .{
         .context = client,
         .visible_target_fn = visibleAttachmentTarget,
@@ -91,7 +65,7 @@ pub fn attachmentCatalog(client: *Client) AttachmentCatalogPortType {
 }
 
 /// Example: `const port = attachmentShelf(app);`.
-pub fn attachmentShelf(client: *Client) AttachmentShelfType {
+pub fn attachmentShelf(client: *client_module.AttachedClient) client_module.AttachmentShelf {
     return .{
         .context = client,
         .adopt_fn = adoptAttachment,
@@ -106,7 +80,7 @@ pub fn attachmentShelf(client: *Client) AttachmentShelfType {
 }
 
 /// Example: `const port = presentation(app);`.
-pub fn presentation(client: *Client) HostPresentationType {
+pub fn presentation(client: *client_module.AttachedClient) client_module.HostPresentation {
     return .{
         .context = client,
         .resize_fn = resizePresenter,
@@ -119,13 +93,13 @@ pub fn presentation(client: *Client) HostPresentationType {
 }
 
 /// Example: `const port = clock(app);`.
-pub fn clock(client: *Client) HostClockType {
+pub fn clock(client: *client_module.AttachedClient) client_module.HostClock {
     return .{ .context = client, .local_time_fn = localTime };
 }
 
 /// Binds runtime I/O directly to the loop that owns its completion tasks.
 /// Example: `const port = transport(loop);`
-pub fn transport(loop: *NativeLoop) TransportDriverType {
+pub fn transport(loop: *NativeLoop) client_module.TransportDriver {
     return .{
         .context = loop,
         .start_read_fn = startRuntimeRead,
@@ -135,27 +109,27 @@ pub fn transport(loop: *NativeLoop) TransportDriverType {
 
 /// Binds configuration work to its owned worker and completion handoff.
 /// Example: `const port = configWatcher(&loop.configuration);`
-pub fn configWatcher(configuration: *ConfigurationReload) ConfigReloadWatcherType {
+pub fn configWatcher(configuration: *ConfigurationReload) client_module.ConfigReloadWatcher {
     return .{
         .context = configuration,
         .start_fn = startConfigWatch,
     };
 }
 
-fn adoptAttachment(_: *anyopaque, _: *CaptureType) !bool {
+fn adoptAttachment(_: *anyopaque, _: *client_module.Capture) !bool {
     return false;
 }
 
-fn applyGraphics(context: *anyopaque, command: PaneGraphicsCommand) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    return host(client).applyGraphics(command);
+fn applyGraphics(context: *anyopaque, command: data.PaneGraphicsCommand) !void {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    return GuiClient.of(client).applyGraphics(command);
 }
 
 fn attachmentModalActive(_: *anyopaque) bool {
     return false;
 }
 
-fn attachmentReservation(_: *anyopaque) ?PaneBottomReservationType {
+fn attachmentReservation(_: *anyopaque) ?data.PaneBottomReservation {
     return null;
 }
 
@@ -163,28 +137,28 @@ fn captureSupported(_: *anyopaque) bool {
     return false;
 }
 
-fn clearPaneGraphics(context: *anyopaque, pane_id: PaneIdType) void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    host(client).graphics_store.clearPane(pane_id);
+fn clearPaneGraphics(context: *anyopaque, pane_id: core.PaneId) void {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    GuiClient.of(client).graphics_store.clearPane(pane_id);
 }
 
 fn closeAttachmentModal(_: *anyopaque) bool {
     return false;
 }
 
-fn consumeGraphicsCredit(context: *anyopaque, credit: GraphicsCreditType) void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    host(client).graphics_store.consumeCredit(credit);
+fn consumeGraphicsCredit(context: *anyopaque, credit: client_module.GraphicsCredit) void {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    GuiClient.of(client).graphics_store.consumeCredit(credit);
 }
 
-fn deliverNotification(_: *anyopaque, _: DeliveryType, _: InputType) !void {}
+fn deliverNotification(_: *anyopaque, _: data.NotificationDelivery, _: data.NotificationInput) !void {}
 
-fn deliveredGeometry(context: *anyopaque) ?GeometryType {
-    const client: *Client = @ptrCast(@alignCast(context));
-    return host(client).lifecycle.delivered_geometry;
+fn deliveredGeometry(context: *anyopaque) ?client_module.Geometry {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    return GuiClient.of(client).lifecycle.delivered_geometry;
 }
 
-fn expectMarkerDeletion(_: *anyopaque, _: AttachmentTargetType) void {}
+fn expectMarkerDeletion(_: *anyopaque, _: data.AttachmentTarget) void {}
 
 fn frameIntervalNs(context: *anyopaque) u64 {
     _ = context;
@@ -192,22 +166,22 @@ fn frameIntervalNs(context: *anyopaque) u64 {
 }
 
 fn graphicsIngressVersion(context: *anyopaque) u64 {
-    const client: *Client = @ptrCast(@alignCast(context));
-    return host(client).graphics_store.ingressVersion();
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    return GuiClient.of(client).graphics_store.ingressVersion();
 }
 
-fn hasPaneGraphics(context: *anyopaque, pane_id: PaneIdType) bool {
-    const client: *Client = @ptrCast(@alignCast(context));
-    return host(client).graphics_store.hasPaneGraphics(pane_id);
+fn hasPaneGraphics(context: *anyopaque, pane_id: core.PaneId) bool {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    return GuiClient.of(client).graphics_store.hasPaneGraphics(pane_id);
 }
 
-fn idAtMarkerDeletion(_: *anyopaque, _: MarkerScreenType, _: MarkerDeletionType) ?AttachmentIdType {
+fn idAtMarkerDeletion(_: *anyopaque, _: client_module.MarkerScreen, _: data.AttachmentMarkerDeletion) ?data.AttachmentId {
     return null;
 }
 
 fn invalidatePlacements(_: *anyopaque) void {}
 
-fn localTime(_: *anyopaque) LocalTimeType {
+fn localTime(_: *anyopaque) client_module.LocalTime {
     var output: [7]u16 = undefined;
     native.telar_gui_local_time(&output);
     return .{ .year = output[0], .month = @intCast(output[1]), .day = @intCast(output[2]), .hour = @intCast(output[3]), .minute = @intCast(output[4]), .second = @intCast(output[5]), .weekday = @intCast(output[6]) };
@@ -215,9 +189,9 @@ fn localTime(_: *anyopaque) LocalTimeType {
 
 fn noteInput(_: *anyopaque, _: u64) void {}
 
-fn notePaneInput(context: *anyopaque, pane_id: PaneIdType, now_ns: u64) void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    const gui = host(client);
+fn notePaneInput(context: *anyopaque, pane_id: core.PaneId, now_ns: u64) void {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const gui = GuiClient.of(client);
     const model = client.model.activeTabModelConst() orelse return;
     const pane = model.findConst(pane_id) orelse return;
     gui.driver.frame_pacer.noteInput(.{
@@ -228,75 +202,75 @@ fn notePaneInput(context: *anyopaque, pane_id: PaneIdType, now_ns: u64) void {
     }, now_ns);
 }
 
-fn paneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType) bool {
-    const client: *Client = @ptrCast(@alignCast(context));
-    return host(client).graphics_store.paneVisible(pane_id);
+fn paneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId) bool {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    return GuiClient.of(client).graphics_store.paneVisible(pane_id);
 }
 
-fn peekGraphicsCredit(context: *anyopaque) ?GraphicsCreditType {
-    const client: *Client = @ptrCast(@alignCast(context));
-    return host(client).graphics_store.peekCredit();
+fn peekGraphicsCredit(context: *anyopaque) ?client_module.GraphicsCredit {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    return GuiClient.of(client).graphics_store.peekCredit();
 }
 
-fn pendingMarkerAtDeletion(_: *anyopaque, _: MarkerScreenType, _: DeletionProbeType) bool {
+fn pendingMarkerAtDeletion(_: *anyopaque, _: client_module.MarkerScreen, _: client_module.DeletionProbe) bool {
     return false;
 }
 
-fn planMarkerRemoval(_: *anyopaque, _: AttachmentIdType, _: MarkerScreenType) ?MarkerRemovalType {
+fn planMarkerRemoval(_: *anyopaque, _: data.AttachmentId, _: client_module.MarkerScreen) ?data.MarkerRemoval {
     return null;
 }
 
-fn playSound(_: *anyopaque, _: AgentSoundType) !void {}
+fn playSound(_: *anyopaque, _: core.AgentSound) !void {}
 
 fn presentationInFlight(context: *anyopaque) bool {
-    const client: *Client = @ptrCast(@alignCast(context));
-    return host(client).lifecycle.active != null;
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    return GuiClient.of(client).lifecycle.active != null;
 }
 
-fn reconcileAttachmentMarkers(_: *anyopaque, _: AttachmentTargetType, _: MarkerScreenType) ?bool {
+fn reconcileAttachmentMarkers(_: *anyopaque, _: data.AttachmentTarget, _: client_module.MarkerScreen) ?bool {
     return null;
 }
 
-fn removeAttachment(_: *anyopaque, _: AttachmentIdType) ?bool {
+fn removeAttachment(_: *anyopaque, _: data.AttachmentId) ?bool {
     return null;
 }
 
-fn removePromptAttachments(_: *anyopaque, _: AttachmentTargetType) ?bool {
+fn removePromptAttachments(_: *anyopaque, _: data.AttachmentTarget) ?bool {
     return null;
 }
 
 fn resizePresenter(_: *anyopaque, _: u16, _: u16) !void {}
 
 fn setClipboard(context: *anyopaque, bytes: []const u8) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    host(client).requestClipboardWrite(bytes) catch |err| switch (err) {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    GuiClient.of(client).requestClipboardWrite(bytes) catch |err| switch (err) {
         error.HostRequestsFull, error.ClipboardTooLarge, error.InvalidUtf8 => std.log.warn("native clipboard update was not admitted: {s}", .{@errorName(err)}),
         else => return err,
     };
 }
 
-fn setPaneGraphicsVisible(context: *anyopaque, pane_id: PaneIdType, visible: bool) !void {
-    const client: *Client = @ptrCast(@alignCast(context));
-    try host(client).graphics_store.setPaneVisible(pane_id, visible);
+fn setPaneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId, visible: bool) !void {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    try GuiClient.of(client).graphics_store.setPaneVisible(pane_id, visible);
 }
 
-fn startCapture(_: *anyopaque, _: CaptureRequestType) !void {
+fn startCapture(_: *anyopaque, _: client_module.CaptureRequest) !void {
     return error.NativeServiceUnavailable;
 }
 
-fn startConfigWatch(context: *anyopaque, args: ConfigWaitArgsType) !void {
+fn startConfigWatch(context: *anyopaque, args: client_module.ConfigWaitArgs) !void {
     const configuration: *ConfigurationReload = @ptrCast(@alignCast(context));
 
     try configuration.schedule(args);
 }
 
-fn startRuntimeRead(context: *anyopaque, state: *RuntimeTransportStateType) !void {
+fn startRuntimeRead(context: *anyopaque, state: *client_module.RuntimeTransportState) !void {
     const loop: *NativeLoop = @ptrCast(@alignCast(context));
 
     try loop.startRead(state);
 }
 
-fn startRuntimeSend(context: *anyopaque, state: *RuntimeTransportStateType, payload: []const u8) !void {
+fn startRuntimeSend(context: *anyopaque, state: *client_module.RuntimeTransportState, payload: []const u8) !void {
     const loop: *NativeLoop = @ptrCast(@alignCast(context));
 
     try loop.startSend(
@@ -307,19 +281,19 @@ fn startRuntimeSend(context: *anyopaque, state: *RuntimeTransportStateType, payl
     );
 }
 
-fn syncAttachmentTarget(_: *anyopaque, _: ?AttachmentTargetType) bool {
+fn syncAttachmentTarget(_: *anyopaque, _: ?data.AttachmentTarget) bool {
     return false;
 }
 
-fn visibleAttachmentTarget(_: *anyopaque) ?AttachmentTargetType {
+fn visibleAttachmentTarget(_: *anyopaque) ?data.AttachmentTarget {
     return null;
 }
 
-pub const chrome = @import("ports/chrome.zig").port;
-pub const hostInput = @import("ports/host_input.zig").port;
-pub const timers = @import("ports/workers.zig").timers;
-pub const barCommands = @import("ports/workers.zig").bars;
-pub const pluginWorkers = @import("ports/workers.zig").plugins;
-pub const pathCompletions = @import("ports/workers.zig").pathCompletions;
-pub const favicons = @import("ports/workers.zig").favicons;
-pub const links = @import("ports/services.zig").links;
+pub const chrome = chrome_module.port;
+pub const hostInput = host_input.port;
+pub const timers = workers.timers;
+pub const barCommands = workers.bars;
+pub const pluginWorkers = workers.plugins;
+pub const pathCompletions = workers.pathCompletions;
+pub const favicons = workers.favicons;
+pub const links = services.links;

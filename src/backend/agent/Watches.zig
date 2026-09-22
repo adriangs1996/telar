@@ -1,13 +1,12 @@
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const core = @import("telar-core");
 const Watch = @import("Watch.zig");
 const Registration = @import("Registration.zig");
-const max_agent_session_file_bytes = @import("telar-core").max_agent_session_file_bytes;
 const std = @import("std");
 const session_file = @import("session_file.zig");
 const PaneKeyType = @import("../pane/PaneKey.zig");
 const Watches = @This();
 
-slots: [max_agent_snapshot_entries]?Watch = @splat(null),
+slots: [core.max_agent_snapshot_entries]?Watch = @splat(null),
 
 /// Registers or refreshes the session file of one pane generation. A
 /// changed path, kind or session restarts the watch; the same ones keep
@@ -19,7 +18,7 @@ slots: [max_agent_snapshot_entries]?Watch = @splat(null),
 /// ```
 pub fn put(watches: *Watches, registration: Registration) bool {
     const path = registration.path;
-    if (path.len == 0 or path.len > max_agent_session_file_bytes) {
+    if (path.len == 0 or path.len > core.max_agent_session_file_bytes) {
         return false;
     }
 

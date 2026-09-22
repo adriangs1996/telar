@@ -1,7 +1,7 @@
+const core = @import("telar-core");
 const Dependencies = @import("Dependencies.zig");
 const std = @import("std");
 const TunnelOptions = @import("TunnelOptions.zig");
-const enter_module = @import("telar-core").enter;
 const head_support = @import("../http/head_support.zig");
 const tunnel_namespace = @import("tunnel_namespace.zig");
 const ExchangeType = @import("Exchange.zig");
@@ -34,7 +34,7 @@ pub fn init(options: TunnelOptions) Tunnel {
 /// try tunnel.run();
 /// ```
 pub fn run(tunnel: *Tunnel) std.Io.Cancelable!void {
-    const path = enter_module(.observation);
+    const path = core.enter(.observation);
     defer path.restore();
 
     const dependencies = tunnel.dependencies;

@@ -1,54 +1,40 @@
-const InitialType = @import("Initial.zig");
+const data = @import("model");
+const agent_options_module = @import("agent_options.zig");
+const icons = @import("../layout/icons.zig");
 const std = @import("std");
 const builtin = @import("builtin");
-const PaneIdType = @import("telar-core").PaneId;
-const TabLocationType = @import("telar-core").TabLocation;
-const BufferType = @import("telar-core").Buffer;
 const DamageRowType = @import("DamageRow.zig");
-const CursorType = @import("telar-core").Cursor;
-const MouseType = @import("telar-core").Mouse;
-const InputModesType = @import("telar-core").InputModes;
-const PointerShapeType = @import("telar-core").PointerShape;
-const ScrollType = @import("telar-core").Scroll;
-const max_foreground_name_bytes_module = @import("telar-core").max_foreground_name_bytes;
-const PaneProgressStateType = @import("telar-core").PaneProgressState;
-const FrameViewType = @import("telar-core").FrameView;
 const AppliedType = @import("Applied.zig");
 const frames = @import("frame.zig");
 const damage = @import("damage.zig");
-const max_cwd_bytes_module = @import("telar-core").max_cwd_bytes;
 const pane_support = @import("pane_support.zig");
-const PaneProgressType = @import("telar-core").PaneProgress;
-const max_pane_title_bytes_module = @import("telar-core").max_pane_title_bytes;
 const Pane = @This();
-const IconType = @import("../layout/icons.zig").Icon;
 const core = @import("telar-core");
 pub const ImageRemoval = @import("ComposerImageRemoval.zig");
-const GenericField = @import("../input/GenericField.zig").Type;
 const ChangeReviewAvailability = @import("ChangeReviewAvailability.zig");
 
-pub const ComposerField = GenericField(4096);
+pub const ComposerField = data.GenericField(4096);
 
 gpa: std.mem.Allocator,
-id: PaneIdType,
-location: TabLocationType,
-buffer: BufferType,
-text_metadata: *@import("telar-core").TextMetadata,
+id: core.PaneId,
+location: core.TabLocation,
+buffer: core.Buffer,
+text_metadata: *core.TextMetadata,
 damage_rows: []DamageRowType,
 attached: bool,
 attachment_generation: u64 = 0,
-cursor: CursorType = .{},
-mouse: MouseType = .{},
-input_modes: InputModesType = .{},
-pointer_shape: PointerShapeType = .default,
-scroll: ScrollType,
+cursor: core.Cursor = .{},
+mouse: core.Mouse = .{},
+input_modes: core.InputModes = .{},
+pointer_shape: core.PointerShape = .default,
+scroll: core.Scroll,
 applied_frame_id: u64 = 0,
 pending_frame_id: u64 = 0,
 graphics_placeholder: bool = false,
 cwd: []u8 = &.{},
-foreground_name: [max_foreground_name_bytes_module]u8 = @splat(0),
+foreground_name: [core.max_foreground_name_bytes]u8 = @splat(0),
 foreground_name_len: u8 = 0,
-progress_state: PaneProgressStateType = .remove,
+progress_state: core.PaneProgressState = .remove,
 progress_percent: ?u8 = null,
 title: []u8 = &.{},
 /// What the user is writing for the agent in this pane, owned like the title.
@@ -73,19 +59,19 @@ resume_history_requested: bool = false,
 pub const Initial = @import("Initial.zig");
 
 /// Reserves cells and row damage for one validated pane. Example: var pane = try Pane.init(gpa, initial);
-pub fn init(gpa: std.mem.Allocator, initial: InitialType) !Pane {
+pub fn init(gpa: std.mem.Allocator, initial: Initial) !Pane {
     if (initial.spec.pane_id == .invalid) {
         return error.InvalidPaneId;
     }
 
     try initial.spec.size.validate();
-    var buffer = try BufferType.init(gpa, initial.spec.size.cols, initial.spec.size.rows);
+    var buffer = try core.Buffer.init(gpa, initial.spec.size.cols, initial.spec.size.rows);
     errdefer buffer.deinit();
 
     const rows = try gpa.alloc(DamageRowType, initial.spec.size.rows);
     errdefer gpa.free(rows);
     @memset(rows, .{});
-    const text_metadata = try gpa.create(@import("telar-core").TextMetadata);
+    const text_metadata = try gpa.create(core.TextMetadata);
     errdefer gpa.destroy(text_metadata);
     text_metadata.* = try .init(gpa, initial.spec.size.rows);
     return .{
@@ -121,7 +107,7 @@ pub fn deinit(pane: *Pane) void {
 
 /// Applies a decoded frame after identity and base admission. Only a
 /// snapshot may resize storage. Example: const work = try pane.applyFrame(frame);
-pub fn applyFrame(pane: *Pane, frame: FrameViewType) !AppliedType {
+pub fn applyFrame(pane: *Pane, frame: core.FrameView) !AppliedType {
     if (frame.pane_id != pane.id) {
         return error.PaneMismatch;
     }
@@ -131,7 +117,7 @@ pub fn applyFrame(pane: *Pane, frame: FrameViewType) !AppliedType {
     }
 
     const metadata = if (frame.text_metadata) |value|
-        try @import("telar-core").TextMetadataView.decode(value.encoded, .{ frame.cols, frame.rows })
+        try core.TextMetadataView.decode(value.encoded, .{ frame.cols, frame.rows })
     else if (frame.base_frame_id == 0)
         return error.MissingSnapshotMetadata
     else
@@ -207,7 +193,7 @@ pub fn markSpan(pane: *Pane, start: u32, count: u32) void {
 /// Owns the full path and reports changes to its bounded display name.
 /// Example: const changed = try pane.setCwd("/work/telar");
 pub fn setCwd(pane: *Pane, path: []const u8) !bool {
-    std.debug.assert(path.len != 0 and path.len <= max_cwd_bytes_module);
+    std.debug.assert(path.len != 0 and path.len <= core.max_cwd_bytes);
     if (std.mem.eql(u8, pane.cwd, path)) {
         return false;
     }
@@ -248,12 +234,12 @@ pub fn applicationLabel(pane: *const Pane) []const u8 {
     return if (name.len != 0) name else "shell";
 }
 
-pub fn applicationIcon(pane: *const Pane) IconType {
-    return IconType.forApplication(pane.foregroundName());
+pub fn applicationIcon(pane: *const Pane) icons.Icon {
+    return icons.Icon.forApplication(pane.foregroundName());
 }
 
 /// Replaces a semantic progress report without allocation. Example: _ = pane.setProgress(progress);
-pub fn setProgress(pane: *Pane, progress: PaneProgressType) bool {
+pub fn setProgress(pane: *Pane, progress: core.PaneProgress) bool {
     if (pane.progress_state == progress.state and pane.progress_percent == progress.percent) {
         return false;
     }
@@ -265,7 +251,7 @@ pub fn setProgress(pane: *Pane, progress: PaneProgressType) bool {
 
 /// Owns a validated window title independently of its request buffer. Example: _ = try pane.setTitle("vim");
 pub fn setTitle(pane: *Pane, title: []const u8) !bool {
-    std.debug.assert(title.len <= max_pane_title_bytes_module);
+    std.debug.assert(title.len <= core.max_pane_title_bytes);
     if (std.mem.eql(u8, pane.title, title)) {
         return false;
     }
@@ -425,7 +411,7 @@ pub fn agentOptions(pane: *const Pane) core.AgentOptions {
 }
 
 /// Applies one catalog-backed draft choice without changing another client's settings. Example: `_ = pane.changeAgentOption(.{ .access = .read_only });`
-pub fn changeAgentOption(pane: *Pane, change: @import("agent_options.zig").Change) bool {
+pub fn changeAgentOption(pane: *Pane, change: agent_options_module.Change) bool {
     const snapshot = pane.agent_thread orelse return false;
     var options = pane.agentOptions();
     switch (change) {

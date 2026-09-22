@@ -13,7 +13,7 @@ Router.routeEvent -> applyInputDecision / applyDecision
       |
 AttachedClient.executeAction
       |
-lua_actions.execute
+AttachedClient.evaluateLuaAction
       |
 ClientModel.callbackContext
       |
@@ -21,9 +21,9 @@ client-owned Generation.invokeCallback / invokeExpression
       |
       +-- callback --> EffectBatch --> validate complete batch
       |                                  |
-      |                         client_actions / plugin_actions
+      |                         AttachedClient.executeAction / startPluginAction
       |
-      +-- expression --> InputDecision --> key_routing / pane_inputs
+      +-- expression --> InputDecision --> AttachedClient.routeKeyInput / pasteExpression
       |
       +-- failure --> client_diagnostic.replace.replace
                                |
@@ -43,7 +43,7 @@ the separate asynchronous [`pluginAction`](plugin-action.md) slice.
 ## State and ownership
 
 The client owns one live `config.Generation`. It contains the bounded Lua VM
-and closures for the active configuration generation. `config_reloads` builds
+and closures for the active configuration generation. `AttachedClient.completeConfigReload` builds
 a complete replacement before swapping that pointer, registry and input router
 together. The VM never enters `ClientModel` or the presenter.
 
@@ -61,7 +61,7 @@ no-op. Invalid UTF-8 or text beyond the fixed buffer is rejected before commit.
 
 ## Callback policy
 
-`lua_actions.execute` owns this order:
+`AttachedClient.evaluateLuaAction` owns this order:
 
 1. capture one callback context from `ClientModel`;
 2. invoke the exact callback generation and identity;
@@ -85,8 +85,8 @@ the sequence.
 An expression returns `consume`, `forward_binding`, semantic keys or bounded
 paste. After a successful invocation, the operation clears any older
 diagnostic and returns the value to `AttachedClient.executeAction`. Keys pass through
-`key_routing` and `key_routing.apply`; paste passes through
-`pane_inputs.expressionPaste`. Both use the focused child's acknowledged
+`AttachedClient.routeKeyInput`; paste passes through
+`AttachedClient.pasteExpression`. Both use the focused child's acknowledged
 terminal modes and the existing pane-input target checks.
 
 An expression does not return a terminal-encoding result. The client encodes
@@ -124,7 +124,7 @@ authority.
   diagnostic validation, equality and revision behavior.
 - `src/client/application/configuration/client_diagnostic.zig` proves shared
   diagnostic validation, fallback and clear semantics.
-- `src/client/application/input/lua_action.zig` proves invocation,
+- `src/model/application/input/lua_action.zig` proves invocation,
   validate-before-apply order, diagnostic order, sequential exit and failure
   classification.
 - `src/client/application/input/action_routing.zig` proves source

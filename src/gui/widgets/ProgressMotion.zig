@@ -1,4 +1,5 @@
 //! One attachment's disposable progress interpolation; never borrows its pane.
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const FrameClock = @import("../animation/FrameClock.zig");
@@ -7,7 +8,7 @@ const ProgressMotion = @This();
 
 pub const duration_ns = 240 * std.time.ns_per_ms;
 
-key: client.AgentKey,
+key: data.AgentKey,
 from: f32 = 0,
 to: f32 = 0,
 known: bool = false,

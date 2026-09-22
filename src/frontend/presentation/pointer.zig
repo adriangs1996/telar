@@ -1,6 +1,6 @@
 //! OSC 22 mouse-pointer shapes emitted by the host presentation path.
 
-const PointerShapeType = @import("telar-core").PointerShape;
+const core = @import("telar-core");
 const std = @import("std");
 
 pub const reset_sequence = sequence(.default);
@@ -10,13 +10,13 @@ pub const reset_sequence = sequence(.default);
 /// ```zig
 /// try writer.writeAll(sequence(.pointer));
 /// ```
-pub fn sequence(shape: PointerShapeType) []const u8 {
+pub fn sequence(shape: core.PointerShape) []const u8 {
     return switch (shape) {
         inline else => |value| comptime shapeSequence(value),
     };
 }
 
-fn shapeSequence(comptime shape: PointerShapeType) []const u8 {
+fn shapeSequence(comptime shape: core.PointerShape) []const u8 {
     const tag = @tagName(shape);
     var name: [tag.len]u8 = undefined;
 
@@ -28,7 +28,7 @@ fn shapeSequence(comptime shape: PointerShapeType) []const u8 {
 }
 
 test "every wire pointer shape has a bounded CSS sequence" {
-    inline for (std.meta.tags(PointerShapeType)) |shape| {
+    inline for (std.meta.tags(core.PointerShape)) |shape| {
         const encoded = sequence(shape);
         try std.testing.expect(std.mem.startsWith(u8, encoded, "\x1b]22;"));
         try std.testing.expect(std.mem.endsWith(u8, encoded, "\x1b\\"));

@@ -1,19 +1,17 @@
-const ProviderMarkType = @import("ProviderMark.zig");
-const RectType = @import("telar-core").Rect;
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
+const core = @import("telar-core");
 const CursorType = @import("Cursor.zig");
 const Semantic = @This();
 
-area: RectType,
-focused_card: ?RectType = null,
-provider_marks: [max_agent_snapshot_entries]ProviderMarkType = undefined,
+area: core.Rect,
+focused_card: ?core.Rect = null,
+provider_marks: [core.max_agent_snapshot_entries]ProviderMark = undefined,
 provider_mark_count: u8 = 0,
-list_area: RectType = .{},
+list_area: core.Rect = .{},
 cursor: ?CursorType = null,
 
 pub const ProviderMark = @import("ProviderMark.zig");
 
-pub fn addProviderMark(semantic: *Semantic, mark: ProviderMarkType) void {
+pub fn addProviderMark(semantic: *Semantic, mark: ProviderMark) void {
     if (semantic.provider_mark_count == semantic.provider_marks.len) {
         return;
     }

@@ -6,18 +6,13 @@
 
 const head = @import("head_support.zig");
 const body = @import("body.zig");
-const MessageType = @import("Message.zig");
 const types = @import("types.zig");
-const HeadType = @import("Head.zig");
-const RouteType = @import("Route.zig");
 const provider = @import("../provider/request_support.zig");
 const connection = @import("connection.zig");
 const GenericExchangePort = @import("GenericExchangePort.zig").Type;
 const GenericExchange = @import("GenericExchange.zig").Type;
 const GenericPort = @import("GenericPort.zig").Type;
 const GenericConnection = @import("GenericConnection.zig").Type;
-const MessageRouteType = @import("MessageRoute.zig");
-const HeadTransformType = @import("HeadTransform.zig");
 const transform = @import("transform.zig");
 const std = @import("std");
 const FakeSession = @import("FakeSession.zig");
@@ -54,7 +49,7 @@ pub const HeadTransform = @import("HeadTransform.zig");
 /// ```zig
 /// const message = relay(session, route, &observer);
 /// ```
-pub fn relay(session: anytype, route: MessageRouteType, observer: anytype) ?MessageType {
+pub fn relay(session: anytype, route: MessageRoute, observer: anytype) ?Message {
     const parsed = relayHead(session, route) orelse return null;
 
     if (!relayBody(session, .{
@@ -76,7 +71,7 @@ pub fn relay(session: anytype, route: MessageRouteType, observer: anytype) ?Mess
 /// ```zig
 /// const head = relayHead(session, route);
 /// ```
-pub fn relayHead(session: anytype, route: MessageRouteType) ?HeadType {
+pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
     var buffer: [head.max_bytes]u8 = undefined;
     const len = head.read(session, route.from, &buffer) orelse return null;
     if (route.capture) |capture| {
@@ -103,7 +98,7 @@ pub fn relayHead(session: anytype, route: MessageRouteType) ?HeadType {
 /// ```zig
 /// const head = relayHeadTransformed(session, transformation);
 /// ```
-pub fn relayHeadTransformed(session: anytype, transformation: HeadTransformType) ?HeadType {
+pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?Head {
     if (transformation.pipeline.len == 0) {
         var route = transformation.route;
         route.capture = transformation.capture;
@@ -156,7 +151,7 @@ pub fn relayHeadTransformed(session: anytype, transformation: HeadTransformType)
 ///     .framing = response.framing,
 /// }, &observer);
 /// ```
-pub fn relayBody(session: anytype, route: RouteType, observer: anytype) bool {
+pub fn relayBody(session: anytype, route: BodyRoute, observer: anytype) bool {
     return body.relay(session, route, observer);
 }
 
@@ -250,7 +245,7 @@ test "informational response is delimited before the final response" {
         "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
     var fake: FakeSession = .{ .origin_input = responses };
 
-    const route: MessageRouteType = .{
+    const route: MessageRoute = .{
         .from = .origin,
         .to = .child,
         .is_response = true,

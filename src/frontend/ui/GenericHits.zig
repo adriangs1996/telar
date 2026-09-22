@@ -1,4 +1,4 @@
-const Rect = @import("telar-core").Rect;
+const core = @import("telar-core");
 
 /// What was clickable, and which layer it belonged to.
 ///
@@ -18,7 +18,7 @@ pub fn Type(comptime Action: type, comptime capacity: usize) type {
         /// lost track of what the user is looking at.
         pub const max_layers = 8;
 
-        pub const Entry = struct { rect: Rect, action: Action, layer: u8 };
+        pub const Entry = struct { rect: core.Rect, action: Action, layer: u8 };
 
         entries: [capacity]Entry = undefined,
         len: usize = 0,
@@ -26,7 +26,7 @@ pub fn Type(comptime Action: type, comptime capacity: usize) type {
         /// Where each layer stops clicks from falling through. Null means the
         /// layer is transparent outside its own registrations, which is what
         /// the base layer and a tooltip both want.
-        blocks: [max_layers]?Rect = @splat(null),
+        blocks: [max_layers]?core.Rect = @splat(null),
         layer: u8 = 0,
         /// The deepest layer opened this frame, so `at` knows where to start.
         top: u8 = 0,
@@ -55,7 +55,7 @@ pub fn Type(comptime Action: type, comptime capacity: usize) type {
         /// on its blank interior lands on the modal instead of reaching the
         /// list behind it. Pass null for an overlay that should not steal
         /// clicks it has no control under - a tooltip, a drag ghost.
-        pub fn beginLayer(h: *Self, swallows: ?Rect) void {
+        pub fn beginLayer(h: *Self, swallows: ?core.Rect) void {
             if (h.layer + 1 >= max_layers) {
                 return;
             }
@@ -71,7 +71,7 @@ pub fn Type(comptime Action: type, comptime capacity: usize) type {
             h.layer -= 1;
         }
 
-        pub fn add(h: *Self, rect: Rect, action: Action) void {
+        pub fn add(h: *Self, rect: core.Rect, action: Action) void {
             if (h.len == capacity) {
                 return;
             }

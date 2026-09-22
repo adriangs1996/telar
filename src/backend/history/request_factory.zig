@@ -1,5 +1,6 @@
 //! Construction of owned messages accepted by the history channel.
 
+const core = @import("telar-core");
 const std = @import("std");
 const LaunchAttemptRequest = @import("LaunchAttemptRequest.zig");
 const model = @import("model.zig");
@@ -8,11 +9,9 @@ const SessionStartRequest = @import("SessionStartRequest.zig");
 const SessionStartedType = @import("SessionStarted.zig");
 const DefinitionType = @import("Definition.zig");
 const SessionTitleType = @import("SessionTitle.zig");
-const ImportHistoryViewType = @import("telar-core").ImportHistoryView;
 const ImportBatchType = @import("ImportBatch.zig");
 const CommandRecord = @import("CommandRecord.zig");
 const CommandFinishedType = @import("CommandFinished.zig");
-const TabLocationType = @import("telar-core").TabLocation;
 
 /// Copies a failed launch into one request whose ownership can cross the
 /// history channel. Partial allocation failure releases every prior copy.
@@ -91,7 +90,7 @@ pub fn sessionTitle(definition: DefinitionType) !model.Request {
 /// ```zig
 /// const request = try importBatch(gpa, view);
 /// ```
-pub fn importBatch(gpa: std.mem.Allocator, view: ImportHistoryViewType) !model.Request {
+pub fn importBatch(gpa: std.mem.Allocator, view: core.ImportHistoryView) !model.Request {
     return .{ .import = try ImportBatchType.init(gpa, view) };
 }
 
@@ -160,7 +159,7 @@ pub fn commandFinished(gpa: std.mem.Allocator, record: CommandRecord) !model.Req
     return .{ .command_finished = value };
 }
 
-const test_location: TabLocationType = .{
+const test_location: core.TabLocation = .{
     .workspace = .{ .workspace = @enumFromInt(2) },
     .tab_id = @enumFromInt(5),
 };

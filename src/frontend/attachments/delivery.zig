@@ -1,19 +1,13 @@
 //! Kitty attachment placements and transmission; the shared catalog owns PNGs.
 
-const SlotStateType = @import("SlotState.zig");
-const GenericCatalog = @import("telar-client").GenericCatalog;
-const ConfigurationType = @import("telar-client").SidebarRendererInput;
-const Plan = @import("telar-client").Plan;
+const client = @import("telar-client");
+const kitty_protocol = @import("kitty_protocol");
+const core = @import("telar-core");
 const std = @import("std");
-const writeTransmissionAbort_module = @import("kitty_protocol").writeTransmissionAbort;
 const kitty_codec = @import("../graphics/kitty_codec.zig");
-const writeDeleteImageRange_module = @import("kitty_protocol").writeDeleteImageRange;
-const writeDeleteImage_module = @import("kitty_protocol").writeDeleteImage;
-const RectType = @import("telar-core").Rect;
-const OutputPlacementType = @import("kitty_protocol").OutputPlacement;
 const presentation = @import("presentation.zig");
 
-pub const Store = GenericCatalog(@This());
+pub const Store = client.GenericCatalog(@This());
 const Slot = Store.Slot;
 const first_image_id: u32 = 0x90000000;
 const first_thumbnail_placement_id: u32 = 0xa0000000;
@@ -23,7 +17,7 @@ const thumbnail_z: i32 = 1500;
 const modal_z: i32 = 2000;
 pub const State = @import("State.zig");
 pub const SlotState = @import("SlotState.zig");
-pub fn configure(store: *Store, configuration: ConfigurationType) bool {
+pub fn configure(store: *Store, configuration: client.SidebarRendererInput) bool {
     const supported = configuration.support == .supported;
     if (store.delivery.supported == supported and store.delivery.cell_width == configuration.cell_width and
         store.delivery.cell_height == configuration.cell_height)
@@ -46,7 +40,7 @@ pub fn configure(store: *Store, configuration: ConfigurationType) bool {
     return true;
 }
 
-pub fn prepare(store: *Store, plan: Plan) void {
+pub fn prepare(store: *Store, plan: client.Plan) void {
     for (&store.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
         slot.delivery.thumbnail.desired = null;
         slot.delivery.modal.desired = null;
@@ -98,7 +92,7 @@ pub fn write(store: *Store, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     }
     var written: usize = 0;
     if (store.delivery.abort_pending) {
-        written += try writeTransmissionAbort_module(writer);
+        written += try kitty_protocol.writeTransmissionAbort(writer);
         store.delivery.abort_pending = false;
     } else if (store.delivery.partial) |index| {
         const slot = &store.slots[index].?;
@@ -121,7 +115,7 @@ pub fn write(store: *Store, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     }
 
     if (store.delivery.delete_all_pending) {
-        written += try writeDeleteImageRange_module(
+        written += try kitty_protocol.writeDeleteImageRange(
             writer,
             first_image_id,
             first_image_id + max_host_ids,
@@ -136,7 +130,7 @@ pub fn write(store: *Store, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
         };
     } else {
         for (store.delivery.delete_ids[0..store.delivery.delete_count]) |image_id|
-            written += try writeDeleteImage_module(writer, image_id);
+            written += try kitty_protocol.writeDeleteImage(writer, image_id);
         store.delivery.delete_count = 0;
     }
 
@@ -175,7 +169,7 @@ pub fn write(store: *Store, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
     return written;
 }
 
-pub fn fitPlacement(store: *const Store, slot: *const Slot, area: RectType) ?OutputPlacementType {
+pub fn fitPlacement(store: *const Store, slot: *const Slot, area: core.Rect) ?kitty_protocol.OutputPlacement {
     return presentation.fitPlacement(.{ .width = slot.width, .height = slot.height }, .{ .width = store.delivery.cell_width, .height = store.delivery.cell_height }, area);
 }
 
@@ -213,7 +207,7 @@ pub fn queueDelete(store: *Store, image_id: u32) void {
     store.delivery.delete_count += 1;
 }
 
-pub fn createSlot(store: *Store) !SlotStateType {
+pub fn createSlot(store: *Store) !SlotState {
     const id = try allocateHostId(store);
     return .{ .image_id = first_image_id + id, .thumbnail = .{ .id = first_thumbnail_placement_id + id, .z = thumbnail_z }, .modal = .{ .id = first_modal_placement_id + id, .z = modal_z } };
 }

@@ -3,24 +3,18 @@
 //! The registry only reads data and hashes code. Plugin Lua is never loaded in
 //! the client process; a resolved invocation is suitable for a separate worker.
 
+const core = @import("telar-core");
+const data = @import("model");
 const std = @import("std");
 const WorkerRequest = @import("WorkerRequest.zig");
 const WorkerResult = @import("WorkerResult.zig");
 const protocol = @import("protocol.zig");
 const LoadContext = @import("LoadContext.zig");
 const Package = @import("Package.zig");
-const max_manifest_bytes_module = @import("telar-core").max_manifest_bytes;
-const parseManifest_module = @import("telar-core").parseManifest;
 const generation_support = @import("../config/generation_support.zig");
-const DigestType = @import("telar-core").Digest;
 const Installation = @import("Installation.zig");
 const FingerprintUpdate = @import("FingerprintUpdate.zig");
 const Registry = @import("Registry.zig");
-const EffectBatchType = @import("../config/EffectBatch.zig");
-const stableId_module = @import("telar-core").stableId;
-const CapabilitySetType = @import("telar-core").CapabilitySet;
-const ScrollDirectionType = @import("../input/action.zig").ScrollDirection;
-const NotificationType = @import("../input/Notification.zig");
 const model = @import("../config/model.zig");
 
 pub const max_package_files = 256;
@@ -120,10 +114,10 @@ pub fn loadPackage(context: LoadContext, configured_path: []const u8) !Package {
         io,
         manifest_path,
         gpa,
-        .limited(max_manifest_bytes_module),
+        .limited(core.max_manifest_bytes),
     );
     defer gpa.free(manifest_bytes);
-    const manifest = try parseManifest_module(gpa, manifest_bytes);
+    const manifest = try core.parseManifest(gpa, manifest_bytes);
 
     var candidate_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const candidate = try std.fmt.bufPrint(
@@ -154,7 +148,7 @@ pub fn loadPackage(context: LoadContext, configured_path: []const u8) !Package {
     return package;
 }
 
-fn digestPackage(gpa: std.mem.Allocator, io: std.Io, root: []const u8) !DigestType {
+fn digestPackage(gpa: std.mem.Allocator, io: std.Io, root: []const u8) !core.Digest {
     var directory = try std.Io.Dir.cwd().openDir(io, root, .{ .iterate = true });
     defer directory.close(io);
     var walker = try directory.walk(gpa);
@@ -394,8 +388,8 @@ test "privileged plugin effects require a digest-bound capability grant" {
         \\  "capabilities": ["runtime.control"]
         \\}
     ;
-    const manifest = try parseManifest_module(std.testing.allocator, manifest_source);
-    const digest: DigestType = @splat(7);
+    const manifest = try core.parseManifest(std.testing.allocator, manifest_source);
+    const digest: core.Digest = @splat(7);
     var registry: Registry = .{};
     registry.packages[0] = .{
         .manifest = manifest,
@@ -403,7 +397,7 @@ test "privileged plugin effects require a digest-bound capability grant" {
         .root_len = 0,
     };
     registry.count = 1;
-    var batch: EffectBatchType = .{};
+    var batch: data.EffectBatch = .{};
     batch.items[0] = .close_pane;
     batch.len = 1;
 
@@ -411,29 +405,29 @@ test "privileged plugin effects require a digest-bound capability grant" {
         error.CapabilityNotGranted,
         registry.authorizeBatch(.{
             .package_index = 0,
-            .plugin_id = stableId_module(manifest.id()),
+            .plugin_id = core.stableId(manifest.id()),
             .digest = digest,
             .batch = &batch,
         }),
     );
     registry.grants[0] = .{
-        .plugin_hash = stableId_module(manifest.id()),
+        .plugin_hash = core.stableId(manifest.id()),
         .digest = digest,
-        .capabilities = CapabilitySetType.initOne(.runtime_control),
+        .capabilities = core.CapabilitySet.initOne(.runtime_control),
     };
     registry.grant_count = 1;
     try registry.authorizeBatch(.{
         .package_index = 0,
-        .plugin_id = stableId_module(manifest.id()),
+        .plugin_id = core.stableId(manifest.id()),
         .digest = digest,
         .batch = &batch,
     });
 
-    for ([_]ScrollDirectionType{ .up, .down }) |direction| {
+    for ([_]data.ScrollDirection{ .up, .down }) |direction| {
         batch.items[0] = .{ .scroll_pane = direction };
         try std.testing.expectError(error.InvalidPluginEffect, registry.authorizeBatch(.{
             .package_index = 0,
-            .plugin_id = stableId_module(manifest.id()),
+            .plugin_id = core.stableId(manifest.id()),
             .digest = digest,
             .batch = &batch,
         }));
@@ -443,17 +437,17 @@ test "privileged plugin effects require a digest-bound capability grant" {
 
     try std.testing.expectError(error.InvalidPluginEffect, registry.authorizeBatch(.{
         .package_index = 0,
-        .plugin_id = stableId_module(manifest.id()),
+        .plugin_id = core.stableId(manifest.id()),
         .digest = digest,
         .batch = &batch,
     }));
 
-    const stale_digest: DigestType = @splat(8);
+    const stale_digest: core.Digest = @splat(8);
     try std.testing.expectError(
         error.StalePluginWorker,
         registry.authorizeBatch(.{
             .package_index = 0,
-            .plugin_id = stableId_module(manifest.id()),
+            .plugin_id = core.stableId(manifest.id()),
             .digest = stale_digest,
             .batch = &batch,
         }),
@@ -461,11 +455,11 @@ test "privileged plugin effects require a digest-bound capability grant" {
 }
 
 test "plugin notification effects require the notifications capability" {
-    const manifest = try parseManifest_module(
+    const manifest = try core.parseManifest(
         std.testing.allocator,
         "{\"api_version\":1,\"id\":\"dev.telar.notify\",\"version\":\"1\",\"entry\":\"plugin.lua\",\"source\":{\"url\":\"local:test\",\"revision\":\"one\"},\"actions\":[\"notify\"],\"capabilities\":[\"notifications\"]}",
     );
-    const digest: DigestType = @splat(5);
+    const digest: core.Digest = @splat(5);
     var registry: Registry = .{};
     registry.packages[0] = .{
         .manifest = manifest,
@@ -473,8 +467,8 @@ test "plugin notification effects require the notifications capability" {
         .root_len = 0,
     };
     registry.count = 1;
-    var batch: EffectBatchType = .{};
-    batch.items[0] = .{ .notification = try NotificationType.init(.{
+    var batch: data.EffectBatch = .{};
+    batch.items[0] = .{ .notification = try data.Notification.init(.{
         .level = .info,
         .duration_ms = 2000,
         .target = .none,
@@ -487,27 +481,27 @@ test "plugin notification effects require the notifications capability" {
         error.CapabilityNotGranted,
         registry.authorizeBatch(.{
             .package_index = 0,
-            .plugin_id = stableId_module(manifest.id()),
+            .plugin_id = core.stableId(manifest.id()),
             .digest = digest,
             .batch = &batch,
         }),
     );
     registry.grants[0] = .{
-        .plugin_hash = stableId_module(manifest.id()),
+        .plugin_hash = core.stableId(manifest.id()),
         .digest = digest,
-        .capabilities = CapabilitySetType.initOne(.notifications),
+        .capabilities = core.CapabilitySet.initOne(.notifications),
     };
     registry.grant_count = 1;
     try registry.authorizeBatch(.{
         .package_index = 0,
-        .plugin_id = stableId_module(manifest.id()),
+        .plugin_id = core.stableId(manifest.id()),
         .digest = digest,
         .batch = &batch,
     });
 }
 
 test "configured plugin actions resolve before the keymap becomes active" {
-    const manifest = try parseManifest_module(
+    const manifest = try core.parseManifest(
         std.testing.allocator,
         "{\"api_version\":1,\"id\":\"dev.telar.binding-test\",\"version\":\"1\",\"entry\":\"plugin.lua\",\"source\":{\"url\":\"local:test\",\"revision\":\"one\"},\"actions\":[\"known\"]}",
     );
@@ -521,8 +515,8 @@ test "configured plugin actions resolve before the keymap becomes active" {
     const binding = try model.ConfiguredBinding.parse(
         &.{"escape"},
         .{ .plugin = .{
-            .plugin = stableId_module(manifest.id()),
-            .action = stableId_module("missing"),
+            .plugin = core.stableId(manifest.id()),
+            .action = core.stableId("missing"),
         } },
     );
     try std.testing.expectError(

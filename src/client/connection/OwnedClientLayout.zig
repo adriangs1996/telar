@@ -1,8 +1,8 @@
-const max_client_layout_wire_bytes_module = @import("telar-core").max_client_layout_wire_bytes;
+const core = @import("telar-core");
 const std = @import("std");
 const OwnedClientLayout = @This();
 
-bytes: [max_client_layout_wire_bytes_module]u8 = undefined,
+bytes: [core.max_client_layout_wire_bytes]u8 = undefined,
 len: u16 = 0,
 used: bool = false,
 

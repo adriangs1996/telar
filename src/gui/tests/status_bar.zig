@@ -1,3 +1,4 @@
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -51,7 +52,12 @@ test "native footer reserves TLS ahead of widgets and mode hints in narrow windo
     state.layout.bottom = .{ try colored("left widget that exceeds the viewport", widget_color), .tabs, try colored("right widget that exceeds the viewport", widget_color) };
     state.layout.top_right = try colored("legacy widget that exceeds the viewport", widget_color);
     var hints: client.Hints = .{};
-    hints.append(.{ .key = try client.parseKey("Ctrl+v"), .label = "split vertically" });
+    hints.append(
+        .{
+            .key = try data.chord.parseKey("Ctrl+v"),
+            .label = "split vertically",
+        },
+    );
     for ([_]u16{ 120, 32, 12 }) |width| {
         try fixture.resize(width, 8);
         var projection = fixture.projection();

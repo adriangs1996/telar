@@ -1,7 +1,6 @@
 //! Request classification by API dialect.
 
 const types = @import("../../agent/types.zig");
-const RequestType = @import("Request.zig");
 const std = @import("std");
 
 pub const ApiDialect = types.ApiDialect;
@@ -21,7 +20,7 @@ pub const RequestClass = enum {
 /// ```zig
 /// const class = classify(.anthropic_messages, .{ .method = "POST", .target = "/v1/messages" });
 /// ```
-pub fn classify(dialect: types.ApiDialect, request: RequestType) RequestClass {
+pub fn classify(dialect: types.ApiDialect, request: Request) RequestClass {
     if (!std.ascii.eqlIgnoreCase(request.method, "POST")) {
         return .auxiliary;
     }
@@ -67,11 +66,11 @@ test "request classification enforces dialect route ownership" {
 
 test "request classification rejects non-generation variants" {
     inline for (.{
-        RequestType{ .method = "GET", .target = "/v1/messages" },
-        RequestType{ .method = "POST", .target = "/v1/messages/count_tokens?beta=true" },
-        RequestType{ .method = "POST", .target = "/api/event_logging/v2/batch" },
-        RequestType{ .method = "POST", .target = "/V1/MESSAGES" },
-        RequestType{ .method = "POST", .target = "/v1/messages#fragment" },
+        Request{ .method = "GET", .target = "/v1/messages" },
+        Request{ .method = "POST", .target = "/v1/messages/count_tokens?beta=true" },
+        Request{ .method = "POST", .target = "/api/event_logging/v2/batch" },
+        Request{ .method = "POST", .target = "/V1/MESSAGES" },
+        Request{ .method = "POST", .target = "/v1/messages#fragment" },
     }) |request| {
         try std.testing.expectEqual(RequestClass.auxiliary, classify(.anthropic_messages, request));
     }

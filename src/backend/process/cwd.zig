@@ -1,9 +1,10 @@
 //! Native working-directory lookup for an observed process.
 
+const darwin = @import("darwin.zig");
 const builtin = @import("builtin");
 const std = @import("std");
 
-const mac = if (builtin.os.tag == .macos) @import("darwin.zig").c else void;
+const mac = if (builtin.os.tag == .macos) darwin.c else void;
 
 /// Reads the current working directory reported by the operating system.
 /// The returned slice borrows `buffer`; failure or insufficient space returns

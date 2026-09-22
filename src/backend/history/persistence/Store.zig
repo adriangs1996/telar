@@ -1,7 +1,7 @@
+const core = @import("telar-core");
 const sqlite = @import("sqlite.zig");
 const std = @import("std");
 const LaunchAttemptType = @import("../LaunchAttempt.zig");
-const raw_module = @import("telar-core").raw;
 const SessionStartedType = @import("../SessionStarted.zig");
 const CommandFinishedType = @import("../CommandFinished.zig");
 const DeleteType = @import("../Delete.zig");
@@ -15,10 +15,8 @@ const Accumulator = @import("../Accumulator.zig");
 const StatsQueryType = @import("../StatsQuery.zig");
 const StatsResultType = @import("../StatsResult.zig");
 const policy = @import("../search_policy.zig");
-const max_history_stats_top_module = @import("telar-core").max_history_stats_top;
 const StatsTopType = @import("../StatsTop.zig");
 const PruneType = @import("../Prune.zig");
-const max_history_query_bytes = @import("telar-core").max_history_query_bytes;
 const Store = @This();
 
 db: *sqlite.c.sqlite3,
@@ -124,12 +122,12 @@ pub fn close(store: *Store) void {
 pub fn insertLaunchAttempt(store: *Store, value: *const LaunchAttemptType) !void {
     const stmt = store.insert_launch_attempt;
     defer sqlite.reset(stmt);
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 1, @intCast(raw_module(value.pane_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 1, @intCast(core.raw(value.pane_id)));
     _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(value.pane_generation));
     const location = sqlite.locationColumns(value.location);
     _ = sqlite.c.sqlite3_bind_int(stmt, 3, location.kind);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(raw_module(value.location.tab_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(core.raw(value.location.tab_id)));
     sqlite.bindText(stmt, 6, value.workspace_path);
     sqlite.bindText(stmt, 7, value.shell);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 8, value.started_at_ms);
@@ -143,11 +141,11 @@ pub fn startSession(store: *Store, value: *const SessionStartedType) !void {
     const stmt = store.insert_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(raw_module(value.pane_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(core.raw(value.pane_id)));
     const location = sqlite.locationColumns(value.location);
     _ = sqlite.c.sqlite3_bind_int(stmt, 3, location.kind);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(raw_module(value.location.tab_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(core.raw(value.location.tab_id)));
     sqlite.bindText(stmt, 6, value.workspace_path);
     sqlite.bindText(stmt, 7, value.shell);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 8, value.started_at_ms);
@@ -221,11 +219,11 @@ pub fn importSession(store: *Store, value: *const SessionStartedType) !void {
     const stmt = store.import_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(raw_module(value.pane_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(core.raw(value.pane_id)));
     const location = sqlite.locationColumns(value.location);
     _ = sqlite.c.sqlite3_bind_int(stmt, 3, location.kind);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(raw_module(value.location.tab_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(core.raw(value.location.tab_id)));
     sqlite.bindText(stmt, 6, value.workspace_path);
     sqlite.bindText(stmt, 7, value.shell);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 8, value.started_at_ms);
@@ -242,11 +240,11 @@ pub fn ensureCommandSession(store: *Store, value: *const CommandFinishedType) !v
     const stmt = store.import_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.session_id);
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(raw_module(value.pane_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(core.raw(value.pane_id)));
     const location = sqlite.locationColumns(value.location);
     _ = sqlite.c.sqlite3_bind_int(stmt, 3, location.kind);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(raw_module(value.location.tab_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(core.raw(value.location.tab_id)));
     sqlite.bindText(stmt, 6, value.workspace_path);
     sqlite.bindText(stmt, 7, "");
     _ = sqlite.c.sqlite3_bind_int64(stmt, 8, value.started_at_ms);
@@ -263,11 +261,11 @@ pub fn importCommand(store: *Store, value: *const CommandFinishedType) !void {
     const stmt = store.import_command;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.session_id);
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(raw_module(value.pane_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(core.raw(value.pane_id)));
     const location = sqlite.locationColumns(value.location);
     _ = sqlite.c.sqlite3_bind_int(stmt, 3, location.kind);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(raw_module(value.location.tab_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(core.raw(value.location.tab_id)));
     _ = sqlite.c.sqlite3_bind_int64(stmt, 6, @intCast(value.sequence));
     sqlite.bindText(stmt, 7, value.command);
     _ = sqlite.c.sqlite3_bind_int(stmt, 8, @intFromBool(value.command_truncated));
@@ -311,11 +309,11 @@ pub fn insertCommand(store: *Store, value: *const CommandFinishedType) !bool {
     const stmt = store.insert_command;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.session_id);
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(raw_module(value.pane_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(core.raw(value.pane_id)));
     const location = sqlite.locationColumns(value.location);
     _ = sqlite.c.sqlite3_bind_int(stmt, 3, location.kind);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 4, @intCast(location.id));
-    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(raw_module(value.location.tab_id)));
+    _ = sqlite.c.sqlite3_bind_int64(stmt, 5, @intCast(core.raw(value.location.tab_id)));
     _ = sqlite.c.sqlite3_bind_int64(stmt, 6, @intCast(value.sequence));
     sqlite.bindText(stmt, 7, value.command);
     _ = sqlite.c.sqlite3_bind_int(stmt, 8, @intFromBool(value.command_truncated));
@@ -495,7 +493,7 @@ pub fn stats(store: *Store, gpa: std.mem.Allocator, request: *const StatsQueryTy
     };
 
     const Top = struct { count: u64, key: []const u8 };
-    var best: [max_history_stats_top_module]Top = undefined;
+    var best: [core.max_history_stats_top]Top = undefined;
     var best_len: usize = 0;
     var iterator = buckets.iterator();
     while (iterator.next()) |entry| {
@@ -560,7 +558,7 @@ pub fn prune(store: *Store, request: *const PruneType) !u64 {
     var sql_buffer: [1024]u8 = undefined;
     var sql = std.Io.Writer.fixed(&sql_buffer);
     try sql.writeAll("DELETE FROM command WHERE 1=1");
-    var match_buffer: [2 * max_history_query_bytes + 2]u8 = undefined;
+    var match_buffer: [2 * core.max_history_query_bytes + 2]u8 = undefined;
     const use_index = store.fts_available and sqlite.queryCharacters(request.matchSlice()) >= 3;
     if (request.match_len != 0) {
         if (use_index) {
@@ -609,7 +607,7 @@ pub fn prune(store: *Store, request: *const PruneType) !u64 {
             _ = sqlite.c.sqlite3_bind_int64(
                 stmt,
                 parameter,
-                @intCast(raw_module(request.pane_id)),
+                @intCast(core.raw(request.pane_id)),
             );
             parameter += 1;
         },
@@ -650,7 +648,7 @@ pub fn query(store: *Store, gpa: std.mem.Allocator, original: *const QueryType) 
     // The trigram index probes instead of scanning the whole table, and
     // is case-insensitive like the fallback. Trigram matching needs at
     // least three characters; shorter queries take the scan.
-    var match_buffer: [2 * max_history_query_bytes + 2]u8 = undefined;
+    var match_buffer: [2 * core.max_history_query_bytes + 2]u8 = undefined;
     const use_index = store.fts_available and sqlite.queryCharacters(request.textSlice()) >= 3;
     if (request.text_len != 0) {
         if (use_index) {

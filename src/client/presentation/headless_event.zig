@@ -1,5 +1,6 @@
+const data = @import("model");
 pub const Message = union(enum) {
-    server: *const @import("../connection/RuntimeMessage.zig"),
-    key: @import("../input/Key.zig"),
+    server: *const data.RuntimeMessage,
+    key: data.Key,
     completed: @import("HeadlessCompletion.zig"),
 };

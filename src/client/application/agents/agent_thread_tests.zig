@@ -1,11 +1,11 @@
+const AgentHistoryWindow = @import("../../panes/AgentHistoryWindow.zig");
+const outbox_support = @import("../../connection/outbox_support.zig");
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const Model = @import("../../model/Model.zig");
-const Command = @import("../../model/name_prompt.zig").Command;
-const AgentOperation = @import("../../connection/AgentOperation.zig");
 const Outbox = @import("../../connection/Outbox.zig");
 const reading = @import("agent_reading.zig");
-const HistoryOperation = @import("../../connection/AgentHistoryOperation.zig");
 
 const pane_id: core.PaneId = @enumFromInt(1);
 const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
@@ -164,9 +164,9 @@ test "agent prompt acknowledgements preserve later edits and replacement attachm
     var bytes: [4096]u8 = undefined;
     _ = try handler.applyAgentThread(try readySnapshot(&bytes, 1));
     try std.testing.expect(handler.planAgentPrompt(pane_id) == null);
-    try std.testing.expect(handler.editAgentComposer(pane_id, Command{ .insert = "Fix the tests\nKeep the API" }));
+    try std.testing.expect(handler.editAgentComposer(pane_id, data.PromptCommand{ .insert = "Fix the tests\nKeep the API" }));
     const prompt = handler.planAgentPrompt(pane_id).?;
-    const operation: AgentOperation = .{
+    const operation: data.AgentOperation = .{
         .pane_id = pane_id,
         .pane_generation = prompt.pane_generation,
         .attachment_generation = prompt.attachment_generation,
@@ -306,7 +306,7 @@ fn historyModel() !*Model {
     return model;
 }
 
-fn historyOperation(model: *Model, generation: u64) HistoryOperation {
+fn historyOperation(model: *Model, generation: u64) data.AgentHistoryOperation {
     const pane = model.agentPane(pane_id).?;
     return .{ .owner = .{ .pane_id = pane_id, .pane_generation = pane.pane_generation, .attachment_generation = pane.attachment_generation, .location = pane.location }, .view_generation = generation };
 }
@@ -335,7 +335,7 @@ test "folded history scanning is bounded and preserves its seam across retries" 
     const page = try std.testing.allocator.create(core.AgentHistoryPage);
     defer std.testing.allocator.destroy(page);
     page.* = window.pages[0];
-    for (0..@import("../../panes/AgentHistoryWindow.zig").max_scan_pages) |index| {
+    for (0..AgentHistoryWindow.max_scan_pages) |index| {
         try std.testing.expect(reading.skipFolded(handler, pane_id));
         const query = (try reading.begin(handler, pane_id)).?;
         try std.testing.expect(!reading.skipFolded(handler, pane_id));
@@ -557,7 +557,7 @@ test "queued agent history cursors own reused input without inflating message me
     try std.testing.expectEqualStrings("provider-item", initial.anchor);
     try std.testing.expectEqualStrings("provider-turn", initial.anchor_turn);
     try std.testing.expectEqualStrings("", initial.cursor);
-    try std.testing.expect(@sizeOf(@import("../../connection/outbox_support.zig").Message) < 512);
+    try std.testing.expect(@sizeOf(outbox_support.Message) < 512);
 }
 
 test "hidden history completions update their window without invalidating the visible tab" {
@@ -785,7 +785,7 @@ test "image drafts survive failed admission later edits and stale acknowledgemen
     }
 
     try std.testing.expectError(error.TooManyAgentImages, handler.attachAgentImage(pane_id, "/tmp/overflow.png"));
-    var operation: AgentOperation = .{ .pane_id = pane_id, .pane_generation = prompt.pane_generation, .attachment_generation = prompt.attachment_generation, .location = location, .composer_content_revision = prompt.composer_content_revision };
+    var operation: data.AgentOperation = .{ .pane_id = pane_id, .pane_generation = prompt.pane_generation, .attachment_generation = prompt.attachment_generation, .location = location, .composer_content_revision = prompt.composer_content_revision };
     try std.testing.expect(!handler.completeAgentPrompt(operation));
     try std.testing.expectEqual(@as(u8, 4), model.agentPane(pane_id).?.composerImages().count);
     operation.composer_content_revision = model.agentPane(pane_id).?.composer_content_revision;

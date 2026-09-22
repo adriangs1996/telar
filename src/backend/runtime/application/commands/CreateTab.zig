@@ -1,13 +1,11 @@
-const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
-const TerminalSizeType = @import("telar-core").TerminalSize;
-const LaunchViewType = @import("telar-core").LaunchView;
+const core = @import("telar-core");
 const CreateTab = @This();
 
-workspace: WorkspaceLocationType,
+workspace: core.WorkspaceLocation,
 /// Borrowed only for the synchronous `execute` call.
 label: []const u8,
-size: TerminalSizeType,
+size: core.TerminalSize,
 /// Every slice in this view is borrowed only for `execute`.
-launch: LaunchViewType,
+launch: core.LaunchView,
 
-kind: @import("telar-core").PaneKind = .terminal,
+kind: core.PaneKind = .terminal,

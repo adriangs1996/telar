@@ -1,6 +1,6 @@
-const TargetType = @import("telar-client").AttachmentTarget;
+const data = @import("model");
 const PiFrame = @This();
 
-target: TargetType,
+target: data.AttachmentTarget,
 prompt: []const u8,
 id: u64,

@@ -1,9 +1,9 @@
-const SinkType = @import("telar-core").Sink;
+const core = @import("telar-core");
 const telemetry = @import("telemetry.zig");
 const std = @import("std");
 const State = @This();
 
-sink: SinkType = .{},
+sink: core.Sink = .{},
 line: [telemetry.max_line_bytes]u8 = undefined,
 write_pending: bool = false,
 
@@ -13,7 +13,7 @@ write_pending: bool = false,
 /// var state = State.init(io, endpoint, "runtime");
 /// ```
 pub fn init(io: std.Io, endpoint: []const u8, suffix: []const u8) State {
-    return .{ .sink = SinkType.init(io, endpoint, suffix) };
+    return .{ .sink = core.Sink.init(io, endpoint, suffix) };
 }
 
 /// Closes the sink without invalidating an in-flight write completion.

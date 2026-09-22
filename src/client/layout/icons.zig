@@ -1,6 +1,5 @@
+const core = @import("telar-core");
 const std = @import("std");
-const AgentProviderType = @import("telar-core").AgentProvider;
-const builtin_table_module = @import("telar-core").builtin_table;
 
 pub const Theme = enum {
     unicode,
@@ -67,7 +66,7 @@ pub const Icon = enum {
     /// ```zig
     /// const icon = Icon.forProvider(agent.provider) orelse .provider_unknown;
     /// ```
-    pub fn forProvider(provider: AgentProviderType) ?Icon {
+    pub fn forProvider(provider: core.AgentProvider) ?Icon {
         return switch (provider) {
             .claude => .provider_claude,
             .codex => .provider_codex,
@@ -79,11 +78,11 @@ pub const Icon = enum {
     /// Selects a foreground application's mark using built-in agent identities
     /// and common terminal tools. Example: const icon = Icon.forApplication("nvim");
     pub fn forApplication(name: []const u8) Icon {
-        if (builtin_table_module.providerFromExecutable(name)) |provider| {
+        if (core.builtin_table.providerFromExecutable(name)) |provider| {
             return Icon.forProvider(provider) orelse .app_terminal;
         }
 
-        for (builtin_table_module.slice()) |*manifest| {
+        for (core.builtin_table.slice()) |*manifest| {
             if (std.mem.eql(u8, name, manifest.displayName())) {
                 return Icon.forProvider(manifest.provider) orelse .app_terminal;
             }

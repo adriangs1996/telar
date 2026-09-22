@@ -1,9 +1,9 @@
+const response_queue = @import("../delivery/response_queue.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Runtime = @import("../Runtime.zig");
 const Session = @import("../client/Session.zig");
 const requests = @import("../application/requests.zig");
-const PendingResponse = @import("../delivery/response_queue.zig").PendingResponse;
 const Pane = @import("../../pane/Pane.zig");
 const RequestFixture = @This();
 
@@ -77,7 +77,7 @@ pub fn sendTo(self: *RequestFixture, session: *Session, message: core.ClientMess
     try requests.dispatch(&self.runtime.application, session, message);
 }
 
-pub fn response(self: *RequestFixture) ?*PendingResponse {
+pub fn response(self: *RequestFixture) ?*response_queue.PendingResponse {
     return self.session.delivery.responses.peek();
 }
 

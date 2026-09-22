@@ -1,9 +1,9 @@
+const DiagnosticsOptions = @import("arguments/DiagnosticsOptions.zig");
 const std = @import("std");
-const Component = @import("arguments/DiagnosticsOptions.zig").Component;
 const Log = @This();
 pub const max_tail_bytes = 64 * 1024;
 name: []const u8,
-component: Component,
+component: DiagnosticsOptions.Component,
 pid: u32,
 
 /// Recognizes only exact telemetry suffixes for the selected socket. Example: `const log = DiagnosticLog.parse(name, base);`
@@ -13,7 +13,7 @@ pub fn parse(name: []const u8, base: []const u8) ?Log {
     }
 
     const suffix = name[base.len..];
-    const component: Component = if (std.mem.startsWith(u8, suffix, ".runtime-")) .runtime else if (std.mem.startsWith(u8, suffix, ".client-")) .client else return null;
+    const component: DiagnosticsOptions.Component = if (std.mem.startsWith(u8, suffix, ".runtime-")) .runtime else if (std.mem.startsWith(u8, suffix, ".client-")) .client else return null;
     const prefix_len: usize = if (component == .runtime) ".runtime-".len else ".client-".len;
     if (suffix.len <= prefix_len + ".log".len) {
         return null;

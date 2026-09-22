@@ -1,6 +1,6 @@
 //! Fixed-depth playback state for one disposable client.
 
-const AgentSound = @import("telar-core").AgentSound;
+const core = @import("telar-core");
 const Playback = @import("SoundPlayback.zig");
 const std = @import("std");
 const Snapshot = @import("SoundSnapshot.zig");
@@ -8,10 +8,10 @@ const Snapshot = @import("SoundSnapshot.zig");
 pub const RequestOutcome = union(enum) {
     ignored,
     queued,
-    start: AgentSound,
+    start: core.AgentSound,
 };
 
-pub fn coalesce(current: ?AgentSound, incoming: AgentSound) AgentSound {
+pub fn coalesce(current: ?core.AgentSound, incoming: core.AgentSound) core.AgentSound {
     if (current == .needs_input or incoming == .needs_input) {
         return .needs_input;
     }
@@ -31,7 +31,7 @@ test "playback starts one worker and coalesces one queued priority" {
         .queued = .needs_input,
     }, playback.snapshot());
 
-    try std.testing.expectEqual(AgentSound.needs_input, playback.complete().?);
+    try std.testing.expectEqual(core.AgentSound.needs_input, playback.complete().?);
     try std.testing.expectEqual(Snapshot{
         .configuration = .{},
         .active = true,

@@ -1,6 +1,5 @@
-const CallbackRefType = @import("../input/CallbackRef.zig");
-const CallbackContextType = @import("CallbackContext.zig");
+const data = @import("model");
 const CallbackInvocation = @This();
 
-reference: CallbackRefType,
-context: CallbackContextType,
+reference: data.InputCallbackRef,
+context: data.CallbackContext,

@@ -1,4 +1,6 @@
 //! Real file watch and generation ownership around the native session fixture.
+const native = @import("../native/native.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
@@ -11,7 +13,7 @@ temp: std.testing.TmpDir,
 path: []const u8,
 trust_path: []const u8,
 
-pub const viewport: @import("../native/native.zig").Viewport = .{ .width = 180, .height = 168, .scale = 1 };
+pub const viewport: native.Viewport = .{ .width = 180, .height = 168, .scale = 1 };
 
 pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
     const gpa = std.testing.allocator;
@@ -28,10 +30,21 @@ pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
     errdefer session.deinit();
     var fixture: Fixture = .{ .session = session, .temp = temp, .path = path, .trust_path = trust_path };
     try fixture.write("config.lua", source);
+    session.gui.app.options.profile = profile;
+    const candidate = try fixture.adoption();
+    session.gui.app.reload.next_generation = candidate.generation.number;
+    _ = try session.gui.app.completeConfigReload(
+        .{
+            .loaded = .{
+                .generation = candidate.generation,
+                .registry = candidate.registry,
+                .trust_store = candidate.trust_store,
+                .mtime_ns = 0,
+            },
+        },
+    );
     session.gui.app.options.config_path = path;
     session.gui.app.options.trust_path = trust_path;
-    session.gui.app.options.profile = profile;
-    _ = try client.operations.config_reloads.apply(&session.gui.app, try fixture.adoption());
     const generation = session.gui.app.lua_generation.?;
     const renderer = try Renderer.configured(gpa, io, .{ .config = generation.snapshot.gui, .theme = generation.snapshot.theme.terminal, .viewport = viewport });
     session.gui.renderer.deinit();
@@ -81,7 +94,7 @@ pub fn wait(fixture: *Fixture) !void {
 
 fn adoption(fixture: *Fixture) !client.ConfigAdoption {
     const gpa = std.testing.allocator;
-    var diagnostic: client.Diagnostic = .{};
+    var diagnostic: data.Diagnostic = .{};
     const generation = try client.Generation.loadFile(.{ .gpa = gpa, .io = std.testing.io, .diagnostic = &diagnostic }, .{
         .path = fixture.path,
         .number = 1,

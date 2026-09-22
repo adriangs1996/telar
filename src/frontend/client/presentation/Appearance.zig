@@ -1,6 +1,5 @@
-const ThemeType = @import("telar-client").ColorTheme;
-const ClientTheme = @import("telar-client").Theme;
+const client = @import("telar-client");
 const Appearance = @This();
 
-theme: ThemeType,
-icons: ClientTheme = .unicode,
+theme: client.ColorTheme,
+icons: client.Theme = .unicode,

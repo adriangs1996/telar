@@ -1,12 +1,12 @@
+const core = @import("telar-core");
 const std = @import("std");
-const max_agent_snapshot_entries = @import("telar-core").max_agent_snapshot_entries;
 const CredentialType = @import("Credential.zig");
 const credential_registry = @import("credential_registry.zig");
 const PaneGeneration = @import("PaneGeneration.zig");
 const Registry = @This();
 
 mutex: std.Io.Mutex = .init,
-slots: [max_agent_snapshot_entries]?CredentialType = @splat(null),
+slots: [core.max_agent_snapshot_entries]?CredentialType = @splat(null),
 
 /// Copies one live capability into bounded registry storage. Exact
 /// duplicate credentials are rejected.

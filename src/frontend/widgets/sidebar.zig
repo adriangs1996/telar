@@ -4,35 +4,22 @@
 //! filters, tabs, or task actions. Clicking an agent remains a client-owned
 //! navigation action that focuses its pane when that pane is attached.
 
+const core = @import("telar-core");
+const client = @import("telar-client");
+const data = @import("model");
 const ContextType = @import("Context.zig");
 const SidebarInput = @import("SidebarInput.zig");
 const Semantic = @import("Semantic.zig");
-const RectType = @import("telar-core").Rect;
-const ColorType = @import("telar-core").Color;
 const AgentLineInput = @import("AgentLineInput.zig");
 const widget = @import("context_support.zig");
 const std = @import("std");
-const StyleType = @import("telar-core").Style;
-const IconType = @import("telar-client").Icon;
-const generic_placeholder_module = @import("telar-core").generic_placeholder;
 const AgentLocationInput = @import("AgentLocationInput.zig");
-const AgentType = @import("telar-client").Agent;
 const AgentMetaInput = @import("AgentMetaInput.zig");
-const measure_module = @import("telar-core").measure;
 const AgentStatusInput = @import("AgentStatusInput.zig");
-const AgentStatusType = @import("telar-core").AgentStatus;
 const icons_module = @import("../ui/icons.zig");
 const ScrollbarInput = @import("ScrollbarInput.zig");
 const RuleInput = @import("RuleInput.zig");
-const BufferType = @import("telar-core").Buffer;
 const State = @import("State.zig");
-const Snapshot = @import("telar-client").AgentSnapshot;
-const theme_support = @import("telar-client").theme_support;
-const AgentInput = @import("telar-client").AgentInput;
-const TabLocationType = @import("telar-core").TabLocation;
-const PaneIdType = @import("telar-core").PaneId;
-const MultiplexerModel = @import("telar-client").MultiplexerModel;
-const AgentProviderType = @import("telar-core").AgentProvider;
 
 const agent_card_rows = 3;
 const agent_row_spacing = 1;
@@ -60,7 +47,7 @@ fn renderCells(context: *ContextType, input: SidebarInput, semantic: *Semantic) 
         return;
     }
 
-    const inside: RectType = .{
+    const inside: core.Rect = .{
         .x = area.x + 1,
         .y = area.y,
         .w = area.w - 2,
@@ -76,8 +63,8 @@ fn renderCells(context: *ContextType, input: SidebarInput, semantic: *Semantic) 
     drawAgents(context, input, semantic);
 }
 
-fn drawHeader(context: *ContextType, area: RectType, background: ColorType) void {
-    const row: RectType = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 3, .h = 1 };
+fn drawHeader(context: *ContextType, area: core.Rect, background: core.Color) void {
+    const row: core.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 3, .h = 1 };
     context.buffer.fill(row, .{ .glyph = " ", .style = .{ .bg = background } });
     _ = context.buffer.writeText(row, .{ .point = .{ .x = row.x, .y = row.y }, .text = minions_icon, .style = .{
         .fg = context.palette.accent,
@@ -147,7 +134,7 @@ fn drawAgentLine(context: *ContextType, line_input: AgentLineInput) void {
         context.palette.surface1
     else
         background;
-    const row: RectType = .{
+    const row: core.Rect = .{
         .x = semantic.list_area.x,
         .y = y,
         .w = semantic.list_area.w -| 1,
@@ -184,7 +171,7 @@ fn drawAgentLine(context: *ContextType, line_input: AgentLineInput) void {
         } });
     }
 
-    const body: RectType = .{ .x = row.x + 2, .y = y, .w = row.w -| 3, .h = 1 };
+    const body: core.Rect = .{ .x = row.x + 2, .y = y, .w = row.w -| 3, .h = 1 };
     if (line == 0) {
         var title_input = line_input;
         title_input.background = row_bg;
@@ -202,7 +189,7 @@ fn drawAgentLine(context: *ContextType, line_input: AgentLineInput) void {
     context.hits.add(row, action);
 }
 
-fn drawAgentTitle(context: *ContextType, line_input: AgentLineInput, area: RectType) void {
+fn drawAgentTitle(context: *ContextType, line_input: AgentLineInput, area: core.Rect) void {
     const input = line_input.sidebar;
     const semantic = line_input.semantic;
     const agent = line_input.agent;
@@ -211,10 +198,10 @@ fn drawAgentTitle(context: *ContextType, line_input: AgentLineInput, area: RectT
     if (area.w == 0) {
         return;
     }
-    const mark_area: RectType = .{ .x = area.x, .y = area.y, .w = 2, .h = 2 };
-    const icon_style: StyleType = .{ .fg = context.palette.accent, .bg = background };
+    const mark_area: core.Rect = .{ .x = area.x, .y = area.y, .w = 2, .h = 2 };
+    const icon_style: core.Style = .{ .fg = context.palette.accent, .bg = background };
     const glyph = agent.iconGlyph();
-    const artwork = IconType.forProvider(agent.provider);
+    const artwork = client.Icon.forProvider(agent.provider);
     if (glyph.len != 0) {
         _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = glyph, .max_width = 1, .style = icon_style });
     } else if (input.transparent and artwork != null) {
@@ -226,7 +213,7 @@ fn drawAgentTitle(context: *ContextType, line_input: AgentLineInput, area: RectT
     _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x + 3, .y = area.y }, .text = if (agent.sessionTitle().len != 0)
         agent.sessionTitle()
     else
-        generic_placeholder_module, .max_width = area.w -| status_width -| 3, .style = .{ .fg = context.palette.text, .bg = background, .flags = .{ .bold = true } } });
+        core.generic_placeholder, .max_width = area.w -| status_width -| 3, .style = .{ .fg = context.palette.text, .bg = background, .flags = .{ .bold = true } } });
     drawStatus(context, .{
         .area = area,
         .status = agent.status,
@@ -265,7 +252,7 @@ fn drawAgentLocation(context: *ContextType, input: AgentLocationInput) void {
     } });
 }
 
-fn projectedPaneIndex(input: SidebarInput, agent: *const AgentType) u16 {
+fn projectedPaneIndex(input: SidebarInput, agent: *const client.Agent) u16 {
     const active = input.active_model orelse return agent.pane_index;
     const location = active.location orelse return agent.pane_index;
     if (!std.meta.eql(location, agent.location)) {
@@ -283,11 +270,11 @@ fn drawAgentMeta(context: *ContextType, input: AgentMetaInput) void {
     if (area.w <= 3) {
         return;
     }
-    const style: StyleType = .{ .fg = context.palette.overlay0, .bg = background };
+    const style: core.Style = .{ .fg = context.palette.overlay0, .bg = background };
     const provider = agent.displayName();
     var x = area.x + 3;
     var remaining = area.w - 3;
-    const provider_width = measure_module(provider);
+    const provider_width = core.measure(provider);
     if (provider_width > remaining or agent.cwdLabel().len == 0) {
         _ = context.buffer.writeTruncated(area, .{ .point = .{ .x = x, .y = area.y }, .text = provider, .max_width = remaining, .style = style });
         return;
@@ -295,7 +282,7 @@ fn drawAgentMeta(context: *ContextType, input: AgentMetaInput) void {
     x += context.buffer.writeText(area, .{ .point = .{ .x = x, .y = area.y }, .text = provider, .style = style });
     remaining -|= provider_width;
     const separator = " · ";
-    const separator_width = measure_module(separator);
+    const separator_width = core.measure(separator);
     if (remaining <= separator_width + 1) {
         return;
     }
@@ -333,11 +320,11 @@ fn drawStatus(context: *ContextType, input: AgentStatusInput) void {
     } });
 }
 
-fn statusWidth(status: AgentStatusType) u16 {
-    return measure_module(statusLabel(status)) + 2;
+fn statusWidth(status: core.AgentStatus) u16 {
+    return core.measure(statusLabel(status)) + 2;
 }
 
-fn statusIcon(status: AgentStatusType, animation_frame: u8) IconType {
+fn statusIcon(status: core.AgentStatus, animation_frame: u8) client.Icon {
     return switch (status) {
         .unknown => .agent_unknown,
         .working => icons_module.working(animation_frame),
@@ -348,7 +335,7 @@ fn statusIcon(status: AgentStatusType, animation_frame: u8) IconType {
     };
 }
 
-fn statusLabel(status: AgentStatusType) []const u8 {
+fn statusLabel(status: core.AgentStatus) []const u8 {
     return switch (status) {
         .unknown => "unknown",
         .working => "working",
@@ -359,7 +346,7 @@ fn statusLabel(status: AgentStatusType) []const u8 {
     };
 }
 
-fn statusColor(context: *const ContextType, status: AgentStatusType) ColorType {
+fn statusColor(context: *const ContextType, status: core.AgentStatus) core.Color {
     return switch (status) {
         .unknown => context.palette.overlay0,
         .working => context.palette.accent,
@@ -370,7 +357,7 @@ fn statusColor(context: *const ContextType, status: AgentStatusType) ColorType {
     };
 }
 
-fn drawEmpty(context: *ContextType, area: RectType, background: ColorType) void {
+fn drawEmpty(context: *ContextType, area: core.Rect, background: core.Color) void {
     if (area.h < 2) {
         return;
     }
@@ -393,7 +380,7 @@ fn drawScrollbar(context: *ContextType, input: ScrollbarInput) void {
     if (total <= list.h or list.h == 0) {
         return;
     }
-    const area: RectType = .{ .x = list.x + list.w - 1, .y = list.y, .w = 1, .h = list.h };
+    const area: core.Rect = .{ .x = list.x + list.w - 1, .y = list.y, .w = 1, .h = list.h };
     const thumb = @max(1, area.h * area.h / total);
     const travel = area.h - thumb;
     const max_scroll = total - area.h;
@@ -415,14 +402,14 @@ fn drawRule(context: *ContextType, input: RuleInput) u16 {
     const y = input.y;
     const background = input.background;
 
-    const style: StyleType = .{ .fg = context.palette.surface1, .bg = background };
+    const style: core.Style = .{ .fg = context.palette.surface1, .bg = background };
     var x = area.x + 1;
     while (x < area.x + area.w - 1) : (x += 1)
         _ = context.buffer.writeText(area, .{ .point = .{ .x = x, .y = y }, .text = "─", .style = style });
     return y + 1;
 }
 
-fn drawRightSeparator(context: *ContextType, area: RectType, background: ColorType) void {
+fn drawRightSeparator(context: *ContextType, area: core.Rect, background: core.Color) void {
     if (area.w == 0) {
         return;
     }
@@ -436,17 +423,17 @@ fn drawRightSeparator(context: *ContextType, area: RectType, background: ColorTy
     }
 }
 
-fn cellBackground(context: *const ContextType, transparent: bool) ColorType {
+fn cellBackground(context: *const ContextType, transparent: bool) core.Color {
     return if (transparent) .default else context.palette.panel_bg;
 }
 
 test "empty snapshot renders the minions header" {
-    var buffer = try BufferType.init(std.testing.allocator, 48, 20);
+    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const snapshot: Snapshot = .{};
-    const palette = theme_support.default_theme.palette;
+    const snapshot: client.AgentSnapshot = .{};
+    const palette = client.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -467,8 +454,8 @@ test "empty snapshot renders the minions header" {
 }
 
 test "agent snapshot renders compact selectable rows and status" {
-    var snapshot: Snapshot = .{};
-    const agent_entries = [_]AgentInput{.{
+    var snapshot: client.AgentSnapshot = .{};
+    const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -486,11 +473,11 @@ test "agent snapshot renders compact selectable rows and status" {
         .status = .blocked,
     }};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var buffer = try BufferType.init(std.testing.allocator, 48, 20);
+    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = theme_support.default_theme.palette;
+    const palette = client.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -515,18 +502,18 @@ test "agent snapshot renders compact selectable rows and status" {
 }
 
 test "active layout projects pane indices without mutating runtime agent state" {
-    const location: TabLocationType = .{
+    const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(2),
     };
-    const first: PaneIdType = @enumFromInt(41);
-    const second: PaneIdType = @enumFromInt(42);
-    var active = MultiplexerModel.init(std.testing.allocator);
+    const first: core.PaneId = @enumFromInt(41);
+    const second: core.PaneId = @enumFromInt(42);
+    var active = client.MultiplexerModel.init(std.testing.allocator);
     defer active.deinit();
     try active.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 80, .h = 24 } });
-    var snapshot: Snapshot = .{};
-    const agent: AgentInput = .{
+    var snapshot: client.AgentSnapshot = .{};
+    const agent: data.AgentInput = .{
         .key = .{ .pane_id = second, .pane_generation = 1 },
         .location = location,
         .pane_index = 9,
@@ -550,8 +537,8 @@ test "active layout projects pane indices without mutating runtime agent state" 
 }
 
 test "agent without pane focus remains unhighlighted" {
-    var snapshot: Snapshot = .{};
-    const agent: AgentInput = .{
+    var snapshot: client.AgentSnapshot = .{};
+    const agent: data.AgentInput = .{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -563,11 +550,11 @@ test "agent without pane focus remains unhighlighted" {
         .status = .ready,
     };
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
-    var buffer = try BufferType.init(std.testing.allocator, 48, 20);
+    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = theme_support.default_theme.palette;
+    const palette = client.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -587,8 +574,8 @@ test "agent without pane focus remains unhighlighted" {
 }
 
 test "transparent Codex row publishes an official provider mark" {
-    var snapshot: Snapshot = .{};
-    const agent_entries = [_]AgentInput{.{
+    var snapshot: client.AgentSnapshot = .{};
+    const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -600,11 +587,11 @@ test "transparent Codex row publishes an official provider mark" {
         .status = .ready,
     }};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var buffer = try BufferType.init(std.testing.allocator, 48, 20);
+    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = theme_support.default_theme.palette;
+    const palette = client.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -618,13 +605,13 @@ test "transparent Codex row publishes an official provider mark" {
         .transparent = true,
     });
     try std.testing.expectEqual(@as(u8, 1), output.provider_mark_count);
-    try std.testing.expectEqual(AgentProviderType.codex, output.provider_marks[0].provider);
-    try std.testing.expectEqual(RectType{ .x = 3, .y = 2, .w = 2, .h = 2 }, output.provider_marks[0].area);
+    try std.testing.expectEqual(core.AgentProvider.codex, output.provider_marks[0].provider);
+    try std.testing.expectEqual(core.Rect{ .x = 3, .y = 2, .w = 2, .h = 2 }, output.provider_marks[0].area);
 }
 
 test "graphical focus exposes only the four rounded card corners" {
-    var snapshot: Snapshot = .{};
-    const agent_entries = [_]AgentInput{.{
+    var snapshot: client.AgentSnapshot = .{};
+    const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -636,11 +623,11 @@ test "graphical focus exposes only the four rounded card corners" {
         .status = .ready,
     }};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var buffer = try BufferType.init(std.testing.allocator, 48, 20);
+    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = theme_support.default_theme.palette;
+    const palette = client.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -656,20 +643,20 @@ test "graphical focus exposes only the four rounded card corners" {
         .rounded_focus = true,
     });
     const card = output.focused_card.?;
-    try std.testing.expectEqual(ColorType.default, buffer.at(card.x, card.y).?.style.bg);
-    try std.testing.expectEqual(ColorType.default, buffer.at(card.x + card.w - 1, card.y).?.style.bg);
+    try std.testing.expectEqual(core.Color.default, buffer.at(card.x, card.y).?.style.bg);
+    try std.testing.expectEqual(core.Color.default, buffer.at(card.x + card.w - 1, card.y).?.style.bg);
     try std.testing.expectEqualDeep(palette.surface0, buffer.at(card.x + 1, card.y).?.style.bg);
     try std.testing.expectEqualDeep(palette.surface0, buffer.at(card.x, card.y + 1).?.style.bg);
-    try std.testing.expectEqual(ColorType.default, buffer.at(card.x, card.y + card.h - 1).?.style.bg);
+    try std.testing.expectEqual(core.Color.default, buffer.at(card.x, card.y + card.h - 1).?.style.bg);
     try std.testing.expectEqual(
-        ColorType.default,
+        core.Color.default,
         buffer.at(card.x + card.w - 1, card.y + card.h - 1).?.style.bg,
     );
 }
 
 test "hover covers the complete three-row agent card" {
-    var snapshot: Snapshot = .{};
-    const agent: AgentInput = .{
+    var snapshot: client.AgentSnapshot = .{};
+    const agent: data.AgentInput = .{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -681,11 +668,11 @@ test "hover covers the complete three-row agent card" {
         .status = .working,
     };
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
-    var buffer = try BufferType.init(std.testing.allocator, 48, 20);
+    var buffer = try core.Buffer.init(std.testing.allocator, 48, 20);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{};
-    const palette = theme_support.default_theme.palette;
+    const palette = client.theme_support.default_theme.palette;
     const action: widget.Action = .{ .sidebar_focus_agent = agent.key };
     var context: ContextType = .{
         .buffer = &buffer,
@@ -706,7 +693,7 @@ test "hover covers the complete three-row agent card" {
 }
 
 test "partial card scroll preserves visible rows, spacing, and hit targets" {
-    const agent_entries = [_]AgentInput{
+    const agent_entries = [_]data.AgentInput{
         .{
             .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
             .location = .{
@@ -733,13 +720,13 @@ test "partial card scroll preserves visible rows, spacing, and hit targets" {
             .status = .working,
         },
     };
-    var snapshot: Snapshot = .{};
+    var snapshot: client.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var buffer = try BufferType.init(std.testing.allocator, 48, 7);
+    var buffer = try core.Buffer.init(std.testing.allocator, 48, 7);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     var state: State = .{ .scroll = 1 };
-    const palette = theme_support.default_theme.palette;
+    const palette = client.theme_support.default_theme.palette;
     var context: ContextType = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -772,7 +759,7 @@ test "partial card scroll preserves visible rows, spacing, and hit targets" {
 }
 
 test "minions icon occupies one cell" {
-    try std.testing.expectEqual(@as(u16, 1), measure_module(minions_icon));
+    try std.testing.expectEqual(@as(u16, 1), core.measure(minions_icon));
 }
 
 test "working status uses an animated glyph" {
@@ -784,7 +771,7 @@ test "working status uses an animated glyph" {
 
 test "42 and 62 column cards reserve status before truncating context" {
     const long_title = "Investigate and improve the agent sidebar context without losing status";
-    const agent: AgentInput = .{
+    const agent: data.AgentInput = .{
         .key = .{ .pane_id = @enumFromInt(41), .pane_generation = 3 },
         .location = .{
             .workspace = .{ .workspace = @enumFromInt(1) },
@@ -801,15 +788,15 @@ test "42 and 62 column cards reserve status before truncating context" {
         .display_name = "Claude Code",
         .status = .blocked,
     };
-    var snapshot: Snapshot = .{};
+    var snapshot: client.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &.{agent} });
     const widths = [_]u16{ 42, 62 };
     for (widths) |width| {
-        var buffer = try BufferType.init(std.testing.allocator, width, 12);
+        var buffer = try core.Buffer.init(std.testing.allocator, width, 12);
         defer buffer.deinit();
         var hits: widget.Hits = .{};
         var state: State = .{};
-        const palette = theme_support.default_theme.palette;
+        const palette = client.theme_support.default_theme.palette;
         var context: ContextType = .{
             .buffer = &buffer,
             .hits = &hits,

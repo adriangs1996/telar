@@ -1,8 +1,7 @@
+const core = @import("telar-core");
 const DependenciesType = @import("../Dependencies.zig");
-const HeapType = @import("telar-core").Heap;
 const std = @import("std");
 const ChildEnvironmentType = @import("../../pty/ChildEnvironment.zig");
-const TableType = @import("telar-core").Table;
 const ProxyRuntime = @import("ProxyRuntime.zig");
 const LocalListenerType = @import("../../transport/LocalListener.zig");
 const StateType = @import("../observability/State.zig");
@@ -19,11 +18,11 @@ const PluginsService = @import("../../plugins/Service.zig");
 const Resources = @This();
 
 dependencies: DependenciesType,
-heap: HeapType,
+heap: core.Heap,
 gpa: std.mem.Allocator,
 child_environment: ChildEnvironmentType,
 /// Immutable after startup; observation workers borrow it by pointer.
-agent_manifests: TableType,
+agent_manifests: core.Table,
 proxy: ProxyRuntime,
 listener: LocalListenerType,
 telemetry: StateType,
@@ -46,7 +45,7 @@ pub fn init(resources: *Resources, initialization: InitializationType) !void {
 
 pub fn acquire(resources: *Resources, initialization: InitializationType, comptime fail_after: ?resources_namespace.AcquisitionPhase) !void {
     resources.dependencies = initialization.dependencies;
-    resources.heap = HeapType.init(initialization.dependencies.allocator);
+    resources.heap = core.Heap.init(initialization.dependencies.allocator);
     resources.gpa = resources.heap.allocator();
 
     try initialization.options.graphics.validate();

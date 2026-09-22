@@ -1,16 +1,16 @@
 //! Owns configured bar ticks, bounded Lua evaluation and command workers.
 
+const model = @import("../../bars/model.zig");
+const bar_update = @import("../../application/configuration/bar_update.zig");
+const data = @import("model");
+const command_execution = @import("../../bars/command_execution.zig");
 const client_diagnostic = @import("../../application/configuration/client_diagnostic.zig");
 const BarFailure = @import("../../application/configuration/Failure.zig");
 const core = @import("telar-core");
 const std = @import("std");
-const PositionType = @import("../../bars/model.zig").Position;
 const Client = @import("../../AttachedClient.zig");
-const monotonic_module = core.monotonic;
 const BarUpdatesCompletion = @import("../../bars/BarUpdatesCompletion.zig");
 const CallbackRequest = @import("CallbackRequest.zig");
-const ApplicationConfigurationBarUpdateOutcome = @import("../../application/configuration/bar_update.zig").Outcome;
-const DiagnosticType = @import("../../config/Diagnostic.zig");
 const CommandOutput = @import("CommandOutput.zig");
 const ContentType = @import("../../bars/Content.zig");
 const Failure = @import("Failure.zig");
@@ -21,9 +21,9 @@ const ConfigurationType = @import("../../bars/Configuration.zig");
 const State = @import("State.zig");
 
 pub const no_deadline: u64 = std.math.maxInt(u64);
-pub const position_count = @typeInfo(PositionType).@"enum".fields.len;
+pub const position_count = @typeInfo(model.Position).@"enum".fields.len;
 
-pub const CommandExecutionId = @import("../../bars/command_execution.zig").Id;
+pub const CommandExecutionId = command_execution.Id;
 
 /// Completes one replaceable timer and folds all expired source ticks.
 ///
@@ -43,7 +43,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
     const due = client.bar_updates.takeDue(.{
         .generation = generation.number,
         .configuration = configuration,
-        .now_ns = monotonic_module(client.io),
+        .now_ns = core.monotonic(client.io),
     });
 
     client.bar_updates.pending_callbacks |= due.dynamic_mask;
@@ -85,9 +85,9 @@ pub fn completeCommand(client: *Client, completion: BarUpdatesCompletion) !void 
     try startNextCommand(client);
 }
 
-fn invokeCallback(client: *Client, request: CallbackRequest) !ApplicationConfigurationBarUpdateOutcome {
+fn invokeCallback(client: *Client, request: CallbackRequest) !bar_update.Outcome {
     const generation = client.lua_generation orelse return .stale;
-    var diagnostic: DiagnosticType = .{};
+    var diagnostic: data.Diagnostic = .{};
     const content = generation.invokeBar(.{
         .reference = request.reference,
         .context = callbackContext(client, request.output),
@@ -131,8 +131,8 @@ fn applyCommandOutput(client: *Client, completed: CommandOutput) !void {
     });
 }
 
-fn publishFailure(client: *Client, failure: Failure) !ApplicationConfigurationBarUpdateOutcome {
-    var diagnostic: DiagnosticType = .{};
+fn publishFailure(client: *Client, failure: Failure) !bar_update.Outcome {
+    var diagnostic: data.Diagnostic = .{};
     diagnostic.set(
         "bar {s} at {s} failed: {s}",
         .{ failure.kind, @tagName(failure.position), @errorName(failure.reason) },
@@ -148,7 +148,7 @@ fn publishFailure(client: *Client, failure: Failure) !ApplicationConfigurationBa
     });
 }
 
-fn publishEvaluation(client: *Client, command: BarUpdateCommand) !ApplicationConfigurationBarUpdateOutcome {
+fn publishEvaluation(client: *Client, command: BarUpdateCommand) !bar_update.Outcome {
     return switch (command.result) {
         .content => |content| commitContent(client, command, content),
         .failed => |failure| commitFailure(client, command, failure),
@@ -182,7 +182,7 @@ fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContex
 }
 
 fn invokeNextCallback(client: *Client, configuration: *const ConfigurationType) !void {
-    for (std.enums.values(PositionType)) |position| {
+    for (std.enums.values(model.Position)) |position| {
         if (client.bar_updates.pending_callbacks & position.bit() == 0) {
             continue;
         }
@@ -208,7 +208,7 @@ fn startNextCommand(client: *Client) !void {
     const generation = client.lua_generation orelse return;
     const configuration = client.barConfiguration() orelse return;
 
-    for (std.enums.values(PositionType)) |position| {
+    for (std.enums.values(model.Position)) |position| {
         if (client.bar_updates.pending_commands & position.bit() == 0) {
             continue;
         }
@@ -255,16 +255,16 @@ test "bar deadlines start immediately and coalesce elapsed intervals" {
         .now_ns = 1_750,
     });
 
-    try std.testing.expectEqual(PositionType.bottom_left.bit(), due.dynamic_mask);
-    try std.testing.expectEqual(PositionType.bottom_center.bit(), due.command_mask);
-    try std.testing.expectEqual(@as(u64, 1_800), state.deadlines[@intFromEnum(PositionType.bottom_left)]);
-    try std.testing.expectEqual(@as(u64, 2_000), state.deadlines[@intFromEnum(PositionType.bottom_center)]);
+    try std.testing.expectEqual(model.Position.bottom_left.bit(), due.dynamic_mask);
+    try std.testing.expectEqual(model.Position.bottom_center.bit(), due.command_mask);
+    try std.testing.expectEqual(@as(u64, 1_800), state.deadlines[@intFromEnum(model.Position.bottom_left)]);
+    try std.testing.expectEqual(@as(u64, 2_000), state.deadlines[@intFromEnum(model.Position.bottom_center)]);
 }
 
 test "bar synchronization clears queued work but preserves one in-flight command identity" {
     var state: State = .{};
-    state.pending_callbacks = PositionType.top_right.bit();
-    state.pending_commands = PositionType.bottom_left.bit();
+    state.pending_callbacks = model.Position.top_right.bit();
+    state.pending_commands = model.Position.bottom_left.bit();
     const execution = try state.reserveCommand(3, .bottom_left);
 
     state.synchronize(.{ .generation = 4, .configuration = null, .now_ns = 2_000 });
@@ -276,7 +276,7 @@ test "bar synchronization clears queued work but preserves one in-flight command
     try std.testing.expect(state.command_execution == null);
 }
 
-fn commitContent(client: *Client, command: BarUpdateCommand, content: ContentType) !ApplicationConfigurationBarUpdateOutcome {
+fn commitContent(client: *Client, command: BarUpdateCommand, content: ContentType) !bar_update.Outcome {
     const update_commit = client.model.updateBar(.{
         .generation = command.generation,
         .position = command.position,
@@ -288,7 +288,7 @@ fn commitContent(client: *Client, command: BarUpdateCommand, content: ContentTyp
     return if (update_commit) |value| .{ .updated = value } else .unchanged;
 }
 
-fn commitFailure(client: *Client, command: BarUpdateCommand, failure: BarFailure) !ApplicationConfigurationBarUpdateOutcome {
+fn commitFailure(client: *Client, command: BarUpdateCommand, failure: BarFailure) !bar_update.Outcome {
     const state = client.model.barState();
     if (command.generation != client.model.configurationGeneration() or
         state.layout.generation != command.generation or

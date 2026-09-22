@@ -1,7 +1,10 @@
-const WindowsTty = @import("WindowsTty.zig");
+const client = @import("telar-client");
+const Coord = @import("Coord.zig");
+const SmallRect = @import("SmallRect.zig");
+const ConsoleScreenBufferInfo = @import("ConsoleScreenBufferInfo.zig");
+const SystemTime = @import("SystemTime.zig");
 
 const std = @import("std");
-const LocalTime = @import("telar-client").LocalTime;
 
 // Windows: console modes for the state, the screen buffer info for the size,
 // and - the awkward one - polling for the change.
@@ -30,19 +33,16 @@ pub const ENABLE_WINDOW_INPUT: std.os.windows.DWORD = 0x0008;
 const ENABLE_MOUSE_INPUT: std.os.windows.DWORD = 0x0010;
 pub const ENABLE_VIRTUAL_TERMINAL_INPUT: std.os.windows.DWORD = 0x0200;
 
-const COORD = @import("Coord.zig").COORD;
-const SMALL_RECT = @import("SmallRect.zig").SMALL_RECT;
-pub const CONSOLE_SCREEN_BUFFER_INFO = @import("ConsoleScreenBufferInfo.zig").CONSOLE_SCREEN_BUFFER_INFO;
-const SYSTEMTIME = @import("SystemTime.zig").SYSTEMTIME;
+pub const CONSOLE_SCREEN_BUFFER_INFO = ConsoleScreenBufferInfo.CONSOLE_SCREEN_BUFFER_INFO;
 
 pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: std.os.windows.HANDLE, lpMode: *std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL;
 pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: std.os.windows.HANDLE, dwMode: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL;
 pub extern "kernel32" fn GetConsoleScreenBufferInfo(hConsoleOutput: std.os.windows.HANDLE, lpConsoleScreenBufferInfo: *CONSOLE_SCREEN_BUFFER_INFO) callconv(.winapi) std.os.windows.BOOL;
-extern "kernel32" fn GetLocalTime(system_time: *SYSTEMTIME) callconv(.winapi) void;
+extern "kernel32" fn GetLocalTime(system_time: *SystemTime.SYSTEMTIME) callconv(.winapi) void;
 pub extern "kernel32" fn GetConsoleWindow() callconv(.winapi) ?std.os.windows.HWND;
 
-pub fn localTime() LocalTime {
-    var value: SYSTEMTIME = undefined;
+pub fn localTime() client.LocalTime {
+    var value: SystemTime.SYSTEMTIME = undefined;
     GetLocalTime(&value);
 
     return .{
@@ -81,19 +81,19 @@ pub fn openConsole(comptime name: []const u8, read: bool) !std.os.windows.HANDLE
 /// mode is per-handle state the next process resets, and there is no POSIX
 /// fatal-signal path to hook. A crash leaves the console in VT mode, which
 /// Windows Terminal recovers from on the next prompt.
-pub fn installCrashRestore(_: *const WindowsTty) void {}
+pub fn installCrashRestore(_: *const Tty) void {}
 
 pub fn emergencyRestore() void {}
 
 pub const ResizeWatcher = @import("WindowsResizeWatcher.zig");
 
 test "Windows console layouts preserve their pre-extraction ABI" {
-    try std.testing.expectEqual(@as(usize, 4), @sizeOf(COORD));
-    try std.testing.expectEqual(@as(usize, 8), @sizeOf(SMALL_RECT));
+    try std.testing.expectEqual(@as(usize, 4), @sizeOf(Coord.COORD));
+    try std.testing.expectEqual(@as(usize, 8), @sizeOf(SmallRect.SMALL_RECT));
     try std.testing.expectEqual(@as(usize, 22), @sizeOf(CONSOLE_SCREEN_BUFFER_INFO));
     try std.testing.expectEqual(@as(usize, 2), @alignOf(CONSOLE_SCREEN_BUFFER_INFO));
     try std.testing.expectEqual(@as(usize, 10), @offsetOf(CONSOLE_SCREEN_BUFFER_INFO, "srWindow"));
     try std.testing.expectEqual(@as(usize, 18), @offsetOf(CONSOLE_SCREEN_BUFFER_INFO, "dwMaximumWindowSize"));
-    try std.testing.expectEqual(@as(usize, 16), @sizeOf(SYSTEMTIME));
-    try std.testing.expectEqual(@as(usize, 14), @offsetOf(SYSTEMTIME, "milliseconds"));
+    try std.testing.expectEqual(@as(usize, 16), @sizeOf(SystemTime.SYSTEMTIME));
+    try std.testing.expectEqual(@as(usize, 14), @offsetOf(SystemTime.SYSTEMTIME, "milliseconds"));
 }

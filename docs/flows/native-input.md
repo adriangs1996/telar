@@ -131,7 +131,7 @@ when another tab is active. A pane hidden by fullscreen keeps its last visible
 geometry until release; visible panes update that geometry on each retained
 event. Focus changes never redirect those events. Detachment or an attachment replacement
 makes the capture stale, and its remaining events are consumed. The additive
-`pane_mouse_inputs.reportRetained` port uses the existing encoder and input
+`AttachedClient.reportRetainedPaneMouse` port uses the existing encoder and input
 controller with a `pointer_lease` target. A newly opened prompt cannot intercept
 the release of a gesture already acquired by that pane. Focus loss reserves one
 ordered recovery message even under input saturation, releases live gestures

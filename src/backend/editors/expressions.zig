@@ -1,9 +1,9 @@
 //! Encode paths as string data, then use each editor's filename API.
+const core = @import("telar-core");
 const std = @import("std");
 const Target = @import("Target.zig");
-const OpenEditor = @import("telar-core").OpenEditor;
 
-pub const max_bytes = OpenEditor.max_bytes * 2 + 1024;
+pub const max_bytes = core.OpenEditor.max_bytes * 2 + 1024;
 
 /// Checks identity again in the same remote evaluation that opens the file.
 /// Example: `const expression = try vim(&buffer, .{ .pid = pid, .path = path });`

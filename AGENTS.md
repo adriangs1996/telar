@@ -57,6 +57,7 @@ frontend never import each other, and `telar-gui` never imports
 
 | Package          | Owns                                                                                                                               |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `model`          | reusable values and bounded state; depends only on core; public API in `src/model/model.zig`                                       |
 | `telar-core`     | cells, buffers, geometry and wire values shared across processes                                                                   |
 | `telar-backend`  | children, PTYs, terminal emulation, history and runtime authority                                                                  |
 | `telar-client`   | disposable model, operations, input policy, configuration, plugins, local transport, resource retention and presentation contracts |
@@ -64,7 +65,9 @@ frontend never import each other, and `telar-gui` never imports
 | `telar-gui`      | native chrome: glyph atlas and quad frames drawn by a Metal backend on macOS and a Wayland/Vulkan backend on Linux                 |
 
 Each package has an explicit module entrypoint in `build.zig`. Put a type in
-core only when both processes need it. Each connection owns independent client
+core only when both processes need it. Shared client-facing values belong in
+`model`; read [`src/model/README.md`](src/model/README.md) before moving types
+across its boundary. Each connection owns independent client
 state. A future native adapter reuses client behavior, not another connection's
 focus or navigation.
 

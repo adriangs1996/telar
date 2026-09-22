@@ -1,3 +1,4 @@
+const pane_kind = @import("../pane_kind.zig");
 const id = @import("../id.zig");
 const types = @import("../types.zig");
 const TerminalSizeType = @import("../TerminalSize.zig");
@@ -10,4 +11,4 @@ label: []const u8 = "",
 size: TerminalSizeType,
 launch: LaunchType,
 
-kind: @import("../pane_kind.zig").PaneKind = .terminal,
+kind: pane_kind.PaneKind = .terminal,

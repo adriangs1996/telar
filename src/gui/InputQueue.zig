@@ -1,22 +1,21 @@
 //! Ordered, bounded input storage. Owns payload lifetimes and release recovery.
+const native = @import("native/native.zig");
+const input_item = @import("input_item.zig");
+const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const event_types = @import("input/event.zig");
-const Event = event_types.Event;
-const NativeEvent = @import("native/native.zig").InputEvent;
 const decode_input = @import("native/decode_input.zig");
-const Item = @import("input_item.zig").Item;
 const ReleaseRecovery = @import("input/ReleaseRecovery.zig");
 const PasteChunk = @import("PasteChunk.zig");
 const KeyInput = @import("input/KeyInput.zig");
 const GenericEventPool = @import("input/GenericEventPool.zig").Type;
 const InputQueue = @This();
 const PointerStamp = @import("input/PointerStamp.zig");
-const Admission = @import("input_item.zig").Admission;
 
 pub const max_paste_bytes = event_types.max_text_bytes;
 const capacity = 1024;
-items: [capacity]Item = undefined,
+items: [capacity]input_item.Item = undefined,
 head: usize = 0,
 len: usize = 0,
 recovery: ReleaseRecovery = .{},
@@ -26,7 +25,7 @@ large_events: GenericEventPool(max_paste_bytes, 2) = .{},
 /// Copies borrowed payloads atomically into bounded storage. Recovery admission
 /// requires the owner to invalidate gestures before accepting another event.
 /// Example: `const result = try queue.accept(event, stamp);`
-pub fn accept(self: *InputQueue, event: Event, stamp: PointerStamp) !Admission {
+pub fn accept(self: *InputQueue, event: event_types.Event, stamp: PointerStamp) !input_item.Admission {
     switch (event) {
         .pointer => |pointer| {
             self.reserve(1) catch |err| {
@@ -70,7 +69,7 @@ pub fn accept(self: *InputQueue, event: Event, stamp: PointerStamp) !Admission {
                     return err;
                 }
             };
-            var admission: Admission = .accepted;
+            var admission: input_item.Admission = .accepted;
             iterator = view.iterator();
             while (iterator.nextCodepointSlice()) |bytes| {
                 var key: KeyInput = .{ .code = .{ .char = .{ .bytes = @splat(0), .len = @intCast(bytes.len) } }, .phase = text.phase };
@@ -152,7 +151,7 @@ pub fn accept(self: *InputQueue, event: Event, stamp: PointerStamp) !Admission {
 
 /// Borrow the oldest event until it is fully processed. Partial scroll/paste
 /// delivery retains the same slot. Example: `const event = input.front() orelse return;`
-pub fn front(self: *InputQueue) ?*Item {
+pub fn front(self: *InputQueue) ?*input_item.Item {
     if (self.len == 0) {
         return null;
     }
@@ -184,7 +183,7 @@ fn reserve(self: *const InputQueue, count: usize) !void {
     }
 }
 
-fn pushKey(self: *InputQueue, key: KeyInput, source: enum { key, text }) !Admission {
+fn pushKey(self: *InputQueue, key: KeyInput, source: enum { key, text }) !input_item.Admission {
     self.reserve(1) catch |err| {
         if (key.phase != .release or key.physical == null) {
             return err;
@@ -215,7 +214,7 @@ pub fn requestRecovery(self: *InputQueue) void {
     self.recovery.queued = true;
 }
 
-fn push(self: *InputQueue, item: Item) void {
+fn push(self: *InputQueue, item: input_item.Item) void {
     self.items[(self.head + self.len) % capacity] = item;
     self.len += 1;
 }
@@ -242,7 +241,7 @@ test "native key normalization preserves configured Ctrl-Space Alt uppercase and
     for (expected, 0..) |name, index| {
         var key = input.items[index].key;
         key.physical = null;
-        try std.testing.expectEqualDeep(try client.parseKey(name), key.terminalKey());
+        try std.testing.expectEqualDeep(try data.chord.parseKey(name), key.terminalKey());
     }
 
     try std.testing.expectEqual(@as(u32, 50), input.items[0].key.physical.?.value);
@@ -343,7 +342,7 @@ test "queued payloads survive borrowing and their slots can be reused across rin
     }
 }
 
-fn acceptNative(queue: *InputQueue, event: NativeEvent) !void {
+fn acceptNative(queue: *InputQueue, event: native.InputEvent) !void {
     _ = try queue.accept(try decode_input.decode(event), .{});
 }
 
@@ -352,7 +351,7 @@ test "recovery keeps admission closed until retained releases and the marker are
     _ = try queue.accept(.{ .text = .{ .bytes = "a" } }, .{});
     queue.requestRecovery();
     const release: KeyInput = .{ .code = .{ .char = .init("a") }, .phase = .release, .physical = .{ .value = 1 } };
-    try std.testing.expectEqual(Admission.recovery, try queue.accept(.{ .key = release }, .{}));
+    try std.testing.expectEqual(input_item.Admission.recovery, try queue.accept(.{ .key = release }, .{}));
     queue.consume();
     try std.testing.expect(queue.front().?.* == .release_recovery);
     try std.testing.expectError(error.NativeInputFull, queue.accept(.{ .text = .{ .bytes = "b" } }, .{}));
@@ -362,6 +361,6 @@ test "recovery keeps admission closed until retained releases and the marker are
     try std.testing.expectError(error.NativeInputFull, queue.accept(.{ .text = .{ .bytes = "b" } }, .{}));
     queue.consume();
     try std.testing.expect(!queue.recovery.queued);
-    try std.testing.expectEqual(Admission.accepted, try queue.accept(.{ .text = .{ .bytes = "b" } }, .{}));
+    try std.testing.expectEqual(input_item.Admission.accepted, try queue.accept(.{ .text = .{ .bytes = "b" } }, .{}));
     try std.testing.expectEqualStrings("b", queue.front().?.text.text().bytes);
 }

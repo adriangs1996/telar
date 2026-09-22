@@ -1,6 +1,6 @@
 //! Bounded extraction of terminal selections in absolute scrollback coordinates.
 
-const max_clipboard_bytes_module = @import("telar-core").max_clipboard_bytes;
+const core = @import("telar-core");
 const Pane = @import("../../pane/Pane.zig");
 const Range = @import("Range.zig");
 const std = @import("std");
@@ -8,7 +8,7 @@ const vt = @import("ghostty-vt");
 const Endpoints = @import("Endpoints.zig");
 const Point = @import("Point.zig");
 
-pub const scratch_bytes = 2 * max_clipboard_bytes_module + 1;
+pub const scratch_bytes = 2 * core.max_clipboard_bytes + 1;
 
 pub const Result = union(enum) {
     copied: []const u8,
@@ -42,7 +42,7 @@ pub fn extract(pane: *Pane, range: Range, scratch: []u8) Result {
         .sel = vt.Selection.init(start, finish, false),
     }) catch return .too_large;
 
-    if (selected.len > max_clipboard_bytes_module) {
+    if (selected.len > core.max_clipboard_bytes) {
         return .too_large;
     }
 

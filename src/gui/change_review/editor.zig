@@ -1,7 +1,7 @@
 //! Reuses the same bounded UTF-8 field, wrapping and preedit as native editors.
+const event_module = @import("../input/event.zig");
 const std = @import("std");
 const Widget = @import("Widget.zig");
-const Event = @import("../input/event.zig").Event;
 const Target = @import("../widgets/interaction/Target.zig");
 const FieldView = @import("../widgets/interaction/FieldView.zig");
 const EditorDisplay = @import("../widgets/interaction/EditorDisplay.zig");
@@ -10,7 +10,7 @@ const Owner = @import("../host/Owner.zig");
 const native = @import("../native/native.zig");
 const actions = @import("action.zig");
 
-pub fn apply(w: *Widget, event: Event, target: Target) !bool {
+pub fn apply(w: *Widget, event: event_module.Event, target: Target) !bool {
     if (!ownsField(w, target)) {
         return false;
     }
