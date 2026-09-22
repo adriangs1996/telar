@@ -5,7 +5,6 @@ const AgentKeyType = @import("../../agents/AgentKey.zig");
 pub const Outcome = enum { ignored, focused, handoff_requested };
 const tab_selections = @import("../tabs/tab_selections.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
-const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
 /// Resolves one sidebar agent key and applies its local navigation or handoff.
 ///
@@ -28,7 +27,7 @@ pub fn apply(client: *Client, key: AgentKeyType) !Outcome {
             if (!client.request_lifecycle.tracker.isEmpty()) {
                 break :handoff .ignored;
             }
-            _ = try workspace_handoffs.requestPane(client, handoff.pane_id, handoff.fallback_workspace);
+            _ = try client.requestWorkspacePane(handoff.pane_id, handoff.fallback_workspace);
             break :handoff .handoff_requested;
         },
     };

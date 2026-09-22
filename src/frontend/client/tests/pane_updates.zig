@@ -15,7 +15,6 @@ const PaneIdType = @import("telar-core").PaneId;
 const encodePaneExited_module = @import("telar-core").encodePaneExited;
 const support = @import("support.zig");
 const pane_closures = @import("telar-client").operations.pane_closures;
-const workspace_handoffs = @import("telar-client").operations.workspace_handoffs;
 const encodePaneOpened_module = @import("telar-core").encodePaneOpened;
 const TabLocationType = @import("telar-core").TabLocation;
 const IconType = @import("telar-client").Icon;
@@ -160,7 +159,7 @@ test "a frame already sent before workspace departure is harmless during handoff
 
     // The runtime writes this frame before it can observe the client's detach.
     try harness.peer.send(std.testing.io, snapshot);
-    _ = try workspace_handoffs.requestWorkspace(client, @enumFromInt(2));
+    _ = try client.requestWorkspace(@enumFromInt(2));
     try harness.settle();
 
     var buffer: [256]u8 = undefined;

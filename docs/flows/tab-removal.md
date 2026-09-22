@@ -25,7 +25,7 @@ runtime tab_closed
 Before provisional detachment the request checks capacity for paste-end,
 focus-out, every attached or pending-open pane detach, and the close message.
 It also reserves enough request identities for closure and synchronous repair.
-`tab_detachment.requiredCapacity` is shared with workspace handoff. Failure at
+`AttachedClient.tabDetachmentCapacity` is shared with workspace handoff. Failure at
 this stage changes neither focus nor attachment state.
 
 The operation then detaches and queues `close_tab` without changing semantic
@@ -48,7 +48,7 @@ obsolete focus, exposes its successor, synchronizes resources and requests its
 snapshot unless one is already pending.
 
 Workspace closure forgets the bookmark. A surviving predecessor is followed
-through `workspace_handoffs.followWorkspace`, whose bypass of stale pending
+through `AttachedClient.requestWorkspaceSwitch`, whose bypass of stale pending
 requests requires an already empty projection. With no predecessor, the
 operation returns `exit`; server dispatch maps it to process status zero.
 
@@ -60,8 +60,7 @@ Canonical state survives any later client resource error. Reconnect rebuilds
 the projection. The flow uses bounded tab/pane stores, request tracking and
 outbox capacity, and never schedules presentation directly.
 
-Source: `src/client/AttachedClient.zig`, `AttachedClient.zig`,
-`tab_snapshots.zig`, and `src/client/operations/workspaces/workspace_handoffs.zig`.
+Source: `src/client/AttachedClient.zig` and `src/client/model/Model.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig` and `synchronization.zig`
 cover preflight, partial failures, correlation, late replies, exact cleanup,
 predecessor following and exit. Model and runtime transport tests cover

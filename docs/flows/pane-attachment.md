@@ -11,7 +11,7 @@ AttachedClient.applyTabSnapshot / host resize / pane geometry or focus change
   -> AttachedClient.sendRuntimeRequest(open_pane, exact pane and tab continuation)
   -> runtime attachment -> pane_opened
   -> AttachedClient.handleServerMessage
-  -> operations/panes/AttachedClient.completePaneOpen
+  -> AttachedClient.completePaneOpen
   -> AttachedClient.confirmPaneAttachment -> Model.confirmPaneAttachment
 ```
 

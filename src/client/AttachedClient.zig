@@ -81,7 +81,6 @@ const Action = @import("input/action.zig").Action;
 const ControlType = @import("input/keybind.zig").Control;
 const copy_modes = @import("operations/input/copy_modes.zig");
 const name_prompts = @import("operations/input/name_prompts.zig");
-const workspace_handoffs = @import("operations/workspaces/workspace_handoffs.zig");
 const layout_updates = @import("resources/client_layouts.zig");
 const client_detachments = @import("operations/session/client_detachments.zig");
 const history_palettes = @import("operations/input/history_palettes.zig");
@@ -111,7 +110,6 @@ const ConfirmPaneSplit = @import("model/ConfirmPaneSplit.zig");
 const PaneOpenedType = @import("telar-core").PaneOpened;
 const OpenedPaneType = @import("application/panes/OpenedPane.zig");
 const WorkspaceCreationType = @import("application/panes/WorkspaceCreation.zig");
-const workspace_creations = @import("operations/workspaces/workspace_creations.zig");
 const PaneAttachmentConfirmationType = @import("application/panes/PaneAttachmentConfirmation.zig");
 const agent_reading = @import("application/agents/agent_reading.zig");
 const request_failure = @import("application/session/request_failure.zig");
@@ -183,7 +181,6 @@ const WorkspaceTabInputType = @import("workspace/WorkspaceTabInput.zig");
 const PaneForeground = @import("telar-core").PaneForeground;
 const TabCreatedType = @import("telar-core").TabCreated;
 const TabCreationType = @import("model/TabCreation.zig");
-const tab_detachment = @import("tab_detachment.zig");
 const pane_pastes = @import("operations/input/pane_pastes.zig");
 const rectSize_module = @import("workspace/multiplexer.zig").rectSize;
 const RequestTabCreation = @import("application/tabs/RequestTabCreation.zig");
@@ -202,6 +199,20 @@ const TabSnapshotRecovery = enum { coalesced, requested };
 const TabCloseOutcome = enum { applied, ignored, exit };
 
 const attached_client_tests = @import("attached_client_tests.zig");
+const WorkspaceSelectionTarget = @import("application/workspaces/workspace_handoff.zig").SelectionTarget;
+const WorkspaceDeparture = @import("model/WorkspaceDeparture.zig");
+const WorkspaceArrival = @import("model/WorkspaceArrival.zig");
+const WorkspaceActivation = @import("model/WorkspaceActivation.zig");
+const WorkspaceHandoff = @import("application/workspaces/WorkspaceHandoff.zig");
+const WorkspacePaneRequest = @import("application/workspaces/PaneRequest.zig");
+
+const WorkspaceSwitchTarget = union(enum) { workspace: core.WorkspaceId, pane: WorkspacePaneRequest };
+const WorkspaceSwitchAuthority = enum { requested_departure, canonical_follow };
+const WorkspaceRecovery = enum { retried, unrecoverable };
+
+const RequestWorkspaceCreation = @import("application/workspaces/RequestWorkspaceCreation.zig");
+const create_workspace = @import("application/workspaces/create_workspace.zig");
+
 const AttachedClient = @This();
 
 io: std.Io,
@@ -643,8 +654,7 @@ pub fn executeAction(self: *AttachedClient, value: Action, origin: ActionOrigin)
         .toggle_workspace_list => _ = self.model.toggleWorkspaceList(),
         .new_workspace => _ = name_prompts.beginWorkspaceCreate(self),
         .rename_workspace => _ = name_prompts.beginWorkspaceRename(self),
-        .select_workspace => |position| _ = try workspace_handoffs.selectWorkspace(
-            self,
+        .select_workspace => |position| _ = try self.selectWorkspace(
             .{
                 .position = position,
             },
@@ -719,20 +729,6 @@ pub fn sendWorkspaceRenameRequest(self: *AttachedClient, rename: core.RenameWork
     );
     errdefer _ = self.request_lifecycle.tracker.take(rename.request_id);
     try self.runtime_transport.outbox.pushWorkspaceRename(rename);
-    try self.startRuntimeSend();
-}
-
-/// Registers correlation before copying the request; failed delivery removes only that registration.
-/// Example: `try self.sendCreateWorkspaceRequest(request);`
-pub fn sendCreateWorkspaceRequest(self: *AttachedClient, request: core.CreateWorkspace) !void {
-    try self.request_lifecycle.tracker.add(
-        request.request_id,
-        .{
-            .create_workspace = request.size,
-        },
-    );
-    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
-    try self.runtime_transport.outbox.pushCreateWorkspace(request);
     try self.startRuntimeSend();
 }
 
@@ -1572,6 +1568,125 @@ pub fn detachTab(self: *AttachedClient, location: TabLocation) !void {
     try self.model.commitTabDetachment(plan);
 }
 
+/// Selects a known inactive workspace only while this connection is idle.
+/// Example: `_ = try app.selectWorkspace(.{ .position = 1 });`
+pub fn selectWorkspace(self: *AttachedClient, target: WorkspaceSelectionTarget) !bool {
+    if (!self.request_lifecycle.tracker.isEmpty()) {
+        return false;
+    }
+
+    const workspace = switch (target) {
+        .position => |position| self.model.workspaceAtPosition(position) orelse return false,
+        .workspace => |workspace| workspace,
+    };
+
+    if (!self.model.knowsWorkspace(workspace)) {
+        return false;
+    }
+
+    if (self.model.workspaceLocation()) |current| {
+        switch (current) {
+            .workspace => |active| {
+                if (active == workspace) {
+                    return false;
+                }
+            },
+            .worktree => {},
+        }
+    }
+
+    _ = try self.requestWorkspaceSwitch(
+        .{
+            .workspace = workspace,
+        },
+        .requested_departure,
+    );
+
+    return true;
+}
+
+/// Opens a workspace using its remembered pane, retaining a single fallback.
+/// Example: `_ = try app.requestWorkspace(workspace_id);`
+pub fn requestWorkspace(self: *AttachedClient, workspace: core.WorkspaceId) !WorkspaceDeparture {
+    return self.requestWorkspaceSwitch(
+        .{
+            .workspace = workspace,
+        },
+        .requested_departure,
+    );
+}
+
+/// Opens an exact remote pane with the containing workspace as optional fallback.
+/// Example: `_ = try app.requestWorkspacePane(pane_id, workspace_id);`
+pub fn requestWorkspacePane(self: *AttachedClient, pane_id: core.PaneId, fallback_workspace: ?core.WorkspaceId) !WorkspaceDeparture {
+    return self.requestWorkspaceSwitch(
+        .{
+            .pane = .{
+                .pane_id = pane_id,
+                .fallback_workspace = fallback_workspace,
+            },
+        },
+        .requested_departure,
+    );
+}
+
+/// Validates a workspace creation and retains its launch parameters until confirmation.
+/// Example: `_ = try app.requestWorkspaceCreation(.{ .name = "agents" });`
+pub fn requestWorkspaceCreation(self: *AttachedClient, command: RequestWorkspaceCreation) !bool {
+    if (!self.request_lifecycle.tracker.isEmpty()) {
+        return false;
+    }
+
+    try create_workspace.validateName(command.name);
+    const cwd_source: ?core.PaneId = if (command.cwd.len == 0)
+        self.model.planWorkspaceCreation() orelse return false
+    else
+        null;
+    const request_id = try self.request_lifecycle.nextId();
+    try self.sendCreateWorkspaceRequest(
+        .{
+            .request_id = request_id,
+            .size = rectSize_module(self.geometry().area) orelse return error.TerminalTooSmall,
+            .name = command.name,
+            .create_cwd = command.create_cwd,
+            .launch = .{
+                .cwd = if (command.cwd.len != 0) command.cwd else self.options.cwd,
+                .cwd_source = cwd_source,
+                .arguments = self.options.arguments,
+            },
+        },
+    );
+
+    return true;
+}
+
+/// Registers correlation before copying the request; failed delivery removes only that registration.
+/// Example: `try self.sendCreateWorkspaceRequest(request);`
+fn sendCreateWorkspaceRequest(self: *AttachedClient, request: core.CreateWorkspace) !void {
+    try self.request_lifecycle.tracker.add(
+        request.request_id,
+        .{
+            .create_workspace = request.size,
+        },
+    );
+    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
+    try self.runtime_transport.outbox.pushCreateWorkspace(request);
+    try self.startRuntimeSend();
+}
+
+/// Counts the deliveries needed to detach one tab, including pending attachments.
+/// Example: `const required = try app.tabDetachmentCapacity(location);`
+fn tabDetachmentCapacity(self: *const AttachedClient, location: TabLocation) !usize {
+    const plan = try self.model.planTabDetachment(location);
+    var required = @as(usize, @intFromBool(plan.paste_marker_required));
+    required += @intFromBool(plan.focus_out_required);
+    for (plan.slice()) |pane| {
+        required += @intFromBool(pane.attached or self.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id));
+    }
+
+    return required;
+}
+
 /// Copies a page cursor before its reading window can change.
 /// Example: `try self.sendRuntimeAgentHistory(request);`
 fn sendRuntimeAgentHistory(self: *AttachedClient, request: core.QueryAgentHistory) !void {
@@ -1865,8 +1980,7 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
                 }
             }
 
-            if (!try workspace_handoffs.selectWorkspace(
-                self,
+            if (!try self.selectWorkspace(
                 .{
                     .workspace = target,
                 },
@@ -2513,15 +2627,27 @@ fn translateOpenedPane(opened: PaneOpenedType) OpenedPaneType {
 }
 
 fn arriveOpenedWorkspace(self: *AttachedClient, opened: OpenedPaneType) !void {
-    try workspace_handoffs.confirm(self, try workspace_handoffs.arrival(self, opened));
+    const size = rectSize_module(self.geometry().area) orelse return error.TerminalTooSmall;
+    const activation = try self.model.arriveWorkspace(workspaceArrival(
+        &self.navigation_history,
+        opened,
+        size,
+    ));
+    try self.activateWorkspace(activation);
 }
 
 fn createOpenedWorkspace(self: *AttachedClient, confirmation: WorkspaceCreationType) !void {
-    _ = try workspace_creations.confirm(self, workspace_creations.confirmation(
-        self,
+    if (!confirmation.opened.created) {
+        return error.UnexpectedRequest;
+    }
+
+    const replacement = try self.model.replaceWorkspace(workspaceArrival(
+        &self.navigation_history,
         confirmation.opened,
         confirmation.requested_size,
     ));
+    self.releaseWorkspace(&replacement.departure);
+    try self.activateWorkspace(replacement.activation);
 }
 
 /// Rejects mismatched or newly created panes before committing an attachment.
@@ -2580,13 +2706,7 @@ fn failRuntimeRequest(self: *AttachedClient, failure: RequestFailedType) !Applic
         .ignored => return .ignored,
         .workspace_snapshot, .tab_snapshot => return error.RuntimeRequestFailed,
         .initial_open => |open| {
-            const outcome = try workspace_handoffs.recover(
-                self,
-                .{
-                    .fallback_workspace = open.fallback_workspace,
-                    .code = failure.code,
-                },
-            );
+            const outcome = try self.recoverWorkspaceSwitch(open.fallback_workspace, failure.code);
             return switch (outcome) {
                 .retried => .recovered,
                 .unrecoverable => error.RuntimeRequestFailed,
@@ -3353,9 +3473,9 @@ fn requestTabClose(self: *AttachedClient) !bool {
     }
 
     const location = self.model.activeTabLocation() orelse return false;
-    const plan = try self.model.planTabDetachment(location);
+    const required = try self.tabDetachmentCapacity(location);
     try self.request_lifecycle.ensureCanStart(2);
-    if (1 + tab_detachment.requiredCapacity(&plan, &self.request_lifecycle.tracker) > self.runtime_transport.outbox.availableCapacity()) {
+    if (1 + required > self.runtime_transport.outbox.availableCapacity()) {
         return error.ClientOutboxFull;
     }
 
@@ -3459,7 +3579,12 @@ fn completeTabClose(self: *AttachedClient, closed: TabClosedType) !TabCloseOutco
 
     self.navigation_history.forget(removal.removed.workspace);
     const previous = command.previous_workspace orelse return .exit;
-    _ = try workspace_handoffs.followWorkspace(self, previous);
+    _ = try self.requestWorkspaceSwitch(
+        .{
+            .workspace = previous,
+        },
+        .canonical_follow,
+    );
     return .applied;
 }
 
@@ -3482,6 +3607,202 @@ fn sendTabClose(self: *AttachedClient, intent: TabCloseIntentType) !void {
             },
         },
     );
+}
+
+/// Preflights departure, queues the open, then retires the previous projection.
+fn requestWorkspaceSwitch(self: *AttachedClient, target: WorkspaceSwitchTarget, authority: WorkspaceSwitchAuthority) !WorkspaceDeparture {
+    const size = rectSize_module(self.geometry().area) orelse return error.TerminalTooSmall;
+    const command: WorkspaceHandoff = switch (target) {
+        .workspace => |workspace| selected: {
+            const bookmark = self.navigation_history.find(
+                .{
+                    .workspace = workspace,
+                },
+            );
+            break :selected .{
+                .target = if (bookmark) |remembered| .{
+                    .pane = remembered.pane_id,
+                } else .{
+                    .workspace = workspace,
+                },
+                .fallback_workspace = workspace,
+                .size = size,
+            };
+        },
+        .pane => |pane| .{
+            .target = .{
+                .pane = pane.pane_id,
+            },
+            .fallback_workspace = pane.fallback_workspace,
+            .size = size,
+        },
+    };
+
+    switch (authority) {
+        .requested_departure => {
+            if (!self.request_lifecycle.tracker.isEmpty()) {
+                return error.WorkspaceSwitchWhileRequestPending;
+            }
+        },
+        .canonical_follow => {
+            if (self.model.workspaceLocation() != null) {
+                return error.WorkspaceStillActive;
+            }
+        },
+    }
+
+    try self.request_lifecycle.ensureCanStart(2);
+    var required: usize = 1;
+    var tabs = self.model.workspace.tabIterator();
+    while (tabs.next()) |tab| {
+        required += try self.tabDetachmentCapacity(tab.location);
+    }
+
+    if (required > self.runtime_transport.outbox.availableCapacity()) {
+        return error.ClientOutboxFull;
+    }
+
+    tabs = self.model.workspace.tabIterator();
+    while (tabs.next()) |tab| {
+        self.detachTab(tab.location) catch |err| {
+            self.restoreDepartingWorkspace() catch {};
+            return err;
+        };
+    }
+
+    self.sendWorkspaceOpen(command) catch |err| {
+        self.restoreDepartingWorkspace() catch {};
+        return err;
+    };
+
+    const departure = self.model.departWorkspace();
+    self.releaseWorkspace(&departure);
+    return departure;
+}
+
+/// Repairs the visible tab after a partial departure; callers preserve the original error.
+fn restoreDepartingWorkspace(self: *AttachedClient) !void {
+    const location = self.model.activeTabLocation() orelse return;
+    const plan = try self.model.planTabDetachment(location);
+    for (plan.slice()) |pane| {
+        try self.graphics.setPaneVisible(pane.pane_id, true);
+    }
+
+    _ = try self.recoverTabSnapshot(location);
+}
+
+/// Retries a missing remembered pane once, clearing the fallback on the new request.
+fn recoverWorkspaceSwitch(self: *AttachedClient, fallback_workspace: ?core.WorkspaceId, code: core.FailureCode) !WorkspaceRecovery {
+    const workspace = fallback_workspace orelse return .unrecoverable;
+    if (code != .pane_not_found) {
+        return .unrecoverable;
+    }
+
+    self.navigation_history.forget(
+        .{
+            .workspace = workspace,
+        },
+    );
+    try self.sendWorkspaceOpen(
+        .{
+            .target = .{
+                .workspace = workspace,
+            },
+            .fallback_workspace = null,
+            .size = rectSize_module(self.geometry().area) orelse return error.TerminalTooSmall,
+        },
+    );
+    return .retried;
+}
+
+/// Correlates the open before its owned message enters the runtime outbox.
+fn sendWorkspaceOpen(self: *AttachedClient, command: WorkspaceHandoff) !void {
+    const request_id = try self.request_lifecycle.nextId();
+    try self.sendRuntimeRequest(
+        .{
+            .registration = .{
+                .request_id = request_id,
+                .continuation = .{
+                    .initial_open = .{
+                        .fallback_workspace = command.fallback_workspace,
+                    },
+                },
+            },
+            .message = .{
+                .open_pane = .{
+                    .request_id = request_id,
+                    .target = command.target,
+                    .size = command.size,
+                    .launch = null,
+                },
+            },
+        },
+    );
+}
+
+/// Restores a bookmark layout only when the runtime selected that exact tab.
+fn workspaceArrival(history: *const HistoryType, opened: OpenedPaneType, size: core.TerminalSize) WorkspaceArrival {
+    const bookmark = history.find(opened.location.workspace);
+    const saved_layout = if (bookmark) |remembered|
+        if (std.meta.eql(remembered.location, opened.location)) remembered.tab_layout else null
+    else
+        null;
+
+    return .{
+        .pane_id = opened.pane_id,
+        .location = opened.location,
+        .size = size,
+        .saved_layout = saved_layout,
+    };
+}
+
+/// Remembers departed navigation before releasing pane resources.
+fn releaseWorkspace(self: *AttachedClient, departure: *const WorkspaceDeparture) void {
+    if (departure.bookmark) |bookmark| {
+        self.navigation_history.remember(
+            .{
+                .location = bookmark.location,
+                .pane_id = bookmark.pane_id,
+                .tab_layout = bookmark.tab_layout,
+            },
+        );
+    }
+
+    for (departure.panes.slice()) |pane_id| {
+        pane_resources.release(self, pane_id);
+    }
+
+    _ = self.model.forgetReportedPaneFocus();
+}
+
+/// Validates the committed root before resuming input and requesting canonical snapshots.
+fn activateWorkspace(self: *AttachedClient, activation: WorkspaceActivation) !void {
+    const active = self.model.workspace.activeConst() orelse return error.StaleWorkspaceActivation;
+    const root = active.model.findConst(activation.pane_id) orelse return error.StaleWorkspaceActivation;
+    const version = self.model.version();
+    if (!std.meta.eql(active.location, activation.location) or
+        active.model.pane_count != 1 or
+        active.model.layout.focused() != activation.pane_id or
+        !std.meta.eql(root.location, activation.location) or
+        !root.attached or
+        version.workspace != activation.workspace_revision or
+        version.tabs != activation.tabs_revision or
+        version.active_tab != activation.active_tab_revision or
+        version.panes != activation.panes_revision or
+        version.copy != activation.copy_revision or
+        activation.workspace_revision_before +% 1 != activation.workspace_revision or
+        activation.tabs_revision_before +% 1 != activation.tabs_revision or
+        activation.active_tab_revision_before +% 1 != activation.active_tab_revision or
+        activation.panes_revision_before +% 1 != activation.panes_revision or
+        activation.copy_revision_before +% @intFromBool(activation.copy_released) != activation.copy_revision)
+    {
+        return error.StaleWorkspaceActivation;
+    }
+
+    try self.synchronizeActivePane();
+    try self.host_input_source.resumeRead();
+    try self.requestWorkspaceSnapshot(activation.location.workspace);
+    try self.requestTabSnapshot(activation.location);
 }
 
 test "layout export decodes to the same active pane and split tree" {

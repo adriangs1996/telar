@@ -4,7 +4,6 @@ const std = @import("std");
 const Client = @import("../../AttachedClient.zig");
 const ResyncRequiredType = @import("telar-core").ResyncRequired;
 pub const Outcome = enum { coalesced, snapshot_requested, handoff_requested, exit };
-const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 
 /// Resolves disposable client state and applies one validated runtime resync.
 /// The client loop maps only the returned `exit` outcome to process status.
@@ -16,7 +15,7 @@ pub fn apply(client: *Client, required: ResyncRequiredType) !Outcome {
     if (required.workspace_closed) {
         client.navigation_history.forget(required.workspace);
         const previous = required.previous_workspace orelse return .exit;
-        _ = try workspace_handoffs.requestWorkspace(client, previous);
+        _ = try client.requestWorkspace(previous);
         return .handoff_requested;
     }
 

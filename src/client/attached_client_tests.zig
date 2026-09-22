@@ -473,7 +473,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
 
     try options.setModel("test-model");
 
-    const Delivery = enum { tab_rename, workspace_rename, workspace_create, tab_create, agent_prompt, notification };
+    const Delivery = enum { tab_rename, workspace_rename, tab_create, agent_prompt, notification };
     for (std.enums.values(Delivery)) |delivery| {
         const request_id = try app.request_lifecycle.nextId();
         const location = tab_location;
@@ -494,20 +494,6 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
                     .request_id = request_id,
                     .workspace = location.workspace,
                     .name = "renamed",
-                },
-            ),
-            .workspace_create => app.sendCreateWorkspaceRequest(
-                .{
-                    .request_id = request_id,
-                    .name = "workspace",
-                    .size = .{
-                        .cols = 80,
-                        .rows = 24,
-                    },
-                    .launch = .{
-                        .cwd = "/",
-                        .arguments = &.{},
-                    },
                 },
             ),
             .tab_create => create_tab(

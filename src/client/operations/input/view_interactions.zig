@@ -14,7 +14,6 @@ const agent_navigation = @import("../agents/agent_navigation.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 const name_prompts = @import("name_prompts.zig");
-const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const notification_flow = @import("../notifications/notifications.zig");
 const attachment_prompts = @import("attachment_prompts.zig");
 
@@ -82,7 +81,11 @@ fn applyIntent(context: *ViewInteractionsContext, intent: IntentType) !IntentOut
                 .{},
             );
         },
-        .select_workspace => |workspace| _ = try workspace_handoffs.selectWorkspace(client, .{ .workspace = workspace }),
+        .select_workspace => |workspace| _ = try client.selectWorkspace(
+            .{
+                .workspace = workspace,
+            },
+        ),
         .notification_activate => |id| _ = try notification_flow.activateNow(client, id),
         .notification_dismiss => |id| _ = try notification_flow.dismissNow(client, id),
         .attachment_dismiss => |id| outcome.layout_changed = try attachment_prompts.dismiss(client, id),

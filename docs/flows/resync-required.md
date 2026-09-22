@@ -24,7 +24,7 @@ notice can retry. Requesting repair changes no model revision and schedules
 no draw. The correlated reply enters `AttachedClient.applyWorkspaceSnapshot`.
 
 Closure first forgets the invalid bookmark. With a predecessor it calls
-`workspace_handoffs.requestWorkspace`, whose admission, capacity, ordered
+`AttachedClient.requestWorkspace`, whose admission, capacity, ordered
 retirement, repair and departure rules still apply. Failure leaves the closed
 bookmark forgotten. Without a predecessor it returns exit without mutating the
 model merely to draw a final frame.
@@ -35,7 +35,7 @@ membership survives and a fresh client can reconstruct its projection.
 
 Source: `src/client/operations/session/resync_requirements.zig`,
 `src/client/connection/LifecycleState.zig`, and
-`src/client/operations/workspaces/workspace_handoffs.zig`.
+`src/client/AttachedClient.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig` and `tab_lifecycle.zig`
 cover matching identity, coalescence, full-outbox retry, closed-bookmark retention
 on failure, predecessor handoff and exit. Runtime response-queue and schema

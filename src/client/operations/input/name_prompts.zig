@@ -16,11 +16,9 @@ const collect_module = @import("../../model/goto_picker.zig").collect;
 const std = @import("std");
 const SourcesType = @import("../../model/Sources.zig");
 const ModelGotoPickerItem = @import("../../model/goto_picker.zig").Item;
-const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const tab_selections = @import("../tabs/tab_selections.zig");
 const agent_navigation = @import("../agents/agent_navigation.zig");
 const SubmissionType = @import("../../model/Submission.zig");
-const workspace_creations = @import("../workspaces/workspace_creations.zig");
 const workspace_renames = @import("../workspaces/workspace_renames.zig");
 const OwnedSearchType = @import("../../connection/OwnedSearch.zig");
 const KeyType = @import("../../input/Key.zig");
@@ -362,7 +360,11 @@ fn pickerSources(client: *Client) SourcesType {
 
 fn navigatePickerItem(client: *Client, item: ModelGotoPickerItem) !void {
     switch (item) {
-        .workspace => |workspace| _ = try workspace_handoffs.selectWorkspace(client, .{ .workspace = workspace }),
+        .workspace => |workspace| _ = try client.selectWorkspace(
+            .{
+                .workspace = workspace,
+            },
+        ),
         .tab => |tab_id| {
             _ = try tab_selections.select(client, .{ .target = .{ .tab_id = tab_id } });
         },
@@ -476,7 +478,7 @@ fn submitWorkspaceCreation(client: *Client, submission: SubmissionType) !bool {
         return false;
     }
 
-    return workspace_creations.request(client, .{
+    return client.requestWorkspaceCreation(.{
         .name = name,
         .cwd = cwd,
         .create_cwd = submission.create_directory and cwd.len != 0,

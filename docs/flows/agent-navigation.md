@@ -19,7 +19,7 @@ ClientModel.planAgentNavigation
        |
        +-- local tab -> tab_selections.select -> pane_focus.apply
        |
-       +-- remote pane -> workspace_handoffs.requestPane
+       +-- remote pane -> AttachedClient.requestWorkspacePane
 ```
 
 The operation owns the branch and local ordering. A pane in an

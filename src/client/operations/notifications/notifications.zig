@@ -17,7 +17,6 @@ const IdType = @import("../../notifications/notifications.zig").Id;
 const NotificationActivationType = @import("../../model/NotificationActivation.zig");
 const NotificationsRootTarget = @import("../../notifications/notifications.zig").Target;
 const tab_selections = @import("../tabs/tab_selections.zig");
-const workspace_handoffs = @import("../workspaces/workspace_handoffs.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 
 /// Delivers one bounded semantic notification through the runtime and records
@@ -195,7 +194,11 @@ fn navigate(client: *Client, target: NotificationsRootTarget) !void {
             _ = try tab_selections.select(client, .{ .target = .{ .tab_id = tab_id } });
         },
         .select_workspace => |workspace| {
-            _ = try workspace_handoffs.selectWorkspace(client, .{ .workspace = workspace });
+            _ = try client.selectWorkspace(
+                .{
+                    .workspace = workspace,
+                },
+            );
         },
         .focus_pane => |pane_id| {
             _ = try pane_focus.apply(client, .{

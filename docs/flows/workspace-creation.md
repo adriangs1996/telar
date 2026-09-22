@@ -5,18 +5,17 @@ The client owns its prompt, navigation history and disposable projection.
 
 ```text
 operations/input/name_prompts.handleInput
-  -> operations/workspaces/workspace_creations.request
+  -> AttachedClient.requestWorkspaceCreation
      -> idle gate, validate name, choose CWD source, retain request size
      -> AttachedClient.sendCreateWorkspaceRequest
   -> runtime commits workspace/root and replaces this client's attachments
   -> pane_opened(create_workspace continuation)
   -> AttachedClient.handleServerMessage
-  -> operations/panes/AttachedClient.completePaneOpen
-     -> workspace_creations.confirmation
-     -> workspace_creations.confirm
+  -> AttachedClient.completePaneOpen
+     -> AttachedClient.createOpenedWorkspace
         -> Model.replaceWorkspace
-        -> workspace_transitions.release(departure)
-        -> workspace_transitions.activate(root)
+        -> AttachedClient.releaseWorkspace(departure)
+        -> AttachedClient.activateWorkspace(root)
   -> adapter observes presentation revisions
 ```
 
@@ -41,10 +40,10 @@ store. Validation/allocation failure keeps the previous projection and all
 revisions. Success advances workspace, tabs, active-tab and panes once; there
 is no intermediate empty model.
 
-In the same synchronous operation, `workspace_transitions.release` remembers
+In the same synchronous operation, `AttachedClient.releaseWorkspace` remembers
 the old focused pane/layout and clears exact copy, paste, focus and graphics
 owners. It silently forgets any remaining obsolete report context.
-`workspace_transitions.activate` validates the committed root and revision
+`AttachedClient.activateWorkspace` validates the committed root and revision
 deltas, synchronizes active resources, resumes host input, then requests the
 workspace snapshot followed by the tab snapshot.
 
@@ -54,8 +53,8 @@ and becomes an owned notice. Unknown, incompatible, malformed or replayed
 confirmation cannot replace the model. Empty-source confirmation remains valid
 for recovery. Presentation is driven by the committed revision.
 
-Source: `src/client/operations/workspaces/workspace_creations.zig`,
-`workspace_transitions.zig`, and `src/client/model/Model.zig`.
+Source: `src/client/AttachedClient.zig`,
+`src/client/model/Model.zig`, and `src/client/workspace/History.zig`.
 Tests: `src/frontend/client/tests/workspace_lifecycle.zig`,
 `src/client/model/tests/workspaces.zig`, bounded outbox tests and runtime
 creation tests cover owned requests, atomic replacement, no stale detach/focus,

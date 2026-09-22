@@ -12,8 +12,6 @@ const decodeServer_module = @import("telar-core").decodeServer;
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const support = @import("support.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const workspace_creations = @import("telar-client").operations.workspace_creations;
-const workspace_handoffs = @import("telar-client").operations.workspace_handoffs;
 const PaneTargetType = @import("telar-core").PaneTarget;
 const RequestIdType = @import("telar-core").RequestId;
 const encodeTabSnapshot_module = @import("telar-core").encodeTabSnapshot;
@@ -100,7 +98,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
 
     // Return through the same runtime handoff used by workspace selection.
     client.request_lifecycle.tracker = .{};
-    _ = try workspace_handoffs.requestWorkspace(client, prior_location.workspace.workspace);
+    _ = try client.requestWorkspace(prior_location.workspace.workspace);
     try harness.settle();
     const detached = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(detached == .detach_pane);
@@ -183,9 +181,21 @@ test "workspace creation validates names before request ownership or projection 
     const version = client.model.version();
     const next_request = client.request_lifecycle.next_request_id;
 
-    try std.testing.expectError(error.InvalidWorkspaceName, workspace_creations.request(client, .{ .name = "" }));
-    try std.testing.expectError(error.InvalidWorkspaceName, workspace_creations.request(client, .{ .name = "bad\nname" }));
-    try std.testing.expectError(error.InvalidUtf8, workspace_creations.request(client, .{ .name = "\xff" }));
+    try std.testing.expectError(error.InvalidWorkspaceName, client.requestWorkspaceCreation(
+        .{
+            .name = "",
+        },
+    ));
+    try std.testing.expectError(error.InvalidWorkspaceName, client.requestWorkspaceCreation(
+        .{
+            .name = "bad\nname",
+        },
+    ));
+    try std.testing.expectError(error.InvalidUtf8, client.requestWorkspaceCreation(
+        .{
+            .name = "\xff",
+        },
+    ));
 
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(next_request, client.request_lifecycle.next_request_id);
@@ -205,7 +215,11 @@ test "workspace creation outbox failure releases correlation and retains the cur
     }
     const version = client.model.version();
 
-    try std.testing.expectError(error.ClientOutboxFull, workspace_creations.request(client, .{ .name = "agents" }));
+    try std.testing.expectError(error.ClientOutboxFull, client.requestWorkspaceCreation(
+        .{
+            .name = "agents",
+        },
+    ));
 
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);

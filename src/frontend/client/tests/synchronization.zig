@@ -11,7 +11,6 @@ const input_operations = @import("telar-client").operations;
 const TerminalSizeType = @import("telar-core").TerminalSize;
 const WorkspaceLocationType = @import("telar-core").WorkspaceLocation;
 const PaneIdType = @import("telar-core").PaneId;
-const workspace_handoffs = @import("telar-client").operations.workspace_handoffs;
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const PaneTargetType = @import("telar-core").PaneTarget;
 const encodeRequestFailed_module = @import("telar-core").encodeRequestFailed;
@@ -211,7 +210,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
     });
     const version_before_departure = client.model.version();
     const pending_updates_before_departure = host(client).presenter.pending_updates;
-    _ = try workspace_handoffs.requestWorkspace(client, @enumFromInt(2));
+    _ = try client.requestWorkspace(@enumFromInt(2));
 
     try std.testing.expect(client.model.workspaceLocation() == null);
     try std.testing.expectEqual(@as(usize, 0), client.model.workspace.count);
@@ -292,7 +291,7 @@ test "workspace handoff capacity failure preserves the source model" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        workspace_handoffs.requestWorkspace(client, @enumFromInt(2)),
+        client.requestWorkspace(@enumFromInt(2)),
     );
 
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
@@ -319,7 +318,7 @@ test "workspace handoff request exhaustion preserves the source model" {
 
     try std.testing.expectError(
         error.RequestIdExhausted,
-        workspace_handoffs.requestWorkspace(client, @enumFromInt(2)),
+        client.requestWorkspace(@enumFromInt(2)),
     );
 
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
@@ -353,7 +352,7 @@ test "workspace handoff reserves its focus-out message" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        workspace_handoffs.requestWorkspace(client, @enumFromInt(2)),
+        client.requestWorkspace(@enumFromInt(2)),
     );
 
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -383,7 +382,7 @@ test "workspace handoff reserves its captured paste closing marker" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        workspace_handoffs.requestWorkspace(client, @enumFromInt(2)),
+        client.requestWorkspace(@enumFromInt(2)),
     );
 
     try std.testing.expect(client.model.panePasteActive());
