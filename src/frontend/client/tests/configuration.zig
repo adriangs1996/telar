@@ -664,14 +664,11 @@ test "Lua expression emits semantic keys through pane input" {
     try std.testing.expectEqual(pending_before, terminal.presenter.pending_updates);
     try harness.settle();
     var buffer: [256]u8 = undefined;
-    const left = try harness.nextClientMessage(&buffer);
-    try std.testing.expect(left == .pane_input);
-    try std.testing.expectEqual(TestHarness.bootstrap_pane, left.pane_input.pane_id);
-    try std.testing.expectEqualStrings("\x1b[D", left.pane_input.bytes);
-    const enter = try harness.nextClientMessage(&buffer);
-    try std.testing.expect(enter == .pane_input);
-    try std.testing.expectEqual(TestHarness.bootstrap_pane, enter.pane_input.pane_id);
-    try std.testing.expectEqualStrings("\r", enter.pane_input.bytes);
+    // Both keys leave in the event's one write, coalesced into one input.
+    const keys = try harness.nextClientMessage(&buffer);
+    try std.testing.expect(keys == .pane_input);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, keys.pane_input.pane_id);
+    try std.testing.expectEqualStrings("\x1b[D\r", keys.pane_input.bytes);
 }
 
 test "Lua expression paste uses pane modes and copy-mode authority" {

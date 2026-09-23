@@ -268,6 +268,7 @@ pub fn windowReady(self: *GuiClient, viewport: native.Viewport) !void {
             .palette = self.renderer.theme.palette,
         },
     );
+    try self.deliverHostEffects();
 }
 
 /// Negotiates the current viewport against the owned renderer and shared model.
@@ -318,6 +319,10 @@ pub fn draw(self: *GuiClient, viewport: native.Viewport) !u64 {
     if (token != 0) {
         self.driver.frame_pacer.record(self.app.presentation.active.?.delivery.commit.slice(), now_ns);
     }
+
+    // Adopting a configuration or a new viewport can leave host requests and
+    // runtime messages that no later event would deliver.
+    try self.deliverHostEffects();
 
     return token;
 }
@@ -1413,9 +1418,10 @@ fn notePaneInput(self: *GuiClient, pane_id: core.PaneId, at_ns: u64) void {
     }, at_ns);
 }
 
-/// Delivers the host requests the shared client left in `model.to_host`.
-/// The window has no outer terminal and no media capture, and it redraws
-/// every image placement each frame.
+/// Delivers the host requests the shared client left in `model.to_host`,
+/// then starts writing what it left for the runtime. The window has no outer
+/// terminal and no media capture, and it redraws every image placement each
+/// frame.
 fn deliverHostEffects(self: *GuiClient) !void {
     const effects = &self.app.model.to_host;
     _ = effects.takePlacementInvalidation();
@@ -1447,6 +1453,8 @@ fn deliverHostEffects(self: *GuiClient) !void {
             }),
         }
     }
+
+    try self.app.flush();
 }
 
 pub fn requestClipboardWrite(self: *GuiClient, bytes: []const u8) !void {

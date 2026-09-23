@@ -237,7 +237,10 @@ test "a media tick that yields to a pending draw runs at that draw's completion"
                 break;
             },
             .client => |message| switch (message) {
-                .sent => |result| try client.completeRuntimeSend(result),
+                .sent => |result| {
+                    try client.completeRuntimeSend(result);
+                    try client.flush();
+                },
                 else => return error.UnexpectedEvent,
             },
             else => return error.UnexpectedEvent,

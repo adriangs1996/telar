@@ -67,6 +67,7 @@ fn observe(terminal: *TerminalClient) !void {
     try client.synchronizeClientLayout();
     try presentation_lifecycle.observe(terminal);
     try presentation_lifecycle.pumpOutput(terminal);
+    try host_effects.deliver(terminal);
 }
 
 /// Routes one event, then draws the chrome facts it changed and delivers the

@@ -7,6 +7,8 @@ const AttachedClient = @import("AttachedClient.zig");
 const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
 const Workers = @import("execution/Workers.zig");
 const Job = @import("execution/Job.zig").Job;
+const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
+const Credit = @import("graphics/Credit.zig");
 
 /// Layout export decodes to the same active pane and split tree.
 /// Example: `try attached_client_tests.layoutRoundTrip(writeCommandLayout);`
@@ -109,7 +111,7 @@ pub fn rejectStaleHostCommits(comptime deliver: fn (*AttachedClient, data.HostCo
 }
 
 /// Transport scheduling releases rejected reservations and retries queued frames in order.
-/// Example: `try attached_client_tests.retryTransportScheduling(startRuntimeSend);`
+/// Example: `try attached_client_tests.retryTransportScheduling(flush);`
 pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerror!void) !void {
     const Driver = struct {
         reject: bool = true,
@@ -158,6 +160,7 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
     app.workers = driver;
+    app.graphics = no_graphics;
     app.model.to_runtime = try .init(std.testing.allocator);
     defer app.model.to_runtime.deinit(std.testing.allocator);
     capture.outbox = &app.model.to_runtime;
@@ -225,7 +228,7 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
 }
 
 /// Enqueue retains copied input after rejected scheduling and preserves order on retry.
-/// Example: `try attached_client_tests.retainQueuedInput(startRuntimeSend);`
+/// Example: `try attached_client_tests.retainQueuedInput(flush);`
 pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void) !void {
     const Driver = struct {
         reject: bool = true,
@@ -266,6 +269,7 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
     app.workers = driver;
+    app.graphics = no_graphics;
     app.model.to_runtime = try .init(std.testing.allocator);
     defer app.model.to_runtime.deinit(std.testing.allocator);
     const state = &app.runtime_transport;
@@ -281,12 +285,13 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
         'x',
     } ** (data.input_limits.max_encoded_bytes + 1);
 
-    try std.testing.expectError(error.DriverBusy, app.sendRuntimeInput(
+    try app.sendRuntimeInput(
         .{
             .pane_id = pane,
             .bytes = &source,
         },
-    ));
+    );
+    try std.testing.expectError(error.DriverBusy, start_send(app));
     try std.testing.expectEqual(@as(u8, 2), app.model.to_runtime.len);
     try std.testing.expect(!app.model.to_runtime.inFlight());
     @memset(&source, 'y');
@@ -299,6 +304,7 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
             },
         },
     );
+    try start_send(app);
     const first = try core.decodeClient(capture.payload);
     try std.testing.expect(first == .pane_input);
     try std.testing.expectEqual(pane, first.pane_input.pane_id);
@@ -596,3 +602,40 @@ pub fn rejectStaleSidebarCommits(comptime deliver: fn (*AttachedClient, data.Sid
     stale.width += 1;
     try std.testing.expectError(error.StaleSidebarLayout, deliver(app, stale));
 }
+
+/// A retained-graphics store that holds nothing, for tests that only flush.
+const no_graphics: GraphicsRetention = .{
+    .context = undefined,
+    .apply_fn = NoGraphics.apply,
+    .clear_pane_fn = NoGraphics.clearPane,
+    .set_pane_visible_fn = NoGraphics.setPaneVisible,
+    .pane_visible_fn = NoGraphics.paneVisible,
+    .has_pane_graphics_fn = NoGraphics.paneVisible,
+    .ingress_version_fn = NoGraphics.ingressVersion,
+    .peek_credit_fn = NoGraphics.peekCredit,
+    .consume_credit_fn = NoGraphics.consumeCredit,
+};
+
+const NoGraphics = struct {
+    fn apply(_: *anyopaque, _: data.PaneGraphicsCommand) !void {
+        return error.UnexpectedGraphics;
+    }
+
+    fn clearPane(_: *anyopaque, _: core.PaneId) void {}
+
+    fn setPaneVisible(_: *anyopaque, _: core.PaneId, _: bool) !void {}
+
+    fn paneVisible(_: *anyopaque, _: core.PaneId) bool {
+        return false;
+    }
+
+    fn ingressVersion(_: *anyopaque) u64 {
+        return 0;
+    }
+
+    fn peekCredit(_: *anyopaque) ?Credit {
+        return null;
+    }
+
+    fn consumeCredit(_: *anyopaque, _: Credit) void {}
+};

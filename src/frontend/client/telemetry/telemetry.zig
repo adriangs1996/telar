@@ -131,7 +131,6 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         "\"decode_avg_us\":{d},\"decode_max_us\":{d}," ++
         "\"apply_avg_us\":{d},\"apply_max_us\":{d}," ++
         "\"compose_avg_us\":{d},\"compose_max_us\":{d}," ++
-        "\"ack_enqueue_avg_us\":{d},\"ack_enqueue_max_us\":{d}," ++
         "\"input_enqueue_avg_us\":{d},\"input_enqueue_max_us\":{d}," ++
         "\"flush_avg_us\":{d},\"flush_max_us\":{d}," ++
         "\"media_flush_avg_us\":{d},\"media_flush_max_us\":{d}," ++
@@ -147,8 +146,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
         metrics.media_flushes,                                        metrics.decode.average() / std.time.ns_per_us,
         metrics.decode.max_ns / std.time.ns_per_us,                   metrics.apply.average() / std.time.ns_per_us,
         metrics.apply.max_ns / std.time.ns_per_us,                    metrics.compose.average() / std.time.ns_per_us,
-        metrics.compose.max_ns / std.time.ns_per_us,                  metrics.ack_enqueue.average() / std.time.ns_per_us,
-        metrics.ack_enqueue.max_ns / std.time.ns_per_us,              metrics.input_enqueue.average() / std.time.ns_per_us,
+        metrics.compose.max_ns / std.time.ns_per_us,                  metrics.input_enqueue.average() / std.time.ns_per_us,
         metrics.input_enqueue.max_ns / std.time.ns_per_us,            metrics.flush.average() / std.time.ns_per_us,
         metrics.flush.max_ns / std.time.ns_per_us,                    metrics.media_flush.average() / std.time.ns_per_us,
         metrics.media_flush.max_ns / std.time.ns_per_us,              metrics.draw_lateness.average() / std.time.ns_per_us,

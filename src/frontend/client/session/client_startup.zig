@@ -10,6 +10,7 @@ const presentation_lifecycle = @import("../presentation/presentation_lifecycle.z
 const host_inputs = @import("../input/host_inputs.zig");
 const host_resizes = @import("../host/host_resizes.zig");
 const client_telemetry = @import("../telemetry/telemetry.zig");
+const host_effects = @import("../host/host_effects.zig");
 
 /// Starts host negotiation and arms I/O without opening a child before its
 /// terminal defaults are available or the bounded probe expires.
@@ -33,6 +34,7 @@ pub fn start(terminal: *TerminalClient, request: StartupRequest) !void {
     try client_telemetry.start(terminal);
     try client.synchronizeBars();
     try client.scheduleConfigReload();
+    try host_effects.deliver(terminal);
 }
 
 /// Advances startup after an event. FIFO configuration precedes the state
@@ -48,7 +50,6 @@ pub fn advance(terminal: *TerminalClient) !bool {
             .terminal_colors = client.model.host.host_capabilities.terminal_colors,
         });
         client.model.startup.phase = .opening;
-        try client.flushGraphicsCredits();
     }
 
     if (client.model.startup.phase == .opening and client.model.activeTabLocation() != null) {

@@ -139,6 +139,8 @@ pub fn drain(self: *Fixture) !void {
             .key => |value| try self.applyKey(value),
             .completed => |value| try self.deliver(value.token, value.outcome),
         }
+
+        try self.app.flush();
     }
 }
 
@@ -219,4 +221,5 @@ pub fn sendOne(self: *Fixture) !void {
     try std.testing.expect(self.pending != null);
     self.pending = null;
     try self.app.completeRuntimeSend({});
+    try self.app.flush();
 }

@@ -71,18 +71,21 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
 
     session.pending = null;
     try app.completeRuntimeSend({});
+    try app.flush();
     const configured = try core.decodeClient(session.pending.?);
     try std.testing.expect(configured == .configure_terminal_colors);
     try std.testing.expectEqualDeep(colors, configured.configure_terminal_colors);
 
     session.pending = null;
     try app.completeRuntimeSend({});
+    try app.flush();
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expect(request == .request_runtime_state);
     try std.testing.expectEqual(app.client_identity, request.request_runtime_state.client_identity);
 
     session.pending = null;
     try app.completeRuntimeSend({});
+    try app.flush();
     try std.testing.expect(session.pending == null);
     try std.testing.expectEqual(@as(usize, 0), app.model.to_runtime.len);
     try std.testing.expect(app.model.startup.phase == .opening);

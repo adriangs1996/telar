@@ -170,7 +170,7 @@ test "native child drag keeps its pane across focus and ignores replacement atta
     var capture = Capture.begin(app, .{ .x = view.content.x, .y = view.content.y, .kind = .press }).?;
     _ = app.model.tabs.layout[tab].focusPane(second);
     try capture.deliver(app, .{ .x = data.workbench.region(&session.gui.app.model).area.w - 1, .y = view.content.y, .raw_x = 999, .raw_y = 999, .kind = .drag, .button = 32 });
-    const request = try core.decodeClient(session.pending.?);
+    const request = try core.decodeClient(try session.sent());
     try std.testing.expectEqual(pane.id, request.pane_input.pane_id);
     try std.testing.expectEqual(second, app.model.tabs.layout[tab].focused().?);
     try session.settle();
@@ -251,7 +251,7 @@ test "native child release crosses a newly opened prompt only with its acquired 
     var release = press;
     release.kind = .release;
     try capture.deliver(app, release);
-    const request = try core.decodeClient(session.pending.?);
+    const request = try core.decodeClient(try session.sent());
     try std.testing.expectEqual(pane.id, request.pane_input.pane_id);
     try std.testing.expect(std.mem.endsWith(u8, request.pane_input.bytes, "m"));
     try session.settle();
@@ -327,7 +327,7 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     release.code = 2;
     try input_support.acceptNative(gui, release);
     try input_support.pump(session.gui);
-    const request = try core.decodeClient(session.pending.?);
+    const request = try core.decodeClient(try session.sent());
     try std.testing.expectEqual(Session.pane_id, request.pane_input.pane_id);
     try std.testing.expect(std.mem.endsWith(u8, request.pane_input.bytes, "m"));
     try session.settle();
@@ -352,7 +352,7 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     try std.testing.expect(data.tab_layout.view(&app.model, tab, Session.pane_id, app.geometry().area) == null);
     try input_support.acceptNative(gui, release);
     try input_support.pump(session.gui);
-    const hidden_request = try core.decodeClient(session.pending.?);
+    const hidden_request = try core.decodeClient(try session.sent());
     try std.testing.expectEqual(Session.pane_id, hidden_request.pane_input.pane_id);
     try std.testing.expect(std.mem.endsWith(u8, hidden_request.pane_input.bytes, "m"));
     try session.settle();
@@ -525,7 +525,7 @@ test "native application repeat keeps its pane when focus changes" {
     _ = app.model.tabs.layout[tab].focusPane(second);
     try input_support.acceptNative(session.gui, .{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39, .phase = 2 });
     try input_support.pump(session.gui);
-    const request = try core.decodeClient(session.pending.?);
+    const request = try core.decodeClient(try session.sent());
     try std.testing.expectEqual(Session.pane_id, request.pane_input.pane_id);
     try std.testing.expectEqualStrings("j", request.pane_input.bytes);
     try session.settle();

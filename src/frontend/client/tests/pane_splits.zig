@@ -55,9 +55,8 @@ test "split restores the original size when request identity allocation fails" {
     try std.testing.expectEqualDeep(before, app.model.version());
     try harness.settle();
     var buffer: [512]u8 = undefined;
-    const provisional = try harness.nextClientMessage(&buffer);
-    try std.testing.expect(provisional == .pane_resize);
-    try std.testing.expectEqualDeep(plan.provisional_resize, provisional.pane_resize);
+    // The restore replaces the provisional resize before the event's write,
+    // so the runtime never sees the provisional size.
     const restored = try harness.nextClientMessage(&buffer);
     try std.testing.expect(restored == .pane_resize);
     try std.testing.expectEqualDeep(plan.restore_resize, restored.pane_resize);

@@ -80,6 +80,7 @@ pub fn deinit(self: *TestHarness) void {
 /// observes exactly what the runtime peer would receive.
 pub fn settle(self: *TestHarness) !void {
     while (self.client.model.to_runtime.inFlight() or self.client.model.to_runtime.len != 0) {
+        try self.client.flush();
         switch (try self.terminal.inbox.receive()) {
             .draw => |result| try presentation_lifecycle.handleDraw(self.terminal, result),
             .client => |message| switch (message) {
@@ -127,9 +128,13 @@ pub fn settleModelPresentation(self: *TestHarness) !void {
             .draw => |result| try presentation_lifecycle.handleDraw(self.terminal, result),
             .media_tick => |result| try presentation_lifecycle.handleMediaTick(self.terminal, result),
             .client => |message| switch (message) {
-                .sent => |result| try self.client.completeRuntimeSend(result),
+                .sent => |result| {
+                    try self.client.completeRuntimeSend(result);
+                    try self.client.flush();
+                },
                 .sidebar_animation_tick, .notification_tick, .bar_tick, .bar_command, .path_completion => {
                     _ = try self.client.update(message);
+                    try self.client.flush();
                     try presentation_lifecycle.observe(self.terminal);
                     target = self.client.model.version();
                 },
@@ -140,8 +145,10 @@ pub fn settleModelPresentation(self: *TestHarness) !void {
     }
 }
 
-/// Receives the next message the client sent to the runtime.
+/// Receives the next message the client sent to the runtime, first starting
+/// the write a direct client call left queued, as the event loop would.
 pub fn nextClientMessage(self: *TestHarness, buffer: []u8) !core.ClientMessage {
+    try self.client.flush();
     const payload = try self.peer.receive(std.testing.io, buffer);
     return core.decodeClient(payload);
 }

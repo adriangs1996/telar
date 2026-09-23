@@ -122,6 +122,14 @@ pub fn startJob(context: *anyopaque, job: client.Job) !void {
     }
 }
 
+/// The runtime write a direct GUI call left, started as the window loop would.
+/// Example: `const request = try core.decodeClient(try session.sent());`
+pub fn sent(self: *Session) ![]const u8 {
+    try self.gui.app.flush();
+
+    return self.pending orelse error.NothingSent;
+}
+
 pub fn settle(self: *Session) !void {
     var count: usize = 0;
     while (true) {
@@ -190,6 +198,7 @@ pub fn settle(self: *Session) !void {
 
         self.pending = null;
         try self.gui.app.completeRuntimeSend({});
+        try self.gui.app.flush();
     }
 }
 

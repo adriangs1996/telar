@@ -106,7 +106,7 @@ test "runtime review autosave acknowledges only submitted text while later typin
     const panel = session.gui.review;
     const index = draft(session, "first");
     try panel.synchronize(&session.gui.app);
-    const first = (try core.decodeClient(session.pending.?)).change_review_command;
+    const first = (try core.decodeClient(try session.sent())).change_review_command;
     try std.testing.expectEqualStrings("first", first.body);
     try std.testing.expectEqual(@as(u32, 1), first.first_line);
     try std.testing.expectEqual(@as(u32, 2), first.last_line);
@@ -118,7 +118,7 @@ test "runtime review autosave acknowledges only submitted text while later typin
     panel.widget.noteComment(index);
     try reply(session, withComment(response(session, 2), "first"));
     try std.testing.expectEqualStrings("first and later", panel.widget.model.comments[index].body.text());
-    const next = (try core.decodeClient(session.pending.?)).change_review_command;
+    const next = (try core.decodeClient(try session.sent())).change_review_command;
     try std.testing.expectEqual(@as(u64, 91), next.comment_id);
     try std.testing.expectEqualStrings("first and later", next.body);
     try reply(session, withComment(response(session, 3), "first and later"));
@@ -168,7 +168,7 @@ test "runtime review close and reopen restores its acknowledged draft on the sam
     try panel.synchronize(&session.gui.app);
     try std.testing.expect(!panel.active);
     try session.gui.openChangeReview(Session.pane_id);
-    try std.testing.expectEqual(@as(u64, 1), (try core.decodeClient(session.pending.?)).query_change_review.edition_id);
+    try std.testing.expectEqual(@as(u64, 1), (try core.decodeClient(try session.sent())).query_change_review.edition_id);
     try reply(session, withComment(response(session, 2), "saved draft"));
     try std.testing.expect(panel.active);
     try std.testing.expectEqualStrings("saved draft", panel.widget.model.comments[index].body.text());
@@ -189,7 +189,7 @@ test "runtime review newer editions remain explicit while its immutable patch st
     try std.testing.expectEqualStrings(patch, panel.widget.model.current().source);
     panel.widget.command = .next_edition;
     try panel.synchronize(&session.gui.app);
-    try std.testing.expectEqual(@as(u64, 2), (try core.decodeClient(session.pending.?)).query_change_review.edition_id);
+    try std.testing.expectEqual(@as(u64, 2), (try core.decodeClient(try session.sent())).query_change_review.edition_id);
     snapshot = response(session, 3);
     snapshot.edition_id = 2;
     snapshot.latest_edition_id = 2;
@@ -237,7 +237,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     try std.testing.expect(std.mem.indexOf(u8, panel.widget.model.status, "Syntax highlighting") != null);
     panel.widget.command = .refresh;
     try panel.synchronize(&gui.app);
-    try std.testing.expectEqual(@as(u64, 2), (try core.decodeClient(session.pending.?)).query_change_review.edition_id);
+    try std.testing.expectEqual(@as(u64, 2), (try core.decodeClient(try session.sent())).query_change_review.edition_id);
     snapshot.request_id = gui.app.model.change_review.pending.?;
     try reply(session, snapshot);
     try adopt(session);
@@ -330,7 +330,7 @@ test "runtime review coalesces new edition notices behind pending saves without 
     );
     try std.testing.expectEqual(save_id, session.gui.app.model.change_review.pending.?);
     try reply(session, withComment(response(session, 2), "feedback"));
-    const query = (try core.decodeClient(session.pending.?)).query_change_review;
+    const query = (try core.decodeClient(try session.sent())).query_change_review;
     try std.testing.expectEqual(@as(u64, 1), query.edition_id);
     try std.testing.expectEqualStrings("thread-A", query.session);
     var snapshot = withComment(response(session, 2), "feedback");
@@ -368,7 +368,7 @@ test "runtime review retains a retired conversation draft and explicitly reopens
     try gui.review.synchronize(&gui.app);
     try std.testing.expect(!gui.review.active);
     try gui.openChangeReview(Session.pane_id);
-    const request = (try core.decodeClient(session.pending.?)).query_change_review;
+    const request = (try core.decodeClient(try session.sent())).query_change_review;
     try std.testing.expectEqual(@as(u64, 0), request.edition_id);
     try std.testing.expectEqualStrings("", request.session);
     _ = try gui.app.handleServerMessage(
@@ -408,6 +408,7 @@ test "runtime review loads through its real worker and inbox after the previous 
     gui.app.workers = host_ports.workers(gui);
     try gui.app.startRuntimeRead();
     try gui.openChangeReview(Session.pane_id);
+    try gui.app.flush();
     var buffer: [128 * 1024]u8 = undefined;
     const request = (try core.decodeClient(try session.peer.receive(std.testing.io, &buffer))).query_change_review;
     try std.testing.expectEqual(gui.app.model.change_review.pending.?, request.request_id);

@@ -9,7 +9,8 @@ const capture_module = @import("../../attachments/capture.zig");
 const term = @import("../../presentation/screen_support.zig");
 const host_inputs = @import("../input/host_inputs.zig");
 
-/// Drains every pending request after one event.
+/// Drains every pending host request after one event, then starts writing
+/// what the event left for the runtime.
 /// Example: `try host_effects.deliver(terminal);`
 pub fn deliver(terminal: *TerminalClient) !void {
     const client = &terminal.app;
@@ -54,6 +55,8 @@ pub fn deliver(terminal: *TerminalClient) !void {
             },
         }
     }
+
+    try client.flush();
 }
 
 fn startCapture(terminal: *TerminalClient, request: data.CaptureRequest) !void {

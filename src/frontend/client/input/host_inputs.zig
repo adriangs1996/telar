@@ -284,7 +284,6 @@ pub fn mouse(terminal: *TerminalClient, event: data.Mouse) !void {
 /// try host_inputs.terminalResponse(terminal, response);
 /// ```
 pub fn terminalResponse(terminal: *TerminalClient, response: term.Event.TerminalResponse) !void {
-    const client = &terminal.app;
 
     _ = try host_capabilities.observe(terminal, response);
     switch (response) {
@@ -292,7 +291,6 @@ pub fn terminalResponse(terminal: *TerminalClient, response: term.Event.Terminal
             if (!kitty_delivery.noteHostReply(&terminal.graphics_store, reply.image_id, reply.supported)) {
                 return;
             }
-            try client.flushGraphicsCredits();
             try presentation_lifecycle.observe(terminal);
         },
         else => {},

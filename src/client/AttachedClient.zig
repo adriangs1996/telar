@@ -238,14 +238,13 @@ pub fn editorExecutable(self: *const AttachedClient) []const u8 {
     return self.options.editor;
 }
 
-/// Copies one fixed-size message and starts its write when idle.
+/// Copies one fixed-size message into the outbox; `flush` writes it.
 /// Example: `try self.sendRuntime(.{ .detach_pane = detach });`
 pub fn sendRuntime(self: *AttachedClient, message: data.outbox_support.Message) !void {
     try self.model.to_runtime.push(message);
-    try self.startRuntimeSend();
 }
 
-/// Copies bounded pane input and starts its write when idle.
+/// Copies bounded pane input into the outbox; `flush` writes it.
 ///
 /// ```zig
 /// try self.sendRuntimeInput(.{ .pane_id = pane_id, .bytes = bytes });
@@ -256,15 +255,13 @@ pub fn sendRuntimeInput(self: *AttachedClient, input: core.PaneInput) !void {
     } else {
         try self.model.to_runtime.pushInput(input.pane_id, input.bytes);
     }
-
-    try self.startRuntimeSend();
 }
 
 /// Starts the receive loop before sending the queued bootstrap.
 /// Example: `try client.startRuntimeIo();`
 pub fn startRuntimeIo(self: *AttachedClient) !void {
     try self.startRuntimeRead();
-    try self.startRuntimeSend();
+    try self.flush();
 }
 
 /// Handles one client event an adapter delivered and returns an exit
@@ -331,8 +328,6 @@ pub fn receiveRuntime(self: *AttachedClient, result: anyerror!*const data.Runtim
         return exit_status;
     }
 
-    self.queueGraphicsCredits();
-    try self.startRuntimeSend();
     try self.startRuntimeRead();
 
     return null;
@@ -623,7 +618,6 @@ pub fn sendRuntimeRequest(self: *AttachedClient, delivery: data.ConnectionDelive
     try self.model.request_lifecycle.tracker.add(delivery.registration.request_id, delivery.registration.continuation);
     errdefer _ = self.model.request_lifecycle.tracker.take(delivery.registration.request_id);
     try self.model.to_runtime.push(delivery.message);
-    try self.startRuntimeSend();
 }
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
@@ -637,7 +631,6 @@ pub fn sendWorkspaceRenameRequest(self: *AttachedClient, rename: core.RenameWork
     );
     errdefer _ = self.model.request_lifecycle.tracker.take(rename.request_id);
     try self.model.to_runtime.pushWorkspaceRename(rename);
-    try self.startRuntimeSend();
 }
 
 /// Synchronizes the focused attachment before reporting child focus. Example: `try self.synchronizeActivePane();`
@@ -720,24 +713,15 @@ pub fn requestPaneSplit(self: *AttachedClient, command: data.RequestPaneSplit) !
     return plan;
 }
 
-/// Releases one runtime write, pumps its successor and resumes host input when
-/// one queue slot becomes available.
+/// Releases one runtime write and resumes host input now that a queue slot is
+/// free; the adapter's `flush` writes the successor.
 ///
 /// ```zig
 /// try self.completeRuntimeSend(result);
 /// ```
 pub fn completeRuntimeSend(self: *AttachedClient, result: anyerror!void) !void {
     try self.model.to_runtime.finishSend(result);
-    self.queueGraphicsCredits();
-    try self.startRuntimeSend();
     self.model.to_host.resume_input = true;
-}
-
-/// Returns available graphics credits and starts their delivery.
-/// Example: `try client.flushGraphicsCredits();`
-pub fn flushGraphicsCredits(self: *AttachedClient) !void {
-    self.queueGraphicsCredits();
-    try self.startRuntimeSend();
 }
 
 /// Commits validated geometry before touching resources. Delivery failure keeps
@@ -2323,7 +2307,6 @@ pub fn navigateAgent(self: *AttachedClient, key: data.AgentKey) !AgentNavigation
 /// ```
 fn sendRuntimeClientLayout(self: *AttachedClient, layout_update: core.ClientLayoutUpdate) !void {
     try self.model.to_runtime.pushClientLayout(layout_update);
-    try self.startRuntimeSend();
 }
 
 /// Requests a canonical snapshot with its exact target retained until the reply.
@@ -2602,7 +2585,6 @@ fn sendNotificationRequest(self: *AttachedClient, request: core.ShowNotification
     try self.model.request_lifecycle.tracker.add(request.request_id, .notification);
     errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
     try self.model.to_runtime.pushNotification(request);
-    try self.startRuntimeSend();
 }
 
 /// Delivers resources for a committed focus, including newly revealed panes. Example: `try self.deliverPaneFocus(focus, area);`
@@ -2639,7 +2621,6 @@ fn sendCreateWorkspaceRequest(self: *AttachedClient, request: core.CreateWorkspa
     );
     errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
     try self.model.to_runtime.pushCreateWorkspace(request);
-    try self.startRuntimeSend();
 }
 
 /// Counts the deliveries needed to detach one tab, including pending attachments.
@@ -2659,21 +2640,18 @@ fn tabDetachmentCapacity(self: *const AttachedClient, location: core.TabLocation
 /// Example: `try self.sendRuntimeAgentHistory(request);`
 fn sendRuntimeAgentHistory(self: *AttachedClient, request: core.QueryAgentHistory) !void {
     try self.model.to_runtime.pushAgentHistory(request);
-    try self.startRuntimeSend();
 }
 
 /// Pins a query to copied provider session bytes before the view can change.
 /// Example: `try self.sendRuntimeChangeReviewQuery(query);`
 fn sendRuntimeChangeReviewQuery(self: *AttachedClient, query: core.QueryChangeReview) !void {
     try self.model.to_runtime.pushChangeReviewQuery(query);
-    try self.startRuntimeSend();
 }
 
 /// Copies comment and path bytes before the originating editor can mutate them.
 /// Example: `try self.sendRuntimeChangeReviewCommand(request);`
 fn sendRuntimeChangeReviewCommand(self: *AttachedClient, request: core.ChangeReviewCommand) !void {
     try self.model.to_runtime.pushChangeReviewCommand(request);
-    try self.startRuntimeSend();
 }
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
@@ -2682,7 +2660,6 @@ fn sendTabRenameRequest(self: *AttachedClient, rename: core.RenameTab, continuat
     try self.model.request_lifecycle.tracker.add(rename.request_id, continuation);
     errdefer _ = self.model.request_lifecycle.tracker.take(rename.request_id);
     try self.model.to_runtime.pushRename(rename);
-    try self.startRuntimeSend();
 }
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
@@ -2699,7 +2676,6 @@ fn sendCreateTabRequest(self: *AttachedClient, request: core.CreateTab) !void {
     );
     errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
     try self.model.to_runtime.pushCreateTab(request);
-    try self.startRuntimeSend();
 }
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
@@ -2713,17 +2689,24 @@ fn sendAgentPromptRequest(self: *AttachedClient, request: core.AgentPrompt, oper
     );
     errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
     try self.model.to_runtime.pushAgentPrompt(request);
-    try self.startRuntimeSend();
 }
 
 /// Owns a routed response until its asynchronous send completes. Example: `try self.sendRuntimeClientCompletion(reply);`
 fn sendRuntimeClientCompletion(self: *AttachedClient, reply: core.ClientCommand) !void {
     try self.model.to_runtime.pushClientCompletion(reply);
-    try self.startRuntimeSend();
 }
 
-/// Keeps queued data owned by the transport if scheduling fails.
-fn startRuntimeSend(self: *AttachedClient) !void {
+/// Moves the graphics credits the host released into `model.to_runtime` and
+/// starts writing the queue when no write is in flight. Procedures only push;
+/// the adapter calls this once after every event, so a burst of messages
+/// leaves in as few writes as the transport allows. Scheduling failure keeps
+/// the queued data owned by the transport.
+///
+/// ```zig
+/// try client.flush();
+/// ```
+pub fn flush(self: *AttachedClient) !void {
+    self.queueGraphicsCredits();
     const transport = &self.runtime_transport;
     const payload = try self.model.to_runtime.beginSend(transport.send_buffer) orelse return;
 
@@ -4732,14 +4715,8 @@ fn receivePaneFrame(self: *AttachedClient, frame: core.FrameView) !data.PaneFram
     const outcome = try data.pane_frame.receive(&self.model, frame);
     switch (outcome) {
         .detached => {},
-        .resync => try self.startRuntimeSend(),
+        .resync => {},
         .applied => |commit| {
-            const enqueued = core.now(self.io);
-            try self.startRuntimeSend();
-            if (comptime core.enabled) {
-                self.telemetry.metrics.ack_enqueue.observe(core.elapsed(enqueued, core.now(self.io)));
-            }
-
             if (self.graphics.paneVisible(commit.pane_id) != commit.graphics_visible) {
                 try self.graphics.setPaneVisible(commit.pane_id, commit.graphics_visible);
             }
@@ -7457,11 +7434,11 @@ test "host resources reject empty and stale commits before calling ports" {
 }
 
 test "transport scheduling releases rejected reservations and retries queued frames in order" {
-    try attached_client_tests.retryTransportScheduling(startRuntimeSend);
+    try attached_client_tests.retryTransportScheduling(flush);
 }
 
 test "enqueue retains copied input after rejected scheduling and preserves order on retry" {
-    try attached_client_tests.retainQueuedInput(startRuntimeSend);
+    try attached_client_tests.retainQueuedInput(flush);
 }
 
 test "change review operation accepts terminal panes and rejects replaced attachments" {
