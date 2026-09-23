@@ -1,5 +1,5 @@
+const data = @import("model");
 const core = @import("telar-core");
-const sidebar_rendering_module = @import("../config/sidebar_rendering.zig");
 const GenerationType = @import("../config/Generation.zig");
 const RegistryType = @import("../plugins/Registry.zig");
 const RouterConfigType = @import("../input/RouterConfig.zig");
@@ -13,7 +13,7 @@ registry: *RegistryType,
 trust_store: *core.TrustStore,
 /// Bindings the adapter compiles into its own router when it adopts.
 input: RouterConfigType,
-sidebar_rendering: sidebar_rendering_module.SidebarRendering,
+sidebar_rendering: data.SidebarRendering,
 
 /// Releases an adoption that no client accepted.
 ///

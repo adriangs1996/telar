@@ -1,7 +1,7 @@
 const core = @import("telar-core");
+const SidebarRendererInput = @import("../../graphics/SidebarRendererInput.zig");
 const client = @import("telar-client");
 const data = @import("model");
-const LayoutRegions = @import("../../widgets/LayoutRegions.zig");
 const context_support = @import("../../widgets/context_support.zig");
 const WidgetsState = @import("../../widgets/State.zig");
 const KittySidebarRendererType = @import("../../graphics/KittySidebarRenderer.zig");
@@ -31,8 +31,7 @@ const kitty_sidebar_module = @import("../../graphics/kitty_sidebar.zig");
 const State = @This();
 
 scratch: core.Buffer,
-regions: LayoutRegions,
-geometry_state: client.WorkspaceState,
+regions: data.GridRegions,
 theme: data.ColorTheme,
 icon_theme: data.icons.Theme,
 hits: context_support.Hits = .{},
@@ -49,7 +48,7 @@ sidebar: WidgetsState = .{},
 workspace_list_collapsed: bool = false,
 dirty: bool = true,
 interaction_revision: u64 = 0,
-sidebar_rendering: client.ResolvedSidebarRendering = .cells,
+sidebar_rendering: data.ResolvedSidebarRendering = .cells,
 toast_overlay_drawn: bool = false,
 kitty_sidebar: KittySidebarRendererType,
 kitty_icons: IconsRenderer,
@@ -82,15 +81,11 @@ pub fn initWithTheme(gpa: std.mem.Allocator, dimensions: Dimensions, selected_th
 /// var view = try State.initWithAppearance(gpa, .{ .width = 80, .height = 24 }, .{ .theme = theme, .icons = .nerd_font });
 /// ```
 pub fn initWithAppearance(gpa: std.mem.Allocator, dimensions: Dimensions, appearance: Appearance) !State {
-    const regions: LayoutRegions = .calculate(dimensions.width, dimensions.height, .{
-        .visible = true,
-        .preferred_width = data.sidebar.default_width,
-    });
+    const regions: data.GridRegions = .calculate(dimensions.width, dimensions.height, true, data.sidebar.default_width);
 
     return .{
         .scratch = try .init(gpa, dimensions.width, dimensions.height),
         .regions = regions,
-        .geometry_state = .{ .current = .{ .area = regions.workbench, .revision = 1 } },
         .theme = appearance.theme,
         .icon_theme = appearance.icons,
         .kitty_sidebar = .init(gpa),
@@ -124,12 +119,7 @@ pub fn resize(state: *State, width: u16, height: u16) !void {
 }
 
 pub fn workbench(state: *const State) core.Rect {
-    return state.geometry().area;
-}
-
-/// Example: `const region = view.geometry();`.
-pub fn geometry(state: *const State) data.Region {
-    return state.geometry_state.current;
+    return state.regions.workbench;
 }
 
 /// Returns the revision of disposable view state changed by host input.
@@ -143,11 +133,7 @@ pub fn interactionVersion(state: *const State) u64 {
 }
 
 fn recalculateRegions(state: *State, width: u16, height: u16) void {
-    state.regions = .calculate(width, height, .{
-        .visible = state.sidebar_requested,
-        .preferred_width = state.sidebar_preferred_width,
-    });
-    state.geometry_state.update(state.regions.workbench);
+    state.regions = .calculate(width, height, state.sidebar_requested, state.sidebar_preferred_width);
 }
 
 pub fn palette(state: *const State) *const data.Palette {
@@ -253,7 +239,7 @@ pub fn resetSidebarScroll(state: *State) void {
 /// ```zig
 /// try view.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 8, .cell_height = 16 });
 /// ```
-pub fn configureSidebar(state: *State, requested: client.SidebarRendering, configuration: client.SidebarRendererInput) !void {
+pub fn configureSidebar(state: *State, requested: data.SidebarRendering, configuration: SidebarRendererInput) !void {
     const resolved = try requested.resolve(configuration.support);
     const toast_changed = state.kitty_toasts.configure(configuration);
     const modal_changed = state.kitty_modal.configure(configuration);

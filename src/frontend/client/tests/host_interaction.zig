@@ -30,6 +30,7 @@ test "host resize commits before resources and presents by model version" {
     };
 
     const commit = (try host_resizes.apply(client, measurement)).?.resize.?;
+    try harness.deliverHostEffects();
 
     const expected: core.TerminalSize = .{
         .cols = 100,
@@ -97,6 +98,7 @@ test "host resize retains committed geometry after outbox backpressure" {
     };
 
     try std.testing.expectError(error.ClientOutboxFull, host_resizes.apply(client, measurement));
+    try harness.deliverHostEffects();
 
     try std.testing.expectEqual(core.TerminalSize{
         .cols = 90,
@@ -483,14 +485,12 @@ test "capability effect failure retains the committed fallback" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    TerminalClient.of(client).sidebar_rendering = .kitty_hybrid;
+    client.model.config.sidebar_rendering = .kitty_hybrid;
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
     TerminalClient.of(client).host_negotiation.deadline_ns = 0;
 
-    try std.testing.expectError(
-        error.KittyGraphicsUnsupported,
-        host_capabilities.handleExpiry(client, {}),
-    );
+    _ = try host_capabilities.handleExpiry(client, {});
+    try std.testing.expectError(error.KittyGraphicsUnsupported, harness.deliverHostEffects());
 
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, client.model.host.host_capabilities.images);
     try std.testing.expectEqual(data.Version{

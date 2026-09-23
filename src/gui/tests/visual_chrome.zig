@@ -139,7 +139,7 @@ test "a blocked agent marks its tab and project independently of selection" {
     projection.workspaces = &workspaces;
     projection.agents = &agents;
     try fixture.paint(projection);
-    const palette = fixture.session.gui.theme.palette;
+    const palette = fixture.session.gui.app.model.theme.palette;
     const quads = fixture.session.gui.renderer.quads.items();
     const blocked_tab = fixture.bandTarget(.{ .select_tab = second_tab }).?;
     const working_tab = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
@@ -215,7 +215,7 @@ test "the attention ring surrounds an unfocused blocked pane only and the header
     try std.testing.expect(dimmed);
     var chip = false;
     const header = renderer.metrics.rect(renderer.origin, layout.find(second).?.outer.row(0));
-    const yellow = fixture.session.gui.theme.palette.yellow;
+    const yellow = fixture.session.gui.app.model.theme.palette.yellow;
     for (renderer.quads.items()) |quad| {
         chip = chip or (quad.radius == 4 and quad.y >= header.y and quad.y + quad.height <= header.y + header.height and matchesColor(quad, yellow));
     }
@@ -241,7 +241,7 @@ test "toasts cap at two and skip a pane already on screen" {
     _ = model.advanceNotifications(data.notifications.transition_duration_ns);
     var overlays: Overlays = .{};
     const renderer = &fixture.session.gui.renderer;
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     renderer.quads.clear();
     var projection = fixture.projection();
     var widgets: frame_widget.List = .{};

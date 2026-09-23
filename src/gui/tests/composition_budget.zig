@@ -6,7 +6,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
-const Regions = @import("../widgets/Regions.zig");
 const Scene = @import("../render/Scene.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
 const Canvas = @import("../widgets/Canvas.zig");
@@ -19,7 +18,7 @@ test "native composed multiplexer scenes keep warm allocation shaping and cell w
     const renderer = &fixture.session.gui.renderer;
     const model = &fixture.session.gui.app.model;
     var overlays: Overlays = .{};
-    var scene: Scene = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = fixture.session.gui.theme };
+    var scene: Scene = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = fixture.session.gui.app.model.theme };
     for (0..2) |mode| {
         if (mode == 1) {
             model.name_prompt.begin(.goto_picker);
@@ -74,7 +73,7 @@ test "native decorated combining clusters remain bounded and atlas exhaustion re
     defer fixture.deinit();
     const renderer = &fixture.session.gui.renderer;
     const atlas = &renderer.atlas.?;
-    var canvas: Canvas = .{ .atlas = atlas, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
+    var canvas: Canvas = .{ .atlas = atlas, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     const cluster = "a" ++ "\u{301}" ** 15;
     const area: core.Rect = .{ .w = 120, .h = 1 };
     renderer.quads.clear();
@@ -111,7 +110,10 @@ fn populateMultiplexer(fixture: *Fixture) !void {
 
     _ = data.tab_selection.select(model, Session.location.tab_id);
     const tab = model.tabs.active;
-    const area = Regions.calculate(160, 60).workbench;
+    const area: core.Rect = .{
+        .w = 160,
+        .h = 60,
+    };
     for (1..8) |index| {
         var layout: data.LayoutSnapshot = .{};
         model.tabs.layout[tab].snapshot(area, &layout);

@@ -147,7 +147,7 @@ test "native copy selection recolors only projected cells and restores retained 
     try session.receiveFrame(1);
     const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const canonical = pane.buffer.cells[0];
-    const view = model_data.tab_layout.view(&session.gui.app.model, session.gui.app.model.tabs.active, pane.id, session.gui.region.area).?;
+    const view = model_data.tab_layout.view(&session.gui.app.model, session.gui.app.model.tabs.active, pane.id, model_data.workbench.region(&session.gui.app.model).area).?;
     const position = [2]u16{ view.content.x, view.content.y };
     var projection = session.gui.projection();
     _ = try session.gui.renderer.prepare(projection);

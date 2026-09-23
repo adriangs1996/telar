@@ -195,7 +195,8 @@ test "client startup validates geometry before request registration" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    try TerminalClient.of(client).view.resize(1, 1);
+    client.model.host.host_size.cols = 1;
+    client.model.host.host_size.rows = 1;
 
     try std.testing.expectError(error.TerminalTooSmall, client_startup.start(client, .{
         .resize_watcher = undefined,

@@ -2,6 +2,7 @@
 //! binds one heap-stable client so workers complete through its event loop.
 
 const tab_drag = @import("../controllers/input/tab_drag.zig");
+const SidebarRendererInput = @import("../../graphics/SidebarRendererInput.zig");
 const client_module = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
@@ -89,16 +90,7 @@ fn consumeGraphicsCredit(context: *anyopaque, credit: client_module.GraphicsCred
 pub fn chrome(client: *client_module.AttachedClient) client_module.HostChrome {
     return .{
         .context = client,
-        .set_theme_fn = setTheme,
-        .set_icon_theme_fn = setIconTheme,
-        .configure_sidebar_fn = configureSidebar,
-        .resize_fn = resizeView,
-        .set_sidebar_layout_fn = setSidebarLayout,
-        .set_workspace_list_collapsed_fn = setWorkspaceListCollapsed,
         .pointer_fn = pointer,
-        .sidebar_renderer_fn = sidebarRenderer,
-        .adopt_sidebar_renderer_fn = adoptSidebarRenderer,
-        .region_fn = region,
         .inspection_scroll_limit_fn = inspectionScrollLimit,
     };
 }
@@ -107,61 +99,6 @@ fn inspectionScrollLimit(context: *anyopaque) ?u32 {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
 
     return history_inspection.scrollLimit(&client.model);
-}
-
-fn sidebarRenderer(context: *anyopaque) client_module.SidebarRendering {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    return TerminalClient.of(client).sidebar_rendering;
-}
-
-fn adoptSidebarRenderer(context: *anyopaque, value: client_module.SidebarRendering) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    TerminalClient.of(client).sidebar_rendering = value;
-}
-
-fn region(context: *anyopaque) data.Region {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    return TerminalClient.of(client).view.geometry();
-}
-
-fn setTheme(context: *anyopaque, theme: data.ColorTheme) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    TerminalClient.of(client).view.setTheme(theme);
-}
-
-fn setIconTheme(context: *anyopaque, theme: data.icons.Theme) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    TerminalClient.of(client).view.setIconTheme(theme);
-}
-
-/// The requested renderer is the adapter's own configuration.
-fn configureSidebar(context: *anyopaque, input: client_module.SidebarRendererInput) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).view.configureSidebar(TerminalClient.of(client).sidebar_rendering, input);
-}
-
-fn resizeView(context: *anyopaque, cols: u16, rows: u16) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).view.resize(cols, rows);
-}
-
-fn setSidebarLayout(context: *anyopaque, visible: bool, width: u16) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    TerminalClient.of(client).view.setSidebarLayout(visible, width);
-}
-
-fn setWorkspaceListCollapsed(context: *anyopaque, collapsed: bool) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    TerminalClient.of(client).view.setWorkspaceListCollapsed(collapsed);
 }
 
 fn pointer(context: *anyopaque, event: data.Mouse) client_module.ViewInteractionCommand {
@@ -288,18 +225,11 @@ fn attachmentReservation(context: *anyopaque) ?data.PaneBottomReservation {
 pub fn presentation(client: *client_module.AttachedClient) client_module.HostPresentation {
     return .{
         .context = client,
-        .resize_fn = resizePresenter,
         .note_input_fn = noteInput,
         .frame_interval_ns_fn = frameIntervalNs,
         .in_flight_fn = presentationInFlight,
         .delivered_geometry_fn = deliveredGeometry,
     };
-}
-
-fn resizePresenter(context: *anyopaque, cols: u16, rows: u16) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).presenter.resize(cols, rows);
 }
 
 fn noteInput(context: *anyopaque, now_ns: u64) void {

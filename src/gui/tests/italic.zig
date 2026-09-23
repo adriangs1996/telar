@@ -210,7 +210,7 @@ fn configured(thicken: bool, line_height: f32) !*Session {
 }
 
 fn content(session: *Session) core.Rect {
-    return data.tab_layout.view(&session.gui.app.model, session.gui.app.model.tabs.active, Session.pane_id, session.gui.region.area).?.content;
+    return data.tab_layout.view(&session.gui.app.model, session.gui.app.model.tabs.active, Session.pane_id, data.workbench.region(&session.gui.app.model).area).?.content;
 }
 
 fn word(session: *Session, point: [2]u16, text: []const u8) void {

@@ -1,13 +1,12 @@
 const client = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
-const LayoutRegions = @import("LayoutRegions.zig");
 const tab_rename = @import("tab_rename.zig");
 const StateType = @import("State.zig");
 const MetricsType = @import("Metrics.zig");
 const Input = @This();
 
-regions: LayoutRegions,
+regions: data.GridRegions,
 model: *const data.ClientModel,
 /// The active tab's slot in `model.tabs`.
 tab: usize,

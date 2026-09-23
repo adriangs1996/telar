@@ -1,4 +1,5 @@
 const data = @import("model");
+const SidebarRendererInput = @import("SidebarRendererInput.zig");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const kitty_protocol = @import("kitty_protocol");
@@ -38,7 +39,7 @@ pub fn retainedBytes(renderer: *const Renderer) usize {
 
 /// Applies host graphics support and cell geometry to modal rendering.
 /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
-pub fn configure(renderer: *Renderer, configuration: client.SidebarRendererInput) bool {
+pub fn configure(renderer: *Renderer, configuration: SidebarRendererInput) bool {
     const supported = configuration.support == .supported;
     if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
         renderer.cell_height == configuration.cell_height)

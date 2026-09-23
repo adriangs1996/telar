@@ -102,7 +102,7 @@ test "a selected pane cannot steal focus from another agent composer" {
     const gui = fixture.session.gui;
     const tab = gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Fixture.pane_id, .new_pane = second, .location = Fixture.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Fixture.pane_id, .new_pane = second, .location = Fixture.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     try std.testing.expect(gui.app.model.identifyPane(.{ .request_id = @enumFromInt(2), .pane_id = second, .location = Fixture.location, .created = false, .kind = .agent, .pane_generation = 8 }));
     const snapshot = try std.testing.allocator.create(core.AgentThreadSnapshot);
     defer std.testing.allocator.destroy(snapshot);

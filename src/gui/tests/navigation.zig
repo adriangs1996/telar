@@ -125,7 +125,7 @@ test "native custom prefix navigates pane focus fullscreen and copy mode" {
     );
     const tab = session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     try input_support.acceptNative(session.gui, .{ .kind = 4, .code = ' ', .mods = 4 });
     try input_support.acceptNative(session.gui, .{ .kind = 3, .code = 7 });
     try input_support.pump(session.gui);
@@ -164,14 +164,14 @@ test "native child drag keeps its pane across focus and ignores replacement atta
     const app = &session.gui.app;
     const tab = app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     _ = app.model.tabs.layout[tab].focusPane(Session.pane_id);
     const pane = app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
-    const view = data.tab_layout.view(&app.model, tab, pane.id, session.gui.region.area).?;
+    const view = data.tab_layout.view(&app.model, tab, pane.id, data.workbench.region(&session.gui.app.model).area).?;
     var capture = Capture.begin(app, .{ .x = view.content.x, .y = view.content.y, .kind = .press }).?;
     _ = app.model.tabs.layout[tab].focusPane(second);
-    try capture.deliver(app, .{ .x = session.gui.region.area.w - 1, .y = view.content.y, .raw_x = 999, .raw_y = 999, .kind = .drag, .button = 32 });
+    try capture.deliver(app, .{ .x = data.workbench.region(&session.gui.app.model).area.w - 1, .y = view.content.y, .raw_x = 999, .raw_y = 999, .kind = .drag, .button = 32 });
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expectEqual(pane.id, request.pane_input.pane_id);
     try std.testing.expectEqual(second, app.model.tabs.layout[tab].focused().?);
@@ -241,7 +241,7 @@ test "native child release crosses a newly opened prompt only with its acquired 
     const tab = app.model.tabs.active;
     const pane = app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
-    const view = data.tab_layout.view(&app.model, tab, pane.id, session.gui.region.area).?;
+    const view = data.tab_layout.view(&app.model, tab, pane.id, data.workbench.region(&session.gui.app.model).area).?;
     const press: data.Mouse = .{
         .x = view.content.x,
         .y = view.content.y,
@@ -274,7 +274,7 @@ test "native pointer rejects a newer layout even before a GPU flight starts" {
     const app = &session.gui.app;
     const tab = app.model.tabs.active;
     session.gui.pointer.configure(.{ 0, 0 }, app.model.host.host_size);
-    try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(11), .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(11), .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     try std.testing.expect(!app.presentation.inFlight());
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = 10, .y = 10 });
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 2, .x = 10, .y = 10 });
@@ -301,7 +301,7 @@ test "native focus loss releases an acquired child mouse gesture" {
     );
     try session.settle();
     session.gui.pointer.configure(session.gui.renderer.origin, app.model.host.host_size);
-    const view = data.tab_layout.view(&app.model, tab, pane.id, session.gui.region.area).?;
+    const view = data.tab_layout.view(&app.model, tab, pane.id, data.workbench.region(&session.gui.app.model).area).?;
     const x = @as(f64, @floatFromInt(view.content.x)) * app.model.host.host_size.cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
     const y = @as(f64, @floatFromInt(view.content.y)) * app.model.host.host_size.cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = x, .y = y });
@@ -453,7 +453,7 @@ fn prepareMouse(session: *Session) !void {
 
 fn pointerPress(session: *Session) native.InputEvent {
     const tab = session.gui.app.model.tabs.active;
-    const view = data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, session.gui.region.area).?;
+    const view = data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, data.workbench.region(&session.gui.app.model).area).?;
     const size = session.gui.app.model.host.host_size;
     return .{
         .kind = 6,
@@ -520,7 +520,7 @@ test "native application repeat keeps its pane when focus changes" {
     const app = &session.gui.app;
     const tab = app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     _ = app.model.tabs.layout[tab].focusPane(Session.pane_id);
     try input_support.acceptNative(session.gui, .{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39 });
     try drainInput(session);

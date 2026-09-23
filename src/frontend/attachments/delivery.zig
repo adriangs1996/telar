@@ -1,6 +1,7 @@
 //! Kitty attachment placements and transmission; the shared catalog owns PNGs.
 
 const client = @import("telar-client");
+const SidebarRendererInput = @import("../graphics/SidebarRendererInput.zig");
 const kitty_protocol = @import("kitty_protocol");
 const core = @import("telar-core");
 const std = @import("std");
@@ -17,7 +18,7 @@ const thumbnail_z: i32 = 1500;
 const modal_z: i32 = 2000;
 pub const State = @import("State.zig");
 pub const SlotState = @import("SlotState.zig");
-pub fn configure(store: *Store, configuration: client.SidebarRendererInput) bool {
+pub fn configure(store: *Store, configuration: SidebarRendererInput) bool {
     const supported = configuration.support == .supported;
     if (store.delivery.supported == supported and store.delivery.cell_width == configuration.cell_width and
         store.delivery.cell_height == configuration.cell_height)

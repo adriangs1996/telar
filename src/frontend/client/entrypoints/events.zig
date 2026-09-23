@@ -14,6 +14,7 @@ const host_resizes = @import("../controllers/host/host_resizes.zig");
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
 const client_telemetry = @import("../resources/telemetry.zig");
 const host_effects = @import("../resources/host_effects.zig");
+const view_chrome = @import("../presentation/view_chrome.zig");
 
 const EventTag = std.meta.Tag(TerminalClient.ClientEvent);
 
@@ -66,10 +67,11 @@ fn observe(client: *client_module.AttachedClient) !void {
     try presentation_lifecycle.pumpOutput(client);
 }
 
-/// Routes one event, then delivers the host requests it left, even when the
-/// event ends the client.
+/// Routes one event, then draws the chrome facts it changed and delivers the
+/// host requests it left, even when the event ends the client.
 fn dispatch(client: *client_module.AttachedClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
     const outcome = try route(client, event, resources);
+    try view_chrome.refreshClient(client);
     try host_effects.deliver(client);
 
     return outcome;

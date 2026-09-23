@@ -1,5 +1,7 @@
 //! Substituted platform resources shared by client integration tests.
 
+const view_chrome = @import("../presentation/view_chrome.zig");
+const host_effects = @import("../resources/host_effects.zig");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
 const data = @import("model");
@@ -317,6 +319,9 @@ pub fn reloadConfiguration(client: *client_module.AttachedClient, adoption: clie
             },
         },
     );
+    try view_chrome.refreshClient(client);
+    try host_effects.deliver(client);
+
     return outcome.adopted;
 }
 

@@ -43,6 +43,11 @@ pub const outbox_support = @import("connection/outbox_support.zig");
 pub const request_failure = @import("application/session/request_failure.zig");
 pub const role = @import("syntax/role.zig");
 pub const sidebar = @import("layout/sidebar.zig");
+pub const GridRegions = @import("layout/GridRegions.zig");
+pub const workbench = @import("workspace/workbench.zig");
+const sidebar_rendering = @import("config/sidebar_rendering.zig");
+pub const SidebarRendering = sidebar_rendering.SidebarRendering;
+pub const ResolvedSidebarRendering = sidebar_rendering.ResolvedSidebarRendering;
 pub const state_types = @import("state/types.zig");
 pub const tab_close = @import("application/tabs/close_tab.zig");
 pub const theme_support = @import("appearance/theme_support.zig");
@@ -332,6 +337,9 @@ pub const WorkspaceTabInput = @import("workspace/WorkspaceTabInput.zig");
 
 test {
     _ = @import("config/SoundPolicy.zig");
+    _ = @import("config/sidebar_rendering.zig");
+    _ = @import("layout/GridRegions.zig");
+    _ = @import("workspace/workbench.zig");
     _ = @import("notifications/NotificationPayload.zig");
     _ = @import("state/HostEffects.zig");
     _ = @import("agents/SnapshotInput.zig");

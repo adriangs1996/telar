@@ -14,7 +14,6 @@ const PointerSample = @import("input/PointerSample.zig");
 const PointerCapture = @import("input/PointerCapture.zig");
 const TerminalClipboard = @import("host/TerminalClipboard.zig");
 const WidgetId = @import("widgets/interaction/Id.zig");
-const Regions = @import("widgets/Regions.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
 const native = @import("native/native.zig");
 const selection = @import("render/copy_selection.zig");
@@ -95,8 +94,6 @@ host: HostServices = .{},
 input_revision: u64 = 0,
 focused: bool = true,
 widgets: State = .{},
-region: shared_model.Region,
-theme: shared_model.ColorTheme,
 chrome: Chrome = .{},
 
 /// The sidebar band width preference; the shared model keeps only visibility.
@@ -166,13 +163,6 @@ pub fn init(params: client.ClientInit) !*GuiClient {
     gui.input_revision = 0;
     gui.focused = true;
     gui.widgets = .{};
-    gui.theme = params.options.theme;
-    gui.region = .{
-        .area = .{},
-        .revision = 0,
-    };
-
-    gui.resizeRegion(params.host_size.cols, params.host_size.rows);
     gui.chrome = .{};
     gui.sidebar = .init(params.options.gui.sidebar.width);
 
@@ -392,7 +382,7 @@ pub fn frameDelayNs(self: *GuiClient) u64 {
     const model = &self.app.model;
     if (model.tabs.activeSlot()) |tab| {
         var layout: shared_model.LayoutSnapshot = .{};
-        model.tabs.layout[tab].snapshot(self.region.area, &layout);
+        model.tabs.layout[tab].snapshot(shared_model.workbench.region(&self.app.model).area, &layout);
         for (layout.views()) |view| {
             if (view.surface != .terminal or view.content.w == 0 or view.content.h == 0) {
                 continue;
@@ -1511,7 +1501,7 @@ fn cursorTarget(self: *const GuiClient) CursorTarget {
     const cursor = selection.cursor(pane, copy_view);
     var layout: shared_model.LayoutSnapshot = .{};
 
-    self.app.model.tabs.layout[tab].snapshot(self.region.area, &layout);
+    self.app.model.tabs.layout[tab].snapshot(shared_model.workbench.region(&self.app.model).area, &layout);
 
     for (layout.views()) |view| {
         if (view.pane_id == pane.id and view.surface == .terminal and cursor.x < view.content.w and cursor.y < view.content.h) {
@@ -1524,22 +1514,6 @@ fn cursorTarget(self: *const GuiClient) CursorTarget {
     }
 
     return .{};
-}
-
-/// The workbench owns the whole measured grid: the sidebar is a pixel band
-/// the renderer already took off the window, not a column of this grid.
-/// Example: `gui.resizeRegion(size.cols, size.rows);`
-pub fn resizeRegion(self: *GuiClient, cols: u16, rows: u16) void {
-    const regions = Regions.calculate(cols, rows);
-
-    if (std.meta.eql(self.region.area, regions.workbench)) {
-        return;
-    }
-
-    self.region = .{
-        .area = regions.workbench,
-        .revision = self.region.revision + 1,
-    };
 }
 
 /// Measures the window with the shared sidebar visibility and this window's
@@ -1666,7 +1640,7 @@ fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
     self.diagrams.beginFrame();
     self.syntax.beginFrame();
     try self.review.synchronize(&self.app);
-    self.review.widget.theme_override = self.theme;
+    self.review.widget.theme_override = self.app.model.theme;
 
     self.refreshPointer();
     try self.resolveFavicons(renderer);
@@ -1677,7 +1651,7 @@ fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
         .terminal = renderer,
         .chrome = &self.chrome,
         .overlays = &self.overlays,
-        .theme = self.theme,
+        .theme = self.app.model.theme,
         .link = if (self.pointer.hover.link) |*hit| hit else null,
         .widgets = &self.widgets,
         .diagrams = &self.diagrams.store,
@@ -1795,7 +1769,7 @@ pub fn projection(self: *const GuiClient) client.Projection {
     return client.capture(
         &self.app.model,
         .{
-            .geometry = self.region,
+            .geometry = shared_model.workbench.region(&self.app.model),
             .status_mode = self.statusMode(),
             .presentation_ingress = self.ingress(),
         },
@@ -1807,7 +1781,7 @@ pub fn projection(self: *const GuiClient) client.Projection {
 pub fn observation(self: *const GuiClient) client.Observation {
     return .{
         .model = self.app.model.version(),
-        .geometry_revision = self.region.revision,
+        .geometry_revision = shared_model.workbench.region(&self.app.model).revision,
         .presentation_ingress = self.ingress(),
     };
 }

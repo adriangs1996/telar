@@ -292,7 +292,7 @@ test "native hover computes absolute rows without adding the host offset to hist
     const gui = fixture.session.gui;
     const tab = gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .vertical, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .vertical, .area = data.workbench.region(&gui.app.model).area });
     const pane = gui.app.model.panes.find(second).?;
     pane.attached = true;
     pane.cursor.visible = false;
@@ -301,7 +301,7 @@ test "native hover computes absolute rows without adding the host offset to hist
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://b.c", .style = .{} });
     pane.markSpan(0, @intCast(pane.buffer.cells.len));
     try fixture.present();
-    const view = data.tab_layout.view(&gui.app.model, tab, second, gui.region.area).?;
+    const view = data.tab_layout.view(&gui.app.model, tab, second, data.workbench.region(&gui.app.model).area).?;
     try std.testing.expect(view.content.y > pane.buffer.h);
     const size = gui.app.model.host.host_size;
     var pointer = fixture.event(6);

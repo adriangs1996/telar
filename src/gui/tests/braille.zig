@@ -218,7 +218,7 @@ fn cell(pattern: u8) core.Cell {
 
 fn paneContent(session: *Session) core.Rect {
     const tab = session.gui.app.model.tabs.active;
-    return data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, session.gui.region.area).?.content;
+    return data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, data.workbench.region(&session.gui.app.model).area).?.content;
 }
 
 fn paint(session: *Session) !void {

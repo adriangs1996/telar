@@ -1,6 +1,7 @@
 //! Presentation event adaptation for one disposable client. The presenter
 //! decides when and what to paint. This adapter releases async tokens and
 //! supplies concrete effects to the application delivery policy.
+const view_chrome = @import("view_chrome.zig");
 const core = @import("telar-core");
 const common = @import("telar-client");
 
@@ -14,6 +15,7 @@ const OutputType = @import("../resources/Output.zig");
 /// try presentation_lifecycle.observe(client);
 /// ```
 pub fn observe(client: *common.AttachedClient) !void {
+    try view_chrome.refreshClient(client);
     try TerminalClient.of(client).presenter.observe(presentation_projection.observation(client));
 }
 

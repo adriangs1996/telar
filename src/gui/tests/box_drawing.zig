@@ -240,7 +240,7 @@ fn paint(session: *Session) !void {
 
 fn mesh(session: *Session, x: u16, y: u16) CellMesh {
     const tab = session.gui.app.model.tabs.active;
-    const area = data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, session.gui.region.area).?.content;
+    const area = data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, data.workbench.region(&session.gui.app.model).area).?.content;
     return session.gui.renderer.retained.at(
         .{
             area.x + x,

@@ -264,10 +264,6 @@ pub fn presentDue(presenter: *Presenter, projection: client.Projection, resource
         projection.presentation_ingress.view_interaction;
     const input_routing_changed = presenter.presentation_state.prepared.presentation_ingress.input_routing !=
         projection.presentation_ingress.input_routing;
-    if (chrome_changed) {
-        resources.view.setSidebarLayout(projection.sidebar_visible, projection.sidebar_width);
-        resources.view.setWorkspaceListCollapsed(projection.workspace_list_collapsed);
-    }
     if (agents_changed) {
         resources.view.resetSidebarScroll();
     }
@@ -298,8 +294,7 @@ pub fn presentDue(presenter: *Presenter, projection: client.Projection, resource
         })
     else
         try presenter.presentEmpty(projection, resources);
-    var geometry = client.Geometry.capture(projection);
-    geometry.region = resources.view.geometry();
+    const geometry = client.Geometry.capture(projection);
     const token = try presenter.presentation_state.begin(.{
         .observation = presenter.presentation_state.observed,
         .commit = presented.commit,

@@ -16,6 +16,8 @@ const kitty_delivery = @import("../graphics/kitty_delivery.zig");
 const InputState = @import("controllers/input/State.zig");
 const host_inputs = @import("controllers/input/host_inputs.zig");
 const host_ports = @import("resources/host_ports.zig");
+const view_chrome = @import("presentation/view_chrome.zig");
+const ChromeRevisions = @import("presentation/ChromeRevisions.zig");
 const capture_module = @import("../attachments/capture.zig");
 const presentation_lifecycle = @import("presentation/presentation_lifecycle.zig");
 
@@ -53,7 +55,7 @@ presenter: Presenter,
 view: PresentationState,
 graphics_store: kitty_delivery.Store,
 host_input: InputState,
-sidebar_rendering: client_module.SidebarRendering,
+chrome_observed: ChromeRevisions = .{},
 
 /// Recovers the terminal client that embeds one shared client. Every host
 /// port and every terminal-side handler receives the shared client and
@@ -90,24 +92,14 @@ pub fn init(params: Params) !*TerminalClient {
     });
     errdefer terminal.app.deinit();
     const host_size = terminal.app.model.host.host_size;
-    const capabilities = terminal.app.model.host.host_capabilities;
     var screen = try ScreenType.init(gpa, host_size.cols, host_size.rows);
     errdefer screen.deinit();
     var view = try PresentationState.initWithAppearance(
         gpa,
         .{ .width = host_size.cols, .height = host_size.rows },
-        .{ .theme = params.options.theme, .icons = params.options.icon_theme },
+        .{ .theme = terminal.app.model.theme, .icons = terminal.app.model.icon_theme },
     );
     errdefer view.deinit();
-    view.setSidebarLayout(params.options.sidebar_visible, data.sidebar.default_width);
-    try view.configureSidebar(
-        params.options.sidebar_rendering,
-        .{
-            .support = capabilities.images,
-            .cell_width = host_size.cell_width_px,
-            .cell_height = host_size.cell_height_px,
-        },
-    );
     var graphics_store = if (params.options.host_shared_memory)
         kitty_delivery.Store.initSharedMemory(gpa)
     else
@@ -135,7 +127,7 @@ pub fn init(params: Params) !*TerminalClient {
     terminal.view = view;
     terminal.graphics_store = graphics_store;
     terminal.host_input = host_input;
-    terminal.sidebar_rendering = params.options.sidebar_rendering;
+    terminal.chrome_observed = .{};
     if (terminal.output) |*value| {
         terminal.writer = &value.writer;
         terminal.graphics_store.delivery.compression_scheduler = .{ .context = terminal, .start = scheduleCompression };
@@ -143,6 +135,7 @@ pub fn init(params: Params) !*TerminalClient {
 
     const client = &terminal.app;
     client.model.host.clipboard_capture = capture_module.platformSupported();
+    client.model.host.grid_chrome = true;
     client.graphics = host_ports.graphicsRetention(client);
     client.chrome = host_ports.chrome(client);
     client.attachment_catalog = host_ports.attachmentCatalog(client);
@@ -165,6 +158,8 @@ pub fn init(params: Params) !*TerminalClient {
         .screen = screen,
         .compositor = .init(gpa),
     };
+    try view_chrome.refresh(terminal);
+
     return terminal;
 }
 

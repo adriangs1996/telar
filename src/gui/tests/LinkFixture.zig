@@ -52,7 +52,7 @@ pub fn present(fixture: *Fixture) !void {
 
 pub fn event(fixture: *Fixture, code: u32) Event {
     const gui = fixture.session.gui;
-    const view = data.tab_layout.view(&gui.app.model, gui.app.model.tabs.active, Session.pane_id, gui.region.area).?;
+    const view = data.tab_layout.view(&gui.app.model, gui.app.model.tabs.active, Session.pane_id, data.workbench.region(&gui.app.model).area).?;
     const size = gui.app.model.host.host_size;
     return .{
         .kind = 6,

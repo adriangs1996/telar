@@ -1,53 +1,14 @@
 const data = @import("model");
-const sidebar_rendering = @import("../config/sidebar_rendering.zig");
-const SidebarRendererInputType = @import("../layout/SidebarRendererInput.zig");
 const ViewInteractionCommandType = @import("../operations/input/ViewInteractionCommand.zig");
-/// The adapter's chrome as the client application drives it: appearance,
-/// sidebar renderer, size, committed chrome layout and pointer hit testing.
-/// Reads of chrome geometry go through `Region`; this port only pushes.
+/// Questions only the adapter's drawn chrome can answer: what a pointer hit
+/// and how far the inspector scrolls under its layout. Everything the chrome
+/// draws, the adapter reads from the model.
 const HostChrome = @This();
 
 context: *anyopaque,
-set_theme_fn: *const fn (*anyopaque, data.ColorTheme) void,
-set_icon_theme_fn: *const fn (*anyopaque, data.icons.Theme) void,
-configure_sidebar_fn: *const fn (*anyopaque, SidebarRendererInputType) anyerror!void,
-resize_fn: *const fn (*anyopaque, u16, u16) anyerror!void,
-set_sidebar_layout_fn: *const fn (*anyopaque, bool, u16) void,
-set_workspace_list_collapsed_fn: *const fn (*anyopaque, bool) void,
 pointer_fn: *const fn (*anyopaque, data.Mouse) ViewInteractionCommandType,
-sidebar_renderer_fn: *const fn (*anyopaque) sidebar_rendering.SidebarRendering,
-adopt_sidebar_renderer_fn: *const fn (*anyopaque, sidebar_rendering.SidebarRendering) void,
-region_fn: *const fn (*anyopaque) data.Region,
 inspection_scroll_limit_fn: *const fn (*anyopaque) ?u32,
 link_pointer_fn: ?*const fn (*anyopaque, data.Mouse) bool = null,
-
-pub fn setTheme(port: HostChrome, theme: data.ColorTheme) void {
-    port.set_theme_fn(port.context, theme);
-}
-
-pub fn setIconTheme(port: HostChrome, theme: data.icons.Theme) void {
-    port.set_icon_theme_fn(port.context, theme);
-}
-
-/// Example: `try client.chrome.configureSidebar(.{ .support = images, .cell_width = w, .cell_height = h });`.
-pub fn configureSidebar(port: HostChrome, input: SidebarRendererInputType) !void {
-    return port.configure_sidebar_fn(port.context, input);
-}
-
-/// Example: `try client.chrome.resize(size.cols, size.rows);`.
-pub fn resize(port: HostChrome, cols: u16, rows: u16) !void {
-    return port.resize_fn(port.context, cols, rows);
-}
-
-/// Applies committed sidebar state synchronously so geometry offers that
-/// follow in the same event see the new workbench.
-pub fn setSidebarLayout(port: HostChrome, visible: bool, width: u16) void {
-    port.set_sidebar_layout_fn(port.context, visible, width);
-}
-
-pub fn setWorkspaceListCollapsed(port: HostChrome, collapsed: bool) void {
-    port.set_workspace_list_collapsed_fn(port.context, collapsed);
-}
 
 /// Resolves one pointer event against the adapter's chrome hit map.
 /// Example: `const interaction = client.chrome.pointer(event);`.
@@ -62,23 +23,9 @@ pub fn linkPointer(port: HostChrome, event: data.Mouse) ?bool {
     return callback(port.context, event);
 }
 
-/// The renderer the adapter currently requests for its sidebar.
-pub fn sidebarRenderer(port: HostChrome) sidebar_rendering.SidebarRendering {
-    return port.sidebar_renderer_fn(port.context);
-}
-
-/// Adopts the renderer a reloaded configuration selected.
-pub fn adoptSidebarRenderer(port: HostChrome, value: sidebar_rendering.SidebarRendering) void {
-    port.adopt_sidebar_renderer_fn(port.context, value);
-}
-
-/// The workbench cell grid the adapter currently publishes.
-pub fn region(port: HostChrome) data.Region {
-    return port.region_fn(port.context);
-}
-
 /// The history inspector's scroll bound under the adapter's layout, when the
 /// inspector is open and clamping is needed.
+/// Example: `if (client.chrome.inspectionScrollLimit()) |limit| ...`
 pub fn inspectionScrollLimit(port: HostChrome) ?u32 {
     return port.inspection_scroll_limit_fn(port.context);
 }

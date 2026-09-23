@@ -172,6 +172,7 @@ test "configuration adoption keeps new ownership after geometry failure" {
     try std.testing.expectEqual(@as(u64, 1), client.model.version().configuration);
     try std.testing.expect(!client.model.sidebar_visible);
     try std.testing.expect(!client.model.pane_gaps);
+    try harness.deliverHostEffects();
     try std.testing.expect(!TerminalClient.of(client).view.sidebar_requested);
     try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
 }

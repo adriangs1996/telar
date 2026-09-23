@@ -589,6 +589,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     const pending_updates_before_hide = TerminalClient.of(client).presenter.pending_updates;
 
     _ = try client.executeAction(.toggle_sidebar, .effect);
+    try harness.deliverHostEffects();
 
     const hidden_area = TerminalClient.of(client).view.workbench();
     try std.testing.expect(hidden_area.w > shown_area.w);
@@ -622,6 +623,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     const version_before_show = client.model.version();
     const pending_updates_before_show = TerminalClient.of(client).presenter.pending_updates;
     _ = try client.executeAction(.toggle_sidebar, .effect);
+    try harness.deliverHostEffects();
 
     try std.testing.expect(client.model.sidebar_visible);
     try std.testing.expect(TerminalClient.of(client).view.sidebar_requested);
@@ -659,6 +661,7 @@ test "sidebar resize keybinding commits width before pane geometry" {
         },
         .effect,
     );
+    try harness.deliverHostEffects();
 
     try std.testing.expectEqual(@as(u16, 44), client.model.sidebar_width);
     try std.testing.expectEqual(@as(u16, 44), TerminalClient.of(client).view.regions.sidebar.w);

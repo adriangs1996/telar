@@ -116,7 +116,6 @@ test {
     _ = @import("widgets/context_support.zig");
     _ = @import("widgets/goto_picker.zig");
     _ = @import("widgets/history_browser.zig");
-    _ = @import("widgets/layout.zig");
     _ = @import("widgets/Label.zig");
     _ = @import("widgets/modal.zig");
     _ = @import("widgets/sidebar.zig");

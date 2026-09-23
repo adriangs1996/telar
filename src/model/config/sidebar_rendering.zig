@@ -1,6 +1,6 @@
 //! Configured sidebar renderer and its resolution against host graphics support.
 
-const data = @import("model");
+const EnvironmentSupport = @import("../types/EnvironmentSupport.zig").EnvironmentSupport;
 const std = @import("std");
 
 pub const SidebarRendering = enum {
@@ -25,7 +25,7 @@ pub const SidebarRendering = enum {
         return error.UnknownSidebarRenderer;
     }
 
-    pub fn resolve(value: SidebarRendering, support: data.EnvironmentSupport) !ResolvedSidebarRendering {
+    pub fn resolve(value: SidebarRendering, support: EnvironmentSupport) !ResolvedSidebarRendering {
         return switch (value) {
             .automatic => if (support == .supported) .kitty_hybrid else .cells,
             .cells => .cells,

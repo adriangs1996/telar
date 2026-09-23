@@ -1,5 +1,4 @@
 const data = @import("model");
-const sidebar_rendering_module = @import("config/sidebar_rendering.zig");
 const core = @import("telar-core");
 const GenerationType = @import("config/Generation.zig");
 const RegistryType = @import("plugins/Registry.zig");
@@ -16,7 +15,7 @@ bindings: []const data.config_values.ConfiguredBinding = &.{},
 theme: data.ColorTheme = data.theme_support.default_theme,
 gui: @import("config/GuiConfig.zig") = .{},
 icon_theme: data.icons.Theme = .unicode,
-sidebar_rendering: sidebar_rendering_module.SidebarRendering = .automatic,
+sidebar_rendering: data.SidebarRendering = .automatic,
 sidebar_visible: bool = true,
 pane_gaps: bool = true,
 sound: data.SoundPolicy = .{},

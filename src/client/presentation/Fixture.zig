@@ -7,7 +7,6 @@ const TransportState = @import("../connection/RuntimeTransportState.zig");
 const Credit = @import("../graphics/Credit.zig");
 const AdapterType = @import("HeadlessAdapter.zig");
 const retained_module = @import("../graphics/retained.zig");
-const StateType = @import("../workspace/State.zig");
 const std = @import("std");
 const Job = @import("../execution/Job.zig").Job;
 const headless_tests = @import("headless_tests.zig");
@@ -29,7 +28,6 @@ receive_pending: bool = false,
 adapter: AdapterType = .{},
 outbox: *model_data.Outbox,
 graphics: retained_module.Store,
-geometry: StateType = .{},
 activations: usize = 0,
 resource_syncs: usize = 0,
 media_requests: usize = 0,
@@ -63,12 +61,9 @@ pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
     fixture.app.attachment_shelf.sync_target_fn = syncTarget;
     fixture.app.attachment_catalog.context = fixture;
     fixture.app.attachment_catalog.visible_target_fn = noTarget;
-    fixture.app.chrome.context = fixture;
-    fixture.app.chrome.region_fn = region;
     fixture.app.host_input_source.context = fixture;
     fixture.app.host_input_source.resume_read_fn = resumeRead;
     fixture.app.presentation.note_pane_input_fn = null;
-    fixture.geometry.update(.{ .w = 40, .h = 10 });
     try fixture.arrive();
     return fixture;
 }
@@ -92,7 +87,7 @@ pub fn arrive(fixture: *Fixture) !void {
 }
 
 pub fn projection(fixture: *Fixture) ProjectionType {
-    return projection_support.capture(fixture.model, .{ .geometry = fixture.geometry.current });
+    return projection_support.capture(fixture.model, .{ .geometry = model_data.workbench.region(fixture.model) });
 }
 
 pub fn prepare(fixture: *Fixture) !lifecycle_module.Token {
@@ -186,11 +181,6 @@ fn startJob(context: *anyopaque, job: Job) !void {
 }
 
 fn resumeRead(_: *anyopaque) !void {}
-
-fn region(context: *anyopaque) model_data.Region {
-    const fixture: *Fixture = @ptrCast(@alignCast(context));
-    return fixture.geometry.current;
-}
 
 fn unsupportedGraphics(_: *anyopaque, _: model_data.PaneGraphicsCommand) !void {
     return error.HeadlessGraphicsUnsupported;

@@ -57,7 +57,6 @@ pub fn attachmentShelf(client: *client_module.AttachedClient) client_module.Atta
 pub fn presentation(client: *client_module.AttachedClient) client_module.HostPresentation {
     return .{
         .context = client,
-        .resize_fn = resizePresenter,
         .note_input_fn = noteInput,
         .note_pane_input_fn = notePaneInput,
         .frame_interval_ns_fn = frameIntervalNs,
@@ -181,8 +180,6 @@ fn removeAttachment(_: *anyopaque, _: data.AttachmentId) ?bool {
 fn removePromptAttachments(_: *anyopaque, _: data.AttachmentTarget) ?bool {
     return null;
 }
-
-fn resizePresenter(_: *anyopaque, _: u16, _: u16) !void {}
 
 fn setPaneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId, visible: bool) !void {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));

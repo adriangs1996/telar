@@ -6,7 +6,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const Session = @import("Session.zig");
-const Regions = @import("../widgets/Regions.zig");
 const HitMap = @import("../widgets/HitMap.zig");
 const bar_regions = @import("../widgets/bar_regions.zig");
 const Rect = @import("../render/Rect.zig");
@@ -68,12 +67,17 @@ test "native pane frames use the smaller pixel gutter on both axes" {
 }
 
 test "native chrome geometry gives the workbench every grid cell of every host" {
+    const session = try Session.init();
+    defer session.deinit();
+    const model = &session.gui.app.model;
+    try std.testing.expect(!model.host.grid_chrome);
+
     for ([_]u16{ 1, 2, 3, 10, 40 }) |height| {
         for ([_]u16{ 1, 20, 61, 62, 120 }) |width| {
-            const regions = Regions.calculate(width, height);
-            try std.testing.expectEqual(height, regions.workbench.h);
-            try std.testing.expectEqual(width, regions.workbench.w);
-            try std.testing.expectEqual(regions.full, regions.workbench);
+            model.host.host_size.cols = width;
+            model.host.host_size.rows = height;
+            const workbench = data.workbench.region(model).area;
+            try std.testing.expectEqual(core.Rect{ .w = width, .h = height }, workbench);
         }
     }
 }

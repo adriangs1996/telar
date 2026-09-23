@@ -44,7 +44,7 @@ pub fn resolve(gui: *const GuiClient, mouse: data.Mouse, mods: u32) Target {
             const tab = gui.app.model.tabs.activeSlot() orelse return .{};
             const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, id) orelse return .{};
             var layout: data.LayoutSnapshot = .{};
-            gui.app.model.tabs.layout[tab].snapshot(gui.region.area, &layout);
+            gui.app.model.tabs.layout[tab].snapshot(data.workbench.region(&gui.app.model).area, &layout);
             const view = layout.find(id) orelse return .{};
             if (view.surface != .terminal or !view.content.contains(mouse.x, mouse.y)) {
                 return .{};

@@ -21,8 +21,8 @@ test "named theme reload changes chrome terminal colors and cursor without repla
     try std.testing.expect(try reload.apply(session.gui, &session.gui.renderer));
     try session.gui.resize(try session.gui.renderer.measure(Fixture.viewport), session.gui.renderer.theme);
     try present(session);
-    try std.testing.expectEqualDeep(data.theme_support.builtin(.catppuccin), session.gui.theme);
-    try std.testing.expectEqualDeep(session.gui.theme.terminal, session.gui.renderer.theme);
+    try std.testing.expectEqualDeep(data.theme_support.builtin(.catppuccin), session.gui.app.model.theme);
+    try std.testing.expectEqualDeep(session.gui.app.model.theme.terminal, session.gui.renderer.theme);
     try std.testing.expectEqual(pixels, session.gui.renderer.atlas.?.pixels.ptr);
     try std.testing.expectEqual(version, session.gui.renderer.atlas_version);
     try std.testing.expectEqual(session.gui.renderer.theme.palette, session.gui.app.model.host.host_capabilities.terminal_colors.palette.?);
@@ -35,12 +35,12 @@ test "named theme reload changes chrome terminal colors and cursor without repla
     try std.testing.expectEqual(version, session.gui.renderer.atlas_version);
 
     session.gui.app.options.theme_locked = true;
-    session.gui.app.options.theme = session.gui.theme;
+    session.gui.app.options.theme = session.gui.app.model.theme;
     try fixture.write("config.lua", "return { api_version = 2, theme = 'tokyo-night', gui = { font = { size = 20 } } }");
     try fixture.wait();
     try std.testing.expect(try reload.apply(session.gui, &session.gui.renderer));
     try std.testing.expectEqualDeep(session.gui.app.options.theme.terminal, session.gui.renderer.theme);
-    try std.testing.expectEqualDeep(session.gui.app.options.theme, session.gui.theme);
+    try std.testing.expectEqualDeep(session.gui.app.options.theme, session.gui.app.model.theme);
     try std.testing.expectEqual(@as(f32, 20), session.gui.renderer.config.font.size);
 }
 
@@ -244,7 +244,6 @@ test "GUI watches imported modules across atomic saves and retains the selected 
         },
         session.gui.renderer.theme.background,
     );
-    try std.testing.expectEqual(.cells, session.gui.app.chrome.sidebarRenderer());
 }
 
 test "chrome scale reload enlarges chrome text without resizing the PTY or the atlas" {
@@ -345,7 +344,7 @@ test "window reload reuses the atlas and padding publishes grid size without its
     try present(session);
     try std.testing.expect(size.cols < previous_size.cols and size.rows < previous_size.rows);
     try std.testing.expectEqual(size, session.gui.app.model.host.host_size);
-    const pane_origin = session.gui.region.area;
+    const pane_origin = data.workbench.region(&session.gui.app.model).area;
     const pixels_origin = session.gui.renderer.metrics.rect(session.gui.renderer.origin, pane_origin);
     const retained = session.gui.renderer.retained.at(
         .{

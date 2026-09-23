@@ -112,7 +112,7 @@ test "the card draws the sheet mark for the three providers and an unboxed glyph
     projection.agents = &agents;
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .sprites = &renderer.sprites.? };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .sprites = &renderer.sprites.? };
     const context: Context = .{ .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
     const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
     const page = &renderer.sprites.?;

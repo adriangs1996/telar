@@ -1,4 +1,4 @@
-//! Native geometry and hit testing implement the shared chrome port.
+//! Native hit testing answers the shared chrome port.
 const data = @import("model");
 const client = @import("telar-client");
 const hover_target = @import("../input/hover_target.zig");
@@ -8,17 +8,8 @@ const GuiClient = @import("../GuiClient.zig");
 pub fn port(app: *client.AttachedClient) client.HostChrome {
     return .{
         .context = app,
-        .set_theme_fn = setTheme,
-        .set_icon_theme_fn = setIcons,
-        .configure_sidebar_fn = configureSidebar,
-        .resize_fn = resize,
-        .set_sidebar_layout_fn = sidebarLayout,
-        .set_workspace_list_collapsed_fn = workspaceList,
         .pointer_fn = pointer,
         .link_pointer_fn = linkPointer,
-        .sidebar_renderer_fn = sidebarRenderer,
-        .adopt_sidebar_renderer_fn = adoptSidebarRenderer,
-        .region_fn = region,
         .inspection_scroll_limit_fn = inspectionScrollLimit,
     };
 }
@@ -27,26 +18,6 @@ fn host(context: *anyopaque) *GuiClient {
     const app: *client.AttachedClient = @ptrCast(@alignCast(context));
     return GuiClient.of(app);
 }
-
-fn setTheme(context: *anyopaque, theme: data.ColorTheme) void {
-    host(context).theme = theme;
-}
-
-fn setIcons(_: *anyopaque, _: data.icons.Theme) void {}
-
-fn configureSidebar(_: *anyopaque, _: client.SidebarRendererInput) !void {}
-
-fn resize(context: *anyopaque, cols: u16, rows: u16) !void {
-    host(context).resizeRegion(cols, rows);
-}
-
-fn sidebarLayout(context: *anyopaque, _: bool, _: u16) void {
-    const gui = host(context);
-    const size = gui.app.model.host.host_size;
-    gui.resizeRegion(size.cols, size.rows);
-}
-
-fn workspaceList(_: *anyopaque, _: bool) void {}
 
 fn pointer(context: *anyopaque, event: data.Mouse) client.ViewInteractionCommand {
     const gui = host(context);
@@ -97,16 +68,6 @@ fn linkPointer(context: *anyopaque, event: data.Mouse) bool {
     }
 
     return true;
-}
-
-fn sidebarRenderer(_: *anyopaque) client.SidebarRendering {
-    return .cells;
-}
-
-fn adoptSidebarRenderer(_: *anyopaque, _: client.SidebarRendering) void {}
-
-fn region(context: *anyopaque) data.Region {
-    return host(context).region;
 }
 
 fn inspectionScrollLimit(context: *anyopaque) ?u32 {

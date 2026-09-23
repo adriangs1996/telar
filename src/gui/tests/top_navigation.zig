@@ -474,7 +474,7 @@ fn expectNumberLabel(fixture: *Fixture, bounds: Rect, label: Label) !void {
     const actual = try firstInk(renderer.quads.items(), bounds);
     var reference = QuadList.init(std.testing.allocator);
     defer reference.deinit();
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &reference, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &reference, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
     const natural: Rect = .{ .x = bounds.x + renderer.chrome.px(3), .y = bounds.y, .width = renderer.chrome.px(14), .height = bounds.height - renderer.chrome.px(5) };
     _ = try canvas.textAt(natural, label);
     const glyph = try firstInk(reference.items(), natural);

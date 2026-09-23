@@ -280,7 +280,7 @@ test "runtime review modal retires a held terminal mouse gesture before swallowi
     const tab = gui.app.model.tabs.active;
     gui.app.model.panes.find(Session.pane_id).?.mouse = .{ .sgr = true, .tracking = .button };
     try publish(session);
-    const view = data.tab_layout.view(&gui.app.model, tab, Session.pane_id, gui.region.area).?;
+    const view = data.tab_layout.view(&gui.app.model, tab, Session.pane_id, data.workbench.region(&gui.app.model).area).?;
     const x = @as(f64, @floatFromInt(view.content.x)) * gui.app.model.host.host_size.cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
     const y = @as(f64, @floatFromInt(view.content.y)) * gui.app.model.host.host_size.cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
     try send(session, .{ .pointer = .{ .kind = .press, .button = .right, .x = x, .y = y } });

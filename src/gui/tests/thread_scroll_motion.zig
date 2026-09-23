@@ -91,7 +91,7 @@ fn sendAt(session: *Session, target: Target, event: Event) !void {
 
 fn addAgentPane(session: *Session) !void {
     const tab = session.gui.app.model.tabs.active;
-    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second_pane_id, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second_pane_id, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(2), .pane_id = second_pane_id, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 78 }));
     var snapshot = session.gui.app.model.panes.findConst(Session.pane_id).?.agent_thread.?.*;
     snapshot.pane_id = second_pane_id;

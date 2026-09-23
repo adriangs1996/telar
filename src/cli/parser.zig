@@ -1,7 +1,6 @@
 //! CLI command selection; each grammar owns its options and validation.
 
 const data = @import("model");
-const client_module = @import("telar-client");
 const core = @import("telar-core");
 const DiagnosticsOptions = @import("arguments/DiagnosticsOptions.zig");
 const ServerOptions = @import("arguments/ServerOptions.zig");
@@ -228,7 +227,7 @@ test "CLI rejects unknown and duplicate themes" {
 test "CLI selects and validates the sidebar renderer" {
     const args = [_][*:0]const u8{ "telar", "--sidebar-renderer=kitty-hybrid", "/bin/sh" };
     const cli = try Cli.parse(&args, .empty);
-    try std.testing.expectEqual(client_module.SidebarRendering.kitty_hybrid, cli.run.sidebar_rendering);
+    try std.testing.expectEqual(data.SidebarRendering.kitty_hybrid, cli.run.sidebar_rendering);
 
     const invalid = [_][*:0]const u8{ "telar", "--sidebar-renderer", "sixel" };
     try std.testing.expectError(error.UnknownSidebarRenderer, Cli.parse(&invalid, .empty));

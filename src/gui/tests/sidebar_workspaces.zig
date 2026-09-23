@@ -142,10 +142,10 @@ test "projects use text contrast for selection and a card background only on hov
         const hit = fixture.bandTarget(.{ .select_workspace = workspaceId(0) }).?;
         const renderer = &fixture.session.gui.renderer;
         const other = fixture.bandTarget(.{ .select_workspace = workspaceId(1) }).?;
-        const bright = fixture.session.gui.theme.palette.text.rgbChannels().?;
+        const bright = fixture.session.gui.app.model.theme.palette.text.rgbChannels().?;
         const muted = [3]u8{ 115, 115, 115 };
         const hovered = if (scale == 1) other else hit;
-        const hover_color = fixture.session.gui.theme.palette.surface1.rgbChannels().?;
+        const hover_color = fixture.session.gui.app.model.theme.palette.surface1.rgbChannels().?;
         var hover_backgrounds: usize = 0;
         var bright_text = false;
         var attention_mark = false;

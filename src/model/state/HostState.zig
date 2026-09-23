@@ -9,6 +9,9 @@ host_capabilities: model_data.HostCapabilities,
 host_capabilities_revision: u64 = 0,
 /// The adapter can capture clipboard media for attachments.
 clipboard_capture: bool = false,
+/// The host draws its sidebar and bars in grid cells, so the workbench is
+/// what they leave. A window draws them in pixels outside the grid.
+grid_chrome: bool = false,
 
 /// Example: `const result = state.hostSize(...);`.
 

@@ -2,6 +2,7 @@
 //! and every reload write it the same way, so no setting waits for a reload.
 const NotificationDelivery = @import("../types/NotificationDelivery.zig").NotificationDelivery;
 const AppearanceThemes = @import("../appearance/AppearanceThemes.zig");
+const SidebarRendering = @import("../config/sidebar_rendering.zig").SidebarRendering;
 const Config = @This();
 
 notification_delivery: NotificationDelivery = .telar,
@@ -14,3 +15,6 @@ history_enter_runs: bool = false,
 /// default fuzzy subsequence matching.
 history_match_fts: bool = false,
 themes: AppearanceThemes = .{},
+/// The requested sidebar renderer; the adapter resolves it against host
+/// image support.
+sidebar_rendering: SidebarRendering = .automatic,

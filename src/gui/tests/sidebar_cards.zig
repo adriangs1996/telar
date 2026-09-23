@@ -102,7 +102,7 @@ test "replacement sidebar widgets retain scrolling and clip their own card contr
     var band_hits: BandHitMap = .{};
     const context: Context = .{ .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
     var state: @import("../widgets/SidebarState.zig") = .{};
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar };
     const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
     const List = GenericWidgetList(Sidebar, 1);
     const area: Rect = .{ .x = 0, .y = 0, .width = 284, .height = 160 };
@@ -179,7 +179,7 @@ test "narrow cards keep status in the first row and clip every token to its card
     const renderer = &fixture.session.gui.renderer;
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .sprites = &renderer.sprites.? };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .sprites = &renderer.sprites.? };
     const context: Context = .{ .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
     const geometry = CardGeometry.derive(renderer.chrome, renderer.metrics);
     projection.sidebar_animation_frame = 9;

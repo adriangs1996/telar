@@ -1,6 +1,5 @@
 const data = @import("model");
 const backend = @import("telar-backend");
-const client = @import("telar-client");
 const std = @import("std");
 const run = @import("run.zig");
 const RunOptions = @This();
@@ -9,7 +8,7 @@ command: backend.Command,
 command_set: bool = false,
 theme: data.ColorTheme = data.theme_support.default_theme,
 theme_set: bool = false,
-sidebar_rendering: client.SidebarRendering = .automatic,
+sidebar_rendering: data.SidebarRendering = .automatic,
 sidebar_renderer_set: bool = false,
 config: ?[*:0]const u8 = null,
 no_config: bool = false,
@@ -68,7 +67,7 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
                 return error.MissingSidebarRenderer;
             }
 
-            options.sidebar_rendering = try client.SidebarRendering.parse(
+            options.sidebar_rendering = try data.SidebarRendering.parse(
                 std.mem.span(args[command_start + 1]),
             );
             sidebar_renderer_set = true;
@@ -81,7 +80,7 @@ pub fn parse(args: []const [*:0]const u8, environ: std.process.Environ) !RunOpti
                 return error.DuplicateSidebarRendererOption;
             }
 
-            options.sidebar_rendering = try client.SidebarRendering.parse(
+            options.sidebar_rendering = try data.SidebarRendering.parse(
                 arg["--sidebar-renderer=".len..],
             );
             sidebar_renderer_set = true;

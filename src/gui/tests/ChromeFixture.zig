@@ -1,3 +1,4 @@
+const data = @import("model");
 const native = @import("../native/native.zig");
 const frame_widget = @import("../widgets/frame_widget.zig");
 const std = @import("std");
@@ -57,7 +58,7 @@ pub fn showSidebar(fixture: *Fixture, visible: bool) !void {
 }
 
 pub fn projection(fixture: *Fixture) client.Projection {
-    return client.capture(&fixture.session.gui.app.model, .{ .geometry = fixture.session.gui.region });
+    return client.capture(&fixture.session.gui.app.model, .{ .geometry = data.workbench.region(&fixture.session.gui.app.model) });
 }
 
 /// The sidebar band of the last painted frame, in device pixels.
@@ -74,7 +75,7 @@ pub fn paint(fixture: *Fixture, projection_value: client.Projection) !void {
 pub fn prepare(fixture: *Fixture, projection_value: client.Projection) !void {
     const renderer = &fixture.session.gui.renderer;
     renderer.quads.clear();
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null };
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null };
     fixture.chrome.animation.begin(fixture.chrome.now_ns);
     canvas.animation = &fixture.chrome.animation;
     var context = try fixture.chrome.begin(&canvas, &projection_value);

@@ -114,7 +114,7 @@ test "native fullscreen progress leaves the focused pane selector reachable at o
 
 fn fixtureCanvas(fixture: *Fixture) Canvas {
     const renderer = &fixture.session.gui.renderer;
-    return .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
+    return .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport };
 }
 
 fn expectInside(quads: []const Quad, bounds: Rect) !void {

@@ -75,6 +75,10 @@ const ClientModel = @This();
 gpa: std.mem.Allocator,
 /// Settings adopted from the active configuration generation.
 config: Config = .{},
+/// The color and icon themes the chrome draws with. Changing either
+/// advances `chrome_revision`.
+theme: model_data.ColorTheme = model_data.theme_support.default_theme,
+icon_theme: model_data.icons.Theme = .unicode,
 startup: model_data.StartupState = .{},
 request_lifecycle: model_data.RequestLifecycle = .{},
 /// Retained tab layouts sent to the runtime for reconnect.
@@ -207,6 +211,8 @@ pub fn initInto(self: *ClientModel, gpa: std.mem.Allocator, initial: InitialClie
     self.* = .{
         .gpa = gpa,
         .config = initial.config,
+        .theme = initial.theme,
+        .icon_theme = initial.icon_theme,
         .pane_gaps = initial.pane_gaps,
         .configuration_generation = initial.configuration_generation,
         .bars = .init(initial.bars),

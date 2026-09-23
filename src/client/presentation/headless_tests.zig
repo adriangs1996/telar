@@ -158,9 +158,12 @@ test "broken bases request recovery and geometry ABA does not authorize a new ge
     try sendFrame(fixture, .{ .frame_id = 3, .base = 2 });
     try std.testing.expectEqual(@as(u64, 1), fixture.outbox.peek().?.request_snapshot.known_frame_id);
     try fixture.sendOne();
-    const old_area = fixture.geometry.current.area;
-    fixture.geometry.update(.{ .w = 20, .h = 10 });
-    fixture.geometry.update(old_area);
+    const host = &fixture.model.host;
+    const old_size = host.host_size;
+    host.host_size.cols = 20;
+    host.host_revision +%= 1;
+    host.host_size = old_size;
+    host.host_revision +%= 1;
     try fixture.complete(token, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
     const current_geometry = GeometryType.capture(fixture.projection());

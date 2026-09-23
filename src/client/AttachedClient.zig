@@ -165,7 +165,13 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
         .host_size = host_size,
         .host_capabilities = capabilities,
         .sidebar_width = data.sidebar.default_width,
-        .config = if (snapshot) |value| configFrom(value) else .{},
+        .config = config: {
+            var config: data.Config = if (snapshot) |value| configFrom(value) else .{};
+            config.sidebar_rendering = params.options.sidebar_rendering;
+            break :config config;
+        },
+        .theme = params.options.theme,
+        .icon_theme = params.options.icon_theme,
         .window_title = if (snapshot) |value| value.windowTitle() else "",
     });
     errdefer client.model.deinit();
@@ -174,10 +180,10 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
     _ = client.model.setSidebarVisible(params.options.sidebar_visible);
 }
 
-/// Returns the workbench grid the adapter currently publishes.
+/// Returns the grid the active tab's panes share.
 /// Example: `const region = client.geometry();`.
 pub fn geometry(client: *const AttachedClient) data.Region {
-    return client.chrome.region();
+    return data.workbench.region(&client.model);
 }
 
 /// Releases shared state. The adapter cancels its tasks and frees its own
@@ -2079,7 +2085,7 @@ pub fn completeConfigReload(self: *AttachedClient, result: anyerror!config_reloa
             .checks = .{
                 .kitty_support = self.model.host.host_capabilities.images,
                 .sidebar_renderer_locked = self.options.sidebar_renderer_locked,
-                .current_sidebar = self.chrome.sidebarRenderer(),
+                .current_sidebar = self.model.config.sidebar_rendering,
             },
         },
     )) {
@@ -2972,16 +2978,12 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
             reply.status = .applied;
         },
         .workspace_list_collapse => {
-            if (self.model.setWorkspaceListCollapsed(true) != null) {
-                self.chrome.setWorkspaceListCollapsed(true);
-            }
+            _ = self.model.setWorkspaceListCollapsed(true);
 
             reply.status = .applied;
         },
         .workspace_list_expand => {
-            if (self.model.setWorkspaceListCollapsed(false) != null) {
-                self.chrome.setWorkspaceListCollapsed(false);
-            }
+            _ = self.model.setWorkspaceListCollapsed(false);
 
             reply.status = .applied;
         },
@@ -3741,41 +3743,17 @@ fn deliverHostCommit(self: *AttachedClient, commit: data.HostCommit) !void {
             };
 
             if (theme) |value| {
-                self.chrome.setTheme(value);
+                self.model.theme = value;
             }
         }
 
         if (change.previous.images != change.current.images) {
             pane_graphics.syncFallbacks(&self.model, self.graphics);
-
-            const size = self.model.host.host_size;
-            try self.chrome.configureSidebar(
-                .{
-                    .support = change.current.images,
-                    .cell_width = size.cell_width_px,
-                    .cell_height = size.cell_height_px,
-                },
-            );
             self.model.to_host.invalidate_placements = true;
         }
     }
 
-    if (commit.resize) |resize| {
-        if (resize.grid_changed) {
-            try self.presentation.resize(resize.current.cols, resize.current.rows);
-            try self.chrome.resize(resize.current.cols, resize.current.rows);
-        }
-
-        if (resize.cell_size_changed) {
-            try self.chrome.configureSidebar(
-                .{
-                    .support = self.model.host.host_capabilities.images,
-                    .cell_width = resize.current.cell_width_px,
-                    .cell_height = resize.current.cell_height_px,
-                },
-            );
-        }
-
+    if (commit.resize) |_| {
         self.model.to_host.invalidate_placements = true;
         if (self.model.tabs.activeSlot()) |tab| {
             const area = self.geometry().area;
@@ -5327,9 +5305,7 @@ fn restoreClientLayout(self: *AttachedClient, snapshot: core.ClientLayoutSnapsho
             try self.deliverSidebarLayout(change);
         }
 
-        if (self.model.setWorkspaceListCollapsed(snapshot.workspace_list_collapsed)) |_| {
-            self.chrome.setWorkspaceListCollapsed(snapshot.workspace_list_collapsed);
-        }
+        _ = self.model.setWorkspaceListCollapsed(snapshot.workspace_list_collapsed);
 
         self.model.restoreClientLayouts(saved_layouts);
         self.model.navigation_history = history;
@@ -5769,7 +5745,6 @@ fn deliverSidebarLayout(self: *AttachedClient, change: data.SidebarLayout) !void
         return error.StaleSidebarLayout;
     }
 
-    self.chrome.setSidebarLayout(change.visible, change.width);
     self.model.to_host.invalidate_placements = true;
     const active = self.model.tabs.activeSlot() orelse return;
     try self.resizeAttachedPanes(active, self.geometry().area);
@@ -6818,7 +6793,7 @@ fn adoptConfiguration(self: *AttachedClient, adoption: Adoption) !data.Configura
     self.plugin_registry = adoption.registry;
     self.trust_store = adoption.trust_store;
     self.host_input_source.adoptBindings(adoption.input);
-    self.chrome.adoptSidebarRenderer(adoption.sidebar_rendering);
+    self.model.config.sidebar_rendering = adoption.sidebar_rendering;
     self.model.sound_playback.configure(snapshot.sound);
     consumed = true;
 
@@ -6835,17 +6810,9 @@ fn adoptConfiguration(self: *AttachedClient, adoption: Adoption) !data.Configura
         try self.synchronizeBars();
     }
     if (!self.options.theme_locked) {
-        self.chrome.setTheme(snapshot.resolveTheme(self.model.host.host_capabilities.appearance, null));
+        self.model.theme = snapshot.resolveTheme(self.model.host.host_capabilities.appearance, null);
     }
-    self.chrome.setIconTheme(snapshot.icon_theme);
-    const host_size = self.model.host.host_size;
-    try self.chrome.configureSidebar(
-        .{
-            .support = self.model.host.host_capabilities.images,
-            .cell_width = host_size.cell_width_px,
-            .cell_height = host_size.cell_height_px,
-        },
-    );
+    self.model.icon_theme = snapshot.icon_theme;
     if (commit.sidebar) |sidebar| {
         try self.deliverSidebarLayout(sidebar);
     } else if (commit.pane_gaps_changed) {

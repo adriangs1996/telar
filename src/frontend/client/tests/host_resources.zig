@@ -1,20 +1,17 @@
-//! Exercises host policy through the client and actual host port boundary.
+//! Host facts committed by the shared client reach the terminal view when it
+//! follows the model after an event.
 const data = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 const core = @import("telar-core");
+const TerminalClient = @import("../TerminalClient.zig");
 const TestHarness = @import("TestHarness.zig");
-const Probe = @import("HostResourceProbe.zig");
 
-test "host resources suppress repeated and invalid geometry before ports" {
+test "host resources ignore repeated and invalid geometry" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     const app = harness.client;
     const version = app.model.version();
-    var probe = Probe.init(app);
-    probe.bind();
-    defer probe.restore();
 
     try std.testing.expect(try app.applyHostUpdate(
         .{
@@ -27,30 +24,21 @@ test "host resources suppress repeated and invalid geometry before ports" {
         .capabilities = app.model.host.host_capabilities,
     }));
     try std.testing.expectEqualDeep(version, app.model.version());
-    try std.testing.expectEqual(@as(usize, 0), probe.len);
     try std.testing.expect(!app.model.to_host.invalidate_placements);
 }
 
-test "host resources select grid and cell changes independently in order" {
+test "the view and the presenter follow committed grid and cell changes" {
     const sizes = [_]core.TerminalSize{
         .{ .cols = 100, .rows = 30 },
         .{ .cols = 80, .rows = 24, .cell_width_px = 10, .cell_height_px = 20 },
         .{ .cols = 100, .rows = 30, .cell_width_px = 10, .cell_height_px = 20 },
     };
-    const expected = [_][]const Probe.Event{
-        &.{ .presenter, .view },
-        &.{.sidebar},
-        &.{ .presenter, .view, .sidebar },
-    };
-    for (sizes, expected) |size, events| {
+    for (sizes) |size| {
         var harness: TestHarness = undefined;
         try harness.init();
         defer harness.deinit();
         const app = harness.client;
-        var probe = Probe.init(app);
-        probe.expected_size = size;
-        probe.bind();
-        defer probe.restore();
+        const terminal = TerminalClient.of(app);
         var capabilities = app.model.host.host_capabilities;
         capabilities.cell_width_px = size.cell_width_px;
         capabilities.cell_height_px = size.cell_height_px;
@@ -61,73 +49,33 @@ test "host resources select grid and cell changes independently in order" {
                 .capabilities = capabilities,
             },
         );
-
-        try std.testing.expectEqualSlices(Probe.Event, events, probe.slice());
-        try std.testing.expect(probe.committed);
         try std.testing.expect(app.model.to_host.invalidate_placements);
-        if (size.cell_width_px != 0) {
-            try std.testing.expectEqualDeep(client.SidebarRendererInput{
-                .support = capabilities.images,
-                .cell_width = size.cell_width_px,
-                .cell_height = size.cell_height_px,
-            }, probe.sidebar.?);
-        }
+        try harness.deliverHostEffects();
+
+        try std.testing.expectEqual(size.cols, terminal.view.scratch.w);
+        try std.testing.expectEqual(size.rows, terminal.view.scratch.h);
+        try std.testing.expectEqual(size.cols, terminal.presenter.screen.back.w);
+        try std.testing.expectEqual(size.rows, terminal.presenter.screen.back.h);
+        try std.testing.expectEqual(size.cell_width_px, terminal.view.cell_width_px);
+        try std.testing.expectEqual(size.cell_height_px, terminal.view.cell_height_px);
+        try std.testing.expectEqual(terminal.view.workbench(), data.workbench.region(&app.model).area);
     }
 }
 
-test "host resources stop at each failed resize port and retain the commit" {
-    const failures = [_]Probe.Event{ .presenter, .view, .sidebar };
-    const expected = [_][]const Probe.Event{
-        &.{.presenter},
-        &.{ .presenter, .view },
-        &.{ .presenter, .view, .sidebar },
-    };
-    for (failures, expected) |failure, events| {
-        var harness: TestHarness = undefined;
-        try harness.init();
-        defer harness.deinit();
-        const app = harness.client;
-        const size: core.TerminalSize = .{ .cols = 100, .rows = 30, .cell_width_px = 10, .cell_height_px = 20 };
-        var probe = Probe.init(app);
-        probe.failure = failure;
-        probe.expected_size = size;
-        probe.bind();
-        defer probe.restore();
-        var capabilities = app.model.host.host_capabilities;
-        capabilities.cell_width_px = size.cell_width_px;
-        capabilities.cell_height_px = size.cell_height_px;
-
-        try std.testing.expectError(error.HostResourceFailed, app.applyHostUpdate(
-            .{
-                .size = size,
-                .capabilities = capabilities,
-            },
-        ));
-        try std.testing.expectEqualSlices(Probe.Event, events, probe.slice());
-        try std.testing.expect(probe.committed);
-        try std.testing.expect(!app.model.to_host.invalidate_placements);
-        try std.testing.expectEqualDeep(size, app.model.host.host_size);
-        try std.testing.expectEqualDeep(capabilities, app.model.host.host_capabilities);
-    }
-}
-
-test "host resources configure graphics before invalidating and suppress repeated observations" {
+test "the view follows image support once and ignores repeated observations" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     const app = harness.client;
-    var probe = Probe.init(app);
-    probe.bind();
-    defer probe.restore();
 
     _ = try app.observeHostCapability(
         .{
             .images = .supported,
         },
     );
-    try std.testing.expectEqualSlices(Probe.Event, &.{.sidebar}, probe.slice());
     try std.testing.expect(app.model.to_host.invalidate_placements);
-    try std.testing.expect(probe.committed);
+    try harness.deliverHostEffects();
+    try std.testing.expectEqual(data.ResolvedSidebarRendering.kitty_hybrid, TerminalClient.of(app).view.sidebar_rendering);
     _ = try app.reconcileHostCapabilities(app.model.host.host_capabilities.withObservation(
         .{
             .pointer_pixels = .unsupported,
@@ -142,25 +90,21 @@ test "host resources configure graphics before invalidating and suppress repeate
     ) == null);
     try std.testing.expect(try app.reconcileHostCapabilities(app.model.host.host_capabilities) == null);
     try std.testing.expectEqualDeep(version, app.model.version());
-    try std.testing.expectEqual(@as(usize, 1), probe.len);
 }
 
-test "host resources retain graphics capabilities when sidebar setup fails" {
+test "a sidebar renderer the host cannot draw fails the refresh and keeps the commit" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
     const app = harness.client;
-    var probe = Probe.init(app);
-    probe.failure = .sidebar;
-    probe.bind();
-    defer probe.restore();
+    app.model.config.sidebar_rendering = .kitty_full;
 
-    try std.testing.expectError(error.HostResourceFailed, app.observeHostCapability(
+    _ = try app.observeHostCapability(
         .{
-            .images = .supported,
+            .images = .unsupported,
         },
-    ));
-    try std.testing.expectEqualSlices(Probe.Event, &.{.sidebar}, probe.slice());
-    try std.testing.expect(probe.committed);
-    try std.testing.expectEqual(data.environment.Support.supported, app.model.host.host_capabilities.images);
+    );
+
+    try std.testing.expectError(error.KittyGraphicsUnsupported, harness.deliverHostEffects());
+    try std.testing.expectEqual(data.environment.Support.unsupported, app.model.host.host_capabilities.images);
 }

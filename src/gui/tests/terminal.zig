@@ -1,4 +1,3 @@
-const Regions = @import("../widgets/Regions.zig");
 const builtin = @import("builtin");
 const Quad_module = @import("../render/Quad.zig");
 const CellMesh = @import("../render/CellMesh.zig");
@@ -377,8 +376,7 @@ test "native resize publishes exact grid pixels and preserves runtime-owned pane
     );
     try session.gui.resize(size, session.gui.renderer.theme);
     try session.settle();
-    const regions = Regions.calculate(size.cols, size.rows);
-    try std.testing.expectEqual(regions.workbench, session.gui.region.area);
+    try std.testing.expectEqual(core.Rect{ .w = size.cols, .h = size.rows }, data.workbench.region(&session.gui.app.model).area);
     try std.testing.expectEqual(size, session.gui.app.model.host.host_size);
     try std.testing.expectEqual(size.cell_width_px, session.gui.app.model.host.host_size.cell_width_px);
     try std.testing.expect(session.resize_count > 0);
@@ -393,7 +391,7 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     try present(session);
     const tab = session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     const token = try session.draw();
     const commit = session.gui.lifecycle.active.?.delivery.commit;
     try std.testing.expectEqual(@as(u8, 2), commit.len);
@@ -415,7 +413,7 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     try expectFullRedraw(session);
     try paintTerminal(session);
     var layout: data.LayoutSnapshot = .{};
-    session.gui.app.model.tabs.layout[tab].snapshot(session.gui.region.area, &layout);
+    session.gui.app.model.tabs.layout[tab].snapshot(data.workbench.region(&session.gui.app.model).area, &layout);
     for (session.gui.renderer.quads.items()) |quad| {
         const contained = for (layout.views()) |view| {
             const bounds = session.gui.renderer.metrics.rect(session.gui.renderer.origin, view.content);
@@ -466,7 +464,7 @@ test "native inbox holds input and GPU completion until the consumer runs" {
 
 fn paneContent(session: *Session) core.Rect {
     const tab = session.gui.app.model.tabs.active;
-    return data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, session.gui.region.area).?.content;
+    return data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, data.workbench.region(&session.gui.app.model).area).?.content;
 }
 
 fn paintTerminal(session: *Session) !void {

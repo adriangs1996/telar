@@ -44,9 +44,9 @@ test "native footer reserves TLS ahead of widgets and mode hints in narrow windo
     defer fixture.deinit();
     try fixture.showSidebar(false);
     const tls_color = core.Color.rgb(.{ 243, 41, 99 });
-    fixture.session.gui.theme.palette.peach = tls_color;
-    fixture.session.gui.theme.palette.yellow = tls_color;
-    fixture.session.gui.theme.palette.red = tls_color;
+    fixture.session.gui.app.model.theme.palette.peach = tls_color;
+    fixture.session.gui.app.model.theme.palette.yellow = tls_color;
+    fixture.session.gui.app.model.theme.palette.red = tls_color;
     const widget_color = core.Color.rgb(.{ 0, 255, 0 });
     var state: data.BarsState = .{};
     state.layout.bottom = .{ try colored("left widget that exceeds the viewport", widget_color), .tabs, try colored("right widget that exceeds the viewport", widget_color) };

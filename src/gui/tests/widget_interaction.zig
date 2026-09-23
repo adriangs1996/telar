@@ -944,7 +944,7 @@ test "composer menu preserves terminal repeats and releases across pane focus ch
     const gui = session.gui;
     const tab = gui.app.model.tabs.active;
     const terminal: core.PaneId = @enumFromInt(21);
-    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
     gui.app.model.panes.find(terminal).?.input_modes.kitty_keyboard_flags = 10;
     try publish(session);
@@ -979,7 +979,7 @@ test "opening a selector focuses its agent split and closing restores that exact
     defer session.deinit();
     const tab = session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     try std.testing.expect(session.gui.app.model.tabs.layout[tab].focusPane(second));
     try publish(session);
     try pressControl(session, try composerSelector(session, .model));
@@ -1267,11 +1267,11 @@ test "agent thread warm drawing allocates no glyph or quad storage and clips sma
             .quads = &session.gui.renderer.quads,
             .metrics = session.gui.renderer.metrics,
             .origin = session.gui.renderer.origin,
-            .theme = session.gui.theme,
+            .theme = session.gui.app.model.theme,
             .chrome = session.gui.renderer.chrome,
         };
         const thread = client.ThreadView.capture(&session.gui.app.model, null, Session.pane_id).?;
-        try (@import("../widgets/ThreadPane.zig"){ .area = session.gui.region.area, .thread = thread }).draw(&canvas);
+        try (@import("../widgets/ThreadPane.zig"){ .area = data.workbench.region(&session.gui.app.model).area, .thread = thread }).draw(&canvas);
         for (session.gui.renderer.quads.items()) |quad| {
             try std.testing.expect(quad.x >= 0 and quad.y >= 0);
             try std.testing.expect(quad.x + quad.width <= @as(f32, @floatFromInt(session.gui.renderer.viewport[0])));
@@ -1600,7 +1600,7 @@ test "conversation controls focus their pane and stale controls cannot focus a r
     try activitySnapshot(session);
     const tab = session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(22);
-    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     _ = session.gui.app.model.tabs.layout[tab].focusPane(second);
     try publish(session);
     const target = try threadItemTarget(session, 42);
@@ -1923,7 +1923,7 @@ test "a terminal split receives typing while the sibling agent composer stays vi
         const tab = gui.app.model.tabs.active;
         const token = if (timing == .during_frame) try session.draw() else 0;
         const terminal: core.PaneId = @enumFromInt(21);
-        try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+        try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
         _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
         if (timing == .after_frame) {
             try publish(session);
@@ -1954,7 +1954,7 @@ test "leaving an agent pane retires native text context and queued editor input 
     try send(session, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "pending", .selection_start = 7, .selection_end = 7 } });
     const tab = gui.app.model.tabs.active;
     const terminal: core.PaneId = @enumFromInt(21);
-    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
     var context: native.TextContext = .{};
     try std.testing.expect(!gui.widgetTextContext(&context));
@@ -1980,7 +1980,7 @@ test "an agent chord timeout cannot restore pane focus before repaint" {
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 121 } } });
     const tab = gui.app.model.tabs.active;
     const terminal: core.PaneId = @enumFromInt(21);
-    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
     gui.router.binding_since_ns = 0;
     gui.router.sequence_timeout_ns = 0;
@@ -2001,7 +2001,7 @@ test "agent direct navigation binding leaves the composer and releases its origi
     const gui = session.gui;
     const tab = gui.app.model.tabs.active;
     const terminal: core.PaneId = @enumFromInt(21);
-    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     _ = gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
     try publish(session);
     const target = try composerTarget(session);
@@ -2196,11 +2196,11 @@ test "one native input batch retires composer replay ownership before a terminal
     adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
     const tab = gui.app.model.tabs.active;
     const terminal: core.PaneId = @enumFromInt(21);
-    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     _ = gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
     try publish(session);
     const target = try composerTarget(session);
-    const view = data.tab_layout.view(&gui.app.model, tab, terminal, gui.region.area).?;
+    const view = data.tab_layout.view(&gui.app.model, tab, terminal, data.workbench.region(&gui.app.model).area).?;
     const size = gui.app.model.host.host_size;
     const x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
     const y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
@@ -2403,7 +2403,7 @@ test "delayed composer cut cannot steal focus from another agent split" {
     const gui = session.gui;
     const tab = gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     try std.testing.expect(gui.app.model.identifyPane(.{ .request_id = @enumFromInt(2), .pane_id = second, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 78 }));
     var snapshot = gui.app.model.panes.findConst(Session.pane_id).?.agent_thread.?.*;
     snapshot.pane_id = second;
@@ -2863,9 +2863,9 @@ test "managed review has exactly one action across single split and fullscreen l
 
     const terminal: core.PaneId = @enumFromInt(21);
     const other_terminal: core.PaneId = @enumFromInt(22);
-    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     _ = gui.app.model.panes.find(terminal).?.identify(.terminal, 78);
-    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = terminal, .new_pane = other_terminal, .location = Session.location, .axis = .vertical, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = terminal, .new_pane = other_terminal, .location = Session.location, .axis = .vertical, .area = data.workbench.region(&gui.app.model).area });
     _ = gui.app.model.panes.find(other_terminal).?.identify(.terminal, 79);
     _ = gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
     try publish(session);
@@ -2878,13 +2878,13 @@ test "managed review has exactly one action across single split and fullscreen l
         try std.testing.expectEqual(target.id, registry.at(.{ target.bounds.x + target.bounds.width / 2, target.bounds.y + target.bounds.height / 2 }).?.id);
     }
 
-    try std.testing.expect(gui.app.model.togglePaneFullscreen(.{ .area = gui.region.area }) != null);
+    try std.testing.expect(gui.app.model.togglePaneFullscreen(.{ .area = data.workbench.region(&gui.app.model).area }) != null);
     try publish(session);
     try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
     _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
     try publish(session);
     try std.testing.expectEqual(@as(usize, 0), reviewControlCount(session));
-    try std.testing.expect(gui.app.model.togglePaneFullscreen(.{ .area = gui.region.area }) != null);
+    try std.testing.expect(gui.app.model.togglePaneFullscreen(.{ .area = data.workbench.region(&gui.app.model).area }) != null);
 
     _ = try gui.app.handleServerMessage(
         .{
@@ -2985,7 +2985,7 @@ test "agent link hand cursor follows links and rejects stale or covered targets"
 fn existingEditor(session: *Session, name: []const u8) !core.PaneId {
     const editor_id: core.PaneId = @enumFromInt(99);
     const tab = session.gui.app.model.tabs.active;
-    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = editor_id, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = editor_id, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(2), .pane_id = editor_id, .location = Session.location, .created = false, .kind = .terminal, .pane_generation = 88 }));
     _ = session.gui.app.model.panes.find(editor_id).?.setForegroundName(name);
     _ = session.gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);

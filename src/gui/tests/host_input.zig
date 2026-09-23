@@ -39,7 +39,7 @@ test "delayed terminal clipboard response cannot paste into a newly focused pane
     try std.testing.expect(session.gui.host.next(&request));
     const tab = session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     try input_support.acceptNative(session.gui, .{ .kind = 9, .request_id = request.request_id, .generation = request.generation, .text = "late", .len = 4 });
     try input_support.pump(session.gui);
     try session.settle();
@@ -133,7 +133,7 @@ test "shared routing queries distinguish key capture from eligible repetition" {
         .new_pane = second,
         .location = Session.location,
         .axis = .horizontal,
-        .area = session.gui.region.area,
+        .area = data.workbench.region(&session.gui.app.model).area,
     });
     const pane = app.model.panes.find(second).?;
     pane.attached = true;

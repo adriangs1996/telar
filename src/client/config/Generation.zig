@@ -1,7 +1,6 @@
 const lua = @import("telar-lua");
 const data = @import("model");
 const core = @import("telar-core");
-const sidebar_rendering = @import("sidebar_rendering.zig");
 const std = @import("std");
 const SnapshotType = @import("Snapshot.zig");
 const Callback = @import("Callback.zig");
@@ -976,7 +975,7 @@ fn parseSidebar(generation: *Generation, index: c_int, diagnostic: *data.Diagnos
             diagnostic.set("config.client.sidebar.renderer must be a string", .{});
             return error.InvalidConfig;
         };
-        generation.snapshot.sidebar_rendering = sidebar_rendering.SidebarRendering.parse(value) catch {
+        generation.snapshot.sidebar_rendering = data.SidebarRendering.parse(value) catch {
             diagnostic.set("unknown sidebar renderer '{s}'", .{value});
             lua_value.pop(state, 1);
             return error.InvalidConfig;

@@ -18,7 +18,7 @@ test "projection composes terminal thread link chrome notifications and modal be
     const model = &gui.app.model;
     const tab = model.tabs.active;
     const thread_id: core.PaneId = @enumFromInt(20);
-    try data.pane_split.split(model, tab, .{ .existing_pane = Session.pane_id, .new_pane = thread_id, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(model, tab, .{ .existing_pane = Session.pane_id, .new_pane = thread_id, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     try std.testing.expect(model.tabs.layout[tab].setSurface(thread_id, .thread));
     _ = model.tabs.layout[tab].focusPane(Session.pane_id);
     try model.panes.find(thread_id).?.setComposer("Borrowed thread draft");
@@ -87,7 +87,7 @@ test "complete widget list fits the maximum pane count with every optional layer
     const tab = gui.app.model.tabs.active;
     for (1..core.max_panes_per_tab) |index| {
         var layout: data.LayoutSnapshot = .{};
-        gui.app.model.tabs.layout[tab].snapshot(gui.region.area, &layout);
+        gui.app.model.tabs.layout[tab].snapshot(data.workbench.region(&gui.app.model).area, &layout);
         var largest = layout.views()[0];
         for (layout.views()[1..]) |view| {
             if (@as(u32, view.content.w) * view.content.h > @as(u32, largest.content.w) * largest.content.h) {
@@ -95,7 +95,7 @@ test "complete widget list fits the maximum pane count with every optional layer
             }
         }
 
-        try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = largest.pane_id, .new_pane = @enumFromInt(index + 100), .location = Session.location, .axis = if (largest.content.w > largest.content.h * 2) .horizontal else .vertical, .area = gui.region.area });
+        try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = largest.pane_id, .new_pane = @enumFromInt(index + 100), .location = Session.location, .axis = if (largest.content.w > largest.content.h * 2) .horizontal else .vertical, .area = data.workbench.region(&gui.app.model).area });
     }
 
     _ = gui.app.model.publishNotification(0, .{ .title = "First", .message = "Finished" });
@@ -196,7 +196,7 @@ fn begin(fixture: *Fixture, projection: *const client.Projection) Canvas {
         .terminal_renderer = renderer,
         .metrics = renderer.metrics,
         .origin = renderer.origin,
-        .theme = gui.theme,
+        .theme = gui.app.model.theme,
         .background_opacity = renderer.config.window.background_opacity,
         .chrome = renderer.chrome,
         .viewport = renderer.viewport,
@@ -210,7 +210,7 @@ fn begin(fixture: *Fixture, projection: *const client.Projection) Canvas {
 fn linkFor(fixture: *Fixture) !@import("../input/LinkHit.zig") {
     const gui = fixture.session.gui;
     const pane = gui.app.model.panes.find(Session.pane_id).?;
-    const view = data.tab_layout.view(&gui.app.model, gui.app.model.tabs.active, pane.id, gui.region.area).?;
+    const view = data.tab_layout.view(&gui.app.model, gui.app.model.tabs.active, pane.id, data.workbench.region(&gui.app.model).area).?;
     return .{
         .pane_id = pane.id,
         .generation = pane.attachment_generation,

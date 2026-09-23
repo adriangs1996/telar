@@ -20,7 +20,6 @@ const PatchSinkType = @import("../../presentation/PatchSink.zig");
 const diff = @import("../../presentation/diff.zig");
 const CompositorType = @import("../../workspace/Compositor.zig");
 const TestingComposition = @import("TestingComposition.zig");
-const LayoutRegions = @import("../../widgets/LayoutRegions.zig");
 const StateType = @import("State.zig");
 const term = @import("../../presentation/screen_support.zig");
 const RenderInput = @import("RenderInput.zig");
@@ -241,7 +240,7 @@ fn testingCompose(compositor: *CompositorType, composition: TestingComposition) 
 }
 
 test "visible regions reserve top bottom sidebar and workbench" {
-    const regions = LayoutRegions.calculate(120, 40, .{ .visible = true, .preferred_width = data.sidebar.default_width });
+    const regions = data.GridRegions.calculate(120, 40, true, data.sidebar.default_width);
     try std.testing.expectEqual(core.Rect{ .x = 42, .w = 78, .h = 1 }, regions.top);
     try std.testing.expectEqual(core.Rect{ .x = 0, .y = 0, .w = 42, .h = 40 }, regions.sidebar);
     try std.testing.expectEqual(core.Rect{ .x = 42, .y = 1, .w = 78, .h = 38 }, regions.workbench);
@@ -274,7 +273,7 @@ test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
 }
 
 test "narrow clients hide the sidebar without forgetting user intent" {
-    const regions = LayoutRegions.calculate(61, 20, .{ .visible = true, .preferred_width = data.sidebar.default_width });
+    const regions = data.GridRegions.calculate(61, 20, true, data.sidebar.default_width);
     try std.testing.expect(regions.sidebar.isEmpty());
     try std.testing.expectEqual(@as(u16, 61), regions.workbench.w);
 }
