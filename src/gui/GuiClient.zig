@@ -8,6 +8,7 @@ const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const host_ports = @import("host_ports.zig");
+const workers = @import("workers.zig");
 const NativeLoop = @import("NativeLoop.zig");
 const InputQueue = @import("InputQueue.zig");
 const pointer_owner = @import("input/pointer_owner.zig");
@@ -60,6 +61,11 @@ const TestSession = @import("tests/Session.zig");
 const input_test_support = @import("tests/input_support.zig");
 const GuiClient = @This();
 
+const JobHook = struct {
+    context: *anyopaque,
+    start: *const fn (*anyopaque, client.Job) anyerror!void,
+};
+
 const InputLimit = enum(u8) {
     minimum_outbox_slots = 4,
     scroll_lines_per_event = 32,
@@ -93,6 +99,9 @@ binding_timeout: client.Scheduler = .{},
 /// Replaces the time of noted pane input; pacing tests pin it so scheduler
 /// delays cannot expire their grace.
 pane_input_time: ?u64 = null,
+/// Receives every job in place of `workers.start`; tests set it to capture
+/// runtime writes and link opens.
+job_hook: ?JobHook = null,
 binding_target: ?WidgetId = null,
 binding_revision: u64 = 0,
 pointer: PointerState = .{},
@@ -190,7 +199,6 @@ pub fn init(params: client.ClientInit) !*GuiClient {
 
     gui.app.graphics = host_ports.graphicsRetention(gui);
     gui.app.chrome = host_ports.chrome(gui);
-    gui.app.workers = host_ports.workers(gui);
     gui.app.host_input_source = host_ports.hostInput(gui);
 
     return gui;
@@ -1419,10 +1427,22 @@ fn notePaneInput(self: *GuiClient, pane_id: core.PaneId, at_ns: u64) void {
 }
 
 /// Delivers the host requests the shared client left in `model.to_host`,
-/// then starts writing what it left for the runtime. The window has no outer
-/// terminal and no media capture, and it redraws every image placement each
-/// frame.
+/// then starts the runtime write and every queued job. A job that fails to
+/// start can leave new host requests, so both drain until the host queue is
+/// empty.
 fn deliverHostEffects(self: *GuiClient) !void {
+    while (true) {
+        try self.deliverRequests();
+        try self.startJobs();
+        if (self.app.model.to_host.count == 0) {
+            return;
+        }
+    }
+}
+
+/// The window has no outer terminal and no media capture, and it redraws
+/// every image placement each frame.
+fn deliverRequests(self: *GuiClient) !void {
     const effects = &self.app.model.to_host;
     _ = effects.takePlacementInvalidation();
     if (effects.rebind_input) {
@@ -1453,8 +1473,19 @@ fn deliverHostEffects(self: *GuiClient) !void {
             }),
         }
     }
+}
 
+/// Starts each queued job; one the inbox rejects finishes as a failure,
+/// which may queue its successor.
+fn startJobs(self: *GuiClient) !void {
     try self.app.flush();
+    while (self.app.to_workers.pop()) |job| {
+        const started = if (self.job_hook) |hook| hook.start(hook.context, job) else workers.start(self, job);
+        started catch |err| {
+            try self.app.failJob(job, err);
+            try self.app.flush();
+        };
+    }
 }
 
 pub fn requestClipboardWrite(self: *GuiClient, bytes: []const u8) !void {

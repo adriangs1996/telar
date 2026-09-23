@@ -124,7 +124,6 @@ pub fn init(params: Params) !*TerminalClient {
     client.graphics = host_ports.graphicsRetention(terminal);
     client.chrome = host_ports.chrome(terminal);
     client.attachments = host_ports.attachmentShelf(terminal);
-    client.workers = host_ports.workers(terminal);
     client.host_input_source = host_ports.hostInput(terminal);
     // The presenter borrows the inbox and metrics, whose heap addresses
     // only exist once the client does.

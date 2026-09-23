@@ -258,15 +258,3 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
         }
     }
 }
-
-/// Example: `client.workers = host_ports.workers(terminal);`.
-pub fn workers(terminal: *TerminalClient) client_module.Workers {
-    return .{ .context = terminal, .start_fn = startJob };
-}
-
-fn startJob(context: *anyopaque, job: client_module.Job) !void {
-    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
-    const client = &terminal.app;
-
-    try terminal.inbox.start(.client, .{ client_module.job_runner.run, .{ client.io, client.gpa, job } });
-}

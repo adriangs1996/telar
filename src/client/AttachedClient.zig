@@ -52,7 +52,8 @@ const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
 const HostChrome = @import("presentation/HostChrome.zig");
 const AttachmentShelf = @import("attachments/AttachmentShelf.zig");
 const PresentationLifecycle = @import("presentation/LifecycleState.zig");
-const Workers = @import("execution/Workers.zig");
+const Job = @import("execution/Job.zig").Job;
+const job_runner = @import("execution/job_runner.zig");
 const Message = @import("execution/Message.zig").Message;
 const HostInputSource = @import("input/HostInputSource.zig");
 const Adoption = @import("resources/Adoption.zig");
@@ -74,6 +75,10 @@ const ResyncOutcome = enum { coalesced, snapshot_requested, handoff_requested, e
 const FocusReportOutcome = enum { applied, unchanged };
 const AgentNavigationOutcome = enum { ignored, focused, handoff_requested };
 
+/// Jobs one event can start: most kinds keep at most one in flight, and
+/// system notices arrive in short bursts.
+const max_queued_jobs = 32;
+
 comptime {
     std.debug.assert(data.effects.max_expression_paste_bytes + 16 <= data.input_limits.max_encoded_bytes);
 }
@@ -93,9 +98,11 @@ trust_store: ?*core.TrustStore,
 reload: ConfigReloadState,
 /// Transient: the alternate flag of the list submission being finished.
 list_submission_alternate: bool = false,
+/// Jobs procedures started during the current event. The adapter drains it
+/// after every event, runs each job off the event loop and delivers its
+/// completion message; a job it cannot start finishes through `failJob`.
+to_workers: core.GenericRing(Job, max_queued_jobs) = .{},
 /// Host ports, bound by the adapter before the first event.
-/// Runs client jobs on the adapter's event loop.
-workers: Workers = undefined,
 graphics: GraphicsRetention = undefined,
 chrome: HostChrome = undefined,
 /// Bound only by hosts that draw attachment previews.
@@ -296,7 +303,18 @@ pub fn update(self: *AttachedClient, message: Message) !?u8 {
     return null;
 }
 
-/// Reserves a receive buffer and releases it if the driver rejects the read.
+/// Finishes a job the adapter could not start as if its worker had failed
+/// with `err`, so its completion releases whatever starting it reserved.
+///
+/// ```zig
+/// inbox.start(.client, .{ job_runner.run, .{ io, gpa, job } }) catch |err| try client.failJob(job, err);
+/// ```
+pub fn failJob(self: *AttachedClient, job: Job, err: anyerror) !void {
+    const status = try self.update(job_runner.failed(job, err));
+    std.debug.assert(status == null);
+}
+
+/// Reserves a receive buffer and releases it if the adapter rejects the read.
 /// Example: `try client.startRuntimeRead();`
 pub fn startRuntimeRead(self: *AttachedClient) !void {
     const transport = &self.runtime_transport;
@@ -304,7 +322,7 @@ pub fn startRuntimeRead(self: *AttachedClient) !void {
         return;
     }
 
-    self.workers.start(.{ .runtime_read = transport }) catch |err| {
+    self.to_workers.push(.{ .runtime_read = transport }) catch |err| {
         transport.cancelRead();
 
         return err;
@@ -797,19 +815,18 @@ pub fn scheduleConfigReload(self: *AttachedClient) !void {
     const generation = self.lua_generation orelse return error.ConfigurationNotLoaded;
     const registry = self.plugin_registry orelse return error.ConfigurationNotLoaded;
 
-    try config_reload.schedule(
+    try self.to_workers.push(config_reload.schedule(
         &self.reload,
         .{
             .io = self.io,
             .gpa = self.gpa,
-            .workers = self.workers,
             .path = path,
             .profile = self.options.profile,
             .trust_path = trust_path,
             .current_generation = generation,
             .current_registry = registry,
         },
-    );
+    ));
 }
 
 /// Borrows bar sources only when Lua and the model agree on their generation.
@@ -835,7 +852,7 @@ pub fn synchronizeBars(self: *AttachedClient) !void {
         },
     );
 
-    try bar_updates.rearm(self.workers, self.io, &self.model.bar_updates);
+    try bar_updates.rearm(self);
 }
 
 /// Snapshot the current exclusive keyboard owners without exposing client state.
@@ -1026,7 +1043,7 @@ pub fn completeLinkOpening(self: *AttachedClient, result: anyerror!void) !void {
     }
 
     const next = self.model.link_opening.complete() orelse return;
-    self.workers.start(.{ .link = next }) catch |err| {
+    self.to_workers.push(.{ .link = next }) catch |err| {
         self.model.link_opening.schedulingFailed();
         try self.reportLinkFailure(err);
     };
@@ -2710,7 +2727,7 @@ pub fn flush(self: *AttachedClient) !void {
     const transport = &self.runtime_transport;
     const payload = try self.model.to_runtime.beginSend(transport.send_buffer) orelse return;
 
-    self.workers.start(.{ .runtime_send = .{ .state = transport, .bytes = payload } }) catch |err| {
+    self.to_workers.push(.{ .runtime_send = .{ .state = transport, .bytes = payload } }) catch |err| {
         self.model.to_runtime.sendFailed();
 
         return err;
@@ -3936,7 +3953,7 @@ fn openLinkFile(self: *AttachedClient, path: data.FilePath) !void {
 fn openExternalLink(self: *AttachedClient, target: data.LinkTarget) !void {
     switch (self.model.link_opening.request(target)) {
         .queued => {},
-        .start => |selected| self.workers.start(.{ .link = selected }) catch |err| {
+        .start => |selected| self.to_workers.push(.{ .link = selected }) catch |err| {
             self.model.link_opening.schedulingFailed();
 
             return err;
@@ -5155,7 +5172,7 @@ fn deliverHostNotification(self: *AttachedClient, input: data.NotificationInput)
         .telar => unreachable,
         .terminal => try self.model.to_host.push(.{ .terminal_notification = payload }),
         // A system notice is best effort; a saturated inbox drops it.
-        .system => self.workers.start(.{ .system_notification = payload }) catch {},
+        .system => self.to_workers.push(.{ .system_notification = payload }) catch {},
     }
 }
 
@@ -5234,7 +5251,7 @@ fn applyAgentSound(self: *AttachedClient, notification: core.AgentSoundNotificat
 }
 
 fn startAgentSound(self: *AttachedClient, kind: core.AgentSound) !void {
-    self.workers.start(.{ .sound = kind }) catch |err| {
+    self.to_workers.push(.{ .sound = kind }) catch |err| {
         self.model.sound_playback.schedulingFailed();
         return err;
     };
@@ -5583,7 +5600,7 @@ fn scheduleSidebarAnimation(self: *AttachedClient) !void {
     const deadline_ns = core.monotonic(self.io) +| sidebar_animation_interval_ns;
     switch (scheduler.update(self.io, deadline_ns)) {
         .idle, .retained => {},
-        .schedule => self.workers.start(.{ .timer = .{ .kind = .sidebar_animation, .scheduler = scheduler } }) catch |err| {
+        .schedule => self.to_workers.push(.{ .timer = .{ .kind = .sidebar_animation, .scheduler = scheduler } }) catch |err| {
             scheduler.schedulingFailed();
             return err;
         },
@@ -5601,7 +5618,7 @@ fn scheduleNotificationTimer(self: *AttachedClient) !void {
     );
     switch (scheduler.update(self.io, deadline_ns)) {
         .idle, .retained => {},
-        .schedule => self.workers.start(.{ .timer = .{ .kind = .notification, .scheduler = scheduler } }) catch |err| {
+        .schedule => self.to_workers.push(.{ .timer = .{ .kind = .notification, .scheduler = scheduler } }) catch |err| {
             scheduler.schedulingFailed();
 
             return err;
@@ -7058,7 +7075,7 @@ fn startPluginAction(self: *AttachedClient, requested: data.PluginAction, callba
             std.debug.assert(rolled_back != null);
         }
 
-        try self.workers.start(.{ .plugin = .{
+        try self.to_workers.push(.{ .plugin = .{
             .execution_id = execution.id,
             .request = request,
         } });
@@ -7321,7 +7338,7 @@ fn startPathCompletion(self: *AttachedClient) !void {
     }
 
     const id = completion_state.reserve();
-    self.workers.start(.{ .path_completion = .init(id, completion_state.inflightSlice()) }) catch |err| {
+    self.to_workers.push(.{ .path_completion = .init(id, completion_state.inflightSlice()) }) catch |err| {
         completion_state.pending = .none;
         return err;
     };

@@ -4,7 +4,6 @@ const data = @import("model");
 const core = @import("telar-core");
 const chrome_module = @import("ports/chrome.zig");
 const host_input = @import("ports/host_input.zig");
-const worker_ports = @import("ports/workers.zig");
 const GuiClient = @import("GuiClient.zig");
 
 /// Example: `const port = graphicsRetention(app);`.
@@ -64,4 +63,3 @@ fn setPaneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId, visible: bo
 
 pub const chrome = chrome_module.port;
 pub const hostInput = host_input.port;
-pub const workers = worker_ports.jobs;

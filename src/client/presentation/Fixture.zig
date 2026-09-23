@@ -8,7 +8,6 @@ const Credit = @import("../graphics/Credit.zig");
 const HeadlessAdapter = @import("HeadlessAdapter.zig");
 const retained_module = @import("../graphics/retained.zig");
 const std = @import("std");
-const Job = @import("../execution/Job.zig").Job;
 const headless_tests = @import("headless_tests.zig");
 const Projection = @import("Projection.zig");
 const projection_support = @import("projection_support.zig");
@@ -54,7 +53,6 @@ pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
     fixture.outbox = &fixture.app.model.to_runtime;
     // Only host boundaries are substituted; server dispatch, input and delivery
     // execute the production operations. Unused host capabilities stay unbound.
-    fixture.app.workers = .{ .context = fixture, .start_fn = startJob };
     fixture.app.graphics = .{ .context = fixture, .apply_fn = unsupportedGraphics, .clear_pane_fn = clearPane, .set_pane_visible_fn = setVisible, .pane_visible_fn = visible, .has_pane_graphics_fn = hasGraphics, .ingress_version_fn = ingress, .peek_credit_fn = peekCredit, .consume_credit_fn = consumeCredit };
     fixture.adapter = .{ .state = &fixture.app.presentation };
     fixture.app.model.host.animation_frame_ns = core.pace.default_interval;
@@ -140,7 +138,7 @@ pub fn drain(self: *Fixture) !void {
             .completed => |value| try self.deliver(value.token, value.outcome),
         }
 
-        try self.app.flush();
+        try self.startJobs();
     }
 }
 
@@ -154,15 +152,19 @@ fn setVisible(context: *anyopaque, id: core.PaneId, value: bool) !void {
     try fixture.graphics.setPaneVisible(id, value);
 }
 
-fn startJob(context: *anyopaque, job: Job) !void {
-    const fixture: *Fixture = @ptrCast(@alignCast(context));
-    switch (job) {
-        .runtime_send => |send| {
-            std.debug.assert(fixture.pending == null);
-            fixture.pending = send.bytes;
-        },
-        .runtime_read => return error.HeadlessReadUnsupported,
-        else => return error.HeadlessJobUnsupported,
+/// Holds the runtime write as the transport would; headless hosts run no
+/// other job.
+fn startJobs(self: *Fixture) !void {
+    try self.app.flush();
+    while (self.app.to_workers.pop()) |job| {
+        switch (job) {
+            .runtime_send => |send| {
+                std.debug.assert(self.pending == null);
+                self.pending = send.bytes;
+            },
+            .runtime_read => return error.HeadlessReadUnsupported,
+            else => return error.HeadlessJobUnsupported,
+        }
     }
 }
 
@@ -221,5 +223,5 @@ pub fn sendOne(self: *Fixture) !void {
     try std.testing.expect(self.pending != null);
     self.pending = null;
     try self.app.completeRuntimeSend({});
-    try self.app.flush();
+    try self.startJobs();
 }

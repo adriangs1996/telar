@@ -71,21 +71,21 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
 
     session.pending = null;
     try app.completeRuntimeSend({});
-    try app.flush();
+    try session.startJobs();
     const configured = try core.decodeClient(session.pending.?);
     try std.testing.expect(configured == .configure_terminal_colors);
     try std.testing.expectEqualDeep(colors, configured.configure_terminal_colors);
 
     session.pending = null;
     try app.completeRuntimeSend({});
-    try app.flush();
+    try session.startJobs();
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expect(request == .request_runtime_state);
     try std.testing.expectEqual(app.client_identity, request.request_runtime_state.client_identity);
 
     session.pending = null;
     try app.completeRuntimeSend({});
-    try app.flush();
+    try session.startJobs();
     try std.testing.expect(session.pending == null);
     try std.testing.expectEqual(@as(usize, 0), app.model.to_runtime.len);
     try std.testing.expect(app.model.startup.phase == .opening);
@@ -431,8 +431,9 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
 test "native driver joins a blocked socket read before freeing the shared client" {
     const session = try Session.init();
     defer session.deinit();
-    session.gui.app.workers = host_ports.workers(session.gui);
+    session.gui.job_hook = null;
     try session.gui.app.startRuntimeRead();
+    _ = try session.gui.update();
     try std.testing.expect(session.gui.app.runtime_transport.receive_pending);
 }
 

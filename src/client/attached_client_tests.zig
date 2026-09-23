@@ -4,8 +4,6 @@ const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const AttachedClient = @import("AttachedClient.zig");
-const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
-const Workers = @import("execution/Workers.zig");
 const Job = @import("execution/Job.zig").Job;
 const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
 const Credit = @import("graphics/Credit.zig");
@@ -23,7 +21,8 @@ pub fn layoutRoundTrip(comptime write_layout: fn (*const AttachedClient, *core.C
         .tab_id = @enumFromInt(2),
     };
 
-    try data.workspace_handoff.bootstrap(&app.model, 
+    try data.workspace_handoff.bootstrap(
+        &app.model,
         .{
             .pane_id = @enumFromInt(3),
             .location = location,
@@ -110,81 +109,92 @@ pub fn rejectStaleHostCommits(comptime deliver: fn (*AttachedClient, data.HostCo
     try std.testing.expectError(error.StaleHostCommit, deliver(app, stale_size));
 }
 
-/// Transport scheduling releases rejected reservations and retries queued frames in order.
-/// Example: `try attached_client_tests.retryTransportScheduling(flush);`
-pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerror!void) !void {
-    const Driver = struct {
-        reject: bool = true,
-        reads: usize = 0,
-        sends: usize = 0,
-        payload: []const u8 = &.{},
-        outbox: *const data.Outbox = undefined,
+/// Starts the runtime jobs a test client queued, as an adapter would. A
+/// rejected start finishes through `failJob`, like any adapter's.
+const Driver = struct {
+    reject: bool = true,
+    reads: usize = 0,
+    sends: usize = 0,
+    payload: []const u8 = &.{},
 
-        fn start(raw: *anyopaque, job: Job) !void {
-            return switch (job) {
-                .runtime_read => |state| read(raw, state),
-                .runtime_send => |send_job| send(raw, send_job.state, send_job.bytes),
-                else => error.UnexpectedJob,
-            };
+    fn drain(self: *Driver, app: *AttachedClient) !void {
+        while (app.to_workers.pop()) |job| {
+            self.start(job) catch |err| try app.failJob(job, err);
+        }
+    }
+
+    fn start(self: *Driver, job: Job) !void {
+        switch (job) {
+            .runtime_read => |state| {
+                self.reads += 1;
+                try std.testing.expect(state.receive_pending);
+            },
+            .runtime_send => |send| {
+                self.sends += 1;
+                try std.testing.expect(send.state.send_buffer.len != 0);
+                if (!self.reject) {
+                    self.payload = send.bytes;
+                }
+            },
+            else => return error.UnexpectedJob,
         }
 
-        fn read(raw: *anyopaque, state: *RuntimeTransportState) !void {
-            const self: *@This() = @ptrCast(@alignCast(raw));
-            self.reads += 1;
-            try std.testing.expect(state.receive_pending);
-
-            if (self.reject) {
-                return error.DriverBusy;
-            }
+        if (self.reject) {
+            return error.DriverBusy;
         }
+    }
+};
 
-        fn send(raw: *anyopaque, _: *RuntimeTransportState, payload: []const u8) !void {
-            const self: *@This() = @ptrCast(@alignCast(raw));
-            self.sends += 1;
-            self.payload = payload;
-            try std.testing.expect(self.outbox.inFlight());
-
-            if (self.reject) {
-                return error.DriverBusy;
-            }
-        }
-    };
-
-    var capture: Driver = .{};
-    const driver: Workers = .{
-        .context = &capture,
-        .start_fn = Driver.start,
-    };
-
-    var send_buffer: [64]u8 = undefined;
+/// A client with only the transport and outbox a transport test touches.
+fn transportClient(send_buffer: []u8) !*AttachedClient {
     const app = try std.testing.allocator.create(AttachedClient);
-    defer std.testing.allocator.destroy(app);
-    app.workers = driver;
+    errdefer std.testing.allocator.destroy(app);
+    app.io = std.testing.io;
+    app.to_workers = .{};
     app.graphics = no_graphics;
     app.model.to_runtime = try .init(std.testing.allocator);
-    defer app.model.to_runtime.deinit(std.testing.allocator);
-    capture.outbox = &app.model.to_runtime;
-    const state = &app.runtime_transport;
-    state.* = .{
+    app.runtime_transport = .{
         .connection = undefined,
-        .send_buffer = &send_buffer,
+        .send_buffer = send_buffer,
         .receive_buffer = &.{},
         .read_buffer = &.{},
     };
 
-    try std.testing.expectError(error.DriverBusy, app.startRuntimeRead());
+    return app;
+}
+
+fn destroyTransportClient(app: *AttachedClient) void {
+    app.model.to_runtime.deinit(std.testing.allocator);
+    std.testing.allocator.destroy(app);
+}
+
+/// Transport scheduling releases rejected reservations and retries queued frames in order.
+/// Example: `try attached_client_tests.retryTransportScheduling(flush);`
+pub fn retryTransportScheduling(comptime flush: fn (*AttachedClient) anyerror!void) !void {
+    var capture: Driver = .{};
+    var send_buffer: [64]u8 = undefined;
+    const app = try transportClient(&send_buffer);
+    defer destroyTransportClient(app);
+    const state = &app.runtime_transport;
+
+    try app.startRuntimeRead();
+    try std.testing.expectError(error.DriverBusy, capture.drain(app));
     try std.testing.expect(!state.receive_pending);
     capture.reject = false;
     try app.startRuntimeRead();
+    try capture.drain(app);
     try app.startRuntimeRead();
+    try capture.drain(app);
     try std.testing.expectEqual(@as(usize, 2), capture.reads);
     try std.testing.expectError(error.ReadFailed, state.completeRead(error.ReadFailed));
     try std.testing.expect(!state.receive_pending);
     try app.startRuntimeRead();
+    try capture.drain(app);
     try std.testing.expectEqual(@as(usize, 3), capture.reads);
     state.cancelRead();
 
-    try start_send(app);
+    try flush(app);
+    try capture.drain(app);
     try std.testing.expectEqual(@as(usize, 0), capture.sends);
     try app.model.to_runtime.push(
         .{
@@ -201,22 +211,26 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
         },
     );
     capture.reject = true;
-    try std.testing.expectError(error.DriverBusy, start_send(app));
+    try flush(app);
+    try std.testing.expectError(error.DriverBusy, capture.drain(app));
     try std.testing.expect(!app.model.to_runtime.inFlight());
     try std.testing.expectEqual(@as(u8, 2), app.model.to_runtime.len);
     const first = send_buffer;
-    const first_len = capture.payload.len;
     capture.reject = false;
-    try start_send(app);
+    try flush(app);
+    try capture.drain(app);
+    const first_len = capture.payload.len;
     try std.testing.expectEqualSlices(
         u8,
         first[0..first_len],
         capture.payload,
     );
-    try start_send(app);
+    try flush(app);
+    try capture.drain(app);
     try std.testing.expectEqual(@as(usize, 2), capture.sends);
     try app.model.to_runtime.finishSend({});
-    try start_send(app);
+    try flush(app);
+    try capture.drain(app);
     try std.testing.expectEqual(@as(usize, 3), capture.sends);
     try std.testing.expect(!std.mem.eql(
         u8,
@@ -229,56 +243,11 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
 
 /// Enqueue retains copied input after rejected scheduling and preserves order on retry.
 /// Example: `try attached_client_tests.retainQueuedInput(flush);`
-pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void) !void {
-    const Driver = struct {
-        reject: bool = true,
-        sends: usize = 0,
-        payload: []const u8 = &.{},
-
-        fn start(raw: *anyopaque, job: Job) !void {
-            return switch (job) {
-                .runtime_read => |state| read(raw, state),
-                .runtime_send => |send_job| send(raw, send_job.state, send_job.bytes),
-                else => error.UnexpectedJob,
-            };
-        }
-
-        fn read(_: *anyopaque, _: *RuntimeTransportState) !void {
-            return error.UnexpectedRead;
-        }
-
-        fn send(raw: *anyopaque, _: *RuntimeTransportState, payload: []const u8) !void {
-            const self: *@This() = @ptrCast(@alignCast(raw));
-            self.sends += 1;
-
-            if (self.reject) {
-                return error.DriverBusy;
-            }
-
-            self.payload = payload;
-        }
-    };
-
+pub fn retainQueuedInput(comptime flush: fn (*AttachedClient) anyerror!void) !void {
     var capture: Driver = .{};
-    const driver: Workers = .{
-        .context = &capture,
-        .start_fn = Driver.start,
-    };
-
     var send_buffer: [data.input_limits.max_encoded_bytes + 64]u8 = undefined;
-    const app = try std.testing.allocator.create(AttachedClient);
-    defer std.testing.allocator.destroy(app);
-    app.workers = driver;
-    app.graphics = no_graphics;
-    app.model.to_runtime = try .init(std.testing.allocator);
-    defer app.model.to_runtime.deinit(std.testing.allocator);
-    const state = &app.runtime_transport;
-    state.* = .{
-        .connection = undefined,
-        .send_buffer = &send_buffer,
-        .receive_buffer = &.{},
-        .read_buffer = &.{},
-    };
+    const app = try transportClient(&send_buffer);
+    defer destroyTransportClient(app);
 
     const pane: core.PaneId = @enumFromInt(1);
     var source = [_]u8{
@@ -291,7 +260,8 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
             .bytes = &source,
         },
     );
-    try std.testing.expectError(error.DriverBusy, start_send(app));
+    try flush(app);
+    try std.testing.expectError(error.DriverBusy, capture.drain(app));
     try std.testing.expectEqual(@as(u8, 2), app.model.to_runtime.len);
     try std.testing.expect(!app.model.to_runtime.inFlight());
     @memset(&source, 'y');
@@ -304,18 +274,21 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
             },
         },
     );
-    try start_send(app);
+    try flush(app);
+    try capture.drain(app);
     const first = try core.decodeClient(capture.payload);
     try std.testing.expect(first == .pane_input);
     try std.testing.expectEqual(pane, first.pane_input.pane_id);
     try std.testing.expectEqualStrings("x" ** data.input_limits.max_encoded_bytes, first.pane_input.bytes);
     try app.model.to_runtime.finishSend({});
-    try start_send(app);
+    try flush(app);
+    try capture.drain(app);
     const second = try core.decodeClient(capture.payload);
     try std.testing.expect(second == .pane_input);
     try std.testing.expectEqualStrings("x", second.pane_input.bytes);
     try app.model.to_runtime.finishSend({});
-    try start_send(app);
+    try flush(app);
+    try capture.drain(app);
     const third = try core.decodeClient(capture.payload);
     try std.testing.expect(third == .detach_pane);
     try std.testing.expectEqual(pane, third.detach_pane.pane_id);
@@ -362,7 +335,8 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient
         .tab_id = @enumFromInt(1),
     };
 
-    try data.workspace_handoff.bootstrap(model, 
+    try data.workspace_handoff.bootstrap(
+        model,
         .{
             .pane_id = pane_id,
             .location = location,
@@ -416,7 +390,8 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
         .tab_id = @enumFromInt(1),
     };
 
-    try data.workspace_handoff.bootstrap(model, 
+    try data.workspace_handoff.bootstrap(
+        model,
         .{
             .pane_id = pane_id,
             .location = location,

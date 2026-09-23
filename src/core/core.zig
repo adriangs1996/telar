@@ -107,6 +107,7 @@ pub const Frame = @import("schema/Frame.zig");
 pub const FrameAck = @import("schema/messages/FrameAck.zig");
 pub const FrameView = @import("schema/FrameView.zig");
 pub const GenericSlotIndex = @import("GenericSlotIndex.zig").Type;
+pub const GenericRing = @import("GenericRing.zig").Type;
 pub const Grant = @import("Grant.zig");
 pub const Granularity = select.Granularity;
 pub const GraphemeIterator = @import("ui/GraphemeIterator.zig");

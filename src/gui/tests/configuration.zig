@@ -182,6 +182,7 @@ test "GUI reload restages fonts for a changed viewport before adopting and joins
     try std.testing.expect(try reload.apply(session.gui, &session.gui.renderer));
     try std.testing.expectEqual(@as(u16, 40), session.gui.renderer.atlas.?.pixel_height);
     try std.testing.expectEqual(@as(f32, 2), session.gui.renderer.scale);
+    try session.startJobs();
     try reload.poll(&session.gui.app);
     try std.testing.expect(reload.worker != null);
     // Deferred fixture teardown cancels this waiting worker before its borrows die.

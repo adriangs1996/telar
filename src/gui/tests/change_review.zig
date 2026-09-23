@@ -405,10 +405,10 @@ test "runtime review loads through its real worker and inbox after the previous 
     const session = try base();
     defer session.deinit();
     const gui = session.gui;
-    gui.app.workers = host_ports.workers(gui);
+    gui.job_hook = null;
     try gui.app.startRuntimeRead();
     try gui.openChangeReview(Session.pane_id);
-    try gui.app.flush();
+    _ = try gui.update();
     var buffer: [128 * 1024]u8 = undefined;
     const request = (try core.decodeClient(try session.peer.receive(std.testing.io, &buffer))).query_change_review;
     try std.testing.expectEqual(gui.app.model.change_review.pending.?, request.request_id);

@@ -9,10 +9,23 @@ const capture_module = @import("../../attachments/capture.zig");
 const term = @import("../../presentation/screen_support.zig");
 const host_inputs = @import("../input/host_inputs.zig");
 
-/// Drains every pending host request after one event, then starts writing
-/// what the event left for the runtime.
+/// Drains every pending host request after one event, then starts the
+/// runtime write and every job the event left. A job that fails to start can
+/// leave new host requests, so both drain until the host queue is empty.
 /// Example: `try host_effects.deliver(terminal);`
 pub fn deliver(terminal: *TerminalClient) !void {
+    const client = &terminal.app;
+
+    while (true) {
+        try deliverRequests(terminal);
+        try startJobs(terminal);
+        if (client.model.to_host.count == 0) {
+            return;
+        }
+    }
+}
+
+fn deliverRequests(terminal: *TerminalClient) !void {
     const client = &terminal.app;
 
     const effects = &client.model.to_host;
@@ -55,8 +68,20 @@ pub fn deliver(terminal: *TerminalClient) !void {
             },
         }
     }
+}
+
+/// Starts each queued job as an inbox producer; one the inbox rejects
+/// finishes as a failure, which may queue its successor.
+fn startJobs(terminal: *TerminalClient) !void {
+    const client = &terminal.app;
 
     try client.flush();
+    while (client.to_workers.pop()) |job| {
+        terminal.inbox.start(.client, .{ client_module.job_runner.run, .{ client.io, client.gpa, job } }) catch |err| {
+            try client.failJob(job, err);
+            try client.flush();
+        };
+    }
 }
 
 fn startCapture(terminal: *TerminalClient, request: data.CaptureRequest) !void {

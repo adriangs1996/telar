@@ -5,6 +5,7 @@ const client = @import("telar-client");
 const data = @import("model");
 const GuiClient = @import("../GuiClient.zig");
 const host_ports = @import("../host_ports.zig");
+const workers = @import("../workers.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Session = @This();
 
@@ -89,9 +90,9 @@ pub fn init() !*Session {
             .scale = 1,
         },
     );
-    session.gui.app.workers = .{
+    session.gui.job_hook = .{
         .context = session,
-        .start_fn = startJob,
+        .start = startJob,
     };
     return session;
 }
@@ -104,7 +105,7 @@ pub fn deinit(self: *Session) void {
 }
 
 /// Captures runtime sends and link opens; every other job runs on the real inbox.
-/// Example: `session.gui.app.workers = .{ .context = session, .start_fn = Session.startJob };`
+/// Example: `session.gui.job_hook = .{ .context = session, .start = Session.startJob };`
 pub fn startJob(context: *anyopaque, job: client.Job) !void {
     const session: *Session = @ptrCast(@alignCast(context));
 
@@ -118,16 +119,27 @@ pub fn startJob(context: *anyopaque, job: client.Job) !void {
             session.opened_link = target;
             session.link_open_count += 1;
         },
-        else => try host_ports.workers(session.gui).start(job),
+        else => try workers.start(session.gui, job),
     }
 }
 
 /// The runtime write a direct GUI call left, started as the window loop would.
 /// Example: `const request = try core.decodeClient(try session.sent());`
 pub fn sent(self: *Session) ![]const u8 {
-    try self.gui.app.flush();
+    try self.startJobs();
 
     return self.pending orelse error.NothingSent;
+}
+
+/// Starts the runtime write and every job a direct GUI call queued.
+/// Example: `try session.startJobs();`
+pub fn startJobs(self: *Session) !void {
+    const app = &self.gui.app;
+
+    try app.flush();
+    while (app.to_workers.pop()) |job| {
+        try startJob(self, job);
+    }
 }
 
 pub fn settle(self: *Session) !void {
@@ -198,7 +210,7 @@ pub fn settle(self: *Session) !void {
 
         self.pending = null;
         try self.gui.app.completeRuntimeSend({});
-        try self.gui.app.flush();
+        try self.startJobs();
     }
 }
 

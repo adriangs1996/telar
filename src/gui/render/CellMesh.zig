@@ -69,7 +69,7 @@ pub fn primaryInk(self: Mesh) []const Quad {
 /// Borrows the ink that did not fit in primary storage.
 /// Example: `for (mesh.overflowInk()) |quad| draw(quad);`
 pub fn overflowInk(self: Mesh) []const Quad {
-    return self.overflow[0 .. self.metadata.len -| primary_capacity];
+    return self.overflow[0..self.metadata.len -| primary_capacity];
 }
 
 /// Gathers the complete geometry in draw order into caller storage.

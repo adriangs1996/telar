@@ -8,7 +8,6 @@ const BarUpdateFailure = @import("BarUpdateFailure.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const Client = @import("../AttachedClient.zig");
-const Workers = @import("../execution/Workers.zig");
 const Job = @import("../execution/Job.zig").Job;
 const BarUpdatesCompletion = @import("../bars/BarUpdatesCompletion.zig");
 const Output = @import("../bars/Output.zig");
@@ -46,7 +45,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
     client.model.bar_updates.pending_commands |= due.command_mask;
     try invokeNextCallback(client, configuration);
     try startNextCommand(client);
-    try rearm(client.workers, client.io, &client.model.bar_updates);
+    try rearm(client);
 }
 
 /// Resolves one command worker by exact identity and discards stale generations.
@@ -216,7 +215,7 @@ fn startNextCommand(client: *Client) !void {
         }
 
         const execution = try client.model.bar_updates.reserveCommand(generation.number, position);
-        client.workers.start(.{ .bar_command = .{ .execution_id = execution.id, .command = source.command } }) catch |err| {
+        client.to_workers.push(.{ .bar_command = .{ .execution_id = execution.id, .command = source.command } }) catch |err| {
             client.model.bar_updates.command_execution = null;
             return err;
         };
@@ -257,64 +256,48 @@ fn commitFailure(client: *Client, command: BarUpdateCommand, failure: BarUpdateF
 }
 
 /// Keeps one timer for the earliest bar deadline or an immediate pending
-/// callback. A rejected timer releases its reservation so the next attempt
-/// can retry.
-/// Example: `try bar_updates.rearm(client.workers, client.io, &client.model.bar_updates);`
-pub fn rearm(workers: Workers, io: std.Io, state: *data.BarUpdatesState) !void {
-    const deadline_ns = if (state.pending_callbacks != 0) core.monotonic(io) else state.nextDeadline();
+/// callback. A timer the queue rejects releases its reservation so the next
+/// attempt can retry.
+/// Example: `try bar_updates.rearm(client);`
+pub fn rearm(client: *Client) !void {
+    const state = &client.model.bar_updates;
+    const job = timerJob(client.io, state) orelse return;
 
-    switch (state.scheduler.update(io, deadline_ns)) {
-        .idle, .retained => {},
-        .schedule => workers.start(.{ .timer = .{ .kind = .bar, .scheduler = &state.scheduler } }) catch |err| {
-            state.scheduler.schedulingFailed();
+    client.to_workers.push(job) catch |err| {
+        state.scheduler.schedulingFailed();
 
-            return err;
-        },
-    }
+        return err;
+    };
 }
 
-test "bar timer scheduling retries failure and reuses one pending worker" {
-    const Timer = struct {
-        reject: bool = true,
-        calls: usize = 0,
+/// The timer the bar deadlines need, or null while the pending one still
+/// fits or nothing is due.
+fn timerJob(io: std.Io, state: *data.BarUpdatesState) ?Job {
+    const deadline_ns = if (state.pending_callbacks != 0) core.monotonic(io) else state.nextDeadline();
 
-        fn start(raw: *anyopaque, job: Job) !void {
-            const self: *@This() = @ptrCast(@alignCast(raw));
-            self.calls += 1;
-            try std.testing.expectEqual(Job.Kind.bar, job.timer.kind);
-            try std.testing.expect(job.timer.scheduler.pending);
-
-            if (self.reject) {
-                return error.TimerBusy;
-            }
-        }
+    return switch (state.scheduler.update(io, deadline_ns)) {
+        .idle, .retained => null,
+        .schedule => .{ .timer = .{ .kind = .bar, .scheduler = &state.scheduler } },
     };
+}
 
-    var timer: Timer = .{};
-    const workers: Workers = .{
-        .context = &timer,
-        .start_fn = Timer.start,
-    };
+test "bar timers reuse one pending worker and follow the earliest deadline" {
     var state: data.BarUpdatesState = .{};
     const io = std.testing.io;
-    try rearm(workers, io, &state);
-    try std.testing.expectEqual(@as(usize, 0), timer.calls);
+    try std.testing.expect(timerJob(io, &state) == null);
+
     state.pending_callbacks = data.bar_values.Position.bottom_left.bit();
-    try std.testing.expectError(error.TimerBusy, rearm(workers, io, &state));
-    try std.testing.expect(!state.scheduler.pending);
-    timer.reject = false;
-    try rearm(workers, io, &state);
+    const first = timerJob(io, &state).?;
+    try std.testing.expectEqual(Job.Kind.bar, first.timer.kind);
     try std.testing.expect(state.scheduler.pending);
     const immediate = state.scheduler.deadline_ns.load(.acquire);
     try std.testing.expect(immediate <= core.monotonic(io));
-    try rearm(workers, io, &state);
-    try std.testing.expectEqual(@as(usize, 2), timer.calls);
+    try std.testing.expect(timerJob(io, &state) == null);
 
     state.pending_callbacks = 0;
     state.deadlines[@intFromEnum(data.bar_values.Position.bottom_left)] = immediate + std.time.ns_per_s;
-    try rearm(workers, io, &state);
+    try std.testing.expect(timerJob(io, &state) == null);
     try std.testing.expectEqual(immediate + std.time.ns_per_s, state.scheduler.deadline_ns.load(.acquire));
-    try std.testing.expectEqual(@as(usize, 2), timer.calls);
     state.synchronize(
         .{
             .generation = 2,
@@ -322,11 +305,10 @@ test "bar timer scheduling retries failure and reuses one pending worker" {
             .now_ns = core.monotonic(io),
         },
     );
-    try rearm(workers, io, &state);
+    try std.testing.expect(timerJob(io, &state) == null);
     try std.testing.expectEqual(data.bar_timing.no_deadline, state.scheduler.deadline_ns.load(.acquire));
     try state.scheduler.complete({});
-    try rearm(workers, io, &state);
-    try std.testing.expectEqual(@as(usize, 2), timer.calls);
+    try std.testing.expect(timerJob(io, &state) == null);
     try std.testing.expect(!state.scheduler.pending);
 }
 

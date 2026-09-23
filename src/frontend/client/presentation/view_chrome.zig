@@ -6,7 +6,6 @@ const std = @import("std");
 const TerminalClient = @import("../TerminalClient.zig");
 const ChromeRevisions = @import("ChromeRevisions.zig");
 
-
 /// Follows every chrome fact that changed since the last call. A failed step
 /// leaves the revisions unobserved, so the next event retries it.
 /// Example: `try view_chrome.refresh(terminal);`

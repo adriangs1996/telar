@@ -11,7 +11,8 @@ pub fn agentReaders(comptime enter: fn (*Client) bool) !void {
     app.model = data.ClientModel.init(std.testing.allocator, true);
     defer app.model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
-    try data.workspace_handoff.bootstrap(&app.model, 
+    try data.workspace_handoff.bootstrap(
+        &app.model,
         .{
             .pane_id = pane_id,
             .location = .{

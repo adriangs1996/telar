@@ -284,7 +284,6 @@ pub fn mouse(terminal: *TerminalClient, event: data.Mouse) !void {
 /// try host_inputs.terminalResponse(terminal, response);
 /// ```
 pub fn terminalResponse(terminal: *TerminalClient, response: term.Event.TerminalResponse) !void {
-
     _ = try host_capabilities.observe(terminal, response);
     switch (response) {
         .kitty_graphics => |reply| {

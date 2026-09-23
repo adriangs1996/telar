@@ -41,7 +41,7 @@ test "host input reads pause at outbox capacity and resume with one token" {
             },
         },
     );
-    try client.flush();
+    try harness.deliverHostEffects();
     while (client.model.to_runtime.hasCapacity()) {
         try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
@@ -138,7 +138,7 @@ test "graphics credits remain owned until the outbox accepts them" {
         try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = pane_id } });
     }
 
-    try client.flush();
+    try harness.deliverHostEffects();
     try std.testing.expectEqual(@as(usize, 4), terminal.graphics_store.peekCredit().?.bytes);
     try std.testing.expect(client.model.to_runtime.inFlight());
 
@@ -146,7 +146,7 @@ test "graphics credits remain owned until the outbox accepts them" {
         .sent => |result| try client.completeRuntimeSend(result),
         else => return error.UnexpectedEvent,
     }
-    try client.flush();
+    try harness.deliverHostEffects();
     try std.testing.expect(terminal.graphics_store.peekCredit() == null);
     try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.model.to_runtime.len));
     try std.testing.expect(client.model.to_runtime.inFlight());

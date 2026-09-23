@@ -526,9 +526,9 @@ test "context folder clicks complete without submitting and reject stale listing
     const session = try initSession();
     defer session.deinit();
     const gui = session.gui;
-    gui.app.workers = .{
+    gui.job_hook = .{
         .context = session,
-        .start_fn = ignorePathCompletion,
+        .start = ignorePathCompletion,
     };
     gui.app.model.name_prompt.begin(.create_workspace);
     _ = gui.app.model.name_prompt.apply(.tab);

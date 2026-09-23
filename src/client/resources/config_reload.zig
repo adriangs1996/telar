@@ -9,7 +9,6 @@ const default_bindings = @import("../config/default_bindings.zig");
 const core = @import("telar-core");
 const Loaded = @import("Loaded.zig");
 const ConfigReloadState = @import("ConfigReloadState.zig");
-const Workers = @import("../execution/Workers.zig");
 const WaitArgs = @import("WaitArgs.zig");
 const Adoption = @import("Adoption.zig");
 const ResolveArgs = @import("ResolveArgs.zig");
@@ -29,13 +28,16 @@ pub const ConfigReload = union(enum) {
     },
 };
 
-/// Schedules one asynchronous watch using the current reload fingerprint.
+/// The next asynchronous watch, using the current reload fingerprint. It
+/// consumes a forced reload; the caller queues the job.
 ///
 /// ```zig
-/// try schedule(&state, args);
+/// try client.to_workers.push(schedule(&state, args));
 /// ```
-pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) !void {
-    try args.workers.start(.{
+pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) Job {
+    defer state.force_next = false;
+
+    return .{
         .config_watch = .{
             .io = args.io,
             .gpa = args.gpa,
@@ -50,8 +52,7 @@ pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) !void {
             .trust_path = args.trust_path,
             .orphans = &state.orphans,
         },
-    });
-    state.force_next = false;
+    };
 }
 
 pub const Outcome = union(enum) {
@@ -248,29 +249,21 @@ test "a rejected load is freed once and reports why" {
     try std.testing.expect(state.orphans.trust == null);
 }
 
-test "forced reload survives scheduling failure and is consumed by a successful worker" {
-    const Capture = struct {
-        force: bool = false,
-        fail: bool = true,
-        fn start(raw: *anyopaque, job: Job) !void {
-            const self: *@This() = @ptrCast(@alignCast(raw));
-            self.force = job.config_watch.force_reload;
-            if (self.fail) {
-                return error.WatcherBusy;
-            }
-        }
-    };
-    var capture: Capture = .{};
+test "a forced reload is consumed by the one watch that carries it" {
     var state: ConfigReloadState = .{ .mtime_ns = 0, .force_next = true };
-    const args: ScheduleArgs = .{ .io = std.testing.io, .gpa = std.testing.allocator, .workers = .{ .context = &capture, .start_fn = Capture.start }, .path = "/config.lua", .profile = null, .trust_path = "/trust.json", .current_generation = @ptrFromInt(@alignOf(Generation)), .current_registry = @ptrFromInt(@alignOf(Registry)) };
-    try std.testing.expectError(error.WatcherBusy, schedule(&state, args));
-    try std.testing.expect(state.force_next);
-    capture.fail = false;
-    try schedule(&state, args);
-    try std.testing.expect(capture.force);
+    const args: ScheduleArgs = .{
+        .io = std.testing.io,
+        .gpa = std.testing.allocator,
+        .path = "/config.lua",
+        .profile = null,
+        .trust_path = "/trust.json",
+        .current_generation = @ptrFromInt(@alignOf(Generation)),
+        .current_registry = @ptrFromInt(@alignOf(Registry)),
+    };
+
+    try std.testing.expect(schedule(&state, args).config_watch.force_reload);
     try std.testing.expect(!state.force_next);
-    try schedule(&state, args);
-    try std.testing.expect(!capture.force);
+    try std.testing.expect(!schedule(&state, args).config_watch.force_reload);
 }
 
 const Partial = struct {
@@ -295,7 +288,6 @@ const Partial = struct {
 const ScheduleArgs = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
-    workers: Workers,
     path: []const u8,
     profile: ?[]const u8,
     trust_path: []const u8,

@@ -325,10 +325,12 @@ pub fn reloadConfiguration(terminal: *TerminalClient, adoption: client_module.Co
     return outcome.adopted;
 }
 
-/// Receives the next inbox event and returns it when it belongs to the
+/// Starts what a direct client call queued, as the event loop would, then
+/// receives the next inbox event and returns it when it belongs to the
 /// shared client.
 /// Example: `switch (try support.receiveClient(terminal)) { .sent => |result| try client.completeRuntimeSend(result), else => return error.UnexpectedEvent }`
 pub fn receiveClient(terminal: *TerminalClient) !client_module.Message {
+    try host_effects.deliver(terminal);
     return switch (try terminal.inbox.receive()) {
         .client => |message| message,
         else => error.UnexpectedEvent,

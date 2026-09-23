@@ -57,7 +57,9 @@ test "host resize commits before resources and presents by model version" {
     try std.testing.expectEqual(@as(u16, 20), client.model.host.host_size.cell_height_px);
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
-    const expected_pane_size = data.tab_layout.contentSize(&client.model, active, 
+    const expected_pane_size = data.tab_layout.contentSize(
+        &client.model,
+        active,
         TestHarness.bootstrap_pane,
         terminal.view.workbench(),
     ).?;
@@ -126,7 +128,9 @@ test "host resize waits for canonical membership then resizes before attaching w
     const terminal = harness.terminal;
     const tab = client.model.tabs.active;
     const sibling: core.PaneId = @enumFromInt(20);
-    try data.tab_snapshot_reconciliation.addDiscovered(&client.model, tab, 
+    try data.tab_snapshot_reconciliation.addDiscovered(
+        &client.model,
+        tab,
         .{
             .pane_id = sibling,
             .location = client.model.tabs.location[tab],
@@ -689,7 +693,9 @@ test "copy mode round trip: enter, select, copy, leave" {
     );
     const painted_cursor_y = terminal.presenter.compositor.copy.?.view.cursor.y;
 
-    const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
+    const pane_view = data.tab_layout.view(
+        &client.model,
+        client.model.tabs.active,
         pane.id,
         terminal.view.workbench(),
     ).?;
@@ -790,7 +796,9 @@ test "a left click opens a file URI and owns the complete mouse gesture" {
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "file:///tmp/click.txt", .style = .{} });
-    const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
+    const pane_view = data.tab_layout.view(
+        &client.model,
+        client.model.tabs.active,
         pane.id,
         terminal.view.workbench(),
     ).?;

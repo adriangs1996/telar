@@ -56,6 +56,7 @@ pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
         @as(i128, client.config_reload.trustWatchFingerprint(io, trust_path));
     session.gui.driver.configuration.observe(renderer.config, viewport);
     try session.gui.app.scheduleConfigReload();
+    try session.startJobs();
     return fixture;
 }
 
@@ -77,6 +78,7 @@ pub fn write(self: *Fixture, name: []const u8, source: []const u8) !void {
 /// Example: `try fixture.wait();`
 pub fn wait(self: *Fixture) !void {
     const reload = &self.session.gui.driver.configuration;
+    try self.session.startJobs();
     try reload.poll(&self.session.gui.app);
     for (0..1000) |_| {
         if (reload.ready.load(.acquire)) {

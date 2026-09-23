@@ -939,7 +939,7 @@ test "agent sound completion releases a failed worker before scheduling its succ
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 }
 
-test "sound scheduling failure releases its token and does not poison a later request" {
+test "a sound the host cannot start releases its token and does not poison a later request" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
@@ -947,25 +947,20 @@ test "sound scheduling failure releases its token and does not poison a later re
     var payload: [512]u8 = undefined;
     const initial = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
     _ = try client.handleServerMessage(try core.decodeServer(initial));
-    var sounds: SoundFailure = .{ .workers = client.workers };
-    client.workers = .{
-        .context = &sounds,
-        .start_fn = SoundFailure.start,
-    };
-    const version = client.model.version();
+    try harness.deliverHostEffects();
     const message = try core.encodeAgentSound(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = 1,
         .sound = .ready,
     });
 
-    try std.testing.expectError(error.SoundSchedulingFailed, client.handleServerMessage(try core.decodeServer(message)));
+    _ = try client.handleServerMessage(try core.decodeServer(message));
+    const job = client.to_workers.pop().?;
+    try std.testing.expect(job == .sound);
+    try client.failJob(job, error.SoundSchedulingFailed);
 
-    try std.testing.expectEqual(@as(usize, 1), sounds.calls);
     try std.testing.expect(!client.model.sound_playback.snapshot().active);
     try std.testing.expect(client.model.sound_playback.snapshot().queued == null);
-    try std.testing.expectEqualDeep(version, client.model.version());
-    client.workers = sounds.workers;
     _ = try client.handleServerMessage(try core.decodeServer(message));
     try std.testing.expect(client.model.sound_playback.snapshot().active);
 }
@@ -1109,22 +1104,6 @@ test "request failure retains canonical recovery when host notification delivery
     try std.testing.expect(recovery == .request_tab_snapshot);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, recovery.request_tab_snapshot.location);
 }
-
-/// Fails every sound job and forwards the rest to the harness workers.
-const SoundFailure = struct {
-    workers: client_module.Workers,
-    calls: usize = 0,
-
-    fn start(context: *anyopaque, job: client_module.Job) !void {
-        const self: *SoundFailure = @ptrCast(@alignCast(context));
-        if (job != .sound) {
-            return self.workers.start(job);
-        }
-
-        self.calls += 1;
-        return error.SoundSchedulingFailed;
-    }
-};
 
 /// Leaves no room for another host request.
 fn fillHostEffects(client: *client_module.AttachedClient) !void {

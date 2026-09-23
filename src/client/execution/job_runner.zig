@@ -42,6 +42,41 @@ pub fn run(io: std.Io, gpa: std.mem.Allocator, job: Job) Message {
     };
 }
 
+/// The completion of a job that never ran: its worker failed with `err`
+/// before doing anything. The client handles it like any other failure, so
+/// one completion path releases what starting the job reserved.
+///
+/// ```zig
+/// _ = try client.update(job_runner.failed(job, error.InboxFull));
+/// ```
+pub fn failed(job: Job, err: anyerror) Message {
+    return switch (job) {
+        .runtime_read => .{ .server = err },
+        .runtime_send => .{ .sent = err },
+        .timer => |timer| switch (timer.kind) {
+            .bar => .{ .bar_tick = err },
+            .notification => .{ .notification_tick = err },
+            .sidebar_animation => .{ .sidebar_animation_tick = err },
+        },
+        .bar_command => |bar| .{ .bar_command = .{
+            .execution_id = bar.execution_id,
+            .result = err,
+        } },
+        .plugin => |plugin| .{ .plugin_result = .{
+            .execution_id = plugin.execution_id,
+            .result = err,
+        } },
+        .path_completion => |completion| .{ .path_completion = .{
+            .execution_id = completion.execution_id,
+            .result = err,
+        } },
+        .link => .{ .link_opened = err },
+        .sound => .{ .sound_played = err },
+        .system_notification => .{ .notified = err },
+        .config_watch => .{ .config_reload = err },
+    };
+}
+
 fn sendRuntime(io: std.Io, send: Job.RuntimeSend) anyerror!void {
     core.mark(io, .client_send_start);
     defer core.mark(io, .client_send_done);
