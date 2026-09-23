@@ -1,7 +1,5 @@
 const core = @import("telar-core");
 const std = @import("std");
-const requests = @import("application/requests.zig");
-const events = @import("application/events.zig");
 const ReviewJobs = @import("../change_review/Jobs.zig");
 const ReviewService = @import("../change_review/Service.zig");
 const AdmittedReview = @import("../change_review/Admitted.zig");
@@ -16,7 +14,6 @@ const Store = @import("client/Store.zig");
 const application_namespace = @import("application/application_namespace.zig");
 const LifecycleState = @import("lifecycle/State.zig");
 const state_support = @import("../workspace/state_support.zig");
-const GeometryLease = @import("application/GeometryLease.zig");
 const WorkspaceState = @import("../workspace/State.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
 const Tracker = @import("../agent/Tracker.zig");
@@ -28,21 +25,24 @@ const AgentHistoryJobs = @import("application/AgentHistoryJobs.zig");
 const PaneType = @import("../pane/Pane.zig");
 const Repository = @import("../workspace/Repository.zig");
 const ReaderType = @import("../workspace/Reader.zig");
-const LaunchRequestType = @import("application/LaunchRequest.zig");
-const GenericPaneLauncher = @import("application/GenericPaneLauncher.zig").Type;
 const SessionTitleType = @import("../agent/SessionTitle.zig");
 const CompletionType = @import("resources/Completion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
 const commands = @import("../workspace/commands.zig");
 const ClientKeyType = @import("../history/ClientKey.zig");
-const WorkspaceChange = @import("application/WorkspaceChange.zig");
 const Session = @import("client/Session.zig");
-const PaneDetachedType = @import("attachment/PaneDetached.zig");
-const TabRemovedType = @import("../workspace/TabRemoved.zig");
-const PendingNotificationType = @import("delivery/PendingNotification.zig");
+const client_control = @import("client_control.zig");
+const geometry_lease = @import("geometry_lease.zig");
+const pane_input = @import("pane_input.zig");
+const tab_removal = @import("tab_removal.zig");
 /// The authoritative state of one running runtime: singletons as fields and
 /// repeating entities as tables. Physical resources stay in `Resources`.
 const RuntimeModel = @This();
+
+const GeometryLease = struct {
+    workspace: core.WorkspaceLocation,
+    owner: ClientKeyType,
+};
 
 io: std.Io,
 gpa: std.mem.Allocator,
@@ -209,48 +209,6 @@ pub fn workspaceReader(model: *const RuntimeModel) ReaderType {
     return ReaderType.init(&model.workspaces);
 }
 
-/// Starts a pane and returns only after the runtime can observe both its
-/// output and exit. Client attachment and response delivery happen later.
-/// ```zig
-/// const pane = try model.launchPane(request);
-/// ```
-pub fn launchPane(model: *RuntimeModel, request: LaunchRequestType) !*PaneType {
-    var launcher: GenericPaneLauncher(event.Event) = .{
-        .io = model.io,
-        .gpa = model.gpa,
-        .select = model.select,
-        .history_service = model.resources.history.service(),
-        .review_service = model.review_service,
-        .inherited_environment = model.inherited_environment,
-        .socket_path = model.socket_path,
-        .executable_path = model.executable_path[0..model.executable_path_len],
-        .manifests = &model.resources.agent_manifests,
-        .proxy = model.resources.proxy.capability(),
-        .panes = &model.panes,
-        .launch_fault = model.launch_fault,
-        .terminal_colors = model.workspaceTerminalColors(request.location.workspace),
-    };
-    const fresh = try launcher.launch(request);
-    model.agents.touch();
-    model.noteSessionChange();
-    return fresh;
-}
-
-/// Queues bytes for a restored pane's child and starts the input write.
-/// The bytes are a runtime-built resume command, never client input.
-///
-/// ```zig
-/// try model.queueRestoredInput(pane, "claude --resume <id>\r");
-/// ```
-pub fn queueRestoredInput(model: *RuntimeModel, pane: *PaneType, bytes: []const u8) !void {
-    if (std.mem.indexOfScalar(u8, bytes, '\r') != null) {
-        pane.noteInjectedSubmission();
-    }
-
-    _ = pane.queuePtyInput(bytes);
-    try events.panes.Io.scheduleInput(model, pane);
-}
-
 /// Hands a checkpointed title to the agent that will resume in a restored
 /// pane and records it for the pane's new history session, so the sidebar
 /// and the history palette show the resumed session under its old name.
@@ -385,7 +343,7 @@ fn collectFinished(model: *RuntimeModel) void {
 
             if (!store.hasAt(location) and workspaces.reader().contains(location)) {
                 const removed = commands.removeTab(&workspaces, location).?;
-                model.publishLifecycleTabRemoved(removed);
+                tab_removal.announce(model, removed);
             }
 
             model.completeEmptyWorkspaceDepartures(location.workspace);
@@ -401,56 +359,14 @@ fn collectFinished(model: *RuntimeModel) void {
 pub fn dropClient(model: *RuntimeModel, key: ClientKeyType) void {
     const session = model.clients.resolve(key) orelse return;
     if (!session.closing) {
-        model.failClientCommandsFor(key);
-        model.failPaneFocusesFor(key);
+        client_control.abandon(model, key);
         session.closing = true;
         session.connection.shutdown(model.io);
         session.attachments.deinit();
         session.delivery.close();
-        model.releaseGeometry(key);
+        geometry_lease.releaseAll(model, key);
     }
     model.finalizeClient(key);
-}
-
-fn failClientCommandsFor(self: *RuntimeModel, key: ClientKeyType) void {
-    for (self.clients.items) |slot| {
-        const requester = slot orelse continue;
-        const pending = requester.pending_client_command orelse continue;
-        if (!std.meta.eql(pending.target, key)) {
-            continue;
-        }
-
-        requester.pending_client_command = null;
-        requester.delivery.responses.push(.{ .request_failed = .{
-            .request_id = pending.request_id,
-            .code = .invalid_request,
-            .message = "target client disconnected before confirming the operation",
-        } }) catch {
-            self.dropClient(requester.key);
-        };
-    }
-}
-
-fn failPaneFocusesFor(model: *RuntimeModel, key: ClientKeyType) void {
-    for (&model.clients.items) |*slot| {
-        const requester = slot.* orelse continue;
-        const pending = requester.pending_pane_focus orelse continue;
-
-        if (!std.meta.eql(pending.target, key)) {
-            continue;
-        }
-
-        requester.releaseFocus();
-        requester.delivery.responses.push(.{ .request_failed = .{
-            .request_id = pending.request_id,
-            .code = .invalid_request,
-            .message = "focus client disconnected",
-        } }) catch {
-            model.dropClient(requester.key);
-            continue;
-        };
-        requester.delivery.close_after_reply = true;
-    }
 }
 
 /// Removes a closing client after its read, write and search slots retire.
@@ -466,166 +382,6 @@ pub fn finalizeClient(model: *RuntimeModel, key: ClientKeyType) void {
     }
 
     _ = model.clients.remove(.{ .io = model.io, .gpa = model.gpa }, key);
-}
-
-/// Acquires or verifies the workspace geometry lease for one client.
-///
-/// ```zig
-/// if (!model.holdsGeometry(client, workspace)) return error.GeometryUnavailable;
-/// ```
-pub fn holdsGeometry(model: *RuntimeModel, key: ClientKeyType, workspace: core.WorkspaceLocation) bool {
-    for (&model.geometry_leases) |*slot| {
-        const lease = slot.* orelse continue;
-
-        if (!std.meta.eql(lease.workspace, workspace)) {
-            continue;
-        }
-
-        return std.meta.eql(lease.owner, key);
-    }
-
-    for (&model.geometry_leases) |*slot| {
-        if (slot.* != null) {
-            continue;
-        }
-
-        slot.* = .{ .workspace = workspace, .owner = key };
-        model.applyWorkspaceTerminalColors(workspace, key);
-        return true;
-    }
-
-    return false;
-}
-
-/// Queries authority without acquiring an unowned workspace.
-/// Example: `const owner = model.geometryOwner(workspace) orelse return;`.
-pub fn geometryOwner(model: *const RuntimeModel, workspace: core.WorkspaceLocation) ?ClientKeyType {
-    for (model.geometry_leases) |slot| {
-        const lease = slot orelse continue;
-        if (std.meta.eql(lease.workspace, workspace)) {
-            return lease.owner;
-        }
-    }
-
-    return null;
-}
-
-pub fn workspaceTerminalColors(model: *RuntimeModel, workspace: core.WorkspaceLocation) core.TerminalColors {
-    const owner = model.geometryOwner(workspace) orelse return .{};
-    const session = model.clients.resolve(owner) orelse return .{};
-    return session.terminal_colors;
-}
-
-/// Updates only workspaces already controlled by this exact generation.
-/// Example: `model.refreshTerminalColors(session.key);`.
-pub fn refreshTerminalColors(model: *RuntimeModel, key: ClientKeyType) void {
-    for (model.geometry_leases) |slot| {
-        const lease = slot orelse continue;
-        if (std.meta.eql(lease.owner, key)) {
-            model.applyWorkspaceTerminalColors(lease.workspace, key);
-        }
-    }
-}
-
-fn applyWorkspaceTerminalColors(model: *RuntimeModel, workspace: core.WorkspaceLocation, key: ClientKeyType) void {
-    const session = model.clients.resolve(key) orelse return;
-    for (model.panes.items) |slot| {
-        const pane = slot orelse continue;
-        if (std.meta.eql(pane.location.workspace, workspace)) {
-            pane.setTerminalColors(session.terminal_colors);
-        }
-    }
-}
-
-fn releaseGeometry(model: *RuntimeModel, key: ClientKeyType) void {
-    for (&model.geometry_leases) |*slot| {
-        const lease = slot.* orelse continue;
-
-        if (!std.meta.eql(lease.owner, key)) {
-            continue;
-        }
-
-        slot.* = null;
-        // The lease is free but the runtime does not know any surviving
-        // client's size. Resync the observers so one re-offers its
-        // geometry and takes the lease over; without this the pane keeps
-        // the departed client's size until an unrelated resize.
-        model.notifyWorkspaceChanged(key, lease.workspace);
-    }
-}
-
-/// Releases a client's lease for one workspace and requests observer resync.
-///
-/// ```zig
-/// model.releaseGeometryFor(client, workspace);
-/// ```
-pub fn releaseGeometryFor(model: *RuntimeModel, key: ClientKeyType, workspace: core.WorkspaceLocation) void {
-    for (&model.geometry_leases) |*slot| {
-        const lease = slot.* orelse continue;
-        if (std.meta.eql(lease.owner, key) and std.meta.eql(lease.workspace, workspace)) {
-            slot.* = null;
-            model.notifyWorkspaceChanged(key, workspace);
-        }
-    }
-}
-
-/// Queues resynchronization for observers other than the mutation origin.
-///
-/// ```zig
-/// model.notifyWorkspaceChanged(origin, workspace);
-/// ```
-pub fn notifyWorkspaceChanged(model: *RuntimeModel, origin: ClientKeyType, workspace: core.WorkspaceLocation) void {
-    model.notifyWorkspaceChange(.{ .origin = origin, .workspace = workspace });
-}
-
-/// Queues resynchronization after a workspace disappears.
-///
-/// ```zig
-/// model.notifyWorkspaceClosed(change);
-/// ```
-pub fn notifyWorkspaceClosed(model: *RuntimeModel, change: WorkspaceChange) void {
-    model.notifyWorkspaceChange(change);
-}
-
-fn notifyWorkspaceChange(model: *RuntimeModel, change: WorkspaceChange) void {
-    for (&model.clients.items) |*slot| {
-        const session = slot.* orelse continue;
-
-        if (std.meta.eql(session.key, change.origin) or !session.active()) {
-            continue;
-        }
-
-        if (session.attachments.observes(change.workspace)) {
-            session.delivery.responses.resync_workspace = change.workspace;
-            session.delivery.responses.resync_previous_workspace = change.previous_workspace;
-        }
-    }
-}
-
-/// Detaches one pane and completes any resulting workspace departure.
-///
-/// ```zig
-/// const detached = model.detachSessionPane(session, pane_id);
-/// ```
-pub fn detachSessionPane(model: *RuntimeModel, session: *Session, pane_id: core.PaneId) ?PaneDetachedType {
-    const detached = session.attachments.detach(pane_id) orelse return null;
-    model.completeSessionWorkspaceDeparture(session, detached);
-    return detached;
-}
-
-fn completeSessionWorkspaceDeparture(model: *RuntimeModel, session: *Session, detached: PaneDetachedType) void {
-    if (!detached.last_attachment) {
-        return;
-    }
-
-    const left_workspace = session.attachments.leaveWorkspace(detached.workspace);
-    std.debug.assert(left_workspace);
-
-    if (!left_workspace) {
-        return;
-    }
-
-    model.releaseGeometryFor(session.key, detached.workspace);
 }
 
 /// Completes departures deferred by `pane_exited` only after every pane
@@ -646,7 +402,7 @@ fn completeEmptyWorkspaceDepartures(model: *RuntimeModel, workspace: core.Worksp
         std.debug.assert(left_workspace);
 
         if (left_workspace) {
-            model.releaseGeometryFor(session.key, workspace);
+            geometry_lease.release(model, session.key, workspace);
         }
     }
 }
@@ -663,79 +419,10 @@ fn hasPendingExitedPane(model: *const RuntimeModel, workspace: core.WorkspaceLoc
     return false;
 }
 
-/// Delivers an automatic tab-removal fact to every client that still
-/// observes its workspace. Queue saturation records snapshot recovery.
-fn publishLifecycleTabRemoved(model: *RuntimeModel, removed: TabRemovedType) void {
-    for (&model.clients.items) |*client_slot| {
-        const client = client_slot.* orelse continue;
-
-        if (!client.active() or !client.attachments.observes(removed.location.workspace)) {
-            continue;
-        }
-
-        client.delivery.responses.pushOrDrop(.{ .tab_closed = .{
-            .request_id = .none,
-            .location = removed.location,
-            .workspace_closed = removed.workspace_removed,
-            .previous_workspace = removed.previous_workspace,
-        } });
-    }
-}
-
-/// Publishes a notification to active UI sessions and returns the number queued.
-///
-/// ```zig
-/// const recipients = model.publishNotification(notification);
-/// ```
-pub fn publishNotification(model: *RuntimeModel, notification: core.Notification) u8 {
-    const pending = PendingNotificationType.init(notification);
-    var delivered: u8 = 0;
-
-    for (&model.clients.items) |*slot| {
-        const recipient = slot.* orelse continue;
-
-        if (!recipient.active() or recipient.role != .ui) {
-            continue;
-        }
-
-        if (recipient.delivery.responses.pushNotification(pending)) {
-            delivered += 1;
-        }
-    }
-
-    return delivered;
-}
-
-/// Queues an agent sound for every active UI client.
-///
-/// ```zig
-/// model.publishAgentSound(notification);
-/// ```
-pub fn publishAgentSound(model: *RuntimeModel, notification: core.AgentSoundNotification) void {
-    for (&model.clients.items) |*slot| {
-        const recipient = slot.* orelse continue;
-
-        if (!recipient.active() or recipient.role != .ui) {
-            continue;
-        }
-
-        _ = recipient.delivery.responses.pushAgentSound(notification);
-    }
-}
-
 /// Publishes due cells from current owners; the timer borrows no attachment.
 /// Example: `try model.cellPublicationDue(result);`.
 pub fn cellPublicationDue(model: *RuntimeModel, result: anyerror!void) !void {
     try model.cell_timer.complete(result);
-}
-
-/// Routes a decoded client message through a request-scoped dispatcher.
-///
-/// ```zig
-/// try model.dispatchClientMessage(session, message);
-/// ```
-pub fn dispatchClientMessage(model: *RuntimeModel, session: *Session, message: core.ClientMessage) !void {
-    return requests.dispatch(model, session, message);
 }
 
 const GraphicsLimits = @import("../media/GraphicsLimits.zig");
@@ -749,7 +436,8 @@ test "runtime model tables start empty with configured graphics limits" {
         .payload_bytes = 256,
         .chunks_per_image = 4,
     };
-    var model: RuntimeModel = undefined;
+    const model = try std.testing.allocator.create(RuntimeModel);
+    defer std.testing.allocator.destroy(model);
     model.workspaces = .{};
     model.agents = .{};
     model.panes = .{
@@ -768,7 +456,8 @@ test "runtime model tables start empty with configured graphics limits" {
 }
 
 test "workspace repository releases allocations retained by the runtime model" {
-    var model: RuntimeModel = undefined;
+    const model = try std.testing.allocator.create(RuntimeModel);
+    defer std.testing.allocator.destroy(model);
     model.workspaces = .{};
     model.gpa = std.testing.allocator;
     var repository = model.workspaceRepository();

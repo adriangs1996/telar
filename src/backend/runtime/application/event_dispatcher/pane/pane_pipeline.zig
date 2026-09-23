@@ -1,5 +1,6 @@
 const core = @import("telar-core");
-const io_events = @import("pane_io.zig");
+const pane_input = @import("../../../pane_input.zig");
+const pane_attachment = @import("../../../pane_attachment.zig");
 const projection = @import("pane_projection.zig");
 const pane_mod = @import("../../../../pane/pane_namespace.zig");
 const std = @import("std");
@@ -12,7 +13,7 @@ const PaneType = @import("../../../../pane/Pane.zig");
 const OutputIngest = @import("../../../entrypoints/events/pane/OutputIngest.zig");
 const PaneIngestStats = @import("../../../../pane/PaneIngestStats.zig");
 const ReadType = @import("../../../entrypoints/events/pane/Read.zig");
-const pane_launcher_mod = @import("../../pane_launcher.zig");
+const pane_launch = @import("../../../pane_launch.zig");
 
 const RuntimeModel = @import("../../../RuntimeModel.zig");
 
@@ -131,13 +132,13 @@ fn refreshPaneClients(model: *RuntimeModel, pane: *PaneType) void {
         const attachment = client.attachments.find(pane.id) orelse continue;
 
         _ = attachment.resizeIfNeeded() catch {
-            _ = model.detachSessionPane(client, pane.id);
+            _ = pane_attachment.detachPane(model, client, pane.id);
         };
     }
 }
 
 fn startNextPaneRead(model: *RuntimeModel, read: ReadType) !void {
-    try model.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ read.io, read.pane });
+    try model.select.concurrent(.pane_output, pane_launch.readPane, .{ read.io, read.pane });
 }
 
 fn processOutput(context: *OutputRuntime, completion: OutputCompletion) !void {
@@ -220,7 +221,7 @@ fn commitIngest(model: *RuntimeModel, completion: IngestCompletion) !void {
     try projection.scheduleObservation(model, pane);
     try projection.scheduleMedia(model, pane);
     refreshPaneClients(model, pane);
-    try io_events.scheduleResponse(model, pane);
+    try pane_input.startResponseWrite(model, pane);
 
     const read: ReadType = .{
         .io = model.io,

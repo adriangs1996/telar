@@ -9,7 +9,7 @@ const core = @import("telar-core");
 const Cursor = @import("../../pane/Cursor.zig");
 const std = @import("std");
 const Wake = @import("Wake.zig");
-const MatchesType = @import("commands/Matches.zig");
+const MatchesType = @import("../delivery/Matches.zig");
 
 /// Starts a search, replacing only this client's previous search.
 /// Example: `try start(model, session, request);`.

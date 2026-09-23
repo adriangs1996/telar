@@ -7,7 +7,7 @@ const RuntimeModel = @import("../RuntimeModel.zig");
 const identity = @import("coordinators/agent_identity.zig");
 const ManagedState = @import("../../agent/ManagedState.zig");
 
-const agent_operations = @import("operations/agents.zig");
+const agent_hooks = @import("../agent_hooks.zig");
 const agent_events = @import("event_dispatcher/agent_events.zig");
 /// Waits without polling while the pane retains its lifecycle actor claim.
 /// Example: `try select.concurrent(.agent_thread_changed, waitForChange, .{ io, pane });`.
@@ -45,7 +45,7 @@ pub fn handle(model: *RuntimeModel, completion: Changed) !bool {
         _ = model.agents.observeManaged(identity.fromPane(pane), ManagedState.fromSnapshot(snapshot, now));
         if (metadata.revision != pane.session.agent.metadata_revision) {
             if (metadata.nameSlice()) |name| {
-                if (agent_operations.reportAgentTitle(model, .{ .pane = pane.key(), .title = name }) == .recorded) {
+                if (agent_hooks.recordTitle(model, pane.key(), name) == .recorded) {
                     const title = model.agents.durableTitle(pane.key());
                     _ = model.resources.history.service().setSessionTitle(model.io, .{
                         .id = pane.history_session_id,

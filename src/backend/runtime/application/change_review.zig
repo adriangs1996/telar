@@ -5,15 +5,31 @@ const RuntimeModel = @import("../RuntimeModel.zig");
 const Session = @import("../client/Session.zig");
 const Context = @import("../../change_review/Context.zig");
 const Job = @import("../../change_review/Job.zig");
-const reviews = @import("operations/reviews.zig");
+const PendingFailure = @import("../delivery/PendingFailure.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
-const review_owner = @import("change_review_owner.zig");
 
-pub fn complete(model: *RuntimeModel, job: *Job) void {
+/// Admits one review query, command or sample and starts its worker.
+///
+/// ```zig
+/// try change_review.start(model, session, request);
+/// ```
+pub fn start(model: *RuntimeModel, session: *Session, request: anytype) !void {
+    admit(model, session, request) catch |err| {
+        try session.delivery.responses.push(.{ .request_failed = failure(request.request_id, err) });
+    };
+}
+
+/// Takes one review worker's result, hands submitted feedback to the agent
+/// and replies to the client that asked.
+///
+/// ```zig
+/// change_review.finish(model, job);
+/// ```
+pub fn finish(model: *RuntimeModel, job: *Job) void {
     if (job.failure == null) {
-        const current = review_owner.resolve(model, job.context.pane) catch |err| {
+        const current = owner(model, job.context.pane) catch |err| {
             job.failure = err;
-            finish(model, job);
+            retire(model, job);
             return;
         };
         if (current.provider != job.context.provider or !std.mem.eql(u8, current.sessionSlice(), job.context.sessionSlice())) {
@@ -31,7 +47,7 @@ pub fn complete(model: *RuntimeModel, job: *Job) void {
             }
         }
     }
-    finish(model, job);
+    retire(model, job);
 }
 
 fn handoff(model: *RuntimeModel, job: *Job) !bool {
@@ -81,7 +97,7 @@ fn handoff(model: *RuntimeModel, job: *Job) !bool {
     return true;
 }
 
-fn finish(model: *RuntimeModel, job: *Job) void {
+fn retire(model: *RuntimeModel, job: *Job) void {
     model.review_jobs.remove(job);
     defer job.deinit();
     if (job.failure == null) {
@@ -93,7 +109,7 @@ fn finish(model: *RuntimeModel, job: *Job) void {
         return;
     }
     if (job.failure) |err| {
-        client.delivery.responses.push(.{ .request_failed = reviews.reviewFailure(job.request_id, err) }) catch {
+        client.delivery.responses.push(.{ .request_failed = failure(job.request_id, err) }) catch {
             model.dropClient(client_key);
             return;
         };
@@ -110,7 +126,7 @@ fn finish(model: *RuntimeModel, job: *Job) void {
 /// Example: `change_review.publish(model, change);`.
 pub fn publish(model: *RuntimeModel, change: core.ChangeReviewChanged) void {
     const key: PaneKey = .{ .id = change.pane_id, .generation = change.pane_generation };
-    const context = review_owner.resolve(model, key) catch return;
+    const context = owner(model, key) catch return;
     if (!std.mem.eql(u8, context.sessionSlice(), change.session)) {
         return;
     }
@@ -129,7 +145,7 @@ pub fn discover(model: *RuntimeModel) void {
     const service = model.review_service orelse return;
     for (model.panes.items) |entry| {
         const pane = entry orelse continue;
-        const context = review_owner.resolve(model, pane.key()) catch {
+        const context = owner(model, pane.key()) catch {
             pane.review_availability.invalidate();
             continue;
         };
@@ -148,4 +164,72 @@ pub fn discover(model: *RuntimeModel) void {
             _ = service.dropped.fetchAdd(1, .monotonic);
         };
     }
+}
+
+fn admit(model: *RuntimeModel, client: *Session, value: anytype) !void {
+    const context = try owner(model, .{ .id = value.pane_id, .generation = value.pane_generation });
+    const T = @TypeOf(value);
+    if ((T != core.QueryChangeReview or value.session.len != 0) and !std.mem.eql(u8, value.session, context.sessionSlice())) {
+        return error.InvalidReviewOwner;
+    }
+    if (T == core.ReportChangeReviewSample or T == core.ChangeReviewCommand) {
+        const scoped = if (T == core.ReportChangeReviewSample) true else value.action == .feedback or value.action == .ack_feedback;
+        if (scoped and value.provider != context.provider) {
+            return error.InvalidReviewOwner;
+        }
+    }
+    const service = model.review_service orelse return error.ReviewUnavailable;
+    if (client.delivery.responses.hasChangeReview()) {
+        return error.ReviewBusy;
+    }
+    const slot = try model.review_jobs.available(client.key);
+    const job = &model.review_jobs.storage[slot];
+    job.* = .{ .service = service, .context = context, .client = client.key, .request_id = value.request_id, .wire_len = 0 };
+    const wire = if (T == core.QueryChangeReview) try core.encodeQueryChangeReview(&job.wire, value) else if (T == core.ChangeReviewCommand) try core.encodeChangeReviewCommand(&job.wire, value) else try core.encodeReportChangeReviewSample(&job.wire, value);
+    job.wire_len = @intCast(wire.len);
+    model.review_jobs.items[slot] = job;
+    errdefer model.review_jobs.items[slot] = null;
+    try model.select.concurrent(.change_review_completed, Job.run, .{ job, model.io });
+}
+
+fn failure(request_id: core.RequestId, err: anyerror) PendingFailure {
+    return .{ .request_id = request_id, .code = switch (err) {
+        error.PaneNotFound => .pane_not_found,
+        error.PaneExited => .pane_exited,
+        error.AgentBusy => .agent_blocked,
+        error.ReviewBusy, error.ReviewCapacity, error.OutOfMemory, error.WriteFailed => .resource_limit,
+        else => .invalid_request,
+    }, .message = switch (err) {
+        error.PaneNotFound => "review pane no longer exists",
+        error.PaneExited => "review pane is closing",
+        error.AgentNotReady, error.InvalidReviewOwner => "review does not belong to the current agent session",
+        error.StaleReview => "review changed in another client; refresh before saving",
+        error.ReviewAlreadySubmitted => "submitted review comments are immutable",
+        error.ReviewBusy => "another review operation is pending; retry shortly",
+        error.AgentBusy => "review retained; agent is busy, retry Send review when ready",
+        error.EditionNotFound => "review edition is unavailable",
+        error.EmptyComment => "write a comment before saving it",
+        error.NoSavedComments => "save at least one comment before sending the review",
+        error.InvalidReviewAnchor => "comment range is outside the immutable edition",
+        error.InvalidPatch => "edit has no complete supported text diff; it was not retained",
+        error.MissingReviewBaseline => "no matching before snapshot; edit was not attributed",
+        error.ReviewCapacity, error.WriteFailed => "review exceeds its bounded storage or feedback limit",
+        error.InvalidReviewStorage => "review storage failed validation; existing file was preserved",
+        error.ReviewUnavailable => "review service is unavailable",
+        else => "review operation failed; retry without discarding local comments",
+    } };
+}
+
+fn owner(model: *RuntimeModel, key: PaneKey) !Context {
+    const pane = model.panes.resolve(key) orelse return error.PaneNotFound;
+    if (pane.close_requested or pane.exit != null) {
+        return error.PaneExited;
+    }
+    if (pane.kind == .agent) {
+        const snapshot = pane.agent_thread orelse return error.AgentNotReady;
+        return Context.init(key, .codex, snapshot.threadId());
+    }
+    const provider = model.agents.projectedProvider(key);
+    const reference = model.agents.sessionReference(key) orelse return error.AgentNotReady;
+    return Context.init(key, provider, reference.slice());
 }

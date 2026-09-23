@@ -3,7 +3,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const ClientKey = @import("../../history/ClientKey.zig");
 const RequestFixture = @import("RequestFixture.zig");
-const client_delivery = @import("../application/client_delivery.zig");
+const client_delivery = @import("../client_delivery.zig");
 
 fn socketPair() ![2]core.SocketChannel {
     var sockets: [2]std.c.fd_t = undefined;

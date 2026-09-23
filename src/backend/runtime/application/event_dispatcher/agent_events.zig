@@ -11,6 +11,8 @@ const ResultType = @import("../../../plugins/Result.zig");
 const AgentResult = @import("../../../agent/Result.zig");
 const ResponseType = @import("../../../engine/Response.zig");
 const SourcesType = @import("../../Sources.zig");
+const suggest_command = @import("../../suggest_command.zig");
+const notifications = @import("../../notifications.zig");
 const types = @import("../../../engine/types.zig");
 const PendingSuggestionType = @import("../../delivery/PendingSuggestion.zig");
 const suggestion = @import("../suggestion.zig");
@@ -92,7 +94,7 @@ pub fn handleMaintenance(model: *RuntimeModel, result: anyerror!void) !void {
     try model.flushSessionCheckpoint();
     model.tickGitStatus();
     model.tickSessionNames();
-    checkEngineIdle(model);
+    suggest_command.stopIdleEngine(model);
     model.resources.proxy.expireCaptures((std.Io.Timestamp.now(model.io, .real).toMilliseconds()));
 }
 
@@ -115,59 +117,6 @@ pub fn handleDescription(model: *RuntimeModel, result: AgentResult) void {
 /// ```
 pub fn scheduleDescription(model: *RuntimeModel) void {
     _ = startNextDescription(model);
-}
-
-/// Applies one engine reply and rearms the engine receive.
-///
-/// ```zig
-/// try AgentEvents.handleEngineResponse(&model, result);
-/// ```
-pub fn handleEngineResponse(model: *RuntimeModel, result: anyerror!ResponseType) !void {
-    const response = result catch return;
-    const service = model.resources.engineService() orelse return;
-    var sources = SourcesType.init(model.io, model.select);
-    try sources.receiveEngine(service);
-
-    switch (response.purpose) {
-        .suggestion => |target| deliverSuggestion(model, target, &response),
-    }
-}
-
-/// Answers the client that asked for a suggestion, if it is still
-/// connected; a departed client simply drops the reply.
-fn deliverSuggestion(model: *RuntimeModel, target: types.Purpose.Suggestion, response: *const ResponseType) void {
-    const session = model.clients.resolve(.{ .id = target.client_id, .generation = target.client_generation }) orelse return;
-    var pending: PendingSuggestionType = .{
-        .request_id = @enumFromInt(target.request_id),
-        .status = switch (response.status) {
-            .success => .ready,
-            .unavailable => .unavailable,
-            .timeout => .timeout,
-            .invalid_output, .failed => .failed,
-        },
-    };
-    if (pending.status == .ready) {
-        if (suggestion.extractCommand(response.textSlice())) |command| {
-            @memcpy(pending.text[0..command.len], command);
-            pending.text_len = @intCast(command.len);
-        } else {
-            pending.status = .failed;
-        }
-    }
-
-    session.delivery.responses.push(.{ .command_suggestion = pending }) catch return;
-}
-
-/// Asks the engine to kill its child when it has been idle. Called
-/// from the agent maintenance tick; it queues nothing when no child
-/// is alive.
-///
-/// ```zig
-/// AgentEvents.checkEngineIdle(&model);
-/// ```
-pub fn checkEngineIdle(model: *RuntimeModel) void {
-    const service = model.resources.engineService() orelse return;
-    service.requestIdleCheck(model.io);
 }
 
 fn startAgentDescription(model: *RuntimeModel, command: CommandType, job_value: JobType) !void {
@@ -311,7 +260,7 @@ fn publishPluginEffectNotification(model: *RuntimeModel, notification: PluginNot
         .message = notification.message,
     };
     _ = core.encodeNotification(&validation_buffer, value) catch return false;
-    return (model.publishNotification(value)) != 0;
+    return notifications.publish(model, value) != 0;
 }
 
 fn descriptionCommand(model: *RuntimeModel) ?CommandType {

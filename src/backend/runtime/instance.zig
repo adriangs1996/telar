@@ -1,5 +1,6 @@
 //! Composition root for one long-lived backend runtime.
 
+const pane_launch = @import("pane_launch.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const Options = @import("Options.zig");
@@ -143,7 +144,7 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
     var repository = first.model.workspaceRepository();
     const kept = try repository.ensure(directory);
     var kept_buffer: [64]u8 = undefined;
-    _ = try first.model.launchPane(.{
+    _ = try pane_launch.launch(&first.model, .{
         .location = kept.location,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunch(&kept_buffer),
@@ -155,7 +156,7 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
     repository.recordTabCreated(logs_tab);
     const logs_location: core.TabLocation = .{ .workspace = kept.location.workspace, .tab_id = logs_tab };
     var logs_buffer: [64]u8 = undefined;
-    _ = try first.model.launchPane(.{
+    _ = try pane_launch.launch(&first.model, .{
         .location = logs_location,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunchIn(&logs_buffer, gone),
@@ -164,7 +165,7 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
     });
     const dropped = try repository.ensure(other_directory);
     var dropped_buffer: [64]u8 = undefined;
-    _ = try first.model.launchPane(.{
+    _ = try pane_launch.launch(&first.model, .{
         .location = dropped.location,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunchIn(&dropped_buffer, gone),
@@ -208,7 +209,7 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     var repository = first.model.workspaceRepository();
     const ensured = try repository.ensure(directory);
     var main_buffer: [64]u8 = undefined;
-    _ = try first.model.launchPane(.{
+    _ = try pane_launch.launch(&first.model, .{
         .location = ensured.location,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunch(&main_buffer),
@@ -220,7 +221,7 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     _ = try repository.find(ensured.location.workspace).?.createTab(logs_tab, "logs");
     repository.recordTabCreated(logs_tab);
     var launch_buffer: [64]u8 = undefined;
-    const pane = try first.model.launchPane(.{
+    const pane = try pane_launch.launch(&first.model, .{
         .location = .{ .workspace = ensured.location.workspace, .tab_id = logs_tab },
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunch(&launch_buffer),
@@ -508,7 +509,7 @@ test "process observation checkpoints a session reported before provider detecti
     var repository = runtime.model.workspaceRepository();
     const workspace = try repository.ensure(directory);
     var argument_buffer: [64]u8 = undefined;
-    const pane = try runtime.model.launchPane(.{
+    const pane = try pane_launch.launch(&runtime.model, .{
         .location = workspace.location,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunchIn(&argument_buffer, directory),

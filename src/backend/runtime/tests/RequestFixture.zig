@@ -3,7 +3,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const Runtime = @import("../Runtime.zig");
 const Session = @import("../client/Session.zig");
-const requests = @import("../application/requests.zig");
+const client_request = @import("../client_request.zig");
 const Pane = @import("../../pane/Pane.zig");
 const RequestFixture = @This();
 
@@ -74,7 +74,7 @@ pub fn send(self: *RequestFixture, message: core.ClientMessage) !void {
 }
 
 pub fn sendTo(self: *RequestFixture, session: *Session, message: core.ClientMessage) !void {
-    try requests.dispatch(&self.runtime.model, session, message);
+    try client_request.receive(&self.runtime.model, session, message);
 }
 
 pub fn response(self: *RequestFixture) ?*response_queue.PendingResponse {

@@ -1,3 +1,4 @@
+const pane_launch = @import("../pane_launch.zig");
 const agent_threads = @import("../application/agent_threads.zig");
 const SessionTitle = @import("../../agent/SessionTitle.zig");
 const core_module = @import("telar-core");
@@ -31,7 +32,7 @@ test "shutdown replaces a pending checkpoint with the latest session and release
     const workspace = try repository.ensure(directory);
     var launch_buffer: [64]u8 = undefined;
     const launch = try sleepLaunch(&launch_buffer);
-    const first_pane = try first.model.launchPane(.{
+    const first_pane = try pane_launch.launch(&first.model, .{
         .location = workspace.location,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = launch,
@@ -47,7 +48,7 @@ test "shutdown replaces a pending checkpoint with the latest session and release
     const tab_id = try repository.nextTabId();
     _ = try repository.find(workspace.location.workspace).?.createTab(tab_id, "late tab");
     repository.recordTabCreated(tab_id);
-    const second_pane = try first.model.launchPane(.{
+    const second_pane = try pane_launch.launch(&first.model, .{
         .location = .{ .workspace = workspace.location.workspace, .tab_id = tab_id },
         .size = .{ .cols = 20, .rows = 5 },
         .launch = launch,
@@ -201,7 +202,7 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
     var repository = first.model.workspaceRepository();
     const workspace = try repository.ensure(directory);
     var launch_buffer: [64]u8 = undefined;
-    const terminal = try first.model.launchPane(.{
+    const terminal = try pane_launch.launch(&first.model, .{
         .location = workspace.location,
         .size = .{ .cols = 80, .rows = 24 },
         .launch = try sleepLaunch(&launch_buffer),
@@ -213,7 +214,7 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
     _ = try repository.find(workspace.location.workspace).?.createTab(tab_id, "Agent work");
     repository.recordTabCreated(tab_id);
     const location: core.TabLocation = .{ .workspace = workspace.location.workspace, .tab_id = tab_id };
-    const pane = try first.model.launchPane(.{
+    const pane = try pane_launch.launch(&first.model, .{
         .location = location,
         .kind = .agent,
         .size = .{ .cols = 100, .rows = 30 },

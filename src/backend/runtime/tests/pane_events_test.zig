@@ -1,5 +1,6 @@
 //! Actor ownership and recovery through production event dispatch.
 const std = @import("std");
+const pane_input = @import("../pane_input.zig");
 const core = @import("telar-core");
 const EventFixture = @import("EventFixture.zig");
 const events = @import("../application/events.zig");
@@ -18,17 +19,17 @@ test "runtime PTY scheduling preserves queued bytes when actor admission fails" 
         const pane = fixture.pane;
         switch (kind) {
             .input => {
-                try events.panes.Io.scheduleInput(fixture.model, pane);
+                try pane_input.startInputWrite(fixture.model, pane);
                 try std.testing.expect(pane.queuePtyInput("queued"));
-                try std.testing.expectError(error.ConcurrencyUnavailable, events.panes.Io.scheduleInput(fixture.model, pane));
+                try std.testing.expectError(error.ConcurrencyUnavailable, pane_input.startInputWrite(fixture.model, pane));
                 try std.testing.expectEqualStrings("queued", pane.input_queue.nextChunk().?);
                 try std.testing.expect(!pane.input_write_pending);
                 try std.testing.expectEqual(@as(usize, 0), pane.input_write_len);
             },
             .response => {
-                try events.panes.Io.scheduleResponse(fixture.model, pane);
+                try pane_input.startResponseWrite(fixture.model, pane);
                 try std.testing.expect(pane.pty_responses.push("queued"));
-                try std.testing.expectError(error.ConcurrencyUnavailable, events.panes.Io.scheduleResponse(fixture.model, pane));
+                try std.testing.expectError(error.ConcurrencyUnavailable, pane_input.startResponseWrite(fixture.model, pane));
                 try std.testing.expectEqualStrings("queued", pane.pty_responses.peek().?);
                 try std.testing.expect(!pane.response_pending);
             },

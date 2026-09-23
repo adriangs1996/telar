@@ -6,9 +6,9 @@ const Job = @import("AgentHistoryJob.zig");
 const PendingFailure = @import("../delivery/PendingFailure.zig");
 
 /// Admits a read without retaining the client's wire buffer or a pane pointer.
-/// Example: `try agent_history.request(model, client, query);`.
-pub fn request(model: *RuntimeModel, client: *Session, query: core.QueryAgentHistory) !void {
-    start(model, client, query) catch |err| {
+/// Example: `try agent_history.start(model, client, query);`.
+pub fn start(model: *RuntimeModel, client: *Session, query: core.QueryAgentHistory) !void {
+    admit(model, client, query) catch |err| {
         if (client.role == .control) {
             client.delivery.setCloseAfterReply(true);
         }
@@ -17,7 +17,7 @@ pub fn request(model: *RuntimeModel, client: *Session, query: core.QueryAgentHis
     };
 }
 
-fn start(model: *RuntimeModel, client: *Session, query: core.QueryAgentHistory) !void {
+fn admit(model: *RuntimeModel, client: *Session, query: core.QueryAgentHistory) !void {
     const pane = model.panes.resolve(.{ .id = query.pane_id, .generation = query.pane_generation }) orelse return error.PaneNotFound;
     if (pane.kind != .agent) {
         return error.NotAnAgentPane;
@@ -46,8 +46,8 @@ fn start(model: *RuntimeModel, client: *Session, query: core.QueryAgentHistory) 
 }
 
 /// Delivers only to the original client generation and validates pane reuse.
-/// Example: `agent_history.complete(model, job);`.
-pub fn complete(model: *RuntimeModel, job: *Job) void {
+/// Example: `agent_history.finish(model, job);`.
+pub fn finish(model: *RuntimeModel, job: *Job) void {
     model.agent_history_jobs.remove(job);
     defer job.deinit();
     const client = model.clients.resolve(job.client) orelse return;

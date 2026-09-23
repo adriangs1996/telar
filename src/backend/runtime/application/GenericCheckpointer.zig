@@ -1,3 +1,5 @@
+const pane_launch = @import("../pane_launch.zig");
+const pane_input = @import("../pane_input.zig");
 const core = @import("telar-core");
 const WriteJob = @import("WriteJob.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
@@ -19,7 +21,7 @@ const PersistenceEncoder = @import("../../persistence/Encoder.zig");
 
 /// Binds checkpointing to one model type. `RuntimeModel` provides
 /// `io`, `gpa`, `session`, `model`, `select`, `workspaceRepository()`,
-/// `launchPane()`, `queueRestoredInput()` and `restoreAgentTitle()`.
+/// and `restoreAgentTitle()`.
 ///
 /// ```zig
 /// const SessionCheckpoint = Checkpointer(RuntimeModel);
@@ -271,7 +273,7 @@ pub fn Type(comptime RuntimeModel: type) type {
             };
 
             try model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
-            const pane = try model.launchPane(.{
+            const pane = try pane_launch.launch(model, .{
                 .location = location,
                 .size = size,
                 .launch = .{
@@ -292,7 +294,7 @@ pub fn Type(comptime RuntimeModel: type) type {
                 if (direct_count == null) {
                     var command_buffer: [session_checkpoint.max_resume_command_bytes]u8 = undefined;
                     const command = session_checkpoint.resumeCommand(&command_buffer, session.provider, session.reference.slice()).?;
-                    try model.queueRestoredInput(pane, command);
+                    try pane_input.sendRestored(model, pane, command);
                 }
 
                 if (!model.agents.restoreSession(pane.key(), session)) {
@@ -330,7 +332,7 @@ pub fn Type(comptime RuntimeModel: type) type {
             };
             const workspace_path = model.workspaceReader().workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
             try model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
-            const pane = try model.launchPane(.{
+            const pane = try pane_launch.launch(model, .{
                 .location = location,
                 .kind = .agent,
                 .restore_conversation = conversation,

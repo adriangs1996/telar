@@ -12,8 +12,10 @@ const change_review = @import("application/change_review.zig");
 const agent_history = @import("application/agent_history.zig");
 const agent_threads = @import("application/agent_threads.zig");
 const pane_search_module = @import("application/pane_search.zig");
-const editors = @import("application/operations/editors.zig");
-const client_delivery = @import("application/client_delivery.zig");
+const link_opening = @import("link_opening.zig");
+const pane_input = @import("pane_input.zig");
+const suggest_command = @import("suggest_command.zig");
+const client_delivery = @import("client_delivery.zig");
 /// Owns and composes the resources, event loop and model for one
 /// long-lived backend lifetime.
 const Runtime = @This();
@@ -164,25 +166,25 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         .agent_description => |result| {
             events.agents.handleDescription(&self.model, result);
         },
-        .change_review_completed => |job| change_review.complete(&self.model, job),
-        .agent_history_completed => |job| agent_history.complete(&self.model, job),
+        .change_review_completed => |job| change_review.finish(&self.model, job),
+        .agent_history_completed => |job| agent_history.finish(&self.model, job),
         .agent_thread_changed => |result| {
             if (try agent_threads.handle(&self.model, result)) {
                 try events.panes.Pipeline.handleExit(&self.model, .{ .pane = result.pane, .result = .{ .exited = 0 } });
             }
         },
         .engine_response => |result| {
-            try events.agents.handleEngineResponse(&self.model, result);
+            try suggest_command.finish(&self.model, result);
         },
         .metrics_tick => |result| {
             try events.observability.handleMetricsTick(&self.model, result);
         },
         .metrics_sampled => |sample| events.observability.handleMetricsSample(&self.model, sample),
         .pane_input_written => |value| {
-            try events.panes.Io.handleInputWritten(&self.model, value);
+            try pane_input.finishInputWrite(&self.model, value);
         },
         .pane_response_written => |value| {
-            try events.panes.Io.handleResponseWritten(&self.model, value);
+            try pane_input.finishResponseWrite(&self.model, value);
         },
         .pane_output => |value| {
             try events.panes.Pipeline.handleOutput(&self.model, value, self.ingest_gate);
@@ -211,7 +213,7 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         .checkpoint_written => |result| {
             self.model.sessionCheckpointWritten(result);
         },
-        .editor_opened => |job| editors.complete(&self.model, job),
+        .editor_opened => |job| link_opening.finish(&self.model, job),
         .git_status => |completion| {
             self.model.gitStatusCompleted(completion);
         },

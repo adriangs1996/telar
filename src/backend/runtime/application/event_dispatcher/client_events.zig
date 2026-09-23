@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const requests = @import("../requests.zig");
+const client_request = @import("../../client_request.zig");
 const LocalListenerType = @import("../../../transport/LocalListener.zig");
 const ClientMessage = @import("../../ClientMessage.zig");
 const request_role = @import("../../client/request_role.zig");
@@ -94,7 +94,7 @@ pub fn handleMessage(model: *RuntimeModel, event: ClientMessage) void {
         };
     }
 
-    requests.dispatch(model, session, message) catch {
+    client_request.receive(model, session, message) catch {
         model.dropClient(event.client);
         return;
     };

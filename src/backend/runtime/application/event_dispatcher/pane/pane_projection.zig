@@ -2,7 +2,8 @@ const core = @import("telar-core");
 const ProbeType = @import("../../../../process/Probe.zig");
 const sound_module = @import("../../../../agent/sound.zig");
 const agents = @import("../agent_events.zig");
-const io_events = @import("pane_io.zig");
+const pane_input = @import("../../../pane_input.zig");
+const agent_sound = @import("../../../agent_sound.zig");
 
 const ProcessReconciliation = @import("../../../entrypoints/events/pane/ProcessReconciliation.zig");
 const agent_identity = @import("../../coordinators/agent_identity.zig");
@@ -69,7 +70,7 @@ pub fn handleMedia(model: *RuntimeModel, completion: MediaCompletion) !void {
         model.metrics.graphics_transfers_staged +|= projection.staged;
     }
 
-    try io_events.scheduleResponse(model, pane);
+    try pane_input.startResponseWrite(model, pane);
 }
 
 /// Starts a pane observation when its single-flight state permits it.
@@ -126,7 +127,7 @@ fn observePane(work: ObservationWork) ObservationCompletion {
 }
 
 fn publishObservedAgentSound(model: *RuntimeModel, notification: core.AgentSoundNotification) void {
-    model.publishAgentSound(notification);
+    agent_sound.publish(model, notification);
 }
 
 fn startPaneMedia(model: *RuntimeModel, work: MediaWork) !void {
