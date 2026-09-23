@@ -13,4 +13,5 @@ test {
     _ = source_file;
     _ = @import("layout_tests.zig");
     _ = @import("layout_naming.zig");
+    _ = @import("receivers.zig");
 }

@@ -70,5 +70,6 @@ fn writeViolation(self: *Reporter, path: []const u8, violation: ViolationType) !
         .generic_file => try self.writer.writeAll("GenericName.zig must expose exactly one public Type(...) type function [codestyle/generic-file]\n"),
         .generic_import => try self.writer.writeAll("import .Type directly with a Generic-prefixed constructor alias [codestyle/generic-import]\n"),
         .dedicated_layout_file => try self.writer.writeAll("a public packed/extern layout requires a dedicated type file [codestyle/dedicated-layout-file]\n"),
+        .receiver_name => try self.writer.writeAll("a method names its receiver self; a procedure names its process model model [codestyle/receiver-name]\n"),
     }
 }

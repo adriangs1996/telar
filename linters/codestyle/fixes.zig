@@ -2,6 +2,7 @@ const std = @import("std");
 const Edit = @import("Edit.zig");
 const Fixer = @import("Fixer.zig");
 const syntax = @import("syntax.zig");
+const receivers = @import("receivers.zig");
 
 /// Applies only deterministic fixes and returns null when the source is unchanged.
 ///
@@ -60,6 +61,14 @@ fn fixOnce(allocator: std.mem.Allocator, source: [:0]const u8) !?[:0]u8 {
         try fixer.fixStatementIf(statement_if);
     }
 
+    const misnamed = try receivers.find(allocator, &tree);
+    defer allocator.free(misnamed);
+
+    for (misnamed) |receiver| {
+        try renameReceiver(allocator, &tree, receiver, &edits);
+        needs_render = needs_render or edits.items.len != 0;
+    }
+
     if (!needs_render) {
         return null;
     }
@@ -83,6 +92,31 @@ fn fixOnce(allocator: std.mem.Allocator, source: [:0]const u8) !?[:0]u8 {
     }
 
     return @as(?[:0]u8, try allocator.dupeZ(u8, rendered));
+}
+
+/// Renames a receiver and every binding use of it inside its function.
+/// A function that already uses the expected name keeps its receiver, so
+/// the rename can never shadow; the check still reports it.
+fn renameReceiver(allocator: std.mem.Allocator, tree: *const std.zig.Ast, receiver: receivers.Receiver, edits: *std.ArrayList(Edit)) !void {
+    if (receivers.usesName(tree, receiver.function, receiver.expected)) {
+        return;
+    }
+
+    const old = tree.tokenSlice(receiver.name_token);
+    var token = tree.firstToken(receiver.function);
+    const last = tree.lastToken(receiver.function);
+    while (token <= last) : (token += 1) {
+        if (tree.tokenTag(token) != .identifier or receivers.isField(tree, token) or !std.mem.eql(u8, tree.tokenSlice(token), old)) {
+            continue;
+        }
+
+        const start = tree.tokenStart(token);
+        try edits.append(allocator, .{
+            .start = start,
+            .end = start + old.len,
+            .replacement = receiver.expected,
+        });
+    }
 }
 
 fn applyEdits(allocator: std.mem.Allocator, source: []const u8, edits: []const Edit) ![:0]u8 {
@@ -312,4 +346,21 @@ test "keeps excessive parameter counts unchanged" {
     const fixed = try fixSource(std.testing.allocator, source);
 
     try std.testing.expectEqual(@as(?[:0]u8, null), fixed);
+}
+
+test "renames a method receiver to self across its body" {
+    try expectFixed(
+        \\const Outbox = @This();
+        \\len: u8,
+        \\pub fn count(self: *const Outbox) u8 {
+        \\    return self.len + @as(u8, @intFromBool(self.len == 0));
+        \\}
+        \\
+    ,
+        \\const Outbox = @This();
+        \\len: u8,
+        \\pub fn count(outbox: *const Outbox) u8 {
+        \\    return outbox.len + @as(u8, @intFromBool(outbox.len == 0));
+        \\}
+    );
 }

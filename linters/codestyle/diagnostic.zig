@@ -14,4 +14,5 @@ pub const Rule = enum {
     generic_file,
     generic_import,
     dedicated_layout_file,
+    receiver_name,
 };
