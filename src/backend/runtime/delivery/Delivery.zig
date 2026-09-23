@@ -5,7 +5,7 @@ const ResponseQueue = @import("ResponseQueue.zig");
 const delivery_namespace = @import("delivery_namespace.zig");
 const std = @import("std");
 const response_queue = @import("response_queue.zig");
-const Preparation = @import("Preparation.zig");
+const Sources = @import("Sources.zig");
 const Prepared = @import("Prepared.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
@@ -580,5 +580,12 @@ pub fn stage(self: *Delivery, payload: []const u8, effect: delivery_namespace.Ef
 const Commit = struct {
     prepared: Prepared,
     attachments: *AttachmentStore,
+    metrics: *RuntimeMetrics,
+};
+
+const Preparation = struct {
+    io: std.Io,
+    attachments: *AttachmentStore,
+    sources: Sources,
     metrics: *RuntimeMetrics,
 };

@@ -3,7 +3,6 @@
 const SseEvent = @import("../SseEvent.zig");
 const std = @import("std");
 const sse = @import("../sse.zig");
-const Delta = @import("Delta.zig");
 
 /// Returns whether an SSE event explicitly reports a naturally completed
 /// Claude turn.
@@ -100,4 +99,8 @@ test "Claude completion rejects an SSE event whose retained data was truncated" 
 const MessageDelta = struct {
     type: ?[]const u8 = null,
     delta: ?Delta = null,
+};
+
+const Delta = struct {
+    stop_reason: ?[]const u8 = null,
 };

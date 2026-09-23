@@ -1,7 +1,7 @@
 //! Shared antialiased RGBA fill for client-owned rounded backgrounds.
 
 const std = @import("std");
-const Shape = @import("Shape.zig");
+const Size = @import("Size.zig");
 const RoundedRectanglePoint = @import("RoundedRectanglePoint.zig");
 
 /// Fills a quota-validated surface. Transparent corners retain the fill RGB
@@ -107,4 +107,9 @@ const Input = struct {
     shape: Shape,
     color: [3]u8,
     stride: ?u32 = null,
+};
+
+const Shape = struct {
+    size: Size,
+    radius: u32,
 };

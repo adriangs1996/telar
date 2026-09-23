@@ -3,7 +3,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const Input = @import("Input.zig");
 const Result = @import("Result.zig");
 const std = @import("std");
 
@@ -208,4 +207,11 @@ const Label = struct {
         label.width = core.measure(text);
         return label;
     }
+};
+
+const Input = struct {
+    area: core.Rect,
+    names: []const []const u8,
+    focused: usize,
+    palette: *const data.Palette,
 };

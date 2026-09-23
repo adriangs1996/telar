@@ -6,7 +6,8 @@ const delivery = @import("kitty_delivery.zig");
 const kitty_codec = @import("kitty_codec.zig");
 const std = @import("std");
 const kitty = @import("kitty.zig");
-const FallbackFrame = @import("FallbackFrame.zig");
+const PartialTransmission = @import("PartialTransmission.zig");
+const kitty_delivery = @import("kitty_delivery.zig");
 const KittyGraphicsWriter = @This();
 
 store: *delivery.Store,
@@ -350,4 +351,9 @@ const PlacementGeometry = struct {
     pane_id: core.PaneId,
     placement: core.Placement,
     image: core.Image,
+};
+
+const FallbackFrame = struct {
+    partial: PartialTransmission,
+    image: kitty_delivery.Store.ImageEntry,
 };

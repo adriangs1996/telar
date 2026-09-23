@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const Context = @import("Context.zig");
 const TabRenameInput = @import("TabRenameInput.zig");
 const Cursor = @import("Cursor.zig");
-const LabelInput = @import("InlineLabel.zig");
 
 pub const Field = data.GenericField(core.max_tab_label_bytes);
 pub const Kind = enum { rename_tab, create_workspace, rename_workspace, copy_search_forward, copy_search_backward };
@@ -145,4 +144,12 @@ const FieldInput = struct {
     area: core.Rect,
     text: []const u8,
     focused: bool,
+};
+
+/// One clipped label written at a column of a single-row area.
+const LabelInput = struct {
+    area: core.Rect,
+    x: u16,
+    text: []const u8,
+    style: core.Style,
 };

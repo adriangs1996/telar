@@ -5,7 +5,6 @@
 
 const core = @import("telar-core");
 const std = @import("std");
-const TitleLine = @import("TitleLine.zig");
 
 /// Bytes one probe reads; a longer backlog continues on the next probe.
 pub const max_scan_bytes = 64 * 1024;
@@ -80,4 +79,9 @@ const Scan = struct {
     /// The last name written for the session, copied into the caller's
     /// buffer and cut to the title bound. Empty means the name was cleared.
     title: ?[]const u8,
+};
+
+const TitleLine = struct {
+    customTitle: []const u8 = "",
+    sessionId: []const u8 = "",
 };

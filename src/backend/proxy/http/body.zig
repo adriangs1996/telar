@@ -3,7 +3,6 @@
 //! The relay preserves wire bytes exactly. It uses the framing already derived
 //! from the head and keeps all buffers fixed-size.
 
-const Direction = @import("Direction.zig");
 const std = @import("std");
 const FakeSessionType = @import("FakeSession.zig");
 const Activity = @import("Activity.zig");
@@ -306,4 +305,9 @@ const Exact = struct {
     direction: Direction,
     count: usize,
     payload: bool,
+};
+
+const Direction = struct {
+    from: Session.Side,
+    to: Session.Side,
 };

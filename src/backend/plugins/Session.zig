@@ -1,5 +1,5 @@
 const std = @import("std");
-const Request = @import("Request.zig");
+const core = @import("telar-core");
 const Result = @import("Result.zig");
 const protocol = @import("protocol.zig");
 const effects = @import("effects.zig");
@@ -159,4 +159,11 @@ const SessionSpec = struct {
     plugin_id: u64,
     digest: [32]u8,
     generation: u64,
+};
+
+const Request = struct {
+    event_id: u64,
+    bytes: []u8,
+    pane: core.PaneId,
+    pane_generation: u64,
 };

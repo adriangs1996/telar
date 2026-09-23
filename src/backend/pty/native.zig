@@ -2,7 +2,6 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
-const CLD = @import("CLD.zig");
 const exit = @import("exit.zig");
 
 const TIOC = switch (builtin.os.tag) {
@@ -196,4 +195,10 @@ test "output readiness never waits and does not consume queued bytes" {
 const Pair = struct {
     master: std.c.fd_t,
     slave: std.c.fd_t,
+};
+
+const CLD = struct {
+    pub const EXITED: c_int = 1;
+    pub const KILLED: c_int = 2;
+    pub const DUMPED: c_int = 3;
 };

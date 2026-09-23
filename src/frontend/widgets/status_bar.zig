@@ -11,7 +11,6 @@ const Context = @import("Context.zig");
 const Metrics = @import("Metrics.zig");
 const std = @import("std");
 const icons_module = @import("../ui/icons.zig");
-const PairInput = @import("PairInput.zig");
 const widget = @import("context_support.zig");
 
 pub fn render(context: *Context, area: core.Rect, metrics: ?Metrics) void {
@@ -246,4 +245,11 @@ const WriteInput = struct {
     x: *u16,
     text: []const u8,
     style: core.Style,
+};
+
+const PairInput = struct {
+    area: core.Rect,
+    x: *u16,
+    key: []const u8,
+    label: []const u8,
 };

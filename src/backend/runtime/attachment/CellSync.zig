@@ -1,7 +1,6 @@
 const TextMetadataCapture = @import("../../pane/TextMetadataCapture.zig");
 const core = @import("telar-core");
 const vt = @import("ghostty-vt");
-const Outstanding = @import("Outstanding.zig");
 const std = @import("std");
 const Pane = @import("../../pane/Pane.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
@@ -351,4 +350,9 @@ const Preparation = struct {
     pane: *Pane,
     force_snapshot: bool,
     metrics: *RuntimeMetrics,
+};
+
+const Outstanding = struct {
+    frame_id: u64,
+    sent_ns: u64,
 };

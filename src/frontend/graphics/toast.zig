@@ -14,7 +14,6 @@ const std = @import("std");
 const GraphicsColor = @import("Color.zig");
 const Metrics = @import("Metrics.zig");
 const Surface = @import("Surface.zig");
-const PixelRectangle = @import("PixelRectangle.zig");
 const ToastRenderer = @import("ToastRenderer.zig");
 const kitty_codec = @import("kitty_codec.zig");
 
@@ -224,4 +223,11 @@ const Colors = struct {
             .failure => self.red,
         };
     }
+};
+
+const PixelRectangle = struct {
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
 };

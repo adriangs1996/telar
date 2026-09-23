@@ -4,7 +4,6 @@ const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const kitty_protocol = @import("kitty_protocol");
-const DestinationSizeInput = @import("DestinationSizeInput.zig");
 const std = @import("std");
 const capability_mod = @import("capabilities.zig");
 const codec = @import("kitty_codec.zig");
@@ -1702,4 +1701,12 @@ const TestCompressionScheduler = struct {
         delivery.completeCompression(store, Compression.run(job));
         self.pending = null;
     }
+};
+
+const DestinationSizeInput = struct {
+    placement: core.Placement,
+    source_width: u32,
+    source_height: u32,
+    cell_width: u16,
+    cell_height: u16,
 };

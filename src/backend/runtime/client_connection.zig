@@ -10,7 +10,6 @@ const ClientKey = @import("../history/ClientKey.zig");
 const ClientMessage = @import("events/ClientMessage.zig");
 const ClientSent = @import("events/ClientSent.zig");
 const LocalListener = @import("../transport/LocalListener.zig");
-const Read = @import("client/Read.zig");
 const Sources = @import("Sources.zig");
 const client_control = @import("client_control.zig");
 const client_request = @import("client_request.zig");
@@ -295,4 +294,11 @@ const Write = struct {
     key: ClientKey,
     connection: *core.SocketChannel,
     payload: []const u8,
+};
+
+const Read = struct {
+    io: std.Io,
+    key: ClientKey,
+    connection: *core.SocketChannel,
+    buffer: []u8,
 };

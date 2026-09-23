@@ -15,7 +15,6 @@ const PreparedTransfer = @import("PreparedTransfer.zig");
 const GraphicsBudget = @import("GraphicsBudget.zig");
 const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 const PreparedTransfers = @import("PreparedTransfers.zig");
-const TestAlive = @import("TestAlive.zig");
 
 const native = @cImport({
     @cInclude("sys/stat.h");
@@ -374,5 +373,19 @@ const ChildObject = struct {
     /// asks of whoever consumes a `t=s` transmission.
     pub fn close(self: ChildObject) void {
         std.posix.munmap(self.pixels);
+    }
+};
+
+const TestAlive = struct {
+    keys: []const core.ImageKey,
+
+    pub fn holds(self: TestAlive, key: core.ImageKey) bool {
+        for (self.keys) |candidate| if (std.meta.eql(candidate, key)) return true;
+        return false;
+    }
+
+    pub fn holdsImage(self: TestAlive, image_id: u32) bool {
+        for (self.keys) |candidate| if (candidate.image_id == image_id) return true;
+        return false;
     }
 };

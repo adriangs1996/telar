@@ -5,7 +5,6 @@ const Canvas = @import("../widgets/Canvas.zig");
 const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
 const CanvasFixture = @import("CanvasFixture.zig");
 const Surface = @import("../widgets/Surface.zig");
-const Sprite = @import("../widgets/Sprite.zig");
 
 const Widget = union(enum) {
     surface: Surface,
@@ -98,5 +97,16 @@ const Text = struct {
     /// Example: `try label.draw(canvas);`
     pub fn draw(self: Text, canvas: *Canvas) !void {
         _ = try canvas.textAt(self.bounds, self.label);
+    }
+};
+
+/// An image reference and its placement; the renderer owns the texture page.
+const Sprite = struct {
+    bounds: @import("../render/Rect.zig"),
+    paint: @import("../widgets/SpritePaint.zig"),
+
+    /// Example: `try mascot.draw(canvas);`
+    pub fn draw(self: Sprite, canvas: *Canvas) !void {
+        try canvas.spriteTintedAt(self.bounds, self.paint);
     }
 };

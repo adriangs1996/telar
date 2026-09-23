@@ -13,7 +13,6 @@ const pane_namespace = @import("../pane/pane_namespace.zig");
 const client_request = @import("client_request.zig");
 const InputCompletion = @import("events/InputCompletion.zig");
 const ResponseCompletion = @import("events/ResponseCompletion.zig");
-const InputWrite = @import("events/InputWrite.zig");
 
 const paste_start = "\x1b[200~";
 const paste_end = "\x1b[201~";
@@ -278,4 +277,12 @@ const ResponseWrite = struct {
     io: std.Io,
     pane: *Pane,
     bytes: []const u8,
+};
+
+const InputWrite = struct {
+    /// Stable input borrowed from a pane until its completion event is handled.
+    io: std.Io,
+    pane: *Pane,
+    bytes: []const u8,
+    started_ns: u64,
 };

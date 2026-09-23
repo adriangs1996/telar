@@ -14,7 +14,6 @@ const TranscodeConfiguration = @import("TranscodeConfiguration.zig");
 const Transcoder = @import("Transcoder.zig");
 const Headers = @import("../Headers.zig");
 const middleware = @import("../middleware.zig");
-const FrameHeader = @import("FrameHeader.zig");
 const HeaderEmission = @import("HeaderEmission.zig");
 const BodyCollector = @import("BodyCollector.zig");
 const TestTranscodeSetup = @import("TestTranscodeSetup.zig");
@@ -1606,4 +1605,11 @@ const FakeWriteSession = struct {
         self.len += bytes.len;
         return true;
     }
+};
+
+const FrameHeader = struct {
+    length: usize,
+    frame_type: u8,
+    flags: u8,
+    stream_id: u32,
 };

@@ -5,7 +5,7 @@ const Channel = @import("Channel.zig");
 const CredentialGate = @import("../CredentialGate.zig");
 const StartOptions = @import("StartOptions.zig");
 const Half = @import("Half.zig");
-const CapturePublication = @import("CapturePublication.zig");
+const Credential = @import("../Credential.zig");
 const decode_mod = @import("decode.zig");
 const buffer = @import("buffer_support.zig");
 const CaptureMetrics = @import("CaptureMetrics.zig");
@@ -175,4 +175,9 @@ pub fn metrics(self: *const Producer) CaptureMetrics {
 const InitOptions = struct {
     config: Config,
     gate: CredentialGate,
+};
+
+const CapturePublication = struct {
+    credential: Credential,
+    half: *Half,
 };

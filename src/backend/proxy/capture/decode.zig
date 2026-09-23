@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const Options = @import("Options.zig");
-const DecodeInput = @import("DecodeInput.zig");
 const CollectOptions = @import("CollectOptions.zig");
 
 const c = @cImport({
@@ -309,4 +308,10 @@ const Result = struct {
         gpa.free(self.bytes);
         self.* = .{ .bytes = &.{}, .decoded = false, .truncated = false };
     }
+};
+
+const DecodeInput = struct {
+    input: []const u8,
+    coding: []const u8,
+    max_bytes: usize,
 };

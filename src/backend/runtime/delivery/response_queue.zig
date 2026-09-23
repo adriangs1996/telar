@@ -3,7 +3,6 @@ const core = @import("telar-core");
 
 const ReviewResult = @import("../../change_review/Result.zig");
 const PendingFailure = @import("PendingFailure.zig");
-const PendingTabSnapshot = @import("PendingTabSnapshot.zig");
 const PendingWorkspaceSnapshot = @import("PendingWorkspaceSnapshot.zig");
 const PendingTabCreated = @import("PendingTabCreated.zig");
 const PendingTabRenamed = @import("PendingTabRenamed.zig");
@@ -180,4 +179,9 @@ const PendingPaneMatches = struct {
     request_id: core.RequestId,
     pane_id: core.PaneId,
     matches: Matches,
+};
+
+const PendingTabSnapshot = struct {
+    request_id: core.RequestId,
+    location: core.TabLocation,
 };

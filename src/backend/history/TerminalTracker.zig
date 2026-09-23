@@ -9,7 +9,6 @@ const osc = @import("osc.zig");
 const TerminalOutputObservation = @import("TerminalOutputObservation.zig");
 const Clock = @import("Clock.zig");
 const Command = @import("Command.zig");
-const TerminalCompletion = @import("TerminalCompletion.zig");
 const Tracker = @This();
 
 gpa: std.mem.Allocator,
@@ -517,4 +516,10 @@ fn freeCommand(self: *Tracker) void {
 const ExitObservation = struct {
     clock: Clock,
     exit_code: i32,
+};
+
+const TerminalCompletion = struct {
+    clock: Clock,
+    exit_code: ?i32,
+    status: osc.Status,
 };

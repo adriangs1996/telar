@@ -1,5 +1,4 @@
 const std = @import("std");
-const Edit = @import("Edit.zig");
 const syntax = @import("syntax.zig");
 const receivers = @import("receivers.zig");
 const Receiver = @import("Receiver.zig");
@@ -441,4 +440,10 @@ const Fixer = struct {
 
         self.needs_render.* = true;
     }
+};
+
+const Edit = struct {
+    start: usize,
+    end: usize,
+    replacement: []const u8,
 };

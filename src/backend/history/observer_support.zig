@@ -9,7 +9,6 @@
 
 const core = @import("telar-core");
 
-const Input = @import("Input.zig");
 const Output = @import("Output.zig");
 const Clock = @import("Clock.zig");
 const vt = @import("ghostty-vt");
@@ -311,4 +310,11 @@ test "observation loss cannot manufacture an idle Codex screen from a partial re
 
 const CodexTestSink = struct {
     pub fn emit(_: *@This(), _: Command) void {}
+};
+
+const Input = struct {
+    offset: u32,
+    len: u32,
+    shell_foreground: bool,
+    clock: Clock,
 };

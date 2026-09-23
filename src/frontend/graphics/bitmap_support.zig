@@ -6,7 +6,6 @@
 //! the size of a terminal cell.
 
 const Bitmap = @import("Bitmap.zig");
-const Axis = @import("Axis.zig");
 const std = @import("std");
 
 const one: u64 = 1 << 16;
@@ -96,4 +95,10 @@ test "a region samples only inside its origin" {
 const BitmapPoint = struct {
     x: u32,
     y: u32,
+};
+
+const Axis = struct {
+    index: u32,
+    next: u32,
+    fraction: u64,
 };

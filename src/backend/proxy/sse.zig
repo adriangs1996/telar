@@ -19,7 +19,6 @@
 //! so observing a response cannot allocate or grow without a bound.
 
 const SseCapture = @import("SseCapture.zig");
-const CapturedExpectation = @import("CapturedExpectation.zig");
 const std = @import("std");
 
 /// Maximum number of bytes retained for one `event` field value.
@@ -552,4 +551,10 @@ test "an oversized line resynchronizes at a lone CR" {
 const CountExpectation = struct {
     count: usize,
     hint: []const u8,
+};
+
+const CapturedExpectation = struct {
+    name: []const u8,
+    data: []const u8,
+    truncated: bool,
 };

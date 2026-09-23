@@ -6,7 +6,6 @@ const RequiredField = @import("RequiredField.zig");
 const std = @import("std");
 const OptionalString = @import("OptionalString.zig");
 const OptionalInteger = @import("OptionalInteger.zig");
-const OptionalMilliseconds = @import("OptionalMilliseconds.zig");
 const Fields = @import("Fields.zig");
 const Array = @import("Array.zig");
 
@@ -203,4 +202,12 @@ const OptionalMebibytes = struct {
     index: c_int,
     name: [*:0]const u8,
     default: usize,
+};
+
+const OptionalMilliseconds = struct {
+    index: c_int,
+    name: [*:0]const u8,
+    default_ns: u64,
+    minimum_ms: u64,
+    maximum_ms: u64,
 };

@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const PluginManifest = @import("PluginManifest.zig");
-const Source = @import("Source.zig");
 const Grant = @import("Grant.zig");
 const TrustStore = @import("TrustStore.zig");
 
@@ -245,3 +244,5 @@ const WireManifest = struct {
     actions: []const []const u8 = &.{},
     capabilities: []const []const u8 = &.{},
 };
+
+const Source = struct { url: []const u8, revision: []const u8 };

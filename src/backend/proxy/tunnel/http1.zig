@@ -27,7 +27,7 @@ const Http1TestHarness = @import("Http1TestHarness.zig");
 const FakeSessionType = @import("../http/FakeSession.zig");
 const Producer = @import("../capture/Producer.zig");
 const Config = @import("../capture/Config.zig");
-const Http1CaptureGate = @import("Http1CaptureGate.zig");
+const Credential = @import("../Credential.zig");
 const Observer = @import("../provider/Observer.zig");
 
 const exchange_port: GenericExchangePort(Http1Connection) = .{
@@ -651,5 +651,11 @@ const ResponseBodyObserver = struct {
         self.response.deinit();
         self.inspect_payload = false;
         self.capture_half = null;
+    }
+};
+
+const Http1CaptureGate = struct {
+    pub fn accepts(_: *anyopaque, _: *const Credential) bool {
+        return true;
     }
 };

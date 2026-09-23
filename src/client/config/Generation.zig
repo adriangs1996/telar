@@ -17,7 +17,7 @@ const Limits = @import("Limits.zig");
 const lua_api = @import("lua-api");
 const FileInput = @import("FileInput.zig");
 const CallbackInvocation = @import("CallbackInvocation.zig");
-const BarInvocation = @import("BarInvocation.zig");
+const BarCallbackContext = @import("BarCallbackContext.zig");
 const bar_values = @import("bar_values.zig");
 const CallbackPreparation = @import("CallbackPreparation.zig");
 const lua_value = @import("lua_value.zig");
@@ -1440,4 +1440,9 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
 
 const BarCallback = struct {
     registry_ref: c_int,
+};
+
+const BarInvocation = struct {
+    reference: data.CallbackRef,
+    context: BarCallbackContext,
 };

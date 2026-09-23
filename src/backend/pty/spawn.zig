@@ -3,7 +3,6 @@
 const Command = @import("Command.zig");
 const std = @import("std");
 const native = @import("native.zig");
-const ChildExec = @import("ChildExec.zig");
 const ChildDescriptor = @import("ChildDescriptor.zig");
 const ExecRequest = @import("ExecRequest.zig");
 const command_mod = @import("command_support.zig");
@@ -297,4 +296,14 @@ test "environment lookup requires the complete variable name" {
 const Spawned = struct {
     master: std.c.fd_t,
     pid: std.c.pid_t,
+};
+
+const ChildExec = struct {
+    master: std.c.fd_t,
+    slave: std.c.fd_t,
+    cwd_fd: ?std.c.fd_t,
+    error_fd: std.c.fd_t,
+    command: *const Command,
+    environment: [*:null]const ?[*:0]const u8,
+    path: []const u8,
 };

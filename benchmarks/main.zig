@@ -17,7 +17,6 @@ const DecodeContext = @import("DecodeContext.zig");
 const PipelineContext = @import("PipelineContext.zig");
 const OutboxContext = @import("OutboxContext.zig");
 const KeybindContext = @import("KeybindContext.zig");
-const LuaCallbackContext = @import("LuaCallbackContext.zig");
 const ClientUiContext = @import("ClientUiContext.zig");
 const BlitContext = @import("BlitContext.zig");
 const CursorContext = @import("CursorContext.zig");
@@ -950,5 +949,28 @@ const ResultWriter = struct {
         if (self.config.enforce and result.p99_ns > case.p99_budget_ns) {
             return error.PerformanceBudgetExceeded;
         }
+    }
+};
+
+const LuaCallbackContext = struct {
+    generation: *client.Generation,
+    reference: data.InputCallbackRef,
+    diagnostic: data.Diagnostic = .{},
+
+    pub fn init(gpa: std.mem.Allocator, io: std.Io) !LuaCallbackContext {
+        var diagnostic: data.Diagnostic = .{};
+        const generation = try client.Generation.loadSource(.{ .gpa = gpa, .io = io, .diagnostic = &diagnostic }, .{
+            .source = "local t=require('telar'); return { api_version=2, client={ keybindings={ t.bind_global({'escape'}, function(ctx) return t.action.toggle_sidebar() end) } } }",
+            .source_name = "@benchmark.lua",
+            .number = 1,
+        });
+        return .{
+            .generation = generation,
+            .reference = generation.snapshot.bindings[0].action.lua_callback,
+        };
+    }
+
+    pub fn deinit(self: *LuaCallbackContext) void {
+        self.generation.deinit();
     }
 };

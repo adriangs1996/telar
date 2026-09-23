@@ -1,5 +1,4 @@
 const queue = @import("queue.zig");
-const Envelope = @import("Envelope.zig");
 const std = @import("std");
 const CredentialGate = @import("../CredentialGate.zig");
 const Credential = @import("../Credential.zig");
@@ -130,6 +129,11 @@ fn release(self: *Channel) void {
 }
 
 const QueuePublication = struct {
+    credential: Credential,
+    half: *Half,
+};
+
+const Envelope = struct {
     credential: Credential,
     half: *Half,
 };

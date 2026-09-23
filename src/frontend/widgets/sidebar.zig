@@ -15,7 +15,6 @@ const widget = @import("context_support.zig");
 const std = @import("std");
 const AgentLocationInput = @import("AgentLocationInput.zig");
 const AgentMetaInput = @import("AgentMetaInput.zig");
-const AgentStatusInput = @import("AgentStatusInput.zig");
 const icons_module = @import("../ui/icons.zig");
 const RuleInput = @import("RuleInput.zig");
 const State = @import("State.zig");
@@ -824,5 +823,12 @@ const ScrollbarInput = struct {
     state: *State,
     list: core.Rect,
     total: u16,
+    background: core.Color,
+};
+
+const AgentStatusInput = struct {
+    area: core.Rect,
+    status: core.AgentStatus,
+    animation_frame: u8,
     background: core.Color,
 };

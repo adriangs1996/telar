@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const lua_api = @import("lua-api");
 const BarCallbackContext = @import("BarCallbackContext.zig");
-const FieldTarget = @import("FieldTarget.zig");
 const Callback = @import("Callback.zig");
 const lua_value = @import("lua_value.zig");
 const Generation = @import("Generation.zig");
@@ -1456,4 +1455,9 @@ test "editor configuration rejects invalid executables before adoption" {
 const DecisionInput = struct {
     index: c_int,
     callback: *const Callback,
+};
+
+const FieldTarget = struct {
+    index: c_int,
+    name: [*:0]const u8,
 };

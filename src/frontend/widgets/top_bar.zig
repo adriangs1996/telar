@@ -15,7 +15,6 @@ const bar_content = @import("bar_content.zig");
 const std = @import("std");
 const WorkspaceDraw = @import("WorkspaceDraw.zig");
 const widget = @import("context_support.zig");
-const WorkspaceNames = @import("WorkspaceNames.zig");
 const Plan = @import("../ui/Plan.zig");
 
 pub const empty_right: data.bar_values.Slot = .empty;
@@ -623,4 +622,10 @@ test "workspace navigation starts right after the telar mark" {
 const ListInput = struct {
     area: core.Rect,
     active_id: ?core.WorkspaceId,
+};
+
+const WorkspaceNames = struct {
+    snapshot: *const data.WorkspaceListSnapshot,
+    active_index: ?usize,
+    active_name: []const u8,
 };

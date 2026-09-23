@@ -2,7 +2,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
 const std = @import("std");
-const BorderTheme = @import("BorderTheme.zig");
 const Plan = @import("../presentation/Plan.zig");
 const Composition = @import("Composition.zig");
 const CompositionResult = @import("CompositionResult.zig");
@@ -447,4 +446,11 @@ const PaneProjection = struct {
     graphics_placeholder: bool,
     progress_state: core.PaneProgressState,
     progress_percent: ?u8,
+};
+
+const BorderTheme = struct {
+    focused: core.Color,
+    unfocused: core.Color,
+    tab_text: core.Color,
+    selected_tab_text: core.Color,
 };

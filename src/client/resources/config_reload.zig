@@ -9,7 +9,7 @@ const default_bindings = @import("../config/default_bindings.zig");
 const core = @import("telar-core");
 const Loaded = @import("Loaded.zig");
 const ConfigReloadState = @import("ConfigReloadState.zig");
-const ScheduleArgs = @import("ScheduleArgs.zig");
+const Workers = @import("../execution/Workers.zig");
 const WaitArgs = @import("WaitArgs.zig");
 const Adoption = @import("Adoption.zig");
 const ResolveArgs = @import("ResolveArgs.zig");
@@ -290,4 +290,15 @@ const Partial = struct {
             gpa.destroy(trust);
         }
     }
+};
+
+const ScheduleArgs = struct {
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    workers: Workers,
+    path: []const u8,
+    profile: ?[]const u8,
+    trust_path: []const u8,
+    current_generation: *const Generation,
+    current_registry: *const Registry,
 };

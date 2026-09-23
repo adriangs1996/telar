@@ -15,7 +15,6 @@ const Mark = @import("../ui/Mark.zig");
 const IconsSlot = @import("IconsSlot.zig");
 const ui_icons = @import("../ui/icons.zig");
 const Placement = @import("Placement.zig");
-const RasterSize = @import("RasterSize.zig");
 const Rasterizer = @import("Rasterizer.zig");
 const Surface = @import("Surface.zig");
 const Bitmap = @import("Bitmap.zig");
@@ -422,4 +421,9 @@ const AtlasInput = struct {
     raster_size: RasterSize,
     atlas_width: u32,
     slots: []const IconsSlot,
+};
+
+const RasterSize = struct {
+    width: u16,
+    height: u16,
 };

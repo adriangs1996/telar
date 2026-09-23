@@ -12,7 +12,6 @@ const core = @import("telar-core");
 const lua_api = @import("lua-api");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
-const FieldLookup = @import("FieldLookup.zig");
 const std = @import("std");
 const TextValue = @import("TextValue.zig");
 
@@ -232,4 +231,10 @@ const EntryInput = struct {
     entry: c_int,
     manifest: *core.AgentManifest,
     position: usize,
+};
+
+const FieldLookup = struct {
+    entry: c_int,
+    position: usize,
+    field: [:0]const u8,
 };

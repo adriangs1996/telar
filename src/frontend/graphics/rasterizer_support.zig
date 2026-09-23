@@ -9,7 +9,6 @@ const RasterizerPoint = @import("RasterizerPoint.zig");
 const Color = @import("Color.zig");
 const freetype = @import("freetype");
 const Surface = @import("Surface.zig");
-const PixelBlend = @import("PixelBlend.zig");
 const Rasterizer = @import("Rasterizer.zig");
 const std = @import("std");
 
@@ -161,4 +160,10 @@ const BitmapBlend = struct {
     bitmap: freetype.c.FT_Bitmap,
     destination: RasterizerPoint,
     color: Color,
+};
+
+const PixelBlend = struct {
+    point: struct { x: u32, y: u32 },
+    color: Color,
+    alpha: u8,
 };

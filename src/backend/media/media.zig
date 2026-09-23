@@ -12,7 +12,6 @@ const vt = @import("ghostty-vt");
 const std = @import("std");
 const FileQueryControl = @import("FileQueryControl.zig");
 const FilterInput = @import("FilterInput.zig");
-const FilterStats = @import("FilterStats.zig");
 const SharedFrame = @import("SharedFrame.zig");
 const SharedFrameKey = @import("SharedFrameKey.zig");
 const FrameResource = @import("FrameResource.zig");
@@ -912,4 +911,19 @@ const SelectedSharedFrame = struct {
     recent_starts: [8]usize = undefined,
     recent_count: u4,
     start: ?usize = null,
+};
+
+const FilterStats = struct {
+    /// Terminal-browser publishes complete shared-memory replacements inside one
+    /// synchronized-output envelope. A busy media actor only needs the newest
+    /// replacement for each placement; mapping older frames would spend the pane
+    /// quota and then overwrite the result. Bytes outside this exact shape remain
+    /// untouched and therefore keep Ghostty as the sole terminal emulator.
+    discarded: u64 = 0,
+    unavailable: u64 = 0,
+    forwarded: u64 = 0,
+    /// The subset of `forwarded` the sink loaded without the parser.
+    direct: u64 = 0,
+    /// The subset of `direct` whose pixels came from a child file.
+    file: u64 = 0,
 };

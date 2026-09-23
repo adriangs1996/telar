@@ -4,7 +4,6 @@ const Counters = @import("../Counters.zig");
 const Credential = @import("../Credential.zig");
 const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
-const Status = @import("Status.zig");
 const metrics = @import("../metrics.zig");
 const TransformContext = @import("../TransformContext.zig");
 const Exchange = @This();
@@ -105,4 +104,10 @@ const TransformTarget = struct {
     direction: middleware.Direction,
     kind: middleware.HeaderKind,
     stream_id: u32,
+};
+
+const Status = struct {
+    phase: middleware.Phase,
+    stream_id: u32,
+    status_code: u16,
 };

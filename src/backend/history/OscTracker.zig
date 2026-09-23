@@ -1,7 +1,6 @@
 const OscScanner = @import("OscScanner.zig");
 const osc_ops = @import("osc.zig");
 const std = @import("std");
-const Observation = @import("Observation.zig");
 const builtin = @import("builtin");
 const Clock = @import("Clock.zig");
 const OscCompletion = @import("OscCompletion.zig");
@@ -216,5 +215,10 @@ fn setCwd(self: *Tracker, cwd: []const u8) void {
 
 const SemanticObservation = struct {
     body: []const u8,
+    clock: Clock,
+};
+
+const Observation = struct {
+    bytes: []const u8,
     clock: Clock,
 };

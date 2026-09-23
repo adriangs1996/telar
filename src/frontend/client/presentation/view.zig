@@ -6,7 +6,6 @@ const core = @import("telar-core");
 const Plan = @import("../../presentation/Plan.zig");
 const tab_rename_module = @import("../../widgets/tab_rename.zig");
 const Context = @import("../../widgets/Context.zig");
-const PickerSources = @import("PickerSources.zig");
 const GotoPickerOutput = @import("../../widgets/GotoPickerOutput.zig");
 const goto_picker_module = @import("../../widgets/goto_picker.zig");
 const Row = @import("../../widgets/Row.zig");
@@ -1409,4 +1408,15 @@ const TestingComposition = struct {
     area: core.Rect,
     palette: *const data.Palette = &data.theme_support.default_theme.palette,
     bottom_reservation: ?data.PaneBottomReservation = null,
+};
+
+const PickerSources = struct {
+    prompt: *data.Prompt,
+    agents: *const data.AgentSnapshot,
+    workspaces: *const data.WorkspaceListSnapshot,
+    /// The client model whose tabs the picker lists.
+    model: ?*const data.ClientModel,
+    history: *const data.HistoryPaletteState,
+    suggestion: *const data.SuggestionState,
+    graphical_frame: bool,
 };

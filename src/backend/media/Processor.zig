@@ -8,7 +8,7 @@ const Responses = @import("Responses.zig");
 const Stats = @import("Stats.zig");
 const SharedFrameView = @import("SharedFrameView.zig");
 const FileQueryView = @import("FileQueryView.zig");
-const LiveImages = @import("LiveImages.zig");
+const vt = @import("ghostty-vt");
 const shared_transfer = @import("shared_transfer.zig");
 const PreparedTransfer = @import("PreparedTransfer.zig");
 const Processor = @This();
@@ -297,4 +297,17 @@ const GraphicsIngest = struct {
     io: std.Io,
     previous_loading_id: ?u32,
     completed_commands: usize,
+};
+
+const LiveImages = struct {
+    storage: *const vt.kitty.graphics.ImageStorage,
+
+    pub fn holds(self: LiveImages, image_key: core.ImageKey) bool {
+        const image = self.storage.imageById(image_key.image_id) orelse return false;
+        return image.generation == image_key.generation;
+    }
+
+    pub fn holdsImage(self: LiveImages, image_id: u32) bool {
+        return self.storage.imageById(image_id) != null;
+    }
 };

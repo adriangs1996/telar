@@ -4,7 +4,6 @@ const client = @import("telar-client");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
 const Rasterizer = @import("Rasterizer.zig");
-const ToastSlot = @import("ToastSlot.zig");
 const icon_graphics = @import("icons.zig");
 const Preparation = @import("Preparation.zig");
 const toast = @import("toast.zig");
@@ -537,4 +536,20 @@ const SlotRender = struct {
     slot: *ToastSlot,
     item: *const data.NotificationItem,
     key: ToastRenderKey,
+};
+
+const ToastSlot = struct {
+    id: data.NotificationId = .invalid,
+    pixels: []u8 = &.{},
+    width: u32 = 0,
+    height: u32 = 0,
+    key: ?ToastRenderKey = null,
+    failed_key: ?ToastRenderKey = null,
+    placement: ?kitty_protocol.OutputPlacement = null,
+    emitted_placement: ?kitty_protocol.OutputPlacement = null,
+    visible: bool = false,
+    image_dirty: bool = false,
+    image_emitted: bool = false,
+    transfer_offset: usize = 0,
+    transfer_key: ?ToastRenderKey = null,
 };

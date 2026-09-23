@@ -4,7 +4,7 @@ const std = @import("std");
 const vt = @import("ghostty-vt");
 const InputScanner = @import("InputScanner.zig");
 const TerminalTracker = @import("TerminalTracker.zig");
-const TerminalCollected = @import("TerminalCollected.zig");
+const Command = @import("Command.zig");
 const osc = @import("osc.zig");
 const Clock = @import("Clock.zig");
 
@@ -486,5 +486,21 @@ const TypeAheadFixture = struct {
 
     pub fn command(self: *const TypeAheadFixture) []const u8 {
         return self.collected.bytes[0..self.collected.len];
+    }
+};
+
+const TerminalCollected = struct {
+    bytes: [256]u8 = undefined,
+    len: usize = 0,
+    cwd: [256]u8 = undefined,
+    cwd_len: usize = 0,
+    exit_code: ?i32 = null,
+
+    pub fn emit(self: *TerminalCollected, command: Command) void {
+        self.len = @min(command.bytes.len, self.bytes.len);
+        @memcpy(self.bytes[0..self.len], command.bytes[0..self.len]);
+        self.cwd_len = @min(command.cwd.len, self.cwd.len);
+        @memcpy(self.cwd[0..self.cwd_len], command.cwd[0..self.cwd_len]);
+        self.exit_code = command.exit_code;
     }
 };

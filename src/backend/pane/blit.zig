@@ -5,7 +5,6 @@ const ColorSource = @import("ColorSource.zig");
 const std = @import("std");
 const RowTarget = @import("RowTarget.zig");
 const vt = @import("ghostty-vt");
-const RowProjection = @import("RowProjection.zig");
 const BlitPane = @import("BlitPane.zig");
 
 // Copying an emulated screen into our cell grid.
@@ -911,4 +910,10 @@ const Operation = struct {
     terminal: *const vt.Terminal,
     state: *vt.RenderState,
     options: Options,
+};
+
+const RowProjection = struct {
+    target: RowTarget,
+    cells: std.MultiArrayList(vt.RenderState.Cell).Slice,
+    colors: ColorSource,
 };

@@ -118,8 +118,6 @@ pub fn basename(path: []const u8) []const u8 {
     return trimmed[split + 1 ..];
 }
 
-const TestEnvironment = @import("TestEnvironment.zig");
-
 test "expansion resolves home, variables and relative paths against the pane" {
     var environment = try TestEnvironment.init(&.{ .{ "HOME", "/home/me" }, .{ "PROJECT", "telar" } });
     defer environment.deinit();
@@ -163,4 +161,29 @@ const ExpansionInput = struct {
     /// Absolute directory relative paths resolve against, usually the focused
     /// pane's cwd; empty when the client does not know it.
     base: []const u8,
+};
+
+/// A process environment block built from test entries.
+const TestEnvironment = struct {
+    map: std.process.Environ.Map,
+    block: std.process.Environ.PosixBlock,
+
+    pub fn init(entries: []const [2][]const u8) !TestEnvironment {
+        var map = std.process.Environ.Map.init(std.testing.allocator);
+        errdefer map.deinit();
+        for (entries) |entry| {
+            try map.put(entry[0], entry[1]);
+        }
+        const block = try map.createPosixBlock(std.testing.allocator, .{});
+        return .{ .map = map, .block = block };
+    }
+
+    pub fn deinit(self: *TestEnvironment) void {
+        self.block.deinit(std.testing.allocator);
+        self.map.deinit();
+    }
+
+    pub fn environ(self: *const TestEnvironment) std.process.Environ {
+        return .{ .block = self.block };
+    }
 };

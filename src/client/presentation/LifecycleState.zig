@@ -1,7 +1,7 @@
 const Observation = @import("Observation.zig");
 const Geometry = @import("Geometry.zig");
 const std = @import("std");
-const Submission = @import("Submission.zig");
+const data = @import("model");
 const lifecycle = @import("lifecycle.zig");
 const PresentationDelivery = @import("PresentationDelivery.zig");
 const State = @This();
@@ -88,4 +88,11 @@ const Flight = struct {
     observation: Observation,
     geometry: Geometry,
     delivery: PresentationDelivery,
+};
+
+const Submission = struct {
+    observation: Observation,
+    commit: data.PresentationCommit,
+    geometry: Geometry = .{},
+    media_pending: bool = false,
 };

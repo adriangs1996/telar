@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const model = @import("../model.zig");
 const CommandFinished = @import("../CommandFinished.zig");
-const LocationColumns = @import("LocationColumns.zig");
 const Entry = @import("../Entry.zig");
 const StatsQuery = @import("../StatsQuery.zig");
 const Store = @import("Store.zig");
@@ -1080,3 +1079,5 @@ const ColumnMigration = struct {
     column: []const u8,
     alter_sql: [:0]const u8,
 };
+
+const LocationColumns = struct { kind: c_int, id: u64 };

@@ -4,7 +4,8 @@ const Mouse = @import("Mouse.zig");
 const InputModes = @import("InputModes.zig");
 const frame_support = @import("frame_support.zig");
 const Scroll = @import("Scroll.zig");
-const SpanIterator = @import("SpanIterator.zig");
+const Decoder = @import("Decoder.zig");
+const CellIterator = @import("CellIterator.zig");
 const FrameView = @This();
 
 pane_id: id.PaneId,
@@ -32,3 +33,38 @@ pub fn spans(self: FrameView) SpanIterator {
         .remaining = self.span_count,
     };
 }
+
+const SpanIterator = struct {
+    decoder: Decoder,
+    remaining: u16,
+
+    pub fn next(self: *SpanIterator) error{Truncated}!?SpanView {
+        if (self.remaining == 0) {
+            return null;
+        }
+        self.remaining -= 1;
+
+        const start = try self.decoder.readInt(u32);
+        const count = try self.decoder.readInt(u32);
+        const encoded_length = try self.decoder.readInt(u32);
+        const encoded_cells = try self.decoder.readBytes(encoded_length);
+        return .{
+            .start = start,
+            .cell_count = count,
+            .encoded_cells = encoded_cells,
+        };
+    }
+
+    const SpanView = struct {
+        start: u32,
+        cell_count: u32,
+        encoded_cells: []const u8,
+
+        pub fn cells(self: SpanView) CellIterator {
+            return .{
+                .decoder = .init(self.encoded_cells),
+                .remaining = self.cell_count,
+            };
+        }
+    };
+};

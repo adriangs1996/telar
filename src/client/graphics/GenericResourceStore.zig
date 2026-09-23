@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const CreditType = @import("Credit.zig");
-const SharedPixels = @import("SharedPixels.zig");
 const std = @import("std");
 const ImageIdentity = @import("ImageIdentity.zig");
 const PlacementIdentity = @import("PlacementIdentity.zig");
@@ -766,4 +765,17 @@ pub fn Type(comptime Delivery: type) type {
 const PixelAllocation = struct {
     pixels: []u8,
     shared: ?SharedPixels = null,
+};
+
+const SharedPixels = struct {
+    name: [64]u8 = undefined,
+    len: u8,
+
+    pub fn slice(self: *const SharedPixels) []const u8 {
+        return self.name[0..self.len];
+    }
+
+    pub fn sliceZ(self: *const SharedPixels) [:0]const u8 {
+        return self.name[0..self.len :0];
+    }
 };

@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const tlsz = @import("tls");
-const MintOptions = @import("MintOptions.zig");
+const Authority = @import("Authority.zig");
 
 pub const Error = error{
     ContextFailed,
@@ -276,4 +276,11 @@ const Cursor = struct {
     pub fn big16(self: *Cursor) !u16 {
         return std.mem.readInt(u16, (try self.take(2))[0..2], .big);
     }
+};
+
+const MintOptions = struct {
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    authority: *const Authority,
+    host: []const u8,
 };

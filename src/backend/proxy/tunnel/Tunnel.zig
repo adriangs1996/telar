@@ -1,5 +1,9 @@
 const core = @import("telar-core");
-const Dependencies = @import("Dependencies.zig");
+const Resources = @import("Resources.zig");
+const Registry = @import("../Registry.zig");
+const Pipeline = @import("../Pipeline.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
+const Producer = @import("../capture/Producer.zig");
 const std = @import("std");
 const head_support = @import("../http/head_support.zig");
 const tunnel_namespace = @import("tunnel_namespace.zig");
@@ -131,4 +135,14 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
 const TunnelOptions = struct {
     dependencies: Dependencies,
     child: std.Io.net.Stream,
+};
+
+const Dependencies = struct {
+    tls: Resources,
+    credentials: *Registry,
+    pipeline: *const Pipeline,
+    transforms: *const TransformPipeline,
+    has_custom_transformers: bool,
+    connection_ids: *std.atomic.Value(u64),
+    captures: *Producer,
 };

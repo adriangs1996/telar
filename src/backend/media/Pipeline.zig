@@ -5,7 +5,7 @@ const Batch = @import("Batch.zig");
 const media = @import("media.zig");
 const Initialization = @import("Initialization.zig");
 const png = @import("png.zig");
-const Processing = @import("Processing.zig");
+const Stats = @import("Stats.zig");
 const FrameResource = @import("FrameResource.zig");
 const shared_transfer = @import("shared_transfer.zig");
 const Pipeline = @This();
@@ -223,4 +223,9 @@ const SharedMemoryAvailability = struct {
                 shared_transfer.validateChildFile(resource.encoded_name, resource.byte_len),
         };
     }
+};
+
+const Processing = struct {
+    current_size: core.TerminalSize,
+    stats: *Stats,
 };

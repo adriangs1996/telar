@@ -11,7 +11,6 @@ const protocol = @import("protocol.zig");
 const LoadContext = @import("LoadContext.zig");
 const Package = @import("Package.zig");
 const generation_support = @import("../config/generation_support.zig");
-const Installation = @import("Installation.zig");
 const Registry = @import("Registry.zig");
 
 pub const max_package_files = 256;
@@ -580,4 +579,9 @@ test "installation copies and revalidates the exact inspected package" {
 const FingerprintUpdate = struct {
     hasher: *std.hash.Wyhash,
     root: []const u8,
+};
+
+const Installation = struct {
+    package: *const Package,
+    destination: []const u8,
 };

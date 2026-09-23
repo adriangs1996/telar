@@ -3,7 +3,6 @@
 const core = @import("telar-core");
 const std = @import("std");
 const Credential = @import("../Credential.zig");
-const TestServiceFixture = @import("TestServiceFixture.zig");
 const Pane = @import("Pane.zig");
 const Headers = @import("../Headers.zig");
 const Service = @import("Service.zig");
@@ -460,3 +459,30 @@ test "loopback service maps CONNECT authentication and target rejections" {
 }
 
 const TestOrigin = struct { listener: std.Io.net.Server, port: u16 };
+
+const TestServiceFixture = struct {
+    temp: std.testing.TmpDir = undefined,
+    key: [std.fs.max_path_bytes]u8 = undefined,
+    certificate: [std.fs.max_path_bytes]u8 = undefined,
+    bundle: [std.fs.max_path_bytes]u8 = undefined,
+    service: ?*Service = null,
+
+    pub fn init(self: *TestServiceFixture, io: std.Io, gpa: std.mem.Allocator) !void {
+        self.temp = std.testing.tmpDir(.{});
+        errdefer self.temp.cleanup();
+
+        var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
+        const directory_len = try self.temp.dir.realPath(io, &directory_buffer);
+        const directory = directory_buffer[0..directory_len];
+        self.service = try Service.create(io, gpa, .{
+            .key = try std.fmt.bufPrint(&self.key, "{s}/ca-key.pem", .{directory}),
+            .certificate = try std.fmt.bufPrint(&self.certificate, "{s}/ca-cert.pem", .{directory}),
+            .bundle = try std.fmt.bufPrint(&self.bundle, "{s}/ca-bundle.pem", .{directory}),
+        });
+    }
+
+    pub fn deinit(self: *TestServiceFixture) void {
+        self.service.?.destroy();
+        self.temp.cleanup();
+    }
+};

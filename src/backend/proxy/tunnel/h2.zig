@@ -16,7 +16,13 @@ const Exchange = @import("Exchange.zig");
 const request_support = @import("../provider/request_support.zig");
 const exchange_mod = @import("exchange_support.zig");
 const ResponseBody = @import("../h2/ResponseBody.zig");
-const H2TestHarness = @import("H2TestHarness.zig");
+const core = @import("telar-core");
+const MiddlewareEvent = @import("../MiddlewareEvent.zig");
+const Pipeline = @import("../Pipeline.zig");
+const Counters = @import("../Counters.zig");
+const identity = @import("../identity.zig");
+const ExpectedObservation = @import("ExpectedObservation.zig");
+const Snapshot = @import("../Snapshot.zig");
 const Streams = @import("../provider/Streams.zig");
 const TransformPipeline = @import("../TransformPipeline.zig");
 const ResponseStreams = @import("../provider/ResponseStreams.zig");
@@ -378,4 +384,55 @@ const H2CaptureGate = struct {
     pub fn accepts(_: *anyopaque, _: *const Credential) bool {
         return true;
     }
+};
+
+const H2TestHarness = struct {
+    capture: H2Capture = .{},
+    pipeline: Pipeline = .{},
+    counters: Counters = .{},
+    exchange: Exchange = undefined,
+
+    pub fn init(self: *H2TestHarness) !void {
+        try self.pipeline.add(.{ .context = &self.capture, .observe = H2Capture.observe });
+        self.exchange = .{
+            .io = std.testing.io,
+            .pipeline = &self.pipeline,
+            .telemetry = &self.counters,
+            .credential = .{
+                .pane_id = try core.pane(13),
+                .pane_generation = 17,
+                .token = .{0x24} ** identity.token_bytes,
+            },
+            .dialect = .anthropic_messages,
+            .connection_id = 29,
+            .protocol = .h2,
+        };
+    }
+
+    pub fn expectObservations(self: *const H2TestHarness, expected: []const ExpectedObservation) !void {
+        try std.testing.expectEqual(expected.len, self.capture.len);
+
+        for (expected, self.capture.events[0..self.capture.len]) |wanted, event| {
+            try std.testing.expectEqual(wanted.phase, event.phase);
+            try std.testing.expectEqual(wanted.stream_id, event.stream_id);
+        }
+    }
+
+    pub fn snapshot(self: *const H2TestHarness) Snapshot {
+        return self.counters.snapshot(.{
+            .connections = .{ .active = 0, .limit_drops = 0 },
+            .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },
+        });
+    }
+
+    const H2Capture = struct {
+        events: [16]MiddlewareEvent = undefined,
+        len: usize = 0,
+
+        pub fn observe(context: *anyopaque, _: std.Io, event: MiddlewareEvent) void {
+            const observed: *H2Capture = @ptrCast(@alignCast(context));
+            observed.events[observed.len] = event;
+            observed.len += 1;
+        }
+    };
 };

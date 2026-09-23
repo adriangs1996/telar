@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const TransmissionChunks = @import("TransmissionChunks.zig");
 const PngTransmissionChunks = @import("PngTransmissionChunks.zig");
-const Transmission = @import("Transmission.zig");
 const PlacementCommand = @import("PlacementCommand.zig");
 
 pub const transmission_budget_per_frame: usize = 256 * 1024;
@@ -93,4 +92,10 @@ const SharedTransmission = struct {
     external_id: u32,
     image: core.Image,
     name: []const u8,
+};
+
+const Transmission = struct {
+    external_id: u32,
+    image: core.Image,
+    pixels: []const u8,
 };

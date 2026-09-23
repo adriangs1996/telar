@@ -6,7 +6,6 @@ const MarkerScreen = @import("MarkerScreen.zig");
 const MarkerPosition = @import("MarkerPosition.zig");
 const std = @import("std");
 const MarkerScan = @import("MarkerScan.zig");
-const MarkerTail = @import("MarkerTail.zig");
 
 const marker_head = "[Image";
 pub const marker_head_width: u16 = marker_head.len;
@@ -328,4 +327,9 @@ const MarkerBoundary = struct {
     ordinal: u16,
     cursor: core.Cursor,
     deletion: model_data.AttachmentMarkerDeletion,
+};
+
+const MarkerTail = struct {
+    number: u16,
+    end: core.Point,
 };

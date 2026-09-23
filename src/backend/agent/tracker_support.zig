@@ -6,7 +6,6 @@
 const core = @import("telar-core");
 const Identity = @import("Identity.zig");
 const types = @import("types.zig");
-const TestProxyObservation = @import("TestProxyObservation.zig");
 const Tracker = @import("Tracker.zig");
 const std = @import("std");
 const Agent = @import("Agent.zig");
@@ -1504,5 +1503,11 @@ test "managed sidebar activity excludes old turns and child output and owns boun
 
 const TestReadyPrompt = struct {
     provider: core.AgentProvider,
+    observed_at_ms: i64,
+};
+
+const TestProxyObservation = struct {
+    dialect: types.ApiDialect,
+    phase: types.ProxyPhase,
     observed_at_ms: i64,
 };

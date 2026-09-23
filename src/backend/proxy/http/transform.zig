@@ -9,7 +9,6 @@ const Headers = @import("../Headers.zig");
 const head = @import("head_support.zig");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
-const TestDecisionInput = @import("TestDecisionInput.zig");
 const Transformation = @import("../Transformation.zig");
 const TransformPipeline = @import("../TransformPipeline.zig");
 const request_support = @import("../provider/request_support.zig");
@@ -323,4 +322,11 @@ const Encoding = struct {
     start_line: []const u8,
     is_response: bool,
     headers: *const Headers,
+};
+
+const TestDecisionInput = struct {
+    original: []const u8,
+    is_response: bool,
+    pipeline: *const TransformPipeline,
+    output: []u8,
 };

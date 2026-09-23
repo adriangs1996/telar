@@ -6,7 +6,6 @@ const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
 const CommandSpec = @import("CommandSpec.zig");
 const std = @import("std");
-const IntegerInput = @import("IntegerInput.zig");
 
 pub fn parseAgentDescriptions(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
@@ -135,4 +134,17 @@ const CommandInput = struct {
     table: c_int,
     label: []const u8,
     command_path: []const u8,
+};
+
+const IntegerInput = struct {
+    table: c_int,
+    field: [:0]const u8,
+    label: []const u8,
+    bounds: IntegerBounds,
+
+    const IntegerBounds = struct {
+        default: u32,
+        min: u32,
+        max: u32,
+    };
 };

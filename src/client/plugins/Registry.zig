@@ -5,7 +5,6 @@ const LoadContext = @import("LoadContext.zig");
 const plugins = @import("plugins.zig");
 const std = @import("std");
 const WorkerRequest = @import("WorkerRequest.zig");
-const BatchAuthorization = @import("BatchAuthorization.zig");
 const Registry = @This();
 
 packages: [data.config_values.max_plugins]Package = undefined,
@@ -168,4 +167,11 @@ const Invocation = struct {
     action_index: u8,
     plugin_id: u64,
     action_id: u64,
+};
+
+const BatchAuthorization = struct {
+    package_index: u8,
+    plugin_id: u64,
+    digest: core.Digest,
+    batch: *const data.EffectBatch,
 };

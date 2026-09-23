@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const client = @import("telar-client");
 const SourceSide = @import("SourceSide.zig");
-const CapturedSpan = @import("CapturedSpan.zig").CapturedSpan;
 const captures = @import("captures.zig");
 const limits = @import("limits.zig");
 const Self = @This();
@@ -143,4 +142,10 @@ const NativeRequest = extern struct {
     spans: [*]CapturedSpan,
     capacity: usize,
     count: usize = 0,
+};
+
+const CapturedSpan = extern struct {
+    start: u32,
+    end: u32,
+    capture: [*:0]const u8,
 };

@@ -11,7 +11,6 @@ const diff = @import("../presentation/diff.zig");
 const Screen = @import("../presentation/Screen.zig");
 const PaneCursor = @import("PaneCursor.zig");
 const PatchSink = @import("../presentation/PatchSink.zig");
-const BorderInput = @import("BorderInput.zig");
 const Plan = @import("../presentation/Plan.zig");
 const Result = @import("Result.zig");
 const fullscreen_tabs = @import("fullscreen_tabs.zig");
@@ -1277,4 +1276,16 @@ const TestingComposition = struct {
     copy: ?client.CopyProjection = null,
     bottom_reservation: ?data.PaneBottomReservation = null,
     force: bool = false,
+};
+
+const BorderInput = struct {
+    view: data.LayoutView,
+    foreground_name: []const u8,
+    /// The client model when the pane is fullscreen, with its tab's slot.
+    fullscreen_model: ?*const data.ClientModel = null,
+    tab: usize = 0,
+    progress_state: core.PaneProgressState,
+    progress_percent: ?u8,
+    animation_frame: u8,
+    palette: *const data.Palette,
 };
