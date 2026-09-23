@@ -3,7 +3,6 @@ const OscTracker = @import("OscTracker.zig");
 const vt = @import("ghostty-vt");
 const InputScanner = @import("InputScanner.zig");
 const terminal_ops = @import("terminal.zig");
-const TerminalInputObservation = @import("TerminalInputObservation.zig");
 const builtin = @import("builtin");
 const osc = @import("osc.zig");
 const Clock = @import("Clock.zig");
@@ -529,4 +528,11 @@ const TerminalOutputObservation = struct {
     bytes: []const u8,
     clock: Clock,
     shell_foreground: ?bool,
+};
+
+const TerminalInputObservation = struct {
+    terminal: *vt.Terminal,
+    bytes: []const u8,
+    shell_foreground: bool,
+    clock: Clock,
 };

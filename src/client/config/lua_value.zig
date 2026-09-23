@@ -6,7 +6,6 @@ const RequiredField = @import("RequiredField.zig");
 const std = @import("std");
 const OptionalInteger = @import("OptionalInteger.zig");
 const Fields = @import("Fields.zig");
-const Array = @import("Array.zig");
 
 pub fn raise(state: *lua_api.c.lua_State, message: [*:0]const u8) c_int {
     _ = lua_api.c.lua_pushstring(state, message);
@@ -215,4 +214,10 @@ const OptionalString = struct {
     index: c_int,
     name: [*:0]const u8,
     default: []const u8,
+};
+
+const Array = struct {
+    index: c_int,
+    count: usize,
+    path: []const u8,
 };

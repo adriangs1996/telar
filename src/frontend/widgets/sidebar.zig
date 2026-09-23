@@ -10,7 +10,6 @@ const data = @import("model");
 const Context = @import("Context.zig");
 const SidebarInput = @import("SidebarInput.zig");
 const Semantic = @import("Semantic.zig");
-const AgentLineInput = @import("AgentLineInput.zig");
 const widget = @import("context_support.zig");
 const std = @import("std");
 const AgentLocationInput = @import("AgentLocationInput.zig");
@@ -835,5 +834,14 @@ const AgentStatusInput = struct {
 const RuleInput = struct {
     area: core.Rect,
     y: u16,
+    background: core.Color,
+};
+
+const AgentLineInput = struct {
+    sidebar: SidebarInput,
+    semantic: *Semantic,
+    y: u16,
+    agent: *const data.Agent,
+    line: u2,
     background: core.Color,
 };

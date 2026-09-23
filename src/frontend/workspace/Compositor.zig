@@ -7,7 +7,7 @@ const Composition = @import("Composition.zig");
 const CompositionResult = @import("CompositionResult.zig");
 const RenderStats = @import("RenderStats.zig");
 const multiplexer = @import("multiplexer.zig");
-const IncrementalComposition = @import("IncrementalComposition.zig");
+const Screen = @import("../presentation/Screen.zig");
 const CompositionInput = @import("CompositionInput.zig");
 const thread_surface = @import("thread_surface.zig");
 /// Presentation-owned cache for one active tab. It borrows an immutable
@@ -460,4 +460,14 @@ const CopyChangeComposition = struct {
     rows: u16,
     cols: u16,
     stats: *RenderStats,
+};
+
+const IncrementalComposition = struct {
+    model: *const data.ClientModel,
+    /// The composed tab's slot in `model.tabs`.
+    tab: usize,
+    screen: *Screen,
+    target: *core.Buffer,
+    previous_copy: ?client.CopyProjection,
+    copy_changed: bool,
 };

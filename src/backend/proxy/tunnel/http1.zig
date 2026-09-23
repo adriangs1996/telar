@@ -10,7 +10,6 @@ const RequestHead = @import("../http/RequestHead.zig");
 const http = @import("../http/http.zig");
 const connection_module = @import("../http/connection.zig");
 const types = @import("../http/types.zig");
-const RequestBodyObserver = @import("RequestBodyObserver.zig");
 const exchange_mod = @import("exchange_support.zig");
 const Half = @import("../capture/Half.zig");
 const buffer_support = @import("../capture/buffer_support.zig");
@@ -713,4 +712,21 @@ const Http1TestHarness = struct {
             observed.len += 1;
         }
     };
+};
+
+const RequestBodyObserver = struct {
+    request: *Observer,
+    capture_half: ?*Half = null,
+
+    /// Feeds one already-forwarded payload fragment to request classification.
+    ///
+    /// ```zig
+    /// observer.observe(.{ .payload = bytes, .forwarded_bytes = bytes.len });
+    /// ```
+    pub fn observe(self: RequestBodyObserver, fragment: Fragment) void {
+        self.request.feed(fragment.payload);
+        if (self.capture_half) |half| {
+            _ = half.append(.request_body, fragment.payload);
+        }
+    }
 };

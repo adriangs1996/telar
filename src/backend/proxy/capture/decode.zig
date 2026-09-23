@@ -1,7 +1,6 @@
 //! Bounded content decoding for completed captures.
 
 const std = @import("std");
-const Options = @import("Options.zig");
 
 const c = @cImport({
     @cInclude("brotli/decode.h");
@@ -316,5 +315,11 @@ const DecodeInput = struct {
 };
 
 const CollectOptions = struct {
+    max_bytes: usize,
+};
+
+const Options = struct {
+    input: []const u8,
+    encoding: []const u8,
     max_bytes: usize,
 };

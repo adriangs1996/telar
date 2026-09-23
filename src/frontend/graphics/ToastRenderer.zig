@@ -8,7 +8,6 @@ const icon_graphics = @import("icons.zig");
 const core = @import("telar-core");
 const toast = @import("toast.zig");
 const toast_module = @import("../widgets/toast.zig");
-const ToastRenderKey = @import("ToastRenderKey.zig");
 const kitty_codec = @import("kitty_codec.zig");
 const Surface = @import("Surface.zig");
 const Renderer = @This();
@@ -559,4 +558,17 @@ const Preparation = struct {
     center: *const data.Center,
     palette: *const data.Palette,
     icon_theme: data.icons.Theme = .unicode,
+};
+
+const ToastRenderKey = struct {
+    id: data.NotificationId,
+    level: data.NotificationLevel,
+    cell_width: u16,
+    cell_height: u16,
+    card_columns: u16,
+    icon_theme: data.icons.Theme,
+    background: [3]u8,
+    accent: [3]u8,
+    text: [3]u8,
+    subtext: [3]u8,
 };

@@ -11,7 +11,6 @@ const std = @import("std");
 const Measurement = @import("Measurement.zig");
 const DamageContext = @import("DamageContext.zig");
 const FrameContext = @import("FrameContext.zig");
-const HistoryInputContext = @import("HistoryInputContext.zig");
 const EncodeContext = @import("EncodeContext.zig");
 const PipelineContext = @import("PipelineContext.zig");
 const OutboxContext = @import("OutboxContext.zig");
@@ -976,4 +975,8 @@ const LuaCallbackContext = struct {
 
 const DecodeContext = struct {
     payloads: [2][]const u8,
+};
+
+const HistoryInputContext = struct {
+    scanner: backend.InputScanner = .{},
 };

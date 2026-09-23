@@ -18,7 +18,6 @@ const FileInput = @import("FileInput.zig");
 const CallbackInvocation = @import("CallbackInvocation.zig");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const bar_values = @import("bar_values.zig");
-const CallbackPreparation = @import("CallbackPreparation.zig");
 const lua_value = @import("lua_value.zig");
 const plugins_config = @import("plugins.zig");
 const commands_config = @import("commands.zig");
@@ -1452,4 +1451,9 @@ const SourceInput = struct {
     config_dir: []const u8 = ".",
     number: u64,
     profile: ?[]const u8 = null,
+};
+
+const CallbackPreparation = struct {
+    invocation: CallbackInvocation,
+    expression: bool,
 };

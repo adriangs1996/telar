@@ -3,7 +3,6 @@ const core = @import("telar-core");
 
 const ReviewResult = @import("../../change_review/Result.zig");
 const PendingFailure = @import("PendingFailure.zig");
-const PendingWorkspaceSnapshot = @import("PendingWorkspaceSnapshot.zig");
 const PendingTabCreated = @import("PendingTabCreated.zig");
 const PendingTabRenamed = @import("PendingTabRenamed.zig");
 const PendingNotification = @import("PendingNotification.zig");
@@ -193,4 +192,9 @@ const PendingPaneText = struct {
     pane: PaneKey,
     rows: u16,
     source: core.PaneTextSource,
+};
+
+const PendingWorkspaceSnapshot = struct {
+    request_id: core.RequestId,
+    workspace: core.WorkspaceLocation,
 };

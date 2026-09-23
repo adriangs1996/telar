@@ -18,7 +18,6 @@ const ModalRenderer = @import("../../graphics/ModalRenderer.zig");
 const kitty_codec = @import("../../graphics/kitty_codec.zig");
 const Stats = @import("../../graphics/Stats.zig");
 const delivery_module = @import("../../attachments/delivery.zig");
-const Presented = @import("Presented.zig");
 const KittyGraphicsWriter = @import("../../graphics/KittyGraphicsWriter.zig");
 const PillRenderer = @import("../../graphics/PillRenderer.zig");
 
@@ -693,4 +692,9 @@ const CellPresentation = struct {
     /// The active tab's slot in `projection.model.tabs`.
     tab: usize,
     force: bool,
+};
+
+const Presented = struct {
+    presented_ns: u64,
+    commit: data.PresentationCommit,
 };
