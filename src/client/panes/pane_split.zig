@@ -18,14 +18,12 @@ pub fn requestPaneSplit(client: *Client, command: data.RequestPaneSplit) !?data.
     }
 
     const plan = client.model.planPaneSplit(command) orelse return null;
-    runtime_io.sendRuntime(
-        client,
+    client.model.to_runtime.push(
         .{
             .pane_resize = plan.provisional_resize,
         },
     ) catch |err| {
-        try runtime_io.sendRuntime(
-            client,
+        try client.model.to_runtime.push(
             .{
                 .pane_resize = plan.restore_resize,
             },
@@ -34,8 +32,7 @@ pub fn requestPaneSplit(client: *Client, command: data.RequestPaneSplit) !?data.
     };
 
     sendPaneSplitRequest(client, plan) catch |err| {
-        try runtime_io.sendRuntime(
-            client,
+        try client.model.to_runtime.push(
             .{
                 .pane_resize = plan.restore_resize,
             },
@@ -49,7 +46,7 @@ pub fn requestPaneSplit(client: *Client, command: data.RequestPaneSplit) !?data.
 fn sendPaneSplitRequest(client: *Client, plan: data.PaneSplitPlan) !void {
     const request_id = try client.model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
-        client,
+        &client.model,
         .{
             .registration = .{
                 .request_id = request_id,
@@ -101,8 +98,7 @@ pub fn confirmPaneSplit(client: *Client, command: data.ConfirmPaneSplit) !data.P
             try pane_focus.synchronizeActivePane(client);
         },
         .inactive => {
-            try runtime_io.sendRuntime(
-                client,
+            try client.model.to_runtime.push(
                 .{
                     .detach_pane = .{
                         .pane_id = commit.pane_id,
@@ -118,8 +114,7 @@ pub fn confirmPaneSplit(client: *Client, command: data.ConfirmPaneSplit) !data.P
                 return error.StalePaneSplitConfirmation;
             }
 
-            try runtime_io.sendRuntime(
-                client,
+            try client.model.to_runtime.push(
                 .{
                     .detach_pane = .{
                         .pane_id = commit.pane_id,
@@ -128,7 +123,7 @@ pub fn confirmPaneSplit(client: *Client, command: data.ConfirmPaneSplit) !data.P
             );
             if (client.model.workspace) |workspace| {
                 if (std.meta.eql(workspace, commit.location.workspace) and !client.model.request_lifecycle.tracker.has(.workspace_snapshot)) {
-                    try workspace_list_snapshot.requestWorkspaceSnapshot(client, workspace);
+                    try workspace_list_snapshot.requestWorkspaceSnapshot(&client.model, workspace);
                 }
             }
         },
@@ -140,16 +135,15 @@ pub fn confirmPaneSplit(client: *Client, command: data.ConfirmPaneSplit) !data.P
 /// Restores only the still-active requested target. A retired target is stale;
 /// a target in an inactive tab is already detached and needs no resize.
 /// A rejected request restores the active target before the failure notice.
-pub fn recoverPaneSplit(client: *Client, split: data.PaneSplit) !SplitRecovery {
-    return switch (client.model.recoverPaneSplit(
+pub fn recoverPaneSplit(model: *data.ClientModel, split: data.PaneSplit) !SplitRecovery {
+    return switch (model.recoverPaneSplit(
         .{
             .split = split,
-            .area = client.geometry().area,
+            .area = data.workbench.region(model).area,
         },
     )) {
         .resize => |resize| recovery: {
-            try runtime_io.sendRuntime(
-                client,
+            try model.to_runtime.push(
                 .{
                     .pane_resize = resize,
                 },

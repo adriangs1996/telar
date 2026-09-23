@@ -29,7 +29,7 @@ pub fn expectMarkerDeletion(client: *Client, pane_id: core.PaneId, command: data
         return;
     }
 
-    const policy = attachmentMarkerPolicy(client, target) orelse return;
+    const policy = attachmentMarkerPolicy(&client.model, target) orelse return;
     if (!attachment_prompt.editsMarkers(policy, key)) {
         return;
     }
@@ -85,8 +85,8 @@ pub fn observeAttachmentInput(client: *Client, pane_id: core.PaneId, command: da
 
 /// Resolves the marker policy of a target whose provider learns marker
 /// identities from committed frames.
-fn attachmentMarkerPolicy(client: *Client, target: data.AttachmentTarget) ?data.AttachmentMarkerPolicy {
-    const markers = client.model.attachmentMarkers(target) orelse return null;
+fn attachmentMarkerPolicy(model: *data.ClientModel, target: data.AttachmentTarget) ?data.AttachmentMarkerPolicy {
+    const markers = model.attachmentMarkers(target) orelse return null;
     const policy = attachment_prompt.markerPolicy(markers);
 
     return if (policy.learnsIdentity()) policy else null;
@@ -97,7 +97,7 @@ fn attachmentMarkerPolicy(client: *Client, target: data.AttachmentTarget) ?data.
 pub fn reconcileAttachmentFrame(client: *Client, pane_id: core.PaneId) bool {
     const shelf = client.attachments orelse return false;
     const target = shelf.visibleTarget() orelse return false;
-    if (target.pane_id != pane_id or attachmentMarkerPolicy(client, target) == null) {
+    if (target.pane_id != pane_id or attachmentMarkerPolicy(&client.model, target) == null) {
         return false;
     }
 

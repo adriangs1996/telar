@@ -678,7 +678,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     );
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(!data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)));
-    try std.testing.expect(!client_module.name_prompt.openNamePrompt(client, .rename_active_tab));
+    try std.testing.expect(!client_module.name_prompt.openNamePrompt(&client.model, .rename_active_tab));
     try std.testing.expect(!client.model.name_prompt.active());
     try support.expectNonCopyVersionEqual(version_before, client.model.version());
     try std.testing.expectEqual(version_before.copy + 1, client.model.version().copy);

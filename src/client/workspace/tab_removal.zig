@@ -23,7 +23,7 @@ pub fn detachTab(client: *Client, location: core.TabLocation) !void {
     }
 
     if (plan.owns_reported_focus) {
-        const outcome = try pane_focus.clearReportedFocus(client);
+        const outcome = try pane_focus.clearReportedFocus(&client.model);
         std.debug.assert(outcome == .applied);
     }
 
@@ -33,8 +33,7 @@ pub fn detachTab(client: *Client, location: core.TabLocation) !void {
             continue;
         }
 
-        try runtime_io.sendRuntime(
-            client,
+        try client.model.to_runtime.push(
             .{
                 .detach_pane = .{
                     .pane_id = pane.pane_id,
@@ -50,12 +49,12 @@ pub fn detachTab(client: *Client, location: core.TabLocation) !void {
 
 /// Counts the deliveries needed to detach one tab, including pending attachments.
 /// Example: `const required = try tab_removal.tabDetachmentCapacity(app, location);`
-pub fn tabDetachmentCapacity(client: *const Client, location: core.TabLocation) !usize {
-    const plan = try client.model.planTabDetachment(location);
+pub fn tabDetachmentCapacity(model: *const data.ClientModel, location: core.TabLocation) !usize {
+    const plan = try model.planTabDetachment(location);
     var required = @as(usize, @intFromBool(plan.paste_marker_required));
     required += @intFromBool(plan.focus_out_required);
     for (plan.slice()) |pane| {
-        required += @intFromBool(pane.attached or client.model.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id));
+        required += @intFromBool(pane.attached or model.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id));
     }
 
     return required;
@@ -67,37 +66,37 @@ pub fn requestTabClose(client: *Client) !bool {
     }
 
     const location = client.model.activeTabLocation() orelse return false;
-    const required = try tabDetachmentCapacity(client, location);
+    const required = try tabDetachmentCapacity(&client.model, location);
     try client.model.request_lifecycle.ensureCanStart(2);
     if (1 + required > client.model.to_runtime.availableCapacity()) {
         return error.ClientOutboxFull;
     }
 
     detachTab(client, location) catch |err| {
-        _ = try tab_snapshot.recoverTabSnapshot(client, location);
+        _ = try tab_snapshot.recoverTabSnapshot(&client.model, location);
         return err;
     };
 
     sendTabClose(
-        client,
+        &client.model,
         .{
             .location = location,
         },
     ) catch |err| {
-        _ = try tab_snapshot.recoverTabSnapshot(client, location);
+        _ = try tab_snapshot.recoverTabSnapshot(&client.model, location);
         return err;
     };
 
     return true;
 }
 
-pub fn recoverTabClose(client: *Client, location: core.TabLocation) !bool {
-    const active = client.model.activeTabLocation() orelse return false;
+pub fn recoverTabClose(model: *data.ClientModel, location: core.TabLocation) !bool {
+    const active = model.activeTabLocation() orelse return false;
     if (!std.meta.eql(active, location)) {
         return false;
     }
 
-    _ = try tab_snapshot.recoverTabSnapshot(client, location);
+    _ = try tab_snapshot.recoverTabSnapshot(model, location);
     return true;
 }
 
@@ -164,7 +163,7 @@ pub fn completeTabClose(client: *Client, closed: core.TabClosed) !TabCloseOutcom
             }
 
             try pane_focus.synchronizeActivePane(client);
-            _ = try tab_snapshot.recoverTabSnapshot(client, location);
+            _ = try tab_snapshot.recoverTabSnapshot(&client.model, location);
         }
     }
 
@@ -184,11 +183,11 @@ pub fn completeTabClose(client: *Client, closed: core.TabClosed) !TabCloseOutcom
     return .applied;
 }
 
-fn sendTabClose(client: *Client, intent: data.TabCloseIntent) !void {
-    const request_id = try client.model.request_lifecycle.nextId();
+fn sendTabClose(model: *data.ClientModel, intent: data.TabCloseIntent) !void {
+    const request_id = try model.request_lifecycle.nextId();
 
     try runtime_io.sendRuntimeRequest(
-        client,
+        model,
         .{
             .registration = .{
                 .request_id = request_id,

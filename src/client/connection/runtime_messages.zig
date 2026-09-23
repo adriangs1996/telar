@@ -33,10 +33,10 @@ const Client = @import("../AttachedClient.zig");
 pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
     switch (message) {
         .change_review_changed => |notification| {
-            _ = change_review.changeReviewChanged(client, notification);
+            _ = change_review.changeReviewChanged(&client.model, notification);
         },
         .change_review_snapshot => |snapshot| {
-            _ = try change_review.applyChangeReview(client, snapshot);
+            _ = try change_review.applyChangeReview(&client.model, snapshot);
         },
         .editor_opened => |reply| {
             try editor_file_links.completeEditorOpen(client, reply);
@@ -48,18 +48,18 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
             _ = try client.model.applyAgentThread(snapshot);
         },
         .request_completed => |reply| {
-            try agent_control.completeAgentRequest(client, reply);
+            try agent_control.completeAgentRequest(&client.model, reply);
         },
         .pane_opened => |opened| _ = try pane_attachment.completePaneOpen(client, opened),
         .tab_snapshot => |snapshot| _ = try tab_snapshot.applyTabSnapshot(client, snapshot),
         .workspace_snapshot => |snapshot| try workspace_list_snapshot.applyWorkspaceSnapshot(client, snapshot),
         .tab_created => |created| _ = try tab_creation.completeTabCreation(client, created),
-        .tab_renamed => |renamed| _ = try tab_rename.completeTabRename(client, renamed),
+        .tab_renamed => |renamed| _ = try tab_rename.completeTabRename(&client.model, renamed),
         .tab_closed => |closed| switch (try tab_removal.completeTabClose(client, closed)) {
             .applied, .ignored => {},
             .exit => return 0,
         },
-        .tab_moved => |moved| _ = try tab_move.completeTabMove(client, moved),
+        .tab_moved => |moved| _ = try tab_move.completeTabMove(&client.model, moved),
         .pane_frame => |frame| _ = try pane_frames.receivePaneFrame(client, frame),
         .pane_cwd => |cwd| _ = try client.model.updatePaneMetadata(
             .{
@@ -112,7 +112,7 @@ pub fn handleServerMessage(client: *Client, message: core.ServerMessage) !?u8 {
         },
         .runtime_stopping => return 0,
         .history_results => |results| _ = try history_palette.applyHistoryResults(client, results),
-        .history_pruned => |confirmation| _ = try history_palette.completeHistoryPrune(client, confirmation),
+        .history_pruned => |confirmation| _ = try history_palette.completeHistoryPrune(&client.model, confirmation),
         .history_output => |output| _ = client.model.history_palette.applyOutput(output),
         .command_suggestion => |suggested| _ = client.model.suggestion.apply(suggested),
         .client_command_result, .client_list, .pane_text, .history_stats_result, .pane_focus_result => return error.UnexpectedControlReply,

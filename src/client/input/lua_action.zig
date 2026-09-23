@@ -72,7 +72,7 @@ fn evaluateLuaAction(client: *Client, command: data.LuaActionCommand) !data.LuaA
     return switch (invocation) {
         .unavailable => .unavailable,
         .failed => |failure| failed: {
-            try publishLuaFailure(client, failure);
+            try publishLuaFailure(&client.model, failure);
             break :failed .{
                 .invocation_failed = failure.reason,
             };
@@ -91,7 +91,7 @@ fn evaluateLuaAction(client: *Client, command: data.LuaActionCommand) !data.LuaA
             )) {
                 .valid => {},
                 .failed => |failure| {
-                    try publishLuaFailure(client, failure);
+                    try publishLuaFailure(&client.model, failure);
                     break :callback .{
                         .validation_failed = failure.reason,
                     };
@@ -124,9 +124,9 @@ fn applyLuaEffect(client: *Client, effect: data.Action) !data.LuaDisposition {
     };
 }
 
-fn publishLuaFailure(client: *Client, failure: data.Failure) !void {
+fn publishLuaFailure(model: *data.ClientModel, failure: data.Failure) !void {
     _ = try client_diagnostic.replace(
-        &client.model,
+        model,
         .{
             .diagnostic = failure.diagnostic,
             .invalid_fallback = client_diagnostic.formatted(

@@ -23,7 +23,7 @@ pub fn requestWorkspaceCreation(client: *Client, command: data.RequestWorkspaceC
         null;
     const request_id = try client.model.request_lifecycle.nextId();
     try sendCreateWorkspaceRequest(
-        client,
+        &client.model,
         .{
             .request_id = request_id,
             .size = data.multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
@@ -42,15 +42,15 @@ pub fn requestWorkspaceCreation(client: *Client, command: data.RequestWorkspaceC
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try workspace_creation.sendCreateWorkspaceRequest(client, request);`
-fn sendCreateWorkspaceRequest(client: *Client, request: core.CreateWorkspace) !void {
-    try client.model.request_lifecycle.tracker.add(
+fn sendCreateWorkspaceRequest(model: *data.ClientModel, request: core.CreateWorkspace) !void {
+    try model.request_lifecycle.tracker.add(
         request.request_id,
         .{
             .create_workspace = request.size,
         },
     );
-    errdefer _ = client.model.request_lifecycle.tracker.take(request.request_id);
-    try client.model.to_runtime.pushCreateWorkspace(request);
+    errdefer _ = model.request_lifecycle.tracker.take(request.request_id);
+    try model.to_runtime.pushCreateWorkspace(request);
 }
 
 pub fn arriveOpenedWorkspace(client: *Client, opened: data.OpenedPane) !void {
@@ -80,7 +80,7 @@ pub fn createOpenedWorkspace(client: *Client, confirmation: data.WorkspaceCreati
 /// Starts workspace creation only when the current client can plan the
 /// request.
 pub fn beginWorkspacePrompt(client: *Client) bool {
-    if (!name_prompt.openNamePrompt(client, .create_workspace)) {
+    if (!name_prompt.openNamePrompt(&client.model, .create_workspace)) {
         return false;
     }
 

@@ -29,15 +29,15 @@ pub fn attachAgentImage(client: *Client, pane_id: core.PaneId, path: []const u8)
 
 /// Copies and correlates a prompt, preserving the draft until acknowledgement.
 /// Example: `try agent_control.submitAgentPrompt(app, pane_id);`
-pub fn submitAgentPrompt(client: *Client, pane_id: core.PaneId) !void {
-    if (client.model.request_lifecycle.tracker.hasPane(.agent_prompt, pane_id)) {
+pub fn submitAgentPrompt(model: *data.ClientModel, pane_id: core.PaneId) !void {
+    if (model.request_lifecycle.tracker.hasPane(.agent_prompt, pane_id)) {
         return;
     }
 
-    const intent = client.model.planAgentPrompt(pane_id) orelse return;
-    const request_id = try client.model.request_lifecycle.nextId();
+    const intent = model.planAgentPrompt(pane_id) orelse return;
+    const request_id = try model.request_lifecycle.nextId();
     try sendAgentPromptRequest(
-        client,
+        model,
         .{
             .request_id = request_id,
             .pane_id = pane_id,
@@ -57,15 +57,15 @@ pub fn submitAgentPrompt(client: *Client, pane_id: core.PaneId) !void {
 }
 
 /// Example: `try agent_control.interruptAgent(app, pane_id);`
-pub fn interruptAgent(client: *Client, pane_id: core.PaneId) !void {
-    const pending = agentOperation(&client.model, pane_id) orelse return;
-    if (client.model.request_lifecycle.tracker.hasPane(.agent_control, pane_id)) {
+pub fn interruptAgent(model: *data.ClientModel, pane_id: core.PaneId) !void {
+    const pending = agentOperation(model, pane_id) orelse return;
+    if (model.request_lifecycle.tracker.hasPane(.agent_control, pane_id)) {
         return;
     }
 
-    const request_id = try client.model.request_lifecycle.nextId();
+    const request_id = try model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
-        client,
+        model,
         .{
             .registration = .{
                 .request_id = request_id,
@@ -86,17 +86,17 @@ pub fn interruptAgent(client: *Client, pane_id: core.PaneId) !void {
 
 /// Resumes an advertised conversation without consuming the composer's draft.
 /// Example: `try agent_control.resumeAgentConversation(app, pane_id, index);`
-pub fn resumeAgentConversation(client: *Client, pane_id: core.PaneId, index: u8) !void {
-    const pending = agentOperation(&client.model, pane_id) orelse return;
-    const pane = client.model.agentPane(pane_id) orelse return;
+pub fn resumeAgentConversation(model: *data.ClientModel, pane_id: core.PaneId, index: u8) !void {
+    const pending = agentOperation(model, pane_id) orelse return;
+    const pane = model.agentPane(pane_id) orelse return;
     const snapshot = pane.agent_thread orelse return;
-    if (!snapshot.canResume() or index >= snapshot.recent.count or client.model.request_lifecycle.tracker.hasPane(.agent_control, pane_id) or client.model.request_lifecycle.tracker.hasPane(.agent_prompt, pane_id)) {
+    if (!snapshot.canResume() or index >= snapshot.recent.count or model.request_lifecycle.tracker.hasPane(.agent_control, pane_id) or model.request_lifecycle.tracker.hasPane(.agent_prompt, pane_id)) {
         return;
     }
 
-    const request_id = try client.model.request_lifecycle.nextId();
+    const request_id = try model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
-        client,
+        model,
         .{
             .registration = .{
                 .request_id = request_id,
@@ -118,18 +118,18 @@ pub fn resumeAgentConversation(client: *Client, pane_id: core.PaneId, index: u8)
 }
 
 /// Example: `try agent_control.approveAgent(app, decision);`
-pub fn approveAgent(client: *Client, decision: data.AgentDecision) !void {
-    const pending = agentOperation(&client.model, decision.pane_id) orelse return;
-    const pane = client.model.agentPane(decision.pane_id) orelse return;
+pub fn approveAgent(model: *data.ClientModel, decision: data.AgentDecision) !void {
+    const pending = agentOperation(model, decision.pane_id) orelse return;
+    const pane = model.agentPane(decision.pane_id) orelse return;
     const thread = pane.agent_thread orelse return;
     const approval = thread.pending_approval orelse return;
-    if (approval.id != decision.approval_id or client.model.request_lifecycle.tracker.hasPane(.agent_control, decision.pane_id)) {
+    if (approval.id != decision.approval_id or model.request_lifecycle.tracker.hasPane(.agent_control, decision.pane_id)) {
         return;
     }
 
-    const request_id = try client.model.request_lifecycle.nextId();
+    const request_id = try model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
-        client,
+        model,
         .{
             .registration = .{
                 .request_id = request_id,
@@ -152,15 +152,15 @@ pub fn approveAgent(client: *Client, decision: data.AgentDecision) !void {
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try agent_control.sendAgentPromptRequest(client, request, operation);`
-pub fn sendAgentPromptRequest(client: *Client, request: core.AgentPrompt, operation: data.AgentOperation) !void {
-    try client.model.request_lifecycle.tracker.add(
+pub fn sendAgentPromptRequest(model: *data.ClientModel, request: core.AgentPrompt, operation: data.AgentOperation) !void {
+    try model.request_lifecycle.tracker.add(
         request.request_id,
         .{
             .agent_prompt = operation,
         },
     );
-    errdefer _ = client.model.request_lifecycle.tracker.take(request.request_id);
-    try client.model.to_runtime.pushAgentPrompt(request);
+    errdefer _ = model.request_lifecycle.tracker.take(request.request_id);
+    try model.to_runtime.pushAgentPrompt(request);
 }
 
 pub fn createAgentTab(client: *Client) !void {
@@ -185,15 +185,15 @@ pub fn createAgentTab(client: *Client) !void {
     );
 }
 
-pub fn queryAgentThread(client: *Client, pane_id: core.PaneId) !void {
-    const pending = agentOperation(&client.model, pane_id) orelse return;
-    if (client.model.request_lifecycle.tracker.hasPane(.agent_query, pane_id)) {
+pub fn queryAgentThread(model: *data.ClientModel, pane_id: core.PaneId) !void {
+    const pending = agentOperation(model, pane_id) orelse return;
+    if (model.request_lifecycle.tracker.hasPane(.agent_query, pane_id)) {
         return;
     }
 
-    const request_id = try client.model.request_lifecycle.nextId();
+    const request_id = try model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
-        client,
+        model,
         .{
             .registration = .{
                 .request_id = request_id,
@@ -212,11 +212,11 @@ pub fn queryAgentThread(client: *Client, pane_id: core.PaneId) !void {
     );
 }
 
-pub fn completeAgentRequest(client: *Client, reply: core.RequestCompleted) !void {
-    const continuation = client.model.request_lifecycle.tracker.take(reply.request_id) orelse return error.UnexpectedControlReply;
+pub fn completeAgentRequest(model: *data.ClientModel, reply: core.RequestCompleted) !void {
+    const continuation = model.request_lifecycle.tracker.take(reply.request_id) orelse return error.UnexpectedControlReply;
     switch (continuation) {
         .agent_prompt => |pending| {
-            _ = client.model.completeAgentPrompt(pending);
+            _ = model.completeAgentPrompt(pending);
         },
         .agent_control, .agent_query, .ignored => {},
         else => return error.UnexpectedControlReply,

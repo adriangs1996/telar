@@ -810,9 +810,9 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
                 gui.widgets.thread_anchor.cancel(control.pane_id);
                 try completions.submit(gui, control.pane_id);
             },
-            .interrupt => try client.agent_control.interruptAgent(&gui.app, control.pane_id),
+            .interrupt => try client.agent_control.interruptAgent(&gui.app.model, control.pane_id),
             .approve, .decline => try client.agent_control.approveAgent(
-                &gui.app,
+                &gui.app.model,
                 .{
                     .pane_id = control.pane_id,
                     .approval_id = control.approval_id,

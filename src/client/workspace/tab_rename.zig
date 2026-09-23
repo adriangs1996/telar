@@ -8,16 +8,16 @@ const tab_creation = @import("tab_creation.zig");
 const Client = @import("../AttachedClient.zig");
 
 /// Example: `_ = try tab_rename.requestTabRename(app, command);`
-pub fn requestTabRename(client: *Client, command: data.RequestRenameTab) !bool {
-    if (client.model.request_lifecycle.tracker.has(.tab_operation)) {
+pub fn requestTabRename(model: *data.ClientModel, command: data.RequestRenameTab) !bool {
+    if (model.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 
     try data.label_validation.validate(command.label, .renamed_tab);
-    const location = client.model.tabLocation(command.tab_id) orelse return false;
-    const request_id = try client.model.request_lifecycle.nextId();
+    const location = model.tabLocation(command.tab_id) orelse return false;
+    const request_id = try model.request_lifecycle.nextId();
     try sendTabRenameRequest(
-        client,
+        model,
         .{
             .request_id = request_id,
             .location = location,
@@ -33,14 +33,14 @@ pub fn requestTabRename(client: *Client, command: data.RequestRenameTab) !bool {
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try tab_rename.sendTabRenameRequest(client, rename, continuation);`
-fn sendTabRenameRequest(client: *Client, rename: core.RenameTab, continuation: data.RequestsContinuation) !void {
-    try client.model.request_lifecycle.tracker.add(rename.request_id, continuation);
-    errdefer _ = client.model.request_lifecycle.tracker.take(rename.request_id);
-    try client.model.to_runtime.pushRename(rename);
+fn sendTabRenameRequest(model: *data.ClientModel, rename: core.RenameTab, continuation: data.RequestsContinuation) !void {
+    try model.request_lifecycle.tracker.add(rename.request_id, continuation);
+    errdefer _ = model.request_lifecycle.tracker.take(rename.request_id);
+    try model.to_runtime.pushRename(rename);
 }
 
-pub fn completeTabRename(client: *Client, renamed: core.TabRenamed) !data.Change {
-    const continuation = client.model.request_lifecycle.tracker.take(renamed.request_id) orelse
+pub fn completeTabRename(model: *data.ClientModel, renamed: core.TabRenamed) !data.Change {
+    const continuation = model.request_lifecycle.tracker.take(renamed.request_id) orelse
         return error.UnexpectedTabRenamed;
     const expected_location = switch (continuation) {
         .rename_tab => |location| location,
@@ -51,7 +51,7 @@ pub fn completeTabRename(client: *Client, renamed: core.TabRenamed) !data.Change
         return error.UnexpectedTabRenamed;
     }
 
-    return client.model.renameTab(
+    return model.renameTab(
         .{
             .location = renamed.location,
             .label = renamed.label,

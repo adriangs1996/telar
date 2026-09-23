@@ -73,7 +73,7 @@ fn deliver(terminal: *TerminalClient, token: common.Token) !void {
     const delivery = terminal.presenter.presentation_state.complete(token, .delivered) orelse return;
     const geometry = client.presentation.delivered_geometry;
     terminal.view.tab_drag.present(&terminal.view.hits, if (geometry) |value| if (value.location) |location| location.workspace else null else null);
-    try common.presentation_delivery.apply(client, delivery.commit);
+    try common.presentation_delivery.apply(&client.model, delivery.commit);
     if (delivery.media_pending) {
         try terminal.presenter.requestMedia();
     }

@@ -13,14 +13,14 @@ const copy_mode = @import("copy_mode.zig");
 /// ```
 pub fn apply(client: *Client, tab: usize, event: data.Mouse) !bool {
     const command: CopyModePointerCommand = .{ .kind = event.kind, .left_button = event.button & 0b11 == 0 };
-    const outcome = try route(client, command, resolve(client, tab, event));
+    const outcome = try route(client, command, resolve(&client.model, tab, event));
     return outcome != .unowned;
 }
 
-fn resolve(client: *Client, tab: usize, event: data.Mouse) Authority {
-    const area = client.geometry().area;
-    if (client.model.pointerSelection()) |selection| {
-        const view = data.tab_layout.view(&client.model, tab, selection.pane_id, area);
+fn resolve(model: *data.ClientModel, tab: usize, event: data.Mouse) Authority {
+    const area = data.workbench.region(model).area;
+    if (model.pointerSelection()) |selection| {
+        const view = data.tab_layout.view(model, tab, selection.pane_id, area);
         const position: ?core.Point = if (view != null and view.?.content.w > 0 and view.?.content.h > 0) .{
             .x = @min(event.x -| view.?.content.x, view.?.content.w - 1),
             .y = @min(event.y -| view.?.content.y, view.?.content.h - 1),
@@ -29,12 +29,12 @@ fn resolve(client: *Client, tab: usize, event: data.Mouse) Authority {
         return .{ .selection = .{ .dragging = selection.dragging, .position = position } };
     }
 
-    const pane_id = client.model.copyModeTarget() orelse return .unowned;
-    if (client.model.panes.findIn(client.model.tabs.location[tab].tab_id, pane_id) == null) {
+    const pane_id = model.copyModeTarget() orelse return .unowned;
+    if (model.panes.findIn(model.tabs.location[tab].tab_id, pane_id) == null) {
         return .target_missing;
     }
 
-    const view = data.tab_layout.view(&client.model, tab, pane_id, area) orelse
+    const view = data.tab_layout.view(model, tab, pane_id, area) orelse
         return .{ .owned = .{ .pointer_inside = false } };
 
     return .{ .owned = .{

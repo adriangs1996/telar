@@ -8,6 +8,7 @@ const pane_closure = @import("../panes/pane_closure.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
 const Client = @import("../AttachedClient.zig");
+const data = @import("model");
 
 const TabSnapshotOutcome = enum { applied, ignored };
 
@@ -15,10 +16,10 @@ const TabSnapshotRecovery = enum { coalesced, requested };
 
 /// Requests a canonical snapshot with its exact target retained until the reply.
 /// Example: `try tab_snapshot.requestTabSnapshot(client, location);`
-pub fn requestTabSnapshot(client: *Client, location: core.TabLocation) !void {
-    const request_id = try client.model.request_lifecycle.nextId();
+pub fn requestTabSnapshot(model: *data.ClientModel, location: core.TabLocation) !void {
+    const request_id = try model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
-        client,
+        model,
         .{
             .registration = .{
                 .request_id = request_id,
@@ -37,12 +38,12 @@ pub fn requestTabSnapshot(client: *Client, location: core.TabLocation) !void {
 }
 
 /// Example: `try tab_snapshot.recoverTabSnapshot(app, location);`
-pub fn recoverTabSnapshot(client: *Client, location: core.TabLocation) !TabSnapshotRecovery {
-    if (client.model.request_lifecycle.tracker.has(.tab_snapshot)) {
+pub fn recoverTabSnapshot(model: *data.ClientModel, location: core.TabLocation) !TabSnapshotRecovery {
+    if (model.request_lifecycle.tracker.has(.tab_snapshot)) {
         return .coalesced;
     }
 
-    try requestTabSnapshot(client, location);
+    try requestTabSnapshot(model, location);
     return .requested;
 }
 
@@ -88,7 +89,7 @@ pub fn applyTabSnapshot(client: *Client, snapshot: core.TabSnapshotView) !TabSna
         const tab = client.model.tabs.find(reconciliation.location.tab_id) orelse return error.StaleTabReconciliation;
         try pane_focus.synchronizeActivePane(client);
         try pane_resize.resizeAttachedPanes(client, tab, reconciliation.area);
-        try pane_attachment.attachVisiblePanes(client, tab, reconciliation.area);
+        try pane_attachment.attachVisiblePanes(&client.model, tab, reconciliation.area);
     }
 
     return .applied;

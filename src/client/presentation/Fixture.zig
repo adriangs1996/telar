@@ -96,7 +96,7 @@ pub fn complete(self: *Fixture, token: lifecycle_module.Token, outcome: lifecycl
 
 fn deliver(self: *Fixture, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) !void {
     const delivery = self.adapter.complete(token, outcome) orelse return;
-    try presentation_delivery.apply(&self.app, delivery.commit);
+    try presentation_delivery.apply(&self.app.model, delivery.commit);
     if (delivery.media_pending) {
         self.media_requests += 1;
     }
@@ -226,6 +226,6 @@ pub fn expectAck(self: *Fixture, frame_id: u64) !void {
 pub fn sendOne(self: *Fixture) !void {
     try std.testing.expect(self.pending != null);
     self.pending = null;
-    try runtime_io.completeRuntimeSend(&self.app, {});
+    try runtime_io.completeRuntimeSend(&self.app.model, {});
     try self.startJobs();
 }

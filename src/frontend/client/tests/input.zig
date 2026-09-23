@@ -405,7 +405,7 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
 
     try std.testing.expect(client.model.panePasteActive());
     try std.testing.expect(!client.model.enterCopyMode());
-    try std.testing.expect(!client_module.name_prompt.openNamePrompt(client, .rename_workspace));
+    try std.testing.expect(!client_module.name_prompt.openNamePrompt(&client.model, .rename_workspace));
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -413,7 +413,7 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
     _ = try client_module.paste_routing.finish(client);
 
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_workspace));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .rename_workspace));
 }
 
 test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
@@ -423,7 +423,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     try harness.bootstrap();
     const client = harness.client;
     const terminal = harness.terminal;
-    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_active_tab));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .rename_active_tab));
 
     _ = try client_module.paste_routing.start(client);
     try std.testing.expect(client.model.name_prompt.currentConst().?.pasting);
@@ -464,7 +464,7 @@ test "name prompt rejects pointer routing after host telemetry" {
         pane.id,
         terminal.view.workbench(),
     ).?;
-    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_active_tab));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .rename_active_tab));
     const version = client.model.version();
     const outbox_len = client.model.to_runtime.len;
     const mouse_events = client.telemetry.metrics.mouse_events;

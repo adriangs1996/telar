@@ -67,7 +67,7 @@ pub fn completeCommand(client: *Client, completion: BarUpdatesCompletion) !void 
                     .output = output,
                 });
             } else |err| {
-                _ = try publishFailure(client, .{
+                _ = try publishFailure(&client.model, .{
                     .generation = execution.generation,
                     .position = execution.position,
                     .reason = err,
@@ -91,14 +91,14 @@ fn invokeCallback(client: *Client, request: CallbackRequest) !bar_update.Outcome
             diagnostic.set("bar callback failed: {s}", .{@errorName(err)});
         }
 
-        return publishEvaluation(client, .{
+        return publishEvaluation(&client.model, .{
             .generation = request.reference.generation,
             .position = request.position,
             .result = .{ .failed = .{ .reason = err, .diagnostic = diagnostic } },
         });
     };
 
-    return publishEvaluation(client, .{
+    return publishEvaluation(&client.model, .{
         .generation = request.reference.generation,
         .position = request.position,
         .result = .{ .content = content },
@@ -119,21 +119,21 @@ fn applyCommandOutput(client: *Client, completed: CommandOutput) !void {
     if (completed.output.len != 0) {
         try content.append(.{ .text = completed.output.slice() });
     }
-    _ = try publishEvaluation(client, .{
+    _ = try publishEvaluation(&client.model, .{
         .generation = completed.execution.generation,
         .position = completed.execution.position,
         .result = .{ .content = content },
     });
 }
 
-fn publishFailure(client: *Client, failure: BarCommandFailure) !bar_update.Outcome {
+fn publishFailure(model: *data.ClientModel, failure: BarCommandFailure) !bar_update.Outcome {
     var diagnostic: data.Diagnostic = .{};
     diagnostic.set(
         "bar {s} at {s} failed: {s}",
         .{ failure.kind, @tagName(failure.position), @errorName(failure.reason) },
     );
 
-    return publishEvaluation(client, .{
+    return publishEvaluation(model, .{
         .generation = failure.generation,
         .position = failure.position,
         .result = .{ .failed = .{
@@ -143,10 +143,10 @@ fn publishFailure(client: *Client, failure: BarCommandFailure) !bar_update.Outco
     });
 }
 
-fn publishEvaluation(client: *Client, command: BarUpdateCommand) !bar_update.Outcome {
+fn publishEvaluation(model: *data.ClientModel, command: BarUpdateCommand) !bar_update.Outcome {
     return switch (command.result) {
-        .content => |content| commitContent(client, command, content),
-        .failed => |failure| commitFailure(client, command, failure),
+        .content => |content| commitContent(model, command, content),
+        .failed => |failure| commitFailure(model, command, failure),
     };
 }
 
@@ -223,8 +223,8 @@ fn startNextCommand(client: *Client) !void {
     }
 }
 
-fn commitContent(client: *Client, command: BarUpdateCommand, content: data.Content) !bar_update.Outcome {
-    const update_commit = client.model.updateBar(.{
+fn commitContent(model: *data.ClientModel, command: BarUpdateCommand, content: data.Content) !bar_update.Outcome {
+    const update_commit = model.updateBar(.{
         .generation = command.generation,
         .position = command.position,
         .content = content,
@@ -235,16 +235,16 @@ fn commitContent(client: *Client, command: BarUpdateCommand, content: data.Conte
     return if (update_commit) |value| .{ .updated = value } else .unchanged;
 }
 
-fn commitFailure(client: *Client, command: BarUpdateCommand, failure: BarUpdateFailure) !bar_update.Outcome {
-    const state = &client.model.bars;
-    if (command.generation != client.model.configuration_generation or
+fn commitFailure(model: *data.ClientModel, command: BarUpdateCommand, failure: BarUpdateFailure) !bar_update.Outcome {
+    const state = &model.bars;
+    if (command.generation != model.configuration_generation or
         state.layout.generation != command.generation or
         !state.layout.isLive(command.position))
     {
         return .stale;
     }
 
-    _ = try client_diagnostic.replace(&client.model, .{
+    _ = try client_diagnostic.replace(model, .{
         .diagnostic = failure.diagnostic,
         .invalid_fallback = client_diagnostic.formatted(
             "bar source failed: {s}",

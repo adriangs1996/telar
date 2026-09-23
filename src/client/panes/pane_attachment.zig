@@ -16,8 +16,7 @@ const PaneOpenOutcome = enum { workspace_arrived, workspace_created, pane_split,
 /// Acknowledges a completed agent and reconciles its focused attachment shelf. Example: `_ = try pane_attachment.synchronizePaneAttachments(client);`
 pub fn synchronizePaneAttachments(client: *Client) !bool {
     if (client.model.takeAgentAcknowledgement()) |key| {
-        try runtime_io.sendRuntime(
-            client,
+        try client.model.to_runtime.push(
             .{
                 .acknowledge_agent = .{
                     .pane_id = key.pane_id,
@@ -42,26 +41,26 @@ pub fn synchronizePaneAttachments(client: *Client) !bool {
 /// Connects visible detached panes after canonical membership is loaded.
 /// Pending attachments are coalesced; failed delivery rolls back its correlation.
 /// Example: `if (tab.snapshot_loaded) { try pane_attachment.attachVisiblePanes(client, tab, area); }`
-pub fn attachVisiblePanes(client: *Client, tab: usize, area: core.Rect) !void {
-    std.debug.assert(client.model.tabs.snapshot_loaded[tab]);
-    var panes = client.model.panes.iterate(client.model.tabs.location[tab].tab_id);
+pub fn attachVisiblePanes(model: *data.ClientModel, tab: usize, area: core.Rect) !void {
+    std.debug.assert(model.tabs.snapshot_loaded[tab]);
+    var panes = model.panes.iterate(model.tabs.location[tab].tab_id);
 
     while (panes.next()) |pane| {
-        if (pane.attached or client.model.request_lifecycle.tracker.hasPane(.attachment, pane.id)) {
+        if (pane.attached or model.request_lifecycle.tracker.hasPane(.attachment, pane.id)) {
             continue;
         }
 
-        const size = data.tab_layout.contentSize(&client.model, tab, pane.id, area) orelse continue;
-        const request_id = try client.model.request_lifecycle.nextId();
+        const size = data.tab_layout.contentSize(model, tab, pane.id, area) orelse continue;
+        const request_id = try model.request_lifecycle.nextId();
         try runtime_io.sendRuntimeRequest(
-            client,
+            model,
             .{
                 .registration = .{
                     .request_id = request_id,
                     .continuation = .{
                         .attach_pane = .{
                             .pane_id = pane.id,
-                            .location = client.model.tabs.location[tab],
+                            .location = model.tabs.location[tab],
                         },
                     },
                 },
@@ -81,12 +80,12 @@ pub fn attachVisiblePanes(client: *Client, tab: usize, area: core.Rect) !void {
 }
 
 /// A failed attachment repairs membership only while that pane is still detached.
-pub fn recoverPaneAttachment(client: *Client, attachment: data.PaneAttachment) !bool {
-    if (!client.model.needsPaneAttachment(attachment)) {
+pub fn recoverPaneAttachment(model: *data.ClientModel, attachment: data.PaneAttachment) !bool {
+    if (!model.needsPaneAttachment(attachment)) {
         return false;
     }
 
-    _ = try tab_snapshot.recoverTabSnapshot(client, attachment.location);
+    _ = try tab_snapshot.recoverTabSnapshot(model, attachment.location);
     return true;
 }
 
@@ -128,7 +127,7 @@ pub fn completePaneOpen(client: *Client, opened: core.PaneOpened) !PaneOpenOutco
         },
         .attach_pane => |attachment| result: {
             try confirmPaneAttachment(
-                client,
+                &client.model,
                 .{
                     .requested = .{
                         .pane_id = attachment.pane_id,
@@ -144,7 +143,7 @@ pub fn completePaneOpen(client: *Client, opened: core.PaneOpened) !PaneOpenOutco
     };
 
     if (outcome != .ignored) {
-        try identifyOpenedPane(client, opened);
+        try identifyOpenedPane(&client.model, opened);
     }
 
     return outcome;
@@ -159,7 +158,7 @@ fn translateOpenedPane(opened: core.PaneOpened) data.OpenedPane {
 }
 
 /// Rejects mismatched or newly created panes before committing an attachment.
-fn confirmPaneAttachment(client: *Client, confirmation: data.PaneAttachmentConfirmation) !void {
+fn confirmPaneAttachment(model: *data.ClientModel, confirmation: data.PaneAttachmentConfirmation) !void {
     const confirmed: data.PaneAttachment = .{
         .pane_id = confirmation.opened.pane_id,
         .location = confirmation.opened.location,
@@ -169,12 +168,12 @@ fn confirmPaneAttachment(client: *Client, confirmation: data.PaneAttachmentConfi
         return error.UnexpectedPane;
     }
 
-    _ = try client.model.confirmPaneAttachment(confirmed);
+    _ = try model.confirmPaneAttachment(confirmed);
 }
 
 /// Sets runtime pane identity after the existing attachment flow commits.
-fn identifyOpenedPane(client: *Client, opened_pane: core.PaneOpened) !void {
-    if (client.model.identifyPane(opened_pane) and opened_pane.kind == .agent) {
-        try agent_control.queryAgentThread(client, opened_pane.pane_id);
+fn identifyOpenedPane(model: *data.ClientModel, opened_pane: core.PaneOpened) !void {
+    if (model.identifyPane(opened_pane) and opened_pane.kind == .agent) {
+        try agent_control.queryAgentThread(model, opened_pane.pane_id);
     }
 }

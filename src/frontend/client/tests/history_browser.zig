@@ -77,7 +77,7 @@ test "history input preserves search through inspection and pages past the first
     const next = (try harness.nextClientMessage(&buffer)).query_history;
     try std.testing.expectEqual(@as(u32, 1), next.offset);
     try std.testing.expectEqual(@as(u64, 20), next.snapshot_id);
-    try std.testing.expect(!client_module.history_palette.canSubmitHistory(client, 0));
+    try std.testing.expect(!client_module.history_palette.canSubmitHistory(&client.model, 0));
 
     const old = try core.encodeHistoryResults(&buffer, .{ .request_id = query.request_id, .entries = &.{entry} });
     _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(old));

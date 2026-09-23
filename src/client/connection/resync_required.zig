@@ -27,6 +27,6 @@ pub fn applyResyncRequirement(client: *Client, required: core.ResyncRequired) !R
         return .coalesced;
     }
 
-    try workspace_list_snapshot.requestWorkspaceSnapshot(client, required.workspace);
+    try workspace_list_snapshot.requestWorkspaceSnapshot(&client.model, required.workspace);
     return .snapshot_requested;
 }

@@ -163,8 +163,7 @@ test "notification action delivers one correlated runtime request without model 
     const request_id: core.RequestId = @enumFromInt(client.model.request_lifecycle.next_request_id);
     const version_before = client.model.version();
     const pending_updates_before = terminal.presenter.pending_updates;
-    try client_module.runtime_io.sendRuntime(
-        client,
+    try client.model.to_runtime.push(
         .{
             .detach_pane = .{
                 .pane_id = TestHarness.bootstrap_pane,

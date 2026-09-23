@@ -508,7 +508,7 @@ test "name prompt suppresses a configured action before source dispatch" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_active_tab));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .rename_active_tab));
     const version = client.model.version();
     const outbox_len = client.model.to_runtime.len;
 
@@ -534,7 +534,7 @@ test "validated native effects preserve their authority while a name prompt is o
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_active_tab));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .rename_active_tab));
     try std.testing.expect(client.model.sidebar_visible);
 
     _ = try client_module.actions.executeAction(client, .toggle_sidebar, .binding);

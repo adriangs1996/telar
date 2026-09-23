@@ -533,7 +533,7 @@ pub fn update(self: *GuiClient) !?u8 {
         }
 
         if (batch.processed != 0) {
-            try client.client_layout.synchronizeClientLayout(&self.app);
+            try client.client_layout.synchronizeClientLayout(&self.app.model);
         }
 
         try loop.configuration.poll(&self.app);
@@ -947,7 +947,7 @@ fn executeAction(self: *GuiClient, value: shared_model.actions.Action) !shared_m
         _ = try client.copy_mode.leaveCopyMode(&self.app);
     }
 
-    _ = client.name_prompt.beginCommandPalette(&self.app, prefix);
+    _ = client.name_prompt.beginCommandPalette(&self.app.model, prefix);
 
     return .continue_routing;
 }
@@ -1661,7 +1661,7 @@ fn complete(self: *GuiClient, token: u64, delivered: bool) !void {
     widget_routing.reconcileFocus(self);
     self.pointer.hover.present(delivered);
     const delivery = self.app.presentation.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
-    try client.presentation_delivery.apply(&self.app, delivery.commit);
+    try client.presentation_delivery.apply(&self.app.model, delivery.commit);
 
     if (delivered) {
         try thread_items.delivered(self);
@@ -1810,7 +1810,7 @@ fn resolveFavicons(self: *GuiClient, renderer: *Renderer) !void {
     const want = favicons.next(&self.app.model.workspace_list_snapshot) orelse return;
 
     const job = client.favicons.request(
-        &self.app,
+        &self.app.model,
         .{
             .workspace = want.workspace,
             .cwd = want.cwd,
@@ -1818,7 +1818,7 @@ fn resolveFavicons(self: *GuiClient, renderer: *Renderer) !void {
         },
     ) orelse return;
     self.driver.inbox.start(.favicon, .{ favicon_worker.execute, .{ self.app.io, self.app.gpa, job } }) catch |err| {
-        client.favicons.cancel(&self.app);
+        client.favicons.cancel(&self.app.model);
         return err;
     };
     favicons.started(want.workspace);

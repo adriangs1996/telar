@@ -5,22 +5,16 @@ const core = @import("telar-core");
 const runtime_messages = @import("runtime_messages.zig");
 const Client = @import("../AttachedClient.zig");
 
-/// Copies one fixed-size message into the outbox; `flush` writes it.
-/// Example: `try runtime_io.sendRuntime(client, .{ .detach_pane = detach });`
-pub fn sendRuntime(client: *Client, message: data.outbox_support.Message) !void {
-    try client.model.to_runtime.push(message);
-}
-
 /// Copies bounded pane input into the outbox; `flush` writes it.
 ///
 /// ```zig
 /// try runtime_io.sendRuntimeInput(client, .{ .pane_id = pane_id, .bytes = bytes });
 /// ```
-pub fn sendRuntimeInput(client: *Client, input: core.PaneInput) !void {
+pub fn sendRuntimeInput(model: *data.ClientModel, input: core.PaneInput) !void {
     if (input.bytes.len > data.input_limits.max_encoded_bytes) {
-        try client.model.to_runtime.pushInputBatch(input.pane_id, input.bytes);
+        try model.to_runtime.pushInputBatch(input.pane_id, input.bytes);
     } else {
-        try client.model.to_runtime.pushInput(input.pane_id, input.bytes);
+        try model.to_runtime.pushInput(input.pane_id, input.bytes);
     }
 }
 
@@ -70,10 +64,10 @@ pub fn receiveRuntime(client: *Client, result: anyerror!*const data.RuntimeMessa
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try runtime_io.sendRuntimeRequest(client, delivery);`
-pub fn sendRuntimeRequest(client: *Client, delivery: data.ConnectionDelivery) !void {
-    try client.model.request_lifecycle.tracker.add(delivery.registration.request_id, delivery.registration.continuation);
-    errdefer _ = client.model.request_lifecycle.tracker.take(delivery.registration.request_id);
-    try client.model.to_runtime.push(delivery.message);
+pub fn sendRuntimeRequest(model: *data.ClientModel, delivery: data.ConnectionDelivery) !void {
+    try model.request_lifecycle.tracker.add(delivery.registration.request_id, delivery.registration.continuation);
+    errdefer _ = model.request_lifecycle.tracker.take(delivery.registration.request_id);
+    try model.to_runtime.push(delivery.message);
 }
 
 /// Releases one runtime write and resumes host input now that a queue slot is
@@ -82,7 +76,7 @@ pub fn sendRuntimeRequest(client: *Client, delivery: data.ConnectionDelivery) !v
 /// ```zig
 /// try runtime_io.completeRuntimeSend(client, result);
 /// ```
-pub fn completeRuntimeSend(client: *Client, result: anyerror!void) !void {
-    try client.model.to_runtime.finishSend(result);
-    client.model.to_host.resume_input = true;
+pub fn completeRuntimeSend(model: *data.ClientModel, result: anyerror!void) !void {
+    try model.to_runtime.finishSend(result);
+    model.to_host.resume_input = true;
 }

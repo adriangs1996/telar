@@ -7,26 +7,26 @@ const Client = @import("../AttachedClient.zig");
 
 /// Validates one request and retains its correlation before delivery.
 /// Example: `_ = try tab_move.requestTabMove(client, command);`
-pub fn requestTabMove(client: *Client, command: data.RequestTabMove) !bool {
-    if (client.model.request_lifecycle.tracker.has(.tab_operation)) {
+pub fn requestTabMove(model: *data.ClientModel, command: data.RequestTabMove) !bool {
+    if (model.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 
-    const location = command.location orelse client.model.activeTabLocation() orelse return false;
-    const workspace = client.model.workspace orelse return false;
-    if (!std.meta.eql(workspace, location.workspace) or client.model.tabs.find(location.tab_id) == null) {
+    const location = command.location orelse model.activeTabLocation() orelse return false;
+    const workspace = model.workspace orelse return false;
+    if (!std.meta.eql(workspace, location.workspace) or model.tabs.find(location.tab_id) == null) {
         return false;
     }
 
     if (command.relative_to) |anchor| {
-        if (anchor == location.tab_id or client.model.tabs.find(anchor) == null) {
+        if (anchor == location.tab_id or model.tabs.find(anchor) == null) {
             return false;
         }
     }
 
-    const request_id = try client.model.request_lifecycle.nextId();
+    const request_id = try model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
-        client,
+        model,
         .{
             .registration = .{
                 .request_id = request_id,
@@ -49,8 +49,8 @@ pub fn requestTabMove(client: *Client, command: data.RequestTabMove) !bool {
 }
 
 /// Consumes one correlated runtime completion before committing canonical state.
-pub fn completeTabMove(client: *Client, moved: core.TabMoved) !data.Change {
-    const continuation = client.model.request_lifecycle.tracker.take(moved.request_id) orelse
+pub fn completeTabMove(model: *data.ClientModel, moved: core.TabMoved) !data.Change {
+    const continuation = model.request_lifecycle.tracker.take(moved.request_id) orelse
         return error.UnexpectedTabMoved;
     const expected_location = switch (continuation) {
         .move_tab => |location| location,
@@ -61,5 +61,5 @@ pub fn completeTabMove(client: *Client, moved: core.TabMoved) !data.Change {
         return error.UnexpectedTabMoved;
     }
 
-    return client.model.applyTabPosition(moved.location, moved.position) catch return error.UnexpectedTabMoved;
+    return model.applyTabPosition(moved.location, moved.position) catch return error.UnexpectedTabMoved;
 }

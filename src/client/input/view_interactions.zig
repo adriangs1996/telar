@@ -81,7 +81,7 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
         },
         .move_tab => |move| {
             _ = try tab_move.requestTabMove(
-                client,
+                &client.model,
                 .{
                     .location = move.location,
                     .direction = move.direction,
@@ -90,7 +90,7 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
             );
         },
         .rename_tab => |tab_id| _ = name_prompt.openNamePrompt(
-            client,
+            &client.model,
             .{
                 .rename_tab = tab_id,
             },

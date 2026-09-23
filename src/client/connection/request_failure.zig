@@ -22,7 +22,7 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !data.Re
     };
 
     if (continuation == .ignored) {
-        change_review.retireChangeReview(client, failure.request_id);
+        change_review.retireChangeReview(&client.model, failure.request_id);
         agent_reading.retired(&client.model);
     }
 
@@ -41,7 +41,7 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !data.Re
 
     switch (continuation) {
         .change_review_query, .change_review_command => |operation| {
-            if (!change_review.failChangeReview(client, operation, failure.message)) {
+            if (!change_review.failChangeReview(&client.model, operation, failure.message)) {
                 return .ignored;
             }
         },
@@ -55,7 +55,7 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !data.Re
         .ignored => return .ignored,
         .workspace_snapshot, .tab_snapshot => return error.RuntimeRequestFailed,
         .initial_open => |open| {
-            const outcome = try workspace_handoff.recoverWorkspaceSwitch(client, open.fallback_workspace, failure.code);
+            const outcome = try workspace_handoff.recoverWorkspaceSwitch(&client.model, open.fallback_workspace, failure.code);
             return switch (outcome) {
                 .retried => .recovered,
                 .unrecoverable => error.RuntimeRequestFailed,
@@ -63,7 +63,7 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !data.Re
         },
         .split => |split| {
             const outcome = try pane_split.recoverPaneSplit(
-                client,
+                &client.model,
                 .{
                     .target_pane = split.target_pane,
                     .location = split.location,
@@ -78,7 +78,7 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !data.Re
         .attach_pane => |attachment| {
             if (failure.code == .pane_not_found) {
                 _ = try pane_attachment.recoverPaneAttachment(
-                    client,
+                    &client.model,
                     .{
                         .pane_id = attachment.pane_id,
                         .location = attachment.location,
@@ -87,7 +87,7 @@ pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !data.Re
             }
         },
         .close_tab => |location| {
-            _ = try tab_removal.recoverTabClose(client, location);
+            _ = try tab_removal.recoverTabClose(&client.model, location);
         },
         .close_pane,
         .create_workspace,

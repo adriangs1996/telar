@@ -39,8 +39,7 @@ pub fn applyCopyMode(client: *Client, command: data.CopyModeCommand) !data.CopyM
     }
 
     if (plan.selection) |selection| {
-        try runtime_io.sendRuntime(
-            client,
+        try client.model.to_runtime.push(
             .{
                 .copy_selection = selection,
             },
@@ -54,7 +53,7 @@ pub fn applyCopyMode(client: *Client, command: data.CopyModeCommand) !data.CopyM
 
     if (plan.search) |direction| {
         _ = name_prompt.openNamePrompt(
-            client,
+            &client.model,
             .{
                 .copy_search = direction,
             },

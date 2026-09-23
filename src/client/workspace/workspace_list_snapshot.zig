@@ -12,10 +12,10 @@ const Client = @import("../AttachedClient.zig");
 
 /// Requests a canonical snapshot with its exact target retained until the reply.
 /// Example: `try workspace_list_snapshot.requestWorkspaceSnapshot(client, workspace);`
-pub fn requestWorkspaceSnapshot(client: *Client, workspace: core.WorkspaceLocation) !void {
-    const request_id = try client.model.request_lifecycle.nextId();
+pub fn requestWorkspaceSnapshot(model: *data.ClientModel, workspace: core.WorkspaceLocation) !void {
+    const request_id = try model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
-        client,
+        model,
         .{
             .registration = .{
                 .request_id = request_id,
@@ -107,7 +107,7 @@ pub fn applyWorkspaceSnapshot(client: *Client, snapshot: core.WorkspaceSnapshotV
     }
 
     if (reconciliation.active_tab_changed or !reconciliation.active_snapshot_loaded) {
-        try tab_snapshot.requestTabSnapshot(client, reconciliation.active);
+        try tab_snapshot.requestTabSnapshot(&client.model, reconciliation.active);
         return;
     }
 

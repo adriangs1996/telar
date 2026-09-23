@@ -11,23 +11,23 @@ const Client = @import("../AttachedClient.zig");
 
 /// Blocks incomplete or oversized pastes while keeping the browser open.
 /// Example: `_ = history_palette.canSubmitHistory(client, selection);`
-pub fn canSubmitHistory(client: *Client, selection: u16) bool {
-    const palette = &client.model.history_palette;
+pub fn canSubmitHistory(model: *data.ClientModel, selection: u16) bool {
+    const palette = &model.history_palette;
     const command = palette.commandAt(selection) orelse {
-        client.model.history_palette.setError(if (palette.phase == .loading) "Searching..." else "Command unavailable or capture truncated; cannot paste");
+        model.history_palette.setError(if (palette.phase == .loading) "Searching..." else "Command unavailable or capture truncated; cannot paste");
         return false;
     };
 
-    const active = client.model.tabs.activeSlot() orelse return false;
-    const pane = data.tab_layout.focusedPaneConst(&client.model, active) orelse return false;
+    const active = model.tabs.activeSlot() orelse return false;
+    const pane = data.tab_layout.focusedPaneConst(model, active) orelse return false;
     pane_input.validateHistoryText(command, pane.input_modes.bracketed_paste) catch |err| {
-        client.model.history_palette.setError(if (err == error.UnframedHistoryText) "Multiline/tab paste requires shell bracketed-paste support" else "Command contains terminal controls; cannot paste");
+        model.history_palette.setError(if (err == error.UnframedHistoryText) "Multiline/tab paste requires shell bracketed-paste support" else "Command contains terminal controls; cannot paste");
         return false;
     };
 
     const slots = (command.len + 13 + data.input_limits.max_encoded_bytes - 1) / data.input_limits.max_encoded_bytes;
-    if (client.model.to_runtime.availableCapacity() < slots + 1) {
-        client.model.history_palette.setError("Input is busy; retry the command");
+    if (model.to_runtime.availableCapacity() < slots + 1) {
+        model.history_palette.setError("Input is busy; retry the command");
         return false;
     }
 
@@ -61,9 +61,9 @@ pub fn scrollHistoryInspection(client: *Client, lines: i16) !void {
 /// awaits only its reply. A scope whose value cannot be resolved from the
 /// committed model falls back to global.
 /// Example: `try history_palette.queryHistory(client, query);`
-pub fn queryHistory(client: *Client, query: []const u8) !void {
-    history_browser.restart(&client.model);
-    try requestHistoryPage(client, query);
+pub fn queryHistory(model: *data.ClientModel, query: []const u8) !void {
+    history_browser.restart(model);
+    try requestHistoryPage(model, query);
 }
 
 /// Loads selected detail only on demand and contains expected queue saturation.
@@ -101,15 +101,15 @@ pub fn refreshHistoryInspection(client: *Client) !void {
             },
         };
 
-        try enqueueHistoryRequest(client, message, request_id);
+        try enqueueHistoryRequest(&client.model, message, request_id);
     }
 }
 
 /// Pages in bounded batches while retaining the first query's insertion boundary.
 /// Example: `try history_palette.navigateHistoryPage(client);`
-pub fn navigateHistoryPage(client: *Client) !void {
-    if (history_browser.navigate(&client.model)) {
-        try requestHistoryPage(client, client.model.name_prompt.currentConst().?.field.text());
+pub fn navigateHistoryPage(model: *data.ClientModel) !void {
+    if (history_browser.navigate(model)) {
+        try requestHistoryPage(model, model.name_prompt.currentConst().?.field.text());
     }
 }
 
@@ -133,15 +133,15 @@ pub fn pasteHistorySelection(client: *Client, request: data.HistoryPasteRequest)
 /// runtime answers with `history_pruned`, which requeries the palette so
 /// the row disappears only once it is actually gone.
 /// Example: `try history_palette.deleteHistorySelection(client, selection);`
-pub fn deleteHistorySelection(client: *Client, selection: u16) !void {
-    const request_id = try client.model.request_lifecycle.nextId();
+pub fn deleteHistorySelection(model: *data.ClientModel, selection: u16) !void {
+    const request_id = try model.request_lifecycle.nextId();
     const id = history_browser.requestDelete(
-        &client.model,
+        model,
         core.raw(request_id),
         selection,
     ) orelse return;
     try enqueueHistoryRequest(
-        client,
+        model,
         .{
             .delete_history = .{
                 .request_id = request_id,
@@ -153,47 +153,46 @@ pub fn deleteHistorySelection(client: *Client, selection: u16) !void {
 }
 
 /// Opens the palette and requests the unfiltered newest history.
-pub fn beginHistoryPalette(client: *Client) !bool {
-    if (!name_prompt.openNamePrompt(client, .history_palette)) {
+pub fn beginHistoryPalette(model: *data.ClientModel) !bool {
+    if (!name_prompt.openNamePrompt(model, .history_palette)) {
         return false;
     }
 
     history_browser.begin(
-        &client.model,
+        model,
         .{
-            .enter_runs = client.model.config.history_enter_runs,
-            .match_fuzzy = !client.model.config.history_match_fts,
+            .enter_runs = model.config.history_enter_runs,
+            .match_fuzzy = !model.config.history_match_fts,
         },
     );
-    try queryHistory(client, "");
+    try queryHistory(model, "");
     return true;
 }
 
-fn requestHistoryPage(client: *Client, query: []const u8) !void {
-    const request_id = try client.model.request_lifecycle.nextId();
+fn requestHistoryPage(model: *data.ClientModel, query: []const u8) !void {
+    const request_id = try model.request_lifecycle.nextId();
 
     var owned: data.OwnedHistoryQuery = .{
         .request_id = request_id,
         .query_len = @intCast(@min(query.len, data.OwnedHistoryQuery.max_query_bytes)),
-        .author = if (client.model.config.history_show_agent_commands) .all else .human,
-        .match = if (client.model.config.history_match_fts) .fts else .fuzzy,
+        .author = if (model.config.history_show_agent_commands) .all else .human,
+        .match = if (model.config.history_match_fts) .fts else .fuzzy,
         .limit = core.max_history_results,
-        .offset = client.model.history_palette.pending_offset,
-        .snapshot_id = client.model.history_palette.snapshot_id,
+        .offset = model.history_palette.pending_offset,
+        .snapshot_id = model.history_palette.snapshot_id,
     };
     @memcpy(owned.query[0..owned.query_len], query[0..owned.query_len]);
-    resolveHistoryScope(&client.model, &owned);
-    if (!client.model.history_palette.beginPageRequest(core.raw(request_id), owned.scope)) {
+    resolveHistoryScope(model, &owned);
+    if (!model.history_palette.beginPageRequest(core.raw(request_id), owned.scope)) {
         return;
     }
 
-    runtime_io.sendRuntime(
-        client,
+    model.to_runtime.push(
         .{
             .query_history = owned,
         },
     ) catch |err| {
-        _ = client.model.history_palette.fail(
+        _ = model.history_palette.fail(
             .{
                 .request_id = request_id,
                 .code = .resource_limit,
@@ -285,9 +284,9 @@ pub fn applyHistoryResults(client: *Client, view: core.HistoryResultsView) !bool
     return changed;
 }
 
-fn enqueueHistoryRequest(client: *Client, message: data.outbox_support.Message, request_id: core.RequestId) !void {
-    runtime_io.sendRuntime(client, message) catch |err| {
-        _ = client.model.history_palette.fail(
+fn enqueueHistoryRequest(model: *data.ClientModel, message: data.outbox_support.Message, request_id: core.RequestId) !void {
+    model.to_runtime.push(message) catch |err| {
+        _ = model.history_palette.fail(
             .{
                 .request_id = request_id,
                 .code = .resource_limit,
@@ -301,12 +300,12 @@ fn enqueueHistoryRequest(client: *Client, message: data.outbox_support.Message, 
 }
 
 /// Requeries the palette after the runtime confirmed a deletion.
-pub fn completeHistoryPrune(client: *Client, confirmation: core.HistoryPruned) !bool {
-    if (!history_browser.pruned(&client.model, core.raw(confirmation.request_id))) {
+pub fn completeHistoryPrune(model: *data.ClientModel, confirmation: core.HistoryPruned) !bool {
+    if (!history_browser.pruned(model, core.raw(confirmation.request_id))) {
         return false;
     }
 
-    try queryHistory(client, client.model.name_prompt.currentConst().?.field.text());
+    try queryHistory(model, model.name_prompt.currentConst().?.field.text());
     return true;
 }
 

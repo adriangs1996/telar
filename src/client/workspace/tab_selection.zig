@@ -24,6 +24,6 @@ pub fn selectTab(client: *Client, command: data.SelectTab) !?data.TabSelection {
     }
 
     try pane_focus.synchronizeActivePane(client);
-    try tab_snapshot.requestTabSnapshot(client, selection.selected);
+    try tab_snapshot.requestTabSnapshot(&client.model, selection.selected);
     return selection;
 }

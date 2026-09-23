@@ -14,7 +14,7 @@ const workspace_rename = @import("workspace/workspace_rename.zig");
 
 /// Layout export decodes to the same active pane and split tree.
 /// Example: `try attached_client_tests.layoutRoundTrip(writeCommandLayout);`
-pub fn layoutRoundTrip(comptime write_layout: fn (*const AttachedClient, *core.ClientCommand) anyerror!void) !void {
+pub fn layoutRoundTrip(comptime write_layout: fn (*const data.ClientModel, *core.ClientCommand) anyerror!void) !void {
     var app: AttachedClient = undefined;
     app.model = data.ClientModel.init(std.testing.allocator, true);
     defer app.model.deinit();
@@ -45,7 +45,7 @@ pub fn layoutRoundTrip(comptime write_layout: fn (*const AttachedClient, *core.C
         .action = .layout_get,
     };
 
-    try write_layout(&app, &reply);
+    try write_layout(&app.model, &reply);
     var bytes: [core.ClientCommand.capacity / 2]u8 = undefined;
     const decoded = try core.decodeServer(try std.fmt.hexToBytes(&bytes, reply.text()));
     try std.testing.expectEqualDeep(location, decoded.client_layout_snapshot.active_tab.?);
@@ -259,7 +259,7 @@ pub fn retainQueuedInput(comptime flush: fn (*AttachedClient) anyerror!void) !vo
     } ** (data.input_limits.max_encoded_bytes + 1);
 
     try runtime_io.sendRuntimeInput(
-        app,
+        &app.model,
         .{
             .pane_id = pane,
             .bytes = &source,
@@ -272,8 +272,7 @@ pub fn retainQueuedInput(comptime flush: fn (*AttachedClient) anyerror!void) !vo
     @memset(&source, 'y');
     capture.reject = false;
 
-    try runtime_io.sendRuntime(
-        app,
+    try app.model.to_runtime.push(
         .{
             .detach_pane = .{
                 .pane_id = pane,
@@ -312,8 +311,7 @@ pub fn retainQueuedInput(comptime flush: fn (*AttachedClient) anyerror!void) !vo
     }
 
     const sends = capture.sends;
-    try std.testing.expectError(error.ClientOutboxFull, runtime_io.sendRuntime(
-        app,
+    try std.testing.expectError(error.ClientOutboxFull, app.model.to_runtime.push(
         .{
             .detach_pane = .{
                 .pane_id = pane,
@@ -326,7 +324,7 @@ pub fn retainQueuedInput(comptime flush: fn (*AttachedClient) anyerror!void) !vo
 
 /// Change review operation accepts terminal panes and rejects replaced attachments.
 /// Example: `try attached_client_tests.rejectReplacedReviewAttachment(openChangeReviewSession, changeReviewOperation, applyChangeReviewResponse);`
-pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient, core.PaneId) anyerror!void, comptime operation: fn (*AttachedClient, u64) anyerror!data.ChangeReviewOperation, comptime apply_response: fn (*AttachedClient, data.ChangeReviewOperation, core.ChangeReviewSnapshotView) anyerror!bool) !void {
+pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*data.ClientModel, core.PaneId) anyerror!void, comptime operation: fn (*data.ClientModel, u64) anyerror!data.ChangeReviewOperation, comptime apply_response: fn (*data.ClientModel, data.ChangeReviewOperation, core.ChangeReviewSnapshotView) anyerror!bool) !void {
     const app = try std.testing.allocator.create(AttachedClient);
     const model = &app.model;
     defer std.testing.allocator.destroy(app);
@@ -355,11 +353,11 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient
     );
     const pane = model.panes.find(pane_id).?;
     _ = pane.identify(.terminal, 3);
-    try open_session(app, pane_id);
-    try std.testing.expect(change_review.isChangeReviewAttached(app));
-    const pending_owner = try operation(app, 0);
+    try open_session(&app.model, pane_id);
+    try std.testing.expect(change_review.isChangeReviewAttached(&app.model));
+    const pending_owner = try operation(&app.model, 0);
     session.begin(@enumFromInt(21));
-    try std.testing.expectError(error.ChangeReviewRequestPending, operation(app, 0));
+    try std.testing.expectError(error.ChangeReviewRequestPending, operation(&app.model, 0));
     const response: core.ChangeReviewSnapshotView = .{
         .request_id = @enumFromInt(21),
         .pane_id = pane_id,
@@ -369,9 +367,9 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient
     };
 
     pane.attachment_generation += 1;
-    try std.testing.expect(!change_review.isChangeReviewAttached(app));
+    try std.testing.expect(!change_review.isChangeReviewAttached(&app.model));
     try std.testing.expect(!try apply_response(
-        app,
+        &app.model,
         pending_owner,
         response,
     ));
@@ -381,7 +379,7 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient
 
 /// Change review operation updates closed review availability without opening or querying a view.
 /// Example: `try attached_client_tests.retainReviewAvailability(openChangeReviewSession, changeReviewChanged);`
-pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core.PaneId) anyerror!void, comptime changed: fn (*AttachedClient, core.ChangeReviewChanged) bool) !void {
+pub fn retainReviewAvailability(comptime open_session: fn (*data.ClientModel, core.PaneId) anyerror!void, comptime changed: fn (*data.ClientModel, core.ChangeReviewChanged) bool) !void {
     const app = try std.testing.allocator.create(AttachedClient);
     const model = &app.model;
     defer std.testing.allocator.destroy(app);
@@ -418,33 +416,33 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
     };
 
     const revision = model.pane_metadata_revision;
-    try std.testing.expect(changed(app, notification));
+    try std.testing.expect(changed(&app.model, notification));
     try std.testing.expect(model.pane_metadata_revision != revision);
     try std.testing.expect(pane.hasChangeReview());
     try std.testing.expect(session.owner == null);
     try std.testing.expect(!session.needsRefresh());
-    try std.testing.expect(!changed(app, notification));
+    try std.testing.expect(!changed(&app.model, notification));
 
-    try open_session(app, pane_id);
+    try open_session(&app.model, pane_id);
     notification.latest_edition_id = 2;
-    try std.testing.expect(changed(app, notification));
+    try std.testing.expect(changed(&app.model, notification));
     try std.testing.expect(session.needsRefresh());
-    change_review.closeChangeReview(app);
+    change_review.closeChangeReview(&app.model);
     try std.testing.expect(pane.hasChangeReview());
     notification.session = "next-hook-session";
     notification.latest_edition_id = 0;
-    try std.testing.expect(changed(app, notification));
+    try std.testing.expect(changed(&app.model, notification));
     try std.testing.expect(!pane.hasChangeReview());
     try std.testing.expect(!session.needsRefresh());
     notification.pane_generation += 1;
     notification.latest_edition_id = 1;
-    try std.testing.expect(!changed(app, notification));
+    try std.testing.expect(!changed(&app.model, notification));
     try std.testing.expect(!pane.hasChangeReview());
 }
 
 /// Owned request deliveries roll back only their own correlation when the outbox is full.
 /// Example: `try attached_client_tests.rollBackFullOutbox(sendTabRenameRequest, sendCreateTabRequest, sendAgentPromptRequest);`
-pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameTab, data.RequestsContinuation) anyerror!void, comptime create_tab: fn (*AttachedClient, core.CreateTab) anyerror!void, comptime prompt: fn (*AttachedClient, core.AgentPrompt, data.AgentOperation) anyerror!void) !void {
+pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.RenameTab, data.RequestsContinuation) anyerror!void, comptime create_tab: fn (*data.ClientModel, core.CreateTab) anyerror!void, comptime prompt: fn (*data.ClientModel, core.AgentPrompt, data.AgentOperation) anyerror!void) !void {
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
     app.model = data.ClientModel.init(std.testing.allocator, true);
@@ -491,7 +489,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
         const location = tab_location;
         const result: anyerror!void = switch (delivery) {
             .tab_rename => rename_tab(
-                app,
+                &app.model,
                 .{
                     .request_id = request_id,
                     .location = location,
@@ -502,7 +500,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
                 },
             ),
             .workspace_rename => workspace_rename.sendWorkspaceRenameRequest(
-                app,
+                &app.model,
                 .{
                     .request_id = request_id,
                     .workspace = location.workspace,
@@ -510,7 +508,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
                 },
             ),
             .tab_create => create_tab(
-                app,
+                &app.model,
                 .{
                     .request_id = request_id,
                     .workspace = location.workspace,
@@ -525,7 +523,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
                 },
             ),
             .agent_prompt => prompt(
-                app,
+                &app.model,
                 .{
                     .request_id = request_id,
                     .pane_id = pane_id,

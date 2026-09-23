@@ -20,9 +20,9 @@ const Client = @import("../AttachedClient.zig");
 /// Opens the command palette with `prefix` already typed. A `?` palette
 /// starts with a cleared suggestion, like `suggestions.begin`.
 /// Example: `_ = name_prompt.beginCommandPalette(app, prefix);`
-pub fn beginCommandPalette(client: *Client, prefix: data.CommandPalettePrefix) bool {
+pub fn beginCommandPalette(model: *data.ClientModel, prefix: data.CommandPalettePrefix) bool {
     if (!openNamePrompt(
-        client,
+        model,
         .{
             .palette = prefix,
         },
@@ -31,7 +31,7 @@ pub fn beginCommandPalette(client: *Client, prefix: data.CommandPalettePrefix) b
     }
 
     if (prefix == .suggest) {
-        client.model.suggestion.begin();
+        model.suggestion.begin();
     }
 
     return true;
@@ -42,7 +42,7 @@ pub fn beginCommandPalette(client: *Client, prefix: data.CommandPalettePrefix) b
 /// Example: `try name_prompt.choosePromptRow(app, index);`
 pub fn choosePromptRow(client: *Client, index: u16) !void {
     client.model.name_prompt.select(index);
-    constrainPickerSelection(client);
+    constrainPickerSelection(&client.model);
     _ = try inputPrompt(
         client,
         .{
@@ -90,18 +90,18 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !data.PromptOutco
     const directory_before = promptDirectoryVersion(&client.model.name_prompt);
     const command = name_prompts.commandFor(input);
     const outcome = if (command) |value| try applyPromptCommand(client, value) else .unchanged;
-    try refreshPromptHistory(client, before);
-    try history_palette.navigateHistoryPage(client);
+    try refreshPromptHistory(&client.model, before);
+    try history_palette.navigateHistoryPage(&client.model);
     if (outcome == .completion_requested) {
         try prompt_paths.acceptPathCompletion(client);
     } else if (outcome == .cancelled or outcome == .finished) {
-        prompt_paths.closePathCompletion(client);
+        prompt_paths.closePathCompletion(&client.model);
     } else if (directory_before != null and !std.meta.eql(directory_before, promptDirectoryVersion(&client.model.name_prompt))) {
         try prompt_paths.refreshPathCompletion(client);
     }
-    constrainPickerSelection(client);
+    constrainPickerSelection(&client.model);
     try history_palette.refreshHistoryInspection(client);
-    suggest_command.discardEditedSuggestion(client, before);
+    suggest_command.discardEditedSuggestion(&client.model, before);
     if (outcome == .finished) {
         var submission = before;
         submission.alternate = client.list_submission_alternate;
@@ -109,60 +109,60 @@ pub fn inputPrompt(client: *Client, input: name_prompts.Input) !data.PromptOutco
         try finishPromptList(client, submission);
     }
     if (outcome == .removed and before.kind == .history) {
-        try history_palette.deleteHistorySelection(client, before.selection);
+        try history_palette.deleteHistorySelection(&client.model, before.selection);
     }
     return outcome;
 }
 
 /// Checks current input authority and initializes the prompt from canonical model state.
 /// Example: `const opened = name_prompt.openNamePrompt(app, .rename_active_tab);`
-pub fn openNamePrompt(client: *Client, intent: name_prompt_opening.Intent) bool {
-    if (client.model.panePasteActive()) {
+pub fn openNamePrompt(model: *data.ClientModel, intent: name_prompt_opening.Intent) bool {
+    if (model.panePasteActive()) {
         return false;
     }
     if (intent == .copy_search) {
-        if (!client.model.copyModeActive()) {
+        if (!model.copyModeActive()) {
             return false;
         }
 
-        client.model.name_prompt.begin(
+        model.name_prompt.begin(
             .{
                 .copy_search = intent.copy_search,
             },
         );
         return true;
     }
-    if (client.model.copyModeActive()) {
+    if (model.copyModeActive()) {
         return false;
     }
 
     const command: data.PromptBegin = switch (intent) {
         .create_workspace => create: {
-            if (!client.model.request_lifecycle.tracker.isEmpty()) {
+            if (!model.request_lifecycle.tracker.isEmpty()) {
                 return false;
             }
-            if (client.model.planWorkspaceCreation() == null) {
+            if (model.planWorkspaceCreation() == null) {
                 return false;
             }
 
             break :create .create_workspace;
         },
         .rename_workspace => rename: {
-            const workspace = client.model.workspace orelse return false;
+            const workspace = model.workspace orelse return false;
             break :rename .{
                 .rename_workspace = .{
                     .workspace = workspace,
-                    .name = client.model.workspaceName(),
+                    .name = model.workspaceName(),
                 },
             };
         },
         .rename_active_tab => rename: {
-            const active = client.model.tabs.activeSlot() orelse return false;
-            break :rename name_prompt_opening.renameTab(client.model.tabs.location[active].tab_id, data.tab_label.text(&client.model, active));
+            const active = model.tabs.activeSlot() orelse return false;
+            break :rename name_prompt_opening.renameTab(model.tabs.location[active].tab_id, data.tab_label.text(model, active));
         },
         .rename_tab => |tab_id| rename: {
-            const tab = client.model.tabs.find(tab_id) orelse return false;
-            break :rename name_prompt_opening.renameTab(tab_id, data.tab_label.text(&client.model, tab));
+            const tab = model.tabs.find(tab_id) orelse return false;
+            break :rename name_prompt_opening.renameTab(tab_id, data.tab_label.text(model, tab));
         },
         .goto_picker => .goto_picker,
         .history_palette => .history_palette,
@@ -173,7 +173,7 @@ pub fn openNamePrompt(client: *Client, intent: name_prompt_opening.Intent) bool 
         .copy_search => unreachable,
     };
 
-    client.model.name_prompt.begin(command);
+    model.name_prompt.begin(command);
     return true;
 }
 
@@ -268,8 +268,8 @@ fn finishPromptList(client: *Client, before: data.PromptListSnapshot) !void {
 
 /// Requeries the runtime only when the palette's query text actually
 /// changed, so selection moves and pastes stay local.
-fn refreshPromptHistory(client: *Client, before: data.PromptListSnapshot) !void {
-    const prompt = client.model.name_prompt.currentConst() orelse return;
+fn refreshPromptHistory(model: *data.ClientModel, before: data.PromptListSnapshot) !void {
+    const prompt = model.name_prompt.currentConst() orelse return;
     if (prompt.target() != .history) {
         return;
     }
@@ -285,24 +285,24 @@ fn refreshPromptHistory(client: *Client, before: data.PromptListSnapshot) !void 
         return;
     }
 
-    try history_palette.queryHistory(client, text);
+    try history_palette.queryHistory(model, text);
 }
 
 /// Keeps the picker selection inside the deterministic result set the
 /// renderer and the submit path both derive from the current query.
-fn constrainPickerSelection(client: *Client) void {
-    const prompt = client.model.name_prompt.currentConst() orelse return;
+fn constrainPickerSelection(model: *data.ClientModel) void {
+    const prompt = model.name_prompt.currentConst() orelse return;
     if (prompt.selection() == 0) {
         return;
     }
 
     const count: u16 = switch (prompt.target()) {
-        .goto => pickerCount(client, prompt.field.text()),
-        .history => client.model.history_palette.len,
+        .goto => pickerCount(model, prompt.field.text()),
+        .history => model.history_palette.len,
         .suggest => 1,
-        .create_workspace => @intCast(client.model.path_completion.entries().len),
+        .create_workspace => @intCast(model.path_completion.entries().len),
         .palette => switch (prompt.paletteMode()) {
-            .goto => pickerCount(client, prompt.paletteQuery()),
+            .goto => pickerCount(model, prompt.paletteQuery()),
             .suggest => 1,
             .actions => blk: {
                 var results: data.CommandResults = .{};
@@ -312,13 +312,13 @@ fn constrainPickerSelection(client: *Client) void {
         },
         else => return,
     };
-    client.model.name_prompt.constrainSelection(count);
+    model.name_prompt.constrainSelection(count);
 }
 
-fn pickerCount(client: *Client, query: []const u8) u16 {
+fn pickerCount(model: *data.ClientModel, query: []const u8) u16 {
     var results: data.Results = .{};
     data.goto_picker.collect(
-        pickerSources(&client.model),
+        pickerSources(model),
         query,
         &results,
     );
@@ -360,7 +360,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
         .create_workspace => workspace_creation.submitWorkspacePrompt(client, submission),
         .rename_workspace => |workspace| blk: {
             break :blk try workspace_rename.requestWorkspaceRename(
-                client,
+                &client.model,
                 .{
                     .workspace = workspace,
                     .name = submission.name,
@@ -369,7 +369,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
         },
         .rename_tab => |tab_id| blk: {
             break :blk try tab_rename.requestTabRename(
-                client,
+                &client.model,
                 .{
                     .tab_id = tab_id,
                     .label = submission.name,
@@ -380,7 +380,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
         // `finishListSubmission` once the prompt no longer owns input.
         .history => blk: {
             const prompt = client.model.name_prompt.currentConst() orelse break :blk false;
-            if (!history_palette.canSubmitHistory(client, prompt.selection())) {
+            if (!history_palette.canSubmitHistory(&client.model, prompt.selection())) {
                 break :blk false;
             }
 
@@ -391,7 +391,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
             client.list_submission_alternate = submission.alternate;
             break :blk true;
         },
-        .suggest => suggest_command.submitSuggestion(client, submission.name),
+        .suggest => suggest_command.submitSuggestion(&client.model, submission.name),
         // The palette closes like the list its prefix selects; `>` closes
         // only when a catalogue entry matches, so Enter on no match is inert.
         .palette => blk: {
@@ -401,7 +401,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
                     client.list_submission_alternate = submission.alternate;
                     break :blk true;
                 },
-                .suggest => break :blk try suggest_command.submitSuggestion(client, prompt.paletteQuery()),
+                .suggest => break :blk try suggest_command.submitSuggestion(&client.model, prompt.paletteQuery()),
                 .actions => {
                     var results: data.CommandResults = .{};
                     data.command_palette.collect(prompt.paletteQuery(), &results);
@@ -418,8 +418,7 @@ fn submitPrompt(client: *Client, submission: data.Submission) !bool {
                 .needle_len = @intCast(submission.name.len),
             };
             @memcpy(owned.needle[0..submission.name.len], submission.name);
-            try runtime_io.sendRuntime(
-                client,
+            try client.model.to_runtime.push(
                 .{
                     .search_pane = owned,
                 },

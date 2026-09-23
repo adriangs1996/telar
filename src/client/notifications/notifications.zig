@@ -47,18 +47,18 @@ pub fn dismissNotificationNow(client: *Client, id: data.NotificationId) !?data.N
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try notifications.sendNotificationRequest(client, request);`
-fn sendNotificationRequest(client: *Client, request: core.ShowNotification) !void {
-    try client.model.request_lifecycle.tracker.add(request.request_id, .notification);
-    errdefer _ = client.model.request_lifecycle.tracker.take(request.request_id);
-    try client.model.to_runtime.pushNotification(request);
+fn sendNotificationRequest(model: *data.ClientModel, request: core.ShowNotification) !void {
+    try model.request_lifecycle.tracker.add(request.request_id, .notification);
+    errdefer _ = model.request_lifecycle.tracker.take(request.request_id);
+    try model.to_runtime.pushNotification(request);
 }
 
 /// Delivers one bounded semantic notification through the runtime and records
 /// the continuation consumed by its delivery report.
-pub fn requestNotificationDelivery(client: *Client, notification: *const data.Notification) !core.RequestId {
-    const request_id = try client.model.request_lifecycle.nextId();
+pub fn requestNotificationDelivery(model: *data.ClientModel, notification: *const data.Notification) !core.RequestId {
+    const request_id = try model.request_lifecycle.nextId();
     try sendNotificationRequest(
-        client,
+        model,
         .{
             .request_id = request_id,
             .notification = .{

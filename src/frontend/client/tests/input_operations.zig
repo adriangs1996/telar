@@ -201,7 +201,7 @@ test "blocked name submission keeps the exact prompt open until cancellation" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expect(api.name_prompt.openNamePrompt(client, .rename_active_tab));
+    try std.testing.expect(api.name_prompt.openNamePrompt(&client.model, .rename_active_tab));
     _ = try api.name_prompt.inputPrompt(
         client,
         .{

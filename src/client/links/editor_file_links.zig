@@ -62,7 +62,7 @@ fn openEditorPane(client: *Client, pane_id: core.PaneId, path: data.FilePath) !v
     try client.model.editor_open.begin(request);
     errdefer _ = client.model.editor_open.complete(request.request_id);
     try runtime_io.sendRuntimeRequest(
-        client,
+        &client.model,
         .{
             .registration = .{
                 .request_id = request.request_id,

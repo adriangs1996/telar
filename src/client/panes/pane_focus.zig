@@ -15,7 +15,7 @@ const FocusReportOutcome = enum { applied, unchanged };
 /// Synchronizes the focused attachment before reporting child focus. Example: `try pane_focus.synchronizeActivePane(client);`
 pub fn synchronizeActivePane(client: *Client) !void {
     _ = try pane_attachment.synchronizePaneAttachments(client);
-    _ = try synchronizeReportedFocus(client);
+    _ = try synchronizeReportedFocus(&client.model);
 }
 
 /// Commits focus before synchronizing attachments and child focus.
@@ -46,7 +46,7 @@ pub fn deliverPaneFocus(client: *Client, focus: data.PaneFocus, area: core.Rect)
     try pane_resize.resizeAttachedPanes(client, active, area);
 
     if (client.model.tabs.snapshot_loaded[active]) {
-        try pane_attachment.attachVisiblePanes(client, active, area);
+        try pane_attachment.attachVisiblePanes(&client.model, active, area);
     }
 }
 
@@ -92,7 +92,7 @@ pub fn completePaneFocusCommand(client: *Client, command: core.PaneFocusCommand)
     const current = client.model.planPaneInput(.focused);
     if (current == null or current.?.pane_id != command.pane_id) {
         return sendPaneFocusCompletion(
-            client,
+            &client.model,
             command,
             .{
                 .outcome = .source_not_focused,
@@ -112,7 +112,7 @@ pub fn completePaneFocusCommand(client: *Client, command: core.PaneFocusCommand)
     );
     if (focus) |changed| {
         return sendPaneFocusCompletion(
-            client,
+            &client.model,
             command,
             .{
                 .outcome = .focused,
@@ -122,7 +122,7 @@ pub fn completePaneFocusCommand(client: *Client, command: core.PaneFocusCommand)
     }
 
     return sendPaneFocusCompletion(
-        client,
+        &client.model,
         command,
         .{
             .outcome = .no_neighbor,
@@ -131,9 +131,8 @@ pub fn completePaneFocusCommand(client: *Client, command: core.PaneFocusCommand)
     );
 }
 
-fn sendPaneFocusCompletion(client: *Client, command: core.PaneFocusCommand, completion: data.PaneFocusCompletion) !void {
-    try runtime_io.sendRuntime(
-        client,
+fn sendPaneFocusCompletion(model: *data.ClientModel, command: core.PaneFocusCommand, completion: data.PaneFocusCompletion) !void {
+    try model.to_runtime.push(
         .{
             .complete_pane_focus = .{
                 .requester = command.requester,
@@ -157,11 +156,11 @@ fn paneFocusDirection(value: core.PaneDirection) data.LayoutDirection {
 }
 
 /// Commits reporting ownership before emitting focus-out and focus-in. Example: `_ = try sync(client);`
-fn synchronizeReportedFocus(client: *Client) !FocusReportOutcome {
-    const transition = client.model.syncReportedPaneFocus() orelse return .unchanged;
+fn synchronizeReportedFocus(model: *data.ClientModel) !FocusReportOutcome {
+    const transition = model.syncReportedPaneFocus() orelse return .unchanged;
     if (transition.focus_out) |pane_id| {
         try runtime_io.sendRuntimeInput(
-            client,
+            model,
             .{
                 .pane_id = pane_id,
                 .bytes = "\x1b[O",
@@ -171,7 +170,7 @@ fn synchronizeReportedFocus(client: *Client) !FocusReportOutcome {
 
     if (transition.focus_in) |pane_id| {
         try runtime_io.sendRuntimeInput(
-            client,
+            model,
             .{
                 .pane_id = pane_id,
                 .bytes = "\x1b[I",
@@ -183,11 +182,11 @@ fn synchronizeReportedFocus(client: *Client) !FocusReportOutcome {
 }
 
 /// Clears focus ownership before detachment and sends the matching focus-out. Example: `_ = try clear(client);`
-pub fn clearReportedFocus(client: *Client) !FocusReportOutcome {
-    const transition = client.model.clearReportedPaneFocus() orelse return .unchanged;
+pub fn clearReportedFocus(model: *data.ClientModel) !FocusReportOutcome {
+    const transition = model.clearReportedPaneFocus() orelse return .unchanged;
     if (transition.focus_out) |pane_id| {
         try runtime_io.sendRuntimeInput(
-            client,
+            model,
             .{
                 .pane_id = pane_id,
                 .bytes = "\x1b[O",

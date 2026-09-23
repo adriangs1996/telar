@@ -37,8 +37,7 @@ pub fn deliverPaneViewport(client: *Client, change: data.PaneViewportChange) !vo
     }
 
     try client.graphics.setPaneVisible(change.pane_id, change.at_bottom);
-    try runtime_io.sendRuntime(
-        client,
+    try client.model.to_runtime.push(
         .{
             .set_pane_viewport = .{
                 .pane_id = change.pane_id,

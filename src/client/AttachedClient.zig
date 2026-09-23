@@ -206,7 +206,7 @@ pub fn update(self: *AttachedClient, message: Message) !?u8 {
 
     switch (message) {
         .server => |result| return runtime_io.receiveRuntime(self, result),
-        .sent => |result| try runtime_io.completeRuntimeSend(self, result),
+        .sent => |result| try runtime_io.completeRuntimeSend(&self.model, result),
         .sidebar_animation_tick => |result| _ = try sidebar_animation.completeSidebarAnimationTick(self, result),
         .notification_tick => |result| _ = try notifications.completeNotificationTick(self, result),
         .bar_tick => |result| try bar_updates.handleTick(self, result),

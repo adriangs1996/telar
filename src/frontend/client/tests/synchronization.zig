@@ -1388,8 +1388,7 @@ test "resync outbox failure releases its snapshot correlation so a later notice 
     try harness.bootstrap();
     const client = harness.client;
     client.model.request_lifecycle.tracker = .{};
-    try client_module.runtime_io.sendRuntime(
-        client,
+    try client.model.to_runtime.push(
         .{
             .detach_pane = .{
                 .pane_id = TestHarness.bootstrap_pane,

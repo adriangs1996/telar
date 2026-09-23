@@ -12,13 +12,13 @@ const Client = @import("../AttachedClient.zig");
 /// Coalesces the complete, canonical layout of the current workspace into the
 /// runtime outbox. Tabs without a runtime snapshot are omitted until known.
 /// Example: `try client_layout.synchronizeClientLayout(app);`
-pub fn synchronizeClientLayout(client: *Client) !void {
-    if (!client.model.client_layouts.snapshot_received) {
+pub fn synchronizeClientLayout(model: *data.ClientModel) !void {
+    if (!model.client_layouts.snapshot_received) {
         return;
     }
 
-    const version = layout_updates.captureVersion(&client.model) orelse return;
-    if (client.model.client_layouts.last_sent) |last| {
+    const version = layout_updates.captureVersion(model) orelse return;
+    if (model.client_layouts.last_sent) |last| {
         if (last.eql(&version)) {
             return;
         }
@@ -27,16 +27,16 @@ pub fn synchronizeClientLayout(client: *Client) !void {
     var nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
     var tabs: [core.max_client_layout_tabs]core.ClientTabLayout = undefined;
     const layout_update = layout_updates.buildUpdate(
-        &client.model,
+        model,
         &nodes,
         &tabs,
     ) orelse return;
-    sendRuntimeClientLayout(client, layout_update) catch |err| switch (err) {
+    sendRuntimeClientLayout(model, layout_update) catch |err| switch (err) {
         error.ClientOutboxFull, error.TooManyPendingClientLayouts => return,
         else => return err,
     };
 
-    client.model.client_layouts.last_sent = version;
+    model.client_layouts.last_sent = version;
 }
 
 /// Copies and coalesces one complete reconnectable client layout.
@@ -44,8 +44,8 @@ pub fn synchronizeClientLayout(client: *Client) !void {
 /// ```zig
 /// try client_layout.sendRuntimeClientLayout(client, update);
 /// ```
-fn sendRuntimeClientLayout(client: *Client, layout_update: core.ClientLayoutUpdate) !void {
-    try client.model.to_runtime.pushClientLayout(layout_update);
+fn sendRuntimeClientLayout(model: *data.ClientModel, layout_update: core.ClientLayoutUpdate) !void {
+    try model.to_runtime.pushClientLayout(layout_update);
 }
 
 /// Consumes the single bootstrap snapshot, restores client-owned preferences
@@ -80,7 +80,7 @@ pub fn restoreClientLayout(client: *Client, snapshot: core.ClientLayoutSnapshotV
     const size = data.multiplexer.rectSize(client.geometry().area) orelse
         return error.TerminalTooSmall;
     const request = client_startup.initialPaneRequest(client, restored, size);
-    try runtime_io.sendRuntimeRequest(client, request);
+    try runtime_io.sendRuntimeRequest(&client.model, request);
     try client.model.client_layouts.markSnapshotReceived();
 }
 

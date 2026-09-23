@@ -40,8 +40,7 @@ pub fn resizeAttachedPanes(client: *Client, tab: usize, area: core.Rect) !void {
         var size = data.multiplexer.rectSize(view.content) orelse continue;
         size.cell_width_px = client.model.host.host_size.cell_width_px;
         size.cell_height_px = client.model.host.host_size.cell_height_px;
-        try runtime_io.sendRuntime(
-            client,
+        try client.model.to_runtime.push(
             .{
                 .pane_resize = .{
                     .pane_id = pane.id,
@@ -67,7 +66,7 @@ fn deliverPaneGeometry(client: *Client, change: data.PaneGeometryChange) !void {
     try resizeAttachedPanes(client, active, change.area);
 
     if (client.model.tabs.snapshot_loaded[active]) {
-        try pane_attachment.attachVisiblePanes(client, active, change.area);
+        try pane_attachment.attachVisiblePanes(&client.model, active, change.area);
     }
 }
 

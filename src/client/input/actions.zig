@@ -131,14 +131,14 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
         ),
         .toggle_workspace_list => _ = client.model.toggleWorkspaceList(),
         .new_workspace => _ = workspace_creation.beginWorkspacePrompt(client),
-        .rename_workspace => _ = name_prompt.openNamePrompt(client, .rename_workspace),
+        .rename_workspace => _ = name_prompt.openNamePrompt(&client.model, .rename_workspace),
         .select_workspace => |position| _ = try workspace_handoff.selectWorkspace(
             client,
             .{
                 .position = position,
             },
         ),
-        .close_pane => _ = try pane_closure.requestPaneClose(client),
+        .close_pane => _ = try pane_closure.requestPaneClose(&client.model),
         .new_tab => _ = try tab_creation.requestTabCreation(
             client,
             .{},
@@ -160,10 +160,10 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
                 },
             },
         ),
-        .rename_tab => _ = name_prompt.openNamePrompt(client, .rename_active_tab),
+        .rename_tab => _ = name_prompt.openNamePrompt(&client.model, .rename_active_tab),
         .close_tab => _ = try tab_removal.requestTabClose(client),
         .move_tab => |direction| _ = try tab_move.requestTabMove(
-            client,
+            &client.model,
             .{
                 .direction = switch (direction) {
                     .previous => .previous,
@@ -172,17 +172,17 @@ pub fn executeAction(client: *Client, value: data.Action, origin: ActionOrigin) 
             },
         ),
         .detach => {
-            try client_layout.synchronizeClientLayout(client);
+            try client_layout.synchronizeClientLayout(&client.model);
             try tab_removal.detachAllTabs(client);
 
             return .stop;
         },
         .enter_copy_mode => _ = copy_mode.enterCopyMode(client),
         .command_tab => |*command| try cli_control.createCommandTab(client, command),
-        .goto_picker => _ = name_prompt.openNamePrompt(client, .goto_picker),
-        .history_palette => _ = try history_palette.beginHistoryPalette(client),
-        .suggest_command => _ = try suggest_command.beginSuggestion(client),
-        .notification => |*notification| _ = try notifications.requestNotificationDelivery(client, notification),
+        .goto_picker => _ = name_prompt.openNamePrompt(&client.model, .goto_picker),
+        .history_palette => _ = try history_palette.beginHistoryPalette(&client.model),
+        .suggest_command => _ = try suggest_command.beginSuggestion(&client.model),
+        .notification => |*notification| _ = try notifications.requestNotificationDelivery(&client.model, notification),
         .lua_callback, .lua_expr, .plugin => unreachable,
     }
 

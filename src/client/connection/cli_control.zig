@@ -24,8 +24,8 @@ const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const Client = @import("../AttachedClient.zig");
 
 /// Owns a routed response until its asynchronous send completes. Example: `try cli_control.sendRuntimeClientCompletion(client, reply);`
-fn sendRuntimeClientCompletion(client: *Client, reply: core.ClientCommand) !void {
-    try client.model.to_runtime.pushClientCompletion(reply);
+fn sendRuntimeClientCompletion(model: *data.ClientModel, reply: core.ClientCommand) !void {
+    try model.to_runtime.pushClientCompletion(reply);
 }
 
 /// Preserves command correlation and returns either its result or a named failure.
@@ -36,7 +36,7 @@ pub fn completeClientCommand(client: *Client, command: core.ClientCommand) !void
         try reply.setText(@errorName(err));
     };
 
-    try sendRuntimeClientCompletion(client, reply);
+    try sendRuntimeClientCompletion(&client.model, reply);
 }
 
 /// Validates a routed API request, applies it, and records applied versus admitted status.
@@ -72,7 +72,7 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
             try applyCommandLayout(client, reply);
         },
         .layout_get => {
-            try writeCommandLayout(client, reply);
+            try writeCommandLayout(&client.model, reply);
         },
         .pane_copy => {
             const selection = try core.CopySelection.fromText(@enumFromInt(reply.target_id), reply.text());
@@ -82,8 +82,7 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
                 return error.TerminalPaneNotAttached;
             }
 
-            try runtime_io.sendRuntime(
-                client,
+            try client.model.to_runtime.push(
                 .{
                     .copy_selection = selection,
                 },
@@ -149,7 +148,7 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
         },
         .pane_close => {
             try focusCommandPane(client, reply.target_id);
-            if (try pane_closure.requestPaneClose(client) == null) {
+            if (try pane_closure.requestPaneClose(&client.model) == null) {
                 return error.PaneClosureUnavailable;
             }
 
@@ -286,14 +285,14 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
             reply.status = .applied;
         },
         .client_open_history => {
-            if (!try history_palette.beginHistoryPalette(client)) {
+            if (!try history_palette.beginHistoryPalette(&client.model)) {
                 return error.ClientPromptUnavailable;
             }
 
             reply.status = .admitted;
         },
         .client_open_goto => {
-            if (!name_prompt.openNamePrompt(client, .goto_picker)) {
+            if (!name_prompt.openNamePrompt(&client.model, .goto_picker)) {
                 return error.ClientPromptUnavailable;
             }
 
@@ -321,24 +320,24 @@ fn executeClientCommand(client: *Client, reply: *core.ClientCommand) !void {
                     .exact = width,
                 },
             );
-            try writeCommandSidebarState(client, reply);
+            try writeCommandSidebarState(&client.model, reply);
         },
         .sidebar_hide => {
             if (client.model.sidebar_visible) {
                 _ = try sidebar_toggle.toggleSidebar(client);
             }
 
-            try writeCommandSidebarState(client, reply);
+            try writeCommandSidebarState(&client.model, reply);
         },
         .sidebar_show => {
             if (!client.model.sidebar_visible) {
                 _ = try sidebar_toggle.toggleSidebar(client);
             }
 
-            try writeCommandSidebarState(client, reply);
+            try writeCommandSidebarState(&client.model, reply);
         },
         .sidebar_get => {
-            try writeCommandSidebarState(client, reply);
+            try writeCommandSidebarState(&client.model, reply);
         },
         .agent_view_expand, .agent_view_collapse => {
             _ = client.model.agentPane(@enumFromInt(reply.target_id)) orelse return error.AgentPaneNotAttached;
@@ -483,24 +482,24 @@ fn selectCommandTabOffset(client: *Client, reply: *core.ClientCommand, offset: i
     reply.status = if (change == null) .applied else .admitted;
 }
 
-fn writeCommandSidebarState(client: *const Client, reply: *core.ClientCommand) !void {
-    reply.value = client.model.sidebar_width;
-    try reply.setText(if (client.model.sidebar_visible) "visible" else "hidden");
+fn writeCommandSidebarState(model: *const data.ClientModel, reply: *core.ClientCommand) !void {
+    reply.value = model.sidebar_width;
+    try reply.setText(if (model.sidebar_visible) "visible" else "hidden");
     reply.status = .applied;
 }
 
 /// Encodes the active layout with stable pane identities into the bounded reply.
-fn writeCommandLayout(client: *const Client, reply: *core.ClientCommand) !void {
-    const tab = client.model.tabs.activeSlot() orelse return error.NoActiveTab;
-    const focused = client.model.tabs.layout[tab].focused() orelse return error.NoFocusedPane;
+fn writeCommandLayout(model: *const data.ClientModel, reply: *core.ClientCommand) !void {
+    const tab = model.tabs.activeSlot() orelse return error.NoActiveTab;
+    const focused = model.tabs.layout[tab].focused() orelse return error.NoFocusedPane;
     var nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
     const tabs = [_]core.ClientTabLayout{
         .{
-            .location = client.model.tabs.location[tab],
+            .location = model.tabs.location[tab],
             .focused_pane = focused,
-            .fullscreen = client.model.tabs.layout[tab].isFullscreen(),
+            .fullscreen = model.tabs.layout[tab].isFullscreen(),
             .workspace_active = true,
-            .nodes = client.model.tabs.layout[tab].clientLayoutNodes(&nodes),
+            .nodes = model.tabs.layout[tab].clientLayoutNodes(&nodes),
         },
     };
 
@@ -509,10 +508,10 @@ fn writeCommandLayout(client: *const Client, reply: *core.ClientCommand) !void {
         &buffer,
         .{
             .restored = true,
-            .sidebar_visible = client.model.sidebar_visible,
-            .sidebar_width = client.model.sidebar_width,
-            .workspace_list_collapsed = client.model.workspace_list_collapsed,
-            .active_tab = client.model.tabs.location[tab],
+            .sidebar_visible = model.sidebar_visible,
+            .sidebar_width = model.sidebar_width,
+            .workspace_list_collapsed = model.workspace_list_collapsed,
+            .active_tab = model.tabs.location[tab],
             .tabs = &tabs,
         },
     );

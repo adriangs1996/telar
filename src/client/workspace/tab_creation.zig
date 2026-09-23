@@ -17,7 +17,7 @@ pub fn requestTabCreation(client: *Client, command: data.RequestTabCreation) !bo
     const plan = client.model.planTabCreation() orelse return false;
     const request_id = try client.model.request_lifecycle.nextId();
     try sendCreateTabRequest(
-        client,
+        &client.model,
         .{
             .kind = command.kind,
             .request_id = request_id,
@@ -37,8 +37,8 @@ pub fn requestTabCreation(client: *Client, command: data.RequestTabCreation) !bo
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try tab_creation.sendCreateTabRequest(client, request);`
-pub fn sendCreateTabRequest(client: *Client, request: core.CreateTab) !void {
-    try client.model.request_lifecycle.tracker.add(
+pub fn sendCreateTabRequest(model: *data.ClientModel, request: core.CreateTab) !void {
+    try model.request_lifecycle.tracker.add(
         request.request_id,
         .{
             .create_tab = .{
@@ -47,8 +47,8 @@ pub fn sendCreateTabRequest(client: *Client, request: core.CreateTab) !void {
             },
         },
     );
-    errdefer _ = client.model.request_lifecycle.tracker.take(request.request_id);
-    try client.model.to_runtime.pushCreateTab(request);
+    errdefer _ = model.request_lifecycle.tracker.take(request.request_id);
+    try model.to_runtime.pushCreateTab(request);
 }
 
 pub fn completeTabCreation(client: *Client, created: core.TabCreated) !data.TabCreation {
@@ -80,7 +80,7 @@ pub fn completeTabCreation(client: *Client, created: core.TabCreated) !data.TabC
     try pane_focus.synchronizeActivePane(client);
 
     if (created.kind == .agent) {
-        try agent_control.queryAgentThread(client, created.root_pane_id);
+        try agent_control.queryAgentThread(&client.model, created.root_pane_id);
     }
 
     return creation;

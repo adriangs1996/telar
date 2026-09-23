@@ -28,8 +28,7 @@ pub fn deliverHostCommit(client: *Client, commit: data.HostCommit) !void {
         if (!std.meta.eql(change.previous.terminal_colors, change.current.terminal_colors) and
             (client.model.startup.phase == .opening or client.model.startup.phase == .active))
         {
-            try runtime_io.sendRuntime(
-                client,
+            try client.model.to_runtime.push(
                 .{
                     .configure_terminal_colors = change.current.terminal_colors,
                 },
@@ -61,7 +60,7 @@ pub fn deliverHostCommit(client: *Client, commit: data.HostCommit) !void {
             try pane_resize.resizeAttachedPanes(client, tab, area);
 
             if (client.model.tabs.snapshot_loaded[tab]) {
-                try pane_attachment.attachVisiblePanes(client, tab, area);
+                try pane_attachment.attachVisiblePanes(&client.model, tab, area);
             }
         }
     }

@@ -466,6 +466,7 @@ test {
     _ = @import("echo_trace.zig");
     _ = @import("fixed_index.zig");
     _ = @import("fuzzy.zig");
+    _ = @import("GenericRing.zig");
     _ = @import("graphics.zig");
     _ = @import("history_filter.zig");
     _ = @import("link.zig");

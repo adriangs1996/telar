@@ -12,10 +12,10 @@ const Client = @import("../AttachedClient.zig");
 /// reply. Without a focused pane there is nothing to give context, so the
 /// palette shows a failure instead of asking.
 /// Example: `try suggest_command.requestSuggestion(client, text);`
-fn requestSuggestion(client: *Client, text: []const u8) !void {
-    const pane_id = suggestionPane(&client.model) orelse {
-        client.model.suggestion.expect(1);
-        _ = client.model.suggestion.apply(
+fn requestSuggestion(model: *data.ClientModel, text: []const u8) !void {
+    const pane_id = suggestionPane(model) orelse {
+        model.suggestion.expect(1);
+        _ = model.suggestion.apply(
             .{
                 .request_id = @enumFromInt(1),
                 .status = .failed,
@@ -24,7 +24,7 @@ fn requestSuggestion(client: *Client, text: []const u8) !void {
         return;
     };
 
-    const request_id = try client.model.request_lifecycle.nextId();
+    const request_id = try model.request_lifecycle.nextId();
     var owned: data.OwnedSuggestion = .{
         .request_id = request_id,
         .pane_id = pane_id,
@@ -32,9 +32,8 @@ fn requestSuggestion(client: *Client, text: []const u8) !void {
     };
     @memcpy(owned.text[0..owned.text_len], text[0..owned.text_len]);
 
-    client.model.suggestion.expect(core.raw(request_id));
-    try runtime_io.sendRuntime(
-        client,
+    model.suggestion.expect(core.raw(request_id));
+    try model.to_runtime.push(
         .{
             .suggest_command = owned,
         },
@@ -55,12 +54,12 @@ pub fn pasteSuggestion(client: *Client) !void {
 }
 
 /// Opens the palette with an empty request and no suggestion.
-pub fn beginSuggestion(client: *Client) !bool {
-    if (!name_prompt.openNamePrompt(client, .suggest_palette)) {
+pub fn beginSuggestion(model: *data.ClientModel) !bool {
+    if (!name_prompt.openNamePrompt(model, .suggest_palette)) {
         return false;
     }
 
-    client.model.suggestion.begin();
+    model.suggestion.begin();
     return true;
 }
 
@@ -73,9 +72,9 @@ fn suggestionPane(model: *const data.ClientModel) ?core.PaneId {
 /// Drops a landed or pending suggestion once its request text changed, so
 /// the next Enter asks again instead of pasting a stale answer. Entering
 /// the palette's `?` mode from another mode counts as a change.
-pub fn discardEditedSuggestion(client: *Client, before: data.PromptListSnapshot) void {
-    const prompt = client.model.name_prompt.currentConst() orelse return;
-    if (name_prompt.promptListSnapshot(&client.model.name_prompt).kind != .suggest) {
+pub fn discardEditedSuggestion(model: *data.ClientModel, before: data.PromptListSnapshot) void {
+    const prompt = model.name_prompt.currentConst() orelse return;
+    if (name_prompt.promptListSnapshot(&model.name_prompt).kind != .suggest) {
         return;
     }
 
@@ -87,20 +86,20 @@ pub fn discardEditedSuggestion(client: *Client, before: data.PromptListSnapshot)
         return;
     }
 
-    client.model.suggestion.invalidate();
+    model.suggestion.invalidate();
 }
 
 /// Enter asks while no suggestion is ready and the prompt stays open; once
 /// a suggestion landed, Enter closes and pastes it.
-pub fn submitSuggestion(client: *Client, text: []const u8) !bool {
-    if (client.model.suggestion.phase == .ready) {
+pub fn submitSuggestion(model: *data.ClientModel, text: []const u8) !bool {
+    if (model.suggestion.phase == .ready) {
         return true;
     }
 
-    if (text.len == 0 or client.model.suggestion.phase == .waiting) {
+    if (text.len == 0 or model.suggestion.phase == .waiting) {
         return false;
     }
 
-    try requestSuggestion(client, text);
+    try requestSuggestion(model, text);
     return false;
 }

@@ -89,8 +89,8 @@ pub fn acceptPathCompletion(client: *Client) !void {
 
 /// Forgets the list when the form closes. A running listing completes into
 /// nothing.
-pub fn closePathCompletion(client: *Client) void {
-    client.model.path_completion.begin();
+pub fn closePathCompletion(model: *data.ClientModel) void {
+    model.path_completion.begin();
 }
 
 /// Expands the typed directory against the focused pane's cwd.

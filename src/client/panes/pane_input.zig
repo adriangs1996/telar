@@ -239,7 +239,7 @@ pub fn deliverPaneInput(client: *Client, plan: data.PaneInputPlan, prepared: dat
     }
 
     try runtime_io.sendRuntimeInput(
-        client,
+        &client.model,
         .{
             .pane_id = plan.pane_id,
             .bytes = prepared.bytes,

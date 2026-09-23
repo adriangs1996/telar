@@ -209,7 +209,7 @@ pub fn settle(self: *Session) !void {
         }
 
         self.pending = null;
-        try client.runtime_io.completeRuntimeSend(&self.gui.app, {});
+        try client.runtime_io.completeRuntimeSend(&self.gui.app.model, {});
         try self.startJobs();
     }
 }

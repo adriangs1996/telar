@@ -21,7 +21,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
     const version_before_prompt = client.model.version();
     const pending_updates_before_prompt = terminal.presenter.pending_updates;
 
-    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_workspace));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .rename_workspace));
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqualStrings("", client.model.name_prompt.currentConst().?.field.text());
     try support.expectNonPromptVersionEqual(version_before_prompt, client.model.version());
@@ -109,7 +109,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     const next_request_id = client.model.request_lifecycle.next_request_id;
     const version_before_request = client.model.version();
 
-    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_workspace));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(&client.model, .rename_workspace));
     try host_inputs.forward(terminal, "x\r");
 
     try std.testing.expect(!client.model.copyModeActive());
@@ -266,7 +266,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     const pending_updates_before_request = terminal.presenter.pending_updates;
 
     try std.testing.expect(client_module.name_prompt.openNamePrompt(
-        client,
+        &client.model,
         .{
             .rename_tab = TestHarness.bootstrap_location.tab_id,
         },
@@ -340,7 +340,7 @@ test "tab rename response must match the requested identity" {
     client.model.request_lifecycle.tracker = .{};
 
     try std.testing.expect(client_module.name_prompt.openNamePrompt(
-        client,
+        &client.model,
         .{
             .rename_tab = TestHarness.bootstrap_location.tab_id,
         },
@@ -380,7 +380,7 @@ test "a failed tab rename preserves the label and notifies" {
     client.model.request_lifecycle.tracker = .{};
 
     try std.testing.expect(client_module.name_prompt.openNamePrompt(
-        client,
+        &client.model,
         .{
             .rename_tab = TestHarness.bootstrap_location.tab_id,
         },
@@ -418,7 +418,7 @@ test "pending tab operation keeps the rename prompt without sending" {
     const version_before_request = client.model.version();
 
     try std.testing.expect(client_module.name_prompt.openNamePrompt(
-        client,
+        &client.model,
         .{
             .rename_tab = TestHarness.bootstrap_location.tab_id,
         },
@@ -451,7 +451,7 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
     }
 
     try std.testing.expect(client_module.name_prompt.openNamePrompt(
-        client,
+        &client.model,
         .{
             .rename_tab = TestHarness.bootstrap_location.tab_id,
         },

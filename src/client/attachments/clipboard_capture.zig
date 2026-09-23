@@ -68,35 +68,35 @@ pub fn completeClipboardCapture(client: *Client, completion: data.Completion) !v
 }
 
 /// Resolves the current target and schedules one best-effort media capture.
-pub fn startClipboardCapture(client: *Client) !clipboard_image.StartOutcome {
-    if (!client.model.host.clipboard_capture) {
+pub fn startClipboardCapture(model: *data.ClientModel) !clipboard_image.StartOutcome {
+    if (!model.host.clipboard_capture) {
         return .unsupported;
     }
 
-    const target = client.model.focusedAttachmentTarget() orelse return .no_target;
-    const capture = (try client.model.clipboard.reserve(target)) orelse return .busy;
+    const target = model.focusedAttachmentTarget() orelse return .no_target;
+    const capture = (try model.clipboard.reserve(target)) orelse return .busy;
     errdefer {
-        const rolled_back = client.model.clipboard.finish(capture.id);
+        const rolled_back = model.clipboard.finish(capture.id);
         std.debug.assert(rolled_back != null);
     }
 
-    try scheduleClipboardCapture(client, capture);
+    try scheduleClipboardCapture(model, capture);
     return .{
         .started = capture,
     };
 }
 
-fn scheduleClipboardCapture(client: *Client, capture: data.ClipboardCapture) !void {
+fn scheduleClipboardCapture(model: *data.ClientModel, capture: data.ClipboardCapture) !void {
     const request: data.CaptureRequest = .{
         .target = capture.target,
         .sequence = @intFromEnum(capture.id),
-        .marker_policy = if (client.model.attachmentMarkers(capture.target)) |markers|
+        .marker_policy = if (model.attachmentMarkers(capture.target)) |markers|
             attachment_prompt.markerPolicy(markers)
         else
             .ordered,
     };
 
-    try client.model.to_host.push(.{ .capture = request });
+    try model.to_host.push(.{ .capture = request });
 }
 
 fn adoptClipboardCapture(client: *Client, capture: *data.Capture) !bool {

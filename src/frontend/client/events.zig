@@ -64,7 +64,7 @@ fn observe(terminal: *TerminalClient) !void {
 
     const path = core.enter(.interactive);
     defer path.restore();
-    try client_module.client_layout.synchronizeClientLayout(client);
+    try client_module.client_layout.synchronizeClientLayout(&client.model);
     try presentation_lifecycle.observe(terminal);
     try presentation_lifecycle.pumpOutput(terminal);
     try host_effects.deliver(terminal);

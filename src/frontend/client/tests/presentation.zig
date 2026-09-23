@@ -238,7 +238,7 @@ test "a media tick that yields to a pending draw runs at that draw's completion"
             },
             .client => |message| switch (message) {
                 .sent => |result| {
-                    try client_module.runtime_io.completeRuntimeSend(client, result);
+                    try client_module.runtime_io.completeRuntimeSend(&client.model, result);
                     try harness.deliverHostEffects();
                 },
                 else => return error.UnexpectedEvent,

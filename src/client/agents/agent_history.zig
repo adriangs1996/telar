@@ -58,7 +58,7 @@ pub fn flushAgentHistory(client: *Client) !void {
             return;
         };
 
-        sendRuntimeAgentHistory(client, query) catch |err| {
+        sendRuntimeAgentHistory(&client.model, query) catch |err| {
             _ = client.model.request_lifecycle.tracker.take(query.request_id);
             _ = agent_reading.failed(
                 &client.model,
@@ -75,8 +75,8 @@ pub fn flushAgentHistory(client: *Client) !void {
 
 /// Copies a page cursor before its reading window can change.
 /// Example: `try agent_history.sendRuntimeAgentHistory(client, request);`
-fn sendRuntimeAgentHistory(client: *Client, request: core.QueryAgentHistory) !void {
-    try client.model.to_runtime.pushAgentHistory(request);
+fn sendRuntimeAgentHistory(model: *data.ClientModel, request: core.QueryAgentHistory) !void {
+    try model.to_runtime.pushAgentHistory(request);
 }
 
 /// Consumes a page response once, before receive storage can be reused.

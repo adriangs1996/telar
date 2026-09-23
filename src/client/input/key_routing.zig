@@ -236,7 +236,7 @@ fn routeCurrentKey(client: *Client, command: data.KeyRoutingCommand, authority: 
         },
     );
     if (pane_id != null and data.key_routing.requestsClipboardPreview(command)) {
-        _ = clipboard_capture.startClipboardCapture(client) catch {};
+        _ = clipboard_capture.startClipboardCapture(&client.model) catch {};
     }
 
     return .{

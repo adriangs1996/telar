@@ -79,8 +79,7 @@ pub fn applyPaneGraphics(client: *Client, command: data.PaneGraphicsCommand) !da
                 return error.InvalidPaneGraphicsResult;
             }
 
-            try runtime_io.sendRuntime(
-                client,
+            try client.model.to_runtime.push(
                 .{
                     .request_graphics_snapshot = .{
                         .pane_id = pane_id,
@@ -96,16 +95,14 @@ pub fn applyPaneGraphics(client: *Client, command: data.PaneGraphicsCommand) !da
                 return error.InvalidPaneGraphicsResult;
             }
 
-            try runtime_io.sendRuntime(
-                client,
+            try client.model.to_runtime.push(
                 .{
                     .configure_graphics = .{
                         .shared = false,
                     },
                 },
             );
-            try runtime_io.sendRuntime(
-                client,
+            try client.model.to_runtime.push(
                 .{
                     .request_graphics_snapshot = .{
                         .pane_id = pane_id,

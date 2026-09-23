@@ -34,8 +34,7 @@ test "host input reads pause at outbox capacity and resume with one token" {
     defer harness.deinit();
     const client = harness.client;
     const terminal = harness.terminal;
-    try client_module.runtime_io.sendRuntime(
-        client,
+    try client.model.to_runtime.push(
         .{
             .detach_pane = .{
                 .pane_id = TestHarness.bootstrap_pane,
@@ -51,7 +50,7 @@ test "host input reads pause at outbox capacity and resume with one token" {
     try std.testing.expect(!terminal.host_input.read_pending);
 
     switch (try support.receiveClient(terminal)) {
-        .sent => |result| try client_module.runtime_io.completeRuntimeSend(client, result),
+        .sent => |result| try client_module.runtime_io.completeRuntimeSend(&client.model, result),
         else => return error.UnexpectedEvent,
     }
     try harness.deliverHostEffects();
@@ -144,7 +143,7 @@ test "graphics credits remain owned until the outbox accepts them" {
     try std.testing.expect(client.model.to_runtime.inFlight());
 
     switch (try support.receiveClient(terminal)) {
-        .sent => |result| try client_module.runtime_io.completeRuntimeSend(client, result),
+        .sent => |result| try client_module.runtime_io.completeRuntimeSend(&client.model, result),
         else => return error.UnexpectedEvent,
     }
     try harness.deliverHostEffects();
@@ -165,7 +164,7 @@ test "runtime write errors release the outbound token" {
 
     try std.testing.expectError(
         error.RuntimeWriteFailed,
-        client_module.runtime_io.completeRuntimeSend(client, error.RuntimeWriteFailed),
+        client_module.runtime_io.completeRuntimeSend(&client.model, error.RuntimeWriteFailed),
     );
     try std.testing.expect(!client.model.to_runtime.inFlight());
     try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);
@@ -183,7 +182,7 @@ test "request delivery rolls correlation back when transport is full" {
     }
     const request_id = try client.model.request_lifecycle.nextId();
 
-    try std.testing.expectError(error.ClientOutboxFull, client_module.runtime_io.sendRuntimeRequest(client, .{
+    try std.testing.expectError(error.ClientOutboxFull, client_module.runtime_io.sendRuntimeRequest(&client.model, .{
         .registration = .{
             .request_id = request_id,
             .continuation = .{ .tab_snapshot = TestHarness.bootstrap_location },
@@ -464,9 +463,9 @@ test "client layout observation sends one canonical workspace update" {
     try std.testing.expect(client.model.restoreSidebarLayout(true, 53) != null);
     try std.testing.expect(client.model.setWorkspaceListCollapsed(true) != null);
 
-    try client_module.client_layout.synchronizeClientLayout(client);
+    try client_module.client_layout.synchronizeClientLayout(&client.model);
     try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);
-    try client_module.client_layout.synchronizeClientLayout(client);
+    try client_module.client_layout.synchronizeClientLayout(&client.model);
     try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);
     try harness.settle();
 

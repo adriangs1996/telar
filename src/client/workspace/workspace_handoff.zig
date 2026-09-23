@@ -127,7 +127,7 @@ pub fn requestWorkspaceSwitch(client: *Client, target: WorkspaceSwitchTarget, au
     try client.model.request_lifecycle.ensureCanStart(2);
     var required: usize = 1;
     for (client.model.tabs.location[0..client.model.tabs.count]) |location| {
-        required += try tab_removal.tabDetachmentCapacity(client, location);
+        required += try tab_removal.tabDetachmentCapacity(&client.model, location);
     }
 
     if (required > client.model.to_runtime.availableCapacity()) {
@@ -141,7 +141,7 @@ pub fn requestWorkspaceSwitch(client: *Client, target: WorkspaceSwitchTarget, au
         };
     }
 
-    sendWorkspaceOpen(client, command) catch |err| {
+    sendWorkspaceOpen(&client.model, command) catch |err| {
         restoreDepartingWorkspace(client) catch {};
         return err;
     };
@@ -159,39 +159,39 @@ fn restoreDepartingWorkspace(client: *Client) !void {
         try client.graphics.setPaneVisible(pane.pane_id, true);
     }
 
-    _ = try tab_snapshot.recoverTabSnapshot(client, location);
+    _ = try tab_snapshot.recoverTabSnapshot(&client.model, location);
 }
 
 /// Retries a missing remembered pane once, clearing the fallback on the new request.
-pub fn recoverWorkspaceSwitch(client: *Client, fallback_workspace: ?core.WorkspaceId, code: core.FailureCode) !WorkspaceRecovery {
+pub fn recoverWorkspaceSwitch(model: *data.ClientModel, fallback_workspace: ?core.WorkspaceId, code: core.FailureCode) !WorkspaceRecovery {
     const workspace = fallback_workspace orelse return .unrecoverable;
     if (code != .pane_not_found) {
         return .unrecoverable;
     }
 
-    client.model.navigation_history.forget(
+    model.navigation_history.forget(
         .{
             .workspace = workspace,
         },
     );
     try sendWorkspaceOpen(
-        client,
+        model,
         .{
             .target = .{
                 .workspace = workspace,
             },
             .fallback_workspace = null,
-            .size = data.multiplexer.rectSize(client.geometry().area) orelse return error.TerminalTooSmall,
+            .size = data.multiplexer.rectSize(data.workbench.region(model).area) orelse return error.TerminalTooSmall,
         },
     );
     return .retried;
 }
 
 /// Correlates the open before its owned message enters the runtime outbox.
-fn sendWorkspaceOpen(client: *Client, command: data.WorkspaceHandoff) !void {
-    const request_id = try client.model.request_lifecycle.nextId();
+fn sendWorkspaceOpen(model: *data.ClientModel, command: data.WorkspaceHandoff) !void {
+    const request_id = try model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
-        client,
+        model,
         .{
             .registration = .{
                 .request_id = request_id,
@@ -274,6 +274,6 @@ pub fn activateWorkspace(client: *Client, activation: data.WorkspaceActivation) 
 
     try pane_focus.synchronizeActivePane(client);
     client.model.to_host.resume_input = true;
-    try workspace_list_snapshot.requestWorkspaceSnapshot(client, activation.location.workspace);
-    try tab_snapshot.requestTabSnapshot(client, activation.location);
+    try workspace_list_snapshot.requestWorkspaceSnapshot(&client.model, activation.location.workspace);
+    try tab_snapshot.requestTabSnapshot(&client.model, activation.location);
 }

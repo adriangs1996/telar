@@ -7,15 +7,15 @@ const pane_resize = @import("pane_resize.zig");
 const Client = @import("../AttachedClient.zig");
 
 /// Requests closure without mutating runtime-owned pane membership.
-pub fn requestPaneClose(client: *Client) !?data.PaneClosure {
-    if (client.model.request_lifecycle.tracker.has(.pane_operation)) {
+pub fn requestPaneClose(model: *data.ClientModel) !?data.PaneClosure {
+    if (model.request_lifecycle.tracker.has(.pane_operation)) {
         return null;
     }
 
-    const closure = client.model.planPaneClosure() orelse return null;
-    const request_id = try client.model.request_lifecycle.nextId();
+    const closure = model.planPaneClosure() orelse return null;
+    const request_id = try model.request_lifecycle.nextId();
     try runtime_io.sendRuntimeRequest(
-        client,
+        model,
         .{
             .registration = .{
                 .request_id = request_id,
