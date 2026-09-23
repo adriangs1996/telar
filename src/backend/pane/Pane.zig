@@ -1,3 +1,4 @@
+const revisions = @import("../revisions.zig");
 const Session = @import("../pty/Session.zig");
 const Session_module = @import("../agent_panes/Session.zig");
 const core = @import("telar-core");
@@ -908,11 +909,7 @@ pub fn completeHistoryObservation(pane: *Pane, process_cache: CacheType) History
     pane.agent_process_cache = process_cache;
 
     if (!std.mem.eql(u8, previous_process.name(), process_cache.name())) {
-        pane.foreground_revision +%= 1;
-
-        if (pane.foreground_revision == 0) {
-            pane.foreground_revision = 1;
-        }
+        revisions.advance(&pane.foreground_revision);
     }
 
     return .{
@@ -969,10 +966,7 @@ pub fn observeGraphicsDamage(pane: *Pane) void {
     if (!storage.dirty) {
         return;
     }
-    pane.graphics_revision +%= 1;
-    if (pane.graphics_revision == 0) {
-        pane.graphics_revision = 1;
-    }
+    revisions.advance(&pane.graphics_revision);
     storage.dirty = false;
 }
 
@@ -1018,10 +1012,7 @@ fn applyProgress(pane: *Pane, state: core.PaneProgressState, percent: ?u8) void 
 
     pane.progress_state = state;
     pane.progress_percent = percent;
-    pane.progress_revision +%= 1;
-    if (pane.progress_revision == 0) {
-        pane.progress_revision = 1;
-    }
+    revisions.advance(&pane.progress_revision);
 }
 
 pub fn writeMediaPty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) void {
@@ -1267,10 +1258,7 @@ pub fn render(pane: *Pane, force: bool) !void {
     });
     pane.semantic_colors_dirty = false;
     pane.render_pending = false;
-    pane.cell_revision +%= 1;
-    if (pane.cell_revision == 0) {
-        pane.cell_revision = 1;
-    }
+    revisions.advance(&pane.cell_revision);
     const cursor = pane.render_state.cursor;
     pane.cursor = if (cursor.visible and cursor.viewport != null and
         cursor.viewport.?.x < pane.screen.w and cursor.viewport.?.y < pane.screen.h)

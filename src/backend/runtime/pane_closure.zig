@@ -66,22 +66,16 @@ pub fn collect(model: *RuntimeModel) void {
         return;
     }
 
-    for (&store.items) |*slot| {
-        const pane = slot.* orelse continue;
+    for (store.items, 0..) |entry, index| {
+        const pane = entry orelse continue;
 
         if (!pane.readyToDestroy() or pane.observers != 0) {
             continue;
         }
 
         const location = pane.location;
-        store.index.remove(core.raw(pane.id));
-        store.exited_count -= 1;
-        slot.* = null;
-        store.count -= 1;
-
-        if (!model.agents.remove(pane.key())) {
-            model.agents.touch();
-        }
+        _ = store.removeExitedAt(index);
+        _ = model.agents.remove(pane.key());
 
         revokeCredential(model, pane);
         pane.destroy();

@@ -22,6 +22,7 @@ const RuntimeMetrics = @import("observability/RuntimeMetrics.zig");
 const CheckpointWriter = @import("CheckpointWriter.zig");
 const AgentHistoryJobs = @import("application/AgentHistoryJobs.zig");
 const ClientKey = @import("../history/ClientKey.zig");
+const AgentDisplayStorage = @import("delivery/AgentDisplayStorage.zig");
 /// The authoritative state of one running runtime: singletons as fields and
 /// repeating entities as tables. Physical resources stay in `Resources`.
 const RuntimeModel = @This();
@@ -60,7 +61,13 @@ session_name_probe_in_flight: bool = false,
 agent_history_jobs: AgentHistoryJobs = .{},
 review_jobs: ReviewJobs = .{},
 review_service: ?*ReviewService = null,
-review_admitted: [core.max_panes_per_tab]?AdmittedReview = @splat(null),
+review_admitted: [PaneStore.capacity]?AdmittedReview = @splat(null),
+/// The agent snapshot's revision and the input revisions it last covered.
+agent_snapshot_revision: u64 = 1,
+agent_snapshot_inputs: [4]u64 = @splat(0),
+/// Storage the snapshot is built into, once per flush that sends it.
+agent_entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined,
+agent_display: [core.max_agent_snapshot_entries]AgentDisplayStorage = undefined,
 /// The pane and owner state change-review discovery last ran against.
 review_owner_stamp: u64 = 0,
 /// Discovery skipped a pane because every job slot was busy; retry it.

@@ -77,13 +77,6 @@ fn observeTestReadyPrompt(tracker: *Tracker, identity: Identity, prompt: TestRea
     });
 }
 
-test "display context changes advance the public snapshot revision" {
-    var tracker: Tracker = .{};
-    const before = tracker.revision;
-    tracker.touch();
-    try std.testing.expectEqual(before + 1, tracker.revision);
-}
-
 test "an agent without evidence does not consume a projection sequence" {
     var tracker: Tracker = .{ .sequence = 41 };
     var agent = Agent.init(try testIdentity());
@@ -1274,10 +1267,17 @@ test "a restored title is dropped with its pane and never reaches another genera
     try std.testing.expect(tracker.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = 43, .observed_at_ms = 100 }));
     try std.testing.expect(tracker.durableTitle(identity.key) == null);
 
+    // A pane id holds one generation at a time: the next generation's agent
+    // exists only after the previous one is gone, and never inherits its
+    // restored title.
     const next_generation: Identity = .{ .key = .{ .id = identity.key.id, .generation = identity.key.generation + 1 }, .process_id = 44, .session_id = .{1} ** 16 };
+    try std.testing.expect(tracker.remove(identity.key));
     try std.testing.expect(tracker.restoreTitle(identity.key, title));
     try std.testing.expect(tracker.observeProcess(.{ .identity = next_generation, .provider = .codex, .process_id = 45, .observed_at_ms = 100 }));
     try std.testing.expect(tracker.durableTitle(next_generation.key) == null);
+
+    try std.testing.expect(tracker.remove(next_generation.key));
+    try std.testing.expect(tracker.observeProcess(.{ .identity = identity, .provider = .codex, .process_id = 46, .observed_at_ms = 100 }));
     try std.testing.expectEqualStrings("Release audit", tracker.durableTitle(identity.key).?.slice());
 }
 

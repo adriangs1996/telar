@@ -1,3 +1,4 @@
+const revisions = @import("../revisions.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const ClientKey = @import("../history/ClientKey.zig");
@@ -43,6 +44,9 @@ next_workspace_id: u64 = 1,
 next_tab_id: u64 = 1,
 /// Workspace-list revision; zero stays reserved for "never sent".
 revision: u64 = 1,
+/// Advances when a tab label changes; the workspace list does not carry
+/// tab labels, but the agent snapshot does.
+label_revision: u64 = 1,
 
 /// Reserves an invisible row with the next identities and a copy of
 /// `path`. The identities are consumed only by `commit`.
@@ -261,11 +265,7 @@ pub fn recordTabCreated(self: *Workspaces, tab_id: core.TabId) void {
 /// Advances the list revision, keeping zero as the "never sent" sentinel.
 /// Example: `workspaces.advanceRevision();`.
 pub fn advanceRevision(self: *Workspaces) void {
-    self.revision +%= 1;
-
-    if (self.revision == 0) {
-        self.revision = 1;
-    }
+    revisions.advance(&self.revision);
 }
 
 /// Validates and stores a non-empty tab label.
@@ -279,6 +279,7 @@ pub fn renameTab(self: *Workspaces, location: core.TabLocation, label: []const u
     }
 
     self.setLabel(slot, index, label);
+    revisions.advance(&self.label_revision);
 }
 
 /// Validates and stores a workspace's explicit name, then advances the

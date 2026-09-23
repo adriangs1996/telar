@@ -21,7 +21,6 @@ pub fn rename(model: *RuntimeModel, session: *Session, request: core.RenameWorks
     };
 
     session_checkpoint.noteChange(model);
-    model.agents.touch();
     resync_required.notify(model, .{ .origin = session.key, .workspace = request.workspace });
     try session.delivery.responses.push(.{ .workspace_snapshot = .{
         .request_id = request.request_id,

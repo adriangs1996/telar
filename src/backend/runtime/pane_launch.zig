@@ -49,7 +49,6 @@ pub fn launch(model: *RuntimeModel, request: LaunchRequest) !*Pane {
     else
         try launchTerminal(model, request);
 
-    model.agents.touch();
     session_checkpoint.noteChange(model);
     return fresh;
 }

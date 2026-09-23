@@ -1,3 +1,4 @@
+const revisions = @import("../revisions.zig");
 const core = @import("telar-core");
 const RepositoryType = @import("Repository.zig");
 const RestoredAgents = @import("RestoredAgents.zig");
@@ -561,16 +562,6 @@ pub fn finishSessionFileProbe(tracker: *Tracker, completion: CompletionType, now
     return changed;
 }
 
-/// Publishes pane-topology changes that alter the display position of
-/// otherwise unchanged agents.
-///
-/// ```zig
-/// tracker.touch();
-/// ```
-pub fn touch(tracker: *Tracker) void {
-    tracker.bumpRevision();
-}
-
 fn resolveProxyAgent(tracker: *Tracker, observation: *const ProxyObservationType) ?*Agent {
     return switch (observation.phase) {
         .request_started => tracker.ensure(observation.identity),
@@ -660,11 +651,7 @@ fn nextSequence(tracker: *Tracker) u64 {
 }
 
 fn bumpRevision(tracker: *Tracker) void {
-    tracker.revision +%= 1;
-
-    if (tracker.revision == 0) {
-        tracker.revision = 1;
-    }
+    revisions.advance(&tracker.revision);
 }
 
 /// Updates the lifecycle projection for one runtime-owned provider session.

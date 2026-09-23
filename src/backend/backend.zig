@@ -174,6 +174,8 @@ test {
     _ = @import("runtime/attachment/attachment_namespace.zig");
     _ = @import("runtime/attachment/AttachmentStore.zig");
     _ = @import("runtime/change_review.zig");
+    _ = @import("revisions.zig");
+    _ = @import("runtime/agent_snapshot.zig");
     _ = @import("workspace/Workspaces.zig");
     _ = @import("workspace/TabRemoved.zig");
     _ = @import("runtime/workspace_git.zig");

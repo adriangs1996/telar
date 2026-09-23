@@ -43,16 +43,18 @@ test "insert stores and find returns the same aggregate" {
     try std.testing.expect(repository.findConst(identity.key).?.matches(identity.key));
 }
 
-test "pane generations are independent repository identities" {
+test "one pane id holds one generation's aggregate at a time" {
     var repository: Repository = .{};
     const first = try testIdentity(1, 1);
     const second = try testIdentity(1, 2);
 
     _ = repository.insert(Agent.init(first)) orelse return error.MissingFirstGeneration;
     try std.testing.expect(repository.find(second.key) == null);
+    try std.testing.expect(repository.insert(Agent.init(second)) == null);
+    try std.testing.expect(repository.remove(first.key));
     _ = repository.insert(Agent.init(second)) orelse return error.MissingSecondGeneration;
 
-    try std.testing.expect(repository.find(first.key) != null);
+    try std.testing.expect(repository.find(first.key) == null);
     try std.testing.expect(repository.find(second.key) != null);
 }
 
@@ -96,11 +98,11 @@ test "remove deletes only the exact pane generation and permits slot reuse" {
     const replacement = try testIdentity(2, 1);
 
     _ = repository.insert(Agent.init(first)) orelse return error.MissingFirstGeneration;
-    _ = repository.insert(Agent.init(second)) orelse return error.MissingSecondGeneration;
+    try std.testing.expect(!repository.remove(second.key));
+    try std.testing.expect(repository.find(first.key) != null);
     try std.testing.expect(repository.remove(first.key));
     try std.testing.expect(!repository.remove(first.key));
     try std.testing.expect(repository.find(first.key) == null);
-    try std.testing.expect(repository.find(second.key) != null);
 
     _ = repository.insert(Agent.init(replacement)) orelse return error.SlotWasNotReusable;
     try std.testing.expect(repository.find(replacement.key) != null);

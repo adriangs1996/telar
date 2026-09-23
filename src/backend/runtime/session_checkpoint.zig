@@ -214,7 +214,7 @@ fn validate(bytes: []const u8) !void {
     while (try reader.next()) |record| {
         if (record == .pane) {
             pane_count += 1;
-            if (pane_count > core.max_panes_per_tab) {
+            if (pane_count > PaneStore.capacity) {
                 return error.InvalidCheckpoint;
             }
         }
@@ -224,7 +224,7 @@ fn validate(bytes: []const u8) !void {
 fn apply(model: *RuntimeModel, bytes: []const u8) !void {
     var reader = try PersistenceReader.init(bytes);
     const panes = &model.panes;
-    var pane_records: [core.max_panes_per_tab]PaneRecord = undefined;
+    var pane_records: [PaneStore.capacity]PaneRecord = undefined;
     var pane_count: usize = 0;
 
     while (try reader.next()) |record| switch (record) {
@@ -691,7 +691,7 @@ test "writeFile replaces the checkpoint atomically and keeps it private" {
 
 test "checkpoint pane records fit the bounded restore storage before model" {
     var buffer: [16384]u8 = undefined;
-    for ([_]usize{ core.max_panes_per_tab, core.max_panes_per_tab + 1 }) |count| {
+    for ([_]usize{ PaneStore.capacity, PaneStore.capacity + 1 }) |count| {
         var encoder = try PersistenceEncoder.init(&buffer, .{
             .next_workspace_id = 2,
             .next_tab_id = 2,
@@ -712,7 +712,7 @@ test "checkpoint pane records fit the bounded restore storage before model" {
         }
 
         const bytes = try encoder.finish();
-        if (count <= core.max_panes_per_tab) {
+        if (count <= PaneStore.capacity) {
             try validate(bytes);
         } else {
             try std.testing.expectError(error.InvalidCheckpoint, validate(bytes));

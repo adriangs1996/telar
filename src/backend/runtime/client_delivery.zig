@@ -10,6 +10,8 @@ const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const PaneType = @import("../pane/Pane.zig");
 const change_review = @import("change_review.zig");
+const agent_snapshot = @import("agent_snapshot.zig");
+const Sources = @import("delivery/Sources.zig");
 const store_support = @import("client/store_support.zig");
 
 /// Delivers pending output to every affected client in a single pass. A
@@ -25,8 +27,14 @@ pub fn flush(model: *RuntimeModel) !void {
     while (passes <= store_support.max_clients) : (passes += 1) {
         pane_closure.collect(model);
         change_review.discover(model);
+        agent_snapshot.refresh(model);
 
-        if (!pumpClients(model)) {
+        var sources = deliverySources(model);
+        if (agent_snapshot.wanted(model)) {
+            sources.agent_entries = agent_snapshot.project(sources, &model.agent_entries, &model.agent_display);
+        }
+
+        if (!pumpClients(model, sources)) {
             break;
         }
     }
@@ -81,13 +89,31 @@ pub fn shutdownDelivered(model: *const RuntimeModel) bool {
     return true;
 }
 
-fn pumpClients(model: *RuntimeModel) bool {
+/// The runtime state every client's delivery reads in this flush.
+fn deliverySources(model: *RuntimeModel) Sources {
+    return .{
+        .panes = &model.panes,
+        .workspaces = &model.workspaces,
+        .agents = &model.agents,
+        .manifests = &model.resources.agent_manifests,
+        .system_metrics = &model.system_metrics,
+        .proxy_active = model.resources.proxy.active(),
+        .proxy_scope = model.resources.proxy.interceptionScope(),
+        .proxy_system_trusted = model.resources.proxy.systemTrusted(),
+        .home = model.home,
+        .client_layouts = &model.client_layouts,
+        .now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
+        .agent_revision = model.agent_snapshot_revision,
+    };
+}
+
+fn pumpClients(model: *RuntimeModel, sources: Sources) bool {
     var dropped = false;
     for (&model.clients.items) |*slot| {
         const session = slot.* orelse continue;
         const key = session.key;
 
-        pump(model, session) catch {
+        pump(model, session, sources) catch {
             client_connection.drop(model, key);
             dropped = true;
         };
@@ -96,7 +122,7 @@ fn pumpClients(model: *RuntimeModel) bool {
     return dropped;
 }
 
-fn pump(model: *RuntimeModel, session: *Session) !void {
+fn pump(model: *RuntimeModel, session: *Session, sources: Sources) !void {
     session.cell_deadline_ns = null;
     if (!session.active() or session.send_pending) {
         return;
@@ -105,19 +131,7 @@ fn pump(model: *RuntimeModel, session: *Session) !void {
     const pending = try session.delivery.prepare(.{
         .io = model.io,
         .attachments = &session.attachments,
-        .sources = .{
-            .panes = &model.panes,
-            .workspaces = &model.workspaces,
-            .agents = &model.agents,
-            .manifests = &model.resources.agent_manifests,
-            .system_metrics = &model.system_metrics,
-            .proxy_active = model.resources.proxy.active(),
-            .proxy_scope = model.resources.proxy.interceptionScope(),
-            .proxy_system_trusted = model.resources.proxy.systemTrusted(),
-            .home = model.home,
-            .client_layouts = &model.client_layouts,
-            .now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
-        },
+        .sources = sources,
         .metrics = &model.metrics,
     });
     const prepared = pending orelse {

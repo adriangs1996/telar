@@ -39,6 +39,8 @@ pub fn apply(sampler: *Sampler, raw: Raw) void {
         }
     }
     sampler.latest = next;
+    // A separate test suite roots this directory, so the backend-wide
+    // `revisions.advance` helper is out of its module path.
     sampler.revision +%= 1;
     if (sampler.revision == 0) {
         sampler.revision = 1;

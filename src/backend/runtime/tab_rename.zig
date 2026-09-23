@@ -22,7 +22,6 @@ pub fn rename(model: *RuntimeModel, session: *Session, request: core.RenameTab) 
     };
 
     session_checkpoint.noteChange(model);
-    model.agents.touch();
     resync_required.notify(model, .{ .origin = session.key, .workspace = request.location.workspace });
 
     const label = model.workspaces.tabLabel(request.location).?;

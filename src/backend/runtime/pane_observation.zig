@@ -2,6 +2,7 @@
 //! off the interactive path; its result updates the pane's cwd and
 //! foreground and reconciles the agent evidence it carries.
 
+const revisions = @import("../revisions.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -63,7 +64,7 @@ pub fn finish(model: *RuntimeModel, completion: ObservationCompletion) !void {
 
     const transition = pane.completeHistoryObservation(completion.process_probe.cache);
     if (transition.cwd_changed) {
-        model.agents.touch();
+        revisions.advance(&model.panes.revision);
     }
 
     recordProcessMetrics(model, completion.process_probe);

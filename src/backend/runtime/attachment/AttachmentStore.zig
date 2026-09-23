@@ -5,15 +5,17 @@ const attachment_namespace = @import("attachment_namespace.zig");
 const SelectionQuery = @import("SelectionQuery.zig");
 const selection = @import("selection.zig");
 const PaneType = @import("../../pane/Pane.zig");
+const PaneStore = @import("../../pane/PaneStore.zig");
 const PaneDetached = @import("PaneDetached.zig");
 pub const AttachmentStore = @This();
 
-pub const capacity = core.max_panes_per_tab;
+/// One client attaches to at most every pane the runtime holds.
+pub const capacity = PaneStore.capacity;
 pub const Iterator = @import("Iterator.zig");
 
-items: [core.max_panes_per_tab]?Attachment = [_]?Attachment{null} ** core.max_panes_per_tab,
+items: [capacity]?Attachment = [_]?Attachment{null} ** capacity,
 count: usize = 0,
-index: core.GenericSlotIndex(2 * core.max_panes_per_tab) = .{},
+index: core.GenericSlotIndex(2 * capacity) = .{},
 workspace: ?core.WorkspaceLocation = null,
 shared_graphics: bool = false,
 /// The owning client's bit in `Pane.observers`; zero outside a client.
@@ -177,7 +179,7 @@ pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *PaneType) 
             return error.WorkspaceMismatch;
         }
     }
-    if (store.count == core.max_panes_per_tab) {
+    if (store.count == capacity) {
         return error.AttachmentLimitReached;
     }
     for (&store.items, 0..) |*slot, position| {
