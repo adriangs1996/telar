@@ -457,9 +457,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
     defer app.model.deinit();
     app.host_input_source = .{
         .context = app,
-        .resume_read_fn = undefined,
         .route_prompt_bytes_fn = undefined,
-        .adopt_bindings_fn = undefined,
     };
 
     app.model.request_lifecycle = .{};

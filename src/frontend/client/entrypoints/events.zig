@@ -116,7 +116,6 @@ fn route(client: *client_module.AttachedClient, event: TerminalClient.ClientEven
         },
         .telemetry_tick => |result| client_telemetry.handleTick(client, result, resources.heap.snapshot()),
         .telemetry_written => |result| client_telemetry.handleWritten(client, result),
-        .config_reload => |result| _ = try client.completeConfigReload(result),
         .clipboard_image => |result| try client.completeClipboardCapture(result),
     }
 
@@ -141,7 +140,6 @@ fn pathFor(tag: EventTag) core.Path {
         .media_tick, .clipboard_image, .compression_done => .media,
         .telemetry_tick,
         .telemetry_written,
-        .config_reload,
         => .observation,
     };
 }
@@ -161,7 +159,6 @@ test "client event paths preserve interactive media and observation budgets" {
     const observation = [_]EventTag{
         .telemetry_tick,
         .telemetry_written,
-        .config_reload,
     };
 
     for (interactive) |tag| {

@@ -18,6 +18,7 @@ const GenerationType = @import("../config/Generation.zig");
 const Partial = @import("Partial.zig");
 const RegistryType = @import("../plugins/Registry.zig");
 const std = @import("std");
+const Job = @import("../execution/Job.zig").Job;
 
 pub const ConfigReload = union(enum) {
     unchanged: i128,
@@ -34,8 +35,8 @@ pub const ConfigReload = union(enum) {
 /// try schedule(&state, args);
 /// ```
 pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) !void {
-    try args.watcher.start(
-        WaitArgs{
+    try args.workers.start(.{
+        .config_watch = .{
             .io = args.io,
             .gpa = args.gpa,
             .path = args.path,
@@ -49,7 +50,7 @@ pub fn schedule(state: *ConfigReloadState, args: ScheduleArgs) !void {
             .trust_path = args.trust_path,
             .orphans = &state.orphans,
         },
-    );
+    });
     state.force_next = false;
 }
 
@@ -251,9 +252,9 @@ test "forced reload survives scheduling failure and is consumed by a successful 
     const Capture = struct {
         force: bool = false,
         fail: bool = true,
-        fn start(raw: *anyopaque, args: WaitArgs) !void {
+        fn start(raw: *anyopaque, job: Job) !void {
             const self: *@This() = @ptrCast(@alignCast(raw));
-            self.force = args.force_reload;
+            self.force = job.config_watch.force_reload;
             if (self.fail) {
                 return error.WatcherBusy;
             }
@@ -261,7 +262,7 @@ test "forced reload survives scheduling failure and is consumed by a successful 
     };
     var capture: Capture = .{};
     var state: ConfigReloadState = .{ .mtime_ns = 0, .force_next = true };
-    const args: ScheduleArgs = .{ .io = std.testing.io, .gpa = std.testing.allocator, .watcher = .{ .context = &capture, .start_fn = Capture.start }, .path = "/config.lua", .profile = null, .trust_path = "/trust.json", .current_generation = @ptrFromInt(@alignOf(GenerationType)), .current_registry = @ptrFromInt(@alignOf(RegistryType)) };
+    const args: ScheduleArgs = .{ .io = std.testing.io, .gpa = std.testing.allocator, .workers = .{ .context = &capture, .start_fn = Capture.start }, .path = "/config.lua", .profile = null, .trust_path = "/trust.json", .current_generation = @ptrFromInt(@alignOf(GenerationType)), .current_registry = @ptrFromInt(@alignOf(RegistryType)) };
     try std.testing.expectError(error.WatcherBusy, schedule(&state, args));
     try std.testing.expect(state.force_next);
     capture.fail = false;

@@ -41,7 +41,6 @@ pub const ClientEvent = union(enum) {
     compression_done: *CompressionType,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
-    config_reload: anyerror!client_module.ConfigReload,
     clipboard_image: client_module.operations.ClipboardImageCompletion,
 };
 
@@ -144,7 +143,6 @@ pub fn init(params: Params) !*TerminalClient {
     client.attachment_shelf = host_ports.attachmentShelf(client);
     client.workers = host_ports.workers(client);
     client.host_input_source = host_ports.hostInput(client);
-    client.config_watcher = host_ports.configWatcher(client);
     // The presenter borrows the inbox and metrics, whose heap addresses
     // only exist once the client does.
     terminal.presenter = .{

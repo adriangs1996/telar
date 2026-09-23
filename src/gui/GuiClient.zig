@@ -1,5 +1,6 @@
 //! One native connection's shared model and disposable host resources.
 const gui_event = @import("gui_event.zig");
+const favicon_worker = @import("image/favicon_worker.zig");
 const event_module = @import("input/event.zig");
 const graphics_delivery = @import("graphics_delivery.zig");
 const shared_model = @import("model");
@@ -192,9 +193,7 @@ pub fn init(params: client.ClientInit) !*GuiClient {
     gui.app.attachment_catalog = host_ports.attachmentCatalog(&gui.app);
     gui.app.attachment_shelf = host_ports.attachmentShelf(&gui.app);
     gui.app.workers = host_ports.workers(&gui.app);
-    gui.app.favicon_runner = host_ports.favicons(&gui.app);
     gui.app.host_input_source = host_ports.hostInput(&gui.app);
-    gui.app.config_watcher = host_ports.configWatcher(&gui.driver.configuration);
 
     return gui;
 }
@@ -1421,6 +1420,16 @@ fn notePaneInput(self: *GuiClient, pane_id: core.PaneId, at_ns: u64) void {
 fn deliverHostEffects(self: *GuiClient) !void {
     const effects = &self.app.model.to_host;
     _ = effects.takePlacementInvalidation();
+    if (effects.rebind_input) {
+        effects.rebind_input = false;
+        self.adoptBindings(self.app.routerConfig());
+    }
+
+    if (effects.resume_input) {
+        effects.resume_input = false;
+        try self.resumeInput();
+    }
+
     if (effects.pane_input) |pane_input| {
         effects.pane_input = null;
         self.notePaneInput(pane_input.pane_id, self.pane_input_time orelse pane_input.at_ns);
@@ -1760,16 +1769,19 @@ fn resolveFavicons(self: *GuiClient, renderer: *Renderer) !void {
     favicons.refresh(self.app.gpa, page);
     const want = favicons.next(&self.app.model.workspace_list_snapshot) orelse return;
 
-    if (try client.operations.favicons.request(
+    const job = client.operations.favicons.request(
         &self.app,
         .{
             .workspace = want.workspace,
             .cwd = want.cwd,
             .cell = @intCast(page.cell),
         },
-    )) {
-        favicons.started(want.workspace);
-    }
+    ) orelse return;
+    self.driver.inbox.start(.favicon, .{ favicon_worker.execute, .{ self.app.io, self.app.gpa, job } }) catch |err| {
+        client.operations.favicons.cancel(&self.app);
+        return err;
+    };
+    favicons.started(want.workspace);
 }
 
 fn refreshPointer(self: *GuiClient) void {

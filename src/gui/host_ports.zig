@@ -8,7 +8,6 @@ const worker_ports = @import("ports/workers.zig");
 const std = @import("std");
 const GuiClient = @import("GuiClient.zig");
 const NativeLoop = @import("NativeLoop.zig");
-const ConfigurationReload = @import("ConfigurationReload.zig");
 const native = @import("native/native.zig");
 
 /// Example: `const port = graphicsRetention(app);`.
@@ -50,15 +49,6 @@ pub fn attachmentShelf(client: *client_module.AttachedClient) client_module.Atta
         .modal_active_fn = attachmentModalActive,
         .close_modal_fn = closeAttachmentModal,
         .reservation_fn = attachmentReservation,
-    };
-}
-
-/// Binds configuration work to its owned worker and completion handoff.
-/// Example: `const port = configWatcher(&loop.configuration);`
-pub fn configWatcher(configuration: *ConfigurationReload) client_module.ConfigReloadWatcher {
-    return .{
-        .context = configuration,
-        .start_fn = startConfigWatch,
     };
 }
 
@@ -144,12 +134,6 @@ fn setPaneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId, visible: bo
     try GuiClient.of(client).graphics_store.setPaneVisible(pane_id, visible);
 }
 
-fn startConfigWatch(context: *anyopaque, args: client_module.ConfigWaitArgs) !void {
-    const configuration: *ConfigurationReload = @ptrCast(@alignCast(context));
-
-    try configuration.schedule(args);
-}
-
 fn syncAttachmentTarget(_: *anyopaque, _: ?data.AttachmentTarget) bool {
     return false;
 }
@@ -161,4 +145,3 @@ fn visibleAttachmentTarget(_: *anyopaque) ?data.AttachmentTarget {
 pub const chrome = chrome_module.port;
 pub const hostInput = host_input.port;
 pub const workers = worker_ports.jobs;
-pub const favicons = worker_ports.favicons;

@@ -1,12 +1,12 @@
 const std = @import("std");
-const ConfigReloadWatcher = @import("ConfigReloadWatcher.zig");
+const Workers = @import("../execution/Workers.zig");
 const GenerationType = @import("../config/Generation.zig");
 const RegistryType = @import("../plugins/Registry.zig");
 const ScheduleArgs = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
-watcher: ConfigReloadWatcher,
+workers: Workers,
 path: []const u8,
 profile: ?[]const u8,
 trust_path: []const u8,

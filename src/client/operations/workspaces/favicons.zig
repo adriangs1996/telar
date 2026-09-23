@@ -1,8 +1,7 @@
 //! Owns the favicon lookups of the workspace list: one bounded file read
-//! at a time on the observation path, started only when the adapter has
-//! bound a runner, stale results discarded by execution identity. Which
-//! workspaces need a lookup is the adapter's knowledge: it holds the
-//! sprite page the images land in.
+//! at a time on the observation path, stale results discarded by execution
+//! identity. Which workspaces need a lookup is the adapter's knowledge: it
+//! holds the sprite page the images land in and runs the lookup itself.
 
 const favicon_outcome = @import("favicon_outcome.zig");
 const std = @import("std");
@@ -10,26 +9,23 @@ const Client = @import("../../AttachedClient.zig");
 const CompletionType = @import("../../completion/FaviconCompletion.zig");
 const ImageType = @import("../../completion/FaviconImage.zig");
 const RequestType = @import("FaviconRequest.zig");
-const TestRunner = @import("FaviconTestRunner.zig");
+const JobType = @import("../../completion/FaviconJob.zig");
 
-/// Starts a lookup when no other is in flight and a runner is bound.
-/// Returns whether it started; the caller retries later otherwise.
+/// Reserves the one lookup slot and returns the job the adapter runs. Null
+/// when another lookup is in flight or the cell cannot hold an image; the
+/// caller retries later. A job the adapter fails to start is released with
+/// `cancel`.
 ///
 /// ```zig
-/// if (try request(client, .{ .workspace = id, .cwd = path, .cell = 32 })) markPending();
+/// const job = request(client, .{ .workspace = id, .cwd = path, .cell = 32 }) orelse return;
 /// ```
-pub fn request(client: *Client, wanted: RequestType) !bool {
-    const runner = client.favicon_runner orelse return false;
+pub fn request(client: *Client, wanted: RequestType) ?JobType {
     if (client.model.favicons.busy() or wanted.cell == 0 or wanted.cell > ImageType.max_side) {
-        return false;
+        return null;
     }
 
     const id = client.model.favicons.reserve(wanted.workspace);
-    runner.start(.init(.{ .execution_id = id, .workspace = wanted.workspace, .cell = wanted.cell }, wanted.cwd)) catch |err| {
-        client.model.favicons.reset();
-        return err;
-    };
-    return true;
+    return .init(.{ .execution_id = id, .workspace = wanted.workspace, .cell = wanted.cell }, wanted.cwd);
 }
 
 /// Lands one worker result: the owned image when it answers the in-flight
@@ -70,21 +66,15 @@ pub fn cancel(client: *Client) void {
 pub const Request = RequestType;
 pub const Completion = CompletionType;
 
-test "one lookup runs at a time, stale and cancelled results are released and failures leave the runner idle" {
+test "one lookup runs at a time and stale and cancelled results are released" {
     var client: Client = undefined;
     client.gpa = std.testing.allocator;
     client.model.favicons = .{};
-    client.favicon_runner = null;
-    try std.testing.expect(!try request(&client, .{ .workspace = @enumFromInt(1), .cwd = "/a", .cell = 16 }));
 
-    var runner: TestRunner = .{};
-    client.favicon_runner = .{ .context = &runner, .start_fn = TestRunner.start };
-    try std.testing.expect(!try request(&client, .{ .workspace = @enumFromInt(1), .cwd = "/a", .cell = 0 }));
-    try std.testing.expect(try request(&client, .{ .workspace = @enumFromInt(1), .cwd = "/a", .cell = 16 }));
-    try std.testing.expect(!try request(&client, .{ .workspace = @enumFromInt(2), .cwd = "/b", .cell = 16 }));
-    try std.testing.expectEqual(@as(usize, 1), runner.started);
-    try std.testing.expectEqualStrings("/a", runner.last.?.cwdSlice());
-    const first = runner.last.?.execution_id;
+    try std.testing.expect(request(&client, .{ .workspace = @enumFromInt(1), .cwd = "/a", .cell = 0 }) == null);
+    const first = request(&client, .{ .workspace = @enumFromInt(1), .cwd = "/a", .cell = 16 }).?;
+    try std.testing.expect(request(&client, .{ .workspace = @enumFromInt(2), .cwd = "/b", .cell = 16 }) == null);
+    try std.testing.expectEqualStrings("/a", first.cwdSlice());
 
     const stale = try std.testing.allocator.create(ImageType);
     stale.* = .{ .side = 16 };
@@ -93,23 +83,18 @@ test "one lookup runs at a time, stale and cancelled results are released and fa
 
     const landed = try std.testing.allocator.create(ImageType);
     landed.* = .{ .side = 16 };
-    const owned = complete(&client, .{ .execution_id = first, .workspace = @enumFromInt(1), .result = landed });
+    const owned = complete(&client, .{ .execution_id = first.execution_id, .workspace = @enumFromInt(1), .result = landed });
     std.testing.allocator.destroy(owned.image);
     try std.testing.expect(!client.model.favicons.busy());
 
-    try std.testing.expect(try request(&client, .{ .workspace = @enumFromInt(2), .cwd = "/b", .cell = 16 }));
-    const second = runner.last.?.execution_id;
+    const second = request(&client, .{ .workspace = @enumFromInt(2), .cwd = "/b", .cell = 16 }).?;
     cancel(&client);
     const cancelled = try std.testing.allocator.create(ImageType);
     cancelled.* = .{ .side = 16 };
-    try std.testing.expect(complete(&client, .{ .execution_id = second, .workspace = @enumFromInt(2), .result = cancelled }) == .stale);
+    try std.testing.expect(complete(&client, .{ .execution_id = second.execution_id, .workspace = @enumFromInt(2), .result = cancelled }) == .stale);
 
-    try std.testing.expect(try request(&client, .{ .workspace = @enumFromInt(3), .cwd = "/c", .cell = 16 }));
-    try std.testing.expect(complete(&client, .{ .execution_id = runner.last.?.execution_id, .workspace = @enumFromInt(3), .result = error.FaviconNotFound }) == .missing);
+    const third = request(&client, .{ .workspace = @enumFromInt(3), .cwd = "/c", .cell = 16 }).?;
+    try std.testing.expect(complete(&client, .{ .execution_id = third.execution_id, .workspace = @enumFromInt(3), .result = error.FaviconNotFound }) == .missing);
     try std.testing.expect(complete(&client, .{ .execution_id = @enumFromInt(5), .workspace = @enumFromInt(3), .result = error.InvalidPngData }) == .stale);
-    try std.testing.expect(!client.model.favicons.busy());
-
-    runner.fail = true;
-    try std.testing.expectError(error.RunnerUnavailable, request(&client, .{ .workspace = @enumFromInt(4), .cwd = "/d", .cell = 16 }));
     try std.testing.expect(!client.model.favicons.busy());
 }

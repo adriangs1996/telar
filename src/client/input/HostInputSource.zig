@@ -1,17 +1,13 @@
 const core = @import("telar-core");
-const RouterConfigType = @import("RouterConfig.zig");
-/// The adapter's host input source: the client resumes it after transport
-/// backpressure, hands it replayed bytes a prompt must decode, and gives it
-/// the bindings a reloaded configuration compiled. Native conversation readers
-/// can own copy mode without creating a terminal-cell selection.
+/// Input state only the adapter holds: it decodes replayed host bytes for a
+/// prompt, and native conversation readers own copy mode without creating a
+/// terminal-cell selection.
 const ThreadExpansion = @import("ThreadExpansion.zig");
 const HostInputSource = @This();
 
 set_thread_expansion_fn: ?*const fn (*anyopaque, ThreadExpansion) anyerror!void = null,
 context: *anyopaque,
-resume_read_fn: *const fn (*anyopaque) anyerror!void,
 route_prompt_bytes_fn: *const fn (*anyopaque, []const u8) anyerror!void,
-adopt_bindings_fn: *const fn (*anyopaque, RouterConfigType) void,
 enter_thread_copy_mode_fn: ?*const fn (*anyopaque, core.PaneId) bool = null,
 thread_copy_mode_active_fn: ?*const fn (*anyopaque) bool = null,
 leave_thread_copy_mode_fn: ?*const fn (*anyopaque) bool = null,
@@ -39,21 +35,9 @@ pub fn leaveThreadCopyMode(port: HostInputSource) bool {
     return leave(port.context);
 }
 
-/// Example: `try client.host_input_source.resumeRead();`.
-pub fn resumeRead(port: HostInputSource) !void {
-    return port.resume_read_fn(port.context);
-}
-
 /// Decodes replayed host bytes for the active prompt.
 pub fn routePromptBytes(port: HostInputSource, bytes: []const u8) !void {
     return port.route_prompt_bytes_fn(port.context, bytes);
-}
-
-/// Replaces the adapter's compiled bindings after a configuration reload.
-/// The reload validated them with the shared keymap checks; an adapter that
-/// still cannot compile them keeps its previous bindings.
-pub fn adoptBindings(port: HostInputSource, config: RouterConfigType) void {
-    port.adopt_bindings_fn(port.context, config);
 }
 
 /// Sets one visible native disclosure without emulating input. Example: `try port.setThreadExpansion(request);`

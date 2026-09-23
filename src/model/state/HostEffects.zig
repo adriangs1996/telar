@@ -27,6 +27,11 @@ clipboard: std.ArrayList(u8) = .empty,
 clipboard_pending: bool = false,
 /// Image placements the host drew are stale and must be redrawn.
 invalidate_placements: bool = false,
+/// Host input may be read again: an outbox slot or a workspace opened.
+resume_input: bool = false,
+/// The key bindings changed; the host rebuilds its input router from
+/// `AttachedClient.routerConfig`.
+rebind_input: bool = false,
 /// The latest input delivered to a pane, so the host can pace the frame
 /// that echoes it.
 pane_input: ?struct {

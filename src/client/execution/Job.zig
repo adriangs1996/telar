@@ -6,6 +6,7 @@ const RuntimeTransportState = @import("../connection/RuntimeTransportState.zig")
 const BarUpdatesJob = @import("../bars/BarUpdatesJob.zig");
 const PluginActionsJob = @import("../plugins/PluginActionsJob.zig");
 const PathCompletionJob = @import("../completion/PathCompletionJob.zig");
+const WaitArgs = @import("../resources/WaitArgs.zig");
 
 pub const Job = union(enum) {
     runtime_read: *RuntimeTransportState,
@@ -18,6 +19,8 @@ pub const Job = union(enum) {
     link: data.LinkTarget,
     sound: core.AgentSound,
     system_notification: data.NotificationPayload,
+    /// Waits for the configuration file to change and loads it.
+    config_watch: WaitArgs,
 
     pub const RuntimeSend = struct {
         state: *RuntimeTransportState,

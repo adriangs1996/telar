@@ -10,6 +10,7 @@ const path_completion = @import("../completion/path_completion.zig");
 const host = @import("../links/host.zig");
 const sound_playback = @import("../agents/sound_playback.zig");
 const system_notification = @import("../notifications/system_notification.zig");
+const config_reload = @import("../resources/config_reload.zig");
 
 /// Runs `job` to completion. The adapter starts it as an inbox producer:
 /// `try inbox.start(.client, .{ job_runner.run, .{ io, gpa, job } });`
@@ -37,6 +38,7 @@ pub fn run(io: std.Io, gpa: std.mem.Allocator, job: Job) Message {
         .link => |target| .{ .link_opened = host.open(io, target) },
         .sound => |kind| .{ .sound_played = sound_playback.play(io, kind) },
         .system_notification => |payload| .{ .notified = system_notification.post(io, payload) },
+        .config_watch => |args| .{ .config_reload = config_reload.wait(args) },
     };
 }
 

@@ -51,6 +51,7 @@ test "host input reads pause at outbox capacity and resume with one token" {
         .sent => |result| try client.completeRuntimeSend(result),
         else => return error.UnexpectedEvent,
     }
+    try harness.deliverHostEffects();
     try std.testing.expectEqual(data.outbox_support.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(client.runtime_transport.outbox.inFlight());
     try std.testing.expect(TerminalClient.of(client).host_input.read_pending);

@@ -61,8 +61,6 @@ pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
     fixture.app.attachment_shelf.sync_target_fn = syncTarget;
     fixture.app.attachment_catalog.context = fixture;
     fixture.app.attachment_catalog.visible_target_fn = noTarget;
-    fixture.app.host_input_source.context = fixture;
-    fixture.app.host_input_source.resume_read_fn = resumeRead;
     fixture.adapter = .{ .state = &fixture.app.presentation };
     fixture.app.model.host.animation_frame_ns = core.pace.default_interval;
     try fixture.arrive();
@@ -180,8 +178,6 @@ fn startJob(context: *anyopaque, job: Job) !void {
         else => return error.HeadlessJobUnsupported,
     }
 }
-
-fn resumeRead(_: *anyopaque) !void {}
 
 fn unsupportedGraphics(_: *anyopaque, _: model_data.PaneGraphicsCommand) !void {
     return error.HeadlessGraphicsUnsupported;

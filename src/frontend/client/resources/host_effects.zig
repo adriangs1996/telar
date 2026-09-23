@@ -7,6 +7,7 @@ const TerminalClient = @import("../TerminalClient.zig");
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
 const capture_module = @import("../../attachments/capture.zig");
 const term = @import("../../presentation/screen_support.zig");
+const host_inputs = @import("../controllers/input/host_inputs.zig");
 
 /// Drains every pending request after one event.
 /// Example: `try host_effects.deliver(client);`
@@ -20,6 +21,19 @@ pub fn deliver(client: *client_module.AttachedClient) !void {
 
     // Terminal frames are paced as a whole, not per pane.
     effects.pane_input = null;
+    if (effects.rebind_input) {
+        effects.rebind_input = false;
+        // A router the new bindings cannot compile keeps the previous one;
+        // reload validation already rejects such bindings.
+        if (host_inputs.buildRouter(client.routerConfig())) |router| {
+            terminal.host_input.replaceRouter(client.io, router);
+        } else |_| {}
+    }
+
+    if (effects.resume_input) {
+        effects.resume_input = false;
+        try host_inputs.scheduleRead(client);
+    }
 
     while (effects.pop()) |effect| {
         switch (effect) {

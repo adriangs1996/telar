@@ -4,6 +4,7 @@
 const core = @import("telar-core");
 const data = @import("model");
 const BarUpdatesCompletion = @import("../bars/BarUpdatesCompletion.zig");
+const config_reload = @import("../resources/config_reload.zig");
 
 pub const Message = union(enum) {
     server: anyerror!*const data.RuntimeMessage,
@@ -17,13 +18,14 @@ pub const Message = union(enum) {
     link_opened: anyerror!void,
     sound_played: anyerror!void,
     notified: anyerror!void,
+    config_reload: anyerror!config_reload.ConfigReload,
 
     /// The budget the event runs under.
     /// Example: `const path = core.enter(message.path());`
     pub fn path(self: Message) core.Path {
         return switch (self) {
             .server, .sent, .sidebar_animation_tick => .interactive,
-            .notification_tick, .bar_tick, .bar_command, .plugin_result, .path_completion, .link_opened, .sound_played, .notified => .observation,
+            .notification_tick, .bar_tick, .bar_command, .plugin_result, .path_completion, .link_opened, .sound_played, .notified, .config_reload => .observation,
         };
     }
 };

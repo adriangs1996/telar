@@ -6,12 +6,7 @@ const thread_items = @import("../widgets/interaction/thread_items.zig");
 
 /// Example: `app.host_input_source = host_input.port(app);`
 pub fn port(app: *client.AttachedClient) client.HostInputSource {
-    return .{ .context = app, .resume_read_fn = resumeRead, .route_prompt_bytes_fn = promptBytes, .adopt_bindings_fn = adopt, .enter_thread_copy_mode_fn = enterCopy, .thread_copy_mode_active_fn = copyActive, .leave_thread_copy_mode_fn = leaveCopy, .set_thread_expansion_fn = setExpansion };
-}
-
-fn resumeRead(context: *anyopaque) !void {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    try GuiClient.of(app).resumeInput();
+    return .{ .context = app, .route_prompt_bytes_fn = promptBytes, .enter_thread_copy_mode_fn = enterCopy, .thread_copy_mode_active_fn = copyActive, .leave_thread_copy_mode_fn = leaveCopy, .set_thread_expansion_fn = setExpansion };
 }
 
 fn promptBytes(context: *anyopaque, bytes: []const u8) !void {
@@ -21,11 +16,6 @@ fn promptBytes(context: *anyopaque, bytes: []const u8) !void {
             .paste_text = bytes,
         },
     );
-}
-
-fn adopt(context: *anyopaque, config: client.RouterConfig) void {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    GuiClient.of(app).adoptBindings(config);
 }
 
 fn enterCopy(context: *anyopaque, pane_id: core.PaneId) bool {

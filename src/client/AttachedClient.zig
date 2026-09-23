@@ -53,12 +53,11 @@ const HostChrome = @import("presentation/HostChrome.zig");
 const AttachmentCatalogPort = @import("attachments/AttachmentCatalogPort.zig");
 const AttachmentShelf = @import("attachments/AttachmentShelf.zig");
 const PresentationLifecycle = @import("presentation/LifecycleState.zig");
-const FaviconRunner = @import("completion/FaviconRunner.zig");
 const Workers = @import("execution/Workers.zig");
 const Message = @import("execution/Message.zig").Message;
 const HostInputSource = @import("input/HostInputSource.zig");
-const ConfigReloadWatcher = @import("resources/ConfigReloadWatcher.zig");
 const Adoption = @import("resources/Adoption.zig");
+const RouterConfig = @import("input/RouterConfig.zig");
 const ConfiguredPlugins = @import("plugins/ConfiguredPlugins.zig");
 
 /// Bindings obey prompt authority; validated native effects retain their caller's authority.
@@ -105,10 +104,7 @@ attachment_shelf: AttachmentShelf = undefined,
 /// The one presentation in flight and what the host last delivered, shared
 /// by every adapter.
 presentation: PresentationLifecycle = .{},
-/// Bound only by adapters that draw sprites; unset means no favicon lookups.
-favicon_runner: ?FaviconRunner = null,
 host_input_source: HostInputSource = undefined,
-config_watcher: ConfigReloadWatcher = undefined,
 
 /// Builds the shared state in its final address. The model is megabytes, so
 /// nothing here passes it by value. Ports remain unbound.
@@ -176,6 +172,28 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
     client.model.sound_playback = .init(params.options.sound);
     try client.model.history_palette.prepare(gpa);
     _ = client.model.setSidebarVisible(params.options.sidebar_visible);
+}
+
+/// The key bindings of the live configuration, borrowed from its
+/// generation until the next adoption.
+/// Example: `const router = try buildRouter(client.routerConfig());`
+pub fn routerConfig(client: *const AttachedClient) RouterConfig {
+    if (client.lua_generation) |generation| {
+        const snapshot = &generation.snapshot;
+        return .{
+            .prefix = snapshot.prefix,
+            .bindings = snapshot.bindingSlice(),
+            .escape_timeout_ns = snapshot.input_escape_timeout_ns,
+            .sequence_timeout_ns = snapshot.input_sequence_timeout_ns,
+        };
+    }
+
+    return .{
+        .prefix = client.options.prefix,
+        .bindings = client.options.bindings,
+        .escape_timeout_ns = client.options.input_escape_timeout_ns,
+        .sequence_timeout_ns = client.options.input_sequence_timeout_ns,
+    };
 }
 
 /// Returns the grid the active tab's panes share.
@@ -275,6 +293,7 @@ pub fn update(self: *AttachedClient, message: Message) !?u8 {
         .link_opened => |result| try self.completeLinkOpening(result),
         .sound_played => |result| try self.completeAgentSound(result),
         .notified => |result| result catch {},
+        .config_reload => |result| _ = try self.completeConfigReload(result),
     }
 
     return null;
@@ -710,7 +729,7 @@ pub fn completeRuntimeSend(self: *AttachedClient, result: anyerror!void) !void {
     try self.runtime_transport.outbox.finishSend(result);
     self.queueGraphicsCredits();
     try self.startRuntimeSend();
-    try self.host_input_source.resumeRead();
+    self.model.to_host.resume_input = true;
 }
 
 /// Returns available graphics credits and starts their delivery.
@@ -798,7 +817,7 @@ pub fn scheduleConfigReload(self: *AttachedClient) !void {
         .{
             .io = self.io,
             .gpa = self.gpa,
-            .watcher = self.config_watcher,
+            .workers = self.workers,
             .path = path,
             .profile = self.options.profile,
             .trust_path = trust_path,
@@ -4695,7 +4714,7 @@ fn activateWorkspace(self: *AttachedClient, activation: data.WorkspaceActivation
     }
 
     try self.synchronizeActivePane();
-    try self.host_input_source.resumeRead();
+    self.model.to_host.resume_input = true;
     try self.requestWorkspaceSnapshot(activation.location.workspace);
     try self.requestTabSnapshot(activation.location);
 }
@@ -6793,7 +6812,7 @@ fn adoptConfiguration(self: *AttachedClient, adoption: Adoption) !data.Configura
     self.lua_generation = adoption.generation;
     self.plugin_registry = adoption.registry;
     self.trust_store = adoption.trust_store;
-    self.host_input_source.adoptBindings(adoption.input);
+    self.model.to_host.rebind_input = true;
     self.model.config.sidebar_rendering = adoption.sidebar_rendering;
     self.model.sound_playback.configure(snapshot.sound);
     consumed = true;

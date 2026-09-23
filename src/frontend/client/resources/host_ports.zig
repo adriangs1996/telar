@@ -225,16 +225,8 @@ fn attachmentReservation(context: *anyopaque) ?data.PaneBottomReservation {
 pub fn hostInput(client: *client_module.AttachedClient) client_module.HostInputSource {
     return .{
         .context = client,
-        .resume_read_fn = resumeHostRead,
         .route_prompt_bytes_fn = routePromptBytes,
-        .adopt_bindings_fn = adoptBindings,
     };
-}
-
-fn resumeHostRead(context: *anyopaque) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try host_inputs.scheduleRead(client);
 }
 
 /// Decodes replayed terminal bytes into prompt events. Bytes that do not
@@ -275,24 +267,6 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
 
 /// The reload validated the bindings with the same keymap limits, so a
 /// failure here is a programming error; the previous router stays in place.
-fn adoptBindings(context: *anyopaque, config: client_module.RouterConfig) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    const router = host_inputs.buildRouter(config) catch return;
-
-    TerminalClient.of(client).host_input.replaceRouter(client.io, router);
-}
-
-/// Example: `client.config_watcher = host_ports.configWatcher(client);`.
-pub fn configWatcher(client: *client_module.AttachedClient) client_module.ConfigReloadWatcher {
-    return .{ .context = client, .start_fn = startConfigWatch };
-}
-
-fn startConfigWatch(context: *anyopaque, args: client_module.ConfigWaitArgs) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).inbox.start(.config_reload, .{ client_module.config_reload.wait, .{args} });
-}
-
 /// Example: `client.workers = host_ports.workers(client);`.
 pub fn workers(client: *client_module.AttachedClient) client_module.Workers {
     return .{ .context = client, .start_fn = startJob };

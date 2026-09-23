@@ -31,9 +31,7 @@ pub fn agentReaders(comptime enter: fn (*Client) bool) !void {
     var received: ?core.PaneId = null;
     app.host_input_source = .{
         .context = &received,
-        .resume_read_fn = undefined,
         .route_prompt_bytes_fn = undefined,
-        .adopt_bindings_fn = undefined,
     };
     const revision = app.model.copy_revision;
     try std.testing.expect(!enter(app));
