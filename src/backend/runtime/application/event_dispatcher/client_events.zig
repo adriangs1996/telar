@@ -51,34 +51,33 @@ pub fn handleHandshaken(application: *Application, result: anyerror!void) void {
 }
 
 /// Decodes and dispatches one client message, then rearms that session
-/// unless shutdown has started. The return value reports whether
-/// shutdown delivery has completed.
+/// unless shutdown has started. Delivery happens in the update's flush.
 ///
 /// ```zig
-/// const should_stop = try ClientEvents.handleMessage(&application, event);
+/// ClientEvents.handleMessage(&application, event);
 /// ```
-pub fn handleMessage(application: *Application, event: ClientMessage) !bool {
+pub fn handleMessage(application: *Application, event: ClientMessage) void {
     core.mark(application.io, .runtime_dispatch);
     const session = application.clients.resolve(event.client) orelse {
         application.metrics.stale_client_messages += 1;
-        return false;
+        return;
     };
 
     session.read_pending = false;
 
     if (session.closing) {
         application.finalizeClient(event.client);
-        return false;
+        return;
     }
 
     const payload = event.result catch {
         application.dropClient(event.client);
-        return false;
+        return;
     };
     const decode_started = core.now(application.io);
     const message = core.decodeClient(payload) catch {
         application.dropClient(event.client);
-        return false;
+        return;
     };
 
     if (comptime core.enabled) {
@@ -97,30 +96,22 @@ pub fn handleMessage(application: *Application, event: ClientMessage) !bool {
 
     requests.dispatch(application, session, message) catch {
         application.dropClient(event.client);
-        return false;
-    };
-    application.pump(session) catch {
-        application.dropClient(event.client);
-        return false;
+        return;
     };
 
     if (!application.shutdown.isRequested()) {
         startNegotiatedClientRead(application, session) catch application.dropClient(event.client);
-        return false;
     }
-
-    application.pumpAll();
-    return application.shutdownDelivered();
 }
 
-/// Applies one client-send completion and reports whether every client
-/// has received the runtime shutdown response.
+/// Applies one client-send completion. The update's flush starts the
+/// session's next delivery.
 ///
 /// ```zig
-/// const should_stop = ClientEvents.handleSent(&application, event);
+/// ClientEvents.handleSent(&application, event);
 /// ```
-pub fn handleSent(application: *Application, event: ClientSent) bool {
-    return sendCompleted(application, .{ .client = event.client, .result = event.result });
+pub fn handleSent(application: *Application, event: ClientSent) void {
+    sendCompleted(application, event);
 }
 
 /// Starts one bounded session write and rolls back `send_pending` when
@@ -170,11 +161,6 @@ fn startNegotiatedClientRead(application: *Application, session: *SessionType) !
         session.read_pending = false;
         return err;
     };
-}
-
-fn detachAfterClientSend(application: *Application, session: *SessionType, pane: core.PaneId) void {
-    _ = session.attachments.detach(pane);
-    application.collect();
 }
 
 fn handshakeClient(io: std.Io, connection: *core.SocketChannel) anyerror!void {
@@ -230,43 +216,29 @@ fn acceptClient(runtime: *AdmissionRuntime, result: anyerror!core.SocketChannel)
     };
 }
 
-fn sendCompleted(application: *Application, event: ClientSent) bool {
-    const session = (application.clients.resolve(event.client)) orelse {
+fn sendCompleted(application: *Application, event: ClientSent) void {
+    const session = application.clients.resolve(event.client) orelse {
         application.metrics.stale_client_messages += 1;
-        return false;
+        return;
     };
 
     session.send_pending = false;
-    if ((session.closing)) {
+    if (session.closing) {
         application.finalizeClient(event.client);
-        return (application.shutdownDelivered());
+        return;
     }
 
-    const completion = (session.delivery.complete(event.result));
+    const completion = session.delivery.complete(event.result);
     if (completion.close_client) {
         application.dropClient(event.client);
-        return (application.shutdownDelivered());
+        return;
     }
 
     if (completion.detach_pane) |detach| {
-        detachAfterClientSend(application, session, detach);
+        _ = session.attachments.detach(detach);
     }
 
-    if ((session.delivery.shouldCloseAfterReply()) and
-        !(application.shutdown.isRequested()))
-    {
+    if (session.delivery.shouldCloseAfterReply() and !application.shutdown.isRequested()) {
         application.dropClient(event.client);
-        return false;
     }
-
-    application.pump(session) catch {
-        application.dropClient(event.client);
-    };
-
-    if (!(application.shutdown.isRequested())) {
-        return false;
-    }
-
-    application.pumpAll();
-    return (application.shutdownDelivered());
 }

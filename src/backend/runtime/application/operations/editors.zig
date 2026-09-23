@@ -97,5 +97,4 @@ pub fn complete(application: *Application, job: *EditorOpenJob) void {
         application.dropClient(job.client);
         return;
     };
-    application.pumpAll();
 }

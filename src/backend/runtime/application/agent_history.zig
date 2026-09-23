@@ -73,8 +73,6 @@ pub fn complete(application: *Application, job: *Job) void {
         };
         job.result = null;
     }
-
-    application.pumpAll();
 }
 
 fn failure(request_id: core.RequestId, err: anyerror) PendingFailure {

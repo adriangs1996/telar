@@ -167,10 +167,6 @@ fn writeDiagnostics(io: std.Io, state: *State, bytes: []const u8) anyerror!void 
 
 fn publishMetrics(application: *Application, sampled: SamplerType) void {
     std.debug.assert(application.system_metrics_pending);
-    const changed = sampled.revision != application.system_metrics.revision;
     application.system_metrics_pending = false;
     application.system_metrics = sampled;
-    if (changed) {
-        application.pumpAll();
-    }
 }

@@ -5,8 +5,7 @@ const JobType = @import("../../agent/session_readers/Job.zig");
 const CompletionType = @import("../../agent/Completion.zig");
 
 /// Binds probing to one application type providing `io`, `select`,
-/// `model.agents`, `session_name_probe_in_flight`, `noteSessionChange` and
-/// `pumpAll`.
+/// `model.agents`, `session_name_probe_in_flight` and `noteSessionChange`.
 pub fn Type(comptime Application: type) type {
     return struct {
         /// Starts one probe for the stalest due session file, if any.
@@ -40,7 +39,6 @@ pub fn Type(comptime Application: type) type {
 
             if (application.model.agents.finishSessionFileProbe(completion, now_ms)) {
                 application.noteSessionChange();
-                application.pumpAll();
             }
         }
     };

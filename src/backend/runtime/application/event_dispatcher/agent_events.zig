@@ -43,7 +43,6 @@ pub fn handleProxyObservation(application: *Application, result: anyerror!Observ
     const observation = proxy_observation.translate(event, pane) orelse return;
     _ = application.model.agents.observeProxy(observation);
     scheduleDescription(application);
-    application.pumpAll();
 }
 
 pub fn handleProxyCapture(application: *Application, result: anyerror!*Half) !void {
@@ -75,20 +74,11 @@ pub fn handlePluginEffects(application: *Application, result_value: anyerror!*Re
     try rearmPluginEffects(application);
     application.plugin_service.authorize(result) catch return;
 
-    var changed = false;
     for (result.batch.slice()) |effect| switch (effect) {
         .record_command => |record| recordPluginCommand(application, result, record),
-        .agent_evidence => |evidence| changed = applyPluginEvidence(application, evidence) or changed,
-        .notification => |notification| {
-            if (publishPluginEffectNotification(application, notification)) {
-                changed = true;
-            }
-        },
+        .agent_evidence => |evidence| _ = applyPluginEvidence(application, evidence),
+        .notification => |notification| _ = publishPluginEffectNotification(application, notification),
     };
-
-    if (changed) {
-        application.pumpAll();
-    }
 }
 
 /// Applies one maintenance tick, expires stale agent activity and
@@ -115,7 +105,6 @@ pub fn handleDescription(application: *Application, result: AgentResult) void {
     application.agent_description_state.complete();
     _ = commitDescription(application, result);
     _ = startNextDescription(application);
-    application.pumpAll();
 }
 
 /// Starts the next queued agent-description job when the configured
@@ -167,7 +156,6 @@ fn deliverSuggestion(application: *Application, target: types.Purpose.Suggestion
     }
 
     session.delivery.responses.push(.{ .command_suggestion = pending }) catch return;
-    application.pumpAll();
 }
 
 /// Asks the engine to kill its child when it has been idle. Called
@@ -261,7 +249,6 @@ fn maintainAgents(application: *Application, result: anyerror!void) !void {
     try rearmAgentMaintenance(application);
 
     _ = application.model.agents.expire((std.Io.Timestamp.now(application.io, .real).toMilliseconds()));
-    application.pumpAll();
 }
 
 fn recordPluginCommand(application: *Application, result: *const ResultType, record: RecordCommandType) void {

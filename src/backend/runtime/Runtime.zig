@@ -14,6 +14,7 @@ const agent_history = @import("application/agent_history.zig");
 const agent_threads = @import("application/agent_threads.zig");
 const pane_search_module = @import("application/pane_search.zig");
 const editors = @import("application/operations/editors.zig");
+const client_delivery = @import("application/client_delivery.zig");
 /// Owns and composes the resources, event loop and application for one
 /// long-lived backend lifetime.
 const Runtime = @This();
@@ -153,7 +154,8 @@ pub fn deinit(self: *Runtime) void {
     self.teardown_state = .stopped;
 }
 
-/// Dispatches one runtime event to its owning operation.
+/// Dispatches one runtime event to its owning procedure, then flushes client
+/// delivery once. Returns whether shutdown delivery has completed.
 /// Example: `const stopped = try runtime.update(event);`.
 pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
     switch (event) {
@@ -164,8 +166,8 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         .handshaken => |result| {
             events.clients.handleHandshaken(&self.application, result);
         },
-        .client_message => |value| return events.clients.handleMessage(&self.application, value),
-        .client_sent => |value| return events.clients.handleSent(&self.application, value),
+        .client_message => |value| events.clients.handleMessage(&self.application, value),
+        .client_sent => |value| events.clients.handleSent(&self.application, value),
         .cell_publication_due => |result| {
             try self.application.cellPublicationDue(result);
         },
@@ -243,5 +245,9 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
         },
     }
 
-    return false;
+    try client_delivery.flush(&self.application);
+    return switch (event) {
+        .client_message, .client_sent => client_delivery.shutdownDelivered(&self.application),
+        else => false,
+    };
 }

@@ -70,10 +70,6 @@ pub fn handleMedia(application: *Application, completion: MediaCompletion) !void
     }
 
     try io_events.scheduleResponse(application, pane);
-    application.pumpAll();
-    try scheduleMedia(application, pane);
-    application.collect();
-    application.pumpAll();
 }
 
 /// Starts a pane observation when its single-flight state permits it.
@@ -187,8 +183,6 @@ fn completeObservation(application: *Application, completion: ObservationComplet
 
     agents.scheduleDescription(application);
     try scheduleObservation(application, pane);
-    application.collect();
-    application.pumpAll();
 }
 
 fn observeProcessMetrics(application: *Application, probe: ProbeType) void {

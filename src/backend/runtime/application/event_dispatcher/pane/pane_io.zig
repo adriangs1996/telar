@@ -33,8 +33,6 @@ pub fn handleInputWritten(application: *Application, completion: InputCompletion
     if (result == .succeeded) {
         try scheduleInput(application, pane);
     }
-
-    application.collect();
 }
 
 /// Releases one completed runtime-response write and starts the next
@@ -56,8 +54,6 @@ pub fn handleResponseWritten(application: *Application, completion: ResponseComp
     if (result == .succeeded) {
         try scheduleResponse(application, pane);
     }
-
-    application.collect();
 }
 
 /// Starts the pane's next queued user-input write when no input write is

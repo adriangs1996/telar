@@ -3,6 +3,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const ClientKey = @import("../../history/ClientKey.zig");
 const RequestFixture = @import("RequestFixture.zig");
+const client_delivery = @import("../application/client_delivery.zig");
 
 fn socketPair() ![2]core.SocketChannel {
     var sockets: [2]std.c.fd_t = undefined;
@@ -243,5 +244,35 @@ test "runtime update delivers shutdown before retiring a one-shot client" {
         }
     }
     try std.testing.expect(!fixture.session.send_pending);
-    try std.testing.expect(fixture.runtime.application.shutdownDelivered());
+    try std.testing.expect(client_delivery.shutdownDelivered(&fixture.runtime.application));
+}
+
+test "runtime update delivers a workspace resync to other observers in the same update" {
+    var fixture: RequestFixture = undefined;
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = try fixture.openPane();
+    const observer = try fixture.addClient();
+    _ = try observer.attachments.attach(fixture.runtime.application.gpa, pane);
+    observer.send_pending = false;
+
+    var wire: [64]u8 = undefined;
+    const encoded = try core.encodeRenameTab(&wire, .{
+        .request_id = @enumFromInt(41),
+        .location = pane.location,
+        .label = "logs",
+    });
+
+    try std.testing.expect(!try fixture.runtime.update(.{ .client_message = .{
+        .client = fixture.session.key,
+        .result = wire[0..encoded.len],
+    } }));
+
+    try std.testing.expect(observer.delivery.responses.resync_workspace == null);
+    try std.testing.expect(observer.send_pending);
+    var response: [256]u8 = undefined;
+    const bytes = try fixture.peers[1].?.receive(std.testing.io, &response);
+    const delivered = try core.decodeServer(bytes);
+    try std.testing.expect(delivered == .resync_required);
+    try std.testing.expectEqualDeep(pane.location.workspace, delivered.resync_required.workspace);
 }

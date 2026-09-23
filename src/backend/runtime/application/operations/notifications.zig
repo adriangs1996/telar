@@ -16,7 +16,6 @@ pub fn routeRuntimeStop(request: *RequestContext) !void {
 pub fn routeShowNotification(request: *RequestContext, notification: core.ShowNotification) !void {
     const confirmation = try request.session.delivery.responses.reserveNotificationShown(notification.request_id);
     confirmation.delivered_clients = request.application.publishNotification(notification.notification);
-    request.application.pumpAll();
 }
 
 fn publishRuntimeStop(application: *Application, event: StopRequestedType) void {

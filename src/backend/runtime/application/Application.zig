@@ -4,7 +4,6 @@ const events = @import("events.zig");
 const ReviewJobs = @import("../../change_review/Jobs.zig");
 const ReviewService = @import("../../change_review/Service.zig");
 const AdmittedReview = @import("../../change_review/Admitted.zig");
-const change_review = @import("change_review.zig");
 const EditorOpenState = @import("../../editors/State.zig");
 const std = @import("std");
 const event = @import("../event.zig");
@@ -79,6 +78,8 @@ review_admitted: [core.max_panes_per_tab]?AdmittedReview = @splat(null),
 editor_open: EditorOpenState = .{},
 input_sequence: u64 = 0,
 cell_timer: core.DeadlineScheduler = .{},
+/// `HOME` from the inherited environment, read once for cwd labels.
+home: ?[]const u8 = null,
 
 /// Composes application state from stable, runtime-owned capabilities.
 ///
@@ -121,6 +122,7 @@ pub fn init(self: *Application, initialization: Initialization) !void {
             .client_layouts = try .init(initialization.gpa),
         },
         .metrics = .{ .started_ns = core.now(initialization.io) },
+        .home = initialization.inherited_environment.getPosix("HOME"),
     };
 }
 
@@ -416,11 +418,6 @@ pub fn dropClient(application: *Application, key: ClientKeyType) void {
         session.attachments.deinit();
         session.delivery.close();
         application.releaseGeometry(key);
-        application.collect();
-        // Deliver the resync notices now rather than on the next tick.
-        // Re-entry from a pump failure is bounded: every dropClient marks
-        // its session closing, and closing sessions are never pumped.
-        application.pumpAll();
     }
     application.finalizeClient(key);
 }
@@ -736,151 +733,10 @@ pub fn publishAgentSound(application: *Application, notification: core.AgentSoun
     }
 }
 
-/// Advances delivery for every active client and settles observed pane damage.
-///
-/// ```zig
-/// application.pumpAll();
-/// ```
-pub fn pumpAll(application: *Application) void {
-    change_review.discover(application);
-    for (&application.clients.items) |*slot| {
-        const session = slot.* orelse continue;
-        const key = session.key;
-        application.pump(session) catch application.dropClient(key);
-    }
-    for (application.model.panes.items) |slot| {
-        const pane = slot orelse continue;
-        application.settlePaneDamage(pane);
-    }
-}
-
-fn settlePaneDamage(application: *Application, pane: *PaneType) void {
-    if (pane.render_pending) {
-        return;
-    }
-
-    for (&application.clients.items) |*slot| {
-        const session = slot.* orelse continue;
-        const attachment = session.attachments.find(pane.id) orelse continue;
-
-        if (attachment.observedCellRevision() != pane.cell_revision) {
-            return;
-        }
-    }
-
-    @memset(pane.damaged_rows, false);
-    pane.dirty = false;
-}
-
-/// Reports whether every live client has consumed the shutdown delivery.
-///
-/// ```zig
-/// if (application.shutdownDelivered()) return;
-/// ```
-pub fn shutdownDelivered(application: *const Application) bool {
-    if (!application.shutdown.isRequested()) {
-        return false;
-    }
-
-    for (&application.clients.items) |*slot| {
-        const session = slot.* orelse continue;
-        if (!session.closing and
-            (session.delivery.stopping() or session.send_pending))
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-/// Prepares and schedules at most one delivery for an active client.
-///
-/// ```zig
-/// try application.pump(session);
-/// ```
-pub fn pump(application: *Application, session: *Session) !void {
-    session.cell_deadline_ns = null;
-    if (!session.active() or session.send_pending) {
-        try application.scheduleCellPublication();
-        return;
-    }
-
-    const pending = try session.delivery.prepare(.{
-        .io = application.io,
-        .attachments = &session.attachments,
-        .sources = .{
-            .panes = &application.model.panes,
-            .workspaces = application.workspaceReader(),
-            .agents = &application.model.agents,
-            .manifests = application.agent_manifests,
-            .system_metrics = &application.system_metrics,
-            .proxy_active = application.proxy_runtime.active(),
-            .proxy_scope = application.proxy_runtime.interceptionScope(),
-            .proxy_system_trusted = application.proxy_runtime.systemTrusted(),
-            .home = application.inherited_environment.getPosix("HOME"),
-            .client_layouts = &application.model.client_layouts,
-            .now_ms = std.Io.Timestamp.now(application.io, .real).toMilliseconds(),
-        },
-        .metrics = &application.metrics,
-    });
-    errdefer if (pending) |prepared| {
-        session.delivery.abort(prepared);
-    };
-
-    for (0..core.max_panes_per_tab) |index| {
-        const attachment = session.attachments.at(index) orelse continue;
-        if (attachment.pane.media.hasPending()) {
-            try events.panes.Projection.scheduleMedia(application, attachment.pane);
-        }
-    }
-
-    const prepared = pending orelse {
-        session.cell_deadline_ns = session.attachments.cellDeadline();
-        try application.scheduleCellPublication();
-        return;
-    };
-    try application.scheduleCellPublication();
-    try events.clients.startSend(application, session, prepared.payload);
-    session.delivery.commit(.{
-        .prepared = prepared,
-        .attachments = &session.attachments,
-        .metrics = &application.metrics,
-    });
-}
-
-// Scheduling exception: std.Io.Threaded allocates task records outside Telar
-// Heap accounting. One logical timer and at most two child waits bound the
-// concurrent work; retaining armed deadlines avoids rebuilding transient waits.
-// There is no task per output update. Reusing the cancellable scheduler keeps
-// shutdown under the runtime's actor lifetime, before Application is released.
-fn scheduleCellPublication(application: *Application) !void {
-    var earliest: ?u64 = null;
-    for (&application.clients.items) |*slot| {
-        const session = slot.* orelse continue;
-        if (!session.active() or session.send_pending) {
-            continue;
-        }
-
-        const deadline = session.cell_deadline_ns orelse continue;
-        earliest = @min(earliest orelse deadline, deadline);
-    }
-
-    if (application.cell_timer.updateEarlier(application.io, earliest) != .schedule) {
-        return;
-    }
-
-    application.select.concurrent(.cell_publication_due, core.deadline_timer.wait, .{ application.io, &application.cell_timer }) catch |err| {
-        application.cell_timer.schedulingFailed();
-        return err;
-    };
-}
-
 /// Publishes due cells from current owners; the timer borrows no attachment.
 /// Example: `try application.cellPublicationDue(result);`.
 pub fn cellPublicationDue(application: *Application, result: anyerror!void) !void {
     try application.cell_timer.complete(result);
-    application.pumpAll();
 }
 
 /// Routes a decoded client message through a request-scoped dispatcher.

@@ -26,14 +26,12 @@ pub fn Type(comptime Application: type) type {
         /// Example: `GitObserver.handleCompletion(application, result);`.
         pub fn handleCompletion(application: *Application, completion: CompletionType) void {
             var repository = application.workspaceRepository();
-            if (repository.completeGitProbe(.{
+            _ = repository.completeGitProbe(.{
                 .workspace = completion.workspace,
                 .branch = if (completion.present) completion.branchSlice() else "",
                 .dirty = completion.present and completion.dirty,
                 .checked_at_ms = std.Io.Timestamp.now(application.io, .real).toMilliseconds(),
-            })) {
-                application.pumpAll();
-            }
+            });
         }
     };
 }

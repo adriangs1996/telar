@@ -137,7 +137,6 @@ fn requestFocus(application: *Application, session: *Session, focus: core.Reques
         session.releaseFocus();
         return err;
     };
-    try application.pump(target);
 }
 
 fn completeFocus(application: *Application, session: *Session, completion: core.CompletePaneFocus) !void {
@@ -166,7 +165,6 @@ fn completeFocus(application: *Application, session: *Session, completion: core.
     } });
     requester.releaseFocus();
     requester.delivery.close_after_reply = true;
-    try application.pump(requester);
 }
 
 fn paneFocusOrigin(application: *Application, pane_key: PaneKeyType) ?*Session {
@@ -241,7 +239,6 @@ fn requestClientCommand(request: *RequestContext, session: *Session, command: co
     session.pending_client_command = .{ .target = target.key, .request_id = command.request_id, .action = command.action, .target_id = command.target_id };
     errdefer session.pending_client_command = null;
     try target.delivery.responses.push(.{ .client_command = routed });
-    try request.application.pump(target);
 }
 
 fn finishClientCommand(request: *RequestContext, session: *Session, completion: core.ClientCommand) !void {
@@ -259,5 +256,4 @@ fn finishClientCommand(request: *RequestContext, session: *Session, completion: 
     reply.route = .{ .id = session.key.id, .generation = session.key.generation };
     try requester.delivery.responses.push(.{ .client_command_result = reply });
     requester.pending_client_command = null;
-    try request.application.pump(requester);
 }

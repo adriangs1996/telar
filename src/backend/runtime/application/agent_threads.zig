@@ -61,7 +61,6 @@ pub fn handle(application: *Application, completion: Changed) !bool {
         }
 
         agent_events.scheduleDescription(application);
-        application.pumpAll();
     }
 
     try application.select.concurrent(.agent_thread_changed, waitForChange, .{ application.io, pane });

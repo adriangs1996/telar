@@ -80,8 +80,6 @@ pub fn handle(application: *Application, response_result: anyerror!model_module.
             }
         },
     }
-
-    application.pumpAll();
 }
 
 fn rearmHistoryResponse(application: *Application) !void {

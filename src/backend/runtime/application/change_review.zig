@@ -83,7 +83,6 @@ fn handoff(application: *Application, job: *Job) !bool {
 
 fn finish(application: *Application, job: *Job) void {
     application.review_jobs.remove(job);
-    defer application.pumpAll();
     defer job.deinit();
     if (job.failure == null) {
         publish(application, .{ .pane_id = job.context.pane.id, .pane_generation = job.context.pane.generation, .session = job.context.sessionSlice(), .latest_edition_id = job.latest_edition_id });

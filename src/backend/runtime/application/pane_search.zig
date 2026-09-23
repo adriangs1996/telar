@@ -60,27 +60,23 @@ pub fn advance(application: *Application, completion: Wake) !void {
     const pane = application.model.panes.resolve(pending.pane) orelse {
         session.pending_search = null;
         try fail(session, wake.request_id, "Pane search target exited");
-        try application.pump(session);
         return;
     };
     if (session.role != .control and session.attachments.find(pane.id) == null) {
         session.pending_search = null;
         try fail(session, wake.request_id, "Pane search target detached");
-        try application.pump(session);
         return;
     }
 
     if (std.Io.Clock.awake.now(application.io).nanoseconds >= pending.deadline_ns) {
         session.pending_search = null;
         try fail(session, wake.request_id, "Pane search deadline exceeded; retry");
-        try application.pump(session);
         return;
     }
 
     const complete = pending.cursor.advance(pane) catch {
         session.pending_search = null;
         try fail(session, wake.request_id, "Pane changed during search; retry");
-        try application.pump(session);
         return;
     };
     if (complete) {
@@ -95,7 +91,6 @@ pub fn advance(application: *Application, completion: Wake) !void {
             .pane_id = pane.id,
             .matches = matches,
         } });
-        try application.pump(session);
     } else {
         try schedule(application, wake, pane.ingest_pending);
     }

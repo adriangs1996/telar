@@ -62,8 +62,6 @@ pub fn handleExit(application: *Application, completion: ExitCompletion) !void {
     application.revokePaneCredential(transition.pane);
 
     if (transition.launch_aborting) {
-        application.collect();
-        application.pumpAll();
         return;
     }
 
@@ -71,9 +69,6 @@ pub fn handleExit(application: *Application, completion: ExitCompletion) !void {
         transition.pane.queueExitedHistory(transition.exit);
         try projection.scheduleObservation(application, transition.pane);
     }
-
-    application.collect();
-    application.pumpAll();
 }
 
 const OutputRuntime = @import("OutputRuntime.zig");
@@ -200,9 +195,6 @@ fn finishOutput(context: *OutputRuntime, pane: *PaneType) !void {
         pane.queueExitedHistory(exit);
         try (projection.scheduleObservation(context.application, pane));
     }
-
-    context.application.collect();
-    context.application.pumpAll();
 }
 
 fn commitIngest(application: *Application, completion: IngestCompletion) !void {
@@ -215,7 +207,6 @@ fn commitIngest(application: *Application, completion: IngestCompletion) !void {
     const stats = completion.result catch {
         _ = pane.requestClose();
         pane.finishPtyOutput();
-        application.collect();
         return;
     };
 
@@ -241,7 +232,4 @@ fn commitIngest(application: *Application, completion: IngestCompletion) !void {
         pane.cancelPtyOutputRead();
         return err;
     };
-
-    application.collect();
-    application.pumpAll();
 }
