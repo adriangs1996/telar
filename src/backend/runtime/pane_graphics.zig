@@ -81,8 +81,8 @@ pub fn finishMedia(model: *RuntimeModel, completion: MediaCompletion) !void {
 
     var stores: [store_support.max_clients]*AttachmentStore = undefined;
     var count: usize = 0;
-    for (&model.clients.items) |*slot| {
-        const client = slot.* orelse continue;
+    var observers = pane.observers;
+    while (model.clients.nextObserver(&observers)) |client| {
         stores[count] = &client.attachments;
         count += 1;
     }

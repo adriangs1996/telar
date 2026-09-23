@@ -48,7 +48,7 @@ pub fn receive(model: *RuntimeModel, completion: OutputCompletion) !void {
         model.metrics.pty_events += 1;
         model.metrics.pty_bytes += output_len;
 
-        if (hasOutstandingFrame(model, pane.id)) {
+        if (hasOutstandingFrame(model, pane)) {
             model.metrics.folded_pty_events += 1;
         }
     }
@@ -123,10 +123,10 @@ pub fn finishIngest(model: *RuntimeModel, completion: IngestCompletion) !void {
     };
 }
 
-fn hasOutstandingFrame(model: *RuntimeModel, pane_id: core.PaneId) bool {
-    for (&model.clients.items) |*slot| {
-        const client = slot.* orelse continue;
-        const attachment = client.attachments.find(pane_id) orelse continue;
+fn hasOutstandingFrame(model: *RuntimeModel, pane: *Pane) bool {
+    var observers = pane.observers;
+    while (model.clients.nextObserver(&observers)) |client| {
+        const attachment = client.attachments.find(pane.id) orelse continue;
 
         if (attachment.outstandingFrameId() != 0) {
             return true;
@@ -137,8 +137,8 @@ fn hasOutstandingFrame(model: *RuntimeModel, pane_id: core.PaneId) bool {
 }
 
 fn refreshAttachments(model: *RuntimeModel, pane: *Pane) void {
-    for (&model.clients.items) |*slot| {
-        const client = slot.* orelse continue;
+    var observers = pane.observers;
+    while (model.clients.nextObserver(&observers)) |client| {
         const attachment = client.attachments.find(pane.id) orelse continue;
 
         _ = attachment.resizeIfNeeded() catch {

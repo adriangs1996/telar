@@ -6,6 +6,10 @@ const ClientKey = @import("../../history/ClientKey.zig");
 const RemovalResources = @import("RemovalResources.zig");
 const Store = @This();
 
+comptime {
+    std.debug.assert(store_support.max_clients <= @bitSizeOf(u8));
+}
+
 items: [store_support.max_clients]?*SessionType = @splat(null),
 count: usize = 0,
 next_id: u64 = 1,
@@ -42,12 +46,13 @@ pub fn add(store: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel
         .generation = store.next_generation,
     };
 
-    for (&store.items) |*slot| {
+    for (&store.items, 0..) |*slot, index| {
         if (slot.* != null) {
             continue;
         }
 
         const session = try SessionType.create(gpa, key, connection);
+        session.attachments.observer = @as(u8, 1) << @intCast(index);
         slot.* = session;
         store.next_id += 1;
         store.next_generation += 1;
@@ -55,6 +60,24 @@ pub fn add(store: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel
         return session;
     }
     unreachable;
+}
+
+/// Pops the lowest client of an observer mask and returns its session.
+///
+/// ```zig
+/// var observers = pane.observers;
+/// while (store.nextObserver(&observers)) |session| { ... }
+/// ```
+pub fn nextObserver(store: *Store, observers: *u8) ?*SessionType {
+    while (observers.* != 0) {
+        const index = @ctz(observers.*);
+        observers.* &= observers.* - 1;
+        if (store.items[index]) |session| {
+            return session;
+        }
+    }
+
+    return null;
 }
 
 /// Resolves only the exact retained client generation.

@@ -172,6 +172,8 @@ test {
     _ = @import("runtime/pane_closure.zig");
     _ = @import("runtime/application/suggestion.zig");
     _ = @import("runtime/attachment/attachment_namespace.zig");
+    _ = @import("runtime/attachment/AttachmentStore.zig");
+    _ = @import("runtime/change_review.zig");
     _ = @import("runtime/attachment/cell.zig");
     _ = @import("runtime/attachment/selection.zig");
     _ = @import("runtime/tests/client_events_test.zig");

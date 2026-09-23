@@ -26,6 +26,10 @@ repository: RepositoryType = .{},
 restored_agents: RestoredAgents = .{},
 watches: WatchesType = .{},
 revision: u64 = 1,
+/// Advances whenever an agent's session reference changes; the session
+/// reference names the change-review owner, which the projection
+/// revision does not cover.
+session_revision: u64 = 0,
 sequence: u64 = 0,
 
 /// Applies one official lifecycle report and its optional session
@@ -43,6 +47,7 @@ pub fn observeReport(tracker: *Tracker, observation: ReportObservationType) bool
     var changed = false;
     if (observation.session) |session| {
         changed = agent.applySessionReference(session);
+        tracker.session_revision +%= @intFromBool(changed);
     }
 
     if (observation.session_file.path.len != 0) {
@@ -73,7 +78,9 @@ pub fn observeReport(tracker: *Tracker, observation: ReportObservationType) bool
 pub fn observeSessionReference(tracker: *Tracker, identity: IdentityType, reference: SessionReferenceType) bool {
     tracker.supersedeRestoredSession(identity.key, reference);
     const agent = tracker.ensure(identity) orelse return false;
-    return agent.applySessionReference(reference);
+    const changed = agent.applySessionReference(reference);
+    tracker.session_revision +%= @intFromBool(changed);
+    return changed;
 }
 
 /// Returns durable resume data from an observed process or a pending restore,
@@ -234,7 +241,7 @@ pub fn observeProcess(tracker: *Tracker, observation: ProcessObservationType) bo
     if (tracker.restored_agents.take(observation.identity.key)) |pending| {
         if (pending.session) |session| {
             if (agent.session_reference == null) {
-                _ = agent.applySessionReference(session.reference);
+                tracker.session_revision +%= @intFromBool(agent.applySessionReference(session.reference));
             }
         }
 

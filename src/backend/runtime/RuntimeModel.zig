@@ -70,6 +70,10 @@ agent_history_jobs: AgentHistoryJobs = .{},
 review_jobs: ReviewJobs = .{},
 review_service: ?*ReviewService = null,
 review_admitted: [core.max_panes_per_tab]?AdmittedReview = @splat(null),
+/// The pane and owner state change-review discovery last ran against.
+review_owner_stamp: u64 = 0,
+/// Discovery skipped a pane because every job slot was busy; retry it.
+review_discovery_blocked: bool = false,
 editor_open: EditorOpenState = .{},
 input_sequence: u64 = 0,
 cell_timer: core.DeadlineScheduler = .{},

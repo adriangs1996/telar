@@ -38,7 +38,7 @@ pub fn flush(model: *RuntimeModel) !void {
     for (model.panes.items) |slot| {
         const pane = slot orelse continue;
         try pane_graphics.startMedia(model, pane);
-        settlePaneDamage(model, pane);
+        settleDamage(model, pane);
     }
 }
 
@@ -161,13 +161,15 @@ fn scheduleCellPublication(model: *RuntimeModel) !void {
     };
 }
 
-fn settlePaneDamage(model: *RuntimeModel, pane: *PaneType) void {
-    if (pane.render_pending) {
+/// Clears a rendered pane's damage once every attached client observed its
+/// current cells. Only this pane's observers are visited.
+fn settleDamage(model: *RuntimeModel, pane: *PaneType) void {
+    if (!pane.dirty or pane.render_pending) {
         return;
     }
 
-    for (&model.clients.items) |*slot| {
-        const session = slot.* orelse continue;
+    var observers = pane.observers;
+    while (model.clients.nextObserver(&observers)) |session| {
         const attachment = session.attachments.find(pane.id) orelse continue;
 
         if (attachment.observedCellRevision() != pane.cell_revision) {

@@ -136,7 +136,9 @@ pub fn publish(model: *RuntimeModel, change: core.ChangeReviewChanged) void {
     pane.review_availability.record(context, change.latest_edition_id);
 }
 
-/// Rebinds cheap runtime metadata and starts bounded, one-shot durable discovery.
+/// Rebinds each pane's review owner and starts bounded, one-shot durable
+/// discovery. Runs only when panes, agent sessions or review bindings
+/// changed since the last run, or when a busy job table skipped a pane.
 /// Example: `change_review.discover(model);`.
 pub fn discover(model: *RuntimeModel) void {
     if (model.shutdown.isRequested()) {
@@ -144,6 +146,11 @@ pub fn discover(model: *RuntimeModel) void {
     }
 
     const service = model.review_service orelse return;
+    if (!model.review_discovery_blocked and ownerStamp(model) == model.review_owner_stamp) {
+        return;
+    }
+
+    var blocked = false;
     for (model.panes.items) |entry| {
         const pane = entry orelse continue;
         const context = owner(model, pane.key()) catch {
@@ -155,7 +162,10 @@ pub fn discover(model: *RuntimeModel) void {
             continue;
         }
 
-        const slot = model.review_jobs.discoverySlot() orelse continue;
+        const slot = model.review_jobs.discoverySlot() orelse {
+            blocked = true;
+            continue;
+        };
         const job = &model.review_jobs.storage[slot];
         job.* = .{ .service = service, .context = context, .client = null, .request_id = .none, .wire_len = 0 };
         model.review_jobs.items[slot] = job;
@@ -165,6 +175,31 @@ pub fn discover(model: *RuntimeModel) void {
             _ = service.dropped.fetchAdd(1, .monotonic);
         };
     }
+
+    model.review_discovery_blocked = blocked;
+    model.review_owner_stamp = ownerStamp(model);
+}
+
+/// Summarizes everything a pane's review owner depends on, in one pass
+/// without agent lookups: pane identity and lifecycle, the managed
+/// conversation, the agent projection and session references, and each
+/// pane's current review binding.
+fn ownerStamp(model: *const RuntimeModel) u64 {
+    var hasher = std.hash.Wyhash.init(model.agents.revision);
+    std.hash.autoHash(&hasher, model.agents.session_revision);
+    for (model.panes.items) |entry| {
+        const pane = entry orelse continue;
+        std.hash.autoHash(&hasher, core.raw(pane.id));
+        std.hash.autoHash(&hasher, pane.generation);
+        std.hash.autoHash(&hasher, pane.close_requested);
+        std.hash.autoHash(&hasher, pane.exit != null);
+        std.hash.autoHash(&hasher, pane.review_availability.revision);
+        if (pane.agent_thread) |snapshot| {
+            hasher.update(snapshot.threadId());
+        }
+    }
+
+    return hasher.final();
 }
 
 fn admit(model: *RuntimeModel, client: *Session, value: anytype) !void {
@@ -233,4 +268,37 @@ fn owner(model: *RuntimeModel, key: PaneKey) !Context {
     const provider = model.agents.projectedProvider(key);
     const reference = model.agents.sessionReference(key) orelse return error.AgentNotReady;
     return Context.init(key, provider, reference.slice());
+}
+
+const RequestFixture = @import("tests/RequestFixture.zig");
+const agent_identity = @import("application/coordinators/agent_identity.zig");
+const SessionReference = @import("../agent/SessionReference.zig");
+
+test "discovery binds a review owner when only its session reference changes" {
+    const fixture = try std.testing.allocator.create(RequestFixture);
+    defer std.testing.allocator.destroy(fixture);
+    try fixture.init();
+    defer fixture.deinit();
+    const model = &fixture.runtime.model;
+    const pane = try fixture.openPane();
+
+    try std.testing.expect(model.agents.observeProcess(.{
+        .identity = agent_identity.fromPane(pane),
+        .provider = .claude,
+        .process_id = 99,
+        .observed_at_ms = 1_000,
+    }));
+    discover(model);
+    try std.testing.expect(!pane.review_availability.active);
+    const stamp = model.review_owner_stamp;
+    discover(model);
+    try std.testing.expectEqual(stamp, model.review_owner_stamp);
+
+    try std.testing.expect(model.agents.observeSessionReference(
+        agent_identity.fromPane(pane),
+        try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1_000),
+    ));
+    discover(model);
+    try std.testing.expect(pane.review_availability.active);
+    try std.testing.expect(pane.review_availability.discovery_started);
 }

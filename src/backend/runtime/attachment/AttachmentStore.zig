@@ -16,6 +16,8 @@ count: usize = 0,
 index: core.GenericSlotIndex(2 * core.max_panes_per_tab) = .{},
 workspace: ?core.WorkspaceLocation = null,
 shared_graphics: bool = false,
+/// The owning client's bit in `Pane.observers`; zero outside a client.
+observer: u8 = 0,
 
 /// Finds the next deferred publication that is not waiting for ingest or ACK.
 /// Example: `const deadline = attachments.cellDeadline();`.
@@ -182,6 +184,7 @@ pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *PaneType) 
         if (slot.* == null) {
             slot.* = try Attachment.init(gpa, pane);
             slot.*.?.configureGraphics(store.shared_graphics);
+            pane.observers |= store.observer;
             store.index.put(core.raw(pane.id), position);
             if (store.workspace == null) {
                 store.workspace = pane.location.workspace;
@@ -210,6 +213,7 @@ pub fn detach(store: *AttachmentStore, pane_id: core.PaneId) ?PaneDetached {
     const workspace = attachment.pane.location.workspace;
     std.debug.assert(store.workspace != null and std.meta.eql(store.workspace.?, workspace));
 
+    attachment.pane.observers &= ~store.observer;
     attachment.deinit();
     store.index.remove(core.raw(pane_id));
     store.items[position] = null;
@@ -264,6 +268,7 @@ pub fn availableGraphicsCredit(store: *const AttachmentStore) usize {
 pub fn clearAttachments(store: *AttachmentStore) void {
     for (&store.items) |*slot| {
         if (slot.*) |*attachment| {
+            attachment.pane.observers &= ~store.observer;
             attachment.deinit();
         }
         slot.* = null;
@@ -276,4 +281,29 @@ pub fn clearAttachments(store: *AttachmentStore) void {
 pub fn deinit(store: *AttachmentStore) void {
     store.clearAttachments();
     store.shared_graphics = false;
+}
+
+const PaneFixture = @import("../tests/PaneFixture.zig");
+
+test "attachments keep their client's bit in the pane observer mask" {
+    const fixture = try std.testing.allocator.create(PaneFixture);
+    defer std.testing.allocator.destroy(fixture);
+    fixture.* = .{};
+    try fixture.init();
+    defer fixture.deinit();
+    const pane = fixture.pane;
+    var first: AttachmentStore = .{ .observer = 0b0010 };
+    defer first.deinit();
+    var second: AttachmentStore = .{ .observer = 0b1000 };
+    defer second.deinit();
+
+    _ = try first.attach(std.testing.allocator, pane);
+    _ = try second.attach(std.testing.allocator, pane);
+    try std.testing.expectEqual(@as(u8, 0b1010), pane.observers);
+
+    _ = first.detach(pane.id);
+    try std.testing.expectEqual(@as(u8, 0b1000), pane.observers);
+
+    second.clearAttachments();
+    try std.testing.expectEqual(@as(u8, 0), pane.observers);
 }

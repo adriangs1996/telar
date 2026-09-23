@@ -71,7 +71,7 @@ pub fn collect(model: *RuntimeModel) void {
     for (&store.items) |*slot| {
         const pane = slot.* orelse continue;
 
-        if (!pane.readyToDestroy() or isAttached(model, pane.id)) {
+        if (!pane.readyToDestroy() or pane.observers != 0) {
             continue;
         }
 
@@ -104,17 +104,6 @@ pub fn revokeCredential(model: *RuntimeModel, pane: *Pane) void {
     if (model.resources.proxy.capability()) |proxy| {
         proxy.revokePane(pane.key());
     }
-}
-
-fn isAttached(model: *RuntimeModel, pane_id: core.PaneId) bool {
-    for (&model.clients.items) |*slot| {
-        const client = slot.* orelse continue;
-        if (client.attachments.find(pane_id) != null) {
-            return true;
-        }
-    }
-
-    return false;
 }
 
 /// Completes departures deferred by a pane exit only after every pane that
