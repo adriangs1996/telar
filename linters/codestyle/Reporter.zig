@@ -1,5 +1,6 @@
 const std = @import("std");
 const ViolationType = @import("Violation.zig");
+const diagnostic = @import("diagnostic.zig");
 const Reporter = @This();
 
 writer: *std.Io.Writer,
@@ -58,16 +59,16 @@ fn writeViolation(self: *Reporter, path: []const u8, violation: ViolationType) !
 
     switch (violation.rule) {
         .invalid_syntax => try self.writer.writeAll("source contains invalid Zig syntax [codestyle/invalid-syntax]\n"),
-        .maximum_parameter_count => try self.writer.print("function has {d} parameters; maximum is 3 [codestyle/maximum-parameter-count]\n", .{violation.detail}),
+        .maximum_parameter_count => try self.writer.print("function has {d} parameters; maximum is {d} [codestyle/maximum-parameter-count]\n", .{ violation.detail, diagnostic.maximum_parameters }),
         .single_line_function_signature => try self.writer.writeAll("function signature must be written on one line [codestyle/single-line-function-signature]\n"),
         .trailing_parameter_comma => try self.writer.writeAll("function parameter list must not have a trailing comma [codestyle/trailing-parameter-comma]\n"),
         .braced_if_branch => try self.writer.writeAll("if and else branches must use blocks [codestyle/braced-if-branch]\n"),
-        .ordinary_struct_declaration => try self.writer.writeAll("move this ordinary struct into its own implicit PascalCase file [codestyle/ordinary-struct-declaration]\n"),
+        .ordinary_struct_declaration => try self.writer.writeAll("move this public struct into its own implicit PascalCase file, or make it private to its owner [codestyle/ordinary-struct-declaration]\n"),
         .type_file_name => try self.writer.writeAll("a concrete type file must use PascalCase [codestyle/type-file-name]\n"),
         .namespace_file_name => try self.writer.writeAll("a function/enum/union namespace must use snake_case [codestyle/namespace-file-name]\n"),
         .generic_constructor => try self.writer.writeAll("export type constructors as Type in GenericName.zig [codestyle/generic-constructor]\n"),
         .generic_file => try self.writer.writeAll("GenericName.zig must expose exactly one public Type(...) type function [codestyle/generic-file]\n"),
         .generic_import => try self.writer.writeAll("import .Type directly with a Generic-prefixed constructor alias [codestyle/generic-import]\n"),
-        .dedicated_layout_file => try self.writer.writeAll("an explicit packed/extern layout requires a dedicated type file [codestyle/dedicated-layout-file]\n"),
+        .dedicated_layout_file => try self.writer.writeAll("a public packed/extern layout requires a dedicated type file [codestyle/dedicated-layout-file]\n"),
     }
 }

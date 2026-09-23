@@ -278,7 +278,7 @@ layers or partial GPU damage.
 - There is one presentation in flight. Its token publishes matching hit maps
   and retires only captured model damage on successful completion. Failed
   delivery preserves previously delivered controls; newer changes remain
-  pending. See the [presentation contract](../../client/presentation/README.md).
+  pending. See [presentation delivery](../../../docs/invariants.md#presentation-delivery).
 
 `zig build test-gui` covers actual chrome composition, borrowed input ownership,
 layout bounds, widget-list capacity/order, warm allocation-free drawing, delayed

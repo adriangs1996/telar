@@ -11,10 +11,8 @@ failure before that point aborts only the launch and never stops the runtime.
 
 ## Decision
 
-The runtime owns the launch transaction through a concrete `PaneLauncher`
-module and returns either a `running` pane or an error. `PaneLauncher` owns only
-the cohesive launch dependencies and never receives `Application` or client state.
-`PaneStore` owns every spawned pane allocation while the launch moves from
+The runtime owns the launch transaction and returns either a `running` pane
+or an error. The launch never depends on client state. The pane table owns every spawned pane allocation while the launch moves from
 `starting` to `running` or `aborting`. Discovery and attachment expose only
 `running` panes.
 
@@ -23,12 +21,10 @@ fails, it marks the pane `aborting`, revokes its proxy credential, shuts down
 the PTY, and retains the allocation until the child is reaped and no actor can
 access it. A consumed `PaneKey` is never reused.
 
-A workspace or tab created for the first pane remains provisional until
-`PaneLauncher` commits the pane. The application flow, rather than
-`PaneLauncher` or a request controller, owns rollback of provisional
-containers and geometry leases; migrated mutations place that policy in their
-command handler. The `createTab` handler consumes its proposed tab identity and
-publishes the owned domain event only after pane commit. After commit,
+A workspace or tab created for the first pane remains provisional until the
+launch commits the pane. The flow that created the container owns rollback of
+provisional containers and geometry leases. Tab creation consumes its proposed
+tab identity and announces the tab only after pane commit. After commit,
 attachment or response delivery failure removes neither the pane nor its
 container. Reconnection discovers the committed pane from runtime state and
 never replays the launch automatically.
@@ -62,7 +58,7 @@ commit. This keeps `session` synonymous with a pane that became usable.
 - Stopping the runtime after partial actor startup would let one client request
   terminate every pane.
 - A separate pending-launch store would duplicate ownership and event lookup
-  already provided by `PaneStore`.
+  already provided by the pane table.
 - Recording an aborted launch as a session would make failed startup look like
   normal terminal activity.
 - Sending the client's last cwd observation as an explicit launch path would

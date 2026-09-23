@@ -42,7 +42,7 @@ each phase):
 
 Base: `main`. Every wire change follows the golden-corpus discipline in
 `src/core/schema/handshake.zig`: corpus entries + version bump. Every phase
-keeps the three-budget rule from `docs/engineering-invariants.md`: nothing here
+keeps the three-budget rule from `docs/invariants.md`: nothing here
 may add work to the interactive path.
 
 Explicit non-goals: PNG decode, Unicode placeholders, remote (socket) clients

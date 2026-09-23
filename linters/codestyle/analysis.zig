@@ -120,33 +120,33 @@ test "accepts conforming functions and conditionals" {
     );
 }
 
-test "rejects functions with more than three parameters" {
+test "rejects functions with more than five parameters" {
     try expectRules(&.{.maximum_parameter_count},
-        \\fn combine(first: u8, second: u8, third: u8, fourth: u8) u8 {
-        \\    return first + second + third + fourth;
+        \\fn combine(first: u8, second: u8, third: u8, fourth: u8, fifth: u8, sixth: u8) u8 {
+        \\    return first + second + third + fourth + fifth + sixth;
         \\}
     );
 }
 
 test "counts anytype parameters" {
     try expectRules(&.{.maximum_parameter_count},
-        \\fn combine(first: anytype, second: anytype, third: anytype, fourth: anytype) void {
-        \\    _ = .{ first, second, third, fourth };
+        \\fn combine(first: anytype, second: anytype, third: anytype, fourth: anytype, fifth: anytype, sixth: anytype) void {
+        \\    _ = .{ first, second, third, fourth, fifth, sixth };
         \\}
     );
 }
 
-test "accepts extern functions with more than three parameters" {
+test "accepts extern functions with more than five parameters" {
     try expectRules(&.{},
-        \\extern "c" fn open(first: u8, second: u8, third: u8, fourth: u8) void;
+        \\extern "c" fn open(first: u8, second: u8, third: u8, fourth: u8, fifth: u8, sixth: u8) void;
     );
 }
 
 test "accepts an explicit maximum parameter count exception" {
     try expectRules(&.{},
         \\// codestyle: allow(maximum-parameter-count)
-        \\fn callback(first: u8, second: u8, third: u8, fourth: u8) void {
-        \\    _ = .{ first, second, third, fourth };
+        \\fn callback(first: u8, second: u8, third: u8, fourth: u8, fifth: u8, sixth: u8) void {
+        \\    _ = .{ first, second, third, fourth, fifth, sixth };
         \\}
     );
 }
@@ -155,8 +155,8 @@ test "requires the maximum parameter count exception beside the declaration" {
     try expectRules(&.{.maximum_parameter_count},
         \\// codestyle: allow(maximum-parameter-count)
         \\
-        \\fn callback(first: u8, second: u8, third: u8, fourth: u8) void {
-        \\    _ = .{ first, second, third, fourth };
+        \\fn callback(first: u8, second: u8, third: u8, fourth: u8, fifth: u8, sixth: u8) void {
+        \\    _ = .{ first, second, third, fourth, fifth, sixth };
         \\}
     );
 }

@@ -11,11 +11,11 @@ Written in Zig 0.16. Very early.
 
 ## Architecture
 
-Telar is split into a long-lived runtime and a disposable client. The source
-tree is organized as capability namespaces with explicit process entrypoints.
-See the [capability map](docs/capabilities.md), the
+Telar is split into a long-lived runtime and a disposable client. Each process
+keeps its state in one flat model and dispatches every message through one
+`update`. See the [architecture](docs/architecture.md), the
 [flow index](docs/flows/README.md), and the
-[engineering invariants](docs/engineering-invariants.md).
+[invariants](docs/invariants.md).
 
 The runtime links system SQLite, libnghttp2 and Brotli. On macOS with Homebrew:
 

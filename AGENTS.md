@@ -10,26 +10,18 @@ general components:
 - A pty-proxy
 - Searchable and structured history
 - Best effort integration with coding agents.
-- An innovative and modern terminal UI focused on user awareness.
+- An innovative and modern terminal UI and GUI terminal emulator focused on user awareness.
 
 ## Why is telar special ?
 
-Unlike tmux, it does not settle for being only a multiplexer.
-Unlike herdr, it tries to own the runtime of the agents instead
-of cooperating with them based on hooks and lifecycle provided.
-
-Like tmux, it is heavily customizable.
-Top notch sidebar, close to a real GUI like T3 Code (<https://github.com/pingdotgg/t3code>)
+- Unlike tmux, it does not settle for being only a multiplexer.
+- Like tmux, it is heavily customizable.
+- Top notch sidebar, like T3 Code (<https://github.com/pingdotgg/t3code>)
 
 ## Architecture
 
 Two processes. The split decides almost everything else, so get it right before
 you add anything that crosses it.
-
-Before changing lifecycle, IPC, PTY/VT/input, graphics, agents, persistence,
-history/proxy, Lua/plugins, or performance, read
-[`docs/engineering-invariants.md`](docs/engineering-invariants.md) and apply
-every rule relevant to the change.
 
 ### The runtime
 
@@ -48,41 +40,33 @@ It owns what only makes sense while somebody is looking: layout, which pane is
 focused, hover, scroll position, selection, what a modal is covering. All of it
 is disposable, because the runtime can rebuild everything that matters.
 
+### State and behavior
+
+Each process keeps its state in one flat model, `RuntimeModel` or
+`ClientModel`: singletons as fields, repeating entities as tables of columns,
+relations as ids. Behavior is procedures over the model, one file per flow,
+reached from the process's single `update` dispatch. Read
+[`docs/architecture.md`](docs/architecture.md) before adding state or a flow,
+and name everything by [`docs/naming.md`](docs/naming.md).
+
+Code with another shape is migration debt, not a template: controllers,
+handlers, context structs that hold their owner, ports for services that behave
+the same on every host, models nested inside models.
+[`docs/plans/procedural-model.md`](docs/plans/procedural-model.md) tracks it.
+
+Before changing lifecycle, IPC, PTY/VT/input, graphics, agents, persistence,
+history/proxy, Lua/plugins, or performance, read
+[`docs/invariants.md`](docs/invariants.md) and apply every rule relevant to the
+change.
+
 ### Code packages
 
-Both processes import `telar-core`. The TUI imports `telar-client` for shared
-client behavior; neither common package imports a host adapter. Backend and
-frontend never import each other, and `telar-gui` never imports
-`telar-frontend`: what both adapters embed lives in the `assets` module. `src/main.zig` selects a CLI entrypoint.
-
-| Package          | Owns                                                                                                                               |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `model`          | reusable values, disposable state and its transitions; public API in `src/model/model.zig`                                       |
-| `telar-core`     | cells, buffers, geometry and wire values shared across processes                                                                   |
-| `telar-backend`  | children, PTYs, terminal emulation, history and runtime authority                                                                  |
-| `telar-client`   | client assembly, operations, input policy, configuration services, plugins, transport, resource retention and presentation contracts |
-| `telar-frontend` | TUI assembly, host terminal, decoder, compositor, diff, pacing and Kitty delivery                                                  |
-| `telar-gui`      | native chrome: glyph atlas and quad frames drawn by a Metal backend on macOS and a Wayland/Vulkan backend on Linux                 |
-
-Each package has an explicit module entrypoint in `build.zig`. Put a type in
-core only when both processes need it. Shared client-facing values belong in
-`model`; read [`src/model/README.md`](src/model/README.md) before moving types
-across its boundary. Each connection owns independent client
-state. A future native adapter reuses client behavior, not another connection's
-focus or navigation.
-
-Before changing client presentation, input adapters or retained-resource delivery,
-read [`src/client/presentation/README.md`](src/client/presentation/README.md).
-Run `zig build check-client-boundaries` when changing common-client imports.
-
-### Following an operation
-
-When adding or refactoring a flow, apply the direct-operation rules in
-[`docs/engineering-invariants.md`](docs/engineering-invariants.md#code-organization-and-tracing).
-Start at the owning process's update/event dispatch, then follow concrete calls
-into the operation. Keep its request, completion and failure behavior together.
-[`docs/entrypoints.md`](docs/entrypoints.md) maps the process roots, operations
-and their protocol replies.
+Both processes import `telar-core`. Backend and client packages never import
+each other, the TUI and the GUI never import each other, and what both adapters
+embed lives in the `assets` module. The package table is in
+[`docs/architecture.md`](docs/architecture.md#packages). Each client connection
+owns its own model; sharing code never shares another connection's focus or
+navigation.
 
 ### One pane, end to end
 
@@ -145,15 +129,26 @@ Watch out for memory problems. Take inspiration from Rust for keeping track of m
 - me is who you are talking to.
 - user means the person using telar.
 - agent means the coding agent a user runs inside a telar's pane. It could include you.
-- client means the TUI that connects to a telar's server.
+- client means a TUI or GUI connected to telar's runtime.
+
+## Commit style
+
+When writing commit messages, descriptions or PRs:
+
+- Do not add a footnote with model signature:
+
+```
+// BAD
+Co-Authored-By: <Model>
+```
 
 ## Code Style
 
 Before adding, splitting, moving or importing Zig types, apply
-[`docs/zig-source-layout.md`](docs/zig-source-layout.md): concrete structs are
-implicit PascalCase files; generic families are `GenericName.zig` with one public
-`Type` constructor, imported directly as `GenericName`; function/enum/union
-namespaces use snake_case. Explicit packed/extern layouts are the exceptions.
+[`docs/zig-source-layout.md`](docs/zig-source-layout.md): a public struct is an
+implicit PascalCase file; a helper type used by one file stays private in it;
+procedures live in snake_case files named after their flow; generic families
+are `GenericName.zig` with one public `Type` constructor.
 
 - Do not end function's signature's parameter list with a ",".
 - Always write the function's signature on a single line.
@@ -220,12 +215,14 @@ pub fn observeProxy(store: *Store, observation: ProxyObservation) bool {}
         }
 ```
 
-- Do not clamp parameter's list. A function could have at most 3 parameters. More is a smell and
-  needs to get worked around
+- A function takes at most 5 parameters; `zig build codestyle` enforces it. Never pack
+  parameters into a context struct that holds a pointer to its owner to stay under the
+  limit. A sixth parameter means the function does too much.
 
-- Every change should preserve or improve the code architecture. Follow Single Responsability Principle
-  and express the semantics of what is being done with functions and structs that encapsulate
-  their state and their state mutations.
+- Every change should preserve or improve the architecture in `docs/architecture.md`:
+  state lives in the model's fields and tables, behavior in procedures named after their
+  flow. Do not wrap data in a struct only to hide it; a table owns only its structural
+  changes (adding and removing rows, keeping its index).
 
 - DO NOT INLINE IMPORT calls:
 
@@ -254,7 +251,8 @@ const step: Step = Step.start;
 
 ```
 
-- Always use "self" as the implicit parameter of a method:
+- Methods of a type (tables and other structs) name their receiver "self". Procedures
+  over a process model take `model`:
 
 ```zig
 const Spring = @This()
@@ -264,6 +262,9 @@ pub fn speed(spring: *const Spring) ...
 
 // Good
 pub fn speed(self: *const Spring) ...
+
+// Good: a procedure in pane_focus.zig
+pub fn move(model: *ClientModel, direction: Direction) !void ...
 ```
 
 - OBJECTS AND FUNCTIONS USING OBJECTS SHOULD HAVE THEIR LAST FIELD ENDING IN COLON

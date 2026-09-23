@@ -33,7 +33,6 @@ visual record.
 | `docs/plans/agent-mode/mocks/NN-*.roles.txt` | The same mockups with every styled run tagged `«role:text»`; the role legend maps to `theme.Palette` in `mocks/README.md`. |
 | `docs/plans/agent-mode/mocks/README.md` | Widths, roles, glyph set. |
 | `docs/plans/agent-mode/review.html` | The self-contained review page: the KGP looks (hybrid composer, rasterized composer, hybrid conversation, canvas) are rendered there as HTML mockups, and the T3 Code facts are cited with file paths. Open it in a browser. |
-| `docs/adr/0009-agent-mode-is-a-client-projection-of-one-runtime.md` | Why agent mode owns no runtime state and why provider knowledge lives in manifests and readers. |
 | `docs/adr/0010-index-agent-transcripts-instead-of-copying-them.md` | Why transcripts are read from the agent's files and only indexed. |
 | `docs/adr/0011-rasterize-the-composer-editor-behind-a-latency-gate.md` | Why the composer editor may cross the media path, and the gate. |
 | `CONTEXT.md`, section "Threads and agent mode" | The vocabulary: project, thread, thread item, registry, blocked reason, the two modes, browse and interact focus, composer, provider option, live command. Code, docs and UI use these words. |
@@ -314,7 +313,7 @@ Verified in the tree at `79f0506`.
    browser does. Parsing runs in observation workers. The interactive path
    allocates nothing.
 7. **Cells keep every function.** Graphics enrich; they never become the
-   only way to read or act (`docs/engineering-invariants.md`, Graphics).
+   only way to read or act (`docs/invariants.md`, Graphics).
    Any graphical proposal below degrades to its cell twin without losing a
    key or an action.
 
@@ -623,7 +622,7 @@ selection, copy through OSC 52. What it is made of:
 
 This is the first place where the visible echo of a keystroke passes
 through the media path, which the invariants forbid today. It is recorded
-as an explicit exception in `docs/engineering-invariants.md` with a gate:
+as an explicit exception in `docs/invariants.md` with a gate:
 the benchmark must show a one-line echo at p99 under one pacer interval
 (16.7 ms) on the local transport, and a session that misses it falls back
 to the cell renderer while the pane never waits. The gate is P2r's
@@ -1293,7 +1292,7 @@ frame at 60 Hz on a 1400×900 terminal (measured sizes in the phase's
 benchmark). The raster editor of P2r adds one image per visual line (≤ 64)
 and is subject to the gate.
 
-## Appendix G. Invariants exception (text for `docs/engineering-invariants.md`)
+## Appendix G. Invariants exception (text for `docs/invariants.md`)
 
 Add under "Three paths › Interactive", after the Lua binding rules:
 
@@ -1337,7 +1336,7 @@ probe in flight per runtime, one second cadence for followed files, at most
 
 ## Sources
 
-telar: `docs/capabilities.md`, `docs/sidebar.md`, `docs/kitty-graphics.md`,
+telar: `docs/architecture.md`, `docs/sidebar.md`, `docs/kitty-graphics.md`,
 `docs/flows/agent-*.md`, `docs/plans/herdr-adoption.md`,
 `docs/plans/proxy-tap.md`, `docs/plans/atuin-ai-adoption.md`,
 `src/frontend/widgets/{sidebar,composition}.zig`,

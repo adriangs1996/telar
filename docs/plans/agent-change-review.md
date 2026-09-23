@@ -5,8 +5,8 @@ started. Product decisions below come from the design interview; the proposed
 runtime contracts still require the technical proofs listed below.
 
 Terms are defined in [CONTEXT.md](../../CONTEXT.md#change-review). Implementation
-must follow [engineering invariants](../engineering-invariants.md) and the
-[client presentation contract](../../src/client/presentation/README.md).
+must follow the [invariants](../invariants.md), including
+[presentation delivery](../invariants.md#presentation-delivery).
 
 ## Purpose and scope
 

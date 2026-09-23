@@ -37,7 +37,7 @@ ClientLayoutStore.replace(decoded update_client_layout)   (validated)
 ## Records
 
 `persistence.checkpoint` owns the durable record types, separate from the
-live aggregates and from wire projections (ADR 0005). A checkpoint is a
+live aggregates and from wire projections (`docs/invariants.md`, Ownership). A checkpoint is a
 header (`TELARCKP`, version, id counters) followed by a stream of tagged
 records: workspace (id, path, explicit name, first tab), tab (extra tabs in
 display order), pane (id, location, cwd, size, NUL-separated launch

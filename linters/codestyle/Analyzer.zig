@@ -3,6 +3,7 @@ const ViolationType = @import("Violation.zig");
 const analyzer_support = @import("analysis.zig");
 const syntax = @import("syntax.zig");
 const Finding = @import("Finding.zig");
+const diagnostic = @import("diagnostic.zig");
 const Analyzer = @This();
 
 allocator: std.mem.Allocator,
@@ -26,7 +27,7 @@ pub fn lintFunction(self: Analyzer, node: std.zig.Ast.Node.Index) !void {
         parameter_count += 1;
     }
 
-    if (parameter_count > 3 and !analyzer_support.allowsExcessParameters(self.tree, function.firstToken())) {
+    if (parameter_count > diagnostic.maximum_parameters and !analyzer_support.allowsExcessParameters(self.tree, function.firstToken())) {
         try self.append(function_token, .{ .rule = .maximum_parameter_count, .detail = parameter_count });
     }
 

@@ -1,7 +1,7 @@
 import os,json,time,subprocess,tempfile
 from pathlib import Path
 validation=Path(__file__).resolve().parent
-binary=validation.parents[2]/'zig-out/bin/telar'
+binary=validation.parent/'zig-out/bin/telar'
 with tempfile.TemporaryDirectory(prefix='telar-smoke-',dir='/tmp') as temp:
  root=Path(temp); endpoint=root/'runtime.sock'
  env=dict(os.environ, XDG_DATA_HOME=str(root/'data'), XDG_CONFIG_HOME=str(root/'config'), SHELL='/bin/sh')

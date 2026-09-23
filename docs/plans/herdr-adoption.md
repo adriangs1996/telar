@@ -3,8 +3,8 @@
 Baseline: telar `1b04d83`, herdr v0.8.2 (2026-08-19). The comparison that
 produced this list is summarized at the end. Every phase names the files and
 types it touches so the work can be checked against the architecture rules in
-[`engineering-invariants.md`](../engineering-invariants.md) and
-[ADR 0005](../adr/0005-keep-the-live-runtime-model-in-memory.md).
+[`invariants.md`](../invariants.md), whose ownership rules cover
+persistence.
 
 Phases are ordered by dependency, not by size. A phase is done when its tests
 exist, its flow document exists under `docs/flows/`, and
@@ -229,7 +229,7 @@ separate types. Panes restore as a relaunch of their original command in
 their last cwd, which is what `PaneLifecycle.restored` would have flagged; the
 sidebar shows them as fresh panes.
 
-ADR 0005 specifies this and nothing implements it. Today runtime death loses
+`docs/invariants.md` requires this and nothing implements it. Today runtime death loses
 workspaces, tabs, layout and history session identity;
 `ClientLayoutStore` keeps eight layouts in memory only.
 
@@ -254,7 +254,7 @@ workspaces, tabs, layout and history session identity;
   layout replica back because pane ids are stable.
 - Config: `runtime.session.persist = true`, `runtime.session.path`.
 
-**Tests** (ADR 0005 lists them): restart round trip, corrupt file, wrong
+**Tests** (`docs/invariants.md`, Proof): restart round trip, corrupt file, wrong
 owner mode, stale generation, disk full (fault-injected writer), queue
 saturation, worker failure. Perf gate: zero steady-state allocation on the
 interactive path; checkpoint latency reported as p50/p95/p99 in

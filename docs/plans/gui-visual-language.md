@@ -275,14 +275,14 @@ and adds a capture under `docs/validation/`.
   `sidebar_animation_frame`; no element owns a timer.
 - No authority: `blocked_reason` changes the chip text; it never enables a
   key that sends `y` to the agent without a hook behind it
-  (`docs/engineering-invariants.md`).
+  (`docs/invariants.md`).
 - Attention aggregates upward: a blocked pane puts a dot on its tab, on its
   workspace pill and a count in the sidebar header; the comparator picks the
   color when several apply.
 
 ## Not built
 
-- A widget framework (out of scope per `docs/plans/native-client-split.md`).
+- A widget framework.
 - Tabs per pane (cmux), terminal as a drawer (T3), embedded browser,
   kanban, containers per task.
 - Rasterized text in the chrome: all text goes through the glyph atlas; no

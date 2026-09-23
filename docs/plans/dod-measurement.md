@@ -285,8 +285,8 @@ failure/cancellation paths. Differential fixtures must produce the same final
 cells, focus, generations and review state in B0 and B2. Validate existing
 presentation retry and resource-retirement behavior.
 
-Keep the [engineering invariants](../engineering-invariants.md) and
-[presentation contract](../../src/client/presentation/README.md): no allocation,
+Keep the [invariants](../invariants.md), including
+[presentation delivery](../invariants.md#presentation-delivery): no allocation,
 file output or blocking profiler operation in steady interactive work; no
 protocol change; no borrowed model pointer in async measurement records; no
 retirement of damage before the existing successful delivery boundary.

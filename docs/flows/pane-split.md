@@ -7,7 +7,7 @@ runtime decides whether the pane exists; the client decides where it is shown.
 
 ## Request
 
-Start with the process table in [entrypoints.md](../entrypoints.md). In the GUI,
+Start at the dispatch described in [architecture](../architecture.md#dispatch). In the GUI,
 `GuiClient.update` dispatches `.input_ready` to `GuiClient.drainInput`.
 `dispatchKey` (or the text branch) reaches `routeKey`, which calls
 `router.routeEvent(event, context)`. The router returns `.action` with

@@ -173,7 +173,7 @@ export default function Features() {
             over the same runtime, and flipping it costs nothing.
           </p>
           <p>
-            Accepted in ADR 0009 and 0010, not shipped yet. The decision is on the page so you can hold us to it.
+            Accepted in ADR 0010, not shipped yet. The decision is on the page so you can hold us to it.
           </p>
         </Feature>
       </ol>

@@ -10,7 +10,6 @@ conversation snapshot and handles prompts, cancellation and approval responses.
 Closing a GUI connection does not close that process. The client owns its draft,
 selection and transcript scroll.
 
-This extends the pane model in [ADR 0014](0014-native-chrome-is-a-second-presentation-adapter.md).
 Pane kind is runtime state. Pane surface remains presentation state. A terminal
 pane may show the existing thread projection, but toggling a surface cannot
 convert a terminal process into a managed agent.
@@ -18,8 +17,8 @@ convert a terminal process into a managed agent.
 The initial product exposes agent creation and interaction only in the GUI.
 `prefix + a` creates a new tab in the current workspace with one agent pane.
 The shared client still owns the commands and conversation projection, and the
-runtime reports the agent through the existing sidebar registry. This is an
-explicit exception to ADR 0014's requirement for equivalent TUI controls.
+runtime reports the agent through the existing sidebar registry. The TUI has
+no equivalent controls yet.
 
 ## Conversation source
 

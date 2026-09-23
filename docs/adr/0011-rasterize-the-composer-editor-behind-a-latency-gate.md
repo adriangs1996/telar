@@ -43,5 +43,5 @@ while composing and the caret is an image.
   is accepted on purpose.
 - The gate is the completion criterion of the phase that builds it; failing
   it leaves the composer hybrid, not broken.
-- `docs/engineering-invariants.md` records the exception and the fallback
-  rule beside the interactive-path rules.
+- `docs/invariants.md` records the exception and the fallback
+  rule under its recorded exceptions.

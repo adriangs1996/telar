@@ -96,5 +96,5 @@
   <rect x="1205" y="988" width="550" height="96" rx="12" class="panel"/>
   <text x="1228" y="1024" class="heading">Observación</text>
   <text x="1228" y="1058" class="body">Historia y agentes: workers fuera del input.</text>
-  <text x="45" y="1129" class="small">Mapa y enlaces: docs/entrypoints.md · Propiedad y límites: docs/capabilities.md · Invariantes: docs/engineering-invariants.md</text>
+  <text x="45" y="1129" class="small">Arquitectura: docs/architecture.md · Invariantes: docs/invariants.md</text>
 </svg>

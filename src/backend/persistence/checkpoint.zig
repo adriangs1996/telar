@@ -1,7 +1,7 @@
 //! Durable session checkpoint records and their file encoding.
 //!
 //! The record types are deliberately separate from live aggregates and from
-//! client projections (ADR 0005). A checkpoint holds only what a restart can
+//! client projections (docs/invariants.md, Ownership). A checkpoint holds only what a restart can
 //! rebuild: identities, paths, labels, pane launch commands and client layout
 //! replicas. File descriptors, PTYs and in-flight work are never written.
 

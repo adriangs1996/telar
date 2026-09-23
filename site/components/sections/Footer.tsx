@@ -14,7 +14,7 @@ export default function Footer() {
           <a href="https://github.com/adriangs1996/telar/tree/main/docs" className="transition-colors hover:text-text">
             Docs
           </a>
-          <a href="https://github.com/adriangs1996/telar/blob/main/docs/engineering-invariants.md" className="transition-colors hover:text-text">
+          <a href="https://github.com/adriangs1996/telar/blob/main/docs/invariants.md" className="transition-colors hover:text-text">
             Invariants
           </a>
           <a href="https://github.com/adriangs1996/telar/tree/main/docs/adr" className="transition-colors hover:text-text">

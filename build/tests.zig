@@ -41,7 +41,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
     client_boundaries.step.dependOn(&boundary_tests.step);
     client_boundaries.step.dependOn(&model_boundaries.step);
     run_client_tests.step.dependOn(&client_boundaries.step);
-    b.step("check-client-boundaries", "Check shared-client module and capability boundaries").dependOn(&client_boundaries.step);
+    b.step("check-client-boundaries", "Check shared-client module boundaries").dependOn(&client_boundaries.step);
     b.step("test-client", "Run renderer-independent client tests").dependOn(&run_client_tests.step);
     test_step.dependOn(&run_client_tests.step);
     // ZLS uses "check" on save. Test artifacts are analyzed without codegen;

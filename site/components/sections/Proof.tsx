@@ -6,7 +6,7 @@ import Reveal from "@/components/Reveal";
 type Tile = { value: number; unit?: string; digits?: number; label: string; source: string };
 
 // No stars, no installs. Numbers a build is allowed to fail on, from
-// docs/engineering-invariants.md and docs/performance-gates.md.
+// docs/invariants.md and docs/performance-gates.md.
 const TILES: Tile[] = [
   { value: 0, label: "allocations on the interactive path in steady state", source: "engineering invariants" },
   { value: 60, unit: "Hz", label: "frame cap; an obsolete frame is folded, never queued", source: "engineering invariants" },

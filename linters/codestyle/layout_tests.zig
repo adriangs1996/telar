@@ -23,11 +23,17 @@ test "ordinary top-level structs and auxiliary structs require their own files" 
     try expectRules(&.{.ordinary_struct_declaration}, "Counter.zig", "const Counter = @This();\npub const Options = struct { enabled: bool };\n");
 }
 
-test "conditional and parenthesized type declarations cannot hide ordinary structs" {
-    try expectRules(&.{.ordinary_struct_declaration}, "options.zig", "const Options = (struct {});\n");
-    try expectRules(&.{.ordinary_struct_declaration}, "options.zig", "const Options = if (true) struct {} else void;\n");
-    try expectRules(&.{ .ordinary_struct_declaration, .ordinary_struct_declaration }, "platform.zig", "const Native = switch (1) { 1 => struct {}, else => struct {} };\n");
+test "conditional and parenthesized type declarations cannot hide public structs" {
+    try expectRules(&.{.ordinary_struct_declaration}, "options.zig", "pub const Options = (struct {});\n");
+    try expectRules(&.{.ordinary_struct_declaration}, "options.zig", "pub const Options = if (true) struct {} else void;\n");
+    try expectRules(&.{ .ordinary_struct_declaration, .ordinary_struct_declaration }, "platform.zig", "pub const Native = switch (1) { 1 => struct {}, else => struct {} };\n");
     try expectRules(&.{}, "platform.zig", "const Native = if (true) @import(\"Native.zig\") else @import(\"Fallback.zig\");\n");
+}
+
+test "private helper structs and layouts stay in their owner's file" {
+    try expectRules(&.{}, "Counter.zig", "const Counter = @This();\nconst Options = struct { enabled: bool };\nvalue: u64 = 0,\n");
+    try expectRules(&.{}, "Key.zig", "const Key = @This();\nconst Mods = packed struct(u8) { bits: u8 };\nmods: Mods,\n");
+    try expectRules(&.{}, "pane_frame.zig", "const Receipt = struct { accepted: bool };\npub fn receive() void {}\n");
 }
 
 test "namespaces contain functions enums unions and value initializers" {

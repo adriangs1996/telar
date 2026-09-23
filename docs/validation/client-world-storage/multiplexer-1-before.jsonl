@@ -1,3 +1,0 @@
-{"type":"metadata","zig":"0.16.0","mode":"ReleaseFast","arch":"aarch64","cpu":"apple_m3","os":"macos","cols":154,"rows":37,"samples":40,"sample_target_ns":40000000}
-{"type":"benchmark","name":"frontend.multiplexer.compose_four","iterations":933,"samples":40,"median_ns_per_op":42715,"min_ns_per_op":42577,"p95_ns_per_op":44165,"p99_ns_per_op":50240,"work_per_op":5698,"work_unit":"cells","work_per_second":133395762,"payload_bytes_per_op":0,"p99_budget_ns":1000000}
-{"type":"benchmark","name":"frontend.multiplexer.patch_one_cell","iterations":214000,"samples":40,"median_ns_per_op":185,"min_ns_per_op":182,"p95_ns_per_op":192,"p99_ns_per_op":463,"work_per_op":1,"work_unit":"cells","work_per_second":5405405,"payload_bytes_per_op":0,"p99_budget_ns":1000000}

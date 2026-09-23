@@ -7,22 +7,13 @@ controlled by disposable clients.
 
 **Runtime instance**:
 One running lifetime of Telar's backend, including its authoritative runtime
-model and the physical resources that support it until ordered shutdown. Its
-implementation composes `Application`, `Resources` and `EventLoop`; none is a
-second runtime.
+model and the physical resources that support it until ordered shutdown.
 _Avoid_: Server, Runtime model
 
-**Runtime application**:
-The runtime-owned application state and orchestration around `RuntimeModel`.
-It applies use cases, manages disposable client sessions and enforces
-cross-capability invariants, but does not own the process event loop or acquire
-physical resources.
-_Avoid_: Server, AppState, Runtime model
-
 **Runtime resources**:
-The live allocators, environment, listener, proxy, telemetry, client-session
-storage and history adapter acquired for one runtime lifetime. They support the
-model but are neither semantic state nor persistable checkpoint data.
+The live processes, descriptors, sockets, workers and storage connections
+acquired for one runtime lifetime. They support the runtime model but are
+neither its state nor persistable checkpoint data.
 _Avoid_: Runtime model, Global state
 
 **Runtime model**:
@@ -32,9 +23,9 @@ support it without becoming its authority.
 _Avoid_: Public state, Server state, AppState
 
 **Client model**:
-The disposable semantic state owned by one client. It combines that client's
-interaction and navigation choices with bounded projections of authoritative
-runtime state needed to present and control its session.
+All disposable state owned by one client connection: its interaction and
+navigation choices, bounded replicas of authoritative runtime state, the facts
+its host reported and the requests it has in flight.
 _Avoid_: AppState, Client runtime, UI state
 
 **Client application**:
@@ -80,21 +71,14 @@ A durable data-only representation of the restorable parts of a runtime model.
 It excludes live resources and does not promise child-process or PTY continuity.
 _Avoid_: Runtime snapshot, Process snapshot
 
-**Workspace aggregate**:
-The runtime-owned workspace identity, path, name and ordered tabs whose rules
-change as one unit.
-_Avoid_: Workspace store, Workspace record
-
-**Workspace repository**:
-The in-memory collection boundary through which workspace aggregates are
-located and retained in the runtime model, without defining their behavior or
-durable representation.
-_Avoid_: Workspace manager, Workspace database
+**Workspace**:
+The runtime-owned workspace identity, path, name and ordered tabs.
+_Avoid_: Workspace aggregate, Workspace store, Workspace record
 
 **Tab removal**:
-The committed disappearance of a tab from its workspace aggregate, whether
-requested directly or caused by the loss of its final pane. It also removes an
-aggregate left with no tabs.
+The committed disappearance of a tab from its workspace, whether requested
+directly or caused by the loss of its final pane. It also removes a workspace
+left with no tabs.
 _Avoid_: Tab close (for the committed fact), Pane close
 
 **Pane launch**:

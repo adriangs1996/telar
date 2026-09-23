@@ -16,7 +16,7 @@ const std = @import("std");
 /// console records centrally; that is the right long-term answer and a much
 /// larger change than a resize watcher.
 ///
-/// Recorded exception to `docs/engineering-invariants.md` ("Idle panes and
+/// Recorded exception to `docs/invariants.md` ("Idle panes and
 /// clients schedule no polling or repaint proportional to their count"): this
 /// is one constant-cost poll per client on Windows only, independent of pane
 /// count. It disappears when console records are translated centrally.

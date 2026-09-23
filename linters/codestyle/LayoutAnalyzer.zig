@@ -45,7 +45,10 @@ pub fn check(self: LayoutAnalyzer) !void {
                     }
                 }
 
-                layout_count += try self.checkLayout(value, variable.ast.mut_token);
+                // Private helper types stay in their owner's file.
+                if (variable.visib_token != null) {
+                    layout_count += try self.checkLayout(value, variable.ast.mut_token);
+                }
             }
         }
 

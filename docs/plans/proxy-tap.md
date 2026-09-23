@@ -15,7 +15,7 @@ so search for the symbol when a line has moved.
 - `libbrotli` 1.2.0 is installed at `/opt/homebrew/opt/brotli`
   (`include/brotli/decode.h`, `lib/libbrotlidec.dylib`). Zig std ships
   `flate` (gzip, deflate, zlib) and `zstd`; it does not ship brotli.
-- Read `docs/engineering-invariants.md` before touching the proxy, history,
+- Read `docs/invariants.md` before touching the proxy, history,
   Lua or plugin code. The sections that bind this work are "Observation",
   "History and proxy", "Lua configuration", "Lua plugins" and "Local
   authority and storage".
@@ -336,7 +336,7 @@ traffic.
 - Runtime side: `runtime/entrypoints/events/proxy_capture.zig` with a new
   `RuntimeEvent.proxy_capture` (observation budget), the joiner, and a
   `CaptureSink` port that P2 implements. Until P2 lands, the sink is a
-  metrics-only stub. Add the new resource rows to `docs/capabilities.md`.
+  metrics-only stub. Record the new resources in `docs/architecture.md`.
 - Config: `runtime.proxy.capture = { enabled = false, max_part_bytes,
   max_exchange_bytes, max_total_bytes, join_timeout_ms }` through the whole
   chain listed above. Keep `capture` off by default.
@@ -372,7 +372,7 @@ bounded effect batch.
   parameter of the module rather than importing `config/model.zig`), and a
   shared `sandbox.zig` extracted from `generation.zig:439-460
   openEnvironment`. `frontend` and `backend` import `telar-lua`; `core`
-  stays free of Lua and libc. Update `docs/capabilities.md` package table.
+  stays free of Lua and libc. Update the package table in `docs/architecture.md`.
 - New backend capability `src/backend/plugins/` (`root.zig`, `service.zig`
   actor, `session.zig` child, `protocol.zig`, `host.zig` Lua host used by
   the worker process, `effects.zig` runtime effect union).
@@ -522,7 +522,7 @@ Status: complete on 2026-09-03. `zig fmt src`, `zig build check`, and
   installed even if the proxy is off (status query reads the record).
 - Docs: rewrite `docs/proxy-tls.md:48` and `:242-246` ("System trust
   remains unchanged") and the invariant at
-  `docs/engineering-invariants.md:221-222` to describe the explicit,
+  `docs/invariants.md` (History and proxy) to describe the explicit,
   reversible action.
 
 ### P7. Shipped example plugin and docs
@@ -535,7 +535,7 @@ Status: complete on 2026-09-03. `zig fmt src`, `zig build check`, and
   `exec_command.cmd` and records them. This is the reference for the
   "user classifies" model and doubles as an integration test fixture.
 - `docs/plugins.md`, `docs/proxy-tls.md`, `docs/configuration.md`,
-  `docs/capabilities.md`, `docs/flows/README.md` rows, and this file's
+  `docs/architecture.md`, `docs/flows/README.md` rows, and this file's
   status per phase.
 
 ## Open items the implementer must verify, not assume

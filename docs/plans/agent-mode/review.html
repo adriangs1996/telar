@@ -1098,7 +1098,7 @@ Start with the HTTP/2 observer; the HTTP/1.1 path is fine.<span class="ac">▌</
   <div class="card hot" id="raster-latency">
     <span class="tag assumption">excepción a la invariante · puerta</span>
     <h3>El eco de una tecla pasa por el camino media</h3>
-    <p>Hasta hoy el camino interactivo entrega cada tecla en celdas sin esperar a nada. Aquí el eco visible de lo que escribes es un raster: glifo desde la caché de FreeType, una línea de ~50 KB RGBA comprimida con zlib, un placement. Se registra como excepción explícita en <code>engineering-invariants.md</code> con una puerta: eco p99 de una línea por debajo de un intervalo del pacer (16,7 ms) en el benchmark; si una sesión la incumple, el composer cae a celdas y el pane nunca espera. Medir antes de prometer.</p>
+    <p>Hasta hoy el camino interactivo entrega cada tecla en celdas sin esperar a nada. Aquí el eco visible de lo que escribes es un raster: glifo desde la caché de FreeType, una línea de ~50 KB RGBA comprimida con zlib, un placement. Se registra como excepción explícita en <code>docs/invariants.md</code> con una puerta: eco p99 de una línea por debajo de un intervalo del pacer (16,7 ms) en el benchmark; si una sesión la incumple, el composer cae a celdas y el pane nunca espera. Medir antes de prometer.</p>
   </div>
   <div class="card" id="raster-input">
     <span class="tag assumption">límites conocidos</span>
@@ -1457,7 +1457,7 @@ Start with the HTTP/2 observer; the HTTP/1.1 path is fine.<span class="ac">▌</
 
 <!-- ============================================================ -->
 <h2 id="limites">13. Propiedad, presupuesto y límites</h2>
-<p class="section-lede">La checklist de <code>docs/engineering-invariants.md</code>, aplicada. Lo que no aparece aquí no está diseñado.</p>
+<p class="section-lede">La checklist de <code>docs/invariants.md</code>, aplicada. Lo que no aparece aquí no está diseñado.</p>
 
 <div class="table-wrap">
   <table id="bounds">
@@ -1543,7 +1543,7 @@ Start with the HTTP/2 observer; the HTTP/1.1 path is fine.<span class="ac">▌</
 
 <!-- ============================================================ -->
 <h2 id="decisiones">14. Decisiones que son tuyas</h2>
-<p class="section-lede">Plan cerrado con once decisiones. Los ficheros de referencia para implementarlo están en <code>docs/plans/agent-mode.md</code> (especificación completa con apéndices: teclas, wire, DDL, manifiestos, composer, capa KGP, excepción a la invariante), <code>docs/plans/agent-mode/mocks/*.txt</code> (maquetas en texto con anchos exactos y su variante <code>.roles.txt</code> con los roles de tema por tramo), <code>docs/plans/agent-mode/review.html</code> (esta página, autocontenida), <code>docs/adr/0009</code> a <code>0011</code> y los términos nuevos de <code>CONTEXT.md</code>. El cuadro libre sigue abierto por si algo cambia.</p>
+<p class="section-lede">Plan cerrado con once decisiones. Los ficheros de referencia para implementarlo están en <code>docs/plans/agent-mode.md</code> (especificación completa con apéndices: teclas, wire, DDL, manifiestos, composer, capa KGP, excepción a la invariante), <code>docs/plans/agent-mode/mocks/*.txt</code> (maquetas en texto con anchos exactos y su variante <code>.roles.txt</code> con los roles de tema por tramo), <code>docs/plans/agent-mode/review.html</code> (esta página, autocontenida), <code>docs/adr/0010</code> y <code>0011</code> y los términos nuevos de <code>CONTEXT.md</code>. El cuadro libre sigue abierto por si algo cambia.</p>
 
 <form class="question" id="q-free" data-lavish-question="free-feedback">
   <span class="tag question">abierto</span>

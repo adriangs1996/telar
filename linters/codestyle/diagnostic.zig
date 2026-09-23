@@ -1,3 +1,6 @@
+/// Functions with more parameters need `// codestyle: allow(maximum-parameter-count)`.
+pub const maximum_parameters = 5;
+
 pub const Rule = enum {
     invalid_syntax,
     maximum_parameter_count,

@@ -11,7 +11,7 @@ representation and makes accidental retention possible.
 
 ## Decision
 
-`proxy/root.zig` exposes lifecycle, pane registration and revocation,
+The proxy exposes lifecycle, pane registration and revocation,
 observations and a metrics snapshot. HTTP/1.1, HTTP/2, TLS, identity,
 middleware, credential storage and queue representation remain private.
 

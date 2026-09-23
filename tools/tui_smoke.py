@@ -1,7 +1,7 @@
 import os,json,time,subprocess,tempfile,pty,threading,select,fcntl,termios,struct,signal,shutil
 from pathlib import Path
 validation=Path(__file__).resolve().parent
-binary=validation.parents[2]/'zig-out/bin/telar'
+binary=validation.parent/'zig-out/bin/telar'
 with tempfile.TemporaryDirectory(prefix='telar-client-smoke-',dir='/tmp') as temp:
  root=Path(temp);endpoint=root/'runtime.sock';cfg=root/'config.lua'
  shutil.copytree(binary.parents[2]/'examples/plugins/sample',root/'plugin')
