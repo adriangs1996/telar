@@ -8,51 +8,51 @@ events: [media.batch_events]media.Event = undefined,
 event_count: usize = 0,
 reset_before: bool = false,
 
-pub fn reset(batch: *Batch) void {
-    batch.len = 0;
-    batch.event_count = 0;
-    batch.reset_before = false;
+pub fn reset(self: *Batch) void {
+    self.len = 0;
+    self.event_count = 0;
+    self.reset_before = false;
 }
 
-pub fn pushOutput(batch: *Batch, bytes: []const u8) bool {
-    if (bytes.len > batch.bytes.len - batch.len) {
+pub fn pushOutput(self: *Batch, bytes: []const u8) bool {
+    if (bytes.len > self.bytes.len - self.len) {
         return false;
     }
-    const offset = batch.len;
-    @memcpy(batch.bytes[offset..][0..bytes.len], bytes);
-    batch.len += bytes.len;
+    const offset = self.len;
+    @memcpy(self.bytes[offset..][0..bytes.len], bytes);
+    self.len += bytes.len;
 
     // Output slices are one byte stream. Merge adjacent PTY reads so the
     // event bound measures output/resize ordering rather than scheduler
     // granularity; TerminalStream is required to be slice-independent.
-    if (batch.event_count != 0) {
-        switch (batch.events[batch.event_count - 1]) {
+    if (self.event_count != 0) {
+        switch (self.events[self.event_count - 1]) {
             .output => |output| {
                 if (@as(usize, output.offset) + output.len == offset) {
-                    batch.events[batch.event_count - 1].output.len += @intCast(bytes.len);
+                    self.events[self.event_count - 1].output.len += @intCast(bytes.len);
                     return true;
                 }
             },
             .resize => {},
         }
     }
-    if (batch.event_count == batch.events.len) {
-        batch.len = offset;
+    if (self.event_count == self.events.len) {
+        self.len = offset;
         return false;
     }
-    batch.events[batch.event_count] = .{ .output = .{
+    self.events[self.event_count] = .{ .output = .{
         .offset = @intCast(offset),
         .len = @intCast(bytes.len),
     } };
-    batch.event_count += 1;
+    self.event_count += 1;
     return true;
 }
 
-pub fn pushResize(batch: *Batch, size: core.TerminalSize) bool {
-    if (batch.event_count == batch.events.len) {
+pub fn pushResize(self: *Batch, size: core.TerminalSize) bool {
+    if (self.event_count == self.events.len) {
         return false;
     }
-    batch.events[batch.event_count] = .{ .resize = size };
-    batch.event_count += 1;
+    self.events[self.event_count] = .{ .resize = size };
+    self.event_count += 1;
     return true;
 }

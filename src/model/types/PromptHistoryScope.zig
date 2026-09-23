@@ -4,8 +4,8 @@ pub const PromptHistoryScope = enum(u8) {
     cwd = 2,
     pane = 3,
 
-    pub fn next(scope: PromptHistoryScope) PromptHistoryScope {
-        return switch (scope) {
+    pub fn next(self: PromptHistoryScope) PromptHistoryScope {
+        return switch (self) {
             .global => .workspace,
             .workspace => .cwd,
             .cwd => .pane,
@@ -13,8 +13,8 @@ pub const PromptHistoryScope = enum(u8) {
         };
     }
 
-    pub fn label(scope: PromptHistoryScope) []const u8 {
-        return switch (scope) {
+    pub fn label(self: PromptHistoryScope) []const u8 {
+        return switch (self) {
             .global => "global",
             .workspace => "workspace",
             .cwd => "cwd",

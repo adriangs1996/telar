@@ -6,10 +6,10 @@ const AgentSnapshotIterator = @This();
 decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *AgentSnapshotIterator) !?AgentSnapshotEntry {
-    if (iterator.remaining == 0) {
+pub fn next(self: *AgentSnapshotIterator) !?AgentSnapshotEntry {
+    if (self.remaining == 0) {
         return null;
     }
-    iterator.remaining -= 1;
-    return try agent.decodeAgentSnapshotEntry(&iterator.decoder);
+    self.remaining -= 1;
+    return try agent.decodeAgentSnapshotEntry(&self.decoder);
 }

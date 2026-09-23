@@ -28,7 +28,7 @@ pub fn init(entries: []const Entry) !TestEnvironment {
     };
 }
 
-pub fn deinit(environment: *TestEnvironment) void {
-    environment.block.deinit(std.testing.allocator);
-    environment.map.deinit();
+pub fn deinit(self: *TestEnvironment) void {
+    self.block.deinit(std.testing.allocator);
+    self.map.deinit();
 }

@@ -21,8 +21,8 @@ pub const Widget = union(enum) {
     modal: modal_widget.Widget,
 
     /// Example: `try widget.draw(canvas);`
-    pub fn draw(widget: Widget, canvas: *Canvas) !void {
-        switch (widget) {
+    pub fn draw(self: Widget, canvas: *Canvas) !void {
+        switch (self) {
             inline else => |value| try value.draw(canvas),
         }
     }

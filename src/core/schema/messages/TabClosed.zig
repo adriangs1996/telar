@@ -14,10 +14,10 @@ previous_workspace: ?id.WorkspaceId = null,
 
 pub const wire_allow_zero_request_id = true;
 
-pub fn validateWire(message: TabClosed) !void {
+pub fn validateWire(self: TabClosed) !void {
     try workspace.validateWorkspaceClosure(
-        message.location.workspace,
-        message.workspace_closed,
-        message.previous_workspace,
+        self.location.workspace,
+        self.workspace_closed,
+        self.previous_workspace,
     );
 }

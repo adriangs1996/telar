@@ -70,19 +70,19 @@ pub fn init(grid: Grid, shape: u3) Curve {
 
 /// Writes one mask; work is capped by the caller's raster extent, never the pane.
 /// Example: `curve.rasterize(.{ .pixels = pixels, .stride = side, .width = 26, .height = 71 });`
-pub fn rasterize(curve: *const Curve, raster: Raster) void {
-    const scale_x = curve.width / @as(f32, @floatFromInt(raster.width));
-    const scale_y = curve.height / @as(f32, @floatFromInt(raster.height));
+pub fn rasterize(self: *const Curve, raster: Raster) void {
+    const scale_x = self.width / @as(f32, @floatFromInt(raster.width));
+    const scale_y = self.height / @as(f32, @floatFromInt(raster.height));
     const antialias = @max(scale_x, scale_y);
-    var bounds = [4]f32{ curve.width, curve.height, 0, 0 };
-    for (curve.points[0..curve.count]) |point| {
+    var bounds = [4]f32{ self.width, self.height, 0, 0 };
+    for (self.points[0..self.count]) |point| {
         bounds[0] = @min(bounds[0], point[0]);
         bounds[1] = @min(bounds[1], point[1]);
         bounds[2] = @max(bounds[2], point[0]);
         bounds[3] = @max(bounds[3], point[1]);
     }
 
-    const margin = (curve.thickness + antialias) / 2;
+    const margin = (self.thickness + antialias) / 2;
     const left: usize = @intFromFloat(std.math.clamp(@floor((bounds[0] - margin) / scale_x), 0, raster.width));
     const top: usize = @intFromFloat(std.math.clamp(@floor((bounds[1] - margin) / scale_y), 0, raster.height));
     const right: usize = @intFromFloat(std.math.clamp(@ceil((bounds[2] + margin) / scale_x), 0, raster.width));
@@ -95,22 +95,22 @@ pub fn rasterize(curve: *const Curve, raster: Raster) void {
 
         for (left..right) |column| {
             const point = [2]f32{ (@as(f32, @floatFromInt(column)) + 0.5) * scale_x, (@as(f32, @floatFromInt(row)) + 0.5) * scale_y };
-            const distance = @sqrt(curve.distanceSquared(point));
-            const coverage = std.math.clamp((curve.thickness / 2 + antialias / 2 - distance) / antialias, 0, 1);
+            const distance = @sqrt(self.distanceSquared(point));
+            const coverage = std.math.clamp((self.thickness / 2 + antialias / 2 - distance) / antialias, 0, 1);
             raster.pixels[row * raster.stride + column] = @intFromFloat(@round(255 * coverage));
         }
     }
 }
 
-fn distanceSquared(curve: *const Curve, point: [2]f32) f32 {
+fn distanceSquared(self: *const Curve, point: [2]f32) f32 {
     var distance = std.math.inf(f32);
-    const points = curve.points[0..curve.count];
+    const points = self.points[0..self.count];
     for (points[0 .. points.len - 1], points[1..]) |a, b| {
         distance = @min(distance, segmentDistance(point, .{ a, b }));
     }
 
-    if (curve.cross) {
-        distance = @min(distance, segmentDistance(point, .{ .{ 0, curve.height }, .{ curve.width, 0 } }));
+    if (self.cross) {
+        distance = @min(distance, segmentDistance(point, .{ .{ 0, self.height }, .{ self.width, 0 } }));
     }
 
     return distance;

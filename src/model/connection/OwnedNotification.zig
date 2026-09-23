@@ -10,15 +10,15 @@ title_len: u8,
 message: [core.max_notification_message_bytes]u8 = undefined,
 message_len: u8,
 
-pub fn view(value: *const OwnedNotification) core.ShowNotification {
+pub fn view(self: *const OwnedNotification) core.ShowNotification {
     return .{
-        .request_id = value.request_id,
+        .request_id = self.request_id,
         .notification = .{
-            .level = value.level,
-            .duration_ms = value.duration_ms,
-            .target = value.target,
-            .title = value.title[0..value.title_len],
-            .message = value.message[0..value.message_len],
+            .level = self.level,
+            .duration_ms = self.duration_ms,
+            .target = self.target,
+            .title = self.title[0..self.title_len],
+            .message = self.message[0..self.message_len],
         },
     };
 }

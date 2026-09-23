@@ -13,10 +13,10 @@ replacement: [2]u32 = .{ 0, 0 },
 
 /// Owns the preedit before the native callback's text borrow expires.
 /// Example: `try preedit.update(id, .{ .composition = value, .current = field });`
-pub fn update(preedit: *Preedit, id: Id, input: @import("PreeditUpdate.zig")) !void {
+pub fn update(self: *Preedit, id: Id, input: @import("PreeditUpdate.zig")) !void {
     const value = input.composition;
     if (value.cancel) {
-        preedit.clear();
+        self.clear();
         return;
     }
 
@@ -25,26 +25,26 @@ pub fn update(preedit: *Preedit, id: Id, input: @import("PreeditUpdate.zig")) !v
         return error.InvalidWidgetComposition;
     }
 
-    const existing = if (preedit.owner) |owner| owner.eql(id) else false;
-    const replacement = if (value.replacement_start != std.math.maxInt(u32)) [2]u32{ value.replacement_start, value.replacement_end } else if (existing) preedit.replacement else input.current.selection();
+    const existing = if (self.owner) |owner| owner.eql(id) else false;
+    const replacement = if (value.replacement_start != std.math.maxInt(u32)) [2]u32{ value.replacement_start, value.replacement_end } else if (existing) self.replacement else input.current.selection();
     if (replacement[0] > replacement[1] or !input.current.validRange(replacement)) {
         return error.InvalidWidgetComposition;
     }
 
-    @memcpy(preedit.bytes[0..value.text.len], value.text);
-    preedit.owner = id;
-    preedit.len = @intCast(value.text.len);
-    preedit.selection = .{ value.selection_start, value.selection_end };
-    preedit.replacement = replacement;
+    @memcpy(self.bytes[0..value.text.len], value.text);
+    self.owner = id;
+    self.len = @intCast(value.text.len);
+    self.selection = .{ value.selection_start, value.selection_end };
+    self.replacement = replacement;
 }
 
 /// Example: `preedit.clear();`
-pub fn clear(preedit: *Preedit) void {
-    preedit.owner = null;
-    preedit.len = 0;
+pub fn clear(self: *Preedit) void {
+    self.owner = null;
+    self.len = 0;
 }
 
 /// Example: `try canvas.textAt(bounds, .{ .text = preedit.text() });`
-pub fn text(preedit: *const Preedit) []const u8 {
-    return preedit.bytes[0..preedit.len];
+pub fn text(self: *const Preedit) []const u8 {
+    return self.bytes[0..self.len];
 }

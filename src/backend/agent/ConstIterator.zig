@@ -13,13 +13,13 @@ next_index: usize = 0,
 ///     publish(agent.snapshot());
 /// }
 /// ```
-pub fn next(cursor: *ConstIterator) ?*const Agent {
-    while (cursor.next_index < cursor.repository.slots.len) {
-        const index = cursor.next_index;
-        cursor.next_index += 1;
+pub fn next(self: *ConstIterator) ?*const Agent {
+    while (self.next_index < self.repository.slots.len) {
+        const index = self.next_index;
+        self.next_index += 1;
 
-        if (cursor.repository.occupiedAt(index)) {
-            return &cursor.repository.slots[index].?;
+        if (self.repository.occupiedAt(index)) {
+            return &self.repository.slots[index].?;
         }
     }
 

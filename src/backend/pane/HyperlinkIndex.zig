@@ -12,16 +12,16 @@ page_indexes: [512]u16 = undefined,
 
 /// Interns the VT identity, including its explicit id, across page boundaries.
 /// Example: `const index = try identities.intern(&builder, reference);`
-pub fn intern(index: *HyperlinkIndex, builder: *core.TextMetadataBuilder, reference: HyperlinkRef) !u16 {
-    if (index.page != reference.page) {
-        @memset(&index.page_ids, null);
-        index.page = reference.page;
+pub fn intern(self: *HyperlinkIndex, builder: *core.TextMetadataBuilder, reference: HyperlinkRef) !u16 {
+    if (self.page != reference.page) {
+        @memset(&self.page_ids, null);
+        self.page = reference.page;
     }
 
-    var page_slot: usize = reference.id % index.page_ids.len;
-    while (index.page_ids[page_slot]) |id| : (page_slot = (page_slot + 1) % index.page_ids.len) {
+    var page_slot: usize = reference.id % self.page_ids.len;
+    while (self.page_ids[page_slot]) |id| : (page_slot = (page_slot + 1) % self.page_ids.len) {
         if (id == reference.id) {
-            return index.page_indexes[page_slot];
+            return self.page_indexes[page_slot];
         }
     }
 
@@ -41,20 +41,20 @@ pub fn intern(index: *HyperlinkIndex, builder: *core.TextMetadataBuilder, refere
     }
 
     const hash = entry.hash(reference.page.memory);
-    var slot: usize = @intCast(hash % index.slots.len);
-    while (index.slots[slot]) |found| : (slot = (slot + 1) % index.slots.len) {
-        const other = index.refs[found];
+    var slot: usize = @intCast(hash % self.slots.len);
+    while (self.slots[slot]) |found| : (slot = (slot + 1) % self.slots.len) {
+        const other = self.refs[found];
         if (entry.eql(reference.page.memory, other.page.hyperlink_set.get(other.page.memory, other.id), other.page.memory)) {
-            index.page_ids[page_slot] = reference.id;
-            index.page_indexes[page_slot] = found;
+            self.page_ids[page_slot] = reference.id;
+            self.page_indexes[page_slot] = found;
             return found;
         }
     }
 
     const inserted = try builder.addLink(uri);
-    index.refs[inserted] = reference;
-    index.slots[slot] = inserted;
-    index.page_ids[page_slot] = reference.id;
-    index.page_indexes[page_slot] = inserted;
+    self.refs[inserted] = reference;
+    self.slots[slot] = inserted;
+    self.page_ids[page_slot] = reference.id;
+    self.page_indexes[page_slot] = inserted;
     return inserted;
 }

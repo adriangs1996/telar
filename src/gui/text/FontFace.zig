@@ -84,59 +84,59 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
     return .{ .face = face, .shaping_font = shaping_font, .mac_rasterizer = mac_rasterizer };
 }
 
-pub fn deinit(font: *FontFace) void {
-    if (font.mac_rasterizer) |*rasterizer| {
+pub fn deinit(self: *FontFace) void {
+    if (self.mac_rasterizer) |*rasterizer| {
         rasterizer.deinit();
     }
 
-    freetype.c.hb_font_destroy(font.shaping_font);
-    _ = freetype.c.FT_Done_Face(font.face);
+    freetype.c.hb_font_destroy(self.shaping_font);
+    _ = freetype.c.FT_Done_Face(self.face);
 }
 
 /// Makes `pixel_height` the size glyph loading and shaping use. A height
 /// seen before reuses its `FT_Size`; switching between resident heights
 /// only activates one and refreshes the HarfBuzz scale.
 /// Example: `try face.select(28);`
-pub fn select(font: *FontFace, pixel_height: u16) !void {
-    if (font.active == pixel_height) {
+pub fn select(self: *FontFace, pixel_height: u16) !void {
+    if (self.active == pixel_height) {
         return;
     }
 
-    const size = try font.sized(pixel_height);
+    const size = try self.sized(pixel_height);
     if (FT_Activate_Size(size.handle) != 0) {
         return error.FontSizeFailed;
     }
 
-    font.active = pixel_height;
-    freetype.c.hb_ft_font_changed(font.shaping_font);
+    self.active = pixel_height;
+    freetype.c.hb_ft_font_changed(self.shaping_font);
 }
 
 /// The sized instance for `pixel_height`, created on first use without
 /// changing the active size, so metrics of any resident height are
 /// readable while another is selected.
 /// Example: `const line = (try face.sized(13)).lineHeight();`
-pub fn sized(font: *FontFace, pixel_height: u16) !FontSize {
+pub fn sized(self: *FontFace, pixel_height: u16) !FontSize {
     if (pixel_height == 0) {
         return error.InvalidPixelHeight;
     }
 
-    if (font.find(pixel_height)) |size| {
+    if (self.find(pixel_height)) |size| {
         return size;
     }
 
-    const slot = font.emptySlot() orelse return error.TooManyFontSizes;
+    const slot = self.emptySlot() orelse return error.TooManyFontSizes;
     var handle: freetype.c.FT_Size = undefined;
-    if (FT_New_Size(font.face, &handle) != 0) {
+    if (FT_New_Size(self.face, &handle) != 0) {
         return error.FontSizeFailed;
     }
     errdefer _ = FT_Done_Size(handle);
 
     // Pixel sizes apply to the active size; restore the previous one after.
-    if (FT_Activate_Size(handle) != 0 or freetype.c.FT_Set_Pixel_Sizes(font.face, 0, pixel_height) != 0) {
+    if (FT_Activate_Size(handle) != 0 or freetype.c.FT_Set_Pixel_Sizes(self.face, 0, pixel_height) != 0) {
         return error.FontSizeFailed;
     }
 
-    if (font.find(font.active)) |previous| {
+    if (self.find(self.active)) |previous| {
         if (FT_Activate_Size(previous.handle) != 0) {
             return error.FontSizeFailed;
         }
@@ -147,8 +147,8 @@ pub fn sized(font: *FontFace, pixel_height: u16) !FontSize {
     return size;
 }
 
-fn find(font: *const FontFace, pixel_height: u16) ?FontSize {
-    for (font.sizes) |slot| {
+fn find(self: *const FontFace, pixel_height: u16) ?FontSize {
+    for (self.sizes) |slot| {
         if (slot) |size| {
             if (size.pixel_height == pixel_height) {
                 return size;
@@ -159,8 +159,8 @@ fn find(font: *const FontFace, pixel_height: u16) ?FontSize {
     return null;
 }
 
-fn emptySlot(font: *FontFace) ?*?FontSize {
-    for (&font.sizes) |*slot| {
+fn emptySlot(self: *FontFace) ?*?FontSize {
+    for (&self.sizes) |*slot| {
         if (slot.* == null) {
             return slot;
         }
@@ -171,14 +171,14 @@ fn emptySlot(font: *FontFace) ?*?FontSize {
 
 /// True for an outline face without color glyph tables: the only kind the
 /// alpha page can hold. Example: `if (!face.monochrome()) { ... }`
-pub fn monochrome(font: *const FontFace) bool {
-    const flags = font.face.*.face_flags;
+pub fn monochrome(self: *const FontFace) bool {
+    const flags = self.face.*.face_flags;
     return flags & freetype.c.FT_FACE_FLAG_SCALABLE != 0 and flags & freetype.c.FT_FACE_FLAG_COLOR == 0;
 }
 
 /// Tests the whole grapheme so combining marks never switch faces mid-cluster.
 /// Example: `if (face.covers("e\u{301}")) { ... }`
-pub fn covers(font: *const FontFace, text: []const u8) bool {
+pub fn covers(self: *const FontFace, text: []const u8) bool {
     var iterator = std.unicode.Utf8View.initUnchecked(text).iterator();
     while (iterator.nextCodepoint()) |codepoint| {
         if (codepoint == 0x200c or codepoint == 0x200d or
@@ -188,7 +188,7 @@ pub fn covers(font: *const FontFace, text: []const u8) bool {
             continue;
         }
 
-        if (freetype.c.FT_Get_Char_Index(font.face, codepoint) == 0) {
+        if (freetype.c.FT_Get_Char_Index(self.face, codepoint) == 0) {
             return false;
         }
     }

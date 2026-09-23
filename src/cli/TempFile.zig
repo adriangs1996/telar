@@ -16,16 +16,16 @@ pub fn begin(io: std.Io, path: []const u8) !TempFile {
     return temp;
 }
 
-fn tempPath(temp: *const TempFile) []const u8 {
-    return temp.temp_buffer[0..temp.temp_len];
+fn tempPath(self: *const TempFile) []const u8 {
+    return self.temp_buffer[0..self.temp_len];
 }
 
-pub fn commit(temp: *TempFile) !void {
-    temp.file.close(temp.io);
-    try std.Io.Dir.renameAbsolute(temp.tempPath(), temp.path, temp.io);
+pub fn commit(self: *TempFile) !void {
+    self.file.close(self.io);
+    try std.Io.Dir.renameAbsolute(self.tempPath(), self.path, self.io);
 }
 
-pub fn discard(temp: *TempFile) void {
-    temp.file.close(temp.io);
-    std.Io.Dir.deleteFileAbsolute(temp.io, temp.tempPath()) catch {};
+pub fn discard(self: *TempFile) void {
+    self.file.close(self.io);
+    std.Io.Dir.deleteFileAbsolute(self.io, self.tempPath()) catch {};
 }

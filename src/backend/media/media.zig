@@ -607,8 +607,8 @@ const TestAvailability = enum {
     first_only,
     none,
 
-    pub fn available(availability: TestAvailability, resource: FrameResource) bool {
-        return switch (availability) {
+    pub fn available(self: TestAvailability, resource: FrameResource) bool {
+        return switch (self) {
             .all => resource.byte_len <= resource.limit,
             .first_only => resource.byte_len <= resource.limit and std.mem.eql(u8, resource.encoded_name, "L3B4LTE="),
             .none => false,

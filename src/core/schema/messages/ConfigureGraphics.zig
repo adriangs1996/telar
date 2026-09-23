@@ -6,6 +6,6 @@ const ConfigureGraphics = @This();
 
 shared: bool,
 
-pub fn validateWire(message: ConfigureGraphics) !void {
-    _ = message;
+pub fn validateWire(self: ConfigureGraphics) !void {
+    _ = self;
 }

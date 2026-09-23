@@ -10,11 +10,11 @@ command_request: bool,
 
 /// Fails before exposing an approval when its complete scope cannot fit.
 /// Example: `try description.write(&request);`
-pub fn write(description: Description, request: *core.AgentApprovalRequest) !void {
-    try description.validateDecision();
+pub fn write(self: Description, request: *core.AgentApprovalRequest) !void {
+    try self.validateDecision();
     var writer: std.Io.Writer = .fixed(&request.description);
-    try writer.writeAll(if (description.command_request) "Allow this command or terminal input?\n" else "Allow these file changes?\n");
-    const params = description.params;
+    try writer.writeAll(if (self.command_request) "Allow this command or terminal input?\n" else "Allow these file changes?\n");
+    const params = self.params;
     const command_value = protocol.field(params, "command");
     if (command_value != .null and command_value != .string) {
         return error.InvalidProviderRequest;
@@ -26,10 +26,10 @@ pub fn write(description: Description, request: *core.AgentApprovalRequest) !voi
     }
 
     const item_id = protocol.string(protocol.field(params, "itemId"));
-    if (!description.command_request or command.len == 0) {
-        if (try description.transcript.reviewText(item_id)) |details| {
+    if (!self.command_request or command.len == 0) {
+        if (try self.transcript.reviewText(item_id)) |details| {
             try writer.print("Requested action:\n{s}\n", .{details});
-        } else if (!description.command_request or protocol.field(params, "networkApprovalContext") == .null) {
+        } else if (!self.command_request or protocol.field(params, "networkApprovalContext") == .null) {
             return error.ApprovalDetailsUnavailable;
         }
     }
@@ -74,8 +74,8 @@ pub fn write(description: Description, request: *core.AgentApprovalRequest) !voi
     request.description_len = @intCast(writer.end);
 }
 
-fn validateDecision(description: Description) !void {
-    const decisions = protocol.field(description.params, "availableDecisions");
+fn validateDecision(self: Description) !void {
+    const decisions = protocol.field(self.params, "availableDecisions");
     if (decisions == .null) {
         return;
     }

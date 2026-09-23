@@ -14,6 +14,6 @@ scale: f32,
 kind: source_kind.Kind = .mermaid,
 
 /// Example: `try writer.writeAll(job.text());`
-pub fn text(job: *const Job) []const u8 {
-    return job.source[0..job.len];
+pub fn text(self: *const Job) []const u8 {
+    return self.source[0..self.len];
 }

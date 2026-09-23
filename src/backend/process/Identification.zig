@@ -14,6 +14,6 @@ pub fn init(table: *const core.Table, provider: core.AgentProvider, command: []c
     return result;
 }
 
-pub fn slice(result: *const Identification) []const u8 {
-    return result.name[0..result.name_len];
+pub fn slice(self: *const Identification) []const u8 {
+    return self.name[0..self.name_len];
 }

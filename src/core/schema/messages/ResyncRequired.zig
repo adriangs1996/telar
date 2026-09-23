@@ -7,10 +7,10 @@ workspace: types.WorkspaceLocation,
 workspace_closed: bool,
 previous_workspace: ?id.WorkspaceId = null,
 
-pub fn validateWire(message: ResyncRequired) !void {
+pub fn validateWire(self: ResyncRequired) !void {
     try workspace_ops.validateWorkspaceClosure(
-        message.workspace,
-        message.workspace_closed,
-        message.previous_workspace,
+        self.workspace,
+        self.workspace_closed,
+        self.previous_workspace,
     );
 }

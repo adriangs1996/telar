@@ -55,58 +55,58 @@ pub fn init(gpa: std.mem.Allocator, w: u16, h: u16) !Buffer {
 /// Silently ignored past `max_clip_depth`, because the alternative is a
 /// draw path that can fail, and a frame that draws one widget unclipped is
 /// a cosmetic bug where a frame that returns an error is a blank screen.
-pub fn pushClip(b: *Buffer, r: Rect) void {
-    if (b.depth == max_clip_depth) {
+pub fn pushClip(self: *Buffer, r: Rect) void {
+    if (self.depth == max_clip_depth) {
         return;
     }
-    b.stack[b.depth] = b.clip;
-    b.depth += 1;
-    b.clip = b.clip.intersect(r);
+    self.stack[self.depth] = self.clip;
+    self.depth += 1;
+    self.clip = self.clip.intersect(r);
 }
 
-pub fn popClip(b: *Buffer) void {
-    if (b.depth == 0) {
+pub fn popClip(self: *Buffer) void {
+    if (self.depth == 0) {
         return;
     }
-    b.depth -= 1;
-    b.clip = b.stack[b.depth];
+    self.depth -= 1;
+    self.clip = self.stack[self.depth];
 }
 
-pub fn deinit(b: *Buffer) void {
-    b.gpa.free(b.cells);
+pub fn deinit(self: *Buffer) void {
+    self.gpa.free(self.cells);
 }
 
-pub fn resize(b: *Buffer, w: u16, h: u16) !void {
+pub fn resize(self: *Buffer, w: u16, h: u16) !void {
     // Fresh allocation rather than realloc: the old cells are cleared
     // below anyway, so copying them into the new block is wasted work.
-    const cells = try b.gpa.alloc(Cell, @as(usize, w) * @as(usize, h));
-    b.gpa.free(b.cells);
-    b.cells = cells;
-    b.w = w;
-    b.h = h;
+    const cells = try self.gpa.alloc(Cell, @as(usize, w) * @as(usize, h));
+    self.gpa.free(self.cells);
+    self.cells = cells;
+    self.w = w;
+    self.h = h;
     // The clip described a buffer that no longer exists, and a stale one
     // would silently drop everything drawn outside the old bounds.
-    b.clip = .{ .w = w, .h = h };
-    b.depth = 0;
-    @memset(b.cells, .{});
+    self.clip = .{ .w = w, .h = h };
+    self.depth = 0;
+    @memset(self.cells, .{});
 }
 
-pub fn area(b: *const Buffer) Rect {
-    return .{ .w = b.w, .h = b.h };
+pub fn area(self: *const Buffer) Rect {
+    return .{ .w = self.w, .h = self.h };
 }
 
-pub fn at(b: *Buffer, x: u16, y: u16) ?*Cell {
-    if (x >= b.w or y >= b.h) {
+pub fn at(self: *Buffer, x: u16, y: u16) ?*Cell {
+    if (x >= self.w or y >= self.h) {
         return null;
     }
-    return &b.cells[@as(usize, y) * @as(usize, b.w) + @as(usize, x)];
+    return &self.cells[@as(usize, y) * @as(usize, self.w) + @as(usize, x)];
 }
 
-pub fn clear(b: *Buffer, style: Style) void {
-    @memset(b.cells, .{ .style = style });
+pub fn clear(self: *Buffer, style: Style) void {
+    @memset(self.cells, .{ .style = style });
 }
 
-pub fn fill(b: *Buffer, r: Rect, fill_value: Fill) void {
+pub fn fill(self: *Buffer, r: Rect, fill_value: Fill) void {
     // Edge sums in u32: `x + w` may exceed maxInt(u16), and positions past
     // it are unaddressable anyway.
     const x_end = @min(@as(u32, r.x) + r.w, @as(u32, std.math.maxInt(u16)) + 1);
@@ -115,7 +115,7 @@ pub fn fill(b: *Buffer, r: Rect, fill_value: Fill) void {
     while (y < y_end) : (y += 1) {
         var x: u32 = r.x;
         while (x < x_end) : (x += 1) {
-            b.setCell(.{ .x = @intCast(x), .y = @intCast(y) }, .{ .text = fill_value.glyph, .width = 1, .style = fill_value.style });
+            self.setCell(.{ .x = @intCast(x), .y = @intCast(y) }, .{ .text = fill_value.glyph, .width = 1, .style = fill_value.style });
         }
     }
 }
@@ -129,8 +129,8 @@ pub fn fill(b: *Buffer, r: Rect, fill_value: Fill) void {
 /// ```zig
 /// buffer.setCell(.{ .x = 4, .y = 2 }, .{ .text = "界", .width = 2 });
 /// ```
-pub fn setCell(b: *Buffer, point: Point, value: CellWrite) void {
-    if (!b.clip.contains(point.x, point.y)) {
+pub fn setCell(self: *Buffer, point: Point, value: CellWrite) void {
+    if (!self.clip.contains(point.x, point.y)) {
         return;
     }
 
@@ -139,11 +139,11 @@ pub fn setCell(b: *Buffer, point: Point, value: CellWrite) void {
     // columns and paint over the neighbour, so the glyph is replaced by a
     // blank that stays inside the clip.
     const fits = value.width != 2 or
-        (point.x < std.math.maxInt(u16) and b.clip.contains(point.x + 1, point.y));
+        (point.x < std.math.maxInt(u16) and self.clip.contains(point.x + 1, point.y));
     const text = if (fits) value.text else " ";
     const drawn: u8 = if (fits) value.width else 1;
 
-    const cell = b.at(point.x, point.y) orelse return;
+    const cell = self.at(point.x, point.y) orelse return;
     var len: u8 = @intCast(@min(text.len, Cell.max_bytes));
     // A cluster longer than the cell is cut, but never mid-codepoint:
     // invalid UTF-8 stored here would reach the host terminal verbatim.
@@ -157,7 +157,7 @@ pub fn setCell(b: *Buffer, point: Point, value: CellWrite) void {
     // emitting anything there and keeps a later write from leaving half of
     // a character behind.
     if (drawn == 2) {
-        if (b.at(point.x + 1, point.y)) |tail| {
+        if (self.at(point.x + 1, point.y)) |tail| {
             tail.* = .{ .len = 0, .width = 0, .style = value.style };
         }
     }
@@ -175,7 +175,7 @@ pub fn setCell(b: *Buffer, point: Point, value: CellWrite) void {
 /// ```zig
 /// const width = buffer.writeText(area, .{ .point = .{ .x = 2, .y = 1 }, .text = "ready" });
 /// ```
-pub fn writeText(b: *Buffer, r: Rect, write: TextWrite) u16 {
+pub fn writeText(self: *Buffer, r: Rect, write: TextWrite) u16 {
     if (write.point.y < r.y or write.point.y >= @as(u32, r.y) + r.h) {
         return 0;
     }
@@ -194,7 +194,7 @@ pub fn writeText(b: *Buffer, r: Rect, write: TextWrite) u16 {
             break;
         }
         if (column >= r.x) {
-            b.setCell(.{ .x = @intCast(column), .y = write.point.y }, .{ .text = cluster.bytes, .width = cluster.width, .style = write.style });
+            self.setCell(.{ .x = @intCast(column), .y = write.point.y }, .{ .text = cluster.bytes, .width = cluster.width, .style = write.style });
         }
         column += cluster.width;
     }
@@ -210,14 +210,14 @@ pub fn writeText(b: *Buffer, r: Rect, write: TextWrite) u16 {
 /// ```zig
 /// buffer.writeTruncated(area, .{ .point = .{ .x = 0, .y = 0 }, .text = name, .max_width = 12 });
 /// ```
-pub fn writeTruncated(b: *Buffer, r: Rect, truncated: TruncatedText) u16 {
+pub fn writeTruncated(self: *Buffer, r: Rect, truncated: TruncatedText) u16 {
     const write: TextWrite = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
 
     if (truncated.max_width == 0) {
         return 0;
     }
     if (text_module.measure(write.text) <= truncated.max_width) {
-        return b.writeText(r, write);
+        return self.writeText(r, write);
     }
 
     // Measured, not assumed to be one column. It is one in every real
@@ -242,12 +242,12 @@ pub fn writeTruncated(b: *Buffer, r: Rect, truncated: TruncatedText) u16 {
         used += cluster.width;
         cut = it.index;
     }
-    const written = b.writeText(r, .{ .point = write.point, .text = write.text[0..cut], .style = write.style });
+    const written = self.writeText(r, .{ .point = write.point, .text = write.text[0..cut], .style = write.style });
     const ellipsis_x = @as(u32, write.point.x) + written;
     if (ellipsis_x > std.math.maxInt(u16)) {
         return written;
     }
-    return written + b.writeText(r, .{ .point = .{ .x = @intCast(ellipsis_x), .y = write.point.y }, .text = ellipsis, .style = write.style });
+    return written + self.writeText(r, .{ .point = .{ .x = @intCast(ellipsis_x), .y = write.point.y }, .text = ellipsis, .style = write.style });
 }
 
 /// Draws the end of `text`, prepending an ellipsis when it does not fit.
@@ -257,7 +257,7 @@ pub fn writeTruncated(b: *Buffer, r: Rect, truncated: TruncatedText) u16 {
 /// ```zig
 /// buffer.writeLeftTruncated(area, .{ .point = .{ .x = 0, .y = 0 }, .text = path, .max_width = 20 });
 /// ```
-pub fn writeLeftTruncated(b: *Buffer, r: Rect, truncated: TruncatedText) u16 {
+pub fn writeLeftTruncated(self: *Buffer, r: Rect, truncated: TruncatedText) u16 {
     const write: TextWrite = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
 
     if (truncated.max_width == 0) {
@@ -265,7 +265,7 @@ pub fn writeLeftTruncated(b: *Buffer, r: Rect, truncated: TruncatedText) u16 {
     }
     const total = text_module.measure(write.text);
     if (total <= truncated.max_width) {
-        return b.writeText(r, write);
+        return self.writeText(r, write);
     }
 
     const ellipsis = "\u{2026}";
@@ -286,12 +286,12 @@ pub fn writeLeftTruncated(b: *Buffer, r: Rect, truncated: TruncatedText) u16 {
         }
         prefix_width += cluster.width;
     }
-    const written = b.writeText(r, .{ .point = write.point, .text = ellipsis, .style = write.style });
+    const written = self.writeText(r, .{ .point = write.point, .text = ellipsis, .style = write.style });
     const text_x = @as(u32, write.point.x) + written;
     if (text_x > std.math.maxInt(u16)) {
         return written;
     }
-    return written + b.writeText(r, .{ .point = .{ .x = @intCast(text_x), .y = write.point.y }, .text = write.text[cut..], .style = write.style });
+    return written + self.writeText(r, .{ .point = .{ .x = @intCast(text_x), .y = write.point.y }, .text = write.text[cut..], .style = write.style });
 }
 
 /// Draws `text` so that it ends at the right edge of `r`.
@@ -299,16 +299,16 @@ pub fn writeLeftTruncated(b: *Buffer, r: Rect, truncated: TruncatedText) u16 {
 /// ```zig
 /// buffer.writeRight(area, .{ .y = area.y, .text = "100%" });
 /// ```
-pub fn writeRight(b: *Buffer, r: Rect, write: RightAlignedText) u16 {
+pub fn writeRight(self: *Buffer, r: Rect, write: RightAlignedText) u16 {
     const width = text_module.measure(write.text);
     if (width > r.w) {
-        return b.writeTruncated(r, .{ .point = .{ .x = r.x, .y = write.y }, .text = write.text, .max_width = r.w, .style = write.style });
+        return self.writeTruncated(r, .{ .point = .{ .x = r.x, .y = write.y }, .text = write.text, .max_width = r.w, .style = write.style });
     }
     const start = @as(u32, r.x) + (r.w - width);
     if (start > std.math.maxInt(u16)) {
         return 0;
     }
-    return b.writeText(r, .{ .point = .{ .x = @intCast(start), .y = write.y }, .text = write.text, .style = write.style });
+    return self.writeText(r, .{ .point = .{ .x = @intCast(start), .y = write.y }, .text = write.text, .style = write.style });
 }
 
 /// Draws a box, with an optional title in the top edge.
@@ -316,7 +316,7 @@ pub fn writeRight(b: *Buffer, r: Rect, write: RightAlignedText) u16 {
 /// ```zig
 /// buffer.box(area, .{ .style = border, .title = " session " });
 /// ```
-pub fn box(b: *Buffer, r: Rect, box_value: Box) void {
+pub fn box(self: *Buffer, r: Rect, box_value: Box) void {
     if (r.w < 2 or r.h < 2) {
         return;
     }
@@ -332,22 +332,22 @@ pub fn box(b: *Buffer, r: Rect, box_value: Box) void {
 
     var x = r.x + 1;
     while (x < right) : (x += 1) {
-        b.setCell(.{ .x = x, .y = r.y }, .{ .text = "─", .width = 1, .style = box_value.style });
-        b.setCell(.{ .x = x, .y = bottom }, .{ .text = "─", .width = 1, .style = box_value.style });
+        self.setCell(.{ .x = x, .y = r.y }, .{ .text = "─", .width = 1, .style = box_value.style });
+        self.setCell(.{ .x = x, .y = bottom }, .{ .text = "─", .width = 1, .style = box_value.style });
     }
     var y = r.y + 1;
     while (y < bottom) : (y += 1) {
-        b.setCell(.{ .x = r.x, .y = y }, .{ .text = "│", .width = 1, .style = box_value.style });
-        b.setCell(.{ .x = right, .y = y }, .{ .text = "│", .width = 1, .style = box_value.style });
+        self.setCell(.{ .x = r.x, .y = y }, .{ .text = "│", .width = 1, .style = box_value.style });
+        self.setCell(.{ .x = right, .y = y }, .{ .text = "│", .width = 1, .style = box_value.style });
     }
-    b.setCell(.{ .x = r.x, .y = r.y }, .{ .text = "╭", .width = 1, .style = box_value.style });
-    b.setCell(.{ .x = right, .y = r.y }, .{ .text = "╮", .width = 1, .style = box_value.style });
-    b.setCell(.{ .x = r.x, .y = bottom }, .{ .text = "╰", .width = 1, .style = box_value.style });
-    b.setCell(.{ .x = right, .y = bottom }, .{ .text = "╯", .width = 1, .style = box_value.style });
+    self.setCell(.{ .x = r.x, .y = r.y }, .{ .text = "╭", .width = 1, .style = box_value.style });
+    self.setCell(.{ .x = right, .y = r.y }, .{ .text = "╮", .width = 1, .style = box_value.style });
+    self.setCell(.{ .x = r.x, .y = bottom }, .{ .text = "╰", .width = 1, .style = box_value.style });
+    self.setCell(.{ .x = right, .y = bottom }, .{ .text = "╯", .width = 1, .style = box_value.style });
 
     if (box_value.title) |title| {
         const inside: Rect = .{ .x = r.x + 2, .y = r.y, .w = r.w -| 4, .h = 1 };
-        _ = b.writeText(inside, .{ .point = .{ .x = r.x + 2, .y = r.y }, .text = title, .style = box_value.style });
+        _ = self.writeText(inside, .{ .point = .{ .x = r.x + 2, .y = r.y }, .text = title, .style = box_value.style });
     }
 }
 
@@ -360,12 +360,12 @@ pub fn box(b: *Buffer, r: Rect, box_value: Box) void {
 /// ```zig
 /// buffer.fillWithoutCorners(area, .{ .bg = palette.panel_bg });
 /// ```
-pub fn fillWithoutCorners(b: *Buffer, r: Rect, style: Style) void {
+pub fn fillWithoutCorners(self: *Buffer, r: Rect, style: Style) void {
     if (r.w < 2 or r.h < 2) {
         return;
     }
 
-    b.fill(.{ .x = r.x + 1, .y = r.y, .w = r.w - 2, .h = 1 }, .{ .glyph = " ", .style = style });
-    b.fill(.{ .x = r.x, .y = r.y + 1, .w = r.w, .h = r.h - 2 }, .{ .glyph = " ", .style = style });
-    b.fill(.{ .x = r.x + 1, .y = r.y + r.h - 1, .w = r.w - 2, .h = 1 }, .{ .glyph = " ", .style = style });
+    self.fill(.{ .x = r.x + 1, .y = r.y, .w = r.w - 2, .h = 1 }, .{ .glyph = " ", .style = style });
+    self.fill(.{ .x = r.x, .y = r.y + 1, .w = r.w, .h = r.h - 2 }, .{ .glyph = " ", .style = style });
+    self.fill(.{ .x = r.x + 1, .y = r.y + r.h - 1, .w = r.w - 2, .h = 1 }, .{ .glyph = " ", .style = style });
 }

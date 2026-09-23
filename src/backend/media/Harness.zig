@@ -37,27 +37,27 @@ pub fn create(storage_limit: usize) !*Harness {
     return harness;
 }
 
-pub fn destroy(harness: *Harness) void {
-    harness.ingestion.prepared_transfers.discardAll(&harness.allocator);
-    harness.ingestion.transfer_preparation.deinit(&harness.allocator);
-    harness.pipeline.deinit();
-    std.debug.assert(harness.budget.used == 0);
-    std.testing.allocator.destroy(harness);
+pub fn destroy(self: *Harness) void {
+    self.ingestion.prepared_transfers.discardAll(&self.allocator);
+    self.ingestion.transfer_preparation.deinit(&self.allocator);
+    self.pipeline.deinit();
+    std.debug.assert(self.budget.used == 0);
+    std.testing.allocator.destroy(self);
 }
 
-pub fn feed(harness: *Harness, bytes: []const u8) void {
-    harness.pipeline.queueOutput(bytes);
-    std.debug.assert(harness.pipeline.seal());
-    defer harness.pipeline.finishSealed();
+pub fn feed(self: *Harness, bytes: []const u8) void {
+    self.pipeline.queueOutput(bytes);
+    std.debug.assert(self.pipeline.seal());
+    defer self.pipeline.finishSealed();
 
     var processor: Processor = .{
-        .state = &harness.ingestion,
-        .media = &harness.pipeline,
-        .media_allocator = &harness.allocator,
+        .state = &self.ingestion,
+        .media = &self.pipeline,
+        .media_allocator = &self.allocator,
         .graphics_limits = .{},
-        .graphics_storage_limit = harness.pipeline.storage_limit,
+        .graphics_storage_limit = self.pipeline.storage_limit,
         .io = std.testing.io,
-        .responses = .{ .context = harness, .write_fn = writeResponse },
+        .responses = .{ .context = self, .write_fn = writeResponse },
     };
     var stats: Stats = .{};
     processor.processMedia(png_test.size, &stats);
@@ -77,14 +77,14 @@ fn writeResponse(context: *anyopaque, response: []const u8) void {
     harness.reply_len += response.len;
 }
 
-pub fn expectImage(harness: *Harness) !void {
-    const storage = &harness.pipeline.terminal.screens.active.kitty_images;
+pub fn expectImage(self: *Harness) !void {
+    const storage = &self.pipeline.terminal.screens.active.kitty_images;
     const image = storage.imageById(7) orelse return error.MissingPngImage;
     try std.testing.expectEqual(.rgba, image.format);
     try std.testing.expectEqual(@as(u32, 1), image.width);
     try std.testing.expectEqual(@as(u32, 1), image.height);
     try std.testing.expectEqualSlices(u8, &.{ 1, 2, 3, 255 }, image.data.bytes().?);
     try std.testing.expectEqual(@as(usize, 1), storage.placements.count());
-    try std.testing.expectEqual(@as(u16, 3), harness.pipeline.terminal.screens.active.cursor.x);
-    try std.testing.expectEqual(@as(u16, 2), harness.pipeline.terminal.screens.active.cursor.y);
+    try std.testing.expectEqual(@as(u16, 3), self.pipeline.terminal.screens.active.cursor.x);
+    try std.testing.expectEqual(@as(u16, 2), self.pipeline.terminal.screens.active.cursor.y);
 }

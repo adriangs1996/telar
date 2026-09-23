@@ -9,7 +9,7 @@ name: core.ShmName,
 /// Bytes reserved against the pane budget for the object's lifetime.
 reserved_len: usize,
 
-pub fn discard(transfer: PreparedTransfer, media: *PaneMediaAllocator) void {
-    _ = std.c.shm_unlink(transfer.name.sliceZ());
-    media.releaseManual(transfer.reserved_len);
+pub fn discard(self: PreparedTransfer, media: *PaneMediaAllocator) void {
+    _ = std.c.shm_unlink(self.name.sliceZ());
+    media.releaseManual(self.reserved_len);
 }

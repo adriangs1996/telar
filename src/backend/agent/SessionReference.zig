@@ -7,8 +7,8 @@ bytes: [core.max_agent_session_reference_bytes]u8 = undefined,
 len: u8 = 0,
 observed_at_ms: i64 = 0,
 
-pub fn slice(reference: *const SessionReference) []const u8 {
-    return reference.bytes[0..reference.len];
+pub fn slice(self: *const SessionReference) []const u8 {
+    return self.bytes[0..self.len];
 }
 
 /// Copies a validated reference.

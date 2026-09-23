@@ -19,22 +19,22 @@ rotation: f32 = 0,
 
 /// Draws a track and round-ended arc without creating textures or font glyphs.
 /// Example: `try (ProgressRing{ .area = square, .color = accent, .fraction = 0.42 }).draw(canvas);`
-pub fn draw(ring: ProgressRing, canvas: *Canvas) !void {
-    const side = @min(ring.area.width, ring.area.height);
+pub fn draw(self: ProgressRing, canvas: *Canvas) !void {
+    const side = @min(self.area.width, self.area.height);
     if (side <= 0) {
         return;
     }
 
     const stroke = @min(side / 4, @max(1, side * 0.12));
-    const bounds: Rect = .{ .x = ring.area.x + (ring.area.width - side) / 2, .y = ring.area.y + (ring.area.height - side) / 2, .width = side, .height = side };
-    try canvas.ringAt(bounds, .{ .width = stroke, .radius = side / 2, .color = ring.color, .alpha = 0.18 });
-    const fraction = std.math.clamp(ring.fraction, 0, 1);
+    const bounds: Rect = .{ .x = self.area.x + (self.area.width - side) / 2, .y = self.area.y + (self.area.height - side) / 2, .width = side, .height = side };
+    try canvas.ringAt(bounds, .{ .width = stroke, .radius = side / 2, .color = self.color, .alpha = 0.18 });
+    const fraction = std.math.clamp(self.fraction, 0, 1);
     if (fraction == 0) {
         return;
     }
 
     const radius = (side - stroke) / 2;
-    const angle = ring.rotation * (2 * std.math.pi);
+    const angle = self.rotation * (2 * std.math.pi);
     const cosine = @cos(angle);
     const sine = @sin(angle);
     const steps: usize = @intFromFloat(@ceil(fraction * segments));
@@ -42,7 +42,7 @@ pub fn draw(ring: ProgressRing, canvas: *Canvas) !void {
         const point = if (index == steps) endpoint(fraction) else circle[index];
         const x = point[0] * cosine - point[1] * sine;
         const y = point[0] * sine + point[1] * cosine;
-        try canvas.fillRoundedAt(.{ .x = bounds.x + radius + x * radius, .y = bounds.y + radius + y * radius, .width = stroke, .height = stroke }, .{ .radius = stroke / 2, .color = ring.color });
+        try canvas.fillRoundedAt(.{ .x = bounds.x + radius + x * radius, .y = bounds.y + radius + y * radius, .width = stroke, .height = stroke }, .{ .radius = stroke / 2, .color = self.color });
     }
 }
 

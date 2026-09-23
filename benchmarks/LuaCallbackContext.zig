@@ -20,6 +20,6 @@ pub fn init(gpa: std.mem.Allocator, io: std.Io) !LuaCallbackContext {
     };
 }
 
-pub fn deinit(context: *LuaCallbackContext) void {
-    context.generation.deinit();
+pub fn deinit(self: *LuaCallbackContext) void {
+    self.generation.deinit();
 }

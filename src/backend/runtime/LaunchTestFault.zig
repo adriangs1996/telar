@@ -6,11 +6,11 @@ const LaunchTestFault = @This();
 phase: model.LaunchPhase,
 claimed: std.atomic.Value(bool) = .init(false),
 
-pub fn inject(fault: *LaunchTestFault, phase: model.LaunchPhase) !void {
-    if (fault.phase != phase) {
+pub fn inject(self: *LaunchTestFault, phase: model.LaunchPhase) !void {
+    if (self.phase != phase) {
         return;
     }
-    if (fault.claimed.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) {
+    if (self.claimed.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) {
         return;
     }
     return error.InjectedLaunchFailure;

@@ -28,89 +28,89 @@ trust_store: ?*core.TrustStore = null,
 trust_path: ?[]const u8 = null,
 owns_resources: bool = true,
 
-pub fn prepare(launch: *Launch, preparation: ClientPreparation) !void {
-    launch.* = .{
+pub fn prepare(self: *Launch, preparation: ClientPreparation) !void {
+    self.* = .{
         .process = preparation.process,
         .options = preparation.options,
         .endpoint = preparation.endpoint,
     };
-    errdefer launch.deinit();
+    errdefer self.deinit();
 
-    try launch.prepareChild(preparation.remote_defaults);
-    launch.generation = try config.loadGeneration(preparation.process, .{
+    try self.prepareChild(preparation.remote_defaults);
+    self.generation = try config.loadGeneration(preparation.process, .{
         .path = preparation.options.config,
         .disabled = preparation.options.no_config,
         .profile = preparation.options.profile,
-    }, &launch.config_path_buffer);
-    launch.config_path = if (launch.generation != null)
+    }, &self.config_path_buffer);
+    self.config_path = if (self.generation != null)
         if (preparation.options.config) |value|
             std.mem.span(value)
         else
-            try client_module.defaultPath(preparation.process.minimal.environ, &launch.config_path_buffer)
+            try client_module.defaultPath(preparation.process.minimal.environ, &self.config_path_buffer)
     else
         null;
-    launch.config_mtime_ns = if (launch.config_path) |path|
-        launch.generation.?.watchFingerprint(preparation.process.io, path)
+    self.config_mtime_ns = if (self.config_path) |path|
+        self.generation.?.watchFingerprint(preparation.process.io, path)
     else
         0;
 
-    if (launch.generation) |generation| {
-        try launch.preparePlugins(generation);
+    if (self.generation) |generation| {
+        try self.preparePlugins(generation);
     }
 }
 
-pub fn prepareChild(launch: *Launch, defaults: ?LaunchDefaults) !void {
+pub fn prepareChild(self: *Launch, defaults: ?LaunchDefaults) !void {
     if (defaults) |remote_launch| {
-        if (remote_launch.cwd.len > launch.cwd_buffer.len) {
+        if (remote_launch.cwd.len > self.cwd_buffer.len) {
             return error.NameTooLong;
         }
 
-        @memcpy(launch.cwd_buffer[0..remote_launch.cwd.len], remote_launch.cwd);
-        launch.cwd_len = remote_launch.cwd.len;
-        if (!launch.options.command_set) {
-            launch.argument_storage[0] = remote_launch.shell;
-            launch.argument_count = 1;
+        @memcpy(self.cwd_buffer[0..remote_launch.cwd.len], remote_launch.cwd);
+        self.cwd_len = remote_launch.cwd.len;
+        if (!self.options.command_set) {
+            self.argument_storage[0] = remote_launch.shell;
+            self.argument_count = 1;
             return;
         }
     } else {
-        launch.cwd_len = try std.Io.Dir.cwd().realPathFile(launch.process.io, ".", &launch.cwd_buffer);
+        self.cwd_len = try std.Io.Dir.cwd().realPathFile(self.process.io, ".", &self.cwd_buffer);
     }
 
-    while (launch.options.command.argv[launch.argument_count]) |argument| : (launch.argument_count += 1) {
-        launch.argument_storage[launch.argument_count] = std.mem.span(argument);
+    while (self.options.command.argv[self.argument_count]) |argument| : (self.argument_count += 1) {
+        self.argument_storage[self.argument_count] = std.mem.span(argument);
     }
 }
 
-fn preparePlugins(launch: *Launch, generation: *client_module.Generation) !void {
-    const resolved_trust_path = try plugin.trustPath(launch.process.minimal.environ, &launch.trust_path_buffer);
-    const loaded_trust = try plugin.loadTrustStore(launch.process, resolved_trust_path);
-    launch.trust_store = try launch.process.gpa.create(core.TrustStore);
-    launch.trust_store.?.* = loaded_trust;
+fn preparePlugins(self: *Launch, generation: *client_module.Generation) !void {
+    const resolved_trust_path = try plugin.trustPath(self.process.minimal.environ, &self.trust_path_buffer);
+    const loaded_trust = try plugin.loadTrustStore(self.process, resolved_trust_path);
+    self.trust_store = try self.process.gpa.create(core.TrustStore);
+    self.trust_store.?.* = loaded_trust;
 
     const registry_value = try client_module.Registry.loadWithTrust(
         .{
-            .gpa = launch.process.gpa,
-            .io = launch.process.io,
+            .gpa = self.process.gpa,
+            .io = self.process.io,
             .config_dir = generation.configDir(),
         },
         generation.pluginSlice(),
-        launch.trust_store.?,
+        self.trust_store.?,
     );
     try registry_value.validateConfiguredActions(generation.snapshot.bindingSlice());
-    launch.plugin_registry = try launch.process.gpa.create(client_module.Registry);
-    launch.plugin_registry.?.* = registry_value;
-    launch.config_mtime_ns ^= @as(i128, launch.plugin_registry.?.watchFingerprint(launch.process.gpa, launch.process.io));
-    launch.config_mtime_ns ^= @as(i128, client_module.config_reload.trustWatchFingerprint(launch.process.io, resolved_trust_path));
-    launch.trust_path = resolved_trust_path;
+    self.plugin_registry = try self.process.gpa.create(client_module.Registry);
+    self.plugin_registry.?.* = registry_value;
+    self.config_mtime_ns ^= @as(i128, self.plugin_registry.?.watchFingerprint(self.process.gpa, self.process.io));
+    self.config_mtime_ns ^= @as(i128, client_module.config_reload.trustWatchFingerprint(self.process.io, resolved_trust_path));
+    self.trust_path = resolved_trust_path;
 }
 
-pub fn frontendOptions(launch: *const Launch) client_module.Options {
-    const snapshot = if (launch.generation) |generation| &generation.snapshot else null;
-    const options = launch.options;
+pub fn frontendOptions(self: *const Launch) client_module.Options {
+    const snapshot = if (self.generation) |generation| &generation.snapshot else null;
+    const options = self.options;
     return .{
-        .arguments = launch.argument_storage[0..launch.argument_count],
-        .cwd = launch.cwd_buffer[0..launch.cwd_len],
-        .endpoint = launch.endpoint,
+        .arguments = self.argument_storage[0..self.argument_count],
+        .cwd = self.cwd_buffer[0..self.cwd_len],
+        .endpoint = self.endpoint,
         .prefix = if (snapshot) |value| value.prefix else data.keybind.default_prefix,
         .bindings = if (snapshot) |value| value.bindingSlice() else &.{},
         .gui = if (snapshot) |value| value.gui else .{},
@@ -131,8 +131,8 @@ pub fn frontendOptions(launch: *const Launch) client_module.Options {
         .pane_gaps = if (snapshot) |value| value.pane_gaps else true,
         .sound = if (snapshot) |value| value.sound else .{},
         .bars = if (snapshot) |value| value.bars.presentation() else .{},
-        .host_shared_memory = launch.options.remote == null and
-            client.supportsHostSharedMemory(launch.process.minimal.environ),
+        .host_shared_memory = self.options.remote == null and
+            client.supportsHostSharedMemory(self.process.minimal.environ),
         .input_escape_timeout_ns = if (snapshot) |value|
             value.input_escape_timeout_ns
         else
@@ -141,37 +141,37 @@ pub fn frontendOptions(launch: *const Launch) client_module.Options {
             value.input_sequence_timeout_ns
         else
             data.keybind.default_sequence_timeout_ns,
-        .lua_generation = launch.generation,
-        .config_path = launch.config_path,
-        .config_mtime_ns = launch.config_mtime_ns,
+        .lua_generation = self.generation,
+        .config_path = self.config_path,
+        .config_mtime_ns = self.config_mtime_ns,
         .theme_locked = options.theme_set,
         .sidebar_renderer_locked = options.sidebar_renderer_set,
-        .plugin_registry = launch.plugin_registry,
-        .trust_store = launch.trust_store,
-        .trust_path = launch.trust_path,
+        .plugin_registry = self.plugin_registry,
+        .trust_store = self.trust_store,
+        .trust_path = self.trust_path,
         .profile = if (options.profile) |value| std.mem.span(value) else null,
-        .editor = client.configuredEditor(launch.process.minimal.environ),
-        .environ = launch.process.minimal.environ,
+        .editor = client.configuredEditor(self.process.minimal.environ),
+        .environ = self.process.minimal.environ,
     };
 }
 
-pub fn transferResources(launch: *Launch) void {
-    launch.owns_resources = false;
+pub fn transferResources(self: *Launch) void {
+    self.owns_resources = false;
 }
 
-pub fn deinit(launch: *Launch) void {
-    if (!launch.owns_resources) {
+pub fn deinit(self: *Launch) void {
+    if (!self.owns_resources) {
         return;
     }
 
-    if (launch.plugin_registry) |registry| {
-        launch.process.gpa.destroy(registry);
+    if (self.plugin_registry) |registry| {
+        self.process.gpa.destroy(registry);
     }
-    if (launch.trust_store) |store| {
-        launch.process.gpa.destroy(store);
+    if (self.trust_store) |store| {
+        self.process.gpa.destroy(store);
     }
-    if (launch.generation) |generation| {
+    if (self.generation) |generation| {
         generation.deinit();
     }
-    launch.owns_resources = false;
+    self.owns_resources = false;
 }

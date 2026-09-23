@@ -13,13 +13,13 @@ initiator: ?ClientKey = null,
 ///     publish(event);
 /// }
 /// ```
-pub fn request(state: *State, initiator: ClientKey) ?StopRequested {
-    if (state.requested) {
+pub fn request(self: *State, initiator: ClientKey) ?StopRequested {
+    if (self.requested) {
         return null;
     }
 
-    state.requested = true;
-    state.initiator = initiator;
+    self.requested = true;
+    self.initiator = initiator;
     return .{ .initiator = initiator };
 }
 
@@ -30,6 +30,6 @@ pub fn request(state: *State, initiator: ClientKey) ?StopRequested {
 ///     stop_accepting_clients();
 /// }
 /// ```
-pub fn isRequested(state: *const State) bool {
-    return state.requested;
+pub fn isRequested(self: *const State) bool {
+    return self.requested;
 }

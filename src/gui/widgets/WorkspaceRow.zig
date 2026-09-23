@@ -26,22 +26,22 @@ pub fn height(canvas: *const Canvas) f32 {
 
 /// Draws only; the list clips both the row and its semantic hit target.
 /// Example: `try row.draw(canvas);`
-pub fn draw(row: WorkspaceRow, canvas: *Canvas) !void {
-    const projection = row.context.projection;
-    const workspace = projection.workspaces.workspaceAt(row.index);
+pub fn draw(self: WorkspaceRow, canvas: *Canvas) !void {
+    const projection = self.context.projection;
+    const workspace = projection.workspaces.workspaceAt(self.index);
     const selected = workspace_identity.activeId(projection) == workspace;
     const palette = canvas.theme.palette;
-    const bounds = row.bounds;
+    const bounds = self.bounds;
     const ink = if (selected) palette.text else inactive_ink;
 
-    if (row.context.isHovered(.{ .intent = .{ .select_workspace = workspace } })) {
+    if (self.context.isHovered(.{ .intent = .{ .select_workspace = workspace } })) {
         try canvas.fillRoundedAt(bounds, .{ .radius = canvas.chrome.px(6), .color = palette.surface1 });
     }
 
     const inset = canvas.chrome.px(12);
     const icon_side = canvas.chrome.px(18);
     const icon: Rect = .{ .x = bounds.x + inset, .y = bounds.y + (bounds.height - icon_side) / 2, .width = icon_side, .height = icon_side };
-    const sprite = if (row.context.favicons) |favicons| favicons.sprite(.{ .workspace = workspace }) else null;
+    const sprite = if (self.context.favicons) |favicons| favicons.sprite(.{ .workspace = workspace }) else null;
     if (sprite) |value| {
         try canvas.spriteTintedAt(icon, .{ .sprite = value, .alpha = if (selected) 1 else 0.5 });
     } else {
@@ -51,21 +51,21 @@ pub fn draw(row: WorkspaceRow, canvas: *Canvas) !void {
     const left = icon.x + icon.width + canvas.chrome.px(9);
     const available = @max(0, bounds.x + bounds.width - inset - left);
     const title: Rect = .{ .x = left, .y = bounds.y + canvas.chrome.px(10), .width = available, .height = canvas.chrome.rowHeight(.body) };
-    const reserved = try row.drawAttention(canvas, title);
-    var name = projection.workspaces.nameAt(row.index);
+    const reserved = try self.drawAttention(canvas, title);
+    var name = projection.workspaces.nameAt(self.index);
     if (selected and projection.model.workspaceName().len != 0) {
         name = projection.model.workspaceName();
     }
 
     try fittedText(canvas, .{ .x = title.x, .y = title.y, .width = @max(0, available - reserved), .height = title.height }, .{ .text = name, .color = ink, .bold = true, .face = .sans, .size = .body });
-    try fittedText(canvas, .{ .x = left, .y = title.y + title.height, .width = available, .height = canvas.chrome.rowHeight(.small) }, .{ .text = projection.workspaces.pathAt(row.index), .color = if (selected) palette.subtext0 else inactive_ink, .face = .sans, .size = .small });
+    try fittedText(canvas, .{ .x = left, .y = title.y + title.height, .width = available, .height = canvas.chrome.rowHeight(.small) }, .{ .text = projection.workspaces.pathAt(self.index), .color = if (selected) palette.subtext0 else inactive_ink, .face = .sans, .size = .small });
 }
 
-fn drawAttention(row: WorkspaceRow, canvas: *Canvas, area: Rect) !f32 {
-    const workspace = row.context.projection.workspaces.workspaceAt(row.index);
+fn drawAttention(self: WorkspaceRow, canvas: *Canvas, area: Rect) !f32 {
+    const workspace = self.context.projection.workspaces.workspaceAt(self.index);
     var count: u8 = 0;
     var urgent: ?*const data.Agent = null;
-    for (row.context.projection.agents.slice()) |*agent| {
+    for (self.context.projection.agents.slice()) |*agent| {
         if (!std.meta.eql(agent.location.workspace, core.WorkspaceLocation{ .workspace = workspace }) or !attention.needsInput(agent.status)) {
             continue;
         }
@@ -78,7 +78,7 @@ fn drawAttention(row: WorkspaceRow, canvas: *Canvas, area: Rect) !f32 {
 
     const agent = urgent orelse return 0;
     var buffer: [8]u8 = undefined;
-    const selected = workspace_identity.activeId(row.context.projection) == workspace;
+    const selected = workspace_identity.activeId(self.context.projection) == workspace;
     const label: Label = .{ .text = std.fmt.bufPrint(&buffer, "! {d}", .{count}) catch unreachable, .color = if (selected) attention.statusColor(canvas.theme.palette, agent.status) else inactive_ink, .face = .sans, .size = .small };
     const width = @min(area.width, try canvas.measure(label));
     _ = try canvas.textAt(.{ .x = area.x + area.width - width, .y = area.y, .width = width, .height = area.height }, label);

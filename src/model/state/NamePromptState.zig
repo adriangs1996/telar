@@ -12,8 +12,8 @@ generation: u64 = 0,
 
 /// Reconciles search scope, selection and scroll after a history transition.
 /// Example: `state.updateHistory(.{ .selection = 0, .reset_scroll = true });`.
-pub fn updateHistory(state: *State, update: struct { scope: ?name_prompt.HistoryScope = null, selection: ?u16 = null, reset_scroll: bool = false, scroll_by: i16 = 0, scroll_limit: ?u32 = null }) void {
-    const prompt = state.mutable() orelse return;
+pub fn updateHistory(self: *State, update: struct { scope: ?name_prompt.HistoryScope = null, selection: ?u16 = null, reset_scroll: bool = false, scroll_by: i16 = 0, scroll_limit: ?u32 = null }) void {
+    const prompt = self.mutable() orelse return;
     if (prompt.mode != .history) {
         return;
     }
@@ -41,23 +41,23 @@ pub fn updateHistory(state: *State, update: struct { scope: ?name_prompt.History
     }
 
     if (!std.meta.eql(before, history.*)) {
-        state.revision +%= 1;
+        self.revision +%= 1;
     }
 }
 
 /// Clamps the selected result and commits a revision only when it changes.
 /// Example: `state.constrainSelection(result_count);`.
-pub fn constrainSelection(state: *State, count: u16) void {
-    const prompt = state.mutable() orelse return;
+pub fn constrainSelection(self: *State, count: u16) void {
+    const prompt = self.mutable() orelse return;
     const selected = @min(prompt.selection(), count -| 1);
     if (selected != prompt.selection()) {
         prompt.setSelection(selected);
-        state.revision +%= 1;
+        self.revision +%= 1;
     }
 }
 
-pub fn takeHistoryPage(state: *State) @FieldType(History, "page_requested") {
-    const prompt = state.mutable() orelse return .none;
+pub fn takeHistoryPage(self: *State) @FieldType(History, "page_requested") {
+    const prompt = self.mutable() orelse return .none;
     if (prompt.target() != .history) {
         return .none;
     }
@@ -72,9 +72,9 @@ pub fn takeHistoryPage(state: *State) @FieldType(History, "page_requested") {
 /// ```zig
 /// prompt.begin(.create_workspace);
 /// ```
-pub fn begin(state: *State, command: name_prompt.Begin) void {
-    state.generation += 1;
-    state.value = switch (command) {
+pub fn begin(self: *State, command: name_prompt.Begin) void {
+    self.generation += 1;
+    self.value = switch (command) {
         .rename_tab => |rename| .{
             .mode = .{ .rename_tab = rename.tab_id },
             .field = .init(rename.label),
@@ -108,8 +108,8 @@ pub fn begin(state: *State, command: name_prompt.Begin) void {
             .field = .init(&[_]u8{prefix.byte()}),
         },
     };
-    state.value.?.generation = state.generation;
-    state.revision +%= 1;
+    self.value.?.generation = self.generation;
+    self.revision +%= 1;
 }
 
 /// Moves a list selection to one exact row, as a pointer press does; the
@@ -118,14 +118,14 @@ pub fn begin(state: *State, command: name_prompt.Begin) void {
 /// ```zig
 /// state.select(row);
 /// ```
-pub fn select(state: *State, index: u16) void {
-    const prompt = state.mutable() orelse return;
+pub fn select(self: *State, index: u16) void {
+    const prompt = self.mutable() orelse return;
     if (!(name_prompt.selects(prompt.target()) or directoryFocused(prompt)) or prompt.selection() == index) {
         return;
     }
 
     prompt.setSelection(index);
-    state.revision +%= 1;
+    self.revision +%= 1;
 }
 
 /// Returns whether input belongs to the prompt.
@@ -133,12 +133,12 @@ pub fn select(state: *State, index: u16) void {
 /// ```zig
 /// if (prompt.active()) routeToPrompt();
 /// ```
-pub fn active(state: *const State) bool {
-    return state.value != null;
+pub fn active(self: *const State) bool {
+    return self.value != null;
 }
 
-fn mutable(state: *State) ?*Prompt {
-    return if (state.value) |*value| value else null;
+fn mutable(self: *State) ?*Prompt {
+    return if (self.value) |*value| value else null;
 }
 
 /// Returns the current prompt without permitting mutation.
@@ -146,8 +146,8 @@ fn mutable(state: *State) ?*Prompt {
 /// ```zig
 /// const current = prompt.currentConst() orelse return;
 /// ```
-pub fn currentConst(state: *const State) ?*const Prompt {
-    return if (state.value) |*value| value else null;
+pub fn currentConst(self: *const State) ?*const Prompt {
+    return if (self.value) |*value| value else null;
 }
 
 /// Returns the revision observed by the client presenter.
@@ -155,8 +155,8 @@ pub fn currentConst(state: *const State) ?*const Prompt {
 /// ```zig
 /// const revision = prompt.version();
 /// ```
-pub fn version(state: *const State) u64 {
-    return state.revision;
+pub fn version(self: *const State) u64 {
+    return self.revision;
 }
 
 /// Applies one semantic editor command. Visible changes advance the
@@ -165,8 +165,8 @@ pub fn version(state: *const State) u64 {
 /// ```zig
 /// const transition = prompt.apply(.backspace);
 /// ```
-pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition {
-    const prompt = state.mutable() orelse return .unchanged;
+pub fn apply(self: *State, command: name_prompt.Command) name_prompt.Transition {
+    const prompt = self.mutable() orelse return .unchanged;
     switch (command) {
         .focus_field => |focus| {
             if (prompt.mode != .create_workspace or prompt.mode.create_workspace.focus == focus) {
@@ -174,7 +174,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
             }
 
             prompt.mode.create_workspace.focus = focus;
-            state.revision +%= 1;
+            self.revision +%= 1;
             return .changed;
         },
         .replace_range => |replacement| {
@@ -189,7 +189,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
                 prompt.setSelection(0);
             }
 
-            state.revision +%= 1;
+            self.revision +%= 1;
             return .changed;
         },
         .paste_start => {
@@ -210,7 +210,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
         },
         .submit, .submit_alternate => {
             if (prompt.pasting) {
-                return state.editField(.{ .insert = " " });
+                return self.editField(.{ .insert = " " });
             }
             if (prompt.form()) |form_state| {
                 if (prompt.field.text().len == 0 and prompt.directory.text().len == 0) {
@@ -237,19 +237,19 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
         .cancel => {
             if (prompt.target() == .history and prompt.mode.history.inspecting) {
                 prompt.mode.history.inspecting = false;
-                state.revision +%= 1;
+                self.revision +%= 1;
                 return .changed;
             }
 
-            state.value = null;
-            state.revision +%= 1;
+            self.value = null;
+            self.revision +%= 1;
             return .cancelled;
         },
         .move_up => {
             if (prompt.target() == .history) {
                 prompt.setSelection(prompt.selection() +| 1);
                 prompt.mode.history.detail_scroll = 0;
-                state.revision +%= 1;
+                self.revision +%= 1;
                 return .changed;
             }
 
@@ -258,7 +258,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
             }
 
             prompt.setSelection(prompt.selection() - 1);
-            state.revision +%= 1;
+            self.revision +%= 1;
             return .changed;
         },
         .move_down => {
@@ -269,7 +269,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
 
                 prompt.setSelection(prompt.selection() -| 1);
                 prompt.mode.history.detail_scroll = 0;
-                state.revision +%= 1;
+                self.revision +%= 1;
                 return .changed;
             }
 
@@ -278,7 +278,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
             }
 
             prompt.setSelection(prompt.selection() +| 1);
-            state.revision +%= 1;
+            self.revision +%= 1;
             return .changed;
         },
         .tab => {
@@ -289,7 +289,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
                 }
 
                 form_state.focus = .directory;
-                state.revision +%= 1;
+                self.revision +%= 1;
                 return .changed;
             }
             if (prompt.target() != .history) {
@@ -298,7 +298,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
 
             prompt.mode.history.scope = prompt.mode.history.scope.next();
             prompt.setSelection(0);
-            state.revision +%= 1;
+            self.revision +%= 1;
             return .changed;
         },
         .back_tab => {
@@ -308,7 +308,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
 
             const form_state = &prompt.mode.create_workspace;
             form_state.focus = if (form_state.focus == .name) .directory else .name;
-            state.revision +%= 1;
+            self.revision +%= 1;
             return .changed;
         },
         .toggle_inspection => {
@@ -318,7 +318,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
 
             prompt.mode.history.inspecting = !prompt.mode.history.inspecting;
             prompt.mode.history.detail_scroll = 0;
-            state.revision +%= 1;
+            self.revision +%= 1;
             return .changed;
         },
         .page_up, .page_down => {
@@ -332,7 +332,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
                 prompt.mode.history.page_requested = if (command == .page_up) .older else .newer;
             }
 
-            state.revision +%= 1;
+            self.revision +%= 1;
             return .changed;
         },
         .remove_entry => {
@@ -340,7 +340,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
                 return .unchanged;
             }
 
-            state.revision +%= 1;
+            self.revision +%= 1;
             return .{ .removed = prompt.selection() };
         },
         .insert,
@@ -352,7 +352,7 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
         .end,
         .select_range,
         .select_all,
-        => return state.editField(command),
+        => return self.editField(command),
     }
 }
 
@@ -361,14 +361,14 @@ pub fn apply(state: *State, command: name_prompt.Command) name_prompt.Transition
 /// ```zig
 /// std.debug.assert(prompt.finish(submission.target));
 /// ```
-pub fn finish(state: *State, target: name_prompt.Target) bool {
-    const prompt = state.currentConst() orelse return false;
+pub fn finish(self: *State, target: name_prompt.Target) bool {
+    const prompt = self.currentConst() orelse return false;
     if (!std.meta.eql(prompt.target(), target)) {
         return false;
     }
 
-    state.value = null;
-    state.revision +%= 1;
+    self.value = null;
+    self.revision +%= 1;
     return true;
 }
 
@@ -377,14 +377,14 @@ pub fn finish(state: *State, target: name_prompt.Target) bool {
 /// ```zig
 /// state.requestDirectoryConfirmation();
 /// ```
-pub fn requestDirectoryConfirmation(state: *State) void {
-    const prompt = state.mutable() orelse return;
+pub fn requestDirectoryConfirmation(self: *State) void {
+    const prompt = self.mutable() orelse return;
     if (prompt.mode != .create_workspace or prompt.mode.create_workspace.confirm_create) {
         return;
     }
 
     prompt.mode.create_workspace.confirm_create = true;
-    state.revision +%= 1;
+    self.revision +%= 1;
 }
 
 /// Replaces the directory text with an accepted completion and keeps the
@@ -393,25 +393,25 @@ pub fn requestDirectoryConfirmation(state: *State) void {
 /// ```zig
 /// state.replaceDirectory("/work/telar/");
 /// ```
-pub fn replaceDirectory(state: *State, text: []const u8) void {
-    const prompt = state.mutable() orelse return;
+pub fn replaceDirectory(self: *State, text: []const u8) void {
+    const prompt = self.mutable() orelse return;
     if (prompt.mode != .create_workspace) {
         return;
     }
 
     prompt.directory.setText(text);
     prompt.mode.create_workspace = .{ .focus = .directory };
-    state.revision +%= 1;
+    self.revision +%= 1;
 }
 
 fn directoryFocused(prompt: *const Prompt) bool {
     return prompt.mode == .create_workspace and prompt.mode.create_workspace.focus == .directory;
 }
 
-fn editField(state: *State, command: name_prompt.Command) name_prompt.Transition {
-    const prompt = state.mutable() orelse return .unchanged;
+fn editField(self: *State, command: name_prompt.Command) name_prompt.Transition {
+    const prompt = self.mutable() orelse return .unchanged;
     if (directoryFocused(prompt)) {
-        return state.editDirectory(command);
+        return self.editDirectory(command);
     }
 
     const before: FieldPosition = .capture(&prompt.field);
@@ -423,12 +423,12 @@ fn editField(state: *State, command: name_prompt.Command) name_prompt.Transition
     if (name_prompt.selects(prompt.target()) and before.len != prompt.field.len) {
         prompt.setSelection(0);
     }
-    state.revision +%= 1;
+    self.revision +%= 1;
     return .changed;
 }
 
-fn editDirectory(state: *State, command: name_prompt.Command) name_prompt.Transition {
-    const prompt = state.mutable() orelse return .unchanged;
+fn editDirectory(self: *State, command: name_prompt.Command) name_prompt.Transition {
+    const prompt = self.mutable() orelse return .unchanged;
     const before: FieldPosition = .capture(&prompt.directory);
     applyEdit(&prompt.directory, prompt.pasting, command);
     if (!before.changed(&prompt.directory)) {
@@ -438,7 +438,7 @@ fn editDirectory(state: *State, command: name_prompt.Command) name_prompt.Transi
     if (before.len != prompt.directory.len) {
         prompt.mode.create_workspace = .{ .focus = .directory };
     }
-    state.revision +%= 1;
+    self.revision +%= 1;
     return .changed;
 }
 

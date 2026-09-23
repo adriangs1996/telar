@@ -9,14 +9,14 @@ responses: [streams.max_tracked_streams]Response = @splat(.{
 }),
 requests: [streams.max_tracked_streams]u32 = @splat(0),
 
-pub fn startRequest(tracker: *Tracker, stream_id: u32) bool {
+pub fn startRequest(self: *Tracker, stream_id: u32) bool {
     if (stream_id == 0) {
         return false;
     }
 
     var free: ?*u32 = null;
 
-    for (&tracker.requests) |*slot| {
+    for (&self.requests) |*slot| {
         if (slot.* == stream_id) {
             return false;
         }
@@ -31,8 +31,8 @@ pub fn startRequest(tracker: *Tracker, stream_id: u32) bool {
     return true;
 }
 
-pub fn finishRequest(tracker: *Tracker, stream_id: u32) void {
-    for (&tracker.requests) |*slot| {
+pub fn finishRequest(self: *Tracker, stream_id: u32) void {
+    for (&self.requests) |*slot| {
         if (slot.* != stream_id) {
             continue;
         }
@@ -42,14 +42,14 @@ pub fn finishRequest(tracker: *Tracker, stream_id: u32) void {
     }
 }
 
-pub fn setResponse(tracker: *Tracker, response: Response) bool {
+pub fn setResponse(self: *Tracker, response: Response) bool {
     if (response.stream_id == 0) {
         return false;
     }
 
     var free: ?*Response = null;
 
-    for (&tracker.responses) |*entry| {
+    for (&self.responses) |*entry| {
         if (entry.stream_id == response.stream_id) {
             entry.* = response;
             return true;
@@ -65,8 +65,8 @@ pub fn setResponse(tracker: *Tracker, response: Response) bool {
     return true;
 }
 
-pub fn status(tracker: *const Tracker, stream_id: u32) u16 {
-    for (tracker.responses) |entry| {
+pub fn status(self: *const Tracker, stream_id: u32) u16 {
+    for (self.responses) |entry| {
         if (entry.stream_id == stream_id) {
             return entry.status_code;
         }
@@ -75,8 +75,8 @@ pub fn status(tracker: *const Tracker, stream_id: u32) u16 {
     return 0;
 }
 
-pub fn hasObservableSseBody(tracker: *const Tracker, stream_id: u32) bool {
-    for (tracker.responses) |entry| {
+pub fn hasObservableSseBody(self: *const Tracker, stream_id: u32) bool {
+    for (self.responses) |entry| {
         if (entry.stream_id == stream_id) {
             return entry.sse_body;
         }
@@ -85,8 +85,8 @@ pub fn hasObservableSseBody(tracker: *const Tracker, stream_id: u32) bool {
     return false;
 }
 
-pub fn hasActiveResponses(tracker: *const Tracker) bool {
-    for (tracker.responses) |entry| {
+pub fn hasActiveResponses(self: *const Tracker) bool {
+    for (self.responses) |entry| {
         if (entry.stream_id != 0) {
             return true;
         }
@@ -95,8 +95,8 @@ pub fn hasActiveResponses(tracker: *const Tracker) bool {
     return false;
 }
 
-pub fn finishResponse(tracker: *Tracker, stream_id: u32) void {
-    for (&tracker.responses) |*entry| {
+pub fn finishResponse(self: *Tracker, stream_id: u32) void {
+    for (&self.responses) |*entry| {
         if (entry.stream_id != stream_id) {
             continue;
         }

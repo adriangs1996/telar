@@ -59,9 +59,9 @@ pub fn createSystem(resources: Resources, files: AuthorityFiles) ca.Error!Author
 /// ```zig
 /// const fingerprint = authority.fingerprint();
 /// ```
-pub fn fingerprint(authority: *const Authority) [40]u8 {
+pub fn fingerprint(self: *const Authority) [40]u8 {
     var digest: [std.crypto.hash.Sha1.digest_length]u8 = undefined;
-    std.crypto.hash.Sha1.hash(authority.pair.certDer(), &digest, .{});
+    std.crypto.hash.Sha1.hash(self.pair.certDer(), &digest, .{});
     return std.fmt.bytesToHex(digest, .upper);
 }
 
@@ -70,8 +70,8 @@ pub fn fingerprint(authority: *const Authority) [40]u8 {
 /// ```zig
 /// if (authority.expiresWithin(io, 86400)) rotate();
 /// ```
-pub fn expiresWithin(authority: *const Authority, io: std.Io, seconds: u64) ca.Error!bool {
-    const parsed = (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse() catch
+pub fn expiresWithin(self: *const Authority, io: std.Io, seconds: u64) ca.Error!bool {
+    const parsed = (std.crypto.Certificate{ .buffer = self.pair.certDer(), .index = 0 }).parse() catch
         return error.ReadFailed;
     const now: u64 = @intCast(@max(std.Io.Clock.real.now(io).toSeconds(), 0));
     return parsed.validity.not_after <= now +| seconds;
@@ -83,8 +83,8 @@ pub fn expiresWithin(authority: *const Authority, io: std.Io, seconds: u64) ca.E
 /// ```zig
 /// if (!try authority.hasSystemLifetime()) rejectAuthority();
 /// ```
-pub fn hasSystemLifetime(authority: *const Authority) ca.Error!bool {
-    const parsed = (std.crypto.Certificate{ .buffer = authority.pair.certDer(), .index = 0 }).parse() catch
+pub fn hasSystemLifetime(self: *const Authority) ca.Error!bool {
+    const parsed = (std.crypto.Certificate{ .buffer = self.pair.certDer(), .index = 0 }).parse() catch
         return error.ReadFailed;
     const lifetime = parsed.validity.not_after -| parsed.validity.not_before;
     return lifetime <= ca.system_ca_seconds + ca.backdate_seconds;
@@ -123,20 +123,20 @@ fn loadOrCreateWithValidity(resources: Resources, files: AuthorityFiles, validit
 /// ```zig
 /// try authority.writeBundle(resources, output_path);
 /// ```
-pub fn writeBundle(authority: *const Authority, resources: Resources, output_path: []const u8) ca.Error!void {
+pub fn writeBundle(self: *const Authority, resources: Resources, output_path: []const u8) ca.Error!void {
     const io = resources.io;
     const gpa = resources.allocator;
 
     const roots = ca.readSystemRoots(io, gpa) catch return error.ReadFailed;
     defer gpa.free(roots);
     var pem_buffer: [ca.max_pem_len]u8 = undefined;
-    const ours = try authority.pair.certPem(&pem_buffer);
+    const ours = try self.pair.certPem(&pem_buffer);
     const bundle = std.mem.concat(gpa, u8, &.{ roots, ours }) catch return error.WriteFailed;
     defer gpa.free(bundle);
     try ca.writeSecure(io, .{ .path = output_path, .bytes = bundle, .exclusive = false });
 }
 
-pub fn mint(authority: *const Authority, io: std.Io, host: []const u8) ca.Error!Pair {
+pub fn mint(self: *const Authority, io: std.Io, host: []const u8) ca.Error!Pair {
     const now = std.Io.Clock.real.now(io).toSeconds();
     var leaf: Pair = .{ .key_pair = tls.x509.KeyPair.generate(io) };
     defer std.crypto.secureZero(u8, std.mem.asBytes(&leaf));
@@ -150,7 +150,7 @@ pub fn mint(authority: *const Authority, io: std.Io, host: []const u8) ca.Error!
             .not_after = now + ca.leaf_seconds,
         },
         leaf.key_pair.public_key,
-        .{ .common_name = ca.ca_common_name, .key_pair = &authority.pair.key_pair },
+        .{ .common_name = ca.ca_common_name, .key_pair = &self.pair.key_pair },
     ) catch return error.CertFailed;
     leaf.cert_len = cert.len;
     return leaf;

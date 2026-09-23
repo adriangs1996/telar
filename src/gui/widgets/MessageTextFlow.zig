@@ -30,13 +30,13 @@ pub const chunk_bytes = 256;
 
 /// Appends inline styles and links with the same source identity as plain text.
 /// Example: `try flow.appendStyled(cell, .{ .text = "", .bold = header });`
-pub fn appendStyled(flow: *Flow, text: []const u8, base: Label) !void {
-    var spans: @import("MessageSpans.zig") = .{ .text = text, .table_cell = flow.table_cell };
+pub fn appendStyled(self: *Flow, text: []const u8, base: Label) !void {
+    var spans: @import("MessageSpans.zig") = .{ .text = text, .table_cell = self.table_cell };
     while (spans.next()) |span| {
-        flow.link = null;
+        self.link = null;
         if (span.destination) |destination| {
-            if (flow.owner) |owner| {
-                flow.link = .{ .owner = owner, .destination_offset = owner.source_offset + @as(u32, @intCast(@intFromPtr(destination.ptr) - flow.source_start)), .destination_len = @intCast(destination.len), .fragment_offset = 0 };
+            if (self.owner) |owner| {
+                self.link = .{ .owner = owner, .destination_offset = owner.source_offset + @as(u32, @intCast(@intFromPtr(destination.ptr) - self.source_start)), .destination_len = @intCast(destination.len), .fragment_offset = 0 };
             }
         }
 
@@ -46,60 +46,60 @@ pub fn appendStyled(flow: *Flow, text: []const u8, base: Label) !void {
         label.bold = base.bold or span.kind == .strong;
         label.italic = span.kind == .emphasis;
         label.underline = span.destination != null;
-        label.color = if (span.destination != null) flow.canvas.theme.palette.accent else base.color;
-        try flow.append(label);
+        label.color = if (span.destination != null) self.canvas.theme.palette.accent else base.color;
+        try self.append(label);
     }
 }
 
 /// Appends complete shaped words, wrapping oversized words on graphemes.
 /// Example: `try flow.append(.{ .text = span, .face = .sans });`
-pub fn append(flow: *Flow, label: Label) !void {
+pub fn append(self: *Flow, label: Label) !void {
     if (label.face == .sans) {
-        try flow.canvas.atlas.prepareEditor();
+        try self.canvas.atlas.prepareEditor();
     }
 
     const Cache = @import("MessageLayoutCache.zig");
-    const state = flow.canvas.widgets;
-    if (label.text.len < Cache.minimum_bytes or state == null or flow.owner == null or flow.alignment != null) {
-        try flow.appendUncached(label);
+    const state = self.canvas.widgets;
+    if (label.text.len < Cache.minimum_bytes or state == null or self.owner == null or self.alignment != null) {
+        try self.appendUncached(label);
         return;
     }
 
-    const cache = try state.?.messageLayout(flow.canvas.atlas.allocator);
-    const key = flow.cacheKey(label);
-    const start_y = flow.y;
-    if (!flow.paint) {
+    const cache = try state.?.messageLayout(self.canvas.atlas.allocator);
+    const key = self.cacheKey(label);
+    const start_y = self.y;
+    if (!self.paint) {
         if (cache.measurement(key)) |result| {
-            flow.y += result.height;
-            flow.x = result.x;
-            flow.max_x = @max(flow.max_x, result.max_x);
-            flow.laid_out_bytes += label.text.len;
+            self.y += result.height;
+            self.x = result.x;
+            self.max_x = @max(self.max_x, result.max_x);
+            self.laid_out_bytes += label.text.len;
             return;
         }
     } else {
         var paint_key = key;
-        paint_key.viewport_top = flow.viewport.y - flow.bounds.y - flow.y;
-        paint_key.viewport_bottom = paint_key.viewport_top + flow.viewport.height;
+        paint_key.viewport_top = self.viewport.y - self.bounds.y - self.y;
+        paint_key.viewport_bottom = paint_key.viewport_top + self.viewport.height;
         if (cache.plan(paint_key)) |plan| {
-            try flow.replay(label, plan);
+            try self.replay(label, plan);
             return;
         }
 
-        flow.recording = cache.begin(paint_key);
-        flow.recording_start = @intFromPtr(label.text.ptr);
-        flow.recording_y = flow.y;
+        self.recording = cache.begin(paint_key);
+        self.recording_start = @intFromPtr(label.text.ptr);
+        self.recording_y = self.y;
     }
-    defer flow.recording = null;
+    defer self.recording = null;
 
-    try flow.appendUncached(label);
-    const result: @import("MessageLayoutResult.zig") = .{ .height = flow.y - start_y, .x = flow.x, .max_x = flow.max_x };
+    try self.appendUncached(label);
+    const result: @import("MessageLayoutResult.zig") = .{ .height = self.y - start_y, .x = self.x, .max_x = self.max_x };
     cache.remember(key, result);
-    if (flow.recording) |plan| {
+    if (self.recording) |plan| {
         plan.complete(result);
     }
 }
 
-fn appendUncached(flow: *Flow, label: Label) !void {
+fn appendUncached(self: *Flow, label: Label) !void {
     var index: usize = 0;
     while (index < label.text.len) {
         const start = index;
@@ -116,28 +116,28 @@ fn appendUncached(flow: *Flow, label: Label) !void {
             const length = chunkLength(label.text[chunk_start..index]);
             var token = label;
             token.text = label.text[chunk_start..][0..length];
-            try flow.appendChunk(token);
+            try self.appendChunk(token);
             chunk_start += length;
         }
     }
 }
 
-fn appendChunk(flow: *Flow, value: Label) !void {
-    const width = try flow.measure(value);
-    if (flow.x > 0 and width > flow.bounds.width - flow.x) {
-        flow.newline();
+fn appendChunk(self: *Flow, value: Label) !void {
+    const width = try self.measure(value);
+    if (self.x > 0 and width > self.bounds.width - self.x) {
+        self.newline();
     }
 
-    if (width <= flow.bounds.width - flow.x or value.text.len > chunk_bytes) {
-        try flow.paintFragment(.{ .label = value, .advance = width });
+    if (width <= self.bounds.width - self.x or value.text.len > chunk_bytes) {
+        try self.paintFragment(.{ .label = value, .advance = width });
         return;
     }
 
     var advances: [chunk_bytes + 1]u32 = undefined;
-    try flow.positions(value, advances[0 .. value.text.len + 1]);
+    try self.positions(value, advances[0 .. value.text.len + 1]);
     var offset: usize = 0;
     while (offset < value.text.len) {
-        const room = @max(1, flow.bounds.width - flow.x);
+        const room = @max(1, self.bounds.width - self.x);
         var iterator: core.GraphemeIterator = .{ .bytes = value.text, .index = offset };
         var end = offset;
         while (iterator.next() != null) {
@@ -156,94 +156,94 @@ fn appendChunk(flow: *Flow, value: Label) !void {
 
         var fragment = value;
         fragment.text = value.text[offset..end];
-        var advance = try flow.measure(fragment);
+        var advance = try self.measure(fragment);
         if (advance > room) {
-            const length = try flow.fittingPrefix(fragment, room);
+            const length = try self.fittingPrefix(fragment, room);
             fragment.text = fragment.text[0..length];
-            advance = try flow.measure(fragment);
+            advance = try self.measure(fragment);
         }
 
-        try flow.paintFragment(.{ .label = fragment, .advance = advance });
+        try self.paintFragment(.{ .label = fragment, .advance = advance });
         offset += fragment.text.len;
         if (offset < value.text.len) {
-            flow.newline();
+            self.newline();
         }
     }
 }
 
-fn paintFragment(flow: *Flow, fragment: @import("MessageFragment.zig")) !void {
-    flow.laid_out_bytes += fragment.label.text.len;
-    if (flow.paint and flow.visible()) {
-        if (flow.recording) |plan| {
-            plan.append(.{ .offset = @intCast(@intFromPtr(fragment.label.text.ptr) - flow.recording_start), .len = @intCast(fragment.label.text.len), .x = flow.x, .y = flow.y - flow.recording_y, .advance = fragment.advance });
+fn paintFragment(self: *Flow, fragment: @import("MessageFragment.zig")) !void {
+    self.laid_out_bytes += fragment.label.text.len;
+    if (self.paint and self.visible()) {
+        if (self.recording) |plan| {
+            plan.append(.{ .offset = @intCast(@intFromPtr(fragment.label.text.ptr) - self.recording_start), .len = @intCast(fragment.label.text.len), .x = self.x, .y = self.y - self.recording_y, .advance = fragment.advance });
         }
 
-        const room = @max(1, flow.bounds.width - flow.x);
-        const shift = if (flow.alignment) |alignment| alignment.offset(@intFromFloat(@round(flow.y / flow.row)), flow.bounds.width) else 0;
-        const area: Rect = .{ .x = flow.bounds.x + flow.x + shift, .y = flow.bounds.y + flow.y, .width = @min(room, fragment.advance + 1), .height = flow.row };
+        const room = @max(1, self.bounds.width - self.x);
+        const shift = if (self.alignment) |alignment| alignment.offset(@intFromFloat(@round(self.y / self.row)), self.bounds.width) else 0;
+        const area: Rect = .{ .x = self.bounds.x + self.x + shift, .y = self.bounds.y + self.y, .width = @min(room, fragment.advance + 1), .height = self.row };
         if (fragment.label.face == .mono) {
-            const first = flow.canvas.quads.items().len;
-            try flow.canvas.fillRoundedAt(.{ .x = area.x, .y = area.y + flow.row * 0.12, .width = area.width, .height = flow.row * 0.76 }, .{ .color = flow.canvas.theme.palette.surface1, .radius = flow.canvas.chrome.px(3) });
-            flow.canvas.quads.fadeFrom(first, 0.55);
+            const first = self.canvas.quads.items().len;
+            try self.canvas.fillRoundedAt(.{ .x = area.x, .y = area.y + self.row * 0.12, .width = area.width, .height = self.row * 0.76 }, .{ .color = self.canvas.theme.palette.surface1, .radius = self.canvas.chrome.px(3) });
+            self.canvas.quads.fadeFrom(first, 0.55);
         }
 
-        if (flow.owner) |owner| {
-            if (flow.canvas.widgets) |state| {
+        if (self.owner) |owner| {
+            if (self.canvas.widgets) |state| {
                 if (state.thread_text) |store| {
                     const geometry = store.maps.preparing();
-                    const offset = owner.source_offset + @as(u32, @intCast(@intFromPtr(fragment.label.text.ptr) - flow.source_start));
-                    if (try geometry.append(flow.canvas, .{ .owner = owner, .offset = offset, .text = fragment.label.text, .bounds = area, .viewport = flow.viewport, .advance = fragment.advance, .face = fragment.label.face, .bold = fragment.label.bold, .pixel_height = flow.canvas.chrome.text(fragment.label.size) orelse flow.canvas.metrics.pixel_height })) |hit| {
-                        try (@import("ThreadTextPaint.zig"){ .geometry = geometry, .fragment = hit }).draw(flow.canvas);
+                    const offset = owner.source_offset + @as(u32, @intCast(@intFromPtr(fragment.label.text.ptr) - self.source_start));
+                    if (try geometry.append(self.canvas, .{ .owner = owner, .offset = offset, .text = fragment.label.text, .bounds = area, .viewport = self.viewport, .advance = fragment.advance, .face = fragment.label.face, .bold = fragment.label.bold, .pixel_height = self.canvas.chrome.text(fragment.label.size) orelse self.canvas.metrics.pixel_height })) |hit| {
+                        try (@import("ThreadTextPaint.zig"){ .geometry = geometry, .fragment = hit }).draw(self.canvas);
                     }
                 }
             }
         }
 
-        if (flow.link) |link| {
+        if (self.link) |link| {
             var control = link;
-            control.fragment_offset = control.owner.source_offset + @as(u32, @intCast(@intFromPtr(fragment.label.text.ptr) - flow.source_start));
-            try (@import("MessageLinkButton.zig"){ .bounds = area, .viewport = flow.viewport, .control = control, .label = fragment.label, .advance = fragment.advance }).draw(flow.canvas);
+            control.fragment_offset = control.owner.source_offset + @as(u32, @intCast(@intFromPtr(fragment.label.text.ptr) - self.source_start));
+            try (@import("MessageLinkButton.zig"){ .bounds = area, .viewport = self.viewport, .control = control, .label = fragment.label, .advance = fragment.advance }).draw(self.canvas);
         } else {
-            _ = try flow.canvas.textAt(area, fragment.label);
+            _ = try self.canvas.textAt(area, fragment.label);
         }
     }
 
-    flow.x += fragment.advance;
-    flow.max_x = @max(flow.max_x, flow.x);
-    if (!flow.paint) {
-        if (flow.alignment) |alignment| {
-            alignment.observe(@intFromFloat(@round(flow.y / flow.row)), flow.x);
+    self.x += fragment.advance;
+    self.max_x = @max(self.max_x, self.x);
+    if (!self.paint) {
+        if (self.alignment) |alignment| {
+            alignment.observe(@intFromFloat(@round(self.y / self.row)), self.x);
         }
     }
 }
 
-fn replay(flow: *Flow, label: Label, plan: *const @import("MessageLayoutPlan.zig")) !void {
-    const base_y = flow.y;
-    const before = flow.laid_out_bytes;
+fn replay(self: *Flow, label: Label, plan: *const @import("MessageLayoutPlan.zig")) !void {
+    const base_y = self.y;
+    const before = self.laid_out_bytes;
     for (plan.fragments[0..plan.len]) |fragment| {
-        flow.x = fragment.x;
-        flow.y = base_y + fragment.y;
+        self.x = fragment.x;
+        self.y = base_y + fragment.y;
         var current = label;
         current.text = label.text[fragment.offset..][0..fragment.len];
-        try flow.paintFragment(.{ .label = current, .advance = fragment.advance });
+        try self.paintFragment(.{ .label = current, .advance = fragment.advance });
     }
 
-    flow.y = base_y + plan.result.height;
-    flow.x = plan.result.x;
-    flow.max_x = @max(flow.max_x, plan.result.max_x);
-    flow.laid_out_bytes = before + label.text.len;
+    self.y = base_y + plan.result.height;
+    self.x = plan.result.x;
+    self.max_x = @max(self.max_x, plan.result.max_x);
+    self.laid_out_bytes = before + label.text.len;
 }
 
-fn cacheKey(flow: *const Flow, label: Label) @import("MessageLayoutKey.zig") {
-    var owner = flow.owner.?;
-    owner.source_offset += @intCast(@intFromPtr(label.text.ptr) - flow.source_start);
-    return .{ .text_hash = std.hash.Wyhash.hash(0, label.text), .text_len = label.text.len, .owner = owner, .font_identity = flow.canvas.atlas.fonts.identity, .font_revision = flow.canvas.atlas.fonts.revision, .width = flow.bounds.width, .start_x = flow.x, .row = flow.row, .scale = flow.canvas.chrome.ratio, .pixel_height = flow.canvas.chrome.text(label.size) orelse flow.canvas.metrics.pixel_height, .cell_width = flow.canvas.metrics.cell_width, .cell_height = flow.canvas.metrics.cell_height, .face = label.face, .bold = label.bold, .italic = label.italic };
+fn cacheKey(self: *const Flow, label: Label) @import("MessageLayoutKey.zig") {
+    var owner = self.owner.?;
+    owner.source_offset += @intCast(@intFromPtr(label.text.ptr) - self.source_start);
+    return .{ .text_hash = std.hash.Wyhash.hash(0, label.text), .text_len = label.text.len, .owner = owner, .font_identity = self.canvas.atlas.fonts.identity, .font_revision = self.canvas.atlas.fonts.revision, .width = self.bounds.width, .start_x = self.x, .row = self.row, .scale = self.canvas.chrome.ratio, .pixel_height = self.canvas.chrome.text(label.size) orelse self.canvas.metrics.pixel_height, .cell_width = self.canvas.metrics.cell_width, .cell_height = self.canvas.metrics.cell_height, .face = label.face, .bold = label.bold, .italic = label.italic };
 }
 
-fn positions(flow: *Flow, label: Label, output: []u32) !void {
-    flow.measured_bytes += label.text.len;
+fn positions(self: *Flow, label: Label, output: []u32) !void {
+    self.measured_bytes += label.text.len;
     if (label.face == .sans) {
-        return flow.canvas.atlas.caretPositions(.{ .text = label.text, .x = 0, .y = 0, .color = .white, .pixel_height = flow.canvas.chrome.text(label.size) orelse flow.canvas.metrics.pixel_height, .face = if (label.bold) .sans_semibold else .sans }, output);
+        return self.canvas.atlas.caretPositions(.{ .text = label.text, .x = 0, .y = 0, .color = .white, .pixel_height = self.canvas.chrome.text(label.size) orelse self.canvas.metrics.pixel_height, .face = if (label.bold) .sans_semibold else .sans }, output);
     }
 
     var iterator: core.GraphemeIterator = .{ .bytes = label.text };
@@ -251,28 +251,28 @@ fn positions(flow: *Flow, label: Label, output: []u32) !void {
     output[0] = 0;
     while (iterator.next()) |cluster| {
         @memset(output[iterator.index - cluster.bytes.len .. iterator.index], advance);
-        advance += @as(u32, cluster.width) * flow.canvas.metrics.cell_width;
+        advance += @as(u32, cluster.width) * self.canvas.metrics.cell_width;
         output[iterator.index] = advance;
     }
 }
 
 /// Finishes the current line, including empty literal lines.
 /// Example: `const height = flow.height();`
-pub fn height(flow: Flow) f32 {
-    return flow.y + flow.row;
+pub fn height(self: Flow) f32 {
+    return self.y + self.row;
 }
 
-fn newline(flow: *Flow) void {
-    flow.x = 0;
-    flow.y += flow.row;
+fn newline(self: *Flow) void {
+    self.x = 0;
+    self.y += self.row;
 }
 
-fn visible(flow: Flow) bool {
-    const y = flow.bounds.y + flow.y;
-    return y + flow.row > flow.viewport.y and y < flow.viewport.y + flow.viewport.height;
+fn visible(self: Flow) bool {
+    const y = self.bounds.y + self.y;
+    return y + self.row > self.viewport.y and y < self.viewport.y + self.viewport.height;
 }
 
-fn fittingPrefix(flow: *Flow, label: Label, room: f32) !usize {
+fn fittingPrefix(self: *Flow, label: Label, room: f32) !usize {
     var iterator: core.GraphemeIterator = .{ .bytes = label.text };
     const first = iterator.next().?;
     var low = first.bytes.len;
@@ -293,7 +293,7 @@ fn fittingPrefix(flow: *Flow, label: Label, room: f32) !usize {
         boundary = @max(first.bytes.len, boundary);
         var probe = label;
         probe.text = label.text[0..boundary];
-        if (try flow.measure(probe) <= room) {
+        if (try self.measure(probe) <= room) {
             fitting = boundary;
             low = @max(middle + 1, boundary + 1);
         } else {
@@ -308,10 +308,10 @@ fn fittingPrefix(flow: *Flow, label: Label, room: f32) !usize {
     return fitting;
 }
 
-fn measure(flow: *Flow, label: Label) !f32 {
-    flow.measured_bytes += label.text.len;
-    flow.max_measured_span = @max(flow.max_measured_span, label.text.len);
-    return flow.canvas.measure(label);
+fn measure(self: *Flow, label: Label) !f32 {
+    self.measured_bytes += label.text.len;
+    self.max_measured_span = @max(self.max_measured_span, label.text.len);
+    return self.canvas.measure(label);
 }
 
 fn chunkLength(text: []const u8) usize {

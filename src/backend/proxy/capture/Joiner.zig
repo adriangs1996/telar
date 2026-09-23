@@ -23,8 +23,8 @@ pub fn init(timeout_ms: u32) Joiner {
 /// ```zig
 /// defer joiner.deinit();
 /// ```
-pub fn deinit(joiner: *Joiner) void {
-    for (&joiner.slots) |*slot| {
+pub fn deinit(self: *Joiner) void {
+    for (&self.slots) |*slot| {
         if (slot.*) |entry| {
             var exchange = entry.exchange();
             exchange.deinit();
@@ -38,13 +38,13 @@ pub fn deinit(joiner: *Joiner) void {
 /// ```zig
 /// const result = joiner.push(now_ms, half);
 /// ```
-pub fn push(joiner: *Joiner, now_ms: i64, half: *Half) table.PushResult {
-    const index = joiner.find(half.key) orelse joiner.empty() orelse {
+pub fn push(self: *Joiner, now_ms: i64, half: *Half) table.PushResult {
+    const index = self.find(half.key) orelse self.empty() orelse {
         return .{ .partial = table.sideExchange(half) };
     };
-    var entry = joiner.slots[index] orelse Entry{
+    var entry = self.slots[index] orelse Entry{
         .key = half.key,
-        .expires_at_ms = now_ms + joiner.timeout_ms,
+        .expires_at_ms = now_ms + self.timeout_ms,
     };
 
     const duplicate = switch (half.side) {
@@ -61,11 +61,11 @@ pub fn push(joiner: *Joiner, now_ms: i64, half: *Half) table.PushResult {
     }
 
     if (entry.request != null and entry.response != null) {
-        joiner.slots[index] = null;
+        self.slots[index] = null;
         return .{ .complete = entry.exchange() };
     }
 
-    joiner.slots[index] = entry;
+    self.slots[index] = entry;
     return .pending;
 }
 
@@ -74,8 +74,8 @@ pub fn push(joiner: *Joiner, now_ms: i64, half: *Half) table.PushResult {
 /// ```zig
 /// if (joiner.expire(now_ms)) |exchange| { _ = exchange; }
 /// ```
-pub fn expire(joiner: *Joiner, now_ms: i64) ?Exchange {
-    for (&joiner.slots) |*slot| {
+pub fn expire(self: *Joiner, now_ms: i64) ?Exchange {
+    for (&self.slots) |*slot| {
         const entry = slot.* orelse continue;
         if (entry.expires_at_ms > now_ms) {
             continue;
@@ -88,8 +88,8 @@ pub fn expire(joiner: *Joiner, now_ms: i64) ?Exchange {
     return null;
 }
 
-fn find(joiner: *const Joiner, key: Key) ?usize {
-    for (joiner.slots, 0..) |slot, index| {
+fn find(self: *const Joiner, key: Key) ?usize {
+    for (self.slots, 0..) |slot, index| {
         const entry = slot orelse continue;
         if (std.meta.eql(entry.key, key)) {
             return index;
@@ -99,8 +99,8 @@ fn find(joiner: *const Joiner, key: Key) ?usize {
     return null;
 }
 
-fn empty(joiner: *const Joiner) ?usize {
-    for (joiner.slots, 0..) |slot, index| {
+fn empty(self: *const Joiner) ?usize {
+    for (self.slots, 0..) |slot, index| {
         if (slot == null) {
             return index;
         }

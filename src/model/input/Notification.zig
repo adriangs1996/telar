@@ -46,10 +46,10 @@ pub fn init(input: Input) !Notification {
     return value;
 }
 
-pub fn title(value: *const Notification) []const u8 {
-    return value.title_bytes[0..value.title_len];
+pub fn title(self: *const Notification) []const u8 {
+    return self.title_bytes[0..self.title_len];
 }
 
-pub fn message(value: *const Notification) []const u8 {
-    return value.message_bytes[0..value.message_len];
+pub fn message(self: *const Notification) []const u8 {
+    return self.message_bytes[0..self.message_len];
 }

@@ -15,21 +15,21 @@ count: u8 = 0,
 
 /// Records the next visible row. Rows beyond the capacity are not painted,
 /// so they are never recorded. Example: `hits.add(row);`.
-pub fn add(hits: *PaletteHits, area: core.Rect) void {
-    if (hits.count == capacity or area.isEmpty()) {
+pub fn add(self: *PaletteHits, area: core.Rect) void {
+    if (self.count == capacity or area.isEmpty()) {
         return;
     }
 
-    hits.rows[hits.count] = area;
-    hits.count += 1;
+    self.rows[self.count] = area;
+    self.count += 1;
 }
 
 /// The result index under the pointer, if a row is there.
 /// Example: `if (hits.at(mouse)) |index| choose(index);`.
-pub fn at(hits: *const PaletteHits, mouse: data.Mouse) ?u16 {
-    for (hits.rows[0..hits.count], 0..) |row, offset| {
+pub fn at(self: *const PaletteHits, mouse: data.Mouse) ?u16 {
+    for (self.rows[0..self.count], 0..) |row, offset| {
         if (row.contains(mouse.x, mouse.y)) {
-            return hits.first + @as(u16, @intCast(offset));
+            return self.first + @as(u16, @intCast(offset));
         }
     }
 

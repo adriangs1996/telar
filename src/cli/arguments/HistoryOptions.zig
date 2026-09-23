@@ -221,11 +221,11 @@ fn daysFromCivil(year: i64, month: i64, day: i64) i64 {
     return era * 146_097 + doe - 719_468;
 }
 
-fn setScope(options: *HistoryOptions, scope: core.HistoryScope, value: ?[*:0]const u8) !void {
-    if (options.scope != .global) {
+fn setScope(self: *HistoryOptions, scope: core.HistoryScope, value: ?[*:0]const u8) !void {
+    if (self.scope != .global) {
         return error.ConflictingHistoryScopes;
     }
 
-    options.scope = scope;
-    options.scope_value = value;
+    self.scope = scope;
+    self.scope_value = value;
 }

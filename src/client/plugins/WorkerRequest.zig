@@ -11,6 +11,6 @@ action_bytes: [core.max_action_bytes]u8 = undefined,
 action_len: u8,
 context: data.CallbackContext,
 
-pub fn action(request: *const WorkerRequest) []const u8 {
-    return request.action_bytes[0..request.action_len];
+pub fn action(self: *const WorkerRequest) []const u8 {
+    return self.action_bytes[0..self.action_len];
 }

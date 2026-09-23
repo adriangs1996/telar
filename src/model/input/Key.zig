@@ -43,12 +43,12 @@ pub fn plain(code: Code) Key {
 }
 
 /// Matches a case-insensitive Ctrl chord. Example: if (key.isCtrl('c')) cancel();
-pub fn isCtrl(key: Key, letter: u8) bool {
-    if (!key.mods.ctrl) {
+pub fn isCtrl(self: Key, letter: u8) bool {
+    if (!self.mods.ctrl) {
         return false;
     }
 
-    return switch (key.code) {
+    return switch (self.code) {
         .char => |char| char.len == 1 and std.ascii.toLower(char.bytes[0]) == letter,
         else => false,
     };

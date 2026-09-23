@@ -9,11 +9,11 @@ green: [3]u8,
 yellow: [3]u8,
 red: [3]u8,
 
-pub fn level(colors: Colors, value: data.NotificationLevel) [3]u8 {
+pub fn level(self: Colors, value: data.NotificationLevel) [3]u8 {
     return switch (value) {
-        .info => colors.blue,
-        .success => colors.green,
-        .warning => colors.yellow,
-        .failure => colors.red,
+        .info => self.blue,
+        .success => self.green,
+        .warning => self.yellow,
+        .failure => self.red,
     };
 }

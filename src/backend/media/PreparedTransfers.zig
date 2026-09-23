@@ -21,8 +21,8 @@ frozen: [core.max_images_per_pane]?FrozenGeneration = @splat(null),
 /// ```zig
 /// if (prepared.covers(key)) continue;
 /// ```
-pub fn covers(prepared: *const PreparedTransfers, key: core.ImageKey) bool {
-    for (prepared.frozen) |slot| {
+pub fn covers(self: *const PreparedTransfers, key: core.ImageKey) bool {
+    for (self.frozen) |slot| {
         const frozen = slot orelse continue;
         if (frozen.image_id == key.image_id) {
             return frozen.generation >= key.generation;
@@ -38,10 +38,10 @@ pub fn covers(prepared: *const PreparedTransfers, key: core.ImageKey) bool {
 /// ```zig
 /// if (!prepared.put(transfer, media)) transfer.discard(media);
 /// ```
-pub fn put(prepared: *PreparedTransfers, transfer: PreparedTransfer, media: *PaneMediaAllocator) bool {
+pub fn put(self: *PreparedTransfers, transfer: PreparedTransfer, media: *PaneMediaAllocator) bool {
     const image_id = transfer.metadata.key.image_id;
     var free_slot: ?usize = null;
-    for (&prepared.items, 0..) |*slot, index| {
+    for (&self.items, 0..) |*slot, index| {
         if (slot.*) |existing| {
             if (existing.metadata.key.image_id != image_id) {
                 continue;
@@ -55,8 +55,8 @@ pub fn put(prepared: *PreparedTransfers, transfer: PreparedTransfer, media: *Pan
         }
     }
     const index = free_slot orelse return false;
-    prepared.items[index] = transfer;
-    prepared.rememberFrozen(transfer.metadata.key);
+    self.items[index] = transfer;
+    self.rememberFrozen(transfer.metadata.key);
     return true;
 }
 
@@ -66,8 +66,8 @@ pub fn put(prepared: *PreparedTransfers, transfer: PreparedTransfer, media: *Pan
 /// ```zig
 /// if (pane.media_ingestion.prepared_transfers.take(key)) |frozen| adopt(frozen);
 /// ```
-pub fn take(prepared: *PreparedTransfers, key: core.ImageKey) ?PreparedTransfer {
-    for (&prepared.items) |*slot| {
+pub fn take(self: *PreparedTransfers, key: core.ImageKey) ?PreparedTransfer {
+    for (&self.items) |*slot| {
         const existing = slot.* orelse continue;
         if (!std.meta.eql(existing.metadata.key, key)) {
             continue;
@@ -79,8 +79,8 @@ pub fn take(prepared: *PreparedTransfers, key: core.ImageKey) ?PreparedTransfer 
 }
 
 /// Whether a frozen generation for `key` is parked here.
-pub fn holds(prepared: *const PreparedTransfers, key: core.ImageKey) bool {
-    for (prepared.items) |slot| {
+pub fn holds(self: *const PreparedTransfers, key: core.ImageKey) bool {
+    for (self.items) |slot| {
         const existing = slot orelse continue;
         if (std.meta.eql(existing.metadata.key, key)) {
             return true;
@@ -94,13 +94,13 @@ pub fn holds(prepared: *const PreparedTransfers, key: core.ImageKey) bool {
 /// ```zig
 /// pane.media_ingestion.prepared_transfers.discardAll(&pane.media_allocator);
 /// ```
-pub fn discardAll(prepared: *PreparedTransfers, media: *PaneMediaAllocator) void {
-    for (&prepared.items) |*slot| {
+pub fn discardAll(self: *PreparedTransfers, media: *PaneMediaAllocator) void {
+    for (&self.items) |*slot| {
         const existing = slot.* orelse continue;
         existing.discard(media);
         slot.* = null;
     }
-    prepared.frozen = @splat(null);
+    self.frozen = @splat(null);
 }
 
 /// Releases the parked frame for `key`, if any.
@@ -108,8 +108,8 @@ pub fn discardAll(prepared: *PreparedTransfers, media: *PaneMediaAllocator) void
 /// ```zig
 /// prepared.discard(key, media);
 /// ```
-pub fn discard(prepared: *PreparedTransfers, key: core.ImageKey, media: *PaneMediaAllocator) void {
-    if (prepared.take(key)) |existing| {
+pub fn discard(self: *PreparedTransfers, key: core.ImageKey, media: *PaneMediaAllocator) void {
+    if (self.take(key)) |existing| {
         existing.discard(media);
     }
 }
@@ -120,8 +120,8 @@ pub fn discard(prepared: *PreparedTransfers, key: core.ImageKey, media: *PaneMed
 /// ```zig
 /// prepared.retain(storage, media);
 /// ```
-pub fn retain(prepared: *PreparedTransfers, alive: anytype, media: *PaneMediaAllocator) void {
-    for (&prepared.items) |*slot| {
+pub fn retain(self: *PreparedTransfers, alive: anytype, media: *PaneMediaAllocator) void {
+    for (&self.items) |*slot| {
         const existing = slot.* orelse continue;
         if (alive.holds(existing.metadata.key)) {
             continue;
@@ -129,7 +129,7 @@ pub fn retain(prepared: *PreparedTransfers, alive: anytype, media: *PaneMediaAll
         existing.discard(media);
         slot.* = null;
     }
-    for (&prepared.frozen) |*slot| {
+    for (&self.frozen) |*slot| {
         const frozen = slot.* orelse continue;
         if (alive.holdsImage(frozen.image_id)) {
             continue;
@@ -138,9 +138,9 @@ pub fn retain(prepared: *PreparedTransfers, alive: anytype, media: *PaneMediaAll
     }
 }
 
-fn rememberFrozen(prepared: *PreparedTransfers, key: core.ImageKey) void {
+fn rememberFrozen(self: *PreparedTransfers, key: core.ImageKey) void {
     var free_slot: ?usize = null;
-    for (&prepared.frozen, 0..) |*slot, index| {
+    for (&self.frozen, 0..) |*slot, index| {
         if (slot.*) |frozen| {
             if (frozen.image_id != key.image_id) {
                 continue;
@@ -152,6 +152,6 @@ fn rememberFrozen(prepared: *PreparedTransfers, key: core.ImageKey) void {
         }
     }
     if (free_slot) |index| {
-        prepared.frozen[index] = .{ .image_id = key.image_id, .generation = key.generation };
+        self.frozen[index] = .{ .image_id = key.image_id, .generation = key.generation };
     }
 }

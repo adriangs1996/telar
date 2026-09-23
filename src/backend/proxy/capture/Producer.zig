@@ -25,14 +25,14 @@ decode_failed: std.atomic.Value(u64) = .init(0),
 /// ```zig
 /// try producer.init(gpa, .{ .config = config, .gate = gate });
 /// ```
-pub fn init(producer: *Producer, gpa: std.mem.Allocator, options: InitOptions) !void {
+pub fn init(self: *Producer, gpa: std.mem.Allocator, options: InitOptions) !void {
     try options.config.validate();
-    producer.* = .{
+    self.* = .{
         .gpa = gpa,
         .config = options.config,
         .quota = .init(options.config.max_total_bytes),
     };
-    producer.channel.init(options.gate);
+    self.channel.init(options.gate);
 }
 
 /// Reserves one direction of an exchange without blocking the relay.
@@ -40,11 +40,11 @@ pub fn init(producer: *Producer, gpa: std.mem.Allocator, options: InitOptions) !
 /// ```zig
 /// const half = producer.start(options) orelse return;
 /// ```
-pub fn start(producer: *Producer, options: StartOptions) ?*Half {
+pub fn start(self: *Producer, options: StartOptions) ?*Half {
     const half = Half.create(.{
-        .gpa = producer.gpa,
-        .quota = &producer.quota,
-        .config = producer.config,
+        .gpa = self.gpa,
+        .quota = &self.quota,
+        .config = self.config,
         .credential = options.credential,
         .dialect = options.dialect,
         .protocol = options.protocol,
@@ -53,15 +53,15 @@ pub fn start(producer: *Producer, options: StartOptions) ?*Half {
         .host = options.host,
         .started_at_ms = options.started_at_ms,
     }) orelse {
-        if (producer.config.enabled) {
-            _ = producer.skipped_quota.fetchAdd(1, .monotonic);
+        if (self.config.enabled) {
+            _ = self.skipped_quota.fetchAdd(1, .monotonic);
         }
 
         return null;
     };
 
     if (options.side == .request) {
-        _ = producer.started.fetchAdd(1, .monotonic);
+        _ = self.started.fetchAdd(1, .monotonic);
     }
 
     return half;
@@ -72,12 +72,12 @@ pub fn start(producer: *Producer, options: StartOptions) ?*Half {
 /// ```zig
 /// producer.publish(io, .{ .credential = credential, .half = half });
 /// ```
-pub fn publish(producer: *Producer, io: std.Io, publication: CapturePublication) void {
+pub fn publish(self: *Producer, io: std.Io, publication: CapturePublication) void {
     if (publication.half.head.truncated or publication.half.body.truncated) {
-        _ = producer.truncated.fetchAdd(1, .monotonic);
+        _ = self.truncated.fetchAdd(1, .monotonic);
     }
 
-    _ = producer.channel.publish(io, .{
+    _ = self.channel.publish(io, .{
         .credential = publication.credential,
         .half = publication.half,
     });
@@ -88,8 +88,8 @@ pub fn publish(producer: *Producer, io: std.Io, publication: CapturePublication)
 /// ```zig
 /// const half = try producer.receive(io);
 /// ```
-pub fn receive(producer: *Producer, io: std.Io) anyerror!*Half {
-    return producer.channel.receive(io);
+pub fn receive(self: *Producer, io: std.Io) anyerror!*Half {
+    return self.channel.receive(io);
 }
 
 /// Closes delivery and frees every half still owned by the queue.
@@ -97,8 +97,8 @@ pub fn receive(producer: *Producer, io: std.Io) anyerror!*Half {
 /// ```zig
 /// producer.close(io);
 /// ```
-pub fn close(producer: *Producer, io: std.Io) void {
-    producer.channel.close(io);
+pub fn close(self: *Producer, io: std.Io) void {
+    self.channel.close(io);
 }
 
 /// Records one body that could not be decoded without retaining its data.
@@ -106,8 +106,8 @@ pub fn close(producer: *Producer, io: std.Io) void {
 /// ```zig
 /// producer.recordDecodeFailure();
 /// ```
-pub fn recordDecodeFailure(producer: *Producer) void {
-    _ = producer.decode_failed.fetchAdd(1, .monotonic);
+pub fn recordDecodeFailure(self: *Producer) void {
+    _ = self.decode_failed.fetchAdd(1, .monotonic);
 }
 
 /// Replaces a content-coded body with its bounded decoded representation.
@@ -115,29 +115,29 @@ pub fn recordDecodeFailure(producer: *Producer) void {
 /// ```zig
 /// producer.decodeBody(half);
 /// ```
-pub fn decodeBody(producer: *Producer, half: *Half) void {
+pub fn decodeBody(self: *Producer, half: *Half) void {
     if (half.encoding().len == 0 or std.ascii.eqlIgnoreCase(half.encoding(), "identity")) {
         half.body_decoded = true;
         return;
     }
 
-    const available = @min(producer.config.max_part_bytes, half.reservation.bytes -| half.head.len);
+    const available = @min(self.config.max_part_bytes, half.reservation.bytes -| half.head.len);
     if (available == 0) {
         half.body.truncated = half.body.len != 0;
         return;
     }
 
-    var result = decode_mod.decode(producer.gpa, .{
+    var result = decode_mod.decode(self.gpa, .{
         .input = half.body.bytes(),
         .encoding = half.encoding(),
         .max_bytes = available,
     }) catch {
-        producer.recordDecodeFailure();
+        self.recordDecodeFailure();
         return;
     };
-    defer result.deinit(producer.gpa);
+    defer result.deinit(self.gpa);
     if (result.failed) {
-        producer.recordDecodeFailure();
+        self.recordDecodeFailure();
         return;
     }
 
@@ -149,7 +149,7 @@ pub fn decodeBody(producer: *Producer, half: *Half) void {
     half.body.truncated = half.body.truncated or result.truncated or was_truncated;
     half.body_decoded = result.decoded;
     if (!was_truncated and half.body.truncated) {
-        _ = producer.truncated.fetchAdd(1, .monotonic);
+        _ = self.truncated.fetchAdd(1, .monotonic);
     }
 }
 
@@ -158,15 +158,15 @@ pub fn decodeBody(producer: *Producer, half: *Half) void {
 /// ```zig
 /// const snapshot = producer.metrics();
 /// ```
-pub fn metrics(producer: *const Producer) CaptureMetrics {
-    const queue_metrics = producer.channel.metrics();
+pub fn metrics(self: *const Producer) CaptureMetrics {
+    const queue_metrics = self.channel.metrics();
 
     return .{
-        .started = producer.started.load(.monotonic),
-        .truncated = producer.truncated.load(.monotonic),
-        .skipped_quota = producer.skipped_quota.load(.monotonic),
+        .started = self.started.load(.monotonic),
+        .truncated = self.truncated.load(.monotonic),
+        .skipped_quota = self.skipped_quota.load(.monotonic),
         .dropped_queue = queue_metrics.dropped,
-        .decode_failed = producer.decode_failed.load(.monotonic),
+        .decode_failed = self.decode_failed.load(.monotonic),
         .queued = queue_metrics.queued,
         .queue_high_water = queue_metrics.high_water,
     };

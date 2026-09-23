@@ -21,8 +21,8 @@ pub fn io(_: *ConnectionIntegration) std.Io {
     return std.testing.io;
 }
 
-pub fn readRequest(context: *ConnectionIntegration) ?RequestHead {
-    const parsed = http.relayHead(&context.session, .{
+pub fn readRequest(self: *ConnectionIntegration) ?RequestHead {
+    const parsed = http.relayHead(&self.session, .{
         .from = .child,
         .to = .origin,
         .is_response = false,
@@ -37,17 +37,17 @@ pub fn readRequest(context: *ConnectionIntegration) ?RequestHead {
     };
 }
 
-pub fn relayRequestBody(context: *ConnectionIntegration, plan: types.BodyPlan) bool {
+pub fn relayRequestBody(self: *ConnectionIntegration, plan: types.BodyPlan) bool {
     return http.relayBody(
-        &context.session,
+        &self.session,
         .{ .from = .child, .to = .origin, .framing = plan },
         IgnoreTestObserver{},
     );
 }
 
-pub fn relayResponse(context: *ConnectionIntegration, request: RequestHead) ?ResponseHead {
+pub fn relayResponse(self: *ConnectionIntegration, request: RequestHead) ?ResponseHead {
     while (true) {
-        const parsed = http.relayHead(&context.session, .{
+        const parsed = http.relayHead(&self.session, .{
             .from = .origin,
             .to = .child,
             .is_response = true,
@@ -55,7 +55,7 @@ pub fn relayResponse(context: *ConnectionIntegration, request: RequestHead) ?Res
         }) orelse return null;
 
         if (!http.relayBody(
-            &context.session,
+            &self.session,
             .{ .from = .origin, .to = .child, .framing = parsed.framing },
             IgnoreTestObserver{},
         )) {
@@ -75,24 +75,24 @@ pub fn relayResponse(context: *ConnectionIntegration, request: RequestHead) ?Res
     }
 }
 
-pub fn exchange(context: *ConnectionIntegration, request: RequestHead) connection_module.ExchangeOutcome {
-    return http.IntegrationExchange.execute(context, request);
+pub fn exchange(self: *ConnectionIntegration, request: RequestHead) connection_module.ExchangeOutcome {
+    return http.IntegrationExchange.execute(self, request);
 }
 
-pub fn publishRequest(context: *ConnectionIntegration, request: RequestHead) void {
-    context.request_classes[context.request_count] = request.classification;
-    context.request_count += 1;
+pub fn publishRequest(self: *ConnectionIntegration, request: RequestHead) void {
+    self.request_classes[self.request_count] = request.classification;
+    self.request_count += 1;
 }
 
-pub fn publishResponse(context: *ConnectionIntegration, response: ResponseHead) void {
-    context.response_statuses[context.response_count] = response.status_code;
-    context.response_count += 1;
+pub fn publishResponse(self: *ConnectionIntegration, response: ResponseHead) void {
+    self.response_statuses[self.response_count] = response.status_code;
+    self.response_count += 1;
 }
 
-pub fn publishFailure(context: *ConnectionIntegration) void {
-    context.failure_count += 1;
+pub fn publishFailure(self: *ConnectionIntegration) void {
+    self.failure_count += 1;
 }
 
-pub fn upgrade(context: *ConnectionIntegration) void {
-    context.upgraded = true;
+pub fn upgrade(self: *ConnectionIntegration) void {
+    self.upgraded = true;
 }

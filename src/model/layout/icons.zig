@@ -18,8 +18,8 @@ pub const Theme = enum {
         return error.UnknownIconTheme;
     }
 
-    pub fn canonicalName(theme: Theme) []const u8 {
-        return switch (theme) {
+    pub fn canonicalName(self: Theme) []const u8 {
+        return switch (self) {
             .unicode => "unicode",
             .nerd_font => "nerd-font",
         };
@@ -101,8 +101,8 @@ pub const Icon = enum {
         return .app_terminal;
     }
 
-    pub fn unicodeGlyph(icon: Icon) []const u8 {
-        return switch (icon) {
+    pub fn unicodeGlyph(self: Icon) []const u8 {
+        return switch (self) {
             .sidebar_collapse => "\u{25c0}",
             .sidebar_expand => "\u{25b6}",
             .workspace_menu => "\u{2756}",
@@ -136,8 +136,8 @@ pub const Icon = enum {
         };
     }
 
-    pub fn nerdGlyph(icon: Icon) []const u8 {
-        return switch (icon) {
+    pub fn nerdGlyph(self: Icon) []const u8 {
+        return switch (self) {
             .sidebar_collapse => "\u{eab5}", // cod-chevron-left
             .sidebar_expand => "\u{eab6}", // cod-chevron-right
             .workspace_menu => "\u{eacd}", // cod-dashboard
@@ -172,8 +172,8 @@ pub const Icon = enum {
 
     /// A one-cell placeholder used only while the opaque KGP replacement is
     /// being transferred. Terminals without KGP keep `unicodeGlyph` instead.
-    pub fn cellFallbackGlyph(icon: Icon) []const u8 {
-        return switch (icon) {
+    pub fn cellFallbackGlyph(self: Icon) []const u8 {
+        return switch (self) {
             .sidebar_collapse => "<",
             .sidebar_expand => ">",
             .workspace_menu => "W",

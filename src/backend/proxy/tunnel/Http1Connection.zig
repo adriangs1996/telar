@@ -41,39 +41,39 @@ pub fn init(options: Http1Options) Connection {
 /// ```zig
 /// connection.run();
 /// ```
-pub fn run(connection: *Connection) void {
-    defer connection.request.deinit();
-    defer connection.discardCaptures();
-    http1.RelayConnection.run(connection);
+pub fn run(self: *Connection) void {
+    defer self.request.deinit();
+    defer self.discardCaptures();
+    http1.RelayConnection.run(self);
 }
 
-fn discardCaptures(connection: *Connection) void {
-    if (connection.request_capture) |half| {
+fn discardCaptures(self: *Connection) void {
+    if (self.request_capture) |half| {
         half.deinit();
-        connection.request_capture = null;
+        self.request_capture = null;
     }
 
-    if (connection.response_capture) |half| {
+    if (self.response_capture) |half| {
         half.deinit();
-        connection.response_capture = null;
+        self.response_capture = null;
     }
 }
 
-pub fn beginCapture(connection: *Connection) void {
-    connection.discardCaptures();
-    const producer = connection.captures orelse return;
-    const started_at_ms = std.Io.Timestamp.now(connection.io, .real).toMilliseconds();
+pub fn beginCapture(self: *Connection) void {
+    self.discardCaptures();
+    const producer = self.captures orelse return;
+    const started_at_ms = std.Io.Timestamp.now(self.io, .real).toMilliseconds();
     const base: StartOptions = .{
-        .credential = connection.exchange.credential,
-        .dialect = connection.exchange.dialect,
-        .protocol = connection.exchange.protocol,
-        .key = .{ .connection_id = connection.exchange.connection_id, .stream_id = 0 },
+        .credential = self.exchange.credential,
+        .dialect = self.exchange.dialect,
+        .protocol = self.exchange.protocol,
+        .key = .{ .connection_id = self.exchange.connection_id, .stream_id = 0 },
         .side = .request,
-        .host = connection.exchange.host.bytes,
+        .host = self.exchange.host.bytes,
         .started_at_ms = started_at_ms,
     };
-    connection.request_capture = producer.start(base);
+    self.request_capture = producer.start(base);
     var response = base;
     response.side = .response;
-    connection.response_capture = producer.start(response);
+    self.response_capture = producer.start(response);
 }

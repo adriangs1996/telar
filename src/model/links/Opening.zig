@@ -5,26 +5,26 @@ const Opening = @This();
 active: bool = false,
 pending: ?data.LinkTarget = null,
 
-pub fn request(opening: *Opening, target: data.LinkTarget) opening_support.Request {
-    if (!opening.active) {
-        opening.active = true;
+pub fn request(self: *Opening, target: data.LinkTarget) opening_support.Request {
+    if (!self.active) {
+        self.active = true;
 
         return .{ .start = target };
     }
 
-    opening.pending = target;
+    self.pending = target;
 
     return .queued;
 }
 
-pub fn complete(opening: *Opening) ?data.LinkTarget {
-    const next = opening.pending;
-    opening.pending = null;
-    opening.active = next != null;
+pub fn complete(self: *Opening) ?data.LinkTarget {
+    const next = self.pending;
+    self.pending = null;
+    self.active = next != null;
 
     return next;
 }
 
-pub fn schedulingFailed(opening: *Opening) void {
-    opening.active = false;
+pub fn schedulingFailed(self: *Opening) void {
+    self.active = false;
 }

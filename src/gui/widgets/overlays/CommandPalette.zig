@@ -39,14 +39,14 @@ scale: f32,
 /// horizontally and anchored at eleven percent of the host height. Tiny
 /// hosts fall back to the shared modal bounds.
 /// Example: `const bounds = palette.area(canvas, rows);`
-pub fn area(palette: CommandPalette, canvas: *Canvas, rows: u16) core.Rect {
-    const host: core.Rect = .{ .w = palette.projection.host_size.cols, .h = palette.projection.host_size.rows };
-    const scale = if (palette.scale > 0) palette.scale else 1;
+pub fn area(self: CommandPalette, canvas: *Canvas, rows: u16) core.Rect {
+    const host: core.Rect = .{ .w = self.projection.host_size.cols, .h = self.projection.host_size.rows };
+    const scale = if (self.scale > 0) self.scale else 1;
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     const wanted: u16 = @intFromFloat(@ceil(@as(f32, width_px) * scale / cell));
     const width = @min(@max(wanted, 24), @min(host.w -| 4, 140));
-    const height: u16 = if (palette.projection.prompt.?.paletteMode() == .suggest)
-        SuggestionPanel.height(palette.projection.suggestion, width)
+    const height: u16 = if (self.projection.prompt.?.paletteMode() == .suggest)
+        SuggestionPanel.height(self.projection.suggestion, width)
     else
         rows + 4;
     const top = @as(u16, @intCast(@as(u32, host.h) * top_percent / 100));
@@ -59,17 +59,17 @@ pub fn area(palette: CommandPalette, canvas: *Canvas, rows: u16) core.Rect {
 
 /// Paints the palette and records one hit per visible row.
 /// Example: `try palette.draw(canvas);`
-pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
-    const hits = palette.hits;
+pub fn draw(self: CommandPalette, canvas: *Canvas) !void {
+    const hits = self.hits;
     hits.* = .{};
-    const prompt = palette.projection.prompt.?;
+    const prompt = self.projection.prompt.?;
     const colors = canvas.theme.palette;
-    const scale = if (palette.scale > 0) palette.scale else 1;
+    const scale = if (self.scale > 0) self.scale else 1;
     var goto_results: data.Results = .{};
     var action_results: data.CommandResults = .{};
     const total: u16 = switch (prompt.paletteMode()) {
         .goto => blk: {
-            data.goto_picker.collect(palette.sources(), prompt.paletteQuery(), &goto_results);
+            data.goto_picker.collect(self.sources(), prompt.paletteQuery(), &goto_results);
             break :blk goto_results.len;
         },
         .actions => blk: {
@@ -79,8 +79,8 @@ pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
         .suggest => 1,
     };
     const visible: u16 = @max(@min(total, max_rows), 1);
-    const frame = palette.area(canvas, visible);
-    palette.modal.* = frame;
+    const frame = self.area(canvas, visible);
+    self.modal.* = frame;
     try canvas.fillRounded(frame, .{ .radius = radius_px * scale, .color = canvas.covering(colors.panel_bg) });
     try canvas.ring(frame, .{ .width = scale, .radius = radius_px * scale, .color = colors.surface1 });
 
@@ -92,7 +92,7 @@ pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
     if (prompt.paletteMode() == .suggest) {
         const inset: u16 = @min(2, content.w / 8);
         const suggestion_area: core.Rect = .{ .x = content.x + inset, .y = content.y, .w = content.w - inset * 2, .h = content.h };
-        try (SuggestionPanel{ .area = suggestion_area, .projection = palette.projection, .hits = hits }).draw(canvas);
+        try (SuggestionPanel{ .area = suggestion_area, .projection = self.projection, .hits = hits }).draw(canvas);
         return;
     }
 
@@ -117,8 +117,8 @@ pub fn draw(palette: CommandPalette, canvas: *Canvas) !void {
         var label_storage: [data.goto_picker.max_label_bytes]u8 = undefined;
         var key_storage: [key_label.max_bytes]u8 = undefined;
         var child = switch (prompt.paletteMode()) {
-            .goto => palette.pickerRow(goto_results.slice()[index].item, &label_storage),
-            .actions => palette.actionRow(action_results.slice()[index].index, &key_storage),
+            .goto => self.pickerRow(goto_results.slice()[index].item, &label_storage),
+            .actions => self.actionRow(action_results.slice()[index].index, &key_storage),
             .suggest => unreachable,
         };
         child.area = row;
@@ -147,8 +147,8 @@ fn drawLegend(canvas: *Canvas, row: core.Rect, mode: data.command_palette.Prefix
     }
 }
 
-fn sources(palette: CommandPalette) data.Sources {
-    return .{ .agents = palette.projection.agents, .workspaces = palette.projection.workspaces, .model = palette.projection.model };
+fn sources(self: CommandPalette) data.Sources {
+    return .{ .agents = self.projection.agents, .workspaces = self.projection.workspaces, .model = self.projection.model };
 }
 
 // The prefix byte is painted over the field text in the accent color; the
@@ -165,8 +165,8 @@ fn drawField(canvas: *Canvas, row: core.Rect, prompt: data.Prompt) !void {
     }
 }
 
-fn pickerRow(palette: CommandPalette, item: data.goto_picker.Item, storage: *[data.goto_picker.max_label_bytes]u8) PaletteRow {
-    const label = data.goto_picker.describe(palette.sources(), item, storage);
+fn pickerRow(self: CommandPalette, item: data.goto_picker.Item, storage: *[data.goto_picker.max_label_bytes]u8) PaletteRow {
+    const label = data.goto_picker.describe(self.sources(), item, storage);
     const split = std.mem.indexOf(u8, label, "  ") orelse label.len;
     const icon: []const u8 = switch (item) {
         .workspace => "■",
@@ -181,9 +181,9 @@ fn pickerRow(palette: CommandPalette, item: data.goto_picker.Item, storage: *[da
     return .{ .icon = icon, .primary = label[0..split], .secondary = std.mem.trimStart(u8, label[split..], " "), .hint = kind };
 }
 
-fn actionRow(palette: CommandPalette, index: u8, storage: *[key_label.max_bytes]u8) PaletteRow {
+fn actionRow(self: CommandPalette, index: u8, storage: *[key_label.max_bytes]u8) PaletteRow {
     const entry = data.command_palette.entries[index];
-    const hint: []const u8 = if (palette.router) |router| blk: {
+    const hint: []const u8 = if (self.router) |router| blk: {
         const key = router.prefixedKeyForAction(entry.action) orelse break :blk "";
         break :blk key_label.chord(storage, router.prefix, key);
     } else "";

@@ -120,8 +120,8 @@ pub fn fromReport(provider: core.AgentProvider, observation: *const ReportObserv
 ///     keepAgentBusy();
 /// }
 /// ```
-pub fn isWorking(evidence: *const Evidence) bool {
-    return evidence.status == .working;
+pub fn isWorking(self: *const Evidence) bool {
+    return self.status == .working;
 }
 
 /// Reports whether this evidence is no longer valid at `now_ms`.
@@ -131,6 +131,6 @@ pub fn isWorking(evidence: *const Evidence) bool {
 ///     discardEvidence();
 /// }
 /// ```
-pub fn isExpired(evidence: *const Evidence, now_ms: i64) bool {
-    return evidence.expires_at_ms <= now_ms;
+pub fn isExpired(self: *const Evidence, now_ms: i64) bool {
+    return self.expires_at_ms <= now_ms;
 }

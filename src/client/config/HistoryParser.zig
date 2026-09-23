@@ -10,102 +10,102 @@ state: *lua_api.c.lua_State,
 runtime: *RuntimeSnapshot,
 diagnostic: *data.Diagnostic,
 
-pub fn parseOutput(parser: *Parser, absolute: c_int) !void {
-    _ = lua_api.c.lua_getfield(parser.state, absolute, "output");
-    defer value.pop(parser.state, 1);
-    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
+pub fn parseOutput(self: *Parser, absolute: c_int) !void {
+    _ = lua_api.c.lua_getfield(self.state, absolute, "output");
+    defer value.pop(self.state, 1);
+    if (lua_api.c.lua_type(self.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
 
-    const mode = value.string(parser.state, -1) orelse {
-        parser.diagnostic.set("config.runtime.history.output must be off or bounded", .{});
+    const mode = value.string(self.state, -1) orelse {
+        self.diagnostic.set("config.runtime.history.output must be off or bounded", .{});
         return error.InvalidConfig;
     };
     if (std.mem.eql(u8, mode, "bounded")) {
-        parser.runtime.history_output_capture = true;
+        self.runtime.history_output_capture = true;
         return;
     }
     if (std.mem.eql(u8, mode, "off")) {
-        parser.runtime.history_output_capture = false;
+        self.runtime.history_output_capture = false;
         return;
     }
 
-    parser.diagnostic.set("config.runtime.history.output must be off or bounded", .{});
+    self.diagnostic.set("config.runtime.history.output must be off or bounded", .{});
     return error.InvalidConfig;
 }
 
-pub fn parsePath(parser: *Parser, absolute: c_int) !void {
-    _ = lua_api.c.lua_getfield(parser.state, absolute, "path");
-    defer value.pop(parser.state, 1);
-    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
+pub fn parsePath(self: *Parser, absolute: c_int) !void {
+    _ = lua_api.c.lua_getfield(self.state, absolute, "path");
+    defer value.pop(self.state, 1);
+    if (lua_api.c.lua_type(self.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
 
-    const path = value.string(parser.state, -1) orelse {
-        parser.diagnostic.set("config.runtime.history.path must be a string", .{});
+    const path = value.string(self.state, -1) orelse {
+        self.diagnostic.set("config.runtime.history.path must be a string", .{});
         return error.InvalidConfig;
     };
     if (path.len == 0 or path.len > data.config_values.max_history_path_bytes or std.mem.indexOfScalar(u8, path, 0) != null) {
-        parser.diagnostic.set("config.runtime.history.path is invalid", .{});
+        self.diagnostic.set("config.runtime.history.path is invalid", .{});
         return error.InvalidConfig;
     }
 
-    @memcpy(parser.runtime.history_path_bytes[0..path.len], path);
-    parser.runtime.history_path_len = @intCast(path.len);
+    @memcpy(self.runtime.history_path_bytes[0..path.len], path);
+    self.runtime.history_path_len = @intCast(path.len);
 }
 
-pub fn parseSecretsFilter(parser: *Parser, absolute: c_int) !void {
-    _ = lua_api.c.lua_getfield(parser.state, absolute, "secrets_filter");
-    defer value.pop(parser.state, 1);
-    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
+pub fn parseSecretsFilter(self: *Parser, absolute: c_int) !void {
+    _ = lua_api.c.lua_getfield(self.state, absolute, "secrets_filter");
+    defer value.pop(self.state, 1);
+    if (lua_api.c.lua_type(self.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
-    if (lua_api.c.lua_type(parser.state, -1) != lua_api.c.LUA_TBOOLEAN) {
-        parser.diagnostic.set("config.runtime.history.secrets_filter must be a boolean", .{});
+    if (lua_api.c.lua_type(self.state, -1) != lua_api.c.LUA_TBOOLEAN) {
+        self.diagnostic.set("config.runtime.history.secrets_filter must be a boolean", .{});
         return error.InvalidConfig;
     }
 
-    parser.runtime.history_filters.secrets = lua_api.c.lua_toboolean(parser.state, -1) != 0;
+    self.runtime.history_filters.secrets = lua_api.c.lua_toboolean(self.state, -1) != 0;
 }
 
-pub fn parsePatterns(parser: *Parser, absolute: c_int, kind: history.PatternKind) !void {
+pub fn parsePatterns(self: *Parser, absolute: c_int, kind: history.PatternKind) !void {
     const name: [:0]const u8 = switch (kind) {
         .commands => "command_filters",
         .cwds => "cwd_filters",
     };
-    _ = lua_api.c.lua_getfield(parser.state, absolute, name.ptr);
-    defer value.pop(parser.state, 1);
-    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
+    _ = lua_api.c.lua_getfield(self.state, absolute, name.ptr);
+    defer value.pop(self.state, 1);
+    if (lua_api.c.lua_type(self.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
-    if (lua_api.c.lua_type(parser.state, -1) != lua_api.c.LUA_TTABLE) {
-        parser.diagnostic.set("config.runtime.history.{s} must be an array of strings", .{name});
+    if (lua_api.c.lua_type(self.state, -1) != lua_api.c.LUA_TTABLE) {
+        self.diagnostic.set("config.runtime.history.{s} must be an array of strings", .{name});
         return error.InvalidConfig;
     }
 
-    const table = lua_api.c.lua_absindex(parser.state, -1);
-    const count = lua_api.c.lua_rawlen(parser.state, table);
-    try value.ensureArrayOnly(parser.state, .{
+    const table = lua_api.c.lua_absindex(self.state, -1);
+    const count = lua_api.c.lua_rawlen(self.state, table);
+    try value.ensureArrayOnly(self.state, .{
         .index = table,
         .count = count,
         .path = switch (kind) {
             .commands => "config.runtime.history.command_filters",
             .cwds => "config.runtime.history.cwd_filters",
         },
-    }, parser.diagnostic);
+    }, self.diagnostic);
     const list = switch (kind) {
-        .commands => &parser.runtime.history_filters.commands,
-        .cwds => &parser.runtime.history_filters.cwds,
+        .commands => &self.runtime.history_filters.commands,
+        .cwds => &self.runtime.history_filters.cwds,
     };
     for (1..count + 1) |item| {
-        _ = lua_api.c.lua_rawgeti(parser.state, table, @intCast(item));
-        defer value.pop(parser.state, 1);
-        const pattern = value.string(parser.state, -1) orelse {
-            parser.diagnostic.set("config.runtime.history.{s}[{d}] must be a string", .{ name, item });
+        _ = lua_api.c.lua_rawgeti(self.state, table, @intCast(item));
+        defer value.pop(self.state, 1);
+        const pattern = value.string(self.state, -1) orelse {
+            self.diagnostic.set("config.runtime.history.{s}[{d}] must be a string", .{ name, item });
             return error.InvalidConfig;
         };
         list.add(pattern) catch {
-            parser.diagnostic.set("config.runtime.history.{s}[{d}] is empty, too long or exceeds the pattern limit", .{ name, item });
+            self.diagnostic.set("config.runtime.history.{s}[{d}] is empty, too long or exceeds the pattern limit", .{ name, item });
             return error.InvalidConfig;
         };
     }

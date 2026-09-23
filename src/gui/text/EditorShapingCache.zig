@@ -19,19 +19,19 @@ count: u8 = 0,
 
 /// Returned spans remain valid until the next insertion clears the arena.
 /// Example: `if (cache.find(key)) |shaped| return shaped;`
-pub fn find(cache: *const Cache, key: Key) ?ShapedRun {
+pub fn find(self: *const Cache, key: Key) ?ShapedRun {
     if (key.text.len <= ShapingEntry.max_bytes) {
         return null;
     }
 
     const hash = fingerprint(key);
-    for (cache.entries[0..cache.count]) |entry| {
+    for (self.entries[0..self.count]) |entry| {
         if (entry.hash != hash or entry.text_len != key.text.len or entry.pixel_height != key.pixel_height or entry.preferred != key.face) {
             continue;
         }
 
-        if (std.mem.eql(u8, cache.text[entry.text_start..][0..entry.text_len], key.text)) {
-            return .{ .font = entry.font, .columns = entry.columns, .rtl = entry.rtl, .glyphs = cache.glyphs[entry.glyph_start..][0..entry.glyph_count], .positions = cache.positions[entry.glyph_start..][0..entry.glyph_count] };
+        if (std.mem.eql(u8, self.text[entry.text_start..][0..entry.text_len], key.text)) {
+            return .{ .font = entry.font, .columns = entry.columns, .rtl = entry.rtl, .glyphs = self.glyphs[entry.glyph_start..][0..entry.glyph_count], .positions = self.positions[entry.glyph_start..][0..entry.glyph_count] };
         }
     }
 
@@ -40,31 +40,31 @@ pub fn find(cache: *const Cache, key: Key) ?ShapedRun {
 
 /// Retires borrowed results without releasing the fixed storage budget.
 /// Example: `cache.clear();`
-pub fn clear(cache: *Cache) void {
-    cache.text_len = 0;
-    cache.glyph_count = 0;
-    cache.count = 0;
+pub fn clear(self: *Cache) void {
+    self.text_len = 0;
+    self.glyph_count = 0;
+    self.count = 0;
 }
 
 /// Owns long runs without retaining caller buffers or growing the budget.
 /// Example: `cache.remember(key, shaped);`
-pub fn remember(cache: *Cache, key: Key, shaped: ShapedRun) void {
+pub fn remember(self: *Cache, key: Key, shaped: ShapedRun) void {
     if (key.text.len <= ShapingEntry.max_bytes or key.text.len > capacity or shaped.glyphs.len > capacity) {
         return;
     }
 
-    if (cache.count == cache.entries.len or key.text.len > capacity - cache.text_len or shaped.glyphs.len > capacity - cache.glyph_count) {
-        cache.clear();
+    if (self.count == self.entries.len or key.text.len > capacity - self.text_len or shaped.glyphs.len > capacity - self.glyph_count) {
+        self.clear();
     }
 
-    @memcpy(cache.text[cache.text_len..][0..key.text.len], key.text);
-    @memcpy(cache.glyphs[cache.glyph_count..][0..shaped.glyphs.len], shaped.glyphs);
-    @memcpy(cache.positions[cache.glyph_count..][0..shaped.positions.len], shaped.positions);
-    cache.entries[cache.count] = .{
+    @memcpy(self.text[self.text_len..][0..key.text.len], key.text);
+    @memcpy(self.glyphs[self.glyph_count..][0..shaped.glyphs.len], shaped.glyphs);
+    @memcpy(self.positions[self.glyph_count..][0..shaped.positions.len], shaped.positions);
+    self.entries[self.count] = .{
         .hash = fingerprint(key),
-        .text_start = cache.text_len,
+        .text_start = self.text_len,
         .text_len = @intCast(key.text.len),
-        .glyph_start = cache.glyph_count,
+        .glyph_start = self.glyph_count,
         .glyph_count = @intCast(shaped.glyphs.len),
         .pixel_height = key.pixel_height,
         .preferred = key.face,
@@ -72,9 +72,9 @@ pub fn remember(cache: *Cache, key: Key, shaped: ShapedRun) void {
         .columns = shaped.columns,
         .rtl = shaped.rtl,
     };
-    cache.text_len += @intCast(key.text.len);
-    cache.glyph_count += @intCast(shaped.glyphs.len);
-    cache.count += 1;
+    self.text_len += @intCast(key.text.len);
+    self.glyph_count += @intCast(shaped.glyphs.len);
+    self.count += 1;
 }
 
 fn fingerprint(key: Key) u64 {

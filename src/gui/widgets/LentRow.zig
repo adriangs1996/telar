@@ -18,7 +18,7 @@ area: core.Rect,
 ///     try slot.draw(&lent.canvas);
 /// }
 /// ```
-pub fn open(lent: *LentRow, canvas: *const Canvas, bounds: Rect) bool {
+pub fn open(self: *LentRow, canvas: *const Canvas, bounds: Rect) bool {
     const metrics = canvas.metrics;
     const cell_width: f32 = @floatFromInt(metrics.cell_width);
     const cell_height: f32 = @floatFromInt(metrics.cell_height);
@@ -26,8 +26,8 @@ pub fn open(lent: *LentRow, canvas: *const Canvas, bounds: Rect) bool {
         return false;
     }
 
-    lent.canvas = canvas.*;
-    lent.canvas.origin = .{ @intFromFloat(@max(0, bounds.x)), @intFromFloat(@max(0, bounds.y + @floor((bounds.height - cell_height) / 2))) };
-    lent.area = .{ .w = @intCast(@min(65535, @as(u32, @intFromFloat(bounds.width / cell_width)))), .h = 1 };
+    self.canvas = canvas.*;
+    self.canvas.origin = .{ @intFromFloat(@max(0, bounds.x)), @intFromFloat(@max(0, bounds.y + @floor((bounds.height - cell_height) / 2))) };
+    self.area = .{ .w = @intCast(@min(65535, @as(u32, @intFromFloat(bounds.width / cell_width)))), .h = 1 };
     return true;
 }

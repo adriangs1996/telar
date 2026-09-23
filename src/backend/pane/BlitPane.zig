@@ -18,14 +18,14 @@ pub fn init(gpa: std.mem.Allocator, cols: u16, rows: u16) !Pane {
     };
 }
 
-pub fn deinit(p: *Pane) void {
-    p.state.deinit(p.gpa);
-    p.term.deinit(p.gpa);
+pub fn deinit(self: *Pane) void {
+    self.state.deinit(self.gpa);
+    self.term.deinit(self.gpa);
 }
 
-pub fn write(p: *Pane, bytes: []const u8) !void {
-    var stream = p.term.vtStream();
+pub fn write(self: *Pane, bytes: []const u8) !void {
+    var stream = self.term.vtStream();
     defer stream.deinit();
     stream.nextSlice(bytes);
-    try p.state.update(p.gpa, &p.term);
+    try self.state.update(self.gpa, &self.term);
 }

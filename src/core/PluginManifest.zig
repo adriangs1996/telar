@@ -17,28 +17,28 @@ actions: [plugin.max_actions]ActionName = undefined,
 action_count: u8,
 capabilities: plugin.CapabilitySet,
 
-pub fn id(manifest: *const Manifest) []const u8 {
-    return manifest.id_bytes[0..manifest.id_len];
+pub fn id(self: *const Manifest) []const u8 {
+    return self.id_bytes[0..self.id_len];
 }
 
-pub fn version(manifest: *const Manifest) []const u8 {
-    return manifest.version_bytes[0..manifest.version_len];
+pub fn version(self: *const Manifest) []const u8 {
+    return self.version_bytes[0..self.version_len];
 }
 
-pub fn entry(manifest: *const Manifest) []const u8 {
-    return manifest.entry_bytes[0..manifest.entry_len];
+pub fn entry(self: *const Manifest) []const u8 {
+    return self.entry_bytes[0..self.entry_len];
 }
 
-pub fn source(manifest: *const Manifest) []const u8 {
-    return manifest.source_bytes[0..manifest.source_len];
+pub fn source(self: *const Manifest) []const u8 {
+    return self.source_bytes[0..self.source_len];
 }
 
-pub fn revision(manifest: *const Manifest) []const u8 {
-    return manifest.revision_bytes[0..manifest.revision_len];
+pub fn revision(self: *const Manifest) []const u8 {
+    return self.revision_bytes[0..self.revision_len];
 }
 
-pub fn hasAction(manifest: *const Manifest, name: []const u8) bool {
-    for (manifest.actions[0..manifest.action_count]) |*candidate|
+pub fn hasAction(self: *const Manifest, name: []const u8) bool {
+    for (self.actions[0..self.action_count]) |*candidate|
         if (std.mem.eql(u8, candidate.slice(), name)) return true;
     return false;
 }

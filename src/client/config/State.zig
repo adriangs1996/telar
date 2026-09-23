@@ -26,30 +26,30 @@ pub fn init(vm: *lua.Vm, path: []const u8) !State {
     return modules;
 }
 
-pub fn dependencyPath(modules: *const State, index: usize) ?[]const u8 {
-    if (index >= modules.dependency_count) {
+pub fn dependencyPath(self: *const State, index: usize) ?[]const u8 {
+    if (index >= self.dependency_count) {
         return null;
     }
-    return modules.dependencies[index][0..modules.dependency_lens[index]];
+    return self.dependencies[index][0..self.dependency_lens[index]];
 }
 
-pub fn watchFingerprint(modules: *const State, io: std.Io, config_path: []const u8) i128 {
+pub fn watchFingerprint(self: *const State, io: std.Io, config_path: []const u8) i128 {
     var hasher = std.hash.Wyhash.init(0x74656c61722d6c75);
     local_modules.updatePathFingerprint(&hasher, io, config_path);
-    for (0..modules.dependency_count) |index|
-        local_modules.updatePathFingerprint(&hasher, io, modules.dependencyPath(index).?);
+    for (0..self.dependency_count) |index|
+        local_modules.updatePathFingerprint(&hasher, io, self.dependencyPath(index).?);
     return @intCast(hasher.final());
 }
 
-pub fn configDir(modules: *const State) []const u8 {
-    return modules.config_dir[0..modules.config_dir_len];
+pub fn configDir(self: *const State) []const u8 {
+    return self.config_dir[0..self.config_dir_len];
 }
 
-pub fn installRequire(modules: *State) void {
-    const state = modules.vm.state;
+pub fn installRequire(self: *State) void {
+    const state = self.vm.state;
     lua_api.c.lua_createtable(state, 0, local_modules.max_local_modules);
-    modules.module_cache_ref = lua_api.c.luaL_ref(state, lua_api.c.LUA_REGISTRYINDEX);
-    lua_api.c.lua_pushlightuserdata(state, modules);
+    self.module_cache_ref = lua_api.c.luaL_ref(state, lua_api.c.LUA_REGISTRYINDEX);
+    lua_api.c.lua_pushlightuserdata(state, self);
     lua_api.c.lua_pushcclosure(state, local_modules.requireLocal, 1);
     lua_api.c.lua_setglobal(state, "require");
 }

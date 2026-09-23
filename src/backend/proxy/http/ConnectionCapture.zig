@@ -15,43 +15,43 @@ step_len: usize = 0,
 published_class: ?request_support.RequestClass = null,
 published_status: ?u16 = null,
 
-fn record(capture: *ConnectionCapture, step: connection.Step) void {
-    std.debug.assert(capture.step_len < capture.steps.len);
-    capture.steps[capture.step_len] = step;
-    capture.step_len += 1;
+fn record(self: *ConnectionCapture, step: connection.Step) void {
+    std.debug.assert(self.step_len < self.steps.len);
+    self.steps[self.step_len] = step;
+    self.step_len += 1;
 }
 
-pub fn readRequest(capture: *ConnectionCapture) ?RequestHead {
-    capture.record(.read_request);
+pub fn readRequest(self: *ConnectionCapture) ?RequestHead {
+    self.record(.read_request);
 
-    if (capture.request_index == capture.request_len) {
+    if (self.request_index == self.request_len) {
         return null;
     }
 
-    defer capture.request_index += 1;
-    return capture.requests[capture.request_index];
+    defer self.request_index += 1;
+    return self.requests[self.request_index];
 }
 
-pub fn exchange(capture: *ConnectionCapture, _: RequestHead) connection.ExchangeOutcome {
-    capture.record(.exchange);
-    defer capture.outcome_index += 1;
-    return capture.outcomes[capture.outcome_index];
+pub fn exchange(self: *ConnectionCapture, _: RequestHead) connection.ExchangeOutcome {
+    self.record(.exchange);
+    defer self.outcome_index += 1;
+    return self.outcomes[self.outcome_index];
 }
 
-pub fn publishRequest(capture: *ConnectionCapture, request: RequestHead) void {
-    capture.record(.publish_request);
-    capture.published_class = request.classification;
+pub fn publishRequest(self: *ConnectionCapture, request: RequestHead) void {
+    self.record(.publish_request);
+    self.published_class = request.classification;
 }
 
-pub fn publishResponse(capture: *ConnectionCapture, final: ResponseHead) void {
-    capture.record(.publish_response);
-    capture.published_status = final.status_code;
+pub fn publishResponse(self: *ConnectionCapture, final: ResponseHead) void {
+    self.record(.publish_response);
+    self.published_status = final.status_code;
 }
 
-pub fn publishFailure(capture: *ConnectionCapture) void {
-    capture.record(.publish_failure);
+pub fn publishFailure(self: *ConnectionCapture) void {
+    self.record(.publish_failure);
 }
 
-pub fn upgrade(capture: *ConnectionCapture) void {
-    capture.record(.upgrade);
+pub fn upgrade(self: *ConnectionCapture) void {
+    self.record(.upgrade);
 }

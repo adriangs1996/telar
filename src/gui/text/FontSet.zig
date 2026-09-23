@@ -79,42 +79,42 @@ pub fn init(library: freetype.c.FT_Library, options: AtlasOptions, pixels: []u8)
 
 /// Releases the discovered faces and their file bytes before the embedded ones.
 /// Example: `fonts.deinit(allocator);`
-pub fn deinit(fonts: *FontSet, allocator: std.mem.Allocator) void {
-    fonts.pool.deinit(allocator);
-    fonts.sans_semibold.deinit();
-    fonts.sans.deinit();
-    fonts.symbols.deinit();
-    if (fonts.text) |*face| {
+pub fn deinit(self: *FontSet, allocator: std.mem.Allocator) void {
+    self.pool.deinit(allocator);
+    self.sans_semibold.deinit();
+    self.sans.deinit();
+    self.symbols.deinit();
+    if (self.text) |*face| {
         face.deinit();
     }
 
-    fonts.primary.deinit();
+    self.primary.deinit();
 }
 
 /// Prefers the requested face whenever it covers the whole grapheme, then the
 /// terminal chain: configured font, embedded text font, symbols, discovered
 /// faces in discovery order. Reads only resident faces and allocates nothing.
 /// Example: `const id = fonts.source("\u{f07b}", .sans);`
-pub fn source(fonts: *const FontSet, text: []const u8, preferred: font_id.Id) font_id.Id {
-    if (preferred != .primary and fonts.borrow(preferred).covers(text)) {
+pub fn source(self: *const FontSet, text: []const u8, preferred: font_id.Id) font_id.Id {
+    if (preferred != .primary and self.borrow(preferred).covers(text)) {
         return preferred;
     }
 
-    if (fonts.primary.covers(text)) {
+    if (self.primary.covers(text)) {
         return .primary;
     }
 
-    if (fonts.text) |*face_value| {
+    if (self.text) |*face_value| {
         if (face_value.covers(text)) {
             return .text;
         }
     }
 
-    if (fonts.symbols.covers(text)) {
+    if (self.symbols.covers(text)) {
         return .symbols;
     }
 
-    return if (fonts.pool.covering(text)) |slot| font_id.Id.fallback(slot) else .primary;
+    return if (self.pool.covering(text)) |slot| font_id.Id.fallback(slot) else .primary;
 }
 
 /// Asks the platform for an installed face covering a grapheme the chain
@@ -123,43 +123,43 @@ pub fn source(fonts: *const FontSet, text: []const u8, preferred: font_id.Id) fo
 /// misses, full pools and unusable files are remembered so the next cold
 /// shaping of the same grapheme asks nothing.
 /// Example: `if (fonts.discover(allocator, "\u{23f5}")) { ... }`
-pub fn discover(fonts: *FontSet, allocator: std.mem.Allocator, text: []const u8) bool {
-    if (fonts.context.options.io == null or fonts.source(text, .primary) != .primary or fonts.primary.covers(text)) {
+pub fn discover(self: *FontSet, allocator: std.mem.Allocator, text: []const u8) bool {
+    if (self.context.options.io == null or self.source(text, .primary) != .primary or self.primary.covers(text)) {
         return false;
     }
 
-    if (fonts.misses.contains(text)) {
+    if (self.misses.contains(text)) {
         return false;
     }
 
     var query: [max_query_bytes:0]u8 = undefined;
     const significant = significantBytes(text, &query) orelse {
-        fonts.misses.remember(text);
+        self.misses.remember(text);
         return false;
     };
-    if (significant.len == 0 or fonts.pool.full()) {
-        fonts.misses.remember(text);
+    if (significant.len == 0 or self.pool.full()) {
+        self.misses.remember(text);
         return false;
     }
 
     var match: FontMatch = .{};
-    fonts.lookups += 1;
-    if (fonts.lookup(significant.ptr, &match) != 0 or fonts.pool.find(match) != null) {
-        fonts.misses.remember(text);
+    self.lookups += 1;
+    if (self.lookup(significant.ptr, &match) != 0 or self.pool.find(match) != null) {
+        self.misses.remember(text);
         return false;
     }
 
-    var face = FallbackFace.init(allocator, fonts.context, match) catch {
-        fonts.misses.remember(text);
+    var face = FallbackFace.init(allocator, self.context, match) catch {
+        self.misses.remember(text);
         return false;
     };
     if (!face.face.covers(text)) {
         face.deinit(allocator);
-        fonts.misses.remember(text);
+        self.misses.remember(text);
         return false;
     }
 
-    _ = fonts.addFallback(face).?;
+    _ = self.addFallback(face).?;
     return true;
 }
 
@@ -167,31 +167,31 @@ pub fn discover(fonts: *FontSet, allocator: std.mem.Allocator, text: []const u8)
 /// The caller retains the face when the pool is full. At most eight additions occur
 /// during one set's lifetime, so the revision cannot wrap.
 /// Example: `const slot = fonts.addFallback(face) orelse return error.FallbackPoolFull;`
-pub fn addFallback(fonts: *FontSet, face: FallbackFace) ?u3 {
-    const slot = fonts.pool.add(face) orelse return null;
-    fonts.revision += 1;
+pub fn addFallback(self: *FontSet, face: FallbackFace) ?u3 {
+    const slot = self.pool.add(face) orelse return null;
+    self.revision += 1;
     return slot;
 }
 
-pub fn get(fonts: *FontSet, id: font_id.Id) *FontFace {
+pub fn get(self: *FontSet, id: font_id.Id) *FontFace {
     return switch (id) {
-        .primary => &fonts.primary,
-        .text => &fonts.text.?,
-        .symbols => &fonts.symbols,
-        .sans => &fonts.sans,
-        .sans_semibold => &fonts.sans_semibold,
-        else => fonts.pool.get(id.fallbackSlot().?),
+        .primary => &self.primary,
+        .text => &self.text.?,
+        .symbols => &self.symbols,
+        .sans => &self.sans,
+        .sans_semibold => &self.sans_semibold,
+        else => self.pool.get(id.fallbackSlot().?),
     };
 }
 
-fn borrow(fonts: *const FontSet, id: font_id.Id) *const FontFace {
+fn borrow(self: *const FontSet, id: font_id.Id) *const FontFace {
     return switch (id) {
-        .primary => &fonts.primary,
-        .text => &fonts.text.?,
-        .symbols => &fonts.symbols,
-        .sans => &fonts.sans,
-        .sans_semibold => &fonts.sans_semibold,
-        else => &fonts.pool.faces[id.fallbackSlot().?].?.face,
+        .primary => &self.primary,
+        .text => &self.text.?,
+        .symbols => &self.symbols,
+        .sans => &self.sans,
+        .sans_semibold => &self.sans_semibold,
+        else => &self.pool.faces[id.fallbackSlot().?].?.face,
     };
 }
 

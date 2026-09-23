@@ -19,175 +19,175 @@ lookahead_left: ?usize = null,
 /// Yields styled labels with the original destination and link source offset.
 /// Reference links are left literal. Exhausted lookahead also stays literal.
 /// Example: `while (spans.next()) |span| try paintSpan(span);`
-pub fn next(spans: *Spans) ?Span {
-    if (spans.code_after) |after| {
-        if (spans.index < spans.code_end) {
-            return spans.nextTableCode();
+pub fn next(self: *Spans) ?Span {
+    if (self.code_after) |after| {
+        if (self.index < self.code_end) {
+            return self.nextTableCode();
         }
 
-        spans.index = after;
-        spans.code_after = null;
+        self.index = after;
+        self.code_after = null;
     }
 
-    if (spans.lookahead_left == null) {
-        spans.lookahead_left = spans.text.len *| 16 +| 64;
+    if (self.lookahead_left == null) {
+        self.lookahead_left = self.text.len *| 16 +| 64;
     }
 
     next_scope: while (true) {
-        while (spans.depth > 0 and spans.index >= spans.scopes[spans.depth - 1].end) {
-            spans.depth -= 1;
-            spans.index = spans.scopes[spans.depth].after;
+        while (self.depth > 0 and self.index >= self.scopes[self.depth - 1].end) {
+            self.depth -= 1;
+            self.index = self.scopes[self.depth].after;
         }
 
-        if (spans.index >= spans.text.len) {
+        if (self.index >= self.text.len) {
             return null;
         }
 
-        const scope = spans.context();
-        const start = spans.index;
-        if (spans.literal) {
-            spans.index = spans.text.len;
-            return .{ .text = spans.text[start..] };
+        const scope = self.context();
+        const start = self.index;
+        if (self.literal) {
+            self.index = self.text.len;
+            return .{ .text = self.text[start..] };
         }
 
-        while (spans.index < scope.end) {
-            const at = spans.index;
-            if (spans.escaped(at, scope.end)) {
+        while (self.index < scope.end) {
+            const at = self.index;
+            if (self.escaped(at, scope.end)) {
                 if (at > start) {
-                    return spans.span(start, at);
+                    return self.span(start, at);
                 }
 
-                spans.index += 2;
-                return spans.span(at + 1, at + 2);
+                self.index += 2;
+                return self.span(at + 1, at + 2);
             }
 
-            if (spans.text[at] == '`') {
-                if (spans.code(.{ at, scope.end })) |value| {
+            if (self.text[at] == '`') {
+                if (self.code(.{ at, scope.end })) |value| {
                     if (at > start) {
-                        return spans.span(start, at);
+                        return self.span(start, at);
                     }
 
-                    if (spans.table_cell and value.end > value.start) {
-                        spans.index = value.start;
-                        spans.code_end = value.end;
-                        spans.code_after = value.after;
-                        return spans.nextTableCode();
+                    if (self.table_cell and value.end > value.start) {
+                        self.index = value.start;
+                        self.code_end = value.end;
+                        self.code_after = value.after;
+                        return self.nextTableCode();
                     }
 
-                    spans.index = value.after;
-                    var result = spans.span(value.start, value.end);
+                    self.index = value.after;
+                    var result = self.span(value.start, value.end);
                     result.kind = .code;
                     return result;
                 }
 
-                spans.index += 1;
-                while (spans.index < scope.end and spans.text[spans.index] == '`') {
-                    spans.index += 1;
+                self.index += 1;
+                while (self.index < scope.end and self.text[self.index] == '`') {
+                    self.index += 1;
                 }
 
                 continue;
             }
 
             if (scope.destination == null) {
-                if (spans.bareLink(.{ at, scope.end })) |end| {
+                if (self.bareLink(.{ at, scope.end })) |end| {
                     if (at > start) {
-                        return spans.span(start, at);
+                        return self.span(start, at);
                     }
 
-                    spans.index = end;
-                    return .{ .text = spans.text[at..end], .kind = scope.kind, .destination = spans.text[at..end], .link_offset = @intCast(at) };
+                    self.index = end;
+                    return .{ .text = self.text[at..end], .kind = scope.kind, .destination = self.text[at..end], .link_offset = @intCast(at) };
                 }
             }
 
             var nested: ?Scope = null;
-            if (spans.depth < spans.scopes.len) {
-                if (scope.destination == null and spans.text[at] == '[' and (at == 0 or spans.text[at - 1] != '!')) {
-                    nested = spans.link(.{ at, scope.end });
-                } else if (scope.destination == null and spans.text[at] == '<') {
-                    if (spans.autolink(.{ at, scope.end })) |value| {
+            if (self.depth < self.scopes.len) {
+                if (scope.destination == null and self.text[at] == '[' and (at == 0 or self.text[at - 1] != '!')) {
+                    nested = self.link(.{ at, scope.end });
+                } else if (scope.destination == null and self.text[at] == '<') {
+                    if (self.autolink(.{ at, scope.end })) |value| {
                         if (at > start) {
-                            return spans.span(start, at);
+                            return self.span(start, at);
                         }
 
-                        spans.index = value.after;
-                        return .{ .text = spans.text[value.start..value.end], .kind = scope.kind, .destination = value.destination, .link_offset = value.link_offset };
+                        self.index = value.after;
+                        return .{ .text = self.text[value.start..value.end], .kind = scope.kind, .destination = value.destination, .link_offset = value.link_offset };
                     }
-                } else if (spans.text[at] == '*' or spans.text[at] == '_') {
-                    nested = spans.emphasis(.{ at, scope.end });
+                } else if (self.text[at] == '*' or self.text[at] == '_') {
+                    nested = self.emphasis(.{ at, scope.end });
                 }
             }
 
             if (nested) |value| {
                 if (at > start) {
-                    return spans.span(start, at);
+                    return self.span(start, at);
                 }
 
-                spans.scopes[spans.depth] = value;
-                spans.depth += 1;
-                spans.index = value.start;
+                self.scopes[self.depth] = value;
+                self.depth += 1;
+                self.index = value.start;
                 continue :next_scope;
             }
 
-            spans.index += 1;
+            self.index += 1;
         }
 
-        return spans.span(start, spans.index);
+        return self.span(start, self.index);
     }
 }
 
-fn nextTableCode(spans: *Spans) Span {
-    const start = spans.index;
-    while (spans.index < spans.code_end) {
-        const at = spans.index;
-        if (spans.text[at] == '\\' and at + 1 < spans.code_end and spans.text[at + 1] == '|') {
+fn nextTableCode(self: *Spans) Span {
+    const start = self.index;
+    while (self.index < self.code_end) {
+        const at = self.index;
+        if (self.text[at] == '\\' and at + 1 < self.code_end and self.text[at + 1] == '|') {
             if (at > start) {
-                var result = spans.span(start, at);
+                var result = self.span(start, at);
                 result.kind = .code;
                 return result;
             }
 
-            spans.index += 2;
-            var result = spans.span(at + 1, at + 2);
+            self.index += 2;
+            var result = self.span(at + 1, at + 2);
             result.kind = .code;
             return result;
         }
 
-        spans.index += 1;
+        self.index += 1;
     }
 
-    var result = spans.span(start, spans.index);
+    var result = self.span(start, self.index);
     result.kind = .code;
     return result;
 }
 
-fn context(spans: *const Spans) Scope {
-    return if (spans.depth == 0) .{ .start = 0, .end = spans.text.len, .after = spans.text.len } else spans.scopes[spans.depth - 1];
+fn context(self: *const Spans) Scope {
+    return if (self.depth == 0) .{ .start = 0, .end = self.text.len, .after = self.text.len } else self.scopes[self.depth - 1];
 }
 
-fn span(spans: *const Spans, start: usize, end: usize) Span {
-    const scope = spans.context();
-    return .{ .text = spans.text[start..end], .kind = scope.kind, .destination = scope.destination, .link_offset = scope.link_offset };
+fn span(self: *const Spans, start: usize, end: usize) Span {
+    const scope = self.context();
+    return .{ .text = self.text[start..end], .kind = scope.kind, .destination = scope.destination, .link_offset = scope.link_offset };
 }
 
-fn scan(spans: *Spans) bool {
-    if (spans.lookahead_left.? == 0) {
+fn scan(self: *Spans) bool {
+    if (self.lookahead_left.? == 0) {
         return false;
     }
 
-    spans.lookahead_left.? -= 1;
+    self.lookahead_left.? -= 1;
     return true;
 }
 
-fn escaped(spans: *const Spans, at: usize, end: usize) bool {
-    return spans.text[at] == '\\' and at + 1 < end and std.ascii.isPunctuation(spans.text[at + 1]);
+fn escaped(self: *const Spans, at: usize, end: usize) bool {
+    return self.text[at] == '\\' and at + 1 < end and std.ascii.isPunctuation(self.text[at + 1]);
 }
 
-fn code(spans: *Spans, range: [2]usize) ?Scope {
+fn code(self: *Spans, range: [2]usize) ?Scope {
     const start = range[0];
     const limit = range[1];
     var content = start;
-    while (content < limit and spans.text[content] == '`') : (content += 1) {
-        if (!spans.scan()) {
+    while (content < limit and self.text[content] == '`') : (content += 1) {
+        if (!self.scan()) {
             return null;
         }
     }
@@ -195,25 +195,25 @@ fn code(spans: *Spans, range: [2]usize) ?Scope {
     const length = content - start;
     var at = content;
     while (at < limit) {
-        if (!spans.scan()) {
+        if (!self.scan()) {
             return null;
         }
 
-        if (spans.text[at] != '`') {
+        if (self.text[at] != '`') {
             at += 1;
             continue;
         }
 
         const close = at;
-        while (at < limit and spans.text[at] == '`') : (at += 1) {
-            if (!spans.scan()) {
+        while (at < limit and self.text[at] == '`') : (at += 1) {
+            if (!self.scan()) {
                 return null;
             }
         }
 
         if (at - close == length) {
             var end = close;
-            if (end > content + 1 and spans.text[content] == ' ' and spans.text[end - 1] == ' ' and std.mem.indexOfNone(u8, spans.text[content..end], " ") != null) {
+            if (end > content + 1 and self.text[content] == ' ' and self.text[end - 1] == ' ' and std.mem.indexOfNone(u8, self.text[content..end], " ") != null) {
                 content += 1;
                 end -= 1;
             }
@@ -225,43 +225,43 @@ fn code(spans: *Spans, range: [2]usize) ?Scope {
     return null;
 }
 
-fn emphasis(spans: *Spans, range: [2]usize) ?Scope {
+fn emphasis(self: *Spans, range: [2]usize) ?Scope {
     const start = range[0];
     const limit = range[1];
-    const marker = spans.text[start];
-    const count: usize = if (start + 1 < limit and spans.text[start + 1] == marker) 2 else 1;
+    const marker = self.text[start];
+    const count: usize = if (start + 1 < limit and self.text[start + 1] == marker) 2 else 1;
     const content = start + count;
-    if (content >= limit or std.ascii.isWhitespace(spans.text[content]) or (marker == '_' and start > 0 and std.ascii.isAlphanumeric(spans.text[start - 1]))) {
+    if (content >= limit or std.ascii.isWhitespace(self.text[content]) or (marker == '_' and start > 0 and std.ascii.isAlphanumeric(self.text[start - 1]))) {
         return null;
     }
 
     var at = content;
     while (at + count <= limit) : (at += 1) {
-        if (!spans.scan()) {
+        if (!self.scan()) {
             return null;
         }
 
-        if (spans.escaped(at, limit)) {
+        if (self.escaped(at, limit)) {
             at += 1;
             continue;
         }
 
-        if (spans.text[at] == '`') {
-            if (spans.code(.{ at, limit })) |value| {
+        if (self.text[at] == '`') {
+            if (self.code(.{ at, limit })) |value| {
                 at = value.after - 1;
                 continue;
             }
         }
 
-        if (spans.text[at] == '[' and spans.context().destination == null) {
-            if (spans.link(.{ at, limit })) |value| {
+        if (self.text[at] == '[' and self.context().destination == null) {
+            if (self.link(.{ at, limit })) |value| {
                 at = value.after - 1;
                 continue;
             }
         }
 
-        if (spans.text[at] == marker and (count == 1 or spans.text[at + 1] == marker) and at > content and !std.ascii.isWhitespace(spans.text[at - 1])) {
-            var result = spans.context();
+        if (self.text[at] == marker and (count == 1 or self.text[at + 1] == marker) and at > content and !std.ascii.isWhitespace(self.text[at - 1])) {
+            var result = self.context();
             result.start = content;
             result.end = at;
             result.after = at + count;
@@ -273,7 +273,7 @@ fn emphasis(spans: *Spans, range: [2]usize) ?Scope {
     return null;
 }
 
-fn link(spans: *Spans, range: [2]usize) ?Scope {
+fn link(self: *Spans, range: [2]usize) ?Scope {
     const start = range[0];
     const limit = range[1];
     if (start > std.math.maxInt(u32)) {
@@ -283,17 +283,17 @@ fn link(spans: *Spans, range: [2]usize) ?Scope {
     var at = start + 1;
     var depth: usize = 0;
     while (at < limit) : (at += 1) {
-        if (!spans.scan()) {
+        if (!self.scan()) {
             return null;
         }
 
-        if (spans.escaped(at, limit)) {
+        if (self.escaped(at, limit)) {
             at += 1;
             continue;
         }
 
-        switch (spans.text[at]) {
-            '`' => if (spans.code(.{ at, limit })) |value| {
+        switch (self.text[at]) {
+            '`' => if (self.code(.{ at, limit })) |value| {
                 at = value.after - 1;
             },
             '[' => {
@@ -308,40 +308,40 @@ fn link(spans: *Spans, range: [2]usize) ?Scope {
                 }
 
                 // Nested inline links cannot give the same label two targets.
-                if (at + 1 < limit and spans.text[at + 1] == '(') {
+                if (at + 1 < limit and self.text[at + 1] == '(') {
                     return null;
                 }
 
                 depth -= 1;
             },
-            '<' => if (spans.autolink(.{ at, limit }) != null) {
+            '<' => if (self.autolink(.{ at, limit }) != null) {
                 return null;
             },
             else => {},
         }
     }
 
-    if (at + 1 >= limit or spans.text[at + 1] != '(') {
+    if (at + 1 >= limit or self.text[at + 1] != '(') {
         return null;
     }
 
     const label_end = at;
-    at = spans.whitespace(at + 2, limit) orelse return null;
-    const angled = at < limit and spans.text[at] == '<';
+    at = self.whitespace(at + 2, limit) orelse return null;
+    const angled = at < limit and self.text[at] == '<';
     const destination_start = at + @intFromBool(angled);
     at = destination_start;
     depth = 0;
     while (at < limit) : (at += 1) {
-        if (!spans.scan()) {
+        if (!self.scan()) {
             return null;
         }
 
-        if (spans.escaped(at, limit)) {
+        if (self.escaped(at, limit)) {
             at += 1;
             continue;
         }
 
-        const byte = spans.text[at];
+        const byte = self.text[at];
         if (angled) {
             if (byte == '>') {
                 break;
@@ -374,39 +374,39 @@ fn link(spans: *Spans, range: [2]usize) ?Scope {
     const destination_end = at;
     at += @intFromBool(angled);
     const before_space = at;
-    at = spans.whitespace(at, limit) orelse return null;
-    if (at < limit and spans.text[at] != ')' and at > before_space) {
-        at = spans.title(at, limit) orelse return null;
-        at = spans.whitespace(at, limit) orelse return null;
+    at = self.whitespace(at, limit) orelse return null;
+    if (at < limit and self.text[at] != ')' and at > before_space) {
+        at = self.title(at, limit) orelse return null;
+        at = self.whitespace(at, limit) orelse return null;
     }
-    if (at >= limit or spans.text[at] != ')') {
+    if (at >= limit or self.text[at] != ')') {
         return null;
     }
 
-    var result = spans.context();
+    var result = self.context();
     result.start = start + 1;
     result.end = label_end;
     result.after = at + 1;
-    result.destination = spans.text[destination_start..destination_end];
+    result.destination = self.text[destination_start..destination_end];
     result.link_offset = @intCast(start);
     return result;
 }
 
-fn whitespace(spans: *Spans, start: usize, limit: usize) ?usize {
+fn whitespace(self: *Spans, start: usize, limit: usize) ?usize {
     var at = start;
     var lines: u8 = 0;
-    while (at < limit and (spans.text[at] == ' ' or spans.text[at] == '\t' or spans.text[at] == '\n' or spans.text[at] == '\r')) : (at += 1) {
-        if (!spans.scan()) {
+    while (at < limit and (self.text[at] == ' ' or self.text[at] == '\t' or self.text[at] == '\n' or self.text[at] == '\r')) : (at += 1) {
+        if (!self.scan()) {
             return null;
         }
 
-        if (spans.text[at] == '\n' or spans.text[at] == '\r') {
+        if (self.text[at] == '\n' or self.text[at] == '\r') {
             lines += 1;
             if (lines > 1) {
                 return null;
             }
 
-            if (spans.text[at] == '\r' and at + 1 < limit and spans.text[at + 1] == '\n') {
+            if (self.text[at] == '\r' and at + 1 < limit and self.text[at + 1] == '\n') {
                 at += 1;
             }
         }
@@ -415,8 +415,8 @@ fn whitespace(spans: *Spans, start: usize, limit: usize) ?usize {
     return at;
 }
 
-fn title(spans: *Spans, start: usize, limit: usize) ?usize {
-    const marker = spans.text[start];
+fn title(self: *Spans, start: usize, limit: usize) ?usize {
+    const marker = self.text[start];
     if (marker != '\'' and marker != '"' and marker != '(') {
         return null;
     }
@@ -424,22 +424,22 @@ fn title(spans: *Spans, start: usize, limit: usize) ?usize {
     const close: u8 = if (marker == '(') ')' else marker;
     var at = start + 1;
     while (at < limit) : (at += 1) {
-        if (!spans.scan()) {
+        if (!self.scan()) {
             return null;
         }
 
-        if (spans.escaped(at, limit)) {
+        if (self.escaped(at, limit)) {
             at += 1;
             continue;
         }
-        if (spans.text[at] == close) {
+        if (self.text[at] == close) {
             return at + 1;
         }
-        if (marker == '(' and spans.text[at] == '(') {
+        if (marker == '(' and self.text[at] == '(') {
             return null;
         }
-        if (spans.text[at] == '\n' or spans.text[at] == '\r') {
-            at = spans.whitespace(at, limit) orelse return null;
+        if (self.text[at] == '\n' or self.text[at] == '\r') {
+            at = self.whitespace(at, limit) orelse return null;
             at -= 1;
         }
     }
@@ -447,7 +447,7 @@ fn title(spans: *Spans, start: usize, limit: usize) ?usize {
     return null;
 }
 
-fn autolink(spans: *Spans, range: [2]usize) ?Scope {
+fn autolink(self: *Spans, range: [2]usize) ?Scope {
     const start = range[0];
     const limit = range[1];
     if (start > std.math.maxInt(u32)) {
@@ -455,21 +455,21 @@ fn autolink(spans: *Spans, range: [2]usize) ?Scope {
     }
 
     const content = start + 1;
-    const remaining = spans.text[content..limit];
+    const remaining = self.text[content..limit];
     const scheme: usize = if (std.ascii.startsWithIgnoreCase(remaining, "https://")) 8 else if (std.ascii.startsWithIgnoreCase(remaining, "http://")) 7 else return null;
     var at = content + scheme;
     while (at < limit) : (at += 1) {
-        if (!spans.scan()) {
+        if (!self.scan()) {
             return null;
         }
 
-        const byte = spans.text[at];
+        const byte = self.text[at];
         if (byte == '>') {
             if (at == content + scheme) {
                 return null;
             }
 
-            return .{ .start = content, .end = at, .after = at + 1, .destination = spans.text[content..at], .link_offset = @intCast(start) };
+            return .{ .start = content, .end = at, .after = at + 1, .destination = self.text[content..at], .link_offset = @intCast(start) };
         }
         if (byte == '<' or byte <= ' ' or byte == 127) {
             return null;

@@ -32,16 +32,16 @@ plugin_count: u8 = 0,
 
 /// Resolves a complete theme with identical CLI/appearance precedence for both hosts.
 /// Example: `const theme = snapshot.resolveTheme(.dark, null);`
-pub fn resolveTheme(snapshot: *const Snapshot, appearance: data.HostAppearance, locked: ?data.ColorTheme) data.ColorTheme {
+pub fn resolveTheme(self: *const Snapshot, appearance: data.HostAppearance, locked: ?data.ColorTheme) data.ColorTheme {
     return locked orelse (switch (appearance) {
         .unknown => null,
-        .light => snapshot.theme_light,
-        .dark => snapshot.theme_dark,
-    } orelse snapshot.theme);
+        .light => self.theme_light,
+        .dark => self.theme_dark,
+    } orelse self.theme);
 }
 
-pub fn bindingSlice(snapshot: *const Snapshot) []const data.config_values.ConfiguredBinding {
-    return snapshot.bindings[0..snapshot.binding_count];
+pub fn bindingSlice(self: *const Snapshot) []const data.config_values.ConfiguredBinding {
+    return self.bindings[0..self.binding_count];
 }
 
 /// The host window title template; empty leaves the host title alone.
@@ -49,8 +49,8 @@ pub fn bindingSlice(snapshot: *const Snapshot) []const data.config_values.Config
 /// ```zig
 /// const template = snapshot.windowTitle();
 /// ```
-pub fn windowTitle(snapshot: *const Snapshot) []const u8 {
-    return snapshot.window_title_bytes[0..snapshot.window_title_len];
+pub fn windowTitle(self: *const Snapshot) []const u8 {
+    return self.window_title_bytes[0..self.window_title_len];
 }
 
 /// Chooses the configured executable before the process environment fallback.

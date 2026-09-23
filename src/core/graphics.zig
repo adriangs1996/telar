@@ -31,8 +31,8 @@ pub const Format = enum(u8) {
     rgb = 24,
     rgba = 32,
 
-    pub fn bytesPerPixel(format: Format) usize {
-        return switch (format) {
+    pub fn bytesPerPixel(self: Format) usize {
+        return switch (self) {
             .rgb => 3,
             .rgba => 4,
         };

@@ -43,8 +43,8 @@ pub fn init(gpa: std.mem.Allocator, launch: core.LaunchView, cwd_path: []const u
     return .{ .command = command, .arguments = arguments, .cwd = cwd, .gpa = gpa };
 }
 
-pub fn deinit(command: *OwnedCommand) void {
-    for (command.arguments) |argument| command.gpa.free(argument);
-    command.gpa.free(command.arguments);
-    command.gpa.free(command.cwd);
+pub fn deinit(self: *OwnedCommand) void {
+    for (self.arguments) |argument| self.gpa.free(argument);
+    self.gpa.free(self.arguments);
+    self.gpa.free(self.cwd);
 }

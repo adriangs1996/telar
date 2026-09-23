@@ -11,9 +11,9 @@ projection: *const client.Projection,
 
 /// Paints the engine's owned response without running engine work in the GUI.
 /// Example: `try widget.draw(canvas);`
-pub fn draw(widget: SuggestionModal, canvas: *Canvas) !void {
-    const modal: Modal = .{ .area = widget.area, .title = "Suggest a command" };
-    const projection = widget.projection.*;
+pub fn draw(self: SuggestionModal, canvas: *Canvas) !void {
+    const modal: Modal = .{ .area = self.area, .title = "Suggest a command" };
+    const projection = self.projection.*;
     const state = projection.suggestion;
     const palette = canvas.theme.palette;
     const text: []const u8 = switch (state.phase) {

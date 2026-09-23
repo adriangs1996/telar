@@ -11,9 +11,9 @@ range: [2]u32,
 /// Writes displayed text in the half-open source range without Markdown syntax.
 /// Visual wrapping adds no newlines; code and literal messages retain their bytes.
 /// Example: `try selection.write(&clipboard_writer);`
-pub fn write(selection: Selection, writer: *std.Io.Writer) !void {
-    var selected = selection;
-    selected.range = selection.bounds();
+pub fn write(self: Selection, writer: *std.Io.Writer) !void {
+    var selected = self;
+    selected.range = self.bounds();
     if (selected.range[0] == selected.range[1]) {
         return;
     }
@@ -66,70 +66,70 @@ pub fn write(selection: Selection, writer: *std.Io.Writer) !void {
     }
 }
 
-fn bounds(selection: Selection) [2]u32 {
-    var start = @min(@min(selection.range[0], selection.range[1]), selection.text.len);
-    var end = @min(@max(selection.range[0], selection.range[1]), selection.text.len);
-    while (start < end and selection.text[start] & 0xc0 == 0x80) {
+fn bounds(self: Selection) [2]u32 {
+    var start = @min(@min(self.range[0], self.range[1]), self.text.len);
+    var end = @min(@max(self.range[0], self.range[1]), self.text.len);
+    while (start < end and self.text[start] & 0xc0 == 0x80) {
         start += 1;
     }
 
-    while (end > start and end < selection.text.len and selection.text[end] & 0xc0 == 0x80) {
+    while (end > start and end < self.text.len and self.text[end] & 0xc0 == 0x80) {
         end -= 1;
     }
 
     return .{ @intCast(start), @intCast(end) };
 }
 
-fn writeRow(selection: Selection, writer: *std.Io.Writer, row: @import("MessageTableCells.zig")) !void {
+fn writeRow(self: Selection, writer: *std.Io.Writer, row: @import("MessageTableCells.zig")) !void {
     var cells = row;
     var first = true;
     while (cells.next()) |cell| {
-        const offset = @intFromPtr(cell.ptr) - @intFromPtr(selection.text.ptr);
-        if (!first and offset > selection.range[0] and offset < selection.range[1]) {
+        const offset = @intFromPtr(cell.ptr) - @intFromPtr(self.text.ptr);
+        if (!first and offset > self.range[0] and offset < self.range[1]) {
             try writer.writeByte('\t');
         }
 
         first = false;
         var spans: @import("MessageSpans.zig") = .{ .text = cell, .table_cell = true };
         while (spans.next()) |span| {
-            try selection.writeSlice(writer, span.text);
+            try self.writeSlice(writer, span.text);
         }
     }
 
-    const end = @intFromPtr(row.source.ptr) - @intFromPtr(selection.text.ptr) + row.source.len;
-    try selection.writeSlice(writer, selection.lineBreak(end));
+    const end = @intFromPtr(row.source.ptr) - @intFromPtr(self.text.ptr) + row.source.len;
+    try self.writeSlice(writer, self.lineBreak(end));
 }
 
-fn writeSlice(selection: Selection, writer: *std.Io.Writer, visible: []const u8) !void {
+fn writeSlice(self: Selection, writer: *std.Io.Writer, visible: []const u8) !void {
     if (visible.len == 0) {
         return;
     }
 
-    const offset = @intFromPtr(visible.ptr) - @intFromPtr(selection.text.ptr);
-    const start = @max(offset, selection.range[0]);
-    const end = @min(offset + visible.len, selection.range[1]);
+    const offset = @intFromPtr(visible.ptr) - @intFromPtr(self.text.ptr);
+    const start = @max(offset, self.range[0]);
+    const end = @min(offset + visible.len, self.range[1]);
     if (start < end) {
-        try writer.writeAll(selection.text[start..end]);
+        try writer.writeAll(self.text[start..end]);
     }
 }
 
-fn lineBreak(selection: Selection, at: usize) []const u8 {
+fn lineBreak(self: Selection, at: usize) []const u8 {
     var end = at;
-    if (end < selection.text.len and selection.text[end] == '\r') {
+    if (end < self.text.len and self.text[end] == '\r') {
         end += 1;
     }
 
-    if (end < selection.text.len and selection.text[end] == '\n') {
+    if (end < self.text.len and self.text[end] == '\n') {
         end += 1;
     }
 
-    return selection.text[at..end];
+    return self.text[at..end];
 }
 
-fn expectText(selection: Selection, expected: []const u8) !void {
+fn expectText(self: Selection, expected: []const u8) !void {
     var buffer: [4096]u8 = undefined;
     var writer = std.Io.Writer.fixed(&buffer);
-    try selection.write(&writer);
+    try self.write(&writer);
     try std.testing.expectEqualStrings(expected, writer.buffered());
 }
 

@@ -15,20 +15,20 @@ cwds: PatternList = .{},
 /// ```zig
 /// if (!filters.shouldRecord(.{ .command = command, .cwd = cwd })) return;
 /// ```
-pub fn shouldRecord(filters: *const Filters, input: Input) bool {
+pub fn shouldRecord(self: *const Filters, input: Input) bool {
     if (input.command.len == 0) {
         return false;
     }
     if (input.command[0] == ' ') {
         return false;
     }
-    if (filters.secrets and history_filter.looksLikeSecret(input.command)) {
+    if (self.secrets and history_filter.looksLikeSecret(input.command)) {
         return false;
     }
-    if (filters.commands.matches(input.command)) {
+    if (self.commands.matches(input.command)) {
         return false;
     }
-    if (filters.cwds.matches(input.cwd)) {
+    if (self.cwds.matches(input.cwd)) {
         return false;
     }
 
@@ -41,17 +41,17 @@ pub fn shouldRecord(filters: *const Filters, input: Input) bool {
 /// ```zig
 /// if (!filters.shouldRecordAgent(.{ .command = command, .cwd = cwd }, true)) return;
 /// ```
-pub fn shouldRecordAgent(filters: *const Filters, input: Input, redact: bool) bool {
+pub fn shouldRecordAgent(self: *const Filters, input: Input, redact: bool) bool {
     if (input.command.len == 0) {
         return false;
     }
-    if (redact and filters.secrets and history_filter.looksLikeSecret(input.command)) {
+    if (redact and self.secrets and history_filter.looksLikeSecret(input.command)) {
         return false;
     }
-    if (filters.commands.matches(input.command)) {
+    if (self.commands.matches(input.command)) {
         return false;
     }
-    if (filters.cwds.matches(input.cwd)) {
+    if (self.cwds.matches(input.cwd)) {
         return false;
     }
 

@@ -8,37 +8,37 @@ thread: client.ThreadView,
 kind: @FieldType(Selector, "kind"),
 
 /// Uses only entries advertised by the live provider. Example: `const count = options.count();`
-pub fn count(options: Options) u8 {
-    const snapshot = options.thread.transcript orelse return 0;
-    return switch (options.kind) {
+pub fn count(self: Options) u8 {
+    const snapshot = self.thread.transcript orelse return 0;
+    return switch (self.kind) {
         .recent => if (snapshot.canResume()) snapshot.recent.count else 0,
         .model => @intCast(snapshot.models().len),
-        .effort => if (snapshot.findModel(options.thread.options.modelSlice())) |model| @intCast(model.efforts().len) else 0,
-        .access => if (snapshot.findModel(options.thread.options.modelSlice()) != null) 3 else 0,
+        .effort => if (snapshot.findModel(self.thread.options.modelSlice())) |model| @intCast(model.efforts().len) else 0,
+        .access => if (snapshot.findModel(self.thread.options.modelSlice()) != null) 3 else 0,
     };
 }
 
 /// Borrows an actual model/effort name or a supported sandbox policy. Example: `draw(options.label(index));`
-pub fn label(options: Options, index: u8) []const u8 {
-    if (index >= options.count()) {
+pub fn label(self: Options, index: u8) []const u8 {
+    if (index >= self.count()) {
         return "";
     }
 
-    return switch (options.kind) {
-        .recent => options.thread.transcript.?.recent.entries[index].titleSlice(),
-        .model => options.thread.transcript.?.models()[index].labelSlice(),
-        .effort => effortLabel(options.thread.transcript.?.findModel(options.thread.options.modelSlice()).?.efforts()[index].idSlice()),
+    return switch (self.kind) {
+        .recent => self.thread.transcript.?.recent.entries[index].titleSlice(),
+        .model => self.thread.transcript.?.models()[index].labelSlice(),
+        .effort => effortLabel(self.thread.transcript.?.findModel(self.thread.options.modelSlice()).?.efforts()[index].idSlice()),
         .access => accessLabel(@enumFromInt(index)),
     };
 }
 
 /// Explains the permissions before the user selects them. Example: `draw(options.detail(index));`
-pub fn detail(options: Options, index: u8) []const u8 {
-    if (options.kind == .recent) {
-        return options.thread.cwd;
+pub fn detail(self: Options, index: u8) []const u8 {
+    if (self.kind == .recent) {
+        return self.thread.cwd;
     }
 
-    if (options.kind != .access) {
+    if (self.kind != .access) {
         return "";
     }
 
@@ -51,23 +51,23 @@ pub fn detail(options: Options, index: u8) []const u8 {
 }
 
 /// Example: `const selected = options.selected();`
-pub fn selected(options: Options) u8 {
-    const snapshot = options.thread.transcript orelse return 0;
-    switch (options.kind) {
+pub fn selected(self: Options) u8 {
+    const snapshot = self.thread.transcript orelse return 0;
+    switch (self.kind) {
         .recent => return 0,
         .model => for (snapshot.models(), 0..) |model, index| {
-            if (std.mem.eql(u8, model.idSlice(), options.thread.options.modelSlice())) {
+            if (std.mem.eql(u8, model.idSlice(), self.thread.options.modelSlice())) {
                 return @intCast(index);
             }
         },
-        .effort => if (snapshot.findModel(options.thread.options.modelSlice())) |model| {
+        .effort => if (snapshot.findModel(self.thread.options.modelSlice())) |model| {
             for (model.efforts(), 0..) |effort, index| {
-                if (effort.eql(options.thread.options.effort)) {
+                if (effort.eql(self.thread.options.effort)) {
                     return @intCast(index);
                 }
             }
         },
-        .access => return @intFromEnum(options.thread.options.access),
+        .access => return @intFromEnum(self.thread.options.access),
     }
 
     return 0;

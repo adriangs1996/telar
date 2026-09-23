@@ -33,13 +33,13 @@ key_overflow: bool = false,
 /// decoder.init();
 /// defer decoder.deinit();
 /// ```
-pub fn init(decoder: *Decoder) void {
-    decoder.* = .{};
-    decoder.fixed_allocator = .init(&decoder.allocator_storage);
-    decoder.scanner = .initStreaming(decoder.fixed_allocator.allocator());
-    decoder.initialized = true;
-    decoder.scanner.ensureTotalStackCapacity(claude_request.max_json_depth) catch {
-        decoder.invalid = true;
+pub fn init(self: *Decoder) void {
+    self.* = .{};
+    self.fixed_allocator = .init(&self.allocator_storage);
+    self.scanner = .initStreaming(self.fixed_allocator.allocator());
+    self.initialized = true;
+    self.scanner.ensureTotalStackCapacity(claude_request.max_json_depth) catch {
+        self.invalid = true;
     };
 }
 
@@ -48,21 +48,21 @@ pub fn init(decoder: *Decoder) void {
 /// ```zig
 /// decoder.feed(fragment);
 /// ```
-pub fn feed(decoder: *Decoder, input: []const u8) void {
-    std.debug.assert(decoder.initialized);
+pub fn feed(self: *Decoder, input: []const u8) void {
+    std.debug.assert(self.initialized);
 
-    if (decoder.invalid or decoder.document_finished or input.len == 0) {
+    if (self.invalid or self.document_finished or input.len == 0) {
         return;
     }
 
-    if (input.len > claude_request.max_inspected_bytes -| decoder.bytes_seen) {
-        decoder.invalid = true;
+    if (input.len > claude_request.max_inspected_bytes -| self.bytes_seen) {
+        self.invalid = true;
         return;
     }
 
-    decoder.bytes_seen += input.len;
-    decoder.scanner.feedInput(input);
-    decoder.consume(false);
+    self.bytes_seen += input.len;
+    self.scanner.feedInput(input);
+    self.consume(false);
 }
 
 /// Ends the JSON document and returns whether its validated shape belongs
@@ -71,16 +71,16 @@ pub fn feed(decoder: *Decoder, input: []const u8) void {
 /// ```zig
 /// const inference = decoder.finish();
 /// ```
-pub fn finish(decoder: *Decoder) bool {
-    std.debug.assert(decoder.initialized);
+pub fn finish(self: *Decoder) bool {
+    std.debug.assert(self.initialized);
 
-    if (!decoder.document_finished and !decoder.invalid) {
-        decoder.scanner.endInput();
-        decoder.consume(true);
+    if (!self.document_finished and !self.invalid) {
+        self.scanner.endInput();
+        self.consume(true);
     }
 
-    return !decoder.invalid and decoder.document_finished and
-        decoder.stream_enabled and decoder.tools_nonempty;
+    return !self.invalid and self.document_finished and
+        self.stream_enabled and self.tools_nonempty;
 }
 
 /// Releases and erases the bounded parsing state.
@@ -88,100 +88,100 @@ pub fn finish(decoder: *Decoder) bool {
 /// ```zig
 /// decoder.deinit();
 /// ```
-pub fn deinit(decoder: *Decoder) void {
-    if (!decoder.initialized) {
+pub fn deinit(self: *Decoder) void {
+    if (!self.initialized) {
         return;
     }
 
-    decoder.scanner.deinit();
-    std.crypto.secureZero(u8, std.mem.asBytes(decoder));
+    self.scanner.deinit();
+    std.crypto.secureZero(u8, std.mem.asBytes(self));
 }
 
-fn consume(decoder: *Decoder, finishing: bool) void {
-    while (!decoder.invalid and !decoder.document_finished) {
-        const token = decoder.scanner.next() catch |failure| switch (failure) {
+fn consume(self: *Decoder, finishing: bool) void {
+    while (!self.invalid and !self.document_finished) {
+        const token = self.scanner.next() catch |failure| switch (failure) {
             error.BufferUnderrun => {
                 if (finishing) {
-                    decoder.invalid = true;
+                    self.invalid = true;
                 }
 
                 return;
             },
             else => {
-                decoder.invalid = true;
+                self.invalid = true;
                 return;
             },
         };
 
         if (token == .end_of_document) {
-            if (decoder.position == .done) {
-                decoder.document_finished = true;
+            if (self.position == .done) {
+                self.document_finished = true;
             } else {
-                decoder.invalid = true;
+                self.invalid = true;
             }
 
             return;
         }
 
-        decoder.consumeToken(token);
+        self.consumeToken(token);
     }
 }
 
-fn consumeToken(decoder: *Decoder, token: std.json.Token) void {
-    switch (decoder.position) {
-        .document => decoder.consumeDocumentStart(token),
-        .key => decoder.consumeKey(token),
-        .value => decoder.consumeValue(token),
-        .nested_value => decoder.consumeNestedValue(token),
-        .done => decoder.invalid = token != .end_of_document,
+fn consumeToken(self: *Decoder, token: std.json.Token) void {
+    switch (self.position) {
+        .document => self.consumeDocumentStart(token),
+        .key => self.consumeKey(token),
+        .value => self.consumeValue(token),
+        .nested_value => self.consumeNestedValue(token),
+        .done => self.invalid = token != .end_of_document,
     }
 }
 
-fn consumeDocumentStart(decoder: *Decoder, token: std.json.Token) void {
-    if (token != .object_begin or decoder.scanner.stackHeight() != 1) {
-        decoder.invalid = true;
+fn consumeDocumentStart(self: *Decoder, token: std.json.Token) void {
+    if (token != .object_begin or self.scanner.stackHeight() != 1) {
+        self.invalid = true;
         return;
     }
 
-    decoder.position = .key;
+    self.position = .key;
 }
 
-fn consumeKey(decoder: *Decoder, token: std.json.Token) void {
+fn consumeKey(self: *Decoder, token: std.json.Token) void {
     switch (token) {
-        .partial_string => |fragment| decoder.appendKey(fragment),
-        .partial_string_escaped_1 => |fragment| decoder.appendKey(&fragment),
-        .partial_string_escaped_2 => |fragment| decoder.appendKey(&fragment),
-        .partial_string_escaped_3 => |fragment| decoder.appendKey(&fragment),
-        .partial_string_escaped_4 => |fragment| decoder.appendKey(&fragment),
+        .partial_string => |fragment| self.appendKey(fragment),
+        .partial_string_escaped_1 => |fragment| self.appendKey(&fragment),
+        .partial_string_escaped_2 => |fragment| self.appendKey(&fragment),
+        .partial_string_escaped_3 => |fragment| self.appendKey(&fragment),
+        .partial_string_escaped_4 => |fragment| self.appendKey(&fragment),
         .string => |fragment| {
-            decoder.appendKey(fragment);
-            decoder.selectField();
-            decoder.position = .value;
+            self.appendKey(fragment);
+            self.selectField();
+            self.position = .value;
         },
         .object_end => {
-            if (decoder.scanner.stackHeight() != 0) {
-                decoder.invalid = true;
+            if (self.scanner.stackHeight() != 0) {
+                self.invalid = true;
                 return;
             }
 
-            decoder.position = .done;
+            self.position = .done;
         },
-        else => decoder.invalid = true,
+        else => self.invalid = true,
     }
 }
 
-fn consumeValue(decoder: *Decoder, token: std.json.Token) void {
+fn consumeValue(self: *Decoder, token: std.json.Token) void {
     switch (token) {
         .object_begin, .array_begin => {
-            const depth = decoder.scanner.stackHeight();
+            const depth = self.scanner.stackHeight();
             if (depth > claude_request.max_json_depth) {
-                decoder.invalid = true;
+                self.invalid = true;
                 return;
             }
 
-            decoder.value_depth = depth;
-            decoder.tools_array_depth = if (decoder.field == .tools and token == .array_begin) depth else 0;
-            decoder.position = .nested_value;
+            self.value_depth = depth;
+            self.tools_array_depth = if (self.field == .tools and token == .array_begin) depth else 0;
+            self.position = .nested_value;
         },
         .partial_number,
         .partial_string,
@@ -191,84 +191,84 @@ fn consumeValue(decoder: *Decoder, token: std.json.Token) void {
         .partial_string_escaped_4,
         => {},
         .true => {
-            if (decoder.field == .stream) {
-                decoder.stream_enabled = true;
+            if (self.field == .stream) {
+                self.stream_enabled = true;
             }
 
-            decoder.completeValue();
+            self.completeValue();
         },
-        .false, .null, .number, .string => decoder.completeValue(),
-        else => decoder.invalid = true,
+        .false, .null, .number, .string => self.completeValue(),
+        else => self.invalid = true,
     }
 }
 
-fn consumeNestedValue(decoder: *Decoder, token: std.json.Token) void {
+fn consumeNestedValue(self: *Decoder, token: std.json.Token) void {
     if (token == .object_begin or token == .array_begin) {
-        if (decoder.scanner.stackHeight() > claude_request.max_json_depth) {
-            decoder.invalid = true;
+        if (self.scanner.stackHeight() > claude_request.max_json_depth) {
+            self.invalid = true;
             return;
         }
     }
 
-    if (decoder.tools_array_depth != 0 and !decoder.tools_nonempty) {
+    if (self.tools_array_depth != 0 and !self.tools_nonempty) {
         const empty_tools = token == .array_end and
-            decoder.scanner.stackHeight() + 1 == decoder.tools_array_depth;
+            self.scanner.stackHeight() + 1 == self.tools_array_depth;
 
         if (!empty_tools) {
-            decoder.tools_nonempty = true;
+            self.tools_nonempty = true;
         }
     }
 
     const closes_value = (token == .object_end or token == .array_end) and
-        decoder.scanner.stackHeight() + 1 == decoder.value_depth;
+        self.scanner.stackHeight() + 1 == self.value_depth;
     if (closes_value) {
-        decoder.completeValue();
+        self.completeValue();
     }
 }
 
-fn completeValue(decoder: *Decoder) void {
-    decoder.field = .other;
-    decoder.value_depth = 0;
-    decoder.tools_array_depth = 0;
-    decoder.position = .key;
+fn completeValue(self: *Decoder) void {
+    self.field = .other;
+    self.value_depth = 0;
+    self.tools_array_depth = 0;
+    self.position = .key;
 }
 
-fn appendKey(decoder: *Decoder, fragment: []const u8) void {
-    if (decoder.key_overflow or fragment.len > decoder.key.len -| decoder.key_len) {
-        decoder.key_overflow = true;
+fn appendKey(self: *Decoder, fragment: []const u8) void {
+    if (self.key_overflow or fragment.len > self.key.len -| self.key_len) {
+        self.key_overflow = true;
         return;
     }
 
-    @memcpy(decoder.key[decoder.key_len..][0..fragment.len], fragment);
-    decoder.key_len += fragment.len;
+    @memcpy(self.key[self.key_len..][0..fragment.len], fragment);
+    self.key_len += fragment.len;
 }
 
-fn selectField(decoder: *Decoder) void {
-    const name = decoder.key[0..decoder.key_len];
-    decoder.field = if (!decoder.key_overflow and std.mem.eql(u8, name, "stream"))
+fn selectField(self: *Decoder) void {
+    const name = self.key[0..self.key_len];
+    self.field = if (!self.key_overflow and std.mem.eql(u8, name, "stream"))
         .stream
-    else if (!decoder.key_overflow and std.mem.eql(u8, name, "tools"))
+    else if (!self.key_overflow and std.mem.eql(u8, name, "tools"))
         .tools
     else
         .other;
 
-    decoder.key_len = 0;
-    decoder.key_overflow = false;
+    self.key_len = 0;
+    self.key_overflow = false;
 
-    switch (decoder.field) {
+    switch (self.field) {
         .stream => {
-            if (decoder.stream_seen) {
-                decoder.invalid = true;
+            if (self.stream_seen) {
+                self.invalid = true;
             }
 
-            decoder.stream_seen = true;
+            self.stream_seen = true;
         },
         .tools => {
-            if (decoder.tools_seen) {
-                decoder.invalid = true;
+            if (self.tools_seen) {
+                self.invalid = true;
             }
 
-            decoder.tools_seen = true;
+            self.tools_seen = true;
         },
         .other => {},
     }

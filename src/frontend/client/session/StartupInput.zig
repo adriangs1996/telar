@@ -63,27 +63,27 @@ pub fn next(self: *StartupInput, incoming: *[]const u8) !?term.Event.TerminalRes
     }
 }
 
-fn retain(state: *StartupInput, bytes: []const u8) !void {
-    if (bytes.len > state.held.len - state.held_len) {
+fn retain(self: *StartupInput, bytes: []const u8) !void {
+    if (bytes.len > self.held.len - self.held_len) {
         return error.StartupInputOverflow;
     }
 
-    @memcpy(state.held[state.held_len..][0..bytes.len], bytes);
-    state.held_len += bytes.len;
+    @memcpy(self.held[self.held_len..][0..bytes.len], bytes);
+    self.held_len += bytes.len;
 }
 
-fn consume(state: *StartupInput, len: usize) void {
-    std.mem.copyForwards(u8, &state.pending, state.pending[len..state.pending_len]);
-    state.pending_len -= len;
+fn consume(self: *StartupInput, len: usize) void {
+    std.mem.copyForwards(u8, &self.pending, self.pending[len..self.pending_len]);
+    self.pending_len -= len;
 }
 
 /// Moves an unfinished escape prefix into the replay, where the normal
 /// input router resumes parsing it across subsequent reads.
 /// Example: `const bytes = try state.finish();`.
-pub fn finish(state: *StartupInput) ![]const u8 {
-    try state.retain(state.pending[0..state.pending_len]);
-    state.pending_len = 0;
-    const len = state.held_len;
-    state.held_len = 0;
-    return state.held[0..len];
+pub fn finish(self: *StartupInput) ![]const u8 {
+    try self.retain(self.pending[0..self.pending_len]);
+    self.pending_len = 0;
+    const len = self.held_len;
+    self.held_len = 0;
+    return self.held[0..len];
 }

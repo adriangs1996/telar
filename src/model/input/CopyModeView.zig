@@ -7,26 +7,26 @@ pointer: bool = false,
 anchor: ?Point,
 linewise: bool,
 
-pub fn selected(view: View, x: u16, y: u32) bool {
-    const anchor = view.anchor orelse return false;
-    if (view.linewise) {
-        const first = @min(anchor.y, view.cursor.y);
-        const last = @max(anchor.y, view.cursor.y);
+pub fn selected(self: View, x: u16, y: u32) bool {
+    const anchor = self.anchor orelse return false;
+    if (self.linewise) {
+        const first = @min(anchor.y, self.cursor.y);
+        const last = @max(anchor.y, self.cursor.y);
         return y >= first and y <= last;
     }
     const point = Point{
         .x = x,
         .y = y,
     };
-    const first, const last = if (copy_mode.less(view.cursor, anchor))
+    const first, const last = if (copy_mode.less(self.cursor, anchor))
         .{
-            view.cursor,
+            self.cursor,
             anchor,
         }
     else
         .{
             anchor,
-            view.cursor,
+            self.cursor,
         };
     return !copy_mode.less(point, first) and !copy_mode.less(last, point);
 }

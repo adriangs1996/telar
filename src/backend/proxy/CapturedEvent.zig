@@ -7,10 +7,10 @@ data: [sse.max_data_bytes]u8 = undefined,
 data_len: usize = 0,
 truncated: bool = false,
 
-pub fn nameSlice(event: *const CapturedEvent) []const u8 {
-    return event.name[0..event.name_len];
+pub fn nameSlice(self: *const CapturedEvent) []const u8 {
+    return self.name[0..self.name_len];
 }
 
-pub fn dataSlice(event: *const CapturedEvent) []const u8 {
-    return event.data[0..event.data_len];
+pub fn dataSlice(self: *const CapturedEvent) []const u8 {
+    return self.data[0..self.data_len];
 }

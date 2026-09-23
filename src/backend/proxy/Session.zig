@@ -15,40 +15,40 @@ origin: End,
 pub const Side = enum { child, origin };
 pub const Protocol = enum { http11, h2 };
 
-pub fn deinit(session: *Session) void {
-    const gpa = session.gpa;
-    session.child.connection.close() catch {};
-    session.origin.connection.close() catch {};
-    session.auth.deinit(gpa);
-    std.crypto.secureZero(u8, std.mem.asBytes(session));
-    gpa.destroy(session);
+pub fn deinit(self: *Session) void {
+    const gpa = self.gpa;
+    self.child.connection.close() catch {};
+    self.origin.connection.close() catch {};
+    self.auth.deinit(gpa);
+    std.crypto.secureZero(u8, std.mem.asBytes(self));
+    gpa.destroy(self);
 }
 
-pub fn read(session: *Session, side: Side, buffer: []u8) ?usize {
-    const len = session.end(side).connection.read(buffer) catch return null;
+pub fn read(self: *Session, side: Side, buffer: []u8) ?usize {
+    const len = self.end(side).connection.read(buffer) catch return null;
     return if (len == 0) null else len;
 }
 
-pub fn writeAll(session: *Session, side: Side, bytes: []const u8) bool {
-    session.end(side).connection.writeAll(bytes) catch return false;
+pub fn writeAll(self: *Session, side: Side, bytes: []const u8) bool {
+    self.end(side).connection.writeAll(bytes) catch return false;
     return true;
 }
 
-pub fn halfClose(session: *Session, side: Side) void {
+pub fn halfClose(self: *Session, side: Side) void {
     // Each relay owns only the send direction of its destination. Closing
     // both directions here races the opposite relay and can truncate h2
     // or upgraded responses after the request side reaches EOF.
-    session.end(side).stream.shutdown(session.io, .send) catch {};
+    self.end(side).stream.shutdown(self.io, .send) catch {};
 }
 
-pub fn negotiated(session: *const Session) Protocol {
-    const selected = session.child.connection.alpn_protocol orelse return .http11;
+pub fn negotiated(self: *const Session) Protocol {
+    const selected = self.child.connection.alpn_protocol orelse return .http11;
     return if (std.mem.eql(u8, selected, "h2")) .h2 else .http11;
 }
 
-fn end(session: *Session, side: Side) *End {
+fn end(self: *Session, side: Side) *End {
     return switch (side) {
-        .child => &session.child,
-        .origin => &session.origin,
+        .child => &self.child,
+        .origin => &self.origin,
     };
 }

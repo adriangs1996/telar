@@ -15,24 +15,24 @@ muted: bool = false,
 
 /// Uses bounded column storage and publishes geometry only for visible cells.
 /// Example: `const height = try table.layout(canvas, true);`
-pub fn layout(widget: Paint, canvas: *Canvas, paint: bool) !f32 {
+pub fn layout(self: Paint, canvas: *Canvas, paint: bool) !f32 {
     var widths: [Table.max_columns]f32 = @splat(0);
-    var row = @import("MessageTableRowPaint.zig"){ .table = widget, .canvas = canvas, .widths = &widths };
-    try row.measureWidths(widget.table.header, true);
-    var lines: Blocks = .{ .text = widget.table.body, .markdown = false };
+    var row = @import("MessageTableRowPaint.zig"){ .table = self, .canvas = canvas, .widths = &widths };
+    try row.measureWidths(self.table.header, true);
+    var lines: Blocks = .{ .text = self.table.body, .markdown = false };
     while (lines.next()) |line| {
         try row.measureWidths(line.text, false);
     }
 
-    fitWidths(widths[0..widget.table.columns], @max(1, widget.bounds.width), canvas.chrome.px(72));
-    row.y = widget.bounds.y + canvas.chrome.px(6);
-    try row.layout(widget.table.header, .{ .header = true, .paint = paint });
-    lines = .{ .text = widget.table.body, .markdown = false };
+    fitWidths(widths[0..self.table.columns], @max(1, self.bounds.width), canvas.chrome.px(72));
+    row.y = self.bounds.y + canvas.chrome.px(6);
+    try row.layout(self.table.header, .{ .header = true, .paint = paint });
+    lines = .{ .text = self.table.body, .markdown = false };
     while (lines.next()) |line| {
         try row.layout(line.text, .{ .paint = paint });
     }
 
-    return row.y - widget.bounds.y + canvas.chrome.px(10);
+    return row.y - self.bounds.y + canvas.chrome.px(10);
 }
 
 fn fitWidths(widths: []f32, available: f32, minimum: f32) void {

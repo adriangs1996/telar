@@ -6,8 +6,8 @@ const Target = @This();
 pane_id: core.PaneId,
 pane_generation: u64,
 
-pub fn validate(target: Target) !void {
-    if (target.pane_id == .invalid or target.pane_generation == 0) {
+pub fn validate(self: Target) !void {
+    if (self.pane_id == .invalid or self.pane_generation == 0) {
         return error.InvalidAttachmentTarget;
     }
 }

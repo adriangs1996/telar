@@ -11,28 +11,28 @@ count: u8 = 0,
 
 /// Owns a UTF-8 absolute PNG path without retaining caller memory.
 /// Example: `try images.append("/private/tmp/image.png");`
-pub fn append(images: *Images, value: []const u8) !void {
+pub fn append(self: *Images, value: []const u8) !void {
     try validatePath(value);
-    if (images.count >= capacity) {
+    if (self.count >= capacity) {
         return error.TooManyAgentImages;
     }
 
-    @memcpy(images.storage[images.count][0..value.len], value);
-    images.lengths[images.count] = @intCast(value.len);
-    images.count += 1;
+    @memcpy(self.storage[self.count][0..value.len], value);
+    self.lengths[self.count] = @intCast(value.len);
+    self.count += 1;
 }
 
 /// Example: `const path = images.path(0);`
-pub fn path(images: *const Images, index: usize) []const u8 {
-    std.debug.assert(index < images.count);
-    return images.storage[index][0..images.lengths[index]];
+pub fn path(self: *const Images, index: usize) []const u8 {
+    std.debug.assert(index < self.count);
+    return self.storage[index][0..self.lengths[index]];
 }
 
 /// Borrows paths only until this value changes. Example: `request.images = images.view();`
-pub fn view(images: *const Images) @import("AgentImagePaths.zig") {
-    var result: @import("AgentImagePaths.zig") = .{ .count = images.count };
-    for (0..images.count) |index| {
-        result.storage[index] = images.path(index);
+pub fn view(self: *const Images) @import("AgentImagePaths.zig") {
+    var result: @import("AgentImagePaths.zig") = .{ .count = self.count };
+    for (0..self.count) |index| {
+        result.storage[index] = self.path(index);
     }
 
     return result;
@@ -51,34 +51,34 @@ pub fn copy(paths: @import("AgentImagePaths.zig")) !Images {
 
 /// Removes one reference, preserving the order of the remaining images.
 /// Example: `_ = images.remove(0);`
-pub fn remove(images: *Images, index: usize) bool {
-    if (index >= images.count) {
+pub fn remove(self: *Images, index: usize) bool {
+    if (index >= self.count) {
         return false;
     }
 
     var next = index;
-    while (next + 1 < images.count) : (next += 1) {
-        images.storage[next] = images.storage[next + 1];
-        images.lengths[next] = images.lengths[next + 1];
+    while (next + 1 < self.count) : (next += 1) {
+        self.storage[next] = self.storage[next + 1];
+        self.lengths[next] = self.lengths[next + 1];
     }
 
-    images.count -= 1;
-    images.lengths[images.count] = 0;
+    self.count -= 1;
+    self.lengths[self.count] = 0;
     return true;
 }
 
 /// Validates even values constructed without append. Example: `try images.validate();`
-pub fn validate(images: *const Images) !void {
-    if (images.count > capacity) {
+pub fn validate(self: *const Images) !void {
+    if (self.count > capacity) {
         return error.TooManyAgentImages;
     }
 
-    for (images.lengths[0..images.count], 0..) |len, index| {
+    for (self.lengths[0..self.count], 0..) |len, index| {
         if (len > max_path_bytes) {
             return error.InvalidAgentImage;
         }
 
-        try validatePath(images.storage[index][0..len]);
+        try validatePath(self.storage[index][0..len]);
     }
 }
 

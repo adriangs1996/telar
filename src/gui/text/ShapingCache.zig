@@ -28,17 +28,17 @@ pub fn init(allocator: std.mem.Allocator) !Cache {
     return .{ .entries = entries };
 }
 
-pub fn deinit(cache: *Cache, allocator: std.mem.Allocator) void {
-    allocator.free(cache.entries);
+pub fn deinit(self: *Cache, allocator: std.mem.Allocator) void {
+    allocator.free(self.entries);
 }
 
 /// Invalidates font-dependent results. Example: `cache.clear();`
-pub fn clear(cache: *Cache) void {
-    for (cache.entries) |*entry| {
+pub fn clear(self: *Cache) void {
+    for (self.entries) |*entry| {
         entry.len = 0;
     }
 
-    cache.victims = @splat(0);
+    self.victims = @splat(0);
 }
 
 const Slot = union(enum) {
@@ -46,14 +46,14 @@ const Slot = union(enum) {
     set: usize,
 };
 
-fn slotFor(cache: *const Cache, key: Key) ?Slot {
+fn slotFor(self: *const Cache, key: Key) ?Slot {
     const text = key.text;
     if (text.len == 0 or text.len > Entry.max_bytes) {
         return null;
     }
 
     if (text.len == 1 and text[0] < ascii_capacity and key.face == .primary) {
-        const entry = &cache.entries[text[0]];
+        const entry = &self.entries[text[0]];
         if (entry.len == 0 or entry.pixel_height == key.pixel_height) {
             return .{ .dedicated = text[0] };
         }
@@ -72,21 +72,21 @@ fn matches(entry: *const Entry, key: Key) bool {
     return entry.len == key.text.len and entry.preferred == key.face and entry.pixel_height == key.pixel_height and std.mem.eql(u8, entry.text[0..entry.len], key.text);
 }
 
-fn setEntries(cache: *Cache, set: usize) []Entry {
+fn setEntries(self: *Cache, set: usize) []Entry {
     const start = ascii_capacity + set * ways;
-    return cache.entries[start .. start + ways];
+    return self.entries[start .. start + ways];
 }
 
 /// Borrows until the next insertion or clear.
 /// Example: `const hit = cache.find(.{ .text = text, .face = .sans });`
-pub fn find(cache: *Cache, key: Key) ?ShapedRun {
-    switch (cache.slotFor(key) orelse return null) {
+pub fn find(self: *Cache, key: Key) ?ShapedRun {
+    switch (self.slotFor(key) orelse return null) {
         .dedicated => |index| {
-            const entry = &cache.entries[index];
+            const entry = &self.entries[index];
             return if (matches(entry, key)) entry.view() else null;
         },
         .set => |set| {
-            for (cache.setEntries(set)) |*entry| {
+            for (self.setEntries(set)) |*entry| {
                 if (matches(entry, key)) {
                     return entry.view();
                 }
@@ -98,14 +98,14 @@ pub fn find(cache: *Cache, key: Key) ?ShapedRun {
 }
 
 /// Copies the borrowed HarfBuzz result. Example: `cache.remember(.{ .text = text }, shaped);`
-pub fn remember(cache: *Cache, key: Key, shaped: ShapedRun) void {
+pub fn remember(self: *Cache, key: Key, shaped: ShapedRun) void {
     if (shaped.glyphs.len > Entry.max_glyphs) {
         return;
     }
 
-    const entry = switch (cache.slotFor(key) orelse return) {
-        .dedicated => |index| &cache.entries[index],
-        .set => |set| cache.victim(set, key),
+    const entry = switch (self.slotFor(key) orelse return) {
+        .dedicated => |index| &self.entries[index],
+        .set => |set| self.victim(set, key),
     };
 
     @memcpy(entry.text[0..key.text.len], key.text);
@@ -122,8 +122,8 @@ pub fn remember(cache: *Cache, key: Key, shaped: ShapedRun) void {
 
 // Reuses the way already holding `key`, then an empty way, then the set's
 // round-robin victim so four colliding labels share the set stably.
-fn victim(cache: *Cache, set: usize, key: Key) *Entry {
-    const candidates = cache.setEntries(set);
+fn victim(self: *Cache, set: usize, key: Key) *Entry {
+    const candidates = self.setEntries(set);
     for (candidates) |*entry| {
         if (matches(entry, key)) {
             return entry;
@@ -136,8 +136,8 @@ fn victim(cache: *Cache, set: usize, key: Key) *Entry {
         }
     }
 
-    const way = cache.victims[set] % ways;
-    cache.victims[set] = (cache.victims[set] + 1) % ways;
+    const way = self.victims[set] % ways;
+    self.victims[set] = (self.victims[set] + 1) % ways;
     return &candidates[way];
 }
 

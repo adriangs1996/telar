@@ -97,203 +97,203 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator, options: Options) !*Session {
 
 /// Enqueues a copied UTF-8 prompt without allocation or waiting for the provider.
 /// Example: `if (!session.submit(io, message)) return error.AgentBusy;`
-pub fn submit(session: *Session, io: std.Io, request: core.AgentSubmission) bool {
+pub fn submit(self: *Session, io: std.Io, request: core.AgentSubmission) bool {
     const text = request.text;
     if ((text.len == 0 and request.images.count == 0) or text.len > core.agent_thread.max_prompt_bytes or !std.unicode.utf8ValidateSlice(text)) {
         return false;
     }
 
     const images = core.AgentImages.copy(request.images) catch return false;
-    if (!session.ready.load(.acquire) or session.prompt_pending.swap(true, .acq_rel)) {
+    if (!self.ready.load(.acquire) or self.prompt_pending.swap(true, .acq_rel)) {
         return false;
     }
 
     var prompt: Prompt = .{ .len = @intCast(text.len), .options = request.options, .images = images };
     @memcpy(prompt.bytes[0..text.len], text);
-    if (!session.mutex.tryLock()) {
-        session.prompt_pending.store(false, .release);
+    if (!self.mutex.tryLock()) {
+        self.prompt_pending.store(false, .release);
         return false;
     }
 
-    defer session.mutex.unlock(io);
-    if (session.published.status != .ready or session.resume_queued or session.reserved.id_len != 0 or !session.published.accepts(request.options)) {
-        session.prompt_pending.store(false, .release);
+    defer self.mutex.unlock(io);
+    if (self.published.status != .ready or self.resume_queued or self.reserved.id_len != 0 or !self.published.accepts(request.options)) {
+        self.prompt_pending.store(false, .release);
         return false;
     }
 
-    session.accepted_prompt = prompt;
-    if (session.enqueue(io, .{ .prompt = prompt })) {
+    self.accepted_prompt = prompt;
+    if (self.enqueue(io, .{ .prompt = prompt })) {
         return true;
     }
 
-    session.accepted_prompt = null;
-    session.prompt_pending.store(false, .release);
+    self.accepted_prompt = null;
+    self.prompt_pending.store(false, .release);
     return false;
 }
 
 /// Reserves an unused pane before queueing a copied catalog selection.
 /// Example: `if (!session.resumeConversation(io, entry)) return error.AgentBusy;`
-pub fn resumeConversation(session: *Session, io: std.Io, entry: core.RecentConversation) bool {
-    if (!session.ready.load(.acquire) or session.prompt_pending.load(.acquire) or !session.mutex.tryLock()) {
+pub fn resumeConversation(self: *Session, io: std.Io, entry: core.RecentConversation) bool {
+    if (!self.ready.load(.acquire) or self.prompt_pending.load(.acquire) or !self.mutex.tryLock()) {
         return false;
     }
 
-    defer session.mutex.unlock(io);
-    if (!session.published.canResume() or session.resume_queued or session.reserved.id_len != 0) {
+    defer self.mutex.unlock(io);
+    if (!self.published.canResume() or self.resume_queued or self.reserved.id_len != 0) {
         return false;
     }
 
-    session.reserved = entry;
-    session.resume_queued = true;
-    session.ready.store(false, .release);
-    if (session.enqueue(io, .{ .resume_conversation = entry })) {
+    self.reserved = entry;
+    self.resume_queued = true;
+    self.ready.store(false, .release);
+    if (self.enqueue(io, .{ .resume_conversation = entry })) {
         return true;
     }
 
-    session.reserved = .{};
-    session.resume_queued = false;
-    session.ready.store(true, .release);
+    self.reserved = .{};
+    self.resume_queued = false;
+    self.ready.store(true, .release);
     return false;
 }
 
 /// Includes an admitted resume before its first provider snapshot arrives.
 /// Example: `if (try session.claims(io, id)) return error.ConversationAlreadyOpen;`
-pub fn claims(session: *Session, io: std.Io, id: []const u8) !bool {
-    if (!session.mutex.tryLock()) {
+pub fn claims(self: *Session, io: std.Io, id: []const u8) !bool {
+    if (!self.mutex.tryLock()) {
         return error.AgentBusy;
     }
 
-    defer session.mutex.unlock(io);
-    return std.mem.eql(u8, id, session.reserved.idSlice()) or std.mem.eql(u8, id, session.published.threadId());
+    defer self.mutex.unlock(io);
+    return std.mem.eql(u8, id, self.reserved.idSlice()) or std.mem.eql(u8, id, self.published.threadId());
 }
 
 /// Example: `_ = session.interrupt(io);`
-pub fn interrupt(session: *Session, io: std.Io) bool {
-    return session.enqueue(io, .interrupt);
+pub fn interrupt(self: *Session, io: std.Io) bool {
+    return self.enqueue(io, .interrupt);
 }
 
 /// Only a user decision naming a pending approval may authorize work.
 /// Example: `_ = session.approve(io, .{ .id = approval.id, .accepted = true });`
-pub fn approve(session: *Session, io: std.Io, decision: core.AgentApprovalDecision) bool {
-    return session.enqueue(io, .{ .approval = decision });
+pub fn approve(self: *Session, io: std.Io, decision: core.AgentApprovalDecision) bool {
+    return self.enqueue(io, .{ .approval = decision });
 }
 
 /// Coalesces intermediate revisions; the receiver always fetches a full snapshot.
 /// Example: `try session.waitForChange(io);`
-pub fn waitForChange(session: *Session, io: std.Io) !void {
-    _ = try session.changes.getOne(io);
+pub fn waitForChange(self: *Session, io: std.Io) !void {
+    _ = try self.changes.getOne(io);
 }
 
 /// Retains immutable configuration without allocating in the request path.
 /// Example: `const options = session.retainHistoryOptions(); defer options.release();`.
-pub fn retainHistoryOptions(session: *const Session) *HistoryOptions {
-    return session.history_options.retain();
+pub fn retainHistoryOptions(self: *const Session) *HistoryOptions {
+    return self.history_options.retain();
 }
 
 /// Copies conversation and owned metadata from the same publication. A busy
 /// publisher wakes the reader again without blocking the runtime loop.
 /// Example: `if (session.snapshot(io, &value)) |metadata| project(value, metadata);`
-pub fn snapshot(session: *Session, io: std.Io, output: *core.AgentThreadSnapshot) ?ThreadMetadata {
-    if (!session.mutex.tryLock()) {
+pub fn snapshot(self: *Session, io: std.Io, output: *core.AgentThreadSnapshot) ?ThreadMetadata {
+    if (!self.mutex.tryLock()) {
         return null;
     }
 
-    defer session.mutex.unlock(io);
-    output.* = session.published;
-    return session.published_metadata;
+    defer self.mutex.unlock(io);
+    output.* = self.published;
+    return self.published_metadata;
 }
 
 /// Copies only the durable identity, including a restore still awaiting the provider.
 /// A busy publisher defers the checkpoint instead of dropping its conversation.
 /// Example: `const conversation = try session.checkpoint(io);`
-pub fn checkpoint(session: *Session, io: std.Io) !?core.RecentConversation {
-    if (!session.mutex.tryLock()) {
+pub fn checkpoint(self: *Session, io: std.Io) !?core.RecentConversation {
+    if (!self.mutex.tryLock()) {
         return error.AgentBusy;
     }
 
-    defer session.mutex.unlock(io);
-    if (session.published.thread_id_len == 0) {
+    defer self.mutex.unlock(io);
+    if (self.published.thread_id_len == 0) {
         return null;
     }
 
-    return try core.RecentConversation.init(session.published.threadId(), session.published_metadata.nameSlice() orelse "");
+    return try core.RecentConversation.init(self.published.threadId(), self.published_metadata.nameSlice() orelse "");
 }
 
 /// Signals shutdown without waiting for provider I/O or process cleanup.
 /// Example: `session.stop(io);`
-pub fn stop(session: *Session, io: std.Io) void {
-    session.stopping.store(true, .release);
-    session.commands.close(io);
-    session.changes.close(io);
+pub fn stop(self: *Session, io: std.Io) void {
+    self.stopping.store(true, .release);
+    self.commands.close(io);
+    self.changes.close(io);
 }
 
 /// Joins the worker from the observation receiver after stop closed its queue.
 /// Example: `session.waitStopped(io);`
-pub fn waitStopped(session: *Session, io: std.Io) void {
-    if (session.worker) |*worker| {
+pub fn waitStopped(self: *Session, io: std.Io) void {
+    if (self.worker) |*worker| {
         worker.await(io);
-        session.worker = null;
+        self.worker = null;
     }
 }
 
 /// Joins the owner after external change receivers have stopped, then frees state.
 /// Example: `session.close(io);`
-pub fn close(session: *Session, io: std.Io) void {
-    session.stop(io);
-    session.waitStopped(io);
+pub fn close(self: *Session, io: std.Io) void {
+    self.stop(io);
+    self.waitStopped(io);
 
-    const gpa = session.gpa;
-    session.history_options.release();
-    gpa.destroy(session);
+    const gpa = self.gpa;
+    self.history_options.release();
+    gpa.destroy(self);
 }
 
-fn enqueue(session: *Session, io: std.Io, command: command_module.Command) bool {
-    if (session.stopping.load(.acquire)) {
+fn enqueue(self: *Session, io: std.Io, command: command_module.Command) bool {
+    if (self.stopping.load(.acquire)) {
         return false;
     }
 
-    return (session.commands.put(io, &.{command}, 0) catch 0) == 1;
+    return (self.commands.put(io, &.{command}, 0) catch 0) == 1;
 }
 
-fn receiveCommand(session: *Session, io: std.Io) anyerror!command_module.Command {
-    return session.commands.getOne(io);
+fn receiveCommand(self: *Session, io: std.Io) anyerror!command_module.Command {
+    return self.commands.getOne(io);
 }
 
-fn publish(session: *Session, io: std.Io) void {
-    session.codex.transcript.value.revision += 1;
-    session.mutex.lockUncancelable(io);
-    session.published = session.codex.transcript.value;
-    session.published_metadata = session.codex.metadata;
-    if (!session.resume_queued and session.codex.pending_resume_request == null) {
-        session.reserved = .{};
+fn publish(self: *Session, io: std.Io) void {
+    self.codex.transcript.value.revision += 1;
+    self.mutex.lockUncancelable(io);
+    self.published = self.codex.transcript.value;
+    self.published_metadata = self.codex.metadata;
+    if (!self.resume_queued and self.codex.pending_resume_request == null) {
+        self.reserved = .{};
     }
-    session.ready.store(session.codex.transcript.value.status == .ready and !session.resume_queued, .release);
-    session.mutex.unlock(io);
-    _ = session.changes.put(io, &.{1}, 0) catch 0;
+    self.ready.store(self.codex.transcript.value.status == .ready and !self.resume_queued, .release);
+    self.mutex.unlock(io);
+    _ = self.changes.put(io, &.{1}, 0) catch 0;
 }
 
-fn run(session: *Session, io: std.Io) void {
+fn run(self: *Session, io: std.Io) void {
     const path = core.enter(.observation);
     defer path.restore();
-    session.runProvider(io) catch |err| {
-        session.commands.close(io);
-        session.ready.store(false, .release);
-        if (!session.stopping.load(.acquire)) {
-            session.recoverPrompt(io);
+    self.runProvider(io) catch |err| {
+        self.commands.close(io);
+        self.ready.store(false, .release);
+        if (!self.stopping.load(.acquire)) {
+            self.recoverPrompt(io);
             var buffer: [256]u8 = undefined;
             const message = std.fmt.bufPrint(&buffer, "Codex app-server stopped: {s}.", .{@errorName(err)}) catch "Codex app-server stopped.";
-            session.codex.fail(message);
-            session.publish(io);
+            self.codex.fail(message);
+            self.publish(io);
         }
     };
-    session.commands.close(io);
+    self.commands.close(io);
 }
 
-fn runProvider(session: *Session, io: std.Io) !void {
+fn runProvider(self: *Session, io: std.Io) !void {
     var child = try std.process.spawn(io, .{
-        .argv = session.history_options.arguments,
-        .cwd = .{ .path = session.history_options.cwd },
-        .environ_map = &session.history_options.environment,
+        .argv = self.history_options.arguments,
+        .cwd = .{ .path = self.history_options.cwd },
+        .environ_map = &self.history_options.environment,
         .stdin = .pipe,
         .stdout = .pipe,
         .stderr = .ignore,
@@ -307,33 +307,33 @@ fn runProvider(session: *Session, io: std.Io) !void {
         child.kill(io);
     }
 
-    session.stream = .{ .file = child.stdout.?, .output_frame = &session.output_frame };
-    try write(io, child.stdin.?, try session.codex.initialize());
+    self.stream = .{ .file = child.stdout.?, .output_frame = &self.output_frame };
+    try write(io, child.stdin.?, try self.codex.initialize());
     var event_storage: [5]protocol.Event = undefined;
     var select = std.Io.Select(protocol.Event).init(io, &event_storage);
     defer select.cancelDiscard();
-    try select.concurrent(.line, Stream.next, .{ &session.stream, io });
-    try select.concurrent(.command, receiveCommand, .{ session, io });
-    try select.concurrent(.deadline, startupDeadline, .{ io, session.startup_timeout_ms });
+    try select.concurrent(.line, Stream.next, .{ &self.stream, io });
+    try select.concurrent(.command, receiveCommand, .{ self, io });
+    try select.concurrent(.deadline, startupDeadline, .{ io, self.startup_timeout_ms });
 
     var resume_deadline_pending = false;
     var command_deadline_pending = false;
     var command_started_ms: i64 = 0;
-    while (!session.stopping.load(.acquire)) {
+    while (!self.stopping.load(.acquire)) {
         const event = try select.await();
         switch (event) {
             .line => |result| {
                 const line = try result;
-                var allocator: std.heap.FixedBufferAllocator = .init(&session.json_storage);
+                var allocator: std.heap.FixedBufferAllocator = .init(&self.json_storage);
                 const parsed = try std.json.parseFromSlice(std.json.Value, allocator.allocator(), line, .{ .max_value_len = protocol.max_line_bytes });
                 defer parsed.deinit();
-                if (try session.codex.receive(.{ .value = parsed.value, .truncated = session.stream.truncated })) |reply| {
+                if (try self.codex.receive(.{ .value = parsed.value, .truncated = self.stream.truncated })) |reply| {
                     try write(io, child.stdin.?, reply);
                 }
 
-                session.captureReview(io, parsed.value);
-                session.publish(io);
-                try select.concurrent(.line, Stream.next, .{ &session.stream, io });
+                self.captureReview(io, parsed.value);
+                self.publish(io);
+                try select.concurrent(.line, Stream.next, .{ &self.stream, io });
             },
             .command => |result| {
                 const command = result catch |err| {
@@ -343,72 +343,72 @@ fn runProvider(session: *Session, io: std.Io) !void {
 
                     return err;
                 };
-                const line = try session.codex.command(command);
-                if (command == .prompt and session.codex.command_request != null) {
+                const line = try self.codex.command(command);
+                if (command == .prompt and self.codex.command_request != null) {
                     command_started_ms = @intCast(std.Io.Timestamp.now(io, .awake).toMilliseconds());
                     if (!command_deadline_pending) {
-                        try select.concurrent(.command_deadline, startupDeadline, .{ io, session.startup_timeout_ms });
+                        try select.concurrent(.command_deadline, startupDeadline, .{ io, self.startup_timeout_ms });
                         command_deadline_pending = true;
                     }
                 }
                 if (command == .resume_conversation) {
-                    session.mutex.lockUncancelable(io);
-                    session.resume_queued = false;
-                    session.mutex.unlock(io);
+                    self.mutex.lockUncancelable(io);
+                    self.resume_queued = false;
+                    self.mutex.unlock(io);
                     if (!resume_deadline_pending) {
-                        try select.concurrent(.resume_deadline, startupDeadline, .{ io, session.startup_timeout_ms });
+                        try select.concurrent(.resume_deadline, startupDeadline, .{ io, self.startup_timeout_ms });
                         resume_deadline_pending = true;
                     }
                 }
                 if (command == .prompt) {
-                    session.mutex.lockUncancelable(io);
-                    session.accepted_prompt = null;
-                    session.mutex.unlock(io);
+                    self.mutex.lockUncancelable(io);
+                    self.accepted_prompt = null;
+                    self.mutex.unlock(io);
                 }
 
                 if (line) |bytes| {
                     try write(io, child.stdin.?, bytes);
                 }
 
-                session.publish(io);
+                self.publish(io);
                 if (command == .prompt) {
-                    session.prompt_pending.store(false, .release);
+                    self.prompt_pending.store(false, .release);
                 }
 
-                try select.concurrent(.command, receiveCommand, .{ session, io });
+                try select.concurrent(.command, receiveCommand, .{ self, io });
             },
             .command_deadline => |result| {
                 try result;
                 command_deadline_pending = false;
-                if (session.codex.command_request != null) {
+                if (self.codex.command_request != null) {
                     const elapsed = std.Io.Timestamp.now(io, .awake).toMilliseconds() - command_started_ms;
-                    if (elapsed >= session.startup_timeout_ms) {
+                    if (elapsed >= self.startup_timeout_ms) {
                         return error.ProviderCommandTimeout;
                     }
 
-                    try select.concurrent(.command_deadline, startupDeadline, .{ io, @as(u32, @intCast(session.startup_timeout_ms - elapsed)) });
+                    try select.concurrent(.command_deadline, startupDeadline, .{ io, @as(u32, @intCast(self.startup_timeout_ms - elapsed)) });
                     command_deadline_pending = true;
                 }
             },
             .resume_deadline => |result| {
                 try result;
                 resume_deadline_pending = false;
-                try session.codex.expireResume();
+                try self.codex.expireResume();
             },
             .deadline => |result| {
                 try result;
-                if (session.codex.skills.value.phase == .loading) {
-                    session.codex.skills_request = null;
-                    session.codex.skills.value.phase = .failed;
-                    session.codex.skills.value.revision +%= 1;
-                    session.codex.transcript.value.skills = session.codex.skills.value;
-                    session.publish(io);
+                if (self.codex.skills.value.phase == .loading) {
+                    self.codex.skills_request = null;
+                    self.codex.skills.value.phase = .failed;
+                    self.codex.skills.value.revision +%= 1;
+                    self.codex.transcript.value.skills = self.codex.skills.value;
+                    self.publish(io);
                 }
-                if (session.codex.transcript.value.recent.phase == .loading) {
-                    session.codex.transcript.value.recent.phase = .failed;
-                    session.publish(io);
+                if (self.codex.transcript.value.recent.phase == .loading) {
+                    self.codex.transcript.value.recent.phase = .failed;
+                    self.publish(io);
                 }
-                if (session.codex.thread_id_len == 0 or !session.codex.catalog_loaded) {
+                if (self.codex.thread_id_len == 0 or !self.codex.catalog_loaded) {
                     return error.ProviderStartupTimeout;
                 }
             },
@@ -416,14 +416,14 @@ fn runProvider(session: *Session, io: std.Io) !void {
     }
 }
 
-fn recoverPrompt(session: *Session, io: std.Io) void {
-    session.mutex.lockUncancelable(io);
-    const prompt = session.accepted_prompt;
-    session.accepted_prompt = null;
-    session.mutex.unlock(io);
+fn recoverPrompt(self: *Session, io: std.Io) void {
+    self.mutex.lockUncancelable(io);
+    const prompt = self.accepted_prompt;
+    self.accepted_prompt = null;
+    self.mutex.unlock(io);
     if (prompt) |value| {
         var preview: [core.agent_thread.max_prompt_bytes + 64]u8 = undefined;
-        session.codex.transcript.update(.{ .role = .user, .text = value.preview(&preview), .complete = true });
+        self.codex.transcript.update(.{ .role = .user, .text = value.preview(&preview), .complete = true });
     }
 }
 

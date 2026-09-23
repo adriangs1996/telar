@@ -16,37 +16,37 @@ seen: [2 * core.max_panes_per_tab]bool = @splat(false),
 
 /// Marks the new visible set without advancing animation state.
 /// Example: `rings.begin();`
-pub fn begin(rings: *RingFades) void {
-    rings.seen = @splat(false);
+pub fn begin(self: *RingFades) void {
+    self.seen = @splat(false);
 }
 
 /// Samples time and requests a wake even when no agent is working.
 /// Example: `const opacity = rings.alpha(attachment, &clock);`
-pub fn alpha(rings: *RingFades, key: data.AgentKey, clock: *FrameClock) f32 {
-    const index = rings.find(key) orelse rings.insert(.{
+pub fn alpha(self: *RingFades, key: data.AgentKey, clock: *FrameClock) f32 {
+    const index = self.find(key) orelse self.insert(.{
         .key = key,
         .transition = .{ .from = 0, .to = 1, .started_ns = clock.now_ns, .duration_ns = duration_ns },
     }) orelse return 1;
-    rings.seen[index] = true;
-    return clock.sample(rings.entries[index].transition);
+    self.seen[index] = true;
+    return clock.sample(self.entries[index].transition);
 }
 
 /// Retires transitions which no visible widget sampled this frame.
 /// Example: `rings.end();`
-pub fn end(rings: *RingFades) void {
+pub fn end(self: *RingFades) void {
     var kept: usize = 0;
-    for (0..rings.len) |index| {
-        if (rings.seen[index]) {
-            rings.entries[kept] = rings.entries[index];
+    for (0..self.len) |index| {
+        if (self.seen[index]) {
+            self.entries[kept] = self.entries[index];
             kept += 1;
         }
     }
 
-    rings.len = kept;
+    self.len = kept;
 }
 
-fn find(rings: *const RingFades, key: data.AgentKey) ?usize {
-    for (rings.entries[0..rings.len], 0..) |entry, index| {
+fn find(self: *const RingFades, key: data.AgentKey) ?usize {
+    for (self.entries[0..self.len], 0..) |entry, index| {
         if (std.meta.eql(entry.key, key)) {
             return index;
         }
@@ -55,11 +55,11 @@ fn find(rings: *const RingFades, key: data.AgentKey) ?usize {
     return null;
 }
 
-fn insert(rings: *RingFades, entry: RingFade) ?usize {
-    if (rings.len < rings.entries.len) {
-        const index = rings.len;
-        rings.entries[index] = entry;
-        rings.len += 1;
+fn insert(self: *RingFades, entry: RingFade) ?usize {
+    if (self.len < self.entries.len) {
+        const index = self.len;
+        self.entries[index] = entry;
+        self.len += 1;
         return index;
     }
 

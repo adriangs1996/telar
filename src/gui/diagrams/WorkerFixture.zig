@@ -21,24 +21,24 @@ pub fn init(body: []const u8) !Fixture {
     return .{ .temp = temp, .executable = executable };
 }
 
-pub fn deinit(fixture: *Fixture) void {
-    std.testing.allocator.free(fixture.executable);
-    fixture.temp.cleanup();
+pub fn deinit(self: *Fixture) void {
+    std.testing.allocator.free(self.executable);
+    self.temp.cleanup();
 }
 
 /// Example: `var task = fixture.task(250);`
-pub fn task(fixture: *Fixture, timeout_ms: u32) Task {
-    return .{ .io = std.testing.io, .allocator = std.testing.allocator, .job = &fixture.job, .executable = fixture.executable, .timeout_ms = timeout_ms };
+pub fn task(self: *Fixture, timeout_ms: u32) Task {
+    return .{ .io = std.testing.io, .allocator = std.testing.allocator, .job = &self.job, .executable = self.executable, .timeout_ms = timeout_ms };
 }
 
 /// Waits only for the child's first builtin, without requiring a model or network.
 /// Example: `const pid = try fixture.awaitPid();`
-pub fn awaitPid(fixture: *Fixture) !std.posix.pid_t {
+pub fn awaitPid(self: *Fixture) !std.posix.pid_t {
     const io = std.testing.io;
     const started = std.Io.Timestamp.now(io, .awake);
     while (std.Io.Timestamp.now(io, .awake).toMilliseconds() - started.toMilliseconds() < 2000) {
         var buffer: [32]u8 = undefined;
-        if (fixture.temp.dir.readFile(io, "helper.pid", &buffer)) |bytes| {
+        if (self.temp.dir.readFile(io, "helper.pid", &buffer)) |bytes| {
             if (std.fmt.parseInt(std.posix.pid_t, bytes, 10)) |pid| {
                 return pid;
             } else |_| {}
@@ -56,7 +56,7 @@ pub fn awaitPid(fixture: *Fixture) !std.posix.pid_t {
 
 /// A zombie still answers signal zero: ESRCH proves the child was also reaped.
 /// Example: `try fixture.expectReaped();`
-pub fn expectReaped(fixture: *Fixture) !void {
-    const pid = try fixture.awaitPid();
+pub fn expectReaped(self: *Fixture) !void {
+    const pid = try self.awaitPid();
     try std.testing.expectError(error.ProcessNotFound, std.posix.kill(pid, @enumFromInt(0)));
 }

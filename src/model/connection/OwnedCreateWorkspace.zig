@@ -8,15 +8,15 @@ name_len: u8,
 launch: core.Launch,
 create_cwd: bool,
 
-pub fn view(value: *const OwnedCreateWorkspace, cwd: []const u8) core.CreateWorkspace {
-    var launch = value.launch;
+pub fn view(self: *const OwnedCreateWorkspace, cwd: []const u8) core.CreateWorkspace {
+    var launch = self.launch;
     launch.cwd = cwd;
 
     return .{
-        .request_id = value.request_id,
-        .size = value.size,
-        .name = value.name[0..value.name_len],
+        .request_id = self.request_id,
+        .size = self.size,
+        .name = self.name[0..self.name_len],
         .launch = launch,
-        .create_cwd = value.create_cwd,
+        .create_cwd = self.create_cwd,
     };
 }

@@ -11,9 +11,9 @@ eviction_index: usize = 0,
 /// ```zig
 /// try layouts.remember(saved);
 /// ```
-pub fn remember(layouts: *Layouts, saved: data.SavedLayout) !void {
+pub fn remember(self: *Layouts, saved: data.SavedLayout) !void {
     var free: ?*?data.SavedLayout = null;
-    for (&layouts.entries) |*slot| {
+    for (&self.entries) |*slot| {
         if (slot.*) |entry| {
             if (std.meta.eql(entry.location, saved.location)) {
                 slot.* = saved;
@@ -35,10 +35,10 @@ pub fn remember(layouts: *Layouts, saved: data.SavedLayout) !void {
 /// ```zig
 /// layouts.retain(saved);
 /// ```
-pub fn retain(layouts: *Layouts, saved: data.SavedLayout) void {
-    layouts.remember(saved) catch {
-        layouts.entries[layouts.eviction_index] = saved;
-        layouts.eviction_index = (layouts.eviction_index + 1) % layouts.entries.len;
+pub fn retain(self: *Layouts, saved: data.SavedLayout) void {
+    self.remember(saved) catch {
+        self.entries[self.eviction_index] = saved;
+        self.eviction_index = (self.eviction_index + 1) % self.entries.len;
     };
 }
 
@@ -47,8 +47,8 @@ pub fn retain(layouts: *Layouts, saved: data.SavedLayout) void {
 /// ```zig
 /// const saved = layouts.find(location) orelse return;
 /// ```
-pub fn find(layouts: *const Layouts, location: core.TabLocation) ?data.SavedLayout {
-    for (layouts.entries) |slot| {
+pub fn find(self: *const Layouts, location: core.TabLocation) ?data.SavedLayout {
+    for (self.entries) |slot| {
         const entry = slot orelse continue;
         if (std.meta.eql(entry.location, location)) {
             return entry;
@@ -63,8 +63,8 @@ pub fn find(layouts: *const Layouts, location: core.TabLocation) ?data.SavedLayo
 /// ```zig
 /// layouts.forget(location);
 /// ```
-pub fn forget(layouts: *Layouts, location: core.TabLocation) void {
-    for (&layouts.entries) |*slot| {
+pub fn forget(self: *Layouts, location: core.TabLocation) void {
+    for (&self.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (std.meta.eql(entry.location, location)) {
             slot.* = null;

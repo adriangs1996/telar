@@ -56,33 +56,33 @@ pub fn resolve(config: client.GuiConfig, scale: f32) Metrics {
 
 /// Scales one logical chrome length to device pixels without rounding.
 /// Example: `const inset = canvas.chrome.px(8);`
-pub fn px(metrics: Metrics, logical: f32) f32 {
-    return logical * metrics.ratio;
+pub fn px(self: Metrics, logical: f32) f32 {
+    return logical * self.ratio;
 }
 
 /// The pixel height of one text role; the terminal role is the caller's.
 /// Example: `const height = canvas.chrome.textSize(.small) orelse canvas.metrics.pixel_height;`
-pub fn text(metrics: Metrics, size: label_size.Size) ?u16 {
+pub fn text(self: Metrics, size: label_size.Size) ?u16 {
     return switch (size) {
         .terminal => null,
-        .title => metrics.title,
-        .body => metrics.body,
-        .small => metrics.small,
+        .title => self.title,
+        .body => self.body,
+        .small => self.small,
     };
 }
 
 /// The row one sans label of `size` needs: its line box rounded up.
 /// Example: `const header_height = canvas.chrome.rowHeight(.body);`
-pub fn rowHeight(metrics: Metrics, size: label_size.Size) f32 {
-    const pixels: f32 = @floatFromInt(metrics.text(size) orelse 0);
+pub fn rowHeight(self: Metrics, size: label_size.Size) f32 {
+    const pixels: f32 = @floatFromInt(self.text(size) orelse 0);
     return @ceil(pixels * sans_line_ratio);
 }
 
 /// Gives a tiny window back to the terminal, dropping navigation before the
 /// footer so mode hints and the TLS indicator survive while a cell row fits.
 /// Example: `const chrome = ChromeMetrics.resolve(config, scale).fit(viewport.height, cell_height);`
-pub fn fit(metrics: Metrics, height: u32, cell_height: u32) Metrics {
-    var fitted = metrics;
+pub fn fit(self: Metrics, height: u32, cell_height: u32) Metrics {
+    var fitted = self;
     if (height -| fitted.vertical() < cell_height) {
         fitted.top_bar = 0;
     }
@@ -96,8 +96,8 @@ pub fn fit(metrics: Metrics, height: u32, cell_height: u32) Metrics {
 
 /// Pixels reserved above and below the cell grid.
 /// Example: `const rows = (height -| chrome.vertical()) / cell_height;`
-pub fn vertical(metrics: Metrics) u32 {
-    return metrics.top_bar + metrics.status_bar;
+pub fn vertical(self: Metrics) u32 {
+    return self.top_bar + self.status_bar;
 }
 
 fn physical(logical: f32, ratio: f32) u32 {

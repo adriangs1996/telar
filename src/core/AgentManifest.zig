@@ -37,8 +37,8 @@ ready_prompt: agent_manifest.PhraseList = .{},
 /// Tool names whose object input contains a shell command field.
 command_tools: CommandTools = .{},
 
-pub fn nameSlice(manifest: *const Manifest) []const u8 {
-    return manifest.name[0..manifest.name_len];
+pub fn nameSlice(self: *const Manifest) []const u8 {
+    return self.name[0..self.name_len];
 }
 
 /// The label to show for this agent: the configured display name, or
@@ -47,16 +47,16 @@ pub fn nameSlice(manifest: *const Manifest) []const u8 {
 /// ```zig
 /// const label = manifest.displayName();
 /// ```
-pub fn displayName(manifest: *const Manifest) []const u8 {
-    if (manifest.display_name_len != 0) {
-        return manifest.display_name[0..manifest.display_name_len];
+pub fn displayName(self: *const Manifest) []const u8 {
+    if (self.display_name_len != 0) {
+        return self.display_name[0..self.display_name_len];
     }
 
-    return manifest.nameSlice();
+    return self.nameSlice();
 }
 
-pub fn iconSlice(manifest: *const Manifest) []const u8 {
-    return manifest.icon[0..manifest.icon_len];
+pub fn iconSlice(self: *const Manifest) []const u8 {
+    return self.icon[0..self.icon_len];
 }
 
 /// Writes the session title shown before the agent has a real one.
@@ -65,24 +65,24 @@ pub fn iconSlice(manifest: *const Manifest) []const u8 {
 /// var buffer: [max_placeholder_bytes]u8 = undefined;
 /// const title = manifest.placeholderTitle(&buffer);
 /// ```
-pub fn placeholderTitle(manifest: *const Manifest, buffer: *[types.max_agent_session_title_bytes]u8) []const u8 {
-    if (manifest.placeholder_len != 0) {
-        return manifest.placeholder[0..manifest.placeholder_len];
+pub fn placeholderTitle(self: *const Manifest, buffer: *[types.max_agent_session_title_bytes]u8) []const u8 {
+    if (self.placeholder_len != 0) {
+        return self.placeholder[0..self.placeholder_len];
     }
 
-    return std.fmt.bufPrint(buffer, "New {s} session", .{manifest.displayName()}) catch unreachable;
+    return std.fmt.bufPrint(buffer, "New {s} session", .{self.displayName()}) catch unreachable;
 }
 
-pub fn setDisplayName(manifest: *Manifest, text: []const u8) agent_manifest.TextError!void {
-    manifest.display_name_len = try agent_manifest.copyText(&manifest.display_name, text);
+pub fn setDisplayName(self: *Manifest, text: []const u8) agent_manifest.TextError!void {
+    self.display_name_len = try agent_manifest.copyText(&self.display_name, text);
 }
 
-pub fn setPlaceholder(manifest: *Manifest, text: []const u8) agent_manifest.TextError!void {
-    manifest.placeholder_len = try agent_manifest.copyText(&manifest.placeholder, text);
+pub fn setPlaceholder(self: *Manifest, text: []const u8) agent_manifest.TextError!void {
+    self.placeholder_len = try agent_manifest.copyText(&self.placeholder, text);
 }
 
-pub fn setIcon(manifest: *Manifest, text: []const u8) agent_manifest.TextError!void {
-    manifest.icon_len = try agent_manifest.copyText(&manifest.icon, text);
+pub fn setIcon(self: *Manifest, text: []const u8) agent_manifest.TextError!void {
+    self.icon_len = try agent_manifest.copyText(&self.icon, text);
 }
 
 comptime {

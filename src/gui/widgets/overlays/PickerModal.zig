@@ -12,9 +12,9 @@ projection: *const client.Projection,
 
 /// Uses the client's canonical fuzzy matches, including its selection ordering.
 /// Example: `try widget.draw(canvas);`
-pub fn draw(widget: PickerModal, canvas: *Canvas) !void {
-    const modal: Modal = .{ .area = widget.area, .title = "Go to workspace, tab or agent" };
-    const projection = widget.projection.*;
+pub fn draw(self: PickerModal, canvas: *Canvas) !void {
+    const modal: Modal = .{ .area = self.area, .title = "Go to workspace, tab or agent" };
+    const projection = self.projection.*;
     const prompt = projection.prompt.?;
     const palette = canvas.theme.palette;
     const sources: data.Sources = .{ .agents = projection.agents, .workspaces = projection.workspaces, .model = projection.model };

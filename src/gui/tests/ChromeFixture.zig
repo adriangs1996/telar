@@ -23,70 +23,70 @@ pub fn init() !Fixture {
     return fixture;
 }
 
-pub fn deinit(fixture: *Fixture) void {
-    fixture.session.deinit();
+pub fn deinit(self: *Fixture) void {
+    self.session.deinit();
 }
 
 /// Sizes the window so the workbench grid holds exactly `cols` by `rows`
 /// cells beside the sidebar band the model's visibility and the GUI's
 /// preference ask for.
 /// Example: `try fixture.resize(120, 40);`
-pub fn resize(fixture: *Fixture, cols: u16, rows: u16) !void {
-    const renderer = &fixture.session.gui.renderer;
-    const gui = fixture.session.gui;
+pub fn resize(self: *Fixture, cols: u16, rows: u16) !void {
+    const renderer = &self.session.gui.renderer;
+    const gui = self.session.gui;
     const reserved = SidebarBand.resolve(gui.sidebar.request(gui.app.model.sidebar_visible), .{ .width = 65535, .cell_width = renderer.metrics.cell_width }).reserved();
-    try fixture.measure(.{ .width = @as(u32, renderer.metrics.cell_width) * cols + reserved, .height = @as(u32, renderer.metrics.cell_height) * rows + renderer.chrome.vertical(), .scale = 1 });
+    try self.measure(.{ .width = @as(u32, renderer.metrics.cell_width) * cols + reserved, .height = @as(u32, renderer.metrics.cell_height) * rows + renderer.chrome.vertical(), .scale = 1 });
 }
 
 /// Measures one exact window through the GUI client and settles the PTY.
 /// Example: `try fixture.measure(.{ .width = 800, .height = 600, .scale = 2 });`
-pub fn measure(fixture: *Fixture, viewport: native.Viewport) !void {
-    const renderer = &fixture.session.gui.renderer;
-    const gui = fixture.session.gui;
+pub fn measure(self: *Fixture, viewport: native.Viewport) !void {
+    const renderer = &self.session.gui.renderer;
+    const gui = self.session.gui;
     const size = try gui.resizeViewport(viewport);
     try gui.resize(size, renderer.theme);
     gui.pointer.configure(renderer.origin, size);
-    try fixture.session.settle();
+    try self.session.settle();
 }
 
 /// Changes the shared visibility and measures the same window again.
 /// Example: `try fixture.showSidebar(false);`
-pub fn showSidebar(fixture: *Fixture, visible: bool) !void {
-    const renderer = &fixture.session.gui.renderer;
-    _ = fixture.session.gui.app.model.setSidebarVisible(visible);
-    try fixture.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = renderer.scale });
+pub fn showSidebar(self: *Fixture, visible: bool) !void {
+    const renderer = &self.session.gui.renderer;
+    _ = self.session.gui.app.model.setSidebarVisible(visible);
+    try self.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = renderer.scale });
 }
 
-pub fn projection(fixture: *Fixture) client.Projection {
-    return client.capture(&fixture.session.gui.app.model, .{ .geometry = data.workbench.region(&fixture.session.gui.app.model) });
+pub fn projection(self: *Fixture) client.Projection {
+    return client.capture(&self.session.gui.app.model, .{ .geometry = data.workbench.region(&self.session.gui.app.model) });
 }
 
 /// The sidebar band of the last painted frame, in device pixels.
 /// Example: `const band = fixture.band();`
-pub fn band(fixture: *Fixture) Rect {
-    return fixture.chrome.presented().bands.sidebar;
+pub fn band(self: *Fixture) Rect {
+    return self.chrome.presented().bands.sidebar;
 }
 
-pub fn paint(fixture: *Fixture, projection_value: client.Projection) !void {
-    try fixture.prepare(projection_value);
-    fixture.chrome.present(true);
+pub fn paint(self: *Fixture, projection_value: client.Projection) !void {
+    try self.prepare(projection_value);
+    self.chrome.present(true);
 }
 
-pub fn prepare(fixture: *Fixture, projection_value: client.Projection) !void {
-    const renderer = &fixture.session.gui.renderer;
+pub fn prepare(self: *Fixture, projection_value: client.Projection) !void {
+    const renderer = &self.session.gui.renderer;
     renderer.quads.clear();
-    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null };
-    fixture.chrome.animation.begin(fixture.chrome.now_ns);
-    canvas.animation = &fixture.chrome.animation;
-    var context = try fixture.chrome.begin(&canvas, &projection_value);
+    var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = self.session.gui.app.model.theme, .background_opacity = renderer.config.window.background_opacity, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar, .sprites = if (renderer.sprites) |*page| page else null };
+    self.chrome.animation.begin(self.chrome.now_ns);
+    canvas.animation = &self.chrome.animation;
+    var context = try self.chrome.begin(&canvas, &projection_value);
     var widgets: frame_widget.List = .{};
-    try fixture.chrome.compose(&context, &widgets);
+    try self.chrome.compose(&context, &widgets);
     try widgets.draw(&canvas);
-    fixture.chrome.seal();
+    self.chrome.seal();
 }
 
-pub fn target(fixture: *Fixture, intent: client.Intent) ?core.Rect {
-    const hits = &fixture.chrome.presented().hits;
+pub fn target(self: *Fixture, intent: client.Intent) ?core.Rect {
+    const hits = &self.chrome.presented().hits;
     for (hits.items[0..hits.len]) |hit| {
         if (hit.action == .intent and std.meta.eql(hit.action.intent, intent)) {
             return hit.area;
@@ -98,23 +98,23 @@ pub fn target(fixture: *Fixture, intent: client.Intent) ?core.Rect {
 
 /// A delivered band control by identity, in device pixels.
 /// Example: `const tab = fixture.bandTarget(.{ .select_tab = id }).?;`
-pub fn bandTarget(fixture: *Fixture, intent: client.Intent) ?Rect {
-    const hit = fixture.chrome.presented().band_hits.find(intent) orelse return null;
+pub fn bandTarget(self: *Fixture, intent: client.Intent) ?Rect {
+    const hit = self.chrome.presented().band_hits.find(intent) orelse return null;
     return hit.area;
 }
 
 /// Presses and releases a band control at its top-left device pixel.
 /// Example: `const command = fixture.clickBand(tab, 0);`
-pub fn clickBand(fixture: *Fixture, area: Rect, button: u32) client.ViewInteractionCommand {
-    const command = fixture.chrome.bandPointer(.{ .kind = .press, .button = @enumFromInt(button), .x = area.x, .y = area.y }) orelse return .{};
-    _ = fixture.chrome.bandPointer(.{ .kind = .release, .button = @enumFromInt(button), .x = area.x, .y = area.y });
+pub fn clickBand(self: *Fixture, area: Rect, button: u32) client.ViewInteractionCommand {
+    const command = self.chrome.bandPointer(.{ .kind = .press, .button = @enumFromInt(button), .x = area.x, .y = area.y }) orelse return .{};
+    _ = self.chrome.bandPointer(.{ .kind = .release, .button = @enumFromInt(button), .x = area.x, .y = area.y });
     return command.interaction;
 }
 
 /// The delivered sidebar resize handle.
 /// Example: `const handle = fixture.resizeHandle().?;`
-pub fn resizeHandle(fixture: *Fixture) ?Rect {
-    const hits = &fixture.chrome.presented().band_hits;
+pub fn resizeHandle(self: *Fixture) ?Rect {
+    const hits = &self.chrome.presented().band_hits;
     for (hits.items[0..hits.len]) |hit| {
         if (hit.action == .resize_sidebar) {
             return hit.area;
@@ -124,8 +124,8 @@ pub fn resizeHandle(fixture: *Fixture) ?Rect {
     return null;
 }
 
-pub fn click(fixture: *Fixture, area: core.Rect, button: u8) client.ViewInteractionCommand {
-    const command = fixture.chrome.pointer(.{ .x = area.x, .y = area.y, .kind = .press, .button = button });
-    _ = fixture.chrome.pointer(.{ .x = area.x, .y = area.y, .kind = .release, .button = button });
+pub fn click(self: *Fixture, area: core.Rect, button: u8) client.ViewInteractionCommand {
+    const command = self.chrome.pointer(.{ .x = area.x, .y = area.y, .kind = .press, .button = button });
+    _ = self.chrome.pointer(.{ .x = area.x, .y = area.y, .kind = .release, .button = button });
     return command;
 }

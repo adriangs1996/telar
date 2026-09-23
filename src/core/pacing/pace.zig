@@ -307,8 +307,8 @@ const Msg = union(enum) {
     mouse_move: struct { x: u16, y: u16 },
     click,
 
-    fn key_of(m: Msg) ?u32 {
-        return switch (m) {
+    fn key_of(self: Msg) ?u32 {
+        return switch (self) {
             // A resize supersedes a resize: only the final size is real.
             .resize => 1,
             // Pointer motion supersedes motion: hover is a function of where

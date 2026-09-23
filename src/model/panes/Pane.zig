@@ -88,34 +88,34 @@ pub fn init(gpa: std.mem.Allocator, initial: Initial) !Pane {
     };
 }
 
-pub fn deinit(pane: *Pane) void {
-    pane.gpa.free(pane.cwd);
-    pane.gpa.free(pane.title);
-    if (pane.composer) |composer| {
-        pane.gpa.destroy(composer);
+pub fn deinit(self: *Pane) void {
+    self.gpa.free(self.cwd);
+    self.gpa.free(self.title);
+    if (self.composer) |composer| {
+        self.gpa.destroy(composer);
     }
-    if (pane.agent_thread) |thread| {
-        pane.gpa.destroy(thread);
+    if (self.agent_thread) |thread| {
+        self.gpa.destroy(thread);
     }
-    pane.clearHistory();
-    if (pane.agent_options) |options| {
-        pane.gpa.destroy(options);
+    self.clearHistory();
+    if (self.agent_options) |options| {
+        self.gpa.destroy(options);
     }
-    pane.gpa.free(pane.damage_rows);
-    pane.text_metadata.deinit(pane.gpa);
-    pane.gpa.destroy(pane.text_metadata);
-    pane.buffer.deinit();
+    self.gpa.free(self.damage_rows);
+    self.text_metadata.deinit(self.gpa);
+    self.gpa.destroy(self.text_metadata);
+    self.buffer.deinit();
 }
 
 /// Applies a decoded frame after identity and base admission. Only a
 /// snapshot may resize storage. Example: const work = try pane.applyFrame(frame);
-pub fn applyFrame(pane: *Pane, frame: core.FrameView) !Applied {
+pub fn applyFrame(self: *Pane, frame: core.FrameView) !Applied {
     core.profiling.add(.pane_apply_frame, 1);
-    if (frame.pane_id != pane.id) {
+    if (frame.pane_id != self.id) {
         return error.PaneMismatch;
     }
 
-    if (frame.base_frame_id != 0 and frame.base_frame_id != pane.applied_frame_id) {
+    if (frame.base_frame_id != 0 and frame.base_frame_id != self.applied_frame_id) {
         return error.FrameBaseMismatch;
     }
 
@@ -125,20 +125,20 @@ pub fn applyFrame(pane: *Pane, frame: core.FrameView) !Applied {
         return error.MissingSnapshotMetadata
     else
         null;
-    const resized = pane.buffer.w != frame.cols or pane.buffer.h != frame.rows;
+    const resized = self.buffer.w != frame.cols or self.buffer.h != frame.rows;
     if (resized and frame.base_frame_id != 0) {
         if (!builtin.is_test) {
             std.log.err(
                 "pane {any}: patch frame={d} base={d}, applied={d}, incoming={d}x{d}, buffer={d}x{d}",
                 .{
-                    pane.id,
+                    self.id,
                     frame.frame_id,
                     frame.base_frame_id,
-                    pane.applied_frame_id,
+                    self.applied_frame_id,
                     frame.cols,
                     frame.rows,
-                    pane.buffer.w,
-                    pane.buffer.h,
+                    self.buffer.w,
+                    self.buffer.h,
                 },
             );
         }
@@ -146,129 +146,129 @@ pub fn applyFrame(pane: *Pane, frame: core.FrameView) !Applied {
         return error.PatchSizeMismatch;
     }
 
-    try pane.text_metadata.reserve(pane.gpa, frame.rows);
-    const replacement_damage = if (resized) try pane.gpa.alloc(DamageRow, frame.rows) else null;
-    errdefer if (replacement_damage) |rows| pane.gpa.free(rows);
+    try self.text_metadata.reserve(self.gpa, frame.rows);
+    const replacement_damage = if (resized) try self.gpa.alloc(DamageRow, frame.rows) else null;
+    errdefer if (replacement_damage) |rows| self.gpa.free(rows);
 
-    const applied = try frames.applyBuffer(&pane.buffer, &pane.cursor, frame);
+    const applied = try frames.applyBuffer(&self.buffer, &self.cursor, frame);
     if (metadata) |value| {
-        pane.text_metadata.replace(value);
+        self.text_metadata.replace(value);
     }
 
-    pane.mouse = frame.mouse;
-    pane.input_modes = frame.input_modes;
-    pane.pointer_shape = frame.pointer_shape;
-    pane.scroll = frame.scroll;
+    self.mouse = frame.mouse;
+    self.input_modes = frame.input_modes;
+    self.pointer_shape = frame.pointer_shape;
+    self.scroll = frame.scroll;
     if (replacement_damage) |rows| {
         @memset(rows, .{});
-        pane.gpa.free(pane.damage_rows);
-        pane.damage_rows = rows;
+        self.gpa.free(self.damage_rows);
+        self.damage_rows = rows;
     } else {
         var spans = frame.spans();
         while (try spans.next()) |span| {
-            pane.markSpan(span.start, span.cell_count);
+            self.markSpan(span.start, span.cell_count);
         }
     }
 
-    pane.applied_frame_id = frame.frame_id;
-    pane.pending_frame_id = frame.frame_id;
+    self.applied_frame_id = frame.frame_id;
+    self.pending_frame_id = frame.frame_id;
     core.profiling.add(.pane_copy_cells, applied.cells);
     core.profiling.add(.pane_copy_bytes, applied.cells * @sizeOf(core.Cell));
     return applied;
 }
 
 /// Retires only the exact pending presentation. Example: pane.commitPresentation(frame_id);
-pub fn commitPresentation(pane: *Pane, frame_id: u64) void {
-    if (pane.pending_frame_id != frame_id) {
+pub fn commitPresentation(self: *Pane, frame_id: u64) void {
+    if (self.pending_frame_id != frame_id) {
         return;
     }
 
-    for (pane.damage_rows) |*row| {
+    for (self.damage_rows) |*row| {
         row.clear();
     }
 
-    pane.pending_frame_id = 0;
+    self.pending_frame_id = 0;
 }
 
 /// Marks a validated range of owned cells. Example: pane.markSpan(1, 2);
-pub fn markSpan(pane: *Pane, start: u32, count: u32) void {
-    damage.markRows(pane.damage_rows, pane.buffer.w, .{ .start = start, .count = count });
+pub fn markSpan(self: *Pane, start: u32, count: u32) void {
+    damage.markRows(self.damage_rows, self.buffer.w, .{ .start = start, .count = count });
 }
 
 /// Owns the full path and reports changes to its bounded display name.
 /// Example: const changed = try pane.setCwd("/work/telar");
-pub fn setCwd(pane: *Pane, path: []const u8) !bool {
+pub fn setCwd(self: *Pane, path: []const u8) !bool {
     std.debug.assert(path.len != 0 and path.len <= core.max_cwd_bytes);
-    if (std.mem.eql(u8, pane.cwd, path)) {
+    if (std.mem.eql(u8, self.cwd, path)) {
         return false;
     }
 
-    const display_changed = !std.mem.eql(u8, pane.cwdName(), pane_support.displayCwdName(path));
-    const replacement = try pane.gpa.dupe(u8, path);
-    pane.gpa.free(pane.cwd);
-    pane.cwd = replacement;
+    const display_changed = !std.mem.eql(u8, self.cwdName(), pane_support.displayCwdName(path));
+    const replacement = try self.gpa.dupe(u8, path);
+    self.gpa.free(self.cwd);
+    self.cwd = replacement;
     return display_changed;
 }
 
-pub fn cwdName(pane: *const Pane) []const u8 {
-    return pane_support.displayCwdName(pane.cwd);
+pub fn cwdName(self: *const Pane) []const u8 {
+    return pane_support.displayCwdName(self.cwd);
 }
 
-pub fn cwdSlice(pane: *const Pane) []const u8 {
-    return pane.cwd;
+pub fn cwdSlice(self: *const Pane) []const u8 {
+    return self.cwd;
 }
 
 /// Replaces a validated foreground label without allocation. Example: _ = pane.setForegroundName("zsh");
-pub fn setForegroundName(pane: *Pane, name: []const u8) bool {
-    std.debug.assert(name.len != 0 and name.len <= pane.foreground_name.len);
-    if (std.mem.eql(u8, pane.foregroundName(), name)) {
+pub fn setForegroundName(self: *Pane, name: []const u8) bool {
+    std.debug.assert(name.len != 0 and name.len <= self.foreground_name.len);
+    if (std.mem.eql(u8, self.foregroundName(), name)) {
         return false;
     }
 
-    @memcpy(pane.foreground_name[0..name.len], name);
-    pane.foreground_name_len = @intCast(name.len);
+    @memcpy(self.foreground_name[0..name.len], name);
+    self.foreground_name_len = @intCast(name.len);
     return true;
 }
 
-pub fn foregroundName(pane: *const Pane) []const u8 {
-    return pane.foreground_name[0..pane.foreground_name_len];
+pub fn foregroundName(self: *const Pane) []const u8 {
+    return self.foreground_name[0..self.foreground_name_len];
 }
 
-pub fn applicationLabel(pane: *const Pane) []const u8 {
-    const name = pane.foregroundName();
+pub fn applicationLabel(self: *const Pane) []const u8 {
+    const name = self.foregroundName();
     return if (name.len != 0) name else "shell";
 }
 
-pub fn applicationIcon(pane: *const Pane) icons.Icon {
-    return icons.Icon.forApplication(pane.foregroundName());
+pub fn applicationIcon(self: *const Pane) icons.Icon {
+    return icons.Icon.forApplication(self.foregroundName());
 }
 
 /// Replaces a semantic progress report without allocation. Example: _ = pane.setProgress(progress);
-pub fn setProgress(pane: *Pane, progress: core.PaneProgress) bool {
-    if (pane.progress_state == progress.state and pane.progress_percent == progress.percent) {
+pub fn setProgress(self: *Pane, progress: core.PaneProgress) bool {
+    if (self.progress_state == progress.state and self.progress_percent == progress.percent) {
         return false;
     }
 
-    pane.progress_state = progress.state;
-    pane.progress_percent = progress.percent;
+    self.progress_state = progress.state;
+    self.progress_percent = progress.percent;
     return true;
 }
 
 /// Owns a validated window title independently of its request buffer. Example: _ = try pane.setTitle("vim");
-pub fn setTitle(pane: *Pane, title: []const u8) !bool {
+pub fn setTitle(self: *Pane, title: []const u8) !bool {
     std.debug.assert(title.len <= core.max_pane_title_bytes);
-    if (std.mem.eql(u8, pane.title, title)) {
+    if (std.mem.eql(u8, self.title, title)) {
         return false;
     }
 
-    const replacement = if (title.len != 0) try pane.gpa.dupe(u8, title) else &[_]u8{};
-    pane.gpa.free(pane.title);
-    pane.title = @constCast(replacement);
+    const replacement = if (title.len != 0) try self.gpa.dupe(u8, title) else &[_]u8{};
+    self.gpa.free(self.title);
+    self.title = @constCast(replacement);
     return true;
 }
 
-pub fn titleSlice(pane: *const Pane) []const u8 {
-    return pane.title;
+pub fn titleSlice(self: *const Pane) []const u8 {
+    return self.title;
 }
 
 pub const max_composer_bytes = Composer.max_bytes;
@@ -278,7 +278,7 @@ pub const max_composer_bytes = Composer.max_bytes;
 /// ```zig
 /// try pane.setComposer("fix the failing test");
 /// ```
-pub fn setComposer(pane: *Pane, text: []const u8) !void {
+pub fn setComposer(self: *Pane, text: []const u8) !void {
     if (text.len > max_composer_bytes) {
         return error.ComposerTooLong;
     }
@@ -291,35 +291,35 @@ pub fn setComposer(pane: *Pane, text: []const u8) !void {
         return error.InvalidComposerText;
     }
 
-    const content_changed = !std.mem.eql(u8, pane.composerSlice(), text);
-    if (pane.composer == null and text.len == 0) {
+    const content_changed = !std.mem.eql(u8, self.composerSlice(), text);
+    if (self.composer == null and text.len == 0) {
         return;
     }
 
-    const field = &(try pane.ensureComposer()).field;
+    const field = &(try self.ensureComposer()).field;
     if (field.replace(.{ 0, @intCast(field.len) }, text)) {
-        pane.composer_revision +%= 1;
+        self.composer_revision +%= 1;
         if (content_changed) {
-            pane.composer_content_revision +%= 1;
+            self.composer_content_revision +%= 1;
         }
     }
 }
 
-pub fn composerSlice(pane: *const Pane) []const u8 {
-    const composer = pane.composer orelse return "";
+pub fn composerSlice(self: *const Pane) []const u8 {
+    const composer = self.composer orelse return "";
     return composer.field.text();
 }
 
 /// The composer, allocated on first use.
 /// Example: `const composer = try pane.ensureComposer();`
-pub fn ensureComposer(pane: *Pane) !*Composer {
-    if (pane.composer) |composer| {
+pub fn ensureComposer(self: *Pane) !*Composer {
+    if (self.composer) |composer| {
         return composer;
     }
 
-    const composer = try pane.gpa.create(Composer);
+    const composer = try self.gpa.create(Composer);
     composer.* = .{};
-    pane.composer = composer;
+    self.composer = composer;
     return composer;
 }
 
@@ -354,39 +354,39 @@ pub fn hasChangeReview(self: *const Pane) bool {
 
 /// Installs the runtime identity and retires cached state for another lifetime.
 /// Example: `_ = pane.identify(.agent, generation);`
-pub fn identify(pane: *Pane, kind: core.PaneKind, generation: u64) bool {
-    if (pane.kind == kind and pane.pane_generation == generation) {
+pub fn identify(self: *Pane, kind: core.PaneKind, generation: u64) bool {
+    if (self.kind == kind and self.pane_generation == generation) {
         return false;
     }
 
-    if (pane.agent_thread) |thread| {
-        pane.gpa.destroy(thread);
-        pane.agent_thread = null;
+    if (self.agent_thread) |thread| {
+        self.gpa.destroy(thread);
+        self.agent_thread = null;
     }
-    pane.clearHistory();
+    self.clearHistory();
 
-    pane.kind = kind;
-    pane.pane_generation = generation;
-    pane.change_review = .{};
-    pane.transcript_scroll = 0;
-    if (pane.agent_options) |options| {
-        pane.gpa.destroy(options);
-        pane.agent_options = null;
+    self.kind = kind;
+    self.pane_generation = generation;
+    self.change_review = .{};
+    self.transcript_scroll = 0;
+    if (self.agent_options) |options| {
+        self.gpa.destroy(options);
+        self.agent_options = null;
     }
-    pane.catalog_revision = 0;
-    pane.resume_history_requested = false;
-    pane.options_revision +%= 1;
+    self.catalog_revision = 0;
+    self.resume_history_requested = false;
+    self.options_revision +%= 1;
     return true;
 }
 
 /// Copies a validated snapshot only for this attached runtime lifetime.
 /// Example: `_ = try pane.applyAgentThread(snapshot);`
-pub fn applyAgentThread(pane: *Pane, snapshot: core.AgentThreadSnapshotView) !bool {
-    if (!pane.attached or pane.kind != .agent or pane.id != snapshot.pane_id or pane.pane_generation != snapshot.pane_generation) {
+pub fn applyAgentThread(self: *Pane, snapshot: core.AgentThreadSnapshotView) !bool {
+    if (!self.attached or self.kind != .agent or self.id != snapshot.pane_id or self.pane_generation != snapshot.pane_generation) {
         return false;
     }
 
-    if (pane.agent_thread) |previous| {
+    if (self.agent_thread) |previous| {
         if (snapshot.revision <= previous.revision) {
             return false;
         }
@@ -395,34 +395,34 @@ pub fn applyAgentThread(pane: *Pane, snapshot: core.AgentThreadSnapshotView) !bo
         const old_len = previous.thread_id_len;
         try snapshot.copyTo(previous);
         if (!std.mem.eql(u8, old_id[0..old_len], previous.threadId())) {
-            pane.clearHistory();
-            pane.transcript_scroll = 0;
-            pane.resume_history_requested = false;
+            self.clearHistory();
+            self.transcript_scroll = 0;
+            self.resume_history_requested = false;
         }
     } else {
-        const replacement = try pane.gpa.create(core.AgentThreadSnapshot);
-        errdefer pane.gpa.destroy(replacement);
+        const replacement = try self.gpa.create(core.AgentThreadSnapshot);
+        errdefer self.gpa.destroy(replacement);
         try snapshot.copyTo(replacement);
-        pane.agent_thread = replacement;
+        self.agent_thread = replacement;
     }
 
-    const retained = pane.agent_thread.?;
-    pane.change_review.retainSession(retained.threadId());
-    pane.catalog_revision = catalogRevision(retained);
-    if (retained.resumed and !pane.resume_history_requested) {
-        pane.clearHistory();
-        pane.history_intent = .older;
-        pane.resume_history_requested = true;
+    const retained = self.agent_thread.?;
+    self.change_review.retainSession(retained.threadId());
+    self.catalog_revision = catalogRevision(retained);
+    if (retained.resumed and !self.resume_history_requested) {
+        self.clearHistory();
+        self.history_intent = .older;
+        self.resume_history_requested = true;
     }
 
-    _ = pane.followAgentThread();
-    if (pane.agent_options == null or !retained.accepts(pane.agent_options.?.*)) {
+    _ = self.followAgentThread();
+    if (self.agent_options == null or !retained.accepts(self.agent_options.?.*)) {
         if (retained.accepts(retained.options)) {
-            if (pane.agent_options == null) {
-                pane.agent_options = try pane.gpa.create(core.AgentOptions);
+            if (self.agent_options == null) {
+                self.agent_options = try self.gpa.create(core.AgentOptions);
             }
-            pane.agent_options.?.* = retained.options;
-            pane.options_revision +%= 1;
+            self.agent_options.?.* = retained.options;
+            self.options_revision +%= 1;
         }
     }
 
@@ -430,14 +430,14 @@ pub fn applyAgentThread(pane: *Pane, snapshot: core.AgentThreadSnapshotView) !bo
 }
 
 /// Borrows a draft's settings through an owned value. Empty values mean startup is incomplete. Example: `const options = pane.agentOptions();`
-pub fn agentOptions(pane: *const Pane) core.AgentOptions {
-    return if (pane.agent_options) |options| options.* else .{};
+pub fn agentOptions(self: *const Pane) core.AgentOptions {
+    return if (self.agent_options) |options| options.* else .{};
 }
 
 /// Applies one catalog-backed draft choice without changing another client's settings. Example: `_ = pane.changeAgentOption(.{ .access = .read_only });`
-pub fn changeAgentOption(pane: *Pane, change: agent_options_module.Change) bool {
-    const snapshot = pane.agent_thread orelse return false;
-    var options = pane.agentOptions();
+pub fn changeAgentOption(self: *Pane, change: agent_options_module.Change) bool {
+    const snapshot = self.agent_thread orelse return false;
+    var options = self.agentOptions();
     switch (change) {
         .model => |id| {
             if (std.mem.eql(u8, options.modelSlice(), id)) {
@@ -451,13 +451,13 @@ pub fn changeAgentOption(pane: *Pane, change: agent_options_module.Change) bool 
         .effort => |effort| options.effort = effort,
         .access => |access| options.access = access,
     }
-    if (!snapshot.accepts(options) or options.eql(pane.agentOptions())) {
+    if (!snapshot.accepts(options) or options.eql(self.agentOptions())) {
         return false;
     }
 
-    const draft = pane.agent_options orelse return false;
+    const draft = self.agent_options orelse return false;
     draft.* = options;
-    pane.options_revision +%= 1;
+    self.options_revision +%= 1;
     return true;
 }
 
@@ -480,8 +480,8 @@ fn catalogRevision(snapshot: *const core.AgentThreadSnapshot) u64 {
 
 /// Borrows image references without allocating storage for empty terminal panes.
 /// Example: `const images = pane.composerImages();`
-pub fn composerImages(pane: *const Pane) *const core.AgentImages {
-    const composer = pane.composer orelse return &empty_composer_images;
+pub fn composerImages(self: *const Pane) *const core.AgentImages {
+    const composer = self.composer orelse return &empty_composer_images;
     return &composer.images;
 }
 
@@ -489,96 +489,96 @@ const empty_composer_images: core.AgentImages = .{};
 
 /// Changes bounded draft attachments and invalidates pending paste/send revisions.
 /// Example: `try pane.attachComposerImage("/private/tmp/image.png");`
-pub fn attachComposerImage(pane: *Pane, path: []const u8) !void {
+pub fn attachComposerImage(self: *Pane, path: []const u8) !void {
     try core.AgentImages.validatePath(path);
-    const composer = try pane.ensureComposer();
+    const composer = try self.ensureComposer();
     try composer.images.append(path);
-    pane.composer_revision +%= 1;
-    pane.composer_content_revision +%= 1;
+    self.composer_revision +%= 1;
+    self.composer_content_revision +%= 1;
 }
 
 /// Rejects stale removal controls after another edit. Example: `_ = pane.removeComposerImage(.{ .index = 0, .revision = revision });`
-pub fn removeComposerImage(pane: *Pane, removal: ImageRemoval) bool {
-    const composer = pane.composer orelse return false;
-    if (removal.revision != pane.composer_revision or !composer.images.remove(removal.index)) {
+pub fn removeComposerImage(self: *Pane, removal: ImageRemoval) bool {
+    const composer = self.composer orelse return false;
+    if (removal.revision != self.composer_revision or !composer.images.remove(removal.index)) {
         return false;
     }
 
-    pane.composer_revision +%= 1;
-    pane.composer_content_revision +%= 1;
+    self.composer_revision +%= 1;
+    self.composer_content_revision +%= 1;
     return true;
 }
 
 /// Clears exactly the draft accepted by the runtime. Example: `_ = pane.acceptComposer(revision);`
-pub fn acceptComposer(pane: *Pane, revision: u64) bool {
-    if (pane.composer_content_revision != revision) {
+pub fn acceptComposer(self: *Pane, revision: u64) bool {
+    if (self.composer_content_revision != revision) {
         return false;
     }
 
-    pane.setComposer("") catch unreachable;
-    if (pane.composerImages().count != 0) {
-        pane.composer.?.images = .{};
-        pane.composer_revision +%= 1;
-        pane.composer_content_revision +%= 1;
+    self.setComposer("") catch unreachable;
+    if (self.composerImages().count != 0) {
+        self.composer.?.images = .{};
+        self.composer_revision +%= 1;
+        self.composer_content_revision +%= 1;
     }
 
-    pane.clearHistory();
-    pane.transcript_scroll = 0;
+    self.clearHistory();
+    self.transcript_scroll = 0;
     return true;
 }
 
 /// Retires the disposable reading window; pending generations become stale.
 /// Example: `pane.clearHistory();`
-pub fn clearHistory(pane: *Pane) void {
-    if (pane.agent_history) |window| {
-        pane.gpa.destroy(window);
-        pane.agent_history = null;
+pub fn clearHistory(self: *Pane) void {
+    if (self.agent_history) |window| {
+        self.gpa.destroy(window);
+        self.agent_history = null;
     }
-    pane.history_intent = null;
-    pane.history_generation +%= 1;
+    self.history_intent = null;
+    self.history_generation +%= 1;
 }
 
 /// Refreshes the live tail only while the reader remains at its end.
 /// Example: `_ = pane.followAgentThread();`
-pub fn followAgentThread(pane: *Pane) bool {
-    if (pane.transcript_scroll != 0) {
+pub fn followAgentThread(self: *Pane) bool {
+    if (self.transcript_scroll != 0) {
         return false;
     }
 
-    const window = pane.agent_history orelse return false;
-    const live = pane.agent_thread orelse return false;
+    const window = self.agent_history orelse return false;
+    const live = self.agent_thread orelse return false;
     return window.followLive(live);
 }
 
 /// Resolves delivered history controls without falling through to newer bytes.
 /// Example: `const snapshot = pane.threadItemSource(identity) orelse return;`
-pub fn threadItemSource(pane: *const Pane, identity: u64) ?*const core.AgentThreadSnapshot {
-    if (pane.agent_history) |window| {
+pub fn threadItemSource(self: *const Pane, identity: u64) ?*const core.AgentThreadSnapshot {
+    if (self.agent_history) |window| {
         return window.findItem(identity);
     }
-    const snapshot = pane.agent_thread orelse return null;
+    const snapshot = self.agent_thread orelse return null;
     return if (snapshot.findItem(identity) != null) snapshot else null;
 }
 
 /// Retains bounded client navigation from the end of the transcript.
 /// Example: `_ = pane.scrollConversation(3);`
-pub fn scrollConversation(pane: *Pane, delta: f64) bool {
+pub fn scrollConversation(self: *Pane, delta: f64) bool {
     if (!std.math.isFinite(delta)) {
         return false;
     }
 
-    const next = std.math.clamp(pane.transcript_scroll + delta, 0, @as(f64, std.math.maxInt(u32)));
-    if (next == pane.transcript_scroll) {
+    const next = std.math.clamp(self.transcript_scroll + delta, 0, @as(f64, std.math.maxInt(u32)));
+    if (next == self.transcript_scroll) {
         return false;
     }
 
-    pane.transcript_scroll = next;
+    self.transcript_scroll = next;
     return true;
 }
 
 /// Applies bounded editor input without allocating. Example: `_ = pane.editComposer(.backspace);`
-pub fn editComposer(pane: *Pane, command: anytype) bool {
-    const field = &(pane.ensureComposer() catch return false).field;
+pub fn editComposer(self: *Pane, command: anytype) bool {
+    const field = &(self.ensureComposer() catch return false).field;
     const previous = .{ field.len, field.head, field.anchor };
     const content_changed = switch (command) {
         .insert => |text| replacementChangesText(field, .{ @intCast(@min(field.head, field.anchor)), @intCast(@max(field.head, field.anchor)) }, text),
@@ -621,9 +621,9 @@ pub fn editComposer(pane: *Pane, command: anytype) bool {
         else => false,
     };
     if (changed) {
-        pane.composer_revision +%= 1;
+        self.composer_revision +%= 1;
         if (content_changed) {
-            pane.composer_content_revision +%= 1;
+            self.composer_content_revision +%= 1;
         }
     }
 

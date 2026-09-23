@@ -8,20 +8,20 @@ handle: freetype.c.FT_Size,
 
 /// Distance from the baseline to the top of the tallest glyph, in pixels.
 /// Example: `const top = size.ascender();`
-pub fn ascender(size: FontSize) i32 {
-    return round26(size.handle.*.metrics.ascender);
+pub fn ascender(self: FontSize) i32 {
+    return round26(self.handle.*.metrics.ascender);
 }
 
 /// The natural line box height, in pixels, never below one.
 /// Example: `const line = size.lineHeight();`
-pub fn lineHeight(size: FontSize) u32 {
-    return @intCast(@max(1, round26(size.handle.*.metrics.height)));
+pub fn lineHeight(self: FontSize) u32 {
+    return @intCast(@max(1, round26(self.handle.*.metrics.height)));
 }
 
 /// The widest advance, in pixels, never below one.
 /// Example: `const cell = size.maxAdvance();`
-pub fn maxAdvance(size: FontSize) u16 {
-    return @intCast(@max(1, round26(size.handle.*.metrics.max_advance)));
+pub fn maxAdvance(self: FontSize) u16 {
+    return @intCast(@max(1, round26(self.handle.*.metrics.max_advance)));
 }
 
 /// Rounds a 26.6 fixed-point value to the nearest pixel.

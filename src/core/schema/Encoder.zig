@@ -8,52 +8,52 @@ pub fn init(buffer: []u8) Encoder {
     return .{ .buffer = buffer };
 }
 
-pub fn writeByte(encoder: *Encoder, value: u8) error{BufferTooSmall}!void {
-    if (encoder.index == encoder.buffer.len) {
+pub fn writeByte(self: *Encoder, value: u8) error{BufferTooSmall}!void {
+    if (self.index == self.buffer.len) {
         return error.BufferTooSmall;
     }
-    encoder.buffer[encoder.index] = value;
-    encoder.index += 1;
+    self.buffer[self.index] = value;
+    self.index += 1;
 }
 
-pub fn writeInt(encoder: *Encoder, comptime T: type, value: T) error{BufferTooSmall}!void {
+pub fn writeInt(self: *Encoder, comptime T: type, value: T) error{BufferTooSmall}!void {
     const size = @sizeOf(T);
 
-    if (encoder.buffer.len - encoder.index < size) {
+    if (self.buffer.len - self.index < size) {
         return error.BufferTooSmall;
     }
 
-    std.mem.writeInt(T, encoder.buffer[encoder.index..][0..size], value, .little);
-    encoder.index += size;
+    std.mem.writeInt(T, self.buffer[self.index..][0..size], value, .little);
+    self.index += size;
 }
 
-pub fn writeBytes(encoder: *Encoder, bytes: []const u8) error{BufferTooSmall}!void {
-    if (encoder.buffer.len - encoder.index < bytes.len) {
+pub fn writeBytes(self: *Encoder, bytes: []const u8) error{BufferTooSmall}!void {
+    if (self.buffer.len - self.index < bytes.len) {
         return error.BufferTooSmall;
     }
 
-    @memmove(encoder.buffer[encoder.index..][0..bytes.len], bytes);
-    encoder.index += bytes.len;
+    @memmove(self.buffer[self.index..][0..bytes.len], bytes);
+    self.index += bytes.len;
 }
 
-pub fn writeSized16(encoder: *Encoder, bytes: []const u8) !void {
+pub fn writeSized16(self: *Encoder, bytes: []const u8) !void {
     if (bytes.len > std.math.maxInt(u16)) {
         return error.LengthOverflow;
     }
 
-    try encoder.writeInt(u16, @intCast(bytes.len));
-    try encoder.writeBytes(bytes);
+    try self.writeInt(u16, @intCast(bytes.len));
+    try self.writeBytes(bytes);
 }
 
-pub fn writeSized32(encoder: *Encoder, bytes: []const u8) !void {
+pub fn writeSized32(self: *Encoder, bytes: []const u8) !void {
     if (bytes.len > std.math.maxInt(u32)) {
         return error.LengthOverflow;
     }
 
-    try encoder.writeInt(u32, @intCast(bytes.len));
-    try encoder.writeBytes(bytes);
+    try self.writeInt(u32, @intCast(bytes.len));
+    try self.writeBytes(bytes);
 }
 
-pub fn finish(encoder: *Encoder) []const u8 {
-    return encoder.buffer[0..encoder.index];
+pub fn finish(self: *Encoder) []const u8 {
+    return self.buffer[0..self.index];
 }

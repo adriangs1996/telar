@@ -14,8 +14,8 @@ pub const PaneGraphicsCommand = union(enum) {
     /// ```zig
     /// const pane_id = command.paneId();
     /// ```
-    pub fn paneId(command: PaneGraphicsCommand) core.PaneId {
-        return switch (command) {
+    pub fn paneId(self: PaneGraphicsCommand) core.PaneId {
+        return switch (self) {
             inline else => |value| value.pane_id,
         };
     }

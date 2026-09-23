@@ -19,23 +19,23 @@ pub fn init(io: std.Io, endpoint: []const u8, suffix: []const u8) Sink {
     return .{ .file = file };
 }
 
-pub fn deinit(sink: *Sink, io: std.Io) void {
+pub fn deinit(self: *Sink, io: std.Io) void {
     if (!diagnostics.enabled) {
         return;
     }
-    if (sink.file) |file| {
+    if (self.file) |file| {
         file.close(io);
     }
-    sink.file = null;
+    self.file = null;
 }
 
-pub fn available(sink: *const Sink) bool {
-    return if (diagnostics.enabled) sink.file != null else false;
+pub fn available(self: *const Sink) bool {
+    return if (diagnostics.enabled) self.file != null else false;
 }
 
-pub fn write(sink: *Sink, io: std.Io, bytes: []const u8) !void {
-    if (!diagnostics.enabled or sink.file == null) {
+pub fn write(self: *Sink, io: std.Io, bytes: []const u8) !void {
+    if (!diagnostics.enabled or self.file == null) {
         return;
     }
-    try sink.file.?.writeStreamingAll(io, bytes);
+    try self.file.?.writeStreamingAll(io, bytes);
 }

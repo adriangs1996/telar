@@ -10,10 +10,10 @@ last_sent: ?Version = null,
 /// ```zig
 /// state.markSnapshotReceived();
 /// ```
-pub fn markSnapshotReceived(state: *State) !void {
-    if (state.snapshot_received) {
+pub fn markSnapshotReceived(self: *State) !void {
+    if (self.snapshot_received) {
         return error.DuplicateClientLayoutSnapshot;
     }
 
-    state.snapshot_received = true;
+    self.snapshot_received = true;
 }

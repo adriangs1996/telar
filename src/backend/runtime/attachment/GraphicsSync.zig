@@ -39,29 +39,29 @@ pub fn init(gpa: std.mem.Allocator, pane: *Pane) Sync {
     };
 }
 
-pub fn deinit(sync: *Sync) void {
-    sync.freeTransfer();
+pub fn deinit(self: *Sync) void {
+    self.freeTransfer();
 }
 
-pub fn reset(sync: *Sync) void {
-    sync.freeTransfer();
-    sync.snapshot = .begin_pending;
-    sync.batch_active = false;
-    sync.target_revision = 0;
-    sync.observed_revision = 0;
-    sync.known_images = [_]?KnownImage{null} ** core.max_images_per_pane;
-    sync.known_placements = [_]?KnownPlacement{null} ** core.max_placements_per_pane;
+pub fn reset(self: *Sync) void {
+    self.freeTransfer();
+    self.snapshot = .begin_pending;
+    self.batch_active = false;
+    self.target_revision = 0;
+    self.observed_revision = 0;
+    self.known_images = [_]?KnownImage{null} ** core.max_images_per_pane;
+    self.known_placements = [_]?KnownPlacement{null} ** core.max_placements_per_pane;
 }
 
-pub fn freeTransfer(sync: *Sync) void {
-    if (sync.transfer) |transfer| {
-        sync.gpa.free(transfer.pixels);
-        sync.pane.media_allocator.releaseManual(transfer.reserved_len);
+pub fn freeTransfer(self: *Sync) void {
+    if (self.transfer) |transfer| {
+        self.gpa.free(transfer.pixels);
+        self.pane.media_allocator.releaseManual(transfer.reserved_len);
         if (transfer.shared_name) |name| {
             if (!transfer.metadata_sent) {
                 _ = std.c.shm_unlink(name.sliceZ());
             }
         }
     }
-    sync.transfer = null;
+    self.transfer = null;
 }

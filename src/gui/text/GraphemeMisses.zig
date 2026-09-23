@@ -10,15 +10,15 @@ pub const capacity = 256;
 hashes: [capacity]u64 = @splat(0),
 
 /// Example: `if (misses.contains(text)) { return .primary; }`
-pub fn contains(misses: *const GraphemeMisses, text: []const u8) bool {
+pub fn contains(self: *const GraphemeMisses, text: []const u8) bool {
     const digest = hash(text);
-    return misses.hashes[digest % capacity] == digest;
+    return self.hashes[digest % capacity] == digest;
 }
 
 /// Example: `misses.remember(text);`
-pub fn remember(misses: *GraphemeMisses, text: []const u8) void {
+pub fn remember(self: *GraphemeMisses, text: []const u8) void {
     const digest = hash(text);
-    misses.hashes[digest % capacity] = digest;
+    self.hashes[digest % capacity] = digest;
 }
 
 // Never zero, so an empty slot never matches.

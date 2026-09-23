@@ -7,6 +7,6 @@ path_len: u16,
 
 /// Borrows the path owned by this asynchronous request.
 /// Example: `const path = probe.pathSlice();`.
-pub fn pathSlice(probe: *const Probe) []const u8 {
-    return probe.path[0..probe.path_len];
+pub fn pathSlice(self: *const Probe) []const u8 {
+    return self.path[0..self.path_len];
 }

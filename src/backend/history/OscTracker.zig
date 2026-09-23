@@ -42,18 +42,18 @@ pub fn init(cwd: []const u8) Tracker {
 /// ```zig
 /// tracker.feed(.{ .bytes = output, .clock = clock }, &sink);
 /// ```
-pub fn feed(tracker: *Tracker, observation: Observation, sink: anytype) void {
-    for (observation.bytes) |byte| switch (tracker.scanner.next(byte)) {
+pub fn feed(self: *Tracker, observation: Observation, sink: anytype) void {
+    for (observation.bytes) |byte| switch (self.scanner.next(byte)) {
         .none => {},
         .start => {
             if (comptime builtin.mode == .Debug) {
-                tracker.osc_started += 1;
+                self.osc_started += 1;
             }
-            tracker.osc_len = 0;
-            tracker.osc_overflow = false;
+            self.osc_len = 0;
+            self.osc_overflow = false;
         },
-        .byte => |value| tracker.appendOsc(value),
-        .end => tracker.finishOsc(observation.clock, sink),
+        .byte => |value| self.appendOsc(value),
+        .end => self.finishOsc(observation.clock, sink),
     };
 }
 
@@ -64,10 +64,10 @@ pub fn feed(tracker: *Tracker, observation: Observation, sink: anytype) void {
 /// ```zig
 /// const captured = tracker.input(bytes);
 /// ```
-pub fn input(tracker: *Tracker, bytes: []const u8) usize {
-    const before = tracker.command_len;
-    for (bytes) |byte| tracker.captureByte(byte);
-    return tracker.command_len - before;
+pub fn input(self: *Tracker, bytes: []const u8) usize {
+    const before = self.command_len;
+    for (bytes) |byte| self.captureByte(byte);
+    return self.command_len - before;
 }
 
 /// Emits the running command as interrupted, if one exists.
@@ -75,65 +75,65 @@ pub fn input(tracker: *Tracker, bytes: []const u8) usize {
 /// ```zig
 /// tracker.interrupt(clock, &sink);
 /// ```
-pub fn interrupt(tracker: *Tracker, clock: Clock, sink: anytype) void {
-    if (!tracker.running) {
+pub fn interrupt(self: *Tracker, clock: Clock, sink: anytype) void {
+    if (!self.running) {
         return;
     }
-    tracker.emit(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
+    self.emit(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
 }
 
-pub fn currentCwd(tracker: *const Tracker) []const u8 {
-    return tracker.cwd[0..tracker.cwd_len];
+pub fn currentCwd(self: *const Tracker) []const u8 {
+    return self.cwd[0..self.cwd_len];
 }
 
-pub fn updateCwd(tracker: *Tracker, cwd: []const u8) void {
-    tracker.setCwd(cwd);
+pub fn updateCwd(self: *Tracker, cwd: []const u8) void {
+    self.setCwd(cwd);
 }
 
-fn captureByte(tracker: *Tracker, byte: u8) void {
-    if (tracker.zone != .input) {
+fn captureByte(self: *Tracker, byte: u8) void {
+    if (self.zone != .input) {
         return;
     }
-    if (tracker.command_len == tracker.command.len) {
-        tracker.command_truncated = true;
+    if (self.command_len == self.command.len) {
+        self.command_truncated = true;
         return;
     }
-    tracker.command[tracker.command_len] = byte;
-    tracker.command_len += 1;
+    self.command[self.command_len] = byte;
+    self.command_len += 1;
 }
 
-fn appendOsc(tracker: *Tracker, byte: u8) void {
-    if (tracker.osc_len == tracker.osc.len) {
-        tracker.osc_overflow = true;
+fn appendOsc(self: *Tracker, byte: u8) void {
+    if (self.osc_len == self.osc.len) {
+        self.osc_overflow = true;
         return;
     }
-    tracker.osc[tracker.osc_len] = byte;
-    tracker.osc_len += 1;
+    self.osc[self.osc_len] = byte;
+    self.osc_len += 1;
 }
 
-fn finishOsc(tracker: *Tracker, clock: Clock, sink: anytype) void {
+fn finishOsc(self: *Tracker, clock: Clock, sink: anytype) void {
     if (comptime builtin.mode == .Debug) {
-        tracker.osc_finished += 1;
+        self.osc_finished += 1;
     }
     defer {
-        tracker.osc_len = 0;
-        tracker.osc_overflow = false;
+        self.osc_len = 0;
+        self.osc_overflow = false;
     }
-    if (tracker.osc_overflow) {
+    if (self.osc_overflow) {
         return;
     }
-    const payload = tracker.osc[0..tracker.osc_len];
+    const payload = self.osc[0..self.osc_len];
     const separator = std.mem.indexOfScalar(u8, payload, ';') orelse payload.len;
     const code = payload[0..separator];
     const body = if (separator == payload.len) "" else payload[separator + 1 ..];
     if (std.mem.eql(u8, code, "133")) {
-        tracker.semantic(.{ .body = body, .clock = clock }, sink);
+        self.semantic(.{ .body = body, .clock = clock }, sink);
     } else if (std.mem.eql(u8, code, "7")) {
-        tracker.cwdReport(body);
+        self.cwdReport(body);
     }
 }
 
-fn semantic(tracker: *Tracker, observation: SemanticObservation, sink: anytype) void {
+fn semantic(self: *Tracker, observation: SemanticObservation, sink: anytype) void {
     const body = observation.body;
     const clock = observation.clock;
 
@@ -142,59 +142,59 @@ fn semantic(tracker: *Tracker, observation: SemanticObservation, sink: anytype) 
     const options = if (separator == body.len) "" else body[separator + 1 ..];
     if (std.mem.eql(u8, action, "A") or std.mem.eql(u8, action, "P")) {
         if (comptime builtin.mode == .Debug) {
-            tracker.prompt_markers += 1;
+            self.prompt_markers += 1;
         }
-        if (tracker.running) {
-            tracker.emit(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
+        if (self.running) {
+            self.emit(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
         }
-        tracker.zone = .prompt;
-        tracker.resetCommand();
+        self.zone = .prompt;
+        self.resetCommand();
     } else if (std.mem.eql(u8, action, "B")) {
         if (comptime builtin.mode == .Debug) {
-            tracker.input_markers += 1;
+            self.input_markers += 1;
         }
-        tracker.zone = .input;
-        tracker.resetCommand();
+        self.zone = .input;
+        self.resetCommand();
     } else if (std.mem.eql(u8, action, "C")) {
         if (comptime builtin.mode == .Debug) {
-            tracker.output_markers += 1;
+            self.output_markers += 1;
         }
-        tracker.zone = .output;
-        tracker.running = tracker.command_len != 0;
-        tracker.started_at_ms = clock.real_ms;
-        tracker.started_awake_ns = clock.awake_ns;
+        self.zone = .output;
+        self.running = self.command_len != 0;
+        self.started_at_ms = clock.real_ms;
+        self.started_awake_ns = clock.awake_ns;
     } else if (std.mem.eql(u8, action, "D")) {
         if (comptime builtin.mode == .Debug) {
-            tracker.finished_markers += 1;
+            self.finished_markers += 1;
         }
-        tracker.zone = .prompt;
-        if (tracker.running) {
-            tracker.emit(.{ .clock = clock, .exit_code = osc_ops.parseExitCode(options), .status = .completed }, sink);
+        self.zone = .prompt;
+        if (self.running) {
+            self.emit(.{ .clock = clock, .exit_code = osc_ops.parseExitCode(options), .status = .completed }, sink);
         }
     }
 }
 
-fn emit(tracker: *Tracker, completion: OscCompletion, sink: anytype) void {
-    const duration = @max(@as(i64, 0), completion.clock.awake_ns - tracker.started_awake_ns);
+fn emit(self: *Tracker, completion: OscCompletion, sink: anytype) void {
+    const duration = @max(@as(i64, 0), completion.clock.awake_ns - self.started_awake_ns);
     sink.emit(.{
-        .bytes = tracker.command[0..tracker.command_len],
-        .cwd = tracker.currentCwd(),
-        .started_at_ms = tracker.started_at_ms,
+        .bytes = self.command[0..self.command_len],
+        .cwd = self.currentCwd(),
+        .started_at_ms = self.started_at_ms,
         .duration_ns = duration,
         .exit_code = completion.exit_code,
         .status = completion.status,
-        .truncated = tracker.command_truncated,
+        .truncated = self.command_truncated,
     });
-    tracker.running = false;
-    tracker.resetCommand();
+    self.running = false;
+    self.resetCommand();
 }
 
-fn resetCommand(tracker: *Tracker) void {
-    tracker.command_len = 0;
-    tracker.command_truncated = false;
+fn resetCommand(self: *Tracker) void {
+    self.command_len = 0;
+    self.command_truncated = false;
 }
 
-fn cwdReport(tracker: *Tracker, body: []const u8) void {
+fn cwdReport(self: *Tracker, body: []const u8) void {
     const prefixes = [_][]const u8{ "file://", "kitty-shell-cwd://" };
     var path: ?[]const u8 = null;
     for (prefixes) |prefix| {
@@ -207,10 +207,10 @@ fn cwdReport(tracker: *Tracker, body: []const u8) void {
         break;
     }
     const encoded = path orelse return;
-    tracker.cwd_len = osc_ops.percentDecode(encoded, &tracker.cwd) orelse return;
+    self.cwd_len = osc_ops.percentDecode(encoded, &self.cwd) orelse return;
 }
 
-fn setCwd(tracker: *Tracker, cwd: []const u8) void {
-    tracker.cwd_len = @min(cwd.len, tracker.cwd.len);
-    @memcpy(tracker.cwd[0..tracker.cwd_len], cwd[0..tracker.cwd_len]);
+fn setCwd(self: *Tracker, cwd: []const u8) void {
+    self.cwd_len = @min(cwd.len, self.cwd.len);
+    @memcpy(self.cwd[0..self.cwd_len], cwd[0..self.cwd_len]);
 }

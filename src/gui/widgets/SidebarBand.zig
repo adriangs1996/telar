@@ -50,34 +50,34 @@ pub fn resolve(request: SidebarRequest, fit: SidebarFit) SidebarBand {
 
 /// Device pixels the grid starts after: the band and its gap.
 /// Example: `const left = band.reserved();`
-pub fn reserved(band: SidebarBand) u32 {
-    return band.width + band.gap;
+pub fn reserved(self: SidebarBand) u32 {
+    return self.width + self.gap;
 }
 
 /// Example: `if (band.visible()) try sidebar.draw(canvas);`
-pub fn visible(band: SidebarBand) bool {
-    return band.width != 0;
+pub fn visible(self: SidebarBand) bool {
+    return self.width != 0;
 }
 
 /// Clamps a requested physical width to this window's bounds.
 /// Example: `const width = band.clamp(@intFromFloat(pointer_x + 1));`
-pub fn clamp(band: SidebarBand, requested: u32) u32 {
-    return std.math.clamp(requested, band.min, band.max);
+pub fn clamp(self: SidebarBand, requested: u32) u32 {
+    return std.math.clamp(requested, self.min, self.max);
 }
 
 /// Clamps a logical width through this window's physical bounds and returns
 /// it in logical pixels again, so a preference keeps its meaning across
 /// display scales.
 /// Example: `preference.logical = band.clampLogical(preference.logical + 16);`
-pub fn clampLogical(band: SidebarBand, logical: f32) f32 {
-    return @as(f32, @floatFromInt(band.clamp(physical(logical, band.scale)))) / band.scale;
+pub fn clampLogical(self: SidebarBand, logical: f32) f32 {
+    return @as(f32, @floatFromInt(self.clamp(physical(logical, self.scale)))) / self.scale;
 }
 
 /// The pointer strip over the edge line, `logical_handle` wide and centred
 /// on the band's last pixel column.
 /// Example: `try context.bands.add(.{ .area = band.handle(area), .action = .resize_sidebar });`
-pub fn handle(band: SidebarBand, area: Rect) Rect {
-    const strip = @max(1, @round(logical_handle * band.scale));
+pub fn handle(self: SidebarBand, area: Rect) Rect {
+    const strip = @max(1, @round(logical_handle * self.scale));
     return .{ .x = area.x + area.width - 1 - @floor(strip / 2), .y = area.y, .width = strip, .height = area.height };
 }
 

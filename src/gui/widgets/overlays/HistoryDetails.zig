@@ -44,16 +44,16 @@ pub fn init(history: *const data.HistoryPaletteState, selection: u16) HistoryDet
 }
 
 /// Example: `for (detail.texts()) |text| { ... }`.
-pub fn texts(detail: *const HistoryDetails) [8][]const u8 {
-    const entry = &detail.history.slice()[detail.selection];
+pub fn texts(self: *const HistoryDetails) [8][]const u8 {
+    const entry = &self.history.slice()[self.selection];
     return .{
-        detail.header[0..detail.header_len],
-        detail.history.commandAt(detail.selection) orelse entry.commandSlice(),
+        self.header[0..self.header_len],
+        self.history.commandAt(self.selection) orelse entry.commandSlice(),
         entry.cwdSlice(),
-        detail.author[0..detail.author_len],
-        detail.timestamp[0..detail.timestamp_len],
-        detail.duration[0..detail.duration_len],
-        detail.history.outputHint(),
-        detail.history.outputSlice(),
+        self.author[0..self.author_len],
+        self.timestamp[0..self.timestamp_len],
+        self.duration[0..self.duration_len],
+        self.history.outputHint(),
+        self.history.outputSlice(),
     };
 }

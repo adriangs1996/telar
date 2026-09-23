@@ -8,16 +8,16 @@ decoder: Decoder,
 remaining: u32,
 style: ?Style = null,
 
-pub fn next(iterator: *CellIterator) !?Cell {
-    if (iterator.remaining == 0) {
+pub fn next(self: *CellIterator) !?Cell {
+    if (self.remaining == 0) {
         return null;
     }
-    iterator.remaining -= 1;
-    const cell = try frame_support.decodeCell(&iterator.decoder, &iterator.style);
+    self.remaining -= 1;
+    const cell = try frame_support.decodeCell(&self.decoder, &self.style);
     // The span header promised exactly `cell_count` cells; leftover bytes
     // after the last one are corruption, not padding.
-    if (iterator.remaining == 0) {
-        try iterator.decoder.ensureEnd();
+    if (self.remaining == 0) {
+        try self.decoder.ensureEnd();
     }
     return cell;
 }

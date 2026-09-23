@@ -47,6 +47,6 @@ pub fn init(definition: Definition) !SessionTitle {
     return value;
 }
 
-pub fn titleSlice(value: *const SessionTitle) []const u8 {
-    return value.title[0..value.title_len];
+pub fn titleSlice(self: *const SessionTitle) []const u8 {
+    return self.title[0..self.title_len];
 }

@@ -62,82 +62,82 @@ pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
     return fixture;
 }
 
-pub fn deinit(fixture: *Fixture) void {
-    fixture.inbox.deinit();
-    if (fixture.adapter.state.active) |flight| {
-        _ = fixture.adapter.complete(flight.token, .cancelled);
+pub fn deinit(self: *Fixture) void {
+    self.inbox.deinit();
+    if (self.adapter.state.active) |flight| {
+        _ = self.adapter.complete(flight.token, .cancelled);
     }
 
-    fixture.graphics.deinit();
-    fixture.app.deinit();
-    fixture.connection.deinit(std.testing.io);
-    fixture.peer.deinit(std.testing.io);
-    std.testing.allocator.destroy(fixture);
+    self.graphics.deinit();
+    self.app.deinit();
+    self.connection.deinit(std.testing.io);
+    self.peer.deinit(std.testing.io);
+    std.testing.allocator.destroy(self);
 }
 
-pub fn arrive(fixture: *Fixture) !void {
-    _ = try fixture.model.arriveWorkspace(.{ .pane_id = headless_tests.pane_id, .location = headless_tests.location, .size = .{ .cols = 4, .rows = 1 } });
-    fixture.activations += 1;
+pub fn arrive(self: *Fixture) !void {
+    _ = try self.model.arriveWorkspace(.{ .pane_id = headless_tests.pane_id, .location = headless_tests.location, .size = .{ .cols = 4, .rows = 1 } });
+    self.activations += 1;
 }
 
-pub fn projection(fixture: *Fixture) Projection {
-    return projection_support.capture(fixture.model, .{ .geometry = model_data.workbench.region(fixture.model) });
+pub fn projection(self: *Fixture) Projection {
+    return projection_support.capture(self.model, .{ .geometry = model_data.workbench.region(self.model) });
 }
 
-pub fn prepare(fixture: *Fixture) !lifecycle_module.Token {
-    return (try fixture.adapter.prepare(fixture.projection())) orelse error.ExpectedPresentation;
+pub fn prepare(self: *Fixture) !lifecycle_module.Token {
+    return (try self.adapter.prepare(self.projection())) orelse error.ExpectedPresentation;
 }
 
-pub fn complete(fixture: *Fixture, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) !void {
-    try fixture.inbox.post(.{ .completed = .{ .token = token, .outcome = outcome } });
-    try fixture.drain();
+pub fn complete(self: *Fixture, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) !void {
+    try self.inbox.post(.{ .completed = .{ .token = token, .outcome = outcome } });
+    try self.drain();
 }
 
-fn deliver(fixture: *Fixture, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) !void {
-    const delivery = fixture.adapter.complete(token, outcome) orelse return;
-    try presentation_delivery.apply(&fixture.app, delivery.commit);
+fn deliver(self: *Fixture, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) !void {
+    const delivery = self.adapter.complete(token, outcome) orelse return;
+    try presentation_delivery.apply(&self.app, delivery.commit);
     if (delivery.media_pending) {
-        fixture.media_requests += 1;
+        self.media_requests += 1;
     }
 }
 
-pub fn receive(fixture: *Fixture, bytes: []const u8) !void {
-    try fixture.postFrame(bytes);
-    try fixture.drain();
+pub fn receive(self: *Fixture, bytes: []const u8) !void {
+    try self.postFrame(bytes);
+    try self.drain();
 }
 
 /// Owns the wire bytes through delayed dispatch, as a transport reservation does.
 /// Example: `try fixture.postFrame(encoded); @memset(encoded, 0); try fixture.drain();`
-pub fn postFrame(fixture: *Fixture, bytes: []const u8) !void {
-    if (fixture.receive_pending) {
+pub fn postFrame(self: *Fixture, bytes: []const u8) !void {
+    if (self.receive_pending) {
         return error.ReceiveBusy;
     }
 
-    if (bytes.len > fixture.receive_buffer.len) {
+    if (bytes.len > self.receive_buffer.len) {
         return error.HeadlessReceiveTooLarge;
     }
 
-    const ticket = try fixture.inbox.reserve();
-    errdefer fixture.inbox.release(ticket);
-    @memcpy(fixture.receive_buffer[0..bytes.len], bytes);
-    fixture.received = try model_data.RuntimeMessage.decode(std.testing.io, fixture.receive_buffer[0..bytes.len]);
-    fixture.receive_pending = true;
-    std.debug.assert(fixture.inbox.publish(ticket, .{ .server = &fixture.received }));
+    const ticket = try self.inbox.reserve();
+    errdefer self.inbox.release(ticket);
+    @memcpy(self.receive_buffer[0..bytes.len], bytes);
+    self.received = try model_data.RuntimeMessage.decode(std.testing.io, self.receive_buffer[0..bytes.len]);
+    self.receive_pending = true;
+    std.debug.assert(self.inbox.publish(ticket, .{ .server = &self.received }));
 }
 
 /// The same finite consumer boundary used by the terminal and native hosts.
 /// Example: `try fixture.drain();`
-pub fn drain(fixture: *Fixture) !void {
-    var turn = try fixture.inbox.begin();
-    defer fixture.inbox.end();
-    while (try fixture.inbox.next(&turn)) |message| {
+pub fn drain(self: *Fixture) !void {
+    var turn = try self.inbox.begin();
+    defer self.inbox.end();
+    while (try self.inbox.next(&turn)) |message| {
         switch (message) {
             .server => |received| {
-                defer fixture.receive_pending = false;
-                _ = try fixture.app.handleServerMessage(received.message);
+                defer self.receive_pending = false;
+                _ = try self.app.handleServerMessage(received.message);
             },
-            .key => |value| try fixture.applyKey(value),
-            .completed => |value| try fixture.deliver(value.token, value.outcome),
+            .key => |value| try self.applyKey(value),
+            .completed => |value| try self.deliver(value.token, value.outcome),
         }
     }
 }
@@ -193,13 +193,13 @@ fn consumeCredit(context: *anyopaque, credit: Credit) void {
     fixture.graphics.consumeCredit(credit);
 }
 
-pub fn key(fixture: *Fixture, value: model_data.Key) !void {
-    try fixture.inbox.post(.{ .key = value });
-    try fixture.drain();
+pub fn key(self: *Fixture, value: model_data.Key) !void {
+    try self.inbox.post(.{ .key = value });
+    try self.drain();
 }
 
-fn applyKey(fixture: *Fixture, value: model_data.Key) !void {
-    _ = try fixture.app.sendPaneInput(
+fn applyKey(self: *Fixture, value: model_data.Key) !void {
+    _ = try self.app.sendPaneInput(
         .{
             .target = .focused,
             .source = .host,
@@ -210,13 +210,13 @@ fn applyKey(fixture: *Fixture, value: model_data.Key) !void {
     );
 }
 
-pub fn expectAck(fixture: *Fixture, frame_id: u64) !void {
-    try std.testing.expectEqual(frame_id, fixture.outbox.peek().?.frame_ack.frame_id);
-    try fixture.sendOne();
+pub fn expectAck(self: *Fixture, frame_id: u64) !void {
+    try std.testing.expectEqual(frame_id, self.outbox.peek().?.frame_ack.frame_id);
+    try self.sendOne();
 }
 
-pub fn sendOne(fixture: *Fixture) !void {
-    try std.testing.expect(fixture.pending != null);
-    fixture.pending = null;
-    try fixture.app.completeRuntimeSend({});
+pub fn sendOne(self: *Fixture) !void {
+    try std.testing.expect(self.pending != null);
+    self.pending = null;
+    try self.app.completeRuntimeSend({});
 }

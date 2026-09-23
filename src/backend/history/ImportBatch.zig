@@ -67,10 +67,10 @@ pub fn init(gpa: std.mem.Allocator, view: core.ImportHistoryView) !*ImportBatch 
     return batch;
 }
 
-pub fn deinit(batch: *ImportBatch, gpa: std.mem.Allocator) void {
-    for (batch.commands) |command| gpa.free(command);
-    gpa.free(batch.commands);
-    gpa.free(batch.times);
-    gpa.free(batch.source);
-    gpa.destroy(batch);
+pub fn deinit(self: *ImportBatch, gpa: std.mem.Allocator) void {
+    for (self.commands) |command| gpa.free(command);
+    gpa.free(self.commands);
+    gpa.free(self.times);
+    gpa.free(self.source);
+    gpa.destroy(self);
 }

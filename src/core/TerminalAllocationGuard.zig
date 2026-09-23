@@ -3,9 +3,9 @@ const TerminalAllocationGuard = @This();
 
 previous: bool,
 
-pub fn restore(guard: TerminalAllocationGuard) void {
+pub fn restore(self: TerminalAllocationGuard) void {
     if (!diagnostics.enabled) {
         return;
     }
-    diagnostics.terminal_allocation_scope = guard.previous;
+    diagnostics.terminal_allocation_scope = self.previous;
 }

@@ -19,14 +19,14 @@ inputs: [core.max_panes_per_tab]?PaneInputGrace = @splat(null),
 /// Records admitted input against the pane's current applied frame. Replacing
 /// the oldest entry when full drops only grace, never input or pending damage.
 /// Example: `pacer.noteInput(current_pane, now_ns);`
-pub fn noteInput(pacer: *FramePacer, pane: Pane, now_ns: u64) void {
+pub fn noteInput(self: *FramePacer, pane: Pane, now_ns: u64) void {
     if (!pane.attached or pane.pane_id == .invalid) {
         return;
     }
 
     var vacant: ?usize = null;
     var oldest: usize = 0;
-    for (pacer.inputs, 0..) |entry, index| {
+    for (self.inputs, 0..) |entry, index| {
         const previous = entry orelse {
             if (vacant == null) {
                 vacant = index;
@@ -42,11 +42,11 @@ pub fn noteInput(pacer: *FramePacer, pane: Pane, now_ns: u64) void {
                 return;
             }
 
-            pacer.inputs[index] = .{ .pane = pane, .started_ns = now_ns };
+            self.inputs[index] = .{ .pane = pane, .started_ns = now_ns };
             return;
         }
 
-        if (pacer.inputs[oldest]) |first| {
+        if (self.inputs[oldest]) |first| {
             if (previous.started_ns < first.started_ns) {
                 oldest = index;
             }
@@ -55,21 +55,21 @@ pub fn noteInput(pacer: *FramePacer, pane: Pane, now_ns: u64) void {
         }
     }
 
-    pacer.inputs[vacant orelse oldest] = .{ .pane = pane, .started_ns = now_ns };
+    self.inputs[vacant orelse oldest] = .{ .pane = pane, .started_ns = now_ns };
 }
 
 /// Returns an absolute deadline without consuming credits or grace. Only
 /// visible terminal panes belong in this borrowed candidate slice.
 /// Example: `const deadline_ns = pacer.waitUntil(visible_panes, now_ns);`
-pub fn waitUntil(pacer: *const FramePacer, panes: []const Pane, now_ns: u64) ?u64 {
-    const ordinary = pacer.cadence.waitUntil(now_ns) orelse return null;
-    for (pacer.inputs) |entry| {
+pub fn waitUntil(self: *const FramePacer, panes: []const Pane, now_ns: u64) ?u64 {
+    const ordinary = self.cadence.waitUntil(now_ns) orelse return null;
+    for (self.inputs) |entry| {
         const grace = entry orelse continue;
         if (now_ns < grace.started_ns) {
             continue;
         }
 
-        const scoped = grace.scoped(pacer.cadence);
+        const scoped = grace.scoped(self.cadence);
         if (scoped.waitUntil(now_ns) != null) {
             continue;
         }
@@ -89,14 +89,14 @@ pub fn waitUntil(pacer: *const FramePacer, panes: []const Pane, now_ns: u64) ?u6
 /// A slightly late ordinary frame keeps cadence. After a full missed interval
 /// or an early input frame, the next interval starts at preparation time.
 /// Example: `pacer.record(flight.delivery.commit.slice(), now_ns);`
-pub fn record(pacer: *FramePacer, panes: []const Pane, now_ns: u64) void {
-    const deadline: ?u64 = if (pacer.cadence.anchor_ns) |anchor| anchor +| pacer.cadence.interval else null;
+pub fn record(self: *FramePacer, panes: []const Pane, now_ns: u64) void {
+    const deadline: ?u64 = if (self.cadence.anchor_ns) |anchor| anchor +| self.cadence.interval else null;
     const frame: core.Pacer.Record = .{
         .now = now_ns,
-        .scheduled_deadline = if (deadline) |due| if (due <= now_ns and now_ns - due < pacer.cadence.interval) due else null else null,
+        .scheduled_deadline = if (deadline) |due| if (due <= now_ns and now_ns - due < self.cadence.interval) due else null else null,
         .absorbed = 1,
     };
-    for (&pacer.inputs) |*entry| {
+    for (&self.inputs) |*entry| {
         const grace = if (entry.*) |*value| value else continue;
         if (now_ns < grace.started_ns) {
             continue;
@@ -107,7 +107,7 @@ pub fn record(pacer: *FramePacer, panes: []const Pane, now_ns: u64) void {
                 continue;
             }
 
-            var scoped = grace.scoped(pacer.cadence);
+            var scoped = grace.scoped(self.cadence);
             if (scoped.waitUntil(now_ns) != null) {
                 break;
             }
@@ -118,5 +118,5 @@ pub fn record(pacer: *FramePacer, panes: []const Pane, now_ns: u64) void {
         }
     }
 
-    pacer.cadence.record(frame);
+    self.cadence.record(frame);
 }

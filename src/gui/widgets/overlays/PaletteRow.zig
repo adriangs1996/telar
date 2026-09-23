@@ -17,27 +17,27 @@ color: ?core.Color = null,
 
 /// Reserves hint cells before clipping the primary and secondary labels.
 /// Example: `try row.draw(canvas);`
-pub fn draw(content: PaletteRow, canvas: *Canvas) !void {
-    const row = content.area;
+pub fn draw(self: PaletteRow, canvas: *Canvas) !void {
+    const row = self.area;
     if (row.isEmpty()) {
         return;
     }
 
     const colors = canvas.theme.palette;
     const parts = row.splitLeft(2);
-    try canvas.text(parts[0], .{ .text = content.icon, .color = colors.subtext0 });
-    const hint_cells = @min(core.measure(content.hint), parts[1].w);
+    try canvas.text(parts[0], .{ .text = self.icon, .color = colors.subtext0 });
+    const hint_cells = @min(core.measure(self.hint), parts[1].w);
     const body = parts[1].splitLeft(parts[1].w -| (hint_cells + 1))[0];
     const hint_area: core.Rect = .{ .x = row.x + row.w - hint_cells, .y = row.y, .w = hint_cells, .h = 1 };
-    try canvas.text(hint_area, .{ .text = content.hint, .color = colors.subtext0 });
-    const primary_label: Label = .{ .text = content.primary, .color = content.color orelse colors.text, .face = if (content.mono) .mono else .sans, .size = .body };
+    try canvas.text(hint_area, .{ .text = self.hint, .color = colors.subtext0 });
+    const primary_label: Label = .{ .text = self.primary, .color = self.color orelse colors.text, .face = if (self.mono) .mono else .sans, .size = .body };
     try canvas.text(body, primary_label);
-    if (content.secondary.len == 0 or body.w < 4) {
+    if (self.secondary.len == 0 or body.w < 4) {
         return;
     }
 
     const cell: f32 = @floatFromInt(@max(canvas.metrics.cell_width, 1));
     const used: u16 = @intFromFloat(@ceil(try canvas.measure(primary_label) / cell));
     const rest = body.splitLeft(used + 1)[1];
-    try canvas.text(rest, .{ .text = content.secondary, .color = colors.subtext0, .face = .sans, .size = .body });
+    try canvas.text(rest, .{ .text = self.secondary, .color = colors.subtext0, .face = .sans, .size = .body });
 }

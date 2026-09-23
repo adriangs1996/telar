@@ -12,16 +12,16 @@ environment_mode: types.EnvironmentMode,
 environment_count: u16,
 encoded_environment: []const u8,
 
-pub fn arguments(launch: LaunchView) ArgumentIterator {
+pub fn arguments(self: LaunchView) ArgumentIterator {
     return .{
-        .decoder = .init(launch.encoded_arguments),
-        .remaining = launch.argument_count,
+        .decoder = .init(self.encoded_arguments),
+        .remaining = self.argument_count,
     };
 }
 
-pub fn environment(launch: LaunchView) EnvironmentIterator {
+pub fn environment(self: LaunchView) EnvironmentIterator {
     return .{
-        .decoder = .init(launch.encoded_environment),
-        .remaining = launch.environment_count,
+        .decoder = .init(self.encoded_environment),
+        .remaining = self.environment_count,
     };
 }

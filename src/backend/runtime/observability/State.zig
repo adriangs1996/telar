@@ -21,8 +21,8 @@ pub fn init(io: std.Io, endpoint: []const u8, suffix: []const u8) State {
 /// ```zig
 /// state.deinit(io);
 /// ```
-pub fn deinit(state: *State, io: std.Io) void {
-    state.sink.deinit(io);
+pub fn deinit(self: *State, io: std.Io) void {
+    self.sink.deinit(io);
 }
 
 /// Reports whether telemetry can accept another scheduled sample.
@@ -32,8 +32,8 @@ pub fn deinit(state: *State, io: std.Io) void {
 ///     return;
 /// }
 /// ```
-pub fn available(state: *const State) bool {
-    return state.sink.available();
+pub fn available(self: *const State) bool {
+    return self.sink.available();
 }
 
 /// Returns the fixed storage reused by consecutive telemetry samples.
@@ -41,8 +41,8 @@ pub fn available(state: *const State) bool {
 /// ```zig
 /// const line = try formatRuntimeTelemetry(state.buffer(), sample);
 /// ```
-pub fn buffer(state: *State) []u8 {
-    return &state.line;
+pub fn buffer(self: *State) []u8 {
+    return &self.line;
 }
 
 /// Reports whether the shared line buffer belongs to a write actor.
@@ -52,8 +52,8 @@ pub fn buffer(state: *State) []u8 {
 ///     return;
 /// }
 /// ```
-pub fn writePending(state: *const State) bool {
-    return state.write_pending;
+pub fn writePending(self: *const State) bool {
+    return self.write_pending;
 }
 
 /// Borrows the shared line buffer for one asynchronous sink write.
@@ -61,9 +61,9 @@ pub fn writePending(state: *const State) bool {
 /// ```zig
 /// state.beginWrite();
 /// ```
-pub fn beginWrite(state: *State) void {
-    std.debug.assert(!state.write_pending);
-    state.write_pending = true;
+pub fn beginWrite(self: *State) void {
+    std.debug.assert(!self.write_pending);
+    self.write_pending = true;
 }
 
 /// Rolls back a write actor that could not be scheduled.
@@ -71,9 +71,9 @@ pub fn beginWrite(state: *State) void {
 /// ```zig
 /// state.cancelWrite();
 /// ```
-pub fn cancelWrite(state: *State) void {
-    std.debug.assert(state.write_pending);
-    state.write_pending = false;
+pub fn cancelWrite(self: *State) void {
+    std.debug.assert(self.write_pending);
+    self.write_pending = false;
 }
 
 /// Releases the shared line buffer and decides whether a failed actor must
@@ -83,9 +83,9 @@ pub fn cancelWrite(state: *State) void {
 /// ```zig
 /// const action = state.finishWrite(result);
 /// ```
-pub fn finishWrite(state: *State, result: anyerror!void) telemetry.WriteCompletion {
-    std.debug.assert(state.write_pending);
-    state.write_pending = false;
+pub fn finishWrite(self: *State, result: anyerror!void) telemetry.WriteCompletion {
+    std.debug.assert(self.write_pending);
+    self.write_pending = false;
 
     result catch return .disable_sink;
     return .ready;
@@ -96,7 +96,7 @@ pub fn finishWrite(state: *State, result: anyerror!void) telemetry.WriteCompleti
 /// ```zig
 /// try state.write(io, line);
 /// ```
-pub fn write(state: *State, io: std.Io, line: []const u8) !void {
-    std.debug.assert(state.write_pending);
-    try state.sink.write(io, line);
+pub fn write(self: *State, io: std.Io, line: []const u8) !void {
+    std.debug.assert(self.write_pending);
+    try self.sink.write(io, line);
 }

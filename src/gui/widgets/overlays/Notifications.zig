@@ -16,13 +16,13 @@ motions: [shared_model.notifications.max_items]Motion = @splat(.{}),
 /// Returns a bounded list of measured cards without emitting quads. Its text
 /// borrows the projection until the caller draws the list.
 /// Example: `var cards = try notifications.prepare(canvas, projection);`
-pub fn prepare(notifications: *Notifications, canvas: *Canvas, projection: client.Projection) !Cards {
+pub fn prepare(self: *Notifications, canvas: *Canvas, projection: client.Projection) !Cards {
     var result: Cards = .{};
     const host = canvas.rect(projection.geometry.area);
     const margin = canvas.chrome.px(16);
     const width = @min(canvas.chrome.px(360), host.width - 2 * margin);
     if (width < canvas.chrome.px(160) or host.height < canvas.chrome.px(96)) {
-        notifications.motions = @splat(.{});
+        self.motions = @splat(.{});
         return result;
     }
 
@@ -57,9 +57,9 @@ pub fn prepare(notifications: *Notifications, canvas: *Canvas, projection: clien
         }
 
         if (canvas.animation) |clock| {
-            if (notifications.motion(item.id, y)) |slot| {
+            if (self.motion(item.id, y)) |slot| {
                 used[slot] = true;
-                card.bounds.y = notifications.motions[slot].position(y, clock);
+                card.bounds.y = self.motions[slot].position(y, clock);
             }
         }
 
@@ -81,7 +81,7 @@ pub fn prepare(notifications: *Notifications, canvas: *Canvas, projection: clien
         try result.append(card.*);
     }
 
-    for (&notifications.motions, used) |*motion_state, seen| {
+    for (&self.motions, used) |*motion_state, seen| {
         if (!seen) {
             motion_state.* = .{};
         }
@@ -90,14 +90,14 @@ pub fn prepare(notifications: *Notifications, canvas: *Canvas, projection: clien
     return result;
 }
 
-fn motion(notifications: *Notifications, id: shared_model.notifications.Id, y: f32) ?usize {
-    for (notifications.motions, 0..) |entry, index| {
+fn motion(self: *Notifications, id: shared_model.notifications.Id, y: f32) ?usize {
+    for (self.motions, 0..) |entry, index| {
         if (entry.id == id) {
             return index;
         }
     }
 
-    for (&notifications.motions, 0..) |*entry, index| {
+    for (&self.motions, 0..) |*entry, index| {
         if (entry.id == .invalid) {
             entry.* = .{ .id = id, .from = y, .to = y };
             return index;

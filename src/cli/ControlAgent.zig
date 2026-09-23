@@ -23,28 +23,28 @@ provider_name: [core.max_agent_provider_name_bytes]u8 = undefined,
 provider_name_len: u8 = 0,
 
 /// Manifest name of the provider; "unknown" when the runtime sent none.
-pub fn providerLabel(agent: *const Agent) []const u8 {
-    if (agent.provider_name_len != 0) {
-        return agent.provider_name[0..agent.provider_name_len];
+pub fn providerLabel(self: *const Agent) []const u8 {
+    if (self.provider_name_len != 0) {
+        return self.provider_name[0..self.provider_name_len];
     }
 
     return "unknown";
 }
 
-pub fn workspaceLabel(agent: *const Agent) []const u8 {
-    return agent.workspace_label[0..agent.workspace_label_len];
+pub fn workspaceLabel(self: *const Agent) []const u8 {
+    return self.workspace_label[0..self.workspace_label_len];
 }
 
-pub fn tabLabel(agent: *const Agent) []const u8 {
-    return agent.tab_label[0..agent.tab_label_len];
+pub fn tabLabel(self: *const Agent) []const u8 {
+    return self.tab_label[0..self.tab_label_len];
 }
 
-pub fn titleSlice(agent: *const Agent) []const u8 {
-    return agent.title[0..agent.title_len];
+pub fn titleSlice(self: *const Agent) []const u8 {
+    return self.title[0..self.title_len];
 }
 
-pub fn cwdLabel(agent: *const Agent) []const u8 {
-    return agent.cwd_label[0..agent.cwd_label_len];
+pub fn cwdLabel(self: *const Agent) []const u8 {
+    return self.cwd_label[0..self.cwd_label_len];
 }
 
 pub fn fromEntry(entry: core.AgentSnapshotEntry) Agent {

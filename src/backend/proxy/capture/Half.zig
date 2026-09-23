@@ -68,80 +68,80 @@ pub fn create(options: HalfOptions) ?*Half {
     return half;
 }
 
-pub fn host(half: *const Half) []const u8 {
-    return half.host_storage[0..half.host_len];
+pub fn host(self: *const Half) []const u8 {
+    return self.host_storage[0..self.host_len];
 }
 
-pub fn method(half: *const Half) []const u8 {
-    return half.method_storage[0..half.method_len];
+pub fn method(self: *const Half) []const u8 {
+    return self.method_storage[0..self.method_len];
 }
 
-pub fn target(half: *const Half) []const u8 {
-    return half.target_storage[0..half.target_len];
+pub fn target(self: *const Half) []const u8 {
+    return self.target_storage[0..self.target_len];
 }
 
-pub fn encoding(half: *const Half) []const u8 {
-    return half.encoding_storage[0..half.encoding_len];
+pub fn encoding(self: *const Half) []const u8 {
+    return self.encoding_storage[0..self.encoding_len];
 }
 
-pub fn setRoute(half: *Half, method_value: []const u8, target_value: []const u8) void {
-    if (method_value.len > half.method_storage.len or target_value.len > half.target_storage.len) {
-        half.head.truncated = true;
+pub fn setRoute(self: *Half, method_value: []const u8, target_value: []const u8) void {
+    if (method_value.len > self.method_storage.len or target_value.len > self.target_storage.len) {
+        self.head.truncated = true;
         return;
     }
 
-    @memcpy(half.method_storage[0..method_value.len], method_value);
-    half.method_len = @intCast(method_value.len);
-    @memcpy(half.target_storage[0..target_value.len], target_value);
-    half.target_len = @intCast(target_value.len);
+    @memcpy(self.method_storage[0..method_value.len], method_value);
+    self.method_len = @intCast(method_value.len);
+    @memcpy(self.target_storage[0..target_value.len], target_value);
+    self.target_len = @intCast(target_value.len);
 }
 
-pub fn setMethod(half: *Half, value: []const u8) void {
-    if (value.len > half.method_storage.len) {
-        half.head.truncated = true;
+pub fn setMethod(self: *Half, value: []const u8) void {
+    if (value.len > self.method_storage.len) {
+        self.head.truncated = true;
         return;
     }
 
-    @memcpy(half.method_storage[0..value.len], value);
-    half.method_len = @intCast(value.len);
+    @memcpy(self.method_storage[0..value.len], value);
+    self.method_len = @intCast(value.len);
 }
 
-pub fn setTarget(half: *Half, value: []const u8) void {
-    if (value.len > half.target_storage.len) {
-        half.head.truncated = true;
+pub fn setTarget(self: *Half, value: []const u8) void {
+    if (value.len > self.target_storage.len) {
+        self.head.truncated = true;
         return;
     }
 
-    @memcpy(half.target_storage[0..value.len], value);
-    half.target_len = @intCast(value.len);
+    @memcpy(self.target_storage[0..value.len], value);
+    self.target_len = @intCast(value.len);
 }
 
-pub fn setEncoding(half: *Half, value: []const u8) void {
-    if (value.len > half.encoding_storage.len) {
-        @memcpy(&half.encoding_storage, value[0..half.encoding_storage.len]);
-        half.encoding_len = @intCast(half.encoding_storage.len);
-        half.body.truncated = true;
+pub fn setEncoding(self: *Half, value: []const u8) void {
+    if (value.len > self.encoding_storage.len) {
+        @memcpy(&self.encoding_storage, value[0..self.encoding_storage.len]);
+        self.encoding_len = @intCast(self.encoding_storage.len);
+        self.body.truncated = true;
         return;
     }
 
-    @memcpy(half.encoding_storage[0..value.len], value);
-    half.encoding_len = @intCast(value.len);
+    @memcpy(self.encoding_storage[0..value.len], value);
+    self.encoding_len = @intCast(value.len);
 }
 
-pub fn append(half: *Half, part: buffer_support.Part, input: []const u8) bool {
+pub fn append(self: *Half, part: buffer_support.Part, input: []const u8) bool {
     const selected = switch (part) {
-        .request_head => if (half.side == .request) &half.head else return false,
-        .request_body => if (half.side == .request) &half.body else return false,
-        .response_head => if (half.side == .response) &half.head else return false,
-        .response_body => if (half.side == .response) &half.body else return false,
+        .request_head => if (self.side == .request) &self.head else return false,
+        .request_body => if (self.side == .request) &self.body else return false,
+        .response_head => if (self.side == .response) &self.head else return false,
+        .response_body => if (self.side == .response) &self.body else return false,
     };
-    const available = half.reservation.bytes -| half.captured_bytes;
+    const available = self.reservation.bytes -| self.captured_bytes;
     const accepted = @min(available, input.len);
 
     if (accepted != 0) {
         const before = selected.len;
         _ = selected.append(input[0..accepted]);
-        half.captured_bytes += selected.len - before;
+        self.captured_bytes += selected.len - before;
     }
 
     if (accepted != input.len) {
@@ -151,18 +151,18 @@ pub fn append(half: *Half, part: buffer_support.Part, input: []const u8) bool {
     return accepted == input.len and !selected.truncated;
 }
 
-pub fn finish(half: *Half, outcome: buffer_support.Outcome, finished_at_ms: i64) void {
-    half.outcome = outcome;
-    half.finished_at_ms = finished_at_ms;
+pub fn finish(self: *Half, outcome: buffer_support.Outcome, finished_at_ms: i64) void {
+    self.outcome = outcome;
+    self.finished_at_ms = finished_at_ms;
 }
 
-pub fn deinit(half: *Half) void {
-    const gpa = half.gpa;
-    half.head.deinit();
-    half.body.deinit();
-    half.reservation.release();
-    std.crypto.secureZero(u8, std.mem.asBytes(half));
-    gpa.destroy(half);
+pub fn deinit(self: *Half) void {
+    const gpa = self.gpa;
+    self.head.deinit();
+    self.body.deinit();
+    self.reservation.release();
+    std.crypto.secureZero(u8, std.mem.asBytes(self));
+    gpa.destroy(self);
 }
 
 /// Records one relayed HTTP head: its bytes, the request line's method and

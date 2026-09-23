@@ -16,45 +16,45 @@ len: u8 = 0,
 /// The expanded query names an existing directory.
 exact_exists: bool = false,
 
-pub fn baseSlice(result: *const Result) []const u8 {
-    return result.base[0..result.base_len];
+pub fn baseSlice(self: *const Result) []const u8 {
+    return self.base[0..self.base_len];
 }
 
-pub fn slice(result: *const Result) []const Entry {
-    return result.entries[0..result.len];
+pub fn slice(self: *const Result) []const Entry {
+    return self.entries[0..self.len];
 }
 
 /// Records the directory the entries belong to. Example: `result.setBase("/home/me");`
-pub fn setBase(result: *Result, base: []const u8) !void {
+pub fn setBase(self: *Result, base: []const u8) !void {
     if (base.len > max_path_bytes) {
         return error.PathTooLong;
     }
 
-    @memcpy(result.base[0..base.len], base);
-    result.base_len = @intCast(base.len);
+    @memcpy(self.base[0..base.len], base);
+    self.base_len = @intCast(base.len);
 }
 
 /// Appends one child directory name, keeping every joined path within
 /// `max_path_bytes`. Example: `try result.append("telar");`
-pub fn append(result: *Result, name: []const u8) !void {
-    if (result.len == max_entries) {
+pub fn append(self: *Result, name: []const u8) !void {
+    if (self.len == max_entries) {
         return error.TooManyEntries;
     }
-    if (name.len == 0 or name.len > max_name_bytes or result.base_len + 1 + name.len > max_path_bytes) {
+    if (name.len == 0 or name.len > max_name_bytes or self.base_len + 1 + name.len > max_path_bytes) {
         return error.NameTooLong;
     }
 
     var entry: Entry = .{ .len = @intCast(name.len) };
     @memcpy(entry.name[0..name.len], name);
-    result.entries[result.len] = entry;
-    result.len += 1;
+    self.entries[self.len] = entry;
+    self.len += 1;
 }
 
 /// Joins the base and one entry into `buffer`; a base of "/" yields "/name".
 /// Example: `const path = result.join(0, &buffer);`
-pub fn join(result: *const Result, index: usize, buffer: *[max_path_bytes]u8) []const u8 {
-    const base = result.baseSlice();
-    const name = result.entries[index].slice();
+pub fn join(self: *const Result, index: usize, buffer: *[max_path_bytes]u8) []const u8 {
+    const base = self.baseSlice();
+    const name = self.entries[index].slice();
     if (base.len == 1 and base[0] == '/') {
         buffer[0] = '/';
         @memcpy(buffer[1 .. 1 + name.len], name);
@@ -69,8 +69,8 @@ pub fn join(result: *const Result, index: usize, buffer: *[max_path_bytes]u8) []
 
 /// Orders entries by name so the same directory always lists the same way.
 /// Example: `result.sort();`
-pub fn sort(result: *Result) void {
-    std.mem.sort(Entry, result.entries[0..result.len], {}, lessThan);
+pub fn sort(self: *Result) void {
+    std.mem.sort(Entry, self.entries[0..self.len], {}, lessThan);
 }
 
 fn lessThan(_: void, left: Entry, right: Entry) bool {

@@ -11,8 +11,8 @@ pub const Exit = union(enum) {
     /// ```zig
     /// const status = exit.code();
     /// ```
-    pub fn code(exit: Exit) u8 {
-        return switch (exit) {
+    pub fn code(self: Exit) u8 {
+        return switch (self) {
             .exited => |status| status,
             .signaled => |signal| @intCast(@min(128 + @intFromEnum(signal), std.math.maxInt(u8))),
         };

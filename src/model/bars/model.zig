@@ -27,8 +27,8 @@ pub const Position = enum(u3) {
     sidebar_footer_center,
     sidebar_footer_right,
 
-    pub fn bit(position: Position) u8 {
-        return @as(u8, 1) << @intFromEnum(position);
+    pub fn bit(self: Position) u8 {
+        return @as(u8, 1) << @intFromEnum(self);
     }
 };
 
@@ -70,8 +70,8 @@ pub const Source = union(enum) {
     dynamic: Dynamic,
     command: Command,
 
-    pub fn interval(source: *const Source) ?u64 {
-        return switch (source.*) {
+    pub fn interval(self: *const Source) ?u64 {
+        return switch (self.*) {
             .dynamic => |value| value.interval_ns,
             .command => |value| value.interval_ns,
             else => null,

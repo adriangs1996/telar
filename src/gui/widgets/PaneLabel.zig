@@ -12,10 +12,10 @@ pub fn init(name: []const u8, index: u16) PaneLabel {
     return label;
 }
 
-pub fn text(label: *const PaneLabel) []const u8 {
-    return label.bytes[0..label.len];
+pub fn text(self: *const PaneLabel) []const u8 {
+    return self.bytes[0..self.len];
 }
 
-pub fn width(label: *const PaneLabel) u16 {
-    return core.measure(label.text());
+pub fn width(self: *const PaneLabel) u16 {
+    return core.measure(self.text());
 }

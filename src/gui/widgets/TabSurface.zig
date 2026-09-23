@@ -11,8 +11,8 @@ active: bool,
 hovered: bool,
 
 /// Example: `try (TabSurface{ .bounds = bounds, .active = active, .hovered = hovered }).draw(canvas);`
-pub fn draw(surface: TabSurface, canvas: *Canvas) !void {
-    const bounds = surface.bounds;
+pub fn draw(self: TabSurface, canvas: *Canvas) !void {
+    const bounds = self.bounds;
     if (bounds.width <= 0 or bounds.height <= 0) {
         return;
     }
@@ -23,9 +23,9 @@ pub fn draw(surface: TabSurface, canvas: *Canvas) !void {
         .x = bounds.x + border,
         .y = bounds.y + border,
         .width = @max(0, bounds.width - 2 * border),
-        .height = @max(0, bounds.height - border - (if (surface.active) @as(f32, 0) else border)),
+        .height = @max(0, bounds.height - border - (if (self.active) @as(f32, 0) else border)),
     };
-    const color = if (surface.active) canvas.covering(.default) else if (surface.hovered) canvas.theme.palette.surface1 else canvas.theme.palette.surface0;
+    const color = if (self.active) canvas.covering(.default) else if (self.hovered) canvas.theme.palette.surface1 else canvas.theme.palette.surface0;
     try shape(canvas, inner, color);
 }
 

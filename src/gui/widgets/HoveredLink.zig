@@ -12,9 +12,9 @@ pane: *const data.Pane,
 
 /// Paints the captured link span and its clipped destination preview.
 /// Example: `try hovered_link.draw(canvas);`
-pub fn draw(widget: HoveredLink, canvas: *Canvas) !void {
-    const hit = widget.hit;
-    const pane = widget.pane;
+pub fn draw(self: HoveredLink, canvas: *Canvas) !void {
+    const hit = self.hit;
+    const pane = self.pane;
     const ink = canvas.theme.terminal.foreground;
     var regions = LinkRegions.init(hit, pane);
     while (regions.next()) |area| {

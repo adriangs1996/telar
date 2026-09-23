@@ -23,8 +23,8 @@ pub fn init(options: H2Options) Connection {
 /// ```zig
 /// connection.run();
 /// ```
-pub fn run(connection: *Connection) void {
-    const options = connection.options;
+pub fn run(self: *Connection) void {
+    const options = self.options;
     var responses = ResponseStreams.init(options.gpa, options.exchange.dialect);
     defer responses.deinit();
     var requests = Streams.init(options.exchange.dialect);

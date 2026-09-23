@@ -64,10 +64,10 @@ copied_until_ns: u64 = 0,
 
 /// Includes reads still converting an image, so send cannot strand a late attachment.
 /// Example: `if (state.pastingImage(pane_id)) disableSend();`
-pub fn pastingImage(state: *const State, pane_id: core.PaneId) bool {
-    for (state.pending_pastes) |pending| {
+pub fn pastingImage(self: *const State, pane_id: core.PaneId) bool {
+    for (self.pending_pastes) |pending| {
         const paste = pending orelse continue;
-        const target = state.dispatcher.maps.presented().find(paste.owner) orelse continue;
+        const target = self.dispatcher.maps.presented().find(paste.owner) orelse continue;
         if (target.action == .composer and target.action.composer == pane_id) {
             return true;
         }
@@ -78,102 +78,102 @@ pub fn pastingImage(state: *const State, pane_id: core.PaneId) bool {
 
 /// Reserves bounded geometry for long messages during frame preparation only.
 /// Example: `const cache = try state.messageLayout(canvas.atlas.allocator);`
-pub fn messageLayout(state: *State, allocator: std_module.mem.Allocator) !*@import("../MessageLayoutCache.zig") {
-    if (state.message_layout == null) {
+pub fn messageLayout(self: *State, allocator: std_module.mem.Allocator) !*@import("../MessageLayoutCache.zig") {
+    if (self.message_layout == null) {
         const cache = try allocator.create(@import("../MessageLayoutCache.zig"));
         cache.* = .{};
-        state.message_layout = cache;
-        state.message_layout_allocator = allocator;
+        self.message_layout = cache;
+        self.message_layout_allocator = allocator;
     }
 
-    return state.message_layout.?;
+    return self.message_layout.?;
 }
 
 /// Retains message heights once a conversation is measured; shares the
 /// layout cache allocator. Example: `const heights = try state.messageHeights(allocator);`
-pub fn messageHeights(state: *State, allocator: std_module.mem.Allocator) !*@import("../MessageHeights.zig") {
-    _ = try state.messageLayout(allocator);
-    if (state.message_heights == null) {
-        const heights = try state.message_layout_allocator.create(@import("../MessageHeights.zig"));
+pub fn messageHeights(self: *State, allocator: std_module.mem.Allocator) !*@import("../MessageHeights.zig") {
+    _ = try self.messageLayout(allocator);
+    if (self.message_heights == null) {
+        const heights = try self.message_layout_allocator.create(@import("../MessageHeights.zig"));
         heights.* = .{};
-        state.message_heights = heights;
+        self.message_heights = heights;
     }
 
-    return state.message_heights.?;
+    return self.message_heights.?;
 }
 
 /// Owns text hit geometry only when an agent conversation is prepared.
 /// Example: `const text = try state.threadText(canvas.atlas.allocator);`
-pub fn threadText(state: *State, allocator: std_module.mem.Allocator) !*@import("ThreadTextStore.zig") {
-    if (state.thread_text == null) {
+pub fn threadText(self: *State, allocator: std_module.mem.Allocator) !*@import("ThreadTextStore.zig") {
+    if (self.thread_text == null) {
         const store = try allocator.create(@import("ThreadTextStore.zig"));
         store.* = .{ .allocator = allocator };
-        state.thread_text = store;
+        self.thread_text = store;
     }
-    return state.thread_text.?;
+    return self.thread_text.?;
 }
 
 /// Releases disposable geometry after the host stops delivering frames.
 /// Example: `state.deinit();`
-pub fn deinit(state: *State) void {
-    if (state.thread_text) |store| {
+pub fn deinit(self: *State) void {
+    if (self.thread_text) |store| {
         store.allocator.destroy(store);
-        state.thread_text = null;
+        self.thread_text = null;
     }
-    if (state.message_heights) |heights| {
-        state.message_layout_allocator.destroy(heights);
-        state.message_heights = null;
+    if (self.message_heights) |heights| {
+        self.message_layout_allocator.destroy(heights);
+        self.message_heights = null;
     }
 
-    if (state.message_layout) |cache| {
-        state.message_layout_allocator.destroy(cache);
-        state.message_layout = null;
+    if (self.message_layout) |cache| {
+        self.message_layout_allocator.destroy(cache);
+        self.message_layout = null;
     }
 }
 
 /// Call only when the copy indicator is visible. Example: `const copied = state.threadCopied(control, canvas.animation);`
-pub fn threadCopied(state: *const State, control: @import("ThreadItemControl.zig"), animation: ?*@import("../../animation/FrameClock.zig")) bool {
-    const copied = state.copied_item orelse return false;
+pub fn threadCopied(self: *const State, control: @import("ThreadItemControl.zig"), animation: ?*@import("../../animation/FrameClock.zig")) bool {
+    const copied = self.copied_item orelse return false;
     const clock = animation orelse return false;
-    if (!copied.sameItem(control) or clock.now_ns >= state.copied_until_ns) {
+    if (!copied.sameItem(control) or clock.now_ns >= self.copied_until_ns) {
         return false;
     }
 
-    clock.requestAt(state.copied_until_ns);
+    clock.requestAt(self.copied_until_ns);
     return true;
 }
 
 /// Example: `if (state.threadExpanded(control)) drawToolOutput();`
-pub fn threadExpanded(state: *const State, control: @import("ThreadItemControl.zig")) bool {
-    return state.thread_expansions.contains(control);
+pub fn threadExpanded(self: *const State, control: @import("ThreadItemControl.zig")) bool {
+    return self.thread_expansions.contains(control);
 }
 
 /// Cancelling provisional text changes pixels even when committed text and
 /// selection stay untouched. Example: `state.cancelComposition();`
-pub fn cancelComposition(state: *State) void {
-    if (state.preedit.owner != null) {
-        state.preedit.clear();
-        state.dispatcher.revision +%= 1;
+pub fn cancelComposition(self: *State) void {
+    if (self.preedit.owner != null) {
+        self.preedit.clear();
+        self.dispatcher.revision +%= 1;
     }
 }
 
 /// Example: `state.begin(projection.prompt != null);`
-pub fn begin(state: *State, modal: bool) void {
-    state.thread_anchor.prepared = null;
-    state.dispatcher.begin().modal_layer = if (modal) 1 else 0;
-    _ = state.editors.begin();
-    if (state.thread_text) |store| {
+pub fn begin(self: *State, modal: bool) void {
+    self.thread_anchor.prepared = null;
+    self.dispatcher.begin().modal_layer = if (modal) 1 else 0;
+    _ = self.editors.begin();
+    if (self.thread_text) |store| {
         _ = store.maps.begin();
     }
 }
 
 /// Imports existing chrome's semantic controls with their exact rectangles.
 /// Example: `try state.chrome(canvas, &chrome);`
-pub fn chrome(state: *State, canvas: *Canvas, input: @import("ChromeRegistration.zig")) !void {
-    state.tab_drag_step = canvas.chrome.px(4);
+pub fn chrome(self: *State, canvas: *Canvas, input: @import("ChromeRegistration.zig")) !void {
+    self.tab_drag_step = canvas.chrome.px(4);
     const value = input.chrome;
     if (value.prepared().bands.sidebar.width > 0) {
-        _ = try state.dispatcher.add((Target{ .bounds = value.prepared().bands.sidebar, .action = .{ .custom = 1 }, .namespace = 1, .focusable = false, .role = 6 }).labelled("Agents"));
+        _ = try self.dispatcher.add((Target{ .bounds = value.prepared().bands.sidebar, .action = .{ .custom = 1 }, .namespace = 1, .focusable = false, .role = 6 }).labelled("Agents"));
     }
 
     for (value.prepared().band_hits.items[0..value.prepared().band_hits.len]) |hit| {
@@ -183,12 +183,12 @@ pub fn chrome(state: *State, canvas: *Canvas, input: @import("ChromeRegistration
             .pane_content => continue,
         };
         const target: Target = .{ .bounds = hit.area, .action = action, .focusable = action != .resize_sidebar };
-        _ = try state.dispatcher.add(target.labelled(labels.forAction(input.projection, action)));
+        _ = try self.dispatcher.add(target.labelled(labels.forAction(input.projection, action)));
     }
 
-    if (state.dispatcher.focused) |id| {
-        if (state.dispatcher.maps.prepared().find(id)) |target| {
-            if (target.action != .text_field and target.action != .composer and state.dispatcher.maps.prepared().modal_layer == 0) {
+    if (self.dispatcher.focused) |id| {
+        if (self.dispatcher.maps.prepared().find(id)) |target| {
+            if (target.action != .text_field and target.action != .composer and self.dispatcher.maps.prepared().modal_layer == 0) {
                 try canvas.ringAt(target.bounds, .{ .color = canvas.theme.palette.accent, .width = 1, .radius = 4 });
             }
         }
@@ -197,80 +197,80 @@ pub fn chrome(state: *State, canvas: *Canvas, input: @import("ChromeRegistration
 
 /// Imports modal result rows after their field, preserving painter priority.
 /// Example: `try state.overlays(canvas, &overlays);`
-pub fn overlays(state: *State, canvas: *Canvas, value: *@import("../overlays/Overlays.zig")) !void {
+pub fn overlays(self: *State, canvas: *Canvas, value: *@import("../overlays/Overlays.zig")) !void {
     const notifications = &value.prepared().notifications;
     for (notifications.hits[0..notifications.count]) |hit| {
-        _ = try state.dispatcher.add(hit);
+        _ = try self.dispatcher.add(hit);
     }
 
     const palette = &value.prepared().palette;
     for (palette.rows[0..palette.count], 0..) |row, index| {
-        _ = try state.dispatcher.add(.{ .id = .{ .generation = state.prompt_generation }, .bounds = canvas.rect(row), .action = .{ .intent = .{ .prompt_row = palette.first + @as(u16, @intCast(index)) } }, .layer = 1, .focusable = false });
+        _ = try self.dispatcher.add(.{ .id = .{ .generation = self.prompt_generation }, .bounds = canvas.rect(row), .action = .{ .intent = .{ .prompt_row = palette.first + @as(u16, @intCast(index)) } }, .layer = 1, .focusable = false });
     }
 }
 
 /// Example: `state.seal();`
-pub fn seal(state: *State) void {
-    state.dispatcher.seal();
-    state.editors.seal();
-    if (state.thread_text) |store| {
+pub fn seal(self: *State) void {
+    self.dispatcher.seal();
+    self.editors.seal();
+    if (self.thread_text) |store| {
         store.maps.seal();
     }
 }
 
 /// Example: `state.present(delivered);`
-pub fn present(state: *State, delivered: bool) void {
-    state.dispatcher.present(delivered);
-    state.editors.present(delivered);
-    if (state.thread_text) |store| {
+pub fn present(self: *State, delivered: bool) void {
+    self.dispatcher.present(delivered);
+    self.editors.present(delivered);
+    if (self.thread_text) |store| {
         store.maps.present(delivered);
     }
     if (!delivered) {
         return;
     }
 
-    if (state.composer_menu.selector != null) {
+    if (self.composer_menu.selector != null) {
         var found = false;
-        for (state.dispatcher.maps.presented().targets[0..state.dispatcher.maps.presented().len]) |target| {
-            if (target.action == .composer_choice and target.action.composer_choice.menu_generation == state.composer_menu.generation and target.action.composer_choice.index == state.composer_menu.selected) {
-                _ = state.dispatcher.focus(target.id);
+        for (self.dispatcher.maps.presented().targets[0..self.dispatcher.maps.presented().len]) |target| {
+            if (target.action == .composer_choice and target.action.composer_choice.menu_generation == self.composer_menu.generation and target.action.composer_choice.index == self.composer_menu.selected) {
+                _ = self.dispatcher.focus(target.id);
                 found = true;
                 break;
             }
         }
 
         if (!found) {
-            state.composer_menu.selector = null;
+            self.composer_menu.selector = null;
         }
     }
 
-    if (state.image_preview != null) {
-        for (state.dispatcher.maps.presented().targets[0..state.dispatcher.maps.presented().len]) |target| {
+    if (self.image_preview != null) {
+        for (self.dispatcher.maps.presented().targets[0..self.dispatcher.maps.presented().len]) |target| {
             if (target.layer == 1 and target.focusable and target.action == .agent_control and target.action.agent_control.kind == .close_image) {
-                _ = state.dispatcher.focus(target.id);
+                _ = self.dispatcher.focus(target.id);
                 break;
             }
         }
     }
 
-    if (state.composer_menu.selector == null and state.image_preview == null) {
-        for (state.editors.presented().items[0..state.editors.presented().len]) |editor| {
+    if (self.composer_menu.selector == null and self.image_preview == null) {
+        for (self.editors.presented().items[0..self.editors.presented().len]) |editor| {
             if (editor.preferred) {
-                if (state.dispatcher.focusedTarget()) |focused| {
+                if (self.dispatcher.focusedTarget()) |focused| {
                     if (focused.action == .composer_selector or focused.action == .agent_control or focused.action == .thread_item or focused.action == .transcript) {
                         break;
                     }
                 }
 
-                _ = state.dispatcher.focus(editor.id);
+                _ = self.dispatcher.focus(editor.id);
                 break;
             }
         }
     }
 
-    if (state.preedit.owner) |owner| {
-        if (state.dispatcher.focused == null or !state.dispatcher.focused.?.eql(owner)) {
-            state.preedit.clear();
+    if (self.preedit.owner) |owner| {
+        if (self.dispatcher.focused == null or !self.dispatcher.focused.?.eql(owner)) {
+            self.preedit.clear();
         }
     }
 }

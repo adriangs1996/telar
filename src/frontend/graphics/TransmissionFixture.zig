@@ -52,15 +52,15 @@ pub fn init(pixels: []const u8) !TransmissionFixture {
     return .{ .model = model, .store = store };
 }
 
-pub fn deinit(fixture: *TransmissionFixture) void {
-    fixture.store.deinit();
-    fixture.model.deinit();
+pub fn deinit(self: *TransmissionFixture) void {
+    self.store.deinit();
+    self.model.deinit();
 }
 
-pub fn writer(fixture: *TransmissionFixture, budget: usize) KittyGraphicsWriter {
+pub fn writer(self: *TransmissionFixture, budget: usize) KittyGraphicsWriter {
     return .{
-        .store = &fixture.store,
-        .layout_snapshot = data.tab_layout.snapshot(&fixture.model, 0, .{ .w = 10, .h = 5 }),
+        .store = &self.store,
+        .layout_snapshot = data.tab_layout.snapshot(&self.model, 0, .{ .w = 10, .h = 5 }),
         .cell_width = 10,
         .cell_height = 20,
         .budget = budget,

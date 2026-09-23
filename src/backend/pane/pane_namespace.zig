@@ -18,7 +18,6 @@ pub const damage = @import("damage.zig");
 
 pub const shared_transfer = @import("../media/shared_transfer.zig");
 
-
 pub const output_chunk_size = 16 * 1024;
 
 pub const max_pty_response_bytes = 1024;
@@ -43,18 +42,18 @@ pub const LaunchState = enum {
     running,
     aborting,
 
-    pub fn commit(state: *LaunchState) void {
-        std.debug.assert(state.* == .starting);
-        state.* = .running;
+    pub fn commit(self: *LaunchState) void {
+        std.debug.assert(self.* == .starting);
+        self.* = .running;
     }
 
-    pub fn abort(state: *LaunchState) void {
-        std.debug.assert(state.* == .starting);
-        state.* = .aborting;
+    pub fn abort(self: *LaunchState) void {
+        std.debug.assert(self.* == .starting);
+        self.* = .aborting;
     }
 
-    pub fn discoverable(state: LaunchState) bool {
-        return state == .running;
+    pub fn discoverable(self: LaunchState) bool {
+        return self == .running;
     }
 };
 

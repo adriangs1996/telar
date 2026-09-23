@@ -17,15 +17,15 @@ last_ns: u64 = 0,
 last: Point = .{ .x = 0, .y = 0 },
 count: u8 = 0,
 
-pub fn press(t: *ClickTracker, at: Point, now_ns: u64) select.Granularity {
-    const near = at.y == t.last.y and (if (at.x > t.last.x) at.x - t.last.x else t.last.x - at.x) <= 1;
-    const soon = t.count > 0 and now_ns -| t.last_ns <= t.interval_ns;
+pub fn press(self: *ClickTracker, at: Point, now_ns: u64) select.Granularity {
+    const near = at.y == self.last.y and (if (at.x > self.last.x) at.x - self.last.x else self.last.x - at.x) <= 1;
+    const soon = self.count > 0 and now_ns -| self.last_ns <= self.interval_ns;
 
-    t.count = if (near and soon) @min(t.count +| 1, 3) else 1;
-    t.last = at;
-    t.last_ns = now_ns;
+    self.count = if (near and soon) @min(self.count +| 1, 3) else 1;
+    self.last = at;
+    self.last_ns = now_ns;
 
-    return switch (t.count) {
+    return switch (self.count) {
         1 => .character,
         2 => .word,
         // Past three it stays on line rather than cycling: a user holding

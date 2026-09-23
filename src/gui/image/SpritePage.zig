@@ -59,9 +59,9 @@ pub fn init(allocator: std.mem.Allocator, cell: u32) !SpritePage {
     return page;
 }
 
-pub fn deinit(page: *SpritePage) void {
-    page.allocator.free(page.pixels);
-    page.* = undefined;
+pub fn deinit(self: *SpritePage) void {
+    self.allocator.free(self.pixels);
+    self.* = undefined;
 }
 
 /// The cell side for one display scale, whole texels inside the bounds.
@@ -73,21 +73,21 @@ pub fn cellFor(scale: f32) u32 {
 
 /// Cells the page can hold in total.
 /// Example: `try std.testing.expect(page.capacity() >= 67);`
-pub fn capacity(page: *const SpritePage) u16 {
-    return @intCast(page.columns * page.columns);
+pub fn capacity(self: *const SpritePage) u16 {
+    return @intCast(self.columns * self.columns);
 }
 
 /// Favicon cells still free: the sheet keeps `max_favicons` at most.
 /// Example: `if (page.faviconRoom() == 0) keepGlyph();`
-pub fn faviconRoom(page: *const SpritePage) u16 {
-    const used = page.count -| @as(u16, providers.len);
-    return @min(max_favicons - @min(max_favicons, used), page.capacity() - page.count);
+pub fn faviconRoom(self: *const SpritePage) u16 {
+    const used = self.count -| @as(u16, providers.len);
+    return @min(max_favicons - @min(max_favicons, used), self.capacity() - self.count);
 }
 
 /// The embedded mark of a built-in provider; custom providers have none.
 /// Example: `if (page.providerMark(agent.provider)) |mark| try canvas.spriteAt(box, mark);`
-pub fn providerMark(page: *const SpritePage, provider: core.AgentProvider) ?Sprite {
-    for (providers, page.provider_marks) |known, sprite| {
+pub fn providerMark(self: *const SpritePage, provider: core.AgentProvider) ?Sprite {
+    for (providers, self.provider_marks) |known, sprite| {
         if (known == provider) {
             return sprite;
         }
@@ -98,39 +98,39 @@ pub fn providerMark(page: *const SpritePage, provider: core.AgentProvider) ?Spri
 
 /// Copies a `cell` by `cell` straight-alpha favicon into the next free cell.
 /// Example: `const sprite = try page.addFavicon(image);`
-pub fn addFavicon(page: *SpritePage, image: ImageView) !Sprite {
-    if (page.faviconRoom() == 0) {
+pub fn addFavicon(self: *SpritePage, image: ImageView) !Sprite {
+    if (self.faviconRoom() == 0) {
         return error.SheetFull;
     }
 
-    return page.add(image);
+    return self.add(image);
 }
 
 /// Texture coordinates of a sprite's cell: u0, v0, u1, v1 in the page.
 /// Example: `const uv = page.uv(sprite);`
-pub fn uv(page: *const SpritePage, sprite: Sprite) [4]f32 {
-    const column: f32 = @floatFromInt(sprite.index % page.columns);
-    const row: f32 = @floatFromInt(sprite.index / page.columns);
-    const cell: f32 = @floatFromInt(page.cell);
+pub fn uv(self: *const SpritePage, sprite: Sprite) [4]f32 {
+    const column: f32 = @floatFromInt(sprite.index % self.columns);
+    const row: f32 = @floatFromInt(sprite.index / self.columns);
+    const cell: f32 = @floatFromInt(self.cell);
     const extent: f32 = @floatFromInt(side);
     return .{ column * cell / extent, row * cell / extent, (column + 1) * cell / extent, (row + 1) * cell / extent };
 }
 
-fn add(page: *SpritePage, image: ImageView) !Sprite {
-    if (image.width != page.cell or image.height != page.cell) {
+fn add(self: *SpritePage, image: ImageView) !Sprite {
+    if (image.width != self.cell or image.height != self.cell) {
         return error.SpriteSizeMismatch;
     }
 
-    if (page.count >= page.capacity()) {
+    if (self.count >= self.capacity()) {
         return error.SheetFull;
     }
 
-    const index = page.count;
-    const left = @as(usize, index % page.columns) * page.cell;
-    const top = @as(usize, index / page.columns) * page.cell;
-    for (0..page.cell) |row| {
-        const destination = page.pixels[((top + row) * side + left) * 4 ..][0 .. page.cell * 4];
-        for (0..page.cell) |column| {
+    const index = self.count;
+    const left = @as(usize, index % self.columns) * self.cell;
+    const top = @as(usize, index / self.columns) * self.cell;
+    for (0..self.cell) |row| {
+        const destination = self.pixels[((top + row) * side + left) * 4 ..][0 .. self.cell * 4];
+        for (0..self.cell) |column| {
             const rgba = image.pixel(@intCast(column), @intCast(row));
             const alpha: u32 = rgba[3];
             const out = destination[column * 4 ..][0..4];
@@ -142,8 +142,8 @@ fn add(page: *SpritePage, image: ImageView) !Sprite {
         }
     }
 
-    page.count += 1;
-    page.version +%= 1;
+    self.count += 1;
+    self.version +%= 1;
     return .{ .index = index };
 }
 

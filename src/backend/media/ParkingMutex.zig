@@ -7,12 +7,12 @@ const ParkingMutex = @This();
 
 inner: std.c.pthread_mutex_t = .{},
 
-pub fn lock(mutex: *ParkingMutex) void {
-    const rc = std.c.pthread_mutex_lock(&mutex.inner);
+pub fn lock(self: *ParkingMutex) void {
+    const rc = std.c.pthread_mutex_lock(&self.inner);
     std.debug.assert(rc == .SUCCESS);
 }
 
-pub fn unlock(mutex: *ParkingMutex) void {
-    const rc = std.c.pthread_mutex_unlock(&mutex.inner);
+pub fn unlock(self: *ParkingMutex) void {
+    const rc = std.c.pthread_mutex_unlock(&self.inner);
     std.debug.assert(rc == .SUCCESS);
 }

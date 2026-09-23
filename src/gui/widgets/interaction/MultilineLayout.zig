@@ -13,19 +13,19 @@ font: ?@import("EditorFont.zig") = null,
 
 /// Returns the first visible row while keeping the caret inside the editor.
 /// Example: `const first = layout.firstRow();`
-pub fn firstRow(layout: Layout) u32 {
-    return layout.position(layout.head)[1] -| (layout.rows -| 1);
+pub fn firstRow(self: Layout) u32 {
+    return self.position(self.head)[1] -| (self.rows -| 1);
 }
 
 /// Measures a byte offset in wrapped columns and rows without allocating.
 /// Example: `const caret = layout.position(field.head);`
-pub fn position(layout: Layout, at: u32) [2]u32 {
-    var lines: WrappedLines = .{ .text = layout.text, .width = layout.columns, .font = layout.font };
+pub fn position(self: Layout, at: u32) [2]u32 {
+    var lines: WrappedLines = .{ .text = self.text, .width = self.columns, .font = self.font };
     var row: u32 = 0;
     while (lines.next()) |line| {
-        const start = @intFromPtr(line.ptr) - @intFromPtr(layout.text.ptr);
+        const start = @intFromPtr(line.ptr) - @intFromPtr(self.text.ptr);
         const end = start + line.len;
-        if (at < end or (at == end and (lines.finished or end < layout.text.len and (layout.text[end] == '\n' or layout.text[end] == '\r')))) {
+        if (at < end or (at == end and (lines.finished or end < self.text.len and (self.text[end] == '\n' or self.text[end] == '\r')))) {
             const column = lines.position(at -| start);
             return .{ column, row };
         }
@@ -38,9 +38,9 @@ pub fn position(layout: Layout, at: u32) [2]u32 {
 
 /// Maps a pointer in measured units to a complete grapheme in the visible rows.
 /// Example: `const offset = layout.offset(.{ column, row });`
-pub fn offset(layout: Layout, point: [2]f64) u32 {
-    const wanted = layout.firstRow() + @as(u32, @intFromFloat(@max(0, @min(65535, @floor(point[1])))));
-    var lines: WrappedLines = .{ .text = layout.text, .width = layout.columns, .font = layout.font };
+pub fn offset(self: Layout, point: [2]f64) u32 {
+    const wanted = self.firstRow() + @as(u32, @intFromFloat(@max(0, @min(65535, @floor(point[1])))));
+    var lines: WrappedLines = .{ .text = self.text, .width = self.columns, .font = self.font };
     var row: u32 = 0;
     while (lines.next()) |line| {
         if (row != wanted) {
@@ -48,13 +48,13 @@ pub fn offset(layout: Layout, point: [2]f64) u32 {
             continue;
         }
 
-        const start: u32 = @intCast(@intFromPtr(line.ptr) - @intFromPtr(layout.text.ptr));
+        const start: u32 = @intCast(@intFromPtr(line.ptr) - @intFromPtr(self.text.ptr));
         var at = start;
         var used: f64 = @floatFromInt(lines.position(0));
         var nearest = @abs(point[0] - used);
         var iterator: core.GraphemeIterator = .{ .bytes = line };
         while (iterator.next()) |cluster| {
-            used = if (layout.font != null) @floatFromInt(lines.position(iterator.index)) else used + @as(f64, @floatFromInt(cluster.width));
+            used = if (self.font != null) @floatFromInt(lines.position(iterator.index)) else used + @as(f64, @floatFromInt(cluster.width));
             const distance = @abs(point[0] - used);
             if (distance <= nearest) {
                 nearest = distance;
@@ -65,7 +65,7 @@ pub fn offset(layout: Layout, point: [2]f64) u32 {
         return at;
     }
 
-    return @intCast(layout.text.len);
+    return @intCast(self.text.len);
 }
 
 test "wrapped composer caret and pointer agree at UTF8 and newline boundaries" {

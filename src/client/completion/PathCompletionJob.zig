@@ -16,6 +16,6 @@ pub fn init(execution_id: data.PathCompletionState.ExecutionId, query: []const u
     return job;
 }
 
-pub fn querySlice(job: *const Job) []const u8 {
-    return job.query[0..job.query_len];
+pub fn querySlice(self: *const Job) []const u8 {
+    return self.query[0..self.query_len];
 }

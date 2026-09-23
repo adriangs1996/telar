@@ -10,19 +10,19 @@ label: []const u8,
 
 /// Publishes the visible part of one toggle or copy action.
 /// Example: `try button.register(canvas);`
-pub fn register(button: Button, canvas: *Canvas) !void {
+pub fn register(self: Button, canvas: *Canvas) !void {
     const state = canvas.widgets orelse return;
-    if (button.control.identity == 0) {
+    if (self.control.identity == 0) {
         return;
     }
 
-    const left = @max(button.bounds.x, button.viewport.x);
-    const top = @max(button.bounds.y, button.viewport.y);
-    const right = @min(button.bounds.x + button.bounds.width, button.viewport.x + button.viewport.width);
-    const bottom = @min(button.bounds.y + button.bounds.height, button.viewport.y + button.viewport.height);
+    const left = @max(self.bounds.x, self.viewport.x);
+    const top = @max(self.bounds.y, self.viewport.y);
+    const right = @min(self.bounds.x + self.bounds.width, self.viewport.x + self.viewport.width);
+    const bottom = @min(self.bounds.y + self.bounds.height, self.viewport.y + self.viewport.height);
     if (right <= left or bottom <= top) {
         return;
     }
 
-    _ = try state.dispatcher.add((@import("interaction/Target.zig"){ .id = .{ .generation = button.control.attachment_generation }, .bounds = .{ .x = left, .y = top, .width = right - left, .height = bottom - top }, .action = .{ .thread_item = button.control }, .thread_header_offset = button.bounds.y - button.viewport.y }).labelled(button.label));
+    _ = try state.dispatcher.add((@import("interaction/Target.zig"){ .id = .{ .generation = self.control.attachment_generation }, .bounds = .{ .x = left, .y = top, .width = right - left, .height = bottom - top }, .action = .{ .thread_item = self.control }, .thread_header_offset = self.bounds.y - self.viewport.y }).labelled(self.label));
 }

@@ -58,6 +58,6 @@ pub fn parse(args: []const []const u8) !Config {
     return config;
 }
 
-pub fn includes(config: Config, name: []const u8) bool {
-    return config.filter == null or std.mem.find(u8, name, config.filter.?) != null;
+pub fn includes(self: Config, name: []const u8) bool {
+    return self.filter == null or std.mem.find(u8, name, self.filter.?) != null;
 }

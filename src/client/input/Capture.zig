@@ -7,15 +7,15 @@ action_count: usize = 0,
 keys: [8]model_data.Key = undefined,
 key_count: usize = 0,
 
-pub fn action(capture: *Capture, value: routing_tests.Action) !model_data.KeybindControl {
-    capture.actions[capture.action_count] = value;
-    capture.action_count += 1;
+pub fn action(self: *Capture, value: routing_tests.Action) !model_data.KeybindControl {
+    self.actions[self.action_count] = value;
+    self.action_count += 1;
     return .continue_routing;
 }
 
-pub fn key(capture: *Capture, value: model_data.Key) !void {
-    capture.keys[capture.key_count] = value;
-    capture.key_count += 1;
+pub fn key(self: *Capture, value: model_data.Key) !void {
+    self.keys[self.key_count] = value;
+    self.key_count += 1;
 }
 
 pub fn forward(_: *Capture, _: []const u8) !void {

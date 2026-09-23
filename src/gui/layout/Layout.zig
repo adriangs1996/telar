@@ -24,15 +24,15 @@ cross_alignment: alignment_module.Alignment = .start,
 /// clip both drawing and hit regions to its bounds. This method changes only
 /// geometry. Invalid measurements fail before changing any child rectangle.
 /// Example: `try (Layout{ .area = bounds, .gap = 8 }).resolve(&children);`
-pub fn resolve(layout: Layout, children: []Item) !void {
-    try layout.validate(children);
-    const area = layout.content();
-    if (layout.direction == .overlay) {
+pub fn resolve(self: Layout, children: []Item) !void {
+    try self.validate(children);
+    const area = self.content();
+    if (self.direction == .overlay) {
         for (children) |*child| {
             const size = [2]f32{ childSize(child, 0, area.width), childSize(child, 1, area.height) };
             child.bounds = .{
-                .x = area.x + offset(layout.alignment, @max(0, area.width - size[0])),
-                .y = area.y + offset(layout.cross_alignment, @max(0, area.height - size[1])),
+                .x = area.x + offset(self.alignment, @max(0, area.width - size[0])),
+                .y = area.y + offset(self.cross_alignment, @max(0, area.height - size[1])),
                 .width = size[0],
                 .height = size[1],
             };
@@ -41,10 +41,10 @@ pub fn resolve(layout: Layout, children: []Item) !void {
         return;
     }
 
-    const axis: usize = if (layout.direction == .row) 0 else 1;
+    const axis: usize = if (self.direction == .row) 0 else 1;
     const available = if (axis == 0) area.width else area.height;
     const cross = if (axis == 0) area.height else area.width;
-    const gaps = layout.gap * @as(f32, @floatFromInt(children.len -| 1));
+    const gaps = self.gap * @as(f32, @floatFromInt(children.len -| 1));
     var reserved = gaps;
     var fills: usize = 0;
     for (children) |*child| {
@@ -62,38 +62,38 @@ pub fn resolve(layout: Layout, children: []Item) !void {
         used += mainSize(child, axis, .{ available, share });
     }
 
-    var cursor = offset(layout.alignment, @max(0, available - used));
+    var cursor = offset(self.alignment, @max(0, available - used));
     for (children) |*child| {
         const main = mainSize(child, axis, .{ available, share });
         const side = childSize(child, axis ^ 1, cross);
-        const position = offset(layout.cross_alignment, @max(0, cross - side));
+        const position = offset(self.cross_alignment, @max(0, cross - side));
         child.bounds = if (axis == 0)
             .{ .x = area.x + cursor, .y = area.y + position, .width = main, .height = side }
         else
             .{ .x = area.x + position, .y = area.y + cursor, .width = side, .height = main };
-        cursor += main + layout.gap;
+        cursor += main + self.gap;
     }
 }
 
 /// Returns the available rectangle after bounded padding.
 /// Example: `const inner = (Layout{ .area = bounds, .padding = padding }).content();`
-pub fn content(layout: Layout) Rect {
-    const left = @min(layout.padding.left, layout.area.width);
-    const top = @min(layout.padding.top, layout.area.height);
+pub fn content(self: Layout) Rect {
+    const left = @min(self.padding.left, self.area.width);
+    const top = @min(self.padding.top, self.area.height);
     return .{
-        .x = layout.area.x + left,
-        .y = layout.area.y + top,
-        .width = @max(0, layout.area.width - left - layout.padding.right),
-        .height = @max(0, layout.area.height - top - layout.padding.bottom),
+        .x = self.area.x + left,
+        .y = self.area.y + top,
+        .width = @max(0, self.area.width - left - self.padding.right),
+        .height = @max(0, self.area.height - top - self.padding.bottom),
     };
 }
 
-fn validate(layout: Layout, children: []const Item) !void {
-    if (!std.math.isFinite(layout.area.x) or !std.math.isFinite(layout.area.y)) {
+fn validate(self: Layout, children: []const Item) !void {
+    if (!std.math.isFinite(self.area.x) or !std.math.isFinite(self.area.y)) {
         return error.InvalidLayout;
     }
 
-    for ([_]f32{ layout.area.width, layout.area.height, layout.padding.left, layout.padding.top, layout.padding.right, layout.padding.bottom, layout.gap }) |value| {
+    for ([_]f32{ self.area.width, self.area.height, self.padding.left, self.padding.top, self.padding.right, self.padding.bottom, self.gap }) |value| {
         if (!validLength(value)) {
             return error.InvalidLayout;
         }

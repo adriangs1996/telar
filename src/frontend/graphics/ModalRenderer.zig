@@ -26,84 +26,84 @@ pub fn init(gpa: std.mem.Allocator) Renderer {
     return .{ .gpa = gpa };
 }
 
-pub fn deinit(renderer: *Renderer) void {
-    for (&renderer.assets) |*asset| if (asset.pixels.len != 0)
-        renderer.gpa.free(asset.pixels);
+pub fn deinit(self: *Renderer) void {
+    for (&self.assets) |*asset| if (asset.pixels.len != 0)
+        self.gpa.free(asset.pixels);
 }
 
-pub fn retainedBytes(renderer: *const Renderer) usize {
+pub fn retainedBytes(self: *const Renderer) usize {
     var total: usize = 0;
-    for (renderer.assets) |asset| total += asset.pixels.len;
+    for (self.assets) |asset| total += asset.pixels.len;
     return total;
 }
 
 /// Applies host graphics support and cell geometry to modal rendering.
 /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
-pub fn configure(renderer: *Renderer, configuration: SidebarRendererInput) bool {
+pub fn configure(self: *Renderer, configuration: SidebarRendererInput) bool {
     const supported = configuration.support == .supported;
-    if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
-        renderer.cell_height == configuration.cell_height)
+    if (self.supported == supported and self.cell_width == configuration.cell_width and
+        self.cell_height == configuration.cell_height)
     {
         return false;
     }
-    renderer.cancelPartial();
-    renderer.supported = supported;
-    renderer.cell_width = configuration.cell_width;
-    renderer.cell_height = configuration.cell_height;
-    renderer.key = null;
+    self.cancelPartial();
+    self.supported = supported;
+    self.cell_width = configuration.cell_width;
+    self.cell_height = configuration.cell_height;
+    self.key = null;
     if (!supported) {
-        renderer.frame_usable = false;
-        renderer.desired_area = null;
+        self.frame_usable = false;
+        self.desired_area = null;
     }
     return true;
 }
 
-pub fn prepare(renderer: *Renderer, area: core.Rect, palette: *const data.Palette) void {
-    renderer.frame_usable = renderer.supported and renderer.cell_width != 0 and
-        renderer.cell_height != 0 and !area.isEmpty();
+pub fn prepare(self: *Renderer, area: core.Rect, palette: *const data.Palette) void {
+    self.frame_usable = self.supported and self.cell_width != 0 and
+        self.cell_height != 0 and !area.isEmpty();
     const background = modal.rgb(palette.panel_bg) orelse {
-        renderer.hide();
+        self.hide();
         return;
     };
     const accent = modal.rgb(palette.accent) orelse {
-        renderer.hide();
+        self.hide();
         return;
     };
-    if (!renderer.frame_usable) {
-        renderer.hide();
+    if (!self.frame_usable) {
+        self.hide();
         return;
     }
 
-    const target_width = std.math.mul(u32, area.w, renderer.cell_width) catch {
-        renderer.hide();
+    const target_width = std.math.mul(u32, area.w, self.cell_width) catch {
+        self.hide();
         return;
     };
-    const target_height = std.math.mul(u32, area.h, renderer.cell_height) catch {
-        renderer.hide();
+    const target_height = std.math.mul(u32, area.h, self.cell_height) catch {
+        self.hide();
         return;
     };
-    const horizontal_width = target_width -| @as(u32, renderer.cell_width) * 2;
-    const vertical_height = target_height -| @as(u32, renderer.cell_height) * 2;
+    const horizontal_width = target_width -| @as(u32, self.cell_width) * 2;
+    const vertical_height = target_height -| @as(u32, self.cell_height) * 2;
     if (horizontal_width == 0 or vertical_height == 0) {
-        renderer.hide();
+        self.hide();
         return;
     }
-    const shortest = @min(renderer.cell_width, renderer.cell_height);
+    const shortest = @min(self.cell_width, self.cell_height);
     const border_width = @max(@as(u16, 1), shortest / 10);
     const radius = @max(@as(u16, 1), @min(@as(u16, 12), shortest / 2));
     const key: ModalRenderKey = .{
         .target_width = target_width,
         .target_height = target_height,
-        .cell_width = renderer.cell_width,
-        .cell_height = renderer.cell_height,
+        .cell_width = self.cell_width,
+        .cell_height = self.cell_height,
         .border_width = border_width,
         .radius = radius,
         .background = background,
         .accent = accent,
     };
-    renderer.desired_area = area;
-    if (renderer.key != null and std.meta.eql(renderer.key.?, key)) {
-        for (&renderer.assets) |*asset| {
+    self.desired_area = area;
+    if (self.key != null and std.meta.eql(self.key.?, key)) {
+        for (&self.assets) |*asset| {
             if (!asset.emitted) {
                 asset.dirty = true;
             }
@@ -111,96 +111,96 @@ pub fn prepare(renderer: *Renderer, area: core.Rect, palette: *const data.Palett
         return;
     }
 
-    renderer.cancelPartial();
+    self.cancelPartial();
     const dimensions = [_][2]u32{
-        .{ @as(u32, renderer.cell_width) * 4, renderer.cell_height },
+        .{ @as(u32, self.cell_width) * 4, self.cell_height },
         .{ horizontal_width, border_width },
         .{ border_width, vertical_height },
     };
     var total_bytes: usize = 0;
     for (dimensions) |size| {
         const pixels = std.math.mul(usize, size[0], size[1]) catch {
-            renderer.hide();
+            self.hide();
             return;
         };
         const bytes = std.math.mul(usize, pixels, 4) catch {
-            renderer.hide();
+            self.hide();
             return;
         };
         total_bytes = std.math.add(usize, total_bytes, bytes) catch {
-            renderer.hide();
+            self.hide();
             return;
         };
     }
     if (total_bytes > modal.max_cache_bytes) {
-        renderer.hide();
+        self.hide();
         return;
     }
-    for (&renderer.assets, dimensions) |*asset, size| {
+    for (&self.assets, dimensions) |*asset, size| {
         const byte_count = @as(usize, size[0]) * size[1] * 4;
         if (asset.pixels.len != byte_count) {
             const next = if (asset.pixels.len == 0)
-                renderer.gpa.alloc(u8, byte_count)
+                self.gpa.alloc(u8, byte_count)
             else
-                renderer.gpa.realloc(asset.pixels, byte_count);
+                self.gpa.realloc(asset.pixels, byte_count);
             asset.pixels = next catch {
-                renderer.key = null;
-                renderer.hide();
+                self.key = null;
+                self.hide();
                 return;
             };
         }
         asset.width = size[0];
         asset.height = size[1];
     }
-    modal.renderCorners(renderer.assetFor(.corners), key);
-    modal.fill(renderer.assetFor(.horizontal).pixels, key.accent);
-    modal.fill(renderer.assetFor(.vertical).pixels, key.accent);
-    renderer.key = key;
-    for (&renderer.assets) |*asset| asset.dirty = true;
+    modal.renderCorners(self.assetFor(.corners), key);
+    modal.fill(self.assetFor(.horizontal).pixels, key.accent);
+    modal.fill(self.assetFor(.vertical).pixels, key.accent);
+    self.key = key;
+    for (&self.assets) |*asset| asset.dirty = true;
 }
 
-pub fn covers(renderer: *const Renderer, area: core.Rect) bool {
-    if (!renderer.frame_usable or renderer.partial != null or renderer.abort_pending or
-        !modal.optionalAreaEql(renderer.desired_area, area) or
-        !modal.optionalAreaEql(renderer.emitted_area, area))
+pub fn covers(self: *const Renderer, area: core.Rect) bool {
+    if (!self.frame_usable or self.partial != null or self.abort_pending or
+        !modal.optionalAreaEql(self.desired_area, area) or
+        !modal.optionalAreaEql(self.emitted_area, area))
     {
         return false;
     }
-    for (renderer.assets) |asset| if (asset.dirty or !asset.emitted) return false;
+    for (self.assets) |asset| if (asset.dirty or !asset.emitted) return false;
     return true;
 }
 
-pub fn damaged(renderer: *const Renderer) bool {
-    if (renderer.abort_pending or renderer.partial != null or
-        !modal.optionalAreaEql(renderer.desired_area, renderer.emitted_area))
+pub fn damaged(self: *const Renderer) bool {
+    if (self.abort_pending or self.partial != null or
+        !modal.optionalAreaEql(self.desired_area, self.emitted_area))
     {
         return true;
     }
-    if (!renderer.supported) {
-        for (renderer.assets) |asset| if (asset.emitted) return true;
+    if (!self.supported) {
+        for (self.assets) |asset| if (asset.emitted) return true;
         return false;
     }
-    if (renderer.frame_usable) {
-        for (renderer.assets) |asset| if (asset.dirty) return true;
+    if (self.frame_usable) {
+        for (self.assets) |asset| if (asset.dirty) return true;
     }
     return false;
 }
 
-pub fn transferInProgress(renderer: *const Renderer) bool {
-    return renderer.abort_pending or renderer.partial != null;
+pub fn transferInProgress(self: *const Renderer) bool {
+    return self.abort_pending or self.partial != null;
 }
 
-pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
-    if (!renderer.damaged()) {
+pub fn write(self: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
+    if (!self.damaged()) {
         return 0;
     }
     var written: usize = 0;
-    if (renderer.abort_pending) {
+    if (self.abort_pending) {
         written += try kitty_protocol.writeTransmissionAbort(writer);
-        renderer.abort_pending = false;
+        self.abort_pending = false;
     }
-    if (!renderer.supported) {
-        for (&renderer.assets, 0..) |*asset, index| {
+    if (!self.supported) {
+        for (&self.assets, 0..) |*asset, index| {
             if (asset.emitted) {
                 written += try kitty_protocol.writeDeleteImage(writer, modal.imageId(index));
             }
@@ -208,16 +208,16 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
             asset.dirty = false;
             asset.transfer_offset = 0;
         }
-        renderer.emitted_area = null;
+        self.emitted_area = null;
         return written;
     }
 
-    if (renderer.emitted_area != null and renderer.anyDirty()) {
-        written += try renderer.deletePlacements(writer);
-        renderer.emitted_area = null;
+    if (self.emitted_area != null and self.anyDirty()) {
+        written += try self.deletePlacements(writer);
+        self.emitted_area = null;
     }
-    if (renderer.frame_usable) {
-        for (&renderer.assets, 0..) |*asset, index| {
+    if (self.frame_usable) {
+        for (&self.assets, 0..) |*asset, index| {
             if (!asset.dirty) {
                 continue;
             }
@@ -242,64 +242,64 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
             written += progress.written;
             asset.transfer_offset = progress.offset;
             if (progress.offset != asset.pixels.len) {
-                renderer.partial = @enumFromInt(index);
+                self.partial = @enumFromInt(index);
                 return written;
             }
             asset.transfer_offset = 0;
             asset.dirty = false;
             asset.emitted = true;
-            renderer.partial = null;
+            self.partial = null;
             return written;
         }
     }
 
-    if (!modal.optionalAreaEql(renderer.desired_area, renderer.emitted_area)) {
-        if (renderer.emitted_area != null) {
-            written += try renderer.deletePlacements(writer);
+    if (!modal.optionalAreaEql(self.desired_area, self.emitted_area)) {
+        if (self.emitted_area != null) {
+            written += try self.deletePlacements(writer);
         }
-        const ready = renderer.allImagesReady();
-        if (renderer.desired_area) |area| {
+        const ready = self.allImagesReady();
+        if (self.desired_area) |area| {
             if (ready) {
-                written += try renderer.writePlacements(writer, area);
+                written += try self.writePlacements(writer, area);
             }
         }
-        renderer.emitted_area = if (ready) renderer.desired_area else null;
+        self.emitted_area = if (ready) self.desired_area else null;
     }
     return written;
 }
 
-pub fn assetFor(renderer: *Renderer, kind: modal.AssetKind) *Asset {
-    return &renderer.assets[@intFromEnum(kind)];
+pub fn assetFor(self: *Renderer, kind: modal.AssetKind) *Asset {
+    return &self.assets[@intFromEnum(kind)];
 }
 
-fn anyDirty(renderer: *const Renderer) bool {
-    for (renderer.assets) |asset| if (asset.dirty) return true;
+fn anyDirty(self: *const Renderer) bool {
+    for (self.assets) |asset| if (asset.dirty) return true;
     return false;
 }
 
-fn allImagesReady(renderer: *const Renderer) bool {
-    if (!renderer.frame_usable) {
+fn allImagesReady(self: *const Renderer) bool {
+    if (!self.frame_usable) {
         return false;
     }
-    for (renderer.assets) |asset| if (asset.dirty or !asset.emitted) return false;
+    for (self.assets) |asset| if (asset.dirty or !asset.emitted) return false;
     return true;
 }
 
-fn cancelPartial(renderer: *Renderer) void {
-    const kind = renderer.partial orelse return;
-    renderer.assetFor(kind).transfer_offset = 0;
-    renderer.partial = null;
-    renderer.abort_pending = true;
+fn cancelPartial(self: *Renderer) void {
+    const kind = self.partial orelse return;
+    self.assetFor(kind).transfer_offset = 0;
+    self.partial = null;
+    self.abort_pending = true;
 }
 
-fn hide(renderer: *Renderer) void {
-    renderer.cancelPartial();
-    renderer.frame_usable = false;
-    renderer.desired_area = null;
+fn hide(self: *Renderer) void {
+    self.cancelPartial();
+    self.frame_usable = false;
+    self.desired_area = null;
 }
 
-fn deletePlacements(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
-    _ = renderer;
+fn deletePlacements(self: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
+    _ = self;
     var written: usize = 0;
     for (0..modal.placement_count) |index|
         written += try kitty_protocol.writeDeletePlacement(
@@ -310,10 +310,10 @@ fn deletePlacements(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.E
     return written;
 }
 
-fn writePlacements(renderer: *const Renderer, writer: *std.Io.Writer, area: core.Rect) std.Io.Writer.Error!usize {
-    const key = renderer.key.?;
-    const horizontal = renderer.assets[@intFromEnum(modal.AssetKind.horizontal)];
-    const vertical = renderer.assets[@intFromEnum(modal.AssetKind.vertical)];
+fn writePlacements(self: *const Renderer, writer: *std.Io.Writer, area: core.Rect) std.Io.Writer.Error!usize {
+    const key = self.key.?;
+    const horizontal = self.assets[@intFromEnum(modal.AssetKind.horizontal)];
+    const vertical = self.assets[@intFromEnum(modal.AssetKind.vertical)];
     const right = area.x + area.w - 1;
     const bottom = area.y + area.h - 1;
     var written: usize = 0;

@@ -25,47 +25,46 @@ pub fn init() !*Fixture {
     return fixture;
 }
 
-pub fn deinit(fixture: *Fixture) void {
-    fixture.session.deinit();
-    std.testing.allocator.destroy(fixture);
+pub fn deinit(self: *Fixture) void {
+    self.session.deinit();
+    std.testing.allocator.destroy(self);
 }
 
-pub fn text(fixture: *Fixture, value: []const u8) void {
-    const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
+pub fn text(self: *Fixture, value: []const u8) void {
+    const pane = self.session.gui.app.model.panes.find(Session.pane_id).?;
     pane.cursor.visible = false;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = value, .style = .{} });
     pane.markSpan(0, @intCast(pane.buffer.cells.len));
-    fixture.session.gui.pointer.hover.dirty = true;
+    self.session.gui.pointer.hover.dirty = true;
 }
 
-pub fn present(fixture: *Fixture) !void {
-    const gui = fixture.session.gui;
-    const token = try fixture.session.draw();
+pub fn present(self: *Fixture) !void {
+    const gui = self.session.gui;
+    const token = try self.session.draw();
     try input_support.presented(
         gui,
         token,
         true,
     );
-    try fixture.session.settle();
+    try self.session.settle();
 }
 
-pub fn event(fixture: *Fixture, code: u32) Event {
-    const gui = fixture.session.gui;
+pub fn event(self: *Fixture, code: u32) Event {
+    const gui = self.session.gui;
     const view = data.tab_layout.view(&gui.app.model, gui.app.model.tabs.active, Session.pane_id, data.workbench.region(&gui.app.model).area).?;
     const size = gui.app.model.host.host_size;
     return .{
         .kind = 6,
         .code = code,
         .mods = hover_target.link_modifier,
-        .x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[0])) + 1,
-        .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[1])) + 1,
+        .x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(self.session.gui.renderer.origin[0])) + 1,
+        .y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(self.session.gui.renderer.origin[1])) + 1,
     };
 }
 
-pub fn send(fixture: *Fixture, value: Event) !void {
-    try input_support.acceptNative(fixture.session.gui, value);
-    try input_support.pump(fixture.session.gui);
-    try fixture.session.settle();
+pub fn send(self: *Fixture, value: Event) !void {
+    try input_support.acceptNative(self.session.gui, value);
+    try input_support.pump(self.session.gui);
+    try self.session.settle();
 }
-

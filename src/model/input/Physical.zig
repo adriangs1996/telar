@@ -2,6 +2,6 @@ const Physical = @This();
 
 value: u32,
 
-pub fn eql(a: Physical, b: Physical) bool {
-    return a.value == b.value;
+pub fn eql(self: Physical, b: Physical) bool {
+    return self.value == b.value;
 }

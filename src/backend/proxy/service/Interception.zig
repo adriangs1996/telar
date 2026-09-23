@@ -56,9 +56,9 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !Interception {
 /// ```zig
 /// interception.deinit();
 /// ```
-pub fn deinit(interception: *Interception) void {
-    interception.roots.deinit(interception.gpa);
-    std.crypto.secureZero(u8, std.mem.asBytes(interception));
+pub fn deinit(self: *Interception) void {
+    self.roots.deinit(self.gpa);
+    std.crypto.secureZero(u8, std.mem.asBytes(self));
 }
 
 /// Returns the certificate paths that a registered child must inherit.
@@ -66,8 +66,8 @@ pub fn deinit(interception: *Interception) void {
 /// ```zig
 /// const trust = interception.clientTrust();
 /// ```
-pub fn clientTrust(interception: *const Interception) Trust {
-    return interception.trust;
+pub fn clientTrust(self: *const Interception) Trust {
+    return self.trust;
 }
 
 /// Borrows the exact TLS resources needed by one tunnel. Their lifetime is
@@ -76,13 +76,13 @@ pub fn clientTrust(interception: *const Interception) Trust {
 /// ```zig
 /// const resources = interception.tunnelResources(&telemetry);
 /// ```
-pub fn tunnelResources(interception: *Interception, telemetry: *Counters) TunnelResources {
+pub fn tunnelResources(self: *Interception, telemetry: *Counters) TunnelResources {
     return .{
-        .io = interception.io,
-        .gpa = interception.gpa,
-        .authority = &interception.authority,
-        .roots = &interception.roots,
-        .intercept_hosts = &interception.hosts,
+        .io = self.io,
+        .gpa = self.gpa,
+        .authority = &self.authority,
+        .roots = &self.roots,
+        .intercept_hosts = &self.hosts,
         .telemetry = telemetry,
     };
 }

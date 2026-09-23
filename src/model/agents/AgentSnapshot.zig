@@ -15,8 +15,8 @@ count: u8 = 0,
 /// ```zig
 /// _ = try snapshot.replace(.{ .revision = 1, .agents = entries });
 /// ```
-pub fn replace(snapshot: *Snapshot, input: SnapshotInput) !bool {
-    if (input.revision <= snapshot.revision) {
+pub fn replace(self: *Snapshot, input: SnapshotInput) !bool {
+    if (input.revision <= self.revision) {
         return false;
     }
     if (input.agents.len > core.max_agent_snapshot_entries) {
@@ -37,7 +37,7 @@ pub fn replace(snapshot: *Snapshot, input: SnapshotInput) !bool {
         replacement.items[index] = try .init(agent);
     }
 
-    snapshot.* = replacement;
+    self.* = replacement;
     return true;
 }
 
@@ -46,8 +46,8 @@ pub fn replace(snapshot: *Snapshot, input: SnapshotInput) !bool {
 /// ```zig
 /// for (snapshot.slice()) |agent| inspect(agent);
 /// ```
-pub fn slice(snapshot: *const Snapshot) []const Agent {
-    return snapshot.items[0..snapshot.count];
+pub fn slice(self: *const Snapshot) []const Agent {
+    return self.items[0..self.count];
 }
 
 /// Resolves one exact pane generation from the current replica.
@@ -55,8 +55,8 @@ pub fn slice(snapshot: *const Snapshot) []const Agent {
 /// ```zig
 /// const agent = snapshot.find(key) orelse return;
 /// ```
-pub fn find(snapshot: *const Snapshot, key: data.AgentKey) ?*const Agent {
-    for (snapshot.slice()) |*agent| {
+pub fn find(self: *const Snapshot, key: data.AgentKey) ?*const Agent {
+    for (self.slice()) |*agent| {
         if (std.meta.eql(agent.key, key)) {
             return agent;
         }
@@ -70,8 +70,8 @@ pub fn find(snapshot: *const Snapshot, key: data.AgentKey) ?*const Agent {
 /// ```zig
 /// const key = snapshot.keyForPane(location, pane_id) orelse return;
 /// ```
-pub fn keyForPane(snapshot: *const Snapshot, location: core.TabLocation, pane_id: core.PaneId) ?data.AgentKey {
-    for (snapshot.slice()) |agent| {
+pub fn keyForPane(self: *const Snapshot, location: core.TabLocation, pane_id: core.PaneId) ?data.AgentKey {
+    for (self.slice()) |agent| {
         if (agent.key.pane_id == pane_id and std.meta.eql(agent.location, location)) {
             return agent.key;
         }
@@ -85,8 +85,8 @@ pub fn keyForPane(snapshot: *const Snapshot, location: core.TabLocation, pane_id
 /// ```zig
 /// if (snapshot.hasWorkingAgent()) scheduleTick();
 /// ```
-pub fn hasWorkingAgent(snapshot: *const Snapshot) bool {
-    for (snapshot.slice()) |agent| {
+pub fn hasWorkingAgent(self: *const Snapshot) bool {
+    for (self.slice()) |agent| {
         if (agent.status == .working) {
             return true;
         }

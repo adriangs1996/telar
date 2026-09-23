@@ -59,22 +59,22 @@ pub fn init(configured: []const []const u8) !Policy {
 ///     interceptTls();
 /// }
 /// ```
-pub fn contains(policy: *const Policy, host: []const u8) bool {
+pub fn contains(self: *const Policy, host: []const u8) bool {
     if (host.len == 0) {
         return false;
     }
 
-    if (policy.intercept_all) {
+    if (self.intercept_all) {
         return true;
     }
-    if (std.sort.binarySearch([]const u8, policy.exact_storage[0..policy.exact_count], host, interception_policy.compare) != null) {
+    if (std.sort.binarySearch([]const u8, self.exact_storage[0..self.exact_count], host, interception_policy.compare) != null) {
         return true;
     }
 
     var offset = std.mem.indexOfScalar(u8, host, '.') orelse return false;
     while (offset + 1 < host.len) {
         const suffix = host[offset + 1 ..];
-        if (std.sort.binarySearch([]const u8, policy.suffix_storage[0..policy.suffix_count], suffix, interception_policy.compareSuffix) != null) {
+        if (std.sort.binarySearch([]const u8, self.suffix_storage[0..self.suffix_count], suffix, interception_policy.compareSuffix) != null) {
             return true;
         }
 
@@ -85,12 +85,12 @@ pub fn contains(policy: *const Policy, host: []const u8) bool {
     return false;
 }
 
-fn appendExact(policy: *Policy, host: []const u8) void {
-    policy.exact_storage[policy.exact_count] = host;
-    policy.exact_count += 1;
+fn appendExact(self: *Policy, host: []const u8) void {
+    self.exact_storage[self.exact_count] = host;
+    self.exact_count += 1;
 }
 
-fn appendSuffix(policy: *Policy, host: []const u8) void {
-    policy.suffix_storage[policy.suffix_count] = host;
-    policy.suffix_count += 1;
+fn appendSuffix(self: *Policy, host: []const u8) void {
+    self.suffix_storage[self.suffix_count] = host;
+    self.suffix_count += 1;
 }

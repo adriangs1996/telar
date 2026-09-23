@@ -9,21 +9,21 @@ pub fn init(layout: Layout) State {
     return .{ .layout = layout };
 }
 
-pub fn replace(state: *State, layout: Layout) model.Change {
-    if (state.layout.eql(&layout)) {
+pub fn replace(self: *State, layout: Layout) model.Change {
+    if (self.layout.eql(&layout)) {
         return .unchanged;
     }
 
-    state.layout = layout;
+    self.layout = layout;
     return .changed;
 }
 
-pub fn update(state: *State, update_value: Update) !model.Change {
-    if (state.layout.generation != update_value.generation or !state.layout.isLive(update_value.position)) {
+pub fn update(self: *State, update_value: Update) !model.Change {
+    if (self.layout.generation != update_value.generation or !self.layout.isLive(update_value.position)) {
         return error.StaleBarUpdate;
     }
 
-    const current = state.layout.slot(update_value.position);
+    const current = self.layout.slot(update_value.position);
     if (current.* != .content) {
         return error.InvalidBarUpdateTarget;
     }
@@ -31,6 +31,6 @@ pub fn update(state: *State, update_value: Update) !model.Change {
         return .unchanged;
     }
 
-    state.layout.set(update_value.position, .{ .content = update_value.content });
+    self.layout.set(update_value.position, .{ .content = update_value.content });
     return .changed;
 }

@@ -16,22 +16,22 @@ pub fn init(request: *const Query) FuzzyPage {
 
 /// Keeps newer candidates ahead of older candidates on equal scores.
 /// Example: `ranking.consider(.{ .id = id, .command = text }, query);`.
-pub fn consider(ranking: *FuzzyPage, candidate: struct { id: i64, command: []const u8 }, query: []const u8) void {
+pub fn consider(self: *FuzzyPage, candidate: struct { id: i64, command: []const u8 }, query: []const u8) void {
     const score = core.score(candidate.command, query) orelse return;
-    if (ranking.count == ranking.wanted and score <= ranking.best[ranking.count - 1].score) {
+    if (self.count == self.wanted and score <= self.best[self.count - 1].score) {
         return;
     }
 
-    var index = ranking.count;
-    if (ranking.count == ranking.wanted) {
+    var index = self.count;
+    if (self.count == self.wanted) {
         index -= 1;
     } else {
-        ranking.count += 1;
+        self.count += 1;
     }
 
-    while (index > 0 and ranking.best[index - 1].score < score) : (index -= 1) {
-        ranking.best[index] = ranking.best[index - 1];
+    while (index > 0 and self.best[index - 1].score < score) : (index -= 1) {
+        self.best[index] = self.best[index - 1];
     }
 
-    ranking.best[index] = .{ .score = score, .id = candidate.id };
+    self.best[index] = .{ .score = score, .id = candidate.id };
 }

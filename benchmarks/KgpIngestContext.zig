@@ -58,8 +58,8 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator) !KgpIngestContext {
     return .{ .terminal = terminal, .stream = stream, .gpa = gpa, .command = command };
 }
 
-pub fn deinit(context: *KgpIngestContext) void {
-    context.stream.deinit();
-    context.terminal.deinit(context.gpa);
-    context.gpa.free(context.command);
+pub fn deinit(self: *KgpIngestContext) void {
+    self.stream.deinit();
+    self.terminal.deinit(self.gpa);
+    self.gpa.free(self.command);
 }

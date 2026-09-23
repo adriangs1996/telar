@@ -37,15 +37,15 @@ pub fn Type(comptime Action: type, comptime capacity: usize) type {
         /// exhaustiveness one - every variant a UI can produce should appear
         /// somewhere in a drawn frame, and a control that is drawn but never
         /// registered is invisible to every other kind of test.
-        pub fn registered(h: *const Self) []const Entry {
-            return h.entries[0..h.len];
+        pub fn registered(self: *const Self) []const Entry {
+            return self.entries[0..self.len];
         }
 
-        pub fn clear(h: *Self) void {
-            h.len = 0;
-            h.layer = 0;
-            h.top = 0;
-            h.blocks = @splat(null);
+        pub fn clear(self: *Self) void {
+            self.len = 0;
+            self.layer = 0;
+            self.top = 0;
+            self.blocks = @splat(null);
         }
 
         /// Opens a layer above the current one.
@@ -55,31 +55,31 @@ pub fn Type(comptime Action: type, comptime capacity: usize) type {
         /// on its blank interior lands on the modal instead of reaching the
         /// list behind it. Pass null for an overlay that should not steal
         /// clicks it has no control under - a tooltip, a drag ghost.
-        pub fn beginLayer(h: *Self, swallows: ?core.Rect) void {
-            if (h.layer + 1 >= max_layers) {
+        pub fn beginLayer(self: *Self, swallows: ?core.Rect) void {
+            if (self.layer + 1 >= max_layers) {
                 return;
             }
-            h.layer += 1;
-            h.top = @max(h.top, h.layer);
-            h.blocks[h.layer] = swallows;
+            self.layer += 1;
+            self.top = @max(self.top, self.layer);
+            self.blocks[self.layer] = swallows;
         }
 
-        pub fn endLayer(h: *Self) void {
-            if (h.layer == 0) {
+        pub fn endLayer(self: *Self) void {
+            if (self.layer == 0) {
                 return;
             }
-            h.layer -= 1;
+            self.layer -= 1;
         }
 
-        pub fn add(h: *Self, rect: core.Rect, action: Action) void {
-            if (h.len == capacity) {
+        pub fn add(self: *Self, rect: core.Rect, action: Action) void {
+            if (self.len == capacity) {
                 return;
             }
             if (rect.isEmpty()) {
                 return;
             }
-            h.entries[h.len] = .{ .rect = rect, .action = action, .layer = h.layer };
-            h.len += 1;
+            self.entries[self.len] = .{ .rect = rect, .action = action, .layer = self.layer };
+            self.len += 1;
         }
 
         /// What a click at (x, y) hits, if anything.
@@ -89,14 +89,14 @@ pub fn Type(comptime Action: type, comptime capacity: usize) type {
         /// underneath it. A layer that swallows the point ends the search
         /// there even when it registered nothing at it, which is the whole
         /// difference between an overlay and a modal.
-        pub fn at(h: *const Self, x: u16, y: u16) ?Action {
-            var layer: i16 = h.top;
+        pub fn at(self: *const Self, x: u16, y: u16) ?Action {
+            var layer: i16 = self.top;
             while (layer >= 0) : (layer -= 1) {
                 const current: u8 = @intCast(layer);
-                var index = h.len;
+                var index = self.len;
                 while (index > 0) {
                     index -= 1;
-                    const entry = h.entries[index];
+                    const entry = self.entries[index];
                     if (entry.layer != current) {
                         continue;
                     }
@@ -104,7 +104,7 @@ pub fn Type(comptime Action: type, comptime capacity: usize) type {
                         return entry.action;
                     }
                 }
-                if (h.blocks[current]) |region| {
+                if (self.blocks[current]) |region| {
                     if (region.contains(x, y)) {
                         return null;
                     }

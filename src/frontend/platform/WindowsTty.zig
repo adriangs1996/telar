@@ -61,16 +61,16 @@ pub fn open() !Tty {
     };
 }
 
-pub fn deinit(t: *Tty) void {
-    _ = windows_ops.SetConsoleMode(t.input, t.original_input);
-    _ = windows_ops.SetConsoleMode(t.output, t.original_output);
-    std.os.windows.CloseHandle(t.input);
-    std.os.windows.CloseHandle(t.output);
+pub fn deinit(self: *Tty) void {
+    _ = windows_ops.SetConsoleMode(self.input, self.original_input);
+    _ = windows_ops.SetConsoleMode(self.output, self.original_output);
+    std.os.windows.CloseHandle(self.input);
+    std.os.windows.CloseHandle(self.output);
 }
 
-pub fn size(t: *const Tty) Size {
+pub fn size(self: *const Tty) Size {
     var info: windows_ops.CONSOLE_SCREEN_BUFFER_INFO = undefined;
-    if (windows_ops.GetConsoleScreenBufferInfo(t.output, &info) == 0) {
+    if (windows_ops.GetConsoleScreenBufferInfo(self.output, &info) == 0) {
         return .{ .cols = 80, .rows = 24 };
     }
     // `srWindow` and not `dwSize`: the buffer is usually taller than the
@@ -82,12 +82,12 @@ pub fn size(t: *const Tty) Size {
     };
 }
 
-pub fn writeHandle(t: *const Tty) std.Io.File {
-    return .{ .handle = t.output, .flags = .{ .nonblocking = false } };
+pub fn writeHandle(self: *const Tty) std.Io.File {
+    return .{ .handle = self.output, .flags = .{ .nonblocking = false } };
 }
 
-pub fn readHandle(t: *const Tty) std.Io.File {
-    return .{ .handle = t.input, .flags = .{ .nonblocking = false } };
+pub fn readHandle(self: *const Tty) std.Io.File {
+    return .{ .handle = self.input, .flags = .{ .nonblocking = false } };
 }
 
 /// Returns a reconnect-stable console identity when no emulator session
@@ -96,11 +96,11 @@ pub fn readHandle(t: *const Tty) std.Io.File {
 /// ```zig
 /// const identity = try tty.identity();
 /// ```
-pub fn identity(t: *const Tty) !u64 {
+pub fn identity(self: *const Tty) !u64 {
     const raw = if (windows_ops.GetConsoleWindow()) |window|
         @intFromPtr(window)
     else
-        @intFromPtr(t.output);
+        @intFromPtr(self.output);
     if (raw == 0) {
         return error.TerminalIdentityUnavailable;
     }

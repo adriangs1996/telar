@@ -10,13 +10,13 @@ first: u8 = 0,
 pub const visible_rows = 8;
 
 /// Keeps keyboard selection in the bounded visible page. Example: `menu.reveal(12);`
-pub fn reveal(menu: *Menu, count: u8) void {
-    menu.selected = @min(menu.selected, count -| 1);
-    if (menu.selected < menu.first) {
-        menu.first = menu.selected;
-    } else if (menu.selected >= @as(u16, menu.first) + visible_rows) {
-        menu.first = menu.selected - visible_rows + 1;
+pub fn reveal(self: *Menu, count: u8) void {
+    self.selected = @min(self.selected, count -| 1);
+    if (self.selected < self.first) {
+        self.first = self.selected;
+    } else if (self.selected >= @as(u16, self.first) + visible_rows) {
+        self.first = self.selected - visible_rows + 1;
     }
 
-    menu.first = @min(menu.first, count -| visible_rows);
+    self.first = @min(self.first, count -| visible_rows);
 }

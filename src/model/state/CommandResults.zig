@@ -7,6 +7,6 @@ matches: [command_palette.entries.len]CommandMatch = undefined,
 len: u8 = 0,
 
 /// Example: `for (results.slice()) |match| draw(command_palette.entries[match.index]);`
-pub fn slice(results: *const CommandResults) []const CommandMatch {
-    return results.matches[0..results.len];
+pub fn slice(self: *const CommandResults) []const CommandMatch {
+    return self.matches[0..self.len];
 }

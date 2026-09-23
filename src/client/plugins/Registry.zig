@@ -50,8 +50,8 @@ pub fn loadWithTrust(context: LoadContext, specs: []const data.PluginSpec, trust
     return registry;
 }
 
-pub fn resolve(registry: *const Registry, requested: data.PluginAction) !Invocation {
-    for (registry.packages[0..registry.count], 0..) |*package, package_index| {
+pub fn resolve(self: *const Registry, requested: data.PluginAction) !Invocation {
+    for (self.packages[0..self.count], 0..) |*package, package_index| {
         if (core.stableId(package.manifest.id()) != requested.plugin) {
             continue;
         }
@@ -70,18 +70,18 @@ pub fn resolve(registry: *const Registry, requested: data.PluginAction) !Invocat
     return error.PluginNotConfigured;
 }
 
-pub fn validateConfiguredActions(registry: *const Registry, bindings: []const data.config_values.ConfiguredBinding) !void {
+pub fn validateConfiguredActions(self: *const Registry, bindings: []const data.config_values.ConfiguredBinding) !void {
     for (bindings) |binding| switch (binding.action) {
-        .plugin => |requested| _ = try registry.resolve(requested),
+        .plugin => |requested| _ = try self.resolve(requested),
         else => {},
     };
 }
 
-pub fn workerRequest(registry: *const Registry, invocation: Invocation, context: data.CallbackContext) !WorkerRequest {
-    if (invocation.package_index >= registry.count) {
+pub fn workerRequest(self: *const Registry, invocation: Invocation, context: data.CallbackContext) !WorkerRequest {
+    if (invocation.package_index >= self.count) {
         return error.PluginNotConfigured;
     }
-    const package = &registry.packages[invocation.package_index];
+    const package = &self.packages[invocation.package_index];
     if (invocation.action_index >= package.manifest.action_count) {
         return error.UnknownPluginAction;
     }
@@ -98,15 +98,15 @@ pub fn workerRequest(registry: *const Registry, invocation: Invocation, context:
     return request;
 }
 
-pub fn authorize(registry: *const Registry, package_index: u8, capability: core.Capability) !void {
-    if (package_index >= registry.count) {
+pub fn authorize(self: *const Registry, package_index: u8, capability: core.Capability) !void {
+    if (package_index >= self.count) {
         return error.PluginNotConfigured;
     }
-    const package = &registry.packages[package_index];
+    const package = &self.packages[package_index];
     if (!package.manifest.capabilities.contains(capability)) {
         return error.CapabilityNotDeclared;
     }
-    for (registry.grants[0..registry.grant_count]) |grant| {
+    for (self.grants[0..self.grant_count]) |grant| {
         if (grant.allows(.{ .id = package.manifest.id(), .digest = package.digest }, capability)) {
             return;
         }
@@ -117,11 +117,11 @@ pub fn authorize(registry: *const Registry, package_index: u8, capability: core.
 
 /// Authorizes a worker batch against its immutable package identity.
 /// For example: `try registry.authorizeBatch(.{ .package_index = index, .plugin_id = id, .digest = digest, .batch = batch });`.
-pub fn authorizeBatch(registry: *const Registry, authorization: BatchAuthorization) !void {
-    if (authorization.package_index >= registry.count) {
+pub fn authorizeBatch(self: *const Registry, authorization: BatchAuthorization) !void {
+    if (authorization.package_index >= self.count) {
         return error.PluginNotConfigured;
     }
-    const package = &registry.packages[authorization.package_index];
+    const package = &self.packages[authorization.package_index];
     if (core.stableId(package.manifest.id()) != authorization.plugin_id or
         !std.mem.eql(u8, &package.digest, &authorization.digest))
     {
@@ -150,16 +150,16 @@ pub fn authorizeBatch(registry: *const Registry, authorization: BatchAuthorizati
             .scroll_pane, .lua_callback, .lua_expr, .plugin, .toggle_thread_view, .new_agent_tab => return error.InvalidPluginEffect,
         };
         if (capability) |required| {
-            try registry.authorize(authorization.package_index, required);
+            try self.authorize(authorization.package_index, required);
         }
     }
 }
 
 /// Hashes every configured package path and readable file for reload detection.
 /// For example: `const fingerprint = registry.watchFingerprint(gpa, io);`.
-pub fn watchFingerprint(registry: *const Registry, gpa: std.mem.Allocator, io: std.Io) u64 {
+pub fn watchFingerprint(self: *const Registry, gpa: std.mem.Allocator, io: std.Io) u64 {
     var hasher = std.hash.Wyhash.init(0x74656c61722d706c);
-    for (registry.packages[0..registry.count]) |*package|
+    for (self.packages[0..self.count]) |*package|
         plugins.updatePackageFingerprint(gpa, io, .{ .hasher = &hasher, .root = package.root() });
     return hasher.final();
 }

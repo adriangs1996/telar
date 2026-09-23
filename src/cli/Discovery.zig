@@ -43,12 +43,12 @@ pub fn parse(output: []const u8) !Discovery {
 
 /// Borrows launch defaults for the lifetime of this discovery result.
 /// Example: `const defaults = found.launchDefaults();`.
-pub fn launchDefaults(found: *const Discovery) LaunchDefaults {
-    return .{ .cwd = found.storage[0..found.lengths[0]], .shell = found.storage[found.lengths[0]..][0..found.lengths[1]] };
+pub fn launchDefaults(self: *const Discovery) LaunchDefaults {
+    return .{ .cwd = self.storage[0..self.lengths[0]], .shell = self.storage[self.lengths[0]..][0..self.lengths[1]] };
 }
 
 /// Borrows the socket path used by the SSH forward.
 /// Example: `const socket = found.endpoint();`.
-pub fn endpoint(found: *const Discovery) []const u8 {
-    return found.storage[found.lengths[0] + found.lengths[1] ..][0..found.lengths[2]];
+pub fn endpoint(self: *const Discovery) []const u8 {
+    return self.storage[self.lengths[0] + self.lengths[1] ..][0..self.lengths[2]];
 }

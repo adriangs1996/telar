@@ -39,45 +39,45 @@ pub fn init(gpa: std.mem.Allocator, pane: *Pane) !Attachment {
     };
 }
 
-pub fn deinit(attachment: *Attachment) void {
-    attachment.cells.deinit(attachment.pane);
-    if (attachment.graphics.shared_transport) {
-        attachment.pane.noteSharedTransport(false);
+pub fn deinit(self: *Attachment) void {
+    self.cells.deinit(self.pane);
+    if (self.graphics.shared_transport) {
+        self.pane.noteSharedTransport(false);
     }
-    attachment.graphics.deinit();
+    self.graphics.deinit();
 }
 
-pub fn resizeIfNeeded(attachment: *Attachment) !bool {
-    return attachment.cells.resizeIfNeeded(attachment.pane);
+pub fn resizeIfNeeded(self: *Attachment) !bool {
+    return self.cells.resizeIfNeeded(self.pane);
 }
 
-pub fn setViewport(attachment: *Attachment, requested: u32) !bool {
-    return attachment.cells.setViewport(attachment.pane, requested);
+pub fn setViewport(self: *Attachment, requested: u32) !bool {
+    return self.cells.setViewport(self.pane, requested);
 }
 
-pub fn requestCellSnapshot(attachment: *Attachment) void {
-    attachment.cells.requestSnapshot();
+pub fn requestCellSnapshot(self: *Attachment) void {
+    self.cells.requestSnapshot();
 }
 
-pub fn copySelection(attachment: *Attachment, range: Range, scratch: []u8) selection.Result {
-    return selection.extract(attachment.pane, range, scratch);
+pub fn copySelection(self: *Attachment, range: Range, scratch: []u8) selection.Result {
+    return selection.extract(self.pane, range, scratch);
 }
 
-pub fn outstandingFrameId(attachment: *const Attachment) u64 {
-    return attachment.cells.outstandingFrameId();
+pub fn outstandingFrameId(self: *const Attachment) u64 {
+    return self.cells.outstandingFrameId();
 }
 
-pub fn observedCellRevision(attachment: *const Attachment) u64 {
-    return attachment.cells.observed_revision;
+pub fn observedCellRevision(self: *const Attachment) u64 {
+    return self.cells.observed_revision;
 }
 
-pub fn acknowledgeFrame(attachment: *Attachment, frame_id: u64, now_ns: u64) ?u64 {
-    return attachment.cells.acknowledge(frame_id, now_ns);
+pub fn acknowledgeFrame(self: *Attachment, frame_id: u64, now_ns: u64) ?u64 {
+    return self.cells.acknowledge(frame_id, now_ns);
 }
 
-pub fn prepareCwd(attachment: *Attachment, buffer: []u8) !?Prepared {
-    const pane = attachment.pane;
-    if (attachment.observed_cwd_revision == pane.cwd.revision) {
+pub fn prepareCwd(self: *Attachment, buffer: []u8) !?Prepared {
+    const pane = self.pane;
+    if (self.observed_cwd_revision == pane.cwd.revision) {
         return null;
     }
     return .{
@@ -133,9 +133,9 @@ test "review discovery replays on attach and reconnect without losing changes du
     try std.testing.expect(try reconnect.prepareReview(&buffer) != null);
 }
 
-pub fn prepareTitle(attachment: *Attachment, buffer: []u8) !?Prepared {
-    const pane = attachment.pane;
-    if (attachment.observed_title_revision == pane.title.revision) {
+pub fn prepareTitle(self: *Attachment, buffer: []u8) !?Prepared {
+    const pane = self.pane;
+    if (self.observed_title_revision == pane.title.revision) {
         return null;
     }
     return .{
@@ -147,9 +147,9 @@ pub fn prepareTitle(attachment: *Attachment, buffer: []u8) !?Prepared {
     };
 }
 
-pub fn prepareForeground(attachment: *Attachment, buffer: []u8) !?Prepared {
-    const pane = attachment.pane;
-    if (attachment.observed_foreground_revision == pane.foreground_revision) {
+pub fn prepareForeground(self: *Attachment, buffer: []u8) !?Prepared {
+    const pane = self.pane;
+    if (self.observed_foreground_revision == pane.foreground_revision) {
         return null;
     }
     return .{
@@ -166,9 +166,9 @@ pub fn prepareForeground(attachment: *Attachment, buffer: []u8) !?Prepared {
 /// ```zig
 /// const prepared = try attachment.prepareProgress(buffer);
 /// ```
-pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?Prepared {
-    const pane = attachment.pane;
-    if (attachment.observed_progress_revision == pane.progress_revision) {
+pub fn prepareProgress(self: *Attachment, buffer: []u8) !?Prepared {
+    const pane = self.pane;
+    if (self.observed_progress_revision == pane.progress_revision) {
         return null;
     }
 
@@ -189,16 +189,16 @@ pub fn prepareProgress(attachment: *Attachment, buffer: []u8) !?Prepared {
 /// ```zig
 /// const prepared = try attachment.prepareNextCells(.{ .io = io, .buffer = buffer, .metrics = metrics });
 /// ```
-pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparation) !?Prepared {
-    const pane = attachment.pane;
-    const scheduled_deadline = attachment.cell_deadline_ns;
-    attachment.cell_deadline_ns = null;
+pub fn prepareNextCells(self: *Attachment, preparation: CellPreparation) !?Prepared {
+    const pane = self.pane;
+    const scheduled_deadline = self.cell_deadline_ns;
+    self.cell_deadline_ns = null;
     if (pane.ingest_pending) {
         return null;
     }
 
-    if (attachment.cells.snapshot_pending) {
-        const payload = (try attachment.cells.prepare(.{
+    if (self.cells.snapshot_pending) {
+        const payload = (try self.cells.prepare(.{
             .io = preparation.io,
             .buffer = preparation.buffer,
             .pane = pane,
@@ -206,46 +206,46 @@ pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparation) !
             .metrics = preparation.metrics,
         })) orelse
             return null;
-        attachment.cells.snapshot_pending = false;
+        self.cells.snapshot_pending = false;
         return .{ .bytes = payload, .effect = .cells };
     }
 
-    if (attachment.cells.hasOutstanding() or
-        (!pane.render_pending and attachment.cells.observed_revision == pane.cell_revision))
+    if (self.cells.hasOutstanding() or
+        (!pane.render_pending and self.cells.observed_revision == pane.cell_revision))
     {
         return null;
     }
 
     const now_ns = core.monotonic(preparation.io);
     if (pane.cell_input_ns) |input_ns| {
-        if (attachment.cell_pacer.last_input_ns != input_ns) {
-            attachment.cell_pacer.noteInput(input_ns);
+        if (self.cell_pacer.last_input_ns != input_ns) {
+            self.cell_pacer.noteInput(input_ns);
         }
     }
 
     if (!pane.output_done) {
-        if (attachment.cell_pacer.waitUntil(now_ns)) |deadline| {
+        if (self.cell_pacer.waitUntil(now_ns)) |deadline| {
             if (deadline > now_ns) {
-                attachment.cell_deadline_ns = deadline;
-                attachment.cell_pacer.noteThrottled();
+                self.cell_deadline_ns = deadline;
+                self.cell_pacer.noteThrottled();
                 return null;
             }
         }
     }
 
-    const payload = try attachment.cells.prepare(.{
+    const payload = try self.cells.prepare(.{
         .io = preparation.io,
         .buffer = preparation.buffer,
         .pane = pane,
         .force_snapshot = false,
         .metrics = preparation.metrics,
     });
-    if (pane.render_pending or attachment.cells.observed_revision != pane.cell_revision) {
+    if (pane.render_pending or self.cells.observed_revision != pane.cell_revision) {
         return null;
     }
 
     // A no-op still paid for projection and diff; synchronized holds did not.
-    attachment.cell_pacer.record(.{
+    self.cell_pacer.record(.{
         .now = now_ns,
         .scheduled_deadline = if (scheduled_deadline) |deadline| (if (now_ns >= deadline) deadline else null) else null,
         .absorbed = 1,
@@ -254,12 +254,12 @@ pub fn prepareNextCells(attachment: *Attachment, preparation: CellPreparation) !
     return if (payload) |bytes| .{ .bytes = bytes, .effect = .cells } else null;
 }
 
-pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?Prepared {
-    const pane = attachment.pane;
-    if (pane.ingest_pending or attachment.exit_sent or !pane.output_done or
-        pane.exit == null or attachment.outstandingFrameId() != 0 or
-        attachment.cells.snapshot_pending or pane.render_pending or
-        attachment.cells.observed_revision != pane.cell_revision)
+pub fn prepareExit(self: *Attachment, buffer: []u8) !?Prepared {
+    const pane = self.pane;
+    if (pane.ingest_pending or self.exit_sent or !pane.output_done or
+        pane.exit == null or self.outstandingFrameId() != 0 or
+        self.cells.snapshot_pending or pane.render_pending or
+        self.cells.observed_revision != pane.cell_revision)
     {
         return null;
     }
@@ -280,40 +280,40 @@ pub fn prepareExit(attachment: *Attachment, buffer: []u8) !?Prepared {
     };
 }
 
-pub fn requestGraphicsSnapshot(attachment: *Attachment) void {
-    attachment.graphics.reset();
+pub fn requestGraphicsSnapshot(self: *Attachment) void {
+    self.graphics.reset();
 }
 
-pub fn configureGraphics(attachment: *Attachment, shared: bool) void {
-    if (attachment.graphics.shared_transport == shared) {
+pub fn configureGraphics(self: *Attachment, shared: bool) void {
+    if (self.graphics.shared_transport == shared) {
         return;
     }
-    attachment.graphics.shared_transport = shared;
-    attachment.pane.noteSharedTransport(shared);
+    self.graphics.shared_transport = shared;
+    self.pane.noteSharedTransport(shared);
 }
 
-pub fn returnGraphicsCredit(attachment: *Attachment, bytes: usize) bool {
-    const available = core.max_image_bytes_per_pane -| attachment.graphics.credit;
+pub fn returnGraphicsCredit(self: *Attachment, bytes: usize) bool {
+    const available = core.max_image_bytes_per_pane -| self.graphics.credit;
     if (bytes == 0 or bytes > available) {
         return false;
     }
 
-    attachment.graphics.credit += bytes;
+    self.graphics.credit += bytes;
     return true;
 }
 
-pub fn graphicsCredit(attachment: *const Attachment) usize {
-    return attachment.graphics.credit;
+pub fn graphicsCredit(self: *const Attachment) usize {
+    return self.graphics.credit;
 }
 
-pub fn hasFrozenGraphics(attachment: *const Attachment) bool {
-    return attachment.graphics.transfer != null;
+pub fn hasFrozenGraphics(self: *const Attachment) bool {
+    return self.graphics.transfer != null;
 }
 
-pub fn hasGraphicsWork(attachment: *const Attachment) bool {
-    return attachment.graphics.snapshot != .idle or
-        attachment.graphics.transfer != null or
-        attachment.graphics.observed_revision != attachment.pane.graphics_revision;
+pub fn hasGraphicsWork(self: *const Attachment) bool {
+    return self.graphics.snapshot != .idle or
+        self.graphics.transfer != null or
+        self.graphics.observed_revision != self.pane.graphics_revision;
 }
 
 /// Prepares one bounded graphics message using the currently available
@@ -322,79 +322,79 @@ pub fn hasGraphicsWork(attachment: *const Attachment) bool {
 /// ```zig
 /// const prepared = try attachment.prepareNextGraphics(.{ .buffer = buffer, .global_credit = credit, .live_storage_available = true });
 /// ```
-pub fn prepareNextGraphics(attachment: *Attachment, preparation: GraphicsPreparation) !?Prepared {
-    const payload = (try attachment_namespace.encodeNextGraphics(attachment, preparation)) orelse return null;
+pub fn prepareNextGraphics(self: *Attachment, preparation: GraphicsPreparation) !?Prepared {
+    const payload = (try attachment_namespace.encodeNextGraphics(self, preparation)) orelse return null;
 
     return .{
         .bytes = payload,
-        .effect = .{ .graphics = attachment.takeGraphicsCounts() },
+        .effect = .{ .graphics = self.takeGraphicsCounts() },
     };
 }
 
-pub fn abandonGraphics(attachment: *Attachment) void {
-    attachment_namespace.abandonGraphicsBatch(attachment);
+pub fn abandonGraphics(self: *Attachment) void {
+    attachment_namespace.abandonGraphicsBatch(self);
 }
 
-pub fn takeGraphicsCounts(attachment: *Attachment) GraphicsCounts {
+pub fn takeGraphicsCounts(self: *Attachment) GraphicsCounts {
     const result: GraphicsCounts = .{
-        .images = attachment.graphics.sent_images,
-        .placements = attachment.graphics.sent_placements,
-        .stage_blocked = attachment.graphics.stage_blocked,
-        .adopted = attachment.graphics.adopted,
-        .freeze = attachment.graphics.freeze,
+        .images = self.graphics.sent_images,
+        .placements = self.graphics.sent_placements,
+        .stage_blocked = self.graphics.stage_blocked,
+        .adopted = self.graphics.adopted,
+        .freeze = self.graphics.freeze,
     };
-    attachment.graphics.sent_images = 0;
-    attachment.graphics.sent_placements = 0;
-    attachment.graphics.stage_blocked = 0;
-    attachment.graphics.adopted = 0;
-    attachment.graphics.freeze = .{};
+    self.graphics.sent_images = 0;
+    self.graphics.sent_placements = 0;
+    self.graphics.stage_blocked = 0;
+    self.graphics.adopted = 0;
+    self.graphics.freeze = .{};
     return result;
 }
 
-pub fn stageGraphics(attachment: *Attachment, global_credit: usize) !attachment_namespace.StageResult {
-    return attachment_namespace.stageNextTransfer(attachment, global_credit);
+pub fn stageGraphics(self: *Attachment, global_credit: usize) !attachment_namespace.StageResult {
+    return attachment_namespace.stageNextTransfer(self, global_credit);
 }
 
-pub fn graphicsCaughtUp(attachment: *const Attachment) bool {
-    return !attachment.graphics.batch_active and
-        attachment.graphics.observed_revision == attachment.pane.graphics_revision;
+pub fn graphicsCaughtUp(self: *const Attachment) bool {
+    return !self.graphics.batch_active and
+        self.graphics.observed_revision == self.pane.graphics_revision;
 }
 
-pub fn graphicsTransferBytes(attachment: *const Attachment) usize {
-    return if (attachment.graphics.transfer) |transfer| transfer.reserved_len else 0;
+pub fn graphicsTransferBytes(self: *const Attachment) usize {
+    return if (self.graphics.transfer) |transfer| transfer.reserved_len else 0;
 }
 
-pub fn commitPrepared(attachment: *Attachment, prepared: Prepared) CommitEffect {
+pub fn commitPrepared(self: *Attachment, prepared: Prepared) CommitEffect {
     return switch (prepared.effect) {
         .cwd => |revision| effect: {
-            attachment.observed_cwd_revision = revision;
+            self.observed_cwd_revision = revision;
             break :effect .{};
         },
         .foreground => |revision| effect: {
-            attachment.observed_foreground_revision = revision;
+            self.observed_foreground_revision = revision;
             break :effect .{};
         },
         .title => |revision| effect: {
-            attachment.observed_title_revision = revision;
+            self.observed_title_revision = revision;
             break :effect .{};
         },
         .progress => |revision| effect: {
-            attachment.observed_progress_revision = revision;
+            self.observed_progress_revision = revision;
             break :effect .{};
         },
         .review => |revision| effect: {
-            attachment.observed_review_revision = revision;
+            self.observed_review_revision = revision;
             break :effect .{};
         },
         .cells => .{},
         .exit => effect: {
-            attachment.exit_sent = true;
-            break :effect .{ .detach_after_send = attachment.pane.id };
+            self.exit_sent = true;
+            break :effect .{ .detach_after_send = self.pane.id };
         },
         .graphics => |counts| .{ .graphics_message = true, .graphics = counts },
     };
 }
 
-pub fn freeTransfer(attachment: *Attachment) void {
-    attachment.graphics.freeTransfer();
+pub fn freeTransfer(self: *Attachment) void {
+    self.graphics.freeTransfer();
 }

@@ -4,10 +4,10 @@ const Scroll = @This();
 total_rows: u32,
 offset: u32,
 
-pub fn maxOffset(scroll: Scroll, rows: u16) u32 {
-    return scroll.total_rows -| rows;
+pub fn maxOffset(self: Scroll, rows: u16) u32 {
+    return self.total_rows -| rows;
 }
 
-pub fn atBottom(scroll: Scroll, rows: u16) bool {
-    return scroll.offset == scroll.maxOffset(rows);
+pub fn atBottom(self: Scroll, rows: u16) bool {
+    return self.offset == self.maxOffset(rows);
 }

@@ -11,9 +11,9 @@ capture_half: ?*Half = null,
 /// ```zig
 /// observer.observe(.{ .payload = bytes, .forwarded_bytes = bytes.len });
 /// ```
-pub fn observe(observer: RequestBodyObserver, fragment: Fragment) void {
-    observer.request.feed(fragment.payload);
-    if (observer.capture_half) |half| {
+pub fn observe(self: RequestBodyObserver, fragment: Fragment) void {
+    self.request.feed(fragment.payload);
+    if (self.capture_half) |half| {
         _ = half.append(.request_body, fragment.payload);
     }
 }

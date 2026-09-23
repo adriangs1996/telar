@@ -62,13 +62,13 @@ pub fn initWithOverrides(gpa: std.mem.Allocator, inherited: std.process.Environ,
 /// ```zig
 /// environment.deinit();
 /// ```
-pub fn deinit(environment: *ChildEnvironment) void {
-    for (environment.block.slice) |entry| {
+pub fn deinit(self: *ChildEnvironment) void {
+    for (self.block.slice) |entry| {
         const bytes = std.mem.span(@constCast(entry.?));
         std.crypto.secureZero(u8, bytes);
-        environment.gpa.free(bytes);
+        self.gpa.free(bytes);
     }
 
-    environment.gpa.free(environment.block.slice);
-    environment.* = undefined;
+    self.gpa.free(self.block.slice);
+    self.* = undefined;
 }

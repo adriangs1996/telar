@@ -25,127 +25,127 @@ last_delta_ns: ?u64 = null,
 last_delta_time_ms: u32 = 0,
 
 /// Example: `motion.reset(pane_scroll_pixels, clock.now_ns);`
-pub fn reset(motion: *ScrollMotion, position: f64, now_ns: u64) void {
-    motion.spring.reset(position);
-    motion.timestamp_ns = now_ns;
-    motion.clearGesture();
+pub fn reset(self: *ScrollMotion, position: f64, now_ns: u64) void {
+    self.spring.reset(position);
+    self.timestamp_ns = now_ns;
+    self.clearGesture();
 }
 
 /// The caller converts delta_y to physical pixels in the pane's direction.
 /// Precise native momentum is consumed directly without a second inertia tail.
 /// Example: `motion.input(pixel_event, now_ns);`
-pub fn input(motion: *ScrollMotion, event: ScrollEvent, now_ns: u64) void {
+pub fn input(self: *ScrollMotion, event: ScrollEvent, now_ns: u64) void {
     if (!std.math.isFinite(event.delta_y)) {
         return;
     }
 
     if (event.phase == .cancel or event.momentum == .cancel) {
-        motion.reset(motion.spring.position, now_ns);
+        self.reset(self.spring.position, now_ns);
         return;
     }
 
     if (!event.precise) {
-        motion.advance(now_ns);
-        motion.clearGesture();
-        motion.spring.frequency = wheel_frequency;
-        const remaining = motion.spring.target - motion.spring.position;
-        const direction = if (remaining != 0) remaining else motion.spring.velocity;
+        self.advance(now_ns);
+        self.clearGesture();
+        self.spring.frequency = wheel_frequency;
+        const remaining = self.spring.target - self.spring.position;
+        const direction = if (remaining != 0) remaining else self.spring.velocity;
         const reversed = (event.delta_y < 0 and direction > 0) or (event.delta_y > 0 and direction < 0);
-        const origin = if (reversed) motion.spring.position else motion.spring.target;
-        motion.spring.retarget(origin + event.delta_y);
+        const origin = if (reversed) self.spring.position else self.spring.target;
+        self.spring.retarget(origin + event.delta_y);
         return;
     }
 
-    motion.timestamp_ns = @max(motion.timestamp_ns, now_ns);
-    motion.spring.reset(motion.spring.position + event.delta_y);
+    self.timestamp_ns = @max(self.timestamp_ns, now_ns);
+    self.spring.reset(self.spring.position + event.delta_y);
     if (!event.kinetic or event.momentum != .none) {
-        motion.clearGesture();
+        self.clearGesture();
         return;
     }
 
-    if (event.phase == .begin or !motion.finger_down) {
-        motion.clearGesture();
-        motion.finger_down = true;
-        motion.sample_time_ms = event.time_ms;
+    if (event.phase == .begin or !self.finger_down) {
+        self.clearGesture();
+        self.finger_down = true;
+        self.sample_time_ms = event.time_ms;
     } else {
-        motion.recordVelocity(event);
+        self.recordVelocity(event);
     }
 
     if (event.delta_y != 0) {
-        motion.last_delta_ns = now_ns;
-        motion.last_delta_time_ms = event.time_ms;
+        self.last_delta_ns = now_ns;
+        self.last_delta_time_ms = event.time_ms;
     }
 
     if (event.phase == .end) {
-        motion.release(event, now_ns);
+        self.release(event, now_ns);
     }
 }
 
 /// Samples actual elapsed time once; delayed frames require no replay loop.
 /// Example: `motion.advance(clock.now_ns);`
-pub fn advance(motion: *ScrollMotion, now_ns: u64) void {
-    const elapsed = now_ns -| motion.timestamp_ns;
-    motion.timestamp_ns = @max(motion.timestamp_ns, now_ns);
-    motion.spring.advance(@as(f64, @floatFromInt(elapsed)) / std.time.ns_per_s);
+pub fn advance(self: *ScrollMotion, now_ns: u64) void {
+    const elapsed = now_ns -| self.timestamp_ns;
+    self.timestamp_ns = @max(self.timestamp_ns, now_ns);
+    self.spring.advance(@as(f64, @floatFromInt(elapsed)) / std.time.ns_per_s);
 }
 
 /// Moves the coordinate origin after pagination without changing velocity.
 /// Example: `motion.translate(resolved_anchor_pixels - old_anchor_pixels);`
-pub fn translate(motion: *ScrollMotion, delta: f64) void {
-    motion.spring.translate(delta);
+pub fn translate(self: *ScrollMotion, delta: f64) void {
+    self.spring.translate(delta);
 }
 
 /// Parks at a temporary page edge without spending travel while data is absent.
 /// Example: `motion.hold(loaded_history_edge, clock.now_ns);`
-pub fn hold(motion: *ScrollMotion, position: f64, now_ns: u64) void {
+pub fn hold(self: *ScrollMotion, position: f64, now_ns: u64) void {
     if (!std.math.isFinite(position)) {
         return;
     }
 
-    const target = motion.spring.target;
-    motion.spring.translate(position - motion.spring.position);
-    motion.spring.retarget(target);
-    motion.timestamp_ns = @max(motion.timestamp_ns, now_ns);
+    const target = self.spring.target;
+    self.spring.translate(position - self.spring.position);
+    self.spring.retarget(target);
+    self.timestamp_ns = @max(self.timestamp_ns, now_ns);
 }
 
 /// Example: `motion.constrain(0, maximum_scroll_pixels);`
-pub fn constrain(motion: *ScrollMotion, minimum: f64, maximum: f64) void {
-    motion.spring.constrain(minimum, maximum);
+pub fn constrain(self: *ScrollMotion, minimum: f64, maximum: f64) void {
+    self.spring.constrain(minimum, maximum);
 }
 
 /// A finger gesture alone requests no frames; its native events supply updates.
 /// Example: `if (motion.active()) clock.requestAt(next_frame_ns);`
-pub fn active(motion: ScrollMotion) bool {
-    return motion.spring.active();
+pub fn active(self: ScrollMotion) bool {
+    return self.spring.active();
 }
 
-fn clearGesture(motion: *ScrollMotion) void {
-    motion.finger_down = false;
-    motion.sample_time_ms = null;
-    motion.pending_delta = 0;
-    motion.sample_duration_ms = 0;
-    motion.sample_velocity = 0;
-    motion.sample_has_velocity = false;
-    motion.release_velocity = 0;
-    motion.has_velocity = false;
-    motion.last_delta_ns = null;
+fn clearGesture(self: *ScrollMotion) void {
+    self.finger_down = false;
+    self.sample_time_ms = null;
+    self.pending_delta = 0;
+    self.sample_duration_ms = 0;
+    self.sample_velocity = 0;
+    self.sample_has_velocity = false;
+    self.release_velocity = 0;
+    self.has_velocity = false;
+    self.last_delta_ns = null;
 }
 
-fn recordVelocity(motion: *ScrollMotion, event: ScrollEvent) void {
-    const previous = motion.sample_time_ms orelse event.time_ms;
+fn recordVelocity(self: *ScrollMotion, event: ScrollEvent) void {
+    const previous = self.sample_time_ms orelse event.time_ms;
     const elapsed_ms = event.time_ms -% previous;
     if (elapsed_ms == 0) {
-        motion.pending_delta += event.delta_y;
-        motion.updateVelocity();
+        self.pending_delta += event.delta_y;
+        self.updateVelocity();
         return;
     }
 
-    motion.sample_time_ms = event.time_ms;
+    self.sample_time_ms = event.time_ms;
     if (elapsed_ms > stale_sample_ms) {
-        motion.pending_delta = 0;
-        motion.sample_duration_ms = 0;
-        motion.release_velocity = 0;
-        motion.has_velocity = false;
+        self.pending_delta = 0;
+        self.sample_duration_ms = 0;
+        self.release_velocity = 0;
+        self.has_velocity = false;
         return;
     }
 
@@ -153,45 +153,45 @@ fn recordVelocity(motion: *ScrollMotion, event: ScrollEvent) void {
         return;
     }
 
-    motion.pending_delta = event.delta_y;
-    motion.sample_duration_ms = elapsed_ms;
-    motion.sample_velocity = motion.release_velocity;
-    motion.sample_has_velocity = motion.has_velocity;
-    motion.updateVelocity();
+    self.pending_delta = event.delta_y;
+    self.sample_duration_ms = elapsed_ms;
+    self.sample_velocity = self.release_velocity;
+    self.sample_has_velocity = self.has_velocity;
+    self.updateVelocity();
 }
 
-fn updateVelocity(motion: *ScrollMotion) void {
-    if (motion.sample_duration_ms == 0) {
+fn updateVelocity(self: *ScrollMotion) void {
+    if (self.sample_duration_ms == 0) {
         return;
     }
 
-    const measured = std.math.clamp(motion.pending_delta * 1000 / @as(f64, @floatFromInt(motion.sample_duration_ms)), -maximum_release_speed, maximum_release_speed);
-    const changed_direction = measured * motion.sample_velocity < 0;
-    const weight = if (!motion.sample_has_velocity or changed_direction) 1 else 1 - @exp(-@as(f64, @floatFromInt(motion.sample_duration_ms)) / 32);
-    motion.release_velocity = motion.sample_velocity + (measured - motion.sample_velocity) * weight;
-    motion.has_velocity = true;
+    const measured = std.math.clamp(self.pending_delta * 1000 / @as(f64, @floatFromInt(self.sample_duration_ms)), -maximum_release_speed, maximum_release_speed);
+    const changed_direction = measured * self.sample_velocity < 0;
+    const weight = if (!self.sample_has_velocity or changed_direction) 1 else 1 - @exp(-@as(f64, @floatFromInt(self.sample_duration_ms)) / 32);
+    self.release_velocity = self.sample_velocity + (measured - self.sample_velocity) * weight;
+    self.has_velocity = true;
 }
 
-fn release(motion: *ScrollMotion, event: ScrollEvent, now_ns: u64) void {
-    const last_delta = motion.last_delta_ns orelse {
-        motion.clearGesture();
+fn release(self: *ScrollMotion, event: ScrollEvent, now_ns: u64) void {
+    const last_delta = self.last_delta_ns orelse {
+        self.clearGesture();
         return;
     };
 
-    const native_age_ms = event.time_ms -% motion.last_delta_time_ms;
+    const native_age_ms = event.time_ms -% self.last_delta_time_ms;
     const elapsed_age_ms = (now_ns -| last_delta) / std.time.ns_per_ms;
     const age_ms = @max(native_age_ms, elapsed_age_ms);
-    const velocity = motion.release_velocity;
-    const valid = motion.has_velocity and age_ms < stale_sample_ms and @abs(velocity) >= minimum_release_speed;
-    motion.clearGesture();
+    const velocity = self.release_velocity;
+    const valid = self.has_velocity and age_ms < stale_sample_ms and @abs(velocity) >= minimum_release_speed;
+    self.clearGesture();
     if (!valid) {
         return;
     }
 
     // This critically damped initial state gives v(t) = v(0) exp(-frequency*t).
-    motion.spring.frequency = inertia_frequency;
-    motion.spring.retarget(motion.spring.position + velocity / inertia_frequency);
-    motion.spring.impulse(velocity);
+    self.spring.frequency = inertia_frequency;
+    self.spring.retarget(self.spring.position + velocity / inertia_frequency);
+    self.spring.impulse(velocity);
 }
 
 test "wheel scroll accelerates and repeated input retains velocity" {

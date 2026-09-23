@@ -21,8 +21,8 @@ len: u8 = 1,
 width: u8 = 1,
 style: Style = .{},
 
-pub fn text(c: *const Cell) []const u8 {
-    return c.bytes[0..c.len];
+pub fn text(self: *const Cell) []const u8 {
+    return self.bytes[0..self.len];
 }
 
 /// The diff calls this once per position per frame, so it is the hottest
@@ -36,7 +36,7 @@ pub fn text(c: *const Cell) []const u8 {
 /// ```zig
 /// if (next.eqlPublic(&previous)) continue;
 /// ```
-pub fn eqlPublic(a: *const Cell, b: *const Cell) bool {
+pub fn eqlPublic(self: *const Cell, b: *const Cell) bool {
     // Whole-cell loads through pointers: a byte view of the struct lets LLVM
     // reassemble lanes from fields it already loaded. The reduction differs
     // per target because each lowers the other poorly:
@@ -45,12 +45,12 @@ pub fn eqlPublic(a: *const Cell, b: *const Cell) bool {
     //   x86-64:  PCMPEQB, PAND, PMOVMSKB with SSE2 and VPXOR, VPTEST with
     //            AVX2 (a max reduction becomes PSHUFD/PMAXUB rounds).
     if (comptime builtin.cpu.arch.isAARCH64()) {
-        const left: *align(1) const [2]Lanes = @ptrCast(a);
+        const left: *align(1) const [2]Lanes = @ptrCast(self);
         const right: *align(1) const [2]Lanes = @ptrCast(b);
         return @reduce(.Max, (left[0] ^ right[0]) | (left[1] ^ right[1])) == 0;
     }
 
-    const left: *align(1) const @Vector(@sizeOf(Cell), u8) = @ptrCast(a);
+    const left: *align(1) const @Vector(@sizeOf(Cell), u8) = @ptrCast(self);
     const right: *align(1) const @Vector(@sizeOf(Cell), u8) = @ptrCast(b);
     return @reduce(.And, left.* == right.*);
 }

@@ -14,43 +14,43 @@ query: core.QueryAgentHistory,
 
 /// Indexes one bounded legacy response while its JSON storage remains alive.
 /// Example: `try history.load(thread);`
-pub fn load(history: *LegacyHistory, thread: std.json.Value) !void {
+pub fn load(self: *LegacyHistory, thread: std.json.Value) !void {
     const turns = protocol.field(thread, "turns");
-    if (turns != .array or turns.array.items.len > history.entries.len) {
+    if (turns != .array or turns.array.items.len > self.entries.len) {
         return error.InvalidHistoryResponse;
     }
 
     for (turns.array.items) |turn| {
         const items = protocol.field(turn, "items");
-        if (items != .array or items.array.items.len > history.entries.len - history.count) {
+        if (items != .array or items.array.items.len > self.entries.len - self.count) {
             return error.HistoryScanLimit;
         }
 
         for (items.array.items) |item| {
-            history.entries[history.count] = .{ .value = item, .turn = protocol.string(protocol.field(turn, "id")) };
-            history.count += 1;
+            self.entries[self.count] = .{ .value = item, .turn = protocol.string(protocol.field(turn, "id")) };
+            self.count += 1;
         }
     }
 }
 
 /// Uses exclusive item/text boundaries in both directions without duplicating fragments.
 /// Example: `try history.fill(output, thread_id);`
-pub fn fill(history: *LegacyHistory, output: *core.AgentHistoryPage, thread_id: []const u8) !void {
-    const query = history.query;
+pub fn fill(self: *LegacyHistory, output: *core.AgentHistoryPage, thread_id: []const u8) !void {
+    const query = self.query;
     const older = query.direction == .older;
     var boundary: ?Position = if (query.cursor.len != 0) try Position.decode(query.cursor, thread_id) else null;
-    var index: i64 = if (older) @as(i64, @intCast(history.count)) - 1 else 0;
+    var index: i64 = if (older) @as(i64, @intCast(self.count)) - 1 else 0;
     if (boundary) |position| {
         if (!std.mem.startsWith(u8, position.provider.slice(), "legacy:")) {
             return error.InvalidHistoryCursor;
         }
 
         index = std.fmt.parseInt(i64, position.provider.slice()[7..], 10) catch return error.InvalidHistoryCursor;
-        if (index < 0 or index >= history.count) {
+        if (index < 0 or index >= self.count) {
             return error.HistoryAnchorUnavailable;
         }
     } else if (query.anchor.len != 0) {
-        const anchor = for (history.entries[0..history.count], 0..) |entry, ordinal| {
+        const anchor = for (self.entries[0..self.count], 0..) |entry, ordinal| {
             if (protocol.is(protocol.field(entry.value, "id"), query.anchor) and std.mem.eql(u8, entry.turn, query.anchor_turn)) {
                 break ordinal;
             }
@@ -58,9 +58,9 @@ pub fn fill(history: *LegacyHistory, output: *core.AgentHistoryPage, thread_id: 
         index = @as(i64, @intCast(anchor)) + (if (older) @as(i64, -1) else 1);
     }
 
-    while (index >= 0 and index < history.count) : (index += if (older) @as(i64, -1) else 1) {
-        const entry = history.entries[@intCast(index)];
-        var normalizer: @import("ItemNormalizer.zig") = .{ .body_buffer = history.body, .include_history_details = true };
+    while (index >= 0 and index < self.count) : (index += if (older) @as(i64, -1) else 1) {
+        const entry = self.entries[@intCast(index)];
+        var normalizer: @import("ItemNormalizer.zig") = .{ .body_buffer = self.body, .include_history_details = true };
         var update = try historical_item.normalize(&normalizer, entry.value);
         if (update.truncated or !std.unicode.utf8ValidateSlice(update.text)) {
             return error.HistoryItemNotRepresentable;
@@ -114,7 +114,7 @@ pub fn fill(history: *LegacyHistory, output: *core.AgentHistoryPage, thread_id: 
         }
         if (output.snapshot.item_count == 1 or !older) {
             output.after = try after.encode(thread_id);
-            output.has_after = index + 1 < history.count or end < update.text.len;
+            output.has_after = index + 1 < self.count or end < update.text.len;
         }
         if ((older and start != 0) or (!older and end != update.text.len) or output.snapshot.item_count == core.agent_thread.max_items or output.snapshot.text_len == core.agent_thread.max_text_bytes) {
             break;

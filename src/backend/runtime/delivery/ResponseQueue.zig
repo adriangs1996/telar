@@ -14,15 +14,15 @@ resync_previous_workspace: ?core.WorkspaceId = null,
 
 pub const Entry = @import("Entry.zig");
 
-pub fn push(queue: *ResponseQueue, response: response_queue.PendingResponse) !void {
-    if (queue.len == queue.items.len) {
+pub fn push(self: *ResponseQueue, response: response_queue.PendingResponse) !void {
+    if (self.len == self.items.len) {
         return error.ResponseQueueFull;
     }
 
-    const index = (@as(usize, queue.head) + queue.len) % queue.items.len;
-    queue.items[index] = response;
-    queue.len += 1;
-    queue.high_water = @max(queue.high_water, queue.len);
+    const index = (@as(usize, self.head) + self.len) % self.items.len;
+    self.items[index] = response;
+    self.len += 1;
+    self.high_water = @max(self.high_water, self.len);
 }
 
 /// Observation notifications may be dropped under backpressure. State
@@ -31,8 +31,8 @@ pub fn push(queue: *ResponseQueue, response: response_queue.PendingResponse) !vo
 /// ```zig
 /// queue.pushOrDrop(response);
 /// ```
-pub fn pushOrDrop(queue: *ResponseQueue, response: response_queue.PendingResponse) void {
-    queue.push(response) catch {
+pub fn pushOrDrop(self: *ResponseQueue, response: response_queue.PendingResponse) void {
+    self.push(response) catch {
         switch (response) {
             .history_result => |result| result.deinit(),
             .agent_history_page => |result| result.deinit(),
@@ -40,30 +40,30 @@ pub fn pushOrDrop(queue: *ResponseQueue, response: response_queue.PendingRespons
             .history_output => |result| result.deinit(),
             .history_stats => |result| result.deinit(),
             .tab_closed => |closed| {
-                queue.resync_workspace = closed.location.workspace;
-                queue.resync_previous_workspace = closed.previous_workspace;
+                self.resync_workspace = closed.location.workspace;
+                self.resync_previous_workspace = closed.previous_workspace;
             },
             .tab_moved => |moved| {
-                queue.resync_workspace = moved.location.workspace;
-                queue.resync_previous_workspace = null;
+                self.resync_workspace = moved.location.workspace;
+                self.resync_previous_workspace = null;
             },
             else => {},
         }
-        queue.dropped += 1;
+        self.dropped += 1;
     };
 }
 
-pub fn pushNotification(queue: *ResponseQueue, notification: PendingNotification) bool {
-    queue.push(.{ .notification = notification }) catch {
-        queue.dropped += 1;
+pub fn pushNotification(self: *ResponseQueue, notification: PendingNotification) bool {
+    self.push(.{ .notification = notification }) catch {
+        self.dropped += 1;
         return false;
     };
     return true;
 }
 
-pub fn pushAgentSound(queue: *ResponseQueue, sound: core.AgentSoundNotification) bool {
-    queue.push(.{ .agent_sound = sound }) catch {
-        queue.dropped += 1;
+pub fn pushAgentSound(self: *ResponseQueue, sound: core.AgentSoundNotification) bool {
+    self.push(.{ .agent_sound = sound }) catch {
+        self.dropped += 1;
         return false;
     };
     return true;
@@ -77,20 +77,20 @@ pub fn pushAgentSound(queue: *ResponseQueue, sound: core.AgentSoundNotification)
 /// const shown = try queue.reserveNotificationShown(request_id);
 /// shown.delivered_clients = delivered;
 /// ```
-pub fn reserveNotificationShown(queue: *ResponseQueue, request_id: core.RequestId) !*core.NotificationShown {
-    try queue.push(.{ .notification_shown = .{
+pub fn reserveNotificationShown(self: *ResponseQueue, request_id: core.RequestId) !*core.NotificationShown {
+    try self.push(.{ .notification_shown = .{
         .request_id = request_id,
         .delivered_clients = 0,
     } });
 
-    const index = (@as(usize, queue.head) + queue.len - 1) % queue.items.len;
-    return &queue.items[index].notification_shown;
+    const index = (@as(usize, self.head) + self.len - 1) % self.items.len;
+    return &self.items[index].notification_shown;
 }
 
 /// Includes prepared responses until their send transaction commits.
 /// Example: `if (queue.hasAgentHistory()) return error.AgentHistoryBusy;`.
-pub fn hasAgentHistory(queue: *const ResponseQueue) bool {
-    return queue.contains(.agent_history_page);
+pub fn hasAgentHistory(self: *const ResponseQueue) bool {
+    return self.contains(.agent_history_page);
 }
 
 /// Keeps one owned review result reserved through socket send admission.
@@ -110,59 +110,59 @@ fn contains(self: *const ResponseQueue, tag: std.meta.Tag(response_queue.Pending
     return false;
 }
 
-pub fn peek(queue: *ResponseQueue) ?*response_queue.PendingResponse {
-    if (queue.len == 0) {
+pub fn peek(self: *ResponseQueue) ?*response_queue.PendingResponse {
+    if (self.len == 0) {
         return null;
     }
 
-    return &queue.items[queue.head];
+    return &self.items[self.head];
 }
 
-pub fn peekManagement(queue: *ResponseQueue) ?Entry {
-    for (0..queue.len) |offset| {
-        const index = (@as(usize, queue.head) + offset) % queue.items.len;
+pub fn peekManagement(self: *ResponseQueue) ?Entry {
+    for (0..self.len) |offset| {
+        const index = (@as(usize, self.head) + offset) % self.items.len;
 
-        if (queue.items[index] == .history_result) {
+        if (self.items[index] == .history_result) {
             continue;
         }
 
-        return .{ .offset = @intCast(offset), .response = &queue.items[index] };
+        return .{ .offset = @intCast(offset), .response = &self.items[index] };
     }
     return null;
 }
 
-pub fn peekObservation(queue: *ResponseQueue) ?Entry {
-    for (0..queue.len) |offset| {
-        const index = (@as(usize, queue.head) + offset) % queue.items.len;
+pub fn peekObservation(self: *ResponseQueue) ?Entry {
+    for (0..self.len) |offset| {
+        const index = (@as(usize, self.head) + offset) % self.items.len;
 
-        if (queue.items[index] != .history_result) {
+        if (self.items[index] != .history_result) {
             continue;
         }
 
-        return .{ .offset = @intCast(offset), .response = &queue.items[index] };
+        return .{ .offset = @intCast(offset), .response = &self.items[index] };
     }
     return null;
 }
 
-pub fn pop(queue: *ResponseQueue) void {
-    std.debug.assert(queue.len != 0);
-    queue.head = @intCast((@as(usize, queue.head) + 1) % queue.items.len);
-    queue.len -= 1;
+pub fn pop(self: *ResponseQueue) void {
+    std.debug.assert(self.len != 0);
+    self.head = @intCast((@as(usize, self.head) + 1) % self.items.len);
+    self.len -= 1;
 }
 
-pub fn removeAt(queue: *ResponseQueue, offset: u8) void {
-    std.debug.assert(offset < queue.len);
+pub fn removeAt(self: *ResponseQueue, offset: u8) void {
+    std.debug.assert(offset < self.len);
     var cursor: usize = offset;
-    while (cursor + 1 < queue.len) : (cursor += 1) {
-        const destination = (@as(usize, queue.head) + cursor) % queue.items.len;
-        const source = (@as(usize, queue.head) + cursor + 1) % queue.items.len;
-        queue.items[destination] = queue.items[source];
+    while (cursor + 1 < self.len) : (cursor += 1) {
+        const destination = (@as(usize, self.head) + cursor) % self.items.len;
+        const source = (@as(usize, self.head) + cursor + 1) % self.items.len;
+        self.items[destination] = self.items[source];
     }
-    queue.len -= 1;
+    self.len -= 1;
 }
 
-pub fn clear(queue: *ResponseQueue) void {
-    while (queue.peek()) |response| {
+pub fn clear(self: *ResponseQueue) void {
+    while (self.peek()) |response| {
         switch (response.*) {
             .history_result => |result| result.deinit(),
             .agent_history_page => |result| result.deinit(),
@@ -171,9 +171,9 @@ pub fn clear(queue: *ResponseQueue) void {
             .history_stats => |result| result.deinit(),
             else => {},
         }
-        queue.pop();
+        self.pop();
     }
-    queue.head = 0;
-    queue.resync_workspace = null;
-    queue.resync_previous_workspace = null;
+    self.head = 0;
+    self.resync_workspace = null;
+    self.resync_previous_workspace = null;
 }

@@ -6,13 +6,13 @@ const ImportEntryIterator = @This();
 decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *ImportEntryIterator) !?ImportEntry {
-    if (iterator.remaining == 0) {
+pub fn next(self: *ImportEntryIterator) !?ImportEntry {
+    if (self.remaining == 0) {
         return null;
     }
-    iterator.remaining -= 1;
-    const started_at_ms = try iterator.decoder.readInt(i64);
-    const command = try iterator.decoder.readSized16();
+    self.remaining -= 1;
+    const started_at_ms = try self.decoder.readInt(i64);
+    const command = try self.decoder.readSized16();
     if (command.len == 0 or command.len > history.max_import_command_bytes) {
         return error.InvalidByteString;
     }

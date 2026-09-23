@@ -18,8 +18,8 @@ start: usize = capacity,
 /// sample.capture(&observer.terminal);
 /// const signal = sample.signal(observer.manifests);
 /// ```
-pub fn capture(sample: *Sample, terminal: *const vt.Terminal) void {
-    sample.start = capacity;
+pub fn capture(self: *Sample, terminal: *const vt.Terminal) void {
+    self.start = capacity;
     const screen = terminal.screens.active;
     var y: usize = terminal.rows;
 
@@ -27,20 +27,20 @@ pub fn capture(sample: *Sample, terminal: *const vt.Terminal) void {
         y -= 1;
         const pin = screen.pages.pin(.{ .active = .{ .y = @intCast(y) } }) orelse continue;
 
-        if (sample.start != capacity and !pin.rowAndCell().row.wrap) {
-            if (!sample.prepend(" ")) {
+        if (self.start != capacity and !pin.rowAndCell().row.wrap) {
+            if (!self.prepend(" ")) {
                 return;
             }
         }
 
-        if (!sample.prependRow(pin.cells(.all))) {
+        if (!self.prependRow(pin.cells(.all))) {
             return;
         }
     }
 }
 
-pub fn text(sample: *const Sample) []const u8 {
-    return sample.bytes[sample.start..];
+pub fn text(self: *const Sample) []const u8 {
+    return self.bytes[self.start..];
 }
 
 /// Applies the manifest table's heuristics to the captured screen.
@@ -48,11 +48,11 @@ pub fn text(sample: *const Sample) []const u8 {
 /// ```zig
 /// const signal = sample.signal(&core.agent_manifest.builtin_table);
 /// ```
-pub fn signal(sample: *const Sample, table: *const core.Table) ?core.Signal {
-    return table.detect(sample.text());
+pub fn signal(self: *const Sample, table: *const core.Table) ?core.Signal {
+    return table.detect(self.text());
 }
 
-fn prependRow(sample: *Sample, cells: []const vt.Cell) bool {
+fn prependRow(self: *Sample, cells: []const vt.Cell) bool {
     var index = cells.len;
     while (index != 0 and cells[index - 1].codepoint() == 0) : (index -= 1) {}
 
@@ -61,7 +61,7 @@ fn prependRow(sample: *Sample, cells: []const vt.Cell) bool {
         const codepoint = cells[index].codepoint();
 
         if (codepoint == 0) {
-            if (!sample.prepend(" ")) {
+            if (!self.prepend(" ")) {
                 return false;
             }
             continue;
@@ -73,7 +73,7 @@ fn prependRow(sample: *Sample, cells: []const vt.Cell) bool {
             break :replaced 1;
         };
 
-        if (!sample.prepend(encoded[0..len])) {
+        if (!self.prepend(encoded[0..len])) {
             return false;
         }
     }
@@ -81,12 +81,12 @@ fn prependRow(sample: *Sample, cells: []const vt.Cell) bool {
     return true;
 }
 
-fn prepend(sample: *Sample, bytes: []const u8) bool {
-    if (bytes.len > sample.start) {
+fn prepend(self: *Sample, bytes: []const u8) bool {
+    if (bytes.len > self.start) {
         return false;
     }
 
-    sample.start -= bytes.len;
-    @memcpy(sample.bytes[sample.start..][0..bytes.len], bytes);
+    self.start -= bytes.len;
+    @memcpy(self.bytes[self.start..][0..bytes.len], bytes);
     return true;
 }

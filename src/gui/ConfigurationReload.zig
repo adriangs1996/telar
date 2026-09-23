@@ -28,73 +28,73 @@ viewport: native.Viewport = .{ .width = 800, .height = 600, .scale = 1 },
 
 /// Captures values, never renderer pointers, for the next preparation.
 /// Example: `reload.observe(renderer.config, viewport);`
-pub fn observe(reload: *Reload, config: client.GuiConfig, viewport: native.Viewport) void {
-    reload.current = config;
-    reload.viewport = viewport;
+pub fn observe(self: *Reload, config: client.GuiConfig, viewport: native.Viewport) void {
+    self.current = config;
+    self.viewport = viewport;
 }
 
 /// Rearming records the new generation's borrows; poll starts it after adoption.
 /// Example: `try reload.schedule(args);`
-pub fn schedule(reload: *Reload, args: client.ConfigWaitArgs) !void {
-    if (reload.scheduled != null or reload.worker != null) {
+pub fn schedule(self: *Reload, args: client.ConfigWaitArgs) !void {
+    if (self.scheduled != null or self.worker != null) {
         return error.ConfigWatchAlreadyRunning;
     }
 
-    reload.scheduled = args;
+    self.scheduled = args;
 }
 
 /// Joins only completed work. Unchanged fingerprints never request a frame.
 /// Example: `try reload.accept(app);`
-pub fn accept(reload: *Reload, app: *client.AttachedClient) !void {
-    if (reload.ready.swap(false, .acquire)) {
-        reload.worker.?.await(reload.io);
-        reload.worker = null;
-        reload.pending = true;
-        if (try reload.result == .unchanged) {
-            reload.pending = false;
-            reload.request = null;
-            _ = try app.completeConfigReload(reload.result);
+pub fn accept(self: *Reload, app: *client.AttachedClient) !void {
+    if (self.ready.swap(false, .acquire)) {
+        self.worker.?.await(self.io);
+        self.worker = null;
+        self.pending = true;
+        if (try self.result == .unchanged) {
+            self.pending = false;
+            self.request = null;
+            _ = try app.completeConfigReload(self.result);
         }
     }
 }
 
 /// Starts a scheduled watcher after adoption captured the current generation.
 /// Example: `try reload.poll(app);`
-pub fn poll(reload: *Reload, _: *client.AttachedClient) !void {
-    if (reload.scheduled) |args| {
-        std.debug.assert(!reload.pending and reload.worker == null);
-        const request: Request = .{ .wait = args, .current = reload.current, .viewport = reload.viewport };
-        reload.request = request;
-        try reload.launch(load, request);
-        reload.scheduled = null;
+pub fn poll(self: *Reload, _: *client.AttachedClient) !void {
+    if (self.scheduled) |args| {
+        std.debug.assert(!self.pending and self.worker == null);
+        const request: Request = .{ .wait = args, .current = self.current, .viewport = self.viewport };
+        self.request = request;
+        try self.launch(load, request);
+        self.scheduled = null;
     }
 }
 
 /// Applies one complete generation at the native consumer boundary.
 /// Example: `const changed = try reload.apply(gui, &renderer);`
-pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
-    if (!reload.pending or gui.app.presentation.active != null) {
+pub fn apply(self: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
+    if (!self.pending or gui.app.presentation.active != null) {
         return false;
     }
 
-    var result = try reload.result;
-    if (result == .loaded and !font_rendering.same(result.loaded.generation.snapshot.gui.font, reload.request.?.current.font) and
-        !std.meta.eql(reload.viewport, reload.request.?.viewport))
+    var result = try self.result;
+    if (result == .loaded and !font_rendering.same(result.loaded.generation.snapshot.gui.font, self.request.?.current.font) and
+        !std.meta.eql(self.viewport, self.request.?.viewport))
     {
-        var request = reload.request.?;
-        request.viewport = reload.viewport;
-        reload.request = request;
-        try reload.launch(restage, request);
-        reload.pending = false;
+        var request = self.request.?;
+        request.viewport = self.viewport;
+        self.request = request;
+        try self.launch(restage, request);
+        self.pending = false;
         return false;
     }
 
-    if (reload.failure) |diagnostic| {
+    if (self.failure) |diagnostic| {
         const mtime_ns = result.loaded.mtime_ns;
         gui.app.reload.deinit(gui.app.gpa);
         gui.app.reload.clearOrphans();
         result = .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
-        reload.failure = null;
+        self.failure = null;
     }
 
     const config = if (result == .loaded) result.loaded.generation.snapshot.gui else null;
@@ -103,8 +103,8 @@ pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
         if (gui.app.options.theme_locked) gui.app.options.theme else null,
     ).terminal else null;
     const generation = if (result == .loaded) result.loaded.generation.number else null;
-    reload.pending = false;
-    reload.request = null;
+    self.pending = false;
+    self.request = null;
     // Physical downstream effects can fail after the common model commits.
     // Keep native resources on that same generation even on this failure path.
     var delivery_error: ?anyerror = null;
@@ -115,25 +115,25 @@ pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
     const adopted = generation != null and gui.app.lua_generation != null and
         gui.app.lua_generation.?.number == generation.?;
     if (adopted) {
-        if (reload.prepared) |replacement| {
-            std.debug.assert(reload.retired == null);
-            reload.retired = renderer.*;
+        if (self.prepared) |replacement| {
+            std.debug.assert(self.retired == null);
+            self.retired = renderer.*;
             renderer.* = replacement;
-            renderer.atlas_version = reload.retired.?.atlas_version;
-            renderer.sprites_version = reload.retired.?.sprites_version;
-            reload.prepared = null;
+            renderer.atlas_version = self.retired.?.atlas_version;
+            renderer.sprites_version = self.retired.?.sprites_version;
+            self.prepared = null;
         }
 
         renderer.config = config.?;
         renderer.theme = theme.?;
-        reload.current = config.?;
+        self.current = config.?;
         if (gui.sidebar.reload(config.?.sidebar.width)) {
             gui.chrome.invalidate();
         }
-    } else if (reload.prepared) |replacement| {
-        std.debug.assert(reload.retired == null);
-        reload.retired = replacement;
-        reload.prepared = null;
+    } else if (self.prepared) |replacement| {
+        std.debug.assert(self.retired == null);
+        self.retired = replacement;
+        self.prepared = null;
     }
 
     if (outcome != null and outcome.? == .rejected) {
@@ -149,33 +149,33 @@ pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
 
 /// Stop before destroying client generations or closing the wake pipe.
 /// Example: `reload.deinit();`
-pub fn deinit(reload: *Reload) void {
-    if (reload.worker) |*worker| {
-        worker.cancel(reload.io);
-        reload.worker = null;
+pub fn deinit(self: *Reload) void {
+    if (self.worker) |*worker| {
+        worker.cancel(self.io);
+        self.worker = null;
     }
 
-    reload.discardPrepared();
-    reload.discardRetired();
-    reload.scheduled = null;
+    self.discardPrepared();
+    self.discardRetired();
+    self.scheduled = null;
 }
 
-fn load(reload: *Reload, request: Request) void {
-    reload.discardRetired();
-    reload.result = client.config_reload.wait(request.wait);
-    reload.prepare(request);
-    reload.publish();
+fn load(self: *Reload, request: Request) void {
+    self.discardRetired();
+    self.result = client.config_reload.wait(request.wait);
+    self.prepare(request);
+    self.publish();
 }
 
-fn restage(reload: *Reload, request: Request) void {
-    reload.discardPrepared();
-    reload.prepare(request);
-    reload.publish();
+fn restage(self: *Reload, request: Request) void {
+    self.discardPrepared();
+    self.prepare(request);
+    self.publish();
 }
 
-fn prepare(reload: *Reload, request: Request) void {
-    reload.failure = null;
-    const result = reload.result catch return;
+fn prepare(self: *Reload, request: Request) void {
+    self.failure = null;
+    const result = self.result catch return;
     if (result != .loaded) {
         return;
     }
@@ -185,36 +185,36 @@ fn prepare(reload: *Reload, request: Request) void {
         return;
     }
 
-    reload.prepared = Renderer.configured(request.wait.gpa, reload.io, .{ .config = config, .viewport = request.viewport }) catch |err| {
+    self.prepared = Renderer.configured(request.wait.gpa, self.io, .{ .config = config, .viewport = request.viewport }) catch |err| {
         var diagnostic: data.Diagnostic = .{};
         diagnostic.set("cannot prepare GUI font '{s}': {s}", .{ config.font.family.name(), @errorName(err) });
-        reload.failure = diagnostic;
+        self.failure = diagnostic;
         return;
     };
 }
 
-fn publish(reload: *Reload) void {
-    reload.ready.store(true, .release);
-    _ = reload.inbox.publish(reload.ticket.?, .configuration_ready);
+fn publish(self: *Reload) void {
+    self.ready.store(true, .release);
+    _ = self.inbox.publish(self.ticket.?, .configuration_ready);
 }
 
-fn launch(reload: *Reload, comptime function: anytype, request: Request) !void {
-    const ticket = try reload.inbox.reserve();
-    errdefer reload.inbox.release(ticket);
-    reload.ticket = ticket;
-    reload.worker = try std.Io.concurrent(reload.io, function, .{ reload, request });
+fn launch(self: *Reload, comptime function: anytype, request: Request) !void {
+    const ticket = try self.inbox.reserve();
+    errdefer self.inbox.release(ticket);
+    self.ticket = ticket;
+    self.worker = try std.Io.concurrent(self.io, function, .{ self, request });
 }
 
-fn discardPrepared(reload: *Reload) void {
-    if (reload.prepared) |*prepared| {
+fn discardPrepared(self: *Reload) void {
+    if (self.prepared) |*prepared| {
         prepared.deinit();
-        reload.prepared = null;
+        self.prepared = null;
     }
 }
 
-fn discardRetired(reload: *Reload) void {
-    if (reload.retired) |*retired| {
+fn discardRetired(self: *Reload) void {
+    if (self.retired) |*retired| {
         retired.deinit();
-        reload.retired = null;
+        self.retired = null;
     }
 }

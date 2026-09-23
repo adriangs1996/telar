@@ -37,10 +37,10 @@ pub fn Type(comptime Service: type, comptime Worker: type, comptime port: Generi
         /// ```zig
         /// running.deinit();
         /// ```
-        pub fn deinit(lifecycle: *Self) void {
-            port.cancel(lifecycle.service, &lifecycle.worker);
-            port.close(lifecycle.service);
-            port.destroy(lifecycle.service);
+        pub fn deinit(self: *Self) void {
+            port.cancel(self.service, &self.worker);
+            port.close(self.service);
+            port.destroy(self.service);
         }
     };
 }

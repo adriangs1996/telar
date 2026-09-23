@@ -9,14 +9,14 @@ state: *ConfigReloadState,
 gpa: std.mem.Allocator,
 loaded: Loaded,
 
-pub fn reject(context: RejectContext, comptime format: []const u8, args: anytype) config_reload.Outcome {
+pub fn reject(self: RejectContext, comptime format: []const u8, args: anytype) config_reload.Outcome {
     var diagnostic: data.Diagnostic = .{};
     diagnostic.set(format, args);
-    context.state.clearOrphans();
-    context.state.mtime_ns = context.loaded.mtime_ns;
-    context.loaded.generation.deinit();
-    context.gpa.destroy(context.loaded.registry);
-    context.gpa.destroy(context.loaded.trust_store);
+    self.state.clearOrphans();
+    self.state.mtime_ns = self.loaded.mtime_ns;
+    self.loaded.generation.deinit();
+    self.gpa.destroy(self.loaded.registry);
+    self.gpa.destroy(self.loaded.trust_store);
 
     return .{ .rejected = diagnostic };
 }

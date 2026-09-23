@@ -10,14 +10,14 @@ pub fn capturesKeys(_: *const GreedyCapture) bool {
     return true;
 }
 
-pub fn key(capture: *GreedyCapture, value: data.Key) !void {
-    capture.keys[capture.key_count] = value;
-    capture.key_count += 1;
+pub fn key(self: *GreedyCapture, value: data.Key) !void {
+    self.keys[self.key_count] = value;
+    self.key_count += 1;
 }
 
 pub fn forward(_: *GreedyCapture, _: []const u8) !void {}
 
-pub fn action(capture: *GreedyCapture, _: keybind.TestAction) !data.KeybindControl {
-    capture.action_count += 1;
+pub fn action(self: *GreedyCapture, _: keybind.TestAction) !data.KeybindControl {
+    self.action_count += 1;
     return .continue_routing;
 }

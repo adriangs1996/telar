@@ -17,11 +17,9 @@ grid_chrome: bool = false,
 animation_frame_ns: ?u64 = null,
 
 /// Example: `const result = state.hostSize(...);`.
-
 /// Example: `const result = state.hostCapabilities(...);`.
-
 /// Example: `const result = state.reconcileHost(...);`.
-pub fn reconcileHost(state: *State, update: model_data.HostUpdate) !?model_data.HostCommit {
+pub fn reconcileHost(self: *State, update: model_data.HostUpdate) !?model_data.HostCommit {
     try update.size.validate();
     const cell_size = update.capabilities.cellSize(update.size.cols, update.size.rows);
     if (update.size.cell_width_px != cell_size.width or
@@ -30,24 +28,24 @@ pub fn reconcileHost(state: *State, update: model_data.HostUpdate) !?model_data.
         return error.InconsistentHostGeometry;
     }
 
-    const capabilities_changed = !std.meta.eql(state.host_capabilities, update.capabilities);
-    const size_changed = !std.meta.eql(state.host_size, update.size);
+    const capabilities_changed = !std.meta.eql(self.host_capabilities, update.capabilities);
+    const size_changed = !std.meta.eql(self.host_size, update.size);
     if (!capabilities_changed and !size_changed) {
         return null;
     }
 
     const capabilities = if (capabilities_changed) changed: {
-        const previous = state.host_capabilities;
-        state.host_capabilities = update.capabilities;
-        state.host_capabilities_revision +%= 1;
+        const previous = self.host_capabilities;
+        self.host_capabilities = update.capabilities;
+        self.host_capabilities_revision +%= 1;
 
         break :changed model_data.HostCapabilitiesChange{
             .previous = previous,
             .current = update.capabilities,
-            .host_capabilities_revision = state.host_capabilities_revision,
+            .host_capabilities_revision = self.host_capabilities_revision,
         };
     } else null;
-    const resize = if (size_changed) state.commitHostResize(update.size) else null;
+    const resize = if (size_changed) self.commitHostResize(update.size) else null;
 
     return .{
         .capabilities = capabilities,
@@ -56,33 +54,33 @@ pub fn reconcileHost(state: *State, update: model_data.HostUpdate) !?model_data.
 }
 
 /// Example: `const result = state.observeHostCapability(...);`.
-pub fn observeHostCapability(state: *State, observation: model_data.HostCapabilityObservation) !?model_data.HostCommit {
-    const capabilities = state.host_capabilities.withObservation(observation);
-    if (std.meta.eql(state.host_capabilities, capabilities)) {
+pub fn observeHostCapability(self: *State, observation: model_data.HostCapabilityObservation) !?model_data.HostCommit {
+    const capabilities = self.host_capabilities.withObservation(observation);
+    if (std.meta.eql(self.host_capabilities, capabilities)) {
         return null;
     }
 
-    return state.reconcileHost(.{
+    return self.reconcileHost(.{
         .capabilities = capabilities,
-        .size = state.resolveHostSize(capabilities),
+        .size = self.resolveHostSize(capabilities),
     });
 }
 
-fn resolveHostSize(state: *const State, capabilities: model_data.HostCapabilities) core.TerminalSize {
-    const cell_size = capabilities.cellSize(state.host_size.cols, state.host_size.rows);
+fn resolveHostSize(self: *const State, capabilities: model_data.HostCapabilities) core.TerminalSize {
+    const cell_size = capabilities.cellSize(self.host_size.cols, self.host_size.rows);
 
     return .{
-        .cols = state.host_size.cols,
-        .rows = state.host_size.rows,
+        .cols = self.host_size.cols,
+        .rows = self.host_size.rows,
         .cell_width_px = cell_size.width,
         .cell_height_px = cell_size.height,
     };
 }
 
-fn commitHostResize(state: *State, size: core.TerminalSize) model_data.HostResizeCommit {
-    const previous = state.host_size;
-    state.host_size = size;
-    state.host_revision +%= 1;
+fn commitHostResize(self: *State, size: core.TerminalSize) model_data.HostResizeCommit {
+    const previous = self.host_size;
+    self.host_size = size;
+    self.host_revision +%= 1;
 
     return .{
         .previous = previous,
@@ -90,6 +88,6 @@ fn commitHostResize(state: *State, size: core.TerminalSize) model_data.HostResiz
         .grid_changed = previous.cols != size.cols or previous.rows != size.rows,
         .cell_size_changed = previous.cell_width_px != size.cell_width_px or
             previous.cell_height_px != size.cell_height_px,
-        .host_revision = state.host_revision,
+        .host_revision = self.host_revision,
     };
 }

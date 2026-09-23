@@ -13,8 +13,8 @@ pub const BodyPlan = union(enum) {
     chunked,
     until_close,
 
-    pub fn hasBody(plan: BodyPlan) bool {
-        return switch (plan) {
+    pub fn hasBody(self: BodyPlan) bool {
+        return switch (self) {
             .none => false,
             .content_length => |len| len != 0,
             .chunked, .until_close => true,

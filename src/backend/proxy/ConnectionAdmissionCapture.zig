@@ -13,19 +13,19 @@ started_stream: ?u8 = null,
 closed_stream: ?u8 = null,
 releases: usize = 0,
 
-fn record(capture: *Capture, step: connection_admission.Step) void {
-    std.debug.assert(capture.len < capture.steps.len);
-    capture.steps[capture.len] = step;
-    capture.len += 1;
+fn record(self: *Capture, step: connection_admission.Step) void {
+    std.debug.assert(self.len < self.steps.len);
+    self.steps[self.len] = step;
+    self.len += 1;
 }
 
-pub fn accept(capture: *Capture) !u8 {
-    capture.record(.accept);
-    const result = if (capture.accept_index < capture.accept_len)
-        capture.accepts[capture.accept_index]
+pub fn accept(self: *Capture) !u8 {
+    self.record(.accept);
+    const result = if (self.accept_index < self.accept_len)
+        self.accepts[self.accept_index]
     else
         .listener_closed;
-    capture.accept_index += 1;
+    self.accept_index += 1;
 
     return switch (result) {
         .stream => |stream| stream,
@@ -35,31 +35,31 @@ pub fn accept(capture: *Capture) !u8 {
     };
 }
 
-pub fn acquire(capture: *Capture) bool {
-    capture.record(.acquire);
-    return capture.slot_available;
+pub fn acquire(self: *Capture) bool {
+    self.record(.acquire);
+    return self.slot_available;
 }
 
-pub fn start(capture: *Capture, _: *std.Io.Group, stream: u8) !void {
-    capture.record(.start);
+pub fn start(self: *Capture, _: *std.Io.Group, stream: u8) !void {
+    self.record(.start);
 
-    if (capture.start_fails) {
+    if (self.start_fails) {
         return error.ConcurrencyUnavailable;
     }
 
-    capture.started_stream = stream;
+    self.started_stream = stream;
 }
 
-pub fn release(capture: *Capture) void {
-    capture.record(.release);
-    capture.releases += 1;
+pub fn release(self: *Capture) void {
+    self.record(.release);
+    self.releases += 1;
 }
 
-pub fn close(capture: *Capture, stream: u8) void {
-    capture.record(.close);
-    capture.closed_stream = stream;
+pub fn close(self: *Capture, stream: u8) void {
+    self.record(.close);
+    self.closed_stream = stream;
 }
 
-pub fn cancel(capture: *Capture, _: *std.Io.Group) void {
-    capture.record(.cancel);
+pub fn cancel(self: *Capture, _: *std.Io.Group) void {
+    self.record(.cancel);
 }

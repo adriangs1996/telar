@@ -8,9 +8,9 @@ base_sequence: u64,
 entry_count: u16,
 encoded_entries: []const u8,
 
-pub fn entries(view: ImportHistoryView) ImportEntryIterator {
+pub fn entries(self: ImportHistoryView) ImportEntryIterator {
     return .{
-        .decoder = .init(view.encoded_entries),
-        .remaining = view.entry_count,
+        .decoder = .init(self.encoded_entries),
+        .remaining = self.entry_count,
     };
 }

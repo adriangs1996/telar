@@ -3,7 +3,7 @@ pub const AttachmentMarkerPolicy = enum {
     stable_number,
     pasted_path,
 
-    pub fn learnsIdentity(policy: AttachmentMarkerPolicy) bool {
-        return policy != .ordered;
+    pub fn learnsIdentity(self: AttachmentMarkerPolicy) bool {
+        return self != .ordered;
     }
 };

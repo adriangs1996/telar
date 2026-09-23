@@ -6,7 +6,7 @@ expected: Credential,
 live: bool = true,
 lookups: usize = 0,
 
-pub fn contains(store: *TestStore, credential: *const Credential) bool {
-    store.lookups += 1;
-    return store.live and std.meta.eql(store.expected, credential.*);
+pub fn contains(self: *TestStore, credential: *const Credential) bool {
+    self.lookups += 1;
+    return self.live and std.meta.eql(self.expected, credential.*);
 }

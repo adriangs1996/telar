@@ -17,20 +17,20 @@ area: core.Rect,
 
 /// Fullscreen hides terminal leaves, but every pane remains directly reachable.
 /// Example: `try strip.draw(canvas);`
-pub fn draw(fullscreen: FullscreenStrip, canvas: *Canvas) !void {
-    var area = fullscreen.area;
+pub fn draw(self: FullscreenStrip, canvas: *Canvas) !void {
+    var area = self.area;
     if (area.isEmpty()) {
         return;
     }
 
-    const model = fullscreen.model;
-    const tab = fullscreen.tab;
+    const model = self.model;
+    const tab = self.tab;
     const layout = &model.tabs.layout[tab];
     if (data.tab_layout.focusedPaneConst(model, tab)) |pane| {
         const review_width = try (ChangeReviewButton{ .area = canvas.rect(area), .pane = pane, .placement = .fullscreen }).draw(canvas);
         const review_columns: u16 = @intFromFloat(@min(65535, @ceil(review_width / @as(f32, @floatFromInt(canvas.metrics.cell_width)))));
         area.w -|= review_columns;
-        var progress: PaneProgress = .{ .pane = pane, .area = canvas.rect(area), .motions = fullscreen.context.progress };
+        var progress: PaneProgress = .{ .pane = pane, .area = canvas.rect(area), .motions = self.context.progress };
         if (try progress.width(canvas) > progress.area.width / 2) {
             progress.compact = true;
         }
@@ -85,7 +85,7 @@ pub fn draw(fullscreen: FullscreenStrip, canvas: *Canvas) !void {
         }
 
         const button: Button = .{
-            .context = fullscreen.context,
+            .context = self.context,
             .area = strip.take(@min(labels[index].width(), limit)),
             .intent = .{ .focus_pane = id },
             .text = labels[index].text(),

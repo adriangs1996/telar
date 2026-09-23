@@ -17,6 +17,6 @@ rtl: bool = false,
 glyphs: [max_glyphs]freetype.c.hb_glyph_info_t = undefined,
 positions: [max_glyphs]freetype.c.hb_glyph_position_t = undefined,
 
-pub fn view(entry: *const Entry) ShapedRun {
-    return .{ .font = entry.font, .columns = entry.columns, .glyphs = entry.glyphs[0..entry.count], .positions = entry.positions[0..entry.count], .rtl = entry.rtl };
+pub fn view(self: *const Entry) ShapedRun {
+    return .{ .font = self.font, .columns = self.columns, .glyphs = self.glyphs[0..self.count], .positions = self.positions[0..self.count], .rtl = self.rtl };
 }

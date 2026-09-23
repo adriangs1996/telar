@@ -36,10 +36,10 @@ pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture) !IncrementalCompose
     };
 }
 
-pub fn deinit(context: *IncrementalComposeContext) void {
-    context.compositor.deinit();
-    context.screen.deinit();
-    const model_gpa = context.model.gpa;
-    context.model.deinit();
-    model_gpa.destroy(context.model);
+pub fn deinit(self: *IncrementalComposeContext) void {
+    self.compositor.deinit();
+    self.screen.deinit();
+    const model_gpa = self.model.gpa;
+    self.model.deinit();
+    model_gpa.destroy(self.model);
 }

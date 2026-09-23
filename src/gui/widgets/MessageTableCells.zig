@@ -32,26 +32,26 @@ pub fn init(line: []const u8) Cells {
 }
 
 /// Example: `while (cells.next()) |cell| try drawCell(cell);`
-pub fn next(cells: *Cells) ?[]const u8 {
-    if (cells.finished or cells.remaining == 0) {
+pub fn next(self: *Cells) ?[]const u8 {
+    if (self.finished or self.remaining == 0) {
         return null;
     }
 
-    cells.remaining -= 1;
-    const start = cells.index;
-    while (cells.index < cells.text.len) {
-        const byte = cells.text[cells.index];
-        if (byte == '\\' and cells.index + 1 < cells.text.len) {
-            cells.index += 2;
+    self.remaining -= 1;
+    const start = self.index;
+    while (self.index < self.text.len) {
+        const byte = self.text[self.index];
+        if (byte == '\\' and self.index + 1 < self.text.len) {
+            self.index += 2;
             continue;
         }
 
-        cells.index += 1;
+        self.index += 1;
         if (byte == '|') {
-            return std.mem.trim(u8, cells.text[start .. cells.index - 1], " \t");
+            return std.mem.trim(u8, self.text[start .. self.index - 1], " \t");
         }
     }
 
-    cells.finished = true;
-    return std.mem.trim(u8, cells.text[start..], " \t");
+    self.finished = true;
+    return std.mem.trim(u8, self.text[start..], " \t");
 }

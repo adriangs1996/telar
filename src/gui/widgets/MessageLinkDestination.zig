@@ -46,23 +46,23 @@ pub fn init(raw: []const u8) !Destination {
 
 /// Borrows the normalized display text until this value is changed or destroyed.
 /// Example: `try drawTooltip(destination.text());`
-pub fn text(destination: *const Destination) []const u8 {
-    return destination.buffer[0..destination.len];
+pub fn text(self: *const Destination) []const u8 {
+    return self.buffer[0..self.len];
 }
 
-fn append(destination: *Destination, bytes: []const u8) !void {
+fn append(self: *Destination, bytes: []const u8) !void {
     for (bytes) |byte| {
         if (byte < 32 or byte == 127) {
             return error.InvalidLinkDestination;
         }
     }
 
-    if (bytes.len > capacity - destination.len) {
+    if (bytes.len > capacity - self.len) {
         return error.InvalidLinkDestination;
     }
 
-    @memcpy(destination.buffer[destination.len..][0..bytes.len], bytes);
-    destination.len += @intCast(bytes.len);
+    @memcpy(self.buffer[self.len..][0..bytes.len], bytes);
+    self.len += @intCast(bytes.len);
 }
 
 fn entity(name: []const u8) ?u21 {

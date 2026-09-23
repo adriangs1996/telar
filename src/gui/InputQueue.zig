@@ -342,8 +342,8 @@ test "queued payloads survive borrowing and their slots can be reused across rin
     }
 }
 
-fn acceptNative(queue: *InputQueue, event: native.InputEvent) !void {
-    _ = try queue.accept(try decode_input.decode(event), .{});
+fn acceptNative(self: *InputQueue, event: native.InputEvent) !void {
+    _ = try self.accept(try decode_input.decode(event), .{});
 }
 
 test "recovery keeps admission closed until retained releases and the marker are consumed" {

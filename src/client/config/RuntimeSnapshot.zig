@@ -27,11 +27,11 @@ session_resume_agents: bool = true,
 session_path_bytes: [data.config_values.max_history_path_bytes]u8 = undefined,
 session_path_len: u16 = 0,
 
-pub fn historyPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
-    if (snapshot.history_path_len == 0) {
+pub fn historyPath(self: *const RuntimeSnapshot) ?[]const u8 {
+    if (self.history_path_len == 0) {
         return null;
     }
-    return snapshot.history_path_bytes[0..snapshot.history_path_len];
+    return self.history_path_bytes[0..self.history_path_len];
 }
 
 /// Configured checkpoint path, or null for the default next to history.
@@ -39,18 +39,18 @@ pub fn historyPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
 /// ```zig
 /// const path = snapshot.sessionPath();
 /// ```
-pub fn sessionPath(snapshot: *const RuntimeSnapshot) ?[]const u8 {
-    if (snapshot.session_path_len == 0) {
+pub fn sessionPath(self: *const RuntimeSnapshot) ?[]const u8 {
+    if (self.session_path_len == 0) {
         return null;
     }
-    return snapshot.session_path_bytes[0..snapshot.session_path_len];
+    return self.session_path_bytes[0..self.session_path_len];
 }
 
-pub fn proxyCaDir(snapshot: *const RuntimeSnapshot) ?[]const u8 {
-    if (snapshot.proxy_ca_dir_len == 0) {
+pub fn proxyCaDir(self: *const RuntimeSnapshot) ?[]const u8 {
+    if (self.proxy_ca_dir_len == 0) {
         return null;
     }
-    return snapshot.proxy_ca_dir_bytes[0..snapshot.proxy_ca_dir_len];
+    return self.proxy_ca_dir_bytes[0..self.proxy_ca_dir_len];
 }
 
 /// Returns the exact hostnames that the runtime may TLS-intercept.
@@ -58,6 +58,6 @@ pub fn proxyCaDir(snapshot: *const RuntimeSnapshot) ?[]const u8 {
 /// ```zig
 /// const hosts = snapshot.proxyInterceptHosts(&storage);
 /// ```
-pub fn proxyInterceptHosts(snapshot: *const RuntimeSnapshot, storage: *[core.max_intercept_hosts][]const u8) []const []const u8 {
-    return snapshot.proxy_intercept_hosts.slices(storage);
+pub fn proxyInterceptHosts(self: *const RuntimeSnapshot, storage: *[core.max_intercept_hosts][]const u8) []const []const u8 {
+    return self.proxy_intercept_hosts.slices(storage);
 }

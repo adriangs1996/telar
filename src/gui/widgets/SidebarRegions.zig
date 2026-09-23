@@ -47,12 +47,12 @@ pub fn resolve(canvas: *const Canvas, area: Rect, count: usize) !SidebarRegions 
 
 /// Headers and the resize gutter do not scroll either list.
 /// Example: `const list = regions.at(.{ pointer.x, pointer.y }) orelse return;`
-pub fn at(regions: SidebarRegions, point: [2]f64) ?List {
-    if (Bands.within(regions.projects, point[0], point[1])) {
+pub fn at(self: SidebarRegions, point: [2]f64) ?List {
+    if (Bands.within(self.projects, point[0], point[1])) {
         return .projects;
     }
 
-    if (Bands.within(regions.agents, point[0], point[1])) {
+    if (Bands.within(self.agents, point[0], point[1])) {
         return .agents;
     }
 

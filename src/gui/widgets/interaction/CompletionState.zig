@@ -23,26 +23,26 @@ first: u8 = 0,
 
 /// Resolves only the token at the caret; a selection or whitespace closes it.
 /// Example: `state.update(thread);`
-pub fn update(state: *State, thread: client.ThreadView) void {
+pub fn update(self: *State, thread: client.ThreadView) void {
     if (!thread.focused) {
         return;
     }
 
     const catalog_revision = if (thread.transcript) |snapshot| snapshot.skills.revision else 0;
-    const changed = state.pane_id != thread.pane_id or state.attachment_generation != thread.attachment_generation or state.revision != thread.composer_revision or state.catalog_revision != catalog_revision;
+    const changed = self.pane_id != thread.pane_id or self.attachment_generation != thread.attachment_generation or self.revision != thread.composer_revision or self.catalog_revision != catalog_revision;
     if (!changed) {
         return;
     }
 
-    state.pane_id = thread.pane_id;
-    state.attachment_generation = thread.attachment_generation;
-    state.revision = thread.composer_revision;
-    state.catalog_revision = catalog_revision;
-    state.generation +%= 1;
-    state.open = false;
-    state.selected = 0;
-    state.first = 0;
-    state.count = 0;
+    self.pane_id = thread.pane_id;
+    self.attachment_generation = thread.attachment_generation;
+    self.revision = thread.composer_revision;
+    self.catalog_revision = catalog_revision;
+    self.generation +%= 1;
+    self.open = false;
+    self.selected = 0;
+    self.first = 0;
+    self.count = 0;
     const field = thread.composer_field orelse return;
     const text = thread.composer;
     const head = field.head;
@@ -61,7 +61,7 @@ pub fn update(state: *State, thread: client.ThreadView) void {
         return;
     }
     const query = text[start + 1 .. head];
-    if (query.len > state.query.len) {
+    if (query.len > self.query.len) {
         return;
     }
     for (query) |byte| {
@@ -74,17 +74,17 @@ pub fn update(state: *State, thread: client.ThreadView) void {
     while (end < text.len and core.AgentSkills.nameByte(text[end])) {
         end += 1;
     }
-    state.slash = text[start] == '/';
-    state.start = @intCast(start);
-    state.end = @intCast(end);
-    @memcpy(state.query[0..query.len], query);
-    state.query_len = @intCast(query.len);
-    state.open = true;
-    if (state.slash) {
+    self.slash = text[start] == '/';
+    self.start = @intCast(start);
+    self.end = @intCast(end);
+    @memcpy(self.query[0..query.len], query);
+    self.query_len = @intCast(query.len);
+    self.open = true;
+    if (self.slash) {
         for (core.AgentCommand.kinds) |kind| {
             if (std.ascii.startsWithIgnoreCase(@tagName(kind), query)) {
-                state.entries[state.count] = .{ .command = kind };
-                state.count += 1;
+                self.entries[self.count] = .{ .command = kind };
+                self.count += 1;
             }
         }
     }
@@ -93,7 +93,7 @@ pub fn update(state: *State, thread: client.ThreadView) void {
     for (skills.entries[0..skills.count], 0..) |skill, index| {
         const name = skill.name(skills);
         var match = query;
-        if (state.slash) {
+        if (self.slash) {
             if (std.ascii.startsWithIgnoreCase("skill:", query)) {
                 match = "";
             } else if (std.ascii.startsWithIgnoreCase(query, "skill:")) {
@@ -103,27 +103,27 @@ pub fn update(state: *State, thread: client.ThreadView) void {
             }
         }
         if (std.ascii.indexOfIgnoreCase(name, match) != null or std.ascii.indexOfIgnoreCase(skill.label(skills), match) != null) {
-            state.entries[state.count] = .{ .skill = @intCast(index) };
-            state.count += 1;
+            self.entries[self.count] = .{ .skill = @intCast(index) };
+            self.count += 1;
         }
     }
 }
 
 /// Example: `state.dismiss();`
-pub fn dismiss(state: *State) void {
-    state.open = false;
+pub fn dismiss(self: *State) void {
+    self.open = false;
 }
 
 /// Example: `state.move(true);`
-pub fn move(state: *State, forward: bool) void {
-    if (state.count == 0) {
+pub fn move(self: *State, forward: bool) void {
+    if (self.count == 0) {
         return;
     }
 
-    state.selected = if (forward) (state.selected + 1) % state.count else if (state.selected == 0) state.count - 1 else state.selected - 1;
-    if (state.selected < state.first) {
-        state.first = state.selected;
-    } else if (state.selected >= @as(u16, state.first) + visible_rows) {
-        state.first = state.selected - visible_rows + 1;
+    self.selected = if (forward) (self.selected + 1) % self.count else if (self.selected == 0) self.count - 1 else self.selected - 1;
+    if (self.selected < self.first) {
+        self.first = self.selected;
+    } else if (self.selected >= @as(u16, self.first) + visible_rows) {
+        self.first = self.selected - visible_rows + 1;
     }
 }

@@ -13,8 +13,8 @@ pub fn measure(canvas: *const Canvas) f32 {
 
 /// The whole row is a keyboard-accessible disclosure; hidden work paints nothing.
 /// Example: `try work.draw(canvas);`
-pub fn draw(work: Work, canvas: *Canvas) !void {
-    const view = work.view;
+pub fn draw(self: Work, canvas: *Canvas) !void {
+    const view = self.view;
     const palette = canvas.theme.palette;
     const side = canvas.chrome.px(16);
     const gap = canvas.chrome.px(8);

@@ -10,8 +10,8 @@ started_at_ms: i64,
 workspace_path: []u8,
 shell: []u8,
 
-pub fn deinit(value: *SessionStarted, gpa: std.mem.Allocator) void {
-    gpa.free(value.workspace_path);
-    gpa.free(value.shell);
-    gpa.destroy(value);
+pub fn deinit(self: *SessionStarted, gpa: std.mem.Allocator) void {
+    gpa.free(self.workspace_path);
+    gpa.free(self.shell);
+    gpa.destroy(self);
 }

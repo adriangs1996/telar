@@ -12,21 +12,21 @@ entries: [16]ChildAgent = undefined,
 count: u8 = 0,
 
 /// Example: `children.setRoot(thread_id);`
-pub fn setRoot(children: *ChildAgents, id: []const u8) void {
-    @memcpy(children.root[0..id.len], id);
-    children.root_len = @intCast(id.len);
+pub fn setRoot(self: *ChildAgents, id: []const u8) void {
+    @memcpy(self.root[0..id.len], id);
+    self.root_len = @intCast(id.len);
 }
 
 /// Registers explicit parent-side collaboration items after their dispatch row exists.
 /// Example: `children.item(&transcript, item);`
-pub fn item(children: *ChildAgents, transcript: *Transcript, value: std.json.Value) void {
+pub fn item(self: *ChildAgents, transcript: *Transcript, value: std.json.Value) void {
     const kind = protocol.field(value, "type");
     if (protocol.is(kind, "subAgentActivity")) {
         const path = protocol.string(protocol.field(value, "agentPath"));
         if (std.mem.eql(u8, path, "/root") or std.mem.eql(u8, path, "/")) {
             return;
         }
-        const child = children.register(transcript, protocol.string(protocol.field(value, "agentThreadId"))) orelse return;
+        const child = self.register(transcript, protocol.string(protocol.field(value, "agentThreadId"))) orelse return;
         setMetadata(child, .{ .name = if (child.name_len == 0) std.fs.path.basename(path) else "", .detail = if (child.detail_len == 0) path else "" });
         const activity = protocol.field(value, "kind");
         if (protocol.is(activity, "started") and child.status == .pending) {
@@ -46,7 +46,7 @@ pub fn item(children: *ChildAgents, transcript: *Transcript, value: std.json.Val
         const receivers = protocol.field(value, "receiverThreadIds");
         if (receivers == .array) {
             for (receivers.array.items) |receiver| {
-                const child = children.register(transcript, protocol.string(receiver)) orelse continue;
+                const child = self.register(transcript, protocol.string(receiver)) orelse continue;
                 if (child.parent_identity == 0) {
                     child.parent_identity = parent;
                 }
@@ -61,7 +61,7 @@ pub fn item(children: *ChildAgents, transcript: *Transcript, value: std.json.Val
         if (states == .object) {
             var iterator = states.object.iterator();
             while (iterator.next()) |entry| {
-                const child = children.register(transcript, entry.key_ptr.*) orelse continue;
+                const child = self.register(transcript, entry.key_ptr.*) orelse continue;
                 if (child.parent_identity == 0) {
                     child.parent_identity = parent;
                 }
@@ -80,22 +80,22 @@ pub fn item(children: *ChildAgents, transcript: *Transcript, value: std.json.Val
 
 /// Intercepts only registered child threads or explicit thread_spawn provenance.
 /// Example: `if (children.observe(&transcript, event)) return;`
-pub fn observe(children: *ChildAgents, transcript: *Transcript, event: ChildEvent) bool {
+pub fn observe(self: *ChildAgents, transcript: *Transcript, event: ChildEvent) bool {
     if (std.mem.eql(u8, event.method, "thread/started")) {
         const thread = protocol.field(event.params, "thread");
         const source = protocol.field(protocol.field(protocol.field(thread, "source"), "subAgent"), "thread_spawn");
         const parent = protocol.string(protocol.field(source, "parent_thread_id"));
-        if (children.root_len == 0 or source != .object or parent.len == 0) {
+        if (self.root_len == 0 or source != .object or parent.len == 0) {
             return false;
         }
-        if (!std.mem.eql(u8, parent, children.root[0..children.root_len]) and children.find(parent) == null) {
+        if (!std.mem.eql(u8, parent, self.root[0..self.root_len]) and self.find(parent) == null) {
             return false;
         }
         const path = protocol.string(protocol.field(source, "agent_path"));
         if (std.mem.eql(u8, path, "/root") or std.mem.eql(u8, path, "/")) {
             return true;
         }
-        const child = children.register(transcript, protocol.string(protocol.field(thread, "id"))) orelse return false;
+        const child = self.register(transcript, protocol.string(protocol.field(thread, "id"))) orelse return false;
         const nickname = protocol.string(protocol.field(source, "agent_nickname"));
         var buffer: [1024]u8 = undefined;
         const details = std.fmt.bufPrint(&buffer, "{s}\n{s}", .{ path, protocol.string(protocol.field(source, "agent_role")) }) catch path;
@@ -104,7 +104,7 @@ pub fn observe(children: *ChildAgents, transcript: *Transcript, event: ChildEven
         return true;
     }
 
-    const child = children.find(protocol.string(protocol.field(event.params, "threadId"))) orelse return false;
+    const child = self.find(protocol.string(protocol.field(event.params, "threadId"))) orelse return false;
     const turn_id = protocol.string(protocol.field(event.params, "turnId"));
     if (turn_id.len != 0 and child.turn_len != 0 and !std.mem.eql(u8, turn_id, child.turn[0..child.turn_len])) {
         return true;
@@ -182,21 +182,21 @@ pub fn observe(children: *ChildAgents, transcript: *Transcript, event: ChildEven
     return true;
 }
 
-fn register(children: *ChildAgents, transcript: *Transcript, id: []const u8) ?*ChildAgent {
-    if (id.len == 0 or id.len > 128 or std.mem.indexOfScalar(u8, id, 0) != null or !std.unicode.utf8ValidateSlice(id) or std.mem.eql(u8, id, children.root[0..children.root_len])) {
+fn register(self: *ChildAgents, transcript: *Transcript, id: []const u8) ?*ChildAgent {
+    if (id.len == 0 or id.len > 128 or std.mem.indexOfScalar(u8, id, 0) != null or !std.unicode.utf8ValidateSlice(id) or std.mem.eql(u8, id, self.root[0..self.root_len])) {
         return null;
     }
-    if (children.find(id)) |child| {
+    if (self.find(id)) |child| {
         return child;
     }
     const child = slot: {
-        if (children.count < children.entries.len) {
-            const entry = &children.entries[children.count];
-            children.count += 1;
+        if (self.count < self.entries.len) {
+            const entry = &self.entries[self.count];
+            self.count += 1;
             break :slot entry;
         }
 
-        for (children.entries[0..children.count]) |*entry| {
+        for (self.entries[0..self.count]) |*entry| {
             if (entry.status == .closed) {
                 break :slot entry;
             }
@@ -211,8 +211,8 @@ fn register(children: *ChildAgents, transcript: *Transcript, id: []const u8) ?*C
     return child;
 }
 
-fn find(children: *ChildAgents, id: []const u8) ?*ChildAgent {
-    for (children.entries[0..children.count]) |*child| {
+fn find(self: *ChildAgents, id: []const u8) ?*ChildAgent {
+    for (self.entries[0..self.count]) |*child| {
         if (std.mem.eql(u8, id, child.id[0..child.id_len])) {
             return child;
         }

@@ -9,28 +9,28 @@ bounds: Rect,
 
 /// Measures only metadata lines not already present in the tool result.
 /// Example: `const height = try details.measure(canvas);`
-pub fn measure(details: Details, canvas: *Canvas) !f32 {
-    return details.layout(canvas, false);
+pub fn measure(self: Details, canvas: *Canvas) !f32 {
+    return self.layout(canvas, false);
 }
 
 /// Draws additional working directory and other metadata before the output.
 /// Example: `try details.draw(canvas);`
-pub fn draw(details: Details, canvas: *Canvas) !void {
-    _ = try details.layout(canvas, true);
+pub fn draw(self: Details, canvas: *Canvas) !void {
+    _ = try self.layout(canvas, true);
 }
 
-fn layout(details: Details, canvas: *Canvas, paint: bool) !f32 {
-    const item = details.view.item;
-    const snapshot = details.view.thread.transcript.?;
+fn layout(self: Details, canvas: *Canvas, paint: bool) !f32 {
+    const item = self.view.item;
+    const snapshot = self.view.thread.transcript.?;
     var lines = std.mem.tokenizeAny(u8, item.detail(snapshot), "\r\n");
     var height: f32 = 0;
     while (lines.next()) |line| {
-        if (represented(line, details.view.text(), item.kind == .command)) {
+        if (represented(line, self.view.text(), item.kind == .command)) {
             continue;
         }
 
-        var text: @import("MessageText.zig") = .{ .bounds = details.bounds, .viewport = details.view.viewport, .text = line, .markdown = false, .muted = true };
-        text.owner = details.view.source(.metadata);
+        var text: @import("MessageText.zig") = .{ .bounds = self.bounds, .viewport = self.view.viewport, .text = line, .markdown = false, .muted = true };
+        text.owner = self.view.source(.metadata);
         text.owner.?.source_offset += @intCast(@intFromPtr(line.ptr) - @intFromPtr(item.detail(snapshot).ptr));
         text.bounds.y += height;
         const measured = try text.measure(canvas);

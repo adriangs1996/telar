@@ -28,15 +28,15 @@ pub fn init() !Configuration {
 /// ```zig
 /// try configuration.add(io, transformer);
 /// ```
-pub fn add(configuration: *Configuration, io: std.Io, transformer: Transformer) !void {
-    configuration.mutex.lockUncancelable(io);
-    defer configuration.mutex.unlock(io);
-    if (configuration.serving) {
+pub fn add(self: *Configuration, io: std.Io, transformer: Transformer) !void {
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
+    if (self.serving) {
         return error.ProxyAlreadyRunning;
     }
 
-    try configuration.transforms.add(transformer);
-    configuration.has_custom_transformers = true;
+    try self.transforms.add(transformer);
+    self.has_custom_transformers = true;
 }
 
 /// Atomically freezes configuration for the lifetime of the serving loop.
@@ -45,14 +45,14 @@ pub fn add(configuration: *Configuration, io: std.Io, transformer: Transformer) 
 /// ```zig
 /// try configuration.beginServing(io);
 /// ```
-pub fn beginServing(configuration: *Configuration, io: std.Io) !void {
-    configuration.mutex.lockUncancelable(io);
-    defer configuration.mutex.unlock(io);
-    if (configuration.serving) {
+pub fn beginServing(self: *Configuration, io: std.Io) !void {
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
+    if (self.serving) {
         return error.ProxyAlreadyRunning;
     }
 
-    configuration.serving = true;
+    self.serving = true;
 }
 
 /// Borrows the immutable transform pipeline after service construction.
@@ -61,9 +61,9 @@ pub fn beginServing(configuration: *Configuration, io: std.Io) !void {
 /// ```zig
 /// const view = configuration.view();
 /// ```
-pub fn view(configuration: *const Configuration) View {
+pub fn view(self: *const Configuration) View {
     return .{
-        .transforms = &configuration.transforms,
-        .has_custom_transformers = configuration.has_custom_transformers,
+        .transforms = &self.transforms,
+        .has_custom_transformers = self.has_custom_transformers,
     };
 }

@@ -8,11 +8,11 @@ relative_to: ?id.TabId = null,
 
 /// Resolves the final position after removing the source from its old slot.
 /// Example: `const position = destination.positionRelativeTo(source_index, anchor_index);`
-pub fn positionRelativeTo(target: TabMoveTarget, source: usize, anchor: usize) usize {
+pub fn positionRelativeTo(self: TabMoveTarget, source: usize, anchor: usize) usize {
     if (source == anchor) {
         return source;
     }
 
-    const insertion = anchor + @as(usize, if (target.direction == .next) 1 else 0);
+    const insertion = anchor + @as(usize, if (self.direction == .next) 1 else 0);
     return insertion - @as(usize, if (source < insertion) 1 else 0);
 }

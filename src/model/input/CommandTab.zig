@@ -54,13 +54,13 @@ pub fn init(arguments: []const []const u8, tab_label: []const u8) !CommandTab {
     return command;
 }
 
-pub fn argument(command: *const CommandTab, index: usize) []const u8 {
+pub fn argument(self: *const CommandTab, index: usize) []const u8 {
     var offset: usize = 0;
     for (0..index) |prior| {
-        offset += command.argument_lens[prior];
+        offset += self.argument_lens[prior];
     }
 
-    return command.argument_storage[offset .. offset + command.argument_lens[index]];
+    return self.argument_storage[offset .. offset + self.argument_lens[index]];
 }
 
 /// The configured label, or the command basename.
@@ -68,10 +68,10 @@ pub fn argument(command: *const CommandTab, index: usize) []const u8 {
 /// ```zig
 /// const label = command.label();
 /// ```
-pub fn label(command: *const CommandTab) []const u8 {
-    if (command.label_len != 0) {
-        return command.label_storage[0..command.label_len];
+pub fn label(self: *const CommandTab) []const u8 {
+    if (self.label_len != 0) {
+        return self.label_storage[0..self.label_len];
     }
 
-    return std.fs.path.basename(command.argument(0));
+    return std.fs.path.basename(self.argument(0));
 }

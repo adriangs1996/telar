@@ -15,9 +15,9 @@ count: usize = 0,
 /// ```zig
 /// try tracker.add(request_id, continuation);
 /// ```
-pub fn add(tracker: *Tracker, request_id: core.RequestId, continuation: requests.Continuation) !void {
+pub fn add(self: *Tracker, request_id: core.RequestId, continuation: requests.Continuation) !void {
     std.debug.assert(request_id != .none);
-    for (&tracker.entries) |*slot| {
+    for (&self.entries) |*slot| {
         if (slot.*) |entry| {
             if (entry.request_id == request_id) {
                 return error.DuplicateRequest;
@@ -30,7 +30,7 @@ pub fn add(tracker: *Tracker, request_id: core.RequestId, continuation: requests
             .request_id = request_id,
             .continuation = continuation,
         };
-        tracker.count += 1;
+        self.count += 1;
 
         return;
     }
@@ -45,8 +45,8 @@ pub fn add(tracker: *Tracker, request_id: core.RequestId, continuation: requests
 ///     return error.TooManyPendingRequests;
 /// }
 /// ```
-pub fn hasCapacity(tracker: *const Tracker) bool {
-    return tracker.count < capacity;
+pub fn hasCapacity(self: *const Tracker) bool {
+    return self.count < capacity;
 }
 
 /// Reports whether no request can still receive a response.
@@ -56,8 +56,8 @@ pub fn hasCapacity(tracker: *const Tracker) bool {
 ///     return;
 /// }
 /// ```
-pub fn isEmpty(tracker: *const Tracker) bool {
-    return tracker.count == 0;
+pub fn isEmpty(self: *const Tracker) bool {
+    return self.count == 0;
 }
 
 /// Reports whether any retained continuation belongs to `group`.
@@ -67,8 +67,8 @@ pub fn isEmpty(tracker: *const Tracker) bool {
 ///     return;
 /// }
 /// ```
-pub fn has(tracker: *const Tracker, group: requests.Group) bool {
-    for (tracker.entries) |slot| {
+pub fn has(self: *const Tracker, group: requests.Group) bool {
+    for (self.entries) |slot| {
         const entry = slot orelse continue;
         if (entry.continuation.group() == group) {
             return true;
@@ -85,8 +85,8 @@ pub fn has(tracker: *const Tracker, group: requests.Group) bool {
 ///     return;
 /// }
 /// ```
-pub fn hasPane(tracker: *const Tracker, group: requests.Group, pane_id: core.PaneId) bool {
-    for (tracker.entries) |slot| {
+pub fn hasPane(self: *const Tracker, group: requests.Group, pane_id: core.PaneId) bool {
+    for (self.entries) |slot| {
         const entry = slot orelse continue;
         if (entry.continuation.group() == group and entry.continuation.paneId() == pane_id) {
             return true;
@@ -101,15 +101,15 @@ pub fn hasPane(tracker: *const Tracker, group: requests.Group, pane_id: core.Pan
 /// ```zig
 /// const continuation = tracker.take(request_id) orelse return error.UnexpectedRequest;
 /// ```
-pub fn take(tracker: *Tracker, request_id: core.RequestId) ?requests.Continuation {
-    for (&tracker.entries) |*slot| {
+pub fn take(self: *Tracker, request_id: core.RequestId) ?requests.Continuation {
+    for (&self.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (entry.request_id != request_id) {
             continue;
         }
 
         slot.* = null;
-        tracker.count -= 1;
+        self.count -= 1;
 
         return entry.continuation;
     }
@@ -125,8 +125,8 @@ pub fn take(tracker: *Tracker, request_id: core.RequestId) ?requests.Continuatio
 /// ```zig
 /// tracker.ignoreTab(tab_id);
 /// ```
-pub fn ignoreTab(tracker: *Tracker, tab_id: core.TabId) void {
-    for (&tracker.entries) |*slot| {
+pub fn ignoreTab(self: *Tracker, tab_id: core.TabId) void {
+    for (&self.entries) |*slot| {
         const entry = if (slot.*) |*value| value else continue;
         if (entry.continuation.tabId() != tab_id) {
             continue;
@@ -145,8 +145,8 @@ pub fn ignoreTab(tracker: *Tracker, tab_id: core.TabId) void {
 /// ```zig
 /// tracker.ignorePane(pane_id);
 /// ```
-pub fn ignorePane(tracker: *Tracker, pane_id: core.PaneId) void {
-    for (&tracker.entries) |*slot| {
+pub fn ignorePane(self: *Tracker, pane_id: core.PaneId) void {
+    for (&self.entries) |*slot| {
         const entry = if (slot.*) |*value| value else continue;
         if (entry.continuation.paneId() == pane_id) {
             if (entry.continuation != .split) {
@@ -162,8 +162,8 @@ pub fn ignorePane(tracker: *Tracker, pane_id: core.PaneId) void {
 /// ```zig
 /// _ = tracker.ignoreAttachment(pane_id);
 /// ```
-pub fn ignoreAttachment(tracker: *Tracker, pane_id: core.PaneId) bool {
-    for (&tracker.entries) |*slot| {
+pub fn ignoreAttachment(self: *Tracker, pane_id: core.PaneId) bool {
+    for (&self.entries) |*slot| {
         const entry = if (slot.*) |*value| value else continue;
         switch (entry.continuation) {
             .attach_pane => |attachment| {
@@ -186,13 +186,13 @@ pub fn ignoreAttachment(tracker: *Tracker, pane_id: core.PaneId) bool {
 /// ```zig
 /// _ = tracker.completePaneClose(pane_id);
 /// ```
-pub fn completePaneClose(tracker: *Tracker, pane_id: core.PaneId) bool {
-    for (&tracker.entries) |*slot| {
+pub fn completePaneClose(self: *Tracker, pane_id: core.PaneId) bool {
+    for (&self.entries) |*slot| {
         const entry = slot.* orelse continue;
         switch (entry.continuation) {
             .close_pane => |operation| if (operation.pane_id == pane_id) {
                 slot.* = null;
-                tracker.count -= 1;
+                self.count -= 1;
                 return true;
             },
             else => {},

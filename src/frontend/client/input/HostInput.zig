@@ -33,16 +33,16 @@ pub fn init(file: std.Io.File, config: client.RouterConfig) !HostInput {
 /// ```zig
 /// state.replaceRouter(io, replacement);
 /// ```
-pub fn replaceRouter(state: *HostInput, io: std.Io, replacement: host_inputs.Router) void {
-    const prefix_was_pending = state.router.prefixPending();
+pub fn replaceRouter(self: *HostInput, io: std.Io, replacement: host_inputs.Router) void {
+    const prefix_was_pending = self.router.prefixPending();
     var inherited = replacement;
-    inherited.inheritPhysicalLeases(&state.router);
-    state.router = inherited;
-    if (prefix_was_pending != state.router.prefixPending()) {
-        state.presentation_revision +%= 1;
+    inherited.inheritPhysicalLeases(&self.router);
+    self.router = inherited;
+    if (prefix_was_pending != self.router.prefixPending()) {
+        self.presentation_revision +%= 1;
     }
-    _ = state.input_timeout.update(io, null);
-    _ = state.binding_timeout.update(io, null);
+    _ = self.input_timeout.update(io, null);
+    _ = self.binding_timeout.update(io, null);
 }
 
 /// Returns the revision of visible host-input routing state.
@@ -50,8 +50,8 @@ pub fn replaceRouter(state: *HostInput, io: std.Io, replacement: host_inputs.Rou
 /// ```zig
 /// const revision = state.presentationVersion();
 /// ```
-pub fn presentationVersion(state: *const HostInput) u64 {
-    return state.presentation_revision;
+pub fn presentationVersion(self: *const HostInput) u64 {
+    return self.presentation_revision;
 }
 
 /// Projects prefix help from the effective router without exposing its
@@ -60,8 +60,8 @@ pub fn presentationVersion(state: *const HostInput) u64 {
 /// ```zig
 /// const mode = state.statusMode(copy_mode_active);
 /// ```
-pub fn statusMode(state: *const HostInput, copy_mode_active: bool) client.Mode {
-    if (!state.router.prefixPending()) {
+pub fn statusMode(self: *const HostInput, copy_mode_active: bool) client.Mode {
+    if (!self.router.prefixPending()) {
         return if (copy_mode_active) .copy else .normal;
     }
 
@@ -81,7 +81,7 @@ pub fn statusMode(state: *const HostInput, copy_mode_active: bool) client.Mode {
     };
     var hints: client.Hints = .{};
     for (useful) |described| {
-        const key = state.router.prefixedKeyForAction(described.action) orelse continue;
+        const key = self.router.prefixedKeyForAction(described.action) orelse continue;
 
         hints.append(.{ .key = key, .label = described.label });
     }

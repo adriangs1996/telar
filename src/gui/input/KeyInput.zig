@@ -12,6 +12,6 @@ generation: u64 = 0,
 
 /// Converts only after GUI shortcuts have been handled. Super has no terminal
 /// encoding in the shared key protocol. Example: `router.route(key.terminalKey());`
-pub fn terminalKey(key: Input) data.Key {
-    return .{ .code = key.code, .mods = .{ .shift = key.mods.shift, .alt = key.mods.alt, .ctrl = key.mods.ctrl }, .phase = key.phase, .physical = key.physical, .kitty = key.kitty };
+pub fn terminalKey(self: Input) data.Key {
+    return .{ .code = self.code, .mods = .{ .shift = self.mods.shift, .alt = self.mods.alt, .ctrl = self.mods.ctrl }, .phase = self.phase, .physical = self.physical, .kitty = self.kitty };
 }

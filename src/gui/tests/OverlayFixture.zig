@@ -25,51 +25,51 @@ pub fn init() !*Fixture {
     return fixture;
 }
 
-pub fn deinit(fixture: *Fixture) void {
-    fixture.renderer.deinit();
-    fixture.model.deinit();
-    std.testing.allocator.destroy(fixture);
+pub fn deinit(self: *Fixture) void {
+    self.renderer.deinit();
+    self.model.deinit();
+    std.testing.allocator.destroy(self);
 }
 
-pub fn projection(fixture: *Fixture) client.Projection {
-    var view = client.capture(&fixture.model, .{ .geometry = .{ .area = .{ .w = fixture.size.cols, .h = fixture.size.rows }, .revision = 1 } });
-    view.host_size = fixture.size;
+pub fn projection(self: *Fixture) client.Projection {
+    var view = client.capture(&self.model, .{ .geometry = .{ .area = .{ .w = self.size.cols, .h = self.size.rows }, .revision = 1 } });
+    view.host_size = self.size;
     return view;
 }
 
-pub fn canvas(fixture: *Fixture) Canvas {
-    return .{ .atlas = &fixture.renderer.atlas.?, .quads = &fixture.renderer.quads, .metrics = fixture.renderer.metrics, .origin = fixture.renderer.origin, .theme = data.theme_support.default_theme, .chrome = fixture.renderer.chrome, .viewport = fixture.renderer.viewport };
+pub fn canvas(self: *Fixture) Canvas {
+    return .{ .atlas = &self.renderer.atlas.?, .quads = &self.renderer.quads, .metrics = self.renderer.metrics, .origin = self.renderer.origin, .theme = data.theme_support.default_theme, .chrome = self.renderer.chrome, .viewport = self.renderer.viewport };
 }
 
-pub fn paint(fixture: *Fixture) !void {
-    try fixture.prepare();
-    fixture.present(true);
+pub fn paint(self: *Fixture) !void {
+    try self.prepare();
+    self.present(true);
 }
 
-pub fn prepare(fixture: *Fixture) !void {
-    fixture.renderer.quads.clear();
-    var target = fixture.canvas();
-    target.widgets = &fixture.widgets;
-    target.animation = if (fixture.animation) |*clock| clock else null;
-    fixture.widgets.begin(fixture.model.name_prompt.active());
-    const projection_value = fixture.projection();
-    fixture.widgets.prompt_generation = if (projection_value.prompt) |prompt| prompt.generation else 0;
+pub fn prepare(self: *Fixture) !void {
+    self.renderer.quads.clear();
+    var target = self.canvas();
+    target.widgets = &self.widgets;
+    target.animation = if (self.animation) |*clock| clock else null;
+    self.widgets.begin(self.model.name_prompt.active());
+    const projection_value = self.projection();
+    self.widgets.prompt_generation = if (projection_value.prompt) |prompt| prompt.generation else 0;
     var widgets: frame_widget.List = .{};
-    try fixture.overlays.compose(.{ .canvas = &target, .projection = &projection_value }, &widgets);
+    try self.overlays.compose(.{ .canvas = &target, .projection = &projection_value }, &widgets);
     try widgets.draw(&target);
-    fixture.overlays.seal();
-    try fixture.widgets.overlays(&target, &fixture.overlays);
-    fixture.widgets.seal();
+    self.overlays.seal();
+    try self.widgets.overlays(&target, &self.overlays);
+    self.widgets.seal();
 }
 
 /// Example: `fixture.present(false);`
-pub fn present(fixture: *Fixture, delivered: bool) void {
-    fixture.overlays.present(delivered);
-    fixture.widgets.present(delivered);
+pub fn present(self: *Fixture, delivered: bool) void {
+    self.overlays.present(delivered);
+    self.widgets.present(delivered);
 }
 
 /// Example: `const result = fixture.pointer(.{ .kind = .press, .x = 10, .y = 20 });`
-pub fn pointer(fixture: *Fixture, event: @import("../input/PointerEvent.zig")) client.ViewInteractionCommand {
-    const routed = fixture.widgets.dispatcher.route(.{ .pointer = event });
+pub fn pointer(self: *Fixture, event: @import("../input/PointerEvent.zig")) client.ViewInteractionCommand {
+    const routed = self.widgets.dispatcher.route(.{ .pointer = event });
     return .{ .consumed = routed.consumed, .intent = if (routed.target) |target| if (target.action == .intent) target.action.intent else .none else .none };
 }

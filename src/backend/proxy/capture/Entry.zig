@@ -8,6 +8,6 @@ request: ?*Half = null,
 response: ?*Half = null,
 expires_at_ms: i64,
 
-pub fn exchange(entry: Entry) Exchange {
-    return .{ .request = entry.request, .response = entry.response };
+pub fn exchange(self: Entry) Exchange {
+    return .{ .request = self.request, .response = self.response };
 }

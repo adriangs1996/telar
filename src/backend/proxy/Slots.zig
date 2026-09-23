@@ -25,11 +25,11 @@ pub fn init(limit: u32) Slots {
 ///     closeRejectedConnection();
 /// }
 /// ```
-pub fn acquire(slots: *Slots) bool {
-    var current = slots.active.load(.monotonic);
+pub fn acquire(self: *Slots) bool {
+    var current = self.active.load(.monotonic);
 
-    while (current < slots.limit) {
-        if (slots.active.cmpxchgWeak(current, current + 1, .acq_rel, .monotonic)) |observed| {
+    while (current < self.limit) {
+        if (self.active.cmpxchgWeak(current, current + 1, .acq_rel, .monotonic)) |observed| {
             current = observed;
             continue;
         }
@@ -37,7 +37,7 @@ pub fn acquire(slots: *Slots) bool {
         return true;
     }
 
-    _ = slots.limit_drops.fetchAdd(1, .monotonic);
+    _ = self.limit_drops.fetchAdd(1, .monotonic);
     return false;
 }
 
@@ -46,8 +46,8 @@ pub fn acquire(slots: *Slots) bool {
 /// ```zig
 /// slots.release();
 /// ```
-pub fn release(slots: *Slots) void {
-    const previous = slots.active.fetchSub(1, .acq_rel);
+pub fn release(self: *Slots) void {
+    const previous = self.active.fetchSub(1, .acq_rel);
     std.debug.assert(previous != 0);
 }
 
@@ -56,9 +56,9 @@ pub fn release(slots: *Slots) void {
 /// ```zig
 /// const metrics = slots.snapshot();
 /// ```
-pub fn snapshot(slots: *const Slots) SlotSnapshot {
+pub fn snapshot(self: *const Slots) SlotSnapshot {
     return .{
-        .active = slots.active.load(.monotonic),
-        .limit_drops = slots.limit_drops.load(.monotonic),
+        .active = self.active.load(.monotonic),
+        .limit_drops = self.limit_drops.load(.monotonic),
     };
 }

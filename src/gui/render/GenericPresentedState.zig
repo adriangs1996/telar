@@ -13,40 +13,40 @@ pub fn Type(comptime Value: type) type {
 
         /// Replaces only unpublished state, preserving the last delivered frame.
         /// Example: `const pending = state.begin();`.
-        pub fn begin(state: *State) *Value {
-            state.sealed = false;
-            state.slots[state.current ^ 1] = .{};
-            return &state.slots[state.current ^ 1];
+        pub fn begin(self: *State) *Value {
+            self.sealed = false;
+            self.slots[self.current ^ 1] = .{};
+            return &self.slots[self.current ^ 1];
         }
 
-        pub fn seal(state: *State) void {
-            state.sealed = true;
+        pub fn seal(self: *State) void {
+            self.sealed = true;
         }
 
         /// Publishes with an index change; failed frames leave controls untouched.
         /// The host validates the matching frame token before calling this method.
         /// Example: `state.present(delivered);`.
-        pub fn present(state: *State, delivered: bool) void {
-            if (state.sealed and delivered) {
-                state.current ^= 1;
+        pub fn present(self: *State, delivered: bool) void {
+            if (self.sealed and delivered) {
+                self.current ^= 1;
             }
 
-            state.sealed = false;
+            self.sealed = false;
         }
 
-        pub fn prepared(state: *const State) *const Value {
-            return &state.slots[state.current ^ 1];
+        pub fn prepared(self: *const State) *const Value {
+            return &self.slots[self.current ^ 1];
         }
 
         /// Mutates only the unsealed replacement while its frame is prepared.
         /// Example: `try state.preparing().add(target);`
-        pub fn preparing(state: *State) *Value {
-            std.debug.assert(!state.sealed);
-            return &state.slots[state.current ^ 1];
+        pub fn preparing(self: *State) *Value {
+            std.debug.assert(!self.sealed);
+            return &self.slots[self.current ^ 1];
         }
 
-        pub fn presented(state: *const State) *const Value {
-            return &state.slots[state.current];
+        pub fn presented(self: *const State) *const Value {
+            return &self.slots[self.current];
         }
     };
 }

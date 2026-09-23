@@ -16,24 +16,24 @@ submitted: bool = false,
 ///     startGeneration(capture.raw());
 /// }
 /// ```
-pub fn feed(capture: *Capture, input: []const u8) bool {
-    if (capture.submitted) {
+pub fn feed(self: *Capture, input: []const u8) bool {
+    if (self.submitted) {
         return false;
     }
     for (input) |byte| {
-        if (capture.len < capture.bytes.len) {
-            capture.bytes[capture.len] = byte;
-            capture.len += 1;
+        if (self.len < self.bytes.len) {
+            self.bytes[self.len] = byte;
+            self.len += 1;
         } else {
-            capture.truncated = true;
+            self.truncated = true;
         }
-        const event = capture.scanner.feed(&.{byte});
+        const event = self.scanner.feed(&.{byte});
         if (event.cancelled) {
-            capture.clear();
+            self.clear();
             continue;
         }
         if (event.submitted) {
-            capture.submitted = true;
+            self.submitted = true;
             return true;
         }
     }
@@ -42,12 +42,12 @@ pub fn feed(capture: *Capture, input: []const u8) bool {
 
 /// Captures an already submitted composer message without terminal editing semantics.
 /// Example: `if (capture.submit("Fix tests\nKeep existing behavior")) queueTitle();`.
-pub fn submit(capture: *Capture, input: []const u8) bool {
-    if (capture.submitted or !std.unicode.utf8ValidateSlice(input)) {
+pub fn submit(self: *Capture, input: []const u8) bool {
+    if (self.submitted or !std.unicode.utf8ValidateSlice(input)) {
         return false;
     }
 
-    capture.clear();
+    self.clear();
     var index: usize = 0;
     while (index < input.len) {
         const byte = input[index];
@@ -57,41 +57,41 @@ pub fn submit(capture: *Capture, input: []const u8) bool {
         }
 
         const whitespace = byte == ' ' or byte == '\r' or byte == '\n' or byte == '\t';
-        if (whitespace and (capture.len == 0 or capture.bytes[capture.len - 1] == ' ')) {
+        if (whitespace and (self.len == 0 or self.bytes[self.len - 1] == ' ')) {
             index += 1;
             continue;
         }
 
         const count: usize = if (whitespace) 1 else std.unicode.utf8ByteSequenceLength(byte) catch unreachable;
-        if (count > capture.bytes.len - capture.len) {
-            capture.truncated = true;
+        if (count > self.bytes.len - self.len) {
+            self.truncated = true;
             break;
         }
 
         if (whitespace) {
-            capture.bytes[capture.len] = ' ';
+            self.bytes[self.len] = ' ';
         } else {
-            @memcpy(capture.bytes[capture.len..][0..count], input[index..][0..count]);
+            @memcpy(self.bytes[self.len..][0..count], input[index..][0..count]);
         }
-        capture.len += @intCast(count);
+        self.len += @intCast(count);
         index += count;
     }
 
-    if (capture.len != 0 and capture.bytes[capture.len - 1] == ' ') {
-        capture.bytes[capture.len - 1] = 0;
-        capture.len -= 1;
+    if (self.len != 0 and self.bytes[self.len - 1] == ' ') {
+        self.bytes[self.len - 1] = 0;
+        self.len -= 1;
     }
-    capture.submitted = true;
+    self.submitted = true;
     return true;
 }
 
-pub fn raw(capture: *const Capture) []const u8 {
-    return capture.bytes[0..capture.len];
+pub fn raw(self: *const Capture) []const u8 {
+    return self.bytes[0..self.len];
 }
 
-pub fn clear(capture: *Capture) void {
-    std.crypto.secureZero(u8, capture.bytes[0..capture.len]);
-    capture.* = .{};
+pub fn clear(self: *Capture) void {
+    std.crypto.secureZero(u8, self.bytes[0..self.len]);
+    self.* = .{};
 }
 
 test "submitted composer capture preserves multiline text without terminal edits" {

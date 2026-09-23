@@ -20,50 +20,50 @@ pub fn innerCenter(self: Rect, w: u16, h: u16) Rect {
 // `x + w` and `y + h` may exceed maxInt(u16), so every edge sum below is
 // computed in u32. Positions past maxInt(u16) are unaddressable; rects
 // whose derived origin would land there come back empty.
-pub fn contains(r: Rect, x: u16, y: u16) bool {
-    return x >= r.x and x < @as(u32, r.x) + r.w and
-        y >= r.y and y < @as(u32, r.y) + r.h;
+pub fn contains(self: Rect, x: u16, y: u16) bool {
+    return x >= self.x and x < @as(u32, self.x) + self.w and
+        y >= self.y and y < @as(u32, self.y) + self.h;
 }
 
 /// Shrinks by `margin` on every side, saturating rather than underflowing:
 /// a rectangle too small to shrink becomes empty, which draws as nothing.
-pub fn inner(r: Rect, margin: u16) Rect {
+pub fn inner(self: Rect, margin: u16) Rect {
     const shrink = @as(u32, margin) * 2;
-    if (r.w <= shrink or r.h <= shrink) {
-        return .{ .x = r.x, .y = r.y };
+    if (self.w <= shrink or self.h <= shrink) {
+        return .{ .x = self.x, .y = self.y };
     }
     return .{
-        .x = r.x +| margin,
-        .y = r.y +| margin,
-        .w = @intCast(r.w - shrink),
-        .h = @intCast(r.h - shrink),
+        .x = self.x +| margin,
+        .y = self.y +| margin,
+        .w = @intCast(self.w - shrink),
+        .h = @intCast(self.h - shrink),
     };
 }
 
 /// Splits off `cols` from the left. The remainder is the second half.
-pub fn splitLeft(r: Rect, cols: u16) [2]Rect {
-    const taken = @min(cols, r.w);
+pub fn splitLeft(self: Rect, cols: u16) [2]Rect {
+    const taken = @min(cols, self.w);
     return .{
-        .{ .x = r.x, .y = r.y, .w = taken, .h = r.h },
-        .{ .x = r.x +| taken, .y = r.y, .w = r.w - taken, .h = r.h },
+        .{ .x = self.x, .y = self.y, .w = taken, .h = self.h },
+        .{ .x = self.x +| taken, .y = self.y, .w = self.w - taken, .h = self.h },
     };
 }
 
 /// Splits off `rows` from the top.
-pub fn splitTop(r: Rect, rows: u16) [2]Rect {
-    const taken = @min(rows, r.h);
+pub fn splitTop(self: Rect, rows: u16) [2]Rect {
+    const taken = @min(rows, self.h);
     return .{
-        .{ .x = r.x, .y = r.y, .w = r.w, .h = taken },
-        .{ .x = r.x, .y = r.y +| taken, .w = r.w, .h = r.h - taken },
+        .{ .x = self.x, .y = self.y, .w = self.w, .h = taken },
+        .{ .x = self.x, .y = self.y +| taken, .w = self.w, .h = self.h - taken },
     };
 }
 
 /// Splits off `rows` from the bottom.
-pub fn splitBottom(r: Rect, rows: u16) [2]Rect {
-    const taken = @min(rows, r.h);
+pub fn splitBottom(self: Rect, rows: u16) [2]Rect {
+    const taken = @min(rows, self.h);
     return .{
-        .{ .x = r.x, .y = r.y, .w = r.w, .h = r.h - taken },
-        .{ .x = r.x, .y = r.y +| (r.h - taken), .w = r.w, .h = taken },
+        .{ .x = self.x, .y = self.y, .w = self.w, .h = self.h - taken },
+        .{ .x = self.x, .y = self.y +| (self.h - taken), .w = self.w, .h = taken },
     };
 }
 
@@ -72,11 +72,11 @@ pub fn splitBottom(r: Rect, rows: u16) [2]Rect {
 /// Nested clips intersect rather than replace: a widget that pushes a clip
 /// bigger than its parent's would otherwise draw straight out of the box
 /// it was handed, which is the escape hatch clipping exists to close.
-pub fn intersect(a: Rect, b: Rect) Rect {
-    const x = @max(a.x, b.x);
-    const y = @max(a.y, b.y);
-    const right = @min(@as(u32, a.x) + a.w, @as(u32, b.x) + b.w);
-    const bottom = @min(@as(u32, a.y) + a.h, @as(u32, b.y) + b.h);
+pub fn intersect(self: Rect, b: Rect) Rect {
+    const x = @max(self.x, b.x);
+    const y = @max(self.y, b.y);
+    const right = @min(@as(u32, self.x) + self.w, @as(u32, b.x) + b.w);
+    const bottom = @min(@as(u32, self.y) + self.h, @as(u32, b.y) + b.h);
     if (right <= x or bottom <= y) {
         return .{ .x = x, .y = y };
     }
@@ -90,13 +90,13 @@ pub fn intersect(a: Rect, b: Rect) Rect {
     };
 }
 
-pub fn isEmpty(r: Rect) bool {
-    return r.w == 0 or r.h == 0;
+pub fn isEmpty(self: Rect) bool {
+    return self.w == 0 or self.h == 0;
 }
 
-pub fn row(r: Rect, index: u16) Rect {
-    if (index >= r.h) {
-        return .{ .x = r.x, .y = r.y };
+pub fn row(self: Rect, index: u16) Rect {
+    if (index >= self.h) {
+        return .{ .x = self.x, .y = self.y };
     }
-    return .{ .x = r.x, .y = r.y +| index, .w = r.w, .h = 1 };
+    return .{ .x = self.x, .y = self.y +| index, .w = self.w, .h = 1 };
 }

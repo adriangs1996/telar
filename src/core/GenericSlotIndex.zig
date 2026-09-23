@@ -15,14 +15,14 @@ pub fn Type(comptime capacity: usize) type {
 
         /// Inserts an absent key; the owning store bounds occupancy below
         /// capacity. Example: `index.put(raw_id, slot);`
-        pub fn put(index: *Self, key: u64, slot: usize) void {
+        pub fn put(self: *Self, key: u64, slot: usize) void {
             std.debug.assert(key != empty_key);
             var probe = home(key);
             for (0..capacity) |_| {
-                const found = index.keys[probe];
+                const found = self.keys[probe];
                 if (found == empty_key) {
-                    index.keys[probe] = key;
-                    index.slots[probe] = @intCast(slot);
+                    self.keys[probe] = key;
+                    self.slots[probe] = @intCast(slot);
                     return;
                 }
 
@@ -34,12 +34,12 @@ pub fn Type(comptime capacity: usize) type {
         }
 
         /// Example: `const slot = index.get(raw_id) orelse return null;`
-        pub fn get(index: *const Self, key: u64) ?usize {
+        pub fn get(self: *const Self, key: u64) ?usize {
             var probe = home(key);
             for (0..capacity) |_| {
-                const found = index.keys[probe];
+                const found = self.keys[probe];
                 if (found == key) {
-                    return index.slots[probe];
+                    return self.slots[probe];
                 }
 
                 if (found == empty_key) {
@@ -55,35 +55,35 @@ pub fn Type(comptime capacity: usize) type {
         /// Removes a key and shifts later members of its cluster back into
         /// the hole, so no lookup ever has to skip a deleted entry.
         /// Example: `index.remove(raw_id);`
-        pub fn remove(index: *Self, key: u64) void {
-            var hole = index.find(key) orelse return;
+        pub fn remove(self: *Self, key: u64) void {
+            var hole = self.find(key) orelse return;
             var probe = next(hole);
             for (0..capacity) |_| {
-                const found = index.keys[probe];
+                const found = self.keys[probe];
                 if (found == empty_key) {
                     break;
                 }
 
                 if (!between(hole, home(found), probe)) {
-                    index.keys[hole] = found;
-                    index.slots[hole] = index.slots[probe];
+                    self.keys[hole] = found;
+                    self.slots[hole] = self.slots[probe];
                     hole = probe;
                 }
 
                 probe = next(probe);
             }
 
-            index.keys[hole] = empty_key;
+            self.keys[hole] = empty_key;
         }
 
-        pub fn reset(index: *Self) void {
-            index.keys = @splat(empty_key);
+        pub fn reset(self: *Self) void {
+            self.keys = @splat(empty_key);
         }
 
-        fn find(index: *const Self, key: u64) ?usize {
+        fn find(self: *const Self, key: u64) ?usize {
             var probe = home(key);
             for (0..capacity) |_| {
-                const found = index.keys[probe];
+                const found = self.keys[probe];
                 if (found == key) {
                     return probe;
                 }

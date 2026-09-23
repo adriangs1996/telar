@@ -6,10 +6,10 @@ const AgentStatusChanges = @This();
 items: [core.max_agent_snapshot_entries]AgentStatusChange = undefined,
 count: u8 = 0,
 
-pub fn append(changes: *AgentStatusChanges, change: AgentStatusChange) void {
-    std.debug.assert(changes.count < changes.items.len);
-    changes.items[changes.count] = change;
-    changes.count += 1;
+pub fn append(self: *AgentStatusChanges, change: AgentStatusChange) void {
+    std.debug.assert(self.count < self.items.len);
+    self.items[self.count] = change;
+    self.count += 1;
 }
 
 /// Borrows status transitions detected during one atomic reconciliation.
@@ -17,6 +17,6 @@ pub fn append(changes: *AgentStatusChanges, change: AgentStatusChange) void {
 /// ```zig
 /// for (commit.status_changes.slice()) |change| alert(change);
 /// ```
-pub fn slice(changes: *const AgentStatusChanges) []const AgentStatusChange {
-    return changes.items[0..changes.count];
+pub fn slice(self: *const AgentStatusChanges) []const AgentStatusChange {
+    return self.items[0..self.count];
 }

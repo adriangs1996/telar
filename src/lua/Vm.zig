@@ -35,35 +35,35 @@ pub fn init(io: std.Io, limits: Limits) !*Vm {
     return owned;
 }
 
-pub fn deinit(vm: *Vm) void {
-    lua_api.c.lua_close(vm.state);
-    std.debug.assert(vm.meter.used == 0);
-    std.heap.c_allocator.destroy(vm);
+pub fn deinit(self: *Vm) void {
+    lua_api.c.lua_close(self.state);
+    std.debug.assert(self.meter.used == 0);
+    std.heap.c_allocator.destroy(self);
 }
 
-pub fn resetBudget(vm: *Vm, instructions: u64, deadline_after_ns: u64) void {
-    vm.instruction_count = 0;
-    vm.instruction_limit = instructions;
-    vm.deadline_ns = vm_support.monotonic(vm.io) +| deadline_after_ns;
+pub fn resetBudget(self: *Vm, instructions: u64, deadline_after_ns: u64) void {
+    self.instruction_count = 0;
+    self.instruction_limit = instructions;
+    self.deadline_ns = vm_support.monotonic(self.io) +| deadline_after_ns;
 }
 
-pub fn evaluate(vm: *Vm, source: []const u8, name: [*:0]const u8) !void {
-    return vm.execute(.{ .source = source, .name = name, .results = 1 });
+pub fn evaluate(self: *Vm, source: []const u8, name: [*:0]const u8) !void {
+    return self.execute(.{ .source = source, .name = name, .results = 1 });
 }
 
-pub fn execute(vm: *Vm, execution: Execution) !void {
-    if (lua_api.c.luaL_loadbufferx(vm.state, execution.source.ptr, execution.source.len, execution.name, "t") != lua_api.c.LUA_OK) {
+pub fn execute(self: *Vm, execution: Execution) !void {
+    if (lua_api.c.luaL_loadbufferx(self.state, execution.source.ptr, execution.source.len, execution.name, "t") != lua_api.c.LUA_OK) {
         return error.LuaLoadFailed;
     }
 
-    if (lua_api.c.lua_pcallk(vm.state, 0, execution.results, 0, 0, null) != lua_api.c.LUA_OK) {
+    if (lua_api.c.lua_pcallk(self.state, 0, execution.results, 0, 0, null) != lua_api.c.LUA_OK) {
         return error.LuaRuntimeFailed;
     }
 }
 
-pub fn errorMessage(vm: *Vm) []const u8 {
+pub fn errorMessage(self: *Vm) []const u8 {
     var len: usize = 0;
-    const message = lua_api.c.lua_tolstring(vm.state, -1, &len) orelse return "unknown Lua error";
+    const message = lua_api.c.lua_tolstring(self.state, -1, &len) orelse return "unknown Lua error";
     return message[0..len];
 }
 

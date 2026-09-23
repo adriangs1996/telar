@@ -4,12 +4,12 @@ const TestAlive = @This();
 
 keys: []const core.ImageKey,
 
-pub fn holds(alive: TestAlive, key: core.ImageKey) bool {
-    for (alive.keys) |candidate| if (std.meta.eql(candidate, key)) return true;
+pub fn holds(self: TestAlive, key: core.ImageKey) bool {
+    for (self.keys) |candidate| if (std.meta.eql(candidate, key)) return true;
     return false;
 }
 
-pub fn holdsImage(alive: TestAlive, image_id: u32) bool {
-    for (alive.keys) |candidate| if (candidate.image_id == image_id) return true;
+pub fn holdsImage(self: TestAlive, image_id: u32) bool {
+    for (self.keys) |candidate| if (candidate.image_id == image_id) return true;
     return false;
 }

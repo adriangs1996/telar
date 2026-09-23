@@ -48,23 +48,23 @@ pub fn init(gpa: std.mem.Allocator) !Delivery {
     return .{ .send_buffer = try gpa.alloc(u8, core.max_frame_size) };
 }
 
-pub fn deinit(delivery: *Delivery, gpa: std.mem.Allocator) void {
-    delivery.responses.clear();
-    gpa.free(delivery.send_buffer);
+pub fn deinit(self: *Delivery, gpa: std.mem.Allocator) void {
+    self.responses.clear();
+    gpa.free(self.send_buffer);
 }
 
-pub fn close(delivery: *Delivery) void {
-    delivery.phase = .closed;
-    delivery.responses.clear();
+pub fn close(self: *Delivery) void {
+    self.phase = .closed;
+    self.responses.clear();
 }
 
-pub fn enqueue(delivery: *Delivery, response: response_queue.PendingResponse) !void {
-    try delivery.responses.push(response);
+pub fn enqueue(self: *Delivery, response: response_queue.PendingResponse) !void {
+    try self.responses.push(response);
 }
 
-pub fn requestWorkspaceResync(delivery: *Delivery, workspace: core.WorkspaceLocation, previous_workspace: ?core.WorkspaceId) void {
-    delivery.responses.resync_workspace = workspace;
-    delivery.responses.resync_previous_workspace = previous_workspace;
+pub fn requestWorkspaceResync(self: *Delivery, workspace: core.WorkspaceLocation, previous_workspace: ?core.WorkspaceId) void {
+    self.responses.resync_workspace = workspace;
+    self.responses.resync_previous_workspace = previous_workspace;
 }
 
 /// Forces a current thread snapshot after a generation-checked query.
@@ -72,8 +72,8 @@ pub fn requestWorkspaceResync(delivery: *Delivery, workspace: core.WorkspaceLoca
 /// ```zig
 /// delivery.requestAgentThread(pane.key());
 /// ```
-pub fn requestAgentThread(delivery: *Delivery, key: PaneKey) void {
-    delivery.requested_agent_thread = key;
+pub fn requestAgentThread(self: *Delivery, key: PaneKey) void {
+    self.requested_agent_thread = key;
 }
 
 /// Schedules one agent snapshot for a client that holds no runtime-state
@@ -83,8 +83,8 @@ pub fn requestAgentThread(delivery: *Delivery, key: PaneKey) void {
 /// ```zig
 /// delivery.requestAgentSnapshot();
 /// ```
-pub fn requestAgentSnapshot(delivery: *Delivery) void {
-    delivery.agent_snapshot_requested = true;
+pub fn requestAgentSnapshot(self: *Delivery) void {
+    self.agent_snapshot_requested = true;
 }
 
 /// Enables level-triggered runtime projections for this client. Repeated
@@ -93,32 +93,32 @@ pub fn requestAgentSnapshot(delivery: *Delivery) void {
 /// ```zig
 /// try delivery.requestRuntimeState(identity);
 /// ```
-pub fn requestRuntimeState(delivery: *Delivery, identity: core.ClientIdentity) !void {
+pub fn requestRuntimeState(self: *Delivery, identity: core.ClientIdentity) !void {
     if (identity == .invalid) {
         return error.InvalidClientIdentity;
     }
-    if (delivery.client_identity != .invalid and delivery.client_identity != identity) {
+    if (self.client_identity != .invalid and self.client_identity != identity) {
         return error.ClientIdentityChanged;
     }
 
-    delivery.client_identity = identity;
-    delivery.runtime_state_requested = true;
+    self.client_identity = identity;
+    self.runtime_state_requested = true;
 }
 
-pub fn requestStop(delivery: *Delivery) void {
-    delivery.stopping_pending = true;
+pub fn requestStop(self: *Delivery) void {
+    self.stopping_pending = true;
 }
 
-pub fn setCloseAfterReply(delivery: *Delivery, enabled: bool) void {
-    delivery.close_after_reply = enabled;
+pub fn setCloseAfterReply(self: *Delivery, enabled: bool) void {
+    self.close_after_reply = enabled;
 }
 
-pub fn shouldCloseAfterReply(delivery: *const Delivery) bool {
-    return delivery.close_after_reply and delivery.responses.len == 0;
+pub fn shouldCloseAfterReply(self: *const Delivery) bool {
+    return self.close_after_reply and self.responses.len == 0;
 }
 
-pub fn stopping(delivery: *const Delivery) bool {
-    return delivery.stopping_pending or switch (delivery.phase) {
+pub fn stopping(self: *const Delivery) bool {
+    return self.stopping_pending or switch (self.phase) {
         .prepared => |transaction| std.meta.activeTag(transaction.effect) == .stopping,
         .in_flight => |completion| completion.stopping_delivered,
         .ready, .closed => false,
@@ -133,15 +133,15 @@ pub fn stopping(delivery: *const Delivery) bool {
 ///     return error.ClipboardTooLarge;
 /// }
 /// ```
-pub fn setClipboard(delivery: *Delivery, pane_id: core.PaneId, bytes: []const u8) bool {
+pub fn setClipboard(self: *Delivery, pane_id: core.PaneId, bytes: []const u8) bool {
     if (bytes.len > core.max_clipboard_bytes) {
         return false;
     }
 
-    std.mem.copyForwards(u8, delivery.clipboard_storage[0..bytes.len], bytes);
-    delivery.clipboard_len = @intCast(bytes.len);
-    delivery.clipboard_pane = pane_id;
-    delivery.clipboard_pending = true;
+    std.mem.copyForwards(u8, self.clipboard_storage[0..bytes.len], bytes);
+    self.clipboard_len = @intCast(bytes.len);
+    self.clipboard_pane = pane_id;
+    self.clipboard_pending = true;
     return true;
 }
 
@@ -151,21 +151,21 @@ pub fn setClipboard(delivery: *Delivery, pane_id: core.PaneId, bytes: []const u8
 /// ```zig
 /// const prepared = try delivery.prepare(.{ .io = io, .attachments = attachments, .sources = sources, .metrics = metrics });
 /// ```
-pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
+pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
     const sources = preparation.sources;
 
-    std.debug.assert(delivery.phase == .ready);
-    const buffer = delivery.send_buffer;
+    std.debug.assert(self.phase == .ready);
+    const buffer = self.send_buffer;
     const workspaces = sources.workspaces;
 
-    if (delivery.stopping_pending) {
-        return delivery.stage(
+    if (self.stopping_pending) {
+        return self.stage(
             try core.encodeRuntimeStopping(buffer),
             .stopping,
         );
     }
 
-    if (delivery.responses.peekManagement()) |entry| {
+    if (self.responses.peekManagement()) |entry| {
         var history_result: ?*QueryResult = null;
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
@@ -181,7 +181,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
             .agent_history = &agent_history,
             .change_review = &change_review,
         }, entry.response);
-        return delivery.stage(payload, .{ .response = .{
+        return self.stage(payload, .{ .response = .{
             .offset = entry.offset,
             .history_result = history_result,
             .history_output = history_output,
@@ -191,41 +191,41 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         } });
     }
 
-    if (delivery.responses.resync_workspace) |workspace| {
-        return delivery.stage(
+    if (self.responses.resync_workspace) |workspace| {
+        return self.stage(
             try core.encodeResyncRequired(buffer, .{
                 .workspace = workspace,
                 .workspace_closed = !workspaces.containsWorkspace(workspace),
-                .previous_workspace = delivery.responses.resync_previous_workspace,
+                .previous_workspace = self.responses.resync_previous_workspace,
             }),
             .resync,
         );
     }
 
-    if (delivery.clipboard_pending) {
-        return delivery.stage(
+    if (self.clipboard_pending) {
+        return self.stage(
             try core.encodePaneClipboard(buffer, .{
-                .pane_id = delivery.clipboard_pane,
-                .bytes = delivery.clipboard_storage[0..delivery.clipboard_len],
+                .pane_id = self.clipboard_pane,
+                .bytes = self.clipboard_storage[0..self.clipboard_len],
             }),
             .clipboard,
         );
     }
 
-    if (delivery.runtime_state_requested and !delivery.client_layout_sent) {
+    if (self.runtime_state_requested and !self.client_layout_sent) {
         var storage: LayoutSnapshotStorage = .{};
         const snapshot: core.ClientLayoutSnapshot = if (sources.client_layouts) |layouts|
-            layouts.snapshot(delivery.client_identity, sources.panes, workspaces, &storage)
+            layouts.snapshot(self.client_identity, sources.panes, workspaces, &storage)
         else
             .{ .restored = false };
-        return delivery.stage(
+        return self.stage(
             try core.encodeClientLayoutSnapshot(buffer, snapshot),
             .client_layout,
         );
     }
 
-    if (delivery.runtime_state_requested and !delivery.proxy_status_sent) {
-        return delivery.stage(
+    if (self.runtime_state_requested and !self.proxy_status_sent) {
+        return self.stage(
             try core.encodeProxyStatus(buffer, .{
                 .active = sources.proxy_active,
                 .scope = sources.proxy_scope,
@@ -238,15 +238,15 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     // Cells win over every periodic or metadata lane. With one message in
     // flight per client, anything sent ahead of a dirty pane costs the
     // keystroke echo a whole round trip.
-    if (try delivery.prepareAttachment(preparation, .cells)) |prepared| {
+    if (try self.prepareAttachment(preparation, .cells)) |prepared| {
         return prepared;
     }
 
-    if (delivery.agent_snapshot_requested or (delivery.runtime_state_requested and
-        delivery.agent_revision_sent < sources.agent_revision))
+    if (self.agent_snapshot_requested or (self.runtime_state_requested and
+        self.agent_revision_sent < sources.agent_revision))
     {
         const revision = sources.agent_revision;
-        return delivery.stage(
+        return self.stage(
             try core.encodeAgentSnapshot(buffer, .{
                 .revision = revision,
                 .entries = sources.agent_entries,
@@ -255,25 +255,25 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         );
     }
 
-    if (delivery.runtime_state_requested or delivery.requested_agent_thread != null) {
+    if (self.runtime_state_requested or self.requested_agent_thread != null) {
         for (sources.panes.items, 0..) |entry, slot| {
             const pane = entry orelse continue;
             const snapshot = pane.agent_thread orelse continue;
             if (pane.close_requested or pane.exit != null) {
                 continue;
             }
-            const requested = if (delivery.requested_agent_thread) |key| std.meta.eql(key, pane.key()) else false;
-            if (!delivery.runtime_state_requested and !requested) {
+            const requested = if (self.requested_agent_thread) |key| std.meta.eql(key, pane.key()) else false;
+            if (!self.runtime_state_requested and !requested) {
                 continue;
             }
             if (!requested) {
-                if (delivery.agent_threads_sent[slot]) |previous| {
+                if (self.agent_threads_sent[slot]) |previous| {
                     if (std.meta.eql(previous.key, pane.key()) and previous.revision >= snapshot.revision) {
                         continue;
                     }
                 }
             }
-            return delivery.stage(try core.encodeAgentThreadSnapshot(buffer, snapshot), .{ .agent_thread = .{
+            return self.stage(try core.encodeAgentThreadSnapshot(buffer, snapshot), .{ .agent_thread = .{
                 .key = pane.key(),
                 .revision = snapshot.revision,
                 .slot = @intCast(slot),
@@ -281,18 +281,18 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         }
     }
 
-    if (delivery.runtime_state_requested) {
-        if (try delivery.prepareAttachment(preparation, .review)) |prepared| {
+    if (self.runtime_state_requested) {
+        if (try self.prepareAttachment(preparation, .review)) |prepared| {
             return prepared;
         }
     }
 
-    if (delivery.runtime_state_requested and
-        delivery.system_metrics_revision_sent < sources.system_metrics.revision)
+    if (self.runtime_state_requested and
+        self.system_metrics_revision_sent < sources.system_metrics.revision)
     {
         const revision = sources.system_metrics.revision;
         if (sources.system_metrics.latest) |values| {
-            return delivery.stage(
+            return self.stage(
                 try core.encodeSystemMetrics(buffer, .{
                     .revision = revision,
                     .cpu_percent = values.cpu_percent,
@@ -303,15 +303,15 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
                 .{ .system_metrics_revision = revision },
             );
         }
-        delivery.system_metrics_revision_sent = revision;
+        self.system_metrics_revision_sent = revision;
     }
 
-    if (delivery.runtime_state_requested and
-        delivery.workspace_list_revision_sent < workspaces.revision)
+    if (self.runtime_state_requested and
+        self.workspace_list_revision_sent < workspaces.revision)
     {
         var entries: [Workspaces.capacity]core.WorkspaceListEntry = undefined;
         const revision = workspaces.revision;
-        return delivery.stage(
+        return self.stage(
             try core.encodeWorkspaceList(buffer, .{
                 .revision = revision,
                 .entries = workspaces.listEntries(&entries),
@@ -320,37 +320,37 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
         );
     }
 
-    if (try delivery.prepareAttachment(preparation, .cwd)) |prepared| {
+    if (try self.prepareAttachment(preparation, .cwd)) |prepared| {
         return prepared;
     }
 
-    if (try delivery.prepareAttachment(preparation, .foreground)) |prepared| {
+    if (try self.prepareAttachment(preparation, .foreground)) |prepared| {
         return prepared;
     }
 
-    if (delivery.runtime_state_requested) {
-        if (try delivery.prepareForeground(preparation)) |prepared| {
+    if (self.runtime_state_requested) {
+        if (try self.prepareForeground(preparation)) |prepared| {
             return prepared;
         }
     }
 
-    if (try delivery.prepareAttachment(preparation, .title)) |prepared| {
+    if (try self.prepareAttachment(preparation, .title)) |prepared| {
         return prepared;
     }
 
-    if (try delivery.prepareAttachment(preparation, .progress)) |prepared| {
+    if (try self.prepareAttachment(preparation, .progress)) |prepared| {
         return prepared;
     }
 
-    if (try delivery.prepareAttachment(preparation, .exit)) |prepared| {
+    if (try self.prepareAttachment(preparation, .exit)) |prepared| {
         return prepared;
     }
 
-    if (try delivery.prepareAttachment(preparation, .graphics)) |prepared| {
+    if (try self.prepareAttachment(preparation, .graphics)) |prepared| {
         return prepared;
     }
 
-    if (delivery.responses.peekObservation()) |entry| {
+    if (self.responses.peekObservation()) |entry| {
         var history_result: ?*QueryResult = null;
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
@@ -366,7 +366,7 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
             .agent_history = &agent_history,
             .change_review = &change_review,
         }, entry.response);
-        return delivery.stage(payload, .{ .response = .{
+        return self.stage(payload, .{ .response = .{
             .offset = entry.offset,
             .history_result = history_result,
             .history_output = history_output,
@@ -383,12 +383,12 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
 /// ```zig
 /// delivery.commit(.{ .prepared = prepared, .attachments = attachments, .metrics = metrics });
 /// ```
-pub fn commit(delivery: *Delivery, operation: Commit) void {
+pub fn commit(self: *Delivery, operation: Commit) void {
     const prepared = operation.prepared;
     const attachments = operation.attachments;
     const metrics = operation.metrics;
 
-    const transaction = switch (delivery.phase) {
+    const transaction = switch (self.phase) {
         .prepared => |transaction| transaction,
         else => unreachable,
     };
@@ -396,7 +396,7 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
     var completion: Completion = .{};
     switch (transaction.effect) {
         .stopping => {
-            delivery.stopping_pending = false;
+            self.stopping_pending = false;
             completion.stopping_delivered = true;
         },
         .response => |response| {
@@ -415,33 +415,33 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
             if (response.change_review) |result| {
                 result.deinit();
             }
-            delivery.responses.removeAt(response.offset);
+            self.responses.removeAt(response.offset);
         },
         .resync => {
-            delivery.responses.resync_workspace = null;
-            delivery.responses.resync_previous_workspace = null;
+            self.responses.resync_workspace = null;
+            self.responses.resync_previous_workspace = null;
             if (comptime core.enabled) {
                 metrics.client_resyncs += 1;
             }
         },
-        .clipboard => delivery.clipboard_pending = false,
-        .client_layout => delivery.client_layout_sent = true,
-        .proxy_status => delivery.proxy_status_sent = true,
+        .clipboard => self.clipboard_pending = false,
+        .client_layout => self.client_layout_sent = true,
+        .proxy_status => self.proxy_status_sent = true,
         .agent_thread => |projection| {
-            delivery.agent_threads_sent[projection.slot] = projection;
-            if (delivery.requested_agent_thread) |key| {
+            self.agent_threads_sent[projection.slot] = projection;
+            if (self.requested_agent_thread) |key| {
                 if (std.meta.eql(key, projection.key)) {
-                    delivery.requested_agent_thread = null;
+                    self.requested_agent_thread = null;
                 }
             }
         },
         .agent_revision => |revision| {
-            delivery.agent_revision_sent = revision;
-            delivery.agent_snapshot_requested = false;
+            self.agent_revision_sent = revision;
+            self.agent_snapshot_requested = false;
         },
-        .system_metrics_revision => |revision| delivery.system_metrics_revision_sent = revision,
-        .workspace_list_revision => |revision| delivery.workspace_list_revision_sent = revision,
-        .foreground => |projection| delivery.foregrounds_sent[projection.slot] = projection,
+        .system_metrics_revision => |revision| self.system_metrics_revision_sent = revision,
+        .workspace_list_revision => |revision| self.workspace_list_revision_sent = revision,
+        .foreground => |projection| self.foregrounds_sent[projection.slot] = projection,
         .attachment => |work| {
             const attachment = attachments.at(work.index) orelse unreachable;
             const effect = attachment.commitPrepared(work.prepared);
@@ -457,31 +457,31 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
                     metrics.graphics_freeze.merge(effect.graphics.freeze);
                 }
             }
-            delivery.next_attachment = (work.index + 1) % AttachmentStore.capacity;
+            self.next_attachment = (work.index + 1) % AttachmentStore.capacity;
         },
     }
-    delivery.phase = .{ .in_flight = completion };
+    self.phase = .{ .in_flight = completion };
 }
 
-pub fn abort(delivery: *Delivery, prepared: Prepared) void {
-    const transaction = switch (delivery.phase) {
+pub fn abort(self: *Delivery, prepared: Prepared) void {
+    const transaction = switch (self.phase) {
         .prepared => |transaction| transaction,
         else => unreachable,
     };
     std.debug.assert(transaction.ticket == prepared.ticket);
-    delivery.phase = .closed;
+    self.phase = .closed;
 }
 
-pub fn complete(delivery: *Delivery, result: anyerror!void) Completion {
-    const completion = switch (delivery.phase) {
+pub fn complete(self: *Delivery, result: anyerror!void) Completion {
+    const completion = switch (self.phase) {
         .in_flight => |completion| completion,
         else => unreachable,
     };
     if (result) |_| {
-        delivery.phase = .ready;
+        self.phase = .ready;
         return completion;
     } else |_| {
-        delivery.phase = .closed;
+        self.phase = .closed;
         var failed = completion;
         failed.close_client = true;
         return failed;
@@ -490,7 +490,7 @@ pub fn complete(delivery: *Delivery, result: anyerror!void) Completion {
 
 const Lane = enum { cwd, foreground, title, progress, review, cells, exit, graphics };
 
-fn prepareForeground(delivery: *Delivery, preparation: Preparation) !?Prepared {
+fn prepareForeground(self: *Delivery, preparation: Preparation) !?Prepared {
     for (preparation.sources.panes.items, 0..) |slot, index| {
         const pane = slot orelse continue;
         if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null) {
@@ -502,13 +502,13 @@ fn prepareForeground(delivery: *Delivery, preparation: Preparation) !?Prepared {
         }
 
         const projection: ForegroundProjection = .{ .slot = index, .key = pane.key(), .revision = pane.foreground_revision };
-        if (delivery.foregrounds_sent[index]) |previous| {
+        if (self.foregrounds_sent[index]) |previous| {
             if (std.meta.eql(previous, projection)) {
                 continue;
             }
         }
 
-        return delivery.stage(try core.encodePaneForeground(delivery.send_buffer, .{
+        return self.stage(try core.encodePaneForeground(self.send_buffer, .{
             .pane_id = pane.id,
             .name = pane.agent_process_cache.name(),
         }), .{ .foreground = projection });
@@ -517,13 +517,13 @@ fn prepareForeground(delivery: *Delivery, preparation: Preparation) !?Prepared {
     return null;
 }
 
-fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) !?Prepared {
+fn prepareAttachment(self: *Delivery, preparation: Preparation, lane: Lane) !?Prepared {
     const attachments = preparation.attachments;
-    const buffer = delivery.send_buffer;
+    const buffer = self.send_buffer;
 
     var checked: usize = 0;
     while (checked < AttachmentStore.capacity) : (checked += 1) {
-        const index = (delivery.next_attachment + checked) % AttachmentStore.capacity;
+        const index = (self.next_attachment + checked) % AttachmentStore.capacity;
         const attachment = attachments.at(index) orelse continue;
         const candidate: ?PreparedType = switch (lane) {
             .cwd => try attachment.prepareCwd(buffer),
@@ -558,7 +558,7 @@ fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) 
             },
         };
         if (candidate) |attachment_prepared| {
-            return delivery.stage(
+            return self.stage(
                 attachment_prepared.bytes,
                 .{ .attachment = .{ .index = index, .prepared = attachment_prepared } },
             );
@@ -567,12 +567,12 @@ fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) 
     return null;
 }
 
-pub fn stage(delivery: *Delivery, payload: []const u8, effect: delivery_namespace.Effect) Prepared {
-    const ticket = delivery.next_ticket;
-    delivery.next_ticket +%= 1;
-    if (delivery.next_ticket == 0) {
-        delivery.next_ticket = 1;
+pub fn stage(self: *Delivery, payload: []const u8, effect: delivery_namespace.Effect) Prepared {
+    const ticket = self.next_ticket;
+    self.next_ticket +%= 1;
+    if (self.next_ticket == 0) {
+        self.next_ticket = 1;
     }
-    delivery.phase = .{ .prepared = .{ .ticket = ticket, .effect = effect } };
+    self.phase = .{ .prepared = .{ .ticket = ticket, .effect = effect } };
     return .{ .payload = payload, .ticket = ticket };
 }

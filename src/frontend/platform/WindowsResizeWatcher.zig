@@ -33,12 +33,12 @@ pub fn init(tty: *WindowsTty) !ResizeWatcher {
 
 pub fn deinit(_: *ResizeWatcher) void {}
 
-pub fn wait(w: *ResizeWatcher, io: std.Io) std.Io.Cancelable!void {
+pub fn wait(self: *ResizeWatcher, io: std.Io) std.Io.Cancelable!void {
     while (true) {
         try io.sleep(.fromMilliseconds(interval_ms), .awake);
-        const now = w.tty.size();
-        if (now.cols != w.last.cols or now.rows != w.last.rows) {
-            w.last = now;
+        const now = self.tty.size();
+        if (now.cols != self.last.cols or now.rows != self.last.rows) {
+            self.last = now;
             return;
         }
     }

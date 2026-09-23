@@ -27,36 +27,36 @@ revision: u64 = 1,
 
 /// Installs presentation measurements without changing topology or ratios.
 /// Example: `_ = layout.setMetrics(.{ .border = 0, .gap = 0 });`.
-pub fn setMetrics(layout: *Layout, metrics: Metrics) bool {
-    if (std.meta.eql(layout.metrics, metrics)) {
+pub fn setMetrics(self: *Layout, metrics: Metrics) bool {
+    if (std.meta.eql(self.metrics, metrics)) {
         return false;
     }
 
-    layout.metrics = metrics;
-    layout.changed();
+    self.metrics = metrics;
+    self.changed();
     return true;
 }
 
-pub fn count(layout: *const Layout) usize {
-    return layout.pane_count;
+pub fn count(self: *const Layout) usize {
+    return self.pane_count;
 }
 
-pub fn focused(layout: *const Layout) ?core.PaneId {
-    return if (layout.focused_pane == .invalid) null else layout.focused_pane;
+pub fn focused(self: *const Layout) ?core.PaneId {
+    return if (self.focused_pane == .invalid) null else self.focused_pane;
 }
 
-pub fn currentRevision(layout: *const Layout) u64 {
-    return layout.revision;
+pub fn currentRevision(self: *const Layout) u64 {
+    return self.revision;
 }
 
-pub fn isFullscreen(layout: *const Layout) bool {
-    return layout.fullscreen;
+pub fn isFullscreen(self: *const Layout) bool {
+    return self.fullscreen;
 }
 
 /// Fullscreen keeps its label border even when the tab has only one pane.
 /// Example: `if (layout.hasBorders()) drawPaneBorder();`.
-pub fn hasBorders(layout: *const Layout) bool {
-    return layout.metrics.border != 0 and (layout.fullscreen or layout.pane_count > 1);
+pub fn hasBorders(self: *const Layout) bool {
+    return self.metrics.border != 0 and (self.fullscreen or self.pane_count > 1);
 }
 
 /// Writes this split tree in the protocol's pre-order representation.
@@ -65,15 +65,15 @@ pub fn hasBorders(layout: *const Layout) bool {
 /// var nodes: [schema.max_client_layout_nodes]schema.ClientLayoutNode = undefined;
 /// const encoded = layout.clientLayoutNodes(&nodes);
 /// ```
-pub fn clientLayoutNodes(layout: *const Layout, output: *[core.max_client_layout_nodes]core.ClientLayoutNode) []const core.ClientLayoutNode {
-    const root = layout.root orelse return output[0..0];
+pub fn clientLayoutNodes(self: *const Layout, output: *[core.max_client_layout_nodes]core.ClientLayoutNode) []const core.ClientLayoutNode {
+    const root = self.root orelse return output[0..0];
     var stack: [layout_support.max_nodes]layout_support.NodeIndex = undefined;
     var stack_len: usize = 1;
     var output_len: usize = 0;
     stack[0] = root;
     while (stack_len != 0) {
         stack_len -= 1;
-        const slot = layout.nodes[stack[stack_len]];
+        const slot = self.nodes[stack[stack_len]];
         output[output_len] = switch (slot.node) {
             .empty => unreachable,
             .leaf => |pane_id| .{
@@ -130,17 +130,17 @@ pub fn fromClientLayout(encoded: core.ClientTabLayoutView) !Layout {
     return builder.layout;
 }
 
-pub fn setPaneGaps(layout: *Layout, enabled: bool) bool {
-    if (layout.pane_gaps == enabled) {
+pub fn setPaneGaps(self: *Layout, enabled: bool) bool {
+    if (self.pane_gaps == enabled) {
         return false;
     }
-    layout.pane_gaps = enabled;
-    layout.changed();
+    self.pane_gaps = enabled;
+    self.changed();
     return true;
 }
 
-pub fn contains(layout: *const Layout, pane_id: core.PaneId) bool {
-    return layout.findLeaf(pane_id) != null;
+pub fn contains(self: *const Layout, pane_id: core.PaneId) bool {
+    return self.findLeaf(pane_id) != null;
 }
 
 /// One-based depth-first position used as the pane's disposable display
@@ -149,9 +149,9 @@ pub fn contains(layout: *const Layout, pane_id: core.PaneId) bool {
 /// ```zig
 /// const index = layout.displayIndex(pane_id);
 /// ```
-pub fn displayIndex(layout: *const Layout, pane_id: core.PaneId) ?u16 {
+pub fn displayIndex(self: *const Layout, pane_id: core.PaneId) ?u16 {
     var storage: [core.max_panes_per_tab]core.PaneId = undefined;
-    for (layout.orderedPanes(&storage), 1..) |candidate, index| {
+    for (self.orderedPanes(&storage), 1..) |candidate, index| {
         if (candidate == pane_id) {
             return @intCast(index);
         }
@@ -165,8 +165,8 @@ pub fn displayIndex(layout: *const Layout, pane_id: core.PaneId) ?u16 {
 /// ```zig
 /// const panes = layout.orderedPanes(&storage);
 /// ```
-pub fn orderedPanes(layout: *const Layout, output: *[core.max_panes_per_tab]core.PaneId) []const core.PaneId {
-    const root = layout.root orelse return output[0..0];
+pub fn orderedPanes(self: *const Layout, output: *[core.max_panes_per_tab]core.PaneId) []const core.PaneId {
+    const root = self.root orelse return output[0..0];
     var stack: [layout_support.max_nodes]layout_support.NodeIndex = undefined;
     var stack_len: usize = 1;
     var index: usize = 0;
@@ -175,7 +175,7 @@ pub fn orderedPanes(layout: *const Layout, output: *[core.max_panes_per_tab]core
     while (stack_len != 0) {
         stack_len -= 1;
 
-        switch (layout.nodes[stack[stack_len]].node) {
+        switch (self.nodes[stack[stack_len]].node) {
             .empty => unreachable,
             .leaf => |candidate| {
                 output[index] = candidate;
@@ -193,23 +193,23 @@ pub fn orderedPanes(layout: *const Layout, output: *[core.max_panes_per_tab]core
     return output[0..index];
 }
 
-pub fn addRoot(layout: *Layout, pane_id: core.PaneId) !void {
+pub fn addRoot(self: *Layout, pane_id: core.PaneId) !void {
     if (pane_id == .invalid) {
         return error.InvalidPaneId;
     }
-    if (layout.root != null) {
+    if (self.root != null) {
         return error.LayoutNotEmpty;
     }
-    layout.nodes[0] = .{
+    self.nodes[0] = .{
         .node = .{
             .leaf = pane_id,
         },
     };
-    layout.root = 0;
-    layout.focused_pane = pane_id;
-    layout.pane_count = 1;
-    layout.fullscreen = false;
-    layout.changed();
+    self.root = 0;
+    self.focused_pane = pane_id;
+    self.pane_count = 1;
+    self.fullscreen = false;
+    self.changed();
 }
 
 /// Rebuilds a disposable layout in the supplied display order, left to
@@ -222,14 +222,14 @@ pub fn addRoot(layout: *Layout, pane_id: core.PaneId) !void {
 /// ```zig
 /// try layout.restoreDisplayOrder(&.{ first, second, third }, second);
 /// ```
-pub fn restoreDisplayOrder(layout: *Layout, pane_ids: []const core.PaneId, focused_pane: core.PaneId) !void {
+pub fn restoreDisplayOrder(self: *Layout, pane_ids: []const core.PaneId, focused_pane: core.PaneId) !void {
     if (pane_ids.len == 0) {
         return error.LayoutEmpty;
     }
     var restored: Layout = .{
-        .pane_gaps = layout.pane_gaps,
-        .metrics = layout.metrics,
-        .revision = layout.revision,
+        .pane_gaps = self.pane_gaps,
+        .metrics = self.metrics,
+        .revision = self.revision,
     };
     try restored.addRoot(pane_ids[0]);
     var previous = pane_ids[0];
@@ -247,13 +247,13 @@ pub fn restoreDisplayOrder(layout: *Layout, pane_ids: []const core.PaneId, focus
     if (!restored.focusPane(focused_pane)) {
         return error.PaneNotFound;
     }
-    layout.* = restored;
+    self.* = restored;
 }
 
-fn setParentRatio(layout: *Layout, pane_id: core.PaneId, ratio: u16) void {
-    const leaf = layout.findLeaf(pane_id) orelse return;
-    const parent = layout.nodes[leaf].parent orelse return;
-    layout.nodes[parent].node.split.ratio = ratio;
+fn setParentRatio(self: *Layout, pane_id: core.PaneId, ratio: u16) void {
+    const leaf = self.findLeaf(pane_id) orelse return;
+    const parent = self.nodes[leaf].parent orelse return;
+    self.nodes[parent].node.split.ratio = ratio;
 }
 
 /// Restores an earlier client-owned split tree when it still describes
@@ -263,7 +263,7 @@ fn setParentRatio(layout: *Layout, pane_id: core.PaneId, ratio: u16) void {
 /// ```zig
 /// const restored = layout.restoreSaved(saved, .{ .ids = pane_ids, .focused = focused_pane });
 /// ```
-pub fn restoreSaved(layout: *Layout, saved: Layout, panes: PaneSet) bool {
+pub fn restoreSaved(self: *Layout, saved: Layout, panes: PaneSet) bool {
     if (panes.ids.len == 0 or panes.ids.len != saved.count()) {
         return false;
     }
@@ -287,19 +287,19 @@ pub fn restoreSaved(layout: *Layout, saved: Layout, panes: PaneSet) bool {
     }
 
     var restored = saved;
-    restored.pane_gaps = layout.pane_gaps;
-    restored.metrics = layout.metrics;
-    restored.revision = layout.revision;
+    restored.pane_gaps = self.pane_gaps;
+    restored.metrics = self.metrics;
+    restored.revision = self.revision;
     restored.focused_pane = panes.focused;
     restored.changed();
-    layout.* = restored;
+    self.* = restored;
 
     return true;
 }
 
-pub fn splitFocused(layout: *Layout, pane_id: core.PaneId, axis: layout_support.Axis) !void {
-    const focused_pane = layout.focused() orelse return error.LayoutEmpty;
-    try layout.split(
+pub fn splitFocused(self: *Layout, pane_id: core.PaneId, axis: layout_support.Axis) !void {
+    const focused_pane = self.focused() orelse return error.LayoutEmpty;
+    try self.split(
         .{
             .existing_pane = focused_pane,
             .new_pane = pane_id,
@@ -313,37 +313,37 @@ pub fn splitFocused(layout: *Layout, pane_id: core.PaneId, axis: layout_support.
 /// ```zig
 /// try layout.split(.{ .existing_pane = first, .new_pane = second, .axis = .horizontal });
 /// ```
-pub fn split(layout: *Layout, request: SplitRequest) !void {
+pub fn split(self: *Layout, request: SplitRequest) !void {
     if (request.new_pane == .invalid) {
         return error.InvalidPaneId;
     }
 
-    if (layout.contains(request.new_pane)) {
+    if (self.contains(request.new_pane)) {
         return error.DuplicatePane;
     }
 
-    if (layout.pane_count == core.max_panes_per_tab) {
+    if (self.pane_count == core.max_panes_per_tab) {
         return error.PaneLimitReached;
     }
 
-    const target = layout.findLeaf(request.existing_pane) orelse return error.PaneNotFound;
+    const target = self.findLeaf(request.existing_pane) orelse return error.PaneNotFound;
 
-    const first = layout.allocateNode() orelse return error.NodeLimitReached;
-    errdefer layout.nodes[first] = .{};
-    layout.nodes[first].node = .{
+    const first = self.allocateNode() orelse return error.NodeLimitReached;
+    errdefer self.nodes[first] = .{};
+    self.nodes[first].node = .{
         .leaf = .invalid,
     };
-    const second = layout.allocateNode() orelse return error.NodeLimitReached;
-    const parent = layout.nodes[target].parent;
-    layout.nodes[first] = layout.nodes[target];
-    layout.nodes[first].parent = target;
-    layout.nodes[second] = .{
+    const second = self.allocateNode() orelse return error.NodeLimitReached;
+    const parent = self.nodes[target].parent;
+    self.nodes[first] = self.nodes[target];
+    self.nodes[first].parent = target;
+    self.nodes[second] = .{
         .parent = target,
         .node = .{
             .leaf = request.new_pane,
         },
     };
-    layout.nodes[target] = .{
+    self.nodes[target] = .{
         .parent = parent,
         .node = .{
             .split = .{
@@ -353,54 +353,54 @@ pub fn split(layout: *Layout, request: SplitRequest) !void {
             },
         },
     };
-    layout.focused_pane = request.new_pane;
-    layout.pane_count += 1;
-    layout.changed();
+    self.focused_pane = request.new_pane;
+    self.pane_count += 1;
+    self.changed();
 }
 
-pub fn remove(layout: *Layout, pane_id: core.PaneId) bool {
-    const leaf = layout.findLeaf(pane_id) orelse return false;
-    const parent = layout.nodes[leaf].parent orelse {
-        layout.nodes[leaf] = .{};
-        layout.root = null;
-        layout.focused_pane = .invalid;
-        layout.pane_count = 0;
-        layout.fullscreen = false;
-        layout.changed();
+pub fn remove(self: *Layout, pane_id: core.PaneId) bool {
+    const leaf = self.findLeaf(pane_id) orelse return false;
+    const parent = self.nodes[leaf].parent orelse {
+        self.nodes[leaf] = .{};
+        self.root = null;
+        self.focused_pane = .invalid;
+        self.pane_count = 0;
+        self.fullscreen = false;
+        self.changed();
         return true;
     };
-    const branch = layout.nodes[parent].node.split;
+    const branch = self.nodes[parent].node.split;
     const sibling = if (branch.first == leaf) branch.second else branch.first;
-    const grandparent = layout.nodes[parent].parent;
-    const replacement = layout.nodes[sibling];
-    layout.nodes[parent] = replacement;
-    layout.nodes[parent].parent = grandparent;
+    const grandparent = self.nodes[parent].parent;
+    const replacement = self.nodes[sibling];
+    self.nodes[parent] = replacement;
+    self.nodes[parent].parent = grandparent;
     switch (replacement.node) {
         .split => |children| {
-            layout.nodes[children.first].parent = parent;
-            layout.nodes[children.second].parent = parent;
+            self.nodes[children.first].parent = parent;
+            self.nodes[children.second].parent = parent;
         },
         else => {},
     }
-    layout.nodes[leaf] = .{};
-    layout.nodes[sibling] = .{};
-    layout.pane_count -= 1;
-    if (layout.focused_pane == pane_id) {
-        layout.focused_pane = layout.firstLeaf(parent).?;
+    self.nodes[leaf] = .{};
+    self.nodes[sibling] = .{};
+    self.pane_count -= 1;
+    if (self.focused_pane == pane_id) {
+        self.focused_pane = self.firstLeaf(parent).?;
     }
-    layout.changed();
+    self.changed();
     return true;
 }
 
-pub fn focusPane(layout: *Layout, pane_id: core.PaneId) bool {
-    if (!layout.contains(pane_id)) {
+pub fn focusPane(self: *Layout, pane_id: core.PaneId) bool {
+    if (!self.contains(pane_id)) {
         return false;
     }
-    if (layout.focused_pane == pane_id) {
+    if (self.focused_pane == pane_id) {
         return true;
     }
-    layout.focused_pane = pane_id;
-    layout.changed();
+    self.focused_pane = pane_id;
+    self.changed();
     return true;
 }
 
@@ -410,33 +410,33 @@ pub fn focusPane(layout: *Layout, pane_id: core.PaneId) bool {
 /// ```zig
 /// const focused = layout.focusDirection(.right, area);
 /// ```
-pub fn focusDirection(layout: *Layout, direction: layout_support.Direction, area: core.Rect) ?core.PaneId {
-    const current_id = layout.focused() orelse return null;
-    const candidate = if (layout.fullscreen)
-        layout.fullscreenFocusTarget(direction)
+pub fn focusDirection(self: *Layout, direction: layout_support.Direction, area: core.Rect) ?core.PaneId {
+    const current_id = self.focused() orelse return null;
+    const candidate = if (self.fullscreen)
+        self.fullscreenFocusTarget(direction)
     else spatial: {
         var geometry: LayoutSnapshot = .{};
-        layout.snapshotTiled(area, &geometry);
+        self.snapshotTiled(area, &geometry);
         break :spatial geometry.focusTarget(current_id, direction);
     };
 
     if (candidate) |pane_id| {
-        _ = layout.focusPane(pane_id);
+        _ = self.focusPane(pane_id);
     }
 
     return candidate;
 }
 
-fn fullscreenFocusTarget(layout: *const Layout, direction: layout_support.Direction) ?core.PaneId {
+fn fullscreenFocusTarget(self: *const Layout, direction: layout_support.Direction) ?core.PaneId {
     if (direction == .up or direction == .down) {
         return null;
     }
 
     var storage: [core.max_panes_per_tab]core.PaneId = undefined;
-    const panes = layout.orderedPanes(&storage);
+    const panes = self.orderedPanes(&storage);
 
     for (panes, 0..) |pane_id, index| {
-        if (pane_id != layout.focused_pane) {
+        if (pane_id != self.focused_pane) {
             continue;
         }
 
@@ -454,10 +454,10 @@ fn fullscreenFocusTarget(layout: *const Layout, direction: layout_support.Direct
 /// requested edge is outside the tab, the nearest opposite edge moves in
 /// that direction instead. Ratios stay bounded and every leaf retains at
 /// least one content cell along the resized axis.
-pub fn resizeFocused(layout: *Layout, direction: layout_support.Direction, area: core.Rect) bool {
-    const leaf = layout.findLeaf(layout.focused_pane) orelse return false;
-    const target = layout.resizeSplit(leaf, direction) orelse return false;
-    const branch = layout.nodes[target].node.split;
+pub fn resizeFocused(self: *Layout, direction: layout_support.Direction, area: core.Rect) bool {
+    const leaf = self.findLeaf(self.focused_pane) orelse return false;
+    const target = self.resizeSplit(leaf, direction) orelse return false;
+    const branch = self.nodes[target].node.split;
     const previous = branch.ratio;
     const adjusted = switch (direction) {
         .left, .up => previous -| layout_support.resize_step,
@@ -471,8 +471,8 @@ pub fn resizeFocused(layout: *Layout, direction: layout_support.Direction, area:
     if (candidate == previous) {
         return false;
     }
-    const target_area = layout.nodeArea(target, area);
-    if (!layout.ratioFits(
+    const target_area = self.nodeArea(target, area);
+    if (!self.ratioFits(
         branch,
         .{
             .area = target_area,
@@ -482,8 +482,8 @@ pub fn resizeFocused(layout: *Layout, direction: layout_support.Direction, area:
         return false;
     }
 
-    layout.nodes[target].node.split.ratio = candidate;
-    layout.changed();
+    self.nodes[target].node.split.ratio = candidate;
+    self.changed();
     return true;
 }
 
@@ -493,10 +493,10 @@ pub fn resizeFocused(layout: *Layout, direction: layout_support.Direction, area:
 /// ```zig
 /// if (layout.surface(pane_id) == .thread) paintThread();
 /// ```
-pub fn surface(layout: *const Layout, pane_id: core.PaneId) core.PaneSurface {
-    const index = layout.findLeaf(pane_id) orelse return .terminal;
+pub fn surface(self: *const Layout, pane_id: core.PaneId) core.PaneSurface {
+    const index = self.findLeaf(pane_id) orelse return .terminal;
 
-    return layout.nodes[index].surface;
+    return self.nodes[index].surface;
 }
 
 /// Changes how one leaf shows its pane. An unknown leaf or an unchanged
@@ -505,24 +505,24 @@ pub fn surface(layout: *const Layout, pane_id: core.PaneId) core.PaneSurface {
 /// ```zig
 /// if (layout.setSurface(pane_id, .thread)) recompose();
 /// ```
-pub fn setSurface(layout: *Layout, pane_id: core.PaneId, value: core.PaneSurface) bool {
-    const index = layout.findLeaf(pane_id) orelse return false;
-    if (layout.nodes[index].surface == value) {
+pub fn setSurface(self: *Layout, pane_id: core.PaneId, value: core.PaneSurface) bool {
+    const index = self.findLeaf(pane_id) orelse return false;
+    if (self.nodes[index].surface == value) {
         return false;
     }
 
-    layout.nodes[index].surface = value;
-    layout.changed();
+    self.nodes[index].surface = value;
+    self.changed();
     return true;
 }
 
-pub fn toggleFullscreen(layout: *Layout) bool {
-    if (layout.pane_count == 0) {
+pub fn toggleFullscreen(self: *Layout) bool {
+    if (self.pane_count == 0) {
         return false;
     }
 
-    layout.fullscreen = !layout.fullscreen;
-    layout.changed();
+    self.fullscreen = !self.fullscreen;
+    self.changed();
     return true;
 }
 
@@ -531,11 +531,11 @@ pub fn toggleFullscreen(layout: *Layout) bool {
 /// ```zig
 /// const allowed = layout.canSplit(.{ .pane_id = pane_id, .axis = .horizontal }, area);
 /// ```
-pub fn canSplit(layout: *const Layout, target: SplitTarget, area: core.Rect) bool {
+pub fn canSplit(self: *const Layout, target: SplitTarget, area: core.Rect) bool {
     var geometry: LayoutSnapshot = .{};
-    layout.snapshot(area, &geometry);
+    self.snapshot(area, &geometry);
 
-    return geometry.prospectiveSplit(target, layout.pane_count) != null;
+    return geometry.prospectiveSplit(target, self.pane_count) != null;
 }
 
 /// Computes the target split geometry without mutating the layout.
@@ -543,50 +543,50 @@ pub fn canSplit(layout: *const Layout, target: SplitTarget, area: core.Rect) boo
 /// ```zig
 /// const split = layout.prospectiveSplit(.{ .pane_id = pane_id, .axis = .horizontal }, area);
 /// ```
-pub fn prospectiveSplit(layout: *const Layout, target: SplitTarget, area: core.Rect) ?ProspectiveSplit {
+pub fn prospectiveSplit(self: *const Layout, target: SplitTarget, area: core.Rect) ?ProspectiveSplit {
     var geometry: LayoutSnapshot = .{};
-    layout.snapshot(area, &geometry);
+    self.snapshot(area, &geometry);
 
-    return geometry.prospectiveSplit(target, layout.pane_count);
+    return geometry.prospectiveSplit(target, self.pane_count);
 }
 
 /// A fullscreen pane keeps its border and labels regardless of pane count.
 /// Example: `layout.snapshot(area, &geometry);`.
-pub fn snapshot(layout: *const Layout, area: core.Rect, output: *LayoutSnapshot) void {
-    if (!layout.fullscreen) {
-        return layout.snapshotTiled(area, output);
+pub fn snapshot(self: *const Layout, area: core.Rect, output: *LayoutSnapshot) void {
+    if (!self.fullscreen) {
+        return self.snapshotTiled(area, output);
     }
     output.reset(
         .{
             .area = area,
-            .revision = layout.revision,
-            .pane_gaps = layout.pane_gaps,
-            .metrics = layout.metrics,
+            .revision = self.revision,
+            .pane_gaps = self.pane_gaps,
+            .metrics = self.metrics,
         },
     );
-    const pane_id = layout.focused() orelse return;
+    const pane_id = self.focused() orelse return;
     output.append(
         .{
             .pane_id = pane_id,
-            .surface = layout.surface(pane_id),
+            .surface = self.surface(pane_id),
             .outer = area,
-            .content = area.inner(layout.metrics.border),
+            .content = area.inner(self.metrics.border),
             .focused = true,
-            .display_index = layout.displayIndex(pane_id) orelse 1,
+            .display_index = self.displayIndex(pane_id) orelse 1,
         },
     );
 }
 
-fn snapshotTiled(layout: *const Layout, area: core.Rect, output: *LayoutSnapshot) void {
+fn snapshotTiled(self: *const Layout, area: core.Rect, output: *LayoutSnapshot) void {
     output.reset(
         .{
             .area = area,
-            .revision = layout.revision,
-            .pane_gaps = layout.pane_gaps,
-            .metrics = layout.metrics,
+            .revision = self.revision,
+            .pane_gaps = self.pane_gaps,
+            .metrics = self.metrics,
         },
     );
-    const root = layout.root orelse return;
+    const root = self.root orelse return;
     const Pending = struct { node: layout_support.NodeIndex, area: core.Rect };
     var stack: [layout_support.max_nodes]Pending = undefined;
     var stack_len: usize = 1;
@@ -598,20 +598,20 @@ fn snapshotTiled(layout: *const Layout, area: core.Rect, output: *LayoutSnapshot
     while (stack_len != 0) {
         stack_len -= 1;
         const pending = stack[stack_len];
-        switch (layout.nodes[pending.node].node) {
+        switch (self.nodes[pending.node].node) {
             .empty => unreachable,
             .leaf => |pane_id| {
                 display_index += 1;
                 output.append(
                     .{
                         .pane_id = pane_id,
-                        .surface = layout.nodes[pending.node].surface,
+                        .surface = self.nodes[pending.node].surface,
                         .outer = pending.area,
-                        .content = if (layout.hasBorders())
-                            pending.area.inner(layout.metrics.border)
+                        .content = if (self.hasBorders())
+                            pending.area.inner(self.metrics.border)
                         else
                             pending.area,
-                        .focused = pane_id == layout.focused_pane,
+                        .focused = pane_id == self.focused_pane,
                         .display_index = display_index,
                     },
                 );
@@ -622,7 +622,7 @@ fn snapshotTiled(layout: *const Layout, area: core.Rect, output: *LayoutSnapshot
                         .area = pending.area,
                         .axis = branch.axis,
                         .ratio = branch.ratio,
-                        .gap = layout.metrics.gutter(layout.pane_gaps),
+                        .gap = self.metrics.gutter(self.pane_gaps),
                     },
                 );
                 stack[stack_len] = .{
@@ -640,22 +640,22 @@ fn snapshotTiled(layout: *const Layout, area: core.Rect, output: *LayoutSnapshot
     }
 }
 
-pub fn views(layout: *const Layout, area: core.Rect, output: *[core.max_panes_per_tab]View) []View {
+pub fn views(self: *const Layout, area: core.Rect, output: *[core.max_panes_per_tab]View) []View {
     var snapshot_output: LayoutSnapshot = .{};
-    layout.snapshot(area, &snapshot_output);
+    self.snapshot(area, &snapshot_output);
     @memcpy(output[0..snapshot_output.len], snapshot_output.views());
     return output[0..snapshot_output.len];
 }
 
-fn resizeSplit(layout: *const Layout, leaf: layout_support.NodeIndex, direction: layout_support.Direction) ?layout_support.NodeIndex {
+fn resizeSplit(self: *const Layout, leaf: layout_support.NodeIndex, direction: layout_support.Direction) ?layout_support.NodeIndex {
     const target_axis: layout_support.Axis = switch (direction) {
         .left, .right => .horizontal,
         .up, .down => .vertical,
     };
     var fallback: ?layout_support.NodeIndex = null;
     var child = leaf;
-    while (layout.nodes[child].parent) |parent| {
-        const branch = layout.nodes[parent].node.split;
+    while (self.nodes[child].parent) |parent| {
+        const branch = self.nodes[parent].node.split;
         if (branch.axis == target_axis) {
             const child_is_first = branch.first == child;
             const requested_edge = switch (direction) {
@@ -674,11 +674,11 @@ fn resizeSplit(layout: *const Layout, leaf: layout_support.NodeIndex, direction:
     return fallback;
 }
 
-fn nodeArea(layout: *const Layout, target: layout_support.NodeIndex, area: core.Rect) core.Rect {
+fn nodeArea(self: *const Layout, target: layout_support.NodeIndex, area: core.Rect) core.Rect {
     var path: [layout_support.max_nodes]layout_support.NodeIndex = undefined;
     var path_len: usize = 0;
     var current = target;
-    while (layout.nodes[current].parent) |parent| {
+    while (self.nodes[current].parent) |parent| {
         path[path_len] = current;
         path_len += 1;
         current = parent;
@@ -687,13 +687,13 @@ fn nodeArea(layout: *const Layout, target: layout_support.NodeIndex, area: core.
     while (path_len != 0) {
         path_len -= 1;
         const child = path[path_len];
-        const branch = layout.nodes[current].node.split;
+        const branch = self.nodes[current].node.split;
         const first, const second = layout_support.splitArea(
             .{
                 .area = current_area,
                 .axis = branch.axis,
                 .ratio = branch.ratio,
-                .gap = layout.metrics.gutter(layout.pane_gaps),
+                .gap = self.metrics.gutter(self.pane_gaps),
             },
         );
         current_area = if (branch.first == child) first else second;
@@ -702,39 +702,39 @@ fn nodeArea(layout: *const Layout, target: layout_support.NodeIndex, area: core.
     return current_area;
 }
 
-fn ratioFits(layout: *const Layout, branch: Split, candidate: RatioCandidate) bool {
+fn ratioFits(self: *const Layout, branch: Split, candidate: RatioCandidate) bool {
     const first, const second = layout_support.splitArea(
         .{
             .area = candidate.area,
             .axis = branch.axis,
             .ratio = candidate.ratio,
-            .gap = layout.metrics.gutter(layout.pane_gaps),
+            .gap = self.metrics.gutter(self.pane_gaps),
         },
     );
     const first_extent = layout_support.extent(first, branch.axis);
     const second_extent = layout_support.extent(second, branch.axis);
 
-    return first_extent >= layout.minimumExtent(branch.first, branch.axis) and
-        second_extent >= layout.minimumExtent(branch.second, branch.axis);
+    return first_extent >= self.minimumExtent(branch.first, branch.axis) and
+        second_extent >= self.minimumExtent(branch.second, branch.axis);
 }
 
-fn minimumExtent(layout: *const Layout, node_index: layout_support.NodeIndex, axis: layout_support.Axis) u16 {
-    return switch (layout.nodes[node_index].node) {
+fn minimumExtent(self: *const Layout, node_index: layout_support.NodeIndex, axis: layout_support.Axis) u16 {
+    return switch (self.nodes[node_index].node) {
         .empty => 0,
-        .leaf => layout.metrics.minimumPaneExtent(),
+        .leaf => self.metrics.minimumPaneExtent(),
         .split => |branch| {
-            const first = layout.minimumExtent(branch.first, axis);
-            const second = layout.minimumExtent(branch.second, axis);
+            const first = self.minimumExtent(branch.first, axis);
+            const second = self.minimumExtent(branch.second, axis);
             if (branch.axis == axis) {
-                return first +| layout.metrics.gutter(layout.pane_gaps) +| second;
+                return first +| self.metrics.gutter(self.pane_gaps) +| second;
             }
             return @max(first, second);
         },
     };
 }
 
-fn allocateNode(layout: *Layout) ?layout_support.NodeIndex {
-    for (&layout.nodes, 0..) |*slot, index| {
+fn allocateNode(self: *Layout) ?layout_support.NodeIndex {
+    for (&self.nodes, 0..) |*slot, index| {
         if (slot.node == .empty) {
             return @intCast(index);
         }
@@ -742,27 +742,27 @@ fn allocateNode(layout: *Layout) ?layout_support.NodeIndex {
     return null;
 }
 
-fn findLeaf(layout: *const Layout, pane_id: core.PaneId) ?layout_support.NodeIndex {
-    for (layout.nodes, 0..) |slot, index| switch (slot.node) {
+fn findLeaf(self: *const Layout, pane_id: core.PaneId) ?layout_support.NodeIndex {
+    for (self.nodes, 0..) |slot, index| switch (slot.node) {
         .leaf => |candidate| if (candidate == pane_id) return @intCast(index),
         else => {},
     };
     return null;
 }
 
-fn firstLeaf(layout: *const Layout, start: layout_support.NodeIndex) ?core.PaneId {
+fn firstLeaf(self: *const Layout, start: layout_support.NodeIndex) ?core.PaneId {
     var current = start;
-    while (true) switch (layout.nodes[current].node) {
+    while (true) switch (self.nodes[current].node) {
         .empty => return null,
         .leaf => |pane_id| return pane_id,
         .split => |branch| current = branch.first,
     };
 }
 
-fn changed(layout: *Layout) void {
-    layout.revision +%= 1;
-    if (layout.revision == 0) {
-        layout.revision = 1;
+fn changed(self: *Layout) void {
+    self.revision +%= 1;
+    if (self.revision == 0) {
+        self.revision = 1;
     }
 }
 

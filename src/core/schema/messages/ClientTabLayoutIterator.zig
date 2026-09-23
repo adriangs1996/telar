@@ -11,11 +11,11 @@ remaining: u16,
 /// ```zig
 /// const tab = (try tabs.next()) orelse return;
 /// ```
-pub fn next(iterator: *ClientTabLayoutIterator) !?ClientTabLayoutView {
-    if (iterator.remaining == 0) {
+pub fn next(self: *ClientTabLayoutIterator) !?ClientTabLayoutView {
+    if (self.remaining == 0) {
         return null;
     }
 
-    iterator.remaining -= 1;
-    return @as(?ClientTabLayoutView, try layout.decodeClientTabLayout(&iterator.decoder));
+    self.remaining -= 1;
+    return @as(?ClientTabLayoutView, try layout.decodeClientTabLayout(&self.decoder));
 }

@@ -66,9 +66,9 @@ last_input_ns: u64 = 0,
 /// ```zig
 /// defer presenter.deinit();
 /// ```
-pub fn deinit(presenter: *Presenter) void {
-    presenter.compositor.deinit();
-    presenter.screen.deinit();
+pub fn deinit(self: *Presenter) void {
+    self.compositor.deinit();
+    self.screen.deinit();
 }
 
 /// Resizes the host screen buffers to one validated terminal grid.
@@ -76,9 +76,9 @@ pub fn deinit(presenter: *Presenter) void {
 /// ```zig
 /// try presenter.resize(80, 24);
 /// ```
-pub fn resize(presenter: *Presenter, cols: u16, rows: u16) !void {
-    try presenter.screen.resize(cols, rows);
-    presenter.compositor.invalidate();
+pub fn resize(self: *Presenter, cols: u16, rows: u16) !void {
+    try self.screen.resize(cols, rows);
+    self.compositor.invalidate();
 }
 
 /// Records host input activity for media-idle policy.
@@ -86,9 +86,9 @@ pub fn resize(presenter: *Presenter, cols: u16, rows: u16) !void {
 /// ```zig
 /// presenter.noteInput(now_ns);
 /// ```
-pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
-    presenter.last_input_ns = now_ns;
-    presenter.pacer.noteInput(now_ns);
+pub fn noteInput(self: *Presenter, now_ns: u64) void {
+    self.last_input_ns = now_ns;
+    self.pacer.noteInput(now_ns);
 }
 
 /// Observes semantic and physical client revisions and schedules one frame.
@@ -96,13 +96,13 @@ pub fn noteInput(presenter: *Presenter, now_ns: u64) void {
 /// ```zig
 /// try presenter.observe(observation);
 /// ```
-pub fn observe(presenter: *Presenter, observation: client.Observation) !void {
-    if (presenter.presentation_state.observe(observation)) {
-        try presenter.requestDraw();
+pub fn observe(self: *Presenter, observation: client.Observation) !void {
+    if (self.presentation_state.observe(observation)) {
+        try self.requestDraw();
         return;
     }
-    if (presenter.presentation_state.needsPreparation() and !presenter.draw_pending) {
-        try presenter.requestDraw();
+    if (self.presentation_state.needsPreparation() and !self.draw_pending) {
+        try self.requestDraw();
     }
 }
 
@@ -112,26 +112,26 @@ pub fn observe(presenter: *Presenter, observation: client.Observation) !void {
 /// ```zig
 /// try presenter.requestDraw();
 /// ```
-pub fn requestDraw(presenter: *Presenter) !void {
-    presenter.pending_updates +|= 1;
+pub fn requestDraw(self: *Presenter) !void {
+    self.pending_updates +|= 1;
     if (comptime core.enabled) {
-        presenter.metrics.max_pending_updates = @max(
-            presenter.metrics.max_pending_updates,
-            presenter.pending_updates,
+        self.metrics.max_pending_updates = @max(
+            self.metrics.max_pending_updates,
+            self.pending_updates,
         );
     }
-    const now_ns = client.monotonic(presenter.io);
-    if (presenter.pacer.waitUntil(now_ns)) |deadline_ns| {
-        if (presenter.draw_pending) {
+    const now_ns = client.monotonic(self.io);
+    if (self.pacer.waitUntil(now_ns)) |deadline_ns| {
+        if (self.draw_pending) {
             return;
         }
 
-        presenter.pacer.noteThrottled();
-        presenter.draw_pending = true;
-        presenter.draw_due_ns = deadline_ns;
-        presenter.draw_scheduled = true;
-        presenter.scheduler.draw(presenter.scheduler.context, deadline_ns) catch |err| {
-            presenter.draw_pending = false;
+        self.pacer.noteThrottled();
+        self.draw_pending = true;
+        self.draw_due_ns = deadline_ns;
+        self.draw_scheduled = true;
+        self.scheduler.draw(self.scheduler.context, deadline_ns) catch |err| {
+            self.draw_pending = false;
             return err;
         };
         return;
@@ -140,9 +140,9 @@ pub fn requestDraw(presenter: *Presenter) !void {
     // Present now even while a paced draw task is armed: input grace must
     // not wait behind a flood's cadence slot. The armed task keeps its token
     // and finds nothing pending when it fires.
-    presenter.draw_due_ns = now_ns;
-    presenter.draw_scheduled = false;
-    try presenter.scheduler.draw_now(presenter.scheduler.context);
+    self.draw_due_ns = now_ns;
+    self.draw_scheduled = false;
+    try self.scheduler.draw_now(self.scheduler.context);
 }
 
 /// Arms one independently paced bulk media pass. Cell work always wins before
@@ -152,21 +152,21 @@ pub fn requestDraw(presenter: *Presenter) !void {
 /// ```zig
 /// try presenter.requestMedia();
 /// ```
-pub fn requestMedia(presenter: *Presenter) !void {
-    const now_ns = client.monotonic(presenter.io);
-    const deadline_ns = if (presenter.media_after_draw) now_ns else now_ns +| core.pace.default_interval;
-    presenter.media_after_draw = false;
-    try presenter.requestMediaAt(deadline_ns);
+pub fn requestMedia(self: *Presenter) !void {
+    const now_ns = client.monotonic(self.io);
+    const deadline_ns = if (self.media_after_draw) now_ns else now_ns +| core.pace.default_interval;
+    self.media_after_draw = false;
+    try self.requestMediaAt(deadline_ns);
 }
 
-fn requestMediaAt(presenter: *Presenter, deadline_ns: u64) !void {
-    if (presenter.media_tick_pending) {
+fn requestMediaAt(self: *Presenter, deadline_ns: u64) !void {
+    if (self.media_tick_pending) {
         return;
     }
 
-    presenter.media_tick_pending = true;
-    presenter.scheduler.media(presenter.scheduler.context, deadline_ns) catch |err| {
-        presenter.media_tick_pending = false;
+    self.media_tick_pending = true;
+    self.scheduler.media(self.scheduler.context, deadline_ns) catch |err| {
+        self.media_tick_pending = false;
         return err;
     };
 }
@@ -176,8 +176,8 @@ fn requestMediaAt(presenter: *Presenter, deadline_ns: u64) !void {
 /// ```zig
 /// try presenter.completeDraw(result);
 /// ```
-pub fn completeDraw(presenter: *Presenter, result: anyerror!void) !void {
-    presenter.draw_pending = false;
+pub fn completeDraw(self: *Presenter, result: anyerror!void) !void {
+    self.draw_pending = false;
 
     try result;
 }
@@ -187,8 +187,8 @@ pub fn completeDraw(presenter: *Presenter, result: anyerror!void) !void {
 /// ```zig
 /// try presenter.completeMediaTick(result);
 /// ```
-pub fn completeMediaTick(presenter: *Presenter, result: anyerror!void) !void {
-    presenter.media_tick_pending = false;
+pub fn completeMediaTick(self: *Presenter, result: anyerror!void) !void {
+    self.media_tick_pending = false;
 
     try result;
 }
@@ -199,72 +199,72 @@ pub fn completeMediaTick(presenter: *Presenter, result: anyerror!void) !void {
 /// ```zig
 /// const token = try presenter.presentDue(projection, resources) orelse return;
 /// ```
-pub fn presentDue(presenter: *Presenter, projection: client.Projection, resources: Resources) !?client.Token {
+pub fn presentDue(self: *Presenter, projection: client.Projection, resources: Resources) !?client.Token {
     if (comptime core.enabled) {
-        presenter.metrics.draw_lateness.observe(client.monotonic(presenter.io) -| presenter.draw_due_ns);
+        self.metrics.draw_lateness.observe(client.monotonic(self.io) -| self.draw_due_ns);
     }
-    if (presenter.pending_updates == 0 or presenter.presentation_state.active != null) {
+    if (self.pending_updates == 0 or self.presentation_state.active != null) {
         return null;
     }
 
-    std.debug.assert(std.meta.eql(projection.version, presenter.presentation_state.observed.model));
+    std.debug.assert(std.meta.eql(projection.version, self.presentation_state.observed.model));
     std.debug.assert(std.meta.eql(
         projection.presentation_ingress,
-        presenter.presentation_state.observed.presentation_ingress,
+        self.presentation_state.observed.presentation_ingress,
     ));
-    const workspace_changed = presenter.presentation_state.prepared.model.workspace !=
+    const workspace_changed = self.presentation_state.prepared.model.workspace !=
         projection.version.workspace;
-    const configuration_changed = presenter.presentation_state.prepared.model.configuration !=
+    const configuration_changed = self.presentation_state.prepared.model.configuration !=
         projection.version.configuration;
-    const diagnostic_changed = presenter.presentation_state.prepared.model.diagnostic !=
+    const diagnostic_changed = self.presentation_state.prepared.model.diagnostic !=
         projection.version.diagnostic;
-    const host_changed = presenter.presentation_state.prepared.model.host !=
+    const host_changed = self.presentation_state.prepared.model.host !=
         projection.version.host;
-    const workspace_list_changed = presenter.presentation_state.prepared.model.workspace_list !=
+    const workspace_list_changed = self.presentation_state.prepared.model.workspace_list !=
         projection.version.workspace_list;
-    const agents_changed = presenter.presentation_state.prepared.model.agents !=
+    const agents_changed = self.presentation_state.prepared.model.agents !=
         projection.version.agents;
-    const sidebar_animation_changed = presenter.presentation_state.prepared.model.sidebar_animation !=
+    const sidebar_animation_changed = self.presentation_state.prepared.model.sidebar_animation !=
         projection.version.sidebar_animation;
-    const proxy_status_changed = presenter.presentation_state.prepared.model.proxy_status !=
+    const proxy_status_changed = self.presentation_state.prepared.model.proxy_status !=
         projection.version.proxy_status;
-    const system_metrics_changed = presenter.presentation_state.prepared.model.system_metrics !=
+    const system_metrics_changed = self.presentation_state.prepared.model.system_metrics !=
         projection.version.system_metrics;
-    const bars_changed = presenter.presentation_state.prepared.model.bars != projection.version.bars;
-    const notifications_changed = presenter.presentation_state.prepared.model.notifications !=
+    const bars_changed = self.presentation_state.prepared.model.bars != projection.version.bars;
+    const notifications_changed = self.presentation_state.prepared.model.notifications !=
         projection.version.notifications;
-    const tabs_changed = presenter.presentation_state.prepared.model.tabs !=
+    const tabs_changed = self.presentation_state.prepared.model.tabs !=
         projection.version.tabs;
-    const active_tab_changed = presenter.presentation_state.prepared.model.active_tab !=
+    const active_tab_changed = self.presentation_state.prepared.model.active_tab !=
         projection.version.active_tab;
-    const panes_changed = presenter.presentation_state.prepared.model.panes !=
+    const panes_changed = self.presentation_state.prepared.model.panes !=
         projection.version.panes;
-    const pane_metadata_changed = presenter.presentation_state.prepared.model.pane_metadata !=
+    const pane_metadata_changed = self.presentation_state.prepared.model.pane_metadata !=
         projection.version.pane_metadata;
-    const pane_foreground_changed = presenter.presentation_state.prepared.model.pane_foreground !=
+    const pane_foreground_changed = self.presentation_state.prepared.model.pane_foreground !=
         projection.version.pane_foreground;
-    const pane_progress_changed = presenter.presentation_state.prepared.model.pane_progress !=
+    const pane_progress_changed = self.presentation_state.prepared.model.pane_progress !=
         projection.version.pane_progress;
-    const pane_graphics_changed = presenter.presentation_state.prepared.model.pane_graphics !=
+    const pane_graphics_changed = self.presentation_state.prepared.model.pane_graphics !=
         projection.version.pane_graphics;
-    const chrome_changed = presenter.presentation_state.prepared.model.chrome !=
+    const chrome_changed = self.presentation_state.prepared.model.chrome !=
         projection.version.chrome;
-    const prompt_changed = presenter.presentation_state.prepared.model.prompt !=
+    const prompt_changed = self.presentation_state.prepared.model.prompt !=
         projection.version.prompt;
-    const history_changed = presenter.presentation_state.prepared.model.history !=
+    const history_changed = self.presentation_state.prepared.model.history !=
         projection.version.history;
-    const suggestion_changed = presenter.presentation_state.prepared.model.suggestion !=
+    const suggestion_changed = self.presentation_state.prepared.model.suggestion !=
         projection.version.suggestion;
-    const path_completion_changed = presenter.presentation_state.prepared.model.path_completion !=
+    const path_completion_changed = self.presentation_state.prepared.model.path_completion !=
         projection.version.path_completion;
-    const viewport_changed = presenter.presentation_state.prepared.model.viewport !=
+    const viewport_changed = self.presentation_state.prepared.model.viewport !=
         projection.version.viewport;
-    const was_copy_mode = if (presenter.compositor.copy) |copy| !copy.view.pointer else false;
+    const was_copy_mode = if (self.compositor.copy) |copy| !copy.view.pointer else false;
     const is_copy_mode = if (projection.copy) |copy| !copy.view.pointer else false;
     const copy_status_changed = was_copy_mode != is_copy_mode;
-    const view_interaction_changed = presenter.presentation_state.prepared.presentation_ingress.view_interaction !=
+    const view_interaction_changed = self.presentation_state.prepared.presentation_ingress.view_interaction !=
         projection.presentation_ingress.view_interaction;
-    const input_routing_changed = presenter.presentation_state.prepared.presentation_ingress.input_routing !=
+    const input_routing_changed = self.presentation_state.prepared.presentation_ingress.input_routing !=
         projection.presentation_ingress.input_routing;
     if (agents_changed) {
         resources.view.resetSidebarScroll();
@@ -286,30 +286,30 @@ pub fn presentDue(presenter: *Presenter, projection: client.Projection, resource
     const force_composition = workspace_changed or configuration_changed or host_changed or
         active_tab_changed or panes_changed or pane_foreground_changed or pane_graphics_changed or
         viewport_changed;
-    try presenter.syncWindowTitle(projection, resources.writer);
+    try self.syncWindowTitle(projection, resources.writer);
     const presented = if (projection.tab) |tab|
-        try presenter.present(.{
+        try self.present(.{
             .projection = projection,
             .resources = resources,
             .tab = tab,
             .force = force_composition,
         })
     else
-        try presenter.presentEmpty(projection, resources);
+        try self.presentEmpty(projection, resources);
     const geometry = client.Geometry.capture(projection);
-    const token = try presenter.presentation_state.begin(.{
-        .observation = presenter.presentation_state.observed,
+    const token = try self.presentation_state.begin(.{
+        .observation = self.presentation_state.observed,
         .commit = presented.commit,
         .geometry = geometry,
         .media_pending = projection.tab != null and mediaWorkPending(projection, resources),
     });
-    presenter.observePresentation(presented.presented_ns);
-    presenter.pacer.record(.{
+    self.observePresentation(presented.presented_ns);
+    self.pacer.record(.{
         .now = presented.presented_ns,
-        .scheduled_deadline = if (presenter.draw_scheduled) presenter.draw_due_ns else null,
-        .absorbed = presenter.pending_updates,
+        .scheduled_deadline = if (self.draw_scheduled) self.draw_due_ns else null,
+        .absorbed = self.pending_updates,
     });
-    presenter.pending_updates = 0;
+    self.pending_updates = 0;
 
     return token;
 }
@@ -322,17 +322,17 @@ pub fn presentDue(presenter: *Presenter, projection: client.Projection, resource
 /// ```zig
 /// try presenter.presentMedia(projection, resources);
 /// ```
-pub fn presentMedia(presenter: *Presenter, projection: client.Projection, resources: Resources) !void {
-    if (presenter.pending_updates != 0 or presenter.draw_pending) {
+pub fn presentMedia(self: *Presenter, projection: client.Projection, resources: Resources) !void {
+    if (self.pending_updates != 0 or self.draw_pending) {
         if (comptime core.enabled) {
-            presenter.metrics.media_deferrals += 1;
+            self.metrics.media_deferrals += 1;
         }
-        presenter.media_after_draw = true;
+        self.media_after_draw = true;
         return;
     }
 
     _ = projection.tab orelse return;
-    const media_idle = client.monotonic(presenter.io) -| presenter.last_input_ns >=
+    const media_idle = client.monotonic(self.io) -| self.last_input_ns >=
         toast_graphics.idle_after_ns;
     resources.view.kittyAttachments().reapRetired();
     const covered_before = resources.view.graphicalToastsCover(projection.notifications);
@@ -340,24 +340,24 @@ pub fn presentMedia(presenter: *Presenter, projection: client.Projection, resour
     const pill_covered_before = resources.view.graphicalPillCoversPlan();
     const icon_fallback_changed = try resources.view.prepareGraphics(projection.notifications, media_idle);
     if (icon_fallback_changed) {
-        try presenter.requestDraw();
+        try self.requestDraw();
     }
     if (!mediaWorkPending(projection, resources)) {
         return;
     }
     if (onlyWaitingForMediaIdle(resources, media_idle)) {
-        try presenter.requestMediaAt(presenter.last_input_ns +| toast_graphics.idle_after_ns);
+        try self.requestMediaAt(self.last_input_ns +| toast_graphics.idle_after_ns);
         return;
     }
 
     var graphics_writer: CombinedGraphicsWriter = .{
         .panes = .{
             .store = resources.graphics_store,
-            .layout_snapshot = presenter.compositor.layoutSnapshot(),
+            .layout_snapshot = self.compositor.layoutSnapshot(),
             .cell_width = projection.host_size.cell_width_px,
             .cell_height = projection.host_size.cell_height_px,
             .budget = kitty_codec.transmission_budget_per_frame,
-            .now_ns = if (comptime core.enabled) client.monotonic(presenter.io) else 0,
+            .now_ns = if (comptime core.enabled) client.monotonic(self.io) else 0,
         },
         .sidebar = resources.view.kittySidebar(),
         .icons = resources.view.kittyIcons(),
@@ -366,46 +366,46 @@ pub fn presentMedia(presenter: *Presenter, projection: client.Projection, resour
         .pill = resources.view.kittyPill(),
         .attachments = resources.view.kittyAttachments(),
         .allow_toast_transmission = media_idle,
-        .metrics = presenter.metrics,
+        .metrics = self.metrics,
     };
-    presenter.screen.graphics = .{
+    self.screen.graphics = .{
         .context = &graphics_writer,
         .write = CombinedGraphicsWriter.writeOpaque,
     };
-    try presenter.flushMedia(resources.writer);
-    presenter.notePaneGraphics(graphics_writer.panes.stats);
+    try self.flushMedia(resources.writer);
+    self.notePaneGraphics(graphics_writer.panes.stats);
 
     if (covered_before != resources.view.graphicalToastsCover(projection.notifications) or
         modal_covered_before != resources.view.graphicalModalCoversPlan() or
         pill_covered_before != resources.view.graphicalPillCoversPlan())
     {
         resources.view.invalidate();
-        try presenter.requestDraw();
+        try self.requestDraw();
     }
     if (mediaWorkPending(projection, resources)) {
         if (onlyWaitingForMediaIdle(resources, media_idle)) {
-            try presenter.requestMediaAt(presenter.last_input_ns +| toast_graphics.idle_after_ns);
+            try self.requestMediaAt(self.last_input_ns +| toast_graphics.idle_after_ns);
         } else {
-            try presenter.requestMedia();
+            try self.requestMedia();
         }
     }
 }
 
-fn notePaneGraphics(presenter: *Presenter, graphics_stats: Stats) void {
+fn notePaneGraphics(self: *Presenter, graphics_stats: Stats) void {
     if (comptime !core.enabled) {
         return;
     }
-    presenter.metrics.pane_shared_images += graphics_stats.shared_images;
-    presenter.metrics.pane_inline_images += graphics_stats.inline_images;
-    presenter.metrics.pane_compressed_images += graphics_stats.compressed_images;
-    presenter.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
-    presenter.metrics.pane_compress_passes += graphics_stats.compress_passes;
+    self.metrics.pane_shared_images += graphics_stats.shared_images;
+    self.metrics.pane_inline_images += graphics_stats.inline_images;
+    self.metrics.pane_compressed_images += graphics_stats.compressed_images;
+    self.metrics.pane_transmission_passes += graphics_stats.transmission_passes;
+    self.metrics.pane_compress_passes += graphics_stats.compress_passes;
     if (graphics_stats.shared_images + graphics_stats.inline_images != 0) {
-        const presented_ns = client.monotonic(presenter.io);
-        if (presenter.last_pane_present_ns) |previous| {
-            presenter.metrics.pane_present_interval.observe(presented_ns -| previous);
+        const presented_ns = client.monotonic(self.io);
+        if (self.last_pane_present_ns) |previous| {
+            self.metrics.pane_present_interval.observe(presented_ns -| previous);
         }
-        presenter.last_pane_present_ns = presented_ns;
+        self.last_pane_present_ns = presented_ns;
     }
 }
 
@@ -443,24 +443,24 @@ fn onlyWaitingForMediaIdle(resources: Resources, media_idle: bool) bool {
         resources.view.kittyToasts().waitingForMediaIdle();
 }
 
-fn observePresentation(presenter: *Presenter, presented_ns: u64) void {
+fn observePresentation(self: *Presenter, presented_ns: u64) void {
     if (comptime core.enabled) {
-        if (presenter.last_presented_ns) |previous| {
-            presenter.metrics.paced_interval.observe(presented_ns -| previous);
+        if (self.last_presented_ns) |previous| {
+            self.metrics.paced_interval.observe(presented_ns -| previous);
         }
     }
 
-    presenter.last_presented_ns = presented_ns;
+    self.last_presented_ns = presented_ns;
 }
 
 pub const Delivery = client.PresentationDelivery;
 
-fn present(presenter: *Presenter, input: CellPresentation) !Presented {
-    const compose_started = core.now(presenter.io);
-    const composed = try presenter.compositor.render(.{
+fn present(self: *Presenter, input: CellPresentation) !Presented {
+    const compose_started = core.now(self.io);
+    const composed = try self.compositor.render(.{
         .model = input.projection.model,
         .tab = input.tab,
-        .screen = &presenter.screen,
+        .screen = &self.screen,
         .input = .{
             .area = input.resources.view.workbench(),
             .palette = input.resources.view.palette(),
@@ -473,10 +473,10 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
         },
     });
     var prompt = input.projection.prompt;
-    const chrome = try input.resources.view.render(&presenter.screen, .{
+    const chrome = try input.resources.view.render(&self.screen, .{
         .model = input.projection.model,
         .tab = input.tab,
-        .compositor = &presenter.compositor,
+        .compositor = &self.compositor,
         .agents = input.projection.agents,
         .sidebar_animation_frame = input.projection.sidebar_animation_frame,
         .notifications = input.projection.notifications,
@@ -496,14 +496,14 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
         .diagnostic = input.projection.diagnostic,
     });
     if (comptime core.enabled) {
-        presenter.metrics.composed_panes += composed.stats.panes;
-        presenter.metrics.composed_cells += composed.stats.cells;
-        presenter.metrics.composed_damage_cells += composed.stats.damaged_cells;
-        presenter.metrics.chrome_scanned_cells += chrome.scanned;
-        presenter.metrics.chrome_damaged_cells += chrome.damaged;
-        presenter.metrics.full_compositions += @intFromBool(composed.stats.full);
-        presenter.metrics.compose.observe(
-            core.elapsed(compose_started, core.now(presenter.io)),
+        self.metrics.composed_panes += composed.stats.panes;
+        self.metrics.composed_cells += composed.stats.cells;
+        self.metrics.composed_damage_cells += composed.stats.damaged_cells;
+        self.metrics.chrome_scanned_cells += chrome.scanned;
+        self.metrics.chrome_damaged_cells += chrome.damaged;
+        self.metrics.full_compositions += @intFromBool(composed.stats.full);
+        self.metrics.compose.observe(
+            core.elapsed(compose_started, core.now(self.io)),
         );
     }
     // Pane graphics that are only names, placements and deletes ride inside
@@ -512,60 +512,60 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
     var control_writer: CellGraphicsWriter = .{
         .panes = if (input.projection.host_capabilities.images == .supported) .{
             .store = input.resources.graphics_store,
-            .layout_snapshot = presenter.compositor.layoutSnapshot(),
+            .layout_snapshot = self.compositor.layoutSnapshot(),
             .cell_width = input.projection.host_size.cell_width_px,
             .cell_height = input.projection.host_size.cell_height_px,
             .mode = .control,
-            .now_ns = if (comptime core.enabled) client.monotonic(presenter.io) else 0,
+            .now_ns = if (comptime core.enabled) client.monotonic(self.io) else 0,
         } else null,
         .pill = input.resources.view.kittyPill(),
     };
-    presenter.screen.graphics = if (controlGraphicsReady(input.projection, input.resources)) .{
+    self.screen.graphics = if (controlGraphicsReady(input.projection, input.resources)) .{
         .context = &control_writer,
         .write = CellGraphicsWriter.writeOpaque,
     } else null;
-    try presenter.flushScreen(input.resources.writer);
+    try self.flushScreen(input.resources.writer);
     if (control_writer.panes) |panes| {
-        presenter.notePaneGraphics(panes.stats);
+        self.notePaneGraphics(panes.stats);
     }
 
     if (comptime core.enabled) {
-        presenter.metrics.pill_graphics_flushed_bytes += control_writer.pill_bytes;
+        self.metrics.pill_graphics_flushed_bytes += control_writer.pill_bytes;
     }
     return .{
-        .presented_ns = client.monotonic(presenter.io),
+        .presented_ns = client.monotonic(self.io),
         .commit = composed.commit,
     };
 }
 
-fn presentEmpty(presenter: *Presenter, projection: client.Projection, resources: Resources) !Presented {
-    presenter.compositor.invalidate();
+fn presentEmpty(self: *Presenter, projection: client.Projection, resources: Resources) !Presented {
+    self.compositor.invalidate();
     resources.view.kittyPill().observe(&.{}, resources.view.palette());
-    const buffer = presenter.screen.buffer();
+    const buffer = self.screen.buffer();
     buffer.clear(.{});
-    presenter.screen.cursor = null;
-    presenter.screen.mouse_pointer = .default;
+    self.screen.cursor = null;
+    self.screen.mouse_pointer = .default;
     var control_writer: CellGraphicsWriter = .{ .pill = resources.view.kittyPill() };
-    presenter.screen.graphics = if (controlGraphicsReady(projection, resources)) .{
+    self.screen.graphics = if (controlGraphicsReady(projection, resources)) .{
         .context = &control_writer,
         .write = CellGraphicsWriter.writeOpaque,
     } else null;
-    try presenter.flushScreen(resources.writer);
+    try self.flushScreen(resources.writer);
     if (comptime core.enabled) {
-        presenter.metrics.pill_graphics_flushed_bytes += control_writer.pill_bytes;
+        self.metrics.pill_graphics_flushed_bytes += control_writer.pill_bytes;
     }
 
-    return .{ .presented_ns = client.monotonic(presenter.io), .commit = .{} };
+    return .{ .presented_ns = client.monotonic(self.io), .commit = .{} };
 }
 
 /// Sends the host window title when the rendered template changes. The
 /// bytes join the frame already being flushed, so a title never costs an
 /// extra host write.
-fn syncWindowTitle(presenter: *Presenter, projection: client.Projection, writer: *std.Io.Writer) !void {
+fn syncWindowTitle(self: *Presenter, projection: client.Projection, writer: *std.Io.Writer) !void {
     const tab_label = if (projection.tab) |tab| data.tab_label.text(projection.model, tab) else "";
     const pane_title = projection.model.focusedPaneTitle();
 
-    try presenter.window_title.sync(writer, .{
+    try self.window_title.sync(writer, .{
         .template = projection.window_title_template,
         .tokens = .{
             .workspace = projection.model.workspaceName(),
@@ -575,27 +575,27 @@ fn syncWindowTitle(presenter: *Presenter, projection: client.Projection, writer:
     });
 }
 
-fn flushScreen(presenter: *Presenter, writer: *std.Io.Writer) !void {
-    const started = core.now(presenter.io);
-    const stats = try presenter.screen.flush(writer);
+fn flushScreen(self: *Presenter, writer: *std.Io.Writer) !void {
+    const started = core.now(self.io);
+    const stats = try self.screen.flush(writer);
     if (comptime core.enabled) {
-        presenter.metrics.flushes += 1;
-        presenter.metrics.scanned_cells += stats.scanned;
-        presenter.metrics.flushed_cells += stats.cells;
-        presenter.metrics.flushed_bytes += stats.bytes;
-        presenter.metrics.graphics_flushed_bytes += stats.graphics_bytes;
+        self.metrics.flushes += 1;
+        self.metrics.scanned_cells += stats.scanned;
+        self.metrics.flushed_cells += stats.cells;
+        self.metrics.flushed_bytes += stats.bytes;
+        self.metrics.graphics_flushed_bytes += stats.graphics_bytes;
         // Only pane control escapes ride the cell frame.
-        presenter.metrics.pane_graphics_flushed_bytes += stats.graphics_bytes;
-        presenter.metrics.flush.observe(core.elapsed(started, core.now(presenter.io)));
+        self.metrics.pane_graphics_flushed_bytes += stats.graphics_bytes;
+        self.metrics.flush.observe(core.elapsed(started, core.now(self.io)));
     }
 }
 
-fn flushMedia(presenter: *Presenter, writer: *std.Io.Writer) !void {
-    const started = core.now(presenter.io);
-    const stats = try presenter.screen.flush(writer);
+fn flushMedia(self: *Presenter, writer: *std.Io.Writer) !void {
+    const started = core.now(self.io);
+    const stats = try self.screen.flush(writer);
     if (comptime core.enabled) {
-        presenter.metrics.media_flushes += 1;
-        presenter.metrics.graphics_flushed_bytes += stats.graphics_bytes;
-        presenter.metrics.media_flush.observe(core.elapsed(started, core.now(presenter.io)));
+        self.metrics.media_flushes += 1;
+        self.metrics.graphics_flushed_bytes += stats.graphics_bytes;
+        self.metrics.media_flush.observe(core.elapsed(started, core.now(self.io)));
     }
 }

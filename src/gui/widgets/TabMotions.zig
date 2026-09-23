@@ -12,21 +12,21 @@ len: usize = 0,
 workspace: ?core.WorkspaceLocation = null,
 
 /// Example: `motions.begin(tabs.workspace);`
-pub fn begin(motions: *TabMotions, workspace: ?core.WorkspaceLocation) void {
-    if (!std.meta.eql(motions.workspace, workspace)) {
-        motions.len = 0;
-        motions.workspace = workspace;
+pub fn begin(self: *TabMotions, workspace: ?core.WorkspaceLocation) void {
+    if (!std.meta.eql(self.workspace, workspace)) {
+        self.len = 0;
+        self.workspace = workspace;
     }
 
-    for (motions.entries[0..motions.len]) |*entry| {
+    for (self.entries[0..self.len]) |*entry| {
         entry.seen = false;
     }
 }
 
 /// Retargets from the currently sampled position, including mid-animation.
 /// Example: `const visible = motions.place(.{ .id = tab_id, .bounds = slot }, clock);`
-pub fn place(motions: *TabMotions, slot: Slot, clock: *Clock) Rect {
-    for (motions.entries[0..motions.len]) |*entry| {
+pub fn place(self: *TabMotions, slot: Slot, clock: *Clock) Rect {
+    for (self.entries[0..self.len]) |*entry| {
         if (entry.id != slot.id) {
             continue;
         }
@@ -48,25 +48,25 @@ pub fn place(motions: *TabMotions, slot: Slot, clock: *Clock) Rect {
         return entry.value(clock.now_ns);
     }
 
-    if (motions.len < motions.entries.len) {
-        motions.entries[motions.len] = .{ .id = slot.id, .from = slot.bounds, .to = slot.bounds, .transition = .{ .from = 1, .to = 1, .started_ns = clock.now_ns, .duration_ns = 0 } };
-        motions.len += 1;
+    if (self.len < self.entries.len) {
+        self.entries[self.len] = .{ .id = slot.id, .from = slot.bounds, .to = slot.bounds, .transition = .{ .from = 1, .to = 1, .started_ns = clock.now_ns, .duration_ns = 0 } };
+        self.len += 1;
     }
 
     return slot.bounds;
 }
 
 /// Example: `motions.finish();`
-pub fn finish(motions: *TabMotions) void {
+pub fn finish(self: *TabMotions) void {
     var kept: usize = 0;
-    for (motions.entries[0..motions.len]) |entry| {
+    for (self.entries[0..self.len]) |entry| {
         if (entry.seen) {
-            motions.entries[kept] = entry;
+            self.entries[kept] = entry;
             kept += 1;
         }
     }
 
-    motions.len = kept;
+    self.len = kept;
 }
 
 test "tab reflow eases retargets continuously and parks its shared clock" {

@@ -33,7 +33,7 @@ failures: u64 = 0,
 /// ```zig
 /// try pipeline.init(.{ .io = io, .allocator = allocator, .size = size, .storage_limit = storage_limit, .payload_limit = payload_limit, .write_pty = write_pty });
 /// ```
-pub fn init(pipeline: *Pipeline, initialization: Initialization) !void {
+pub fn init(self: *Pipeline, initialization: Initialization) !void {
     png.install();
 
     const io = initialization.io;
@@ -43,92 +43,92 @@ pub fn init(pipeline: *Pipeline, initialization: Initialization) !void {
     const payload_limit = initialization.payload_limit;
     const write_pty = initialization.write_pty;
 
-    pipeline.allocator = allocator;
-    pipeline.write_pty = write_pty;
-    pipeline.payload_limit = payload_limit;
-    pipeline.storage_limit = storage_limit;
-    pipeline.terminal = try .init(io, allocator, .{
+    self.allocator = allocator;
+    self.write_pty = write_pty;
+    self.payload_limit = payload_limit;
+    self.storage_limit = storage_limit;
+    self.terminal = try .init(io, allocator, .{
         .cols = size.cols,
         .rows = size.rows,
         .kitty_image_storage_limit = storage_limit,
         .kitty_image_loading_limits = media.image_loading_limits,
     });
-    errdefer pipeline.terminal.deinit(allocator);
-    pipeline.stream = pipeline.newStream();
-    errdefer pipeline.stream.deinit();
-    try pipeline.stream.handler.resize(media.vtResize(size));
-    pipeline.batches = .{ .{}, .{} };
-    pipeline.active = 0;
-    pipeline.worker = null;
-    pipeline.enabled = true;
-    pipeline.dropped_events = 0;
-    pipeline.dropped_bytes = 0;
-    pipeline.queue_event_high_water = 0;
-    pipeline.queue_byte_high_water = 0;
-    pipeline.resets = 0;
-    pipeline.failures = 0;
+    errdefer self.terminal.deinit(allocator);
+    self.stream = self.newStream();
+    errdefer self.stream.deinit();
+    try self.stream.handler.resize(media.vtResize(size));
+    self.batches = .{ .{}, .{} };
+    self.active = 0;
+    self.worker = null;
+    self.enabled = true;
+    self.dropped_events = 0;
+    self.dropped_bytes = 0;
+    self.queue_event_high_water = 0;
+    self.queue_byte_high_water = 0;
+    self.resets = 0;
+    self.failures = 0;
 }
 
-pub fn deinit(pipeline: *Pipeline) void {
-    if (pipeline.worker) |index| {
-        pipeline.batches[index].reset();
+pub fn deinit(self: *Pipeline) void {
+    if (self.worker) |index| {
+        self.batches[index].reset();
     }
-    pipeline.worker = null;
-    if (pipeline.enabled) {
-        pipeline.stream.deinit();
+    self.worker = null;
+    if (self.enabled) {
+        self.stream.deinit();
     }
-    pipeline.terminal.deinit(pipeline.allocator);
+    self.terminal.deinit(self.allocator);
 }
 
-pub fn queueOutput(pipeline: *Pipeline, bytes: []const u8) void {
+pub fn queueOutput(self: *Pipeline, bytes: []const u8) void {
     if (bytes.len > media.batch_bytes) {
-        pipeline.dropActive(bytes.len, 1);
+        self.dropActive(bytes.len, 1);
         return;
     }
-    var batch = &pipeline.batches[pipeline.active];
+    var batch = &self.batches[self.active];
     if (!batch.pushOutput(bytes)) {
-        pipeline.dropActive(bytes.len, 1);
-        batch = &pipeline.batches[pipeline.active];
+        self.dropActive(bytes.len, 1);
+        batch = &self.batches[self.active];
         _ = batch.pushOutput(bytes);
     }
-    pipeline.observeQueueDepth();
+    self.observeQueueDepth();
 }
 
-pub fn queueResize(pipeline: *Pipeline, size: core.TerminalSize) void {
-    var batch = &pipeline.batches[pipeline.active];
+pub fn queueResize(self: *Pipeline, size: core.TerminalSize) void {
+    var batch = &self.batches[self.active];
     if (!batch.pushResize(size)) {
-        pipeline.dropActive(0, 1);
-        batch = &pipeline.batches[pipeline.active];
+        self.dropActive(0, 1);
+        batch = &self.batches[self.active];
         _ = batch.pushResize(size);
     }
-    pipeline.observeQueueDepth();
+    self.observeQueueDepth();
 }
 
-pub fn hasPending(pipeline: *const Pipeline) bool {
-    return pipeline.worker == null and pipeline.batches[pipeline.active].event_count != 0;
+pub fn hasPending(self: *const Pipeline) bool {
+    return self.worker == null and self.batches[self.active].event_count != 0;
 }
 
-pub fn seal(pipeline: *Pipeline) bool {
-    if (!pipeline.hasPending()) {
+pub fn seal(self: *Pipeline) bool {
+    if (!self.hasPending()) {
         return false;
     }
-    const sealed = pipeline.active;
-    pipeline.active ^= 1;
-    std.debug.assert(pipeline.batches[pipeline.active].event_count == 0);
-    pipeline.worker = sealed;
+    const sealed = self.active;
+    self.active ^= 1;
+    std.debug.assert(self.batches[self.active].event_count == 0);
+    self.worker = sealed;
     return true;
 }
 
 /// Reports whether ingestion state must be reset before replaying the seal.
 /// Example: `if (pipeline.sealedRequiresReset()) resetIngestion();`.
-pub fn sealedRequiresReset(pipeline: *const Pipeline) bool {
-    return pipeline.batches[pipeline.worker.?].reset_before;
+pub fn sealedRequiresReset(self: *const Pipeline) bool {
+    return self.batches[self.worker.?].reset_before;
 }
 
-pub fn finishSealed(pipeline: *Pipeline) void {
-    const index = pipeline.worker orelse unreachable;
-    pipeline.batches[index].reset();
-    pipeline.worker = null;
+pub fn finishSealed(self: *Pipeline) void {
+    const index = self.worker orelse unreachable;
+    self.batches[index].reset();
+    self.worker = null;
 }
 
 /// Replays one sealed media batch through a sink exposing
@@ -137,18 +137,18 @@ pub fn finishSealed(pipeline: *Pipeline) void {
 /// ```zig
 /// pipeline.processSealed(.{ .current_size = size, .stats = stats }, &sink);
 /// ```
-pub fn processSealed(pipeline: *Pipeline, processing: Processing, sink: anytype) void {
+pub fn processSealed(self: *Pipeline, processing: Processing, sink: anytype) void {
     const current_size = processing.current_size;
     const stats = processing.stats;
 
-    const batch = &pipeline.batches[pipeline.worker orelse return];
-    if (batch.reset_before or !pipeline.enabled) {
-        pipeline.resetState(current_size) catch {
-            pipeline.failures +|= 1;
+    const batch = &self.batches[self.worker orelse return];
+    if (batch.reset_before or !self.enabled) {
+        self.resetState(current_size) catch {
+            self.failures +|= 1;
             stats.failed = true;
             return;
         };
-        pipeline.resets +|= 1;
+        self.resets +|= 1;
         stats.reset = true;
     }
 
@@ -156,10 +156,10 @@ pub fn processSealed(pipeline: *Pipeline, processing: Processing, sink: anytype)
         .output => |output| {
             const start: usize = output.offset;
             const bytes = batch.bytes[start..][0..output.len];
-            const remaining = media.stripFileQueries(bytes, &pipeline.scratch, sink);
+            const remaining = media.stripFileQueries(bytes, &self.scratch, sink);
             const filtered = media.filterAtomicSharedFrames(.{
                 .bytes = remaining,
-                .storage_limit = pipeline.storage_limit,
+                .storage_limit = self.storage_limit,
             }, sink, SharedMemoryAvailability{});
             stats.discarded_frames +|= filtered.discarded;
             stats.unavailable_frames +|= filtered.unavailable;
@@ -168,48 +168,48 @@ pub fn processSealed(pipeline: *Pipeline, processing: Processing, sink: anytype)
             stats.file_frames +|= filtered.file;
             stats.output_bytes +|= bytes.len;
         },
-        .resize => |size| pipeline.stream.handler.resize(media.vtResize(size)) catch {
-            pipeline.failures +|= 1;
+        .resize => |size| self.stream.handler.resize(media.vtResize(size)) catch {
+            self.failures +|= 1;
             stats.failed = true;
         },
     };
 }
 
-fn dropActive(pipeline: *Pipeline, incoming_bytes: usize, incoming_events: usize) void {
-    const batch = &pipeline.batches[pipeline.active];
-    pipeline.dropped_events +|= batch.event_count + incoming_events;
-    pipeline.dropped_bytes +|= batch.len + incoming_bytes;
+fn dropActive(self: *Pipeline, incoming_bytes: usize, incoming_events: usize) void {
+    const batch = &self.batches[self.active];
+    self.dropped_events +|= batch.event_count + incoming_events;
+    self.dropped_bytes +|= batch.len + incoming_bytes;
     batch.reset();
     batch.reset_before = true;
 }
 
-fn observeQueueDepth(pipeline: *Pipeline) void {
+fn observeQueueDepth(self: *Pipeline) void {
     var events: usize = 0;
     var bytes: usize = 0;
-    for (&pipeline.batches) |*batch| {
+    for (&self.batches) |*batch| {
         events += batch.event_count;
         bytes += batch.len;
     }
-    pipeline.queue_event_high_water = @max(pipeline.queue_event_high_water, events);
-    pipeline.queue_byte_high_water = @max(pipeline.queue_byte_high_water, bytes);
+    self.queue_event_high_water = @max(self.queue_event_high_water, events);
+    self.queue_byte_high_water = @max(self.queue_byte_high_water, bytes);
 }
 
-fn resetState(pipeline: *Pipeline, size: core.TerminalSize) !void {
-    if (pipeline.enabled) {
-        pipeline.stream.deinit();
+fn resetState(self: *Pipeline, size: core.TerminalSize) !void {
+    if (self.enabled) {
+        self.stream.deinit();
     }
-    pipeline.enabled = false;
-    pipeline.terminal.fullReset();
-    pipeline.stream = pipeline.newStream();
-    errdefer pipeline.stream.deinit();
-    try pipeline.stream.handler.resize(media.vtResize(size));
-    pipeline.enabled = true;
+    self.enabled = false;
+    self.terminal.fullReset();
+    self.stream = self.newStream();
+    errdefer self.stream.deinit();
+    try self.stream.handler.resize(media.vtResize(size));
+    self.enabled = true;
 }
 
-fn newStream(pipeline: *Pipeline) vt.TerminalStream {
-    var handler = pipeline.terminal.vtHandler();
-    handler.apc_handler.max_bytes.put(.kitty, pipeline.payload_limit);
+fn newStream(self: *Pipeline) vt.TerminalStream {
+    var handler = self.terminal.vtHandler();
+    handler.apc_handler.max_bytes.put(.kitty, self.payload_limit);
     handler.apc_handler.enable(.glyph, false);
-    handler.effects.write_pty = pipeline.write_pty;
-    return .init(.{ .allocator = pipeline.allocator, .handler = handler });
+    handler.effects.write_pty = self.write_pty;
+    return .init(.{ .allocator = self.allocator, .handler = handler });
 }

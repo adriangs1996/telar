@@ -67,8 +67,8 @@ pub fn parse(gpa: std.mem.Allocator, source: []const u8) !TrustStore {
 /// ```zig
 /// try store.upsert(&manifest, .{ .digest = digest, .capabilities = capabilities });
 /// ```
-pub fn upsert(store: *TrustStore, manifest: *const PluginManifest, update: GrantUpdate) !void {
-    for (store.entries[0..store.count]) |*entry| {
+pub fn upsert(self: *TrustStore, manifest: *const PluginManifest, update: GrantUpdate) !void {
+    for (self.entries[0..self.count]) |*entry| {
         if (!std.mem.eql(u8, entry.pluginId(), manifest.id())) {
             continue;
         }
@@ -79,7 +79,7 @@ pub fn upsert(store: *TrustStore, manifest: *const PluginManifest, update: Grant
         };
         return;
     }
-    if (store.count == plugin_ops.max_grants) {
+    if (self.count == plugin_ops.max_grants) {
         return error.TooManyTrustGrants;
     }
     var entry: StoredGrant = .{
@@ -91,18 +91,18 @@ pub fn upsert(store: *TrustStore, manifest: *const PluginManifest, update: Grant
         },
     };
     @memcpy(entry.plugin_bytes[0..manifest.id_len], manifest.id());
-    store.entries[store.count] = entry;
-    store.count += 1;
+    self.entries[self.count] = entry;
+    self.count += 1;
 }
 
-pub fn grants(store: *const TrustStore, buffer: *[plugin_ops.max_grants]Grant) []const Grant {
-    for (store.entries[0..store.count], 0..) |entry, index| buffer[index] = entry.grant;
-    return buffer[0..store.count];
+pub fn grants(self: *const TrustStore, buffer: *[plugin_ops.max_grants]Grant) []const Grant {
+    for (self.entries[0..self.count], 0..) |entry, index| buffer[index] = entry.grant;
+    return buffer[0..self.count];
 }
 
-pub fn writeJson(store: *const TrustStore, writer: *std.Io.Writer) !void {
+pub fn writeJson(self: *const TrustStore, writer: *std.Io.Writer) !void {
     try writer.writeAll("{\"version\":1,\"grants\":[");
-    for (store.entries[0..store.count], 0..) |*entry, index| {
+    for (self.entries[0..self.count], 0..) |*entry, index| {
         if (index != 0) {
             try writer.writeByte(',');
         }

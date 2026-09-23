@@ -17,13 +17,13 @@ channel: Channel,
 /// var observations: Observations = undefined;
 /// try observations.init(liveness);
 /// ```
-pub fn init(observations: *Observations, liveness: CredentialGate) !void {
-    observations.* = .{
+pub fn init(self: *Observations, liveness: CredentialGate) !void {
+    self.* = .{
         .pipeline_value = .{},
         .channel = undefined,
     };
-    observations.channel.init(liveness);
-    try observations.pipeline_value.add(observations.channel.observer());
+    self.channel.init(liveness);
+    try self.pipeline_value.add(self.channel.observer());
 }
 
 /// Closes delivery after all publishers have stopped.
@@ -31,8 +31,8 @@ pub fn init(observations: *Observations, liveness: CredentialGate) !void {
 /// ```zig
 /// observations.close(io);
 /// ```
-pub fn close(observations: *Observations, io: std.Io) void {
-    observations.channel.close(io);
+pub fn close(self: *Observations, io: std.Io) void {
+    self.channel.close(io);
 }
 
 /// Waits for the next queued event whose credential remains live.
@@ -40,8 +40,8 @@ pub fn close(observations: *Observations, io: std.Io) void {
 /// ```zig
 /// const event = try observations.receive(io);
 /// ```
-pub fn receive(observations: *Observations, io: std.Io) anyerror!MiddlewareEvent {
-    return observations.channel.receive(io);
+pub fn receive(self: *Observations, io: std.Io) anyerror!MiddlewareEvent {
+    return self.channel.receive(io);
 }
 
 /// Borrows the immutable publication pipeline used by active tunnels.
@@ -49,8 +49,8 @@ pub fn receive(observations: *Observations, io: std.Io) anyerror!MiddlewareEvent
 /// ```zig
 /// const pipeline = observations.pipeline();
 /// ```
-pub fn pipeline(observations: *const Observations) *const Pipeline {
-    return &observations.pipeline_value;
+pub fn pipeline(self: *const Observations) *const Pipeline {
+    return &self.pipeline_value;
 }
 
 /// Returns a lock-free snapshot of bounded queue behavior.
@@ -58,6 +58,6 @@ pub fn pipeline(observations: *const Observations) *const Pipeline {
 /// ```zig
 /// const snapshot = observations.metrics();
 /// ```
-pub fn metrics(observations: *const Observations) ObservationQueueMetrics {
-    return observations.channel.metrics();
+pub fn metrics(self: *const Observations) ObservationQueueMetrics {
+    return self.channel.metrics();
 }

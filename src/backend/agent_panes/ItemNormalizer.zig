@@ -12,7 +12,7 @@ description: [2048]u8 = undefined,
 
 /// Normalizes only public provider item fields. The returned slices borrow this scratch.
 /// Example: `if (normalizer.item(value, true)) |update| transcript.update(update);`
-pub fn item(normalizer: *ItemNormalizer, value: std.json.Value, complete: bool) ?ItemUpdate {
+pub fn item(self: *ItemNormalizer, value: std.json.Value, complete: bool) ?ItemUpdate {
     const kind = protocol.field(value, "type");
     var result: ItemUpdate = .{
         .id = protocol.string(protocol.field(value, "id")),
@@ -20,7 +20,7 @@ pub fn item(normalizer: *ItemNormalizer, value: std.json.Value, complete: bool) 
         .complete = complete,
         .status = status(protocol.field(value, "status"), complete),
     };
-    var writer: std.Io.Writer = .fixed(normalizer.body_buffer orelse &normalizer.body);
+    var writer: std.Io.Writer = .fixed(self.body_buffer orelse &self.body);
     if (protocol.is(kind, "agentMessage") or protocol.is(kind, "plan")) {
         result.role = .assistant;
         result.kind = if (protocol.is(kind, "plan")) .plan else .message;
@@ -74,7 +74,7 @@ pub fn item(normalizer: *ItemNormalizer, value: std.json.Value, complete: bool) 
     } else if (protocol.is(kind, "commandExecution")) {
         result.kind = .command;
         result.title = "Command";
-        result.detail = std.fmt.bufPrint(&normalizer.description, "{s}\n{s}", .{ protocol.string(protocol.field(value, "command")), protocol.string(protocol.field(value, "cwd")) }) catch protocol.string(protocol.field(value, "command"));
+        result.detail = std.fmt.bufPrint(&self.description, "{s}\n{s}", .{ protocol.string(protocol.field(value, "command")), protocol.string(protocol.field(value, "cwd")) }) catch protocol.string(protocol.field(value, "command"));
         writer.print("$ {s}\n{s}", .{ protocol.string(protocol.field(value, "command")), protocol.string(protocol.field(value, "aggregatedOutput")) }) catch {
             result.truncated = true;
         };
@@ -91,7 +91,7 @@ pub fn item(normalizer: *ItemNormalizer, value: std.json.Value, complete: bool) 
         result.truncated = changes != .array;
         if (changes == .array) {
             result.truncated = changes.array.items.len == 0;
-            result.detail = std.fmt.bufPrint(&normalizer.description, "{d} file(s)", .{changes.array.items.len}) catch "";
+            result.detail = std.fmt.bufPrint(&self.description, "{d} file(s)", .{changes.array.items.len}) catch "";
             for (changes.array.items) |change| {
                 fileChange(&writer, change) catch |err| {
                     result.truncated = true;
@@ -105,7 +105,7 @@ pub fn item(normalizer: *ItemNormalizer, value: std.json.Value, complete: bool) 
         }
     } else if (protocol.is(kind, "mcpToolCall") or protocol.is(kind, "dynamicToolCall")) {
         result.kind = if (protocol.is(kind, "mcpToolCall")) .mcp else .dynamic_tool;
-        result.title = std.fmt.bufPrint(&normalizer.heading, "{s} · {s}", .{ protocol.string(protocol.field(value, if (result.kind == .mcp) "server" else "namespace")), protocol.string(protocol.field(value, "tool")) }) catch protocol.string(protocol.field(value, "tool"));
+        result.title = std.fmt.bufPrint(&self.heading, "{s} · {s}", .{ protocol.string(protocol.field(value, if (result.kind == .mcp) "server" else "namespace")), protocol.string(protocol.field(value, "tool")) }) catch protocol.string(protocol.field(value, "tool"));
         writer.print("Arguments\n{f}\n", .{std.json.fmt(protocol.field(value, "arguments"), .{ .whitespace = .indent_2 })}) catch {
             result.truncated = true;
         };
@@ -147,7 +147,7 @@ pub fn item(normalizer: *ItemNormalizer, value: std.json.Value, complete: bool) 
         writer.writeAll(protocol.string(protocol.field(value, "prompt"))) catch {
             result.truncated = true;
         };
-        if (normalizer.include_history_details) {
+        if (self.include_history_details) {
             collaborationDetails(&writer, value) catch {
                 result.truncated = true;
             };

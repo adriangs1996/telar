@@ -15,8 +15,8 @@ pub fn init(path: []const u8) !CwdState {
     return state;
 }
 
-pub fn slice(state: *const CwdState) []const u8 {
-    return state.bytes[0..state.len];
+pub fn slice(self: *const CwdState) []const u8 {
+    return self.bytes[0..self.len];
 }
 
 /// Invalid observations and repeated values are ignored. The fixed buffer
@@ -27,22 +27,22 @@ pub fn slice(state: *const CwdState) []const u8 {
 ///     publishCwd(cwd.slice());
 /// }
 /// ```
-pub fn update(state: *CwdState, path: []const u8) bool {
-    if (!validCwd(path) or std.mem.eql(u8, state.slice(), path)) {
+pub fn update(self: *CwdState, path: []const u8) bool {
+    if (!validCwd(path) or std.mem.eql(u8, self.slice(), path)) {
         return false;
     }
-    @memcpy(state.bytes[0..path.len], path);
-    state.len = @intCast(path.len);
-    revisions.advance(&state.revision);
+    @memcpy(self.bytes[0..path.len], path);
+    self.len = @intCast(path.len);
+    revisions.advance(&self.revision);
     return true;
 }
 
-fn set(state: *CwdState, path: []const u8) bool {
+fn set(self: *CwdState, path: []const u8) bool {
     if (!validCwd(path)) {
         return false;
     }
-    @memcpy(state.bytes[0..path.len], path);
-    state.len = @intCast(path.len);
+    @memcpy(self.bytes[0..path.len], path);
+    self.len = @intCast(path.len);
     return true;
 }
 

@@ -8,8 +8,8 @@ projection: *const client.Projection,
 
 /// Registers the painted controls and outlines the focused one before overlays.
 /// Example: `try focus.draw(canvas);`
-pub fn draw(widget: ChromeFocus, canvas: *Canvas) !void {
+pub fn draw(self: ChromeFocus, canvas: *Canvas) !void {
     if (canvas.widgets) |state| {
-        try state.chrome(canvas, .{ .chrome = widget.chrome, .projection = widget.projection });
+        try state.chrome(canvas, .{ .chrome = self.chrome, .projection = self.projection });
     }
 }

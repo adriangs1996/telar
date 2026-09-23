@@ -10,12 +10,12 @@ const TransformPipeline = @This();
 transformers: [middleware.max_transformers]Transformer = undefined,
 len: u8 = 0,
 
-pub fn add(pipeline: *TransformPipeline, transformer: Transformer) !void {
-    if (pipeline.len == pipeline.transformers.len) {
+pub fn add(self: *TransformPipeline, transformer: Transformer) !void {
+    if (self.len == self.transformers.len) {
         return error.TooManyProxyTransformers;
     }
-    pipeline.transformers[pipeline.len] = transformer;
-    pipeline.len += 1;
+    self.transformers[self.len] = transformer;
+    self.len += 1;
 }
 
 pub const Request = @import("Request.zig");
@@ -25,11 +25,11 @@ pub const Request = @import("Request.zig");
 /// ```zig
 /// const changed = pipeline.apply(.{ .io = io, .context = context, .headers = &headers });
 /// ```
-pub fn apply(pipeline: *const TransformPipeline, request: Request) bool {
+pub fn apply(self: *const TransformPipeline, request: Request) bool {
     const headers = request.headers;
 
     var changed = false;
-    for (pipeline.transformers[0..pipeline.len]) |transformer| {
+    for (self.transformers[0..self.len]) |transformer| {
         var view_storage: [middleware.max_header_fields]HeaderView = undefined;
         var effects: EffectBatch = .{};
         const status = transformer.transform(

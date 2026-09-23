@@ -12,30 +12,30 @@ thread: client.ThreadView,
 
 /// Draws a native conversation with an attachment-scoped composer and controls.
 /// Example: `try thread_pane.draw(canvas);`
-pub fn draw(widget: ThreadPane, canvas: *Canvas) !void {
-    if (widget.area.isEmpty()) {
+pub fn draw(self: ThreadPane, canvas: *Canvas) !void {
+    if (self.area.isEmpty()) {
         return;
     }
 
-    if (widget.thread.kind != .agent) {
-        try widget.drawTerminalThread(canvas);
+    if (self.thread.kind != .agent) {
+        try self.drawTerminalThread(canvas);
         return;
     }
 
-    const bounds = canvas.rect(widget.area);
+    const bounds = canvas.rect(self.area);
     const first = canvas.quads.items().len;
     defer canvas.quads.clipFrom(first, bounds);
     const palette = canvas.theme.palette;
-    const approval = if (widget.thread.transcript) |snapshot| snapshot.pending_approval else null;
-    const layout = ThreadLayout.resolve(canvas, bounds, .{ .blocked = approval != null, .images = if (widget.thread.composer_images) |images| images.count != 0 else false });
-    const status = if (widget.thread.transcript) |snapshot| snapshot.status else .starting;
-    const status_text = thread_status.text(widget.thread.transcript);
-    const title = if (widget.thread.agent) |agent| agent.displayName() else if (widget.thread.kind == .agent) "Codex" else "Conversation";
+    const approval = if (self.thread.transcript) |snapshot| snapshot.pending_approval else null;
+    const layout = ThreadLayout.resolve(canvas, bounds, .{ .blocked = approval != null, .images = if (self.thread.composer_images) |images| images.count != 0 else false });
+    const status = if (self.thread.transcript) |snapshot| snapshot.status else .starting;
+    const status_text = thread_status.text(self.thread.transcript);
+    const title = if (self.thread.agent) |agent| agent.displayName() else if (self.thread.kind == .agent) "Codex" else "Conversation";
     const header = layout.header;
     const status_width = @min(header.width / 2, try canvas.measure(.{ .text = status_text, .face = .sans, .size = .small }) + canvas.chrome.px(18));
-    const resume_width = if (widget.thread.transcript) |snapshot| if (snapshot.canResume()) @min(canvas.chrome.px(220), header.width * 0.55) else @as(f32, 0) else @as(f32, 0);
+    const resume_width = if (self.thread.transcript) |snapshot| if (snapshot.canResume()) @min(canvas.chrome.px(220), header.width * 0.55) else @as(f32, 0) else @as(f32, 0);
     if (resume_width > 0) {
-        const recent = &widget.thread.transcript.?.recent;
+        const recent = &self.thread.transcript.?.recent;
         const label: []const u8 = switch (recent.phase) {
             .loading => "Loading conversations…",
             .failed => "Conversations unavailable",
@@ -43,38 +43,38 @@ pub fn draw(widget: ThreadPane, canvas: *Canvas) !void {
         };
         try (@import("ComposerTrigger.zig"){
             .bounds = .{ .x = header.x + header.width - status_width - resume_width, .y = header.y, .width = resume_width, .height = header.height },
-            .selector = .{ .pane_id = widget.thread.pane_id, .kind = .recent, .catalog_revision = widget.thread.catalog_revision, .options_revision = widget.thread.options_revision },
-            .generation = widget.thread.attachment_generation,
+            .selector = .{ .pane_id = self.thread.pane_id, .kind = .recent, .catalog_revision = self.thread.catalog_revision, .options_revision = self.thread.options_revision },
+            .generation = self.thread.attachment_generation,
             .label = label,
             .enabled = recent.phase == .ready and recent.count > 0,
         }).draw(canvas);
     }
 
     _ = try canvas.textAt(.{ .x = header.x, .y = header.y, .width = @max(0, header.width - status_width - resume_width), .height = header.height }, .{ .text = title, .face = .sans, .size = .title, .bold = true, .color = palette.text });
-    try (@import("ActivityText.zig"){ .bounds = .{ .x = header.x + header.width - status_width, .y = header.y, .width = status_width, .height = header.height }, .label = .{ .text = status_text, .face = .sans, .size = .small, .color = if (status == .blocked) palette.yellow else if (status == .failed) palette.red else palette.subtext0 }, .active = thread_status.active(widget.thread.transcript) }).draw(canvas);
+    try (@import("ActivityText.zig"){ .bounds = .{ .x = header.x + header.width - status_width, .y = header.y, .width = status_width, .height = header.height }, .label = .{ .text = status_text, .face = .sans, .size = .small, .color = if (status == .blocked) palette.yellow else if (status == .failed) palette.red else palette.subtext0 }, .active = thread_status.active(self.thread.transcript) }).draw(canvas);
     var request: ?*const core.AgentApprovalRequest = null;
     if (canvas.widgets) |state| {
         if (state.approval_review) |review| {
-            request = review.request(widget.thread);
+            request = review.request(self.thread);
         }
     }
 
-    try (@import("ThreadTranscript.zig"){ .bounds = layout.body, .thread = widget.thread, .request = request }).draw(canvas);
+    try (@import("ThreadTranscript.zig"){ .bounds = layout.body, .thread = self.thread, .request = request }).draw(canvas);
 
     if (approval) |pending| {
-        try widget.drawApproval(canvas, .{ .bounds = layout.approval, .request = pending });
+        try self.drawApproval(canvas, .{ .bounds = layout.approval, .request = pending });
     }
 
-    try (@import("AgentComposer.zig"){ .bounds = layout.composer, .pane_bounds = bounds, .thread = widget.thread }).draw(canvas);
-    try (@import("ThreadSelectionStatus.zig"){ .bounds = layout.footer, .pane_id = widget.thread.pane_id }).draw(canvas);
+    try (@import("AgentComposer.zig"){ .bounds = layout.composer, .pane_bounds = bounds, .thread = self.thread }).draw(canvas);
+    try (@import("ThreadSelectionStatus.zig"){ .bounds = layout.footer, .pane_id = self.thread.pane_id }).draw(canvas);
 }
 
-fn drawTerminalThread(widget: ThreadPane, canvas: *Canvas) !void {
+fn drawTerminalThread(self: ThreadPane, canvas: *Canvas) !void {
     const palette = canvas.theme.palette;
-    try canvas.fill(widget.area, palette.surface_dim);
-    const header, const rest = widget.area.splitTop(1);
+    try canvas.fill(self.area, palette.surface_dim);
+    const header, const rest = self.area.splitTop(1);
     var storage: [256]u8 = undefined;
-    const title = if (widget.thread.agent) |agent| std.fmt.bufPrint(&storage, " {s} {s} · {s}", .{ agent.iconGlyph(), agent.displayName(), @tagName(agent.status) }) catch "Agent" else " no agent in this pane";
+    const title = if (self.thread.agent) |agent| std.fmt.bufPrint(&storage, " {s} {s} · {s}", .{ agent.iconGlyph(), agent.displayName(), @tagName(agent.status) }) catch "Agent" else " no agent in this pane";
     try canvas.fill(header, palette.surface0);
     try canvas.text(header, .{ .text = title, .color = palette.accent, .bold = true });
     if (rest.isEmpty()) {
@@ -90,10 +90,10 @@ fn drawTerminalThread(widget: ThreadPane, canvas: *Canvas) !void {
 
     try canvas.fill(composer, palette.surface0);
     try canvas.text(composer.splitLeft(2)[0], .{ .text = "> ", .color = palette.accent });
-    try canvas.text(composer.splitLeft(2)[1], .{ .text = if (widget.thread.composer.len == 0) "write to the agent" else widget.thread.composer, .color = if (widget.thread.composer.len == 0) palette.overlay1 else palette.text });
+    try canvas.text(composer.splitLeft(2)[1], .{ .text = if (self.thread.composer.len == 0) "write to the agent" else self.thread.composer, .color = if (self.thread.composer.len == 0) palette.overlay1 else palette.text });
 }
 
-fn drawApproval(widget: ThreadPane, canvas: *Canvas, input: @import("ThreadApprovalPaint.zig")) !void {
+fn drawApproval(self: ThreadPane, canvas: *Canvas, input: @import("ThreadApprovalPaint.zig")) !void {
     const area = input.bounds;
     const palette = canvas.theme.palette;
     const row = @min(canvas.chrome.px(28), area.height / 4);
@@ -110,7 +110,7 @@ fn drawApproval(widget: ThreadPane, canvas: *Canvas, input: @import("ThreadAppro
 
     const width = @min(canvas.chrome.px(112), (area.width - 4 * inset) / 3);
     const y = area.y + area.height - row;
-    try (@import("ThreadControl.zig"){ .bounds = .{ .x = area.x + inset, .y = y, .width = @max(0, area.width - 4 * inset - 2 * width), .height = row }, .pane_id = widget.thread.pane_id, .generation = widget.thread.attachment_generation, .kind = .review, .approval_id = input.request.id, .label = "Review full request" }).draw(canvas);
-    try (@import("ThreadControl.zig"){ .bounds = .{ .x = area.x + area.width - inset - width, .y = y, .width = width, .height = row }, .pane_id = widget.thread.pane_id, .generation = widget.thread.attachment_generation, .kind = .approve, .approval_id = input.request.id, .label = "Approve" }).draw(canvas);
-    try (@import("ThreadControl.zig"){ .bounds = .{ .x = area.x + area.width - 2 * inset - 2 * width, .y = y, .width = width, .height = row }, .pane_id = widget.thread.pane_id, .generation = widget.thread.attachment_generation, .kind = .decline, .approval_id = input.request.id, .label = "Decline" }).draw(canvas);
+    try (@import("ThreadControl.zig"){ .bounds = .{ .x = area.x + inset, .y = y, .width = @max(0, area.width - 4 * inset - 2 * width), .height = row }, .pane_id = self.thread.pane_id, .generation = self.thread.attachment_generation, .kind = .review, .approval_id = input.request.id, .label = "Review full request" }).draw(canvas);
+    try (@import("ThreadControl.zig"){ .bounds = .{ .x = area.x + area.width - inset - width, .y = y, .width = width, .height = row }, .pane_id = self.thread.pane_id, .generation = self.thread.attachment_generation, .kind = .approve, .approval_id = input.request.id, .label = "Approve" }).draw(canvas);
+    try (@import("ThreadControl.zig"){ .bounds = .{ .x = area.x + area.width - 2 * inset - 2 * width, .y = y, .width = width, .height = row }, .pane_id = self.thread.pane_id, .generation = self.thread.attachment_generation, .kind = .decline, .approval_id = input.request.id, .label = "Decline" }).draw(canvas);
 }

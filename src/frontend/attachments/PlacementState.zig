@@ -9,34 +9,34 @@ z: i32,
 desired: ?kitty_protocol.OutputPlacement = null,
 emitted: ?kitty_protocol.OutputPlacement = null,
 
-pub fn wanted(placement: *const PlacementState) bool {
-    return placement.desired != null;
+pub fn wanted(self: *const PlacementState) bool {
+    return self.desired != null;
 }
 
-pub fn damaged(placement: *const PlacementState) bool {
-    return !presentation.optionalPlacementEql(placement.desired, placement.emitted);
+pub fn damaged(self: *const PlacementState) bool {
+    return !presentation.optionalPlacementEql(self.desired, self.emitted);
 }
 
-pub fn write(placement: *PlacementState, writer: *std.Io.Writer, image_id: u32) std.Io.Writer.Error!usize {
-    if (!placement.damaged()) {
+pub fn write(self: *PlacementState, writer: *std.Io.Writer, image_id: u32) std.Io.Writer.Error!usize {
+    if (!self.damaged()) {
         return 0;
     }
 
     var written: usize = 0;
-    if (placement.emitted != null) {
-        written += try kitty_protocol.writeDeletePlacement(writer, image_id, placement.id);
+    if (self.emitted != null) {
+        written += try kitty_protocol.writeDeletePlacement(writer, image_id, self.id);
     }
 
-    if (placement.desired) |desired| {
+    if (self.desired) |desired| {
         written += try kitty_codec.writeUiPlacement(writer, .{
             .image_id = image_id,
-            .placement_id = placement.id,
+            .placement_id = self.id,
             .value = desired,
-            .z = placement.z,
+            .z = self.z,
         });
     }
 
-    placement.emitted = placement.desired;
+    self.emitted = self.desired;
 
     return written;
 }

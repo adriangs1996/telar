@@ -31,10 +31,10 @@ pub fn load(allocator: std.mem.Allocator, io: std.Io, family: *const client.Font
     return .{ .bytes = bytes, .owned = true, .match = match };
 }
 
-pub fn deinit(source: *FontSource, allocator: std.mem.Allocator) void {
-    if (source.owned) {
-        allocator.free(source.bytes);
+pub fn deinit(self: *FontSource, allocator: std.mem.Allocator) void {
+    if (self.owned) {
+        allocator.free(self.bytes);
     }
 
-    source.* = .{};
+    self.* = .{};
 }

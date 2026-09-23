@@ -20,8 +20,8 @@ next_generation: u64 = 1,
 /// ```zig
 /// if (!store.hasCapacity()) return error.ClientLimitReached;
 /// ```
-pub fn hasCapacity(store: *const Store) bool {
-    return store.count < store.items.len;
+pub fn hasCapacity(self: *const Store) bool {
+    return self.count < self.items.len;
 }
 
 /// Creates and retains a session under a fresh identity. The connection
@@ -30,23 +30,23 @@ pub fn hasCapacity(store: *const Store) bool {
 /// ```zig
 /// const session = try store.add(gpa, connection);
 /// ```
-pub fn add(store: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel) !*Session {
-    if (!store.hasCapacity()) {
+pub fn add(self: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel) !*Session {
+    if (!self.hasCapacity()) {
         return error.ClientLimitReached;
     }
 
-    if (store.next_id == 0 or store.next_id == std.math.maxInt(u64) or
-        store.next_generation == 0 or store.next_generation == std.math.maxInt(u64))
+    if (self.next_id == 0 or self.next_id == std.math.maxInt(u64) or
+        self.next_generation == 0 or self.next_generation == std.math.maxInt(u64))
     {
         return error.ClientIdentityExhausted;
     }
 
     const key: ClientKey = .{
-        .id = store.next_id,
-        .generation = store.next_generation,
+        .id = self.next_id,
+        .generation = self.next_generation,
     };
 
-    for (&store.items, 0..) |*slot, index| {
+    for (&self.items, 0..) |*slot, index| {
         if (slot.* != null) {
             continue;
         }
@@ -54,9 +54,9 @@ pub fn add(store: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel
         const session = try Session.create(gpa, key, connection);
         session.attachments.observer = @as(u8, 1) << @intCast(index);
         slot.* = session;
-        store.next_id += 1;
-        store.next_generation += 1;
-        store.count += 1;
+        self.next_id += 1;
+        self.next_generation += 1;
+        self.count += 1;
         return session;
     }
     unreachable;
@@ -68,11 +68,11 @@ pub fn add(store: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel
 /// var observers = pane.observers;
 /// while (store.nextObserver(&observers)) |session| { ... }
 /// ```
-pub fn nextObserver(store: *Store, observers: *u8) ?*Session {
+pub fn nextObserver(self: *Store, observers: *u8) ?*Session {
     while (observers.* != 0) {
         const index = @ctz(observers.*);
         observers.* &= observers.* - 1;
-        if (store.items[index]) |session| {
+        if (self.items[index]) |session| {
             return session;
         }
     }
@@ -85,8 +85,8 @@ pub fn nextObserver(store: *Store, observers: *u8) ?*Session {
 /// ```zig
 /// const session = store.resolve(key) orelse return error.StaleClient;
 /// ```
-pub fn resolve(store: *Store, key: ClientKey) ?*Session {
-    for (&store.items) |*slot| {
+pub fn resolve(self: *Store, key: ClientKey) ?*Session {
+    for (&self.items) |*slot| {
         const session = slot.* orelse continue;
         if (session.key.id == key.id and session.key.generation == key.generation) {
             return session;
@@ -101,8 +101,8 @@ pub fn resolve(store: *Store, key: ClientKey) ?*Session {
 /// ```zig
 /// _ = store.remove(resources, key);
 /// ```
-pub fn remove(store: *Store, resources: RemovalResources, key: ClientKey) bool {
-    for (&store.items) |*slot| {
+pub fn remove(self: *Store, resources: RemovalResources, key: ClientKey) bool {
+    for (&self.items) |*slot| {
         const session = slot.* orelse continue;
         if (session.key.id != key.id or session.key.generation != key.generation) {
             continue;
@@ -111,7 +111,7 @@ pub fn remove(store: *Store, resources: RemovalResources, key: ClientKey) bool {
         session.deinit(resources.io, resources.gpa);
         resources.gpa.destroy(session);
         slot.* = null;
-        store.count -= 1;
+        self.count -= 1;
         return true;
     }
     return false;
@@ -123,8 +123,8 @@ pub fn remove(store: *Store, resources: RemovalResources, key: ClientKey) bool {
 /// ```zig
 /// store.deinit(io, gpa);
 /// ```
-pub fn deinit(store: *Store, io: std.Io, gpa: std.mem.Allocator) void {
-    for (&store.items) |*slot| {
+pub fn deinit(self: *Store, io: std.Io, gpa: std.mem.Allocator) void {
+    for (&self.items) |*slot| {
         if (slot.*) |session| {
             session.connection.shutdown(io);
             std.debug.assert(!session.read_pending and !session.send_pending);
@@ -133,5 +133,5 @@ pub fn deinit(store: *Store, io: std.Io, gpa: std.mem.Allocator) void {
         }
         slot.* = null;
     }
-    store.count = 0;
+    self.count = 0;
 }

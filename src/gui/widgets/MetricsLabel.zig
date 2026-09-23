@@ -20,10 +20,10 @@ pub fn init(values: ?data.SystemMetrics) MetricsLabel {
     return label;
 }
 
-pub fn text(label: *const MetricsLabel) []const u8 {
-    return label.bytes[0..label.len];
+pub fn text(self: *const MetricsLabel) []const u8 {
+    return self.bytes[0..self.len];
 }
 
-pub fn width(label: *const MetricsLabel) u16 {
-    return core.measure(label.text());
+pub fn width(self: *const MetricsLabel) u16 {
+    return core.measure(self.text());
 }

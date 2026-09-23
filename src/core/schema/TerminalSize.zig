@@ -7,11 +7,11 @@ rows: u16,
 cell_width_px: u16 = 0,
 cell_height_px: u16 = 0,
 
-pub fn validate(size: TerminalSize) !void {
-    if (size.cols == 0 or size.rows == 0) {
+pub fn validate(self: TerminalSize) !void {
+    if (self.cols == 0 or self.rows == 0) {
         return error.InvalidTerminalSize;
     }
-    const cells = @as(u32, size.cols) * @as(u32, size.rows);
+    const cells = @as(u32, self.cols) * @as(u32, self.rows);
     if (cells > frame.max_cell_count) {
         return error.ScreenTooLarge;
     }

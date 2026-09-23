@@ -8,15 +8,15 @@ const PaneDescriptorIterator = @This();
 decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *PaneDescriptorIterator) !?PaneDescriptor {
-    if (iterator.remaining == 0) {
+pub fn next(self: *PaneDescriptorIterator) !?PaneDescriptor {
+    if (self.remaining == 0) {
         return null;
     }
-    iterator.remaining -= 1;
+    self.remaining -= 1;
     return .{
-        .pane_id = try id.pane(try iterator.decoder.readInt(u64)),
-        .lifecycle = try codec.decodePaneLifecycle(try iterator.decoder.readByte()),
-        .kind = try tab.decodePaneKind(try iterator.decoder.readByte()),
-        .pane_generation = try iterator.decoder.readInt(u64),
+        .pane_id = try id.pane(try self.decoder.readInt(u64)),
+        .lifecycle = try codec.decodePaneLifecycle(try self.decoder.readByte()),
+        .kind = try tab.decodePaneKind(try self.decoder.readByte()),
+        .pane_generation = try self.decoder.readInt(u64),
     };
 }

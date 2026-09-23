@@ -6,25 +6,25 @@ const TabDescriptorIterator = @This();
 decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *TabDescriptorIterator) !?TabDescriptorView {
-    if (iterator.remaining == 0) {
+pub fn next(self: *TabDescriptorIterator) !?TabDescriptorView {
+    if (self.remaining == 0) {
         return null;
     }
-    iterator.remaining -= 1;
+    self.remaining -= 1;
     var descriptor: TabDescriptorView = .{
-        .tab_id = try id.tab(try iterator.decoder.readInt(u64)),
-        .position = try iterator.decoder.readInt(u16),
-        .pane_count = try iterator.decoder.readInt(u16),
-        .label = try iterator.decoder.readSized16(),
-        .foreground_count = try iterator.decoder.readInt(u16),
+        .tab_id = try id.tab(try self.decoder.readInt(u64)),
+        .position = try self.decoder.readInt(u16),
+        .pane_count = try self.decoder.readInt(u16),
+        .label = try self.decoder.readSized16(),
+        .foreground_count = try self.decoder.readInt(u16),
         .encoded_foregrounds = undefined,
     };
-    const start = iterator.decoder.index;
+    const start = self.decoder.index;
     for (0..descriptor.foreground_count) |_| {
-        _ = try iterator.decoder.readInt(u64);
-        _ = try iterator.decoder.readSized16();
+        _ = try self.decoder.readInt(u64);
+        _ = try self.decoder.readSized16();
     }
 
-    descriptor.encoded_foregrounds = iterator.decoder.consumed(start);
+    descriptor.encoded_foregrounds = self.decoder.consumed(start);
     return descriptor;
 }

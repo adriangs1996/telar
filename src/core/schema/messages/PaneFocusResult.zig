@@ -12,9 +12,9 @@ focused_pane_id: id.PaneId,
 /// ```zig
 /// try result.validateWire();
 /// ```
-pub fn validateWire(result: PaneFocusResult) !void {
-    try codec.validateRequestId(result.request_id);
-    if (result.outcome == .focused) {
-        try codec.validatePaneId(result.focused_pane_id);
+pub fn validateWire(self: PaneFocusResult) !void {
+    try codec.validateRequestId(self.request_id);
+    if (self.outcome == .focused) {
+        try codec.validatePaneId(self.focused_pane_id);
     }
 }

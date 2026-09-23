@@ -29,15 +29,15 @@ pub fn read(terminal: *const vt.Terminal, y: usize) Row {
     return row;
 }
 
-pub fn text(row: *const Row) []const u8 {
-    return std.mem.trim(u8, row.bytes[0..row.len], " ");
+pub fn text(self: *const Row) []const u8 {
+    return std.mem.trim(u8, self.bytes[0..self.len], " ");
 }
 
-pub fn isStatus(row: *const Row) bool {
-    const line = row.text();
+pub fn isStatus(self: *const Row) bool {
+    const line = self.text();
     const open = std.mem.indexOfScalar(u8, line, '(') orelse return false;
     const heading = std.mem.trim(u8, line[0..open], " ");
-    const spinner = row.first == 0x2022 or (row.first >= 0x2800 and row.first <= 0x28ff);
+    const spinner = self.first == 0x2022 or (self.first >= 0x2800 and self.first <= 0x28ff);
     if (!spinner and !std.mem.eql(u8, heading, "Working") and !std.mem.eql(u8, heading, "Thinking") and !std.mem.eql(u8, heading, "Reconnecting") and !std.mem.eql(u8, heading, "Compacting")) {
         return false;
     }

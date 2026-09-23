@@ -27,119 +27,119 @@ annotations: ?DiffAnnotations = null,
 
 /// Measures all lines but paints and retains selectable geometry only in view.
 /// Example: `const height = try diff.layout();`
-pub fn layout(widget: *Paint) !f32 {
-    widget.y = widget.bounds.y;
-    widget.digits = 3;
-    widget.syntax_paint = .{ .source = widget.text, .roles = widget.roles orelse if (widget.paint) (if (widget.canvas.syntax) |store| store.request(widget.text) else null) else null };
-    var scan: core.ChangeReviewDiffLines = .{ .text = widget.text };
+pub fn layout(self: *Paint) !f32 {
+    self.y = self.bounds.y;
+    self.digits = 3;
+    self.syntax_paint = .{ .source = self.text, .roles = self.roles orelse if (self.paint) (if (self.canvas.syntax) |store| store.request(self.text) else null) else null };
+    var scan: core.ChangeReviewDiffLines = .{ .text = self.text };
     var maximum: u32 = 0;
     while (scan.next()) |line| {
         maximum = @max(maximum, @max(line.old orelse 0, line.new orelse 0));
     }
 
     while (maximum >= 1000) : (maximum /= 10) {
-        widget.digits += 1;
+        self.digits += 1;
     }
 
-    const first = widget.canvas.quads.items().len;
-    defer if (widget.paint) {
-        widget.canvas.quads.clipFrom(first, widget.viewport);
+    const first = self.canvas.quads.items().len;
+    defer if (self.paint) {
+        self.canvas.quads.clipFrom(first, self.viewport);
     };
-    var lines: core.ChangeReviewDiffLines = .{ .text = widget.text };
+    var lines: core.ChangeReviewDiffLines = .{ .text = self.text };
     var started = false;
     while (lines.next()) |line| {
         if (line.kind == .file) {
             if (started) {
-                widget.y += widget.canvas.chrome.px(14);
+                self.y += self.canvas.chrome.px(14);
             }
 
-            try widget.header(line, lines.counts());
+            try self.header(line, lines.counts());
             started = true;
             continue;
         }
 
         if (!started) {
-            try widget.header(.{ .kind = .file, .text = "Changes" }, (core.ChangeReviewDiffLines{ .text = widget.text }).counts());
+            try self.header(.{ .kind = .file, .text = "Changes" }, (core.ChangeReviewDiffLines{ .text = self.text }).counts());
             started = true;
         }
 
         if (line.kind == .hunk) {
-            try widget.hunk(line);
+            try self.hunk(line);
         } else {
-            try widget.code(line);
+            try self.code(line);
         }
     }
 
-    return widget.y - widget.bounds.y + widget.canvas.chrome.px(10);
+    return self.y - self.bounds.y + self.canvas.chrome.px(10);
 }
 
-fn header(widget: *Paint, line: core.ChangeReviewDiffLine, counts: [2]u32) !void {
-    const canvas = widget.canvas;
+fn header(self: *Paint, line: core.ChangeReviewDiffLine, counts: [2]u32) !void {
+    const canvas = self.canvas;
     const name = line.text[(if (std.mem.lastIndexOfScalar(u8, line.text, '/')) |at| at + 1 else 0)..];
     const has_path = !std.mem.eql(u8, line.text, name);
     const height = canvas.chrome.px(if (has_path or line.operation.len > 0) @as(f32, 60) else 40);
-    defer widget.y += height;
-    if (!widget.visible(height)) {
+    defer self.y += height;
+    if (!self.visible(height)) {
         return;
     }
 
-    const area = widget.rowBounds(height);
+    const area = self.rowBounds(height);
     const inset = @min(canvas.chrome.px(12), area.width / 8);
     const badge_width = @min(canvas.chrome.px(100), area.width * 0.4);
     const title_width = @max(0, area.width - 2 * inset - badge_width);
     try canvas.fillRoundedAt(area, .{ .color = canvas.theme.palette.surface0, .radius = canvas.chrome.px(6) });
-    try widget.fitted(.{ .x = area.x + inset, .y = area.y + canvas.chrome.px(5), .width = title_width, .height = canvas.chrome.px(28) }, .{ .text = name, .face = .sans, .size = .body, .bold = true, .color = canvas.theme.palette.text });
+    try self.fitted(.{ .x = area.x + inset, .y = area.y + canvas.chrome.px(5), .width = title_width, .height = canvas.chrome.px(28) }, .{ .text = name, .face = .sans, .size = .body, .bold = true, .color = canvas.theme.palette.text });
     var path_buffer: [1024]u8 = undefined;
     const path = shortPath(line.text, &path_buffer);
     var subtitle_buffer: [1152]u8 = undefined;
     const subtitle = if (!has_path) line.operation else if (line.operation.len == 0) path else std.fmt.bufPrint(&subtitle_buffer, "{s} · {s}", .{ line.operation, path }) catch path;
-    try widget.fitted(.{ .x = area.x + inset, .y = area.y + canvas.chrome.px(32), .width = @max(0, area.width - 2 * inset), .height = canvas.chrome.px(20) }, .{ .text = subtitle, .face = .sans, .size = .small, .color = canvas.theme.palette.overlay1 });
+    try self.fitted(.{ .x = area.x + inset, .y = area.y + canvas.chrome.px(32), .width = @max(0, area.width - 2 * inset), .height = canvas.chrome.px(20) }, .{ .text = subtitle, .face = .sans, .size = .small, .color = canvas.theme.palette.overlay1 });
     for (counts, 0..) |count, index| {
         var buffer: [16]u8 = undefined;
         const text = try std.fmt.bufPrint(&buffer, "{s}{d}", .{ if (index == 0) @as([]const u8, "+") else "-", count });
         const badge: Rect = .{ .x = area.x + area.width - inset - badge_width + @as(f32, @floatFromInt(index)) * badge_width / 2, .y = area.y + canvas.chrome.px(8), .width = badge_width / 2, .height = canvas.chrome.px(24) };
-        try widget.fitted(badge, .{ .text = text, .face = .sans, .size = .small, .bold = true, .color = if (index == 0) canvas.theme.palette.green else canvas.theme.palette.red });
+        try self.fitted(badge, .{ .text = text, .face = .sans, .size = .small, .bold = true, .color = if (index == 0) canvas.theme.palette.green else canvas.theme.palette.red });
     }
 }
 
-fn hunk(widget: *Paint, line: core.ChangeReviewDiffLine) !void {
-    const height = widget.canvas.chrome.px(28);
-    defer widget.y += height;
-    if (!widget.visible(height)) {
+fn hunk(self: *Paint, line: core.ChangeReviewDiffLine) !void {
+    const height = self.canvas.chrome.px(28);
+    defer self.y += height;
+    if (!self.visible(height)) {
         return;
     }
 
-    const canvas = widget.canvas;
-    const area = widget.rowBounds(height);
+    const canvas = self.canvas;
+    const area = self.rowBounds(height);
     const first = canvas.quads.items().len;
     try canvas.fillAt(area, canvas.theme.palette.accent);
     canvas.quads.fadeFrom(first, 0.06);
     const inset = @min(canvas.chrome.px(12), area.width / 8);
-    try widget.fitted(.{ .x = area.x + inset, .y = area.y, .width = @max(0, area.width - 2 * inset), .height = height }, .{ .text = line.text, .face = .sans, .size = .small, .color = canvas.theme.palette.subtext0 });
+    try self.fitted(.{ .x = area.x + inset, .y = area.y, .width = @max(0, area.width - 2 * inset), .height = height }, .{ .text = line.text, .face = .sans, .size = .small, .color = canvas.theme.palette.subtext0 });
 }
 
-fn code(widget: *Paint, line: core.ChangeReviewDiffLine) !void {
-    const canvas = widget.canvas;
+fn code(self: *Paint, line: core.ChangeReviewDiffLine) !void {
+    const canvas = self.canvas;
     const cell: f32 = @floatFromInt(canvas.metrics.cell_width);
     const row = @max(canvas.chrome.px(22), @as(f32, @floatFromInt(canvas.metrics.cell_height)));
-    const number_width = @as(f32, @floatFromInt(widget.digits)) * cell + canvas.chrome.px(12);
-    const columns: usize = if (widget.bounds.width >= 2 * number_width + canvas.chrome.px(150)) 2 else if (widget.bounds.width >= number_width + canvas.chrome.px(100)) 1 else 0;
-    const gutter = @min(widget.bounds.width / 2, @as(f32, @floatFromInt(columns)) * number_width + canvas.chrome.px(24));
-    const padding = @min(canvas.chrome.px(10), widget.bounds.width / 12);
-    const code_width = @max(1, widget.bounds.width - gutter - padding);
+    const number_width = @as(f32, @floatFromInt(self.digits)) * cell + canvas.chrome.px(12);
+    const columns: usize = if (self.bounds.width >= 2 * number_width + canvas.chrome.px(150)) 2 else if (self.bounds.width >= number_width + canvas.chrome.px(100)) 1 else 0;
+    const gutter = @min(self.bounds.width / 2, @as(f32, @floatFromInt(columns)) * number_width + canvas.chrome.px(24));
+    const padding = @min(canvas.chrome.px(10), self.bounds.width / 12);
+    const code_width = @max(1, self.bounds.width - gutter - padding);
     const code_columns: u16 = @intFromFloat(@min(65535, @max(1, @floor(code_width / cell))));
-    const start_y = widget.y;
+    const start_y = self.y;
     var wrapped: @import("overlays/WrappedLines.zig") = .{ .text = line.text, .width = code_columns };
     var continuation = false;
     while (wrapped.next()) |text| {
-        defer widget.y += row;
+        defer self.y += row;
         const first_line = !continuation;
         continuation = true;
-        if (!widget.visible(row)) {
+        if (!self.visible(row)) {
             continue;
         }
 
-        const area = widget.rowBounds(row);
+        const area = self.rowBounds(row);
         const palette = canvas.theme.palette;
         try canvas.fillAt(area, palette.surface_dim);
         try canvas.fillAt(.{ .x = area.x, .y = area.y, .width = gutter, .height = row }, palette.surface0);
@@ -169,48 +169,48 @@ fn code(widget: *Paint, line: core.ChangeReviewDiffLine) !void {
 
         try canvas.fillAt(.{ .x = area.x + gutter - 1, .y = area.y, .width = 1, .height = row }, palette.surface1);
         const text_area: Rect = .{ .x = area.x + gutter + padding / 2, .y = area.y, .width = @max(0, area.width - gutter - padding), .height = row };
-        if (widget.annotations) |annotations| {
-            try annotations.row(annotations.context, canvas, .{ .line = line, .fragment = text, .bounds = area, .code = text_area, .paint = widget.paint });
+        if (self.annotations) |annotations| {
+            try annotations.row(annotations.context, canvas, .{ .line = line, .fragment = text, .bounds = area, .code = text_area, .paint = self.paint });
         }
-        try widget.literal(text_area, text);
+        try self.literal(text_area, text);
     }
 
-    if (widget.annotations) |annotations| {
-        const area = widget.rowBounds(0);
-        widget.y += try annotations.after(annotations.context, canvas, DiffRow{ .line = line, .fragment = line.text, .bounds = area, .code = area, .paint = widget.paint, .columns = code_columns, .line_height = row, .start_y = start_y });
+    if (self.annotations) |annotations| {
+        const area = self.rowBounds(0);
+        self.y += try annotations.after(annotations.context, canvas, DiffRow{ .line = line, .fragment = line.text, .bounds = area, .code = area, .paint = self.paint, .columns = code_columns, .line_height = row, .start_y = start_y });
     }
 }
 
-fn literal(widget: *Paint, area: Rect, text: []const u8) !void {
-    const canvas = widget.canvas;
-    if (widget.owner) |owner| {
+fn literal(self: *Paint, area: Rect, text: []const u8) !void {
+    const canvas = self.canvas;
+    if (self.owner) |owner| {
         if (canvas.widgets) |state| {
             if (state.thread_text) |store| {
                 const geometry = store.maps.preparing();
-                const offset = owner.source_offset + @as(u32, @intCast(@intFromPtr(text.ptr) - widget.source_start));
-                if (try geometry.append(canvas, .{ .owner = owner, .offset = offset, .text = text, .bounds = area, .viewport = widget.viewport, .advance = 0, .face = .mono, .pixel_height = canvas.metrics.pixel_height })) |hit| {
+                const offset = owner.source_offset + @as(u32, @intCast(@intFromPtr(text.ptr) - self.source_start));
+                if (try geometry.append(canvas, .{ .owner = owner, .offset = offset, .text = text, .bounds = area, .viewport = self.viewport, .advance = 0, .face = .mono, .pixel_height = canvas.metrics.pixel_height })) |hit| {
                     try (@import("ThreadTextPaint.zig"){ .geometry = geometry, .fragment = hit }).draw(canvas);
                 }
             }
         }
     }
 
-    try widget.syntax_paint.draw(canvas, .{ .bounds = area, .text = text });
+    try self.syntax_paint.draw(canvas, .{ .bounds = area, .text = text });
 }
 
-fn fitted(widget: *Paint, area: Rect, original: Label) !void {
+fn fitted(self: *Paint, area: Rect, original: Label) !void {
     var buffer: [TextFit.max_bytes]u8 = undefined;
     var label = original;
-    label.text = try (@import("TextFit.zig"){ .canvas = widget.canvas, .width = area.width }).fit(label, &buffer);
-    _ = try widget.canvas.textAt(area, label);
+    label.text = try (@import("TextFit.zig"){ .canvas = self.canvas, .width = area.width }).fit(label, &buffer);
+    _ = try self.canvas.textAt(area, label);
 }
 
-fn visible(widget: Paint, height: f32) bool {
-    return widget.paint and widget.y + height > widget.viewport.y and widget.y < widget.viewport.y + widget.viewport.height;
+fn visible(self: Paint, height: f32) bool {
+    return self.paint and self.y + height > self.viewport.y and self.y < self.viewport.y + self.viewport.height;
 }
 
-fn rowBounds(widget: Paint, height: f32) Rect {
-    return .{ .x = widget.bounds.x, .y = widget.y, .width = widget.bounds.width, .height = height };
+fn rowBounds(self: Paint, height: f32) Rect {
+    return .{ .x = self.bounds.x, .y = self.y, .width = self.bounds.width, .height = height };
 }
 
 fn shortPath(path: []const u8, buffer: []u8) []const u8 {

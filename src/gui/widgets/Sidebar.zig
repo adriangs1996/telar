@@ -23,11 +23,11 @@ area: Rect,
 
 /// Draws the band and its ordered cards with matching clipped controls.
 /// Example: `try sidebar.draw(canvas);`
-pub fn draw(sidebar: Sidebar, canvas: *Canvas) !void {
-    const context = sidebar.context;
-    const area = sidebar.area;
+pub fn draw(self: Sidebar, canvas: *Canvas) !void {
+    const context = self.context;
+    const area = self.area;
     if (area.width <= 0 or area.height <= 0) {
-        sidebar.state.hide();
+        self.state.hide();
         return;
     }
 
@@ -36,16 +36,16 @@ pub fn draw(sidebar: Sidebar, canvas: *Canvas) !void {
     // background and opacity like the workbench.
     try canvas.panelAt(.{ .x = area.x, .y = area.y, .width = area.width - 1, .height = area.height });
     try canvas.fillAt(.{ .x = area.x + area.width - 1, .y = area.y, .width = 1, .height = area.height }, palette.surface1);
-    sidebar.state.observe(context.projection.agents);
+    self.state.observe(context.projection.agents);
     const regions = if (context.sidebar_regions) |prepared| prepared.* else try SidebarRegions.resolve(canvas, area, context.projection.workspaces.count);
 
     try drawHeader(canvas, regions.projects_header, "projects");
-    try (WorkspaceList{ .state = sidebar.state, .context = context, .bounds = regions.projects }).draw(canvas);
+    try (WorkspaceList{ .state = self.state, .context = context, .bounds = regions.projects }).draw(canvas);
     try drawHeader(canvas, regions.agents_header, "agents");
     if (regions.agents.height > 0) {
-        try sidebar.drawList(canvas, .{ .bounds = regions.agents });
+        try self.drawList(canvas, .{ .bounds = regions.agents });
     } else {
-        sidebar.state.agents.hide();
+        self.state.agents.hide();
     }
 
     try context.bands.add(.{ .area = canvas.sidebar.handle(area), .action = .resize_sidebar });
@@ -67,9 +67,9 @@ fn drawHeader(canvas: *Canvas, header: Rect, text: []const u8) !void {
     }
 }
 
-fn drawList(sidebar: Sidebar, canvas: *Canvas, list: SidebarList) !void {
-    const context = sidebar.context;
-    const state = sidebar.state;
+fn drawList(self: Sidebar, canvas: *Canvas, list: SidebarList) !void {
+    const context = self.context;
+    const state = self.state;
     const palette = canvas.theme.palette;
     const agents = context.projection.agents.slice();
     const geometry = CardGeometry.derive(canvas.chrome, canvas.metrics);

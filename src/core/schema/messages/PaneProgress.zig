@@ -11,18 +11,18 @@ percent: ?u8 = null,
 /// ```zig
 /// try progress.validateWire();
 /// ```
-pub fn validateWire(message: PaneProgress) !void {
-    if (message.percent) |percent| {
+pub fn validateWire(self: PaneProgress) !void {
+    if (self.percent) |percent| {
         if (percent > 100) {
             return error.InvalidProgressPercent;
         }
     }
 
-    switch (message.state) {
-        .remove, .indeterminate => if (message.percent != null) {
+    switch (self.state) {
+        .remove, .indeterminate => if (self.percent != null) {
             return error.UnexpectedProgressPercent;
         },
-        .set => if (message.percent == null) {
+        .set => if (self.percent == null) {
             return error.MissingProgressPercent;
         },
         .@"error", .pause => {},

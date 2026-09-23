@@ -22,20 +22,20 @@ pub fn init(key: data.Key, modes: core.InputModes) Encoding {
     };
 }
 
-pub fn reportsAllKeys(encoding: Encoding) bool {
-    return encoding.kitty_flags & 0b01000 != 0;
+pub fn reportsAllKeys(self: Encoding) bool {
+    return self.kitty_flags & 0b01000 != 0;
 }
 
-pub fn usesKittyFor(encoding: Encoding, key: data.Key) bool {
-    if (encoding.kitty_flags == 0) {
+pub fn usesKittyFor(self: Encoding, key: data.Key) bool {
+    if (self.kitty_flags == 0) {
         return false;
     }
 
     return switch (key.code) {
         .char, .escape => true,
-        .enter, .backspace, .tab => encoding.modifier != 1 or
-            encoding.reportsAllKeys() or
-            (encoding.event_types and key.kitty != null),
+        .enter, .backspace, .tab => self.modifier != 1 or
+            self.reportsAllKeys() or
+            (self.event_types and key.kitty != null),
         else => false,
     };
 }

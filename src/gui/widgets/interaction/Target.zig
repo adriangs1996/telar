@@ -59,8 +59,8 @@ pub const Action = union(enum) {
 };
 
 /// Example: `const pane_id = target.paneId() orelse return;`
-pub fn paneId(target: Target) ?core.PaneId {
-    return switch (target.action) {
+pub fn paneId(self: Target) ?core.PaneId {
+    return switch (self.action) {
         .composer, .transcript, .change_review => |id| id,
         .agent_control => |control| control.pane_id,
         .thread_item => |control| control.pane_id,
@@ -73,8 +73,8 @@ pub fn paneId(target: Target) ?core.PaneId {
 }
 
 /// Example: `if (target.activatable()) exposePressAction();`
-pub fn activatable(target: Target) bool {
-    return switch (target.action) {
+pub fn activatable(self: Target) bool {
+    return switch (self.action) {
         .change_review, .intent, .prompt, .complete_path, .history, .agent_control, .composer_selector, .composer_choice, .composer_completion, .thread_item => true,
         else => false,
     };
@@ -82,14 +82,14 @@ pub fn activatable(target: Target) bool {
 
 /// Half-open device pixels shared with drawing.
 /// Example: `if (target.contains(.{ pointer.x, pointer.y })) ...`
-pub fn contains(target: Target, point: [2]f64) bool {
-    return point[0] >= target.bounds.x and point[1] >= target.bounds.y and point[0] < @as(f64, target.bounds.x) + target.bounds.width and point[1] < @as(f64, target.bounds.y) + target.bounds.height;
+pub fn contains(self: Target, point: [2]f64) bool {
+    return point[0] >= self.bounds.x and point[1] >= self.bounds.y and point[0] < @as(f64, self.bounds.x) + self.bounds.width and point[1] < @as(f64, self.bounds.y) + self.bounds.height;
 }
 
 /// Copies a short accessible label, preserving UTF-8 boundaries.
 /// Example: `const target = value.labelled("Create tab");`
-pub fn labelled(target: Target, text: []const u8) Target {
-    var result = target;
+pub fn labelled(self: Target, text: []const u8) Target {
+    var result = self;
     var len = @min(text.len, result.label.len);
     while (len > 0 and len < text.len and text[len] & 0xc0 == 0x80) {
         len -= 1;

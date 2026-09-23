@@ -82,7 +82,7 @@ cell_timer: core.DeadlineScheduler = .{},
 /// ```zig
 /// try model.init(&resources, loop.selector(), options);
 /// ```
-pub fn init(self: *RuntimeModel, resources: *Resources, select: *std.Io.Select(event.Event), options: Options) !void {
+pub fn init(model: *RuntimeModel, resources: *Resources, select: *std.Io.Select(event.Event), options: Options) !void {
     const io = resources.io();
     var executable_path: [std.fs.max_path_bytes]u8 = undefined;
     const executable_path_len = try std.process.executablePath(io, &executable_path);
@@ -91,7 +91,7 @@ pub fn init(self: *RuntimeModel, resources: *Resources, select: *std.Io.Select(e
     const review_path = try std.fmt.bufPrint(&review_directory, "{s}/change-reviews", .{std.fs.path.dirname(options.session_path orelse options.endpoint) orelse return error.InvalidReviewStorage});
     const review_service = try ReviewService.init(resources.gpa, review_path);
     errdefer review_service.deinit();
-    self.* = .{
+    model.* = .{
         .review_service = review_service,
         .io = io,
         .gpa = resources.gpa,
@@ -117,17 +117,17 @@ pub fn init(self: *RuntimeModel, resources: *Resources, select: *std.Io.Select(e
 
 /// Releases pane, job and workspace state after every actor has joined.
 /// Example: `runtime.loop.cancel(); client_connection.releaseAll(model); model.deinit();`.
-pub fn deinit(self: *RuntimeModel) void {
-    self.panes.deinit();
-    self.agent_history_jobs.deinitJoined();
-    self.review_jobs.deinitJoined();
-    if (self.review_service) |service| {
+pub fn deinit(model: *RuntimeModel) void {
+    model.panes.deinit();
+    model.agent_history_jobs.deinitJoined();
+    model.review_jobs.deinitJoined();
+    if (model.review_service) |service| {
         service.deinit();
-        self.review_service = null;
+        model.review_service = null;
     }
 
-    self.client_layouts.deinit();
-    self.workspaces.deinit(self.gpa);
+    model.client_layouts.deinit();
+    model.workspaces.deinit(model.gpa);
 }
 
 const GraphicsLimits = @import("../media/GraphicsLimits.zig");

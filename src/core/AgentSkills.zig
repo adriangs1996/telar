@@ -14,7 +14,7 @@ text_len: u16 = 0,
 
 /// Owns the advertised metadata; provider paths remain in the runtime.
 /// Example: `try skills.append(.{ .name = "review", .description = "Review changes" });`
-pub fn append(skills: *Skills, info: @import("AgentSkillInfo.zig")) !void {
+pub fn append(self: *Skills, info: @import("AgentSkillInfo.zig")) !void {
     if (info.name.len == 0 or info.name.len > 128 or !validText(info.name)) {
         return error.InvalidSkill;
     }
@@ -23,7 +23,7 @@ pub fn append(skills: *Skills, info: @import("AgentSkillInfo.zig")) !void {
             return error.InvalidSkill;
         }
     }
-    if (skills.find(info.name) != null) {
+    if (self.find(info.name) != null) {
         return error.DuplicateSkill;
     }
 
@@ -31,26 +31,26 @@ pub fn append(skills: *Skills, info: @import("AgentSkillInfo.zig")) !void {
     if (label.len > 128 or info.description.len > 256 or !validText(label) or !validText(info.description)) {
         return error.InvalidSkill;
     }
-    if (skills.count == capacity or info.name.len + label.len + info.description.len > skills.text.len - skills.text_len) {
+    if (self.count == capacity or info.name.len + label.len + info.description.len > self.text.len - self.text_len) {
         return error.TooManySkills;
     }
 
     var entry: Skill = .{ .scope = info.scope };
     inline for (.{ "name", "label", "description" }, .{ info.name, label, info.description }) |field, bytes| {
-        @field(entry, field ++ "_offset") = skills.text_len;
+        @field(entry, field ++ "_offset") = self.text_len;
         @field(entry, field ++ "_len") = @intCast(bytes.len);
-        @memcpy(skills.text[skills.text_len..][0..bytes.len], bytes);
-        skills.text_len += @intCast(bytes.len);
+        @memcpy(self.text[self.text_len..][0..bytes.len], bytes);
+        self.text_len += @intCast(bytes.len);
     }
 
-    skills.entries[skills.count] = entry;
-    skills.count += 1;
+    self.entries[self.count] = entry;
+    self.count += 1;
 }
 
 /// Example: `const index = skills.find("review") orelse return;`
-pub fn find(skills: *const Skills, name: []const u8) ?u8 {
-    for (skills.entries[0..skills.count], 0..) |entry, index| {
-        if (std.mem.eql(u8, entry.name(skills), name)) {
+pub fn find(self: *const Skills, name: []const u8) ?u8 {
+    for (self.entries[0..self.count], 0..) |entry, index| {
+        if (std.mem.eql(u8, entry.name(self), name)) {
             return @intCast(index);
         }
     }
@@ -60,8 +60,8 @@ pub fn find(skills: *const Skills, name: []const u8) ?u8 {
 
 /// Exact token boundaries prevent `$review-extra` from invoking `$review`.
 /// Example: `if (skills.mentioned(prompt, index)) appendSkillInput();`
-pub fn mentioned(skills: *const Skills, text: []const u8, index: u8) bool {
-    const name = skills.entries[index].name(skills);
+pub fn mentioned(self: *const Skills, text: []const u8, index: u8) bool {
+    const name = self.entries[index].name(self);
     for (text, 0..) |byte, offset| {
         if (byte != '$' or offset > 0 and !std.ascii.isWhitespace(text[offset - 1])) {
             continue;
@@ -82,24 +82,24 @@ pub fn nameByte(byte: u8) bool {
 }
 
 /// Example: `try skills.encode(encoder);`
-pub fn encode(skills: *const Skills, encoder: *@import("schema/Encoder.zig")) !void {
-    if (skills.count > capacity or skills.text_len > skills.text.len) {
+pub fn encode(self: *const Skills, encoder: *@import("schema/Encoder.zig")) !void {
+    if (self.count > capacity or self.text_len > self.text.len) {
         return error.InvalidSkill;
     }
 
-    try encoder.writeInt(u64, skills.revision);
-    try encoder.writeByte(@intFromEnum(skills.phase));
-    try encoder.writeByte(@intFromBool(skills.truncated));
-    try encoder.writeByte(skills.count);
-    for (skills.entries[0..skills.count]) |entry| {
+    try encoder.writeInt(u64, self.revision);
+    try encoder.writeByte(@intFromEnum(self.phase));
+    try encoder.writeByte(@intFromBool(self.truncated));
+    try encoder.writeByte(self.count);
+    for (self.entries[0..self.count]) |entry| {
         inline for (.{ "name", "label", "description" }) |field| {
             const offset = @field(entry, field ++ "_offset");
             const len = @field(entry, field ++ "_len");
-            if (@as(usize, offset) + len > skills.text_len) {
+            if (@as(usize, offset) + len > self.text_len) {
                 return error.InvalidSkill;
             }
 
-            try encoder.writeSized16(skills.text[offset..][0..len]);
+            try encoder.writeSized16(self.text[offset..][0..len]);
         }
 
         try encoder.writeByte(@intFromEnum(entry.scope));

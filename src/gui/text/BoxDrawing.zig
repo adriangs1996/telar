@@ -13,8 +13,8 @@ pub fn parse(text: []const u8) ?Box {
     return .{ .codepoint = 0x2500 + (@as(u21, text[1] & 1) << 6) + (text[2] & 63) };
 }
 
-pub fn curve(box: Box) ?u3 {
-    return if (box.codepoint >= 0x256d and box.codepoint <= 0x2573) @intCast(box.codepoint - 0x256d) else null;
+pub fn curve(self: Box) ?u3 {
+    return if (self.codepoint >= 0x256d and self.codepoint <= 0x2573) @intCast(self.codepoint - 0x256d) else null;
 }
 
 test "all 128 box codepoints and only bare complete graphemes are procedural" {

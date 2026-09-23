@@ -12,13 +12,13 @@ pending: bool = false,
 /// ```zig
 /// if (scheduler.update(io, deadline_ns) == .schedule) startWorker();
 /// ```
-pub fn update(scheduler: *DeadlineScheduler, io: std.Io, deadline_ns: ?u64) deadline_timer.Update {
+pub fn update(self: *DeadlineScheduler, io: std.Io, deadline_ns: ?u64) deadline_timer.Update {
     const replacement = deadline_ns orelse deadline_timer.no_deadline;
-    const previous = scheduler.deadline_ns.load(.acquire);
-    scheduler.deadline_ns.store(replacement, .release);
-    if (scheduler.pending) {
+    const previous = self.deadline_ns.load(.acquire);
+    self.deadline_ns.store(replacement, .release);
+    if (self.pending) {
         if (previous != replacement) {
-            scheduler.wake.set(io);
+            self.wake.set(io);
         }
 
         return .retained;
@@ -27,8 +27,8 @@ pub fn update(scheduler: *DeadlineScheduler, io: std.Io, deadline_ns: ?u64) dead
         return .idle;
     }
 
-    scheduler.wake.reset();
-    scheduler.pending = true;
+    self.wake.reset();
+    self.pending = true;
 
     return .schedule;
 }
@@ -40,16 +40,16 @@ pub fn update(scheduler: *DeadlineScheduler, io: std.Io, deadline_ns: ?u64) dead
 /// ```zig
 /// if (scheduler.updateEarlier(io, earliest_pending_ns) == .schedule) startWorker();
 /// ```
-pub fn updateEarlier(scheduler: *DeadlineScheduler, io: std.Io, deadline_ns: ?u64) deadline_timer.Update {
-    if (scheduler.pending) {
+pub fn updateEarlier(self: *DeadlineScheduler, io: std.Io, deadline_ns: ?u64) deadline_timer.Update {
+    if (self.pending) {
         const requested = deadline_ns orelse return .retained;
-        const armed = scheduler.deadline_ns.load(.acquire);
+        const armed = self.deadline_ns.load(.acquire);
         if (armed <= requested) {
             return .retained;
         }
     }
 
-    return scheduler.update(io, deadline_ns);
+    return self.update(io, deadline_ns);
 }
 
 /// Releases the reservation when the caller could not schedule its worker.
@@ -57,8 +57,8 @@ pub fn updateEarlier(scheduler: *DeadlineScheduler, io: std.Io, deadline_ns: ?u6
 /// ```zig
 /// scheduler.schedulingFailed();
 /// ```
-pub fn schedulingFailed(scheduler: *DeadlineScheduler) void {
-    scheduler.pending = false;
+pub fn schedulingFailed(self: *DeadlineScheduler) void {
+    self.pending = false;
 }
 
 /// Releases the completed worker before propagating its result.
@@ -66,8 +66,8 @@ pub fn schedulingFailed(scheduler: *DeadlineScheduler) void {
 /// ```zig
 /// try scheduler.complete(result);
 /// ```
-pub fn complete(scheduler: *DeadlineScheduler, result: anyerror!void) !void {
-    scheduler.pending = false;
+pub fn complete(self: *DeadlineScheduler, result: anyerror!void) !void {
+    self.pending = false;
 
     try result;
 }

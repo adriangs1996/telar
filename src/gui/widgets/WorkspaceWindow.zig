@@ -26,15 +26,15 @@ pub fn centered(total: usize, active: usize, capacity: usize) WorkspaceWindow {
 
 /// The nearest workspace outside the slice on its left.
 /// Example: `const previous = window.previous() orelse return;`
-pub fn previous(window: WorkspaceWindow) ?usize {
-    return if (window.first == 0) null else window.first - 1;
+pub fn previous(self: WorkspaceWindow) ?usize {
+    return if (self.first == 0) null else self.first - 1;
 }
 
 /// The nearest workspace outside the slice on its right.
 /// Example: `const next = window.next() orelse return;`
-pub fn next(window: WorkspaceWindow) ?usize {
-    const index = window.first + window.count;
-    return if (index == window.total) null else index;
+pub fn next(self: WorkspaceWindow) ?usize {
+    const index = self.first + self.count;
+    return if (index == self.total) null else index;
 }
 
 test "workspace window centers selection and clamps at both ends" {

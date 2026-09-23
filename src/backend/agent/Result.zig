@@ -9,6 +9,6 @@ status: description.ResultStatus,
 title: [core.max_agent_session_title_bytes]u8 = undefined,
 title_len: u8 = 0,
 
-pub fn titleSlice(result: *const Result) []const u8 {
-    return result.title[0..result.title_len];
+pub fn titleSlice(self: *const Result) []const u8 {
+    return self.title[0..self.title_len];
 }

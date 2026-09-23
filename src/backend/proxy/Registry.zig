@@ -14,13 +14,13 @@ slots: [core.max_agent_snapshot_entries]?Credential = @splat(null),
 /// ```zig
 /// try registry.register(io, &credential);
 /// ```
-pub fn register(registry: *Registry, io: std.Io, credential: *const Credential) !void {
-    registry.mutex.lockUncancelable(io);
-    defer registry.mutex.unlock(io);
+pub fn register(self: *Registry, io: std.Io, credential: *const Credential) !void {
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
     var free: ?*?Credential = null;
 
-    for (&registry.slots) |*slot| {
+    for (&self.slots) |*slot| {
         if (slot.*) |*existing| {
             if (credential_registry.sameCredential(existing, credential)) {
                 return error.DuplicateProxyCredential;
@@ -39,11 +39,11 @@ pub fn register(registry: *Registry, io: std.Io, credential: *const Credential) 
 /// ```zig
 /// registry.remove(io, &credential);
 /// ```
-pub fn remove(registry: *Registry, io: std.Io, credential: *const Credential) void {
-    registry.mutex.lockUncancelable(io);
-    defer registry.mutex.unlock(io);
+pub fn remove(self: *Registry, io: std.Io, credential: *const Credential) void {
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
-    for (&registry.slots) |*slot| {
+    for (&self.slots) |*slot| {
         const existing = if (slot.*) |*value| value else continue;
         if (!credential_registry.sameCredential(existing, credential)) {
             continue;
@@ -60,11 +60,11 @@ pub fn remove(registry: *Registry, io: std.Io, credential: *const Credential) vo
 /// ```zig
 /// registry.removePane(io, .{ .id = pane_id, .generation = generation });
 /// ```
-pub fn removePane(registry: *Registry, io: std.Io, pane: PaneGeneration) void {
-    registry.mutex.lockUncancelable(io);
-    defer registry.mutex.unlock(io);
+pub fn removePane(self: *Registry, io: std.Io, pane: PaneGeneration) void {
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
-    for (&registry.slots) |*slot| {
+    for (&self.slots) |*slot| {
         const existing = if (slot.*) |*value| value else continue;
         if (existing.pane_id != pane.id or existing.pane_generation != pane.generation) {
             continue;
@@ -81,11 +81,11 @@ pub fn removePane(registry: *Registry, io: std.Io, pane: PaneGeneration) void {
 ///     rejectTunnel();
 /// }
 /// ```
-pub fn contains(registry: *Registry, io: std.Io, credential: *const Credential) bool {
-    registry.mutex.lockUncancelable(io);
-    defer registry.mutex.unlock(io);
+pub fn contains(self: *Registry, io: std.Io, credential: *const Credential) bool {
+    self.mutex.lockUncancelable(io);
+    defer self.mutex.unlock(io);
 
-    for (&registry.slots) |*slot| {
+    for (&self.slots) |*slot| {
         const existing = if (slot.*) |*value| value else continue;
         if (credential_registry.sameCredential(existing, credential)) {
             return true;

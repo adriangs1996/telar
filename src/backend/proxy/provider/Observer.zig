@@ -15,11 +15,11 @@ active: bool = false,
 /// observer.init(.anthropic_messages);
 /// defer observer.deinit();
 /// ```
-pub fn init(observer: *Observer, dialect: types.ApiDialect) void {
-    observer.* = .{ .dialect = dialect, .active = true };
+pub fn init(self: *Observer, dialect: types.ApiDialect) void {
+    self.* = .{ .dialect = dialect, .active = true };
 
     if (dialect == .anthropic_messages) {
-        observer.claude_decoder.init();
+        self.claude_decoder.init();
     }
 }
 
@@ -28,13 +28,13 @@ pub fn init(observer: *Observer, dialect: types.ApiDialect) void {
 /// ```zig
 /// observer.feed(fragment.payload);
 /// ```
-pub fn feed(observer: *Observer, input: []const u8) void {
-    if (!observer.active) {
+pub fn feed(self: *Observer, input: []const u8) void {
+    if (!self.active) {
         return;
     }
 
-    switch (observer.dialect) {
-        .anthropic_messages => observer.claude_decoder.feed(input),
+    switch (self.dialect) {
+        .anthropic_messages => self.claude_decoder.feed(input),
         else => {},
     }
 }
@@ -45,13 +45,13 @@ pub fn feed(observer: *Observer, input: []const u8) void {
 /// ```zig
 /// const classification = observer.finish();
 /// ```
-pub fn finish(observer: *Observer) request_support.RequestClass {
-    if (!observer.active) {
+pub fn finish(self: *Observer) request_support.RequestClass {
+    if (!self.active) {
         return .auxiliary;
     }
 
-    return switch (observer.dialect) {
-        .anthropic_messages => if (observer.claude_decoder.finish()) .inference else .auxiliary,
+    return switch (self.dialect) {
+        .anthropic_messages => if (self.claude_decoder.finish()) .inference else .auxiliary,
         else => .auxiliary,
     };
 }
@@ -63,8 +63,8 @@ pub fn finish(observer: *Observer) request_support.RequestClass {
 ///     observer.feed(fragment);
 /// }
 /// ```
-pub fn isActive(observer: *const Observer) bool {
-    return observer.active;
+pub fn isActive(self: *const Observer) bool {
+    return self.active;
 }
 
 /// Releases and erases all provider-specific parsing state.
@@ -72,15 +72,15 @@ pub fn isActive(observer: *const Observer) bool {
 /// ```zig
 /// observer.deinit();
 /// ```
-pub fn deinit(observer: *Observer) void {
-    if (!observer.active) {
+pub fn deinit(self: *Observer) void {
+    if (!self.active) {
         return;
     }
 
-    if (observer.dialect == .anthropic_messages) {
-        observer.claude_decoder.deinit();
+    if (self.dialect == .anthropic_messages) {
+        self.claude_decoder.deinit();
     }
 
-    observer.dialect = .unknown;
-    observer.active = false;
+    self.dialect = .unknown;
+    self.active = false;
 }

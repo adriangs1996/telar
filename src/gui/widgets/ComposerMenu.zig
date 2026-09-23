@@ -12,33 +12,33 @@ pane_bounds: Rect,
 
 /// Popovers borrow catalog labels for this frame; targets own only revisions and indices.
 /// Example: `try menu.draw(canvas);`
-pub fn draw(menu: Menu, canvas: *Canvas) !void {
+pub fn draw(self: Menu, canvas: *Canvas) !void {
     const state = canvas.widgets orelse return;
     const open = state.composer_menu;
     const selector = open.selector orelse return;
-    if (selector.pane_id != menu.thread.pane_id or open.attachment_generation != menu.thread.attachment_generation or selector.catalog_revision != menu.thread.catalog_revision or selector.options_revision != menu.thread.options_revision) {
+    if (selector.pane_id != self.thread.pane_id or open.attachment_generation != self.thread.attachment_generation or selector.catalog_revision != self.thread.catalog_revision or selector.options_revision != self.thread.options_revision) {
         return;
     }
 
-    const options: @import("ComposerOptions.zig") = .{ .thread = menu.thread, .kind = selector.kind };
+    const options: @import("ComposerOptions.zig") = .{ .thread = self.thread, .kind = selector.kind };
     const count = options.count();
     if (count == 0) {
         return;
     }
 
-    const padding = @min(canvas.chrome.px(8), menu.pane_bounds.width / 10);
+    const padding = @min(canvas.chrome.px(8), self.pane_bounds.width / 10);
     const rows = @min(count, ComposerMenuState.visible_rows);
-    const row_height = @min(canvas.chrome.px(if (selector.kind == .access or selector.kind == .recent) @as(f32, 54) else 36), @max(0, menu.pane_bounds.height - 2 * padding - canvas.chrome.px(36)) / @as(f32, @floatFromInt(rows)));
-    const width = @min(canvas.chrome.px(if (selector.kind == .access or selector.kind == .recent) @as(f32, 370) else 300), @max(0, menu.pane_bounds.width - 2 * padding));
+    const row_height = @min(canvas.chrome.px(if (selector.kind == .access or selector.kind == .recent) @as(f32, 54) else 36), @max(0, self.pane_bounds.height - 2 * padding - canvas.chrome.px(36)) / @as(f32, @floatFromInt(rows)));
+    const width = @min(canvas.chrome.px(if (selector.kind == .access or selector.kind == .recent) @as(f32, 370) else 300), @max(0, self.pane_bounds.width - 2 * padding));
     const height = row_height * @as(f32, @floatFromInt(rows)) + canvas.chrome.px(36);
-    const bounds: Rect = .{ .x = std.math.clamp(open.anchor.x, menu.pane_bounds.x + padding, menu.pane_bounds.x + menu.pane_bounds.width - padding - width), .y = std.math.clamp(open.anchor.y - height - padding, menu.pane_bounds.y + padding, @max(menu.pane_bounds.y + padding, menu.pane_bounds.y + menu.pane_bounds.height - height - padding)), .width = width, .height = height };
+    const bounds: Rect = .{ .x = std.math.clamp(open.anchor.x, self.pane_bounds.x + padding, self.pane_bounds.x + self.pane_bounds.width - padding - width), .y = std.math.clamp(open.anchor.y - height - padding, self.pane_bounds.y + padding, @max(self.pane_bounds.y + padding, self.pane_bounds.y + self.pane_bounds.height - height - padding)), .width = width, .height = height };
     const first_quad = canvas.quads.items().len;
-    defer canvas.quads.clipFrom(first_quad, menu.pane_bounds);
+    defer canvas.quads.clipFrom(first_quad, self.pane_bounds);
     try (@import("ComposerSurface.zig"){ .bounds = bounds, .radius = canvas.chrome.px(13) }).draw(canvas);
     _ = try state.dispatcher.add((Target{ .namespace = 0x434d, .id = .{ .generation = open.generation }, .bounds = bounds, .action = .{ .custom = 0x434d }, .focusable = false }).labelled("Composer options"));
     const palette = canvas.theme.palette;
     const title = switch (selector.kind) {
-        .recent => if (menu.thread.transcript.?.recent.has_more) "16 most recent conversations" else "Recent conversations",
+        .recent => if (self.thread.transcript.?.recent.has_more) "16 most recent conversations" else "Recent conversations",
         .model => "Model",
         .effort => "Reasoning effort",
         .access => "Permissions",
@@ -70,6 +70,6 @@ pub fn draw(menu: Menu, canvas: *Canvas) !void {
             try canvas.iconAt(.{ .x = row.x + row.width - canvas.chrome.px(28), .y = row.y, .width = canvas.chrome.px(20), .height = text.height }, .{ .text = "\u{f00c}", .color = palette.accent, .size = .small });
         }
 
-        _ = try state.dispatcher.add((Target{ .id = .{ .generation = menu.thread.attachment_generation }, .bounds = row, .action = .{ .composer_choice = .{ .selector = selector, .index = index, .menu_generation = open.generation } }, .traverse_tab = false }).labelled(options.label(index)));
+        _ = try state.dispatcher.add((Target{ .id = .{ .generation = self.thread.attachment_generation }, .bounds = row, .action = .{ .composer_choice = .{ .selector = selector, .index = index, .menu_generation = open.generation } }, .traverse_tab = false }).labelled(options.label(index)));
     }
 }

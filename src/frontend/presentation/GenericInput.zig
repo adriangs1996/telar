@@ -33,30 +33,30 @@ pub fn Type(comptime capacity: usize) type {
         ///
         /// Zero means the buffer is full and the caller has to drain it with
         /// `next` before offering more. It never means the bytes are gone.
-        pub fn push(in: *Self, chunk: []const u8) usize {
-            const take = @min(capacity - in.len, chunk.len);
-            @memcpy(in.pending[in.len..][0..take], chunk[0..take]);
-            in.len += take;
+        pub fn push(self: *Self, chunk: []const u8) usize {
+            const take = @min(capacity - self.len, chunk.len);
+            @memcpy(self.pending[self.len..][0..take], chunk[0..take]);
+            self.len += take;
             return take;
         }
 
         /// The next complete event, or null if more bytes are needed.
-        pub fn next(in: *Self) ?screen_support.Event {
-            while (in.len > 0) {
-                const parsed = screen_support.parse(in.pending[0..in.len]) orelse return null;
+        pub fn next(self: *Self) ?screen_support.Event {
+            while (self.len > 0) {
+                const parsed = screen_support.parse(self.pending[0..self.len]) orelse return null;
                 if (parsed.len == 0) {
                     // Needs more bytes - unless there is no more room for them,
                     // in which case the buffer holds something that will never
                     // parse and waiting is a deadlock. Dropping the oldest byte
                     // is the only move that guarantees progress.
-                    if (in.len < capacity) {
+                    if (self.len < capacity) {
                         return null;
                     }
-                    in.discard(1);
-                    in.dropped += 1;
+                    self.discard(1);
+                    self.dropped += 1;
                     continue;
                 }
-                in.discard(parsed.len);
+                self.discard(parsed.len);
                 if (parsed.event == .incomplete) {
                     continue;
                 }
@@ -65,9 +65,9 @@ pub fn Type(comptime capacity: usize) type {
             return null;
         }
 
-        fn discard(in: *Self, count: usize) void {
-            std.mem.copyForwards(u8, in.pending[0 .. in.len - count], in.pending[count..in.len]);
-            in.len -= count;
+        fn discard(self: *Self, count: usize) void {
+            std.mem.copyForwards(u8, self.pending[0 .. self.len - count], self.pending[count..self.len]);
+            self.len -= count;
         }
     };
 }

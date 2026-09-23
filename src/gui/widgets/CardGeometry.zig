@@ -27,35 +27,35 @@ pub fn derive(chrome: ChromeMetrics, metrics: Metrics) CardGeometry {
 
 /// Scales card spacing with the same display and font ratio as its icons.
 /// Example: `const inset = geometry.px(CardGeometry.padding_x);`
-pub fn px(geometry: CardGeometry, logical: f32) f32 {
-    return @round(logical * geometry.scale);
+pub fn px(self: CardGeometry, logical: f32) f32 {
+    return @round(logical * self.scale);
 }
 
 /// Height of a card: three rows inside the vertical padding.
 /// Example: `const height = geometry.height();`
-pub fn height(geometry: CardGeometry) f32 {
-    return 2 * geometry.small_row + geometry.title_row + geometry.px(6) + 2 * geometry.px(padding_y);
+pub fn height(self: CardGeometry) f32 {
+    return 2 * self.small_row + self.title_row + self.px(6) + 2 * self.px(padding_y);
 }
 
 /// Distance between the tops of two consecutive cards.
 /// Example: `const top = list_top + index * geometry.pitch();`
-pub fn pitch(geometry: CardGeometry) f32 {
-    return geometry.height() + geometry.px(spacing);
+pub fn pitch(self: CardGeometry) f32 {
+    return self.height() + self.px(spacing);
 }
 
 /// The inner rectangle of row `index` inside a card's outer bounds.
 /// Example: `const title_row = geometry.row(card, 1);`
-pub fn row(geometry: CardGeometry, bounds: Rect, index: u2) Rect {
+pub fn row(self: CardGeometry, bounds: Rect, index: u2) Rect {
     const top: f32 = switch (index) {
         0 => 0,
-        1 => geometry.small_row + geometry.px(4),
-        else => geometry.small_row + geometry.title_row + geometry.px(6),
+        1 => self.small_row + self.px(4),
+        else => self.small_row + self.title_row + self.px(6),
     };
     return .{
-        .x = bounds.x + geometry.px(padding_x),
-        .y = bounds.y + geometry.px(padding_y) + top,
-        .width = @max(0, bounds.width - 2 * geometry.px(padding_x)),
-        .height = if (index == 1) geometry.title_row else geometry.small_row,
+        .x = bounds.x + self.px(padding_x),
+        .y = bounds.y + self.px(padding_y) + top,
+        .width = @max(0, bounds.width - 2 * self.px(padding_x)),
+        .height = if (index == 1) self.title_row else self.small_row,
     };
 }
 

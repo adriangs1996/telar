@@ -26,9 +26,9 @@ pub fn init(text: []const u8) EventLine {
 /// ```zig
 /// line.set("Run zig build test?");
 /// ```
-pub fn set(line: *EventLine, text: []const u8) void {
+pub fn set(self: *EventLine, text: []const u8) void {
     var end: usize = 0;
-    while (end < text.len and end < line.bytes.len and text[end] >= 0x20 and text[end] != 0x7f) {
+    while (end < text.len and end < self.bytes.len and text[end] >= 0x20 and text[end] != 0x7f) {
         end += 1;
     }
 
@@ -40,8 +40,8 @@ pub fn set(line: *EventLine, text: []const u8) void {
         end = 0;
     }
 
-    @memcpy(line.bytes[0..end], text[0..end]);
-    line.len = @intCast(end);
+    @memcpy(self.bytes[0..end], text[0..end]);
+    self.len = @intCast(end);
 }
 
 /// Borrows the stored line.
@@ -49,8 +49,8 @@ pub fn set(line: *EventLine, text: []const u8) void {
 /// ```zig
 /// entry.last_event = line.slice();
 /// ```
-pub fn slice(line: *const EventLine) []const u8 {
-    return line.bytes[0..line.len];
+pub fn slice(self: *const EventLine) []const u8 {
+    return self.bytes[0..self.len];
 }
 
 /// Reports whether two lines carry the same bytes.
@@ -58,8 +58,8 @@ pub fn slice(line: *const EventLine) []const u8 {
 /// ```zig
 /// if (!previous.eql(&current)) bumpRevision();
 /// ```
-pub fn eql(line: *const EventLine, other: *const EventLine) bool {
-    return std.mem.eql(u8, line.slice(), other.slice());
+pub fn eql(self: *const EventLine, other: *const EventLine) bool {
+    return std.mem.eql(u8, self.slice(), other.slice());
 }
 
 test "event lines keep one control-free UTF-8 line within the wire bound" {

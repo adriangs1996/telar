@@ -28,19 +28,19 @@ pub const ConstIterator = @import("ConstIterator.zig");
 /// ```zig
 /// const stored = repository.insert(Agent.init(identity)) orelse return;
 /// ```
-pub fn insert(repository: *Repository, candidate: Agent) ?*Agent {
+pub fn insert(self: *Repository, candidate: Agent) ?*Agent {
     const key = candidate.paneKey();
-    if (repository.index.get(core.raw(key.id)) != null) {
+    if (self.index.get(core.raw(key.id)) != null) {
         return null;
     }
 
-    var free = repository.occupied.complement().iterator(.{});
+    var free = self.occupied.complement().iterator(.{});
     if (free.next()) |slot| {
-        repository.slots[slot] = candidate;
-        repository.keys[slot] = key;
-        repository.occupied.set(slot);
-        repository.index.put(core.raw(key.id), slot);
-        return &repository.slots[slot].?;
+        self.slots[slot] = candidate;
+        self.keys[slot] = key;
+        self.occupied.set(slot);
+        self.index.put(core.raw(key.id), slot);
+        return &self.slots[slot].?;
     }
 
     return null;
@@ -51,9 +51,9 @@ pub fn insert(repository: *Repository, candidate: Agent) ?*Agent {
 /// ```zig
 /// const agent = repository.find(pane_key) orelse return;
 /// ```
-pub fn find(repository: *Repository, key: PaneKey) ?*Agent {
-    const index = repository.indexOf(key) orelse return null;
-    return &repository.slots[index].?;
+pub fn find(self: *Repository, key: PaneKey) ?*Agent {
+    const index = self.indexOf(key) orelse return null;
+    return &self.slots[index].?;
 }
 
 /// Finds the immutable aggregate for one exact pane generation.
@@ -61,9 +61,9 @@ pub fn find(repository: *Repository, key: PaneKey) ?*Agent {
 /// ```zig
 /// const agent = repository.findConst(pane_key) orelse return;
 /// ```
-pub fn findConst(repository: *const Repository, key: PaneKey) ?*const Agent {
-    const index = repository.indexOf(key) orelse return null;
-    return &repository.slots[index].?;
+pub fn findConst(self: *const Repository, key: PaneKey) ?*const Agent {
+    const index = self.indexOf(key) orelse return null;
+    return &self.slots[index].?;
 }
 
 /// Removes one exact pane generation without applying lifecycle policy.
@@ -71,32 +71,32 @@ pub fn findConst(repository: *const Repository, key: PaneKey) ?*const Agent {
 /// ```zig
 /// _ = repository.remove(pane_key);
 /// ```
-pub fn remove(repository: *Repository, key: PaneKey) bool {
-    const index = repository.indexOf(key) orelse return false;
-    repository.release(index);
+pub fn remove(self: *Repository, key: PaneKey) bool {
+    const index = self.indexOf(key) orelse return false;
+    self.release(index);
     return true;
 }
 
 /// Whether a slot holds an aggregate, without reading the aggregate.
-pub fn occupiedAt(repository: *const Repository, index: usize) bool {
-    return repository.occupied.isSet(index);
+pub fn occupiedAt(self: *const Repository, index: usize) bool {
+    return self.occupied.isSet(index);
 }
 
 /// Empties one occupied slot. Iterators remove their current aggregate here.
-pub fn release(repository: *Repository, index: usize) void {
-    std.debug.assert(repository.occupied.isSet(index));
-    repository.index.remove(core.raw(repository.keys[index].id));
-    repository.slots[index] = null;
-    repository.occupied.unset(index);
+pub fn release(self: *Repository, index: usize) void {
+    std.debug.assert(self.occupied.isSet(index));
+    self.index.remove(core.raw(self.keys[index].id));
+    self.slots[index] = null;
+    self.occupied.unset(index);
 }
 
-fn indexOf(repository: *const Repository, key: PaneKey) ?usize {
-    const slot = repository.index.get(core.raw(key.id)) orelse return null;
-    if (repository.keys[slot].generation != key.generation) {
+fn indexOf(self: *const Repository, key: PaneKey) ?usize {
+    const slot = self.index.get(core.raw(key.id)) orelse return null;
+    if (self.keys[slot].generation != key.generation) {
         return null;
     }
 
-    std.debug.assert(repository.slots[slot].?.matches(key));
+    std.debug.assert(self.slots[slot].?.matches(key));
     return slot;
 }
 
@@ -105,8 +105,8 @@ fn indexOf(repository: *const Repository, key: PaneKey) ?usize {
 /// ```zig
 /// var iterator = repository.iterator();
 /// ```
-pub fn iterator(repository: *Repository) Iterator {
-    return .{ .repository = repository };
+pub fn iterator(self: *Repository) Iterator {
+    return .{ .repository = self };
 }
 
 /// Creates an immutable iterator over the current repository contents.
@@ -114,6 +114,6 @@ pub fn iterator(repository: *Repository) Iterator {
 /// ```zig
 /// var iterator = repository.constIterator();
 /// ```
-pub fn constIterator(repository: *const Repository) ConstIterator {
-    return .{ .repository = repository };
+pub fn constIterator(self: *const Repository) ConstIterator {
+    return .{ .repository = self };
 }

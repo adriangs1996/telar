@@ -3,8 +3,8 @@ const Sink = @This();
 
 pipeline: *backend.Pipeline,
 
-pub fn observe(sink: *Sink, bytes: []const u8) void {
-    sink.pipeline.stream.nextSlice(bytes);
+pub fn observe(self: *Sink, bytes: []const u8) void {
+    self.pipeline.stream.nextSlice(bytes);
 }
 
 /// The bare pipeline measures the emulator's own shared-memory load;

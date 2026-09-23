@@ -9,11 +9,11 @@ count: u16 = 0,
 
 /// The straight RGBA of one index; out-of-range indices are an error.
 /// Example: `const rgba = try palette.lookup(index);`
-pub fn lookup(palette: *const PngPalette, index: u8) ![4]u8 {
-    if (index >= palette.count) {
+pub fn lookup(self: *const PngPalette, index: u8) ![4]u8 {
+    if (index >= self.count) {
         return error.InvalidPngData;
     }
 
-    const color = palette.colors[index];
-    return .{ color[0], color[1], color[2], palette.alphas[index] };
+    const color = self.colors[index];
+    return .{ color[0], color[1], color[2], self.alphas[index] };
 }

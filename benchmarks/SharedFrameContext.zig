@@ -64,21 +64,21 @@ pub fn init(io: std.Io, gpa: std.mem.Allocator) !SharedFrameContext {
     return context;
 }
 
-pub fn deinit(context: *SharedFrameContext) void {
-    context.pipeline.deinit();
-    context.gpa.destroy(context.pipeline);
-    context.gpa.free(context.pixels);
+pub fn deinit(self: *SharedFrameContext) void {
+    self.pipeline.deinit();
+    self.gpa.destroy(self.pipeline);
+    self.gpa.free(self.pixels);
 }
 
 /// The child's side of one frame: a fresh object, its size, one memcpy.
-pub fn publish(context: *SharedFrameContext) !void {
-    context.sequence += 1;
+pub fn publish(self: *SharedFrameContext) !void {
+    self.sequence += 1;
     const name = try std.fmt.bufPrintZ(
-        &context.name,
+        &self.name,
         "/tlrbench{x}-{x}",
-        .{ @as(u32, @bitCast(std.c.getpid())), context.sequence },
+        .{ @as(u32, @bitCast(std.c.getpid())), self.sequence },
     );
-    context.name_len = name.len;
+    self.name_len = name.len;
     const fd = std.c.shm_open(
         name,
         @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDWR, .CREAT = true, .EXCL = true })),
@@ -100,41 +100,41 @@ pub fn publish(context: *SharedFrameContext) !void {
         0,
     );
     defer std.posix.munmap(map);
-    @memcpy(map[0..raw_len], context.pixels);
+    @memcpy(map[0..raw_len], self.pixels);
 
     const Encoder = std.base64.standard.Encoder;
     var encoded: [128]u8 = undefined;
     const payload = Encoder.encode(encoded[0..Encoder.calcSize(name.len)], name);
-    const envelope = try std.fmt.bufPrint(&context.envelope, "{s}{s}{s}", .{ control, payload, trailer });
-    context.envelope_len = envelope.len;
+    const envelope = try std.fmt.bufPrint(&self.envelope, "{s}{s}{s}", .{ control, payload, trailer });
+    self.envelope_len = envelope.len;
 }
 
-pub fn unpublish(context: *SharedFrameContext) void {
-    _ = std.c.shm_unlink(context.name[0..context.name_len :0]);
+pub fn unpublish(self: *SharedFrameContext) void {
+    _ = std.c.shm_unlink(self.name[0..self.name_len :0]);
 }
 
 /// The runtime's media actor for one batch holding the published frame.
-pub fn ingest(context: *SharedFrameContext) !u64 {
-    context.pipeline.queueOutput(context.envelope[0..context.envelope_len]);
-    if (!context.pipeline.seal()) {
+pub fn ingest(self: *SharedFrameContext) !u64 {
+    self.pipeline.queueOutput(self.envelope[0..self.envelope_len]);
+    if (!self.pipeline.seal()) {
         return error.MediaBatchEmpty;
     }
     var stats: backend.Stats = .{};
-    var sink: Sink = .{ .pipeline = context.pipeline };
-    context.pipeline.processSealed(.{ .current_size = context.size, .stats = &stats }, &sink);
-    context.pipeline.finishSealed();
+    var sink: Sink = .{ .pipeline = self.pipeline };
+    self.pipeline.processSealed(.{ .current_size = self.size, .stats = &stats }, &sink);
+    self.pipeline.finishSealed();
     if (stats.forwarded_frames != 1 or stats.failed) {
         return error.SharedFrameNotForwarded;
     }
-    const image = context.pipeline.terminal.screens.active.kitty_images.imageById(7) orelse
+    const image = self.pipeline.terminal.screens.active.kitty_images.imageById(7) orelse
         return error.KgpImageMissing;
     return image.generation + image.data.len();
 }
 
 /// The freeze the send loop performs for a local client, then the unlink
 /// Ghostty would do after consuming it.
-pub fn freeze(context: *SharedFrameContext) !u64 {
-    const name = backend.freezeSharedPixels(context.pixels) orelse
+pub fn freeze(self: *SharedFrameContext) !u64 {
+    const name = backend.freezeSharedPixels(self.pixels) orelse
         return error.SharedMemoryUnavailable;
     _ = std.c.shm_unlink(name.sliceZ());
     return name.slice().len;

@@ -16,32 +16,32 @@ pub fn init(allocator: std.mem.Allocator, rows: u16) !Storage {
     return .{ .buffer = buffer, .len = limits.header_size + @as(usize, rows) };
 }
 
-pub fn deinit(storage: *Storage, allocator: std.mem.Allocator) void {
-    allocator.free(storage.buffer);
-    storage.* = undefined;
+pub fn deinit(self: *Storage, allocator: std.mem.Allocator) void {
+    allocator.free(self.buffer);
+    self.* = undefined;
 }
 
 /// Geometry changes reserve before applying any incoming cells.
 /// Example: `try storage.reserve(allocator, rows);`
-pub fn reserve(storage: *Storage, allocator: std.mem.Allocator, rows: u16) !void {
-    if (storage.buffer.len >= limits.capacity(rows)) {
+pub fn reserve(self: *Storage, allocator: std.mem.Allocator, rows: u16) !void {
+    if (self.buffer.len >= limits.capacity(rows)) {
         return;
     }
 
     const replacement = try allocator.alloc(u8, limits.capacity(rows));
-    @memcpy(replacement[0..storage.len], storage.buffer[0..storage.len]);
-    allocator.free(storage.buffer);
-    storage.buffer = replacement;
+    @memcpy(replacement[0..self.len], self.buffer[0..self.len]);
+    allocator.free(self.buffer);
+    self.buffer = replacement;
 }
 
-pub fn view(storage: *const Storage) View {
-    return View.trusted(storage.buffer[0..storage.len]);
+pub fn view(self: *const Storage) View {
+    return View.trusted(self.buffer[0..self.len]);
 }
 
 /// Copies a fully validated replacement into previously reserved storage.
 /// Example: `storage.replace(view);`
-pub fn replace(storage: *Storage, value: View) void {
-    std.debug.assert(value.encoded.len <= storage.buffer.len);
-    @memcpy(storage.buffer[0..value.encoded.len], value.encoded);
-    storage.len = value.encoded.len;
+pub fn replace(self: *Storage, value: View) void {
+    std.debug.assert(value.encoded.len <= self.buffer.len);
+    @memcpy(self.buffer[0..value.encoded.len], value.encoded);
+    self.len = value.encoded.len;
 }

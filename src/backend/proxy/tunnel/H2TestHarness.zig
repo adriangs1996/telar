@@ -14,12 +14,12 @@ pipeline: Pipeline = .{},
 counters: Counters = .{},
 exchange: Exchange = undefined,
 
-pub fn init(harness: *TestHarness) !void {
-    try harness.pipeline.add(.{ .context = &harness.capture, .observe = H2Capture.observe });
-    harness.exchange = .{
+pub fn init(self: *TestHarness) !void {
+    try self.pipeline.add(.{ .context = &self.capture, .observe = H2Capture.observe });
+    self.exchange = .{
         .io = std.testing.io,
-        .pipeline = &harness.pipeline,
-        .telemetry = &harness.counters,
+        .pipeline = &self.pipeline,
+        .telemetry = &self.counters,
         .credential = .{
             .pane_id = try core.pane(13),
             .pane_generation = 17,
@@ -31,17 +31,17 @@ pub fn init(harness: *TestHarness) !void {
     };
 }
 
-pub fn expectObservations(harness: *const TestHarness, expected: []const ExpectedObservation) !void {
-    try std.testing.expectEqual(expected.len, harness.capture.len);
+pub fn expectObservations(self: *const TestHarness, expected: []const ExpectedObservation) !void {
+    try std.testing.expectEqual(expected.len, self.capture.len);
 
-    for (expected, harness.capture.events[0..harness.capture.len]) |wanted, event| {
+    for (expected, self.capture.events[0..self.capture.len]) |wanted, event| {
         try std.testing.expectEqual(wanted.phase, event.phase);
         try std.testing.expectEqual(wanted.stream_id, event.stream_id);
     }
 }
 
-pub fn snapshot(harness: *const TestHarness) Snapshot {
-    return harness.counters.snapshot(.{
+pub fn snapshot(self: *const TestHarness) Snapshot {
+    return self.counters.snapshot(.{
         .connections = .{ .active = 0, .limit_drops = 0 },
         .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },
     });

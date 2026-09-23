@@ -10,6 +10,6 @@ revision: u64,
 
 /// Rejects input captured before a workbench-grid change, including ABA.
 /// Example: `if (!captured.matches(current)) return;`.
-pub fn matches(captured: Region, current: Region) bool {
-    return captured.revision == current.revision and std.meta.eql(captured.area, current.area);
+pub fn matches(self: Region, current: Region) bool {
+    return self.revision == current.revision and std.meta.eql(self.area, current.area);
 }

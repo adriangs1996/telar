@@ -14,13 +14,13 @@ pub fn init(executable: []const u8) Cache {
     return cache;
 }
 
-pub fn name(cache: *const Cache) []const u8 {
-    return cache.foreground_name[0..cache.foreground_name_len];
+pub fn name(self: *const Cache) []const u8 {
+    return self.foreground_name[0..self.foreground_name_len];
 }
 
-pub fn setName(cache: *Cache, value: []const u8) void {
+pub fn setName(self: *Cache, value: []const u8) void {
     const source = if (value.len == 0) "process" else value;
-    const len = @min(source.len, cache.foreground_name.len);
-    @memcpy(cache.foreground_name[0..len], source[0..len]);
-    cache.foreground_name_len = @intCast(len);
+    const len = @min(source.len, self.foreground_name.len);
+    @memcpy(self.foreground_name[0..len], source[0..len]);
+    self.foreground_name_len = @intCast(len);
 }

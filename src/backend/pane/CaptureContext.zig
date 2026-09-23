@@ -7,13 +7,13 @@ const CaptureContext = @This();
 pane: *Pane,
 observation_stats: ?*Stats = null,
 
-pub fn emit(context: *CaptureContext, command: Command) void {
-    const pane = context.pane;
+pub fn emit(self: *CaptureContext, command: Command) void {
+    const pane = self.pane;
     if (!pane.history_session_started) {
         return;
     }
     const sequence = pane.history_sequence.reserve() orelse {
-        if (context.observation_stats) |stats| {
+        if (self.observation_stats) |stats| {
             stats.dropped += 1;
         }
 
@@ -38,7 +38,7 @@ pub fn emit(context: *CaptureContext, command: Command) void {
         },
         .command = command,
     });
-    if (context.observation_stats) |stats| {
+    if (self.observation_stats) |stats| {
         if (submitted) {
             stats.captured += 1;
         } else {

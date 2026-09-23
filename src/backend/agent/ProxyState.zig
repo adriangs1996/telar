@@ -25,17 +25,17 @@ active_count: u16 = 0,
 ///     .activity_refreshed, .evidence_replaced => publish(),
 /// }
 /// ```
-pub fn apply(state: *ProxyState, observation: ProxyObservation) ApplyResult {
-    if (observation.phase == .request_started and state.isOlderThanEvidence(observation.observed_at_ms)) {
+pub fn apply(self: *ProxyState, observation: ProxyObservation) ApplyResult {
+    if (observation.phase == .request_started and self.isOlderThanEvidence(observation.observed_at_ms)) {
         return .ignored;
     }
 
-    if (!state.track(observation.phase, observation.exchange)) {
+    if (!self.track(observation.phase, observation.exchange)) {
         return .ignored;
     }
 
     if (observation.isResponseActivity()) {
-        if (state.evidence) |*evidence| {
+        if (self.evidence) |*evidence| {
             if (observation.impliedProvider() == evidence.provider and evidence.isWorking()) {
                 if (observation.observed_at_ms - evidence.observed_at_ms < types.activity_refresh_ms) {
                     return .ignored;
@@ -48,7 +48,7 @@ pub fn apply(state: *ProxyState, observation: ProxyObservation) ApplyResult {
         }
     }
 
-    if (!state.replaceEvidence(&observation, state.statusAfter(observation.phase))) {
+    if (!self.replaceEvidence(&observation, self.statusAfter(observation.phase))) {
         return .ignored;
     }
 
@@ -60,10 +60,10 @@ pub fn apply(state: *ProxyState, observation: ProxyObservation) ApplyResult {
 /// ```zig
 /// state.clear();
 /// ```
-pub fn clear(state: *ProxyState) void {
-    state.evidence = null;
-    state.active = @splat(null);
-    state.active_count = 0;
+pub fn clear(self: *ProxyState) void {
+    self.evidence = null;
+    self.active = @splat(null);
+    self.active_count = 0;
 }
 
 /// Clears the complete proxy lifecycle when its evidence has expired.
@@ -71,14 +71,14 @@ pub fn clear(state: *ProxyState) void {
 /// ```zig
 /// _ = state.clearExpired(now_ms);
 /// ```
-pub fn clearExpired(state: *ProxyState, now_ms: i64) bool {
-    const evidence = state.evidence orelse return false;
+pub fn clearExpired(self: *ProxyState, now_ms: i64) bool {
+    const evidence = self.evidence orelse return false;
 
     if (!evidence.isExpired(now_ms)) {
         return false;
     }
 
-    state.clear();
+    self.clear();
     return true;
 }
 
@@ -89,9 +89,9 @@ pub fn clearExpired(state: *ProxyState, now_ms: i64) bool {
 /// ```zig
 /// if (state.awaitingToolResult()) reason = .permission;
 /// ```
-pub fn awaitingToolResult(state: *const ProxyState) bool {
-    const evidence = state.evidence orelse return false;
-    return evidence.status == .working and state.active_count == 0;
+pub fn awaitingToolResult(self: *const ProxyState) bool {
+    const evidence = self.evidence orelse return false;
+    return evidence.status == .working and self.active_count == 0;
 }
 
 /// Returns a copy of the latest proxy evidence, if one exists.
@@ -99,45 +99,45 @@ pub fn awaitingToolResult(state: *const ProxyState) bool {
 /// ```zig
 /// const evidence = state.currentEvidence();
 /// ```
-pub fn currentEvidence(state: *const ProxyState) ?Evidence {
-    return state.evidence;
+pub fn currentEvidence(self: *const ProxyState) ?Evidence {
+    return self.evidence;
 }
 
-fn replaceEvidence(state: *ProxyState, observation: *const ProxyObservation, status: core.AgentStatus) bool {
-    if (state.isOlderThanEvidence(observation.observed_at_ms)) {
+fn replaceEvidence(self: *ProxyState, observation: *const ProxyObservation, status: core.AgentStatus) bool {
+    if (self.isOlderThanEvidence(observation.observed_at_ms)) {
         return false;
     }
 
-    state.evidence = Evidence.fromProxy(observation, status);
+    self.evidence = Evidence.fromProxy(observation, status);
     return true;
 }
 
-fn track(state: *ProxyState, phase: types.ProxyPhase, exchange: ProxyExchange) bool {
+fn track(self: *ProxyState, phase: types.ProxyPhase, exchange: ProxyExchange) bool {
     return switch (phase) {
-        .request_started => state.start(exchange),
-        .response_activity => state.contains(exchange),
-        .provider_turn_completed, .response_finished => state.settle(exchange),
-        .request_failed => state.settleFailure(exchange),
+        .request_started => self.start(exchange),
+        .response_activity => self.contains(exchange),
+        .provider_turn_completed, .response_finished => self.settle(exchange),
+        .request_failed => self.settleFailure(exchange),
     };
 }
 
-fn statusAfter(state: *const ProxyState, phase: types.ProxyPhase) core.AgentStatus {
+fn statusAfter(self: *const ProxyState, phase: types.ProxyPhase) core.AgentStatus {
     return switch (phase) {
         .request_started, .response_activity, .response_finished => .working,
-        .provider_turn_completed => if (state.active_count == 0) .ready else .working,
-        .request_failed => if (state.active_count == 0) .failed else .working,
+        .provider_turn_completed => if (self.active_count == 0) .ready else .working,
+        .request_failed => if (self.active_count == 0) .failed else .working,
     };
 }
 
-fn isOlderThanEvidence(state: *const ProxyState, observed_at_ms: i64) bool {
-    const evidence = state.evidence orelse return false;
+fn isOlderThanEvidence(self: *const ProxyState, observed_at_ms: i64) bool {
+    const evidence = self.evidence orelse return false;
     return observed_at_ms < evidence.observed_at_ms;
 }
 
-pub fn start(state: *ProxyState, exchange: ProxyExchange) bool {
+pub fn start(self: *ProxyState, exchange: ProxyExchange) bool {
     var free: ?*?ProxyExchange = null;
 
-    for (&state.active) |*slot| {
+    for (&self.active) |*slot| {
         if (slot.*) |active| {
             if (proxy_state.sameExchange(active, exchange)) {
                 return false;
@@ -149,12 +149,12 @@ pub fn start(state: *ProxyState, exchange: ProxyExchange) bool {
 
     const destination = free orelse return false;
     destination.* = exchange;
-    state.active_count += 1;
+    self.active_count += 1;
     return true;
 }
 
-pub fn contains(state: *const ProxyState, exchange: ProxyExchange) bool {
-    for (state.active) |active| {
+pub fn contains(self: *const ProxyState, exchange: ProxyExchange) bool {
+    for (self.active) |active| {
         if (active != null and proxy_state.sameExchange(active.?, exchange)) {
             return true;
         }
@@ -163,8 +163,8 @@ pub fn contains(state: *const ProxyState, exchange: ProxyExchange) bool {
     return false;
 }
 
-pub fn settle(state: *ProxyState, exchange: ProxyExchange) bool {
-    for (&state.active) |*slot| {
+pub fn settle(self: *ProxyState, exchange: ProxyExchange) bool {
+    for (&self.active) |*slot| {
         const active = slot.* orelse continue;
 
         if (!proxy_state.sameExchange(active, exchange)) {
@@ -172,18 +172,18 @@ pub fn settle(state: *ProxyState, exchange: ProxyExchange) bool {
         }
 
         slot.* = null;
-        state.active_count -= 1;
+        self.active_count -= 1;
         return true;
     }
 
     return false;
 }
 
-pub fn settleFailure(state: *ProxyState, exchange: ProxyExchange) bool {
+pub fn settleFailure(self: *ProxyState, exchange: ProxyExchange) bool {
     if (exchange.protocol == .h2 and exchange.stream_id == 0) {
         var removed = false;
 
-        for (&state.active) |*slot| {
+        for (&self.active) |*slot| {
             const active = slot.* orelse continue;
 
             if (active.protocol != .h2 or active.connection_id != exchange.connection_id) {
@@ -191,12 +191,12 @@ pub fn settleFailure(state: *ProxyState, exchange: ProxyExchange) bool {
             }
 
             slot.* = null;
-            state.active_count -= 1;
+            self.active_count -= 1;
             removed = true;
         }
 
         return removed;
     }
 
-    return state.settle(exchange);
+    return self.settle(exchange);
 }

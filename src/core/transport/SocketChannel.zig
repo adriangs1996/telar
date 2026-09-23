@@ -24,58 +24,58 @@ pub fn init(stream: std.Io.net.Stream) SocketChannel {
 /// ```zig
 /// session.connection.bindReadBuffer(read_buffer);
 /// ```
-pub fn bindReadBuffer(channel: *SocketChannel, buffer: []u8) void {
-    channel.read_buffer = buffer;
-    channel.reader = null;
+pub fn bindReadBuffer(self: *SocketChannel, buffer: []u8) void {
+    self.read_buffer = buffer;
+    self.reader = null;
 }
 
-pub fn send(channel: *SocketChannel, io: std.Io, payload: []const u8) transport.WriteFrameError!void {
-    if (!channel.isActive()) {
+pub fn send(self: *SocketChannel, io: std.Io, payload: []const u8) transport.WriteFrameError!void {
+    if (!self.isActive()) {
         return error.ConnectionClosed;
     }
-    var stream_writer = channel.stream.writer(io, &.{});
+    var stream_writer = self.stream.writer(io, &.{});
     try transport.writeFrame(&stream_writer.interface, payload);
 }
 
-pub fn receive(channel: *SocketChannel, io: std.Io, buffer: []u8) transport.ReadFrameError![]u8 {
-    if (!channel.isActive()) {
+pub fn receive(self: *SocketChannel, io: std.Io, buffer: []u8) transport.ReadFrameError![]u8 {
+    if (!self.isActive()) {
         return error.ConnectionClosed;
     }
-    return transport.readFrame(channel.boundReader(io), buffer);
+    return transport.readFrame(self.boundReader(io), buffer);
 }
 
 /// Returns the reader over `read_buffer`, creating it on first use. An
 /// unbound channel reads exactly one frame per call, so binding later
 /// loses nothing.
-fn boundReader(channel: *SocketChannel, io: std.Io) *std.Io.Reader {
-    if (channel.reader) |*reader| {
+fn boundReader(self: *SocketChannel, io: std.Io) *std.Io.Reader {
+    if (self.reader) |*reader| {
         return &reader.interface;
     }
 
-    channel.reader = channel.stream.reader(io, channel.read_buffer);
-    return &channel.reader.?.interface;
+    self.reader = self.stream.reader(io, self.read_buffer);
+    return &self.reader.?.interface;
 }
 
-pub fn isActive(channel: *const SocketChannel) bool {
-    return channel.active.load(.acquire);
+pub fn isActive(self: *const SocketChannel) bool {
+    return self.active.load(.acquire);
 }
 
 /// Interrupts pending reads and writes without releasing the descriptor.
 /// The owner can wait for its I/O actors before calling `deinit`.
-pub fn shutdown(channel: *SocketChannel, io: std.Io) void {
-    if (!channel.isActive()) {
+pub fn shutdown(self: *SocketChannel, io: std.Io) void {
+    if (!self.isActive()) {
         return;
     }
-    channel.stream.shutdown(io, .both) catch {};
+    self.stream.shutdown(io, .both) catch {};
 }
 
-pub fn deinit(channel: *SocketChannel, io: std.Io) void {
-    if (!channel.active.swap(false, .acq_rel)) {
+pub fn deinit(self: *SocketChannel, io: std.Io) void {
+    if (!self.active.swap(false, .acq_rel)) {
         return;
     }
     // Closing a descriptor from another thread does not reliably wake a
     // blocking read on POSIX. Shutdown does, which lets a dead frontend
     // release its runtime connection while the reader actor is pending.
-    channel.stream.shutdown(io, .both) catch {};
-    channel.stream.close(io);
+    self.stream.shutdown(io, .both) catch {};
+    self.stream.close(io);
 }

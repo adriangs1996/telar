@@ -10,33 +10,33 @@ pixel_height: u16,
 
 /// Maps host grid coordinates into physical pixels with an external inset.
 /// Example: `const pixels = metrics.rect(.{ 8, 12 }, pane.content);`
-pub fn rect(metrics: Metrics, origin: [2]u32, cells: core.Rect) @import("render/Rect.zig") {
+pub fn rect(self: Metrics, origin: [2]u32, cells: core.Rect) @import("render/Rect.zig") {
     return .{
-        .x = @floatFromInt(origin[0] + @as(u32, cells.x) * metrics.cell_width),
-        .y = @floatFromInt(origin[1] + @as(u32, cells.y) * metrics.cell_height),
-        .width = @floatFromInt(@as(u32, cells.w) * metrics.cell_width),
-        .height = @floatFromInt(@as(u32, cells.h) * metrics.cell_height),
+        .x = @floatFromInt(origin[0] + @as(u32, cells.x) * self.cell_width),
+        .y = @floatFromInt(origin[1] + @as(u32, cells.y) * self.cell_height),
+        .width = @floatFromInt(@as(u32, cells.w) * self.cell_width),
+        .height = @floatFromInt(@as(u32, cells.h) * self.cell_height),
     };
 }
 
 /// Supplies fallback fitting with the actual grid rather than natural font metrics.
 /// Example: `run.cell_bounds = metrics.glyphCell();`
-pub fn glyphCell(metrics: Metrics) @import("render/Rect.zig") {
-    return .{ .x = 0, .y = -metrics.baseline, .width = @floatFromInt(metrics.cell_width), .height = @floatFromInt(metrics.cell_height) };
+pub fn glyphCell(self: Metrics) @import("render/Rect.zig") {
+    return .{ .x = 0, .y = -self.baseline, .width = @floatFromInt(self.cell_width), .height = @floatFromInt(self.cell_height) };
 }
 
 /// Computes only complete cells. Edge pixels belong to the native chrome.
 /// Example: `const size = try metrics.measure(viewport);`
-pub fn measure(metrics: Metrics, viewport: native.Viewport) !core.TerminalSize {
-    if (metrics.cell_width == 0 or metrics.cell_height == 0) {
+pub fn measure(self: Metrics, viewport: native.Viewport) !core.TerminalSize {
+    if (self.cell_width == 0 or self.cell_height == 0) {
         return error.InvalidCellSize;
     }
 
     const size: core.TerminalSize = .{
-        .cols = std.math.cast(u16, viewport.width / metrics.cell_width) orelse return error.ScreenTooLarge,
-        .rows = std.math.cast(u16, viewport.height / metrics.cell_height) orelse return error.ScreenTooLarge,
-        .cell_width_px = metrics.cell_width,
-        .cell_height_px = metrics.cell_height,
+        .cols = std.math.cast(u16, viewport.width / self.cell_width) orelse return error.ScreenTooLarge,
+        .rows = std.math.cast(u16, viewport.height / self.cell_height) orelse return error.ScreenTooLarge,
+        .cell_width_px = self.cell_width,
+        .cell_height_px = self.cell_height,
     };
     try size.validate();
     return size;

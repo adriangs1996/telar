@@ -22,16 +22,16 @@ pub fn init(allocator: std.mem.Allocator) Grid {
     return .{ .allocator = allocator };
 }
 
-pub fn deinit(grid: *Grid) void {
-    grid.entries.deinit(grid.allocator);
-    grid.primary.deinit(grid.allocator);
-    grid.overflow.deinit(grid.allocator);
+pub fn deinit(self: *Grid) void {
+    self.entries.deinit(self.allocator);
+    self.primary.deinit(self.allocator);
+    self.overflow.deinit(self.allocator);
 }
 
 /// Geometry changes invalidate positions; steady frames allocate nothing.
 /// Example: `try grid.resize(.{ cols, rows });`
-pub fn resize(grid: *Grid, size: [2]u16) !void {
-    if (grid.cols == size[0] and grid.rows == size[1]) {
+pub fn resize(self: *Grid, size: [2]u16) !void {
+    if (self.cols == size[0] and self.rows == size[1]) {
         return;
     }
 
@@ -40,44 +40,44 @@ pub fn resize(grid: *Grid, size: [2]u16) !void {
         return error.NativeCellBudgetExceeded;
     }
 
-    try grid.entries.ensureTotalCapacityPrecise(grid.allocator, count);
-    try grid.primary.ensureTotalCapacityPrecise(grid.allocator, count);
-    try grid.overflow.ensureTotalCapacityPrecise(grid.allocator, count);
-    grid.entries.items.len = count;
-    grid.primary.items.len = count;
-    grid.overflow.items.len = count;
-    grid.cols = size[0];
-    grid.rows = size[1];
-    grid.invalidate();
+    try self.entries.ensureTotalCapacityPrecise(self.allocator, count);
+    try self.primary.ensureTotalCapacityPrecise(self.allocator, count);
+    try self.overflow.ensureTotalCapacityPrecise(self.allocator, count);
+    self.entries.items.len = count;
+    self.primary.items.len = count;
+    self.overflow.items.len = count;
+    self.cols = size[0];
+    self.rows = size[1];
+    self.invalidate();
 }
 
 /// Use when font resources or global colors change. Example: `grid.invalidate();`
-pub fn invalidate(grid: *Grid) void {
-    for (grid.entries.items) |*entry| {
+pub fn invalidate(self: *Grid) void {
+    for (self.entries.items) |*entry| {
         entry.valid = false;
     }
 }
 
 /// Borrows every array until resize or deinit. Example: `grid.at(.{ x, y }).background();`
-pub fn at(grid: *Grid, position: [2]u16) Mesh {
-    std.debug.assert(position[0] < grid.cols and position[1] < grid.rows);
-    const index = @as(usize, position[1]) * grid.cols + position[0];
+pub fn at(self: *Grid, position: [2]u16) Mesh {
+    std.debug.assert(position[0] < self.cols and position[1] < self.rows);
+    const index = @as(usize, position[1]) * self.cols + position[0];
     return .{
-        .metadata = &grid.entries.items[index],
-        .primary = &grid.primary.items[index],
-        .overflow = &grid.overflow.items[index],
+        .metadata = &self.entries.items[index],
+        .primary = &self.primary.items[index],
+        .overflow = &self.overflow.items[index],
     };
 }
 
 /// Borrows `len` consecutive cells starting at `position` until resize or
 /// deinit. Example: `const row = grid.row(.{ x, y }, cols);`
-pub fn row(grid: *Grid, position: [2]u16, len: u16) Row {
-    std.debug.assert(position[1] < grid.rows and @as(usize, position[0]) + len <= grid.cols);
-    const start = @as(usize, position[1]) * grid.cols + position[0];
+pub fn row(self: *Grid, position: [2]u16, len: u16) Row {
+    std.debug.assert(position[1] < self.rows and @as(usize, position[0]) + len <= self.cols);
+    const start = @as(usize, position[1]) * self.cols + position[0];
     return .{
-        .metadata = grid.entries.items[start..][0..len],
-        .primary = grid.primary.items[start..][0..len],
-        .overflow = grid.overflow.items[start..][0..len],
+        .metadata = self.entries.items[start..][0..len],
+        .primary = self.primary.items[start..][0..len],
+        .overflow = self.overflow.items[start..][0..len],
     };
 }
 

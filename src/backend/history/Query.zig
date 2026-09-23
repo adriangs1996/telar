@@ -83,8 +83,8 @@ pub fn init(input: Input) !Query {
 /// ```zig
 /// const text = query.textSlice();
 /// ```
-pub fn textSlice(query: *const Query) []const u8 {
-    return query.text[0..query.text_len];
+pub fn textSlice(self: *const Query) []const u8 {
+    return self.text[0..self.text_len];
 }
 
 /// Returns the cwd or workspace scope text owned by this value.
@@ -92,6 +92,6 @@ pub fn textSlice(query: *const Query) []const u8 {
 /// ```zig
 /// const scope = query.scopeSlice();
 /// ```
-pub fn scopeSlice(query: *const Query) []const u8 {
-    return query.scope_text[0..query.scope_text_len];
+pub fn scopeSlice(self: *const Query) []const u8 {
+    return self.scope_text[0..self.scope_text_len];
 }

@@ -22,31 +22,31 @@ pub fn init(body: []const u8) !Fixture {
 }
 
 /// Example: `fixture.deinit();`
-pub fn deinit(fixture: *Fixture) void {
-    std.testing.allocator.free(fixture.executable);
-    fixture.temp.cleanup();
+pub fn deinit(self: *Fixture) void {
+    std.testing.allocator.free(self.executable);
+    self.temp.cleanup();
 }
 
 /// Example: `const page = try fixture.read(query);`
-pub fn read(fixture: *Fixture, query: core.QueryAgentHistory) !*core.AgentHistoryPage {
-    var arguments = [_][]const u8{fixture.executable};
+pub fn read(self: *Fixture, query: core.QueryAgentHistory) !*core.AgentHistoryPage {
+    var arguments = [_][]const u8{self.executable};
     var options: Options = .{
         .gpa = std.testing.allocator,
         .cwd = "/tmp",
         .arguments = &arguments,
         .environment = .init(std.testing.allocator),
-        .timeout_ms = fixture.timeout_ms,
+        .timeout_ms = self.timeout_ms,
     };
     defer options.environment.deinit();
     return Provider.read(std.testing.io, std.testing.allocator, .{ .options = &options, .query = query, .thread_id = "thread-1" });
 }
 
 /// Example: `_ = try fixture.awaitPid();`
-pub fn awaitPid(fixture: *Fixture) !std.posix.pid_t {
+pub fn awaitPid(self: *Fixture) !std.posix.pid_t {
     const io = std.testing.io;
     const started = std.Io.Timestamp.now(io, .awake);
     while (std.Io.Timestamp.now(io, .awake).toMilliseconds() - started.toMilliseconds() < 2000) {
-        if (try fixture.publishedPid()) |pid| {
+        if (try self.publishedPid()) |pid| {
             return pid;
         }
 
@@ -58,22 +58,22 @@ pub fn awaitPid(fixture: *Fixture) !std.posix.pid_t {
 
 /// A child still awaiting waitpid answers signal zero too.
 /// Example: `try fixture.expectReaped();`
-pub fn expectReaped(fixture: *Fixture) !void {
-    const pid = try fixture.awaitPid();
+pub fn expectReaped(self: *Fixture) !void {
+    const pid = try self.awaitPid();
     try std.testing.expectError(error.ProcessNotFound, std.posix.kill(pid, @enumFromInt(0)));
 }
 
 /// The outer deadline can expire before the shell publishes its PID. Call only
 /// after the read has joined, so an absent PID cannot appear later.
 /// Example: `try fixture.expectReapedIfPublished();`
-pub fn expectReapedIfPublished(fixture: *Fixture) !void {
-    const pid = try fixture.publishedPid() orelse return;
+pub fn expectReapedIfPublished(self: *Fixture) !void {
+    const pid = try self.publishedPid() orelse return;
     try std.testing.expectError(error.ProcessNotFound, std.posix.kill(pid, @enumFromInt(0)));
 }
 
-fn publishedPid(fixture: *Fixture) !?std.posix.pid_t {
+fn publishedPid(self: *Fixture) !?std.posix.pid_t {
     var buffer: [32]u8 = undefined;
-    const bytes = fixture.temp.dir.readFile(std.testing.io, "provider.pid", &buffer) catch |err| {
+    const bytes = self.temp.dir.readFile(std.testing.io, "provider.pid", &buffer) catch |err| {
         if (err == error.FileNotFound) {
             return null;
         }

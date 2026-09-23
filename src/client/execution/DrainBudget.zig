@@ -17,12 +17,12 @@ pub fn begin(io: std.Io, pending: usize) Budget {
 
 /// Permits one indivisible handler, including one after an expired deadline.
 /// Example: `if (!budget.take(io)) break;`
-pub fn take(budget: *Budget, io: std.Io) bool {
-    if (budget.remaining == 0 or (budget.processed != 0 and std.Io.Clock.awake.now(io).toNanoseconds() - budget.started_ns >= max_duration_ns)) {
+pub fn take(self: *Budget, io: std.Io) bool {
+    if (self.remaining == 0 or (self.processed != 0 and std.Io.Clock.awake.now(io).toNanoseconds() - self.started_ns >= max_duration_ns)) {
         return false;
     }
 
-    budget.remaining -= 1;
-    budget.processed += 1;
+    self.remaining -= 1;
+    self.processed += 1;
     return true;
 }

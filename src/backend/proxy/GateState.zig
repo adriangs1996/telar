@@ -9,6 +9,6 @@ fn isLive(context: *anyopaque, credential: *const Credential) bool {
     return credential.pane_generation == state.live_generation;
 }
 
-pub fn gate(state: *GateState) CredentialGate {
-    return .{ .context = state, .is_live = isLive };
+pub fn gate(self: *GateState) CredentialGate {
+    return .{ .context = self, .is_live = isLive };
 }

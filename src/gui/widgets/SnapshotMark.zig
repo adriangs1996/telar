@@ -15,6 +15,6 @@ pub fn of(snapshot: *const data.AgentSnapshot) SnapshotMark {
 }
 
 /// Example: `if (mark.eql(SnapshotMark.of(snapshot))) return;`
-pub fn eql(mark: SnapshotMark, other: SnapshotMark) bool {
-    return std.meta.eql(mark, other);
+pub fn eql(self: SnapshotMark, other: SnapshotMark) bool {
+    return std.meta.eql(self, other);
 }

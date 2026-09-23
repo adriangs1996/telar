@@ -24,14 +24,14 @@ pub fn init(io: std.Io) !ProxyTestFiles {
     return files;
 }
 
-pub fn deinit(files: *ProxyTestFiles) void {
-    files.temp.cleanup();
+pub fn deinit(self: *ProxyTestFiles) void {
+    self.temp.cleanup();
 }
 
-pub fn config(files: *const ProxyTestFiles) Config {
+pub fn config(self: *const ProxyTestFiles) Config {
     return .{
-        .key_path = files.key[0..files.key_len],
-        .certificate_path = files.certificate[0..files.certificate_len],
-        .bundle_path = files.bundle[0..files.bundle_len],
+        .key_path = self.key[0..self.key_len],
+        .certificate_path = self.certificate[0..self.certificate_len],
+        .bundle_path = self.bundle[0..self.bundle_len],
     };
 }

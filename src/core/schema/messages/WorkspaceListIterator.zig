@@ -6,10 +6,10 @@ const WorkspaceListIterator = @This();
 decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *WorkspaceListIterator) !?WorkspaceListEntry {
-    if (iterator.remaining == 0) {
+pub fn next(self: *WorkspaceListIterator) !?WorkspaceListEntry {
+    if (self.remaining == 0) {
         return null;
     }
-    iterator.remaining -= 1;
-    return try workspace.decodeWorkspaceListEntry(&iterator.decoder);
+    self.remaining -= 1;
+    return try workspace.decodeWorkspaceListEntry(&self.decoder);
 }

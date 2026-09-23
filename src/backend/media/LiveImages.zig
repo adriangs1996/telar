@@ -4,11 +4,11 @@ const LiveImages = @This();
 
 storage: *const vt.kitty.graphics.ImageStorage,
 
-pub fn holds(alive: LiveImages, image_key: core.ImageKey) bool {
-    const image = alive.storage.imageById(image_key.image_id) orelse return false;
+pub fn holds(self: LiveImages, image_key: core.ImageKey) bool {
+    const image = self.storage.imageById(image_key.image_id) orelse return false;
     return image.generation == image_key.generation;
 }
 
-pub fn holdsImage(alive: LiveImages, image_id: u32) bool {
-    return alive.storage.imageById(image_id) != null;
+pub fn holdsImage(self: LiveImages, image_id: u32) bool {
+    return self.storage.imageById(image_id) != null;
 }

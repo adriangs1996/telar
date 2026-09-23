@@ -13,20 +13,20 @@ label: []const u8,
 
 /// Registers the exact action and generation shown by the delivered button.
 /// Example: `try send_button.draw(canvas);`
-pub fn draw(control: Control, canvas: *Canvas) !void {
-    if (control.bounds.width <= 0 or control.bounds.height <= 0) {
+pub fn draw(self: Control, canvas: *Canvas) !void {
+    if (self.bounds.width <= 0 or self.bounds.height <= 0) {
         return;
     }
 
     const palette = canvas.theme.palette;
-    const primary = control.kind == .submit or control.kind == .approve;
-    try canvas.fillRoundedAt(control.bounds, .{ .color = if (control.enabled and primary) palette.accent else palette.surface1, .radius = canvas.chrome.px(6) });
-    const inset = @min(canvas.chrome.px(10), control.bounds.width / 8);
-    var label = control.bounds;
+    const primary = self.kind == .submit or self.kind == .approve;
+    try canvas.fillRoundedAt(self.bounds, .{ .color = if (self.enabled and primary) palette.accent else palette.surface1, .radius = canvas.chrome.px(6) });
+    const inset = @min(canvas.chrome.px(10), self.bounds.width / 8);
+    var label = self.bounds;
     label.x += inset;
     label.width -= 2 * inset;
-    _ = try canvas.textAt(label, .{ .text = control.label, .face = .sans, .size = .small, .bold = true, .color = if (!control.enabled) palette.overlay1 else if (primary) palette.surface_dim else palette.text });
+    _ = try canvas.textAt(label, .{ .text = self.label, .face = .sans, .size = .small, .bold = true, .color = if (!self.enabled) palette.overlay1 else if (primary) palette.surface_dim else palette.text });
     if (canvas.widgets) |state| {
-        _ = try state.dispatcher.add((Target{ .id = .{ .generation = control.generation }, .bounds = control.bounds, .action = .{ .agent_control = .{ .pane_id = control.pane_id, .kind = control.kind, .approval_id = control.approval_id } }, .enabled = control.enabled }).labelled(control.label));
+        _ = try state.dispatcher.add((Target{ .id = .{ .generation = self.generation }, .bounds = self.bounds, .action = .{ .agent_control = .{ .pane_id = self.pane_id, .kind = self.kind, .approval_id = self.approval_id } }, .enabled = self.enabled }).labelled(self.label));
     }
 }

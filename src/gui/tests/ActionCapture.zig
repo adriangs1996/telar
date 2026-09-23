@@ -5,13 +5,13 @@ const ActionCapture = @This();
 value: ?data.actions.Action = null,
 keys: usize = 0,
 
-pub fn action(capture: *ActionCapture, value: data.actions.Action) !data.keybind.Control {
-    capture.value = value;
+pub fn action(self: *ActionCapture, value: data.actions.Action) !data.keybind.Control {
+    self.value = value;
     return .continue_routing;
 }
 
-pub fn key(capture: *ActionCapture, _: data.Key) !void {
-    capture.keys += 1;
+pub fn key(self: *ActionCapture, _: data.Key) !void {
+    self.keys += 1;
 }
 
 pub fn forward(_: *ActionCapture, _: []const u8) !void {}

@@ -24,57 +24,57 @@ expect_marker_deletion_fn: *const fn (*anyopaque, model_data.AttachmentTarget) v
 
 /// Takes ownership of one capture; reports whether the layout changed.
 /// Example: `const layout_changed = try shelf.adopt(capture);`.
-pub fn adopt(port: AttachmentShelf, capture: *model_data.Capture) !bool {
-    return port.adopt_fn(port.context, capture);
+pub fn adopt(self: AttachmentShelf, capture: *model_data.Capture) !bool {
+    return self.adopt_fn(self.context, capture);
 }
 
-pub fn reconcileMarkers(port: AttachmentShelf, target: model_data.AttachmentTarget, screen: MarkerScreen) ?bool {
-    return port.reconcile_markers_fn(port.context, target, screen);
+pub fn reconcileMarkers(self: AttachmentShelf, target: model_data.AttachmentTarget, screen: MarkerScreen) ?bool {
+    return self.reconcile_markers_fn(self.context, target, screen);
 }
 
-pub fn syncTarget(port: AttachmentShelf, target: ?model_data.AttachmentTarget) bool {
-    return port.sync_target_fn(port.context, target);
+pub fn syncTarget(self: AttachmentShelf, target: ?model_data.AttachmentTarget) bool {
+    return self.sync_target_fn(self.context, target);
 }
 
-pub fn remove(port: AttachmentShelf, id: model_data.AttachmentId) ?bool {
-    return port.remove_fn(port.context, id);
+pub fn remove(self: AttachmentShelf, id: model_data.AttachmentId) ?bool {
+    return self.remove_fn(self.context, id);
 }
 
-pub fn removePrompt(port: AttachmentShelf, target: model_data.AttachmentTarget) ?bool {
-    return port.remove_prompt_fn(port.context, target);
+pub fn removePrompt(self: AttachmentShelf, target: model_data.AttachmentTarget) ?bool {
+    return self.remove_prompt_fn(self.context, target);
 }
 
 /// Whether the modal owns host input. Example: `if (shelf.modalActive()) ...`.
-pub fn modalActive(port: AttachmentShelf) bool {
-    return port.modal_active_fn(port.context);
+pub fn modalActive(self: AttachmentShelf) bool {
+    return self.modal_active_fn(self.context);
 }
 
-pub fn closeModal(port: AttachmentShelf) bool {
-    return port.close_modal_fn(port.context);
+pub fn closeModal(self: AttachmentShelf) bool {
+    return self.close_modal_fn(self.context);
 }
 
 /// Space the shelf asks for below the pane that owns the visible previews.
-pub fn reservation(port: AttachmentShelf) ?model_data.PaneBottomReservation {
-    return port.reservation_fn(port.context);
+pub fn reservation(self: AttachmentShelf) ?model_data.PaneBottomReservation {
+    return self.reservation_fn(self.context);
 }
 
 /// Example: `const target = shelf.visibleTarget() orelse return;`.
-pub fn visibleTarget(port: AttachmentShelf) ?model_data.AttachmentTarget {
-    return port.visible_target_fn(port.context);
+pub fn visibleTarget(self: AttachmentShelf) ?model_data.AttachmentTarget {
+    return self.visible_target_fn(self.context);
 }
 
-pub fn planMarkerRemoval(port: AttachmentShelf, id: model_data.AttachmentId, screen: MarkerScreen) ?model_data.MarkerRemoval {
-    return port.plan_marker_removal_fn(port.context, id, screen);
+pub fn planMarkerRemoval(self: AttachmentShelf, id: model_data.AttachmentId, screen: MarkerScreen) ?model_data.MarkerRemoval {
+    return self.plan_marker_removal_fn(self.context, id, screen);
 }
 
-pub fn idAtMarkerDeletion(port: AttachmentShelf, screen: MarkerScreen, deletion: model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId {
-    return port.id_at_marker_deletion_fn(port.context, screen, deletion);
+pub fn idAtMarkerDeletion(self: AttachmentShelf, screen: MarkerScreen, deletion: model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId {
+    return self.id_at_marker_deletion_fn(self.context, screen, deletion);
 }
 
-pub fn pendingMarkerAtDeletion(port: AttachmentShelf, screen: MarkerScreen, probe: DeletionProbe) bool {
-    return port.pending_marker_at_deletion_fn(port.context, screen, probe);
+pub fn pendingMarkerAtDeletion(self: AttachmentShelf, screen: MarkerScreen, probe: DeletionProbe) bool {
+    return self.pending_marker_at_deletion_fn(self.context, screen, probe);
 }
 
-pub fn expectMarkerDeletion(port: AttachmentShelf, target: model_data.AttachmentTarget) void {
-    port.expect_marker_deletion_fn(port.context, target);
+pub fn expectMarkerDeletion(self: AttachmentShelf, target: model_data.AttachmentTarget) void {
+    self.expect_marker_deletion_fn(self.context, target);
 }

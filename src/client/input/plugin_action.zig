@@ -15,8 +15,8 @@ pub const CompletionCommand = union(enum) {
         reason: anyerror,
     },
 
-    pub fn executionId(command: CompletionCommand) model_data.PluginExecutionId {
-        return switch (command) {
+    pub fn executionId(self: CompletionCommand) model_data.PluginExecutionId {
+        return switch (self) {
             .succeeded => |result| result.execution_id,
             .failed => |failure| failure.execution_id,
         };

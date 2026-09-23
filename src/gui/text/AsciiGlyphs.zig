@@ -21,16 +21,16 @@ pub fn index(run: TextRun, pixel_height: u16) ?usize {
 }
 
 /// Example: `if (glyphs.find(index)) |glyph| paint(glyph);`
-pub fn find(glyphs: *const Glyphs, entry: usize) ?AsciiGlyph {
-    return glyphs.entries[entry];
+pub fn find(self: *const Glyphs, entry: usize) ?AsciiGlyph {
+    return self.entries[entry];
 }
 
 /// Example: `glyphs.remember(index, glyph);`
-pub fn remember(glyphs: *Glyphs, entry: usize, glyph: AsciiGlyph) void {
-    glyphs.entries[entry] = glyph;
+pub fn remember(self: *Glyphs, entry: usize, glyph: AsciiGlyph) void {
+    self.entries[entry] = glyph;
 }
 
 /// Example: `glyphs.clear();`
-pub fn clear(glyphs: *Glyphs) void {
-    glyphs.entries = @splat(null);
+pub fn clear(self: *Glyphs) void {
+    self.entries = @splat(null);
 }

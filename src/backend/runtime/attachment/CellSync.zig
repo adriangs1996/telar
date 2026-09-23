@@ -52,50 +52,50 @@ pub fn init(gpa: std.mem.Allocator, pane: *Pane) !Sync {
     };
 }
 
-pub fn deinit(sync: *Sync, pane: *Pane) void {
-    sync.clearViewport(pane);
-    sync.projected_text_metadata.deinit(sync.gpa);
-    sync.projected_state.deinit(sync.gpa);
-    sync.gpa.free(sync.projected_damage);
-    sync.projected.deinit();
-    sync.acknowledged.deinit();
+pub fn deinit(self: *Sync, pane: *Pane) void {
+    self.clearViewport(pane);
+    self.projected_text_metadata.deinit(self.gpa);
+    self.projected_state.deinit(self.gpa);
+    self.gpa.free(self.projected_damage);
+    self.projected.deinit();
+    self.acknowledged.deinit();
 }
 
-pub fn resizeIfNeeded(sync: *Sync, pane: *Pane) !bool {
-    if (sync.acknowledged.w == pane.screen.w and
-        sync.acknowledged.h == pane.screen.h)
+pub fn resizeIfNeeded(self: *Sync, pane: *Pane) !bool {
+    if (self.acknowledged.w == pane.screen.w and
+        self.acknowledged.h == pane.screen.h)
     {
         return false;
     }
-    try sync.acknowledged.resize(pane.screen.w, pane.screen.h);
+    try self.acknowledged.resize(pane.screen.w, pane.screen.h);
     try pane_mod.resizeScreenStorage(.{
-        .gpa = sync.gpa,
-        .screen = &sync.projected,
-        .damaged_rows = &sync.projected_damage,
+        .gpa = self.gpa,
+        .screen = &self.projected,
+        .damaged_rows = &self.projected_damage,
         .cols = pane.screen.w,
         .rows = pane.screen.h,
     });
-    sync.outstanding = null;
-    sync.snapshot_pending = true;
+    self.outstanding = null;
+    self.snapshot_pending = true;
     return true;
 }
 
-fn syncViewportScreen(sync: *Sync, pane: *Pane) void {
+fn syncViewportScreen(self: *Sync, pane: *Pane) void {
     const active_key = pane.terminal.screens.active_key;
-    if (sync.viewport_screen == active_key) {
+    if (self.viewport_screen == active_key) {
         return;
     }
-    sync.clearViewport(pane);
-    sync.viewport_screen = active_key;
+    self.clearViewport(pane);
+    self.viewport_screen = active_key;
 }
 
-pub fn clearViewport(sync: *Sync, pane: *Pane) void {
-    if (sync.viewport_pin) |pin| {
-        const screen = pane.terminal.screens.get(sync.viewport_screen).?;
+pub fn clearViewport(self: *Sync, pane: *Pane) void {
+    if (self.viewport_pin) |pin| {
+        const screen = pane.terminal.screens.get(self.viewport_screen).?;
         screen.scroll(.{ .active = {} });
         screen.pages.untrackPin(pin);
     }
-    sync.viewport_pin = null;
+    self.viewport_pin = null;
 }
 
 /// Moves this client's viewport without leaving the shared terminal
@@ -105,13 +105,13 @@ pub fn clearViewport(sync: *Sync, pane: *Pane) void {
 /// ```zig
 /// const changed = try sync.setViewport(pane, requested_offset);
 /// ```
-pub fn setViewport(sync: *Sync, pane: *Pane, requested: u32) !bool {
+pub fn setViewport(self: *Sync, pane: *Pane, requested: u32) !bool {
     const terminal_allocations = core.enterTerminalAllocations();
     defer terminal_allocations.restore();
 
-    sync.syncViewportScreen(pane);
+    self.syncViewportScreen(pane);
     const screen = pane.terminal.screens.active;
-    if (sync.viewport_pin) |pin| {
+    if (self.viewport_pin) |pin| {
         screen.scroll(.{ .pin = pin.* });
     } else {
         screen.scroll(.{ .active = {} });
@@ -127,46 +127,46 @@ pub fn setViewport(sync: *Sync, pane: *Pane, requested: u32) !bool {
     }
 
     if (scrollbar.offset + scrollbar.len >= scrollbar.total) {
-        sync.clearViewport(pane);
+        self.clearViewport(pane);
     } else {
         const top = screen.pages.pin(.{ .viewport = .{} }) orelse return error.ViewportUnavailable;
-        if (sync.viewport_pin) |pin| {
+        if (self.viewport_pin) |pin| {
             pin.* = top;
         } else {
-            sync.viewport_pin = try screen.pages.trackPin(top);
+            self.viewport_pin = try screen.pages.trackPin(top);
         }
     }
 
-    sync.snapshot_pending = true;
+    self.snapshot_pending = true;
     return true;
 }
 
-pub fn requestSnapshot(sync: *Sync) void {
-    sync.snapshot_pending = true;
+pub fn requestSnapshot(self: *Sync) void {
+    self.snapshot_pending = true;
 }
 
-pub fn outstandingFrameId(sync: *const Sync) u64 {
-    return if (sync.outstanding) |outstanding| outstanding.frame_id else 0;
+pub fn outstandingFrameId(self: *const Sync) u64 {
+    return if (self.outstanding) |outstanding| outstanding.frame_id else 0;
 }
 
-pub fn hasOutstanding(sync: *const Sync) bool {
-    return sync.outstanding != null;
+pub fn hasOutstanding(self: *const Sync) bool {
+    return self.outstanding != null;
 }
 
-pub fn acknowledge(sync: *Sync, frame_id: u64, now_ns: u64) ?u64 {
-    const outstanding = sync.outstanding orelse return null;
+pub fn acknowledge(self: *Sync, frame_id: u64, now_ns: u64) ?u64 {
+    const outstanding = self.outstanding orelse return null;
     if (outstanding.frame_id != frame_id) {
         return null;
     }
-    sync.acknowledged_frame_id = frame_id;
-    sync.outstanding = null;
+    self.acknowledged_frame_id = frame_id;
+    self.outstanding = null;
     return core.elapsed(outstanding.sent_ns, now_ns);
 }
 
-pub fn project(sync: *Sync, pane: *Pane, force: bool) !Projection {
-    sync.syncViewportScreen(pane);
+pub fn project(self: *Sync, pane: *Pane, force: bool) !Projection {
+    self.syncViewportScreen(pane);
     const screen = pane.terminal.screens.active;
-    if (sync.viewport_pin) |pin| {
+    if (self.viewport_pin) |pin| {
         if (pin.garbage) {
             pin.garbage = false;
         }
@@ -175,21 +175,21 @@ pub fn project(sync: *Sync, pane: *Pane, force: bool) !Projection {
         {
             const terminal_allocations = core.enterTerminalAllocations();
             defer terminal_allocations.restore();
-            try sync.projected_state.update(sync.gpa, &pane.terminal);
+            try self.projected_state.update(self.gpa, &pane.terminal);
         }
-        try sync.projected_text_metadata.update(sync.gpa, &sync.projected_state);
+        try self.projected_text_metadata.update(self.gpa, &self.projected_state);
         _ = blit_module.blit(.{
-            .buffer = &sync.projected,
-            .area = sync.projected.area(),
+            .buffer = &self.projected,
+            .area = self.projected.area(),
             .terminal = &pane.terminal,
-            .state = &sync.projected_state,
-            .options = .{ .force = force, .damaged_rows = sync.projected_damage },
+            .state = &self.projected_state,
+            .options = .{ .force = force, .damaged_rows = self.projected_damage },
         });
         return .{
-            .buffer = &sync.projected,
-            .text_metadata = sync.projected_text_metadata.current.view(),
-            .text_revision = sync.projected_text_metadata.revision,
-            .damaged_rows = sync.projected_damage,
+            .buffer = &self.projected,
+            .text_metadata = self.projected_text_metadata.current.view(),
+            .text_revision = self.projected_text_metadata.revision,
+            .damaged_rows = self.projected_damage,
             .cursor = .{},
             .scroll = scrollState(screen.pages.scrollbar()),
         };
@@ -218,7 +218,7 @@ fn scrollState(value: anytype) core.Scroll {
 /// ```zig
 /// const payload = try sync.prepare(.{ .io = io, .buffer = buffer, .pane = pane, .force_snapshot = false, .metrics = metrics });
 /// ```
-pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
+pub fn prepare(self: *Sync, preparation: Preparation) !?[]const u8 {
     const io = preparation.io;
     const buffer = preparation.buffer;
     const pane = preparation.pane;
@@ -232,7 +232,7 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     if (pane.render_pending) {
         try pane.render(false);
     }
-    const projection = try sync.project(pane, force_snapshot);
+    const projection = try self.project(pane, force_snapshot);
     const source = projection.buffer;
     var span_storage: [core.max_span_count]core.Span = undefined;
     var snapshot = force_snapshot;
@@ -241,27 +241,27 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     else
         damage_module.collectSpans(.{
             .current = source.cells,
-            .acknowledged = sync.acknowledged.cells,
+            .acknowledged = self.acknowledged.cells,
             .cols = source.w,
             .damaged_rows = projection.damaged_rows,
         }, &span_storage);
     var span_count = diff.span_count;
     snapshot = snapshot or diff.snapshot_required;
 
-    const text_projected = sync.viewport_pin != null;
-    const text_changed = projection.text_revision != sync.acknowledged_text_revision or text_projected != sync.acknowledged_text_projected;
-    const cursor_changed = !std.meta.eql(projection.cursor, sync.acknowledged_cursor);
-    const mouse_changed = !std.meta.eql(pane.mouse, sync.acknowledged_mouse);
+    const text_projected = self.viewport_pin != null;
+    const text_changed = projection.text_revision != self.acknowledged_text_revision or text_projected != self.acknowledged_text_projected;
+    const cursor_changed = !std.meta.eql(projection.cursor, self.acknowledged_cursor);
+    const mouse_changed = !std.meta.eql(pane.mouse, self.acknowledged_mouse);
     const input_modes_changed = !std.meta.eql(
         pane.input_modes,
-        sync.acknowledged_input_modes,
+        self.acknowledged_input_modes,
     );
-    const pointer_changed = pane.pointer_shape != sync.acknowledged_pointer_shape;
-    const scroll_changed = !std.meta.eql(projection.scroll, sync.acknowledged_scroll);
+    const pointer_changed = pane.pointer_shape != self.acknowledged_pointer_shape;
+    const scroll_changed = !std.meta.eql(projection.scroll, self.acknowledged_scroll);
     if (!snapshot and span_count == 0 and !cursor_changed and !mouse_changed and
         !input_modes_changed and !pointer_changed and !scroll_changed and !text_changed)
     {
-        sync.observeProjection(pane, projection);
+        self.observeProjection(pane, projection);
 
         if (comptime core.enabled) {
             metrics.noop_frames += 1;
@@ -279,12 +279,12 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
         span_count = 1;
     }
 
-    const frame_id = sync.next_frame_id;
-    sync.next_frame_id += 1;
+    const frame_id = self.next_frame_id;
+    self.next_frame_id += 1;
     const payload = try core.encodePaneFrame(buffer, .{
         .pane_id = pane.id,
         .frame_id = frame_id,
-        .base_frame_id = if (snapshot) 0 else sync.acknowledged_frame_id,
+        .base_frame_id = if (snapshot) 0 else self.acknowledged_frame_id,
         .cols = source.w,
         .rows = source.h,
         .cursor = projection.cursor,
@@ -296,22 +296,22 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
         .text_metadata = if (snapshot or text_changed) projection.text_metadata else null,
     });
     if (snapshot) {
-        @memcpy(sync.acknowledged.cells, source.cells);
+        @memcpy(self.acknowledged.cells, source.cells);
     } else {
         for (span_storage[0..span_count]) |span| {
             const start: usize = @intCast(span.start);
-            @memcpy(sync.acknowledged.cells[start..][0..span.cells.len], span.cells);
+            @memcpy(self.acknowledged.cells[start..][0..span.cells.len], span.cells);
         }
     }
-    sync.acknowledged_text_revision = projection.text_revision;
-    sync.acknowledged_text_projected = text_projected;
-    sync.acknowledged_cursor = projection.cursor;
-    sync.acknowledged_mouse = pane.mouse;
-    sync.acknowledged_input_modes = pane.input_modes;
-    sync.acknowledged_pointer_shape = pane.pointer_shape;
-    sync.acknowledged_scroll = projection.scroll;
-    sync.observeProjection(pane, projection);
-    sync.outstanding = .{ .frame_id = frame_id, .sent_ns = core.now(io) };
+    self.acknowledged_text_revision = projection.text_revision;
+    self.acknowledged_text_projected = text_projected;
+    self.acknowledged_cursor = projection.cursor;
+    self.acknowledged_mouse = pane.mouse;
+    self.acknowledged_input_modes = pane.input_modes;
+    self.acknowledged_pointer_shape = pane.pointer_shape;
+    self.acknowledged_scroll = projection.scroll;
+    self.observeProjection(pane, projection);
+    self.outstanding = .{ .frame_id = frame_id, .sent_ns = core.now(io) };
     if (comptime core.enabled) {
         var cell_count: u64 = 0;
         for (span_storage[0..span_count]) |span| cell_count += span.cells.len;
@@ -337,10 +337,10 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     return payload;
 }
 
-fn observeProjection(sync: *Sync, pane: *const Pane, projection: Projection) void {
-    if (projection.buffer == &sync.projected) {
-        @memset(sync.projected_damage, false);
+fn observeProjection(self: *Sync, pane: *const Pane, projection: Projection) void {
+    if (projection.buffer == &self.projected) {
+        @memset(self.projected_damage, false);
     }
 
-    sync.observed_revision = pane.cell_revision;
+    self.observed_revision = pane.cell_revision;
 }

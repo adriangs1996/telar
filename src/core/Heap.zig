@@ -22,12 +22,12 @@ pub fn init(child: std.mem.Allocator) Heap {
     return .{ .child = child };
 }
 
-pub fn allocator(heap: *Heap) std.mem.Allocator {
+pub fn allocator(self: *Heap) std.mem.Allocator {
     if (!diagnostics.enabled) {
-        return heap.child;
+        return self.child;
     }
     return .{
-        .ptr = heap,
+        .ptr = self,
         .vtable = &.{
             .alloc = alloc,
             .resize = resize,
@@ -37,57 +37,57 @@ pub fn allocator(heap: *Heap) std.mem.Allocator {
     };
 }
 
-pub fn snapshot(heap: *const Heap) Snapshot {
+pub fn snapshot(self: *const Heap) Snapshot {
     return .{
-        .live_bytes = diagnostics.load(&heap.live_bytes),
-        .live_allocs = diagnostics.load(&heap.live_allocs),
-        .allocs = diagnostics.load(&heap.allocs),
-        .frees = diagnostics.load(&heap.frees),
-        .alloc_bytes = diagnostics.load(&heap.alloc_bytes),
-        .interactive_allocs = diagnostics.load(&heap.path_allocs[@intFromEnum(diagnostics.Path.interactive)]),
-        .interactive_alloc_bytes = diagnostics.load(&heap.path_alloc_bytes[@intFromEnum(diagnostics.Path.interactive)]),
-        .interactive_vt_allocs = diagnostics.load(&heap.interactive_vt_allocs),
-        .interactive_vt_alloc_bytes = diagnostics.load(&heap.interactive_vt_alloc_bytes),
-        .media_allocs = diagnostics.load(&heap.path_allocs[@intFromEnum(diagnostics.Path.media)]),
-        .media_alloc_bytes = diagnostics.load(&heap.path_alloc_bytes[@intFromEnum(diagnostics.Path.media)]),
-        .observation_allocs = diagnostics.load(&heap.path_allocs[@intFromEnum(diagnostics.Path.observation)]),
-        .observation_alloc_bytes = diagnostics.load(&heap.path_alloc_bytes[@intFromEnum(diagnostics.Path.observation)]),
-        .other_allocs = diagnostics.load(&heap.path_allocs[@intFromEnum(diagnostics.Path.other)]),
-        .other_alloc_bytes = diagnostics.load(&heap.path_alloc_bytes[@intFromEnum(diagnostics.Path.other)]),
+        .live_bytes = diagnostics.load(&self.live_bytes),
+        .live_allocs = diagnostics.load(&self.live_allocs),
+        .allocs = diagnostics.load(&self.allocs),
+        .frees = diagnostics.load(&self.frees),
+        .alloc_bytes = diagnostics.load(&self.alloc_bytes),
+        .interactive_allocs = diagnostics.load(&self.path_allocs[@intFromEnum(diagnostics.Path.interactive)]),
+        .interactive_alloc_bytes = diagnostics.load(&self.path_alloc_bytes[@intFromEnum(diagnostics.Path.interactive)]),
+        .interactive_vt_allocs = diagnostics.load(&self.interactive_vt_allocs),
+        .interactive_vt_alloc_bytes = diagnostics.load(&self.interactive_vt_alloc_bytes),
+        .media_allocs = diagnostics.load(&self.path_allocs[@intFromEnum(diagnostics.Path.media)]),
+        .media_alloc_bytes = diagnostics.load(&self.path_alloc_bytes[@intFromEnum(diagnostics.Path.media)]),
+        .observation_allocs = diagnostics.load(&self.path_allocs[@intFromEnum(diagnostics.Path.observation)]),
+        .observation_alloc_bytes = diagnostics.load(&self.path_alloc_bytes[@intFromEnum(diagnostics.Path.observation)]),
+        .other_allocs = diagnostics.load(&self.path_allocs[@intFromEnum(diagnostics.Path.other)]),
+        .other_alloc_bytes = diagnostics.load(&self.path_alloc_bytes[@intFromEnum(diagnostics.Path.other)]),
     };
 }
 
-fn recordAlloc(heap: *Heap, len: usize) void {
-    diagnostics.add(&heap.live_bytes, len);
-    diagnostics.add(&heap.live_allocs, 1);
-    diagnostics.add(&heap.allocs, 1);
-    diagnostics.add(&heap.alloc_bytes, len);
+fn recordAlloc(self: *Heap, len: usize) void {
+    diagnostics.add(&self.live_bytes, len);
+    diagnostics.add(&self.live_allocs, 1);
+    diagnostics.add(&self.allocs, 1);
+    diagnostics.add(&self.alloc_bytes, len);
     const path = @intFromEnum(diagnostics.current_path);
-    diagnostics.add(&heap.path_allocs[path], 1);
-    diagnostics.add(&heap.path_alloc_bytes[path], len);
+    diagnostics.add(&self.path_allocs[path], 1);
+    diagnostics.add(&self.path_alloc_bytes[path], len);
     if (diagnostics.current_path == .interactive and diagnostics.terminal_allocation_scope) {
-        diagnostics.add(&heap.interactive_vt_allocs, 1);
-        diagnostics.add(&heap.interactive_vt_alloc_bytes, len);
+        diagnostics.add(&self.interactive_vt_allocs, 1);
+        diagnostics.add(&self.interactive_vt_alloc_bytes, len);
     }
 }
 
-fn recordGrow(heap: *Heap, delta: usize) void {
-    diagnostics.add(&heap.live_bytes, delta);
-    diagnostics.add(&heap.alloc_bytes, delta);
-    diagnostics.add(&heap.path_alloc_bytes[@intFromEnum(diagnostics.current_path)], delta);
+fn recordGrow(self: *Heap, delta: usize) void {
+    diagnostics.add(&self.live_bytes, delta);
+    diagnostics.add(&self.alloc_bytes, delta);
+    diagnostics.add(&self.path_alloc_bytes[@intFromEnum(diagnostics.current_path)], delta);
     if (diagnostics.current_path == .interactive and diagnostics.terminal_allocation_scope) {
-        diagnostics.add(&heap.interactive_vt_alloc_bytes, delta);
+        diagnostics.add(&self.interactive_vt_alloc_bytes, delta);
     }
 }
 
-fn recordShrink(heap: *Heap, delta: usize) void {
-    diagnostics.sub(&heap.live_bytes, delta);
+fn recordShrink(self: *Heap, delta: usize) void {
+    diagnostics.sub(&self.live_bytes, delta);
 }
 
-fn recordFree(heap: *Heap, len: usize) void {
-    diagnostics.sub(&heap.live_bytes, len);
-    diagnostics.sub(&heap.live_allocs, 1);
-    diagnostics.add(&heap.frees, 1);
+fn recordFree(self: *Heap, len: usize) void {
+    diagnostics.sub(&self.live_bytes, len);
+    diagnostics.sub(&self.live_allocs, 1);
+    diagnostics.add(&self.frees, 1);
 }
 
 // codestyle: allow(maximum-parameter-count)

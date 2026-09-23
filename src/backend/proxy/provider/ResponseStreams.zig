@@ -31,12 +31,12 @@ pub fn init(allocator: std.mem.Allocator, dialect: types.ApiDialect) ResponseStr
 ///     publishCompletion(stream_id);
 /// }
 /// ```
-pub fn feed(streams: *ResponseStreams, stream_id: u32, input: []const u8) bool {
-    if (stream_id == 0 or streams.dialect != .anthropic_messages) {
+pub fn feed(self: *ResponseStreams, stream_id: u32, input: []const u8) bool {
+    if (stream_id == 0 or self.dialect != .anthropic_messages) {
         return false;
     }
 
-    const slot = streams.find(stream_id) orelse streams.create(stream_id) orelse return false;
+    const slot = self.find(stream_id) orelse self.create(stream_id) orelse return false;
     return slot.response.?.feed(input);
 }
 
@@ -45,11 +45,11 @@ pub fn feed(streams: *ResponseStreams, stream_id: u32, input: []const u8) bool {
 /// ```zig
 /// streams.finish(stream_id);
 /// ```
-pub fn finish(streams: *ResponseStreams, stream_id: u32) void {
-    const slot = streams.find(stream_id) orelse return;
+pub fn finish(self: *ResponseStreams, stream_id: u32) void {
+    const slot = self.find(stream_id) orelse return;
     const response = slot.response orelse return;
     response.deinit();
-    streams.allocator.destroy(response);
+    self.allocator.destroy(response);
     slot.* = .{};
 }
 
@@ -58,19 +58,19 @@ pub fn finish(streams: *ResponseStreams, stream_id: u32) void {
 /// ```zig
 /// streams.deinit();
 /// ```
-pub fn deinit(streams: *ResponseStreams) void {
-    for (&streams.slots) |*slot| {
+pub fn deinit(self: *ResponseStreams) void {
+    for (&self.slots) |*slot| {
         const response = slot.response orelse continue;
         response.deinit();
-        streams.allocator.destroy(response);
+        self.allocator.destroy(response);
         slot.* = .{};
     }
 
-    streams.dialect = .unknown;
+    self.dialect = .unknown;
 }
 
-pub fn find(streams: *ResponseStreams, stream_id: u32) ?*ResponseStreamsSlot {
-    for (&streams.slots) |*slot| {
+pub fn find(self: *ResponseStreams, stream_id: u32) ?*ResponseStreamsSlot {
+    for (&self.slots) |*slot| {
         if (slot.stream_id == stream_id) {
             return slot;
         }
@@ -79,14 +79,14 @@ pub fn find(streams: *ResponseStreams, stream_id: u32) ?*ResponseStreamsSlot {
     return null;
 }
 
-fn create(streams: *ResponseStreams, stream_id: u32) ?*ResponseStreamsSlot {
-    for (&streams.slots) |*slot| {
+fn create(self: *ResponseStreams, stream_id: u32) ?*ResponseStreamsSlot {
+    for (&self.slots) |*slot| {
         if (slot.stream_id != 0) {
             continue;
         }
 
-        const response = streams.allocator.create(ResponseObserver) catch return null;
-        response.* = .init(streams.dialect);
+        const response = self.allocator.create(ResponseObserver) catch return null;
+        response.* = .init(self.dialect);
         slot.* = .{
             .stream_id = stream_id,
             .response = response,

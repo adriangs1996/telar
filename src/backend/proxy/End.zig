@@ -9,7 +9,7 @@ reader: std.Io.net.Stream.Reader = undefined,
 writer: std.Io.net.Stream.Writer = undefined,
 connection: tlsz.Connection = undefined,
 
-pub fn wire(endpoint: *End, io: std.Io) void {
-    endpoint.reader = endpoint.stream.reader(io, &endpoint.input_buffer);
-    endpoint.writer = endpoint.stream.writer(io, &endpoint.output_buffer);
+pub fn wire(self: *End, io: std.Io) void {
+    self.reader = self.stream.reader(io, &self.input_buffer);
+    self.writer = self.stream.writer(io, &self.output_buffer);
 }

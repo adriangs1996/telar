@@ -11,8 +11,8 @@ pub fn schedule(context: *anyopaque, job: *Compression) anyerror!void {
     scheduler.pending = job;
 }
 
-pub fn complete(scheduler: *TestCompressionScheduler, store: *delivery.Store) void {
-    const job = scheduler.pending orelse return;
+pub fn complete(self: *TestCompressionScheduler, store: *delivery.Store) void {
+    const job = self.pending orelse return;
     delivery.completeCompression(store, Compression.run(job));
-    scheduler.pending = null;
+    self.pending = null;
 }

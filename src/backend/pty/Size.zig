@@ -10,11 +10,11 @@ cell_height_px: u16 = 0,
 /// ```zig
 /// const size = requested.valid();
 /// ```
-pub fn valid(size: Size) Size {
+pub fn valid(self: Size) Size {
     return .{
-        .cols = if (size.cols == 0) 80 else size.cols,
-        .rows = if (size.rows == 0) 24 else size.rows,
-        .cell_width_px = size.cell_width_px,
-        .cell_height_px = size.cell_height_px,
+        .cols = if (self.cols == 0) 80 else self.cols,
+        .rows = if (self.rows == 0) 24 else self.rows,
+        .cell_width_px = self.cell_width_px,
+        .cell_height_px = self.cell_height_px,
     };
 }

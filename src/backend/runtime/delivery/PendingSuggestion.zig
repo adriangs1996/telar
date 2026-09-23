@@ -8,6 +8,6 @@ status: core.SuggestionStatus,
 text: [core.max_suggestion_bytes]u8 = undefined,
 text_len: u16 = 0,
 
-pub fn textSlice(pending: *const PendingSuggestion) []const u8 {
-    return pending.text[0..pending.text_len];
+pub fn textSlice(self: *const PendingSuggestion) []const u8 {
+    return self.text[0..self.text_len];
 }

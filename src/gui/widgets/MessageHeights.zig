@@ -13,8 +13,8 @@ pub const capacity = 4096;
 entries: [capacity]?Entry = @splat(null),
 
 /// Example: `if (heights.find(key)) |height| return height;`
-pub fn find(heights: *const Heights, key: Key) ?f32 {
-    const entry = heights.entries[slot(key)] orelse return null;
+pub fn find(self: *const Heights, key: Key) ?f32 {
+    const entry = self.entries[slot(key)] orelse return null;
     if (!std.meta.eql(entry.key, key)) {
         return null;
     }
@@ -23,8 +23,8 @@ pub fn find(heights: *const Heights, key: Key) ?f32 {
 }
 
 /// Example: `heights.remember(key, height);`
-pub fn remember(heights: *Heights, key: Key, height: f32) void {
-    heights.entries[slot(key)] = .{
+pub fn remember(self: *Heights, key: Key, height: f32) void {
+    self.entries[slot(key)] = .{
         .key = key,
         .height = height,
     };

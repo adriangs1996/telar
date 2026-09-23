@@ -32,36 +32,36 @@ dot: ?core.Color = null,
 /// Paints and registers a pixel control. Plain controls retain a clear
 /// background on hover; centered labels reserve equal space around their dot.
 /// Example: `try button.draw(canvas);`
-pub fn draw(button: PixelButton, canvas: *Canvas) !void {
-    if (button.area.width <= 0 or button.area.height <= 0) {
+pub fn draw(self: PixelButton, canvas: *Canvas) !void {
+    if (self.area.width <= 0 or self.area.height <= 0) {
         return;
     }
 
     const palette = canvas.theme.palette;
-    const action: action_module.Action = .{ .intent = button.intent };
-    const hovered = button.context.isHovered(action);
+    const action: action_module.Action = .{ .intent = self.intent };
+    const hovered = self.context.isHovered(action);
 
-    if (button.background) {
-        const fill: core.Color = if (button.active) palette.accent else if (hovered) palette.surface1 else palette.surface0;
-        try canvas.fillRoundedAt(button.area, .{ .radius = button.radius, .color = fill });
+    if (self.background) {
+        const fill: core.Color = if (self.active) palette.accent else if (hovered) palette.surface1 else palette.surface0;
+        try canvas.fillRoundedAt(self.area, .{ .radius = self.radius, .color = fill });
     }
 
-    const dot_space: f32 = if (button.dot != null) canvas.chrome.px(AttentionDot.diameter + AttentionDot.gap) else 0;
-    const centered = button.alignment == .center;
-    const inset = if (centered) @max(button.inset, dot_space) else button.inset;
-    var label_area = button.area;
+    const dot_space: f32 = if (self.dot != null) canvas.chrome.px(AttentionDot.diameter + AttentionDot.gap) else 0;
+    const centered = self.alignment == .center;
+    const inset = if (centered) @max(self.inset, dot_space) else self.inset;
+    var label_area = self.area;
     label_area.x += inset;
     label_area.width = @max(0, label_area.width - 2 * inset - (if (centered) @as(f32, 0) else dot_space));
 
     const text_label: Label = .{
-        .text = button.text,
-        .color = if (button.active and button.background) palette.surface_dim else if (button.active or hovered) palette.text else palette.subtext0,
-        .bold = button.bold or button.active,
-        .face = button.face,
-        .size = button.size,
+        .text = self.text,
+        .color = if (self.active and self.background) palette.surface_dim else if (self.active or hovered) palette.text else palette.subtext0,
+        .bold = self.bold or self.active,
+        .face = self.face,
+        .size = self.size,
     };
 
-    if (button.alignment != .start and label_area.width > 0) {
+    if (self.alignment != .start and label_area.width > 0) {
         var children = [_]Item{.{
             .width = .{
                 .fixed = @min(label_area.width, try canvas.measure(text_label)),
@@ -71,7 +71,7 @@ pub fn draw(button: PixelButton, canvas: *Canvas) !void {
         try (Layout{
             .area = label_area,
             .direction = .overlay,
-            .alignment = button.alignment,
+            .alignment = self.alignment,
         }).resolve(&children);
 
         label_area = children[0].bounds;
@@ -79,15 +79,15 @@ pub fn draw(button: PixelButton, canvas: *Canvas) !void {
 
     _ = try canvas.textAt(label_area, text_label);
 
-    if (button.dot) |color| {
+    if (self.dot) |color| {
         try (AttentionDot{
-            .area = button.area,
+            .area = self.area,
             .color = color,
         }).draw(canvas);
     }
 
-    try button.context.bands.add(.{
-        .area = button.area,
+    try self.context.bands.add(.{
+        .area = self.area,
         .action = action,
     });
 }

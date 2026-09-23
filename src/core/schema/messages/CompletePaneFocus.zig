@@ -16,14 +16,14 @@ focused_pane_id: id.PaneId,
 /// ```zig
 /// try completion.validateWire();
 /// ```
-pub fn validateWire(completion: CompletePaneFocus) !void {
-    try completion.requester.validateWire();
-    try codec.validateRequestId(completion.request_id);
-    try codec.validatePaneId(completion.pane_id);
-    if (completion.pane_generation == 0) {
+pub fn validateWire(self: CompletePaneFocus) !void {
+    try self.requester.validateWire();
+    try codec.validateRequestId(self.request_id);
+    try codec.validatePaneId(self.pane_id);
+    if (self.pane_generation == 0) {
         return error.InvalidPaneGeneration;
     }
-    if (completion.outcome == .focused) {
-        try codec.validatePaneId(completion.focused_pane_id);
+    if (self.outcome == .focused) {
+        try codec.validatePaneId(self.focused_pane_id);
     }
 }

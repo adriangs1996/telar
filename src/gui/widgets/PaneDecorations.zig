@@ -30,14 +30,14 @@ rings: *RingFades,
 
 /// Uses the same immutable pane geometry as terminal painting and input routing.
 /// Example: `try decorations.draw(canvas);`
-pub fn draw(decorations: PaneDecorations, canvas: *Canvas) !void {
-    const context = decorations.context;
+pub fn draw(self: PaneDecorations, canvas: *Canvas) !void {
+    const context = self.context;
     const projection = context.projection;
     const tab = projection.tab orelse return;
     const model = projection.model;
     const location = model.tabs.location[tab];
-    decorations.rings.begin();
-    defer decorations.rings.end();
+    self.rings.begin();
+    defer self.rings.end();
     if (!model.tabs.layout[tab].hasBorders()) {
         return;
     }
@@ -46,7 +46,7 @@ pub fn draw(decorations: PaneDecorations, canvas: *Canvas) !void {
     for (layout.views()) |view| {
         const pane = model.panes.findInConst(location.tab_id, view.pane_id) orelse continue;
         const agent = attention.paneAgent(projection, location, view.pane_id);
-        try decorations.border(canvas, view);
+        try self.border(canvas, view);
         const title = view.outer.row(0);
         if (model.tabs.layout[tab].isFullscreen()) {
             const strip: FullscreenStrip = .{ .context = context, .model = model, .tab = tab, .area = title };
@@ -60,26 +60,26 @@ pub fn draw(decorations: PaneDecorations, canvas: *Canvas) !void {
             try canvas.dimAt(canvas.rect(view.content), dim_alpha);
             if (agent) |value| {
                 if (attention.needsInput(value.status)) {
-                    try decorations.ring(canvas, .{ .view = view, .status = value.status, .key = .{ .pane_id = pane.id, .pane_generation = pane.attachment_generation } });
+                    try self.ring(canvas, .{ .view = view, .status = value.status, .key = .{ .pane_id = pane.id, .pane_generation = pane.attachment_generation } });
                 }
             }
         }
     }
 }
 
-fn ring(decorations: PaneDecorations, canvas: *Canvas, spec: RingSpec) !void {
-    const outer = decorations.frameRect(canvas, spec.view);
+fn ring(self: PaneDecorations, canvas: *Canvas, spec: RingSpec) !void {
+    const outer = self.frameRect(canvas, spec.view);
     const inset: Rect = .{ .x = outer.x + 1, .y = outer.y + 1, .width = @max(0, outer.width - 2), .height = @max(0, outer.height - 2) };
     try canvas.ringAt(inset, .{
         .width = canvas.chrome.px(ring_width),
         .radius = @max(0, canvas.chrome.px(frame_radius) - 1),
         .color = attention.statusColor(canvas.theme.palette, spec.status),
-        .alpha = if (canvas.animation) |clock| decorations.rings.alpha(spec.key, clock) else 1,
+        .alpha = if (canvas.animation) |clock| self.rings.alpha(spec.key, clock) else 1,
     });
 }
 
-fn border(decorations: PaneDecorations, canvas: *Canvas, view: data.LayoutView) !void {
-    const context = decorations.context;
+fn border(self: PaneDecorations, canvas: *Canvas, view: data.LayoutView) !void {
+    const context = self.context;
     const outer = view.outer;
     const content = view.content;
     const bands = [_]core.Rect{
@@ -94,7 +94,7 @@ fn border(decorations: PaneDecorations, canvas: *Canvas, view: data.LayoutView) 
     }
 
     const original = canvas.rect(outer);
-    const frame = decorations.frameRect(canvas, view);
+    const frame = self.frameRect(canvas, view);
     const extensions = [_]Rect{
         .{ .x = original.x + original.width, .y = original.y, .width = frame.width - original.width, .height = original.height },
         .{ .x = original.x, .y = original.y + original.height, .width = original.width, .height = frame.height - original.height },

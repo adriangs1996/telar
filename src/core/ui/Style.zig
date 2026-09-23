@@ -22,8 +22,8 @@ pub const Underline = enum(u3) {
 /// Runs once per position per frame in the diff, so it is the hottest
 /// comparison in the renderer. Packing the attributes turned five branches
 /// into one integer compare.
-pub fn eql(a: Style, b: Style) bool {
-    return @as(u16, @bitCast(a.flags)) == @as(u16, @bitCast(b.flags)) and
-        a.fg.eql(b.fg) and a.bg.eql(b.bg) and
-        a.underline_color.eql(b.underline_color);
+pub fn eql(self: Style, b: Style) bool {
+    return @as(u16, @bitCast(self.flags)) == @as(u16, @bitCast(b.flags)) and
+        self.fg.eql(b.fg) and self.bg.eql(b.bg) and
+        self.underline_color.eql(b.underline_color);
 }

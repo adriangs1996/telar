@@ -62,90 +62,90 @@ pub fn init(gpa: std.mem.Allocator) KittySidebarRenderer {
     return .{ .gpa = gpa };
 }
 
-pub fn deinit(renderer: *KittySidebarRenderer) void {
-    if (renderer.focused_card_pixels.len != 0) {
-        renderer.gpa.free(renderer.focused_card_pixels);
+pub fn deinit(self: *KittySidebarRenderer) void {
+    if (self.focused_card_pixels.len != 0) {
+        self.gpa.free(self.focused_card_pixels);
     }
-    if (renderer.provider_atlas.len != 0) {
-        renderer.gpa.free(renderer.provider_atlas);
+    if (self.provider_atlas.len != 0) {
+        self.gpa.free(self.provider_atlas);
     }
 }
 
-pub fn retainedBytes(renderer: *const KittySidebarRenderer) usize {
-    return renderer.focused_card_pixels.len + renderer.provider_atlas.len;
+pub fn retainedBytes(self: *const KittySidebarRenderer) usize {
+    return self.focused_card_pixels.len + self.provider_atlas.len;
 }
 
 /// Prepares sidebar graphics for one cell-layout frame.
 /// For example: `try renderer.prepare(content, .{ .width = 10, .height = 20 })`.
-pub fn prepare(renderer: *KittySidebarRenderer, content: SidebarContent, cell: CellSize) !void {
+pub fn prepare(self: *KittySidebarRenderer, content: SidebarContent, cell: CellSize) !void {
     if (content.provider_marks.len > max_provider_placements) {
         return error.TooManySidebarPlacements;
     }
     if (content.area.isEmpty() or cell.width == 0 or cell.height == 0) {
-        renderer.visible = false;
-        renderer.placements_dirty = renderer.emitted;
+        self.visible = false;
+        self.placements_dirty = self.emitted;
         return;
     }
-    try renderer.prepareFocusedCard(content.focused_card, cell);
+    try self.prepareFocusedCard(content.focused_card, cell);
     const provider_scale = @max(@as(u32, 1), provider_raster_size / @as(u32, @min(cell.width, cell.height)));
     const provider_slot_width = std.math.mul(u32, cell.width, provider_scale) catch return error.SidebarTooLarge;
     const provider_slot_height = std.math.mul(u32, cell.height, provider_scale) catch return error.SidebarTooLarge;
     const provider_atlas_width = std.math.mul(u32, provider_count, provider_slot_width) catch return error.SidebarTooLarge;
     const provider_atlas_height = provider_slot_height;
     const provider_atlas_len = try kitty_sidebar.rgbaLength(provider_atlas_width, provider_atlas_height);
-    const resized = renderer.provider_slot_width != provider_slot_width or
-        renderer.provider_slot_height != provider_slot_height;
+    const resized = self.provider_slot_width != provider_slot_width or
+        self.provider_slot_height != provider_slot_height;
     if (resized) {
-        const next_provider_atlas = try renderer.gpa.alloc(u8, provider_atlas_len);
-        if (renderer.provider_atlas.len != 0) {
-            renderer.gpa.free(renderer.provider_atlas);
+        const next_provider_atlas = try self.gpa.alloc(u8, provider_atlas_len);
+        if (self.provider_atlas.len != 0) {
+            self.gpa.free(self.provider_atlas);
         }
-        renderer.provider_atlas = next_provider_atlas;
-        renderer.provider_slot_width = provider_slot_width;
-        renderer.provider_slot_height = provider_slot_height;
-        renderer.provider_atlas_width = provider_atlas_width;
-        renderer.provider_atlas_height = provider_atlas_height;
+        self.provider_atlas = next_provider_atlas;
+        self.provider_slot_width = provider_slot_width;
+        self.provider_slot_height = provider_slot_height;
+        self.provider_atlas_width = provider_atlas_width;
+        self.provider_atlas_height = provider_atlas_height;
     }
 
-    if (resized or !std.meta.eql(renderer.provider_foreground, content.provider_foreground)) {
-        renderer.provider_foreground = content.provider_foreground;
+    if (resized or !std.meta.eql(self.provider_foreground, content.provider_foreground)) {
+        self.provider_foreground = content.provider_foreground;
         kitty_sidebar.renderProviderAtlas(.{
-            .destination = renderer.provider_atlas,
+            .destination = self.provider_atlas,
             .atlas = .{ .width = provider_atlas_width, .height = provider_atlas_height },
             .slot = .{ .width = provider_slot_width, .height = provider_slot_height },
             .foreground = content.provider_foreground,
         });
-        renderer.provider_emitted = false;
-        renderer.provider_dirty = content.provider_marks.len != 0;
-        renderer.placements_dirty = true;
+        self.provider_emitted = false;
+        self.provider_dirty = content.provider_marks.len != 0;
+        self.placements_dirty = true;
     }
-    if (!renderer.visible) {
-        renderer.provider_dirty = content.provider_marks.len != 0;
-        renderer.placements_dirty = true;
+    if (!self.visible) {
+        self.provider_dirty = content.provider_marks.len != 0;
+        self.placements_dirty = true;
     }
-    if (!std.meta.eql(renderer.area, content.area)) {
-        renderer.placements_dirty = true;
+    if (!std.meta.eql(self.area, content.area)) {
+        self.placements_dirty = true;
     }
-    if (!kitty_sidebar.providerPlacementsEqual(renderer.provider_marks[0..renderer.provider_mark_count], content.provider_marks)) {
-        @memcpy(renderer.provider_marks[0..content.provider_marks.len], content.provider_marks);
-        renderer.provider_mark_count = @intCast(content.provider_marks.len);
-        renderer.placements_dirty = true;
+    if (!kitty_sidebar.providerPlacementsEqual(self.provider_marks[0..self.provider_mark_count], content.provider_marks)) {
+        @memcpy(self.provider_marks[0..content.provider_marks.len], content.provider_marks);
+        self.provider_mark_count = @intCast(content.provider_marks.len);
+        self.placements_dirty = true;
     }
-    if (content.provider_marks.len != 0 and !renderer.provider_emitted) {
-        renderer.provider_dirty = true;
+    if (content.provider_marks.len != 0 and !self.provider_emitted) {
+        self.provider_dirty = true;
     }
-    renderer.area = content.area;
-    renderer.visible = true;
+    self.area = content.area;
+    self.visible = true;
 }
 
-fn prepareFocusedCard(renderer: *KittySidebarRenderer, focused: ?SidebarFocus, cell: CellSize) !void {
+fn prepareFocusedCard(self: *KittySidebarRenderer, focused: ?SidebarFocus, cell: CellSize) !void {
     const next_card = if (focused) |value| value.area else null;
-    if (!std.meta.eql(renderer.focused_card, next_card)) {
-        renderer.placements_dirty = true;
+    if (!std.meta.eql(self.focused_card, next_card)) {
+        self.placements_dirty = true;
     }
-    renderer.focused_card = next_card;
+    self.focused_card = next_card;
     const value = focused orelse {
-        renderer.focused_card_dirty = false;
+        self.focused_card_dirty = false;
         return;
     };
     const target_width = std.math.mul(u32, value.area.w, cell.width) catch
@@ -157,18 +157,18 @@ fn prepareFocusedCard(renderer: *KittySidebarRenderer, focused: ?SidebarFocus, c
         target_height,
         max_focused_card_pixels,
     );
-    const changed = renderer.focused_card_width != raster_size.width or
-        renderer.focused_card_height != raster_size.height or
-        !std.mem.eql(u8, &renderer.focused_card_color, &value.color);
+    const changed = self.focused_card_width != raster_size.width or
+        self.focused_card_height != raster_size.height or
+        !std.mem.eql(u8, &self.focused_card_color, &value.color);
     if (!changed) {
-        if (!renderer.focused_card_emitted) {
-            renderer.focused_card_dirty = true;
+        if (!self.focused_card_emitted) {
+            self.focused_card_dirty = true;
         }
         return;
     }
     const byte_len = try kitty_sidebar.rgbaLength(raster_size.width, raster_size.height);
-    const next_pixels = try renderer.gpa.alloc(u8, byte_len);
-    errdefer renderer.gpa.free(next_pixels);
+    const next_pixels = try self.gpa.alloc(u8, byte_len);
+    errdefer self.gpa.free(next_pixels);
     const target_radius = @max(@as(u32, 2), @min(@as(u32, 12), cell.height / 3));
     const raster_radius = @max(
         @as(u32, 1),
@@ -179,84 +179,84 @@ fn prepareFocusedCard(renderer: *KittySidebarRenderer, focused: ?SidebarFocus, c
         .shape = .{ .size = raster_size, .radius = @intCast(raster_radius) },
         .color = value.color,
     });
-    if (renderer.focused_card_pixels.len != 0) {
-        renderer.gpa.free(renderer.focused_card_pixels);
+    if (self.focused_card_pixels.len != 0) {
+        self.gpa.free(self.focused_card_pixels);
     }
-    renderer.focused_card_pixels = next_pixels;
-    renderer.focused_card_width = raster_size.width;
-    renderer.focused_card_height = raster_size.height;
-    renderer.focused_card_color = value.color;
-    renderer.focused_card_dirty = true;
-    renderer.placements_dirty = true;
+    self.focused_card_pixels = next_pixels;
+    self.focused_card_width = raster_size.width;
+    self.focused_card_height = raster_size.height;
+    self.focused_card_color = value.color;
+    self.focused_card_dirty = true;
+    self.placements_dirty = true;
 }
 
-pub fn damaged(renderer: *const KittySidebarRenderer) bool {
-    return renderer.focused_card_dirty or renderer.provider_dirty or renderer.placements_dirty;
+pub fn damaged(self: *const KittySidebarRenderer) bool {
+    return self.focused_card_dirty or self.provider_dirty or self.placements_dirty;
 }
 
 /// Emits pending sidebar images and placements. Geometry comes from what
 /// `prepare` rasterized: taking live cell sizes here let a resize between
 /// the two calls mismatch the placement against the pixels.
-pub fn write(renderer: *KittySidebarRenderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
-    if (!renderer.damaged()) {
+pub fn write(self: *KittySidebarRenderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
+    if (!self.damaged()) {
         return 0;
     }
     var written: usize = 0;
-    if (!renderer.visible) {
-        if (renderer.focused_card_emitted) {
+    if (!self.visible) {
+        if (self.focused_card_emitted) {
             written += try kitty_protocol.writeDeleteImage(writer, focused_card_id);
         }
-        if (renderer.provider_emitted) {
+        if (self.provider_emitted) {
             written += try kitty_protocol.writeDeleteImage(writer, provider_atlas_id);
         }
-        renderer.emitted = false;
-        renderer.focused_card_emitted = false;
-        renderer.emitted_focused_card = null;
-        renderer.focused_card_dirty = false;
-        renderer.provider_emitted = false;
-        renderer.emitted_provider_mark_count = 0;
-        renderer.provider_dirty = false;
-        renderer.placements_dirty = false;
+        self.emitted = false;
+        self.focused_card_emitted = false;
+        self.emitted_focused_card = null;
+        self.focused_card_dirty = false;
+        self.provider_emitted = false;
+        self.emitted_provider_mark_count = 0;
+        self.provider_dirty = false;
+        self.placements_dirty = false;
         return written;
     }
-    if (renderer.focused_card_dirty) {
+    if (self.focused_card_dirty) {
         written += try kitty_codec.writeTransmission(writer, .{
             .external_id = focused_card_id,
             .image = .{
                 .key = .{ .image_id = focused_card_id, .generation = 1 },
                 .format = .rgba,
-                .width = renderer.focused_card_width,
-                .height = renderer.focused_card_height,
-                .byte_len = renderer.focused_card_pixels.len,
+                .width = self.focused_card_width,
+                .height = self.focused_card_height,
+                .byte_len = self.focused_card_pixels.len,
             },
-            .pixels = renderer.focused_card_pixels,
+            .pixels = self.focused_card_pixels,
         });
-        renderer.focused_card_emitted = true;
+        self.focused_card_emitted = true;
     }
-    if (renderer.provider_dirty) {
+    if (self.provider_dirty) {
         written += try kitty_codec.writeTransmission(writer, .{
             .external_id = provider_atlas_id,
             .image = .{
                 .key = .{ .image_id = provider_atlas_id, .generation = 1 },
                 .format = .rgba,
-                .width = renderer.provider_atlas_width,
-                .height = renderer.provider_atlas_height,
-                .byte_len = renderer.provider_atlas.len,
+                .width = self.provider_atlas_width,
+                .height = self.provider_atlas_height,
+                .byte_len = self.provider_atlas.len,
             },
-            .pixels = renderer.provider_atlas,
+            .pixels = self.provider_atlas,
         });
-        renderer.provider_emitted = true;
+        self.provider_emitted = true;
     }
-    if (renderer.placements_dirty) {
-        if (renderer.emitted_focused_card != null) {
+    if (self.placements_dirty) {
+        if (self.emitted_focused_card != null) {
             written += try kitty_protocol.writeDeletePlacement(
                 writer,
                 focused_card_id,
                 focused_card_placement_id,
             );
         }
-        if (renderer.focused_card) |card| {
-            if (renderer.focused_card_emitted) {
+        if (self.focused_card) |card| {
+            if (self.focused_card_emitted) {
                 written += try kitty_codec.writePlacement(writer, .{
                     .image_id = focused_card_id,
                     .placement_id = focused_card_placement_id,
@@ -267,8 +267,8 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *std.Io.Writer) std.Io.Wri
                         .offset_y = 0,
                         .source_x = 0,
                         .source_y = 0,
-                        .source_width = renderer.focused_card_width,
-                        .source_height = renderer.focused_card_height,
+                        .source_width = self.focused_card_width,
+                        .source_height = self.focused_card_height,
                         .columns = card.w,
                         .rows = card.h,
                     },
@@ -276,13 +276,13 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *std.Io.Writer) std.Io.Wri
                 });
             }
         }
-        renderer.emitted_focused_card = renderer.focused_card;
-        for (0..renderer.emitted_provider_mark_count) |index| written += try kitty_protocol.writeDeletePlacement(
+        self.emitted_focused_card = self.focused_card;
+        for (0..self.emitted_provider_mark_count) |index| written += try kitty_protocol.writeDeletePlacement(
             writer,
             provider_atlas_id,
             first_provider_placement_id + @as(u32, @intCast(index)),
         );
-        for (renderer.provider_marks[0..renderer.provider_mark_count], 0..) |mark, index| {
+        for (self.provider_marks[0..self.provider_mark_count], 0..) |mark, index| {
             written += try kitty_codec.writePlacement(writer, .{
                 .image_id = provider_atlas_id,
                 .placement_id = first_provider_placement_id + @as(u32, @intCast(index)),
@@ -291,21 +291,21 @@ pub fn write(renderer: *KittySidebarRenderer, writer: *std.Io.Writer) std.Io.Wri
                     .row = mark.area.y,
                     .offset_x = 0,
                     .offset_y = 0,
-                    .source_x = @as(u32, @intFromEnum(mark.provider)) * renderer.provider_slot_width,
+                    .source_x = @as(u32, @intFromEnum(mark.provider)) * self.provider_slot_width,
                     .source_y = 0,
-                    .source_width = renderer.provider_slot_width,
-                    .source_height = renderer.provider_slot_height,
+                    .source_width = self.provider_slot_width,
+                    .source_height = self.provider_slot_height,
                     .columns = mark.area.w,
                     .rows = mark.area.h,
                 },
                 .z = -8,
             });
         }
-        renderer.emitted_provider_mark_count = renderer.provider_mark_count;
+        self.emitted_provider_mark_count = self.provider_mark_count;
     }
-    renderer.focused_card_dirty = false;
-    renderer.provider_dirty = false;
-    renderer.placements_dirty = false;
-    renderer.emitted = true;
+    self.focused_card_dirty = false;
+    self.provider_dirty = false;
+    self.placements_dirty = false;
+    self.emitted = true;
     return written;
 }

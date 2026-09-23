@@ -28,38 +28,38 @@ pub fn init(model: *const data.ClientModel, slot: usize) Label {
     return label;
 }
 
-fn setText(label: *Label, name: []const u8, index: usize) void {
-    const prefix = std.fmt.bufPrint(&label.buffer, " {d}:", .{index + 1}) catch unreachable;
-    label.icon_column = @intCast(prefix.len);
-    const suffix = std.fmt.bufPrint(label.buffer[prefix.len..], "{s}{s} ", .{
-        if (label.icon != null) "  " else "",
+fn setText(self: *Label, name: []const u8, index: usize) void {
+    const prefix = std.fmt.bufPrint(&self.buffer, " {d}:", .{index + 1}) catch unreachable;
+    self.icon_column = @intCast(prefix.len);
+    const suffix = std.fmt.bufPrint(self.buffer[prefix.len..], "{s}{s} ", .{
+        if (self.icon != null) "  " else "",
         name,
     }) catch unreachable;
-    label.len = prefix.len + suffix.len;
+    self.len = prefix.len + suffix.len;
 }
 
-fn text(label: *const Label) []const u8 {
-    return label.buffer[0..label.len];
+fn text(self: *const Label) []const u8 {
+    return self.buffer[0..self.len];
 }
 
-pub fn width(label: *const Label) u16 {
-    const marker: u16 = if (label.fullscreen) tab_bar.fullscreen_marker_width else 0;
-    return core.measure(label.text()) + marker;
+pub fn width(self: *const Label) u16 {
+    const marker: u16 = if (self.fullscreen) tab_bar.fullscreen_marker_width else 0;
+    return core.measure(self.text()) + marker;
 }
 
 /// Draws clipped text and icons only when their slots fit. Example: label.draw(context, placement);
-pub fn draw(label: *const Label, context: *Context, placement: Placement) void {
+pub fn draw(self: *const Label, context: *Context, placement: Placement) void {
     const rect = placement.rect;
-    const text_width = @min(core.measure(label.text()), rect.w);
-    _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = rect.x, .y = rect.y }, .text = label.text(), .max_width = text_width, .style = placement.style });
+    const text_width = @min(core.measure(self.text()), rect.w);
+    _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = rect.x, .y = rect.y }, .text = self.text(), .max_width = text_width, .style = placement.style });
 
-    if (label.icon) |icon| {
-        if (rect.w > label.icon_column + 1) {
-            _ = context.drawIcon(.{ .area = rect, .point = .{ .x = rect.x + label.icon_column, .y = rect.y }, .icon = icon, .style = placement.style });
+    if (self.icon) |icon| {
+        if (rect.w > self.icon_column + 1) {
+            _ = context.drawIcon(.{ .area = rect, .point = .{ .x = rect.x + self.icon_column, .y = rect.y }, .icon = icon, .style = placement.style });
         }
     }
 
-    if (!label.fullscreen or rect.w < text_width + tab_bar.fullscreen_marker_width) {
+    if (!self.fullscreen or rect.w < text_width + tab_bar.fullscreen_marker_width) {
         return;
     }
 

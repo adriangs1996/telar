@@ -79,10 +79,10 @@ pub fn acquire(io: std.Io, endpoint: []const u8) !Identity {
 
 /// Releases the lease after the native application and its consumers stop.
 /// Example: `defer identity.deinit(io);`
-pub fn deinit(identity: *Identity, io: std.Io) void {
-    if (identity.file) |file| {
+pub fn deinit(self: *Identity, io: std.Io) void {
+    if (self.file) |file| {
         file.close(io);
-        identity.file = null;
+        self.file = null;
     }
 }
 

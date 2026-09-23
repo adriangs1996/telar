@@ -12,27 +12,27 @@ requests: [4]Request = @splat(.{}),
 next_id: u64 = 1,
 
 /// A delayed read keeps its original destination. Example: `try host.read(owner);`
-pub fn read(services: *Services, owner: Owner) !u64 {
-    const request = try services.reserve(.read);
+pub fn read(self: *Services, owner: Owner) !u64 {
+    const request = try self.reserve(.read);
     request.owner = owner;
     return request.id;
 }
 
 /// Requests an image with ordinary text fallback. Example: `try host.readImage(owner);`
-pub fn readImage(services: *Services, owner: Owner) !u64 {
-    const request = try services.reserve(.read_image);
+pub fn readImage(self: *Services, owner: Owner) !u64 {
+    const request = try self.reserve(.read_image);
     request.owner = owner;
     return request.id;
 }
 
 /// Example: `try host.write(selected_utf8);`
-pub fn write(services: *Services, bytes: []const u8) !u64 {
-    return services.writeOwned(.{}, bytes);
+pub fn write(self: *Services, bytes: []const u8) !u64 {
+    return self.writeOwned(.{}, bytes);
 }
 
 /// Correlates a write with the editor awaiting its outcome, for transactional
 /// cut. Example: `const request_id = try host.writeOwned(owner, selection);`
-pub fn writeOwned(services: *Services, owner: Owner, bytes: []const u8) !u64 {
+pub fn writeOwned(self: *Services, owner: Owner, bytes: []const u8) !u64 {
     if (bytes.len > event.max_text_bytes) {
         return error.ClipboardTooLarge;
     }
@@ -41,7 +41,7 @@ pub fn writeOwned(services: *Services, owner: Owner, bytes: []const u8) !u64 {
         return error.InvalidUtf8;
     }
 
-    const request = try services.reserve(.write);
+    const request = try self.reserve(.write);
     request.owner = owner;
     @memcpy(request.bytes[0..bytes.len], bytes);
     request.len = bytes.len;
@@ -50,9 +50,9 @@ pub fn writeOwned(services: *Services, owner: Owner, bytes: []const u8) !u64 {
 
 /// Bytes stay valid until the matching completion; the host must copy before
 /// returning control. Example: `if (host.next(out)) startNativeRequest(out.*);`
-pub fn next(services: *Services, out: *native.HostRequest) bool {
+pub fn next(self: *Services, out: *native.HostRequest) bool {
     var oldest: ?*Request = null;
-    for (&services.requests) |*request| {
+    for (&self.requests) |*request| {
         if (request.state == .queued and (oldest == null or request.id < oldest.?.id)) {
             oldest = request;
         }
@@ -66,8 +66,8 @@ pub fn next(services: *Services, out: *native.HostRequest) bool {
 
 /// Unknown, duplicate and mismatched results cannot complete another request.
 /// Example: `if (host.complete(result) == .read) deliverToWidget(result);`
-pub fn complete(services: *Services, result: Result) ?Request.Kind {
-    for (&services.requests) |*request| {
+pub fn complete(self: *Services, result: Result) ?Request.Kind {
+    for (&self.requests) |*request| {
         if (request.state != .active or request.id != result.request_id or request.owner.target_id != result.target_id or request.owner.generation != result.generation) {
             continue;
         }
@@ -79,22 +79,22 @@ pub fn complete(services: *Services, result: Result) ?Request.Kind {
     return null;
 }
 
-fn reserve(services: *Services, kind: Request.Kind) !*Request {
-    if (services.next_id == std.math.maxInt(u64)) {
+fn reserve(self: *Services, kind: Request.Kind) !*Request {
+    if (self.next_id == std.math.maxInt(u64)) {
         return error.HostRequestIdsExhausted;
     }
 
-    for (&services.requests) |*request| {
+    for (&self.requests) |*request| {
         if (request.state != .free) {
             continue;
         }
 
         request.state = .queued;
         request.kind = kind;
-        request.id = services.next_id;
+        request.id = self.next_id;
         request.owner = .{};
         request.len = 0;
-        services.next_id += 1;
+        self.next_id += 1;
         return request;
     }
 

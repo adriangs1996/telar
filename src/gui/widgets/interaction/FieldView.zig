@@ -62,16 +62,16 @@ pub fn revision(app: *const client.AttachedClient, target: Target) u64 {
 }
 
 /// Example: `const selected = field.selection();`
-pub fn selection(field: FieldView) [2]u32 {
-    return .{ @min(field.head, field.anchor), @max(field.head, field.anchor) };
+pub fn selection(self: FieldView) [2]u32 {
+    return .{ @min(self.head, self.anchor), @max(self.head, self.anchor) };
 }
 
 /// Validates native byte offsets without copying the field or changing it.
 /// Example: `if (!field.validRange(range)) return;`
-pub fn validRange(field: FieldView, range: [2]u32) bool {
-    return field.boundary(range[0]) and field.boundary(range[1]);
+pub fn validRange(self: FieldView, range: [2]u32) bool {
+    return self.boundary(range[0]) and self.boundary(range[1]);
 }
 
-fn boundary(field: FieldView, at: u32) bool {
-    return at <= field.text.len and (at == field.text.len or field.text[at] & 0xc0 != 0x80);
+fn boundary(self: FieldView, at: u32) bool {
+    return at <= self.text.len and (at == self.text.len or self.text[at] & 0xc0 != 0x80);
 }

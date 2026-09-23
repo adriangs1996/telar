@@ -32,6 +32,6 @@ pub fn writeOpaque(context: *anyopaque, bytes: []const u8) !usize {
 
 /// Closes after the client has joined its host-output actor.
 /// Example: `fast.deinit();`.
-pub fn deinit(fast: *FastWriter) void {
-    _ = std.c.close(fast.fd);
+pub fn deinit(self: *FastWriter) void {
+    _ = std.c.close(self.fd);
 }

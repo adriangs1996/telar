@@ -40,9 +40,9 @@ pub fn init(gpa: std.mem.Allocator) !Channel {
 /// ```zig
 /// channel.close(io);
 /// ```
-pub fn close(channel: *Channel, io: std.Io) void {
-    channel.requests.close(io);
-    channel.responses.close(io);
+pub fn close(self: *Channel, io: std.Io) void {
+    self.requests.close(io);
+    self.responses.close(io);
 }
 
 /// Releases every request and response still owned by the channel, then
@@ -51,35 +51,35 @@ pub fn close(channel: *Channel, io: std.Io) void {
 /// ```zig
 /// channel.deinit(io);
 /// ```
-pub fn deinit(channel: *Channel, io: std.Io) void {
-    channel.responses.close(io);
+pub fn deinit(self: *Channel, io: std.Io) void {
+    self.responses.close(io);
 
     var request_buffer: [8]model.Request = undefined;
     while (true) {
-        const count = channel.requests.get(io, &request_buffer, 0) catch break;
+        const count = self.requests.get(io, &request_buffer, 0) catch break;
         if (count == 0) {
             break;
         }
 
         for (request_buffer[0..count]) |request| {
-            model.deinitRequest(request, channel.gpa);
+            model.deinitRequest(request, self.gpa);
         }
     }
 
     var response_buffer: [channel_support.response_capacity]model.Response = undefined;
     while (true) {
-        const count = channel.responses.get(io, &response_buffer, 0) catch break;
+        const count = self.responses.get(io, &response_buffer, 0) catch break;
         if (count == 0) {
             break;
         }
 
         for (response_buffer[0..count]) |response| {
-            model.deinitResponse(response, channel.gpa);
+            model.deinitResponse(response, self.gpa);
         }
     }
 
-    channel.gpa.free(channel.response_storage);
-    channel.gpa.free(channel.request_storage);
+    self.gpa.free(self.response_storage);
+    self.gpa.free(self.request_storage);
 }
 
 /// Offers one owned request without blocking. Success transfers ownership
@@ -88,16 +88,16 @@ pub fn deinit(channel: *Channel, io: std.Io) void {
 /// ```zig
 /// if (!channel.submit(.{ .io = io, .request = request, .metrics = metrics })) return error.HistoryQueueFull;
 /// ```
-pub fn submit(channel: *Channel, submission: Submission) bool {
+pub fn submit(self: *Channel, submission: Submission) bool {
     const depth = submission.metrics.beginSubmission();
-    const count = channel.requests.put(submission.io, &.{submission.request}, 0) catch 0;
+    const count = self.requests.put(submission.io, &.{submission.request}, 0) catch 0;
     if (count == 1) {
         submission.metrics.acceptSubmission(depth);
         return true;
     }
 
     submission.metrics.dropSubmission();
-    model.deinitRequest(submission.request, channel.gpa);
+    model.deinitRequest(submission.request, self.gpa);
     return false;
 }
 
@@ -107,16 +107,16 @@ pub fn submit(channel: *Channel, submission: Submission) bool {
 /// ```zig
 /// const request = try channel.receiveRequest(io, metrics);
 /// ```
-pub fn receiveRequest(channel: *Channel, io: std.Io, metrics: *Counters) !model.Request {
-    const request = try channel.requests.getOne(io);
+pub fn receiveRequest(self: *Channel, io: std.Io, metrics: *Counters) !model.Request {
+    const request = try self.requests.getOne(io);
     metrics.completeDequeue();
     return request;
 }
 
 /// Drains a bounded batch, waiting only for its first request.
 /// Example: `const count = try channel.receiveBatch(io, .{ .items = &items, .metrics = metrics });`.
-pub fn receiveBatch(channel: *Channel, io: std.Io, batch: struct { items: []model.Request, metrics: *Counters }) !usize {
-    const count = try channel.requests.get(io, batch.items, 1);
+pub fn receiveBatch(self: *Channel, io: std.Io, batch: struct { items: []model.Request, metrics: *Counters }) !usize {
+    const count = try self.requests.get(io, batch.items, 1);
     for (0..count) |_| {
         batch.metrics.completeDequeue();
     }
@@ -129,8 +129,8 @@ pub fn receiveBatch(channel: *Channel, io: std.Io, batch: struct { items: []mode
 /// ```zig
 /// try channel.sendResponse(io, response);
 /// ```
-pub fn sendResponse(channel: *Channel, io: std.Io, response: model.Response) !void {
-    try channel.responses.putOne(io, response);
+pub fn sendResponse(self: *Channel, io: std.Io, response: model.Response) !void {
+    try self.responses.putOne(io, response);
 }
 
 /// Waits for the next response and transfers its ownership to the caller.
@@ -138,6 +138,6 @@ pub fn sendResponse(channel: *Channel, io: std.Io, response: model.Response) !vo
 /// ```zig
 /// const response = try channel.receiveResponse(io);
 /// ```
-pub fn receiveResponse(channel: *Channel, io: std.Io) !model.Response {
-    return channel.responses.getOne(io);
+pub fn receiveResponse(self: *Channel, io: std.Io) !model.Response {
+    return self.responses.getOne(io);
 }

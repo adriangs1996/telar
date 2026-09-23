@@ -9,9 +9,9 @@ name: []const u8,
 tab_count: u16,
 encoded_tabs: []const u8,
 
-pub fn tabs(snapshot: WorkspaceSnapshotView) TabDescriptorIterator {
+pub fn tabs(self: WorkspaceSnapshotView) TabDescriptorIterator {
     return .{
-        .decoder = .init(snapshot.encoded_tabs),
-        .remaining = snapshot.tab_count,
+        .decoder = .init(self.encoded_tabs),
+        .remaining = self.tab_count,
     };
 }

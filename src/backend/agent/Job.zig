@@ -9,6 +9,6 @@ provider: core.AgentProvider,
 query: [description.max_query_bytes]u8 = undefined,
 query_len: u16,
 
-pub fn querySlice(job: *const Job) []const u8 {
-    return job.query[0..job.query_len];
+pub fn querySlice(self: *const Job) []const u8 {
+    return self.query[0..self.query_len];
 }

@@ -27,24 +27,24 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
         /// ```zig
         /// if (!leases.acquire(identity, owner)) dropInput();
         /// ```
-        pub fn acquire(leases: *Self, identity: Physical, assigned_owner: Owner) bool {
-            if (leases.indexOf(identity)) |index| {
-                leases.entries[index].owner = assigned_owner;
+        pub fn acquire(self: *Self, identity: Physical, assigned_owner: Owner) bool {
+            if (self.indexOf(identity)) |index| {
+                self.entries[index].owner = assigned_owner;
 
                 return true;
             }
 
-            if (leases.len == leases.entries.len) {
-                leases.overflows +%= 1;
+            if (self.len == self.entries.len) {
+                self.overflows +%= 1;
 
                 return false;
             }
 
-            leases.entries[leases.len] = .{
+            self.entries[self.len] = .{
                 .identity = identity,
                 .owner = assigned_owner,
             };
-            leases.len += 1;
+            self.len += 1;
 
             return true;
         }
@@ -54,10 +54,10 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
         /// ```zig
         /// const owner = leases.owner(identity) orelse return;
         /// ```
-        pub fn owner(leases: *const Self, identity: Physical) ?Owner {
-            const index = leases.indexOf(identity) orelse return null;
+        pub fn owner(self: *const Self, identity: Physical) ?Owner {
+            const index = self.indexOf(identity) orelse return null;
 
-            return leases.entries[index].owner;
+            return self.entries[index].owner;
         }
 
         /// Ends one physical lifecycle and returns its final owner.
@@ -65,12 +65,12 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
         /// ```zig
         /// const owner = leases.release(identity) orelse return;
         /// ```
-        pub fn release(leases: *Self, identity: Physical) ?Owner {
-            const index = leases.indexOf(identity) orelse return null;
-            const owner_value = leases.entries[index].owner;
-            leases.len -= 1;
-            if (index != leases.len) {
-                leases.entries[index] = leases.entries[leases.len];
+        pub fn release(self: *Self, identity: Physical) ?Owner {
+            const index = self.indexOf(identity) orelse return null;
+            const owner_value = self.entries[index].owner;
+            self.len -= 1;
+            if (index != self.len) {
+                self.entries[index] = self.entries[self.len];
             }
 
             return owner_value;
@@ -81,8 +81,8 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
         /// ```zig
         /// leases.clear();
         /// ```
-        pub fn clear(leases: *Self) void {
-            leases.len = 0;
+        pub fn clear(self: *Self) void {
+            self.len = 0;
         }
 
         /// Returns the number of active physical lifecycles.
@@ -90,8 +90,8 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
         /// ```zig
         /// const pressed = leases.count();
         /// ```
-        pub fn count(leases: *const Self) usize {
-            return leases.len;
+        pub fn count(self: *const Self) usize {
+            return self.len;
         }
 
         /// Returns how many new presses were rejected because the table was
@@ -100,12 +100,12 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
         /// ```zig
         /// const dropped = leases.overflowCount();
         /// ```
-        pub fn overflowCount(leases: *const Self) u64 {
-            return leases.overflows;
+        pub fn overflowCount(self: *const Self) u64 {
+            return self.overflows;
         }
 
-        fn indexOf(leases: *const Self, identity: Physical) ?usize {
-            for (leases.entries[0..leases.len], 0..) |entry, index| {
+        fn indexOf(self: *const Self, identity: Physical) ?usize {
+            for (self.entries[0..self.len], 0..) |entry, index| {
                 if (entry.identity.eql(identity)) {
                     return index;
                 }

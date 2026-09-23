@@ -10,8 +10,8 @@ value: ChildEnvironment,
 /// ```zig
 /// const child_environment = pane_environment.environment();
 /// ```
-pub fn environment(pane_environment: *const PaneEnvironment) *const ChildEnvironment {
-    return &pane_environment.value;
+pub fn environment(self: *const PaneEnvironment) *const ChildEnvironment {
+    return &self.value;
 }
 
 /// Scrubs and releases the ephemeral child environment.
@@ -19,6 +19,6 @@ pub fn environment(pane_environment: *const PaneEnvironment) *const ChildEnviron
 /// ```zig
 /// pane_environment.deinit();
 /// ```
-pub fn deinit(pane_environment: *PaneEnvironment) void {
-    pane_environment.value.deinit();
+pub fn deinit(self: *PaneEnvironment) void {
+    self.value.deinit();
 }

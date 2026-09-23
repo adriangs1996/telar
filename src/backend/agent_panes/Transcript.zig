@@ -11,94 +11,94 @@ truncated_items: [core.agent_thread.max_items]bool = @splat(false),
 
 /// Selects the provider turn used to scope item IDs and approval lookups.
 /// Example: `try transcript.setTurn(provider_turn_id);`
-pub fn setTurn(transcript: *Transcript, id: []const u8) !void {
+pub fn setTurn(self: *Transcript, id: []const u8) !void {
     if (id.len > 128 or !std.unicode.utf8ValidateSlice(id) or std.mem.indexOfScalar(u8, id, 0) != null) {
         return error.InvalidProviderId;
     }
 
-    @memcpy(transcript.value.current_turn_id[0..id.len], id);
-    transcript.value.current_turn_id_len = @intCast(id.len);
+    @memcpy(self.value.current_turn_id[0..id.len], id);
+    self.value.current_turn_id_len = @intCast(id.len);
 }
 
 /// Keeps the most recent items within both count and UTF-8 byte limits.
 /// Example: `transcript.update(.{ .id = "item-1", .role = .assistant, .text = "Hello" });`
-pub fn update(transcript: *Transcript, value: @import("ItemUpdate.zig")) void {
+pub fn update(self: *Transcript, value: @import("ItemUpdate.zig")) void {
     var item = value;
-    if (item.source_turn.len == 0 and item.id.len != 0 and (item.turn_identity orelse transcript.turn_identity) == transcript.turn_identity) {
-        item.source_turn = transcript.value.currentTurnId();
+    if (item.source_turn.len == 0 and item.id.len != 0 and (item.turn_identity orelse self.turn_identity) == self.turn_identity) {
+        item.source_turn = self.value.currentTurnId();
     }
 
     if (item.id.len > 128 or !std.unicode.utf8ValidateSlice(item.id) or std.mem.indexOfScalar(u8, item.id, 0) != null or item.source_turn.len > 128 or !std.unicode.utf8ValidateSlice(item.source_turn) or std.mem.indexOfScalar(u8, item.source_turn, 0) != null) {
-        transcript.value.truncated = true;
+        self.value.truncated = true;
         return;
     }
 
-    const existing = if (item.identity != 0) transcript.findIdentity(item.identity) else transcript.find(item);
-    if (existing == null and transcript.next_identity == std.math.maxInt(u64)) {
-        transcript.value.truncated = true;
-        transcript.value.status = .failed;
+    const existing = if (item.identity != 0) self.findIdentity(item.identity) else self.find(item);
+    if (existing == null and self.next_identity == std.math.maxInt(u64)) {
+        self.value.truncated = true;
+        self.value.status = .failed;
         return;
     }
 
-    var index = existing orelse transcript.append(item);
-    var stored = &transcript.value.item_storage[index];
+    var index = existing orelse self.append(item);
+    var stored = &self.value.item_storage[index];
     if (stored.complete and !item.complete and stored.kind != .subagent and stored.kind != .plan) {
         return;
     }
 
     if (item.retain_text) {
-        transcript.updateFields(index, item);
-        transcript.metadata(index, item);
+        self.updateFields(index, item);
+        self.metadata(index, item);
         return;
     }
 
-    transcript.truncated_items[index] = item.truncated or (item.append and transcript.truncated_items[index]);
+    self.truncated_items[index] = item.truncated or (item.append and self.truncated_items[index]);
     const prior_len = if (item.append) stored.text_len else 0;
     const available = core.agent_thread.max_text_bytes - prior_len;
     const keep = utf8Prefix(item.text, @min(item.text.len, available));
 
     if (keep != item.text.len) {
-        transcript.value.truncated = true;
-        transcript.truncated_items[index] = true;
+        self.value.truncated = true;
+        self.truncated_items[index] = true;
     }
 
     const additional = prior_len + keep -| stored.text_len;
-    while (transcript.value.text_len + additional > core.agent_thread.max_text_bytes and index != 0) {
-        transcript.evictFirst();
+    while (self.value.text_len + additional > core.agent_thread.max_text_bytes and index != 0) {
+        self.evictFirst();
         index -= 1;
-        stored = &transcript.value.item_storage[index];
+        stored = &self.value.item_storage[index];
     }
 
-    if (transcript.value.text_len + additional > core.agent_thread.max_text_bytes) {
-        transcript.value.truncated = true;
-        transcript.truncated_items[index] = true;
+    if (self.value.text_len + additional > core.agent_thread.max_text_bytes) {
+        self.value.truncated = true;
+        self.truncated_items[index] = true;
         return;
     }
 
     const old_end = stored.text_offset + stored.text_len;
     const new_len = prior_len + keep;
     const new_end = stored.text_offset + new_len;
-    const suffix_len = transcript.value.text_len - old_end;
+    const suffix_len = self.value.text_len - old_end;
     if (new_end > old_end) {
-        std.mem.copyBackwards(u8, transcript.value.text_storage[new_end..][0..suffix_len], transcript.value.text_storage[old_end..][0..suffix_len]);
+        std.mem.copyBackwards(u8, self.value.text_storage[new_end..][0..suffix_len], self.value.text_storage[old_end..][0..suffix_len]);
     } else {
-        std.mem.copyForwards(u8, transcript.value.text_storage[new_end..][0..suffix_len], transcript.value.text_storage[old_end..][0..suffix_len]);
+        std.mem.copyForwards(u8, self.value.text_storage[new_end..][0..suffix_len], self.value.text_storage[old_end..][0..suffix_len]);
     }
 
-    @memcpy(transcript.value.text_storage[stored.text_offset + prior_len ..][0..keep], item.text[0..keep]);
-    for (transcript.value.item_storage[index + 1 .. transcript.value.item_count]) |*later| {
+    @memcpy(self.value.text_storage[stored.text_offset + prior_len ..][0..keep], item.text[0..keep]);
+    for (self.value.item_storage[index + 1 .. self.value.item_count]) |*later| {
         later.text_offset = later.text_offset - stored.text_len + @as(u32, @intCast(new_len));
     }
 
-    transcript.value.text_len = @intCast(transcript.value.text_len - stored.text_len + new_len);
+    self.value.text_len = @intCast(self.value.text_len - stored.text_len + new_len);
     stored.text_len = @intCast(new_len);
-    transcript.updateFields(index, item);
-    transcript.value.truncated = transcript.value.truncated or item.truncated;
-    transcript.metadata(index, item);
+    self.updateFields(index, item);
+    self.value.truncated = self.value.truncated or item.truncated;
+    self.metadata(index, item);
 }
 
-fn updateFields(transcript: *Transcript, index: usize, item: @import("ItemUpdate.zig")) void {
-    const stored = &transcript.value.item_storage[index];
+fn updateFields(self: *Transcript, index: usize, item: @import("ItemUpdate.zig")) void {
+    const stored = &self.value.item_storage[index];
     stored.complete = item.complete;
     stored.kind = item.kind orelse stored.kind;
     stored.status = item.status orelse if (item.complete) .completed else .running;
@@ -106,39 +106,39 @@ fn updateFields(transcript: *Transcript, index: usize, item: @import("ItemUpdate
     stored.parent_identity = item.parent_identity orelse stored.parent_identity;
     stored.turn_identity = item.turn_identity orelse stored.turn_identity;
     stored.role = item.role;
-    stored.fragment_end = !transcript.truncated_items[index];
+    stored.fragment_end = !self.truncated_items[index];
     if (item.id.len != 0) {
-        @memcpy(transcript.ids[index][0..item.id.len], item.id);
-        transcript.id_lengths[index] = @intCast(item.id.len);
+        @memcpy(self.ids[index][0..item.id.len], item.id);
+        self.id_lengths[index] = @intCast(item.id.len);
     }
 }
 
 /// Approval review must retain the entire referenced tool item.
 /// Example: `const details = try transcript.reviewText(item_id);`
-pub fn reviewText(transcript: *const Transcript, id: []const u8) !?[]const u8 {
-    const index = transcript.find(.{ .id = id, .source_turn = transcript.value.currentTurnId(), .role = .tool }) orelse return null;
-    if (transcript.truncated_items[index]) {
+pub fn reviewText(self: *const Transcript, id: []const u8) !?[]const u8 {
+    const index = self.find(.{ .id = id, .source_turn = self.value.currentTurnId(), .role = .tool }) orelse return null;
+    if (self.truncated_items[index]) {
         return error.ApprovalDetailsTruncated;
     }
 
-    return transcript.value.item_storage[index].text(&transcript.value);
+    return self.value.item_storage[index].text(&self.value);
 }
 
 /// Returns the stable local identity for a provider item still retained.
 /// Example: `const parent = transcript.identity("dispatch-1") orelse 0;`
-pub fn identity(transcript: *const Transcript, id: []const u8) ?u64 {
-    const index = transcript.find(.{ .id = id, .source_turn = transcript.value.currentTurnId(), .role = .tool }) orelse return null;
-    return transcript.value.item_storage[index].identity;
+pub fn identity(self: *const Transcript, id: []const u8) ?u64 {
+    const index = self.find(.{ .id = id, .source_turn = self.value.currentTurnId(), .role = .tool }) orelse return null;
+    return self.value.item_storage[index].identity;
 }
 
 /// Example: `const row = transcript.get(child.row_identity);`
-pub fn get(transcript: *Transcript, local_identity: u64) ?*core.AgentThreadItem {
-    const index = transcript.findIdentity(local_identity) orelse return null;
-    return &transcript.value.item_storage[index];
+pub fn get(self: *Transcript, local_identity: u64) ?*core.AgentThreadItem {
+    const index = self.findIdentity(local_identity) orelse return null;
+    return &self.value.item_storage[index];
 }
 
-fn findIdentity(transcript: *const Transcript, local_identity: u64) ?usize {
-    for (transcript.value.items(), 0..) |item, index| {
+fn findIdentity(self: *const Transcript, local_identity: u64) ?usize {
+    for (self.value.items(), 0..) |item, index| {
         if (item.identity == local_identity) {
             return index;
         }
@@ -147,13 +147,13 @@ fn findIdentity(transcript: *const Transcript, local_identity: u64) ?usize {
     return null;
 }
 
-fn metadata(transcript: *Transcript, index: usize, update_item: @import("ItemUpdate.zig")) void {
+fn metadata(self: *Transcript, index: usize, update_item: @import("ItemUpdate.zig")) void {
     if (update_item.title == null and update_item.detail == null and update_item.reference == null and update_item.id.len == 0 and update_item.source_turn.len == 0) {
         return;
     }
 
-    const previous = transcript.value.metadata_storage;
-    const row = &transcript.value.item_storage[index];
+    const previous = self.value.metadata_storage;
+    const row = &self.value.item_storage[index];
     const title = update_item.title orelse previous[row.title_offset..][0..row.title_len];
     const detail = update_item.detail orelse previous[row.detail_offset..][0..row.detail_len];
     const reference = update_item.reference orelse previous[row.reference_offset..][0..row.reference_len];
@@ -168,13 +168,13 @@ fn metadata(transcript: *Transcript, index: usize, update_item: @import("ItemUpd
     };
     const old_length = @as(usize, row.title_len) + row.detail_len + row.reference_len + row.source_len + row.source_turn_len;
     const new_length = lengths[0] + lengths[1] + lengths[2] + lengths[3] + lengths[4];
-    if (transcript.value.metadata_len - old_length + new_length > core.agent_thread.max_metadata_bytes) {
-        transcript.value.truncated = true;
+    if (self.value.metadata_len - old_length + new_length > core.agent_thread.max_metadata_bytes) {
+        self.value.truncated = true;
         return;
     }
 
-    transcript.value.metadata_len = 0;
-    for (transcript.value.item_storage[0..transcript.value.item_count], 0..) |*entry, current| {
+    self.value.metadata_len = 0;
+    for (self.value.item_storage[0..self.value.item_count], 0..) |*entry, current| {
         const strings = if (current == index) .{ title[0..lengths[0]], detail[0..lengths[1]], reference[0..lengths[2]], source, source_turn } else .{
             previous[entry.title_offset..][0..entry.title_len],
             previous[entry.detail_offset..][0..entry.detail_len],
@@ -183,38 +183,38 @@ fn metadata(transcript: *Transcript, index: usize, update_item: @import("ItemUpd
             previous[entry.source_turn_offset..][0..entry.source_turn_len],
         };
         inline for (.{ "title", "detail", "reference", "source", "source_turn" }, 0..) |field, number| {
-            @field(entry, field ++ "_offset") = transcript.value.metadata_len;
+            @field(entry, field ++ "_offset") = self.value.metadata_len;
             @field(entry, field ++ "_len") = @intCast(strings[number].len);
-            @memcpy(transcript.value.metadata_storage[transcript.value.metadata_len..][0..strings[number].len], strings[number]);
-            transcript.value.metadata_len += @intCast(strings[number].len);
+            @memcpy(self.value.metadata_storage[self.value.metadata_len..][0..strings[number].len], strings[number]);
+            self.value.metadata_len += @intCast(strings[number].len);
         }
     }
 
-    transcript.value.truncated = transcript.value.truncated or lengths[0] != title.len or lengths[1] != detail.len or lengths[2] != reference.len;
+    self.value.truncated = self.value.truncated or lengths[0] != title.len or lengths[1] != detail.len or lengths[2] != reference.len;
 }
 
-fn compactMetadata(transcript: *Transcript) void {
-    const previous = transcript.value.metadata_storage;
-    transcript.value.metadata_len = 0;
-    for (transcript.value.item_storage[0..transcript.value.item_count]) |*entry| {
+fn compactMetadata(self: *Transcript) void {
+    const previous = self.value.metadata_storage;
+    self.value.metadata_len = 0;
+    for (self.value.item_storage[0..self.value.item_count]) |*entry| {
         inline for (.{ "title", "detail", "reference", "source", "source_turn" }) |field| {
             const source = previous[@field(entry, field ++ "_offset")..][0..@field(entry, field ++ "_len")];
-            @field(entry, field ++ "_offset") = transcript.value.metadata_len;
-            @memcpy(transcript.value.metadata_storage[transcript.value.metadata_len..][0..source.len], source);
-            transcript.value.metadata_len += @intCast(source.len);
+            @field(entry, field ++ "_offset") = self.value.metadata_len;
+            @memcpy(self.value.metadata_storage[self.value.metadata_len..][0..source.len], source);
+            self.value.metadata_len += @intCast(source.len);
         }
     }
 }
 
-fn find(transcript: *const Transcript, update_item: @import("ItemUpdate.zig")) ?usize {
+fn find(self: *const Transcript, update_item: @import("ItemUpdate.zig")) ?usize {
     if (update_item.id.len == 0) {
         return null;
     }
 
-    for (0..transcript.value.item_count) |index| {
-        const item = transcript.value.item_storage[index];
-        const same_turn = if (update_item.source_turn.len != 0) std.mem.eql(u8, update_item.source_turn, item.sourceTurn(&transcript.value)) else item.turn_identity == (update_item.turn_identity orelse transcript.turn_identity);
-        if (same_turn and std.mem.eql(u8, update_item.id, transcript.ids[index][0..transcript.id_lengths[index]])) {
+    for (0..self.value.item_count) |index| {
+        const item = self.value.item_storage[index];
+        const same_turn = if (update_item.source_turn.len != 0) std.mem.eql(u8, update_item.source_turn, item.sourceTurn(&self.value)) else item.turn_identity == (update_item.turn_identity orelse self.turn_identity);
+        if (same_turn and std.mem.eql(u8, update_item.id, self.ids[index][0..self.id_lengths[index]])) {
             return index;
         }
     }
@@ -222,50 +222,50 @@ fn find(transcript: *const Transcript, update_item: @import("ItemUpdate.zig")) ?
     return null;
 }
 
-fn append(transcript: *Transcript, item: @import("ItemUpdate.zig")) usize {
+fn append(self: *Transcript, item: @import("ItemUpdate.zig")) usize {
     const reference: []const u8 = item.reference orelse "";
     const metadata_bytes = metadataPrefix(item.title orelse "", core.agent_thread.max_item_title_bytes) + metadataPrefix(item.detail orelse "", core.agent_thread.max_item_detail_bytes) + @min(reference.len, core.agent_thread.max_item_reference_bytes) + item.id.len + item.source_turn.len;
-    while (transcript.value.item_count != 0 and transcript.value.metadata_len + metadata_bytes > core.agent_thread.max_metadata_bytes) {
-        transcript.evictFirst();
+    while (self.value.item_count != 0 and self.value.metadata_len + metadata_bytes > core.agent_thread.max_metadata_bytes) {
+        self.evictFirst();
     }
 
-    if (transcript.value.item_count == core.agent_thread.max_items) {
-        transcript.evictFirst();
+    if (self.value.item_count == core.agent_thread.max_items) {
+        self.evictFirst();
     }
 
-    const index = transcript.value.item_count;
-    transcript.value.item_storage[index] = .{
+    const index = self.value.item_count;
+    self.value.item_storage[index] = .{
         .role = item.role,
-        .identity = transcript.next_identity,
-        .turn_identity = transcript.turn_identity,
+        .identity = self.next_identity,
+        .turn_identity = self.turn_identity,
         .kind = item.kind orelse if (item.role == .system) .system else .message,
-        .text_offset = transcript.value.text_len,
+        .text_offset = self.value.text_len,
     };
-    transcript.next_identity += 1;
-    @memcpy(transcript.ids[index][0..item.id.len], item.id);
-    transcript.id_lengths[index] = @intCast(item.id.len);
-    transcript.truncated_items[index] = false;
-    transcript.value.item_count += 1;
+    self.next_identity += 1;
+    @memcpy(self.ids[index][0..item.id.len], item.id);
+    self.id_lengths[index] = @intCast(item.id.len);
+    self.truncated_items[index] = false;
+    self.value.item_count += 1;
     return index;
 }
 
-fn evictFirst(transcript: *Transcript) void {
-    const removed = transcript.value.item_storage[0].text_len;
-    const count = transcript.value.item_count;
-    std.mem.copyForwards(core.AgentThreadItem, transcript.value.item_storage[0 .. count - 1], transcript.value.item_storage[1..count]);
-    std.mem.copyForwards([128]u8, transcript.ids[0 .. count - 1], transcript.ids[1..count]);
-    std.mem.copyForwards(u8, transcript.id_lengths[0 .. count - 1], transcript.id_lengths[1..count]);
-    std.mem.copyForwards(bool, transcript.truncated_items[0 .. count - 1], transcript.truncated_items[1..count]);
-    transcript.value.item_count -= 1;
-    transcript.value.text_len -= removed;
-    std.mem.copyForwards(u8, transcript.value.text_storage[0..transcript.value.text_len], transcript.value.text_storage[removed..][0..transcript.value.text_len]);
+fn evictFirst(self: *Transcript) void {
+    const removed = self.value.item_storage[0].text_len;
+    const count = self.value.item_count;
+    std.mem.copyForwards(core.AgentThreadItem, self.value.item_storage[0 .. count - 1], self.value.item_storage[1..count]);
+    std.mem.copyForwards([128]u8, self.ids[0 .. count - 1], self.ids[1..count]);
+    std.mem.copyForwards(u8, self.id_lengths[0 .. count - 1], self.id_lengths[1..count]);
+    std.mem.copyForwards(bool, self.truncated_items[0 .. count - 1], self.truncated_items[1..count]);
+    self.value.item_count -= 1;
+    self.value.text_len -= removed;
+    std.mem.copyForwards(u8, self.value.text_storage[0..self.value.text_len], self.value.text_storage[removed..][0..self.value.text_len]);
 
-    for (transcript.value.item_storage[0..transcript.value.item_count]) |*item| {
+    for (self.value.item_storage[0..self.value.item_count]) |*item| {
         item.text_offset -= removed;
     }
 
-    transcript.compactMetadata();
-    transcript.value.truncated = true;
+    self.compactMetadata();
+    self.value.truncated = true;
 }
 
 fn metadataPrefix(text: []const u8, limit: usize) usize {

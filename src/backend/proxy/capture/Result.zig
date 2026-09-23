@@ -11,8 +11,8 @@ failed: bool = false,
 /// ```zig
 /// defer result.deinit(gpa);
 /// ```
-pub fn deinit(result: *Result, gpa: std.mem.Allocator) void {
-    std.crypto.secureZero(u8, result.bytes);
-    gpa.free(result.bytes);
-    result.* = .{ .bytes = &.{}, .decoded = false, .truncated = false };
+pub fn deinit(self: *Result, gpa: std.mem.Allocator) void {
+    std.crypto.secureZero(u8, self.bytes);
+    gpa.free(self.bytes);
+    self.* = .{ .bytes = &.{}, .decoded = false, .truncated = false };
 }

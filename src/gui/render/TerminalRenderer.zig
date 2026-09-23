@@ -84,107 +84,107 @@ pub fn configured(allocator: std.mem.Allocator, io: std.Io, options: @import("Re
     return renderer;
 }
 
-pub fn deinit(renderer: *Renderer) void {
-    if (renderer.atlas) |*atlas| {
+pub fn deinit(self: *Renderer) void {
+    if (self.atlas) |*atlas| {
         atlas.deinit();
     }
 
-    if (renderer.sprites) |*sprites| {
+    if (self.sprites) |*sprites| {
         sprites.deinit();
     }
 
-    renderer.font.deinit(renderer.allocator);
+    self.font.deinit(self.allocator);
 
-    renderer.quads.deinit();
-    renderer.cell_quads.deinit();
-    renderer.retained.deinit();
+    self.quads.deinit();
+    self.cell_quads.deinit();
+    self.retained.deinit();
 }
 
 /// Resolves physical font metrics before the shared client is constructed.
 /// Example: `const size = try renderer.measure(viewport);`
-pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSize {
+pub fn measure(self: *Renderer, viewport: native.Viewport) !core.TerminalSize {
     if (!std.math.isFinite(viewport.scale) or viewport.scale <= 0 or viewport.scale > 8) {
         return error.InvalidDisplayScale;
     }
 
-    if (renderer.atlas == null or renderer.scale != viewport.scale) {
-        const pixel_height: u16 = @intFromFloat(@round(renderer.config.font.scaledSize(viewport.scale)));
+    if (self.atlas == null or self.scale != viewport.scale) {
+        const pixel_height: u16 = @intFromFloat(@round(self.config.font.scaledSize(viewport.scale)));
         var replacement = try GlyphAtlas.init(
-            renderer.allocator,
+            self.allocator,
             .{
-                .font = renderer.font.bytes,
+                .font = self.font.bytes,
                 .pixel_height = pixel_height,
-                .face_index = renderer.font.match.face_index,
-                .postscript = std.mem.sliceTo(&renderer.font.match.postscript, 0),
-                .thicken = renderer.config.font.thicken,
-                .thicken_strength = renderer.config.font.thicken_strength,
-                .io = renderer.io,
+                .face_index = self.font.match.face_index,
+                .postscript = std.mem.sliceTo(&self.font.match.postscript, 0),
+                .thicken = self.config.font.thicken,
+                .thicken_strength = self.config.font.thicken_strength,
+                .io = self.io,
             },
         );
         errdefer replacement.deinit();
         try replacement.prepareFallbacks();
-        var sprites = try SpritePage.init(renderer.allocator, SpritePage.cellFor(viewport.scale));
+        var sprites = try SpritePage.init(self.allocator, SpritePage.cellFor(viewport.scale));
         errdefer sprites.deinit();
         const natural_height: f32 = @floatFromInt(try replacement.lineHeight(pixel_height));
-        const height = @round(natural_height * renderer.config.font.line_height);
-        const width = @round(@as(f32, @floatFromInt(try replacement.cellWidth(pixel_height))) + renderer.config.font.letter_spacing * viewport.scale);
+        const height = @round(natural_height * self.config.font.line_height);
+        const width = @round(@as(f32, @floatFromInt(try replacement.cellWidth(pixel_height))) + self.config.font.letter_spacing * viewport.scale);
 
         if (height < 1 or height > 65535 or width < 1 or width > 65535) {
             return error.InvalidFontSpacing;
         }
 
-        renderer.metrics = .{
+        self.metrics = .{
             .cell_width = @intFromFloat(width),
             .cell_height = @intFromFloat(height),
             .baseline = @as(f32, @floatFromInt(try replacement.ascender(pixel_height))) + (height - natural_height) / 2,
             .pixel_height = pixel_height,
         };
-        if (renderer.atlas) |*atlas| {
+        if (self.atlas) |*atlas| {
             atlas.deinit();
         }
 
-        if (renderer.sprites) |*page| {
+        if (self.sprites) |*page| {
             page.deinit();
         }
 
-        renderer.retained.invalidate();
-        renderer.atlas = replacement;
-        renderer.sprites = sprites;
-        renderer.scale = viewport.scale;
-        renderer.last_page_version = 0;
-        renderer.last_sprites_version = 0;
+        self.retained.invalidate();
+        self.atlas = replacement;
+        self.sprites = sprites;
+        self.scale = viewport.scale;
+        self.last_page_version = 0;
+        self.last_sprites_version = 0;
     }
 
     // Chrome bands come off the window first, in whole device pixels, so
     // the grid beside and below them holds complete cells and the PTY never
     // sees chrome. The sidebar band and its gap replace the left padding.
-    const chrome = ChromeMetrics.resolve(renderer.config, viewport.scale).fit(viewport.height, renderer.metrics.cell_height);
+    const chrome = ChromeMetrics.resolve(self.config, viewport.scale).fit(viewport.height, self.metrics.cell_height);
     const body_height = viewport.height -| chrome.vertical();
-    const padding = renderer.config.window.padding;
-    const x = @min(@as(u32, @intFromFloat(@round(padding.x * viewport.scale))), (viewport.width -| renderer.metrics.cell_width) / 2);
-    const y = @min(@as(u32, @intFromFloat(@round(padding.y * viewport.scale))), (body_height -| renderer.metrics.cell_height) / 2);
-    const sidebar = SidebarBand.resolve(renderer.sidebar_request, .{ .width = viewport.width, .cell_width = renderer.metrics.cell_width, .padding_x = x, .scale = viewport.scale });
+    const padding = self.config.window.padding;
+    const x = @min(@as(u32, @intFromFloat(@round(padding.x * viewport.scale))), (viewport.width -| self.metrics.cell_width) / 2);
+    const y = @min(@as(u32, @intFromFloat(@round(padding.y * viewport.scale))), (body_height -| self.metrics.cell_height) / 2);
+    const sidebar = SidebarBand.resolve(self.sidebar_request, .{ .width = viewport.width, .cell_width = self.metrics.cell_width, .padding_x = x, .scale = viewport.scale });
     const left = if (sidebar.visible()) sidebar.reserved() else x;
 
-    const size = try renderer.metrics.measure(.{
+    const size = try self.metrics.measure(.{
         .width = viewport.width -| left -| x,
         .height = body_height -| (2 * y),
         .scale = viewport.scale,
     });
 
-    renderer.chrome = chrome;
-    renderer.sidebar = sidebar;
-    renderer.origin = .{ left, chrome.top_bar + y };
-    renderer.viewport = .{ viewport.width, viewport.height };
+    self.chrome = chrome;
+    self.sidebar = sidebar;
+    self.origin = .{ left, chrome.top_bar + y };
+    self.viewport = .{ viewport.width, viewport.height };
     const cells = @as(usize, size.cols) * size.rows;
 
     if (cells > RetainedCells.max_cells) {
         return error.NativeCellBudgetExceeded;
     }
 
-    try renderer.quads.reserve(frame_budget.quads(cells));
-    try renderer.cell_quads.reserve(CellMesh.capacity);
-    try renderer.retained.resize(.{
+    try self.quads.reserve(frame_budget.quads(cells));
+    try self.cell_quads.reserve(CellMesh.capacity);
+    try self.retained.resize(.{
         size.cols,
         size.rows,
     });
@@ -194,25 +194,25 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
 /// Starts a frame without traversing the model or emitting any quads. The
 /// widget composition decides which terminal leaves to draw afterwards.
 /// Example: `renderer.begin();`
-pub fn begin(renderer: *Renderer) void {
-    renderer.quads.clear();
-    renderer.repainted_cells = 0;
-    const background = rgb(renderer.theme.background);
-    const foreground = rgb(renderer.theme.foreground);
+pub fn begin(self: *Renderer) void {
+    self.quads.clear();
+    self.repainted_cells = 0;
+    const background = rgb(self.theme.background);
+    const foreground = rgb(self.theme.foreground);
 
-    if (renderer.last_theme == null or !renderer.theme.sameCells(renderer.last_theme.?)) {
-        renderer.retained.invalidate();
+    if (self.last_theme == null or !self.theme.sameCells(self.last_theme.?)) {
+        self.retained.invalidate();
     }
 
-    renderer.last_theme = renderer.theme;
-    renderer.background = background;
-    renderer.foreground = foreground;
+    self.last_theme = self.theme;
+    self.background = background;
+    self.foreground = foreground;
 }
 
 /// Terminal-only preparation for renderer probes. The GUI composes its complete
 /// widget list in Scene instead. Example: `try renderer.prepare(projection);`
-pub fn prepare(renderer: *Renderer, projection: client.Projection) !data.PresentationCommit {
-    renderer.begin();
+pub fn prepare(self: *Renderer, projection: client.Projection) !data.PresentationCommit {
+    self.begin();
     const tab = projection.tab orelse return .{};
     const model = projection.model;
     const location = model.tabs.location[tab];
@@ -226,7 +226,7 @@ pub fn prepare(renderer: *Renderer, projection: client.Projection) !data.Present
         }
 
         const pane = model.panes.findInConst(location.tab_id, view.pane_id) orelse continue;
-        try renderer.drawPane(.{
+        try self.drawPane(.{
             .pane = pane,
             .view = view,
             .copy = copy_selection.forPane(projection.copy, pane.id),
@@ -242,17 +242,17 @@ pub fn prepare(renderer: *Renderer, projection: client.Projection) !data.Present
 /// and overlays share them; each frame version advances only when its page
 /// changed, so the backend uploads once per change and never on a warm frame.
 /// Example: `renderer.seal();`
-pub fn seal(renderer: *Renderer) void {
-    const page_version = renderer.atlas.?.version;
-    if (renderer.last_page_version != page_version) {
-        renderer.last_page_version = page_version;
-        renderer.atlas_version +%= 1;
+pub fn seal(self: *Renderer) void {
+    const page_version = self.atlas.?.version;
+    if (self.last_page_version != page_version) {
+        self.last_page_version = page_version;
+        self.atlas_version +%= 1;
     }
 
-    const sprites_version = if (renderer.sprites) |page| page.version else 0;
-    if (renderer.last_sprites_version != sprites_version) {
-        renderer.last_sprites_version = sprites_version;
-        renderer.sprites_version +%= 1;
+    const sprites_version = if (self.sprites) |page| page.version else 0;
+    if (self.last_sprites_version != sprites_version) {
+        self.last_sprites_version = sprites_version;
+        self.sprites_version +%= 1;
     }
 }
 
@@ -260,14 +260,14 @@ const PanePaint = @import("PanePaint.zig");
 
 /// The Canvas terminal operation reuses retained cell meshes and cursor policy.
 /// Example: `try renderer.drawPane(paint);`
-pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
+pub fn drawPane(self: *Renderer, paint: PanePaint) !void {
     core.profiling.add(.gui_pane_draw, 1);
     var visited: u64 = 0;
     var ink_visited: u64 = 0;
     var hits: u64 = 0;
     var rebuilt: u64 = 0;
     var item_calls: u64 = 0;
-    const quads_before = renderer.quads.items().len;
+    const quads_before = self.quads.items().len;
 
     defer {
         core.profiling.add(.gui_cell_visit, visited);
@@ -276,7 +276,7 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
         core.profiling.add(.mesh_hit, hits);
         core.profiling.add(.mesh_rebuild, rebuilt);
         core.profiling.add(.mesh_items, item_calls);
-        core.profiling.add(.gui_quads, renderer.quads.items().len - quads_before);
+        core.profiling.add(.gui_quads, self.quads.items().len - quads_before);
     }
 
     const pane = paint.pane;
@@ -286,7 +286,7 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
     for (0..rows) |row| {
         const y = area.y + @as(u16, @intCast(row));
         const source = pane.buffer.cells[row * pane.buffer.w ..][0..cols];
-        const retained = renderer.retained.row(.{ area.x, y }, cols);
+        const retained = self.retained.row(.{ area.x, y }, cols);
         for (source, retained.metadata, 0..) |*original, *metadata, col| {
             // Only a selected cell needs a projected copy; every other cell
             // is compared in place in the pane buffer.
@@ -301,7 +301,7 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
                 break :projected &selected;
             } else original;
 
-            const rect = renderer.cellRect(.{
+            const rect = self.cellRect(.{
                 .x = area.x + @as(u16, @intCast(col)),
                 .y = y,
                 .w = @intCast(@min(@max(1, cell.width), cols - col)),
@@ -314,10 +314,10 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
                     .cell = cell.*,
                     .rect = rect,
                 };
-                try renderer.paintCell(key);
-                mesh.replace(key, renderer.cell_quads.items());
-                mesh.classifyBackground(renderer.background);
-                renderer.repainted_cells += 1;
+                try self.paintCell(key);
+                mesh.replace(key, self.cell_quads.items());
+                mesh.classifyBackground(self.background);
+                self.repainted_cells += 1;
                 rebuilt += 1;
             } else {
                 hits += 1;
@@ -325,23 +325,23 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
 
             if (metadata.background) {
                 item_calls += 1;
-                try renderer.quads.push(mesh.background());
+                try self.quads.push(mesh.background());
             }
         }
     }
 
-    const cursor = renderer.paneCursor(paint);
+    const cursor = self.paneCursor(paint);
     if (cursor) |visible| {
         if (visible.style == .block) {
-            try visible.paint(&renderer.quads);
+            try visible.paint(&self.quads);
         }
     }
 
     // Backgrounds and the block cursor precede natural ink. The cell anchor
     // owns its color; italic overhang remains visible across adjacent cells.
-    const bounds = renderer.cellRect(area);
+    const bounds = self.cellRect(area);
     for (0..rows) |row| {
-        const retained = renderer.retained.row(.{ area.x, area.y + @as(u16, @intCast(row)) }, cols);
+        const retained = self.retained.row(.{ area.x, area.y + @as(u16, @intCast(row)) }, cols);
         for (retained.metadata, 0..) |*metadata, col| {
             ink_visited += 1;
             if (metadata.len <= 1) {
@@ -354,20 +354,20 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
                 .bounds = bounds,
                 .color = if (cursor) |visible| visible.inkColor(metadata.paint.rect) else null,
             };
-            try renderer.pushInk(mesh.primaryInk(), target);
-            try renderer.pushInk(mesh.overflowInk(), target);
+            try self.pushInk(mesh.primaryInk(), target);
+            try self.pushInk(mesh.overflowInk(), target);
         }
     }
 
     if (cursor) |visible| {
         if (visible.style != .block) {
-            try visible.paint(&renderer.quads);
+            try visible.paint(&self.quads);
         }
     }
 }
 
 /// Appends retained ink clipped to its pane, recolored under a block cursor.
-fn pushInk(renderer: *Renderer, ink: []const Quad, target: InkTarget) !void {
+fn pushInk(self: *Renderer, ink: []const Quad, target: InkTarget) !void {
     for (ink) |original| {
         var item = original;
         if (target.color) |override| {
@@ -377,17 +377,17 @@ fn pushInk(renderer: *Renderer, ink: []const Quad, target: InkTarget) !void {
             item.a = override.a;
         }
 
-        try renderer.quads.pushClipped(item, target.bounds);
+        try self.quads.pushClipped(item, target.bounds);
     }
 }
 
-fn paneCursor(renderer: *const Renderer, paint: PanePaint) ?CursorPaint {
+fn paneCursor(self: *const Renderer, paint: PanePaint) ?CursorPaint {
     const pane = paint.pane;
     const area = paint.view.content;
     const rows = @min(area.h, pane.buffer.h);
     const cols = @min(area.w, pane.buffer.w);
     const visible_cursor = copy_selection.cursor(pane, paint.copy);
-    if (!paint.hide_cursor and paint.view.focused and visible_cursor.visible and renderer.cursor_on and visible_cursor.x < cols and visible_cursor.y < rows) {
+    if (!paint.hide_cursor and paint.view.focused and visible_cursor.visible and self.cursor_on and visible_cursor.x < cols and visible_cursor.y < rows) {
         var col = visible_cursor.x;
         const row = visible_cursor.y;
         if (col > 0 and pane.buffer.cells[@as(usize, row) * pane.buffer.w + col].width == 0) {
@@ -396,47 +396,47 @@ fn paneCursor(renderer: *const Renderer, paint: PanePaint) ?CursorPaint {
 
         const cell = pane.buffer.cells[@as(usize, row) * pane.buffer.w + col];
         return .{
-            .rect = renderer.cellRect(.{ .x = area.x + col, .y = area.y + row, .w = @min(@max(1, cell.width), cols - col), .h = 1 }),
-            .style = if (!renderer.focused) .hollow else switch (visible_cursor.appearance.shape) {
-                .default => renderer.config.cursor.style,
+            .rect = self.cellRect(.{ .x = area.x + col, .y = area.y + row, .w = @min(@max(1, cell.width), cols - col), .h = 1 }),
+            .style = if (!self.focused) .hollow else switch (visible_cursor.appearance.shape) {
+                .default => self.config.cursor.style,
                 .block => .block,
                 .bar => .bar,
                 .underline => .underline,
                 .hollow => .hollow,
             },
-            .color = if (renderer.theme.cursor_color) |c| rgb(c) else renderer.foreground,
-            .text_color = if (renderer.theme.cursor_text_color) |c| rgb(c) else renderer.background,
-            .thickness = @max(1, @round(renderer.scale * 2)),
+            .color = if (self.theme.cursor_color) |c| rgb(c) else self.foreground,
+            .text_color = if (self.theme.cursor_text_color) |c| rgb(c) else self.background,
+            .thickness = @max(1, @round(self.scale * 2)),
         };
     }
 
     return null;
 }
 
-fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
+fn paintCell(self: *Renderer, paint: CellPaint) !void {
     const cell = paint.cell;
     const rect = paint.rect;
-    const list = &renderer.cell_quads;
+    const list = &self.cell_quads;
     list.clear();
-    const background = renderer.color(if (cell.style.flags.inverse) cell.style.fg else cell.style.bg, if (cell.style.flags.inverse) renderer.foreground else renderer.background);
+    const background = self.color(if (cell.style.flags.inverse) cell.style.fg else cell.style.bg, if (cell.style.flags.inverse) self.foreground else self.background);
     var background_rect = rect;
-    background_rect.width = @floatFromInt(renderer.metrics.cell_width);
+    background_rect.width = @floatFromInt(self.metrics.cell_width);
     try list.pushRect(background_rect, background);
     if (cell.width == 0 or cell.style.flags.invisible) {
         return;
     }
 
-    var ink = renderer.color(if (cell.style.flags.inverse) cell.style.bg else cell.style.fg, if (cell.style.flags.inverse) renderer.background else renderer.foreground);
+    var ink = self.color(if (cell.style.flags.inverse) cell.style.bg else cell.style.fg, if (cell.style.flags.inverse) self.background else self.foreground);
     if (cell.style.flags.faint) {
         ink.a *= 0.5;
     }
 
     if (!std.mem.eql(u8, cell.text(), " ")) {
-        _ = try renderer.atlas.?.place(.{ .text = cell.text(), .x = rect.x, .y = rect.y + renderer.metrics.baseline, .color = ink, .pixel_height = renderer.metrics.pixel_height, .cell_bounds = renderer.metrics.glyphCell(), .bold = cell.style.flags.bold, .italic = cell.style.flags.italic }, list);
+        _ = try self.atlas.?.place(.{ .text = cell.text(), .x = rect.x, .y = rect.y + self.metrics.baseline, .color = ink, .pixel_height = self.metrics.pixel_height, .cell_bounds = self.metrics.glyphCell(), .bold = cell.style.flags.bold, .italic = cell.style.flags.italic }, list);
     }
 
     if (cell.style.flags.underline != .none) {
-        try list.pushRect(.{ .x = rect.x, .y = rect.y + rect.height - 2, .width = rect.width, .height = 1 }, renderer.color(cell.style.underline_color, ink));
+        try list.pushRect(.{ .x = rect.x, .y = rect.y + rect.height - 2, .width = rect.width, .height = 1 }, self.color(cell.style.underline_color, ink));
     }
 
     if (cell.style.flags.strikethrough) {
@@ -444,34 +444,34 @@ fn paintCell(renderer: *Renderer, paint: CellPaint) !void {
     }
 }
 
-fn cellRect(renderer: *const Renderer, cells: core.Rect) Rect {
-    return renderer.metrics.rect(renderer.origin, cells);
+fn cellRect(self: *const Renderer, cells: core.Rect) Rect {
+    return self.metrics.rect(self.origin, cells);
 }
 
-fn color(renderer: *const Renderer, value: core.Color, fallback: Color) Color {
-    return colors.withPalette(value, fallback, &renderer.theme.palette);
+fn color(self: *const Renderer, value: core.Color, fallback: Color) Color {
+    return colors.withPalette(value, fallback, &self.theme.palette);
 }
 
 fn rgb(value: [3]u8) Color {
     return Color.rgb(value[0], value[1], value[2]);
 }
 
-pub fn frame(renderer: *const Renderer, token: u64) native.Frame {
-    const quads = renderer.quads.items();
+pub fn frame(self: *const Renderer, token: u64) native.Frame {
+    const quads = self.quads.items();
     return .{
         .token = token,
         .quads = quads.ptr,
         .quad_count = @intCast(quads.len),
-        .atlas = if (renderer.atlas) |atlas| atlas.pixels.ptr else null,
+        .atlas = if (self.atlas) |atlas| atlas.pixels.ptr else null,
         .atlas_side = GlyphAtlas.side,
-        .atlas_version = renderer.atlas_version,
-        .sprites = if (renderer.sprites) |page| page.pixels.ptr else null,
-        .sprites_side = if (renderer.sprites != null) SpritePage.side else 0,
-        .sprites_version = renderer.sprites_version,
-        .diagrams = renderer.diagrams,
-        .background = .{ renderer.background.r, renderer.background.g, renderer.background.b, renderer.config.window.background_opacity },
-        .background_blur = renderer.config.window.background_blur,
-        .titlebar = @intFromBool(renderer.config.window.titlebar),
+        .atlas_version = self.atlas_version,
+        .sprites = if (self.sprites) |page| page.pixels.ptr else null,
+        .sprites_side = if (self.sprites != null) SpritePage.side else 0,
+        .sprites_version = self.sprites_version,
+        .diagrams = self.diagrams,
+        .background = .{ self.background.r, self.background.g, self.background.b, self.config.window.background_opacity },
+        .background_blur = self.config.window.background_blur,
+        .titlebar = @intFromBool(self.config.window.titlebar),
     };
 }
 

@@ -37,63 +37,63 @@ engine: ?EngineRuntime,
 /// var resources: Resources = undefined;
 /// try resources.init(initialization);
 /// ```
-pub fn init(resources: *Resources, initialization: Initialization) !void {
-    return resources.acquire(initialization, null);
+pub fn init(self: *Resources, initialization: Initialization) !void {
+    return self.acquire(initialization, null);
 }
 
-pub fn acquire(resources: *Resources, initialization: Initialization, comptime fail_after: ?resources_namespace.AcquisitionPhase) !void {
-    resources.dependencies = initialization.dependencies;
-    resources.heap = core.Heap.init(initialization.dependencies.allocator);
-    resources.gpa = resources.heap.allocator();
+pub fn acquire(self: *Resources, initialization: Initialization, comptime fail_after: ?resources_namespace.AcquisitionPhase) !void {
+    self.dependencies = initialization.dependencies;
+    self.heap = core.Heap.init(initialization.dependencies.allocator);
+    self.gpa = self.heap.allocator();
 
     try initialization.options.graphics.validate();
-    attachment.initSharedFreezeNonce(resources.io());
+    attachment.initSharedFreezeNonce(self.io());
 
-    resources.agent_manifests = initialization.options.agent_manifests;
-    resources.child_environment = try ChildEnvironment.init(resources.gpa, initialization.options.environment, "telar");
-    errdefer resources.child_environment.deinit();
+    self.agent_manifests = initialization.options.agent_manifests;
+    self.child_environment = try ChildEnvironment.init(self.gpa, initialization.options.environment, "telar");
+    errdefer self.child_environment.deinit();
     try resources_namespace.checkpoint(fail_after, .child_environment);
 
-    resources.proxy = try ProxyRuntime.init(
-        resources.io(),
-        resources.gpa,
+    self.proxy = try ProxyRuntime.init(
+        self.io(),
+        self.gpa,
         .{
             .config = initialization.options.proxy,
             .system_trusted = initialization.options.proxy_system_trusted,
         },
     );
-    errdefer resources.proxy.deinit();
+    errdefer self.proxy.deinit();
     try resources_namespace.checkpoint(fail_after, .proxy);
 
-    resources.listener = try LocalListener.listen(resources.io(), initialization.options.endpoint);
-    errdefer resources.listener.deinit(resources.io());
+    self.listener = try LocalListener.listen(self.io(), initialization.options.endpoint);
+    errdefer self.listener.deinit(self.io());
     try resources_namespace.checkpoint(fail_after, .listener);
 
-    resources.telemetry = resources_namespace.initTelemetry(resources.io(), initialization.options.endpoint);
-    errdefer resources.telemetry.deinit(resources.io());
+    self.telemetry = resources_namespace.initTelemetry(self.io(), initialization.options.endpoint);
+    errdefer self.telemetry.deinit(self.io());
     try resources_namespace.checkpoint(fail_after, .telemetry);
 
-    resources.history = try HistoryRuntime.init(resources.io(), resources.gpa, .{
+    self.history = try HistoryRuntime.init(self.io(), self.gpa, .{
         .database_path = initialization.options.history_path,
         .filters = initialization.options.history_filters,
         .capture_output = initialization.options.history_output_capture,
     });
-    errdefer resources.history.deinit();
+    errdefer self.history.deinit();
     try resources_namespace.checkpoint(fail_after, .history);
 
-    try resources.plugins.init(.{
-        .io = resources.io(),
-        .gpa = resources.gpa,
+    try self.plugins.init(.{
+        .io = self.io(),
+        .gpa = self.gpa,
         .specs = initialization.options.plugins,
     });
-    errdefer resources.plugins.deinit();
+    errdefer self.plugins.deinit();
     try resources_namespace.checkpoint(fail_after, .plugins);
 
-    resources.engine = if (initialization.options.engine) |options|
-        try EngineRuntime.init(resources.io(), resources.gpa, options)
+    self.engine = if (initialization.options.engine) |options|
+        try EngineRuntime.init(self.io(), self.gpa, options)
     else
         null;
-    errdefer if (resources.engine) |*engine| engine.deinit();
+    errdefer if (self.engine) |*engine| engine.deinit();
     try resources_namespace.checkpoint(fail_after, .engine);
 }
 
@@ -102,16 +102,16 @@ pub fn acquire(resources: *Resources, initialization: Initialization, comptime f
 /// ```zig
 /// const service = resources.engineService() orelse return;
 /// ```
-pub fn engineService(resources: *Resources) ?*Service {
-    if (resources.engine) |*engine| {
+pub fn engineService(self: *Resources) ?*Service {
+    if (self.engine) |*engine| {
         return engine.service();
     }
 
     return null;
 }
 
-pub fn pluginService(resources: *Resources) *PluginsService {
-    return resources.plugins.service();
+pub fn pluginService(self: *Resources) *PluginsService {
+    return self.plugins.service();
 }
 
 /// Returns the I/O implementation selected by the process root.
@@ -119,8 +119,8 @@ pub fn pluginService(resources: *Resources) *PluginsService {
 /// ```zig
 /// const io = resources.io();
 /// ```
-pub fn io(resources: *const Resources) std.Io {
-    return resources.dependencies.io;
+pub fn io(self: *const Resources) std.Io {
+    return self.dependencies.io;
 }
 
 /// Releases resources acquired before actors were started.
@@ -128,14 +128,14 @@ pub fn io(resources: *const Resources) std.Io {
 /// ```zig
 /// resources.deinitUnstarted();
 /// ```
-pub fn deinitUnstarted(resources: *Resources) void {
-    if (resources.engine) |*engine| {
+pub fn deinitUnstarted(self: *Resources) void {
+    if (self.engine) |*engine| {
         engine.deinit();
     }
-    resources.proxy.deinit();
-    resources.plugins.deinit();
-    resources.history.deinit();
-    resources.telemetry.deinit(resources.io());
-    resources.listener.deinit(resources.io());
-    resources.child_environment.deinit();
+    self.proxy.deinit();
+    self.plugins.deinit();
+    self.history.deinit();
+    self.telemetry.deinit(self.io());
+    self.listener.deinit(self.io());
+    self.child_environment.deinit();
 }

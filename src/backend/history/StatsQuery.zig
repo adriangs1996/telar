@@ -36,6 +36,6 @@ pub fn init(input: Input) !StatsQuery {
     return query;
 }
 
-pub fn scopeSlice(query: *const StatsQuery) []const u8 {
-    return query.scope_text[0..query.scope_text_len];
+pub fn scopeSlice(self: *const StatsQuery) []const u8 {
+    return self.scope_text[0..self.scope_text_len];
 }

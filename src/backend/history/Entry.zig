@@ -17,9 +17,9 @@ workspace_path: []u8,
 provider: []u8 = &.{},
 command_truncated: bool = false,
 
-pub fn deinit(entry: *Entry, gpa: std.mem.Allocator) void {
-    gpa.free(entry.command);
-    gpa.free(entry.cwd);
-    gpa.free(entry.workspace_path);
-    gpa.free(entry.provider);
+pub fn deinit(self: *Entry, gpa: std.mem.Allocator) void {
+    gpa.free(self.command);
+    gpa.free(self.cwd);
+    gpa.free(self.workspace_path);
+    gpa.free(self.provider);
 }

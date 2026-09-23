@@ -29,35 +29,35 @@ search_scheduled: bool = false,
 cell_deadline_ns: ?u64 = null,
 
 /// Example: `if (session.setTerminalColors(colors)) { updateOwnedPanes(); }`.
-pub fn setTerminalColors(session: *Session, colors: core.TerminalColors) bool {
-    if (std.meta.eql(session.terminal_colors, colors)) {
+pub fn setTerminalColors(self: *Session, colors: core.TerminalColors) bool {
+    if (std.meta.eql(self.terminal_colors, colors)) {
         return false;
     }
 
-    session.terminal_colors = colors;
+    self.terminal_colors = colors;
     return true;
 }
 
 /// Reserves one correlated focus exchange before its command is delivered.
 /// Example: `try session.reserveFocus(pending);`.
-pub fn reserveFocus(session: *Session, pending: PendingPaneFocus) !void {
-    if (session.pending_pane_focus != null) {
+pub fn reserveFocus(self: *Session, pending: PendingPaneFocus) !void {
+    if (self.pending_pane_focus != null) {
         return error.FocusAlreadyPending;
     }
 
-    session.pending_pane_focus = pending;
+    self.pending_pane_focus = pending;
 }
 
 /// Retires a completed or undeliverable focus exchange.
 /// Example: `session.releaseFocus();`.
-pub fn releaseFocus(session: *Session) void {
-    session.pending_pane_focus = null;
+pub fn releaseFocus(self: *Session) void {
+    self.pending_pane_focus = null;
 }
 
 /// Checks all correlation fields without consuming an unrelated completion.
 /// Example: `if (!session.acceptsFocusCompletion(sender, reply)) return;`.
-pub fn acceptsFocusCompletion(session: *const Session, sender: ClientKey, reply: core.CompletePaneFocus) bool {
-    const pending = session.pending_pane_focus orelse return false;
+pub fn acceptsFocusCompletion(self: *const Session, sender: ClientKey, reply: core.CompletePaneFocus) bool {
+    const pending = self.pending_pane_focus orelse return false;
 
     return std.meta.eql(pending.target, sender) and pending.request_id == reply.request_id and
         pending.pane_id == reply.pane_id and pending.pane_generation == reply.pane_generation;
@@ -96,8 +96,8 @@ pub fn create(gpa: std.mem.Allocator, key: ClientKey, connection: core.SocketCha
 /// ```zig
 /// if (session.active()) try scheduleRead(session);
 /// ```
-pub fn active(session: *const Session) bool {
-    return !session.closing and session.connection.isActive();
+pub fn active(self: *const Session) bool {
+    return !self.closing and self.connection.isActive();
 }
 
 /// Releases connection, attachment and buffer ownership after all socket
@@ -107,11 +107,11 @@ pub fn active(session: *const Session) bool {
 /// session.deinit(io, gpa);
 /// gpa.destroy(session);
 /// ```
-pub fn deinit(session: *Session, io: std.Io, gpa: std.mem.Allocator) void {
-    std.debug.assert(!session.read_pending and !session.send_pending);
-    session.connection.deinit(io);
-    session.attachments.deinit();
-    session.delivery.deinit(gpa);
-    gpa.free(session.receive_buffer);
-    gpa.free(session.read_buffer);
+pub fn deinit(self: *Session, io: std.Io, gpa: std.mem.Allocator) void {
+    std.debug.assert(!self.read_pending and !self.send_pending);
+    self.connection.deinit(io);
+    self.attachments.deinit();
+    self.delivery.deinit(gpa);
+    gpa.free(self.receive_buffer);
+    gpa.free(self.read_buffer);
 }

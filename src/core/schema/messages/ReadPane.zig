@@ -9,8 +9,8 @@ pane_generation: u64,
 rows: u16,
 source: types.PaneTextSource,
 
-pub fn validateWire(message: ReadPane) !void {
-    if (message.rows == 0 or message.rows > types.max_pane_text_rows) {
+pub fn validateWire(self: ReadPane) !void {
+    if (self.rows == 0 or self.rows > types.max_pane_text_rows) {
         return error.InvalidPaneTextRows;
     }
 }

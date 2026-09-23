@@ -90,33 +90,33 @@ pub fn init(gpa: std.mem.Allocator) !Fixture {
     };
 }
 
-pub fn deinit(fixture: *Fixture) void {
-    fixture.gpa.free(fixture.fragmented_spans[1]);
-    fixture.gpa.free(fixture.fragmented_spans[0]);
-    fixture.gpa.free(fixture.full_storage_b);
-    fixture.gpa.free(fixture.full_storage_a);
-    fixture.gpa.free(fixture.fragmented_storage_b);
-    fixture.gpa.free(fixture.fragmented_storage_a);
-    fixture.gpa.free(fixture.sparse_storage_b);
-    fixture.gpa.free(fixture.sparse_storage_a);
-    fixture.gpa.free(fixture.terminal_output);
-    fixture.gpa.free(fixture.encode_buffer);
-    fixture.gpa.free(fixture.cells_b);
-    fixture.gpa.free(fixture.cells_a);
+pub fn deinit(self: *Fixture) void {
+    self.gpa.free(self.fragmented_spans[1]);
+    self.gpa.free(self.fragmented_spans[0]);
+    self.gpa.free(self.full_storage_b);
+    self.gpa.free(self.full_storage_a);
+    self.gpa.free(self.fragmented_storage_b);
+    self.gpa.free(self.fragmented_storage_a);
+    self.gpa.free(self.sparse_storage_b);
+    self.gpa.free(self.sparse_storage_a);
+    self.gpa.free(self.terminal_output);
+    self.gpa.free(self.encode_buffer);
+    self.gpa.free(self.cells_b);
+    self.gpa.free(self.cells_a);
 }
 
-pub fn spans(fixture: *const Fixture, workload: main.Workload, variant: usize) []const core.Span {
+pub fn spans(self: *const Fixture, workload: main.Workload, variant: usize) []const core.Span {
     return switch (workload) {
-        .one_cell => &fixture.sparse_spans[variant],
-        .fragmented => fixture.fragmented_spans[variant],
-        .full_screen => &fixture.full_spans[variant],
+        .one_cell => &self.sparse_spans[variant],
+        .fragmented => self.fragmented_spans[variant],
+        .full_screen => &self.full_spans[variant],
     };
 }
 
-pub fn payloads(fixture: *const Fixture, workload: main.Workload) [2][]const u8 {
+pub fn payloads(self: *const Fixture, workload: main.Workload) [2][]const u8 {
     return switch (workload) {
-        .one_cell => fixture.sparse_payloads,
-        .fragmented => fixture.fragmented_payloads,
-        .full_screen => fixture.full_payloads,
+        .one_cell => self.sparse_payloads,
+        .fragmented => self.fragmented_payloads,
+        .full_screen => self.full_payloads,
     };
 }

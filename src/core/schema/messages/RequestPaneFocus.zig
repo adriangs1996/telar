@@ -13,10 +13,10 @@ direction: types.PaneDirection,
 /// ```zig
 /// try request.validateWire();
 /// ```
-pub fn validateWire(request: RequestPaneFocus) !void {
-    try codec.validateRequestId(request.request_id);
-    try codec.validatePaneId(request.pane_id);
-    if (request.pane_generation == 0) {
+pub fn validateWire(self: RequestPaneFocus) !void {
+    try codec.validateRequestId(self.request_id);
+    try codec.validatePaneId(self.pane_id);
+    if (self.pane_generation == 0) {
         return error.InvalidPaneGeneration;
     }
 }

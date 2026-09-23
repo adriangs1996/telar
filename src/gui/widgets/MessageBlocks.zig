@@ -10,14 +10,14 @@ index: usize = 0,
 
 /// Reads headings, lists, quotes and fenced code without retaining source data.
 /// Example: `while (blocks.next()) |block| try drawBlock(block);`
-pub fn next(blocks: *Blocks) ?Block {
-    if (blocks.index >= blocks.text.len) {
+pub fn next(self: *Blocks) ?Block {
+    if (self.index >= self.text.len) {
         return null;
     }
 
-    const source_offset = blocks.index;
-    const line = blocks.readLine();
-    if (!blocks.markdown) {
+    const source_offset = self.index;
+    const line = self.readLine();
+    if (!self.markdown) {
         return .{ .text = line };
     }
 
@@ -33,12 +33,12 @@ pub fn next(blocks: *Blocks) ?Block {
             length += 1;
         }
 
-        const start = blocks.index;
+        const start = self.index;
         var end = start;
         var closed = false;
-        while (blocks.index < blocks.text.len) {
-            const before = blocks.index;
-            const candidate = std.mem.trim(u8, blocks.readLine(), " \t");
+        while (self.index < self.text.len) {
+            const before = self.index;
+            const candidate = std.mem.trim(u8, self.readLine(), " \t");
             var count: usize = 0;
             while (count < candidate.len and candidate[count] == fence) {
                 count += 1;
@@ -50,16 +50,16 @@ pub fn next(blocks: *Blocks) ?Block {
                 break;
             }
 
-            end = blocks.index;
+            end = self.index;
         }
 
-        return .{ .text = std.mem.trimEnd(u8, blocks.text[start..end], "\r\n"), .kind = .code, .language = std.mem.trim(u8, trimmed[length..], " \t"), .fenced_closed = closed, .source_offset = @intCast(source_offset) };
+        return .{ .text = std.mem.trimEnd(u8, self.text[start..end], "\r\n"), .kind = .code, .language = std.mem.trim(u8, trimmed[length..], " \t"), .fenced_closed = closed, .source_offset = @intCast(source_offset) };
     }
 
     if (std.mem.indexOfScalar(u8, line, '|') != null) {
-        if (MessageTable.parse(blocks.text[source_offset..])) |table| {
-            blocks.index = source_offset + table.len;
-            return .{ .text = blocks.text[source_offset..blocks.index], .kind = .table, .source_offset = @intCast(source_offset) };
+        if (MessageTable.parse(self.text[source_offset..])) |table| {
+            self.index = source_offset + table.len;
+            return .{ .text = self.text[source_offset..self.index], .kind = .table, .source_offset = @intCast(source_offset) };
         }
     }
 
@@ -96,22 +96,22 @@ pub fn next(blocks: *Blocks) ?Block {
     return .{ .text = line };
 }
 
-fn readLine(blocks: *Blocks) []const u8 {
-    const start = blocks.index;
-    while (blocks.index < blocks.text.len and blocks.text[blocks.index] != '\n' and blocks.text[blocks.index] != '\r') {
-        blocks.index += 1;
+fn readLine(self: *Blocks) []const u8 {
+    const start = self.index;
+    while (self.index < self.text.len and self.text[self.index] != '\n' and self.text[self.index] != '\r') {
+        self.index += 1;
     }
 
-    const end = blocks.index;
-    if (blocks.index < blocks.text.len) {
-        const byte = blocks.text[blocks.index];
-        blocks.index += 1;
-        if (byte == '\r' and blocks.index < blocks.text.len and blocks.text[blocks.index] == '\n') {
-            blocks.index += 1;
+    const end = self.index;
+    if (self.index < self.text.len) {
+        const byte = self.text[self.index];
+        self.index += 1;
+        if (byte == '\r' and self.index < self.text.len and self.text[self.index] == '\n') {
+            self.index += 1;
         }
     }
 
-    return blocks.text[start..end];
+    return self.text[start..end];
 }
 
 test "message blocks preserve fenced output and recognize structure before wrapping" {

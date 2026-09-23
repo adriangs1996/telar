@@ -12,15 +12,15 @@ area: core.Rect,
 
 /// Draws validated Lua segments with the same palette roles as terminal cells.
 /// Example: `try content.draw(canvas);`
-pub fn draw(content: BarContent, canvas: *Canvas) !void {
-    var strip: Strip = .{ .area = content.area };
-    for (content.content.slice()) |segment| {
+pub fn draw(self: BarContent, canvas: *Canvas) !void {
+    var strip: Strip = .{ .area = self.area };
+    for (self.content.slice()) |segment| {
         if (strip.remaining() == 0) {
             break;
         }
 
         const label: Label = .{
-            .text = content.content.text(segment),
+            .text = self.content.text(segment),
             .color = if (segment.style.foreground) |value| color(canvas, value) else canvas.theme.palette.subtext0,
             .bold = segment.style.bold,
             .italic = segment.style.italic,

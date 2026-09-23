@@ -9,7 +9,7 @@ source_row: []const core.Cell,
 /// Linear cell index of `source_row[0]` in the screen buffer.
 base: usize,
 
-pub fn copyRun(sink: *PatchSink, run_start: u16, count: u16) !void {
-    const destination = try sink.screen.patchCells(@intCast(sink.base + run_start), count);
-    @memcpy(destination, sink.source_row[run_start..][0..count]);
+pub fn copyRun(self: *PatchSink, run_start: u16, count: u16) !void {
+    const destination = try self.screen.patchCells(@intCast(self.base + run_start), count);
+    @memcpy(destination, self.source_row[run_start..][0..count]);
 }

@@ -7,11 +7,11 @@ geometry: *const Geometry,
 fragment: Fragment,
 
 /// Example: `try (ThreadTextPaint{ .geometry = geometry, .fragment = fragment }).draw(canvas);`
-pub fn draw(paint: Paint, canvas: *Canvas) !void {
+pub fn draw(self: Paint, canvas: *Canvas) !void {
     const state = canvas.widgets orelse return;
     const selection = &state.thread_selection;
-    const fragment = paint.fragment;
-    const row = paint.geometry.rows[fragment.row];
+    const fragment = self.fragment;
+    const row = self.geometry.rows[fragment.row];
     const owner = selection.owner orelse return;
     if (owner.pane_id != row.owner.pane_id or owner.attachment_generation != row.owner.attachment_generation) {
         return;
@@ -25,9 +25,9 @@ pub fn draw(paint: Paint, canvas: *Canvas) !void {
     if (selection.range()) |range| {
         var left: ?f32 = null;
         var right: f32 = 0;
-        const carets = paint.geometry.carets[fragment.caret_start..][0..fragment.caret_count];
+        const carets = self.geometry.carets[fragment.caret_start..][0..fragment.caret_count];
         for (carets, 0..) |caret, index| {
-            const at = paint.geometry.position(fragment, index);
+            const at = self.geometry.position(fragment, index);
             if (!at.before(range[0]) and !range[1].before(at)) {
                 left = if (left) |previous| @min(previous, caret.x) else caret.x;
                 right = @max(right, caret.x);
@@ -42,8 +42,8 @@ pub fn draw(paint: Paint, canvas: *Canvas) !void {
     }
     if (selection.keyboard) {
         const head = selection.head orelse return;
-        for (paint.geometry.carets[fragment.caret_start..][0..fragment.caret_count], 0..) |caret, index| {
-            if (head.eql(paint.geometry.position(fragment, index))) {
+        for (self.geometry.carets[fragment.caret_start..][0..fragment.caret_count], 0..) |caret, index| {
+            if (head.eql(self.geometry.position(fragment, index))) {
                 try canvas.fillAt(.{ .x = fragment.bounds.x + caret.x, .y = fragment.bounds.y + 2, .width = @max(1, canvas.chrome.px(1.5)), .height = @max(1, fragment.bounds.height - 4) }, canvas.theme.palette.accent);
                 return;
             }

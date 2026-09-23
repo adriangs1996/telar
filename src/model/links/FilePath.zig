@@ -55,8 +55,8 @@ pub fn init(target: *const LinkTarget) !FilePath {
     return path;
 }
 
-pub fn slice(path: *const FilePath) []const u8 {
-    return path.storage[0..path.len];
+pub fn slice(self: *const FilePath) []const u8 {
+    return self.storage[0..self.len];
 }
 
 /// Accepts an absolute Markdown path or a validated local file URI.

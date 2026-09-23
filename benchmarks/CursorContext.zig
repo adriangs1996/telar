@@ -14,6 +14,6 @@ pub fn init(gpa: std.mem.Allocator, output: []u8) !CursorContext {
     return .{ .screen = screen, .output = output };
 }
 
-pub fn deinit(context: *CursorContext) void {
-    context.screen.deinit();
+pub fn deinit(self: *CursorContext) void {
+    self.screen.deinit();
 }

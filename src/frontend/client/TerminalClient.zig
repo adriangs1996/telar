@@ -174,16 +174,16 @@ fn waitForPresentation(io: std.Io, deadline_ns: u64) anyerror!void {
 /// Cancels every admitted producer first — the reload task publishes
 /// into the orphan slots — then releases terminal resources, the shared
 /// state and finally the allocation.
-pub fn deinit(terminal: *TerminalClient) void {
-    const gpa = terminal.app.gpa;
-    terminal.inbox.deinit();
-    if (terminal.output) |*output| {
+pub fn deinit(self: *TerminalClient) void {
+    const gpa = self.app.gpa;
+    self.inbox.deinit();
+    if (self.output) |*output| {
         output.deinit();
     }
 
-    terminal.graphics_store.deinit();
-    terminal.view.deinit();
-    terminal.presenter.deinit();
-    terminal.app.deinit();
-    gpa.destroy(terminal);
+    self.graphics_store.deinit();
+    self.view.deinit();
+    self.presenter.deinit();
+    self.app.deinit();
+    gpa.destroy(self);
 }

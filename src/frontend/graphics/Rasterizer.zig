@@ -55,30 +55,30 @@ pub fn initFont(font: []const u8) !Rasterizer {
     };
 }
 
-pub fn deinit(rasterizer: *Rasterizer) void {
-    freetype.c.hb_buffer_destroy(rasterizer.shaping_buffer);
-    freetype.c.hb_font_destroy(rasterizer.shaping_font);
-    _ = freetype.c.FT_Done_Face(rasterizer.face);
-    _ = freetype.c.FT_Done_FreeType(rasterizer.library);
-    rasterizer.* = undefined;
+pub fn deinit(self: *Rasterizer) void {
+    freetype.c.hb_buffer_destroy(self.shaping_buffer);
+    freetype.c.hb_font_destroy(self.shaping_font);
+    _ = freetype.c.FT_Done_Face(self.face);
+    _ = freetype.c.FT_Done_FreeType(self.library);
+    self.* = undefined;
 }
 
-pub fn setPixelHeight(rasterizer: *Rasterizer, pixel_height: u16) !void {
+pub fn setPixelHeight(self: *Rasterizer, pixel_height: u16) !void {
     if (pixel_height == 0) {
         return error.InvalidPixelHeight;
     }
-    if (rasterizer.pixel_height == pixel_height) {
+    if (self.pixel_height == pixel_height) {
         return;
     }
-    if (freetype.c.FT_Set_Pixel_Sizes(rasterizer.face, 0, pixel_height) != 0) {
+    if (freetype.c.FT_Set_Pixel_Sizes(self.face, 0, pixel_height) != 0) {
         return error.FontSizeFailed;
     }
-    freetype.c.hb_ft_font_changed(rasterizer.shaping_font);
-    rasterizer.pixel_height = pixel_height;
+    freetype.c.hb_ft_font_changed(self.shaping_font);
+    self.pixel_height = pixel_height;
 }
 
-pub fn metrics(rasterizer: *const Rasterizer) Metrics {
-    const raw = rasterizer.face.*.size.*.metrics;
+pub fn metrics(self: *const Rasterizer) Metrics {
+    const raw = self.face.*.size.*.metrics;
     return .{
         .ascender = rasterizer_support.fixed26_6Round(raw.ascender),
         .descender = rasterizer_support.fixed26_6Round(raw.descender),
@@ -88,15 +88,15 @@ pub fn metrics(rasterizer: *const Rasterizer) Metrics {
 
 /// Measures the same shaped advances used by drawText, without painting.
 /// Example: `const width = try rasterizer.measureText("1 nvim");`.
-pub fn measureText(rasterizer: *Rasterizer, text: []const u8) !u32 {
-    if (rasterizer.pixel_height == 0) {
+pub fn measureText(self: *Rasterizer, text: []const u8) !u32 {
+    if (self.pixel_height == 0) {
         return error.FontSizeNotSet;
     }
     if (text.len == 0) {
         return 0;
     }
 
-    const shaped = try rasterizer.shapeText(text);
+    const shaped = try self.shapeText(text);
     var advance: i64 = 0;
     for (shaped.glyphs, shaped.positions) |glyph, position| {
         if (glyph.codepoint == 0) {
@@ -112,15 +112,15 @@ pub fn measureText(rasterizer: *Rasterizer, text: []const u8) !u32 {
 /// Draws one UTF-8 line and returns its pixel advance. The baseline and
 /// origin are signed so bearings may safely extend outside the surface.
 /// For example: `try rasterizer.drawText(.{ .surface = surface, .origin = .{ .x = 0, .y = 16 }, .text = "Telar", .color = color, .max_width = 80 })`.
-pub fn drawText(rasterizer: *Rasterizer, draw: TextDraw) !u32 {
+pub fn drawText(self: *Rasterizer, draw: TextDraw) !u32 {
     try draw.surface.validate();
-    if (rasterizer.pixel_height == 0) {
+    if (self.pixel_height == 0) {
         return error.FontSizeNotSet;
     }
     if (draw.text.len == 0) {
         return 0;
     }
-    const shaped = try rasterizer.shapeText(draw.text);
+    const shaped = try self.shapeText(draw.text);
 
     var pen_x = draw.origin.x * 64;
     const origin_fixed = pen_x;
@@ -132,10 +132,10 @@ pub fn drawText(rasterizer: *Rasterizer, draw: TextDraw) !u32 {
         if (rasterizer_support.fixed26_6Round(next_x - origin_fixed) > draw.max_width) {
             break;
         }
-        if (freetype.c.FT_Load_Glyph(rasterizer.face, glyph.codepoint, freetype.c.FT_LOAD_DEFAULT) != 0) {
+        if (freetype.c.FT_Load_Glyph(self.face, glyph.codepoint, freetype.c.FT_LOAD_DEFAULT) != 0) {
             return error.GlyphLoadFailed;
         }
-        const slot = rasterizer.face.*.glyph;
+        const slot = self.face.*.glyph;
         if (freetype.c.FT_Render_Glyph(slot, freetype.c.FT_RENDER_MODE_NORMAL) != 0) {
             return error.GlyphRenderFailed;
         }
@@ -154,31 +154,31 @@ pub fn drawText(rasterizer: *Rasterizer, draw: TextDraw) !u32 {
     return @intCast(@max(0, rasterizer_support.fixed26_6Round(pen_x - origin_fixed)));
 }
 
-pub fn shapeText(rasterizer: *Rasterizer, text: []const u8) !ShapedText {
+pub fn shapeText(self: *Rasterizer, text: []const u8) !ShapedText {
     if (!std.unicode.utf8ValidateSlice(text)) {
         return error.InvalidUtf8;
     }
-    freetype.c.hb_buffer_reset(rasterizer.shaping_buffer);
+    freetype.c.hb_buffer_reset(self.shaping_buffer);
     freetype.c.hb_buffer_add_utf8(
-        rasterizer.shaping_buffer,
+        self.shaping_buffer,
         text.ptr,
         @intCast(text.len),
         0,
         @intCast(text.len),
     );
-    if (freetype.c.hb_buffer_allocation_successful(rasterizer.shaping_buffer) == 0) {
+    if (freetype.c.hb_buffer_allocation_successful(self.shaping_buffer) == 0) {
         return error.ShapingFailed;
     }
-    freetype.c.hb_buffer_guess_segment_properties(rasterizer.shaping_buffer);
-    freetype.c.hb_shape(rasterizer.shaping_font, rasterizer.shaping_buffer, null, 0);
+    freetype.c.hb_buffer_guess_segment_properties(self.shaping_buffer);
+    freetype.c.hb_shape(self.shaping_font, self.shaping_buffer, null, 0);
     var glyph_count: c_uint = 0;
     const glyphs = freetype.c.hb_buffer_get_glyph_infos(
-        rasterizer.shaping_buffer,
+        self.shaping_buffer,
         &glyph_count,
     ) orelse return error.ShapingFailed;
     var position_count: c_uint = 0;
     const positions = freetype.c.hb_buffer_get_glyph_positions(
-        rasterizer.shaping_buffer,
+        self.shaping_buffer,
         &position_count,
     ) orelse return error.ShapingFailed;
     if (position_count != glyph_count) {

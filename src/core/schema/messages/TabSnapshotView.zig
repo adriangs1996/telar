@@ -8,9 +8,9 @@ location: TabLocation,
 pane_count: u16,
 encoded_panes: []const u8,
 
-pub fn panes(snapshot: TabSnapshotView) PaneDescriptorIterator {
+pub fn panes(self: TabSnapshotView) PaneDescriptorIterator {
     return .{
-        .decoder = .init(snapshot.encoded_panes),
-        .remaining = snapshot.pane_count,
+        .decoder = .init(self.encoded_panes),
+        .remaining = self.pane_count,
     };
 }

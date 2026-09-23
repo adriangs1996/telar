@@ -9,8 +9,8 @@ items: [capacity]Control = undefined,
 len: usize = 0,
 
 /// Example: `if (expansions.contains(control)) drawDetails();`
-pub fn contains(state: *const Expansions, control: Control) bool {
-    for (state.items[0..state.len]) |item| {
+pub fn contains(self: *const Expansions, control: Control) bool {
+    for (self.items[0..self.len]) |item| {
         if (item.sameItem(control)) {
             return true;
         }
@@ -21,22 +21,22 @@ pub fn contains(state: *const Expansions, control: Control) bool {
 
 /// Evicts the oldest open disclosure at capacity without allocating.
 /// Example: `expansions.toggle(control);`
-pub fn toggle(state: *Expansions, control: Control) void {
-    for (state.items[0..state.len], 0..) |item, index| {
+pub fn toggle(self: *Expansions, control: Control) void {
+    for (self.items[0..self.len], 0..) |item, index| {
         if (item.sameItem(control)) {
-            std.mem.copyForwards(Control, state.items[index .. state.len - 1], state.items[index + 1 .. state.len]);
-            state.len -= 1;
+            std.mem.copyForwards(Control, self.items[index .. self.len - 1], self.items[index + 1 .. self.len]);
+            self.len -= 1;
             return;
         }
     }
 
-    if (state.len == capacity) {
-        std.mem.copyForwards(Control, state.items[0 .. capacity - 1], state.items[1..]);
-        state.len -= 1;
+    if (self.len == capacity) {
+        std.mem.copyForwards(Control, self.items[0 .. capacity - 1], self.items[1..]);
+        self.len -= 1;
     }
 
-    state.items[state.len] = control;
-    state.len += 1;
+    self.items[self.len] = control;
+    self.len += 1;
 }
 
 test "disclosures survive item reorder and never transfer to a replacement owner" {

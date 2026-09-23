@@ -16,6 +16,6 @@ state: core.AgentTitleState,
 /// ```zig
 /// try persist(finished.titleSlice());
 /// ```
-pub fn titleSlice(finished: *const DescriptionFinished) []const u8 {
-    return finished.title[0..finished.title_len];
+pub fn titleSlice(self: *const DescriptionFinished) []const u8 {
+    return self.title[0..self.title_len];
 }

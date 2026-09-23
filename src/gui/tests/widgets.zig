@@ -13,8 +13,8 @@ const Widget = union(enum) {
     text: Text,
     sprite: Sprite,
 
-    pub fn draw(widget: Widget, canvas: *Canvas) !void {
-        switch (widget) {
+    pub fn draw(self: Widget, canvas: *Canvas) !void {
+        switch (self) {
             inline else => |value| try value.draw(canvas),
         }
     }

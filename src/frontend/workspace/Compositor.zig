@@ -50,12 +50,12 @@ pub fn init(gpa: std.mem.Allocator) Compositor {
 /// ```zig
 /// defer compositor.deinit();
 /// ```
-pub fn deinit(compositor: *Compositor) void {
-    if (compositor.composed) |*buffer| {
+pub fn deinit(self: *Compositor) void {
+    if (self.composed) |*buffer| {
         buffer.deinit();
     }
 
-    compositor.composed = null;
+    self.composed = null;
 }
 
 /// Forces the next frame to rebuild the complete active composition.
@@ -63,8 +63,8 @@ pub fn deinit(compositor: *Compositor) void {
 /// ```zig
 /// compositor.invalidate();
 /// ```
-pub fn invalidate(compositor: *Compositor) void {
-    compositor.invalidated = true;
+pub fn invalidate(self: *Compositor) void {
+    self.invalidated = true;
 }
 
 /// Composes an immutable tab model into the host screen and records which
@@ -73,74 +73,74 @@ pub fn invalidate(compositor: *Compositor) void {
 /// ```zig
 /// const result = try compositor.render(composition);
 /// ```
-pub fn render(compositor: *Compositor, composition: Composition) !CompositionResult {
+pub fn render(self: *Compositor, composition: Composition) !CompositionResult {
     core.profiling.add(.tui_compose, 1);
     const model = composition.model;
     const tab = composition.tab;
     const screen = composition.screen;
     const options = composition.input;
-    const previous_copy = compositor.copy;
+    const previous_copy = self.copy;
     const copy_changed = !std.meta.eql(previous_copy, options.copy);
-    const progress_animation_changed = compositor.progress_animation_frame != options.progress_animation_frame;
+    const progress_animation_changed = self.progress_animation_frame != options.progress_animation_frame;
     const border_theme: BorderTheme = .{
         .focused = options.palette.accent,
         .unfocused = options.palette.overlay0,
         .tab_text = options.palette.subtext0,
         .selected_tab_text = options.palette.surface_dim,
     };
-    if (compositor.border_theme == null or !std.meta.eql(compositor.border_theme.?, border_theme)) {
-        compositor.border_theme = border_theme;
-        compositor.invalidated = true;
+    if (self.border_theme == null or !std.meta.eql(self.border_theme.?, border_theme)) {
+        self.border_theme = border_theme;
+        self.invalidated = true;
     }
-    if (try compositor.ensureComposed(screen.back.w, screen.back.h)) {
-        compositor.invalidated = true;
+    if (try self.ensureComposed(screen.back.w, screen.back.h)) {
+        self.invalidated = true;
     }
-    if (!std.meta.eql(compositor.area, options.area)) {
-        compositor.area = options.area;
-        compositor.invalidated = true;
+    if (!std.meta.eql(self.area, options.area)) {
+        self.area = options.area;
+        self.invalidated = true;
     }
-    if (!std.meta.eql(compositor.source, model.tabs.location[tab])) {
-        compositor.source = model.tabs.location[tab];
-        compositor.invalidated = true;
+    if (!std.meta.eql(self.source, model.tabs.location[tab])) {
+        self.source = model.tabs.location[tab];
+        self.invalidated = true;
     }
-    if (!std.meta.eql(compositor.bottom_reservation, options.bottom_reservation)) {
-        compositor.bottom_reservation = options.bottom_reservation;
-        compositor.invalidated = true;
+    if (!std.meta.eql(self.bottom_reservation, options.bottom_reservation)) {
+        self.bottom_reservation = options.bottom_reservation;
+        self.invalidated = true;
     }
-    compositor.copy = options.copy;
+    self.copy = options.copy;
     if (options.force) {
-        compositor.invalidated = true;
+        self.invalidated = true;
     }
 
-    if (compositor.layout_snapshot.revision != model.tabs.layout[tab].currentRevision()) {
-        compositor.invalidated = true;
+    if (self.layout_snapshot.revision != model.tabs.layout[tab].currentRevision()) {
+        self.invalidated = true;
     }
 
     // Area, tab, reservation and revision changes all invalidate, so an
     // unchanged frame keeps the snapshot it already reserved.
-    if (compositor.invalidated) {
-        model.tabs.layout[tab].snapshot(options.area, &compositor.layout_snapshot);
-        compositor.bottom_reservation_area = compositor.layout_snapshot.reserveBelowPane(options.bottom_reservation);
+    if (self.invalidated) {
+        model.tabs.layout[tab].snapshot(options.area, &self.layout_snapshot);
+        self.bottom_reservation_area = self.layout_snapshot.reserveBelowPane(options.bottom_reservation);
     }
-    if (compositor.paneProjectionChanged(model, tab)) {
-        compositor.invalidated = true;
+    if (self.paneProjectionChanged(model, tab)) {
+        self.invalidated = true;
     }
-    if (compositor.thread_surfaces and compositor.agents_revision != options.agents_revision) {
-        compositor.invalidated = true;
+    if (self.thread_surfaces and self.agents_revision != options.agents_revision) {
+        self.invalidated = true;
     }
-    compositor.agents_revision = options.agents_revision;
-    const target = &compositor.composed.?;
+    self.agents_revision = options.agents_revision;
+    const target = &self.composed.?;
     const commit = data.presentation_delivery.capture(model, tab);
-    const stats = if (compositor.invalidated) full: {
+    const stats = if (self.invalidated) full: {
         target.clear(.{});
         screen.cursor = null;
         var full_stats: RenderStats = .{ .full = true };
-        compositor.fullscreen_labels = .{};
-        for (compositor.layout_snapshot.views()) |view| {
+        self.fullscreen_labels = .{};
+        for (self.layout_snapshot.views()) |view| {
             const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, view.pane_id) orelse continue;
             full_stats.panes += 1;
             if (model.tabs.layout[tab].hasBorders()) {
-                compositor.fullscreen_labels = multiplexer.drawBorder(target, .{
+                self.fullscreen_labels = multiplexer.drawBorder(target, .{
                     .view = view,
                     .foreground_name = pane.foregroundName(),
                     .fullscreen_model = if (model.tabs.layout[tab].isFullscreen()) model else null,
@@ -204,13 +204,13 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
             .copy_changed = copy_changed,
         };
         if (progress_animation_changed) {
-            try compositor.composeProgressBorders(&context, options);
+            try self.composeProgressBorders(&context, options);
         }
-        break :incremental try compositor.composeIncremental(&context);
+        break :incremental try self.composeIncremental(&context);
     };
 
-    compositor.progress_animation_frame = options.progress_animation_frame;
-    compositor.invalidated = false;
+    self.progress_animation_frame = options.progress_animation_frame;
+    self.invalidated = false;
     return .{ .stats = stats, .commit = commit };
 }
 
@@ -220,8 +220,8 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
 /// ```zig
 /// compositor.copyArea(destination, area);
 /// ```
-pub fn copyArea(compositor: *const Compositor, destination: *core.Buffer, area: core.Rect) void {
-    const source = if (compositor.composed) |*buffer| buffer else return;
+pub fn copyArea(self: *const Compositor, destination: *core.Buffer, area: core.Rect) void {
+    const source = if (self.composed) |*buffer| buffer else return;
     if (source.w != destination.w or source.h != destination.h) {
         return;
     }
@@ -242,8 +242,8 @@ pub fn copyArea(compositor: *const Compositor, destination: *core.Buffer, area: 
 /// ```zig
 /// const layout = compositor.layoutSnapshot();
 /// ```
-pub fn layoutSnapshot(compositor: *const Compositor) *const data.LayoutSnapshot {
-    return &compositor.layout_snapshot;
+pub fn layoutSnapshot(self: *const Compositor) *const data.LayoutSnapshot {
+    return &self.layout_snapshot;
 }
 
 /// Returns the area removed from the pane projection for its bottom
@@ -252,18 +252,18 @@ pub fn layoutSnapshot(compositor: *const Compositor) *const data.LayoutSnapshot 
 /// ```zig
 /// const shelf = compositor.bottomReservationArea();
 /// ```
-pub fn bottomReservationArea(compositor: *const Compositor) core.Rect {
-    return compositor.bottom_reservation_area;
+pub fn bottomReservationArea(self: *const Compositor) core.Rect {
+    return self.bottom_reservation_area;
 }
 
 /// Returns owned labels from the last cell composition for deferred media.
 /// Example: `const labels = compositor.fullscreenLabels();`.
-pub fn fullscreenLabels(compositor: *const Compositor) *const Plan {
-    return &compositor.fullscreen_labels;
+pub fn fullscreenLabels(self: *const Compositor) *const Plan {
+    return &self.fullscreen_labels;
 }
 
-fn ensureComposed(compositor: *Compositor, width: u16, height: u16) !bool {
-    if (compositor.composed) |*buffer| {
+fn ensureComposed(self: *Compositor, width: u16, height: u16) !bool {
+    if (self.composed) |*buffer| {
         if (buffer.w == width and buffer.h == height) {
             return false;
         }
@@ -272,14 +272,14 @@ fn ensureComposed(compositor: *Compositor, width: u16, height: u16) !bool {
         return true;
     }
 
-    compositor.composed = try .init(compositor.gpa, width, height);
+    self.composed = try .init(self.gpa, width, height);
     return true;
 }
 
-fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition) !RenderStats {
+fn composeIncremental(self: *Compositor, context: *IncrementalComposition) !RenderStats {
     var stats: RenderStats = .{};
     context.screen.cursor = null;
-    for (compositor.layout_snapshot.views()) |view| {
+    for (self.layout_snapshot.views()) |view| {
         const pane = context.model.panes.findInConst(context.model.tabs.location[context.tab].tab_id, view.pane_id) orelse continue;
         stats.panes += 1;
         if (view.surface == .thread) {
@@ -288,7 +288,7 @@ fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition)
         const rows = @min(view.content.h, pane.buffer.h);
         const cols = @min(view.content.w, pane.buffer.w);
         if (context.copy_changed) {
-            try compositor.composeCopyChange(context, .{
+            try self.composeCopyChange(context, .{
                 .pane = pane,
                 .view = view,
                 .rows = rows,
@@ -319,13 +319,13 @@ fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition)
                 .source_y = y,
                 .start = start,
                 .end = end,
-                .copy = multiplexer.copyView(compositor.copy, pane.id),
+                .copy = multiplexer.copyView(self.copy, pane.id),
             });
         }
         if (view.focused) {
             multiplexer.setPaneCursor(context.screen, pane, .{
                 .content = view.content,
-                .copy = multiplexer.copyView(compositor.copy, pane.id),
+                .copy = multiplexer.copyView(self.copy, pane.id),
             });
         }
     }
@@ -333,18 +333,18 @@ fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition)
     return stats;
 }
 
-fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposition, options: CompositionInput) !void {
+fn composeProgressBorders(self: *Compositor, context: *IncrementalComposition, options: CompositionInput) !void {
     if (!context.model.tabs.layout[context.tab].hasBorders()) {
         return;
     }
 
-    for (compositor.layout_snapshot.views()) |view| {
+    for (self.layout_snapshot.views()) |view| {
         const pane = context.model.panes.findInConst(context.model.tabs.location[context.tab].tab_id, view.pane_id) orelse continue;
         if (pane.progress_state == .remove) {
             continue;
         }
 
-        compositor.fullscreen_labels = multiplexer.drawBorder(context.target, .{
+        self.fullscreen_labels = multiplexer.drawBorder(context.target, .{
             .view = view,
             .foreground_name = pane.foregroundName(),
             .fullscreen_model = if (context.model.tabs.layout[context.tab].isFullscreen()) context.model else null,
@@ -358,9 +358,9 @@ fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposit
     }
 }
 
-fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, input: CopyChangeComposition) !void {
+fn composeCopyChange(self: *Compositor, context: *IncrementalComposition, input: CopyChangeComposition) !void {
     const previous = multiplexer.copyView(context.previous_copy, input.pane.id);
-    const next = multiplexer.copyView(compositor.copy, input.pane.id);
+    const next = multiplexer.copyView(self.copy, input.pane.id);
     if (std.meta.eql(previous, next)) {
         return;
     }
@@ -401,17 +401,17 @@ fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, 
     }
 }
 
-fn paneProjectionChanged(compositor: *Compositor, model: *const data.ClientModel, tab: usize) bool {
+fn paneProjectionChanged(self: *Compositor, model: *const data.ClientModel, tab: usize) bool {
     var next: [core.max_panes_per_tab]PaneProjection = undefined;
     var next_count: u8 = 0;
-    for (compositor.layout_snapshot.views()) |view| {
+    for (self.layout_snapshot.views()) |view| {
         const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, view.pane_id) orelse continue;
         next[next_count] = .{
             .pane_id = pane.id,
             .surface = view.surface,
             .cols = pane.buffer.w,
             .rows = pane.buffer.h,
-            .scroll_offset = multiplexer.highlightedScrollOffset(compositor.copy, pane),
+            .scroll_offset = multiplexer.highlightedScrollOffset(self.copy, pane),
             .graphics_placeholder = pane.graphics_placeholder,
             .progress_state = pane.progress_state,
             .progress_percent = pane.progress_percent,
@@ -419,21 +419,21 @@ fn paneProjectionChanged(compositor: *Compositor, model: *const data.ClientModel
         next_count += 1;
     }
 
-    var changed = compositor.pane_count != next_count;
+    var changed = self.pane_count != next_count;
     if (!changed) {
-        for (compositor.panes[0..compositor.pane_count], next[0..next_count]) |previous, current| {
+        for (self.panes[0..self.pane_count], next[0..next_count]) |previous, current| {
             if (!std.meta.eql(previous, current)) {
                 changed = true;
                 break;
             }
         }
     }
-    @memcpy(compositor.panes[0..next_count], next[0..next_count]);
-    compositor.pane_count = next_count;
-    compositor.thread_surfaces = false;
+    @memcpy(self.panes[0..next_count], next[0..next_count]);
+    self.pane_count = next_count;
+    self.thread_surfaces = false;
     for (next[0..next_count]) |projection| {
         if (projection.surface == .thread) {
-            compositor.thread_surfaces = true;
+            self.thread_surfaces = true;
         }
     }
     return changed;

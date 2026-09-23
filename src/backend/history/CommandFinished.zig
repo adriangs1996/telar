@@ -25,10 +25,10 @@ output: []u8,
 output_truncated: bool,
 output_observed: u64,
 
-pub fn deinit(value: *CommandFinished, gpa: std.mem.Allocator) void {
-    const allocation_len = @sizeOf(CommandFinished) + value.command.len +
-        value.cwd.len + value.workspace_path.len + value.provider.len +
-        value.tool_call_id.len + value.output.len;
-    const allocation: [*]align(@alignOf(CommandFinished)) u8 = @ptrCast(value);
+pub fn deinit(self: *CommandFinished, gpa: std.mem.Allocator) void {
+    const allocation_len = @sizeOf(CommandFinished) + self.command.len +
+        self.cwd.len + self.workspace_path.len + self.provider.len +
+        self.tool_call_id.len + self.output.len;
+    const allocation: [*]align(@alignOf(CommandFinished)) u8 = @ptrCast(self);
     gpa.free(allocation[0..allocation_len]);
 }

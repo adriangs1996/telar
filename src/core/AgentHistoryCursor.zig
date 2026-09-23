@@ -18,6 +18,6 @@ pub fn init(value: []const u8) !Cursor {
 }
 
 /// Example: `try writer.writeAll(cursor.slice());`
-pub fn slice(cursor: *const Cursor) []const u8 {
-    return cursor.bytes[0..cursor.len];
+pub fn slice(self: *const Cursor) []const u8 {
+    return self.bytes[0..self.len];
 }

@@ -25,12 +25,12 @@ pub fn init(notification: core.Notification) PendingNotification {
     return pending;
 }
 
-pub fn view(notification: *const PendingNotification) core.Notification {
+pub fn view(self: *const PendingNotification) core.Notification {
     return .{
-        .level = notification.level,
-        .duration_ms = notification.duration_ms,
-        .target = notification.target,
-        .title = notification.title_bytes[0..notification.title_len],
-        .message = notification.message_bytes[0..notification.message_len],
+        .level = self.level,
+        .duration_ms = self.duration_ms,
+        .target = self.target,
+        .title = self.title_bytes[0..self.title_len],
+        .message = self.message_bytes[0..self.message_len],
     };
 }

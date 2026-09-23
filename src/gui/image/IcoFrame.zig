@@ -53,31 +53,31 @@ pub fn init(entry: *const [16]u8, bytes: []const u8) !IcoFrame {
 
 /// Decodes straight RGBA, preserving alpha or the legacy one-bit AND mask.
 /// Example: `var image = try frame.decode(gpa); defer image.deinit(gpa);`
-pub fn decode(frame: IcoFrame, gpa: std.mem.Allocator) !DecodedImage {
-    if (frame.format == .png) {
-        var image = try png.decode(gpa, frame.bytes, .{ .max_side = 256, .max_pixels = 256 * 256 });
+pub fn decode(self: IcoFrame, gpa: std.mem.Allocator) !DecodedImage {
+    if (self.format == .png) {
+        var image = try png.decode(gpa, self.bytes, .{ .max_side = 256, .max_pixels = 256 * 256 });
         errdefer image.deinit(gpa);
-        if (image.width != frame.width or image.height != frame.height) {
+        if (image.width != self.width or image.height != self.height) {
             return error.InvalidIcoData;
         }
 
         return image;
     }
 
-    const pixels = try gpa.alloc(u8, frame.width * frame.height * 4);
-    const bitmap = frame.bytes[40..][0..pixels.len];
-    const mask = frame.bytes[40 + pixels.len ..];
-    const stride = frame.width * 4;
-    const mask_stride = ((frame.width + 31) / 32) * 4;
+    const pixels = try gpa.alloc(u8, self.width * self.height * 4);
+    const bitmap = self.bytes[40..][0..pixels.len];
+    const mask = self.bytes[40 + pixels.len ..];
+    const stride = self.width * 4;
+    const mask_stride = ((self.width + 31) / 32) * 4;
     var has_alpha = false;
     var offset: usize = 3;
     while (offset < bitmap.len) : (offset += 4) {
         has_alpha = has_alpha or bitmap[offset] != 0;
     }
 
-    for (0..frame.height) |y| {
-        const source_y = frame.height - 1 - y;
-        for (0..frame.width) |x| {
+    for (0..self.height) |y| {
+        const source_y = self.height - 1 - y;
+        for (0..self.width) |x| {
             const bgra = bitmap[source_y * stride + x * 4 ..][0..4];
             const hidden = mask[source_y * mask_stride + x / 8] & (@as(u8, 0x80) >> @as(u3, @intCast(x % 8))) != 0;
             const alpha: u8 = if (has_alpha) bgra[3] else if (hidden) 0 else 255;
@@ -85,13 +85,13 @@ pub fn decode(frame: IcoFrame, gpa: std.mem.Allocator) !DecodedImage {
         }
     }
 
-    return .{ .width = frame.width, .height = frame.height, .pixels = pixels };
+    return .{ .width = self.width, .height = self.height, .pixels = pixels };
 }
 
 /// Prefers the smallest image covering the cell, otherwise the largest available.
 /// Example: `if (candidate.preferredTo(current, cell)) current = candidate;`
-pub fn preferredTo(frame: IcoFrame, other: IcoFrame, cell: u32) bool {
-    const side = @min(frame.width, frame.height);
+pub fn preferredTo(self: IcoFrame, other: IcoFrame, cell: u32) bool {
+    const side = @min(self.width, self.height);
     const previous = @min(other.width, other.height);
     if (side >= cell) {
         return previous < cell or side < previous;

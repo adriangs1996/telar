@@ -53,20 +53,20 @@ pub fn init(dialect: types.ApiDialect, configuration: TranscodeConfiguration) Tr
     return transcoder;
 }
 
-pub fn deinit(transcoder: *Transcoder) void {
-    if (transcoder.inflater) |inflater| {
+pub fn deinit(self: *Transcoder) void {
+    if (self.inflater) |inflater| {
         relay.c.nghttp2_hd_inflate_del(inflater);
     }
-    if (transcoder.deflater) |deflater| {
+    if (self.deflater) |deflater| {
         relay.c.nghttp2_hd_deflate_del(deflater);
     }
-    transcoder.inflater = null;
-    transcoder.deflater = null;
-    std.crypto.secureZero(u8, &transcoder.compressed);
-    std.crypto.secureZero(u8, &transcoder.encoded);
+    self.inflater = null;
+    self.deflater = null;
+    std.crypto.secureZero(u8, &self.compressed);
+    std.crypto.secureZero(u8, &self.encoded);
 }
 
-pub fn process(transcoder: *Transcoder, input: []const u8, port: anytype) bool {
+pub fn process(self: *Transcoder, input: []const u8, port: anytype) bool {
     const Receiver = struct {
         owner: *Transcoder,
         port: @TypeOf(port),
@@ -83,87 +83,87 @@ pub fn process(transcoder: *Transcoder, input: []const u8, port: anytype) bool {
             return receiver.owner.finishFrame(receiver.port);
         }
     };
-    var receiver: Receiver = .{ .owner = transcoder, .port = port };
-    return transcoder.framing.feed(input, &receiver) and !transcoder.failed;
+    var receiver: Receiver = .{ .owner = self, .port = port };
+    return self.framing.feed(input, &receiver) and !self.failed;
 }
 
-fn beginFrame(transcoder: *Transcoder, port: anytype) bool {
-    transcoder.setting_len = 0;
-    transcoder.frame_padding = 0;
+fn beginFrame(self: *Transcoder, port: anytype) bool {
+    self.setting_len = 0;
+    self.frame_padding = 0;
 
-    if (transcoder.continuation_stream != 0) {
-        if (transcoder.framing.frame_type != relay.frame_continuation or
-            transcoder.framing.stream_id != transcoder.continuation_stream)
+    if (self.continuation_stream != 0) {
+        if (self.framing.frame_type != relay.frame_continuation or
+            self.framing.stream_id != self.continuation_stream)
         {
-            transcoder.failed = true;
+            self.failed = true;
             return false;
         }
         return true;
     }
-    if (transcoder.framing.frame_type == relay.frame_continuation) {
-        transcoder.failed = true;
+    if (self.framing.frame_type == relay.frame_continuation) {
+        self.failed = true;
         return false;
     }
-    if (transcoder.framing.frame_type == relay.frame_headers or
-        transcoder.framing.frame_type == relay.frame_push_promise)
+    if (self.framing.frame_type == relay.frame_headers or
+        self.framing.frame_type == relay.frame_push_promise)
     {
-        if (transcoder.framing.stream_id == 0) {
-            transcoder.failed = true;
+        if (self.framing.stream_id == 0) {
+            self.failed = true;
             return false;
         }
-        transcoder.block_type = transcoder.framing.frame_type;
-        transcoder.block_flags = transcoder.framing.flags;
-        transcoder.block_stream = transcoder.framing.stream_id;
-        transcoder.block_prefix_len = switch (transcoder.framing.frame_type) {
-            relay.frame_headers => if (transcoder.framing.flags & relay.flag_priority != 0) 5 else 0,
+        self.block_type = self.framing.frame_type;
+        self.block_flags = self.framing.flags;
+        self.block_stream = self.framing.stream_id;
+        self.block_prefix_len = switch (self.framing.frame_type) {
+            relay.frame_headers => if (self.framing.flags & relay.flag_priority != 0) 5 else 0,
             relay.frame_push_promise => 4,
             else => unreachable,
         };
-        transcoder.block_prefix_seen = 0;
-        transcoder.compressed_len = 0;
+        self.block_prefix_seen = 0;
+        self.compressed_len = 0;
         return true;
     }
-    if (!port.writeAll(transcoder.configuration.to, &transcoder.framing.header)) {
-        transcoder.failed = true;
+    if (!port.writeAll(self.configuration.to, &self.framing.header)) {
+        self.failed = true;
         return false;
     }
     return true;
 }
 
-fn processPayload(transcoder: *Transcoder, payload: []const u8, port: anytype) bool {
-    if (!relay.isHeaderFrame(transcoder.framing.frame_type)) {
+fn processPayload(self: *Transcoder, payload: []const u8, port: anytype) bool {
+    if (!relay.isHeaderFrame(self.framing.frame_type)) {
         // Publish peer limits before the last SETTINGS byte reaches the
         // peer. Its next header block may use the newly advertised HPACK
         // table or frame size immediately.
-        if (transcoder.framing.frame_type == relay.c.NGHTTP2_SETTINGS and
-            transcoder.framing.flags & relay.c.NGHTTP2_FLAG_ACK == 0)
+        if (self.framing.frame_type == relay.c.NGHTTP2_SETTINGS and
+            self.framing.flags & relay.c.NGHTTP2_FLAG_ACK == 0)
         {
-            transcoder.observeSettings(payload, transcoder.configuration.source_settings);
+            self.observeSettings(payload, self.configuration.source_settings);
         }
-        if (!port.writeAll(transcoder.configuration.to, payload)) {
-            transcoder.failed = true;
+        if (!port.writeAll(self.configuration.to, payload)) {
+            self.failed = true;
             return false;
         }
-        if (transcoder.framing.frame_type == relay.frame_data and payload.len != 0) {
-            if (transcoder.configuration.direction == .response) {
+        if (self.framing.frame_type == relay.frame_data and payload.len != 0) {
+            if (self.configuration.direction == .response) {
                 port.emit(.{ .lifecycle = .{
                     .phase = .response_activity,
-                    .stream_id = transcoder.framing.stream_id,
-                    .status_code = transcoder.streams.status(transcoder.framing.stream_id),
+                    .stream_id = self.framing.stream_id,
+                    .status_code = self.streams.status(self.framing.stream_id),
                 } });
             }
 
-            if (transcoder.dataBodyFragment(payload)) |fragment| {
+            if (self.dataBodyFragment(payload)) |fragment| {
                 if (fragment.len != 0) {
-                    switch (transcoder.configuration.direction) {
+                    switch (self.configuration.direction) {
                         .request => port.emit(.{ .request_body = .{
-                            .stream_id = transcoder.framing.stream_id,
+                            .stream_id = self.framing.stream_id,
                             .bytes = fragment,
                         } }),
                         .response => port.emit(.{ .response_body = .{
-                            .stream_id = transcoder.framing.stream_id,
-                            .status_code = transcoder.streams.status(transcoder.framing.stream_id),
-                            .sse_body = transcoder.hasObservableSseBody(transcoder.framing.stream_id),
+                            .stream_id = self.framing.stream_id,
+                            .status_code = self.streams.status(self.framing.stream_id),
+                            .sse_body = self.hasObservableSseBody(self.framing.stream_id),
                             .bytes = fragment,
                         } }),
                     }
@@ -173,77 +173,77 @@ fn processPayload(transcoder: *Transcoder, payload: []const u8, port: anytype) b
         return true;
     }
 
-    var input_start = transcoder.framing.payload_offset;
+    var input_start = self.framing.payload_offset;
     var slice = payload;
-    if (transcoder.framing.frame_type != relay.frame_continuation and
-        transcoder.framing.flags & relay.flag_padded != 0 and input_start == 0)
+    if (self.framing.frame_type != relay.frame_continuation and
+        self.framing.flags & relay.flag_padded != 0 and input_start == 0)
     {
         if (slice.len == 0) {
             return true;
         }
-        transcoder.frame_padding = slice[0];
+        self.frame_padding = slice[0];
         slice = slice[1..];
         input_start += 1;
     }
 
-    if (transcoder.framing.frame_type != relay.frame_continuation and
-        transcoder.block_prefix_seen < transcoder.block_prefix_len)
+    if (self.framing.frame_type != relay.frame_continuation and
+        self.block_prefix_seen < self.block_prefix_len)
     {
         const take = @min(
-            transcoder.block_prefix_len - transcoder.block_prefix_seen,
+            self.block_prefix_len - self.block_prefix_seen,
             slice.len,
         );
         @memcpy(
-            transcoder.block_prefix[transcoder.block_prefix_seen..][0..take],
+            self.block_prefix[self.block_prefix_seen..][0..take],
             slice[0..take],
         );
-        transcoder.block_prefix_seen += @intCast(take);
+        self.block_prefix_seen += @intCast(take);
         slice = slice[take..];
         input_start += take;
     }
 
-    const padding_start = transcoder.framing.payload_len -| transcoder.frame_padding;
-    if (transcoder.frame_padding > transcoder.framing.payload_len or
-        padding_start < transcoder.headerPayloadPrefixLength())
+    const padding_start = self.framing.payload_len -| self.frame_padding;
+    if (self.frame_padding > self.framing.payload_len or
+        padding_start < self.headerPayloadPrefixLength())
     {
-        transcoder.failed = true;
+        self.failed = true;
         return false;
     }
     if (input_start >= padding_start) {
         return true;
     }
     const fragment_len = @min(slice.len, padding_start - input_start);
-    if (fragment_len > transcoder.compressed.len - transcoder.compressed_len) {
-        transcoder.failed = true;
+    if (fragment_len > self.compressed.len - self.compressed_len) {
+        self.failed = true;
         return false;
     }
     @memcpy(
-        transcoder.compressed[transcoder.compressed_len..][0..fragment_len],
+        self.compressed[self.compressed_len..][0..fragment_len],
         slice[0..fragment_len],
     );
-    transcoder.compressed_len += fragment_len;
+    self.compressed_len += fragment_len;
     return true;
 }
 
-fn finishFrame(transcoder: *Transcoder, port: anytype) bool {
-    const completed_type = transcoder.framing.frame_type;
-    const completed_flags = transcoder.framing.flags;
-    const completed_stream = transcoder.framing.stream_id;
+fn finishFrame(self: *Transcoder, port: anytype) bool {
+    const completed_type = self.framing.frame_type;
+    const completed_flags = self.framing.flags;
+    const completed_stream = self.framing.stream_id;
 
     if (relay.isHeaderFrame(completed_type)) {
         if (completed_flags & relay.flag_end_headers == 0) {
-            transcoder.continuation_stream = completed_stream;
+            self.continuation_stream = completed_stream;
         } else {
-            transcoder.continuation_stream = 0;
-            if (transcoder.block_prefix_seen != transcoder.block_prefix_len or
-                !transcoder.finishHeaderBlock(port))
+            self.continuation_stream = 0;
+            if (self.block_prefix_seen != self.block_prefix_len or
+                !self.finishHeaderBlock(port))
             {
-                transcoder.failed = true;
+                self.failed = true;
                 return false;
             }
         }
     } else {
-        transcoder.observeCompletedFrame(.{
+        self.observeCompletedFrame(.{
             .frame_type = completed_type,
             .flags = completed_flags,
             .stream_id = completed_stream,
@@ -253,8 +253,8 @@ fn finishFrame(transcoder: *Transcoder, port: anytype) bool {
     return true;
 }
 
-fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
-    const configuration = transcoder.configuration;
+fn finishHeaderBlock(self: *Transcoder, port: anytype) bool {
+    const configuration = self.configuration;
     const direction = configuration.direction;
     const target_settings = configuration.target_settings;
 
@@ -262,40 +262,40 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
         target_settings.header_table_size.load(.seq_cst),
         relay.max_header_block_bytes,
     );
-    if (inflate_table_size != transcoder.applied_inflate_table_size) {
-        const inflater = transcoder.inflater orelse return false;
+    if (inflate_table_size != self.applied_inflate_table_size) {
+        const inflater = self.inflater orelse return false;
         if (relay.c.nghttp2_hd_inflate_change_table_size(inflater, inflate_table_size) != 0) {
             return false;
         }
-        transcoder.applied_inflate_table_size = inflate_table_size;
+        self.applied_inflate_table_size = inflate_table_size;
     }
     // The table-size limit must be installed before decoding a block that
     // can begin with an HPACK dynamic-table update.
-    var original = transcoder.decodeHeaders() orelse return false;
-    const kind = relay.headerKind(transcoder.block_type, &original);
+    var original = self.decodeHeaders() orelse return false;
+    const kind = relay.headerKind(self.block_type, &original);
     if (!relay.validH2Headers(&original, kind)) {
         return false;
     }
-    if (transcoder.block_type == relay.frame_push_promise and
-        (direction != .response or relay.promisedStreamId(transcoder) == 0 or
-            relay.promisedStreamId(transcoder) & 1 != 0))
+    if (self.block_type == relay.frame_push_promise and
+        (direction != .response or relay.promisedStreamId(self) == 0 or
+            relay.promisedStreamId(self) & 1 != 0))
     {
         return false;
     }
     if (kind == .request or kind == .response) {
         relay.emitHeaders(port, .{
             .direction = direction,
-            .stream_id = transcoder.block_stream,
+            .stream_id = self.block_stream,
             .headers = &original,
         });
     }
     var transformed: Headers = undefined;
     transformed.copyFrom(&original);
     var context = configuration.transform_context;
-    context.stream_id = if (transcoder.block_type == relay.frame_push_promise)
-        relay.promisedStreamId(transcoder)
+    context.stream_id = if (self.block_type == relay.frame_push_promise)
+        relay.promisedStreamId(self)
     else
-        transcoder.block_stream;
+        self.block_stream;
     context.kind = kind;
     _ = configuration.pipeline.apply(.{ .io = configuration.io, .context = context, .headers = &transformed });
     if (!relay.compatibleH2Headers(&original, &transformed, context.kind)) {
@@ -303,17 +303,17 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
     }
 
     if (direction == .request and context.kind == .request and
-        transcoder.streams.startRequest(transcoder.block_stream))
+        self.streams.startRequest(self.block_stream))
     {
         port.emit(.{ .lifecycle = .{
-            .phase = if (provider.classify(transcoder.dialect, .{
+            .phase = if (provider.classify(self.dialect, .{
                 .method = original.find(":method") orelse "",
                 .target = original.find(":path") orelse "",
             }) == .inference)
                 .request_started
             else
                 .auxiliary_request_started,
-            .stream_id = transcoder.block_stream,
+            .stream_id = self.block_stream,
             .status_code = 0,
         } });
     }
@@ -322,12 +322,12 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
         target_settings.header_table_size.load(.seq_cst),
         relay.max_header_block_bytes,
     );
-    if (table_size != transcoder.applied_table_size) {
-        const deflater = transcoder.deflater orelse return false;
+    if (table_size != self.applied_table_size) {
+        const deflater = self.deflater orelse return false;
         if (relay.c.nghttp2_hd_deflate_change_table_size(deflater, table_size) != 0) {
             return false;
         }
-        transcoder.applied_table_size = table_size;
+        self.applied_table_size = table_size;
     }
     var nv: [middleware.max_header_fields]relay.c.nghttp2_nv = undefined;
     for (transformed.fields[0..transformed.len], 0..) |field, index| nv[index] = .{
@@ -337,58 +337,58 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
         .valuelen = field.value_len,
         .flags = if (field.sensitive) relay.c.NGHTTP2_NV_FLAG_NO_INDEX else 0,
     };
-    const deflater = transcoder.deflater orelse return false;
+    const deflater = self.deflater orelse return false;
     const bound = relay.c.nghttp2_hd_deflate_bound(deflater, &nv, transformed.len);
-    if (bound > transcoder.encoded.len) {
+    if (bound > self.encoded.len) {
         return false;
     }
     const encoded_len = relay.c.nghttp2_hd_deflate_hd2(
         deflater,
-        &transcoder.encoded,
-        transcoder.encoded.len,
+        &self.encoded,
+        self.encoded.len,
         &nv,
         transformed.len,
     );
     if (encoded_len < 0) {
         return false;
     }
-    if (!transcoder.writeHeaderBlock(port, @intCast(encoded_len))) {
+    if (!self.writeHeaderBlock(port, @intCast(encoded_len))) {
         return false;
     }
 
     const status_code = relay.parseStatusHeader(&transformed);
     if (direction == .response and status_code >= 200) {
-        _ = transcoder.streams.setResponse(.{
-            .stream_id = transcoder.block_stream,
+        _ = self.streams.setResponse(.{
+            .stream_id = self.block_stream,
             .status_code = status_code,
             .sse_body = middleware.hasObservableSseBody(&original),
         });
     }
 
-    if (transcoder.block_flags & relay.flag_end_stream != 0) {
+    if (self.block_flags & relay.flag_end_stream != 0) {
         switch (direction) {
             .request => {
-                port.emit(.{ .request_finished = .{ .stream_id = transcoder.block_stream } });
-                transcoder.streams.finishRequest(transcoder.block_stream);
+                port.emit(.{ .request_finished = .{ .stream_id = self.block_stream } });
+                self.streams.finishRequest(self.block_stream);
             },
             .response => {
-                const final_status = transcoder.streams.status(transcoder.block_stream);
+                const final_status = self.streams.status(self.block_stream);
                 port.emit(.{ .lifecycle = .{
                     .phase = if (final_status >= 400) .request_failed else .response_finished,
-                    .stream_id = transcoder.block_stream,
+                    .stream_id = self.block_stream,
                     .status_code = final_status,
                 } });
-                transcoder.streams.finishResponse(transcoder.block_stream);
+                self.streams.finishResponse(self.block_stream);
             },
         }
     }
     return true;
 }
 
-fn decodeHeaders(transcoder: *Transcoder) ?Headers {
-    const inflater = transcoder.inflater orelse return null;
+fn decodeHeaders(self: *Transcoder) ?Headers {
+    const inflater = self.inflater orelse return null;
     var headers: Headers = .{};
-    var input = transcoder.compressed[0..transcoder.compressed_len];
+    var input = self.compressed[0..self.compressed_len];
     while (true) {
         var field: relay.c.nghttp2_nv = undefined;
         var flags: c_int = 0;
@@ -423,26 +423,26 @@ fn decodeHeaders(transcoder: *Transcoder) ?Headers {
     }
 }
 
-fn writeHeaderBlock(transcoder: *Transcoder, port: anytype, encoded_len: usize) bool {
-    const advertised_frame_size = transcoder.configuration.target_settings.max_frame_size.load(.seq_cst);
+fn writeHeaderBlock(self: *Transcoder, port: anytype, encoded_len: usize) bool {
+    const advertised_frame_size = self.configuration.target_settings.max_frame_size.load(.seq_cst);
     const max_frame_size: usize = if (advertised_frame_size >= 16 * 1024 and
         advertised_frame_size <= 0x00ff_ffff)
         advertised_frame_size
     else
         16 * 1024;
-    if (transcoder.block_prefix_len >= max_frame_size) {
+    if (self.block_prefix_len >= max_frame_size) {
         return false;
     }
     var offset: usize = 0;
     var first = true;
     while (first or offset < encoded_len) {
-        const prefix_len: usize = if (first) transcoder.block_prefix_len else 0;
+        const prefix_len: usize = if (first) self.block_prefix_len else 0;
         const fragment_len = @min(encoded_len - offset, max_frame_size - prefix_len);
         const final = offset + fragment_len == encoded_len;
         var header: [framing_module.header_bytes]u8 = undefined;
-        const kind: u8 = if (first) transcoder.block_type else relay.frame_continuation;
+        const kind: u8 = if (first) self.block_type else relay.frame_continuation;
         var flags: u8 = if (first)
-            transcoder.block_flags & ~(relay.flag_padded | relay.flag_end_headers)
+            self.block_flags & ~(relay.flag_padded | relay.flag_end_headers)
         else
             0;
         if (final) {
@@ -454,23 +454,23 @@ fn writeHeaderBlock(transcoder: *Transcoder, port: anytype, encoded_len: usize) 
                 .length = prefix_len + fragment_len,
                 .frame_type = kind,
                 .flags = flags,
-                .stream_id = transcoder.block_stream,
+                .stream_id = self.block_stream,
             },
         );
-        if (!port.writeAll(transcoder.configuration.to, &header)) {
+        if (!port.writeAll(self.configuration.to, &header)) {
             return false;
         }
 
         if (prefix_len != 0 and !port.writeAll(
-            transcoder.configuration.to,
-            transcoder.block_prefix[0..prefix_len],
+            self.configuration.to,
+            self.block_prefix[0..prefix_len],
         )) {
             return false;
         }
 
         if (fragment_len != 0 and !port.writeAll(
-            transcoder.configuration.to,
-            transcoder.encoded[offset..][0..fragment_len],
+            self.configuration.to,
+            self.encoded[offset..][0..fragment_len],
         )) {
             return false;
         }
@@ -481,15 +481,15 @@ fn writeHeaderBlock(transcoder: *Transcoder, port: anytype, encoded_len: usize) 
     return true;
 }
 
-fn observeSettings(transcoder: *Transcoder, payload: []const u8, settings: *PeerSettings) void {
+fn observeSettings(self: *Transcoder, payload: []const u8, settings: *PeerSettings) void {
     for (payload) |byte| {
-        transcoder.setting[transcoder.setting_len] = byte;
-        transcoder.setting_len += 1;
-        if (transcoder.setting_len != transcoder.setting.len) {
+        self.setting[self.setting_len] = byte;
+        self.setting_len += 1;
+        if (self.setting_len != self.setting.len) {
             continue;
         }
-        const identifier = std.mem.readInt(u16, transcoder.setting[0..2], .big);
-        const value = std.mem.readInt(u32, transcoder.setting[2..6], .big);
+        const identifier = std.mem.readInt(u16, self.setting[0..2], .big);
+        const value = std.mem.readInt(u32, self.setting[2..6], .big);
         switch (identifier) {
             relay.c.NGHTTP2_SETTINGS_HEADER_TABLE_SIZE => settings.header_table_size.store(value, .seq_cst),
             relay.c.NGHTTP2_SETTINGS_MAX_FRAME_SIZE => if (value >= 16 * 1024 and
@@ -497,12 +497,12 @@ fn observeSettings(transcoder: *Transcoder, payload: []const u8, settings: *Peer
                 settings.max_frame_size.store(value, .seq_cst),
             else => {},
         }
-        transcoder.setting_len = 0;
+        self.setting_len = 0;
     }
 }
 
-fn observeCompletedFrame(transcoder: *Transcoder, completed: CompletedFrame, port: anytype) void {
-    const direction = transcoder.configuration.direction;
+fn observeCompletedFrame(self: *Transcoder, completed: CompletedFrame, port: anytype) void {
+    const direction = self.configuration.direction;
     const frame_type = completed.frame_type;
     const frame_flags = completed.flags;
     const frame_stream = completed.stream_id;
@@ -511,14 +511,14 @@ fn observeCompletedFrame(transcoder: *Transcoder, completed: CompletedFrame, por
         port.emit(.{ .lifecycle = .{
             .phase = .request_failed,
             .stream_id = frame_stream,
-            .status_code = transcoder.streams.status(frame_stream),
+            .status_code = self.streams.status(frame_stream),
         } });
-        transcoder.streams.finishResponse(frame_stream);
+        self.streams.finishResponse(frame_stream);
         if (direction == .request) {
-            transcoder.streams.finishRequest(frame_stream);
+            self.streams.finishRequest(frame_stream);
         }
     } else if (direction == .response and frame_type == relay.frame_goaway and
-        transcoder.streams.hasActiveResponses())
+        self.streams.hasActiveResponses())
     {
         port.emit(.{ .lifecycle = .{
             .phase = .request_failed,
@@ -528,39 +528,39 @@ fn observeCompletedFrame(transcoder: *Transcoder, completed: CompletedFrame, por
     } else if (direction == .response and frame_type == relay.frame_data and
         frame_stream != 0 and frame_flags & relay.flag_end_stream != 0)
     {
-        const status_code = transcoder.streams.status(frame_stream);
+        const status_code = self.streams.status(frame_stream);
         port.emit(.{ .lifecycle = .{
             .phase = if (status_code >= 400) .request_failed else .response_finished,
             .stream_id = frame_stream,
             .status_code = status_code,
         } });
-        transcoder.streams.finishResponse(frame_stream);
+        self.streams.finishResponse(frame_stream);
     }
     if (direction == .request and frame_type == relay.frame_data and
         frame_stream != 0 and frame_flags & relay.flag_end_stream != 0)
     {
         port.emit(.{ .request_finished = .{ .stream_id = frame_stream } });
-        transcoder.streams.finishRequest(frame_stream);
+        self.streams.finishRequest(frame_stream);
     }
 }
 
-fn dataBodyFragment(transcoder: *Transcoder, payload: []const u8) ?[]const u8 {
-    const prefix: usize = @intFromBool(transcoder.framing.flags & relay.flag_padded != 0);
+fn dataBodyFragment(self: *Transcoder, payload: []const u8) ?[]const u8 {
+    const prefix: usize = @intFromBool(self.framing.flags & relay.flag_padded != 0);
 
-    if (prefix != 0 and transcoder.framing.payload_offset == 0) {
+    if (prefix != 0 and self.framing.payload_offset == 0) {
         if (payload.len == 0) {
             return "";
         }
 
-        transcoder.frame_padding = payload[0];
+        self.frame_padding = payload[0];
     }
 
-    if (transcoder.frame_padding > transcoder.framing.payload_len -| prefix) {
+    if (self.frame_padding > self.framing.payload_len -| prefix) {
         return null;
     }
 
-    const body_end = transcoder.framing.payload_len - transcoder.frame_padding;
-    const input_start = transcoder.framing.payload_offset;
+    const body_end = self.framing.payload_len - self.frame_padding;
+    const input_start = self.framing.payload_offset;
     const input_end = input_start + payload.len;
     const fragment_start = @max(input_start, prefix);
     const fragment_end = @min(input_end, body_end);
@@ -572,14 +572,14 @@ fn dataBodyFragment(transcoder: *Transcoder, payload: []const u8) ?[]const u8 {
     return payload[fragment_start - input_start .. fragment_end - input_start];
 }
 
-fn headerPayloadPrefixLength(transcoder: *const Transcoder) usize {
-    if (transcoder.framing.frame_type == relay.frame_continuation) {
+fn headerPayloadPrefixLength(self: *const Transcoder) usize {
+    if (self.framing.frame_type == relay.frame_continuation) {
         return 0;
     }
-    return @as(usize, transcoder.block_prefix_len) +
-        @intFromBool(transcoder.block_flags & relay.flag_padded != 0);
+    return @as(usize, self.block_prefix_len) +
+        @intFromBool(self.block_flags & relay.flag_padded != 0);
 }
 
-fn hasObservableSseBody(transcoder: *const Transcoder, stream_id: u32) bool {
-    return transcoder.streams.hasObservableSseBody(stream_id);
+fn hasObservableSseBody(self: *const Transcoder, stream_id: u32) bool {
+    return self.streams.hasObservableSseBody(stream_id);
 }

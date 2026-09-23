@@ -10,17 +10,17 @@ memory_used_decigib: u16,
 has_battery: bool,
 battery_percent: u8,
 
-pub fn validateWire(message: SystemMetrics) !void {
-    if (message.revision == 0) {
+pub fn validateWire(self: SystemMetrics) !void {
+    if (self.revision == 0) {
         return error.InvalidMetricsRevision;
     }
-    if (message.cpu_percent > 100) {
+    if (self.cpu_percent > 100) {
         return error.InvalidMetricsValue;
     }
-    if (message.has_battery and message.battery_percent > 100) {
+    if (self.has_battery and self.battery_percent > 100) {
         return error.InvalidMetricsValue;
     }
-    if (!message.has_battery and message.battery_percent != 0) {
+    if (!self.has_battery and self.battery_percent != 0) {
         return error.InvalidMetricsValue;
     }
 }

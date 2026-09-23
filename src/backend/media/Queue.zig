@@ -10,9 +10,9 @@ entries: [8]?Entry = @splat(null),
 
 /// Offers one deduplicated request without retaining emulator pointers.
 /// Example: `const added = queue.request(request);`.
-pub fn request(queue: *Queue, value: Input) bool {
+pub fn request(self: *Queue, value: Input) bool {
     var free: ?usize = null;
-    for (queue.entries, 0..) |entry, index| {
+    for (self.entries, 0..) |entry, index| {
         if (entry) |existing| {
             if (transfer_preparation.same(existing.request, value)) {
                 return false;
@@ -23,14 +23,14 @@ pub fn request(queue: *Queue, value: Input) bool {
     }
 
     const index = free orelse return false;
-    queue.entries[index] = .{ .request = value };
+    self.entries[index] = .{ .request = value };
     return true;
 }
 
 /// Transfers one completed reservation to the attachment. Null means pending.
 /// Example: `const frozen = try queue.take(request) orelse return;`.
-pub fn take(queue: *Queue, value: Input) !?Frozen {
-    for (&queue.entries) |*slot| {
+pub fn take(self: *Queue, value: Input) !?Frozen {
+    for (&self.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (!transfer_preparation.same(entry.request, value)) {
             continue;
@@ -46,8 +46,8 @@ pub fn take(queue: *Queue, value: Input) !?Frozen {
 
 /// Freezes requests against the media actor's current immutable read borrow.
 /// Example: `queue.process(storage, media_allocator);`.
-pub fn process(queue: *Queue, storage: anytype, media: *PaneMediaAllocator) void {
-    for (&queue.entries) |*slot| {
+pub fn process(self: *Queue, storage: anytype, media: *PaneMediaAllocator) void {
+    for (&self.entries) |*slot| {
         const entry = if (slot.*) |*entry| entry else continue;
         const image = storage.imageById(entry.request.key.image_id) orelse {
             transfer_preparation.discardEntry(slot, media);
@@ -71,16 +71,16 @@ pub fn process(queue: *Queue, storage: anytype, media: *PaneMediaAllocator) void
 
 /// Releases parked results after joining the actor, including detach cleanup.
 /// Example: `queue.deinit(media_allocator);`.
-pub fn deinit(queue: *Queue, media: *PaneMediaAllocator) void {
-    for (&queue.entries) |*slot| {
+pub fn deinit(self: *Queue, media: *PaneMediaAllocator) void {
+    for (&self.entries) |*slot| {
         transfer_preparation.discardEntry(slot, media);
     }
 }
 
 /// Releases work no remaining consumer needs, including detach and reset.
 /// Example: `queue.retain(consumers, media_allocator);`.
-pub fn retain(queue: *Queue, consumers: anytype, media: *PaneMediaAllocator) void {
-    for (&queue.entries) |*slot| {
+pub fn retain(self: *Queue, consumers: anytype, media: *PaneMediaAllocator) void {
+    for (&self.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (!consumers.wants(entry.request.key, entry.request.shared_transport)) {
             transfer_preparation.discardEntry(slot, media);

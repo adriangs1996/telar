@@ -36,36 +36,36 @@ pub fn create() !*RuntimeStateFixture {
     return fixture;
 }
 
-pub fn destroy(fixture: *RuntimeStateFixture) void {
-    fixture.attachments.deinit();
-    fixture.delivery.deinit(std.testing.allocator);
-    std.testing.allocator.destroy(fixture);
+pub fn destroy(self: *RuntimeStateFixture) void {
+    self.attachments.deinit();
+    self.delivery.deinit(std.testing.allocator);
+    std.testing.allocator.destroy(self);
 }
 
-fn sources(fixture: *RuntimeStateFixture) Sources {
+fn sources(self: *RuntimeStateFixture) Sources {
     return .{
-        .panes = &fixture.panes,
-        .workspaces = &fixture.workspaces,
-        .agents = &fixture.agents,
-        .system_metrics = &fixture.system_metrics,
+        .panes = &self.panes,
+        .workspaces = &self.workspaces,
+        .agents = &self.agents,
+        .system_metrics = &self.system_metrics,
         .proxy_active = true,
         .home = null,
     };
 }
 
-pub fn next(fixture: *RuntimeStateFixture) !?core.ServerMessage {
-    const prepared = (try fixture.delivery.prepare(.{
+pub fn next(self: *RuntimeStateFixture) !?core.ServerMessage {
+    const prepared = (try self.delivery.prepare(.{
         .io = std.testing.io,
-        .attachments = &fixture.attachments,
-        .sources = fixture.sources(),
-        .metrics = &fixture.metrics,
+        .attachments = &self.attachments,
+        .sources = self.sources(),
+        .metrics = &self.metrics,
     })) orelse return null;
     const message = try core.decodeServer(prepared.payload);
-    fixture.delivery.commit(.{
+    self.delivery.commit(.{
         .prepared = prepared,
-        .attachments = &fixture.attachments,
-        .metrics = &fixture.metrics,
+        .attachments = &self.attachments,
+        .metrics = &self.metrics,
     });
-    _ = fixture.delivery.complete({});
+    _ = self.delivery.complete({});
     return message;
 }

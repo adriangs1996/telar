@@ -29,14 +29,14 @@ pub fn resolve(items: []const core.AgentThreadItem) Order {
     return order;
 }
 
-fn appendTree(order: *Order, items: []const core.AgentThreadItem, index: usize) void {
-    if (order.visited[index]) {
+fn appendTree(self: *Order, items: []const core.AgentThreadItem, index: usize) void {
+    if (self.visited[index]) {
         return;
     }
 
-    order.visited[index] = true;
-    order.indices[order.len] = @intCast(index);
-    order.len += 1;
+    self.visited[index] = true;
+    self.indices[self.len] = @intCast(index);
+    self.len += 1;
     const identity = items[index].identity;
     if (identity == 0) {
         return;
@@ -44,7 +44,7 @@ fn appendTree(order: *Order, items: []const core.AgentThreadItem, index: usize) 
 
     for (items, 0..) |item, child| {
         if (item.parent_identity == identity) {
-            order.appendTree(items, child);
+            self.appendTree(items, child);
         }
     }
 }

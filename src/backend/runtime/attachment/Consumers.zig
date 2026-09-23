@@ -8,9 +8,9 @@ pane_id: core.PaneId,
 stores: []const *AttachmentStore,
 
 /// Example: `const needed = consumers.wants(key, true);`.
-pub fn wants(consumers: Consumers, key: core.ImageKey, shared: bool) bool {
-    for (consumers.stores) |store| {
-        const attachment = store.find(consumers.pane_id) orelse continue;
+pub fn wants(self: Consumers, key: core.ImageKey, shared: bool) bool {
+    for (self.stores) |store| {
+        const attachment = store.find(self.pane_id) orelse continue;
         if (attachment.graphics.shared_transport != shared or attachment_mod.knowsImage(attachment, key)) {
             continue;
         }

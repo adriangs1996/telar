@@ -22,15 +22,15 @@ pub fn height(state: *const data.SuggestionState, width: u16) u16 {
 
 /// Uses existing prompt controls so Enter and pointer submission share semantics.
 /// Example: `try panel.draw(canvas);`
-pub fn draw(panel: SuggestionPanel, target: *Canvas) !void {
+pub fn draw(self: SuggestionPanel, target: *Canvas) !void {
     var painter = target.*;
     painter.chrome.body = @max(painter.chrome.body, @as(u16, @intFromFloat(painter.chrome.px(16))));
     painter.chrome.small = @max(painter.chrome.small, @as(u16, @intFromFloat(painter.chrome.px(14))));
     painter.chrome.title = @max(painter.chrome.title, @as(u16, @intFromFloat(painter.chrome.px(20))));
     const canvas = &painter;
-    const prompt = panel.projection.prompt.?;
+    const prompt = self.projection.prompt.?;
     const colors = canvas.theme.palette;
-    var remaining = panel.area;
+    var remaining = self.area;
     if (remaining.h >= 10) {
         const header = remaining.splitTop(2);
         _ = try canvas.textAt(canvas.rect(header[0]), .{ .text = "Suggest a command", .face = .sans, .size = .title, .bold = true, .color = colors.text });
@@ -53,27 +53,27 @@ pub fn draw(panel: SuggestionPanel, target: *Canvas) !void {
 
     const footer_rows: u16 = if (remaining.h >= 5) 3 else 1;
     const parts = remaining.splitBottom(footer_rows);
-    const clipped = try panel.preview(canvas, parts[0]);
+    const clipped = try self.preview(canvas, parts[0]);
     var controls = parts[1];
     if (controls.h >= 3) {
-        const state = panel.projection.suggestion;
+        const state = self.projection.suggestion;
         try canvas.text(controls.row(0), .{ .text = if (clipped) "Preview shortened to fit." else if (state.phase == .ready) "Paste first, then run in shell." else "Review before pasting.", .face = .sans, .size = .small, .color = colors.subtext0 });
         controls = controls.splitTop(1)[1];
     }
 
-    try panel.footer(canvas, controls);
+    try self.footer(canvas, controls);
 }
 
-fn preview(panel: SuggestionPanel, canvas: *Canvas, area: core.Rect) !bool {
+fn preview(self: SuggestionPanel, canvas: *Canvas, area: core.Rect) !bool {
     if (area.isEmpty()) {
         return true;
     }
 
-    const state = panel.projection.suggestion;
+    const state = self.projection.suggestion;
     const colors = canvas.theme.palette;
     try canvas.fillRounded(area, .{ .color = colors.surface0, .radius = canvas.chrome.px(8) });
     try canvas.ring(area, .{ .color = if (state.phase == .failed) colors.red else colors.accent, .width = canvas.chrome.px(1), .radius = canvas.chrome.px(8), .alpha = 0.5 });
-    panel.hits.add(area);
+    self.hits.add(area);
     const content = if (area.h > 2 and area.w > 2) area.inner(1) else area;
     const text = switch (state.phase) {
         .idle => "Describe what you want to do, then press Enter.",
@@ -96,9 +96,9 @@ fn preview(panel: SuggestionPanel, canvas: *Canvas, area: core.Rect) !bool {
     return lines.next() != null;
 }
 
-fn footer(panel: SuggestionPanel, canvas: *Canvas, area: core.Rect) !void {
-    const state = panel.projection.suggestion;
-    const prompt = panel.projection.prompt.?;
+fn footer(self: SuggestionPanel, canvas: *Canvas, area: core.Rect) !void {
+    const state = self.projection.suggestion;
+    const prompt = self.projection.prompt.?;
     const bounds = canvas.rect(area);
     const button_width = @min(bounds.width, canvas.chrome.px(190));
     const cancel_width = @min(@max(0, bounds.width - button_width - canvas.chrome.px(12)), canvas.chrome.px(110));

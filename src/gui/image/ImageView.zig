@@ -14,7 +14,7 @@ height: u32,
 
 /// The straight RGBA of one region pixel.
 /// Example: `const rgba = view.pixel(3, 4);`
-pub fn pixel(view: ImageView, column: u32, row: u32) [4]u8 {
-    const offset = @as(usize, view.y + row) * view.stride + @as(usize, view.x + column) * 4;
-    return view.pixels[offset..][0..4].*;
+pub fn pixel(self: ImageView, column: u32, row: u32) [4]u8 {
+    const offset = @as(usize, self.y + row) * self.stride + @as(usize, self.x + column) * 4;
+    return self.pixels[offset..][0..4].*;
 }

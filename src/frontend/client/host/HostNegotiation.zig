@@ -11,39 +11,39 @@ initial_settled: bool = false,
 timer: client.Scheduler = .{},
 
 /// Example: `if (state.begin(now_ns)) try writer.writeAll(color_query);`.
-pub fn begin(state: *HostNegotiation, now_ns: u64) bool {
-    if (state.deadline_ns != null) {
+pub fn begin(self: *HostNegotiation, now_ns: u64) bool {
+    if (self.deadline_ns != null) {
         return false;
     }
 
-    state.deadline_ns = now_ns +| host_negotiation.timeout_ns;
-    state.received = .initEmpty();
+    self.deadline_ns = now_ns +| host_negotiation.timeout_ns;
+    self.received = .initEmpty();
     return true;
 }
 
 /// Example: `if (!state.accept(.foreground, now_ns)) return;`.
-pub fn accept(state: *HostNegotiation, color: host_negotiation.Color, now_ns: u64) bool {
-    const deadline = state.deadline_ns orelse return false;
-    if (now_ns >= deadline or state.received.contains(color)) {
+pub fn accept(self: *HostNegotiation, color: host_negotiation.Color, now_ns: u64) bool {
+    const deadline = self.deadline_ns orelse return false;
+    if (now_ns >= deadline or self.received.contains(color)) {
         return false;
     }
 
-    state.received.insert(color);
-    if (state.received.count() == 2) {
-        state.initial_settled = true;
+    self.received.insert(color);
+    if (self.received.count() == 2) {
+        self.initial_settled = true;
     }
 
     return true;
 }
 
 /// Example: `if (state.expire(now_ns)) settleUnansweredCapabilities();`.
-pub fn expire(state: *HostNegotiation, now_ns: u64) bool {
-    const deadline = state.deadline_ns orelse return false;
+pub fn expire(self: *HostNegotiation, now_ns: u64) bool {
+    const deadline = self.deadline_ns orelse return false;
     if (now_ns < deadline) {
         return false;
     }
 
-    state.deadline_ns = null;
-    state.initial_settled = true;
+    self.deadline_ns = null;
+    self.initial_settled = true;
     return true;
 }

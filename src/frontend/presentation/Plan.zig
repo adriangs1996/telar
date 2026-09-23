@@ -8,22 +8,22 @@ area: core.Rect = .{},
 labels: [core.max_panes_per_tab]Label = undefined,
 len: u8 = 0,
 
-pub fn slice(plan: *const Plan) []const Label {
-    return plan.labels[0..plan.len];
+pub fn slice(self: *const Plan) []const Label {
+    return self.labels[0..self.len];
 }
 
 /// Copies the already truncated cell text, never borrowing pane metadata.
 /// Continuation cells are skipped and grapheme bytes remain intact.
 /// Example: `_ = plan.appendPainted(.{ .buffer = buffer, .area = area, .selected = true });`.
-pub fn appendPainted(plan: *Plan, painted: PaintedLabel) bool {
-    if (plan.len == core.max_panes_per_tab or painted.area.h != 1 or painted.area.x < plan.area.x or
+pub fn appendPainted(self: *Plan, painted: PaintedLabel) bool {
+    if (self.len == core.max_panes_per_tab or painted.area.h != 1 or painted.area.x < self.area.x or
         !std.meta.eql(painted.area, painted.area.intersect(painted.buffer.area())))
     {
         return false;
     }
 
     var label: Label = .{
-        .offset = painted.area.x - plan.area.x,
+        .offset = painted.area.x - self.area.x,
         .width = painted.area.w,
         .selected = painted.selected,
     };
@@ -45,19 +45,19 @@ pub fn appendPainted(plan: *Plan, painted: PaintedLabel) bool {
     const trimmed = std.mem.trim(u8, label.text(), " ");
     std.mem.copyForwards(u8, &label.bytes, trimmed);
     label.len = @intCast(trimmed.len);
-    plan.labels[plan.len] = label;
-    plan.len += 1;
+    self.labels[self.len] = label;
+    self.len += 1;
     return true;
 }
 
 /// Ignores focus and strip position while comparing text and label geometry.
 /// Example: `const stable = plan.sameText(previous);`.
-pub fn sameText(plan: *const Plan, other: *const Plan) bool {
-    if (plan.area.w != other.area.w or plan.area.h != other.area.h or plan.len != other.len) {
+pub fn sameText(self: *const Plan, other: *const Plan) bool {
+    if (self.area.w != other.area.w or self.area.h != other.area.h or self.len != other.len) {
         return false;
     }
 
-    for (plan.slice(), other.slice()) |*left, *right| {
+    for (self.slice(), other.slice()) |*left, *right| {
         if (!left.sameText(right)) {
             return false;
         }
@@ -68,12 +68,12 @@ pub fn sameText(plan: *const Plan, other: *const Plan) bool {
 
 /// Compares only initialized labels; movement does not change image content.
 /// Example: `const reusable = plan.sameContent(previous);`.
-pub fn sameContent(plan: *const Plan, other: *const Plan) bool {
-    if (!plan.sameText(other)) {
+pub fn sameContent(self: *const Plan, other: *const Plan) bool {
+    if (!self.sameText(other)) {
         return false;
     }
 
-    for (plan.slice(), other.slice()) |left, right| {
+    for (self.slice(), other.slice()) |left, right| {
         if (left.selected != right.selected) {
             return false;
         }

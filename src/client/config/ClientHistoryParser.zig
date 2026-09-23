@@ -9,58 +9,58 @@ state: *lua_api.c.lua_State,
 snapshot: *Snapshot,
 diagnostic: *data.Diagnostic,
 
-pub fn parseMatch(parser: *Parser, absolute: c_int) !void {
-    _ = lua_api.c.lua_getfield(parser.state, absolute, "match");
-    defer value.pop(parser.state, 1);
-    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
+pub fn parseMatch(self: *Parser, absolute: c_int) !void {
+    _ = lua_api.c.lua_getfield(self.state, absolute, "match");
+    defer value.pop(self.state, 1);
+    if (lua_api.c.lua_type(self.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
 
-    const mode = value.string(parser.state, -1) orelse {
-        parser.diagnostic.set("config.client.history.match must be fuzzy or fts", .{});
+    const mode = value.string(self.state, -1) orelse {
+        self.diagnostic.set("config.client.history.match must be fuzzy or fts", .{});
         return error.InvalidConfig;
     };
     if (std.mem.eql(u8, mode, "fts")) {
-        parser.snapshot.history_match_fts = true;
+        self.snapshot.history_match_fts = true;
     } else if (std.mem.eql(u8, mode, "fuzzy")) {
-        parser.snapshot.history_match_fts = false;
+        self.snapshot.history_match_fts = false;
     } else {
-        parser.diagnostic.set("config.client.history.match must be fuzzy or fts", .{});
+        self.diagnostic.set("config.client.history.match must be fuzzy or fts", .{});
         return error.InvalidConfig;
     }
 }
 
-pub fn parseVisibility(parser: *Parser, absolute: c_int) !void {
-    _ = lua_api.c.lua_getfield(parser.state, absolute, "show_agent_commands");
-    defer value.pop(parser.state, 1);
-    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
+pub fn parseVisibility(self: *Parser, absolute: c_int) !void {
+    _ = lua_api.c.lua_getfield(self.state, absolute, "show_agent_commands");
+    defer value.pop(self.state, 1);
+    if (lua_api.c.lua_type(self.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
-    if (lua_api.c.lua_type(parser.state, -1) != lua_api.c.LUA_TBOOLEAN) {
-        parser.diagnostic.set("config.client.history.show_agent_commands must be a boolean", .{});
+    if (lua_api.c.lua_type(self.state, -1) != lua_api.c.LUA_TBOOLEAN) {
+        self.diagnostic.set("config.client.history.show_agent_commands must be a boolean", .{});
         return error.InvalidConfig;
     }
 
-    parser.snapshot.history_show_agent_commands = lua_api.c.lua_toboolean(parser.state, -1) != 0;
+    self.snapshot.history_show_agent_commands = lua_api.c.lua_toboolean(self.state, -1) != 0;
 }
 
-pub fn parseEnter(parser: *Parser, absolute: c_int) !void {
-    _ = lua_api.c.lua_getfield(parser.state, absolute, "enter");
-    defer value.pop(parser.state, 1);
-    if (lua_api.c.lua_type(parser.state, -1) == lua_api.c.LUA_TNIL) {
+pub fn parseEnter(self: *Parser, absolute: c_int) !void {
+    _ = lua_api.c.lua_getfield(self.state, absolute, "enter");
+    defer value.pop(self.state, 1);
+    if (lua_api.c.lua_type(self.state, -1) == lua_api.c.LUA_TNIL) {
         return;
     }
 
-    const mode = value.string(parser.state, -1) orelse {
-        parser.diagnostic.set("config.client.history.enter must be paste or run", .{});
+    const mode = value.string(self.state, -1) orelse {
+        self.diagnostic.set("config.client.history.enter must be paste or run", .{});
         return error.InvalidConfig;
     };
     if (std.mem.eql(u8, mode, "run")) {
-        parser.snapshot.history_enter_runs = true;
+        self.snapshot.history_enter_runs = true;
     } else if (std.mem.eql(u8, mode, "paste")) {
-        parser.snapshot.history_enter_runs = false;
+        self.snapshot.history_enter_runs = false;
     } else {
-        parser.diagnostic.set("config.client.history.enter must be paste or run", .{});
+        self.diagnostic.set("config.client.history.enter must be paste or run", .{});
         return error.InvalidConfig;
     }
 }

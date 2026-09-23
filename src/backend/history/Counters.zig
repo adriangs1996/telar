@@ -23,8 +23,8 @@ sqlite_open_failures: std.atomic.Value(u64) = .init(0),
 /// const depth = counters.beginSubmission();
 /// counters.acceptSubmission(depth);
 /// ```
-pub fn beginSubmission(counters: *Counters) u64 {
-    return counters.queued.fetchAdd(1, .monotonic) + 1;
+pub fn beginSubmission(self: *Counters) u64 {
+    return self.queued.fetchAdd(1, .monotonic) + 1;
 }
 
 /// Commits the high-water mark for an accepted queue submission.
@@ -32,8 +32,8 @@ pub fn beginSubmission(counters: *Counters) u64 {
 /// ```zig
 /// counters.acceptSubmission(depth);
 /// ```
-pub fn acceptSubmission(counters: *Counters, depth: u64) void {
-    _ = counters.queue_high_water.fetchMax(depth, .monotonic);
+pub fn acceptSubmission(self: *Counters, depth: u64) void {
+    _ = self.queue_high_water.fetchMax(depth, .monotonic);
 }
 
 /// Rolls back a refused queue position and records the dropped request.
@@ -41,9 +41,9 @@ pub fn acceptSubmission(counters: *Counters, depth: u64) void {
 /// ```zig
 /// counters.dropSubmission();
 /// ```
-pub fn dropSubmission(counters: *Counters) void {
-    _ = counters.queued.fetchSub(1, .monotonic);
-    _ = counters.dropped.fetchAdd(1, .monotonic);
+pub fn dropSubmission(self: *Counters) void {
+    _ = self.queued.fetchSub(1, .monotonic);
+    _ = self.dropped.fetchAdd(1, .monotonic);
 }
 
 /// Releases one queue position after the worker receives its request.
@@ -51,8 +51,8 @@ pub fn dropSubmission(counters: *Counters) void {
 /// ```zig
 /// counters.completeDequeue();
 /// ```
-pub fn completeDequeue(counters: *Counters) void {
-    _ = counters.queued.fetchSub(1, .monotonic);
+pub fn completeDequeue(self: *Counters) void {
+    _ = self.queued.fetchSub(1, .monotonic);
 }
 
 /// Records one SQLite write attempt, including failures and tail latency.
@@ -60,12 +60,12 @@ pub fn completeDequeue(counters: *Counters) void {
 /// ```zig
 /// counters.observeWrite(elapsed_ns, result);
 /// ```
-pub fn observeWrite(counters: *Counters, elapsed_ns: u64, result: anyerror!void) void {
-    _ = counters.sqlite_writes.fetchAdd(1, .monotonic);
-    _ = counters.sqlite_write_ns.fetchAdd(elapsed_ns, .monotonic);
-    _ = counters.sqlite_write_max_ns.fetchMax(elapsed_ns, .monotonic);
+pub fn observeWrite(self: *Counters, elapsed_ns: u64, result: anyerror!void) void {
+    _ = self.sqlite_writes.fetchAdd(1, .monotonic);
+    _ = self.sqlite_write_ns.fetchAdd(elapsed_ns, .monotonic);
+    _ = self.sqlite_write_max_ns.fetchMax(elapsed_ns, .monotonic);
     result catch {
-        _ = counters.sqlite_write_failures.fetchAdd(1, .monotonic);
+        _ = self.sqlite_write_failures.fetchAdd(1, .monotonic);
     };
 }
 
@@ -74,13 +74,13 @@ pub fn observeWrite(counters: *Counters, elapsed_ns: u64, result: anyerror!void)
 /// ```zig
 /// counters.observeQuery(elapsed_ns, response == .failed);
 /// ```
-pub fn observeQuery(counters: *Counters, elapsed_ns: u64, failed: bool) void {
-    _ = counters.sqlite_queries.fetchAdd(1, .monotonic);
-    _ = counters.sqlite_query_ns.fetchAdd(elapsed_ns, .monotonic);
-    _ = counters.sqlite_query_max_ns.fetchMax(elapsed_ns, .monotonic);
+pub fn observeQuery(self: *Counters, elapsed_ns: u64, failed: bool) void {
+    _ = self.sqlite_queries.fetchAdd(1, .monotonic);
+    _ = self.sqlite_query_ns.fetchAdd(elapsed_ns, .monotonic);
+    _ = self.sqlite_query_max_ns.fetchMax(elapsed_ns, .monotonic);
 
     if (failed) {
-        _ = counters.sqlite_query_failures.fetchAdd(1, .monotonic);
+        _ = self.sqlite_query_failures.fetchAdd(1, .monotonic);
     }
 }
 
@@ -89,8 +89,8 @@ pub fn observeQuery(counters: *Counters, elapsed_ns: u64, failed: bool) void {
 /// ```zig
 /// counters.recordOpenFailure();
 /// ```
-pub fn recordOpenFailure(counters: *Counters) void {
-    _ = counters.sqlite_open_failures.fetchAdd(1, .monotonic);
+pub fn recordOpenFailure(self: *Counters) void {
+    _ = self.sqlite_open_failures.fetchAdd(1, .monotonic);
 }
 
 /// Captures one internally consistent-enough telemetry view without locks.
@@ -99,20 +99,20 @@ pub fn recordOpenFailure(counters: *Counters) void {
 /// ```zig
 /// const current = counters.snapshot(store_available);
 /// ```
-pub fn snapshot(counters: *const Counters, available: bool) Snapshot {
+pub fn snapshot(self: *const Counters, available: bool) Snapshot {
     return .{
-        .queued = counters.queued.load(.monotonic),
-        .queue_high_water = counters.queue_high_water.load(.monotonic),
-        .dropped = counters.dropped.load(.monotonic),
-        .sqlite_writes = counters.sqlite_writes.load(.monotonic),
-        .sqlite_write_failures = counters.sqlite_write_failures.load(.monotonic),
-        .sqlite_write_ns = counters.sqlite_write_ns.load(.monotonic),
-        .sqlite_write_max_ns = counters.sqlite_write_max_ns.load(.monotonic),
-        .sqlite_queries = counters.sqlite_queries.load(.monotonic),
-        .sqlite_query_failures = counters.sqlite_query_failures.load(.monotonic),
-        .sqlite_query_ns = counters.sqlite_query_ns.load(.monotonic),
-        .sqlite_query_max_ns = counters.sqlite_query_max_ns.load(.monotonic),
-        .sqlite_open_failures = counters.sqlite_open_failures.load(.monotonic),
+        .queued = self.queued.load(.monotonic),
+        .queue_high_water = self.queue_high_water.load(.monotonic),
+        .dropped = self.dropped.load(.monotonic),
+        .sqlite_writes = self.sqlite_writes.load(.monotonic),
+        .sqlite_write_failures = self.sqlite_write_failures.load(.monotonic),
+        .sqlite_write_ns = self.sqlite_write_ns.load(.monotonic),
+        .sqlite_write_max_ns = self.sqlite_write_max_ns.load(.monotonic),
+        .sqlite_queries = self.sqlite_queries.load(.monotonic),
+        .sqlite_query_failures = self.sqlite_query_failures.load(.monotonic),
+        .sqlite_query_ns = self.sqlite_query_ns.load(.monotonic),
+        .sqlite_query_max_ns = self.sqlite_query_max_ns.load(.monotonic),
+        .sqlite_open_failures = self.sqlite_open_failures.load(.monotonic),
         .available = available,
     };
 }

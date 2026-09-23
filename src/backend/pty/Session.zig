@@ -33,8 +33,8 @@ pub fn spawn(command: *const Command, initial_size: Size) !Session {
 /// ```zig
 /// const pid = session.processId();
 /// ```
-pub fn processId(session: *const Session) std.c.pid_t {
-    return session.pid;
+pub fn processId(self: *const Session) std.c.pid_t {
+    return self.pid;
 }
 
 /// Reads child output, then drains only bytes already available. A burst
@@ -44,12 +44,12 @@ pub fn processId(session: *const Session) std.c.pid_t {
 /// ```zig
 /// const len = try session.read(io, &buffer);
 /// ```
-pub fn read(session: *const Session, io: std.Io, buffer: []u8) !usize {
-    const input = session.file();
+pub fn read(self: *const Session, io: std.Io, buffer: []u8) !usize {
+    const input = self.file();
     var len = try input.readStreaming(io, &.{buffer});
     var reads: usize = 1;
 
-    while (len != 0 and len < buffer.len and reads < 8 and native.outputReady(session.master)) : (reads += 1) {
+    while (len != 0 and len < buffer.len and reads < 8 and native.outputReady(self.master)) : (reads += 1) {
         const extra = input.readStreaming(io, &.{buffer[len..]}) catch |err| switch (err) {
             error.Canceled => return err,
             else => break,
@@ -69,13 +69,13 @@ pub fn read(session: *const Session, io: std.Io, buffer: []u8) !usize {
 /// ```zig
 /// try session.writeAll(io, "git status\n");
 /// ```
-pub fn writeAll(session: *const Session, io: std.Io, bytes: []const u8) !void {
-    return session.file().writeStreamingAll(io, bytes);
+pub fn writeAll(self: *const Session, io: std.Io, bytes: []const u8) !void {
+    return self.file().writeStreamingAll(io, bytes);
 }
 
-fn file(session: *const Session) std.Io.File {
+fn file(self: *const Session) std.Io.File {
     return .{
-        .handle = session.master,
+        .handle = self.master,
         .flags = .{ .nonblocking = false },
     };
 }
@@ -86,13 +86,13 @@ fn file(session: *const Session) std.Io.File {
 /// ```zig
 /// const shell_is_foreground = session.shellForeground() orelse false;
 /// ```
-pub fn shellForeground(session: *const Session) ?bool {
-    if (session.master < 0) {
+pub fn shellForeground(self: *const Session) ?bool {
+    if (self.master < 0) {
         return null;
     }
 
-    const foreground = native.foregroundProcessGroup(session.master) orelse return null;
-    return foreground == session.pid;
+    const foreground = native.foregroundProcessGroup(self.master) orelse return null;
+    return foreground == self.pid;
 }
 
 /// Returns the foreground process group controlling the slave side. The
@@ -102,12 +102,12 @@ pub fn shellForeground(session: *const Session) ?bool {
 /// ```zig
 /// const process_group = session.foregroundProcessGroup() orelse return;
 /// ```
-pub fn foregroundProcessGroup(session: *const Session) ?std.c.pid_t {
-    if (session.master < 0) {
+pub fn foregroundProcessGroup(self: *const Session) ?std.c.pid_t {
+    if (self.master < 0) {
         return null;
     }
 
-    return native.foregroundProcessGroup(session.master);
+    return native.foregroundProcessGroup(self.master);
 }
 
 /// Resizing the master updates the kernel's PTY state and sends SIGWINCH
@@ -116,9 +116,9 @@ pub fn foregroundProcessGroup(session: *const Session) ?std.c.pid_t {
 /// ```zig
 /// try session.resize(size);
 /// ```
-pub fn resize(session: *Session, next_size: Size) !void {
+pub fn resize(self: *Session, next_size: Size) !void {
     var window = session_support.windowSize(next_size);
-    try native.setWindowSize(session.master, &window);
+    try native.setWindowSize(self.master, &window);
 }
 
 /// Blocks until the child exits, reaps it exactly once, and returns its
@@ -128,39 +128,39 @@ pub fn resize(session: *Session, next_size: Size) !void {
 /// ```zig
 /// const exit = try session.wait();
 /// ```
-pub fn wait(session: *Session) !exit_module.Exit {
-    if (session.deinitialized.load(.acquire)) {
+pub fn wait(self: *Session) !exit_module.Exit {
+    if (self.deinitialized.load(.acquire)) {
         return error.ChildAlreadyReaped;
     }
 
-    if (session.wait_claimed.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) {
-        if (session.reaped.load(.acquire)) {
+    if (self.wait_claimed.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) {
+        if (self.reaped.load(.acquire)) {
             return error.ChildAlreadyReaped;
         }
 
         return error.ChildWaitAlreadyClaimed;
     }
 
-    session.lockLifecycle();
-    if (session.reaped.load(.acquire)) {
-        session.unlockLifecycle();
+    self.lockLifecycle();
+    if (self.reaped.load(.acquire)) {
+        self.unlockLifecycle();
         return error.ChildAlreadyReaped;
     }
-    session.unlockLifecycle();
+    self.unlockLifecycle();
 
     // The blocking observation happens outside the mutex so shutdown can
     // still terminate a running child. Once the child is a zombie, wait
     // and shutdown serialize the decision to reap or signal it.
-    try native.waitObserve(session.pid);
+    try native.waitObserve(self.pid);
 
-    session.lockLifecycle();
-    defer session.unlockLifecycle();
-    if (session.reaped.load(.acquire)) {
+    self.lockLifecycle();
+    defer self.unlockLifecycle();
+    if (self.reaped.load(.acquire)) {
         return error.ChildAlreadyReaped;
     }
 
-    const exit = try native.waitPid(session.pid);
-    session.reaped.store(true, .release);
+    const exit = try native.waitPid(self.pid);
+    self.reaped.store(true, .release);
     return exit;
 }
 
@@ -179,41 +179,41 @@ pub fn wait(session: *Session) !exit_module.Exit {
 /// ```zig
 /// session.shutdown();
 /// ```
-pub fn shutdown(session: *Session) void {
-    if (session.deinitialized.load(.acquire)) {
+pub fn shutdown(self: *Session) void {
+    if (self.deinitialized.load(.acquire)) {
         return;
     }
 
-    session.lockLifecycle();
-    defer session.unlockLifecycle();
+    self.lockLifecycle();
+    defer self.unlockLifecycle();
 
-    if (!session.reaped.load(.acquire)) {
-        native.terminateForeground(session.master);
+    if (!self.reaped.load(.acquire)) {
+        native.terminateForeground(self.master);
 
-        native.terminate(session.pid);
+        native.terminate(self.pid);
         // Discard queued terminal I/O before joining the wait actor.
         // The master stays open until all descriptor borrows finish.
-        native.flushPty(session.master);
+        native.flushPty(self.master);
     }
 }
 
-fn closeMaster(session: *Session) void {
-    if (session.master >= 0) {
+fn closeMaster(self: *Session) void {
+    if (self.master >= 0) {
         // A master write blocked on a full slave input queue survives
         // even the child's death, and Darwin's close then waits behind
         // it forever. Flushing both queues wakes the writer first.
-        native.flushPty(session.master);
-        native.closeDescriptor(&session.master);
+        native.flushPty(self.master);
+        native.closeDescriptor(&self.master);
     }
 }
 
-fn lockLifecycle(session: *Session) void {
-    const result = std.c.pthread_mutex_lock(&session.lifecycle_mutex);
+fn lockLifecycle(self: *Session) void {
+    const result = std.c.pthread_mutex_lock(&self.lifecycle_mutex);
     std.debug.assert(result == .SUCCESS);
 }
 
-fn unlockLifecycle(session: *Session) void {
-    const result = std.c.pthread_mutex_unlock(&session.lifecycle_mutex);
+fn unlockLifecycle(self: *Session) void {
+    const result = std.c.pthread_mutex_unlock(&self.lifecycle_mutex);
     std.debug.assert(result == .SUCCESS);
 }
 
@@ -224,21 +224,21 @@ fn unlockLifecycle(session: *Session) void {
 /// ```zig
 /// session.deinit();
 /// ```
-pub fn deinit(session: *Session) void {
-    if (session.deinitialized.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) {
+pub fn deinit(self: *Session) void {
+    if (self.deinitialized.cmpxchgStrong(false, true, .acq_rel, .acquire) != null) {
         return;
     }
 
-    session.closeMaster();
+    self.closeMaster();
 
-    session.lockLifecycle();
-    if (!session.reaped.load(.acquire)) {
-        native.terminate(session.pid);
-        _ = native.waitPid(session.pid) catch {};
-        session.reaped.store(true, .release);
+    self.lockLifecycle();
+    if (!self.reaped.load(.acquire)) {
+        native.terminate(self.pid);
+        _ = native.waitPid(self.pid) catch {};
+        self.reaped.store(true, .release);
     }
-    session.unlockLifecycle();
+    self.unlockLifecycle();
 
-    const result = std.c.pthread_mutex_destroy(&session.lifecycle_mutex);
+    const result = std.c.pthread_mutex_destroy(&self.lifecycle_mutex);
     std.debug.assert(result == .SUCCESS);
 }

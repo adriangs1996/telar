@@ -22,8 +22,8 @@ area: Rect,
 
 /// Paints into the pixel rectangle of the border row.
 /// Example: `try header.draw(canvas);`
-pub fn draw(header: PaneHeader, canvas: *Canvas) !void {
-    const row = header.area;
+pub fn draw(self: PaneHeader, canvas: *Canvas) !void {
+    const row = self.area;
     const palette = canvas.theme.palette;
     const chrome = canvas.chrome;
     const band_height = @min(row.height, @as(f32, @floatFromInt(chrome.pane_header)));
@@ -32,18 +32,18 @@ pub fn draw(header: PaneHeader, canvas: *Canvas) !void {
     }
 
     var band: Rect = .{ .x = row.x + chrome.px(8), .y = row.y, .width = @max(0, row.width - 2 * chrome.px(8)), .height = band_height };
-    band.width -= try (ChangeReviewButton{ .area = band, .pane = header.pane }).draw(canvas);
+    band.width -= try (ChangeReviewButton{ .area = band, .pane = self.pane }).draw(canvas);
     var index_storage: [8]u8 = undefined;
-    const index_text = std.fmt.bufPrint(&index_storage, "{d}", .{header.index}) catch unreachable;
+    const index_text = std.fmt.bufPrint(&index_storage, "{d}", .{self.index}) catch unreachable;
     const index_width = try canvas.measure(.{ .text = index_text, .bold = true, .face = .sans, .size = .body });
     var chip_storage: [32]u8 = undefined;
-    const chip_text = header.chip(&chip_storage);
+    const chip_text = self.chip(&chip_storage);
     var chip_width: f32 = 0;
     if (chip_text.len != 0) {
         chip_width = @ceil(try canvas.measure(.{ .text = chip_text, .face = .sans, .size = .body }) + 2 * chrome.px(6));
     }
 
-    var progress: PaneProgress = .{ .pane = header.pane, .area = band, .motions = header.context.progress };
+    var progress: PaneProgress = .{ .pane = self.pane, .area = band, .motions = self.context.progress };
     var progress_width = try progress.width(canvas);
     const reserved = index_width + chip_width + chrome.px(12);
     if (progress_width > @min(band.width / 2, @max(0, band.width - reserved))) {
@@ -51,7 +51,7 @@ pub fn draw(header: PaneHeader, canvas: *Canvas) !void {
         progress_width = try progress.width(canvas);
     }
 
-    const attention_width = if (header.agent) |agent| (if (attention.needsInput(agent.status)) chip_width else 0) else 0;
+    const attention_width = if (self.agent) |agent| (if (attention.needsInput(agent.status)) chip_width else 0) else 0;
     if (progress_width > 0 and progress_width + index_width + attention_width + chrome.px(12) <= band.width) {
         try progress.draw(canvas);
         band.width = @max(0, band.width - progress_width - chrome.px(6));
@@ -61,7 +61,7 @@ pub fn draw(header: PaneHeader, canvas: *Canvas) !void {
     const end = band.x + band.width;
     x += try canvas.textAt(.{ .x = x, .y = band.y, .width = @max(0, end - x), .height = band.height }, .{ .text = index_text, .color = palette.text, .bold = true, .face = .sans, .size = .body });
     x += chrome.px(6);
-    const name = header.pane.foregroundName();
+    const name = self.pane.foregroundName();
     if (chip_width > end - x) {
         chip_width = 0;
     }
@@ -74,12 +74,12 @@ pub fn draw(header: PaneHeader, canvas: *Canvas) !void {
 
     const chip_height = @min(band.height, chrome.px(16));
     const chip_bounds: Rect = .{ .x = end - chip_width, .y = band.y + @floor((band.height - chip_height) / 2), .width = chip_width, .height = chip_height };
-    try canvas.fillRoundedAt(chip_bounds, .{ .radius = chrome.px(4), .color = attention.statusColor(palette, header.agent.?.status) });
+    try canvas.fillRoundedAt(chip_bounds, .{ .radius = chrome.px(4), .color = attention.statusColor(palette, self.agent.?.status) });
     _ = try canvas.textAt(.{ .x = chip_bounds.x + chrome.px(6), .y = band.y, .width = chip_width - 2 * chrome.px(6), .height = band.height }, .{ .text = chip_text, .color = palette.surface_dim, .face = .sans, .size = .body });
 }
 
-fn chip(header: PaneHeader, storage: []u8) []const u8 {
-    const agent = header.agent orelse return "";
+fn chip(self: PaneHeader, storage: []u8) []const u8 {
+    const agent = self.agent orelse return "";
     return switch (agent.status) {
         .blocked => switch (agent.blockedReason()) {
             .permission => "permission",
@@ -87,7 +87,7 @@ fn chip(header: PaneHeader, storage: []u8) []const u8 {
             .plan => "plan",
             .none, .other => "blocked",
         },
-        .working => workingLabel(storage, header.context.statusAge(agent)),
+        .working => workingLabel(storage, self.context.statusAge(agent)),
         .done => "done",
         .failed => "failed",
         .ready => "ready",

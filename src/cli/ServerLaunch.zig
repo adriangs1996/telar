@@ -52,63 +52,63 @@ tap_snapshot_buffer: [std.fs.max_path_bytes]u8 = undefined,
 tap_snapshot_directory: ?[]const u8 = null,
 trust_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
 
-pub fn prepare(launch: *Launch, preparation: ServerPreparation) !void {
-    launch.* = .{
+pub fn prepare(self: *Launch, preparation: ServerPreparation) !void {
+    self.* = .{
         .process = preparation.process,
         .options = preparation.options,
         .connector = preparation.connector,
     };
-    errdefer launch.deinit();
+    errdefer self.deinit();
 
-    launch.config_generation = try config.loadGeneration(preparation.process, .{
+    self.config_generation = try config.loadGeneration(preparation.process, .{
         .path = preparation.options.config,
         .disabled = preparation.options.no_config,
         .profile = preparation.options.profile,
-    }, &launch.config_path_buffer);
-    if (launch.config_generation) |generation| {
-        try launch.applyConfig(generation);
+    }, &self.config_path_buffer);
+    if (self.config_generation) |generation| {
+        try self.applyConfig(generation);
     }
-    try launch.options.graphics.validate();
+    try self.options.graphics.validate();
 
-    if (launch.options.mode != .background_launcher) {
-        try launch.prepareRuntimeStorage();
-        if (launch.options.fresh) {
-            if (launch.session_path) |path| {
-                _ = try server.setSessionAside(launch.process.io, path);
+    if (self.options.mode != .background_launcher) {
+        try self.prepareRuntimeStorage();
+        if (self.options.fresh) {
+            if (self.session_path) |path| {
+                _ = try server.setSessionAside(self.process.io, path);
             }
         }
-        if (launch.config_generation) |generation| {
-            try launch.prepareTapPlugins(generation);
+        if (self.config_generation) |generation| {
+            try self.prepareTapPlugins(generation);
         }
     }
 }
 
-fn applyConfig(launch: *Launch, generation: *client.Generation) !void {
+fn applyConfig(self: *Launch, generation: *client.Generation) !void {
     const runtime_config = &generation.snapshot.runtime;
-    launch.agent_manifests = runtime_config.agent_manifests;
-    launch.history_filters = runtime_config.history_filters;
-    launch.history_output_capture = runtime_config.history_output_capture;
-    launch.session_persist = runtime_config.session_persist;
-    launch.session_resume_agents = runtime_config.session_resume_agents;
+    self.agent_manifests = runtime_config.agent_manifests;
+    self.history_filters = runtime_config.history_filters;
+    self.history_output_capture = runtime_config.history_output_capture;
+    self.session_persist = runtime_config.session_persist;
+    self.session_resume_agents = runtime_config.session_resume_agents;
     if (runtime_config.sessionPath()) |session_path| {
-        const resolved = try server.resolveConfigPath(launch.process.gpa, generation.configDir(), session_path);
-        defer launch.process.gpa.free(resolved);
-        launch.configured_session_path = try std.fmt.bufPrint(&launch.configured_session_buffer, "{s}", .{resolved});
+        const resolved = try server.resolveConfigPath(self.process.gpa, generation.configDir(), session_path);
+        defer self.process.gpa.free(resolved);
+        self.configured_session_path = try std.fmt.bufPrint(&self.configured_session_buffer, "{s}", .{resolved});
     }
-    if (!launch.options.graphics_pane_set) {
-        launch.options.graphics.pane_bytes = runtime_config.graphics_pane_bytes;
+    if (!self.options.graphics_pane_set) {
+        self.options.graphics.pane_bytes = runtime_config.graphics_pane_bytes;
     }
-    if (!launch.options.graphics_global_set) {
-        launch.options.graphics.global_bytes = runtime_config.graphics_global_bytes;
+    if (!self.options.graphics_global_set) {
+        self.options.graphics.global_bytes = runtime_config.graphics_global_bytes;
     }
     if (runtime_config.historyPath()) |history_path| {
-        const resolved = try server.resolveConfigPath(launch.process.gpa, generation.configDir(), history_path);
-        defer launch.process.gpa.free(resolved);
-        launch.configured_history_path = try std.fmt.bufPrintZ(&launch.configured_history_buffer, "{s}", .{resolved});
+        const resolved = try server.resolveConfigPath(self.process.gpa, generation.configDir(), history_path);
+        defer self.process.gpa.free(resolved);
+        self.configured_history_path = try std.fmt.bufPrintZ(&self.configured_history_buffer, "{s}", .{resolved});
     }
 
-    launch.proxy_intercept_hosts = runtime_config.proxyInterceptHosts(&launch.proxy_intercept_host_storage);
-    launch.proxy_capture = .{
+    self.proxy_intercept_hosts = runtime_config.proxyInterceptHosts(&self.proxy_intercept_host_storage);
+    self.proxy_capture = .{
         .enabled = runtime_config.proxy_capture_enabled,
         .max_part_bytes = runtime_config.proxy_capture_max_part_bytes,
         .max_exchange_bytes = runtime_config.proxy_capture_max_exchange_bytes,
@@ -116,74 +116,74 @@ fn applyConfig(launch: *Launch, generation: *client.Generation) !void {
         .join_timeout_ms = runtime_config.proxy_capture_join_timeout_ms,
     };
     if (runtime_config.proxyCaDir()) |ca_directory| {
-        launch.configured_proxy_directory = try server.resolveConfigPath(
-            launch.process.gpa,
+        self.configured_proxy_directory = try server.resolveConfigPath(
+            self.process.gpa,
             generation.configDir(),
             ca_directory,
         );
     }
     if (runtime_config.agent_descriptions.enabled()) {
-        launch.agent_description_options = .{
-            .arguments = runtime_config.agent_descriptions.arguments(&launch.description_arguments),
+        self.agent_description_options = .{
+            .arguments = runtime_config.agent_descriptions.arguments(&self.description_arguments),
             .timeout_ms = runtime_config.agent_descriptions.timeout_ms,
         };
     }
     if (runtime_config.engine.enabled()) {
-        launch.engine_options = .{
-            .arguments = runtime_config.engine.arguments(&launch.engine_arguments),
+        self.engine_options = .{
+            .arguments = runtime_config.engine.arguments(&self.engine_arguments),
             .timeout_ms = runtime_config.engine.timeout_ms,
             .idle_timeout_ms = runtime_config.engine_idle_timeout_ms,
         };
     }
 }
 
-fn prepareRuntimeStorage(launch: *Launch) !void {
-    try launch.connector.prepareServerDirectory();
-    launch.history_path = if (launch.configured_history_path) |path|
+fn prepareRuntimeStorage(self: *Launch) !void {
+    try self.connector.prepareServerDirectory();
+    self.history_path = if (self.configured_history_path) |path|
         .{ .path = path, .managed_directory = null }
     else
-        try server.resolveHistoryPath(launch.process.minimal.environ, &launch.history_buffer);
-    try server.prepareHistoryDatabase(launch.process.io, launch.history_path);
-    if (launch.session_persist) {
-        launch.session_path = launch.configured_session_path orelse try std.fmt.bufPrint(
-            &launch.session_buffer,
+        try server.resolveHistoryPath(self.process.minimal.environ, &self.history_buffer);
+    try server.prepareHistoryDatabase(self.process.io, self.history_path);
+    if (self.session_persist) {
+        self.session_path = self.configured_session_path orelse try std.fmt.bufPrint(
+            &self.session_buffer,
             "{s}/session.ckpt",
-            .{std.fs.path.dirname(launch.history_path.path) orelse "."},
+            .{std.fs.path.dirname(self.history_path.path) orelse "."},
         );
     }
 
-    const proxy_enabled = if (launch.config_generation) |generation|
+    const proxy_enabled = if (self.config_generation) |generation|
         generation.snapshot.runtime.proxy_enabled
     else
         false;
-    const proxy_directory = launch.configured_proxy_directory orelse block: {
-        const resolved = try server.resolveProxyDirectory(launch.process.minimal.environ, &launch.default_proxy_buffer);
-        launch.default_proxy_directory = try launch.process.gpa.dupe(u8, resolved);
-        break :block launch.default_proxy_directory.?;
+    const proxy_directory = self.configured_proxy_directory orelse block: {
+        const resolved = try server.resolveProxyDirectory(self.process.minimal.environ, &self.default_proxy_buffer);
+        self.default_proxy_directory = try self.process.gpa.dupe(u8, resolved);
+        break :block self.default_proxy_directory.?;
     };
-    _ = try proxy_cli.rotateIfNeeded(launch.process, proxy_directory);
-    launch.proxy_system_trusted = proxy_cli.trusted(launch.process, proxy_directory);
+    _ = try proxy_cli.rotateIfNeeded(self.process, proxy_directory);
+    self.proxy_system_trusted = proxy_cli.trusted(self.process, proxy_directory);
     if (proxy_enabled) {
-        const authority_names = server.proxyAuthorityNames(launch.proxy_system_trusted);
-        try server.prepareProxyDirectory(launch.process.io, proxy_directory);
-        launch.proxy_options = .{
-            .key_path = try std.fmt.bufPrint(&launch.proxy_key_buffer, "{s}/{s}", .{ proxy_directory, authority_names.key }),
-            .certificate_path = try std.fmt.bufPrint(&launch.proxy_cert_buffer, "{s}/{s}", .{ proxy_directory, authority_names.certificate }),
-            .bundle_path = try std.fmt.bufPrint(&launch.proxy_bundle_buffer, "{s}/ca-bundle.pem", .{proxy_directory}),
-            .system_authority = launch.proxy_system_trusted,
-            .intercept_hosts = launch.proxy_intercept_hosts,
-            .capture = launch.proxy_capture,
+        const authority_names = server.proxyAuthorityNames(self.proxy_system_trusted);
+        try server.prepareProxyDirectory(self.process.io, proxy_directory);
+        self.proxy_options = .{
+            .key_path = try std.fmt.bufPrint(&self.proxy_key_buffer, "{s}/{s}", .{ proxy_directory, authority_names.key }),
+            .certificate_path = try std.fmt.bufPrint(&self.proxy_cert_buffer, "{s}/{s}", .{ proxy_directory, authority_names.certificate }),
+            .bundle_path = try std.fmt.bufPrint(&self.proxy_bundle_buffer, "{s}/ca-bundle.pem", .{proxy_directory}),
+            .system_authority = self.proxy_system_trusted,
+            .intercept_hosts = self.proxy_intercept_hosts,
+            .capture = self.proxy_capture,
         };
     }
 }
 
-fn prepareTapPlugins(launch: *Launch, generation: *client.Generation) !void {
-    const trust_path = try plugin_cli.trustPath(launch.process.minimal.environ, &launch.trust_path_buffer);
-    const trust = try plugin_cli.loadTrustStore(launch.process, trust_path);
+fn prepareTapPlugins(self: *Launch, generation: *client.Generation) !void {
+    const trust_path = try plugin_cli.trustPath(self.process.minimal.environ, &self.trust_path_buffer);
+    const trust = try plugin_cli.loadTrustStore(self.process, trust_path);
     const registry = try client.Registry.loadWithTrust(
         .{
-            .gpa = launch.process.gpa,
-            .io = launch.process.io,
+            .gpa = self.process.gpa,
+            .io = self.process.io,
             .config_dir = generation.configDir(),
         },
         generation.pluginSlice(),
@@ -198,82 +198,82 @@ fn prepareTapPlugins(launch: *Launch, generation: *client.Generation) !void {
         if (!granted.contains(.proxy_tap)) {
             continue;
         }
-        if (launch.tap_spec_count == backend.max_workers) {
+        if (self.tap_spec_count == backend.max_workers) {
             return error.TooManyTapPlugins;
         }
-        const snapshot_root = try launch.ensureTapSnapshot();
+        const snapshot_root = try self.ensureTapSnapshot();
         var package_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        const package_path = try std.fmt.bufPrint(&package_buffer, "{s}/package-{d}", .{ snapshot_root, launch.tap_spec_count });
-        try client.installPackage(launch.process.gpa, launch.process.io, .{
+        const package_path = try std.fmt.bufPrint(&package_buffer, "{s}/package-{d}", .{ snapshot_root, self.tap_spec_count });
+        try client.installPackage(self.process.gpa, self.process.io, .{
             .package = package,
             .destination = package_path,
         });
-        const copied = try client.inspectPackage(launch.process.gpa, launch.process.io, package_path);
+        const copied = try client.inspectPackage(self.process.gpa, self.process.io, package_path);
         if (!std.mem.eql(u8, &copied.digest, &package.digest)) {
             return error.PluginChangedDuringInstall;
         }
         var entry_buffer: [std.fs.max_path_bytes]u8 = undefined;
         const entry = try std.fmt.bufPrint(&entry_buffer, "{s}/{s}", .{ package_path, copied.manifest.entry() });
-        launch.tap_specs[launch.tap_spec_count] = try backend.ServiceSpec.init(launch.tap_spec_count, generation.number, .{
+        self.tap_specs[self.tap_spec_count] = try backend.ServiceSpec.init(self.tap_spec_count, generation.number, .{
             .id = copied.manifest.id(),
             .entry = entry,
             .digest = copied.digest,
             .declared = copied.manifest.capabilities,
             .granted = granted,
         });
-        launch.tap_spec_count += 1;
+        self.tap_spec_count += 1;
     }
 }
 
-fn ensureTapSnapshot(launch: *Launch) ![]const u8 {
-    if (launch.tap_snapshot_directory) |path| {
+fn ensureTapSnapshot(self: *Launch) ![]const u8 {
+    if (self.tap_snapshot_directory) |path| {
         return path;
     }
     var nonce: [16]u8 = undefined;
-    try launch.process.io.randomSecure(&nonce);
+    try self.process.io.randomSecure(&nonce);
     const nonce_hex = std.fmt.bytesToHex(nonce, .lower);
-    const path = try std.fmt.bufPrint(&launch.tap_snapshot_buffer, "/tmp/telar-tap-workers-{d}-{s}", .{ std.c.getuid(), &nonce_hex });
-    try std.Io.Dir.cwd().createDir(launch.process.io, path, std.Io.File.Permissions.fromMode(0o700));
-    launch.tap_snapshot_directory = path;
+    const path = try std.fmt.bufPrint(&self.tap_snapshot_buffer, "/tmp/telar-tap-workers-{d}-{s}", .{ std.c.getuid(), &nonce_hex });
+    try std.Io.Dir.cwd().createDir(self.process.io, path, std.Io.File.Permissions.fromMode(0o700));
+    self.tap_snapshot_directory = path;
     return path;
 }
 
-pub fn runtimeInitialization(launch: *const Launch) backend.Initialization {
+pub fn runtimeInitialization(self: *const Launch) backend.Initialization {
     return .{
         .dependencies = .{
-            .io = launch.process.io,
-            .allocator = launch.process.gpa,
+            .io = self.process.io,
+            .allocator = self.process.gpa,
         },
         .options = .{
-            .endpoint = launch.connector.endpointPath(),
-            .graphics = launch.options.graphics,
-            .environment = launch.process.minimal.environ,
-            .history_path = launch.history_path.path,
-            .history_filters = launch.history_filters,
-            .history_output_capture = launch.history_output_capture,
-            .proxy = launch.proxy_options,
-            .proxy_system_trusted = launch.proxy_system_trusted,
-            .plugins = launch.tap_specs[0..launch.tap_spec_count],
-            .agent_descriptions = launch.agent_description_options,
-            .engine = launch.engine_options,
-            .agent_manifests = launch.agent_manifests,
-            .session_path = launch.session_path,
-            .resume_agents = launch.session_resume_agents,
+            .endpoint = self.connector.endpointPath(),
+            .graphics = self.options.graphics,
+            .environment = self.process.minimal.environ,
+            .history_path = self.history_path.path,
+            .history_filters = self.history_filters,
+            .history_output_capture = self.history_output_capture,
+            .proxy = self.proxy_options,
+            .proxy_system_trusted = self.proxy_system_trusted,
+            .plugins = self.tap_specs[0..self.tap_spec_count],
+            .agent_descriptions = self.agent_description_options,
+            .engine = self.engine_options,
+            .agent_manifests = self.agent_manifests,
+            .session_path = self.session_path,
+            .resume_agents = self.session_resume_agents,
         },
     };
 }
 
-pub fn launchDaemon(launch: *const Launch) !void {
+pub fn launchDaemon(self: *const Launch) !void {
     if (std.c.setsid() < 0) {
         return error.DetachFailed;
     }
 
     var executable_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const executable = executable_buffer[0..try std.process.executablePath(launch.process.io, &executable_buffer)];
+    const executable = executable_buffer[0..try std.process.executablePath(self.process.io, &executable_buffer)];
     var pane_mib_buffer: [32]u8 = undefined;
-    const pane_mib = try std.fmt.bufPrint(&pane_mib_buffer, "{d}", .{launch.options.graphics.pane_bytes / (1024 * 1024)});
+    const pane_mib = try std.fmt.bufPrint(&pane_mib_buffer, "{d}", .{self.options.graphics.pane_bytes / (1024 * 1024)});
     var global_mib_buffer: [32]u8 = undefined;
-    const global_mib = try std.fmt.bufPrint(&global_mib_buffer, "{d}", .{launch.options.graphics.global_bytes / (1024 * 1024)});
+    const global_mib = try std.fmt.bufPrint(&global_mib_buffer, "{d}", .{self.options.graphics.global_bytes / (1024 * 1024)});
     var argv: [14][]const u8 = undefined;
     var argc: usize = 0;
     for ([_][]const u8{
@@ -281,7 +281,7 @@ pub fn launchDaemon(launch: *const Launch) !void {
         "server",
         "--daemonized",
         "--socket",
-        launch.connector.endpointPath(),
+        self.connector.endpointPath(),
         "--graphics-pane-mib",
         pane_mib,
         "--graphics-global-mib",
@@ -290,25 +290,25 @@ pub fn launchDaemon(launch: *const Launch) !void {
         argv[argc] = arg;
         argc += 1;
     }
-    if (launch.options.fresh) {
+    if (self.options.fresh) {
         argv[argc] = "--fresh";
         argc += 1;
     }
-    if (launch.options.config) |path| {
+    if (self.options.config) |path| {
         argv[argc] = "--config";
         argv[argc + 1] = std.mem.span(path);
         argc += 2;
-    } else if (launch.options.no_config) {
+    } else if (self.options.no_config) {
         argv[argc] = "--no-config";
         argc += 1;
     }
-    if (launch.options.profile) |profile| {
+    if (self.options.profile) |profile| {
         argv[argc] = "--profile";
         argv[argc + 1] = std.mem.span(profile);
         argc += 2;
     }
 
-    const daemon = try std.process.spawn(launch.process.io, .{
+    const daemon = try std.process.spawn(self.process.io, .{
         .argv = argv[0..argc],
         .cwd = .{ .path = "/" },
         .stdin = .ignore,
@@ -318,21 +318,21 @@ pub fn launchDaemon(launch: *const Launch) !void {
     _ = daemon;
 }
 
-pub fn deinit(launch: *Launch) void {
-    if (launch.tap_snapshot_directory) |directory| {
-        std.Io.Dir.cwd().deleteTree(launch.process.io, directory) catch {};
-        launch.tap_snapshot_directory = null;
+pub fn deinit(self: *Launch) void {
+    if (self.tap_snapshot_directory) |directory| {
+        std.Io.Dir.cwd().deleteTree(self.process.io, directory) catch {};
+        self.tap_snapshot_directory = null;
     }
-    if (launch.default_proxy_directory) |directory| {
-        launch.process.gpa.free(directory);
-        launch.default_proxy_directory = null;
+    if (self.default_proxy_directory) |directory| {
+        self.process.gpa.free(directory);
+        self.default_proxy_directory = null;
     }
-    if (launch.configured_proxy_directory) |directory| {
-        launch.process.gpa.free(directory);
-        launch.configured_proxy_directory = null;
+    if (self.configured_proxy_directory) |directory| {
+        self.process.gpa.free(directory);
+        self.configured_proxy_directory = null;
     }
-    if (launch.config_generation) |generation| {
+    if (self.config_generation) |generation| {
         generation.deinit();
-        launch.config_generation = null;
+        self.config_generation = null;
     }
 }

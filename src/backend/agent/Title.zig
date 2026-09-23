@@ -10,10 +10,10 @@ state: core.AgentTitleState = .placeholder,
 phase: Agent.TitlePhase = .waiting_query,
 capture: Capture = .{},
 
-pub fn slice(title: *const Title) []const u8 {
-    return title.bytes[0..title.len];
+pub fn slice(self: *const Title) []const u8 {
+    return self.bytes[0..self.len];
 }
 
-pub fn clearSensitive(title: *Title) void {
-    title.capture.clear();
+pub fn clearSensitive(self: *Title) void {
+    self.capture.clear();
 }

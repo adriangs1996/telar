@@ -42,31 +42,31 @@ pub fn init(io: std.Io, endpoint: []const u8) State {
 /// ```zig
 /// telemetry.deinit(io);
 /// ```
-pub fn deinit(state: *State, io: std.Io) void {
-    state.write_pending = false;
-    state.enabled = false;
-    state.sink.deinit(io);
+pub fn deinit(self: *State, io: std.Io) void {
+    self.write_pending = false;
+    self.enabled = false;
+    self.sink.deinit(io);
 }
 
-pub fn available(state: *const State) bool {
-    return state.enabled and state.sink.available();
+pub fn available(self: *const State) bool {
+    return self.enabled and self.sink.available();
 }
 
-pub fn reserveWrite(state: *State) bool {
-    if (!state.available() or state.write_pending) {
+pub fn reserveWrite(self: *State) bool {
+    if (!self.available() or self.write_pending) {
         return false;
     }
 
-    state.write_pending = true;
+    self.write_pending = true;
 
     return true;
 }
 
-pub fn disable(state: *State, io: std.Io) void {
-    state.enabled = false;
+pub fn disable(self: *State, io: std.Io) void {
+    self.enabled = false;
 
-    if (!state.write_pending) {
-        state.sink.deinit(io);
+    if (!self.write_pending) {
+        self.sink.deinit(io);
     }
 }
 

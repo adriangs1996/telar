@@ -33,16 +33,16 @@ pub fn init(allocator: std.mem.Allocator, context: FaceContext, match: FontMatch
     return .{ .bytes = bytes, .face = face, .match = match };
 }
 
-pub fn deinit(fallback: *FallbackFace, allocator: std.mem.Allocator) void {
-    fallback.face.deinit();
-    allocator.free(fallback.bytes);
-    fallback.* = undefined;
+pub fn deinit(self: *FallbackFace, allocator: std.mem.Allocator) void {
+    self.face.deinit();
+    allocator.free(self.bytes);
+    self.* = undefined;
 }
 
 /// Whether `match` names the same file and face already loaded here.
 /// Example: `if (fallback.matches(match)) { ... }`
-pub fn matches(fallback: *const FallbackFace, match: FontMatch) bool {
-    return fallback.match.face_index == match.face_index and
-        std.mem.eql(u8, std.mem.sliceTo(&fallback.match.path, 0), std.mem.sliceTo(&match.path, 0)) and
-        std.mem.eql(u8, std.mem.sliceTo(&fallback.match.postscript, 0), std.mem.sliceTo(&match.postscript, 0));
+pub fn matches(self: *const FallbackFace, match: FontMatch) bool {
+    return self.match.face_index == match.face_index and
+        std.mem.eql(u8, std.mem.sliceTo(&self.match.path, 0), std.mem.sliceTo(&match.path, 0)) and
+        std.mem.eql(u8, std.mem.sliceTo(&self.match.postscript, 0), std.mem.sliceTo(&match.postscript, 0));
 }

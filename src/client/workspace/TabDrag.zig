@@ -12,39 +12,39 @@ dragging: bool = false,
 destination: ?core.TabMoveTarget = null,
 
 /// Example: `drag.begin(location, point);`
-pub fn begin(drag: *TabDrag, source: core.TabLocation, point: [2]f64) void {
-    drag.* = .{ .captured = true, .source = source, .origin = point };
+pub fn begin(self: *TabDrag, source: core.TabLocation, point: [2]f64) void {
+    self.* = .{ .captured = true, .source = source, .origin = point };
 }
 
 /// A cancelled gesture remains a sink until its matching release.
 /// Example: `drag.cancel();`
-pub fn cancel(drag: *TabDrag) void {
-    drag.source = null;
-    drag.destination = null;
-    drag.dragging = false;
+pub fn cancel(self: *TabDrag) void {
+    self.source = null;
+    self.destination = null;
+    self.dragging = false;
 }
 
 /// Source identity survives focus changes, but never workspace replacement.
 /// Example: `drag.validate(&client.model);`
-pub fn validate(drag: *TabDrag, model: *const data.ClientModel) void {
-    const source = drag.source orelse return;
+pub fn validate(self: *TabDrag, model: *const data.ClientModel) void {
+    const source = self.source orelse return;
     if (model.name_prompt.active() or !std.meta.eql(model.workspace, @as(?core.WorkspaceLocation, source.workspace)) or model.tabs.find(source.tab_id) == null) {
-        drag.cancel();
+        self.cancel();
     }
 }
 
 /// Example: `drag.update(point, .{ .relative_to = tab_id, .direction = .next });`
-pub fn update(drag: *TabDrag, point: [2]f64, destination: ?core.TabMoveTarget) void {
-    const source = drag.source orelse return;
-    drag.dragging = drag.dragging or @abs(point[0] - drag.origin[0]) >= 1 or @abs(point[1] - drag.origin[1]) >= 1;
-    drag.destination = if (drag.dragging and destination != null and destination.?.relative_to != source.tab_id) destination else null;
+pub fn update(self: *TabDrag, point: [2]f64, destination: ?core.TabMoveTarget) void {
+    const source = self.source orelse return;
+    self.dragging = self.dragging or @abs(point[0] - self.origin[0]) >= 1 or @abs(point[1] - self.origin[1]) >= 1;
+    self.destination = if (self.dragging and destination != null and destination.?.relative_to != source.tab_id) destination else null;
 }
 
 /// Produces a single canonical move request on a valid drop.
 /// Example: `const move = drag.finish() orelse return;`
-pub fn finish(drag: *TabDrag) ?TabMoveIntent {
-    defer drag.* = .{};
-    const source = drag.source orelse return null;
-    const target = drag.destination orelse return null;
+pub fn finish(self: *TabDrag) ?TabMoveIntent {
+    defer self.* = .{};
+    const source = self.source orelse return null;
+    const target = self.destination orelse return null;
     return .{ .location = source, .direction = target.direction, .relative_to = target.relative_to };
 }

@@ -54,8 +54,8 @@ pub fn init(gpa: std.mem.Allocator, database_path: [:0]const u8, metrics: *Count
 /// ```zig
 /// worker.deinit();
 /// ```
-pub fn deinit(worker: *Worker) void {
-    if (worker.database) |*database| {
+pub fn deinit(self: *Worker) void {
+    if (self.database) |*database| {
         database.close();
     }
 }
@@ -67,7 +67,7 @@ pub fn deinit(worker: *Worker) void {
 /// ```zig
 /// try worker.run(.{ .io = io, .channel = channel, .metrics = metrics });
 /// ```
-pub fn run(worker: *Worker, context: Context) anyerror!void {
+pub fn run(self: *Worker, context: Context) anyerror!void {
     var items: [64]model.Request = undefined;
     while (true) {
         const count = context.channel.receiveBatch(context.io, .{ .items = &items, .metrics = context.metrics }) catch |err| switch (err) {
@@ -76,7 +76,7 @@ pub fn run(worker: *Worker, context: Context) anyerror!void {
         };
         var next: usize = 0;
         defer for (items[next..count]) |request| {
-            model.deinitRequest(request, worker.gpa);
+            model.deinitRequest(request, self.gpa);
         };
 
         const path = core.enter(.observation);
@@ -94,7 +94,7 @@ pub fn run(worker: *Worker, context: Context) anyerror!void {
                 continue;
             }
 
-            if (try worker.execute(context, request) == .stop) {
+            if (try self.execute(context, request) == .stop) {
                 return;
             }
         }
@@ -106,8 +106,8 @@ pub fn run(worker: *Worker, context: Context) anyerror!void {
 /// ```zig
 /// const available = worker.available();
 /// ```
-pub fn available(worker: *const Worker) bool {
-    return worker.database != null;
+pub fn available(self: *const Worker) bool {
+    return self.database != null;
 }
 
 /// Returns the database-open failure retained by a degraded worker.
@@ -115,8 +115,8 @@ pub fn available(worker: *const Worker) bool {
 /// ```zig
 /// const failure = worker.openError();
 /// ```
-pub fn openError(worker: *const Worker) ?anyerror {
-    return worker.open_error;
+pub fn openError(self: *const Worker) ?anyerror {
+    return self.open_error;
 }
 
 /// Samples the current on-disk SQLite size for telemetry. In-memory and
@@ -125,12 +125,12 @@ pub fn openError(worker: *const Worker) ?anyerror {
 /// ```zig
 /// const bytes = worker.sqliteBytes(io);
 /// ```
-pub fn sqliteBytes(worker: *const Worker, io: std.Io) u64 {
-    if (std.mem.eql(u8, worker.database_path, ":memory:")) {
+pub fn sqliteBytes(self: *const Worker, io: std.Io) u64 {
+    if (std.mem.eql(u8, self.database_path, ":memory:")) {
         return 0;
     }
 
-    const stat = std.Io.Dir.cwd().statFile(io, worker.database_path, .{ .follow_symlinks = false }) catch return 0;
+    const stat = std.Io.Dir.cwd().statFile(io, self.database_path, .{ .follow_symlinks = false }) catch return 0;
     if (stat.size < 0) {
         return 0;
     }
@@ -138,28 +138,28 @@ pub fn sqliteBytes(worker: *const Worker, io: std.Io) u64 {
     return @intCast(stat.size);
 }
 
-fn execute(worker: *Worker, context: Context, request: model.Request) anyerror!worker_support.Execution {
+fn execute(self: *Worker, context: Context, request: model.Request) anyerror!worker_support.Execution {
     switch (request) {
-        .launch_attempt => |value| worker.writeLaunchAttempt(context, value),
-        .session_started => |value| worker.writeSessionStart(context, value),
-        .session_finished => |value| worker.writeSessionFinish(context, value),
-        .session_title => |value| worker.writeSessionTitle(context, value),
-        .command_finished => |value| worker.writeCommand(context, value),
-        .import => |value| worker.writeImport(context, value),
-        .stats => |value| worker.queryStats(context, value),
-        .read_output => |value| worker.readOutput(context, value),
-        .delete => |value| worker.deleteCommand(context, value),
-        .prune => |value| worker.prune(context, value),
-        .query => |value| return worker.query(context, value),
+        .launch_attempt => |value| self.writeLaunchAttempt(context, value),
+        .session_started => |value| self.writeSessionStart(context, value),
+        .session_finished => |value| self.writeSessionFinish(context, value),
+        .session_title => |value| self.writeSessionTitle(context, value),
+        .command_finished => |value| self.writeCommand(context, value),
+        .import => |value| self.writeImport(context, value),
+        .stats => |value| self.queryStats(context, value),
+        .read_output => |value| self.readOutput(context, value),
+        .delete => |value| self.deleteCommand(context, value),
+        .prune => |value| self.prune(context, value),
+        .query => |value| return self.query(context, value),
     }
 
     return .continue_running;
 }
 
-fn writeLaunchAttempt(worker: *Worker, context: Context, value: *LaunchAttempt) void {
-    defer value.deinit(worker.gpa);
+fn writeLaunchAttempt(self: *Worker, context: Context, value: *LaunchAttempt) void {
+    defer value.deinit(self.gpa);
     const started = std.Io.Timestamp.now(context.io, .awake);
-    const result = if (worker.database) |*database|
+    const result = if (self.database) |*database|
         database.insertLaunchAttempt(value)
     else
         error.HistoryUnavailable;
@@ -167,10 +167,10 @@ fn writeLaunchAttempt(worker: *Worker, context: Context, value: *LaunchAttempt) 
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeSessionStart(worker: *Worker, context: Context, value: *SessionStarted) void {
-    defer value.deinit(worker.gpa);
+fn writeSessionStart(self: *Worker, context: Context, value: *SessionStarted) void {
+    defer value.deinit(self.gpa);
     const started = std.Io.Timestamp.now(context.io, .awake);
-    const result = if (worker.database) |*database|
+    const result = if (self.database) |*database|
         database.startSession(value)
     else
         error.HistoryUnavailable;
@@ -178,9 +178,9 @@ fn writeSessionStart(worker: *Worker, context: Context, value: *SessionStarted) 
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeSessionFinish(worker: *Worker, context: Context, value: SessionFinished) void {
+fn writeSessionFinish(self: *Worker, context: Context, value: SessionFinished) void {
     const started = std.Io.Timestamp.now(context.io, .awake);
-    const result = if (worker.database) |*database|
+    const result = if (self.database) |*database|
         database.finishSession(value)
     else
         error.HistoryUnavailable;
@@ -188,9 +188,9 @@ fn writeSessionFinish(worker: *Worker, context: Context, value: SessionFinished)
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeSessionTitle(worker: *Worker, context: Context, value: SessionTitle) void {
+fn writeSessionTitle(self: *Worker, context: Context, value: SessionTitle) void {
     const started = std.Io.Timestamp.now(context.io, .awake);
-    const result = if (worker.database) |*database|
+    const result = if (self.database) |*database|
         database.setSessionTitle(&value)
     else
         error.HistoryUnavailable;
@@ -198,10 +198,10 @@ fn writeSessionTitle(worker: *Worker, context: Context, value: SessionTitle) voi
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeCommand(worker: *Worker, context: Context, value: *CommandFinished) void {
-    defer value.deinit(worker.gpa);
+fn writeCommand(self: *Worker, context: Context, value: *CommandFinished) void {
+    defer value.deinit(self.gpa);
     const started = std.Io.Timestamp.now(context.io, .awake);
-    const result = if (worker.database) |*database| write: {
+    const result = if (self.database) |*database| write: {
         if (value.origin != .pane) {
             database.ensureCommandSession(value) catch |err| break :write err;
         }
@@ -223,10 +223,10 @@ fn writeCommand(worker: *Worker, context: Context, value: *CommandFinished) void
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeImport(worker: *Worker, context: Context, batch: *ImportBatch) void {
-    defer batch.deinit(worker.gpa);
+fn writeImport(self: *Worker, context: Context, batch: *ImportBatch) void {
+    defer batch.deinit(self.gpa);
     const started = std.Io.Timestamp.now(context.io, .awake);
-    const result = if (worker.database) |*database|
+    const result = if (self.database) |*database|
         worker_support.writeImportBatch(database, batch)
     else
         error.HistoryUnavailable;
@@ -234,9 +234,9 @@ fn writeImport(worker: *Worker, context: Context, batch: *ImportBatch) void {
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn queryStats(worker: *Worker, context: Context, request: StatsQuery) void {
-    const response: model.Response = if (worker.database) |*database| result: {
-        const value = database.stats(worker.gpa, &request) catch break :result .{ .failed = .{
+fn queryStats(self: *Worker, context: Context, request: StatsQuery) void {
+    const response: model.Response = if (self.database) |*database| result: {
+        const value = database.stats(self.gpa, &request) catch break :result .{ .failed = .{
             .request_id = request.request_id,
             .origin = request.origin,
             .message = "history stats failed",
@@ -246,13 +246,13 @@ fn queryStats(worker: *Worker, context: Context, request: StatsQuery) void {
     } else worker_support.unavailableResponse(request.request_id, request.origin);
 
     context.channel.sendResponse(context.io, response) catch {
-        model.deinitResponse(response, worker.gpa);
+        model.deinitResponse(response, self.gpa);
     };
 }
 
-fn readOutput(worker: *Worker, context: Context, request: Delete) void {
-    const response: model.Response = if (worker.database) |*database| result: {
-        const value = database.readCommandOutput(worker.gpa, request) catch break :result .{ .failed = .{
+fn readOutput(self: *Worker, context: Context, request: Delete) void {
+    const response: model.Response = if (self.database) |*database| result: {
+        const value = database.readCommandOutput(self.gpa, request) catch break :result .{ .failed = .{
             .request_id = request.request_id,
             .origin = request.origin,
             .message = "history output read failed",
@@ -262,12 +262,12 @@ fn readOutput(worker: *Worker, context: Context, request: Delete) void {
     } else worker_support.unavailableResponse(request.request_id, request.origin);
 
     context.channel.sendResponse(context.io, response) catch {
-        model.deinitResponse(response, worker.gpa);
+        model.deinitResponse(response, self.gpa);
     };
 }
 
-fn deleteCommand(worker: *Worker, context: Context, request: Delete) void {
-    const removed: u64 = if (worker.database) |*database|
+fn deleteCommand(self: *Worker, context: Context, request: Delete) void {
+    const removed: u64 = if (self.database) |*database|
         database.deleteCommand(request.id) catch 0
     else
         0;
@@ -279,8 +279,8 @@ fn deleteCommand(worker: *Worker, context: Context, request: Delete) void {
     });
 }
 
-fn prune(worker: *Worker, context: Context, request: Prune) void {
-    const removed: u64 = if (worker.database) |*database|
+fn prune(self: *Worker, context: Context, request: Prune) void {
+    const removed: u64 = if (self.database) |*database|
         database.prune(&request) catch 0
     else
         0;
@@ -292,10 +292,10 @@ fn prune(worker: *Worker, context: Context, request: Prune) void {
     });
 }
 
-fn query(worker: *Worker, context: Context, request: Query) anyerror!worker_support.Execution {
+fn query(self: *Worker, context: Context, request: Query) anyerror!worker_support.Execution {
     const started = std.Io.Timestamp.now(context.io, .awake);
-    const response: model.Response = if (worker.database) |*database|
-        if (database.query(worker.gpa, &request)) |result|
+    const response: model.Response = if (self.database) |*database|
+        if (database.query(self.gpa, &request)) |result|
             .{ .query_result = result }
         else |_|
             .{ .failed = .{
@@ -308,7 +308,7 @@ fn query(worker: *Worker, context: Context, request: Query) anyerror!worker_supp
 
     context.metrics.observeQuery(worker_support.elapsedSince(context.io, started), response == .failed);
     context.channel.sendResponse(context.io, response) catch |err| {
-        model.deinitResponse(response, worker.gpa);
+        model.deinitResponse(response, self.gpa);
 
         if (err == error.Closed) {
             return .stop;

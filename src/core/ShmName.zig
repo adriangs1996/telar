@@ -25,10 +25,10 @@ pub fn init(name: []const u8) error{InvalidShmName}!ShmName {
     return value;
 }
 
-pub fn slice(name: *const ShmName) []const u8 {
-    return name.bytes[0..name.len];
+pub fn slice(self: *const ShmName) []const u8 {
+    return self.bytes[0..self.len];
 }
 
-pub fn sliceZ(name: *const ShmName) [:0]const u8 {
-    return name.bytes[0..name.len :0];
+pub fn sliceZ(self: *const ShmName) [:0]const u8 {
+    return self.bytes[0..self.len :0];
 }

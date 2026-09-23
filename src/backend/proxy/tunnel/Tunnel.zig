@@ -33,25 +33,25 @@ pub fn init(options: TunnelOptions) Tunnel {
 /// ```zig
 /// try tunnel.run();
 /// ```
-pub fn run(tunnel: *Tunnel) std.Io.Cancelable!void {
+pub fn run(self: *Tunnel) std.Io.Cancelable!void {
     const path = core.enter(.observation);
     defer path.restore();
 
-    const dependencies = tunnel.dependencies;
+    const dependencies = self.dependencies;
     const io = dependencies.tls.io;
-    defer tunnel.child.close(io);
+    defer self.child.close(io);
 
     var head: [head_support.max_bytes]u8 = undefined;
     defer std.crypto.secureZero(u8, &head);
-    const head_len = tunnel_namespace.readConnectHead(io, tunnel.child, &head) orelse return;
-    var authenticated = switch (tunnel_namespace.Authenticate.execute(tunnel, head[0..head_len])) {
+    const head_len = tunnel_namespace.readConnectHead(io, self.child, &head) orelse return;
+    var authenticated = switch (tunnel_namespace.Authenticate.execute(self, head[0..head_len])) {
         .authenticated => |value| value,
         .rejected => |rejection| {
             if (rejection.metric) |metric| {
                 tunnel_namespace.recordAuthenticationRejection(dependencies.tls.telemetry, metric);
             }
 
-            tunnel_namespace.reply(io, tunnel.child, rejection.response);
+            tunnel_namespace.reply(io, self.child, rejection.response);
             return;
         },
     };
@@ -73,11 +73,11 @@ pub fn run(tunnel: *Tunnel) std.Io.Cancelable!void {
     const upstream = tunnel_namespace.connectUpstream(target.host, io, target.port) catch {
         dependencies.tls.telemetry.record(.upstream_connect_failure);
         exchange.publish(.request_failed, 0);
-        tunnel_namespace.reply(io, tunnel.child, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
+        tunnel_namespace.reply(io, self.child, "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n");
         return;
     };
     defer upstream.close(io);
-    tunnel_namespace.reply(io, tunnel.child, "HTTP/1.1 200 Connection Established\r\n\r\n");
+    tunnel_namespace.reply(io, self.child, "HTTP/1.1 200 Connection Established\r\n\r\n");
 
     var tls_establisher: Establisher = .{
         .resources = dependencies.tls,
@@ -85,14 +85,14 @@ pub fn run(tunnel: *Tunnel) std.Io.Cancelable!void {
     };
     const route = tls_establisher.establish(.{
         .host = target.host.bytes,
-        .child = tunnel.child,
+        .child = self.child,
         .origin = upstream,
     }) orelse return;
 
     var negotiated_h2 = false;
     const session = switch (route) {
         .passthrough => {
-            tunnel_namespace.relayPassthrough(io, tunnel.child, upstream);
+            tunnel_namespace.relayPassthrough(io, self.child, upstream);
             return;
         },
         .http11 => |established| established,

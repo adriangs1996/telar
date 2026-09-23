@@ -18,12 +18,12 @@ layer: u8 = 1,
 /// Buttons activate on release inside their delivered bounds. Keyboard
 /// equivalents remain with the form's editor, so clicking does not steal it.
 /// Example: `try button.draw(canvas);`
-pub fn draw(button: FormButton, canvas: *Canvas) !void {
-    if (button.bounds.width <= 0 or button.bounds.height <= 0) {
+pub fn draw(self: FormButton, canvas: *Canvas) !void {
+    if (self.bounds.width <= 0 or self.bounds.height <= 0) {
         return;
     }
 
-    const target = (Target{ .id = .{ .generation = button.generation }, .namespace = button.namespace, .bounds = button.bounds, .action = button.action, .layer = button.layer, .focusable = false, .enabled = button.enabled }).labelled(button.label orelse button.text);
+    const target = (Target{ .id = .{ .generation = self.generation }, .namespace = self.namespace, .bounds = self.bounds, .action = self.action, .layer = self.layer, .focusable = false, .enabled = self.enabled }).labelled(self.label orelse self.text);
     var hovered = false;
     var pressed = false;
     if (canvas.widgets) |state| {
@@ -34,18 +34,18 @@ pub fn draw(button: FormButton, canvas: *Canvas) !void {
 
     const palette = canvas.theme.palette;
     const first = canvas.quads.items().len;
-    if (!button.quiet or hovered or pressed) {
-        try canvas.fillRoundedAt(button.bounds, .{ .color = if (button.primary) palette.accent else if (hovered or pressed) palette.surface1 else palette.surface0, .radius = canvas.chrome.px(7) });
+    if (!self.quiet or hovered or pressed) {
+        try canvas.fillRoundedAt(self.bounds, .{ .color = if (self.primary) palette.accent else if (hovered or pressed) palette.surface1 else palette.surface0, .radius = canvas.chrome.px(7) });
     }
 
-    var label: Label = .{ .text = button.text, .color = if (button.primary) canvas.covering(palette.surface_dim) else palette.text, .face = .sans, .size = .body, .bold = button.primary };
-    if (pressed and button.enabled) {
+    var label: Label = .{ .text = self.text, .color = if (self.primary) canvas.covering(palette.surface_dim) else palette.text, .face = .sans, .size = .body, .bold = self.primary };
+    if (pressed and self.enabled) {
         label.alpha = 0.8;
     }
 
-    const width = @min(button.bounds.width, try canvas.measure(label));
-    _ = try canvas.textAt(.{ .x = button.bounds.x + (button.bounds.width - width) / 2, .y = button.bounds.y, .width = width, .height = button.bounds.height }, label);
-    if (!button.enabled) {
+    const width = @min(self.bounds.width, try canvas.measure(label));
+    _ = try canvas.textAt(.{ .x = self.bounds.x + (self.bounds.width - width) / 2, .y = self.bounds.y, .width = width, .height = self.bounds.height }, label);
+    if (!self.enabled) {
         canvas.quads.fadeFrom(first, 0.4);
     }
 }

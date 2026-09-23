@@ -14,21 +14,21 @@ title: client.WindowTitleState = .{},
 /// ```zig
 /// state.ensureHostname();
 /// ```
-pub fn ensureHostname(state: *State) void {
-    if (state.hostname_loaded) {
+pub fn ensureHostname(self: *State) void {
+    if (self.hostname_loaded) {
         return;
     }
 
     var buffer: [std.posix.HOST_NAME_MAX]u8 = undefined;
     const name = std.posix.gethostname(&buffer) catch "";
-    const len = @min(name.len, state.hostname.len);
-    @memcpy(state.hostname[0..len], name[0..len]);
-    state.hostname_len = @intCast(len);
-    state.hostname_loaded = true;
+    const len = @min(name.len, self.hostname.len);
+    @memcpy(self.hostname[0..len], name[0..len]);
+    self.hostname_len = @intCast(len);
+    self.hostname_loaded = true;
 }
 
-pub fn hostnameSlice(state: *const State) []const u8 {
-    return state.hostname[0..state.hostname_len];
+pub fn hostnameSlice(self: *const State) []const u8 {
+    return self.hostname[0..self.hostname_len];
 }
 
 /// Renders the template and writes OSC 0 only when the result differs
@@ -37,7 +37,7 @@ pub fn hostnameSlice(state: *const State) []const u8 {
 /// ```zig
 /// try state.sync(writer, .{ .template = template, .tokens = tokens });
 /// ```
-pub fn sync(state: *State, writer: *std.Io.Writer, input: client.SyncInput) !void {
+pub fn sync(self: *State, writer: *std.Io.Writer, input: client.SyncInput) !void {
     if (input.template.len == 0) {
         return;
     }
@@ -45,11 +45,11 @@ pub fn sync(state: *State, writer: *std.Io.Writer, input: client.SyncInput) !voi
     var complete = input.tokens;
 
     if (complete.hostname.len == 0) {
-        state.ensureHostname();
-        complete.hostname = state.hostnameSlice();
+        self.ensureHostname();
+        complete.hostname = self.hostnameSlice();
     }
 
-    _ = try state.title.sync(
+    _ = try self.title.sync(
         .{
             .context = writer,
             .set = setTitle,

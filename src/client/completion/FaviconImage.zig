@@ -10,10 +10,10 @@ pixels: [@as(usize, max_side) * max_side * 4]u8 = undefined,
 
 /// The `side * side` RGBA bytes in use.
 /// Example: `const rgba = image.slice();`
-pub fn slice(image: *const FaviconImage) []const u8 {
-    return image.pixels[0 .. @as(usize, image.side) * image.side * 4];
+pub fn slice(self: *const FaviconImage) []const u8 {
+    return self.pixels[0 .. @as(usize, self.side) * self.side * 4];
 }
 
-pub fn mutableSlice(image: *FaviconImage) []u8 {
-    return image.pixels[0 .. @as(usize, image.side) * image.side * 4];
+pub fn mutableSlice(self: *FaviconImage) []u8 {
+    return self.pixels[0 .. @as(usize, self.side) * self.side * 4];
 }

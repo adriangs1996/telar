@@ -51,10 +51,10 @@ pub fn init(cell: Rect, thickness: f32) !Grid {
 
 /// Emits the specified arms or dash pattern; curves are rasterized separately.
 /// Example: `grid.draw(box);`
-pub fn draw(grid: *Grid, box: Box) void {
+pub fn draw(self: *Grid, box: Box) void {
     if (box_lines.get(box.codepoint)) |lines| {
         var resolved = lines;
-        if (@min(grid.width, grid.height) < 3 * grid.light) {
+        if (@min(self.width, self.height) < 3 * self.light) {
             // Two strokes and their gap need three units; a single stroke keeps
             // undersized cells visible instead of clipping both strokes away.
             inline for (.{ "up", "right", "down", "left" }) |field| {
@@ -64,7 +64,7 @@ pub fn draw(grid: *Grid, box: Box) void {
             }
         }
 
-        grid.intersection(resolved);
+        self.intersection(resolved);
         return;
     }
 
@@ -72,13 +72,13 @@ pub fn draw(grid: *Grid, box: Box) void {
     const count: u8 = if (cp >= 0x254c) 2 else if (cp >= 0x2508) 4 else 3;
     const vertical = cp & 2 != 0;
     const heavy = cp & 1 != 0;
-    const thickness = if (heavy) grid.heavy else grid.light;
-    const desired_gap = if (count != 2) @max(4, grid.light) else if (cp == 0x254c) grid.light else grid.heavy;
-    const extent = if (vertical) grid.height else grid.width;
-    const across = if (vertical) grid.width else grid.height;
+    const thickness = if (heavy) self.heavy else self.light;
+    const desired_gap = if (count != 2) @max(4, self.light) else if (cp == 0x254c) self.light else self.heavy;
+    const extent = if (vertical) self.height else self.width;
+    const across = if (vertical) self.width else self.height;
     const center = @max(0, @floor((across - thickness) / 2));
     if (extent < 2 * @as(f32, @floatFromInt(count))) {
-        grid.add(if (vertical) .{ center, 0, center + thickness, extent } else .{ 0, center, extent, center + thickness });
+        self.add(if (vertical) .{ center, 0, center + thickness, extent } else .{ 0, center, extent, center + thickness });
         return;
     }
 
@@ -91,35 +91,35 @@ pub fn draw(grid: *Grid, box: Box) void {
         const extra = @min(1, remainder);
         remainder -= extra;
         const end = start + dash + extra;
-        grid.add(if (vertical) .{ center, start, center + thickness, end } else .{ start, center, end, center + thickness });
+        self.add(if (vertical) .{ center, start, center + thickness, end } else .{ start, center, end, center + thickness });
         start = end + gap;
     }
 }
 
-fn add(grid: *Grid, edges: [4]f32) void {
-    const left = std.math.clamp(edges[0], 0, grid.width);
-    const top = std.math.clamp(edges[1], 0, grid.height);
-    const right = std.math.clamp(edges[2], left, grid.width);
-    const bottom = std.math.clamp(edges[3], top, grid.height);
+fn add(self: *Grid, edges: [4]f32) void {
+    const left = std.math.clamp(edges[0], 0, self.width);
+    const top = std.math.clamp(edges[1], 0, self.height);
+    const right = std.math.clamp(edges[2], left, self.width);
+    const bottom = std.math.clamp(edges[3], top, self.height);
     if (right == left or bottom == top) {
         return;
     }
 
-    grid.rects[grid.count] = .{ .x = left, .y = top, .width = right - left, .height = bottom - top };
-    grid.count += 1;
+    self.rects[self.count] = .{ .x = left, .y = top, .width = right - left, .height = bottom - top };
+    self.count += 1;
 }
 
-fn intersection(grid: *Grid, lines: BoxLines.Lines) void {
-    const light_px = grid.light;
-    const heavy_px = grid.heavy;
+fn intersection(self: *Grid, lines: BoxLines.Lines) void {
+    const light_px = self.light;
+    const heavy_px = self.heavy;
 
     // Top of light horizontal strokes
-    const h_light_top = @floor((grid.height - light_px) / 2);
+    const h_light_top = @floor((self.height - light_px) / 2);
     // Bottom of light horizontal strokes
     const h_light_bottom = h_light_top + light_px;
 
     // Top of heavy horizontal strokes
-    const h_heavy_top = @floor((grid.height - heavy_px) / 2);
+    const h_heavy_top = @floor((self.height - heavy_px) / 2);
     // Bottom of heavy horizontal strokes
     const h_heavy_bottom = h_heavy_top + heavy_px;
 
@@ -129,12 +129,12 @@ fn intersection(grid: *Grid, lines: BoxLines.Lines) void {
     const h_double_bottom = h_light_bottom + light_px;
 
     // Left of light vertical strokes
-    const v_light_left = @floor((grid.width - light_px) / 2);
+    const v_light_left = @floor((self.width - light_px) / 2);
     // Right of light vertical strokes
     const v_light_right = v_light_left + light_px;
 
     // Left of heavy vertical strokes
-    const v_heavy_left = @floor((grid.width - heavy_px) / 2);
+    const v_heavy_left = @floor((self.width - heavy_px) / 2);
     // Right of heavy vertical strokes
     const v_heavy_right = v_heavy_left + heavy_px;
 
@@ -197,53 +197,53 @@ fn intersection(grid: *Grid, lines: BoxLines.Lines) void {
 
     switch (lines.up) {
         .none => {},
-        .light => grid.add(.{ v_light_left, 0, v_light_right, up_bottom }),
-        .heavy => grid.add(.{ v_heavy_left, 0, v_heavy_right, up_bottom }),
+        .light => self.add(.{ v_light_left, 0, v_light_right, up_bottom }),
+        .heavy => self.add(.{ v_heavy_left, 0, v_heavy_right, up_bottom }),
         .double => {
             const left_bottom = if (lines.left == .double) h_light_top else up_bottom;
             const right_bottom = if (lines.right == .double) h_light_top else up_bottom;
 
-            grid.add(.{ v_double_left, 0, v_light_left, left_bottom });
-            grid.add(.{ v_light_right, 0, v_double_right, right_bottom });
+            self.add(.{ v_double_left, 0, v_light_left, left_bottom });
+            self.add(.{ v_light_right, 0, v_double_right, right_bottom });
         },
     }
 
     switch (lines.right) {
         .none => {},
-        .light => grid.add(.{ right_left, h_light_top, grid.width, h_light_bottom }),
-        .heavy => grid.add(.{ right_left, h_heavy_top, grid.width, h_heavy_bottom }),
+        .light => self.add(.{ right_left, h_light_top, self.width, h_light_bottom }),
+        .heavy => self.add(.{ right_left, h_heavy_top, self.width, h_heavy_bottom }),
         .double => {
             const top_left = if (lines.up == .double) v_light_right else right_left;
             const bottom_left = if (lines.down == .double) v_light_right else right_left;
 
-            grid.add(.{ top_left, h_double_top, grid.width, h_light_top });
-            grid.add(.{ bottom_left, h_light_bottom, grid.width, h_double_bottom });
+            self.add(.{ top_left, h_double_top, self.width, h_light_top });
+            self.add(.{ bottom_left, h_light_bottom, self.width, h_double_bottom });
         },
     }
 
     switch (lines.down) {
         .none => {},
-        .light => grid.add(.{ v_light_left, down_top, v_light_right, grid.height }),
-        .heavy => grid.add(.{ v_heavy_left, down_top, v_heavy_right, grid.height }),
+        .light => self.add(.{ v_light_left, down_top, v_light_right, self.height }),
+        .heavy => self.add(.{ v_heavy_left, down_top, v_heavy_right, self.height }),
         .double => {
             const left_top = if (lines.left == .double) h_light_bottom else down_top;
             const right_top = if (lines.right == .double) h_light_bottom else down_top;
 
-            grid.add(.{ v_double_left, left_top, v_light_left, grid.height });
-            grid.add(.{ v_light_right, right_top, v_double_right, grid.height });
+            self.add(.{ v_double_left, left_top, v_light_left, self.height });
+            self.add(.{ v_light_right, right_top, v_double_right, self.height });
         },
     }
 
     switch (lines.left) {
         .none => {},
-        .light => grid.add(.{ 0, h_light_top, left_right, h_light_bottom }),
-        .heavy => grid.add(.{ 0, h_heavy_top, left_right, h_heavy_bottom }),
+        .light => self.add(.{ 0, h_light_top, left_right, h_light_bottom }),
+        .heavy => self.add(.{ 0, h_heavy_top, left_right, h_heavy_bottom }),
         .double => {
             const top_right = if (lines.up == .double) v_light_left else left_right;
             const bottom_right = if (lines.down == .double) v_light_left else left_right;
 
-            grid.add(.{ 0, h_double_top, top_right, h_light_top });
-            grid.add(.{ 0, h_light_bottom, bottom_right, h_double_bottom });
+            self.add(.{ 0, h_double_top, top_right, h_light_top });
+            self.add(.{ 0, h_light_bottom, bottom_right, h_double_bottom });
         },
     }
 }

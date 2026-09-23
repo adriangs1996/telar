@@ -39,8 +39,8 @@ pub const Capability = enum(u8) {
         return error.UnknownCapability;
     }
 
-    pub fn canonicalName(capability: Capability) []const u8 {
-        return switch (capability) {
+    pub fn canonicalName(self: Capability) []const u8 {
+        return switch (self) {
             .workspace_read => "workspace.read",
             .workspace_write => "workspace.write",
             .process_spawn => "process.spawn",

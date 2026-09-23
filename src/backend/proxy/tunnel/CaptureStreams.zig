@@ -12,17 +12,17 @@ exchange: *Exchange,
 side: buffer_support.Side,
 slots: [128]?CaptureSlot = .{null} ** 128,
 
-pub fn deinit(streams: *CaptureStreams) void {
-    for (&streams.slots) |*slot| {
+pub fn deinit(self: *CaptureStreams) void {
+    for (&self.slots) |*slot| {
         const present = slot.* orelse continue;
         slot.* = null;
-        streams.publish(present.half, .reset);
+        self.publish(present.half, .reset);
     }
 }
 
-pub fn feedHeaders(streams: *CaptureStreams, block: HeaderBlock) void {
-    const half = streams.ensure(block.stream_id) orelse return;
-    const part: buffer_support.Part = if (streams.side == .request) .request_head else .response_head;
+pub fn feedHeaders(self: *CaptureStreams, block: HeaderBlock) void {
+    const half = self.ensure(block.stream_id) orelse return;
+    const part: buffer_support.Part = if (self.side == .request) .request_head else .response_head;
 
     for (block.fields) |field| {
         _ = half.append(part, field.name);
@@ -30,7 +30,7 @@ pub fn feedHeaders(streams: *CaptureStreams, block: HeaderBlock) void {
         _ = half.append(part, field.value);
         _ = half.append(part, "\r\n");
 
-        if (streams.side == .request) {
+        if (self.side == .request) {
             if (std.mem.eql(u8, field.name, ":method")) {
                 half.setMethod(field.value);
             } else if (std.mem.eql(u8, field.name, ":path")) {
@@ -50,41 +50,41 @@ pub fn feedHeaders(streams: *CaptureStreams, block: HeaderBlock) void {
     }
 }
 
-pub fn feedBody(streams: *CaptureStreams, stream_id: u32, bytes: []const u8) void {
-    const half = streams.ensure(stream_id) orelse return;
-    const part: buffer_support.Part = if (streams.side == .request) .request_body else .response_body;
+pub fn feedBody(self: *CaptureStreams, stream_id: u32, bytes: []const u8) void {
+    const half = self.ensure(stream_id) orelse return;
+    const part: buffer_support.Part = if (self.side == .request) .request_body else .response_body;
     _ = half.append(part, bytes);
 }
 
-pub fn finish(streams: *CaptureStreams, stream_id: u32, outcome: buffer_support.Outcome) void {
-    const index = streams.find(stream_id) orelse return;
-    const slot = streams.slots[index].?;
-    streams.slots[index] = null;
-    streams.publish(slot.half, outcome);
+pub fn finish(self: *CaptureStreams, stream_id: u32, outcome: buffer_support.Outcome) void {
+    const index = self.find(stream_id) orelse return;
+    const slot = self.slots[index].?;
+    self.slots[index] = null;
+    self.publish(slot.half, outcome);
 }
 
-fn ensure(streams: *CaptureStreams, stream_id: u32) ?*Half {
-    if (streams.find(stream_id)) |index| {
-        return streams.slots[index].?.half;
+fn ensure(self: *CaptureStreams, stream_id: u32) ?*Half {
+    if (self.find(stream_id)) |index| {
+        return self.slots[index].?.half;
     }
 
-    const index = streams.empty() orelse return null;
-    const half = streams.producer.start(.{
-        .credential = streams.exchange.credential,
-        .dialect = streams.exchange.dialect,
-        .protocol = streams.exchange.protocol,
-        .key = .{ .connection_id = streams.exchange.connection_id, .stream_id = stream_id },
-        .side = streams.side,
-        .host = streams.exchange.host.bytes,
-        .started_at_ms = std.Io.Timestamp.now(streams.exchange.io, .real).toMilliseconds(),
+    const index = self.empty() orelse return null;
+    const half = self.producer.start(.{
+        .credential = self.exchange.credential,
+        .dialect = self.exchange.dialect,
+        .protocol = self.exchange.protocol,
+        .key = .{ .connection_id = self.exchange.connection_id, .stream_id = stream_id },
+        .side = self.side,
+        .host = self.exchange.host.bytes,
+        .started_at_ms = std.Io.Timestamp.now(self.exchange.io, .real).toMilliseconds(),
     }) orelse return null;
-    streams.slots[index] = .{ .stream_id = stream_id, .half = half };
+    self.slots[index] = .{ .stream_id = stream_id, .half = half };
 
     return half;
 }
 
-fn find(streams: *const CaptureStreams, stream_id: u32) ?usize {
-    for (streams.slots, 0..) |slot, index| {
+fn find(self: *const CaptureStreams, stream_id: u32) ?usize {
+    for (self.slots, 0..) |slot, index| {
         const present = slot orelse continue;
         if (present.stream_id == stream_id) {
             return index;
@@ -94,8 +94,8 @@ fn find(streams: *const CaptureStreams, stream_id: u32) ?usize {
     return null;
 }
 
-fn empty(streams: *const CaptureStreams) ?usize {
-    for (streams.slots, 0..) |slot, index| {
+fn empty(self: *const CaptureStreams) ?usize {
+    for (self.slots, 0..) |slot, index| {
         if (slot == null) {
             return index;
         }
@@ -104,10 +104,10 @@ fn empty(streams: *const CaptureStreams) ?usize {
     return null;
 }
 
-fn publish(streams: *CaptureStreams, half: *Half, outcome: buffer_support.Outcome) void {
-    half.finish(outcome, std.Io.Timestamp.now(streams.exchange.io, .real).toMilliseconds());
-    streams.producer.publish(streams.exchange.io, .{
-        .credential = streams.exchange.credential,
+fn publish(self: *CaptureStreams, half: *Half, outcome: buffer_support.Outcome) void {
+    half.finish(outcome, std.Io.Timestamp.now(self.exchange.io, .real).toMilliseconds());
+    self.producer.publish(self.exchange.io, .{
+        .credential = self.exchange.credential,
         .half = half,
     });
 }

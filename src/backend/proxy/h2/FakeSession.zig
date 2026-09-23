@@ -12,10 +12,10 @@ origin_output_len: usize = 0,
 child_half_closed: bool = false,
 origin_half_closed: bool = false,
 
-pub fn read(session: *FakeSession, side: Session.Side, output: []u8) ?usize {
+pub fn read(self: *FakeSession, side: Session.Side, output: []u8) ?usize {
     const input, const offset = switch (side) {
-        .child => .{ session.child_input, &session.child_offset },
-        .origin => .{ session.origin_input, &session.origin_offset },
+        .child => .{ self.child_input, &self.child_offset },
+        .origin => .{ self.origin_input, &self.origin_offset },
     };
 
     if (offset.* == input.len) {
@@ -28,10 +28,10 @@ pub fn read(session: *FakeSession, side: Session.Side, output: []u8) ?usize {
     return len;
 }
 
-pub fn writeAll(session: *FakeSession, side: Session.Side, input: []const u8) bool {
+pub fn writeAll(self: *FakeSession, side: Session.Side, input: []const u8) bool {
     const output, const len = switch (side) {
-        .child => .{ &session.child_output, &session.child_output_len },
-        .origin => .{ &session.origin_output, &session.origin_output_len },
+        .child => .{ &self.child_output, &self.child_output_len },
+        .origin => .{ &self.origin_output, &self.origin_output_len },
     };
 
     if (input.len > output.len - len.*) {
@@ -43,17 +43,17 @@ pub fn writeAll(session: *FakeSession, side: Session.Side, input: []const u8) bo
     return true;
 }
 
-pub fn halfClose(session: *FakeSession, side: Session.Side) void {
+pub fn halfClose(self: *FakeSession, side: Session.Side) void {
     switch (side) {
-        .child => session.child_half_closed = true,
-        .origin => session.origin_half_closed = true,
+        .child => self.child_half_closed = true,
+        .origin => self.origin_half_closed = true,
     }
 }
 
-pub fn childOutput(session: *const FakeSession) []const u8 {
-    return session.child_output[0..session.child_output_len];
+pub fn childOutput(self: *const FakeSession) []const u8 {
+    return self.child_output[0..self.child_output_len];
 }
 
-pub fn originOutput(session: *const FakeSession) []const u8 {
-    return session.origin_output[0..session.origin_output_len];
+pub fn originOutput(self: *const FakeSession) []const u8 {
+    return self.origin_output[0..self.origin_output_len];
 }

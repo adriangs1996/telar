@@ -8,6 +8,6 @@ const CredentialGate = @This();
 context: *anyopaque,
 is_live: *const fn (*anyopaque, *const Credential) bool,
 
-pub fn accepts(gate: CredentialGate, credential: *const Credential) bool {
-    return gate.is_live(gate.context, credential);
+pub fn accepts(self: CredentialGate, credential: *const Credential) bool {
+    return self.is_live(self.context, credential);
 }

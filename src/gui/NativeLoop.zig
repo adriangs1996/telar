@@ -41,10 +41,9 @@ fn wake(fd: usize) void {
 
 /// Revoke admission, join producers, then release their wake endpoint.
 /// Example: `loop.deinit();`
-pub fn deinit(loop: *Loop) void {
-    loop.inbox.close();
-    loop.configuration.deinit();
-    loop.inbox.deinit();
-    native.telar_gui_close_pipe(&loop.fds);
+pub fn deinit(self: *Loop) void {
+    self.inbox.close();
+    self.configuration.deinit();
+    self.inbox.deinit();
+    native.telar_gui_close_pipe(&self.fds);
 }
-

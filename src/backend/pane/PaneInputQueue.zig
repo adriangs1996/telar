@@ -25,19 +25,19 @@ dropped_bytes: u64 = 0,
 ///     recordDroppedInput(input.len);
 /// }
 /// ```
-pub fn push(queue: *PaneInputQueue, input: []const u8) bool {
-    if (input.len > queue.bytes.len - queue.len) {
-        queue.dropped_bytes +|= input.len;
+pub fn push(self: *PaneInputQueue, input: []const u8) bool {
+    if (input.len > self.bytes.len - self.len) {
+        self.dropped_bytes +|= input.len;
         return false;
     }
     var offset: usize = 0;
     while (offset < input.len) {
-        const index = (queue.head + queue.len + offset) % queue.bytes.len;
-        const run = @min(input.len - offset, queue.bytes.len - index);
-        @memcpy(queue.bytes[index..][0..run], input[offset..][0..run]);
+        const index = (self.head + self.len + offset) % self.bytes.len;
+        const run = @min(input.len - offset, self.bytes.len - index);
+        @memcpy(self.bytes[index..][0..run], input[offset..][0..run]);
         offset += run;
     }
-    queue.len += input.len;
+    self.len += input.len;
     return true;
 }
 
@@ -47,21 +47,21 @@ pub fn push(queue: *PaneInputQueue, input: []const u8) bool {
 /// ```zig
 /// const chunk = queue.nextChunk() orelse return;
 /// ```
-pub fn nextChunk(queue: *const PaneInputQueue) ?[]const u8 {
-    if (queue.len == 0) {
+pub fn nextChunk(self: *const PaneInputQueue) ?[]const u8 {
+    if (self.len == 0) {
         return null;
     }
-    const run = @min(queue.len, queue.bytes.len - queue.head);
-    return queue.bytes[queue.head..][0..run];
+    const run = @min(self.len, self.bytes.len - self.head);
+    return self.bytes[self.head..][0..run];
 }
 
-pub fn consume(queue: *PaneInputQueue, count: usize) void {
-    std.debug.assert(count <= queue.len);
-    queue.head = (queue.head + count) % queue.bytes.len;
-    queue.len -= count;
+pub fn consume(self: *PaneInputQueue, count: usize) void {
+    std.debug.assert(count <= self.len);
+    self.head = (self.head + count) % self.bytes.len;
+    self.len -= count;
 }
 
-pub fn clear(queue: *PaneInputQueue) void {
-    queue.head = 0;
-    queue.len = 0;
+pub fn clear(self: *PaneInputQueue) void {
+    self.head = 0;
+    self.len = 0;
 }

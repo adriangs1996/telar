@@ -59,24 +59,24 @@ pub fn read(io: std.Io, gpa: std.mem.Allocator, request_value: Request) !*core.A
     }
 }
 
-fn execute(task: *ProviderHistory) void {
-    task.result = task.exchange();
+fn execute(self: *ProviderHistory) void {
+    self.result = self.exchange();
 }
 
-fn deadline(task: *ProviderHistory) !void {
-    try task.io.sleep(.fromMilliseconds(task.request_value.options.timeout_ms), .awake);
+fn deadline(self: *ProviderHistory) !void {
+    try self.io.sleep(.fromMilliseconds(self.request_value.options.timeout_ms), .awake);
 }
 
-fn exchange(task: *ProviderHistory) !*core.AgentHistoryPage {
-    const options = task.request_value.options;
-    const response = try task.gpa.alloc(u8, max_response_bytes);
-    defer task.gpa.free(response);
-    const json = try task.gpa.alloc(u8, max_json_bytes);
-    defer task.gpa.free(json);
-    task.json = .init(json);
-    task.body = try task.gpa.alloc(u8, max_response_bytes);
-    defer task.gpa.free(task.body);
-    var child = try std.process.spawn(task.io, .{
+fn exchange(self: *ProviderHistory) !*core.AgentHistoryPage {
+    const options = self.request_value.options;
+    const response = try self.gpa.alloc(u8, max_response_bytes);
+    defer self.gpa.free(response);
+    const json = try self.gpa.alloc(u8, max_json_bytes);
+    defer self.gpa.free(json);
+    self.json = .init(json);
+    self.body = try self.gpa.alloc(u8, max_response_bytes);
+    defer self.gpa.free(self.body);
+    var child = try std.process.spawn(self.io, .{
         .argv = options.arguments,
         .cwd = .{ .path = options.cwd },
         .environ_map = &options.environment,
@@ -90,38 +90,38 @@ fn exchange(task: *ProviderHistory) !*core.AgentHistoryPage {
             std.posix.kill(-pid, .KILL) catch {};
         }
 
-        child.kill(task.io);
+        child.kill(self.io);
     }
 
-    task.stream = .{ .file = child.stdout.?, .external_line = response };
-    task.input = child.stdin.?;
-    _ = try task.rpc("initialize", .{
+    self.stream = .{ .file = child.stdout.?, .external_line = response };
+    self.input = child.stdin.?;
+    _ = try self.rpc("initialize", .{
         .clientInfo = .{ .name = "telar_history", .version = "0.1.0" },
         .capabilities = .{ .experimentalApi = true },
     });
-    try task.input.writeStreamingAll(task.io, "{\"method\":\"initialized\"}\n");
-    const metadata = try task.rpc("thread/read", .{ .threadId = task.request_value.thread_id, .includeTurns = false });
+    try self.input.writeStreamingAll(self.io, "{\"method\":\"initialized\"}\n");
+    const metadata = try self.rpc("thread/read", .{ .threadId = self.request_value.thread_id, .includeTurns = false });
     const thread = protocol.field(metadata, "thread");
-    if (!protocol.is(protocol.field(thread, "id"), task.request_value.thread_id)) {
+    if (!protocol.is(protocol.field(thread, "id"), self.request_value.thread_id)) {
         return error.InvalidHistoryThread;
     }
     if (!protocol.is(protocol.field(thread, "historyMode"), "paginated")) {
-        return task.loadLegacyPage();
+        return self.loadLegacyPage();
     }
 
-    return task.loadPage();
+    return self.loadPage();
 }
 
-fn rpc(task: *ProviderHistory, method: []const u8, params: anytype) !std.json.Value {
-    const id = task.next_request;
-    task.next_request += 1;
-    const bytes = protocol.encode(&task.write_buffer, .{ .id = id, .method = method, .params = params }) catch return error.HistoryCursorTooLarge;
-    try task.input.writeStreamingAll(task.io, bytes);
+fn rpc(self: *ProviderHistory, method: []const u8, params: anytype) !std.json.Value {
+    const id = self.next_request;
+    self.next_request += 1;
+    const bytes = protocol.encode(&self.write_buffer, .{ .id = id, .method = method, .params = params }) catch return error.HistoryCursorTooLarge;
+    try self.input.writeStreamingAll(self.io, bytes);
     var skipped: usize = 0;
     while (skipped < 256) : (skipped += 1) {
-        const line = task.stream.next(task.io) catch |err| return if (err == error.ProviderFrameTooLarge) error.HistoryResponseTooLarge else err;
-        task.json.reset();
-        const value = std.json.parseFromSliceLeaky(std.json.Value, task.json.allocator(), line, .{ .max_value_len = max_response_bytes }) catch return error.InvalidHistoryResponse;
+        const line = self.stream.next(self.io) catch |err| return if (err == error.ProviderFrameTooLarge) error.HistoryResponseTooLarge else err;
+        self.json.reset();
+        const value = std.json.parseFromSliceLeaky(std.json.Value, self.json.allocator(), line, .{ .max_value_len = max_response_bytes }) catch return error.InvalidHistoryResponse;
         const returned_id = protocol.field(value, "id");
         if (protocol.field(value, "method") == .string) {
             if (returned_id != .null) {
@@ -149,33 +149,33 @@ fn rpc(task: *ProviderHistory, method: []const u8, params: anytype) !std.json.Va
     return error.HistoryNotificationLimit;
 }
 
-fn loadLegacyPage(task: *ProviderHistory) !*core.AgentHistoryPage {
-    const result = try task.rpc("thread/read", .{ .threadId = task.request_value.thread_id, .includeTurns = true });
+fn loadLegacyPage(self: *ProviderHistory) !*core.AgentHistoryPage {
+    const result = try self.rpc("thread/read", .{ .threadId = self.request_value.thread_id, .includeTurns = true });
     const thread = protocol.field(result, "thread");
-    if (!protocol.is(protocol.field(thread, "id"), task.request_value.thread_id)) {
+    if (!protocol.is(protocol.field(thread, "id"), self.request_value.thread_id)) {
         return error.InvalidHistoryThread;
     }
 
-    const history = try task.gpa.create(@import("LegacyHistory.zig"));
-    defer task.gpa.destroy(history);
-    history.* = .{ .body = task.body, .query = task.request_value.query };
+    const history = try self.gpa.create(@import("LegacyHistory.zig"));
+    defer self.gpa.destroy(history);
+    history.* = .{ .body = self.body, .query = self.request_value.query };
     try history.load(thread);
-    const output = try task.gpa.create(core.AgentHistoryPage);
-    errdefer task.gpa.destroy(output);
-    const query = task.request_value.query;
+    const output = try self.gpa.create(core.AgentHistoryPage);
+    errdefer self.gpa.destroy(output);
+    const query = self.request_value.query;
     output.* = .{ .request_id = query.request_id, .view_generation = query.view_generation, .snapshot = .{ .pane_id = query.pane_id, .pane_generation = query.pane_generation, .status = .ready, .revision = query.view_generation } };
-    const id = task.request_value.thread_id;
+    const id = self.request_value.thread_id;
     @memcpy(output.snapshot.thread_id[0..id.len], id);
     output.snapshot.thread_id_len = @intCast(id.len);
     try history.fill(output, id);
     return output;
 }
 
-fn loadPage(task: *ProviderHistory) !*core.AgentHistoryPage {
-    const query = task.request_value.query;
-    const thread = task.request_value.thread_id;
-    const output = try task.gpa.create(core.AgentHistoryPage);
-    errdefer task.gpa.destroy(output);
+fn loadPage(self: *ProviderHistory) !*core.AgentHistoryPage {
+    const query = self.request_value.query;
+    const thread = self.request_value.thread_id;
+    const output = try self.gpa.create(core.AgentHistoryPage);
+    errdefer self.gpa.destroy(output);
     output.* = .{
         .request_id = query.request_id,
         .view_generation = query.view_generation,
@@ -193,7 +193,7 @@ fn loadPage(task: *ProviderHistory) !*core.AgentHistoryPage {
     }
 
     while (scanned < max_scanned_items) : (scanned += 1) {
-        const response = try task.rpc("thread/items/list", .{
+        const response = try self.rpc("thread/items/list", .{
             .threadId = thread,
             .cursor = if (cursor.len == 0) @as(?[]const u8, null) else cursor.slice(),
             .limit = 1,
@@ -243,7 +243,7 @@ fn loadPage(task: *ProviderHistory) !*core.AgentHistoryPage {
             continue;
         }
 
-        var normalizer: @import("ItemNormalizer.zig") = .{ .body_buffer = task.body, .include_history_details = true };
+        var normalizer: @import("ItemNormalizer.zig") = .{ .body_buffer = self.body, .include_history_details = true };
         var update = try historical_item.normalize(&normalizer, raw_item);
         if (update.truncated) {
             return error.HistoryItemNotRepresentable;

@@ -18,39 +18,39 @@ line_end: usize = 0,
 
 /// Preserves every byte and wraps whole words when they fit on the next line.
 /// Example: `while (lines.next()) |line| try paint(line);`
-pub fn next(lines: *Lines) ?[]const u8 {
-    if (lines.finished or lines.width == 0) {
+pub fn next(self: *Lines) ?[]const u8 {
+    if (self.finished or self.width == 0) {
         return null;
     }
 
-    if (lines.font != null and lines.text.len <= Font.max_bytes) {
-        return lines.nextShaped();
+    if (self.font != null and self.text.len <= Font.max_bytes) {
+        return self.nextShaped();
     }
 
-    const start = lines.index;
-    lines.line_start = start;
+    const start = self.index;
+    self.line_start = start;
     var used: u32 = 0;
     var boundary = start;
-    var iterator: core.GraphemeIterator = .{ .bytes = lines.text, .index = start };
-    while (iterator.index < lines.text.len) {
+    var iterator: core.GraphemeIterator = .{ .bytes = self.text, .index = start };
+    while (iterator.index < self.text.len) {
         const before = iterator.index;
-        if (lines.text[before] == '\n' or lines.text[before] == '\r') {
-            lines.index = before + 1;
-            if (lines.text[before] == '\r' and lines.index < lines.text.len and lines.text[lines.index] == '\n') {
-                lines.index += 1;
+        if (self.text[before] == '\n' or self.text[before] == '\r') {
+            self.index = before + 1;
+            if (self.text[before] == '\r' and self.index < self.text.len and self.text[self.index] == '\n') {
+                self.index += 1;
             }
 
-            lines.line_end = before;
-            return lines.text[start..before];
+            self.line_end = before;
+            return self.text[start..before];
         }
 
         const cluster = iterator.next().?;
         const advance = cluster.width;
-        if (used + advance > lines.width) {
-            lines.index = if (before == start) iterator.index else if (boundary > start) boundary else before;
-            lines.finished = lines.index == lines.text.len;
-            lines.line_end = lines.index;
-            return lines.text[start..lines.index];
+        if (used + advance > self.width) {
+            self.index = if (before == start) iterator.index else if (boundary > start) boundary else before;
+            self.finished = self.index == self.text.len;
+            self.line_end = self.index;
+            return self.text[start..self.index];
         }
 
         used += advance;
@@ -59,40 +59,40 @@ pub fn next(lines: *Lines) ?[]const u8 {
         }
     }
 
-    lines.index = lines.text.len;
-    lines.finished = true;
-    lines.line_end = lines.text.len;
-    return lines.text[start..];
+    self.index = self.text.len;
+    self.finished = true;
+    self.line_end = self.text.len;
+    return self.text[start..];
 }
 
 /// Uses the current complete line's shaping, including internal ligature stops.
 /// Example: `const x = lines.position(selection - line_start);`
-pub fn position(lines: *const Lines, offset: usize) u32 {
-    const at = @min(offset, lines.line_end - lines.line_start);
-    return if (lines.font != null and lines.text.len <= Font.max_bytes) lines.line_positions[at] else core.measure(lines.text[lines.line_start .. lines.line_start + at]);
+pub fn position(self: *const Lines, offset: usize) u32 {
+    const at = @min(offset, self.line_end - self.line_start);
+    return if (self.font != null and self.text.len <= Font.max_bytes) self.line_positions[at] else core.measure(self.text[self.line_start .. self.line_start + at]);
 }
 
-fn nextShaped(lines: *Lines) []const u8 {
-    const start = lines.index;
-    if (!lines.paragraph_ready or start > lines.paragraph_end) {
-        lines.paragraph_start = start;
-        lines.paragraph_end = start;
-        while (lines.paragraph_end < lines.text.len and lines.text[lines.paragraph_end] != '\r' and lines.text[lines.paragraph_end] != '\n') {
-            lines.paragraph_end += 1;
+fn nextShaped(self: *Lines) []const u8 {
+    const start = self.index;
+    if (!self.paragraph_ready or start > self.paragraph_end) {
+        self.paragraph_start = start;
+        self.paragraph_end = start;
+        while (self.paragraph_end < self.text.len and self.text[self.paragraph_end] != '\r' and self.text[self.paragraph_end] != '\n') {
+            self.paragraph_end += 1;
         }
 
-        const paragraph = lines.text[start..lines.paragraph_end];
-        lines.font.?.positions(paragraph, lines.paragraph_positions[0 .. paragraph.len + 1]);
-        lines.paragraph_ready = true;
+        const paragraph = self.text[start..self.paragraph_end];
+        self.font.?.positions(paragraph, self.paragraph_positions[0 .. paragraph.len + 1]);
+        self.paragraph_ready = true;
     }
 
-    const relative = start - lines.paragraph_start;
-    var end = start + fittingEnd(lines.text[start..lines.paragraph_end], .{ .positions = lines.paragraph_positions[relative .. lines.paragraph_end - lines.paragraph_start + 1], .width = lines.width });
+    const relative = start - self.paragraph_start;
+    var end = start + fittingEnd(self.text[start..self.paragraph_end], .{ .positions = self.paragraph_positions[relative .. self.paragraph_end - self.paragraph_start + 1], .width = self.width });
     var adjusted = false;
     while (true) {
-        const line = lines.text[start..end];
-        lines.font.?.positions(line, lines.line_positions[0 .. line.len + 1]);
-        const fit = fittingEnd(line, .{ .positions = lines.line_positions[0 .. line.len + 1], .width = lines.width });
+        const line = self.text[start..end];
+        self.font.?.positions(line, self.line_positions[0 .. line.len + 1]);
+        const fit = fittingEnd(line, .{ .positions = self.line_positions[0 .. line.len + 1], .width = self.width });
         if (fit == line.len) {
             break;
         }
@@ -125,19 +125,19 @@ fn nextShaped(lines: *Lines) []const u8 {
         adjusted = true;
     }
 
-    lines.line_start = start;
-    lines.line_end = end;
-    lines.index = end;
-    if (end == lines.paragraph_end and end < lines.text.len) {
-        lines.index += 1;
-        if (lines.text[end] == '\r' and lines.index < lines.text.len and lines.text[lines.index] == '\n') {
-            lines.index += 1;
+    self.line_start = start;
+    self.line_end = end;
+    self.index = end;
+    if (end == self.paragraph_end and end < self.text.len) {
+        self.index += 1;
+        if (self.text[end] == '\r' and self.index < self.text.len and self.text[self.index] == '\n') {
+            self.index += 1;
         }
     } else {
-        lines.finished = end == lines.text.len;
+        self.finished = end == self.text.len;
     }
 
-    return lines.text[start..end];
+    return self.text[start..end];
 }
 
 fn fittingEnd(text: []const u8, input: @import("LineFit.zig")) usize {

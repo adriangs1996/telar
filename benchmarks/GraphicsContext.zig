@@ -54,17 +54,17 @@ pub fn init(gpa: std.mem.Allocator, output: []u8) !GraphicsContext {
     return .{ .store = store, .model = model, .output = output };
 }
 
-pub fn deinit(context: *GraphicsContext) void {
-    const model_gpa = context.model.gpa;
-    context.model.deinit();
-    model_gpa.destroy(context.model);
-    context.store.deinit();
+pub fn deinit(self: *GraphicsContext) void {
+    const model_gpa = self.model.gpa;
+    self.model.deinit();
+    model_gpa.destroy(self.model);
+    self.store.deinit();
 }
 
-pub fn writer(context: *GraphicsContext) frontend.KittyGraphicsWriter {
+pub fn writer(self: *GraphicsContext) frontend.KittyGraphicsWriter {
     return .{
-        .store = &context.store,
-        .layout_snapshot = data.tab_layout.snapshot(context.model, 0, .{ .w = main.cols, .h = main.rows }),
+        .store = &self.store,
+        .layout_snapshot = data.tab_layout.snapshot(self.model, 0, .{ .w = main.cols, .h = main.rows }),
         .cell_width = 10,
         .cell_height = 20,
     };

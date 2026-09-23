@@ -8,9 +8,9 @@ storage: [4]Job = undefined,
 
 /// Reserves at most four readers globally and one per client connection.
 /// Example: `const slot = try jobs.available(client);`.
-pub fn available(jobs: *const Jobs, client: ClientKey) !usize {
+pub fn available(self: *const Jobs, client: ClientKey) !usize {
     var vacant: ?usize = null;
-    for (jobs.items, 0..) |item, index| {
+    for (self.items, 0..) |item, index| {
         if (item) |job| {
             if (std.meta.eql(job.client, client)) {
                 return error.AgentHistoryBusy;
@@ -25,8 +25,8 @@ pub fn available(jobs: *const Jobs, client: ClientKey) !usize {
 
 /// Removes exactly the job whose actor has joined.
 /// Example: `jobs.remove(job);`.
-pub fn remove(jobs: *Jobs, completed: *Job) void {
-    for (&jobs.items) |*item| {
+pub fn remove(self: *Jobs, completed: *Job) void {
+    for (&self.items) |*item| {
         if (item.* == completed) {
             item.* = null;
             return;
@@ -38,8 +38,8 @@ pub fn remove(jobs: *Jobs, completed: *Job) void {
 
 /// Cancelling the select discards completion events, so ownership stays here
 /// until every actor has joined. Example: `jobs.deinitJoined();`.
-pub fn deinitJoined(jobs: *Jobs) void {
-    for (&jobs.items) |*item| {
+pub fn deinitJoined(self: *Jobs) void {
+    for (&self.items) |*item| {
         if (item.*) |job| {
             job.deinit();
             item.* = null;

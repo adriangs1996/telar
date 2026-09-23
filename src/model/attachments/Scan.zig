@@ -36,41 +36,41 @@ pub fn at(buffer: *const core.Buffer, origin: Position) ?Scan {
 }
 
 /// The current cell, or null once the screen is exhausted.
-pub fn position(scan: *Scan) ?Position {
-    if (scan.x >= scan.buffer.w - 1) {
-        scan.x = 0;
-        scan.y += 1;
+pub fn position(self: *Scan) ?Position {
+    if (self.x >= self.buffer.w - 1) {
+        self.x = 0;
+        self.y += 1;
     }
-    if (scan.y >= scan.buffer.h) {
+    if (self.y >= self.buffer.h) {
         return null;
     }
 
     return .{
-        .x = scan.x,
-        .y = scan.y,
+        .x = self.x,
+        .y = self.y,
     };
 }
 
-pub fn cell(scan: *Scan) ?*const core.Cell {
-    const here = scan.position() orelse return null;
+pub fn cell(self: *Scan) ?*const core.Cell {
+    const here = self.position() orelse return null;
 
     return path_marker.cellAt(
-        scan.buffer,
+        self.buffer,
         here.x,
         here.y,
     );
 }
 
-pub fn step(scan: *Scan) void {
-    scan.x += 1;
+pub fn step(self: *Scan) void {
+    self.x += 1;
 }
 
-pub fn expect(scan: *Scan, byte: u8) bool {
-    const here = scan.cell() orelse return false;
+pub fn expect(self: *Scan, byte: u8) bool {
+    const here = self.cell() orelse return false;
     if (!path_marker.isSingle(here) or here.text()[0] != byte) {
         return false;
     }
-    scan.step();
+    self.step();
 
     return true;
 }

@@ -9,21 +9,21 @@ pub fn init(max_bytes: usize) Quota {
     return .{ .max_bytes = max_bytes };
 }
 
-pub fn reserve(quota: *Quota, bytes: usize) ?Reservation {
-    var current = quota.reserved.load(.monotonic);
+pub fn reserve(self: *Quota, bytes: usize) ?Reservation {
+    var current = self.reserved.load(.monotonic);
 
-    while (bytes <= quota.max_bytes -| current) {
-        if (quota.reserved.cmpxchgWeak(current, current + bytes, .monotonic, .monotonic)) |observed| {
+    while (bytes <= self.max_bytes -| current) {
+        if (self.reserved.cmpxchgWeak(current, current + bytes, .monotonic, .monotonic)) |observed| {
             current = observed;
             continue;
         }
 
-        return .{ .quota = quota, .bytes = bytes };
+        return .{ .quota = self, .bytes = bytes };
     }
 
     return null;
 }
 
-pub fn used(quota: *const Quota) usize {
-    return quota.reserved.load(.monotonic);
+pub fn used(self: *const Quota) usize {
+    return self.reserved.load(.monotonic);
 }

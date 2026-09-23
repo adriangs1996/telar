@@ -42,30 +42,30 @@ pub fn decode(bytes: []const u8, thread: []const u8) !Position {
 
 /// Encodes an exclusive text boundary around an inclusive provider anchor.
 /// Example: `page.before = try position.encode(thread_id);`
-pub fn encode(position: *const Position, thread: []const u8) !core.AgentHistoryCursor {
+pub fn encode(self: *const Position, thread: []const u8) !core.AgentHistoryCursor {
     var cursor: core.AgentHistoryCursor = .{};
     var writer: std.Io.Writer = .fixed(&cursor.bytes);
     std.json.Stringify.value(.{
         .version = 2,
         .thread = thread,
-        .provider = position.provider.slice(),
-        .source = position.source[0..position.source_len],
-        .turn = position.turn[0..position.turn_len],
-        .offset = position.offset,
-        .after = position.after,
+        .provider = self.provider.slice(),
+        .source = self.source[0..self.source_len],
+        .turn = self.turn[0..self.turn_len],
+        .offset = self.offset,
+        .after = self.after,
     }, .{}, &writer) catch return error.HistoryCursorTooLarge;
     cursor.len = @intCast(writer.end);
     return cursor;
 }
 
 /// Example: `try position.setSource(provider_item_id, provider_turn_id);`
-pub fn setSource(position: *Position, source: []const u8, turn: []const u8) !void {
-    if (source.len == 0 or source.len > position.source.len or !std.unicode.utf8ValidateSlice(source) or std.mem.indexOfScalar(u8, source, 0) != null or turn.len == 0 or turn.len > position.turn.len or !std.unicode.utf8ValidateSlice(turn) or std.mem.indexOfScalar(u8, turn, 0) != null) {
+pub fn setSource(self: *Position, source: []const u8, turn: []const u8) !void {
+    if (source.len == 0 or source.len > self.source.len or !std.unicode.utf8ValidateSlice(source) or std.mem.indexOfScalar(u8, source, 0) != null or turn.len == 0 or turn.len > self.turn.len or !std.unicode.utf8ValidateSlice(turn) or std.mem.indexOfScalar(u8, turn, 0) != null) {
         return error.InvalidHistoryItem;
     }
 
-    @memcpy(position.source[0..source.len], source);
-    position.source_len = @intCast(source.len);
-    @memcpy(position.turn[0..turn.len], turn);
-    position.turn_len = @intCast(turn.len);
+    @memcpy(self.source[0..source.len], source);
+    self.source_len = @intCast(source.len);
+    @memcpy(self.turn[0..turn.len], turn);
+    self.turn_len = @intCast(turn.len);
 }

@@ -20,20 +20,20 @@ offset: u32 = 0,
 snapshot_id: u64 = 0,
 entry_id: u64 = 0,
 
-pub fn view(value: *const OwnedHistoryQuery) core.QueryHistory {
+pub fn view(self: *const OwnedHistoryQuery) core.QueryHistory {
     return .{
-        .request_id = value.request_id,
-        .query = value.query[0..value.query_len],
-        .scope = value.scope,
-        .scope_value = value.scope_value[0..value.scope_value_len],
-        .pane_id = value.pane_id,
+        .request_id = self.request_id,
+        .query = self.query[0..self.query_len],
+        .scope = self.scope,
+        .scope_value = self.scope_value[0..self.scope_value_len],
+        .pane_id = self.pane_id,
         .failed_only = false,
-        .author = value.author,
-        .match = value.match,
+        .author = self.author,
+        .match = self.match,
         .distinct = false,
-        .limit = value.limit,
-        .offset = value.offset,
-        .snapshot_id = value.snapshot_id,
-        .entry_id = value.entry_id,
+        .limit = self.limit,
+        .offset = self.offset,
+        .snapshot_id = self.snapshot_id,
+        .entry_id = self.entry_id,
     };
 }

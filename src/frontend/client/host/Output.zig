@@ -27,40 +27,40 @@ pub fn init(allocator: std.mem.Allocator, target: *std.Io.Writer) !Output {
 
 /// Grows only the writable buffer at a geometry transition, never in flight.
 /// Example: `try output.prepareFrame(width * height);`.
-pub fn prepareFrame(output: *Output, cells: usize) !void {
-    std.debug.assert(!output.pending);
+pub fn prepareFrame(self: *Output, cells: usize) !void {
+    std.debug.assert(!self.pending);
     const required = @max(512 * 1024, cells * 96 + 512 * 1024);
     if (required > 16 * 1024 * 1024) {
         return error.HostFrameTooLarge;
     }
-    if (required <= output.writer.buffer.len) {
+    if (required <= self.writer.buffer.len) {
         return;
     }
 
-    const buffer = try output.allocator.realloc(output.buffers[output.active], required);
-    output.buffers[output.active] = buffer;
-    output.writer.buffer = buffer;
+    const buffer = try self.allocator.realloc(self.buffers[self.active], required);
+    self.buffers[self.active] = buffer;
+    self.writer.buffer = buffer;
 }
 
 /// Seals bytes without copying. The returned borrow ends at complete().
 /// Example: `const work = output.begin() orelse return;`.
-pub fn begin(output: *Output) ?Work {
-    if (output.pending or output.writer.end == 0) {
+pub fn begin(self: *Output) ?Work {
+    if (self.pending or self.writer.end == 0) {
         return null;
     }
 
-    const bytes = output.writer.buffered();
-    output.active ^= 1;
-    output.writer = .fixed(output.buffers[output.active]);
-    output.pending = true;
-    return .{ .target = output.target, .bytes = bytes };
+    const bytes = self.writer.buffered();
+    self.active ^= 1;
+    self.writer = .fixed(self.buffers[self.active]);
+    self.pending = true;
+    return .{ .target = self.target, .bytes = bytes };
 }
 
 /// Attempts one nonblocking prefix before handing the remaining bytes off.
 /// Example: `const remaining = try output.tryWrite(work);`.
-pub fn tryWrite(output: *Output, work: Work) !Work {
-    std.debug.assert(output.pending);
-    const fast = output.fast_write orelse return work;
+pub fn tryWrite(self: *Output, work: Work) !Work {
+    std.debug.assert(self.pending);
+    const fast = self.fast_write orelse return work;
     const written = try fast.write(fast.context, work.bytes);
     if (written > work.bytes.len) {
         return error.InvalidWriteCount;
@@ -71,20 +71,20 @@ pub fn tryWrite(output: *Output, work: Work) !Work {
 
 /// Ends the borrow before propagating failure. Failed writes never retire damage.
 /// Example: `const delivery = try output.complete(result);`.
-pub fn complete(output: *Output, result: anyerror!void) !?client.Token {
-    std.debug.assert(output.pending);
-    output.pending = false;
-    const delivery = output.delivery;
-    output.delivery = null;
+pub fn complete(self: *Output, result: anyerror!void) !?client.Token {
+    std.debug.assert(self.pending);
+    self.pending = false;
+    const delivery = self.delivery;
+    self.delivery = null;
     try result;
     return delivery;
 }
 
 /// Releases storage after cancelling and joining the output actor.
 /// Example: `output.deinit();`.
-pub fn deinit(output: *Output) void {
-    for (output.buffers) |buffer| {
-        output.allocator.free(buffer);
+pub fn deinit(self: *Output) void {
+    for (self.buffers) |buffer| {
+        self.allocator.free(buffer);
     }
 }
 

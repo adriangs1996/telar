@@ -68,6 +68,6 @@ pub fn measure(canvas: *const Canvas, projection: *const client.Projection) !For
 }
 
 /// Example: `const rect = layout.completionRow(index);`
-pub fn completionRow(form: Form, index: usize) Rect {
-    return .{ .x = form.suggestions.x, .y = form.suggestions.y + @as(f32, @floatFromInt(index)) * form.row_height, .width = form.suggestions.width, .height = form.row_height };
+pub fn completionRow(self: Form, index: usize) Rect {
+    return .{ .x = self.suggestions.x, .y = self.suggestions.y + @as(f32, @floatFromInt(index)) * self.row_height, .width = self.suggestions.width, .height = self.row_height };
 }

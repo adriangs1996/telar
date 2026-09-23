@@ -13,6 +13,6 @@ pub fn capture(field: anytype) FieldPosition {
     };
 }
 
-pub fn changed(before: FieldPosition, field: anytype) bool {
-    return before.len != field.len or before.head != field.head or before.anchor != field.anchor;
+pub fn changed(self: FieldPosition, field: anytype) bool {
+    return self.len != field.len or self.head != field.head or self.anchor != field.anchor;
 }

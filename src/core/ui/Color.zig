@@ -44,8 +44,8 @@ pub const Color = extern struct {
         return if (self.kind == .rgb) self.value else null;
     }
 
-    pub fn eql(a: Color, b: Color) bool {
-        return @as(u32, @bitCast(a)) == @as(u32, @bitCast(b));
+    pub fn eql(self: Color, b: Color) bool {
+        return @as(u32, @bitCast(self)) == @as(u32, @bitCast(b));
     }
 
     comptime {

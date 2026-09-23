@@ -8,11 +8,11 @@ selected: bool,
 bytes: [pane_labels.max_text_bytes]u8 = undefined,
 len: u8 = 0,
 
-pub fn text(label: *const Label) []const u8 {
-    return label.bytes[0..label.len];
+pub fn text(self: *const Label) []const u8 {
+    return self.bytes[0..self.len];
 }
 
-pub fn sameText(a: *const Label, b: *const Label) bool {
-    return a.offset == b.offset and a.width == b.width and
-        std.mem.eql(u8, a.text(), b.text());
+pub fn sameText(self: *const Label, b: *const Label) bool {
+    return self.offset == b.offset and self.width == b.width and
+        std.mem.eql(u8, self.text(), b.text());
 }

@@ -106,29 +106,29 @@ pub fn trusted(bytes: []const u8) View {
 
 /// Returns the full URI for a snapshot-local hyperlink identity.
 /// Example: `const uri = view.link(run.link_index).?;`
-pub fn link(view: View, index: u16) ?[]const u8 {
-    if (index >= view.link_count) {
+pub fn link(self: View, index: u16) ?[]const u8 {
+    if (index >= self.link_count) {
         return null;
     }
 
-    const bytes = view.link_bytes[@as(usize, index) * limits.link_size ..];
+    const bytes = self.link_bytes[@as(usize, index) * limits.link_size ..];
     const offset = std.mem.readInt(u32, bytes[0..4], .little);
     const len = std.mem.readInt(u16, bytes[4..6], .little);
-    return view.uri_bytes[offset..][0..len];
+    return self.uri_bytes[offset..][0..len];
 }
 
-pub fn runs(view: View) Runs {
-    return .{ .bytes = view.run_bytes };
+pub fn runs(self: View) Runs {
+    return .{ .bytes = self.run_bytes };
 }
 
 /// Finds the run covering a linear cell index without scanning the viewport.
 /// Example: `const run = view.at(@as(u32, y) * cols + x);`
-pub fn at(view: View, cell: u32) ?LinkRun {
+pub fn at(self: View, cell: u32) ?LinkRun {
     var low: usize = 0;
-    var high: usize = view.run_count;
+    var high: usize = self.run_count;
     while (low < high) {
         const mid = low + (high - low) / 2;
-        var iterator: Runs = .{ .bytes = view.run_bytes[mid * limits.run_size ..] };
+        var iterator: Runs = .{ .bytes = self.run_bytes[mid * limits.run_size ..] };
         const run = iterator.next().?;
         if (cell < run.start) {
             high = mid;

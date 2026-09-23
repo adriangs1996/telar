@@ -17,11 +17,11 @@ pub fn init(value: []const u8) !AgentEffort {
 }
 
 /// Example: `drawLabel(effort.idSlice());`
-pub fn idSlice(effort: *const AgentEffort) []const u8 {
-    return effort.id[0..effort.id_len];
+pub fn idSlice(self: *const AgentEffort) []const u8 {
+    return self.id[0..self.id_len];
 }
 
 /// Example: `if (effort.eql(other)) return;`
-pub fn eql(effort: AgentEffort, other: AgentEffort) bool {
-    return std.mem.eql(u8, effort.idSlice(), other.idSlice());
+pub fn eql(self: AgentEffort, other: AgentEffort) bool {
+    return std.mem.eql(u8, self.idSlice(), other.idSlice());
 }

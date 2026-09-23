@@ -16,28 +16,28 @@ leave_thread_copy_mode_fn: ?*const fn (*anyopaque) bool = null,
 /// Unsupported hosts leave all state untouched. The adapter owns cancellation
 /// when another pane, editor or modal takes focus.
 /// Example: `_ = client.host_input_source.enterThreadCopyMode(pane_id);`
-pub fn enterThreadCopyMode(port: HostInputSource, pane_id: core.PaneId) bool {
-    const enter = port.enter_thread_copy_mode_fn orelse return false;
-    return enter(port.context, pane_id);
+pub fn enterThreadCopyMode(self: HostInputSource, pane_id: core.PaneId) bool {
+    const enter = self.enter_thread_copy_mode_fn orelse return false;
+    return enter(self.context, pane_id);
 }
 
 /// Keeps semantic actions aware of a native reader without exposing its state.
 /// Example: `if (port.threadCopyModeActive()) leaveReader();`
-pub fn threadCopyModeActive(port: HostInputSource) bool {
-    const active = port.thread_copy_mode_active_fn orelse return false;
-    return active(port.context);
+pub fn threadCopyModeActive(self: HostInputSource) bool {
+    const active = self.thread_copy_mode_active_fn orelse return false;
+    return active(self.context);
 }
 
 /// Retires native reading before another semantic action. The adapter reports
 /// whether it changed state. Example: `_ = port.leaveThreadCopyMode();`
-pub fn leaveThreadCopyMode(port: HostInputSource) bool {
-    const leave = port.leave_thread_copy_mode_fn orelse return false;
-    return leave(port.context);
+pub fn leaveThreadCopyMode(self: HostInputSource) bool {
+    const leave = self.leave_thread_copy_mode_fn orelse return false;
+    return leave(self.context);
 }
 
 /// Decodes replayed host bytes for the active prompt.
-pub fn routePromptBytes(port: HostInputSource, bytes: []const u8) !void {
-    return port.route_prompt_bytes_fn(port.context, bytes);
+pub fn routePromptBytes(self: HostInputSource, bytes: []const u8) !void {
+    return self.route_prompt_bytes_fn(self.context, bytes);
 }
 
 /// Sets one visible native disclosure without emulating input. Example: `try port.setThreadExpansion(request);`

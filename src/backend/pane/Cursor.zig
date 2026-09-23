@@ -57,35 +57,35 @@ pub fn init(text: []const u8) Cursor {
 
 /// Advances against an idle pane; changes invalidate all partial results.
 /// Example: `if (try cursor.advance(pane)) publish(cursor);`.
-pub fn advance(cursor: *Cursor, pane: anytype) !bool {
+pub fn advance(self: *Cursor, pane: anytype) !bool {
     if (pane.ingest_pending) {
         return false;
     }
-    if (cursor.needle_len == 0) {
+    if (self.needle_len == 0) {
         return true;
     }
 
     const pages = &pane.terminal.screens.active.pages;
-    if (cursor.revision) |revision| {
+    if (self.revision) |revision| {
         if (revision != pane.search_revision) {
             return error.SearchInvalidated;
         }
     } else {
-        cursor.revision = pane.search_revision;
-        cursor.end_row = pages.total_rows;
-        cursor.next_row = cursor.end_row -| text_search.max_rows;
-        cursor.truncated = cursor.next_row != 0;
+        self.revision = pane.search_revision;
+        self.end_row = pages.total_rows;
+        self.next_row = self.end_row -| text_search.max_rows;
+        self.truncated = self.next_row != 0;
     }
 
-    const end = @min(cursor.end_row, cursor.next_row + rows_per_turn);
-    while (cursor.next_row < end) : (cursor.next_row += 1) {
-        const pin = pages.pin(.{ .screen = .{ .x = 0, .y = @intCast(cursor.next_row) } }) orelse continue;
+    const end = @min(self.end_row, self.next_row + rows_per_turn);
+    while (self.next_row < end) : (self.next_row += 1) {
+        const pin = pages.pin(.{ .screen = .{ .x = 0, .y = @intCast(self.next_row) } }) orelse continue;
         var columns: [text_search.max_cols]u16 = undefined;
         var row_length: usize = 0;
         var matched: usize = 0;
         for (pin.cells(.all), 0..) |cell, column| {
             if (row_length == columns.len) {
-                cursor.truncated = true;
+                self.truncated = true;
                 break;
             }
             if (cell.wide == .spacer_tail or cell.wide == .spacer_head) {
@@ -94,35 +94,35 @@ pub fn advance(cursor: *Cursor, pane: anytype) !bool {
 
             columns[row_length] = @intCast(column);
             row_length += 1;
-            const point = cursor.normalize(if (cell.hasText()) cell.codepoint() else ' ');
-            while (matched != 0 and point != cursor.needle[matched]) {
-                matched = cursor.prefix[matched - 1];
+            const point = self.normalize(if (cell.hasText()) cell.codepoint() else ' ');
+            while (matched != 0 and point != self.needle[matched]) {
+                matched = self.prefix[matched - 1];
             }
-            if (point == cursor.needle[matched]) {
+            if (point == self.needle[matched]) {
                 matched += 1;
             }
-            if (matched != cursor.needle_len) {
+            if (matched != self.needle_len) {
                 continue;
             }
-            if (cursor.count == cursor.matches.len) {
-                cursor.truncated = true;
+            if (self.count == self.matches.len) {
+                self.truncated = true;
                 return true;
             }
 
-            const first = columns[row_length - cursor.needle_len];
-            cursor.matches[cursor.count] = .{
+            const first = columns[row_length - self.needle_len];
+            self.matches[self.count] = .{
                 .x = first,
-                .y = @intCast(cursor.next_row),
+                .y = @intCast(self.next_row),
                 .len = @as(u16, @intCast(column)) - first + 1,
             };
-            cursor.count += 1;
+            self.count += 1;
             matched = 0;
         }
     }
 
-    return cursor.next_row == cursor.end_row;
+    return self.next_row == self.end_row;
 }
 
-fn normalize(cursor: *const Cursor, point: u21) u21 {
-    return if (cursor.fold and point < 128) std.ascii.toLower(@intCast(point)) else point;
+fn normalize(self: *const Cursor, point: u21) u21 {
+    return if (self.fold and point < 128) std.ascii.toLower(@intCast(point)) else point;
 }

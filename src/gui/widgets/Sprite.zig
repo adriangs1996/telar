@@ -6,6 +6,6 @@ bounds: @import("../render/Rect.zig"),
 paint: @import("SpritePaint.zig"),
 
 /// Example: `try mascot.draw(canvas);`
-pub fn draw(sprite: Sprite, canvas: *Canvas) !void {
-    try canvas.spriteTintedAt(sprite.bounds, sprite.paint);
+pub fn draw(self: Sprite, canvas: *Canvas) !void {
+    try canvas.spriteTintedAt(self.bounds, self.paint);
 }

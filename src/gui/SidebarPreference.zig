@@ -22,50 +22,50 @@ pub fn init(configured: f32) Preference {
 
 /// The request the renderer measures with.
 /// Example: `renderer.sidebar_request = gui.sidebar.request(model.sidebar_visible);`
-pub fn request(preference: *const Preference, visible: bool) SidebarRequest {
-    return .{ .visible = visible, .logical_width = preference.logical };
+pub fn request(self: *const Preference, visible: bool) SidebarRequest {
+    return .{ .visible = visible, .logical_width = self.logical };
 }
 
 /// Retains the resolved band so later steps and drags clamp to this window.
 /// Example: `gui.sidebar.observe(renderer.sidebar);`
-pub fn observe(preference: *Preference, band: SidebarBand) void {
-    preference.band = band;
+pub fn observe(self: *Preference, band: SidebarBand) void {
+    self.band = band;
 }
 
 /// Moves the preference by one keyboard step; false when the bounds held it.
 /// Example: `if (gui.sidebar.step(.right)) gui.chrome.invalidate();`
-pub fn step(preference: *Preference, direction: data.actions.SidebarDirection) bool {
+pub fn step(self: *Preference, direction: data.actions.SidebarDirection) bool {
     const delta: f32 = switch (direction) {
         .left => -SidebarBand.logical_step,
         .right => SidebarBand.logical_step,
     };
-    return preference.set(preference.band.clampLogical(preference.logical + delta));
+    return self.set(self.band.clampLogical(self.logical + delta));
 }
 
 /// Adopts the exact width a drag selected, in device pixels.
 /// Example: `if (gui.sidebar.drag(width)) gui.chrome.invalidate();`
-pub fn drag(preference: *Preference, physical: u32) bool {
-    return preference.set(@as(f32, @floatFromInt(preference.band.clamp(physical))) / preference.band.scale);
+pub fn drag(self: *Preference, physical: u32) bool {
+    return self.set(@as(f32, @floatFromInt(self.band.clamp(physical))) / self.band.scale);
 }
 
 /// Follows a reload: a changed configured width replaces the preference, an
 /// unchanged one keeps what the person chose interactively.
 /// Example: `_ = gui.sidebar.reload(renderer.config.sidebar.width);`
-pub fn reload(preference: *Preference, configured: f32) bool {
-    if (configured == preference.configured) {
+pub fn reload(self: *Preference, configured: f32) bool {
+    if (configured == self.configured) {
         return false;
     }
 
-    preference.configured = configured;
-    return preference.set(configured);
+    self.configured = configured;
+    return self.set(configured);
 }
 
-fn set(preference: *Preference, logical: f32) bool {
-    if (logical == preference.logical) {
+fn set(self: *Preference, logical: f32) bool {
+    if (logical == self.logical) {
         return false;
     }
 
-    preference.logical = logical;
+    self.logical = logical;
     return true;
 }
 

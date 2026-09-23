@@ -12,8 +12,8 @@ unique: u64,
 top: []StatsTop,
 gpa: std.mem.Allocator,
 
-pub fn deinit(result: *StatsResult) void {
-    for (result.top) |entry| result.gpa.free(entry.command);
-    result.gpa.free(result.top);
-    result.gpa.destroy(result);
+pub fn deinit(self: *StatsResult) void {
+    for (self.top) |entry| self.gpa.free(entry.command);
+    self.gpa.free(self.top);
+    self.gpa.destroy(self);
 }

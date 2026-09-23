@@ -10,8 +10,8 @@ path_storage: [core.AgentImages.max_path_bytes]u8 = undefined,
 path_len: u16,
 
 /// Example: `const path = preview.path();`
-pub fn path(preview: *const Preview) []const u8 {
-    return preview.path_storage[0..preview.path_len];
+pub fn path(self: *const Preview) []const u8 {
+    return self.path_storage[0..self.path_len];
 }
 
 /// Original pixels do not depend on draft text, image order, theme or DPI.
@@ -39,6 +39,6 @@ pub fn fit(area: Rect, size: [2]u32) Rect {
 }
 
 /// Example: `if (preview.matches(target)) keepOpen();`
-pub fn matches(preview: Preview, target: @import("Target.zig")) bool {
-    return target.id.generation == preview.generation and target.action == .agent_control and std.meta.eql(target.action.agent_control, preview.control);
+pub fn matches(self: Preview, target: @import("Target.zig")) bool {
+    return target.id.generation == self.generation and target.action == .agent_control and std.meta.eql(target.action.agent_control, self.control);
 }

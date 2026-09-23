@@ -43,9 +43,9 @@ pub fn listen(io: std.Io, path: []const u8) !LocalListener {
     return result;
 }
 
-pub fn accept(listener: *LocalListener, io: std.Io) !core.SocketChannel {
-    std.debug.assert(listener.active);
-    const stream = try listener.listener.accept(io);
+pub fn accept(self: *LocalListener, io: std.Io) !core.SocketChannel {
+    std.debug.assert(self.active);
+    const stream = try self.listener.accept(io);
     errdefer stream.close(io);
     const peer_uid = try local.peerUid(stream.socket.handle);
     if (!local.sameUserPeer(peer_uid, std.c.geteuid())) {
@@ -54,24 +54,24 @@ pub fn accept(listener: *LocalListener, io: std.Io) !core.SocketChannel {
     return .init(stream);
 }
 
-pub fn deinit(listener: *LocalListener, io: std.Io) void {
-    if (!listener.active) {
+pub fn deinit(self: *LocalListener, io: std.Io) void {
+    if (!self.active) {
         return;
     }
     // POSIX does not guarantee that close from another thread interrupts
     // accept. Shutdown does, and the runtime admission actor uses it as
     // the concurrent cancellation mechanism.
-    listener.shutdown();
-    listener.listener.deinit(io);
-    removeIfOwned(io, listener.path[0..listener.path_len], listener.inode);
-    listener.active = false;
+    self.shutdown();
+    self.listener.deinit(io);
+    removeIfOwned(io, self.path[0..self.path_len], self.inode);
+    self.active = false;
 }
 
-pub fn shutdown(listener: *LocalListener) void {
-    if (!listener.active) {
+pub fn shutdown(self: *LocalListener) void {
+    if (!self.active) {
         return;
     }
-    _ = std.c.shutdown(listener.listener.socket.handle, std.posix.SHUT.RDWR);
+    _ = std.c.shutdown(self.listener.socket.handle, std.posix.SHUT.RDWR);
 }
 
 fn removeIfOwned(io: std.Io, path: []const u8, inode: std.Io.File.INode) void {

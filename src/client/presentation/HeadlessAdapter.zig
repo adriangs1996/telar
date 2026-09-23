@@ -18,22 +18,22 @@ fail_preparation: bool = false,
 /// Copies one bounded projection synchronously, then holds it until complete.
 /// Busy attempts coalesce observations without overwriting the in-flight frame.
 /// Example: `const token = try adapter.prepare(projection) orelse return;`.
-pub fn prepare(adapter: *Adapter, projection: Projection) !?lifecycle_module.Token {
+pub fn prepare(self: *Adapter, projection: Projection) !?lifecycle_module.Token {
     const observation: Observation = .{
         .model = projection.version,
         .presentation_ingress = projection.presentation_ingress,
         .geometry_revision = projection.geometry.revision,
     };
-    _ = adapter.state.observe(observation);
-    if (adapter.busy or adapter.state.active != null) {
+    _ = self.state.observe(observation);
+    if (self.busy or self.state.active != null) {
         return error.PresentationBusy;
     }
 
-    if (!adapter.state.needsPreparation()) {
+    if (!self.state.needsPreparation()) {
         return null;
     }
 
-    if (adapter.fail_preparation) {
+    if (self.fail_preparation) {
         return error.HeadlessPreparationFailed;
     }
 
@@ -51,20 +51,20 @@ pub fn prepare(adapter: *Adapter, projection: Projection) !?lifecycle_module.Tok
         }
     }
 
-    adapter.frame.cell_count = 0;
-    adapter.frame.pane_count = 0;
-    adapter.frame.version = projection.version;
-    adapter.frame.geometry = Geometry.capture(projection);
-    adapter.frame.focused = null;
+    self.frame.cell_count = 0;
+    self.frame.pane_count = 0;
+    self.frame.version = projection.version;
+    self.frame.geometry = Geometry.capture(projection);
+    self.frame.focused = null;
     if (projection.tab) |slot| {
-        adapter.frame.focused = model.tabs.layout[slot].focused();
+        self.frame.focused = model.tabs.layout[slot].focused();
         var panes = model.panes.iterateConst(model.tabs.location[slot].tab_id);
         while (panes.next()) |pane| {
-            const start = adapter.frame.cell_count;
+            const start = self.frame.cell_count;
             const len = pane.buffer.cells.len;
-            @memcpy(adapter.frame.cells[start..][0..len], pane.buffer.cells);
-            adapter.frame.cell_count += len;
-            adapter.frame.panes[adapter.frame.pane_count] = .{
+            @memcpy(self.frame.cells[start..][0..len], pane.buffer.cells);
+            self.frame.cell_count += len;
+            self.frame.panes[self.frame.pane_count] = .{
                 .id = pane.id,
                 .start = start,
                 .len = len,
@@ -74,20 +74,20 @@ pub fn prepare(adapter: *Adapter, projection: Projection) !?lifecycle_module.Tok
                 .pointer_shape = pane.pointer_shape,
                 .scroll = pane.scroll,
             };
-            adapter.frame.pane_count += 1;
+            self.frame.pane_count += 1;
         }
     }
 
-    return try adapter.state.begin(.{
+    return try self.state.begin(.{
         .observation = observation,
         .commit = if (projection.tab) |slot| data.presentation_delivery.capture(model, slot) else .{},
-        .geometry = adapter.frame.geometry,
+        .geometry = self.frame.geometry,
     });
 }
 
 /// Reports completion only after all consumers stop borrowing frame storage.
 /// Failed and cancelled work releases its slot without retiring model damage.
 /// Example: `const delivery = adapter.complete(token, .delivered) orelse return;`.
-pub fn complete(adapter: *Adapter, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) ?PresentationDelivery {
-    return adapter.state.complete(token, outcome);
+pub fn complete(self: *Adapter, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) ?PresentationDelivery {
+    return self.state.complete(token, outcome);
 }

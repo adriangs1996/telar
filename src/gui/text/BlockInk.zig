@@ -39,11 +39,11 @@ pub fn init(cell: Rect, block: Block) !Ink {
 
 /// Uses local cell coordinates; bold and italic do not deform the geometry.
 /// Example: `try ink.paint(run, list);`
-pub fn paint(ink: *const Ink, run: TextRun, list: *QuadList) !void {
+pub fn paint(self: *const Ink, run: TextRun, list: *QuadList) !void {
     const bounds = run.cell_bounds orelse return error.MissingCellBounds;
     var color = run.color;
-    color.a *= ink.coverage;
-    for (ink.rects[0..ink.count]) |rect| {
+    color.a *= self.coverage;
+    for (self.rects[0..self.count]) |rect| {
         var placed = rect;
         placed.x += run.x + bounds.x;
         placed.y += run.y + bounds.y;
@@ -51,22 +51,22 @@ pub fn paint(ink: *const Ink, run: TextRun, list: *QuadList) !void {
     }
 }
 
-fn slab(ink: *Ink, cell: Rect, shape: @import("BlockSlab.zig")) void {
+fn slab(self: *Ink, cell: Rect, shape: @import("BlockSlab.zig")) void {
     switch (shape.side) {
-        .top => ink.append(.{ .x = 0, .y = 0, .width = cell.width, .height = split(cell.height, shape.eighths) }),
+        .top => self.append(.{ .x = 0, .y = 0, .width = cell.width, .height = split(cell.height, shape.eighths) }),
         .bottom => {
             const top = split(cell.height, 8 - shape.eighths);
-            ink.append(.{ .x = 0, .y = top, .width = cell.width, .height = cell.height - top });
+            self.append(.{ .x = 0, .y = top, .width = cell.width, .height = cell.height - top });
         },
-        .left => ink.append(.{ .x = 0, .y = 0, .width = split(cell.width, shape.eighths), .height = cell.height }),
+        .left => self.append(.{ .x = 0, .y = 0, .width = split(cell.width, shape.eighths), .height = cell.height }),
         .right => {
             const left = split(cell.width, 8 - shape.eighths);
-            ink.append(.{ .x = left, .y = 0, .width = cell.width - left, .height = cell.height });
+            self.append(.{ .x = left, .y = 0, .width = cell.width - left, .height = cell.height });
         },
     }
 }
 
-fn quadrants(ink: *Ink, cell: Rect, mask: u4) void {
+fn quadrants(self: *Ink, cell: Rect, mask: u4) void {
     const middle_x = split(cell.width, 4);
     const middle_y = split(cell.height, 4);
     const tops = [2]f32{ 0, middle_y };
@@ -77,7 +77,7 @@ fn quadrants(ink: *Ink, cell: Rect, mask: u4) void {
         const x: f32 = if (left) 0 else middle_x;
         const right_edge: f32 = if (right) cell.width else middle_x;
         if (left or right) {
-            ink.append(.{ .x = x, .y = top, .width = right_edge - x, .height = bottom - top });
+            self.append(.{ .x = x, .y = top, .width = right_edge - x, .height = bottom - top });
         }
     }
 }
@@ -92,26 +92,26 @@ fn split(extent: f32, eighths: u4) f32 {
     return @round(extent * @as(f32, @floatFromInt(eighths)) / 8);
 }
 
-fn append(ink: *Ink, rect: Rect) void {
+fn append(self: *Ink, rect: Rect) void {
     if (rect.width <= 0 or rect.height <= 0) {
         return;
     }
 
-    if (ink.count > 0) {
-        const previous = &ink.rects[ink.count - 1];
+    if (self.count > 0) {
+        const previous = &self.rects[self.count - 1];
         if (previous.x == rect.x and previous.width == rect.width and previous.y + previous.height == rect.y) {
             previous.height += rect.height;
             return;
         }
     }
 
-    std.debug.assert(ink.count < capacity);
-    ink.rects[ink.count] = rect;
-    ink.count += 1;
+    std.debug.assert(self.count < capacity);
+    self.rects[self.count] = rect;
+    self.count += 1;
 }
 
-fn covered(ink: *const Ink, point: [2]f32) bool {
-    for (ink.rects[0..ink.count]) |rect| {
+fn covered(self: *const Ink, point: [2]f32) bool {
+    for (self.rects[0..self.count]) |rect| {
         if (point[0] >= rect.x and point[0] < rect.x + rect.width and point[1] >= rect.y and point[1] < rect.y + rect.height) {
             return true;
         }
@@ -120,9 +120,9 @@ fn covered(ink: *const Ink, point: [2]f32) bool {
     return false;
 }
 
-fn area(ink: *const Ink) f32 {
+fn area(self: *const Ink) f32 {
     var total: f32 = 0;
-    for (ink.rects[0..ink.count]) |rect| {
+    for (self.rects[0..self.count]) |rect| {
         total += rect.width * rect.height;
     }
 
@@ -161,7 +161,8 @@ test "the full block covers the cell and every element stays inside it across ce
 test "opposite slabs and complementary quadrants tile the full block at every pixel" {
     const pairs = [_][2]u21{
         .{ 0x2580, 0x2584 }, .{ 0x258c, 0x2590 }, .{ 0x2594, 0x2587 }, .{ 0x2595, 0x2589 },
-        .{ 0x2596, 0x259c }, .{ 0x2597, 0x259b }, .{ 0x2598, 0x259f }, .{ 0x259d, 0x2599 }, .{ 0x259a, 0x259e },
+        .{ 0x2596, 0x259c }, .{ 0x2597, 0x259b }, .{ 0x2598, 0x259f }, .{ 0x259d, 0x2599 },
+        .{ 0x259a, 0x259e },
     };
     for ([_][2]f32{ .{ 11, 21 }, .{ 8, 17 }, .{ 9, 20.5 }, .{ 1, 1 }, .{ 3, 5 }, .{ 26, 71 } }) |size| {
         const cell: Rect = .{ .x = 0, .y = 0, .width = size[0], .height = size[1] };

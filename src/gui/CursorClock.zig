@@ -10,45 +10,45 @@ started_ns: u64 = 0,
 
 /// Changes reset the phase; the source remains an owned semantic value.
 /// Example: `clock.observe(target, now_ns);`
-pub fn observe(clock: *Clock, target: Target, now_ns: u64) void {
-    if (!std.meta.eql(clock.target, target)) {
-        clock.target = target;
-        clock.reset(now_ns);
+pub fn observe(self: *Clock, target: Target, now_ns: u64) void {
+    if (!std.meta.eql(self.target, target)) {
+        self.target = target;
+        self.reset(now_ns);
     }
 }
 
 /// Input and focus restart a visible phase. Example: `clock.reset(now_ns);`
-pub fn reset(clock: *Clock, now_ns: u64) void {
-    clock.started_ns = now_ns;
+pub fn reset(self: *Clock, now_ns: u64) void {
+    self.started_ns = now_ns;
 }
 
-pub fn shown(clock: *const Clock, now_ns: u64) bool {
-    if (!clock.blinks()) {
+pub fn shown(self: *const Clock, now_ns: u64) bool {
+    if (!self.blinks()) {
         return true;
     }
 
-    return ((now_ns -| clock.started_ns) / clock.interval()) % 2 == 0;
+    return ((now_ns -| self.started_ns) / self.interval()) % 2 == 0;
 }
 
 /// Zero parks the native timer. Late wakeups fold missed phases.
 /// Example: `const delay_ms = clock.wakeupAfter(now_ns);`
-pub fn wakeupAfter(clock: *const Clock, now_ns: u64) u32 {
-    if (!clock.blinks()) {
+pub fn wakeupAfter(self: *const Clock, now_ns: u64) u32 {
+    if (!self.blinks()) {
         return 0;
     }
 
-    const remaining = clock.interval() - (now_ns -| clock.started_ns) % clock.interval();
+    const remaining = self.interval() - (now_ns -| self.started_ns) % self.interval();
     return @intCast(std.math.divCeil(u64, remaining, std.time.ns_per_ms) catch unreachable);
 }
 
-fn blinks(clock: *const Clock) bool {
-    const cursor = clock.target.cursor;
-    return clock.focused and cursor.visible and cursor.appearance.blink and
-        (cursor.appearance.shape != .default or clock.config.blink);
+fn blinks(self: *const Clock) bool {
+    const cursor = self.target.cursor;
+    return self.focused and cursor.visible and cursor.appearance.blink and
+        (cursor.appearance.shape != .default or self.config.blink);
 }
 
-fn interval(clock: *const Clock) u64 {
-    return @as(u64, clock.config.blink_interval_ms) * std.time.ns_per_ms;
+fn interval(self: *const Clock) u64 {
+    return @as(u64, self.config.blink_interval_ms) * std.time.ns_per_ms;
 }
 
 test "cursor deadlines fold late wakeups and park for hidden steady or unfocused cursors" {

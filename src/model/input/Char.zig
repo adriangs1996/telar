@@ -13,14 +13,14 @@ pub fn init(text: []const u8) Char {
     return char;
 }
 
-pub fn slice(char: *const Char) []const u8 {
-    return char.bytes[0..char.len];
+pub fn slice(self: *const Char) []const u8 {
+    return self.bytes[0..self.len];
 }
 
-pub fn eql(char: *const Char, text: []const u8) bool {
+pub fn eql(self: *const Char, text: []const u8) bool {
     return std.mem.eql(
         u8,
-        char.slice(),
+        self.slice(),
         text,
     );
 }

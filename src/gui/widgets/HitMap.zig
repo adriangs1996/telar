@@ -11,27 +11,27 @@ len: usize = 0,
 
 /// Rejects overflow rather than publishing a drawn control without a target.
 /// Example: `try hits.add(.{ .area = row, .action = action });`
-pub fn add(hits: *HitMap, hit: Hit) !void {
+pub fn add(self: *HitMap, hit: Hit) !void {
     if (hit.area.isEmpty()) {
         return;
     }
 
-    if (hits.len == hits.items.len) {
+    if (self.len == self.items.len) {
         return error.ChromeHitCapacityExceeded;
     }
 
-    hits.items[hits.len] = hit;
-    hits.len += 1;
+    self.items[self.len] = hit;
+    self.len += 1;
 }
 
 /// Later targets take precedence, as later quads do.
 /// Example: `const action = hits.at(.{ mouse.x, mouse.y });`
-pub fn at(hits: *const HitMap, point: [2]u16) ?action.Action {
-    var index = hits.len;
+pub fn at(self: *const HitMap, point: [2]u16) ?action.Action {
+    var index = self.len;
     while (index > 0) {
         index -= 1;
-        if (hits.items[index].area.contains(point[0], point[1])) {
-            return hits.items[index].action;
+        if (self.items[index].area.contains(point[0], point[1])) {
+            return self.items[index].action;
         }
     }
 

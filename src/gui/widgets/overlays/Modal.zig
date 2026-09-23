@@ -18,17 +18,17 @@ pub fn bounds(host: core.Rect, wanted: core.Rect) core.Rect {
 
 /// Clears the modal before drawing its border and title.
 /// Example: `try (Modal{ .area = area, .title = "Rename tab" }).draw(canvas);`
-pub fn draw(modal: Modal, canvas: *Canvas) !void {
+pub fn draw(self: Modal, canvas: *Canvas) !void {
     const palette = canvas.theme.palette;
-    try canvas.fill(modal.area, canvas.covering(palette.panel_bg));
-    try canvas.border(modal.area, palette.accent);
+    try canvas.fill(self.area, canvas.covering(palette.panel_bg));
+    try canvas.border(self.area, palette.accent);
 
-    if (modal.area.w > 4) {
-        try canvas.text(.{ .x = modal.area.x + 2, .y = modal.area.y, .w = modal.area.w - 4, .h = 1 }, .{ .text = modal.title, .color = palette.accent, .bold = true });
+    if (self.area.w > 4) {
+        try canvas.text(.{ .x = self.area.x + 2, .y = self.area.y, .w = self.area.w - 4, .h = 1 }, .{ .text = self.title, .color = palette.accent, .bold = true });
     }
 }
 
 /// Example: `const inner = modal.content();`.
-pub fn content(modal: Modal) core.Rect {
-    return if (modal.area.w > 2 and modal.area.h > 2) modal.area.inner(1) else modal.area;
+pub fn content(self: Modal) core.Rect {
+    return if (self.area.w > 2 and self.area.h > 2) self.area.inner(1) else self.area;
 }

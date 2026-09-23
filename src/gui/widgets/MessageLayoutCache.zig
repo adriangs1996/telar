@@ -15,8 +15,8 @@ next_metric: usize = 0,
 next_plan: usize = 0,
 
 /// Example: `if (cache.measurement(key)) |result| applyGeometry(result);`
-pub fn measurement(cache: *const Cache, key: Key) ?Result {
-    for (cache.metrics) |entry| {
+pub fn measurement(self: *const Cache, key: Key) ?Result {
+    for (self.metrics) |entry| {
         if (entry) |metric| {
             if (std.meta.eql(metric.key, key)) {
                 return metric.result;
@@ -28,8 +28,8 @@ pub fn measurement(cache: *const Cache, key: Key) ?Result {
 }
 
 /// Example: `cache.remember(key, .{ .height = delta_y, .x = x });`
-pub fn remember(cache: *Cache, key: Key, result: Result) void {
-    for (&cache.metrics) |*entry| {
+pub fn remember(self: *Cache, key: Key, result: Result) void {
+    for (&self.metrics) |*entry| {
         if (entry.*) |metric| {
             if (std.meta.eql(metric.key, key)) {
                 entry.* = .{ .key = key, .result = result };
@@ -38,13 +38,13 @@ pub fn remember(cache: *Cache, key: Key, result: Result) void {
         }
     }
 
-    cache.metrics[cache.next_metric] = .{ .key = key, .result = result };
-    cache.next_metric = (cache.next_metric + 1) % metric_capacity;
+    self.metrics[self.next_metric] = .{ .key = key, .result = result };
+    self.next_metric = (self.next_metric + 1) % metric_capacity;
 }
 
 /// Example: `if (cache.plan(key)) |plan| try replay(plan);`
-pub fn plan(cache: *const Cache, key: Key) ?*const Plan {
-    for (&cache.plans) |*entry| {
+pub fn plan(self: *const Cache, key: Key) ?*const Plan {
+    for (&self.plans) |*entry| {
         if (entry.valid and std.meta.eql(entry.key, key)) {
             return entry;
         }
@@ -55,9 +55,9 @@ pub fn plan(cache: *const Cache, key: Key) ?*const Plan {
 
 /// Reserves one replaceable plan during the synchronous preparation phase.
 /// Example: `const plan = cache.begin(key);`
-pub fn begin(cache: *Cache, key: Key) *Plan {
-    const entry = &cache.plans[cache.next_plan];
-    cache.next_plan = (cache.next_plan + 1) % plan_capacity;
+pub fn begin(self: *Cache, key: Key) *Plan {
+    const entry = &self.plans[self.next_plan];
+    self.next_plan = (self.next_plan + 1) % plan_capacity;
     entry.key = key;
     entry.len = 0;
     entry.valid = false;

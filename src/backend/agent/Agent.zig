@@ -111,8 +111,8 @@ pub fn init(identity: Identity) Agent {
 ///     return &agent;
 /// }
 /// ```
-pub fn matches(agent: *const Agent, key: PaneKey) bool {
-    return agent.key.id == key.id and agent.key.generation == key.generation;
+pub fn matches(self: *const Agent, key: PaneKey) bool {
+    return self.key.id == key.id and self.key.generation == key.generation;
 }
 
 /// Returns the exact pane generation that identifies this aggregate.
@@ -120,8 +120,8 @@ pub fn matches(agent: *const Agent, key: PaneKey) bool {
 /// ```zig
 /// const key = agent.paneKey();
 /// ```
-pub fn paneKey(agent: *const Agent) PaneKey {
-    return agent.key;
+pub fn paneKey(self: *const Agent) PaneKey {
+    return self.key;
 }
 
 /// Applies authoritative foreground-process evidence and replaces evidence
@@ -132,28 +132,28 @@ pub fn paneKey(agent: *const Agent) PaneKey {
 ///     publishProjection();
 /// }
 /// ```
-pub fn applyProcess(agent: *Agent, observation: ProcessObservation) bool {
+pub fn applyProcess(self: *Agent, observation: ProcessObservation) bool {
     if (observation.provider == .unknown or observation.process_id == 0) {
         return false;
     }
 
-    const replaced_process = agent.process != null;
+    const replaced_process = self.process != null;
 
-    if (agent.process) |evidence| {
-        if (evidence.provider == observation.provider and agent.agent_process_id == observation.process_id) {
+    if (self.process) |evidence| {
+        if (evidence.provider == observation.provider and self.agent_process_id == observation.process_id) {
             return false;
         }
 
-        agent.screen = null;
-        agent.report = null;
-        agent.proxy.clear();
+        self.screen = null;
+        self.report = null;
+        self.proxy.clear();
     }
 
-    agent.agent_process_id = observation.process_id;
-    agent.process = Evidence.fromProcess(&observation);
-    agent.authority = if (replaced_process) .active else switch (agent.authority) {
+    self.agent_process_id = observation.process_id;
+    self.process = Evidence.fromProcess(&observation);
+    self.authority = if (replaced_process) .active else switch (self.authority) {
         .candidate, .stale, .exited => .active,
-        .active, .obscured, .resumed => agent.authority,
+        .active, .obscured, .resumed => self.authority,
     };
 
     return true;
@@ -166,7 +166,7 @@ pub fn applyProcess(agent: *Agent, observation: ProcessObservation) bool {
 ///     publishProjection();
 /// }
 /// ```
-pub fn applyProxy(agent: *Agent, observation: ProxyObservation) bool {
+pub fn applyProxy(self: *Agent, observation: ProxyObservation) bool {
     if (observation.dialect == .unknown) {
         return false;
     }
@@ -176,37 +176,37 @@ pub fn applyProxy(agent: *Agent, observation: ProxyObservation) bool {
     // process-backed agent may talk to any host, so its exchanges count
     // regardless of dialect; only proxy- or screen-derived identity rejects a
     // foreign one.
-    const established_provider = agent.provider();
+    const established_provider = self.provider();
 
-    if (agent.process == null and established_provider != .unknown and observation.impliedProvider() != established_provider) {
+    if (self.process == null and established_provider != .unknown and observation.impliedProvider() != established_provider) {
         return false;
     }
 
-    switch (agent.proxy.apply(observation)) {
+    switch (self.proxy.apply(observation)) {
         .ignored => return false,
         .activity_refreshed => return true,
         .evidence_replaced => {},
     }
 
     if (providers.of(established_provider).ready_prompt_settles_report and observation.phase == .request_started) {
-        if (agent.screen) |screen| {
+        if (self.screen) |screen| {
             if (screen.status == .ready and screen.observed_at_ms <= observation.observed_at_ms) {
-                agent.screen = null;
+                self.screen = null;
             }
         }
     }
 
-    if (agent.authority == .obscured and
+    if (self.authority == .obscured and
         (observation.phase == .request_started or observation.phase == .response_activity))
     {
-        agent.screen = null;
-        agent.authority = .resumed;
+        self.screen = null;
+        self.authority = .resumed;
         return true;
     }
 
-    agent.authority = switch (agent.authority) {
+    self.authority = switch (self.authority) {
         .candidate, .stale => .active,
-        .active, .obscured, .resumed => agent.authority,
+        .active, .obscured, .resumed => self.authority,
         .exited => return false,
     };
 
@@ -222,36 +222,36 @@ pub fn applyProxy(agent: *Agent, observation: ProxyObservation) bool {
 ///     publishProjection();
 /// }
 /// ```
-pub fn applyReport(agent: *Agent, observation: ReportObservation) bool {
+pub fn applyReport(self: *Agent, observation: ReportObservation) bool {
     if (observation.state == .exited) {
-        if (agent.report == null) {
+        if (self.report == null) {
             return false;
         }
 
-        agent.report = null;
-        agent.report_detail = .{};
+        self.report = null;
+        self.report_detail = .{};
         return true;
     }
 
-    agent.report_settling = observation.state == .settling;
-    agent.report_detail = .{
+    self.report_settling = observation.state == .settling;
+    self.report_detail = .{
         .blocked_reason = observation.blocked_reason,
         .event = EventLine.init(observation.event),
     };
-    if (providers.of(agent.provider()).ready_prompt_settles_report and observation.state == .working) {
+    if (providers.of(self.provider()).ready_prompt_settles_report and observation.state == .working) {
         // A prompt from before this tool or turn cannot become completion
         // evidence later, when the report expires.
-        if (agent.screen) |screen| {
+        if (self.screen) |screen| {
             if (screen.status == .ready) {
-                agent.screen = null;
+                self.screen = null;
             }
         }
     }
 
-    agent.report = Evidence.fromReport(agent.provider(), &observation);
-    agent.authority = switch (agent.authority) {
+    self.report = Evidence.fromReport(self.provider(), &observation);
+    self.authority = switch (self.authority) {
         .candidate, .stale, .obscured => .active,
-        .active, .resumed => agent.authority,
+        .active, .resumed => self.authority,
         .exited => .active,
     };
     return true;
@@ -265,9 +265,9 @@ pub fn applyReport(agent: *Agent, observation: ReportObservation) bool {
 ///     publishProjection();
 /// }
 /// ```
-pub fn applyScreen(agent: *Agent, observation: ScreenObservation) bool {
+pub fn applyScreen(self: *Agent, observation: ScreenObservation) bool {
     const signal = observation.signal;
-    const process_provider = if (agent.process) |evidence| evidence.provider else core.AgentProvider.unknown;
+    const process_provider = if (self.process) |evidence| evidence.provider else core.AgentProvider.unknown;
 
     if (process_provider != .unknown and signal.provider != .unknown and signal.provider != process_provider) {
         return false;
@@ -278,9 +278,9 @@ pub fn applyScreen(agent: *Agent, observation: ScreenObservation) bool {
     else if (signal.provider != .unknown)
         signal.provider
     else
-        agent.provider();
+        self.provider();
 
-    if (signal.status == .ready and !signal.identity_confirmed and agent.provider() != signal.provider) {
+    if (signal.status == .ready and !signal.identity_confirmed and self.provider() != signal.provider) {
         return false;
     }
 
@@ -288,40 +288,40 @@ pub fn applyScreen(agent: *Agent, observation: ScreenObservation) bool {
         return false;
     }
 
-    if (signal.status == .ready and agent.projected.status == .working and !signal.ready_confirmed) {
+    if (signal.status == .ready and self.projected.status == .working and !signal.ready_confirmed) {
         return false;
     }
 
     if (providers.of(known_provider).ready_prompt_settles_report) {
-        if (agent.screen) |screen| {
+        if (self.screen) |screen| {
             if (screenOrder(observation, screen) == .lt) {
                 return false;
             }
         }
 
-        if (agent.report) |report| {
+        if (self.report) |report| {
             if (screenOrder(observation, report) != .gt) {
                 return false;
             }
 
             if (signal.status == .ready) {
-                if (!signal.ready_confirmed or (report.status == .working and !agent.report_settling and !report.isExpired(observation.observed_at_ms))) {
+                if (!signal.ready_confirmed or (report.status == .working and !self.report_settling and !report.isExpired(observation.observed_at_ms))) {
                     return false;
                 }
 
-                agent.report = null;
+                self.report = null;
             } else if (report.status == .ready) {
                 // SessionStart and Interrupt describe a moment, not a
                 // permanent veto of later visible activity.
-                agent.report = null;
+                self.report = null;
             }
         }
     }
 
-    agent.screen = Evidence.fromScreen(known_provider, &observation);
+    self.screen = Evidence.fromScreen(known_provider, &observation);
 
     if (signal.status == .blocked) {
-        agent.authority = .obscured;
+        self.authority = .obscured;
     }
 
     return true;
@@ -335,31 +335,31 @@ pub fn applyScreen(agent: *Agent, observation: ScreenObservation) bool {
 ///     removeAgent();
 /// }
 /// ```
-pub fn expire(agent: *Agent, now_ms: i64) bool {
-    if (agent.managed != null) {
+pub fn expire(self: *Agent, now_ms: i64) bool {
+    if (self.managed != null) {
         return false;
     }
 
-    _ = agent.proxy.clearExpired(now_ms);
+    _ = self.proxy.clearExpired(now_ms);
 
-    if (agent.screen) |evidence| {
+    if (self.screen) |evidence| {
         if (evidence.isExpired(now_ms)) {
-            agent.screen = null;
+            self.screen = null;
         }
     }
 
-    if (agent.report) |evidence| {
+    if (self.report) |evidence| {
         if (evidence.isExpired(now_ms)) {
-            agent.report = null;
+            self.report = null;
         }
     }
 
-    if (agent.process != null or agent.proxy.currentEvidence() != null or agent.screen != null or agent.report != null) {
+    if (self.process != null or self.proxy.currentEvidence() != null or self.screen != null or self.report != null) {
         return false;
     }
 
-    agent.authority = .stale;
-    agent.retire();
+    self.authority = .stale;
+    self.retire();
     return true;
 }
 
@@ -370,12 +370,12 @@ pub fn expire(agent: *Agent, now_ms: i64) bool {
 ///     removeAgent();
 /// }
 /// ```
-pub fn processExited(agent: *Agent) bool {
-    if (agent.process == null) {
+pub fn processExited(self: *Agent) bool {
+    if (self.process == null) {
         return false;
     }
 
-    agent.retire();
+    self.retire();
     return true;
 }
 
@@ -384,8 +384,8 @@ pub fn processExited(agent: *Agent) bool {
 /// ```zig
 /// agent.retire();
 /// ```
-pub fn retire(agent: *Agent) void {
-    agent.title.clearSensitive();
+pub fn retire(self: *Agent) void {
+    self.title.clearSensitive();
 }
 
 /// Recomputes the client-facing projection from the aggregate's current
@@ -394,37 +394,37 @@ pub fn retire(agent: *Agent) void {
 /// ```zig
 /// const result = agent.reproject(.{ .sequence = 4, .now_ms = now_ms, .can_queue_description = true });
 /// ```
-pub fn reproject(agent: *Agent, context: ProjectionContext) ProjectionResult {
-    const evidence = agent.chooseEvidence(context.now_ms) orelse return .no_evidence;
-    const provider_value = agent.projectionProvider(evidence);
-    const previous = agent.projected;
+pub fn reproject(self: *Agent, context: ProjectionContext) ProjectionResult {
+    const evidence = self.chooseEvidence(context.now_ms) orelse return .no_evidence;
+    const provider_value = self.projectionProvider(evidence);
+    const previous = self.projected;
 
-    agent.ensurePlaceholder();
-    agent.projected = .{
-        .pane_id = agent.key.id,
-        .pane_generation = agent.key.generation,
-        .process_id = agent.agent_process_id orelse agent.process_id,
-        .session_id = agent.session_id,
+    self.ensurePlaceholder();
+    self.projected = .{
+        .pane_id = self.key.id,
+        .pane_generation = self.key.generation,
+        .process_id = self.agent_process_id orelse self.process_id,
+        .session_id = self.session_id,
         .provider = provider_value,
-        .status = agent.visibleStatus(previous.status, evidence.status),
+        .status = self.visibleStatus(previous.status, evidence.status),
         .source = evidence.source,
-        .authority = agent.authority,
+        .authority = self.authority,
         .confidence = evidence.confidence,
         .sequence = context.sequence,
         .observed_at_ms = evidence.observed_at_ms,
         .expires_at_ms = evidence.expires_at_ms,
     };
 
-    agent.projected.blocked_reason = agent.blockedReason(evidence);
-    if (agent.projected.status != previous.status or agent.status_changed_at_ms == 0) {
-        agent.status_changed_at_ms = context.now_ms;
+    self.projected.blocked_reason = self.blockedReason(evidence);
+    if (self.projected.status != previous.status or self.status_changed_at_ms == 0) {
+        self.status_changed_at_ms = context.now_ms;
     }
 
-    const title_changed = agent.advanceTitle(evidence.status, context.can_queue_description);
-    const event_changed = agent.refreshEvent(evidence);
+    const title_changed = self.advanceTitle(evidence.status, context.can_queue_description);
+    const event_changed = self.refreshEvent(evidence);
 
-    if (sameProjection(previous, agent.projected)) {
-        agent.projected.sequence = previous.sequence;
+    if (sameProjection(previous, self.projected)) {
+        self.projected.sequence = previous.sequence;
         return if (title_changed or event_changed) .changed else .unchanged;
     }
 
@@ -438,13 +438,13 @@ pub fn reproject(agent: *Agent, context: ProjectionContext) ProjectionResult {
 /// ```zig
 /// const entry = agent.snapshot(now_ms);
 /// ```
-pub fn snapshot(agent: *const Agent, now_ms: i64) core.AgentSnapshotEntry {
-    var entry = agent.projected;
-    entry.session_title = agent.title.slice();
-    entry.title_source = agent.title.source;
-    entry.title_state = agent.title.state;
-    entry.last_event = agent.event.slice();
-    entry.status_age_s = agent.statusAgeSeconds(now_ms);
+pub fn snapshot(self: *const Agent, now_ms: i64) core.AgentSnapshotEntry {
+    var entry = self.projected;
+    entry.session_title = self.title.slice();
+    entry.title_source = self.title.source;
+    entry.title_state = self.title.state;
+    entry.last_event = self.event.slice();
+    entry.status_age_s = self.statusAgeSeconds(now_ms);
     return entry;
 }
 
@@ -454,12 +454,12 @@ pub fn snapshot(agent: *const Agent, now_ms: i64) core.AgentSnapshotEntry {
 /// ```zig
 /// const age = agent.statusAgeSeconds(now_ms);
 /// ```
-pub fn statusAgeSeconds(agent: *const Agent, now_ms: i64) u32 {
-    if (agent.status_changed_at_ms == 0 or now_ms <= agent.status_changed_at_ms) {
+pub fn statusAgeSeconds(self: *const Agent, now_ms: i64) u32 {
+    if (self.status_changed_at_ms == 0 or now_ms <= self.status_changed_at_ms) {
         return 0;
     }
 
-    return @intCast(@min(@divFloor(now_ms - agent.status_changed_at_ms, 1000), std.math.maxInt(u32)));
+    return @intCast(@min(@divFloor(now_ms - self.status_changed_at_ms, 1000), std.math.maxInt(u32)));
 }
 
 /// Returns the last projected status for transition detection.
@@ -467,8 +467,8 @@ pub fn statusAgeSeconds(agent: *const Agent, now_ms: i64) u32 {
 /// ```zig
 /// const status = agent.projectedStatus();
 /// ```
-pub fn projectedStatus(agent: *const Agent) core.AgentStatus {
-    return agent.projected.status;
+pub fn projectedStatus(self: *const Agent) core.AgentStatus {
+    return self.projected.status;
 }
 
 /// Stores the agent's own session reference. A later report replaces an
@@ -477,14 +477,14 @@ pub fn projectedStatus(agent: *const Agent) core.AgentStatus {
 /// ```zig
 /// if (agent.applySessionReference(reference)) persist();
 /// ```
-pub fn applySessionReference(agent: *Agent, reference: SessionReference) bool {
-    if (agent.session_reference) |existing| {
+pub fn applySessionReference(self: *Agent, reference: SessionReference) bool {
+    if (self.session_reference) |existing| {
         if (std.mem.eql(u8, existing.slice(), reference.slice())) {
             return false;
         }
     }
 
-    agent.session_reference = reference;
+    self.session_reference = reference;
     return true;
 }
 
@@ -496,12 +496,12 @@ pub fn applySessionReference(agent: *Agent, reference: SessionReference) bool {
 ///     publishProjection();
 /// }
 /// ```
-pub fn acknowledge(agent: *Agent) bool {
-    if (agent.seen) {
+pub fn acknowledge(self: *Agent) bool {
+    if (self.seen) {
         return false;
     }
 
-    agent.seen = true;
+    self.seen = true;
     return true;
 }
 
@@ -510,28 +510,28 @@ pub fn acknowledge(agent: *Agent) bool {
 /// ```zig
 /// _ = agent.observeInput(bytes);
 /// ```
-pub fn observeInput(agent: *Agent, bytes: []const u8) bool {
-    if (agent.title.phase != .waiting_query) {
+pub fn observeInput(self: *Agent, bytes: []const u8) bool {
+    if (self.title.phase != .waiting_query) {
         return false;
     }
 
-    if (!agent.title.capture.feed(bytes)) {
+    if (!self.title.capture.feed(bytes)) {
         return false;
     }
 
-    agent.title.phase = .waiting_work;
+    self.title.phase = .waiting_work;
     return true;
 }
 
 /// Queues title generation for an accepted composer submission even if lifecycle updates coalesce.
 /// Example: `_ = agent.observeSubmittedPrompt("Fix tests\nKeep behavior", true);`.
-pub fn observeSubmittedPrompt(agent: *Agent, text: []const u8, can_queue: bool) bool {
-    if (agent.title.phase != .waiting_query or !agent.title.capture.submit(text)) {
+pub fn observeSubmittedPrompt(self: *Agent, text: []const u8, can_queue: bool) bool {
+    if (self.title.phase != .waiting_query or !self.title.capture.submit(text)) {
         return false;
     }
 
-    agent.title.phase = .waiting_work;
-    return agent.advanceTitle(.working, can_queue);
+    self.title.phase = .waiting_work;
+    return self.advanceTitle(.working, can_queue);
 }
 
 /// Reports whether this aggregate currently owns the sole running description
@@ -542,8 +542,8 @@ pub fn observeSubmittedPrompt(agent: *Agent, text: []const u8, can_queue: bool) 
 ///     waitForCompletion();
 /// }
 /// ```
-pub fn hasRunningDescription(agent: *const Agent) bool {
-    return agent.title.phase == .running;
+pub fn hasRunningDescription(self: *const Agent) bool {
+    return self.title.phase == .running;
 }
 
 /// Reports whether this aggregate consumes one bounded description slot.
@@ -553,8 +553,8 @@ pub fn hasRunningDescription(agent: *const Agent) bool {
 ///     pending += 1;
 /// }
 /// ```
-pub fn hasPendingDescription(agent: *const Agent) bool {
-    return agent.title.phase == .queued or agent.title.phase == .running;
+pub fn hasPendingDescription(self: *const Agent) bool {
+    return self.title.phase == .queued or self.title.phase == .running;
 }
 
 /// Starts this aggregate's queued description job, or permanently fails an
@@ -565,29 +565,29 @@ pub fn hasPendingDescription(agent: *const Agent) bool {
 ///     publishFailure();
 /// }
 /// ```
-pub fn startDescriptionJob(agent: *Agent) DescriptionJobResult {
-    if (agent.title.phase != .queued) {
+pub fn startDescriptionJob(self: *Agent) DescriptionJobResult {
+    if (self.title.phase != .queued) {
         return .not_queued;
     }
 
     var normalized: [description.max_query_bytes]u8 = undefined;
-    const query = description.normalizeQuery(agent.title.capture.raw(), &normalized) catch {
-        agent.title.phase = .failed;
-        agent.title.state = .failed;
-        agent.title.clearSensitive();
+    const query = description.normalizeQuery(self.title.capture.raw(), &normalized) catch {
+        self.title.phase = .failed;
+        self.title.state = .failed;
+        self.title.clearSensitive();
         return .failed;
     };
 
     var job: Job = .{
-        .pane = agent.key,
-        .session_id = agent.session_id,
-        .provider = agent.provider(),
+        .pane = self.key,
+        .session_id = self.session_id,
+        .provider = self.provider(),
         .query_len = @intCast(query.len),
     };
     @memcpy(job.query[0..query.len], query);
     std.crypto.secureZero(u8, &normalized);
-    agent.title.clearSensitive();
-    agent.title.phase = .running;
+    self.title.clearSensitive();
+    self.title.phase = .running;
     return .{ .started = job };
 }
 
@@ -597,9 +597,9 @@ pub fn startDescriptionJob(agent: *Agent) DescriptionJobResult {
 /// ```zig
 /// const finished = agent.finishDescription(&result) orelse return;
 /// ```
-pub fn finishDescription(agent: *Agent, result: *const Result) ?DescriptionFinished {
-    if (!agent.matches(result.pane) or agent.title.phase != .running or
-        !std.mem.eql(u8, &agent.session_id, &result.session_id))
+pub fn finishDescription(self: *Agent, result: *const Result) ?DescriptionFinished {
+    if (!self.matches(result.pane) or self.title.phase != .running or
+        !std.mem.eql(u8, &self.session_id, &result.session_id))
     {
         return null;
     }
@@ -607,32 +607,32 @@ pub fn finishDescription(agent: *Agent, result: *const Result) ?DescriptionFinis
     if (result.status == .success) {
         const value = result.titleSlice();
 
-        if (value.len == 0 or value.len > agent.title.bytes.len or !validTitle(value)) {
-            agent.title.phase = .failed;
-            agent.title.state = .failed;
+        if (value.len == 0 or value.len > self.title.bytes.len or !validTitle(value)) {
+            self.title.phase = .failed;
+            self.title.state = .failed;
         } else {
-            @memcpy(agent.title.bytes[0..value.len], value);
-            agent.title.len = @intCast(value.len);
-            agent.title.source = .generated;
-            agent.title.state = .ready;
-            agent.title.phase = .finished;
+            @memcpy(self.title.bytes[0..value.len], value);
+            self.title.len = @intCast(value.len);
+            self.title.source = .generated;
+            self.title.state = .ready;
+            self.title.phase = .finished;
         }
     } else {
-        agent.title.phase = .failed;
-        agent.title.state = .failed;
+        self.title.phase = .failed;
+        self.title.state = .failed;
     }
 
-    std.debug.assert(agent.title.state == .ready or agent.title.state == .failed);
+    std.debug.assert(self.title.state == .ready or self.title.state == .failed);
     var finished: DescriptionFinished = .{
-        .pane = agent.key,
-        .session_id = agent.session_id,
-        .source = if (agent.title.state == .ready) agent.title.source else .telar,
-        .state = agent.title.state,
+        .pane = self.key,
+        .session_id = self.session_id,
+        .source = if (self.title.state == .ready) self.title.source else .telar,
+        .state = self.title.state,
     };
 
-    if (agent.title.state == .ready) {
-        finished.title_len = agent.title.len;
-        @memcpy(finished.title[0..agent.title.len], agent.title.slice());
+    if (self.title.state == .ready) {
+        finished.title_len = self.title.len;
+        @memcpy(finished.title[0..self.title.len], self.title.slice());
     }
 
     return finished;
@@ -643,12 +643,12 @@ pub fn finishDescription(agent: *Agent, result: *const Result) ?DescriptionFinis
 /// ```zig
 /// _ = try agent.setManualTitle("Investigate proxy lifecycle");
 /// ```
-pub fn setManualTitle(agent: *Agent, value: []const u8) !void {
+pub fn setManualTitle(self: *Agent, value: []const u8) !void {
     if (!validTitle(value)) {
         return error.InvalidAgentTitle;
     }
 
-    agent.applyReadyTitle(value, .manual);
+    self.applyReadyTitle(value, .manual);
 }
 
 /// Applies the name the agent's own session carries, as reported by its
@@ -659,13 +659,13 @@ pub fn setManualTitle(agent: *Agent, value: []const u8) !void {
 /// ```zig
 /// if (try agent.reportTitle("Fix proxy")) publish();
 /// ```
-pub fn reportTitle(agent: *Agent, value: []const u8) !bool {
+pub fn reportTitle(self: *Agent, value: []const u8) !bool {
     if (value.len == 0) {
-        if (agent.title.source != .agent) {
+        if (self.title.source != .agent) {
             return false;
         }
 
-        agent.title = .{ .phase = .finished };
+        self.title = .{ .phase = .finished };
         return true;
     }
 
@@ -673,11 +673,11 @@ pub fn reportTitle(agent: *Agent, value: []const u8) !bool {
         return error.InvalidAgentTitle;
     }
 
-    if (agent.title.source == .agent and std.mem.eql(u8, agent.title.slice(), value)) {
+    if (self.title.source == .agent and std.mem.eql(u8, self.title.slice(), value)) {
         return false;
     }
 
-    agent.applyReadyTitle(value, .agent);
+    self.applyReadyTitle(value, .agent);
     return true;
 }
 
@@ -687,8 +687,8 @@ pub fn reportTitle(agent: *Agent, value: []const u8) !bool {
 /// ```zig
 /// agent.restoreTitle(title);
 /// ```
-pub fn restoreTitle(agent: *Agent, title: SessionTitle) void {
-    agent.applyReadyTitle(title.slice(), title.source);
+pub fn restoreTitle(self: *Agent, title: SessionTitle) void {
+    self.applyReadyTitle(title.slice(), title.source);
 }
 
 /// Returns the title worth checkpointing: a ready generated, manual or agent
@@ -697,37 +697,37 @@ pub fn restoreTitle(agent: *Agent, title: SessionTitle) void {
 /// ```zig
 /// const title = agent.durableTitle() orelse return;
 /// ```
-pub fn durableTitle(agent: *const Agent) ?SessionTitle {
-    if (agent.title.state != .ready) {
+pub fn durableTitle(self: *const Agent) ?SessionTitle {
+    if (self.title.state != .ready) {
         return null;
     }
 
-    return SessionTitle.init(agent.title.slice(), agent.title.source) catch null;
+    return SessionTitle.init(self.title.slice(), self.title.source) catch null;
 }
 
-fn applyReadyTitle(agent: *Agent, value: []const u8, source: core.AgentTitleSource) void {
+fn applyReadyTitle(self: *Agent, value: []const u8, source: core.AgentTitleSource) void {
     std.debug.assert(validTitle(value));
-    agent.title.clearSensitive();
-    @memcpy(agent.title.bytes[0..value.len], value);
-    agent.title.len = @intCast(value.len);
-    agent.title.source = source;
-    agent.title.state = .ready;
-    agent.title.phase = .finished;
+    self.title.clearSensitive();
+    @memcpy(self.title.bytes[0..value.len], value);
+    self.title.len = @intCast(value.len);
+    self.title.source = source;
+    self.title.state = .ready;
+    self.title.phase = .finished;
 }
 
 // The hook names the reason when it has one. Without it, a response that
 // closed on a tool request while nothing is in flight is a permission
 // prompt; the remaining blocked states carry no evidence about their cause.
-fn blockedReason(agent: *const Agent, evidence: Evidence) core.AgentBlockedReason {
-    if (agent.projected.status != .blocked) {
+fn blockedReason(self: *const Agent, evidence: Evidence) core.AgentBlockedReason {
+    if (self.projected.status != .blocked) {
         return .none;
     }
 
-    if (evidence.source == .lifecycle_report and agent.report_detail.blocked_reason != .none) {
-        return agent.report_detail.blocked_reason;
+    if (evidence.source == .lifecycle_report and self.report_detail.blocked_reason != .none) {
+        return self.report_detail.blocked_reason;
     }
 
-    if (agent.proxy.awaitingToolResult()) {
+    if (self.proxy.awaitingToolResult()) {
         return .permission;
     }
 
@@ -736,55 +736,55 @@ fn blockedReason(agent: *const Agent, evidence: Evidence) core.AgentBlockedReaso
 
 // The event line follows the report that decides the projection; any other
 // evidence carries no line. Returns whether the shown line changed.
-fn refreshEvent(agent: *Agent, evidence: Evidence) bool {
-    const next: EventLine = if (evidence.source == .lifecycle_report) agent.report_detail.event else .{};
-    if (agent.event.eql(&next)) {
+fn refreshEvent(self: *Agent, evidence: Evidence) bool {
+    const next: EventLine = if (evidence.source == .lifecycle_report) self.report_detail.event else .{};
+    if (self.event.eql(&next)) {
         return false;
     }
 
-    agent.event = next;
+    self.event = next;
     return true;
 }
 
-fn provider(agent: *const Agent) core.AgentProvider {
-    if (agent.managed) |evidence| {
+fn provider(self: *const Agent) core.AgentProvider {
+    if (self.managed) |evidence| {
         return evidence.provider;
     }
 
-    if (agent.process) |evidence| {
+    if (self.process) |evidence| {
         return evidence.provider;
     }
 
-    if (agent.proxy.currentEvidence()) |evidence| {
+    if (self.proxy.currentEvidence()) |evidence| {
         if (evidence.provider != .unknown) {
             return evidence.provider;
         }
     }
 
-    if (agent.screen) |evidence| {
+    if (self.screen) |evidence| {
         return evidence.provider;
     }
 
     return .unknown;
 }
 
-fn chooseEvidence(agent: *const Agent, now_ms: i64) ?Evidence {
-    if (agent.managed) |evidence| {
+fn chooseEvidence(self: *const Agent, now_ms: i64) ?Evidence {
+    if (self.managed) |evidence| {
         return evidence;
     }
 
-    const process = agent.process;
-    const screen = if (agent.screen) |value|
+    const process = self.process;
+    const screen = if (self.screen) |value|
         if (!value.isExpired(now_ms)) value else null
     else
         null;
-    const proxy = if (agent.proxy.currentEvidence()) |value|
+    const proxy = if (self.proxy.currentEvidence()) |value|
         if (!value.isExpired(now_ms)) value else null
     else
         null;
 
     // An official lifecycle report outranks everything the runtime infers.
-    if (agent.report) |value| {
+    if (self.report) |value| {
         if (!value.isExpired(now_ms)) {
             return value;
         }
@@ -870,21 +870,21 @@ fn screenOrder(observation: ScreenObservation, evidence: Evidence) std.math.Orde
 /// A turn that finished while the previous projection was `working` stays
 /// `done` until acknowledged. Any other evidence status ends the unseen
 /// window so the next completion is reported again.
-fn visibleStatus(agent: *Agent, previous: core.AgentStatus, current: core.AgentStatus) core.AgentStatus {
+fn visibleStatus(self: *Agent, previous: core.AgentStatus, current: core.AgentStatus) core.AgentStatus {
     if (current != .ready) {
-        agent.seen = true;
+        self.seen = true;
         return current;
     }
 
     if (previous == .working) {
-        agent.seen = false;
+        self.seen = false;
     }
 
-    return if (agent.seen) .ready else .done;
+    return if (self.seen) .ready else .done;
 }
 
-fn projectionProvider(agent: *const Agent, evidence: Evidence) core.AgentProvider {
-    if (agent.process) |process| {
+fn projectionProvider(self: *const Agent, evidence: Evidence) core.AgentProvider {
+    if (self.process) |process| {
         return process.provider;
     }
 
@@ -892,11 +892,11 @@ fn projectionProvider(agent: *const Agent, evidence: Evidence) core.AgentProvide
         return evidence.provider;
     }
 
-    if (agent.proxy.currentEvidence()) |proxy| {
+    if (self.proxy.currentEvidence()) |proxy| {
         return proxy.provider;
     }
 
-    if (agent.screen) |screen| {
+    if (self.screen) |screen| {
         return screen.provider;
     }
 
@@ -905,33 +905,33 @@ fn projectionProvider(agent: *const Agent, evidence: Evidence) core.AgentProvide
 
 // The aggregate carries the generic placeholder only; delivery replaces it
 // with the manifest's own wording, next to the provider name it also adds.
-fn ensurePlaceholder(agent: *Agent) void {
-    if (agent.title.source != .telar) {
+fn ensurePlaceholder(self: *Agent) void {
+    if (self.title.source != .telar) {
         return;
     }
 
     const placeholder = core.generic_placeholder;
 
-    if (std.mem.eql(u8, agent.title.slice(), placeholder)) {
+    if (std.mem.eql(u8, self.title.slice(), placeholder)) {
         return;
     }
 
-    @memcpy(agent.title.bytes[0..placeholder.len], placeholder);
-    agent.title.len = @intCast(placeholder.len);
+    @memcpy(self.title.bytes[0..placeholder.len], placeholder);
+    self.title.len = @intCast(placeholder.len);
 }
 
-fn advanceTitle(agent: *Agent, status: core.AgentStatus, can_queue: bool) bool {
-    if (agent.title.phase != .waiting_work or status != .working) {
+fn advanceTitle(self: *Agent, status: core.AgentStatus, can_queue: bool) bool {
+    if (self.title.phase != .waiting_work or status != .working) {
         return false;
     }
 
     if (!can_queue) {
-        agent.title.phase = .failed;
-        agent.title.state = .failed;
-        agent.title.clearSensitive();
+        self.title.phase = .failed;
+        self.title.state = .failed;
+        self.title.clearSensitive();
     } else {
-        agent.title.phase = .queued;
-        agent.title.state = .pending;
+        self.title.phase = .queued;
+        self.title.state = .pending;
     }
 
     return true;
@@ -1192,8 +1192,8 @@ test "new proxy work resumes an obscured agent" {
 
 /// Applies official state from an app-server owned by this runtime.
 /// Example: `agent.applyManaged(.{ .status = .working, .observed_at_ms = now });`.
-pub fn applyManaged(agent: *Agent, state: @import("ManagedState.zig")) void {
-    agent.managed = .{
+pub fn applyManaged(self: *Agent, state: @import("ManagedState.zig")) void {
+    self.managed = .{
         .provider = .codex,
         .status = state.status,
         .source = .lifecycle_report,
@@ -1201,9 +1201,9 @@ pub fn applyManaged(agent: *Agent, state: @import("ManagedState.zig")) void {
         .observed_at_ms = state.observed_at_ms,
         .expires_at_ms = std.math.maxInt(i64),
     };
-    agent.authority = .active;
-    agent.report_detail.blocked_reason = if (state.status == .blocked) .permission else .none;
-    agent.report_detail.event = state.event;
+    self.authority = .active;
+    self.report_detail.blocked_reason = if (state.status == .blocked) .permission else .none;
+    self.report_detail.event = state.event;
 }
 
 test "managed official state persists idle and stronger authority cannot be replaced by heuristics" {

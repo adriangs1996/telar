@@ -13,7 +13,7 @@ pub fn init(gpa: std.mem.Allocator) !OutboxContext {
     return .{ .outbox = outbox };
 }
 
-pub fn deinit(context: *OutboxContext, gpa: std.mem.Allocator) void {
-    context.outbox.deinit(gpa);
-    gpa.destroy(context.outbox);
+pub fn deinit(self: *OutboxContext, gpa: std.mem.Allocator) void {
+    self.outbox.deinit(gpa);
+    gpa.destroy(self.outbox);
 }

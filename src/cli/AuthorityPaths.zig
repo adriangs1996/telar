@@ -18,10 +18,10 @@ pub fn init(directory: []const u8) !AuthorityPaths {
     return paths;
 }
 
-pub fn files(paths: *const AuthorityPaths) backend.AuthorityFiles {
-    return .{ .key = paths.key[0..paths.key_len], .certificate = paths.certificate[0..paths.certificate_len] };
+pub fn files(self: *const AuthorityPaths) backend.AuthorityFiles {
+    return .{ .key = self.key[0..self.key_len], .certificate = self.certificate[0..self.certificate_len] };
 }
 
-pub fn recordPath(paths: *const AuthorityPaths) []const u8 {
-    return paths.record[0..paths.record_len];
+pub fn recordPath(self: *const AuthorityPaths) []const u8 {
+    return self.record[0..self.record_len];
 }

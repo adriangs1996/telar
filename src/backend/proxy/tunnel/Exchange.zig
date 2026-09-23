@@ -25,11 +25,11 @@ status_code: u16 = 0,
 /// ```zig
 /// exchange.publish(.response_activity, 0);
 /// ```
-pub fn publish(exchange: *Exchange, phase: middleware.Phase, stream_id: u32) void {
-    exchange.publishStatus(.{
+pub fn publish(self: *Exchange, phase: middleware.Phase, stream_id: u32) void {
+    self.publishStatus(.{
         .phase = phase,
         .stream_id = stream_id,
-        .status_code = exchange.status_code,
+        .status_code = self.status_code,
     });
 }
 
@@ -43,8 +43,8 @@ pub fn publish(exchange: *Exchange, phase: middleware.Phase, stream_id: u32) voi
 ///     .status_code = 200,
 /// });
 /// ```
-pub fn publishStatus(exchange: *Exchange, status: Status) void {
-    if (exchange.dialect == .anthropic_messages) {
+pub fn publishStatus(self: *Exchange, status: Status) void {
+    if (self.dialect == .anthropic_messages) {
         const counter: ?metrics.Counter = switch (status.phase) {
             .request_started => .claude_inference_request,
             .provider_turn_completed => .claude_turn_completion,
@@ -54,19 +54,19 @@ pub fn publishStatus(exchange: *Exchange, status: Status) void {
         };
 
         if (counter) |selected| {
-            exchange.telemetry.record(selected);
+            self.telemetry.record(selected);
         }
     }
 
-    exchange.pipeline.publish(exchange.io, .{
-        .credential = exchange.credential,
-        .dialect = exchange.dialect,
+    self.pipeline.publish(self.io, .{
+        .credential = self.credential,
+        .dialect = self.dialect,
         .phase = status.phase,
-        .protocol = exchange.protocol,
-        .connection_id = exchange.connection_id,
+        .protocol = self.protocol,
+        .connection_id = self.connection_id,
         .stream_id = status.stream_id,
         .status_code = status.status_code,
-        .observed_at_ms = std.Io.Timestamp.now(exchange.io, .real).toMilliseconds(),
+        .observed_at_ms = std.Io.Timestamp.now(self.io, .real).toMilliseconds(),
     });
 }
 
@@ -80,15 +80,15 @@ pub fn publishStatus(exchange: *Exchange, status: Status) void {
 ///     .stream_id = 0,
 /// });
 /// ```
-pub fn transformContext(exchange: *const Exchange, target: TransformTarget) TransformContext {
+pub fn transformContext(self: *const Exchange, target: TransformTarget) TransformContext {
     return .{
-        .pane_id = exchange.credential.pane_id,
-        .pane_generation = exchange.credential.pane_generation,
-        .dialect = exchange.dialect,
-        .protocol = exchange.protocol,
+        .pane_id = self.credential.pane_id,
+        .pane_generation = self.credential.pane_generation,
+        .dialect = self.dialect,
+        .protocol = self.protocol,
         .direction = target.direction,
         .kind = target.kind,
-        .connection_id = exchange.connection_id,
+        .connection_id = self.connection_id,
         .stream_id = target.stream_id,
     };
 }
@@ -98,6 +98,6 @@ pub fn transformContext(exchange: *const Exchange, target: TransformTarget) Tran
 /// ```zig
 /// exchange.record(.claude_sse_payload_fragment);
 /// ```
-pub fn record(exchange: *Exchange, counter: metrics.Counter) void {
-    exchange.telemetry.record(counter);
+pub fn record(self: *Exchange, counter: metrics.Counter) void {
+    self.telemetry.record(counter);
 }

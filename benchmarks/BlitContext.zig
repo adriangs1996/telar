@@ -46,20 +46,20 @@ pub fn init(gpa: std.mem.Allocator, io: std.Io) !BlitContext {
     };
 }
 
-pub fn deinit(context: *BlitContext) void {
-    context.buffer.deinit();
-    context.state.deinit(context.gpa);
-    context.terminal.deinit(context.gpa);
+pub fn deinit(self: *BlitContext) void {
+    self.buffer.deinit();
+    self.state.deinit(self.gpa);
+    self.terminal.deinit(self.gpa);
 }
 
 /// Copies every row regardless of damage. Example: `const copied = context.blitAll();`
-pub fn blitAll(context: *BlitContext) u64 {
+pub fn blitAll(self: *BlitContext) u64 {
     const stats = backend.blit(.{
-        .buffer = &context.buffer,
-        .area = context.buffer.area(),
-        .terminal = &context.terminal,
-        .state = &context.state,
+        .buffer = &self.buffer,
+        .area = self.buffer.area(),
+        .terminal = &self.terminal,
+        .state = &self.state,
         .options = .{ .force = true },
     });
-    return stats.copied + context.buffer.cells[main.cols + 3].len;
+    return stats.copied + self.buffer.cells[main.cols + 3].len;
 }

@@ -6,6 +6,6 @@ bounds: @import("../render/Rect.zig"),
 label: @import("Label.zig"),
 
 /// Example: `try label.draw(canvas);`
-pub fn draw(text: Text, canvas: *Canvas) !void {
-    _ = try canvas.textAt(text.bounds, text.label);
+pub fn draw(self: Text, canvas: *Canvas) !void {
+    _ = try canvas.textAt(self.bounds, self.label);
 }

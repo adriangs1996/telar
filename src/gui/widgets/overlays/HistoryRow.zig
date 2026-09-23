@@ -15,28 +15,28 @@ selected: bool,
 
 /// Selecting a row never pastes or runs it. The delivered page revision guards
 /// asynchronous replacements. Example: `try row.draw(canvas);`
-pub fn draw(widget: Row, canvas: *Canvas) !void {
-    if (widget.bounds.width <= 0 or widget.bounds.height <= 0) {
+pub fn draw(self: Row, canvas: *Canvas) !void {
+    if (self.bounds.width <= 0 or self.bounds.height <= 0) {
         return;
     }
 
-    const history = widget.projection.history;
-    const entry = &history.slice()[widget.index];
-    const command = history.commandAt(widget.index) orelse entry.commandSlice();
+    const history = self.projection.history;
+    const entry = &history.slice()[self.index];
+    const command = history.commandAt(self.index) orelse entry.commandSlice();
     const palette = canvas.theme.palette;
     const px = canvas.chrome;
     const gap = px.px(10);
-    const bounds: Rect = .{ .x = widget.bounds.x, .y = widget.bounds.y + px.px(2), .width = widget.bounds.width, .height = @max(0, widget.bounds.height - px.px(4)) };
+    const bounds: Rect = .{ .x = self.bounds.x, .y = self.bounds.y + px.px(2), .width = self.bounds.width, .height = @max(0, self.bounds.height - px.px(4)) };
     var hovered = false;
     if (canvas.widgets) |state| {
-        const target = (Target{ .id = .{ .generation = widget.projection.prompt.?.generation }, .bounds = bounds, .action = .{ .history = .{ .select = .{ .index = widget.index, .revision = history.version() } } }, .layer = 1, .focusable = false, .enabled = history.phase == .ready }).labelled(command);
+        const target = (Target{ .id = .{ .generation = self.projection.prompt.?.generation }, .bounds = bounds, .action = .{ .history = .{ .select = .{ .index = self.index, .revision = history.version() } } }, .layer = 1, .focusable = false, .enabled = history.phase == .ready }).labelled(command);
         const id = try state.dispatcher.add(target);
         hovered = if (state.dispatcher.hovered) |hover| hover.eql(id) else false;
     }
 
-    if (widget.selected or hovered) {
-        try canvas.fillRoundedAt(bounds, .{ .color = if (widget.selected) palette.surface1 else palette.surface0, .radius = px.px(8) });
-        if (widget.selected) {
+    if (self.selected or hovered) {
+        try canvas.fillRoundedAt(bounds, .{ .color = if (self.selected) palette.surface1 else palette.surface0, .radius = px.px(8) });
+        if (self.selected) {
             try canvas.ringAt(bounds, .{ .color = palette.accent, .radius = px.px(8), .width = px.px(1), .alpha = 0.3 });
         }
     }
@@ -48,7 +48,7 @@ pub fn draw(widget: Row, canvas: *Canvas) !void {
     const color = if (entry.status == .running) palette.accent else if (entry.status == .interrupted) palette.yellow else if (entry.exit_code) |code| (if (code == 0) palette.green else palette.red) else palette.subtext0;
     _ = try canvas.textAt(symbol, .{ .text = if (entry.status == .running) "◌" else if (entry.status == .interrupted) "■" else if (entry.exit_code) |code| (if (code == 0) "✓" else "!") else "·", .face = .sans, .size = .title, .color = color });
     const title: Rect = .{ .x = symbol.x + symbol.width + gap, .y = top, .width = @max(0, bounds.width - symbol.width - gap * 3), .height = line_height };
-    try widget.commandText(canvas, .{ .bounds = title, .text = command });
+    try self.commandText(canvas, .{ .bounds = title, .text = command });
 
     var duration: [32]u8 = undefined;
     var age: [32]u8 = undefined;
@@ -62,9 +62,9 @@ pub fn draw(widget: Row, canvas: *Canvas) !void {
     _ = try canvas.textAt(.{ .x = title.x, .y = metadata.y, .width = @max(0, title.width - meta_width - gap), .height = small_height }, .{ .text = labels.compactPath(entry.cwdSlice(), &path_storage), .face = .sans, .size = .small, .color = palette.subtext0, .alpha = 0.8 });
 }
 
-fn commandText(widget: Row, canvas: *Canvas, value: struct { bounds: Rect, text: []const u8 }) !void {
+fn commandText(self: Row, canvas: *Canvas, value: struct { bounds: Rect, text: []const u8 }) !void {
     _ = try canvas.textAt(value.bounds, .{ .text = value.text, .color = canvas.theme.palette.text });
-    const query = widget.projection.prompt.?.field.text();
+    const query = self.projection.prompt.?.field.text();
     var iterator: core.GraphemeIterator = .{ .bytes = value.text };
     var column: u16 = 0;
     var matched: usize = 0;

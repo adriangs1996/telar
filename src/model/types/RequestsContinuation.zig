@@ -31,8 +31,8 @@ pub const RequestsContinuation = union(enum) {
     editor_open: AgentOperation,
     ignored,
 
-    pub fn group(continuation: RequestsContinuation) Group {
-        return switch (continuation) {
+    pub fn group(self: RequestsContinuation) Group {
+        return switch (self) {
             .initial_open => .initial_open,
             .create_workspace, .rename_workspace => .workspace_operation,
             .workspace_snapshot => .workspace_snapshot,
@@ -52,8 +52,8 @@ pub const RequestsContinuation = union(enum) {
         };
     }
 
-    pub fn tabId(continuation: RequestsContinuation) ?core.TabId {
-        return switch (continuation) {
+    pub fn tabId(self: RequestsContinuation) ?core.TabId {
+        return switch (self) {
             .agent_history => |operation| operation.owner.location.tab_id,
             .change_review_query, .change_review_command => |operation| operation.location.tab_id,
             .editor_open, .agent_prompt, .agent_control, .agent_query => |operation| operation.location.tab_id,
@@ -65,8 +65,8 @@ pub const RequestsContinuation = union(enum) {
         };
     }
 
-    pub fn paneId(continuation: RequestsContinuation) ?core.PaneId {
-        return switch (continuation) {
+    pub fn paneId(self: RequestsContinuation) ?core.PaneId {
+        return switch (self) {
             .agent_history => |operation| operation.owner.pane_id,
             .change_review_query, .change_review_command => |operation| operation.pane_id,
             .editor_open, .agent_prompt, .agent_control, .agent_query => |operation| operation.pane_id,

@@ -17,14 +17,14 @@ label: Label,
 active: bool = false,
 
 /// Call only for visible rows. Example: `try (ActivityText{ .bounds = row, .label = label, .active = working }).draw(canvas);`
-pub fn draw(activity: ActivityText, canvas: *Canvas) !void {
-    if (activity.bounds.width <= 0 or activity.bounds.height <= 0 or activity.label.text.len == 0) {
+pub fn draw(self: ActivityText, canvas: *Canvas) !void {
+    if (self.bounds.width <= 0 or self.bounds.height <= 0 or self.label.text.len == 0) {
         return;
     }
 
     const first = canvas.quads.items().len;
-    const width = try canvas.textAt(activity.bounds, activity.label);
-    if (!activity.active or first == canvas.quads.items().len) {
+    const width = try canvas.textAt(self.bounds, self.label);
+    if (!self.active or first == canvas.quads.items().len) {
         return;
     }
 
@@ -33,7 +33,7 @@ pub fn draw(activity: ActivityText, canvas: *Canvas) !void {
     const step = clock.step(FrameClock.frame_interval_ns) % steps;
     const radius = @max(canvas.chrome.px(20), width * 0.35);
     const progress = @as(f32, @floatFromInt(step)) / steps;
-    canvas.quads.highlightFrom(first, .{ .center = activity.bounds.x - radius + (width + 2 * radius) * progress, .radius = radius });
+    canvas.quads.highlightFrom(first, .{ .center = self.bounds.x - radius + (width + 2 * radius) * progress, .radius = radius });
 }
 
 test "activity animates cached glyphs and parks when complete or invisible" {

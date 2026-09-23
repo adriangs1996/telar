@@ -11,30 +11,30 @@ queries: usize = 0,
 last_query_id: u32 = 0,
 last_query_len: usize = 0,
 
-pub fn observe(output: *TestOutput, bytes: []const u8) void {
-    @memcpy(output.bytes[output.len..][0..bytes.len], bytes);
-    output.len += bytes.len;
+pub fn observe(self: *TestOutput, bytes: []const u8) void {
+    @memcpy(self.bytes[self.len..][0..bytes.len], bytes);
+    self.len += bytes.len;
 }
 
-pub fn observeSharedFrame(output: *TestOutput, frame: SharedFrameView) bool {
-    if (!output.direct) {
+pub fn observeSharedFrame(self: *TestOutput, frame: SharedFrameView) bool {
+    if (!self.direct) {
         return false;
     }
-    output.direct_frames += 1;
-    output.last_direct = frame;
+    self.direct_frames += 1;
+    self.last_direct = frame;
     return true;
 }
 
-pub fn observeFileQuery(output: *TestOutput, query: FileQueryView) bool {
-    if (!output.direct) {
+pub fn observeFileQuery(self: *TestOutput, query: FileQueryView) bool {
+    if (!self.direct) {
         return false;
     }
-    output.queries += 1;
-    output.last_query_id = query.image_id;
-    output.last_query_len = query.byte_len;
+    self.queries += 1;
+    self.last_query_id = query.image_id;
+    self.last_query_len = query.byte_len;
     return true;
 }
 
-pub fn slice(output: *const TestOutput) []const u8 {
-    return output.bytes[0..output.len];
+pub fn slice(self: *const TestOutput) []const u8 {
+    return self.bytes[0..self.len];
 }

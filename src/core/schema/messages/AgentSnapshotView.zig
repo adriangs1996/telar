@@ -5,9 +5,9 @@ revision: u64,
 entry_count: u16,
 encoded_entries: []const u8,
 
-pub fn entries(snapshot: AgentSnapshotView) AgentSnapshotIterator {
+pub fn entries(self: AgentSnapshotView) AgentSnapshotIterator {
     return .{
-        .decoder = .init(snapshot.encoded_entries),
-        .remaining = snapshot.entry_count,
+        .decoder = .init(self.encoded_entries),
+        .remaining = self.entry_count,
     };
 }

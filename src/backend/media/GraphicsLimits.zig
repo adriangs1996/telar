@@ -11,13 +11,13 @@ placements_per_pane: usize = core.max_placements_per_pane,
 payload_bytes: usize = core.max_encoded_chunk_bytes,
 chunks_per_image: usize = core.max_chunks_per_image,
 
-pub fn validate(limits: GraphicsLimits) !void {
-    if (limits.pane_bytes < 2 or limits.pane_bytes > core.max_image_bytes_per_pane or
-        limits.global_bytes < limits.pane_bytes or limits.global_bytes > core.max_image_bytes_global or
-        limits.images_per_pane < 2 or limits.images_per_pane > core.max_images_per_pane or
-        limits.placements_per_pane < 2 or limits.placements_per_pane > core.max_placements_per_pane or
-        limits.payload_bytes == 0 or limits.payload_bytes > core.max_encoded_chunk_bytes or
-        limits.chunks_per_image == 0 or limits.chunks_per_image > core.max_chunks_per_image)
+pub fn validate(self: GraphicsLimits) !void {
+    if (self.pane_bytes < 2 or self.pane_bytes > core.max_image_bytes_per_pane or
+        self.global_bytes < self.pane_bytes or self.global_bytes > core.max_image_bytes_global or
+        self.images_per_pane < 2 or self.images_per_pane > core.max_images_per_pane or
+        self.placements_per_pane < 2 or self.placements_per_pane > core.max_placements_per_pane or
+        self.payload_bytes == 0 or self.payload_bytes > core.max_encoded_chunk_bytes or
+        self.chunks_per_image == 0 or self.chunks_per_image > core.max_chunks_per_image)
     {
         return error.InvalidGraphicsLimits;
     }

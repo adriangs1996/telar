@@ -51,10 +51,10 @@ pub fn init(gpa: std.mem.Allocator, tab_count: usize) !ClientUiContext {
     return .{ .model = model, .screen = screen, .view = view };
 }
 
-pub fn deinit(context: *ClientUiContext) void {
-    context.view.deinit();
-    context.screen.deinit();
-    const model_gpa = context.model.gpa;
-    context.model.deinit();
-    model_gpa.destroy(context.model);
+pub fn deinit(self: *ClientUiContext) void {
+    self.view.deinit();
+    self.screen.deinit();
+    const model_gpa = self.model.gpa;
+    self.model.deinit();
+    model_gpa.destroy(self.model);
 }

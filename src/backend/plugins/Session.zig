@@ -56,30 +56,30 @@ pub fn open(io: std.Io, gpa: std.mem.Allocator, options: OpenOptions) !*Session 
 /// ```zig
 /// session.close();
 /// ```
-pub fn close(session: *Session) void {
-    session.child.kill(session.io);
-    if (session.stderr_future) |*future| {
-        _ = future.await(session.io) catch {};
+pub fn close(self: *Session) void {
+    self.child.kill(self.io);
+    if (self.stderr_future) |*future| {
+        _ = future.await(self.io) catch {};
     }
-    if (session.stderr_len != 0) {
-        std.log.warn("tap worker stderr: {s}", .{session.stderr_bytes[0..session.stderr_len]});
+    if (self.stderr_len != 0) {
+        std.log.warn("tap worker stderr: {s}", .{self.stderr_bytes[0..self.stderr_len]});
     }
-    session.reader.deinit();
-    session.gpa.destroy(session);
+    self.reader.deinit();
+    self.gpa.destroy(self);
 }
 
-fn drainStderr(session: *Session) anyerror!void {
-    const stderr = session.child.stderr orelse return;
+fn drainStderr(self: *Session) anyerror!void {
+    const stderr = self.child.stderr orelse return;
     var buffer: [1024]u8 = undefined;
     while (true) {
-        const count = stderr.readStreaming(session.io, &.{&buffer}) catch return;
+        const count = stderr.readStreaming(self.io, &.{&buffer}) catch return;
         if (count == 0) {
             return;
         }
-        const keep = @min(count, session.stderr_bytes.len - session.stderr_len);
+        const keep = @min(count, self.stderr_bytes.len - self.stderr_len);
         if (keep != 0) {
-            @memcpy(session.stderr_bytes[session.stderr_len..][0..keep], buffer[0..keep]);
-            session.stderr_len += keep;
+            @memcpy(self.stderr_bytes[self.stderr_len..][0..keep], buffer[0..keep]);
+            self.stderr_len += keep;
         }
     }
 }
@@ -89,24 +89,24 @@ fn drainStderr(session: *Session) anyerror!void {
 /// ```zig
 /// const result = try session.exchange(spec, request);
 /// ```
-pub fn exchange(session: *Session, spec: SessionSpec, request: Request) !*Result {
+pub fn exchange(self: *Session, spec: SessionSpec, request: Request) !*Result {
     var prefix: [protocol.prefix_bytes]u8 = undefined;
     std.mem.writeInt(u32, &prefix, @intCast(request.bytes.len), .little);
-    const stdin = session.child.stdin orelse return error.WorkerClosed;
-    stdin.writeStreamingAll(session.io, &prefix) catch return error.WorkerWriteFailed;
-    stdin.writeStreamingAll(session.io, request.bytes) catch return error.WorkerWriteFailed;
-    const timeout: std.Io.Timeout = .{ .deadline = .fromNow(session.io, .{
+    const stdin = self.child.stdin orelse return error.WorkerClosed;
+    stdin.writeStreamingAll(self.io, &prefix) catch return error.WorkerWriteFailed;
+    stdin.writeStreamingAll(self.io, request.bytes) catch return error.WorkerWriteFailed;
+    const timeout: std.Io.Timeout = .{ .deadline = .fromNow(self.io, .{
         .clock = .awake,
-        .raw = .fromMilliseconds(session.timeout_ms),
+        .raw = .fromMilliseconds(self.timeout_ms),
     }) };
-    try session.readExact(&prefix, timeout);
+    try self.readExact(&prefix, timeout);
     const response_len = std.mem.readInt(u32, &prefix, .little);
     if (response_len == 0 or response_len > effects.max_effect_bytes) {
         return error.InvalidWorkerFrame;
     }
-    const storage = try session.gpa.alloc(u8, response_len);
-    errdefer session.gpa.free(storage);
-    try session.readExact(storage, timeout);
+    const storage = try self.gpa.alloc(u8, response_len);
+    errdefer self.gpa.free(storage);
+    try self.readExact(storage, timeout);
     if (storage[0] == 3) {
         const failure = try protocol.decodeError(storage);
         if (failure.event_id != request.event_id) {
@@ -118,9 +118,9 @@ pub fn exchange(session: *Session, spec: SessionSpec, request: Request) !*Result
     if (decoded.event_id != request.event_id) {
         return error.StaleWorkerReply;
     }
-    const result = try session.gpa.create(Result);
+    const result = try self.gpa.create(Result);
     result.* = .{
-        .gpa = session.gpa,
+        .gpa = self.gpa,
         .package_index = spec.package_index,
         .plugin_id = spec.plugin_id,
         .digest = spec.digest,
@@ -134,8 +134,8 @@ pub fn exchange(session: *Session, spec: SessionSpec, request: Request) !*Result
     return result;
 }
 
-fn readExact(session: *Session, output: []u8, timeout: std.Io.Timeout) !void {
-    const reader = session.reader.reader(0);
+fn readExact(self: *Session, output: []u8, timeout: std.Io.Timeout) !void {
+    const reader = self.reader.reader(0);
     var offset: usize = 0;
     while (offset != output.len) {
         const buffered = reader.buffered();
@@ -147,7 +147,7 @@ fn readExact(session: *Session, output: []u8, timeout: std.Io.Timeout) !void {
             continue;
         }
 
-        session.reader.fill(1, timeout) catch |err| switch (err) {
+        self.reader.fill(1, timeout) catch |err| switch (err) {
             error.Timeout => return error.WorkerTimeout,
             error.EndOfStream => return error.WorkerClosed,
             else => return error.WorkerReadFailed,

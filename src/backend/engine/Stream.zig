@@ -29,13 +29,13 @@ pub const InitOptions = @import("InitOptions.zig");
 /// session.stream.init(.{ .allocator = gpa, .io = io, .stdout = child.stdout.? });
 /// defer session.stream.deinit();
 /// ```
-pub fn init(stream: *Stream, options: InitOptions) void {
-    stream.discarding = false;
-    stream.reader.init(options.allocator, options.io, stream.streams.toStreams(), &.{options.stdout});
+pub fn init(self: *Stream, options: InitOptions) void {
+    self.discarding = false;
+    self.reader.init(options.allocator, options.io, self.streams.toStreams(), &.{options.stdout});
 }
 
-pub fn deinit(stream: *Stream) void {
-    stream.reader.deinit();
+pub fn deinit(self: *Stream) void {
+    self.reader.deinit();
 }
 
 /// Yields the next parseable record. Waits at most until `timeout`.
@@ -47,8 +47,8 @@ pub fn deinit(stream: *Stream) void {
 ///     .discarded, .closed => {},
 /// }
 /// ```
-pub fn next(stream: *Stream, gpa: std.mem.Allocator, timeout: std.Io.Timeout) Error!Next {
-    const reader = stream.reader.reader(0);
+pub fn next(self: *Stream, gpa: std.mem.Allocator, timeout: std.Io.Timeout) Error!Next {
+    const reader = self.reader.reader(0);
 
     while (true) {
         const buffered = reader.buffered();
@@ -58,8 +58,8 @@ pub fn next(stream: *Stream, gpa: std.mem.Allocator, timeout: std.Io.Timeout) Er
                 line = line[0 .. line.len - 1];
             }
 
-            const was_discarding = stream.discarding;
-            stream.discarding = false;
+            const was_discarding = self.discarding;
+            self.discarding = false;
             if (was_discarding) {
                 reader.toss(newline + 1);
                 return .discarded;
@@ -76,10 +76,10 @@ pub fn next(stream: *Stream, gpa: std.mem.Allocator, timeout: std.Io.Timeout) Er
 
         if (buffered.len > rpc.max_line_bytes) {
             reader.toss(buffered.len);
-            stream.discarding = true;
+            self.discarding = true;
         }
 
-        stream.reader.fill(1, timeout) catch |err| switch (err) {
+        self.reader.fill(1, timeout) catch |err| switch (err) {
             error.EndOfStream => return .closed,
             error.Timeout => return error.Timeout,
             else => return error.ReadFailed,

@@ -22,14 +22,14 @@ pub fn init(text: []const u8) !Target {
     return target;
 }
 
-pub fn uri(target: *const Target) []const u8 {
-    return target.storage[0..target.len];
+pub fn uri(self: *const Target) []const u8 {
+    return self.storage[0..self.len];
 }
 
-pub fn eql(a: *const Target, b: *const Target) bool {
-    return a.scheme == b.scheme and std.mem.eql(
+pub fn eql(self: *const Target, b: *const Target) bool {
+    return self.scheme == b.scheme and std.mem.eql(
         u8,
-        a.uri(),
+        self.uri(),
         b.uri(),
     );
 }

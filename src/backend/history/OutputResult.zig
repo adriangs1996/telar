@@ -12,7 +12,7 @@ observed_bytes: u64,
 content: []u8,
 gpa: std.mem.Allocator,
 
-pub fn deinit(result: *OutputResult) void {
-    result.gpa.free(result.content);
-    result.gpa.destroy(result);
+pub fn deinit(self: *OutputResult) void {
+    self.gpa.free(self.content);
+    self.gpa.destroy(self);
 }

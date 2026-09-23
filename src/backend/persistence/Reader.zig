@@ -39,28 +39,28 @@ pub fn init(bytes: []const u8) !Reader {
     return .{ .inner = decoder, .counters = counters, .version = file_version };
 }
 
-pub fn next(reader: *Reader) !?checkpoint.Record {
-    if (reader.finished) {
+pub fn next(self: *Reader) !?checkpoint.Record {
+    if (self.finished) {
         return null;
     }
-    const kind = std.enums.fromInt(checkpoint.Kind, try reader.inner.readByte()) orelse return error.InvalidCheckpoint;
+    const kind = std.enums.fromInt(checkpoint.Kind, try self.inner.readByte()) orelse return error.InvalidCheckpoint;
     switch (kind) {
         .end => {
-            try reader.inner.ensureEnd();
-            reader.finished = true;
+            try self.inner.ensureEnd();
+            self.finished = true;
             return null;
         },
         .workspace => {
-            const id = try reader.inner.readInt(u64);
-            const path = try reader.inner.readSized16();
+            const id = try self.inner.readInt(u64);
+            const path = try self.inner.readSized16();
             try checkpoint.validatePath(path);
-            const name = try reader.inner.readSized16();
+            const name = try self.inner.readSized16();
             if (name.len > core.max_tab_label_bytes) {
                 return error.InvalidCheckpoint;
             }
-            const first_tab_id = try reader.inner.readInt(u64);
-            const first_tab_label = try reader.inner.readSized16();
-            if ((reader.version < 3 and first_tab_label.len == 0) or first_tab_label.len > core.max_tab_label_bytes) {
+            const first_tab_id = try self.inner.readInt(u64);
+            const first_tab_label = try self.inner.readSized16();
+            if ((self.version < 3 and first_tab_label.len == 0) or first_tab_label.len > core.max_tab_label_bytes) {
                 return error.InvalidCheckpoint;
             }
             return .{ .workspace = .{
@@ -72,39 +72,39 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
             } };
         },
         .tab => {
-            const workspace_id = try reader.inner.readInt(u64);
-            const tab_id = try reader.inner.readInt(u64);
-            const label = try reader.inner.readSized16();
-            if ((reader.version < 3 and label.len == 0) or label.len > core.max_tab_label_bytes) {
+            const workspace_id = try self.inner.readInt(u64);
+            const tab_id = try self.inner.readInt(u64);
+            const label = try self.inner.readSized16();
+            if ((self.version < 3 and label.len == 0) or label.len > core.max_tab_label_bytes) {
                 return error.InvalidCheckpoint;
             }
             return .{ .tab = .{ .workspace_id = workspace_id, .tab_id = tab_id, .label = label } };
         },
         .pane => {
-            const pane_id = try reader.inner.readInt(u64);
-            const workspace_id = try reader.inner.readInt(u64);
-            const tab_id = try reader.inner.readInt(u64);
-            const cwd = try reader.inner.readSized16();
+            const pane_id = try self.inner.readInt(u64);
+            const workspace_id = try self.inner.readInt(u64);
+            const tab_id = try self.inner.readInt(u64);
+            const cwd = try self.inner.readSized16();
             try checkpoint.validatePath(cwd);
-            const cols = try reader.inner.readInt(u16);
-            const rows = try reader.inner.readInt(u16);
-            const argument_count = try reader.inner.readInt(u16);
-            const arguments = try reader.inner.readSized16();
+            const cols = try self.inner.readInt(u16);
+            const rows = try self.inner.readInt(u16);
+            const argument_count = try self.inner.readInt(u16);
+            const arguments = try self.inner.readSized16();
             if (argument_count > checkpoint.max_launch_arguments or arguments.len > checkpoint.max_launch_bytes) {
                 return error.InvalidCheckpoint;
             }
             if (std.mem.count(u8, arguments, "\x00") != argument_count) {
                 return error.InvalidCheckpoint;
             }
-            const agent_provider = try reader.inner.readByte();
-            const agent_session = try reader.inner.readSized16();
+            const agent_provider = try self.inner.readByte();
+            const agent_session = try self.inner.readSized16();
             if (agent_session.len != 0) {
                 core.validateSessionReference(agent_session) catch return error.InvalidCheckpoint;
             }
-            const agent_title = if (reader.version >= 2) try reader.inner.readSized16() else "";
-            const agent_title_source = if (reader.version >= 2) try reader.inner.readByte() else 0;
+            const agent_title = if (self.version >= 2) try self.inner.readSized16() else "";
+            const agent_title_source = if (self.version >= 2) try self.inner.readByte() else 0;
             try checkpoint.validateTitle(agent_title, agent_title_source);
-            const kind_value = if (reader.version >= 4) try reader.inner.readByte() else 0;
+            const kind_value = if (self.version >= 4) try self.inner.readByte() else 0;
             const pane_kind = std.enums.fromInt(core.PaneKind, kind_value) orelse return error.InvalidCheckpoint;
             const pane: @import("PaneRecord.zig") = .{
                 .kind = pane_kind,
@@ -125,9 +125,9 @@ pub fn next(reader: *Reader) !?checkpoint.Record {
             return .{ .pane = pane };
         },
         .layout => {
-            const identity = try reader.inner.readInt(u64);
-            const last_used = try reader.inner.readInt(u64);
-            const payload = try reader.inner.readSized32();
+            const identity = try self.inner.readInt(u64);
+            const last_used = try self.inner.readInt(u64);
+            const payload = try self.inner.readSized32();
             if (payload.len == 0 or payload.len > core.max_client_layout_wire_bytes) {
                 return error.InvalidCheckpoint;
             }

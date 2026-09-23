@@ -18,18 +18,18 @@ pub fn init() !Fixture {
     return .{ .atlas = atlas, .quads = QuadList.init(std.testing.allocator) };
 }
 
-pub fn deinit(fixture: *Fixture) void {
-    fixture.quads.deinit();
-    fixture.atlas.deinit();
+pub fn deinit(self: *Fixture) void {
+    self.quads.deinit();
+    self.atlas.deinit();
 }
 
 /// Ten-pixel cells keep monospace widths easy to compare against sans
 /// advances; the chrome sizes are the defaults at scale 1 (15, 13, 11).
 /// Example: `var canvas = fixture.canvas();`
-pub fn canvas(fixture: *Fixture) Canvas {
+pub fn canvas(self: *Fixture) Canvas {
     return .{
-        .atlas = &fixture.atlas,
-        .quads = &fixture.quads,
+        .atlas = &self.atlas,
+        .quads = &self.quads,
         .origin = .{ 8, 12 },
         .metrics = .{ .cell_width = 10, .cell_height = 24, .baseline = 18, .pixel_height = 16 },
         .theme = data.theme_support.default_theme,

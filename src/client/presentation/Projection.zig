@@ -45,18 +45,18 @@ window_title_template: []const u8 = "",
 /// ```zig
 /// const thread = projection.threadView(pane_id) orelse return;
 /// ```
-pub fn threadView(projection: *const Projection, pane_id: core.PaneId) ?ThreadView {
-    const slot = projection.tab orelse return null;
-    const model = projection.model;
+pub fn threadView(self: *const Projection, pane_id: core.PaneId) ?ThreadView {
+    const slot = self.tab orelse return null;
+    const model = self.model;
     const pane = model.panes.findInConst(model.tabs.location[slot].tab_id, pane_id) orelse return null;
-    var thread = ThreadView.capture(model, projection.agents, pane_id) orelse return null;
+    var thread = ThreadView.capture(model, self.agents, pane_id) orelse return null;
     const workspace_id = switch (pane.location.workspace) {
         .workspace => |id| id,
         .worktree => return thread,
     };
-    for (0..projection.workspaces.count) |index| {
-        if (projection.workspaces.workspaceAt(index) == workspace_id) {
-            thread.branch = projection.workspaces.branchAt(index);
+    for (0..self.workspaces.count) |index| {
+        if (self.workspaces.workspaceAt(index) == workspace_id) {
+            thread.branch = self.workspaces.branchAt(index);
             break;
         }
     }

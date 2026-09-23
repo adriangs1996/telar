@@ -62,27 +62,27 @@ fn less(_: void, a: [2]f32, b: [2]f32) bool {
     return a[0] < b[0];
 }
 
-fn append(ink: *Ink, rect: Rect) !void {
-    for (ink.rects[0..ink.count]) |*previous| {
+fn append(self: *Ink, rect: Rect) !void {
+    for (self.rects[0..self.count]) |*previous| {
         if (previous.x == rect.x and previous.width == rect.width and previous.y + previous.height == rect.y) {
             previous.height += rect.height;
             return;
         }
     }
 
-    if (ink.count == capacity) {
+    if (self.count == capacity) {
         return error.BoxQuadBudgetExceeded;
     }
 
-    ink.rects[ink.count] = rect;
-    ink.count += 1;
+    self.rects[self.count] = rect;
+    self.count += 1;
 }
 
 /// Uses local cell coordinates; Unicode weight wins over bold/italic font flags.
 /// Example: `try ink.paint(run, list);`
-pub fn paint(ink: *const Ink, run: TextRun, list: *QuadList) !void {
+pub fn paint(self: *const Ink, run: TextRun, list: *QuadList) !void {
     const bounds = run.cell_bounds orelse return error.MissingCellBounds;
-    for (ink.rects[0..ink.count]) |rect| {
+    for (self.rects[0..self.count]) |rect| {
         var placed = rect;
         placed.x += run.x + bounds.x;
         placed.y += run.y + bounds.y;

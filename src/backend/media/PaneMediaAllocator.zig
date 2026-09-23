@@ -32,8 +32,8 @@ pub fn init(child: std.mem.Allocator, budget: *GraphicsBudget, limit: usize) Pan
 /// ```zig
 /// if (!media.adoptMapping(placeholder, map)) return error.MappingLimitReached;
 /// ```
-pub fn adoptMapping(media: *PaneMediaAllocator, placeholder: []const u8, pixels: []align(std.heap.page_size_min) u8) bool {
-    for (&media.mappings) |*slot| {
+pub fn adoptMapping(self: *PaneMediaAllocator, placeholder: []const u8, pixels: []align(std.heap.page_size_min) u8) bool {
+    for (&self.mappings) |*slot| {
         if (slot.* != null) {
             continue;
         }
@@ -49,9 +49,9 @@ pub fn adoptMapping(media: *PaneMediaAllocator, placeholder: []const u8, pixels:
 /// ```zig
 /// const pixels = pane.media_allocator.imagePixels(image.data.bytes()) orelse continue;
 /// ```
-pub fn imagePixels(media: *const PaneMediaAllocator, data: ?[]const u8) ?[]const u8 {
+pub fn imagePixels(self: *const PaneMediaAllocator, data: ?[]const u8) ?[]const u8 {
     const bytes = data orelse return null;
-    for (media.mappings) |slot| {
+    for (self.mappings) |slot| {
         const mapping = slot orelse continue;
         if (mapping.placeholder == bytes.ptr) {
             return mapping.pixels;
@@ -60,21 +60,21 @@ pub fn imagePixels(media: *const PaneMediaAllocator, data: ?[]const u8) ?[]const
     return bytes;
 }
 
-fn releaseMapping(media: *PaneMediaAllocator, memory: []u8) void {
-    for (&media.mappings) |*slot| {
+fn releaseMapping(self: *PaneMediaAllocator, memory: []u8) void {
+    for (&self.mappings) |*slot| {
         const mapping = slot.* orelse continue;
         if (mapping.placeholder != memory.ptr) {
             continue;
         }
         std.posix.munmap(mapping.pixels);
-        media.releaseManual(mapping.pixels.len);
+        self.releaseManual(mapping.pixels.len);
         slot.* = null;
         return;
     }
 }
 
-fn isMapped(media: *const PaneMediaAllocator, memory: []u8) bool {
-    for (media.mappings) |slot| {
+fn isMapped(self: *const PaneMediaAllocator, memory: []u8) bool {
+    for (self.mappings) |slot| {
         const mapping = slot orelse continue;
         if (mapping.placeholder == memory.ptr) {
             return true;
@@ -83,9 +83,9 @@ fn isMapped(media: *const PaneMediaAllocator, memory: []u8) bool {
     return false;
 }
 
-pub fn allocator(media: *PaneMediaAllocator) std.mem.Allocator {
+pub fn allocator(self: *PaneMediaAllocator) std.mem.Allocator {
     // Callback signatures are fixed by `std.mem.Allocator.VTable`.
-    return .{ .ptr = media, .vtable = &.{
+    return .{ .ptr = self, .vtable = &.{
         .alloc = alloc,
         .resize = resize,
         .remap = remap,
@@ -93,16 +93,16 @@ pub fn allocator(media: *PaneMediaAllocator) std.mem.Allocator {
     } };
 }
 
-pub fn reserveManual(media: *PaneMediaAllocator, bytes: usize) bool {
-    return media.budget.reserve(media, bytes);
+pub fn reserveManual(self: *PaneMediaAllocator, bytes: usize) bool {
+    return self.budget.reserve(self, bytes);
 }
 
-pub fn releaseManual(media: *PaneMediaAllocator, bytes: usize) void {
-    media.budget.release(media, bytes);
+pub fn releaseManual(self: *PaneMediaAllocator, bytes: usize) void {
+    self.budget.release(self, bytes);
 }
 
-pub fn detach(media: *PaneMediaAllocator) void {
-    media.budget.releaseAll(media);
+pub fn detach(self: *PaneMediaAllocator) void {
+    self.budget.releaseAll(self);
 }
 
 // codestyle: allow(maximum-parameter-count)

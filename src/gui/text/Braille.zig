@@ -19,7 +19,7 @@ pub fn parse(text: []const u8) ?Braille {
 
 /// Uses the caller's cell bounds relative to its baseline; no font or atlas lookup.
 /// Example: `_ = try pattern.paint(run, quads);`
-pub fn paint(pattern: Braille, run: TextRun, list: *QuadList) !f32 {
+pub fn paint(self: Braille, run: TextRun, list: *QuadList) !f32 {
     var bounds = run.cell_bounds orelse return error.MissingCellBounds;
     bounds.x += run.x;
     bounds.y += run.y;
@@ -31,7 +31,7 @@ pub fn paint(pattern: Braille, run: TextRun, list: *QuadList) !f32 {
     const columns = [_]u1{ 0, 0, 0, 1, 1, 1, 0, 1 };
     const rows = [_]u2{ 0, 1, 2, 0, 1, 2, 3, 3 };
     for (columns, rows, 0..) |column, row, bit| {
-        if (pattern.dots & (@as(u8, 1) << @intCast(bit)) == 0) {
+        if (self.dots & (@as(u8, 1) << @intCast(bit)) == 0) {
             continue;
         }
 

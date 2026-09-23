@@ -11,68 +11,68 @@ pub fn init(gpa: std.mem.Allocator, max_bytes: usize) Buffer {
     return .{ .gpa = gpa, .max_bytes = max_bytes };
 }
 
-pub fn append(buffer: *Buffer, input: []const u8) bool {
-    const available = buffer.max_bytes -| buffer.len;
+pub fn append(self: *Buffer, input: []const u8) bool {
+    const available = self.max_bytes -| self.len;
     const accepted = @min(available, input.len);
 
-    if (accepted != 0 and !buffer.ensureCapacity(buffer.len + accepted)) {
-        buffer.truncated = true;
+    if (accepted != 0 and !self.ensureCapacity(self.len + accepted)) {
+        self.truncated = true;
         return false;
     }
 
     if (accepted != 0) {
-        @memcpy(buffer.storage[buffer.len..][0..accepted], input[0..accepted]);
-        buffer.len += accepted;
+        @memcpy(self.storage[self.len..][0..accepted], input[0..accepted]);
+        self.len += accepted;
     }
 
     if (accepted != input.len) {
-        buffer.truncated = true;
+        self.truncated = true;
     }
 
     return accepted == input.len;
 }
 
-pub fn bytes(buffer: *const Buffer) []const u8 {
-    return buffer.storage[0..buffer.len];
+pub fn bytes(self: *const Buffer) []const u8 {
+    return self.storage[0..self.len];
 }
 
-pub fn reset(buffer: *Buffer) void {
-    std.crypto.secureZero(u8, buffer.storage[0..buffer.len]);
-    buffer.len = 0;
-    buffer.truncated = false;
+pub fn reset(self: *Buffer) void {
+    std.crypto.secureZero(u8, self.storage[0..self.len]);
+    self.len = 0;
+    self.truncated = false;
 }
 
-pub fn deinit(buffer: *Buffer) void {
-    if (buffer.storage.len != 0) {
-        std.crypto.secureZero(u8, buffer.storage);
-        buffer.gpa.free(buffer.storage);
+pub fn deinit(self: *Buffer) void {
+    if (self.storage.len != 0) {
+        std.crypto.secureZero(u8, self.storage);
+        self.gpa.free(self.storage);
     }
 
-    buffer.storage = &.{};
-    buffer.len = 0;
-    buffer.truncated = false;
+    self.storage = &.{};
+    self.len = 0;
+    self.truncated = false;
 }
 
-fn ensureCapacity(buffer: *Buffer, needed: usize) bool {
-    if (needed <= buffer.storage.len) {
+fn ensureCapacity(self: *Buffer, needed: usize) bool {
+    if (needed <= self.storage.len) {
         return true;
     }
 
-    var capacity = @min(buffer.max_bytes, @max(@as(usize, 256), buffer.storage.len));
+    var capacity = @min(self.max_bytes, @max(@as(usize, 256), self.storage.len));
     while (capacity < needed) {
-        capacity = @min(buffer.max_bytes, capacity *| 2);
-        if (capacity < needed and capacity == buffer.max_bytes) {
+        capacity = @min(self.max_bytes, capacity *| 2);
+        if (capacity < needed and capacity == self.max_bytes) {
             return false;
         }
     }
 
-    const replacement = buffer.gpa.alloc(u8, capacity) catch return false;
-    @memcpy(replacement[0..buffer.len], buffer.storage[0..buffer.len]);
-    if (buffer.storage.len != 0) {
-        std.crypto.secureZero(u8, buffer.storage);
-        buffer.gpa.free(buffer.storage);
+    const replacement = self.gpa.alloc(u8, capacity) catch return false;
+    @memcpy(replacement[0..self.len], self.storage[0..self.len]);
+    if (self.storage.len != 0) {
+        std.crypto.secureZero(u8, self.storage);
+        self.gpa.free(self.storage);
     }
 
-    buffer.storage = replacement;
+    self.storage = replacement;
     return true;
 }

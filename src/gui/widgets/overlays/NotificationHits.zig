@@ -8,12 +8,12 @@ count: usize = 0,
 
 /// Painter order gives the close button precedence over its card.
 /// Example: `const target = hits.at(.{ event.x, event.y });`
-pub fn at(hits: *const Hits, point: [2]f64) ?Target {
-    var index = hits.count;
+pub fn at(self: *const Hits, point: [2]f64) ?Target {
+    var index = self.count;
     while (index > 0) {
         index -= 1;
-        if (hits.hits[index].contains(point)) {
-            return hits.hits[index];
+        if (self.hits[index].contains(point)) {
+            return self.hits[index];
         }
     }
 

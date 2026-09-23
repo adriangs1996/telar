@@ -15,18 +15,18 @@ depth: u8 = 8,
 
 /// Bytes per source pixel: the filter distance.
 /// Example: `const bpp = header.bytesPerPixel();`
-pub fn bytesPerPixel(header: PngHeader) u8 {
-    const channels: u8 = switch (header.color) {
+pub fn bytesPerPixel(self: PngHeader) u8 {
+    const channels: u8 = switch (self.color) {
         .rgb => 3,
         .palette => 1,
         .rgba => 4,
     };
 
-    return channels * (header.depth / 8);
+    return channels * (self.depth / 8);
 }
 
 /// Bytes of one unfiltered scanline, without the filter byte.
 /// Example: `const stride = header.stride();`
-pub fn stride(header: PngHeader) usize {
-    return @as(usize, header.width) * header.bytesPerPixel();
+pub fn stride(self: PngHeader) usize {
+    return @as(usize, self.width) * self.bytesPerPixel();
 }

@@ -42,56 +42,56 @@ pub fn init(gpa: std.mem.Allocator) Renderer {
     };
 }
 
-pub fn deinit(renderer: *Renderer) void {
-    if (renderer.atlas.len != 0) {
-        renderer.gpa.free(renderer.atlas);
+pub fn deinit(self: *Renderer) void {
+    if (self.atlas.len != 0) {
+        self.gpa.free(self.atlas);
     }
-    if (renderer.text) |*text| {
+    if (self.text) |*text| {
         text.deinit();
     }
 }
 
-pub fn retainedBytes(renderer: *const Renderer) usize {
-    return renderer.atlas.len;
+pub fn retainedBytes(self: *const Renderer) usize {
+    return self.atlas.len;
 }
 
-pub fn available(renderer: *const Renderer) bool {
-    return renderer.supported and !renderer.failed;
+pub fn available(self: *const Renderer) bool {
+    return self.supported and !self.failed;
 }
 
 /// Applies host graphics support and cell geometry to the icon atlas.
 /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
-pub fn configure(renderer: *Renderer, configuration: SidebarRendererInput) bool {
-    const supported = configuration.support == .supported and renderer.text != null;
-    if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
-        renderer.cell_height == configuration.cell_height)
+pub fn configure(self: *Renderer, configuration: SidebarRendererInput) bool {
+    const supported = configuration.support == .supported and self.text != null;
+    if (self.supported == supported and self.cell_width == configuration.cell_width and
+        self.cell_height == configuration.cell_height)
     {
         return false;
     }
-    renderer.supported = supported;
-    renderer.cell_width = configuration.cell_width;
-    renderer.cell_height = configuration.cell_height;
-    renderer.failed = false;
+    self.supported = supported;
+    self.cell_width = configuration.cell_width;
+    self.cell_height = configuration.cell_height;
+    self.failed = false;
     return true;
 }
 
-pub fn disable(renderer: *Renderer) void {
-    renderer.failed = true;
-    renderer.visible = false;
-    renderer.placement_count = 0;
-    renderer.placements_dirty = renderer.image_emitted or renderer.transfer_offset != 0;
+pub fn disable(self: *Renderer) void {
+    self.failed = true;
+    self.visible = false;
+    self.placement_count = 0;
+    self.placements_dirty = self.image_emitted or self.transfer_offset != 0;
 }
 
-pub fn prepare(renderer: *Renderer, marks: []const Mark) !void {
+pub fn prepare(self: *Renderer, marks: []const Mark) !void {
     if (marks.len > ui_icons.max_marks) {
         return error.TooManyIconMarks;
     }
-    if (!renderer.supported or renderer.failed or renderer.cell_width == 0 or
-        renderer.cell_height == 0 or marks.len == 0)
+    if (!self.supported or self.failed or self.cell_width == 0 or
+        self.cell_height == 0 or marks.len == 0)
     {
-        renderer.visible = false;
-        renderer.placement_count = 0;
-        renderer.placements_dirty = renderer.image_emitted or renderer.transfer_offset != 0;
+        self.visible = false;
+        self.placement_count = 0;
+        self.placements_dirty = self.image_emitted or self.transfer_offset != 0;
         return;
     }
 
@@ -119,13 +119,13 @@ pub fn prepare(renderer: *Renderer, marks: []const Mark) !void {
         next_placements[mark_index] = .{ .area = mark.area, .slot = slot };
     }
     const next_placement_count: u8 = @intCast(marks.len);
-    const raster_size = icons.fitCell(renderer.cell_width, renderer.cell_height);
+    const raster_size = icons.fitCell(self.cell_width, self.cell_height);
     const atlas_width = @as(u32, raster_size.width) * icons.widestSlot(next_slots[0..next_slot_count]);
-    const slots_changed = renderer.pixel_width != raster_size.width or
-        renderer.pixel_height != raster_size.height or
-        renderer.atlas_width != atlas_width or
+    const slots_changed = self.pixel_width != raster_size.width or
+        self.pixel_height != raster_size.height or
+        self.atlas_width != atlas_width or
         !icons.slotsEqual(
-            renderer.slots[0..renderer.slot_count],
+            self.slots[0..self.slot_count],
             next_slots[0..next_slot_count],
         );
 
@@ -136,122 +136,122 @@ pub fn prepare(renderer: *Renderer, marks: []const Mark) !void {
         if (atlas_len > icons.max_atlas_bytes) {
             return error.IconAtlasTooLarge;
         }
-        const next_atlas = try renderer.gpa.alloc(u8, atlas_len);
-        errdefer renderer.gpa.free(next_atlas);
-        const text = if (renderer.text) |*value| value else unreachable;
+        const next_atlas = try self.gpa.alloc(u8, atlas_len);
+        errdefer self.gpa.free(next_atlas);
+        const text = if (self.text) |*value| value else unreachable;
         try icons.renderAtlas(text, .{
             .pixels = next_atlas,
             .raster_size = raster_size,
             .atlas_width = atlas_width,
             .slots = next_slots[0..next_slot_count],
         });
-        if (renderer.atlas.len != 0) {
-            renderer.gpa.free(renderer.atlas);
+        if (self.atlas.len != 0) {
+            self.gpa.free(self.atlas);
         }
-        renderer.atlas = next_atlas;
-        renderer.atlas_width = atlas_width;
-        renderer.atlas_height = atlas_height;
-        renderer.pixel_width = raster_size.width;
-        renderer.pixel_height = raster_size.height;
-        @memcpy(renderer.slots[0..next_slot_count], next_slots[0..next_slot_count]);
-        renderer.slot_count = next_slot_count;
-        renderer.transfer_abort_pending = renderer.transfer_offset != 0;
-        renderer.image_dirty = true;
-        renderer.placements_dirty = true;
+        self.atlas = next_atlas;
+        self.atlas_width = atlas_width;
+        self.atlas_height = atlas_height;
+        self.pixel_width = raster_size.width;
+        self.pixel_height = raster_size.height;
+        @memcpy(self.slots[0..next_slot_count], next_slots[0..next_slot_count]);
+        self.slot_count = next_slot_count;
+        self.transfer_abort_pending = self.transfer_offset != 0;
+        self.image_dirty = true;
+        self.placements_dirty = true;
     }
 
     if (!icons.placementsEqual(
-        renderer.placements[0..renderer.placement_count],
+        self.placements[0..self.placement_count],
         next_placements[0..next_placement_count],
     )) {
         @memcpy(
-            renderer.placements[0..next_placement_count],
+            self.placements[0..next_placement_count],
             next_placements[0..next_placement_count],
         );
-        renderer.placement_count = next_placement_count;
-        renderer.placements_dirty = true;
+        self.placement_count = next_placement_count;
+        self.placements_dirty = true;
     }
-    if (!renderer.visible) {
-        renderer.placements_dirty = true;
+    if (!self.visible) {
+        self.placements_dirty = true;
     }
-    renderer.visible = true;
+    self.visible = true;
 }
 
-pub fn damaged(renderer: *const Renderer) bool {
-    return renderer.transfer_abort_pending or renderer.transfer_offset != 0 or
-        renderer.image_dirty or renderer.placements_dirty;
+pub fn damaged(self: *const Renderer) bool {
+    return self.transfer_abort_pending or self.transfer_offset != 0 or
+        self.image_dirty or self.placements_dirty;
 }
 
-pub fn transferInProgress(renderer: *const Renderer) bool {
-    return renderer.transfer_offset != 0;
+pub fn transferInProgress(self: *const Renderer) bool {
+    return self.transfer_offset != 0;
 }
 
-pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
-    if (!renderer.damaged()) {
+pub fn write(self: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
+    if (!self.damaged()) {
         return 0;
     }
     var written: usize = 0;
-    if (renderer.transfer_abort_pending) {
+    if (self.transfer_abort_pending) {
         written += try kitty_protocol.writeTransmissionAbort(writer);
-        renderer.transfer_abort_pending = false;
-        renderer.transfer_offset = 0;
+        self.transfer_abort_pending = false;
+        self.transfer_offset = 0;
     }
 
-    if (!renderer.visible) {
-        if (renderer.transfer_offset != 0) {
+    if (!self.visible) {
+        if (self.transfer_offset != 0) {
             written += try kitty_protocol.writeTransmissionAbort(writer);
-            renderer.transfer_offset = 0;
+            self.transfer_offset = 0;
         }
-        if (renderer.image_emitted) {
+        if (self.image_emitted) {
             written += try kitty_protocol.writeDeleteImage(writer, icons.image_id);
         }
-        renderer.image_emitted = false;
-        renderer.image_dirty = false;
-        renderer.placements_dirty = false;
-        renderer.emitted_placement_count = 0;
+        self.image_emitted = false;
+        self.image_dirty = false;
+        self.placements_dirty = false;
+        self.emitted_placement_count = 0;
         return written;
     }
 
-    if (renderer.image_dirty) {
-        if (renderer.transfer_offset == 0 and renderer.image_emitted) {
+    if (self.image_dirty) {
+        if (self.transfer_offset == 0 and self.image_emitted) {
             written += try kitty_protocol.writeDeleteImage(writer, icons.image_id);
-            renderer.image_emitted = false;
-            renderer.emitted_placement_count = 0;
+            self.image_emitted = false;
+            self.emitted_placement_count = 0;
         }
         const progress = try kitty_codec.writeTransmissionChunks(writer, .{
             .external_id = icons.image_id,
             .image = .{
                 .key = .{ .image_id = icons.image_id, .generation = 1 },
                 .format = .rgba,
-                .width = renderer.atlas_width,
-                .height = renderer.atlas_height,
-                .byte_len = renderer.atlas.len,
+                .width = self.atlas_width,
+                .height = self.atlas_height,
+                .byte_len = self.atlas.len,
             },
-            .pixels = renderer.atlas,
-            .start_offset = renderer.transfer_offset,
+            .pixels = self.atlas,
+            .start_offset = self.transfer_offset,
             .budget = kitty_codec.transmission_budget_per_frame,
             .compressed = false,
         });
         written += progress.written;
-        renderer.transfer_offset = progress.offset;
-        if (progress.offset != renderer.atlas.len) {
+        self.transfer_offset = progress.offset;
+        if (progress.offset != self.atlas.len) {
             return written;
         }
-        renderer.transfer_offset = 0;
-        renderer.image_dirty = false;
-        renderer.image_emitted = true;
+        self.transfer_offset = 0;
+        self.image_dirty = false;
+        self.image_emitted = true;
     }
 
-    if (renderer.placements_dirty and renderer.image_emitted) {
-        for (0..renderer.emitted_placement_count) |index| {
+    if (self.placements_dirty and self.image_emitted) {
+        for (0..self.emitted_placement_count) |index| {
             written += try kitty_protocol.writeDeletePlacement(
                 writer,
                 icons.image_id,
                 icons.first_placement_id + @as(u32, @intCast(index)),
             );
         }
-        for (renderer.placements[0..renderer.placement_count], 0..) |placement, index| {
-            const columns: u32 = renderer.slots[placement.slot].columns;
+        for (self.placements[0..self.placement_count], 0..) |placement, index| {
+            const columns: u32 = self.slots[placement.slot].columns;
             written += try kitty_codec.writePlacement(writer, .{
                 .image_id = icons.image_id,
                 .placement_id = icons.first_placement_id + @as(u32, @intCast(index)),
@@ -261,17 +261,17 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer) std.Io.Writer.Error!us
                     .offset_x = 0,
                     .offset_y = 0,
                     .source_x = 0,
-                    .source_y = @as(u32, placement.slot) * renderer.pixel_height,
-                    .source_width = columns * renderer.pixel_width,
-                    .source_height = renderer.pixel_height,
+                    .source_y = @as(u32, placement.slot) * self.pixel_height,
+                    .source_width = columns * self.pixel_width,
+                    .source_height = self.pixel_height,
                     .columns = columns,
                     .rows = 1,
                 },
                 .z = icons.z_index,
             });
         }
-        renderer.emitted_placement_count = renderer.placement_count;
-        renderer.placements_dirty = false;
+        self.emitted_placement_count = self.placement_count;
+        self.placements_dirty = false;
     }
     return written;
 }

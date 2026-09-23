@@ -8,19 +8,19 @@ responses: usize = 0,
 actions: usize = 0,
 supported: bool = false,
 
-pub fn forward(capture: *TerminalResponseCapture, bytes: []const u8) !void {
-    capture.forwarded += bytes.len;
+pub fn forward(self: *TerminalResponseCapture, bytes: []const u8) !void {
+    self.forwarded += bytes.len;
 }
 
-pub fn action(capture: *TerminalResponseCapture, _: keybind.TestAction) !data.KeybindControl {
-    capture.actions += 1;
+pub fn action(self: *TerminalResponseCapture, _: keybind.TestAction) !data.KeybindControl {
+    self.actions += 1;
     return .continue_routing;
 }
 
-pub fn terminalResponse(capture: *TerminalResponseCapture, response: term.Event.TerminalResponse) !void {
+pub fn terminalResponse(self: *TerminalResponseCapture, response: term.Event.TerminalResponse) !void {
     switch (response) {
-        .kitty_graphics => |kitty| capture.supported = kitty.supported,
+        .kitty_graphics => |kitty| self.supported = kitty.supported,
         else => {},
     }
-    capture.responses += 1;
+    self.responses += 1;
 }

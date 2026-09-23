@@ -20,6 +20,6 @@ pub fn init(purpose: types.Purpose, text: []const u8) !Prompt {
     return prompt;
 }
 
-pub fn slice(prompt: *const Prompt) []const u8 {
-    return prompt.bytes[0..prompt.len];
+pub fn slice(self: *const Prompt) []const u8 {
+    return self.bytes[0..self.len];
 }

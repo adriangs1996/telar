@@ -14,26 +14,26 @@ context: *const Context,
 area: Rect,
 
 /// Example: `try status.draw(canvas);`
-pub fn draw(bar: StatusBar, canvas: *Canvas) !void {
-    if (bar.area.width <= 0 or bar.area.height <= 0) {
+pub fn draw(self: StatusBar, canvas: *Canvas) !void {
+    if (self.area.width <= 0 or self.area.height <= 0) {
         return;
     }
 
-    try canvas.panelAt(bar.area);
+    try canvas.panelAt(self.area);
     const margin = canvas.chrome.px(8);
-    var row = (Layout{ .area = bar.area, .padding = .{ .left = margin, .right = margin } }).content();
-    try bar.tls(canvas, &row);
-    if (bar.context.projection.status_mode != .normal) {
-        const mode_bar: ModeBar = .{ .mode = bar.context.projection.status_mode, .area = row };
+    var row = (Layout{ .area = self.area, .padding = .{ .left = margin, .right = margin } }).content();
+    try self.tls(canvas, &row);
+    if (self.context.projection.status_mode != .normal) {
+        const mode_bar: ModeBar = .{ .mode = self.context.projection.status_mode, .area = row };
         try mode_bar.draw(canvas);
         return;
     }
 
-    try bar.widgets(canvas, row);
+    try self.widgets(canvas, row);
 }
 
-fn tls(bar: StatusBar, canvas: *Canvas, row: *Rect) !void {
-    const projection = bar.context.projection;
+fn tls(self: StatusBar, canvas: *Canvas, row: *Rect) !void {
+    const projection = self.context.projection;
     if (!projection.proxy_tls_active and !projection.proxy_system_trusted) {
         return;
     }
@@ -49,12 +49,12 @@ fn tls(bar: StatusBar, canvas: *Canvas, row: *Rect) !void {
     });
 }
 
-fn widgets(bar: StatusBar, canvas: *Canvas, bounds: Rect) !void {
+fn widgets(self: StatusBar, canvas: *Canvas, bounds: Rect) !void {
     const quads = canvas.quads;
     const first = quads.items().len;
     defer quads.clipFrom(first, bounds);
-    const layout = &bar.context.projection.bar_state.layout;
-    const metrics = bar.context.projection.system_metrics;
+    const layout = &self.context.projection.bar_state.layout;
+    const metrics = self.context.projection.system_metrics;
     var bottom_width: f32 = 0;
     for (&layout.bottom) |*slot| {
         const painter: SlotPainter = .{ .slot = slot, .metrics = metrics };

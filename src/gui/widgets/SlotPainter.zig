@@ -14,31 +14,31 @@ metrics: ?data.SystemMetrics = null,
 
 /// Measures one slot in cells for the caller's own layout.
 /// Example: `const right_width = painter.width();`
-pub fn width(painter: SlotPainter) u16 {
-    return switch (painter.slot.*) {
+pub fn width(self: SlotPainter) u16 {
+    return switch (self.slot.*) {
         .empty, .tabs => 0,
-        .metrics => MetricsLabel.init(painter.metrics).width(),
+        .metrics => MetricsLabel.init(self.metrics).width(),
         .content => |*content| BarContent.columns(content),
     };
 }
 
 /// `width` in device pixels, for a pixel band's layout.
 /// Example: `const wanted = painter.pixelWidth(canvas);`
-pub fn pixelWidth(painter: SlotPainter, canvas: *const Canvas) f32 {
-    return @floatFromInt(@as(u32, painter.width()) * canvas.metrics.cell_width);
+pub fn pixelWidth(self: SlotPainter, canvas: *const Canvas) f32 {
+    return @floatFromInt(@as(u32, self.width()) * canvas.metrics.cell_width);
 }
 
 /// Paints one slot clipped to the supplied cell area.
 /// Example: `try painter.draw(canvas);`
-pub fn draw(painter: SlotPainter, canvas: *Canvas) !void {
-    switch (painter.slot.*) {
+pub fn draw(self: SlotPainter, canvas: *Canvas) !void {
+    switch (self.slot.*) {
         .empty, .tabs => {},
         .metrics => {
-            const label = MetricsLabel.init(painter.metrics);
-            try canvas.text(painter.area, .{ .text = label.text(), .color = canvas.theme.palette.subtext0 });
+            const label = MetricsLabel.init(self.metrics);
+            try canvas.text(self.area, .{ .text = label.text(), .color = canvas.theme.palette.subtext0 });
         },
         .content => |*content| {
-            const content_widget: BarContent = .{ .content = content, .area = painter.area };
+            const content_widget: BarContent = .{ .content = content, .area = self.area };
             try content_widget.draw(canvas);
         },
     }

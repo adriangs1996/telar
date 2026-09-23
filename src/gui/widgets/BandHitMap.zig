@@ -17,27 +17,27 @@ len: usize = 0,
 
 /// Rejects overflow rather than publishing a drawn control without a target.
 /// Example: `try bands.add(.{ .area = pill, .action = .{ .intent = .{ .select_workspace = id } } });`
-pub fn add(hits: *BandHitMap, hit: BandHit) !void {
+pub fn add(self: *BandHitMap, hit: BandHit) !void {
     if (hit.area.width <= 0 or hit.area.height <= 0) {
         return;
     }
 
-    if (hits.len == hits.items.len) {
+    if (self.len == self.items.len) {
         return error.ChromeHitCapacityExceeded;
     }
 
-    hits.items[hits.len] = hit;
-    hits.len += 1;
+    self.items[self.len] = hit;
+    self.len += 1;
 }
 
 /// Later targets take precedence, as later quads do.
 /// Example: `const action = hits.at(.{ event.x, event.y });`
-pub fn at(hits: *const BandHitMap, point: [2]f64) ?action.Action {
-    var index = hits.len;
+pub fn at(self: *const BandHitMap, point: [2]f64) ?action.Action {
+    var index = self.len;
     while (index > 0) {
         index -= 1;
-        if (Bands.within(hits.items[index].area, point[0], point[1])) {
-            return hits.items[index].action;
+        if (Bands.within(self.items[index].area, point[0], point[1])) {
+            return self.items[index].action;
         }
     }
 
@@ -46,8 +46,8 @@ pub fn at(hits: *const BandHitMap, point: [2]f64) ?action.Action {
 
 /// The first target carrying `intent`, for tests that click by identity.
 /// Example: `const tab = hits.find(.{ .select_tab = id }) orelse return error.Missing;`
-pub fn find(hits: *const BandHitMap, intent: client.Intent) ?BandHit {
-    for (hits.items[0..hits.len]) |hit| {
+pub fn find(self: *const BandHitMap, intent: client.Intent) ?BandHit {
+    for (self.items[0..self.len]) |hit| {
         if (hit.action == .intent and std.meta.eql(hit.action.intent, intent)) {
             return hit;
         }

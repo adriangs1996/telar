@@ -29,10 +29,10 @@ pub fn init(package_index: u8, generation: u64, package: Package) !Spec {
     return spec;
 }
 
-pub fn entry(spec: *const Spec) []const u8 {
-    return spec.entry_storage[0..spec.entry_len];
+pub fn entry(self: *const Spec) []const u8 {
+    return self.entry_storage[0..self.entry_len];
 }
 
-pub fn allows(spec: *const Spec, capability: core.Capability) bool {
-    return spec.declared.contains(capability) and spec.granted.contains(capability);
+pub fn allows(self: *const Spec, capability: core.Capability) bool {
+    return self.declared.contains(capability) and self.granted.contains(capability);
 }

@@ -18,40 +18,40 @@ pub fn init(allocator: std.mem.Allocator) QuadList {
     return .{ .allocator = allocator };
 }
 
-pub fn deinit(list: *QuadList) void {
-    list.quads.deinit(list.allocator);
-    list.* = undefined;
+pub fn deinit(self: *QuadList) void {
+    self.quads.deinit(self.allocator);
+    self.* = undefined;
 }
 
-pub fn clear(list: *QuadList) void {
-    list.quads.clearRetainingCapacity();
+pub fn clear(self: *QuadList) void {
+    self.quads.clearRetainingCapacity();
 }
 
-pub fn push(list: *QuadList, item: Quad) !void {
-    if (list.limit) |limit| {
-        if (list.quads.items.len >= limit) {
+pub fn push(self: *QuadList, item: Quad) !void {
+    if (self.limit) |limit| {
+        if (self.quads.items.len >= limit) {
             return error.NativeQuadBudgetExceeded;
         }
 
-        list.quads.appendAssumeCapacity(item);
+        self.quads.appendAssumeCapacity(item);
     } else {
-        try list.quads.append(list.allocator, item);
+        try self.quads.append(self.allocator, item);
     }
 }
 
 /// Clips visible ink at its pane boundary without changing the retained mesh.
 /// Example: `try list.pushClipped(glyph, pane_bounds);`
-pub fn pushClipped(list: *QuadList, item: Quad, clip: Rect) !void {
+pub fn pushClipped(self: *QuadList, item: Quad, clip: Rect) !void {
     const clipped = clipQuad(item, clip);
     if (clipped.width > 0 and clipped.height > 0) {
-        try list.push(clipped);
+        try self.push(clipped);
     }
 }
 
 /// Appends a solid rectangle through the atlas' white texel.
 /// Example: `try list.pushRect(.{ .x = 0, .y = 0, .width = 8, .height = 8 }, Color.white);`
-pub fn pushRect(list: *QuadList, rect: Rect, color: Color) !void {
-    try list.push(.{
+pub fn pushRect(self: *QuadList, rect: Rect, color: Color) !void {
+    try self.push(.{
         .x = rect.x,
         .y = rect.y,
         .width = rect.width,
@@ -69,8 +69,8 @@ pub fn pushRect(list: *QuadList, rect: Rect, color: Color) !void {
 
 /// Appends one rounded or outlined surface; the shader resolves its shape.
 /// Example: `try list.pushRounded(card, .{ .fill = surface, .radius = 8 });`
-pub fn pushRounded(list: *QuadList, rect: Rect, shape: RoundedRect) !void {
-    try list.push(.{
+pub fn pushRounded(self: *QuadList, rect: Rect, shape: RoundedRect) !void {
+    try self.push(.{
         .x = rect.x,
         .y = rect.y,
         .width = rect.width,
@@ -95,8 +95,8 @@ pub fn pushRounded(list: *QuadList, rect: Rect, shape: RoundedRect) !void {
 /// Appends one cell of the RGBA sprite page scaled into `rect`; the tint's
 /// alpha fades it and its RGB multiplies the artwork, white keeps it as is.
 /// Example: `try list.pushSprite(box, page.uv(mark), Color.white);`
-pub fn pushSprite(list: *QuadList, rect: Rect, sprite: SpriteQuad) !void {
-    try list.push(.{
+pub fn pushSprite(self: *QuadList, rect: Rect, sprite: SpriteQuad) !void {
+    try self.push(.{
         .x = rect.x,
         .y = rect.y,
         .width = rect.width,
@@ -115,12 +115,12 @@ pub fn pushSprite(list: *QuadList, rect: Rect, sprite: SpriteQuad) !void {
 
 /// Appends one complete diagram texture. Pane clipping also adjusts its UVs.
 /// Example: `try list.pushDiagram(bounds, 0);`
-pub fn pushDiagram(list: *QuadList, rect: Rect, slot: u8) !void {
+pub fn pushDiagram(self: *QuadList, rect: Rect, slot: u8) !void {
     if (slot >= DiagramTexture.slot_count) {
         return error.InvalidDiagramSlot;
     }
 
-    try list.push(.{
+    try self.push(.{
         .x = rect.x,
         .y = rect.y,
         .width = rect.width,
@@ -137,26 +137,26 @@ pub fn pushDiagram(list: *QuadList, rect: Rect, slot: u8) !void {
     });
 }
 
-pub fn items(list: *const QuadList) []const Quad {
-    return list.quads.items;
+pub fn items(self: *const QuadList) []const Quad {
+    return self.quads.items;
 }
 
 /// Highlights existing glyphs without changing their geometry or reshaping.
 /// Example: `list.highlightFrom(first_glyph, .{ .center = x, .radius = 40 });`
-pub fn highlightFrom(list: *QuadList, start: usize, wave: @import("OpacityWave.zig")) void {
-    for (list.quads.items[start..]) |*glyph| {
+pub fn highlightFrom(self: *QuadList, start: usize, wave: @import("OpacityWave.zig")) void {
+    for (self.quads.items[start..]) |*glyph| {
         glyph.a *= wave.at(glyph.x + glyph.width / 2);
     }
 }
 
 /// Fits newly painted ink inside a box, preserving aspect ratio and centering
 /// both axes. Example: `list.fitFrom(first_icon_quad, icon_box);`
-pub fn fitFrom(list: *QuadList, start: usize, bounds: Rect) void {
+pub fn fitFrom(self: *QuadList, start: usize, bounds: Rect) void {
     var left = std.math.inf(f32);
     var top = std.math.inf(f32);
     var right = -std.math.inf(f32);
     var bottom = -std.math.inf(f32);
-    for (list.items()[start..]) |item| {
+    for (self.items()[start..]) |item| {
         left = @min(left, item.x);
         top = @min(top, item.y);
         right = @max(right, item.x + item.width);
@@ -170,7 +170,7 @@ pub fn fitFrom(list: *QuadList, start: usize, bounds: Rect) void {
     const scale = @min(bounds.width / (right - left), bounds.height / (bottom - top));
     const x = bounds.x + (bounds.width - (right - left) * scale) / 2;
     const y = bounds.y + (bounds.height - (bottom - top) * scale) / 2;
-    for (list.quads.items[start..]) |*item| {
+    for (self.quads.items[start..]) |*item| {
         item.x = x + (item.x - left) * scale;
         item.y = y + (item.y - top) * scale;
         item.width *= scale;
@@ -180,8 +180,8 @@ pub fn fitFrom(list: *QuadList, start: usize, bounds: Rect) void {
 
 /// Fades a composed widget, including glyphs, sprites and rounded borders.
 /// Example: `list.fadeFrom(first_card_quad, opacity);`
-pub fn fadeFrom(list: *QuadList, start: usize, opacity: f32) void {
-    for (list.quads.items[start..]) |*item| {
+pub fn fadeFrom(self: *QuadList, start: usize, opacity: f32) void {
+    for (self.quads.items[start..]) |*item| {
         item.a *= opacity;
         item.border_a *= opacity;
     }
@@ -230,25 +230,25 @@ test "clear keeps capacity and drops quads" {
 }
 
 /// Reserves a bounded frame at geometry changes. Example: `try list.reserve(4096);`
-pub fn reserve(list: *QuadList, count: usize) !void {
-    try list.quads.ensureTotalCapacityPrecise(list.allocator, count);
-    list.limit = count;
+pub fn reserve(self: *QuadList, count: usize) !void {
+    try self.quads.ensureTotalCapacityPrecise(self.allocator, count);
+    self.limit = count;
 }
 
 /// Clips newly appended glyph quads and their texture coordinates together
 /// and drops the ones left without area, so overflowing labels cost no quads.
 /// Example: `list.clipFrom(first_glyph, cell_rect);`
-pub fn clipFrom(list: *QuadList, start: usize, clip: Rect) void {
+pub fn clipFrom(self: *QuadList, start: usize, clip: Rect) void {
     var kept = start;
-    for (list.quads.items[start..]) |item| {
+    for (self.quads.items[start..]) |item| {
         const clipped = clipQuad(item, clip);
         if (clipped.width > 0 and clipped.height > 0) {
-            list.quads.items[kept] = clipped;
+            self.quads.items[kept] = clipped;
             kept += 1;
         }
     }
 
-    list.quads.items.len = kept;
+    self.quads.items.len = kept;
 }
 
 fn clipQuad(original: Quad, clip: Rect) Quad {

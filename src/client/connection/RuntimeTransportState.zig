@@ -12,44 +12,44 @@ receive_pending: bool = false,
 
 /// Reserves the single receive buffer before a read actor starts.
 /// Example: `if (!state.beginRead()) return;`.
-pub fn beginRead(state: *State) bool {
-    if (state.receive_pending) {
+pub fn beginRead(self: *State) bool {
+    if (self.receive_pending) {
         return false;
     }
 
-    state.receive_pending = true;
+    self.receive_pending = true;
     return true;
 }
 
 /// Releases a read that could not be scheduled.
 /// Example: `state.cancelRead();`.
-pub fn cancelRead(state: *State) void {
-    state.receive_pending = false;
+pub fn cancelRead(self: *State) void {
+    self.receive_pending = false;
 }
 
 /// Releases the read reservation. The returned borrow lasts until the next
 /// read, which the consumer arms only after dispatch finishes.
 /// Example: `const payload = try state.completeRead(result);`.
-pub fn completeRead(state: *State, result: anyerror!*const data.RuntimeMessage) !*const data.RuntimeMessage {
-    std.debug.assert(state.receive_pending);
-    state.receive_pending = false;
+pub fn completeRead(self: *State, result: anyerror!*const data.RuntimeMessage) !*const data.RuntimeMessage {
+    std.debug.assert(self.receive_pending);
+    self.receive_pending = false;
     return result;
 }
 
 /// Owns the decoded value beside its wire bytes until dispatch finishes.
 /// Inbox messages borrow this value; they do not duplicate it in every slot.
 /// Example: `return state.read(io);`.
-pub fn read(state: *State, io: std.Io) !*const data.RuntimeMessage {
-    const bytes = try state.connection.receive(io, state.receive_buffer);
+pub fn read(self: *State, io: std.Io) !*const data.RuntimeMessage {
+    const bytes = try self.connection.receive(io, self.receive_buffer);
     core.mark(io, .client_read);
-    state.received = try data.RuntimeMessage.decode(io, bytes);
-    return &state.received;
+    self.received = try data.RuntimeMessage.decode(io, bytes);
+    return &self.received;
 }
 
 /// Sends the reserved frame without knowing the client event protocol.
 /// Example: `try state.send(io, bytes);`.
-pub fn send(state: *State, io: std.Io, bytes: []const u8) !void {
-    try state.connection.send(io, bytes);
+pub fn send(self: *State, io: std.Io, bytes: []const u8) !void {
+    try self.connection.send(io, bytes);
 }
 
 /// Allocates the bounded frame buffers around one connected channel.
@@ -79,9 +79,9 @@ pub fn init(gpa: std.mem.Allocator, connection: *core.SocketChannel) !State {
 /// ```zig
 /// state.deinit(gpa);
 /// ```
-pub fn deinit(state: *State, gpa: std.mem.Allocator) void {
-    state.connection.bindReadBuffer(&.{});
-    gpa.free(state.send_buffer);
-    gpa.free(state.receive_buffer);
-    gpa.free(state.read_buffer);
+pub fn deinit(self: *State, gpa: std.mem.Allocator) void {
+    self.connection.bindReadBuffer(&.{});
+    gpa.free(self.send_buffer);
+    gpa.free(self.receive_buffer);
+    gpa.free(self.read_buffer);
 }

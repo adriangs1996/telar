@@ -25,29 +25,29 @@ owner: ?@import("MessageLayoutOwner.zig") = null,
 
 /// Returns the height used by the exact same word layout as the painter.
 /// Example: `const height = try message.measure(canvas);`
-pub fn measure(widget: Text, canvas: *Canvas) !f32 {
-    return widget.layout(canvas, false);
+pub fn measure(self: Text, canvas: *Canvas) !f32 {
+    return self.layout(canvas, false);
 }
 
 /// Paints only visible lines and keeps code and inline styles inside the column.
 /// Example: `try message.draw(canvas);`
-pub fn draw(widget: Text, canvas: *Canvas) !void {
+pub fn draw(self: Text, canvas: *Canvas) !void {
     const first = canvas.quads.items().len;
-    defer canvas.quads.clipFrom(first, widget.viewport);
-    _ = try widget.layout(canvas, true);
+    defer canvas.quads.clipFrom(first, self.viewport);
+    _ = try self.layout(canvas, true);
 }
 
-fn layout(widget: Text, canvas: *Canvas, paint: bool) !f32 {
-    if (widget.code) {
-        return widget.codeBlock(canvas, .{ .block = .{ .text = widget.text, .kind = .code, .language = if (widget.diff) "Changes" else "Output" }, .paint = paint });
+fn layout(self: Text, canvas: *Canvas, paint: bool) !f32 {
+    if (self.code) {
+        return self.codeBlock(canvas, .{ .block = .{ .text = self.text, .kind = .code, .language = if (self.diff) "Changes" else "Output" }, .paint = paint });
     }
 
-    var blocks: @import("MessageBlocks.zig") = .{ .text = widget.text, .markdown = widget.markdown };
+    var blocks: @import("MessageBlocks.zig") = .{ .text = self.text, .markdown = self.markdown };
     var y: f32 = 0;
     while (blocks.next()) |block| {
         if (block.kind == .spacer or block.kind == .rule) {
-            if (paint and block.kind == .rule and widget.visible(widget.bounds.y + y, canvas.chrome.px(18))) {
-                try canvas.fillAt(.{ .x = widget.bounds.x, .y = widget.bounds.y + y + canvas.chrome.px(8), .width = widget.bounds.width, .height = 1 }, canvas.theme.palette.surface1);
+            if (paint and block.kind == .rule and self.visible(self.bounds.y + y, canvas.chrome.px(18))) {
+                try canvas.fillAt(.{ .x = self.bounds.x, .y = self.bounds.y + y + canvas.chrome.px(8), .width = self.bounds.width, .height = 1 }, canvas.theme.palette.surface1);
             }
 
             y += canvas.chrome.px(if (block.kind == .rule) @as(f32, 18) else 8);
@@ -55,34 +55,34 @@ fn layout(widget: Text, canvas: *Canvas, paint: bool) !f32 {
         }
 
         if (block.kind == .code) {
-            var code = widget;
+            var code = self;
             code.bounds.y += y;
             y += try code.codeBlock(canvas, .{ .block = block, .paint = paint });
             continue;
         }
 
         if (block.kind == .table) {
-            y += try (@import("MessageTablePaint.zig"){ .bounds = .{ .x = widget.bounds.x, .y = widget.bounds.y + y, .width = widget.bounds.width, .height = 0 }, .viewport = widget.viewport, .table = MessageTable.parse(block.text).?, .owner = widget.owner, .source_start = @intFromPtr(widget.text.ptr), .muted = widget.muted }).layout(canvas, paint);
+            y += try (@import("MessageTablePaint.zig"){ .bounds = .{ .x = self.bounds.x, .y = self.bounds.y + y, .width = self.bounds.width, .height = 0 }, .viewport = self.viewport, .table = MessageTable.parse(block.text).?, .owner = self.owner, .source_start = @intFromPtr(self.text.ptr), .muted = self.muted }).layout(canvas, paint);
             continue;
         }
 
-        const indent = if (block.kind == .bullet or block.kind == .quote) @min(canvas.chrome.px(26), widget.bounds.width / 5) else 0;
+        const indent = if (block.kind == .bullet or block.kind == .quote) @min(canvas.chrome.px(26), self.bounds.width / 5) else 0;
         const top = if (block.kind == .heading) canvas.chrome.px(7) else 0;
         const row = canvas.chrome.px(if (block.kind == .heading) @as(f32, 30) else 25);
-        var flow: @import("MessageTextFlow.zig") = .{ .canvas = canvas, .bounds = .{ .x = widget.bounds.x + indent, .y = widget.bounds.y + y + top, .width = @max(1, widget.bounds.width - indent), .height = 0 }, .viewport = widget.viewport, .row = row, .paint = paint, .owner = widget.owner, .source_start = @intFromPtr(widget.text.ptr) };
-        const label: Label = .{ .text = block.text, .face = .sans, .size = if (block.kind == .heading) .title else .body, .bold = block.kind == .heading, .color = if (widget.muted or block.kind == .quote) canvas.theme.palette.subtext0 else canvas.theme.palette.text };
-        if (widget.markdown) {
+        var flow: @import("MessageTextFlow.zig") = .{ .canvas = canvas, .bounds = .{ .x = self.bounds.x + indent, .y = self.bounds.y + y + top, .width = @max(1, self.bounds.width - indent), .height = 0 }, .viewport = self.viewport, .row = row, .paint = paint, .owner = self.owner, .source_start = @intFromPtr(self.text.ptr) };
+        const label: Label = .{ .text = block.text, .face = .sans, .size = if (block.kind == .heading) .title else .body, .bold = block.kind == .heading, .color = if (self.muted or block.kind == .quote) canvas.theme.palette.subtext0 else canvas.theme.palette.text };
+        if (self.markdown) {
             try flow.appendStyled(block.text, label);
         } else {
             try flow.append(label);
         }
 
-        if (paint and block.kind == .bullet and widget.visible(widget.bounds.y + y, row)) {
-            _ = try canvas.textAt(.{ .x = widget.bounds.x, .y = widget.bounds.y + y, .width = indent, .height = row }, .{ .text = block.marker, .face = .sans, .size = .body, .color = canvas.theme.palette.subtext0 });
+        if (paint and block.kind == .bullet and self.visible(self.bounds.y + y, row)) {
+            _ = try canvas.textAt(.{ .x = self.bounds.x, .y = self.bounds.y + y, .width = indent, .height = row }, .{ .text = block.marker, .face = .sans, .size = .body, .color = canvas.theme.palette.subtext0 });
         }
 
-        if (paint and block.kind == .quote and widget.visible(widget.bounds.y + y, flow.height())) {
-            try canvas.fillRoundedAt(.{ .x = widget.bounds.x + canvas.chrome.px(3), .y = widget.bounds.y + y + canvas.chrome.px(3), .width = canvas.chrome.px(2), .height = @max(0, flow.height() - canvas.chrome.px(6)) }, .{ .color = canvas.theme.palette.overlay0, .radius = 1 });
+        if (paint and block.kind == .quote and self.visible(self.bounds.y + y, flow.height())) {
+            try canvas.fillRoundedAt(.{ .x = self.bounds.x + canvas.chrome.px(3), .y = self.bounds.y + y + canvas.chrome.px(3), .width = canvas.chrome.px(2), .height = @max(0, flow.height() - canvas.chrome.px(6)) }, .{ .color = canvas.theme.palette.overlay0, .radius = 1 });
         }
 
         y += top + flow.height() + canvas.chrome.px(if (block.kind == .heading) @as(f32, 5) else 2);
@@ -91,20 +91,20 @@ fn layout(widget: Text, canvas: *Canvas, paint: bool) !f32 {
     return y;
 }
 
-fn codeBlock(widget: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig")) !f32 {
-    if (widget.diff or std.mem.eql(u8, input.block.language, "diff") or std.mem.eql(u8, input.block.language, "patch")) {
-        var diff: @import("DiffPaint.zig") = .{ .canvas = canvas, .bounds = widget.bounds, .viewport = widget.viewport, .text = input.block.text, .owner = widget.owner, .source_start = @intFromPtr(widget.text.ptr), .paint = input.paint };
+fn codeBlock(self: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig")) !f32 {
+    if (self.diff or std.mem.eql(u8, input.block.language, "diff") or std.mem.eql(u8, input.block.language, "patch")) {
+        var diff: @import("DiffPaint.zig") = .{ .canvas = canvas, .bounds = self.bounds, .viewport = self.viewport, .text = input.block.text, .owner = self.owner, .source_start = @intFromPtr(self.text.ptr), .paint = input.paint };
         return diff.layout();
     }
 
     const MermaidBlock = @import("MermaidBlock.zig");
-    const diagram: ?MermaidBlock = if (input.block.isMermaid() and widget.owner != null) .{ .bounds = widget.bounds, .request = .{ .owner = widget.owner.?, .block_offset = input.block.source_offset, .text = input.block.text, .theme = Theme.init(canvas.theme), .scale = canvas.chrome.ratio } } else null;
+    const diagram: ?MermaidBlock = if (input.block.isMermaid() and self.owner != null) .{ .bounds = self.bounds, .request = .{ .owner = self.owner.?, .block_offset = input.block.source_offset, .text = input.block.text, .theme = Theme.init(canvas.theme), .scale = canvas.chrome.ratio } } else null;
     var diagram_view = if (diagram) |value| value.lookup(canvas) else null;
     if (diagram_view) |view| {
         if (view == .ready) {
             const value = diagram.?;
             const ready_height = value.measure(canvas, view.ready);
-            if (input.paint and widget.visible(widget.bounds.y, ready_height)) {
+            if (input.paint and self.visible(self.bounds.y, ready_height)) {
                 try value.draw(canvas, view.ready);
             }
 
@@ -112,13 +112,13 @@ fn codeBlock(widget: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig
         }
     }
 
-    const inset = @min(canvas.chrome.px(14), widget.bounds.width / 8);
+    const inset = @min(canvas.chrome.px(14), self.bounds.width / 8);
     const header = canvas.chrome.px(30);
     const row: f32 = @max(canvas.chrome.px(21), @as(f32, @floatFromInt(canvas.metrics.cell_height)));
-    const columns: u16 = @intFromFloat(@max(1, @min(65535, @floor((widget.bounds.width - 2 * inset) / @as(f32, @floatFromInt(canvas.metrics.cell_width))))));
+    const columns: u16 = @intFromFloat(@max(1, @min(65535, @floor((self.bounds.width - 2 * inset) / @as(f32, @floatFromInt(canvas.metrics.cell_width))))));
     var lines: @import("overlays/WrappedLines.zig") = .{ .text = input.block.text, .width = columns };
     const height = header + @as(f32, @floatFromInt(lines.count())) * row + canvas.chrome.px(12);
-    if (!input.paint or !widget.visible(widget.bounds.y, height + canvas.chrome.px(10))) {
+    if (!input.paint or !self.visible(self.bounds.y, height + canvas.chrome.px(10))) {
         return height + canvas.chrome.px(10);
     }
 
@@ -128,25 +128,25 @@ fn codeBlock(widget: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig
         }
     }
 
-    const card: Rect = .{ .x = widget.bounds.x, .y = widget.bounds.y + canvas.chrome.px(4), .width = widget.bounds.width, .height = height };
+    const card: Rect = .{ .x = self.bounds.x, .y = self.bounds.y + canvas.chrome.px(4), .width = self.bounds.width, .height = height };
     try canvas.fillRoundedAt(card, .{ .color = canvas.theme.palette.surface0, .radius = canvas.chrome.px(8) });
     try canvas.ringAt(card, .{ .color = canvas.theme.palette.overlay0, .width = 1, .radius = canvas.chrome.px(8), .alpha = 0.4 });
     var storage: [TextFit.max_bytes]u8 = undefined;
     var label: Label = .{ .text = if (diagram != null) MermaidBlock.label(diagram_view) else if (input.block.language.len > 0) input.block.language else "Code", .face = .sans, .size = .small, .color = canvas.theme.palette.subtext0 };
     label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = @max(0, card.width - 2 * inset) }).fit(label, &storage);
-    if (widget.visible(card.y, header)) {
+    if (self.visible(card.y, header)) {
         _ = try canvas.textAt(.{ .x = card.x + inset, .y = card.y, .width = card.width - 2 * inset, .height = header }, label);
     }
     var y = card.y + header;
     while (lines.next()) |line| {
-        if (widget.visible(y, row)) {
+        if (self.visible(y, row)) {
             const area: Rect = .{ .x = card.x + inset, .y = y, .width = card.width - 2 * inset, .height = row };
-            if (widget.owner) |owner| {
+            if (self.owner) |owner| {
                 if (canvas.widgets) |state| {
                     if (state.thread_text) |store| {
                         const geometry = store.maps.preparing();
-                        const at = owner.source_offset + @as(u32, @intCast(@intFromPtr(line.ptr) - @intFromPtr(widget.text.ptr)));
-                        if (try geometry.append(canvas, .{ .owner = owner, .offset = at, .text = line, .bounds = area, .viewport = widget.viewport, .advance = 0, .face = .mono, .pixel_height = canvas.metrics.pixel_height })) |hit| {
+                        const at = owner.source_offset + @as(u32, @intCast(@intFromPtr(line.ptr) - @intFromPtr(self.text.ptr)));
+                        if (try geometry.append(canvas, .{ .owner = owner, .offset = at, .text = line, .bounds = area, .viewport = self.viewport, .advance = 0, .face = .mono, .pixel_height = canvas.metrics.pixel_height })) |hit| {
                             try (@import("ThreadTextPaint.zig"){ .geometry = geometry, .fragment = hit }).draw(canvas);
                         }
                     }
@@ -161,8 +161,8 @@ fn codeBlock(widget: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig
     return height + canvas.chrome.px(10);
 }
 
-fn visible(widget: Text, y: f32, height: f32) bool {
-    return y + height > widget.viewport.y and y < widget.viewport.y + widget.viewport.height;
+fn visible(self: Text, y: f32, height: f32) bool {
+    return y + height > self.viewport.y and y < self.viewport.y + self.viewport.height;
 }
 
 test "offscreen Markdown decorations cannot exhaust the visible frame quad budget" {

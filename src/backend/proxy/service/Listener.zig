@@ -33,8 +33,8 @@ pub fn bind(io: std.Io) !Listener {
 /// ```zig
 /// listener.deinit(io);
 /// ```
-pub fn deinit(listener: *Listener, io: std.Io) void {
-    listener.server.deinit(io);
+pub fn deinit(self: *Listener, io: std.Io) void {
+    self.server.deinit(io);
 }
 
 /// Waits for one incoming loopback connection.
@@ -42,8 +42,8 @@ pub fn deinit(listener: *Listener, io: std.Io) void {
 /// ```zig
 /// const stream = try listener.accept(io);
 /// ```
-pub fn accept(listener: *Listener, io: std.Io) !std.Io.net.Stream {
-    return listener.server.accept(io);
+pub fn accept(self: *Listener, io: std.Io) !std.Io.net.Stream {
+    return self.server.accept(io);
 }
 
 /// Returns the port selected during `bind`.
@@ -51,6 +51,6 @@ pub fn accept(listener: *Listener, io: std.Io) !std.Io.net.Stream {
 /// ```zig
 /// const port = listener.port();
 /// ```
-pub fn port(listener: *const Listener) u16 {
-    return listener.bound_port;
+pub fn port(self: *const Listener) u16 {
+    return self.bound_port;
 }

@@ -9,15 +9,15 @@ buffer: *const core.Buffer,
 x: u16 = 0,
 y: u16 = 0,
 
-pub fn next(scan: *MarkerScan) ?MarkerPosition {
-    const buffer = scan.buffer;
-    while (scan.y < buffer.h and scan.x + markers.marker_head_width <= buffer.w) {
-        const at: core.Point = .{ .x = scan.x, .y = scan.y };
-        if (scan.x + markers.marker_head_width < buffer.w) {
-            scan.x += 1;
+pub fn next(self: *MarkerScan) ?MarkerPosition {
+    const buffer = self.buffer;
+    while (self.y < buffer.h and self.x + markers.marker_head_width <= buffer.w) {
+        const at: core.Point = .{ .x = self.x, .y = self.y };
+        if (self.x + markers.marker_head_width < buffer.w) {
+            self.x += 1;
         } else {
-            scan.x = 0;
-            scan.y += 1;
+            self.x = 0;
+            self.y += 1;
         }
 
         if (markers.parseMarker(buffer, at)) |marker| {

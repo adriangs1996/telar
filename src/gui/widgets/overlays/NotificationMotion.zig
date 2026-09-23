@@ -12,18 +12,18 @@ transition: Transition = .{ .from = 0, .to = 1, .started_ns = 0, .duration_ns = 
 
 /// Retargets from the sampled position when another card arrives or leaves.
 /// Example: `const y = motion.position(target_y, clock);`
-pub fn position(motion: *Motion, target: f32, clock: *Clock) f32 {
-    if (motion.to != target) {
-        motion.from = motion.value(clock.now_ns);
-        motion.to = target;
-        motion.transition.started_ns = clock.now_ns;
+pub fn position(self: *Motion, target: f32, clock: *Clock) f32 {
+    if (self.to != target) {
+        self.from = self.value(clock.now_ns);
+        self.to = target;
+        self.transition.started_ns = clock.now_ns;
     }
 
-    _ = clock.sample(motion.transition);
-    return motion.value(clock.now_ns);
+    _ = clock.sample(self.transition);
+    return self.value(clock.now_ns);
 }
 
-fn value(motion: Motion, now_ns: u64) f32 {
-    const t = motion.transition.value(now_ns);
-    return motion.from + (motion.to - motion.from) * t * t * (3 - 2 * t);
+fn value(self: Motion, now_ns: u64) f32 {
+    const t = self.transition.value(now_ns);
+    return self.from + (self.to - self.from) * t * t * (3 - 2 * t);
 }

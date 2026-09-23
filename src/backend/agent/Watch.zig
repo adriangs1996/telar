@@ -21,12 +21,12 @@ name_known: bool = false,
 checked_at_ms: i64 = 0,
 pending: bool = false,
 
-pub fn pathSlice(watch: *const Watch) []const u8 {
-    return watch.path[0..watch.path_len];
+pub fn pathSlice(self: *const Watch) []const u8 {
+    return self.path[0..self.path_len];
 }
 
-pub fn nameSlice(watch: *const Watch) []const u8 {
-    return watch.name[0..watch.name_len];
+pub fn nameSlice(self: *const Watch) []const u8 {
+    return self.name[0..self.name_len];
 }
 
 /// Records a name as handed over and reports whether it differs from the
@@ -35,13 +35,13 @@ pub fn nameSlice(watch: *const Watch) []const u8 {
 /// ```zig
 /// if (watch.remember(title)) apply(title);
 /// ```
-pub fn remember(watch: *Watch, value: []const u8) bool {
-    if (watch.name_known and std.mem.eql(u8, watch.nameSlice(), value)) {
+pub fn remember(self: *Watch, value: []const u8) bool {
+    if (self.name_known and std.mem.eql(u8, self.nameSlice(), value)) {
         return false;
     }
 
-    @memcpy(watch.name[0..value.len], value);
-    watch.name_len = @intCast(value.len);
-    watch.name_known = true;
+    @memcpy(self.name[0..value.len], value);
+    self.name_len = @intCast(value.len);
+    self.name_known = true;
     return true;
 }

@@ -14,11 +14,11 @@ text_len: u16 = 0,
 /// ```zig
 /// model.suggestion.begin();
 /// ```
-pub fn begin(state: *State) void {
-    state.pending_request = 0;
-    state.phase = .idle;
-    state.text_len = 0;
-    state.revision +%= 1;
+pub fn begin(self: *State) void {
+    self.pending_request = 0;
+    self.phase = .idle;
+    self.text_len = 0;
+    self.revision +%= 1;
 }
 
 /// Records the request whose reply is awaited and shows the waiting
@@ -27,11 +27,11 @@ pub fn begin(state: *State) void {
 /// ```zig
 /// model.suggestion.expect(schema.id.raw(request_id));
 /// ```
-pub fn expect(state: *State, request_id: u64) void {
-    state.pending_request = request_id;
-    state.phase = .waiting;
-    state.text_len = 0;
-    state.revision +%= 1;
+pub fn expect(self: *State, request_id: u64) void {
+    self.pending_request = request_id;
+    self.phase = .waiting;
+    self.text_len = 0;
+    self.revision +%= 1;
 }
 
 /// Discards a landed or pending suggestion because the request text
@@ -40,15 +40,15 @@ pub fn expect(state: *State, request_id: u64) void {
 /// ```zig
 /// model.suggestion.invalidate();
 /// ```
-pub fn invalidate(state: *State) void {
-    if (state.phase == .idle) {
+pub fn invalidate(self: *State) void {
+    if (self.phase == .idle) {
         return;
     }
 
-    state.pending_request = 0;
-    state.phase = .idle;
-    state.text_len = 0;
-    state.revision +%= 1;
+    self.pending_request = 0;
+    self.phase = .idle;
+    self.text_len = 0;
+    self.revision +%= 1;
 }
 
 /// Lands one reply. Replies for any other request are ignored.
@@ -56,26 +56,26 @@ pub fn invalidate(state: *State) void {
 /// ```zig
 /// _ = model.suggestion.apply(.{ .request_id = request_id, .status = .ready, .text = "ls" });
 /// ```
-pub fn apply(state: *State, suggestion: core.CommandSuggestion) bool {
+pub fn apply(self: *State, suggestion: core.CommandSuggestion) bool {
     const request_id = core.raw(suggestion.request_id);
-    if (request_id == 0 or request_id != state.pending_request) {
+    if (request_id == 0 or request_id != self.pending_request) {
         return false;
     }
 
-    state.pending_request = 0;
-    state.status = suggestion.status;
+    self.pending_request = 0;
+    self.status = suggestion.status;
     const len = @min(suggestion.text.len, core.max_suggestion_bytes);
-    @memcpy(state.text[0..len], suggestion.text[0..len]);
-    state.text_len = @intCast(len);
-    state.phase = if (suggestion.status == .ready and len != 0) .ready else .failed;
-    state.revision +%= 1;
+    @memcpy(self.text[0..len], suggestion.text[0..len]);
+    self.text_len = @intCast(len);
+    self.phase = if (suggestion.status == .ready and len != 0) .ready else .failed;
+    self.revision +%= 1;
     return true;
 }
 
-pub fn textSlice(state: *const State) []const u8 {
-    return state.text[0..state.text_len];
+pub fn textSlice(self: *const State) []const u8 {
+    return self.text[0..self.text_len];
 }
 
-pub fn version(state: *const State) u64 {
-    return state.revision;
+pub fn version(self: *const State) u64 {
+    return self.revision;
 }

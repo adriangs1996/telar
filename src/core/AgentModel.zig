@@ -12,27 +12,27 @@ effort_count: u8 = 0,
 default_effort: AgentEffort = .{},
 
 /// Example: `sendModel(model.idSlice());`
-pub fn idSlice(model: *const AgentModel) []const u8 {
-    return model.id[0..model.id_len];
+pub fn idSlice(self: *const AgentModel) []const u8 {
+    return self.id[0..self.id_len];
 }
 
 /// Example: `drawLabel(model.labelSlice());`
-pub fn labelSlice(model: *const AgentModel) []const u8 {
-    return model.label[0..model.label_len];
+pub fn labelSlice(self: *const AgentModel) []const u8 {
+    return self.label[0..self.label_len];
 }
 
 /// Example: `for (model.efforts()) |effort| drawEffort(effort);`
-pub fn efforts(model: *const AgentModel) []const AgentEffort {
-    return model.effort_storage[0..model.effort_count];
+pub fn efforts(self: *const AgentModel) []const AgentEffort {
+    return self.effort_storage[0..self.effort_count];
 }
 
 /// Example: `if (!model.supports(options.effort)) return error.UnsupportedEffort;`
-pub fn supports(model: *const AgentModel, effort: AgentEffort) bool {
+pub fn supports(self: *const AgentModel, effort: AgentEffort) bool {
     if (effort.id_len > limits.max_effort_bytes) {
         return false;
     }
 
-    for (model.efforts()) |supported| {
+    for (self.efforts()) |supported| {
         if (std.mem.eql(u8, effort.idSlice(), supported.idSlice())) {
             return true;
         }

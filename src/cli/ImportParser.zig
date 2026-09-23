@@ -17,56 +17,56 @@ active: u1 = 0,
 command_len: usize = 0,
 command_active: bool = false,
 
-pub fn feed(state: *ImportParser, raw_line: []const u8) ?ImportedEntry {
+pub fn feed(self: *ImportParser, raw_line: []const u8) ?ImportedEntry {
     const line = std.mem.trimEnd(u8, raw_line, "\r");
-    return switch (state.kind) {
+    return switch (self.kind) {
         .auto => unreachable,
-        .zsh => state.feedZsh(line),
-        .bash => state.feedBash(line),
-        .fish => state.feedFish(line),
+        .zsh => self.feedZsh(line),
+        .bash => self.feedBash(line),
+        .fish => self.feedFish(line),
     };
 }
 
-pub fn flush(state: *ImportParser) ?ImportedEntry {
-    if (!state.command_active or state.command_len == 0) {
+pub fn flush(self: *ImportParser) ?ImportedEntry {
+    if (!self.command_active or self.command_len == 0) {
         return null;
     }
 
-    state.command_active = false;
-    return .{ .started_at_ms = state.pending_time_ms, .command = state.command_storage[state.active][0..state.command_len] };
+    self.command_active = false;
+    return .{ .started_at_ms = self.pending_time_ms, .command = self.command_storage[self.active][0..self.command_len] };
 }
 
-fn feedZsh(state: *ImportParser, line: []const u8) ?ImportedEntry {
-    if (state.command_active) {
-        if (state.command_len != 0 and state.command_storage[state.active][state.command_len - 1] == '\\') {
-            state.command_len -= 1;
-            state.append("\n");
-            state.append(line);
+fn feedZsh(self: *ImportParser, line: []const u8) ?ImportedEntry {
+    if (self.command_active) {
+        if (self.command_len != 0 and self.command_storage[self.active][self.command_len - 1] == '\\') {
+            self.command_len -= 1;
+            self.append("\n");
+            self.append(line);
             if (line.len != 0 and line[line.len - 1] == '\\') {
                 return null;
             }
 
-            return state.flush();
+            return self.flush();
         }
     }
 
-    const finished = state.flush();
+    const finished = self.flush();
     if (std.mem.startsWith(u8, line, ": ")) {
         const semicolon = std.mem.indexOfScalar(u8, line, ';') orelse return finished;
         const meta = line[2..semicolon];
         const colon = std.mem.indexOfScalar(u8, meta, ':') orelse return finished;
         const seconds = std.fmt.parseInt(i64, meta[0..colon], 10) catch 0;
-        state.begin(seconds * 1_000, line[semicolon + 1 ..]);
+        self.begin(seconds * 1_000, line[semicolon + 1 ..]);
         if (line.len != 0 and line[line.len - 1] == '\\') {
             return finished;
         }
     } else if (line.len != 0) {
-        state.begin(0, line);
+        self.begin(0, line);
     } else {
         return finished;
     }
 
-    if (state.command_len != 0 and state.command_storage[state.active][state.command_len - 1] == '\\') {
+    if (self.command_len != 0 and self.command_storage[self.active][self.command_len - 1] == '\\') {
         return finished;
     }
     if (finished) |value| {
@@ -75,40 +75,40 @@ fn feedZsh(state: *ImportParser, line: []const u8) ?ImportedEntry {
         return value;
     }
 
-    return state.flush();
+    return self.flush();
 }
 
-fn feedBash(state: *ImportParser, line: []const u8) ?ImportedEntry {
+fn feedBash(self: *ImportParser, line: []const u8) ?ImportedEntry {
     if (line.len > 1 and line[0] == '#') {
-        const seconds = std.fmt.parseInt(i64, line[1..], 10) catch return state.emitPlain(line);
-        const finished = state.flush();
-        state.pending_time_ms = seconds * 1_000;
+        const seconds = std.fmt.parseInt(i64, line[1..], 10) catch return self.emitPlain(line);
+        const finished = self.flush();
+        self.pending_time_ms = seconds * 1_000;
         return finished;
     }
 
-    return state.emitPlain(line);
+    return self.emitPlain(line);
 }
 
-fn emitPlain(state: *ImportParser, line: []const u8) ?ImportedEntry {
+fn emitPlain(self: *ImportParser, line: []const u8) ?ImportedEntry {
     if (line.len == 0) {
         return null;
     }
 
-    const finished = state.flush();
-    const time = state.pending_time_ms;
-    state.begin(time, line);
+    const finished = self.flush();
+    const time = self.pending_time_ms;
+    self.begin(time, line);
     if (finished) |value| {
         return value;
     }
 
-    return state.flush();
+    return self.flush();
 }
 
-fn feedFish(state: *ImportParser, line: []const u8) ?ImportedEntry {
+fn feedFish(self: *ImportParser, line: []const u8) ?ImportedEntry {
     if (std.mem.startsWith(u8, line, "- cmd: ")) {
-        const finished = state.flush();
-        state.begin(0, line["- cmd: ".len..]);
-        state.command_active = true;
+        const finished = self.flush();
+        self.begin(0, line["- cmd: ".len..]);
+        self.command_active = true;
         if (finished) |value| {
             return value;
         }
@@ -117,25 +117,25 @@ fn feedFish(state: *ImportParser, line: []const u8) ?ImportedEntry {
     }
     if (std.mem.startsWith(u8, line, "  when: ")) {
         const seconds = std.fmt.parseInt(i64, line["  when: ".len..], 10) catch 0;
-        state.pending_time_ms = seconds * 1_000;
-        return state.flush();
+        self.pending_time_ms = seconds * 1_000;
+        return self.flush();
     }
 
     return null;
 }
 
-fn begin(state: *ImportParser, time_ms: i64, command: []const u8) void {
-    state.active ^= 1;
-    state.pending_time_ms = time_ms;
-    state.command_len = 0;
-    state.command_active = true;
-    state.append(command);
+fn begin(self: *ImportParser, time_ms: i64, command: []const u8) void {
+    self.active ^= 1;
+    self.pending_time_ms = time_ms;
+    self.command_len = 0;
+    self.command_active = true;
+    self.append(command);
 }
 
-fn append(state: *ImportParser, bytes: []const u8) void {
-    const buffer = &state.command_storage[state.active];
-    const room = buffer.len - state.command_len;
+fn append(self: *ImportParser, bytes: []const u8) void {
+    const buffer = &self.command_storage[self.active];
+    const room = buffer.len - self.command_len;
     const take = @min(room, bytes.len);
-    @memcpy(buffer[state.command_len .. state.command_len + take], bytes[0..take]);
-    state.command_len += take;
+    @memcpy(buffer[self.command_len .. self.command_len + take], bytes[0..take]);
+    self.command_len += take;
 }

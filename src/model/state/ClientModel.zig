@@ -202,7 +202,7 @@ pub fn initWithState(gpa: std.mem.Allocator, initial: InitialClientState) Client
 
 /// Initializes the final destination without copying the reserved workspace slots.
 /// Example: `model.initInto(gpa, initial);`
-pub fn initInto(self: *ClientModel, gpa: std.mem.Allocator, initial: InitialClientState) void {
+pub fn initInto(model: *ClientModel, gpa: std.mem.Allocator, initial: InitialClientState) void {
     initial.host_size.validate() catch unreachable;
     const cell_size = initial.host_capabilities.cellSize(
         initial.host_size.cols,
@@ -211,7 +211,7 @@ pub fn initInto(self: *ClientModel, gpa: std.mem.Allocator, initial: InitialClie
     std.debug.assert(initial.host_size.cell_width_px == cell_size.width);
     std.debug.assert(initial.host_size.cell_height_px == cell_size.height);
 
-    self.* = .{
+    model.* = .{
         .gpa = gpa,
         .config = initial.config,
         .theme = initial.theme,
@@ -223,9 +223,9 @@ pub fn initInto(self: *ClientModel, gpa: std.mem.Allocator, initial: InitialClie
         .sidebar_width = @max(model_data.sidebar.minimum_width, initial.sidebar_width),
     };
 
-    std.debug.assert(initial.window_title.len <= self.window_title_template.len);
-    @memcpy(self.window_title_template[0..initial.window_title.len], initial.window_title);
-    self.window_title_template_len = @intCast(initial.window_title.len);
+    std.debug.assert(initial.window_title.len <= model.window_title_template.len);
+    @memcpy(model.window_title_template[0..initial.window_title.len], initial.window_title);
+    model.window_title_template_len = @intCast(initial.window_title.len);
 }
 
 /// Releases all semantic workspace state owned by the model.
@@ -727,7 +727,7 @@ pub fn toggleWorkspaceList(model: *ClientModel) WorkspaceListCollapse {
 
 /// Decodes a bounded runtime list and preserves the previous replica on rejection.
 /// Example: `_ = try self.applyWorkspaceList(list);`
-pub fn applyWorkspaceList(self: *ClientModel, list: core.WorkspaceListView) !workspace_list_rejection.Outcome {
+pub fn applyWorkspaceList(model: *ClientModel, list: core.WorkspaceListView) !workspace_list_rejection.Outcome {
     var entries: [core.max_workspace_list_entries]EntryInput = undefined;
     var count: usize = 0;
     var iterator = list.entries();
@@ -743,7 +743,7 @@ pub fn applyWorkspaceList(self: *ClientModel, list: core.WorkspaceListView) !wor
         count += 1;
     }
 
-    const commit = self.reconcileWorkspaceList(
+    const commit = model.reconcileWorkspaceList(
         .{
             .revision = list.revision,
             .entries = entries[0..count],
@@ -2772,32 +2772,32 @@ pub fn selectTab(model: *ClientModel, target: model_data.TabSelectionTarget) !?m
 }
 
 /// Replaces only a matching active tab layout after validating all members. Example: `const change = try model.applyPaneLayout(request);`
-pub fn applyPaneLayout(self: *ClientModel, request: model_data.PaneLayoutRequest) !model_data.PaneFocus {
-    const slot = self.tabs.activeSlot() orelse return error.NoActiveTab;
-    const location = self.tabs.location[slot];
+pub fn applyPaneLayout(model: *ClientModel, request: model_data.PaneLayoutRequest) !model_data.PaneFocus {
+    const slot = model.tabs.activeSlot() orelse return error.NoActiveTab;
+    const location = model.tabs.location[slot];
     if (!std.meta.eql(location, request.location)) {
         return error.LayoutTabMismatch;
     }
 
-    const previous = self.tabs.layout[slot].focused() orelse return error.NoFocusedPane;
+    const previous = model.tabs.layout[slot].focused() orelse return error.NoFocusedPane;
     for (request.panes.ids) |pane_id| {
-        const pane = self.panes.findInConst(location.tab_id, pane_id) orelse return error.LayoutPaneMismatch;
+        const pane = model.panes.findInConst(location.tab_id, pane_id) orelse return error.LayoutPaneMismatch;
         if (pane.kind == .agent and request.layout.surface(pane_id) != .thread) {
             return error.InvalidAgentSurface;
         }
     }
 
-    if (!tab_layout.restoreSaved(self, slot, request.layout, request.panes)) {
+    if (!tab_layout.restoreSaved(model, slot, request.layout, request.panes)) {
         return error.LayoutPaneMismatch;
     }
 
-    self.panes_revision +%= 1;
-    return .{ .location = location, .previous = previous, .focused = request.panes.focused, .geometry_changed = true, .panes_revision = self.panes_revision };
+    model.panes_revision +%= 1;
+    return .{ .location = location, .previous = previous, .focused = request.panes.focused, .geometry_changed = true, .panes_revision = model.panes_revision };
 }
 
 /// Example: `_ = model.planAgentPrompt(pane_id);`
-pub fn planAgentPrompt(self: *ClientModel, pane_id: core.PaneId) ?AgentPromptIntent {
-    const pane = self.agentPane(pane_id) orelse return null;
+pub fn planAgentPrompt(model: *ClientModel, pane_id: core.PaneId) ?AgentPromptIntent {
+    const pane = model.agentPane(pane_id) orelse return null;
     const thread = pane.agent_thread orelse return null;
     if (thread.status != .ready or (std.mem.trim(u8, pane.composerSlice(), " \t\r\n").len == 0 and pane.composerImages().count == 0)) {
         return null;
@@ -2820,12 +2820,12 @@ pub fn planAgentPrompt(self: *ClientModel, pane_id: core.PaneId) ?AgentPromptInt
 }
 
 /// Example: `_ = model.completeAgentPrompt(operation);`
-pub fn completeAgentPrompt(self: *ClientModel, operation: model_data.AgentOperation) bool {
-    const pane = self.agentPane(operation.pane_id) orelse return false;
+pub fn completeAgentPrompt(model: *ClientModel, operation: model_data.AgentOperation) bool {
+    const pane = model.agentPane(operation.pane_id) orelse return false;
     if (pane.pane_generation != operation.pane_generation or pane.attachment_generation != operation.attachment_generation) {
         return false;
     }
 
     const revision = operation.composer_content_revision orelse return false;
-    return self.acceptAgentPrompt(operation.pane_id, revision);
+    return model.acceptAgentPrompt(operation.pane_id, revision);
 }

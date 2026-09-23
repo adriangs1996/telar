@@ -11,6 +11,6 @@ deletion: types.MarkerDeletion,
 /// for a pasted path.
 deletions: u8 = 1,
 
-pub fn keyCount(removal: MarkerRemoval) usize {
-    return @as(usize, removal.steps) * 2 + removal.deletions;
+pub fn keyCount(self: MarkerRemoval) usize {
+    return @as(usize, self.steps) * 2 + self.deletions;
 }

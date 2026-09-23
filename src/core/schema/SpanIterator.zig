@@ -5,16 +5,16 @@ const SpanIterator = @This();
 decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *SpanIterator) error{Truncated}!?SpanView {
-    if (iterator.remaining == 0) {
+pub fn next(self: *SpanIterator) error{Truncated}!?SpanView {
+    if (self.remaining == 0) {
         return null;
     }
-    iterator.remaining -= 1;
+    self.remaining -= 1;
 
-    const start = try iterator.decoder.readInt(u32);
-    const count = try iterator.decoder.readInt(u32);
-    const encoded_length = try iterator.decoder.readInt(u32);
-    const encoded_cells = try iterator.decoder.readBytes(encoded_length);
+    const start = try self.decoder.readInt(u32);
+    const count = try self.decoder.readInt(u32);
+    const encoded_length = try self.decoder.readInt(u32);
+    const encoded_cells = try self.decoder.readBytes(encoded_length);
     return .{
         .start = start,
         .cell_count = count,

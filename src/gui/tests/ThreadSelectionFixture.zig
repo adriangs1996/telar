@@ -35,29 +35,29 @@ pub fn init() !Fixture {
     return fixture;
 }
 
-pub fn deinit(fixture: *Fixture) void {
-    fixture.session.deinit();
+pub fn deinit(self: *Fixture) void {
+    self.session.deinit();
 }
 
-pub fn publish(fixture: *Fixture) !void {
-    const token = try fixture.session.draw();
+pub fn publish(self: *Fixture) !void {
+    const token = try self.session.draw();
     try input_support.presented(
-        fixture.session.gui,
+        self.session.gui,
         token,
         true,
     );
-    try fixture.session.settle();
+    try self.session.settle();
 }
 
-pub fn send(fixture: *Fixture, event: event_module.Event) !void {
-    try input_support.accept(fixture.session.gui, event);
-    try input_support.pump(fixture.session.gui);
+pub fn send(self: *Fixture, event: event_module.Event) !void {
+    try input_support.accept(self.session.gui, event);
+    try input_support.pump(self.session.gui);
 }
 
-pub fn messages(fixture: *Fixture, texts: []const []const u8) !void {
+pub fn messages(self: *Fixture, texts: []const []const u8) !void {
     const snapshot = try std.testing.allocator.create(core.AgentThreadSnapshot);
     defer std.testing.allocator.destroy(snapshot);
-    const pane = fixture.session.gui.app.model.agentPane(pane_id).?;
+    const pane = self.session.gui.app.model.agentPane(pane_id).?;
     snapshot.* = .{ .pane_id = pane_id, .pane_generation = 7, .revision = if (pane.agent_thread) |current| current.revision + 1 else 1, .status = .ready };
     @memcpy(snapshot.metadata_storage[0..6], "Turn-1");
     snapshot.metadata_len = 6;
@@ -72,11 +72,11 @@ pub fn messages(fixture: *Fixture, texts: []const []const u8) !void {
     }
     snapshot.item_count = @intCast(texts.len);
     var bytes: [96 * 1024]u8 = undefined;
-    _ = try fixture.session.gui.app.model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, snapshot))).agent_thread_snapshot);
+    _ = try self.session.gui.app.model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, snapshot))).agent_thread_snapshot);
 }
 
-pub fn target(fixture: *const Fixture, field: enum { transcript, composer }) !Target {
-    const registry = fixture.session.gui.widgets.dispatcher.maps.presented();
+pub fn target(self: *const Fixture, field: enum { transcript, composer }) !Target {
+    const registry = self.session.gui.widgets.dispatcher.maps.presented();
     for (registry.targets[0..registry.len]) |value| {
         if ((field == .transcript and value.action == .transcript and value.action.transcript == pane_id) or (field == .composer and value.action == .composer and value.action.composer == pane_id)) {
             return value;
@@ -85,12 +85,12 @@ pub fn target(fixture: *const Fixture, field: enum { transcript, composer }) !Ta
     return error.MissingSelectionTarget;
 }
 
-pub fn point(fixture: *const Fixture, identity: u64, needle: []const u8) ![2]f64 {
-    const pane = fixture.session.gui.app.model.agentPane(pane_id).?;
+pub fn point(self: *const Fixture, identity: u64, needle: []const u8) ![2]f64 {
+    const pane = self.session.gui.app.model.agentPane(pane_id).?;
     const snapshot = pane.threadItemSource(identity) orelse return error.MissingSource;
     const item = snapshot.findItem(identity) orelse return error.MissingSource;
     const offset = item.text_offset + (std.mem.indexOf(u8, item.text(snapshot), needle) orelse return error.MissingText);
-    const geometry = fixture.session.gui.widgets.thread_text.?.maps.presented();
+    const geometry = self.session.gui.widgets.thread_text.?.maps.presented();
     for (geometry.fragments[0..geometry.fragment_count]) |fragment| {
         if (geometry.rows[fragment.row].owner.item_identity != identity or fragment.section != .body) {
             continue;
@@ -104,20 +104,20 @@ pub fn point(fixture: *const Fixture, identity: u64, needle: []const u8) ![2]f64
     return error.TextNotVisible;
 }
 
-pub fn drag(fixture: *Fixture, points: [2][2]f64) !void {
-    try fixture.send(.{ .pointer = .{ .kind = .press, .x = points[0][0], .y = points[0][1] } });
-    try fixture.send(.{ .pointer = .{ .kind = .drag, .x = points[1][0], .y = points[1][1] } });
-    try fixture.send(.{ .pointer = .{ .kind = .release, .x = points[1][0], .y = points[1][1] } });
+pub fn drag(self: *Fixture, points: [2][2]f64) !void {
+    try self.send(.{ .pointer = .{ .kind = .press, .x = points[0][0], .y = points[0][1] } });
+    try self.send(.{ .pointer = .{ .kind = .drag, .x = points[1][0], .y = points[1][1] } });
+    try self.send(.{ .pointer = .{ .kind = .release, .x = points[1][0], .y = points[1][1] } });
 }
 
-pub fn clipboard(fixture: *Fixture) !native.HostRequest {
+pub fn clipboard(self: *Fixture) !native.HostRequest {
     var request: native.HostRequest = .{};
-    if (!fixture.session.gui.host.next(&request)) {
+    if (!self.session.gui.host.next(&request)) {
         return error.MissingClipboardWrite;
     }
     return request;
 }
 
-pub fn ack(fixture: *Fixture, request: native.HostRequest, status: ClipboardResult.Status) !void {
-    try fixture.send(.{ .clipboard = .{ .operation = .write, .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .status = status } });
+pub fn ack(self: *Fixture, request: native.HostRequest, status: ClipboardResult.Status) !void {
+    try self.send(.{ .clipboard = .{ .operation = .write, .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .status = status } });
 }

@@ -31,20 +31,20 @@ complete: bool = false,
 /// Projects large output strings into a bounded preview without changing control fields.
 /// The scanner still validates discarded bytes; this scratch belongs to the observation actor.
 /// Example: `frame.reset(); try frame.consume(&scanner);`
-pub fn reset(frame: *OutputFrame) void {
-    frame.* = .{};
-    frame.writer = .fixed(&frame.bytes);
+pub fn reset(self: *OutputFrame) void {
+    self.* = .{};
+    self.writer = .fixed(&self.bytes);
 }
 
 /// Consumes available streaming tokens, retaining neither the input nor heap allocations.
 /// Example: `scanner.feedInput(chunk); try frame.consume(&scanner);`
-pub fn consume(frame: *OutputFrame, scanner: *std.json.Scanner) !void {
+pub fn consume(self: *OutputFrame, scanner: *std.json.Scanner) !void {
     while (true) {
         const next = scanner.next() catch |err| switch (err) {
             error.BufferUnderrun => return,
             else => return error.InvalidProviderFrame,
         };
-        frame.token(next) catch |err| switch (err) {
+        self.token(next) catch |err| switch (err) {
             error.WriteFailed => return error.ProviderFrameTooLarge,
             else => return err,
         };
@@ -54,137 +54,137 @@ pub fn consume(frame: *OutputFrame, scanner: *std.json.Scanner) !void {
     }
 }
 
-fn token(frame: *OutputFrame, value: std.json.Token) !void {
+fn token(self: *OutputFrame, value: std.json.Token) !void {
     switch (value) {
         .object_begin, .array_begin => {
-            try frame.beginValue();
-            if (frame.depth == frame.containers.len) {
+            try self.beginValue();
+            if (self.depth == self.containers.len) {
                 return error.ProviderFrameTooDeep;
             }
 
             const object = value == .object_begin;
-            try frame.writer.writeByte(if (object) '{' else '[');
-            frame.containers[frame.depth] = if (object) .object_first else .array_first;
-            frame.depth += 1;
-            frame.is_output = false;
+            try self.writer.writeByte(if (object) '{' else '[');
+            self.containers[self.depth] = if (object) .object_first else .array_first;
+            self.depth += 1;
+            self.is_output = false;
         },
         .object_end, .array_end => {
-            frame.depth -= 1;
-            try frame.writer.writeByte(if (value == .object_end) '}' else ']');
+            self.depth -= 1;
+            try self.writer.writeByte(if (value == .object_end) '}' else ']');
         },
         .true, .false, .null => {
-            try frame.beginValue();
-            try frame.writer.writeAll(switch (value) {
+            try self.beginValue();
+            try self.writer.writeAll(switch (value) {
                 .true => "true",
                 .false => "false",
                 else => "null",
             });
         },
         .partial_number, .number => |part| {
-            if (!frame.in_number) {
-                try frame.beginValue();
+            if (!self.in_number) {
+                try self.beginValue();
             }
 
-            try frame.writer.writeAll(part);
-            frame.in_number = value != .number;
+            try self.writer.writeAll(part);
+            self.in_number = value != .number;
         },
         .partial_string, .string => |part| {
-            try frame.stringPart(part);
+            try self.stringPart(part);
             if (value == .string) {
-                try frame.endString();
+                try self.endString();
             }
         },
-        .partial_string_escaped_1 => |part| try frame.stringPart(&part),
-        .partial_string_escaped_2 => |part| try frame.stringPart(&part),
-        .partial_string_escaped_3 => |part| try frame.stringPart(&part),
-        .partial_string_escaped_4 => |part| try frame.stringPart(&part),
-        .end_of_document => frame.complete = true,
+        .partial_string_escaped_1 => |part| try self.stringPart(&part),
+        .partial_string_escaped_2 => |part| try self.stringPart(&part),
+        .partial_string_escaped_3 => |part| try self.stringPart(&part),
+        .partial_string_escaped_4 => |part| try self.stringPart(&part),
+        .end_of_document => self.complete = true,
         .allocated_string, .allocated_number => unreachable,
     }
 }
 
-fn beginValue(frame: *OutputFrame) !void {
-    if (frame.depth == 0) {
+fn beginValue(self: *OutputFrame) !void {
+    if (self.depth == 0) {
         return;
     }
 
-    const container = &frame.containers[frame.depth - 1];
+    const container = &self.containers[self.depth - 1];
     switch (container.*) {
         .object_value => container.* = .object_key,
         .array_first => container.* = .array_value,
-        .array_value => try frame.writer.writeByte(','),
+        .array_value => try self.writer.writeByte(','),
         else => unreachable,
     }
 }
 
-fn stringPart(frame: *OutputFrame, part: []const u8) !void {
-    if (!frame.in_string) {
-        frame.is_key = frame.depth != 0 and switch (frame.containers[frame.depth - 1]) {
+fn stringPart(self: *OutputFrame, part: []const u8) !void {
+    if (!self.in_string) {
+        self.is_key = self.depth != 0 and switch (self.containers[self.depth - 1]) {
             .object_first, .object_key => true,
             else => false,
         };
-        if (frame.is_key) {
-            if (frame.containers[frame.depth - 1] == .object_key) {
-                try frame.writer.writeByte(',');
+        if (self.is_key) {
+            if (self.containers[self.depth - 1] == .object_key) {
+                try self.writer.writeByte(',');
             }
 
-            frame.key_len = 0;
-            frame.is_output = false;
+            self.key_len = 0;
+            self.is_output = false;
         } else {
-            try frame.beginValue();
+            try self.beginValue();
         }
 
-        try frame.writer.writeByte('"');
-        frame.string_start = frame.writer.end;
-        frame.retained = 0;
-        frame.string_truncated = false;
-        frame.in_string = true;
+        try self.writer.writeByte('"');
+        self.string_start = self.writer.end;
+        self.retained = 0;
+        self.string_truncated = false;
+        self.in_string = true;
     }
 
-    if (frame.is_key and frame.key_len <= frame.key.len) {
-        const count = @min(part.len, frame.key.len - frame.key_len);
-        @memcpy(frame.key[frame.key_len..][0..count], part[0..count]);
-        frame.key_len = if (count == part.len) frame.key_len + count else frame.key.len + 1;
+    if (self.is_key and self.key_len <= self.key.len) {
+        const count = @min(part.len, self.key.len - self.key_len);
+        @memcpy(self.key[self.key_len..][0..count], part[0..count]);
+        self.key_len = if (count == part.len) self.key_len + count else self.key.len + 1;
     }
 
-    const count = if (frame.is_output) @min(part.len, max_output_bytes - frame.retained) else part.len;
-    try std.json.Stringify.encodeJsonStringChars(part[0..count], .{}, &frame.writer);
-    if (frame.is_output) {
-        frame.retained += count;
-        frame.string_truncated = frame.string_truncated or count != part.len;
+    const count = if (self.is_output) @min(part.len, max_output_bytes - self.retained) else part.len;
+    try std.json.Stringify.encodeJsonStringChars(part[0..count], .{}, &self.writer);
+    if (self.is_output) {
+        self.retained += count;
+        self.string_truncated = self.string_truncated or count != part.len;
     }
 }
 
-fn endString(frame: *OutputFrame) !void {
-    if (frame.string_truncated) {
+fn endString(self: *OutputFrame) !void {
+    if (self.string_truncated) {
         // A scanner input boundary or the byte quota can bisect a UTF-8 codepoint.
-        const bytes = frame.writer.buffered();
+        const bytes = self.writer.buffered();
         var end = bytes.len;
-        while (end > frame.string_start and bytes[end - 1] & 0xc0 == 0x80) {
+        while (end > self.string_start and bytes[end - 1] & 0xc0 == 0x80) {
             end -= 1;
         }
 
-        if (end > frame.string_start and bytes[end - 1] >= 0xc0) {
+        if (end > self.string_start and bytes[end - 1] >= 0xc0) {
             const width = std.unicode.utf8ByteSequenceLength(bytes[end - 1]) catch unreachable;
             if (bytes.len - (end - 1) < width) {
-                frame.writer.end = end - 1;
+                self.writer.end = end - 1;
             }
         }
 
-        try std.json.Stringify.encodeJsonStringChars(marker, .{}, &frame.writer);
-        frame.truncated = true;
+        try std.json.Stringify.encodeJsonStringChars(marker, .{}, &self.writer);
+        self.truncated = true;
     }
 
-    try frame.writer.writeByte('"');
-    if (frame.is_key) {
-        frame.is_output = frame.key_len <= frame.key.len and output_fields.has(frame.key[0..frame.key_len]);
-        try frame.writer.writeByte(':');
-        frame.containers[frame.depth - 1] = .object_value;
+    try self.writer.writeByte('"');
+    if (self.is_key) {
+        self.is_output = self.key_len <= self.key.len and output_fields.has(self.key[0..self.key_len]);
+        try self.writer.writeByte(':');
+        self.containers[self.depth - 1] = .object_value;
     } else {
-        frame.is_output = false;
+        self.is_output = false;
     }
 
-    frame.in_string = false;
+    self.in_string = false;
 }
 
 test "output projection preserves JSON values across every input boundary" {

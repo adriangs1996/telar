@@ -18,8 +18,8 @@ count: u16 = 0,
 /// var record: LaunchRecord = .{};
 /// record.capture(launch);
 /// ```
-pub fn capture(record: *LaunchRecord, launch: core.LaunchView) void {
-    record.* = .{};
+pub fn capture(self: *LaunchRecord, launch: core.LaunchView) void {
+    self.* = .{};
     if (launch.environment_mode != .inherit_runtime or launch.argument_count == 0 or launch.argument_count > max_arguments) {
         return;
     }
@@ -32,21 +32,21 @@ pub fn capture(record: *LaunchRecord, launch: core.LaunchView) void {
             return;
         }
 
-        @memcpy(record.bytes[len .. len + argument.len], argument);
+        @memcpy(self.bytes[len .. len + argument.len], argument);
         len += argument.len;
-        record.bytes[len] = 0;
+        self.bytes[len] = 0;
         len += 1;
         count += 1;
     }
 
-    record.len = @intCast(len);
-    record.count = count;
+    self.len = @intCast(len);
+    self.count = count;
 }
 
-pub fn restorable(record: *const LaunchRecord) bool {
-    return record.count != 0;
+pub fn restorable(self: *const LaunchRecord) bool {
+    return self.count != 0;
 }
 
-pub fn slice(record: *const LaunchRecord) []const u8 {
-    return record.bytes[0..record.len];
+pub fn slice(self: *const LaunchRecord) []const u8 {
+    return self.bytes[0..self.len];
 }

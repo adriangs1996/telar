@@ -8,8 +8,8 @@ generation: u64,
 /// ```zig
 /// try route.validateWire();
 /// ```
-pub fn validateWire(route: ClientRoute) !void {
-    if (route.id == 0 or route.generation == 0) {
+pub fn validateWire(self: ClientRoute) !void {
+    if (self.id == 0 or self.generation == 0) {
         return error.InvalidClientRoute;
     }
 }

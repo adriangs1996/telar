@@ -21,13 +21,13 @@ context: *const Context,
 area: Rect,
 
 /// Example: `try strip.draw(canvas);`
-pub fn draw(strip: TabStrip, canvas: *Canvas) !void {
-    const area = strip.area;
+pub fn draw(self: TabStrip, canvas: *Canvas) !void {
+    const area = self.area;
     if (area.width <= 0 or area.height <= 0) {
         return;
     }
 
-    const model = strip.context.projection.model;
+    const model = self.context.projection.model;
     const collection = &model.tabs;
     if (canvas.widgets) |widgets| {
         widgets.tab_motions.begin(model.workspace);
@@ -43,7 +43,7 @@ pub fn draw(strip: TabStrip, canvas: *Canvas) !void {
     if (collection.count != 0) {
         var widths: [core.max_tabs_per_workspace]f32 = undefined;
         for (0..collection.count) |index| {
-            widths[index] = try strip.width(canvas, index);
+            widths[index] = try self.width(canvas, index);
         }
 
         const available = @max(0, right - area.x);
@@ -115,20 +115,20 @@ pub fn draw(strip: TabStrip, canvas: *Canvas) !void {
             if (dragging) {
                 lifted = painted;
             } else {
-                try strip.tab(canvas, painted);
+                try self.tab(canvas, painted);
             }
             x += tab_width;
         }
 
         if (lifted) |entry| {
-            try strip.tab(canvas, entry);
+            try self.tab(canvas, entry);
             try canvas.ringAt(entry.bounds, .{ .color = canvas.theme.palette.accent, .width = chrome.px(1), .radius = chrome.px(8) });
         }
     }
 
     if (plus_width > 0) {
         const button: PixelButton = .{
-            .context = strip.context,
+            .context = self.context,
             .area = .{ .x = plus_x, .y = control.y + chrome.px(2), .width = plus_width, .height = @max(0, control.height - chrome.px(6)) },
             .intent = .create_tab,
             .text = "+",
@@ -139,10 +139,10 @@ pub fn draw(strip: TabStrip, canvas: *Canvas) !void {
     }
 }
 
-fn tab(strip: TabStrip, canvas: *Canvas, entry: TabEntry) !void {
+fn tab(self: TabStrip, canvas: *Canvas, entry: TabEntry) !void {
     const index = entry.index;
     const bounds = entry.bounds;
-    const context = strip.context;
+    const context = self.context;
     const model = context.projection.model;
     const location = model.tabs.location[index];
     const palette = canvas.theme.palette;
@@ -191,13 +191,13 @@ fn tab(strip: TabStrip, canvas: *Canvas, entry: TabEntry) !void {
     }
 }
 
-fn width(strip: TabStrip, canvas: *Canvas, index: usize) !f32 {
-    const model = strip.context.projection.model;
+fn width(self: TabStrip, canvas: *Canvas, index: usize) !f32 {
+    const model = self.context.projection.model;
     var storage: [core.max_tab_label_bytes + 16]u8 = undefined;
     const chrome = canvas.chrome;
     const measured = try canvas.measure(.{ .text = text(&storage, model, index), .face = .sans, .bold = true, .size = .body });
     const icon_space = if (data.tab_label.icon(model, index) != null) canvas.iconSize(.{ .text = "", .size = .body }) + chrome.px(6) else 0;
-    const dot = attention.tabDot(strip.context.projection, canvas.theme.palette, model.tabs.location[index]);
+    const dot = attention.tabDot(self.context.projection, canvas.theme.palette, model.tabs.location[index]);
     const dot_space: f32 = if (dot != null) chrome.px(AttentionDot.diameter + AttentionDot.gap) else 0;
     return @ceil(std.math.clamp(measured + icon_space + 2 * chrome.px(inset) + dot_space, chrome.px(96), chrome.px(180)));
 }

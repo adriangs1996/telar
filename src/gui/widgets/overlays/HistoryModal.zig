@@ -18,53 +18,53 @@ reveal: f32 = 1,
 
 /// All controls use the same animated pixel layout as the painted surface.
 /// Example: `try widget.draw(canvas);`
-pub fn draw(widget: HistoryModal, canvas: *Canvas) !void {
+pub fn draw(self: HistoryModal, canvas: *Canvas) !void {
     const first = canvas.quads.items().len;
-    try (@import("DialogSurface.zig"){ .bounds = widget.layout.bounds, .viewport = widget.layout.viewport }).draw(canvas);
+    try (@import("DialogSurface.zig"){ .bounds = self.layout.bounds, .viewport = self.layout.viewport }).draw(canvas);
     const content = canvas.quads.items().len;
-    try widget.header(canvas);
-    try widget.search(canvas);
-    try widget.summary(canvas);
-    try widget.rows(canvas);
-    if (widget.projection.prompt.?.inspecting() and widget.projection.history.len != 0) {
-        try widget.inspect(canvas);
+    try self.header(canvas);
+    try self.search(canvas);
+    try self.summary(canvas);
+    try self.rows(canvas);
+    if (self.projection.prompt.?.inspecting() and self.projection.history.len != 0) {
+        try self.inspect(canvas);
     }
 
-    try widget.footer(canvas);
-    canvas.quads.clipFrom(content, widget.layout.bounds);
-    canvas.quads.clipFrom(first, widget.layout.viewport);
-    canvas.quads.fadeFrom(first, widget.reveal);
+    try self.footer(canvas);
+    canvas.quads.clipFrom(content, self.layout.bounds);
+    canvas.quads.clipFrom(first, self.layout.viewport);
+    canvas.quads.fadeFrom(first, self.reveal);
 }
 
-fn header(widget: HistoryModal, canvas: *Canvas) !void {
-    const area = widget.layout.header;
+fn header(self: HistoryModal, canvas: *Canvas) !void {
+    const area = self.layout.header;
     const close_width = @min(canvas.chrome.px(30), area.width);
-    const prompt = widget.projection.prompt.?;
+    const prompt = self.projection.prompt.?;
     var heading = canvas.*;
     heading.chrome.title = @intFromFloat(@max(canvas.chrome.px(20), @as(f32, @floatFromInt(canvas.chrome.title))));
     _ = try heading.textAt(.{ .x = area.x, .y = area.y, .width = @max(0, area.width - close_width - canvas.chrome.px(8)), .height = area.height }, .{ .text = "Command history", .face = .sans, .size = .title, .bold = true, .color = canvas.theme.palette.text });
     try (FormButton{ .bounds = .{ .x = area.x + area.width - close_width, .y = area.y, .width = close_width, .height = area.height }, .text = if (prompt.inspecting()) "‹" else "×", .label = if (prompt.inspecting()) "Back to history" else "Close history", .action = .{ .prompt = .cancel }, .generation = prompt.generation, .namespace = 1, .quiet = true }).draw(canvas);
 }
 
-fn search(widget: HistoryModal, canvas: *Canvas) !void {
-    const prompt = widget.projection.prompt.?;
-    var field = TextField.fromPrompt(&prompt, widget.layout.search, .name);
+fn search(self: HistoryModal, canvas: *Canvas) !void {
+    const prompt = self.projection.prompt.?;
+    var field = TextField.fromPrompt(&prompt, self.layout.search, .name);
     field.form_control = true;
     field.label = "Search command history";
     field.placeholder = "Search commands…";
     try field.draw(canvas);
-    const scope = switch (widget.projection.history.effective_scope) {
+    const scope = switch (self.projection.history.effective_scope) {
         .global => "All history  Tab",
         .cwd => "Directory  Tab",
         .workspace => "Workspace  Tab",
         .pane => "This pane  Tab",
     };
-    try (FormButton{ .bounds = widget.layout.scope, .text = scope, .label = "Change history scope (Tab)", .action = .{ .history = .cycle_scope }, .generation = prompt.generation, .namespace = 2 }).draw(canvas);
+    try (FormButton{ .bounds = self.layout.scope, .text = scope, .label = "Change history scope (Tab)", .action = .{ .history = .cycle_scope }, .generation = prompt.generation, .namespace = 2 }).draw(canvas);
 }
 
-fn summary(widget: HistoryModal, canvas: *Canvas) !void {
-    const history = widget.projection.history;
-    const area = widget.layout.summary;
+fn summary(self: HistoryModal, canvas: *Canvas) !void {
+    const history = self.projection.history;
+    const area = self.layout.summary;
     const palette = canvas.theme.palette;
     var storage: [100]u8 = undefined;
     const text = if (history.len == 0)
@@ -72,7 +72,7 @@ fn summary(widget: HistoryModal, canvas: *Canvas) !void {
     else
         std.fmt.bufPrint(&storage, "{d}–{d} commands{s}", .{ @as(u64, history.page_offset) + 1, @as(u64, history.page_offset) + history.len, if (history.has_more) " +" else "" }) catch "Commands";
     const width = try canvas.textAt(area, .{ .text = text, .face = .sans, .size = .small, .color = palette.subtext0 });
-    if (history.match_fuzzy and widget.projection.prompt.?.field.text().len != 0) {
+    if (history.match_fuzzy and self.projection.prompt.?.field.text().len != 0) {
         const label: @import("../Label.zig") = .{ .text = "Fuzzy search · newest 1,000", .face = .sans, .size = .small, .color = palette.subtext0 };
         const fuzzy_width = try canvas.measure(label);
         if (area.width > width + fuzzy_width + canvas.chrome.px(20)) {
@@ -81,13 +81,13 @@ fn summary(widget: HistoryModal, canvas: *Canvas) !void {
     }
 }
 
-fn rows(widget: HistoryModal, canvas: *Canvas) !void {
-    const layout = widget.layout;
+fn rows(self: HistoryModal, canvas: *Canvas) !void {
+    const layout = self.layout;
     if (layout.results.width <= 0 or layout.rows == 0) {
         return;
     }
 
-    const history = widget.projection.history;
+    const history = self.projection.history;
     if (history.len == 0) {
         const height = canvas.chrome.rowHeight(.body);
         const area: Rect = .{ .x = layout.results.x + canvas.chrome.px(12), .y = layout.results.y + @max(0, (layout.results.height - height * 2) / 2), .width = @max(0, layout.results.width - canvas.chrome.px(24)), .height = height };
@@ -96,20 +96,20 @@ fn rows(widget: HistoryModal, canvas: *Canvas) !void {
         return;
     }
 
-    const selected = @min(widget.projection.prompt.?.selection(), history.len - 1);
+    const selected = @min(self.projection.prompt.?.selection(), history.len - 1);
     const count = @min(layout.rows, history.len);
     const start = (selected + 1) -| count;
     for (0..count) |offset| {
         const index: u16 = start + @as(u16, @intCast(offset));
-        try (@import("HistoryRow.zig"){ .bounds = layout.row(@intCast(offset)), .projection = widget.projection, .index = index, .selected = index == selected }).draw(canvas);
+        try (@import("HistoryRow.zig"){ .bounds = layout.row(@intCast(offset)), .projection = self.projection, .index = index, .selected = index == selected }).draw(canvas);
     }
 }
 
-fn footer(widget: HistoryModal, canvas: *Canvas) !void {
-    const history = widget.projection.history;
-    const prompt = widget.projection.prompt.?;
+fn footer(self: HistoryModal, canvas: *Canvas) !void {
+    const history = self.projection.history;
+    const prompt = self.projection.prompt.?;
     const palette = canvas.theme.palette;
-    const layout = widget.layout;
+    const layout = self.layout;
     const selected: ?u16 = if (history.len == 0) null else @min(prompt.selection(), history.len - 1);
     var storage: [256]u8 = undefined;
     const detail = if (history.errorSlice().len != 0)
@@ -140,8 +140,8 @@ fn footer(widget: HistoryModal, canvas: *Canvas) !void {
     _ = try canvas.textAt(.{ .x = area.x, .y = area.y, .width = @max(0, inspect_button.x - area.x - gap), .height = area.height }, .{ .text = if (prompt.inspecting()) "PgUp / PgDn  Scroll output" else if (history.enter_runs) "↑ ↓ Select   Shift+Enter Paste" else "↑ ↓ Select   Shift+Enter Run", .face = .sans, .size = .small, .color = palette.subtext0 });
 }
 
-fn inspect(widget: HistoryModal, canvas: *Canvas) !void {
-    const layout = widget.layout;
+fn inspect(self: HistoryModal, canvas: *Canvas) !void {
+    const layout = self.layout;
     const metrics = Metrics.fromCanvas(canvas);
     const content = layout.inspectionContent(metrics);
     const columns = columnsFor(content, metrics);
@@ -152,9 +152,9 @@ fn inspect(widget: HistoryModal, canvas: *Canvas) !void {
 
     try canvas.fillRoundedAt(layout.inspection, .{ .color = canvas.theme.palette.surface0, .radius = canvas.chrome.px(8) });
     const first = canvas.quads.items().len;
-    const selection = @min(widget.projection.prompt.?.selection(), widget.projection.history.len - 1);
-    var detail = HistoryDetails.init(widget.projection.history, selection);
-    var skip = widget.projection.prompt.?.detailScroll();
+    const selection = @min(self.projection.prompt.?.selection(), self.projection.history.len - 1);
+    var detail = HistoryDetails.init(self.projection.history, selection);
+    var skip = self.projection.prompt.?.detailScroll();
     var row: u16 = 0;
     const rows_count: u16 = @intFromFloat(@floor(content.height / row_height));
     for (detail.texts(), 0..) |text, index| {

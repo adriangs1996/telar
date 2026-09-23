@@ -9,8 +9,8 @@ path_lengths: [core.AgentSkills.capacity]u16 = @splat(0),
 
 /// Resolves only enabled skills advertised for this pane's working directory.
 /// Example: `try catalog.load(result, cwd);`
-pub fn load(catalog: *Catalog, result: std.json.Value, cwd: []const u8) !void {
-    catalog.value = .{ .revision = catalog.value.revision +% 1, .phase = .ready };
+pub fn load(self: *Catalog, result: std.json.Value, cwd: []const u8) !void {
+    self.value = .{ .revision = self.value.revision +% 1, .phase = .ready };
     const data = protocol.field(result, "data");
     if (data != .array) {
         return error.InvalidSkillCatalog;
@@ -25,7 +25,7 @@ pub fn load(catalog: *Catalog, result: std.json.Value, cwd: []const u8) !void {
             return error.InvalidSkillCatalog;
         }
         const errors = protocol.field(group, "errors");
-        catalog.value.truncated = errors == .array and errors.array.items.len != 0;
+        self.value.truncated = errors == .array and errors.array.items.len != 0;
         for (skills.array.items) |value| {
             const enabled = protocol.field(value, "enabled");
             if (enabled != .bool or !enabled.bool) {
@@ -34,7 +34,7 @@ pub fn load(catalog: *Catalog, result: std.json.Value, cwd: []const u8) !void {
 
             const skill_path = protocol.string(protocol.field(value, "path"));
             if (!std.fs.path.isAbsolute(skill_path) or skill_path.len > 1024 or std.mem.indexOfScalar(u8, skill_path, 0) != null or !std.unicode.utf8ValidateSlice(skill_path)) {
-                catalog.value.truncated = true;
+                self.value.truncated = true;
                 continue;
             }
             const interface = protocol.field(value, "interface");
@@ -42,21 +42,21 @@ pub fn load(catalog: *Catalog, result: std.json.Value, cwd: []const u8) !void {
             const legacy = protocol.string(protocol.field(value, "shortDescription"));
             const description = if (short.len > 0) short else if (legacy.len > 0) legacy else protocol.string(protocol.field(value, "description"));
             const scope = if (protocol.string(protocol.field(value, "pluginId")).len != 0) core.AgentSkill.Scope.plugin else std.meta.stringToEnum(core.AgentSkill.Scope, protocol.string(protocol.field(value, "scope"))) orelse .user;
-            const index = catalog.value.count;
-            catalog.value.append(.{
+            const index = self.value.count;
+            self.value.append(.{
                 .name = protocol.string(protocol.field(value, "name")),
                 .label = truncate(protocol.string(protocol.field(interface, "displayName")), 128),
                 .description = truncate(description, 256),
                 .scope = scope,
             }) catch |err| {
                 if (err != error.DuplicateSkill) {
-                    catalog.value.truncated = true;
+                    self.value.truncated = true;
                 }
 
                 continue;
             };
-            @memcpy(catalog.paths[index][0..skill_path.len], skill_path);
-            catalog.path_lengths[index] = @intCast(skill_path.len);
+            @memcpy(self.paths[index][0..skill_path.len], skill_path);
+            self.path_lengths[index] = @intCast(skill_path.len);
         }
 
         return;
@@ -66,8 +66,8 @@ pub fn load(catalog: *Catalog, result: std.json.Value, cwd: []const u8) !void {
 }
 
 /// Example: `const path = catalog.path(index);`
-pub fn path(catalog: *const Catalog, index: u8) []const u8 {
-    return catalog.paths[index][0..catalog.path_lengths[index]];
+pub fn path(self: *const Catalog, index: u8) []const u8 {
+    return self.paths[index][0..self.path_lengths[index]];
 }
 
 fn truncate(value: []const u8, limit: usize) []const u8 {

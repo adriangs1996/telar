@@ -39,19 +39,19 @@ pub fn Type(comptime Action: type, comptime max_keys: usize) type {
             return binding;
         }
 
-        pub fn sameSequence(a: *const Self, b: *const Self) bool {
-            return data.keybind.sequenceOrder(a.slice(), b.slice()) == .eq;
+        pub fn sameSequence(self: *const Self, b: *const Self) bool {
+            return data.keybind.sequenceOrder(self.slice(), b.slice()) == .eq;
         }
 
         /// True when one sequence equals or prefixes the other — the same
         /// overlap Keymap.init rejects as duplicate or ambiguous.
-        pub fn conflictsWith(a: *const Self, b: *const Self) bool {
-            const shared = data.keybind.commonPrefix(a.slice(), b.slice());
-            return shared == a.len or shared == b.len;
+        pub fn conflictsWith(self: *const Self, b: *const Self) bool {
+            const shared = data.keybind.commonPrefix(self.slice(), b.slice());
+            return shared == self.len or shared == b.len;
         }
 
-        pub fn slice(binding: *const Self) []const data.Key {
-            return binding.keys[0..binding.len];
+        pub fn slice(self: *const Self) []const data.Key {
+            return self.keys[0..self.len];
         }
     };
 }

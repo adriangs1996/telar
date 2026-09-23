@@ -28,8 +28,8 @@ pub fn resolve(canvas: *const Canvas) Bands {
 
 /// Whether a window point lies in any band, in the pointer's coordinates.
 /// Example: `if (bands.contains(event.x, event.y)) return chrome.bandPointer(event);`
-pub fn contains(bands: Bands, x: f64, y: f64) bool {
-    return within(bands.top_bar, x, y) or within(bands.sidebar, x, y) or within(bands.status_bar, x, y);
+pub fn contains(self: Bands, x: f64, y: f64) bool {
+    return within(self.top_bar, x, y) or within(self.sidebar, x, y) or within(self.status_bar, x, y);
 }
 
 /// Example: `if (Bands.within(bounds, event.x, event.y)) return hit.action;`

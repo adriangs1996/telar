@@ -14,16 +14,16 @@ pixels: []u8,
 allocation: ?[]u8 = null,
 
 /// Example: `defer image.deinit(allocator);`
-pub fn deinit(image: *Image, allocator: std.mem.Allocator) void {
-    allocator.free(image.allocation orelse image.pixels);
-    image.* = undefined;
+pub fn deinit(self: *Image, allocator: std.mem.Allocator) void {
+    allocator.free(self.allocation orelse self.pixels);
+    self.* = undefined;
 }
 
 /// Validates dimensions before exposing bytes to a native GPU backend.
 /// Example: `if (!image.valid()) return error.DiagramLimit;`
-pub fn valid(image: Image) bool {
-    return image.width > 0 and image.height > 0 and image.width <= max_side and image.height <= max_side and
-        @as(u64, image.width) * image.height <= max_pixels and image.pixels.len == @as(u64, image.width) * image.height * 4 and
-        std.math.isFinite(image.logical_width) and std.math.isFinite(image.logical_height) and
-        image.logical_width > 0 and image.logical_height > 0 and image.logical_width <= 1_000_000 and image.logical_height <= 1_000_000;
+pub fn valid(self: Image) bool {
+    return self.width > 0 and self.height > 0 and self.width <= max_side and self.height <= max_side and
+        @as(u64, self.width) * self.height <= max_pixels and self.pixels.len == @as(u64, self.width) * self.height * 4 and
+        std.math.isFinite(self.logical_width) and std.math.isFinite(self.logical_height) and
+        self.logical_width > 0 and self.logical_height > 0 and self.logical_width <= 1_000_000 and self.logical_height <= 1_000_000;
 }

@@ -12,22 +12,22 @@ transition: Transition = .{ .from = 1, .to = 1, .started_ns = 0, .duration_ns = 
 /// A generation opens once; query results and inspector changes keep its phase.
 /// Hidden and static compositions request no animation frames.
 /// Example: `const reveal = motion.sample(prompt_generation, canvas.animation);`
-pub fn sample(motion: *ModalMotion, generation: ?u64, animation: ?*FrameClock) f32 {
+pub fn sample(self: *ModalMotion, generation: ?u64, animation: ?*FrameClock) f32 {
     const current_generation = generation orelse {
-        motion.* = .{};
+        self.* = .{};
         return 1;
     };
     const clock = animation orelse {
-        motion.* = .{ .generation = current_generation };
+        self.* = .{ .generation = current_generation };
         return 1;
     };
 
-    if (motion.generation != current_generation) {
-        motion.generation = current_generation;
-        motion.transition = .{ .from = 0, .to = 1, .started_ns = clock.now_ns, .duration_ns = duration_ns };
+    if (self.generation != current_generation) {
+        self.generation = current_generation;
+        self.transition = .{ .from = 0, .to = 1, .started_ns = clock.now_ns, .duration_ns = duration_ns };
     }
 
-    const remaining = 1 - clock.sample(motion.transition);
+    const remaining = 1 - clock.sample(self.transition);
     return 1 - remaining * remaining * remaining;
 }
 

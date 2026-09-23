@@ -24,45 +24,45 @@ target: std.Build.ResolvedTarget,
 optimize: std.builtin.OptimizeMode,
 build_options: *std.Build.Step.Options,
 
-pub fn addSuiteTest(modules: Modules, b: *std.Build, suite: Suite) *std.Build.Step.Compile {
+pub fn addSuiteTest(self: Modules, b: *std.Build, suite: Suite) *std.Build.Step.Compile {
     const tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path(suite.path),
-            .target = modules.target,
-            .optimize = modules.optimize,
+            .target = self.target,
+            .optimize = self.optimize,
             .link_libc = suite.libc,
         }),
     });
 
     if (std.mem.eql(u8, suite.path, "src/main.zig")) {
-        tests.root_module.addOptions("build_options", modules.build_options);
+        tests.root_module.addOptions("build_options", self.build_options);
     }
 
-    tests.root_module.addImport("unicode", modules.unicode);
-    tests.root_module.addImport("telar-core", modules.core);
-    tests.root_module.addImport("telar-backend", modules.backend);
-    tests.root_module.addImport("telar-frontend", modules.frontend);
-    tests.root_module.addImport("telar-client", modules.client);
-    tests.root_module.addImport("model", modules.data);
-    tests.root_module.addImport("kitty_protocol", modules.kitty_protocol);
-    tests.root_module.addImport("lua-api", modules.lua_api);
-    tests.root_module.addImport("telar-lua", modules.telar_lua);
-    tests.root_module.addImport("tls", modules.tls);
-    tests.root_module.addImport("freetype", modules.freetype);
-    tests.root_module.addImport("assets", modules.assets);
-    if (modules.gui) |gui| {
+    tests.root_module.addImport("unicode", self.unicode);
+    tests.root_module.addImport("telar-core", self.core);
+    tests.root_module.addImport("telar-backend", self.backend);
+    tests.root_module.addImport("telar-frontend", self.frontend);
+    tests.root_module.addImport("telar-client", self.client);
+    tests.root_module.addImport("model", self.data);
+    tests.root_module.addImport("kitty_protocol", self.kitty_protocol);
+    tests.root_module.addImport("lua-api", self.lua_api);
+    tests.root_module.addImport("telar-lua", self.telar_lua);
+    tests.root_module.addImport("tls", self.tls);
+    tests.root_module.addImport("freetype", self.freetype);
+    tests.root_module.addImport("assets", self.assets);
+    if (self.gui) |gui| {
         tests.root_module.addImport("telar-gui", gui);
     }
-    tests.root_module.addImport("wuffs", modules.wuffs);
-    tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "include" }) });
-    tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.nghttp2_prefix, "lib" }) });
+    tests.root_module.addImport("wuffs", self.wuffs);
+    tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ self.nghttp2_prefix, "include" }) });
+    tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ self.nghttp2_prefix, "lib" }) });
     tests.root_module.linkSystemLibrary("nghttp2", .{});
-    tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ modules.brotli_prefix, "include" }) });
-    tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ modules.brotli_prefix, "lib" }) });
+    tests.root_module.addIncludePath(.{ .cwd_relative = b.pathJoin(&.{ self.brotli_prefix, "include" }) });
+    tests.root_module.addLibraryPath(.{ .cwd_relative = b.pathJoin(&.{ self.brotli_prefix, "lib" }) });
     tests.root_module.linkSystemLibrary("brotlidec", .{});
 
     if (suite.vt) {
-        tests.root_module.addImport("ghostty-vt", modules.ghostty_vt);
+        tests.root_module.addImport("ghostty-vt", self.ghostty_vt);
     }
 
     return tests;

@@ -5,18 +5,18 @@ const Plan = @This();
 marks: [icons.max_marks]Mark = undefined,
 len: u8 = 0,
 
-pub fn reset(plan: *Plan) void {
-    plan.len = 0;
+pub fn reset(self: *Plan) void {
+    self.len = 0;
 }
 
-pub fn add(plan: *Plan, mark: Mark) void {
-    if (plan.len == plan.marks.len) {
+pub fn add(self: *Plan, mark: Mark) void {
+    if (self.len == self.marks.len) {
         return;
     }
-    plan.marks[plan.len] = mark;
-    plan.len += 1;
+    self.marks[self.len] = mark;
+    self.len += 1;
 }
 
-pub fn slice(plan: *const Plan) []const Mark {
-    return plan.marks[0..plan.len];
+pub fn slice(self: *const Plan) []const Mark {
+    return self.marks[0..self.len];
 }

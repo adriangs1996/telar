@@ -107,19 +107,19 @@ pub fn deinit(self: *State) void {
     self.attachment_store.deinit();
 }
 
-pub fn resize(state: *State, width: u16, height: u16) !void {
-    state.tab_drag.gesture.cancel();
-    state.tab_drag.hits.clear();
-    if (state.scratch.w != width or state.scratch.h != height) {
-        try state.scratch.resize(width, height);
+pub fn resize(self: *State, width: u16, height: u16) !void {
+    self.tab_drag.gesture.cancel();
+    self.tab_drag.hits.clear();
+    if (self.scratch.w != width or self.scratch.h != height) {
+        try self.scratch.resize(width, height);
     }
-    state.recalculateRegions(width, height);
-    state.modal_overlay_area = .{};
-    state.dirty = true;
+    self.recalculateRegions(width, height);
+    self.modal_overlay_area = .{};
+    self.dirty = true;
 }
 
-pub fn workbench(state: *const State) core.Rect {
-    return state.regions.workbench;
+pub fn workbench(self: *const State) core.Rect {
+    return self.regions.workbench;
 }
 
 /// Returns the revision of disposable view state changed by host input.
@@ -128,44 +128,44 @@ pub fn workbench(state: *const State) core.Rect {
 /// ```zig
 /// const revision = view.interactionVersion();
 /// ```
-pub fn interactionVersion(state: *const State) u64 {
-    return state.interaction_revision;
+pub fn interactionVersion(self: *const State) u64 {
+    return self.interaction_revision;
 }
 
-fn recalculateRegions(state: *State, width: u16, height: u16) void {
-    state.regions = .calculate(width, height, state.sidebar_requested, state.sidebar_preferred_width);
+fn recalculateRegions(self: *State, width: u16, height: u16) void {
+    self.regions = .calculate(width, height, self.sidebar_requested, self.sidebar_preferred_width);
 }
 
-pub fn palette(state: *const State) *const data.Palette {
-    return &state.theme.palette;
+pub fn palette(self: *const State) *const data.Palette {
+    return &self.theme.palette;
 }
 
-pub fn setTheme(state: *State, selected_theme: data.ColorTheme) void {
-    state.theme = selected_theme;
-    state.hovered = null;
-    state.dirty = true;
+pub fn setTheme(self: *State, selected_theme: data.ColorTheme) void {
+    self.theme = selected_theme;
+    self.hovered = null;
+    self.dirty = true;
 }
 
-pub fn setIconTheme(state: *State, selected_theme: data.icons.Theme) void {
-    if (state.icon_theme == selected_theme) {
+pub fn setIconTheme(self: *State, selected_theme: data.icons.Theme) void {
+    if (self.icon_theme == selected_theme) {
         return;
     }
-    state.icon_theme = selected_theme;
-    state.dirty = true;
+    self.icon_theme = selected_theme;
+    self.dirty = true;
 }
 
-pub fn toggleSidebar(state: *State) void {
-    state.sidebar_requested = !state.sidebar_requested;
-    state.recalculateRegions(state.scratch.w, state.scratch.h);
-    state.hovered = null;
-    state.dirty = true;
+pub fn toggleSidebar(self: *State) void {
+    self.sidebar_requested = !self.sidebar_requested;
+    self.recalculateRegions(self.scratch.w, self.scratch.h);
+    self.hovered = null;
+    self.dirty = true;
 }
 
-pub fn setSidebarVisible(state: *State, visible: bool) void {
-    if (state.sidebar_requested == visible) {
+pub fn setSidebarVisible(self: *State, visible: bool) void {
+    if (self.sidebar_requested == visible) {
         return;
     }
-    state.toggleSidebar();
+    self.toggleSidebar();
 }
 
 /// Projects the complete committed sidebar geometry into disposable view
@@ -174,20 +174,20 @@ pub fn setSidebarVisible(state: *State, visible: bool) void {
 /// ```zig
 /// view.setSidebarLayout(true, 73);
 /// ```
-pub fn setSidebarLayout(state: *State, visible: bool, preferred_width: u16) void {
-    if (state.sidebar_requested == visible and state.sidebar_preferred_width == preferred_width) {
+pub fn setSidebarLayout(self: *State, visible: bool, preferred_width: u16) void {
+    if (self.sidebar_requested == visible and self.sidebar_preferred_width == preferred_width) {
         return;
     }
 
-    state.sidebar_requested = visible;
-    state.sidebar_preferred_width = preferred_width;
-    state.recalculateRegions(state.scratch.w, state.scratch.h);
-    state.hovered = null;
-    state.dirty = true;
+    self.sidebar_requested = visible;
+    self.sidebar_preferred_width = preferred_width;
+    self.recalculateRegions(self.scratch.w, self.scratch.h);
+    self.hovered = null;
+    self.dirty = true;
 }
 
-pub fn invalidate(state: *State) void {
-    state.dirty = true;
+pub fn invalidate(self: *State) void {
+    self.dirty = true;
 }
 
 /// Clears stale pointer hover when a modal input surface changes routing.
@@ -195,18 +195,18 @@ pub fn invalidate(state: *State) void {
 /// ```zig
 /// view.clearHover();
 /// ```
-pub fn clearHover(state: *State) void {
-    state.tab_drag.gesture.cancel();
-    const had_pointer = state.pointer_position != null;
-    state.pointer_position = null;
-    state.pointer_content = .{};
+pub fn clearHover(self: *State) void {
+    self.tab_drag.gesture.cancel();
+    const had_pointer = self.pointer_position != null;
+    self.pointer_position = null;
+    self.pointer_content = .{};
 
-    if (state.hovered == null and !had_pointer) {
+    if (self.hovered == null and !had_pointer) {
         return;
     }
 
-    state.hovered = null;
-    state.dirty = true;
+    self.hovered = null;
+    self.dirty = true;
 }
 
 /// Projects the committed workspace-list preference into client chrome.
@@ -214,14 +214,14 @@ pub fn clearHover(state: *State) void {
 /// ```zig
 /// view.setWorkspaceListCollapsed(model.workspace_list_collapsed);
 /// ```
-pub fn setWorkspaceListCollapsed(state: *State, collapsed: bool) void {
-    if (state.workspace_list_collapsed == collapsed) {
+pub fn setWorkspaceListCollapsed(self: *State, collapsed: bool) void {
+    if (self.workspace_list_collapsed == collapsed) {
         return;
     }
 
-    state.workspace_list_collapsed = collapsed;
-    state.hovered = null;
-    state.dirty = true;
+    self.workspace_list_collapsed = collapsed;
+    self.hovered = null;
+    self.dirty = true;
 }
 
 /// Resets transient sidebar position when the presenter observes a new
@@ -230,8 +230,8 @@ pub fn setWorkspaceListCollapsed(state: *State, collapsed: bool) void {
 /// ```zig
 /// view.resetSidebarScroll();
 /// ```
-pub fn resetSidebarScroll(state: *State) void {
-    state.sidebar.scroll = 0;
+pub fn resetSidebarScroll(self: *State) void {
+    self.sidebar.scroll = 0;
 }
 
 /// Resolves the requested sidebar mode against host graphics support.
@@ -239,46 +239,46 @@ pub fn resetSidebarScroll(state: *State) void {
 /// ```zig
 /// try view.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 8, .cell_height = 16 });
 /// ```
-pub fn configureSidebar(state: *State, requested: data.SidebarRendering, configuration: SidebarRendererInput) !void {
+pub fn configureSidebar(self: *State, requested: data.SidebarRendering, configuration: SidebarRendererInput) !void {
     const resolved = try requested.resolve(configuration.support);
-    const toast_changed = state.kitty_toasts.configure(configuration);
-    const modal_changed = state.kitty_modal.configure(configuration);
-    const pill_changed = state.kitty_pill.configure(configuration);
-    const icons_changed = state.kitty_icons.configure(configuration);
-    const attachments_changed = delivery_module.configure(&state.attachment_store, configuration);
-    if (state.sidebar_rendering != resolved or state.cell_width_px != configuration.cell_width or
-        state.cell_height_px != configuration.cell_height or toast_changed or icons_changed or
+    const toast_changed = self.kitty_toasts.configure(configuration);
+    const modal_changed = self.kitty_modal.configure(configuration);
+    const pill_changed = self.kitty_pill.configure(configuration);
+    const icons_changed = self.kitty_icons.configure(configuration);
+    const attachments_changed = delivery_module.configure(&self.attachment_store, configuration);
+    if (self.sidebar_rendering != resolved or self.cell_width_px != configuration.cell_width or
+        self.cell_height_px != configuration.cell_height or toast_changed or icons_changed or
         modal_changed or pill_changed or attachments_changed)
     {
-        state.sidebar_rendering = resolved;
-        state.cell_width_px = configuration.cell_width;
-        state.cell_height_px = configuration.cell_height;
-        state.dirty = true;
+        self.sidebar_rendering = resolved;
+        self.cell_width_px = configuration.cell_width;
+        self.cell_height_px = configuration.cell_height;
+        self.dirty = true;
     }
 }
 
-pub fn kittySidebar(state: *State) *KittySidebarRenderer {
-    return &state.kitty_sidebar;
+pub fn kittySidebar(self: *State) *KittySidebarRenderer {
+    return &self.kitty_sidebar;
 }
 
-pub fn kittyToasts(state: *State) *ToastRenderer {
-    return &state.kitty_toasts;
+pub fn kittyToasts(self: *State) *ToastRenderer {
+    return &self.kitty_toasts;
 }
 
-pub fn kittyModal(state: *State) *ModalRenderer {
-    return &state.kitty_modal;
+pub fn kittyModal(self: *State) *ModalRenderer {
+    return &self.kitty_modal;
 }
 
-pub fn kittyPill(state: *State) *PillRenderer {
-    return &state.kitty_pill;
+pub fn kittyPill(self: *State) *PillRenderer {
+    return &self.kitty_pill;
 }
 
-pub fn kittyIcons(state: *State) *IconsRenderer {
-    return &state.kitty_icons;
+pub fn kittyIcons(self: *State) *IconsRenderer {
+    return &self.kitty_icons;
 }
 
-pub fn kittyAttachments(state: *State) *delivery_module.Store {
-    return &state.attachment_store;
+pub fn kittyAttachments(self: *State) *delivery_module.Store {
+    return &self.attachment_store;
 }
 
 /// Returns the space requested below the pane that owns the visible image
@@ -287,8 +287,8 @@ pub fn kittyAttachments(state: *State) *delivery_module.Store {
 /// ```zig
 /// const reservation = view.attachmentReservation();
 /// ```
-pub fn attachmentReservation(state: *const State) ?data.PaneBottomReservation {
-    const target = state.attachment_store.visibleTarget() orelse return null;
+pub fn attachmentReservation(self: *const State) ?data.PaneBottomReservation {
+    const target = self.attachment_store.visibleTarget() orelse return null;
 
     return .{
         .pane_id = target.pane_id,
@@ -304,22 +304,22 @@ pub fn attachmentReservation(state: *const State) ?data.PaneBottomReservation {
 /// ```zig
 /// const layout_changed = view.syncAttachmentTarget(target);
 /// ```
-pub fn syncAttachmentTarget(state: *State, target: ?data.AttachmentTarget) bool {
-    const change = state.attachment_store.setTarget(target);
+pub fn syncAttachmentTarget(self: *State, target: ?data.AttachmentTarget) bool {
+    const change = self.attachment_store.setTarget(target);
     if (!change.changed) {
         return false;
     }
-    state.hovered = null;
-    state.dirty = true;
+    self.hovered = null;
+    self.dirty = true;
     return change.layout_changed;
 }
 
-pub fn adoptAttachment(state: *State, capture: *data.Capture) !bool {
-    const had_items = state.attachment_store.hasVisibleItems();
-    try state.attachment_store.adopt(capture);
-    const has_items = state.attachment_store.hasVisibleItems();
+pub fn adoptAttachment(self: *State, capture: *data.Capture) !bool {
+    const had_items = self.attachment_store.hasVisibleItems();
+    try self.attachment_store.adopt(capture);
+    const has_items = self.attachment_store.hasVisibleItems();
     const layout_changed = had_items != has_items;
-    state.dirty = true;
+    self.dirty = true;
     return layout_changed;
 }
 
@@ -329,15 +329,15 @@ pub fn adoptAttachment(state: *State, capture: *data.Capture) !bool {
 /// ```zig
 /// const layout_changed = view.removeAttachment(id) orelse return;
 /// ```
-pub fn removeAttachment(state: *State, id: data.AttachmentId) ?bool {
-    const had_items = state.attachment_store.hasVisibleItems();
-    if (!state.attachment_store.remove(id)) {
+pub fn removeAttachment(self: *State, id: data.AttachmentId) ?bool {
+    const had_items = self.attachment_store.hasVisibleItems();
+    if (!self.attachment_store.remove(id)) {
         return null;
     }
 
-    const has_items = state.attachment_store.hasVisibleItems();
-    state.hovered = null;
-    state.recordInteraction();
+    const has_items = self.attachment_store.hasVisibleItems();
+    self.hovered = null;
+    self.recordInteraction();
 
     return had_items != has_items;
 }
@@ -347,15 +347,15 @@ pub fn removeAttachment(state: *State, id: data.AttachmentId) ?bool {
 /// ```zig
 /// const layout_changed = view.removePromptAttachments(target) orelse return;
 /// ```
-pub fn removePromptAttachments(state: *State, target: data.AttachmentTarget) ?bool {
-    const had_items = state.attachment_store.hasVisibleItems();
-    if (state.attachment_store.removeVisible(target) == 0) {
+pub fn removePromptAttachments(self: *State, target: data.AttachmentTarget) ?bool {
+    const had_items = self.attachment_store.hasVisibleItems();
+    if (self.attachment_store.removeVisible(target) == 0) {
         return null;
     }
 
-    const has_items = state.attachment_store.hasVisibleItems();
-    state.hovered = null;
-    state.recordInteraction();
+    const has_items = self.attachment_store.hasVisibleItems();
+    self.hovered = null;
+    self.recordInteraction();
 
     return had_items != has_items;
 }
@@ -366,30 +366,30 @@ pub fn removePromptAttachments(state: *State, target: data.AttachmentTarget) ?bo
 /// ```zig
 /// const layout_changed = view.reconcileAttachmentMarkers(target, screen) orelse return;
 /// ```
-pub fn reconcileAttachmentMarkers(state: *State, target: data.AttachmentTarget, screen: client.MarkerScreen) ?bool {
-    const had_items = state.attachment_store.hasVisibleItems();
-    if (state.attachment_store.reconcileMarkers(target, screen) == 0) {
+pub fn reconcileAttachmentMarkers(self: *State, target: data.AttachmentTarget, screen: client.MarkerScreen) ?bool {
+    const had_items = self.attachment_store.hasVisibleItems();
+    if (self.attachment_store.reconcileMarkers(target, screen) == 0) {
         return null;
     }
 
-    const has_items = state.attachment_store.hasVisibleItems();
-    state.hovered = null;
-    state.recordInteraction();
+    const has_items = self.attachment_store.hasVisibleItems();
+    self.hovered = null;
+    self.recordInteraction();
 
     return had_items != has_items;
 }
 
-pub fn hasAttachmentModal(state: *const State) bool {
-    return state.attachment_store.hasModal();
+pub fn hasAttachmentModal(self: *const State) bool {
+    return self.attachment_store.hasModal();
 }
 
-pub fn closeAttachmentModal(state: *State) bool {
-    if (!state.attachment_store.closeModal()) {
+pub fn closeAttachmentModal(self: *State) bool {
+    if (!self.attachment_store.closeModal()) {
         return false;
     }
 
-    state.hovered = null;
-    state.recordInteraction();
+    self.hovered = null;
+    self.recordInteraction();
 
     return true;
 }
@@ -401,40 +401,40 @@ pub fn closeAttachmentModal(state: *State) bool {
 /// ```zig
 /// _ = try view.prepareGraphics(&model.notification_center, media_idle);
 /// ```
-pub fn prepareGraphics(state: *State, snapshot: *const data.Center, media_idle: bool) !bool {
-    if (!state.graphics_plan_dirty and
-        !(media_idle and state.kitty_toasts.preparationDeferred()))
+pub fn prepareGraphics(self: *State, snapshot: *const data.Center, media_idle: bool) !bool {
+    if (!self.graphics_plan_dirty and
+        !(media_idle and self.kitty_toasts.preparationDeferred()))
     {
         return false;
     }
-    state.kitty_toasts.setMediaIdle(media_idle);
-    state.kitty_toasts.prepare(.{
-        .area = state.graphics_plan.toast_area,
+    self.kitty_toasts.setMediaIdle(media_idle);
+    self.kitty_toasts.prepare(.{
+        .area = self.graphics_plan.toast_area,
         .center = snapshot,
-        .palette = state.palette(),
-        .icon_theme = state.icon_theme,
+        .palette = self.palette(),
+        .icon_theme = self.icon_theme,
     });
-    delivery_module.prepare(&state.attachment_store, state.graphics_plan.attachments);
-    state.kitty_modal.prepare(state.graphics_plan.modal_area, state.palette());
-    state.kitty_pill.prepare(&state.graphics_plan.pill_labels, state.palette());
-    try state.kitty_sidebar.prepare(.{
-        .area = state.graphics_plan.sidebar_area,
-        .focused_card = state.graphics_plan.focused_card,
-        .provider_marks = state.graphics_plan.provider_marks[0..state.graphics_plan.provider_mark_count],
-        .provider_foreground = state.palette().text.rgbChannels() orelse state.theme.terminal.foreground,
-    }, .{ .width = state.cell_width_px, .height = state.cell_height_px });
+    delivery_module.prepare(&self.attachment_store, self.graphics_plan.attachments);
+    self.kitty_modal.prepare(self.graphics_plan.modal_area, self.palette());
+    self.kitty_pill.prepare(&self.graphics_plan.pill_labels, self.palette());
+    try self.kitty_sidebar.prepare(.{
+        .area = self.graphics_plan.sidebar_area,
+        .focused_card = self.graphics_plan.focused_card,
+        .provider_marks = self.graphics_plan.provider_marks[0..self.graphics_plan.provider_mark_count],
+        .provider_foreground = self.palette().text.rgbChannels() orelse self.theme.terminal.foreground,
+    }, .{ .width = self.cell_width_px, .height = self.cell_height_px });
     var icon_fallback_changed = false;
-    state.kitty_icons.prepare(state.graphics_plan.icons.slice()) catch {
-        state.kitty_icons.disable();
-        state.dirty = true;
+    self.kitty_icons.prepare(self.graphics_plan.icons.slice()) catch {
+        self.kitty_icons.disable();
+        self.dirty = true;
         icon_fallback_changed = true;
     };
-    state.graphics_plan_dirty = false;
+    self.graphics_plan_dirty = false;
     return icon_fallback_changed;
 }
 
-pub fn graphicsPreparationPending(state: *const State) bool {
-    return state.graphics_plan_dirty;
+pub fn graphicsPreparationPending(self: *const State) bool {
+    return self.graphics_plan_dirty;
 }
 
 /// Reports whether prepared toast rasters exactly cover this snapshot.
@@ -442,22 +442,22 @@ pub fn graphicsPreparationPending(state: *const State) bool {
 /// ```zig
 /// const covered = view.graphicalToastsCover(&model.notification_center);
 /// ```
-pub fn graphicalToastsCover(state: *const State, snapshot: *const data.Center) bool {
-    return state.kitty_toasts.covers(snapshot);
+pub fn graphicalToastsCover(self: *const State, snapshot: *const data.Center) bool {
+    return self.kitty_toasts.covers(snapshot);
 }
 
-pub fn graphicalModalCovers(state: *const State, area: core.Rect) bool {
-    return state.kitty_modal.covers(area);
+pub fn graphicalModalCovers(self: *const State, area: core.Rect) bool {
+    return self.kitty_modal.covers(area);
 }
 
-pub fn graphicalModalCoversPlan(state: *const State) bool {
-    return state.graphicalModalCovers(state.graphics_plan.modal_area);
+pub fn graphicalModalCoversPlan(self: *const State) bool {
+    return self.graphicalModalCovers(self.graphics_plan.modal_area);
 }
 
 /// Checks text coverage, allowing the previous focus during image replacement.
 /// Example: `const covered = view.graphicalPillCoversPlan();`.
-pub fn graphicalPillCoversPlan(state: *const State) bool {
-    return state.kitty_pill.coversText(&state.graphics_plan.pill_labels, state.palette());
+pub fn graphicalPillCoversPlan(self: *const State) bool {
+    return self.kitty_pill.coversText(&self.graphics_plan.pill_labels, self.palette());
 }
 
 /// Maps one pointer event to semantic intent without mutating client
@@ -466,21 +466,21 @@ pub fn graphicalPillCoversPlan(state: *const State) bool {
 /// ```zig
 /// const interaction = view.handleMouse(mouse);
 /// ```
-pub fn handleMouse(state: *State, mouse: screen_support.Event.Mouse) client.ViewInteractionCommand {
+pub fn handleMouse(self: *State, mouse: screen_support.Event.Mouse) client.ViewInteractionCommand {
     var result: client.ViewInteractionCommand = .{};
-    if (state.attachment_store.hasModal()) {
+    if (self.attachment_store.hasModal()) {
         result.consumed = true;
     }
-    const crossed_content = if (state.pointer_position) |previous|
-        state.pointer_content.contains(previous.x, previous.y) != state.pointer_content.contains(mouse.x, mouse.y)
+    const crossed_content = if (self.pointer_position) |previous|
+        self.pointer_content.contains(previous.x, previous.y) != self.pointer_content.contains(mouse.x, mouse.y)
     else
         false;
-    state.pointer_position = .{ .x = mouse.x, .y = mouse.y };
-    const hovered = state.hits.at(mouse.x, mouse.y);
+    self.pointer_position = .{ .x = mouse.x, .y = mouse.y };
+    const hovered = self.hits.at(mouse.x, mouse.y);
 
-    if (!view_ops.optionalActionEql(state.hovered, hovered) or crossed_content) {
-        state.hovered = hovered;
-        state.recordInteraction();
+    if (!view_ops.optionalActionEql(self.hovered, hovered) or crossed_content) {
+        self.hovered = hovered;
+        self.recordInteraction();
     }
     if (hovered) |action| {
         switch (action) {
@@ -488,15 +488,15 @@ pub fn handleMouse(state: *State, mouse: screen_support.Event.Mouse) client.View
             else => {},
         }
     }
-    if (state.sidebar_resize_active) {
+    if (self.sidebar_resize_active) {
         result.consumed = true;
         switch (mouse.kind) {
             .drag => {
                 result.intent = .{ .resize_sidebar = mouse.x +| 1 };
             },
             .release => {
-                state.sidebar_resize_active = false;
-                state.recordInteraction();
+                self.sidebar_resize_active = false;
+                self.recordInteraction();
                 result.intent = .{ .resize_sidebar = mouse.x +| 1 };
             },
             else => {},
@@ -505,19 +505,19 @@ pub fn handleMouse(state: *State, mouse: screen_support.Event.Mouse) client.View
         return result;
     }
     if (mouse.kind == .press and hovered != null and hovered.? == .resize_sidebar and mouse.button & 0b11 == 0) {
-        state.sidebar_resize_active = true;
-        state.recordInteraction();
+        self.sidebar_resize_active = true;
+        self.recordInteraction();
         result.consumed = true;
 
         return result;
     }
-    if (state.regions.sidebar.contains(mouse.x, mouse.y)) {
+    if (self.regions.sidebar.contains(mouse.x, mouse.y)) {
         switch (mouse.kind) {
-            .scroll_up => if (state.sidebar.scrollBy(-3, state.sidebarListHeight())) {
-                state.recordInteraction();
+            .scroll_up => if (self.sidebar.scrollBy(-3, self.sidebarListHeight())) {
+                self.recordInteraction();
             },
-            .scroll_down => if (state.sidebar.scrollBy(3, state.sidebarListHeight())) {
-                state.recordInteraction();
+            .scroll_down => if (self.sidebar.scrollBy(3, self.sidebarListHeight())) {
+                self.recordInteraction();
             },
             else => {},
         }
@@ -542,8 +542,8 @@ pub fn handleMouse(state: *State, mouse: screen_support.Event.Mouse) client.View
         .toggle_workspace_list => result.intent = .toggle_workspace_list,
         .sidebar_focus_agent => |key| result.intent = .{ .focus_agent = key },
         .sidebar_scroll_to => |row| {
-            state.sidebar.scroll = row;
-            state.recordInteraction();
+            self.sidebar.scroll = row;
+            self.recordInteraction();
         },
         .notification_activate => |id| {
             result.intent = .{ .notification_activate = id };
@@ -555,9 +555,9 @@ pub fn handleMouse(state: *State, mouse: screen_support.Event.Mouse) client.View
         },
         .attachment_open => |id| {
             result.consumed = true;
-            if (state.attachment_store.openModal(id)) {
-                state.hovered = null;
-                state.recordInteraction();
+            if (self.attachment_store.openModal(id)) {
+                self.hovered = null;
+                self.recordInteraction();
             }
         },
         .attachment_dismiss => |id| {
@@ -567,31 +567,31 @@ pub fn handleMouse(state: *State, mouse: screen_support.Event.Mouse) client.View
         .attachment_shelf_hold => result.consumed = true,
         .attachment_modal_close => {
             result.consumed = true;
-            _ = state.closeAttachmentModal();
+            _ = self.closeAttachmentModal();
         },
         .attachment_modal_hold => result.consumed = true,
     }
     return result;
 }
 
-fn sidebarListHeight(state: *const State) u16 {
-    return state.regions.sidebar.h -| 11;
+fn sidebarListHeight(self: *const State) u16 {
+    return self.regions.sidebar.h -| 11;
 }
 
-fn recordInteraction(state: *State) void {
-    state.interaction_revision +%= 1;
-    state.dirty = true;
+fn recordInteraction(self: *State) void {
+    self.interaction_revision +%= 1;
+    self.dirty = true;
 }
 
 /// A rejected configuration paints one red line over the bottom row so
 /// the message survives until the next successful reload.
-fn renderDiagnosticBanner(state: *State, screen: *Screen, diagnostic: ?[]const u8) void {
+fn renderDiagnosticBanner(self: *State, screen: *Screen, diagnostic: ?[]const u8) void {
     const message = diagnostic orelse return;
-    const banner = state.regions.bottom;
+    const banner = self.regions.bottom;
     if (banner.isEmpty()) {
         return;
     }
-    const colors = state.palette();
+    const colors = self.palette();
     const style: core.Style = .{
         .fg = colors.text,
         .bg = colors.red,
@@ -602,34 +602,34 @@ fn renderDiagnosticBanner(state: *State, screen: *Screen, diagnostic: ?[]const u
     _ = screen.back.writeText(banner, .{ .point = .{ .x = banner.x + prefix_width, .y = banner.y }, .text = message, .style = style });
 }
 
-pub fn render(state: *State, screen: *Screen, input: RenderInput) !RenderStats {
-    defer state.renderTabInsertion(screen);
+pub fn render(self: *State, screen: *Screen, input: RenderInput) !RenderStats {
+    defer self.renderTabInsertion(screen);
     // Resolve against rebuilt hits on chrome/layout changes, and against
     // current pane metadata even when cell/chrome rendering is a no-op.
-    defer screen.mouse_pointer = state.mousePointerShape(input);
+    defer screen.mouse_pointer = self.mousePointerShape(input);
     // The banner must survive every present — pane composition may have
     // repainted the bottom row — so it lands on both exit paths.
-    defer state.renderDiagnosticBanner(screen, input.diagnostic);
-    if (!input.force and !state.dirty and !state.attachment_store.hasModal() and
+    defer self.renderDiagnosticBanner(screen, input.diagnostic);
+    if (!input.force and !self.dirty and !self.attachment_store.hasModal() and
         view_ops.pickerPrompt(input.prompt) == null and
-        !input.notifications.hasItems() and !state.toast_overlay_drawn)
+        !input.notifications.hasItems() and !self.toast_overlay_drawn)
     {
         return .{};
     }
-    state.hits.clear();
-    state.scratch.clear(.{});
-    state.graphics_plan.icons.reset();
-    const hybrid = state.sidebar_rendering == .kitty_hybrid or
-        state.sidebar_rendering == .kitty_full;
-    const focused_card_color: ?[3]u8 = if (hybrid) state.palette().surface0.rgbChannels() else null;
+    self.hits.clear();
+    self.scratch.clear(.{});
+    self.graphics_plan.icons.reset();
+    const hybrid = self.sidebar_rendering == .kitty_hybrid or
+        self.sidebar_rendering == .kitty_full;
+    const focused_card_color: ?[3]u8 = if (hybrid) self.palette().surface0.rgbChannels() else null;
     var context: Context = .{
-        .buffer = &state.scratch,
-        .hits = &state.hits,
-        .palette = state.palette(),
-        .hovered = state.hovered,
-        .icon_theme = state.icon_theme,
-        .icon_plan = if (input.diagnostic == null and state.kitty_icons.available())
-            &state.graphics_plan.icons
+        .buffer = &self.scratch,
+        .hits = &self.hits,
+        .palette = self.palette(),
+        .hovered = self.hovered,
+        .icon_theme = self.icon_theme,
+        .icon_plan = if (input.diagnostic == null and self.kitty_icons.available())
+            &self.graphics_plan.icons
         else
             null,
     };
@@ -638,24 +638,24 @@ pub fn render(state: *State, screen: *Screen, input: RenderInput) !RenderStats {
     const layout = if (input.compositor) |compositor|
         compositor.layoutSnapshot()
     else layout: {
-        input.model.tabs.layout[input.tab].snapshot(state.workbench(), &fallback_layout);
-        fallback_attachment_area = fallback_layout.reserveBelowPane(state.attachmentReservation());
+        input.model.tabs.layout[input.tab].snapshot(self.workbench(), &fallback_layout);
+        fallback_attachment_area = fallback_layout.reserveBelowPane(self.attachmentReservation());
         break :layout &fallback_layout;
     };
     const attachment_area = if (input.compositor) |compositor|
         compositor.bottomReservationArea()
     else
         fallback_attachment_area;
-    const previous_pill_area = state.graphics_plan.pill_labels.area.intersect(state.scratch.area());
+    const previous_pill_area = self.graphics_plan.pill_labels.area.intersect(self.scratch.area());
     const label_plan = if (input.compositor) |compositor| compositor.fullscreenLabels() else &view_ops.empty_pane_labels;
     const label_area = label_plan.area;
     if (input.compositor) |compositor| {
-        compositor.copyArea(&state.scratch, previous_pill_area);
-        compositor.copyArea(&state.scratch, label_area);
+        compositor.copyArea(&self.scratch, previous_pill_area);
+        compositor.copyArea(&self.scratch, label_area);
     }
 
     const composed = composition_module.render(&context, .{
-        .regions = state.regions,
+        .regions = self.regions,
         .model = input.model,
         .tab = input.tab,
         .layout = layout,
@@ -664,7 +664,7 @@ pub fn render(state: *State, screen: *Screen, input: RenderInput) !RenderStats {
         .prompt = input.prompt,
         .path_completion = input.path_completion,
         .sidebar_snapshot = input.agents,
-        .sidebar_state = &state.sidebar,
+        .sidebar_state = &self.sidebar,
         .sidebar_transparent = hybrid,
         .sidebar_rounded_focus = focused_card_color != null,
         .sidebar_animation_frame = input.sidebar_animation_frame,
@@ -678,10 +678,10 @@ pub fn render(state: *State, screen: *Screen, input: RenderInput) !RenderStats {
         } else null,
         .status_mode = input.status_mode,
         .workspaces = input.workspaces,
-        .workspace_list_collapsed = state.workspace_list_collapsed,
+        .workspace_list_collapsed = self.workspace_list_collapsed,
         .bar_state = input.bar_state,
     });
-    const attachment_snapshot = state.attachment_store.snapshot();
+    const attachment_snapshot = self.attachment_store.snapshot();
     var attachment_plan = attachment_preview_module.renderShelf(
         &context,
         attachment_area,
@@ -698,34 +698,34 @@ pub fn render(state: *State, screen: *Screen, input: RenderInput) !RenderStats {
             goto_picker_module.modalArea(application_area)
     else
         core.Rect{};
-    const graphical_modal = state.graphicalModalCovers(current_modal_area);
+    const graphical_modal = self.graphicalModalCovers(current_modal_area);
     if (input.compositor) |compositor| {
-        if (!state.modal_overlay_area.isEmpty()) {
-            compositor.copyArea(&state.scratch, state.modal_overlay_area.intersect(state.regions.workbench));
+        if (!self.modal_overlay_area.isEmpty()) {
+            compositor.copyArea(&self.scratch, self.modal_overlay_area.intersect(self.regions.workbench));
         }
         if (!current_modal_area.isEmpty() and
-            !std.meta.eql(current_modal_area, state.modal_overlay_area))
+            !std.meta.eql(current_modal_area, self.modal_overlay_area))
         {
-            compositor.copyArea(&state.scratch, current_modal_area.intersect(state.regions.workbench));
+            compositor.copyArea(&self.scratch, current_modal_area.intersect(self.regions.workbench));
         }
     }
-    const toast_area = toast_module.overlayArea(state.regions.workbench);
+    const toast_area = toast_module.overlayArea(self.regions.workbench);
     const has_toasts = input.notifications.hasItems() and !toast_area.isEmpty();
     const pill_occluded = !label_area.intersect(current_modal_area).isEmpty() or
         (has_toasts and !label_area.intersect(toast_area).isEmpty());
     const pill_plan = if (pill_occluded) &view_ops.empty_pane_labels else label_plan;
-    state.kitty_pill.observe(pill_plan, state.palette());
-    if (state.kitty_pill.coversText(pill_plan, state.palette())) {
+    self.kitty_pill.observe(pill_plan, self.palette());
+    if (self.kitty_pill.coversText(pill_plan, self.palette())) {
         for (pill_plan.slice()) |label| {
             const area: core.Rect = .{ .x = pill_plan.area.x + label.offset, .y = pill_plan.area.y, .w = label.width, .h = 1 };
-            state.scratch.fill(area, .{ .glyph = " ", .style = .{} });
+            self.scratch.fill(area, .{ .glyph = " ", .style = .{} });
         }
     }
 
-    const graphical_toasts = state.kitty_toasts.covers(input.notifications);
-    if (has_toasts or state.toast_overlay_drawn) {
+    const graphical_toasts = self.kitty_toasts.covers(input.notifications);
+    if (has_toasts or self.toast_overlay_drawn) {
         if (input.compositor) |compositor| {
-            compositor.copyArea(&state.scratch, toast_area);
+            compositor.copyArea(&self.scratch, toast_area);
         }
         if (has_toasts) {
             if (graphical_toasts) {
@@ -765,44 +765,44 @@ pub fn render(state: *State, screen: *Screen, input: RenderInput) !RenderStats {
             provider_marks[provider_mark_count] = .{ .area = mark.area, .provider = provider };
             provider_mark_count += 1;
         }
-        state.graphics_plan.sidebar_area = composed.sidebar.area;
-        state.graphics_plan.focused_card = if (composed.sidebar.focused_card) |area|
+        self.graphics_plan.sidebar_area = composed.sidebar.area;
+        self.graphics_plan.focused_card = if (composed.sidebar.focused_card) |area|
             if (focused_card_color) |color| .{ .area = area, .color = color } else null
         else
             null;
         @memcpy(
-            state.graphics_plan.provider_marks[0..provider_mark_count],
+            self.graphics_plan.provider_marks[0..provider_mark_count],
             provider_marks[0..provider_mark_count],
         );
-        state.graphics_plan.provider_mark_count = @intCast(provider_mark_count);
+        self.graphics_plan.provider_mark_count = @intCast(provider_mark_count);
     } else {
-        state.graphics_plan.sidebar_area = .{};
-        state.graphics_plan.focused_card = null;
-        state.graphics_plan.provider_mark_count = 0;
+        self.graphics_plan.sidebar_area = .{};
+        self.graphics_plan.focused_card = null;
+        self.graphics_plan.provider_mark_count = 0;
     }
-    state.graphics_plan.toast_area = toast_area;
-    state.graphics_plan.attachments = attachment_plan;
-    state.graphics_plan.modal_area = drawn_modal_area;
-    state.graphics_plan.pill_labels = pill_plan.*;
-    state.graphics_plan_dirty = true;
+    self.graphics_plan.toast_area = toast_area;
+    self.graphics_plan.attachments = attachment_plan;
+    self.graphics_plan.modal_area = drawn_modal_area;
+    self.graphics_plan.pill_labels = pill_plan.*;
+    self.graphics_plan_dirty = true;
 
     var stats: RenderStats = .{};
-    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, state.regions.top));
-    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, state.regions.sidebar));
-    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, state.regions.bottom));
-    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, attachment_area));
-    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, previous_pill_area));
-    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, label_area));
-    if (has_toasts or state.toast_overlay_drawn) {
-        stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, toast_area));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &self.scratch, self.regions.top));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &self.scratch, self.regions.sidebar));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &self.scratch, self.regions.bottom));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &self.scratch, attachment_area));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &self.scratch, previous_pill_area));
+    stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &self.scratch, label_area));
+    if (has_toasts or self.toast_overlay_drawn) {
+        stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &self.scratch, toast_area));
     }
-    if (!state.modal_overlay_area.isEmpty()) {
-        stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, state.modal_overlay_area));
+    if (!self.modal_overlay_area.isEmpty()) {
+        stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &self.scratch, self.modal_overlay_area));
     }
     if (!drawn_modal_area.isEmpty() and
-        !std.meta.eql(drawn_modal_area, state.modal_overlay_area))
+        !std.meta.eql(drawn_modal_area, self.modal_overlay_area))
     {
-        stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &state.scratch, drawn_modal_area));
+        stats = view_ops.addStats(stats, try view_ops.syncRegion(screen, &self.scratch, drawn_modal_area));
     }
     if (composed.cursor) |cursor| {
         screen.cursor = .{
@@ -816,25 +816,25 @@ pub fn render(state: *State, screen: *Screen, input: RenderInput) !RenderStats {
             .y = cursor.cursor_y,
         };
     }
-    state.dirty = false;
-    state.toast_overlay_drawn = has_toasts;
-    state.modal_overlay_area = drawn_modal_area;
+    self.dirty = false;
+    self.toast_overlay_drawn = has_toasts;
+    self.modal_overlay_area = drawn_modal_area;
     return stats;
 }
 
-pub fn mousePointerShape(state: *State, input: RenderInput) core.PointerShape {
-    state.pointer_content = .{};
+pub fn mousePointerShape(self: *State, input: RenderInput) core.PointerShape {
+    self.pointer_content = .{};
 
     if (input.copy_mode_active or input.prompt != null) {
         return .default;
     }
 
-    if (state.sidebar_resize_active) {
+    if (self.sidebar_resize_active) {
         return .ew_resize;
     }
 
-    const position = state.pointer_position orelse return .default;
-    const hovered = state.hits.at(position.x, position.y) orelse return .default;
+    const position = self.pointer_position orelse return .default;
+    const hovered = self.hits.at(position.x, position.y) orelse return .default;
     return switch (hovered) {
         .resize_sidebar => .ew_resize,
         .toggle_sidebar,
@@ -849,13 +849,13 @@ pub fn mousePointerShape(state: *State, input: RenderInput) core.PointerShape {
         .attachment_dismiss,
         .attachment_modal_close,
         => .pointer,
-        .focus_pane => |pane_id| state.panePointerShape(input, pane_id),
+        .focus_pane => |pane_id| self.panePointerShape(input, pane_id),
         .active_workspace, .attachment_shelf_hold, .attachment_modal_hold => .default,
     };
 }
 
-fn panePointerShape(state: *State, input: RenderInput, pane_id: core.PaneId) core.PointerShape {
-    if (state.attachment_store.hasModal()) {
+fn panePointerShape(self: *State, input: RenderInput, pane_id: core.PaneId) core.PointerShape {
+    if (self.attachment_store.hasModal()) {
         return .default;
     }
 
@@ -868,13 +868,13 @@ fn panePointerShape(state: *State, input: RenderInput, pane_id: core.PaneId) cor
     const layout = if (input.compositor) |compositor|
         compositor.layoutSnapshot()
     else layout: {
-        input.model.tabs.layout[input.tab].snapshot(state.workbench(), &fallback);
-        _ = fallback.reserveBelowPane(state.attachmentReservation());
+        input.model.tabs.layout[input.tab].snapshot(self.workbench(), &fallback);
+        _ = fallback.reserveBelowPane(self.attachmentReservation());
         break :layout &fallback;
     };
     const view = layout.find(pane_id) orelse return .default;
-    state.pointer_content = view.content;
-    const position = state.pointer_position orelse return .default;
+    self.pointer_content = view.content;
+    const position = self.pointer_position orelse return .default;
     if (!view.content.contains(position.x, position.y)) {
         return .default;
     }
@@ -882,15 +882,15 @@ fn panePointerShape(state: *State, input: RenderInput, pane_id: core.PaneId) cor
     return pane.pointer_shape;
 }
 
-fn renderTabInsertion(state: *State, screen: *Screen) void {
-    const target = state.tab_drag.gesture.destination orelse return;
-    for (state.hits.registered()) |hit| {
+fn renderTabInsertion(self: *State, screen: *Screen) void {
+    const target = self.tab_drag.gesture.destination orelse return;
+    for (self.hits.registered()) |hit| {
         if (hit.action != .select_tab or hit.action.select_tab != target.relative_to) {
             continue;
         }
 
         const x = if (target.direction == .previous) hit.rect.x else hit.rect.x + hit.rect.w -| 1;
-        _ = screen.back.writeTruncated(hit.rect, .{ .point = .{ .x = x, .y = hit.rect.y }, .text = "▏", .max_width = 1, .style = .{ .fg = state.palette().accent, .bg = state.palette().panel_bg, .flags = .{ .bold = true } } });
+        _ = screen.back.writeTruncated(hit.rect, .{ .point = .{ .x = x, .y = hit.rect.y }, .text = "▏", .max_width = 1, .style = .{ .fg = self.palette().accent, .bg = self.palette().panel_bg, .flags = .{ .bold = true } } });
         return;
     }
 }

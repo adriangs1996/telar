@@ -23,36 +23,36 @@ clipboard: ?@import("ThreadSelectionClipboard.zig") = null,
 problem: ?enum { copy_limit, copy_failed, geometry_limit } = null,
 
 /// Example: `if (selection.selected()) copyRange();`
-pub fn selected(selection: *const Selection) bool {
-    const a = selection.anchor orelse return false;
-    const b = selection.head orelse return false;
+pub fn selected(self: *const Selection) bool {
+    const a = self.anchor orelse return false;
+    const b = self.head orelse return false;
     return !a.eql(b);
 }
 
 /// Example: `if (selection.retains(pane_id)) keepPages();`
-pub fn retains(selection: *const Selection, pane_id: core.PaneId) bool {
-    const owner = selection.owner orelse return false;
-    return owner.pane_id == pane_id and (selection.dragging or selection.keyboard or selection.selected());
+pub fn retains(self: *const Selection, pane_id: core.PaneId) bool {
+    const owner = self.owner orelse return false;
+    return owner.pane_id == pane_id and (self.dragging or self.keyboard or self.selected());
 }
 
 /// Clears input state immediately and defers page release to frame preparation.
 /// Example: `selection.clear();`
-pub fn clear(selection: *Selection) void {
-    const pending = selection.release orelse selection.owner;
-    selection.* = .{ .release = pending };
+pub fn clear(self: *Selection) void {
+    const pending = self.release orelse self.owner;
+    self.* = .{ .release = pending };
 }
 
 /// Example: `const ordered = selection.range() orelse return;`
-pub fn range(selection: *const Selection) ?[2]Position {
-    const a = selection.anchor orelse return null;
-    const b = selection.head orelse return null;
+pub fn range(self: *const Selection) ?[2]Position {
+    const a = self.anchor orelse return null;
+    const b = self.head orelse return null;
     return if (b.before(a)) .{ b, a } else .{ a, b };
 }
 
 /// Starts another gesture without releasing an already pinned source window.
 /// Example: `selection.restart(owner);`
-pub fn restart(selection: *Selection, owner: Owner) void {
-    const retained = if (selection.owner) |previous| previous.pane_id == owner.pane_id and previous.attachment_generation == owner.attachment_generation and selection.frozen else false;
-    const release = if (retained) selection.release else selection.release orelse selection.owner;
-    selection.* = .{ .owner = owner, .release = release, .frozen = retained };
+pub fn restart(self: *Selection, owner: Owner) void {
+    const retained = if (self.owner) |previous| previous.pane_id == owner.pane_id and previous.attachment_generation == owner.attachment_generation and self.frozen else false;
+    const release = if (retained) self.release else self.release orelse self.owner;
+    self.* = .{ .owner = owner, .release = release, .frozen = retained };
 }

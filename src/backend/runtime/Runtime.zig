@@ -46,40 +46,40 @@ teardown_state: enum { running, shutting_down, stopped },
 /// try runtime.init(.{ .dependencies = dependencies, .options = options });
 /// defer runtime.deinit();
 /// ```
-pub fn init(runtime: *Runtime, initialization: Initialization) !void {
-    try runtime.start(initialization, false);
+pub fn init(self: *Runtime, initialization: Initialization) !void {
+    try self.start(initialization, false);
 }
 
-pub fn start(runtime: *Runtime, initialization: Initialization, comptime fail_after_actors: bool) !void {
-    runtime.teardown_state = .running;
+pub fn start(self: *Runtime, initialization: Initialization, comptime fail_after_actors: bool) !void {
+    self.teardown_state = .running;
 
-    try runtime.resources.init(initialization);
-    errdefer runtime.resources.deinitUnstarted();
+    try self.resources.init(initialization);
+    errdefer self.resources.deinitUnstarted();
 
-    runtime.loop.init(runtime.resources.io(), initialization.options.stop);
-    errdefer runtime.loop.cancel();
+    self.loop.init(self.resources.io(), initialization.options.stop);
+    errdefer self.loop.cancel();
 
-    try runtime.model.init(&runtime.resources, runtime.loop.selector(), initialization.options);
+    try self.model.init(&self.resources, self.loop.selector(), initialization.options);
     errdefer {
-        runtime.model.panes.shutdown();
-        runtime.loop.cancel();
-        runtime.model.deinit();
+        self.model.panes.shutdown();
+        self.loop.cancel();
+        self.model.deinit();
     }
 
-    session_checkpoint.restore(&runtime.model);
-    try runtime.scheduleInitialEvents();
+    session_checkpoint.restore(&self.model);
+    try self.scheduleInitialEvents();
 
     if (comptime fail_after_actors) {
         return error.InjectedStartupFailure;
     }
 }
 
-fn scheduleInitialEvents(runtime: *Runtime) !void {
-    const resources = &runtime.resources;
-    var sources = Sources.init(resources.io(), runtime.loop.selector());
+fn scheduleInitialEvents(self: *Runtime) !void {
+    const resources = &self.resources;
+    var sources = Sources.init(resources.io(), self.loop.selector());
 
     try sources.acceptClient(&resources.listener);
-    try sources.waitForStop(runtime.loop.stop);
+    try sources.waitForStop(self.loop.stop);
     try sources.receiveHistory(resources.history.service());
     if (resources.engineService()) |engine_service| {
         try sources.receiveEngine(engine_service);
@@ -103,13 +103,13 @@ fn scheduleInitialEvents(runtime: *Runtime) !void {
 /// ```zig
 /// try runtime.run();
 /// ```
-pub fn run(runtime: *Runtime) !void {
+pub fn run(self: *Runtime) !void {
     while (true) {
-        const event = try runtime.loop.next();
+        const event = try self.loop.next();
         const path = core.enter(runtime_event.diagnosticsPath(event));
         defer path.restore();
 
-        if (try runtime.update(event)) {
+        if (try self.update(event)) {
             return;
         }
     }

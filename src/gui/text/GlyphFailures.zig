@@ -11,10 +11,10 @@ next: [buckets]u2 = @splat(0),
 
 /// Matches the complete glyph/size/style key, never a hash alone.
 /// Example: `if (failures.contains(key)) return error.AtlasFull;`
-pub fn contains(cache: *const Cache, key: u64) bool {
+pub fn contains(self: *const Cache, key: u64) bool {
     std.debug.assert(key != 0);
     const first = bucket(key) * ways;
-    for (cache.keys[first..][0..ways]) |stored| {
+    for (self.keys[first..][0..ways]) |stored| {
         if (stored == key) {
             return true;
         }
@@ -25,10 +25,10 @@ pub fn contains(cache: *const Cache, key: u64) bool {
 
 /// Replaces only a bounded recent failure; successful glyphs stay in the atlas.
 /// Example: `failures.remember(key);`
-pub fn remember(cache: *Cache, key: u64) void {
+pub fn remember(self: *Cache, key: u64) void {
     std.debug.assert(key != 0);
     const index = bucket(key);
-    const entries = cache.keys[index * ways ..][0..ways];
+    const entries = self.keys[index * ways ..][0..ways];
     for (entries) |*entry| {
         if (entry.* == key) {
             return;
@@ -40,8 +40,8 @@ pub fn remember(cache: *Cache, key: u64) void {
         }
     }
 
-    entries[cache.next[index]] = key;
-    cache.next[index] +%= 1;
+    entries[self.next[index]] = key;
+    self.next[index] +%= 1;
 }
 
 fn bucket(key: u64) usize {

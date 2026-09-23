@@ -15,9 +15,9 @@ alignments: [max_columns]Alignment,
 
 /// Extra body cells are ignored consistently by drawing and selected-text copy.
 /// Example: `var cells = table.rowCells(line);`
-pub fn rowCells(table: Table, line: []const u8) Cells {
+pub fn rowCells(self: Table, line: []const u8) Cells {
     var cells = Cells.init(line);
-    cells.remaining = table.columns;
+    cells.remaining = self.columns;
     return cells;
 }
 

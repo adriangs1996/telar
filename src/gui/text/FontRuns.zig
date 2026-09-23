@@ -19,39 +19,39 @@ preferred: font_id.Id = .primary,
 /// Consecutive graphemes of the preferred face share one span; every other
 /// grapheme is its own span so fitted fallback ink keeps one cell advance.
 /// Example: `while (runs.next()) |run| { ... }`
-pub fn next(runs: *FontRuns) ?FontRun {
-    const start = runs.iterator.index;
-    const first = runs.iterator.next() orelse return null;
+pub fn next(self: *FontRuns) ?FontRun {
+    const start = self.iterator.index;
+    const first = self.iterator.next() orelse return null;
     if (Braille.parse(first.bytes)) |pattern| {
-        return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .braille = pattern }, .columns = first.width };
+        return .{ .text = self.iterator.bytes[start..self.iterator.index], .source = .{ .braille = pattern }, .columns = first.width };
     }
 
     if (Box.parse(first.bytes)) |box| {
-        return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .box = box }, .columns = first.width };
+        return .{ .text = self.iterator.bytes[start..self.iterator.index], .source = .{ .box = box }, .columns = first.width };
     }
 
     if (Block.parse(first.bytes)) |block| {
-        return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .block = block }, .columns = first.width };
+        return .{ .text = self.iterator.bytes[start..self.iterator.index], .source = .{ .block = block }, .columns = first.width };
     }
 
-    const id = runs.fonts.source(first.bytes, runs.preferred);
-    if (id != runs.preferred) {
-        return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .font = id }, .columns = first.width, .preferred = runs.preferred };
+    const id = self.fonts.source(first.bytes, self.preferred);
+    if (id != self.preferred) {
+        return .{ .text = self.iterator.bytes[start..self.iterator.index], .source = .{ .font = id }, .columns = first.width, .preferred = self.preferred };
     }
 
     var columns: u32 = first.width;
     while (true) {
-        const previous = runs.iterator.index;
-        const cluster = runs.iterator.next() orelse break;
-        if (Braille.parse(cluster.bytes) != null or Box.parse(cluster.bytes) != null or Block.parse(cluster.bytes) != null or runs.fonts.source(cluster.bytes, runs.preferred) != id) {
-            runs.iterator.index = previous;
+        const previous = self.iterator.index;
+        const cluster = self.iterator.next() orelse break;
+        if (Braille.parse(cluster.bytes) != null or Box.parse(cluster.bytes) != null or Block.parse(cluster.bytes) != null or self.fonts.source(cluster.bytes, self.preferred) != id) {
+            self.iterator.index = previous;
             break;
         }
 
         columns += cluster.width;
     }
 
-    return .{ .text = runs.iterator.bytes[start..runs.iterator.index], .source = .{ .font = id }, .columns = columns, .preferred = runs.preferred };
+    return .{ .text = self.iterator.bytes[start..self.iterator.index], .source = .{ .font = id }, .columns = columns, .preferred = self.preferred };
 }
 
 test "Braille separates font spans without splitting combining graphemes" {

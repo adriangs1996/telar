@@ -10,9 +10,9 @@ label: @import("Label.zig"),
 /// Word boundaries keep ordinary shaping intact while every run fits the
 /// existing cache. Only visible runs are painted; no storage is retained.
 /// Example: `try (Caption{ .bounds = area, .label = label }).draw(canvas);`
-pub fn draw(caption: Caption, canvas: *Canvas) !void {
-    var remaining = caption.bounds;
-    var iterator: core.GraphemeIterator = .{ .bytes = caption.label.text };
+pub fn draw(self: Caption, canvas: *Canvas) !void {
+    var remaining = self.bounds;
+    var iterator: core.GraphemeIterator = .{ .bytes = self.label.text };
     while (remaining.width > 0 and iterator.index < iterator.bytes.len) {
         var storage: [64]u8 = undefined;
         var len: usize = 0;
@@ -49,7 +49,7 @@ pub fn draw(caption: Caption, canvas: *Canvas) !void {
             len = break_len;
         }
 
-        var label = caption.label;
+        var label = self.label;
         label.text = storage[0..len];
         const width = try canvas.textAt(remaining, label);
         if (width <= 0) {

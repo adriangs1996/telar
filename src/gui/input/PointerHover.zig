@@ -24,48 +24,48 @@ dirty: bool = true,
 
 /// Copies native coordinates for re-evaluation after output, resize or modifiers.
 /// Example: `hover.observe(event);`
-pub fn observe(hover: *Hover, event: Event) void {
+pub fn observe(self: *Hover, event: Event) void {
     if (event.kind == .leave) {
-        hover.clear();
+        self.clear();
         return;
     }
 
-    hover.event = event;
+    self.event = event;
 }
 
 /// Reuses the cached cell until model state or delivered controls change.
 /// Example: `hover.refresh(gui);`
-pub fn refresh(hover: *Hover, gui: *GuiClient) void {
+pub fn refresh(self: *Hover, gui: *GuiClient) void {
     if (!gui.focused) {
-        hover.clear();
+        self.clear();
         return;
     }
 
-    const event = hover.event orelse return;
+    const event = self.event orelse return;
     if (gui.review.active) {
-        hover.assign(null, .default);
-        hover.cached = null;
+        self.assign(null, .default);
+        self.cached = null;
         return;
     }
 
     if (gui.widgets.tab_drag.dragging and gui.widgets.tab_drag.source != null) {
-        hover.assign(null, .grabbing);
-        hover.cached = null;
+        self.assign(null, .grabbing);
+        self.cached = null;
         return;
     }
 
     if (gui.overlays.presented().native_modal != null) {
         const target = gui.widgets.dispatcher.maps.presented().at(.{ event.x, event.y });
         const shape: core.PointerShape = if (target) |control| if (control.action == .text_field) .text else if (control.enabled and control.activatable()) .pointer else .default else .default;
-        hover.assign(null, shape);
-        hover.cached = null;
+        self.assign(null, shape);
+        self.cached = null;
         return;
     }
 
     if (!gui.app.model.name_prompt.active() and gui.overlays.presented().modal == null) {
         if (gui.overlays.presented().notifications.at(.{ event.x, event.y })) |target| {
-            hover.assign(null, if (target.enabled) .pointer else .default);
-            hover.cached = null;
+            self.assign(null, if (target.enabled) .pointer else .default);
+            self.cached = null;
             return;
         }
     }
@@ -73,8 +73,8 @@ pub fn refresh(hover: *Hover, gui: *GuiClient) void {
     if (!gui.app.model.name_prompt.active() and gui.overlays.presented().modal == null and gui.widgets.composer_menu.selector == null and !gui.widgets.thread_selection.dragging) {
         if (gui.widgets.dispatcher.maps.presented().at(.{ event.x, event.y })) |target| {
             if (target.enabled and target.action == .message_link and gui.pointerGeometryMatches() and message_links.destination(gui, target.action.message_link) != null) {
-                hover.assign(null, .pointer);
-                hover.cached = null;
+                self.assign(null, .pointer);
+                self.cached = null;
                 return;
             }
         }
@@ -83,79 +83,79 @@ pub fn refresh(hover: *Hover, gui: *GuiClient) void {
     var moved = event;
     moved.kind = .move;
     const mouse = gui.pointer.geometry.resolve(moved) orelse {
-        hover.assign(null, gui.chrome.bandShape(moved));
-        hover.cached = null;
+        self.assign(null, gui.chrome.bandShape(moved));
+        self.cached = null;
         return;
     };
     const cell: [2]u16 = .{ mouse.x, mouse.y };
     const stamp = Stamp.capture(gui, cell, event.mods);
-    if (!hover.dirty and std.meta.eql(hover.cached, @as(?Stamp, stamp))) {
+    if (!self.dirty and std.meta.eql(self.cached, @as(?Stamp, stamp))) {
         return;
     }
 
-    hover.cached = stamp;
-    hover.dirty = false;
+    self.cached = stamp;
+    self.dirty = false;
     const target = hover_target.resolve(gui, mouse, event.mods);
-    hover.assign(target.link, target.shape);
+    self.assign(target.link, target.shape);
     if (target.link) |hit| {
         const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[gui.app.model.tabs.active].tab_id, hit.pane_id).?;
         if (pane.pending_frame_id == 0) {
-            hover.shown_link = hit;
+            self.shown_link = hit;
         }
     }
 }
 
 /// An in-flight update may be clicked only when the same target was visible.
 /// Example: `if (hover.openable()) gesture.begin(hover.link.?);`
-pub fn openable(hover: *const Hover) bool {
-    const current = hover.link orelse return false;
-    const shown = hover.shown_link orelse return false;
+pub fn openable(self: *const Hover) bool {
+    const current = self.link orelse return false;
+    const shown = self.shown_link orelse return false;
     return current.eql(&shown);
 }
 
 /// Seals the overlay bounds with the frame, independently of later pointer motion.
 /// Example: `hover.prepare();`
-pub fn prepare(hover: *Hover) void {
-    hover.prepared_link = hover.link;
-    hover.prepared_preview = if (hover.link) |*hit| hit.previewArea() else null;
+pub fn prepare(self: *Hover) void {
+    self.prepared_link = self.link;
+    self.prepared_preview = if (self.link) |*hit| hit.previewArea() else null;
 }
 
 /// Visible previews cover terminal cells until a replacement is delivered.
 /// Example: `if (hover.covers(mouse)) return .{ .consumed = true };`
-pub fn covers(hover: *const Hover, mouse: data.Mouse) bool {
-    const preview = hover.shown_preview orelse return false;
+pub fn covers(self: *const Hover, mouse: data.Mouse) bool {
+    const preview = self.shown_preview orelse return false;
     return preview.contains(mouse.x, mouse.y);
 }
 
 /// Presentation publishes only the target captured by that frame's preparation.
 /// Example: `hover.present(delivered);`
-pub fn present(hover: *Hover, delivered: bool) void {
+pub fn present(self: *Hover, delivered: bool) void {
     if (delivered) {
-        hover.shown_link = hover.prepared_link;
-        hover.shown_preview = hover.prepared_preview;
+        self.shown_link = self.prepared_link;
+        self.shown_preview = self.prepared_preview;
     }
 
-    hover.prepared_link = null;
-    hover.prepared_preview = null;
-    hover.dirty = true;
+    self.prepared_link = null;
+    self.prepared_preview = null;
+    self.dirty = true;
 }
 
-fn assign(hover: *Hover, next: ?Hit, shape: core.PointerShape) void {
-    const same = if (hover.link) |*previous| if (next) |*current| previous.eql(current) else false else next == null;
+fn assign(self: *Hover, next: ?Hit, shape: core.PointerShape) void {
+    const same = if (self.link) |*previous| if (next) |*current| previous.eql(current) else false else next == null;
     if (!same) {
-        hover.link = next;
-        hover.revision +%= 1;
+        self.link = next;
+        self.revision +%= 1;
     }
 
-    hover.shape = shape;
+    self.shape = shape;
 }
 
 /// Losing pointer focus removes the highlight and invalidates the cached cell.
 /// Example: `hover.clear();`
-pub fn clear(hover: *Hover) void {
-    hover.event = null;
-    hover.cached = null;
-    hover.shown_link = null;
-    hover.dirty = true;
-    hover.assign(null, .default);
+pub fn clear(self: *Hover) void {
+    self.event = null;
+    self.cached = null;
+    self.shown_link = null;
+    self.dirty = true;
+    self.assign(null, .default);
 }

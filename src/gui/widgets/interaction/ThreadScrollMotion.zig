@@ -18,90 +18,90 @@ last_precise: bool = false,
 
 /// Page anchors change coordinates, while explicit navigation replaces motion.
 /// Example: `entry.synchronize(pane, now_ns);`
-pub fn synchronize(entry: *Motion, pane: *const data.Pane, now_ns: u64) void {
-    if (entry.anchor_revision != pane.transcript_anchor_revision) {
-        entry.motion.translate((pane.transcript_scroll - entry.applied) * entry.step);
-    } else if (entry.applied != pane.transcript_scroll) {
-        entry.motion.reset(pane.transcript_scroll * entry.step, now_ns);
+pub fn synchronize(self: *Motion, pane: *const data.Pane, now_ns: u64) void {
+    if (self.anchor_revision != pane.transcript_anchor_revision) {
+        self.motion.translate((pane.transcript_scroll - self.applied) * self.step);
+    } else if (self.applied != pane.transcript_scroll) {
+        self.motion.reset(pane.transcript_scroll * self.step, now_ns);
     }
 
-    entry.applied = pane.transcript_scroll;
-    entry.anchor_revision = pane.transcript_anchor_revision;
+    self.applied = pane.transcript_scroll;
+    self.anchor_revision = pane.transcript_anchor_revision;
 }
 
 /// Only delivered geometry may replace a trajectory's bounds and pixel scale.
 /// Example: `entry.geometry(target, now_ns);`
-pub fn geometry(entry: *Motion, target: @import("Target.zig"), now_ns: u64) void {
+pub fn geometry(self: *Motion, target: @import("Target.zig"), now_ns: u64) void {
     const step: f64 = @max(1, target.scroll_step);
-    if (entry.step != step) {
-        entry.step = step;
-        entry.motion.reset(entry.applied * step, now_ns);
+    if (self.step != step) {
+        self.step = step;
+        self.motion.reset(self.applied * step, now_ns);
     }
 
     // Input during a flight can postpone its anchor. These limits still use
     // that uncommitted coordinate system and would clip pending travel.
-    if (target.thread_reanchor and entry.anchor_revision == target.thread_anchor_revision) {
+    if (target.thread_reanchor and self.anchor_revision == target.thread_anchor_revision) {
         return;
     }
 
-    entry.geometry_ready = true;
-    entry.limit = target.scroll_limit;
-    entry.has_older = target.thread_has_older;
-    entry.has_newer = target.thread_has_newer;
-    entry.bound(now_ns);
+    self.geometry_ready = true;
+    self.limit = target.scroll_limit;
+    self.has_older = target.thread_has_older;
+    self.has_newer = target.thread_has_newer;
+    self.bound(now_ns);
 }
 
 /// Retains direct movement blocked on page loading until the same gesture ends.
 /// A new gesture or reversal takes control from the current visible position.
 /// Example: `entry.input(normalized_pixel_event, now_ns);`
-pub fn input(entry: *Motion, event: @import("../../input/ScrollEvent.zig"), now_ns: u64) void {
+pub fn input(self: *Motion, event: @import("../../input/ScrollEvent.zig"), now_ns: u64) void {
     if (!std_module.math.isFinite(event.delta_y)) {
         return;
     }
 
-    if (!entry.geometry_ready or entry.waiting) {
-        entry.motion.hold(entry.motion.spring.position, now_ns);
+    if (!self.geometry_ready or self.waiting) {
+        self.motion.hold(self.motion.spring.position, now_ns);
     }
 
     const cancelled = event.phase == .cancel or event.momentum == .cancel;
     const continuing = event.phase == .update or event.phase == .end or event.momentum != .none;
-    const pending = entry.motion.spring.target - entry.motion.spring.position;
-    const retain = entry.waiting and entry.last_precise and event.precise and continuing and event.phase != .begin and !cancelled and (event.delta_y == 0 or pending * event.delta_y > 0);
-    entry.motion.input(event, now_ns);
+    const pending = self.motion.spring.target - self.motion.spring.position;
+    const retain = self.waiting and self.last_precise and event.precise and continuing and event.phase != .begin and !cancelled and (event.delta_y == 0 or pending * event.delta_y > 0);
+    self.motion.input(event, now_ns);
     if (retain) {
-        entry.motion.spring.retarget(entry.motion.spring.target + pending);
+        self.motion.spring.retarget(self.motion.spring.target + pending);
     }
 
-    entry.last_precise = event.precise and !cancelled;
-    entry.bound(now_ns);
+    self.last_precise = event.precise and !cancelled;
+    self.bound(now_ns);
 }
 
 /// A provisional page edge parks time until delivery supplies more content.
 /// Example: `entry.advance(now_ns);`
-pub fn advance(entry: *Motion, now_ns: u64) void {
-    if (!entry.geometry_ready or entry.waiting) {
-        entry.motion.hold(entry.motion.spring.position, now_ns);
+pub fn advance(self: *Motion, now_ns: u64) void {
+    if (!self.geometry_ready or self.waiting) {
+        self.motion.hold(self.motion.spring.position, now_ns);
     } else {
-        entry.motion.advance(now_ns);
+        self.motion.advance(now_ns);
     }
 
-    entry.bound(now_ns);
+    self.bound(now_ns);
 }
 
 /// Hard endpoints absorb outward velocity; missing pages retain pending travel.
 /// Example: `entry.bound(now_ns);`
-pub fn bound(entry: *Motion, now_ns: u64) void {
-    if (!entry.geometry_ready) {
+pub fn bound(self: *Motion, now_ns: u64) void {
+    if (!self.geometry_ready) {
         return;
     }
 
-    const maximum = entry.limit * entry.step;
-    const budget = @as(f64, std_module.math.maxInt(u32)) * entry.step;
-    entry.motion.constrain(if (entry.has_newer) -budget else 0, if (entry.has_older) budget else maximum);
-    const spring = entry.motion.spring;
-    entry.waiting = (entry.has_newer and spring.position <= 0 and (spring.target < 0 or spring.velocity < 0)) or (entry.has_older and spring.position >= maximum and (spring.target > maximum or spring.velocity > 0));
-    if (entry.waiting) {
-        entry.motion.hold(@max(0, @min(maximum, spring.position)), now_ns);
+    const maximum = self.limit * self.step;
+    const budget = @as(f64, std_module.math.maxInt(u32)) * self.step;
+    self.motion.constrain(if (self.has_newer) -budget else 0, if (self.has_older) budget else maximum);
+    const spring = self.motion.spring;
+    self.waiting = (self.has_newer and spring.position <= 0 and (spring.target < 0 or spring.velocity < 0)) or (self.has_older and spring.position >= maximum and (spring.target > maximum or spring.velocity > 0));
+    if (self.waiting) {
+        self.motion.hold(@max(0, @min(maximum, spring.position)), now_ns);
     }
 }
 

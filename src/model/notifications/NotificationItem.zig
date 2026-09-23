@@ -17,31 +17,31 @@ transition_position_ns: u64 = 0,
 transition_updated_ns: u64,
 expires_at_ns: u64,
 
-pub fn title(item: *const Item) []const u8 {
-    return item.title_buffer[0..item.title_len];
+pub fn title(self: *const Item) []const u8 {
+    return self.title_buffer[0..self.title_len];
 }
 
-pub fn message(item: *const Item) []const u8 {
-    return item.message_buffer[0..item.message_len];
+pub fn message(self: *const Item) []const u8 {
+    return self.message_buffer[0..self.message_len];
 }
 
 /// Applies f(t) = 3t² - 2t³ and rounds to the nearest terminal cell.
 /// u128 intermediates keep the integer-only render path exact and bounded.
-pub fn animatedWidth(item: *const Item, full_width: u16) u16 {
-    return @intCast(item.animatedPixels(full_width));
+pub fn animatedWidth(self: *const Item, full_width: u16) u16 {
+    return @intCast(self.animatedPixels(full_width));
 }
 
 /// Evaluates the same continuous curve at pixel precision for graphical
 /// placements. FPS only controls how often this value is sampled.
-pub fn animatedPixels(item: *const Item, full_width: u32) u32 {
-    if (full_width == 0 or item.transition_position_ns == 0) {
+pub fn animatedPixels(self: *const Item, full_width: u32) u32 {
+    if (full_width == 0 or self.transition_position_ns == 0) {
         return 0;
     }
-    if (item.transition_position_ns >= notifications.transition_duration_ns) {
+    if (self.transition_position_ns >= notifications.transition_duration_ns) {
         return full_width;
     }
 
-    const position: u128 = item.transition_position_ns;
+    const position: u128 = self.transition_position_ns;
     const duration: u128 = notifications.transition_duration_ns;
     const numerator = position * position * (3 * duration - 2 * position);
     const denominator = duration * duration * duration;
@@ -52,58 +52,58 @@ pub fn animatedPixels(item: *const Item, full_width: u32) u32 {
     ));
 }
 
-pub fn clickable(item: *const Item) bool {
-    return std.meta.activeTag(item.target) != .none;
+pub fn clickable(self: *const Item) bool {
+    return std.meta.activeTag(self.target) != .none;
 }
 
-pub fn beginExit(item: *Item, now_ns: u64) bool {
-    if (item.phase == .exiting) {
+pub fn beginExit(self: *Item, now_ns: u64) bool {
+    if (self.phase == .exiting) {
         return false;
     }
-    if (item.phase == .entering) {
-        _ = item.advanceEntering(now_ns);
+    if (self.phase == .entering) {
+        _ = self.advanceEntering(now_ns);
     }
-    item.phase = .exiting;
-    item.transition_updated_ns = now_ns;
+    self.phase = .exiting;
+    self.transition_updated_ns = now_ns;
     return true;
 }
 
-pub fn advanceEntering(item: *Item, now_ns: u64) bool {
-    if (now_ns <= item.transition_updated_ns) {
+pub fn advanceEntering(self: *Item, now_ns: u64) bool {
+    if (now_ns <= self.transition_updated_ns) {
         return false;
     }
-    const previous = item.transition_position_ns;
-    item.transition_position_ns = @min(
+    const previous = self.transition_position_ns;
+    self.transition_position_ns = @min(
         notifications.transition_duration_ns,
-        previous +| (now_ns - item.transition_updated_ns),
+        previous +| (now_ns - self.transition_updated_ns),
     );
-    item.transition_updated_ns = now_ns;
-    if (item.transition_position_ns == notifications.transition_duration_ns) {
-        item.phase = .visible;
+    self.transition_updated_ns = now_ns;
+    if (self.transition_position_ns == notifications.transition_duration_ns) {
+        self.phase = .visible;
     }
-    return item.transition_position_ns != previous;
+    return self.transition_position_ns != previous;
 }
 
-pub fn advanceExiting(item: *Item, now_ns: u64) bool {
-    if (now_ns <= item.transition_updated_ns) {
+pub fn advanceExiting(self: *Item, now_ns: u64) bool {
+    if (now_ns <= self.transition_updated_ns) {
         return false;
     }
-    const previous = item.transition_position_ns;
-    item.transition_position_ns -|= now_ns - item.transition_updated_ns;
-    item.transition_updated_ns = now_ns;
-    return item.transition_position_ns != previous;
+    const previous = self.transition_position_ns;
+    self.transition_position_ns -|= now_ns - self.transition_updated_ns;
+    self.transition_updated_ns = now_ns;
+    return self.transition_position_ns != previous;
 }
 
-pub fn nextDeadline(item: *const Item, now_ns: u64, frame_interval_ns: u64) u64 {
-    return switch (item.phase) {
+pub fn nextDeadline(self: *const Item, now_ns: u64, frame_interval_ns: u64) u64 {
+    return switch (self.phase) {
         .entering => @min(
             now_ns +| frame_interval_ns,
-            item.transition_updated_ns +| (notifications.transition_duration_ns - item.transition_position_ns),
+            self.transition_updated_ns +| (notifications.transition_duration_ns - self.transition_position_ns),
         ),
-        .visible => item.expires_at_ns,
+        .visible => self.expires_at_ns,
         .exiting => @min(
             now_ns +| frame_interval_ns,
-            item.transition_updated_ns +| item.transition_position_ns,
+            self.transition_updated_ns +| self.transition_position_ns,
         ),
     };
 }

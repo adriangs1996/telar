@@ -20,14 +20,14 @@ pub fn init(_: *PosixTty) !ResizeWatcher {
     return .{ .read_end = .{ .handle = posix_ops.wake[0], .flags = .{ .nonblocking = false } } };
 }
 
-pub fn deinit(w: *ResizeWatcher) void {
+pub fn deinit(self: *ResizeWatcher) void {
     // Disarmed before the descriptors close, so a signal arriving during
     // shutdown cannot write into a number that has already been recycled
     // by whatever opened next.
     const write_end = posix_ops.wake[1];
     posix_ops.wake[1] = -1;
     _ = std.c.close(write_end);
-    _ = std.c.close(w.read_end.handle);
+    _ = std.c.close(self.read_end.handle);
 }
 
 /// Blocks until a resize arrives.
@@ -37,9 +37,9 @@ pub fn deinit(w: *ResizeWatcher) void {
 /// a raw syscall is not one. An actor blocked in libc's `read` never
 /// notices it was cancelled, so the group waits for it forever and the
 /// process hangs with the terminal still in raw mode.
-pub fn wait(w: *ResizeWatcher, io: std.Io) std.Io.Cancelable!void {
+pub fn wait(self: *ResizeWatcher, io: std.Io) std.Io.Cancelable!void {
     var drain: [64]u8 = undefined;
-    _ = w.read_end.readStreaming(io, &.{&drain}) catch |err| switch (err) {
+    _ = self.read_end.readStreaming(io, &.{&drain}) catch |err| switch (err) {
         error.Canceled => |e| return e,
         // The pipe is ours and nothing else writes to it, so any other
         // failure means shutdown. Returning leaves the caller's loop.

@@ -20,8 +20,8 @@ pub fn init(provider: core.AgentProvider, reference: SessionReference) !ResumeSe
 
 /// Compares the provider and session identifier, ignoring observation time.
 /// Example: `if (previous.eql(current)) return;`.
-pub fn eql(session: ResumeSession, other: ResumeSession) bool {
-    return session.provider == other.provider and std.mem.eql(u8, session.reference.slice(), other.reference.slice());
+pub fn eql(self: ResumeSession, other: ResumeSession) bool {
+    return self.provider == other.provider and std.mem.eql(u8, self.reference.slice(), other.reference.slice());
 }
 
 fn isUuid(value: []const u8) bool {

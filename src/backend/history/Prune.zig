@@ -45,10 +45,10 @@ pub fn init(input: Input) !Prune {
     return prune;
 }
 
-pub fn scopeSlice(prune: *const Prune) []const u8 {
-    return prune.scope_text[0..prune.scope_text_len];
+pub fn scopeSlice(self: *const Prune) []const u8 {
+    return self.scope_text[0..self.scope_text_len];
 }
 
-pub fn matchSlice(prune: *const Prune) []const u8 {
-    return prune.match[0..prune.match_len];
+pub fn matchSlice(self: *const Prune) []const u8 {
+    return self.match[0..self.match_len];
 }

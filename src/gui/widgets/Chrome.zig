@@ -37,82 +37,82 @@ animation: @import("../animation/FrameClock.zig") = .{},
 /// Starts the pending hit map and returns a context borrowing only the caller's
 /// projection and persistent chrome state. Keep it alive until drawing ends.
 /// Example: `composition.context = try chrome.begin(canvas, projection);`
-pub fn begin(chrome: *Chrome, canvas: *Canvas, projection: *const client.Projection) !Context {
-    const pending = chrome.maps.begin();
+pub fn begin(self: *Chrome, canvas: *Canvas, projection: *const client.Projection) !Context {
+    const pending = self.maps.begin();
     try registerPanes(&pending.hits, projection.*);
     pending.bands = Bands.resolve(canvas);
     pending.sidebar_regions = try SidebarRegions.resolve(canvas, pending.bands.sidebar, projection.workspaces.count);
-    chrome.ages.observe(projection.agents, chrome.now_ns);
-    chrome.progress.begin();
-    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = chrome.hovered, .presented_workspace = chrome.presented().workspace, .ages = &chrome.ages, .favicons = &chrome.favicons, .progress = &chrome.progress, .sidebar_regions = &pending.sidebar_regions };
+    self.ages.observe(projection.agents, self.now_ns);
+    self.progress.begin();
+    const context: Context = .{ .hits = &pending.hits, .bands = &pending.band_hits, .projection = projection, .hovered = self.hovered, .presented_workspace = self.presented().workspace, .ages = &self.ages, .favicons = &self.favicons, .progress = &self.progress, .sidebar_regions = &pending.sidebar_regions };
     pending.workspace = context.workspaceId();
     return context;
 }
 
 /// Appends the permanent chrome in painter order without emitting quads.
 /// The caller owns the context through draw. Example: `try chrome.compose(&context, &widgets);`
-pub fn compose(chrome: *Chrome, context: *Context, widgets: anytype) !void {
-    const bands = chrome.maps.preparing().bands;
+pub fn compose(self: *Chrome, context: *Context, widgets: anytype) !void {
+    const bands = self.maps.preparing().bands;
     try widgets.append(.{ .top_bar = .{ .context = context, .area = bands.top_bar, .sidebar_visible = bands.sidebar.width > 0 } });
     try widgets.append(.{ .status = .{ .context = context, .area = bands.status_bar } });
-    try widgets.append(.{ .sidebar = .{ .state = &chrome.sidebar, .context = context, .area = bands.sidebar } });
-    try widgets.append(.{ .panes = .{ .context = context, .rings = &chrome.rings } });
+    try widgets.append(.{ .sidebar = .{ .state = &self.sidebar, .context = context, .area = bands.sidebar } });
+    try widgets.append(.{ .panes = .{ .context = context, .rings = &self.rings } });
 }
 
 /// Seals hit records only after every composed widget has drawn successfully.
 /// Example: `chrome.seal();`
-pub fn seal(chrome: *Chrome) void {
-    chrome.progress.end();
-    chrome.maps.seal();
+pub fn seal(self: *Chrome) void {
+    self.progress.end();
+    self.maps.seal();
 }
 
 /// Publishes only the controls belonging to the host's completed frame token.
 /// Example: `chrome.present(delivered);`.
-pub fn present(chrome: *Chrome, delivered: bool) void {
-    chrome.maps.present(delivered);
+pub fn present(self: *Chrome, delivered: bool) void {
+    self.maps.present(delivered);
 }
 
-pub fn prepared(chrome: *const Chrome) *const HitState {
-    return chrome.maps.prepared();
+pub fn prepared(self: *const Chrome) *const HitState {
+    return self.maps.prepared();
 }
 
-pub fn presented(chrome: *const Chrome) *const HitState {
-    return chrome.maps.presented();
+pub fn presented(self: *const Chrome) *const HitState {
+    return self.maps.presented();
 }
 
 /// Advances local hover/scroll invalidation without changing pane geometry.
 /// Example: `chrome.invalidate();`
-pub fn invalidate(chrome: *Chrome) void {
-    chrome.revision +%= 1;
+pub fn invalidate(self: *Chrome) void {
+    self.revision +%= 1;
 }
 
 /// Keeps existing hover paint and native cursor hints in sync with widgets.
 /// Example: `chrome.widgetPointer(pointer, resizing);`
-pub fn widgetPointer(chrome: *Chrome, event: PointerEvent, resizing: bool) void {
-    chrome.sidebar_resize_active = resizing;
+pub fn widgetPointer(self: *Chrome, event: PointerEvent, resizing: bool) void {
+    self.sidebar_resize_active = resizing;
     if (event.kind == .leave) {
-        chrome.leavePointer();
+        self.leavePointer();
     } else {
-        chrome.hover(chrome.presented().band_hits.at(.{ event.x, event.y }));
+        self.hover(self.presented().band_hits.at(.{ event.x, event.y }));
     }
 }
 
 /// Retains a cell-control gesture through release, even outside its
 /// bounds. Compare `revision` around this call to request a local repaint.
 /// Example: `const command = chrome.pointer(mouse);`
-pub fn pointer(chrome: *Chrome, event: data.Mouse) client.ViewInteractionCommand {
-    const visible = chrome.presented();
+pub fn pointer(self: *Chrome, event: data.Mouse) client.ViewInteractionCommand {
+    const visible = self.presented();
     const action = visible.hits.at(.{ event.x, event.y });
-    chrome.hover(action);
-    if (chrome.gesture_button) |button| {
+    self.hover(action);
+    if (self.gesture_button) |button| {
         if (event.kind == .drag or event.kind == .release) {
             if (event.button & 3 != button and event.button & 3 != 3) {
                 return .{ .consumed = true };
             }
 
             if (event.kind == .release) {
-                chrome.gesture_button = null;
-                chrome.invalidate();
+                self.gesture_button = null;
+                self.invalidate();
             }
         }
 
@@ -128,7 +128,7 @@ pub fn pointer(chrome: *Chrome, event: data.Mouse) client.ViewInteractionCommand
         return .{ .consumed = true };
     }
 
-    chrome.gesture_button = event.button & 3;
+    self.gesture_button = event.button & 3;
     return .{ .intent = buttonIntent(target.intent, event.button & 3), .consumed = true };
 }
 
@@ -138,17 +138,17 @@ pub fn pointer(chrome: *Chrome, event: data.Mouse) client.ViewInteractionCommand
 /// its release; a press on the sidebar's resize handle turns the drag into
 /// widths, and the wheel over the sidebar scrolls its cards.
 /// Example: `if (chrome.bandPointer(event)) |command| return apply(command);`
-pub fn bandPointer(chrome: *Chrome, event: PointerEvent) ?BandCommand {
-    const visible = chrome.presented();
+pub fn bandPointer(self: *Chrome, event: PointerEvent) ?BandCommand {
+    const visible = self.presented();
     const action = visible.band_hits.at(.{ event.x, event.y });
     const inside = action != null or visible.bands.contains(event.x, event.y);
-    if (chrome.band_gesture) |button| {
+    if (self.band_gesture) |button| {
         if (event.kind == .release or event.kind == .drag) {
-            const resize = chrome.sidebar_resize_active;
+            const resize = self.sidebar_resize_active;
             if (event.kind == .release and @intFromEnum(event.button) == button) {
-                chrome.band_gesture = null;
-                chrome.sidebar_resize_active = false;
-                chrome.invalidate();
+                self.band_gesture = null;
+                self.sidebar_resize_active = false;
+                self.invalidate();
             }
 
             return .{ .interaction = .{ .consumed = true }, .sidebar_width = if (resize) edgeWidth(event.x) else null };
@@ -161,11 +161,11 @@ pub fn bandPointer(chrome: *Chrome, event: PointerEvent) ?BandCommand {
         return null;
     }
 
-    chrome.hover(action);
+    self.hover(action);
     if (event.kind == .scroll_up or event.kind == .scroll_down) {
-        if (chrome.sidebarScrollAt(.{ event.x, event.y })) |scroll| {
+        if (self.sidebarScrollAt(.{ event.x, event.y })) |scroll| {
             if (scroll.wheel(if (event.kind == .scroll_up) .scroll_up else .scroll_down)) {
-                chrome.invalidate();
+                self.invalidate();
             }
         }
 
@@ -177,11 +177,11 @@ pub fn bandPointer(chrome: *Chrome, event: PointerEvent) ?BandCommand {
     }
 
     const button: u8 = @intFromEnum(event.button);
-    chrome.band_gesture = button;
-    chrome.invalidate();
+    self.band_gesture = button;
+    self.invalidate();
     const target = action orelse return .{ .interaction = .{ .consumed = true } };
     if (target == .resize_sidebar) {
-        chrome.sidebar_resize_active = button == 0;
+        self.sidebar_resize_active = button == 0;
         return .{ .interaction = .{ .consumed = true } };
     }
 
@@ -190,11 +190,11 @@ pub fn bandPointer(chrome: *Chrome, event: PointerEvent) ?BandCommand {
 
 /// Selects a scroll owner using only the completed frame's list viewports.
 /// Example: `const scroll = chrome.sidebarScrollAt(point) orelse return;`
-pub fn sidebarScrollAt(chrome: *Chrome, point: [2]f64) ?*@import("PixelScroll.zig") {
-    const list = chrome.presented().sidebar_regions.at(point) orelse return null;
+pub fn sidebarScrollAt(self: *Chrome, point: [2]f64) ?*@import("PixelScroll.zig") {
+    const list = self.presented().sidebar_regions.at(point) orelse return null;
     return switch (list) {
-        .projects => &chrome.sidebar.projects,
-        .agents => &chrome.sidebar.agents,
+        .projects => &self.sidebar.projects,
+        .agents => &self.sidebar.agents,
     };
 }
 
@@ -202,12 +202,12 @@ pub fn sidebarScrollAt(chrome: *Chrome, point: [2]f64) ?*@import("PixelScroll.zi
 /// hand over a control and the horizontal resize cursor over the sidebar
 /// edge or while it is being dragged.
 /// Example: `hover.assign(null, chrome.bandShape(event));`
-pub fn bandShape(chrome: *const Chrome, event: PointerEvent) core.PointerShape {
-    if (chrome.sidebar_resize_active) {
+pub fn bandShape(self: *const Chrome, event: PointerEvent) core.PointerShape {
+    if (self.sidebar_resize_active) {
         return .col_resize;
     }
 
-    const action = chrome.presented().band_hits.at(.{ event.x, event.y }) orelse return .default;
+    const action = self.presented().band_hits.at(.{ event.x, event.y }) orelse return .default;
     return switch (action) {
         .resize_sidebar => .col_resize,
         .intent => |intent| if (intent != .none) .pointer else .default,
@@ -234,10 +234,10 @@ fn buttonIntent(intent: client.Intent, button: u8) client.Intent {
     return if (button != 0) .none else intent;
 }
 
-fn hover(chrome: *Chrome, action: ?action_module.Action) void {
-    if (!std.meta.eql(action, chrome.hovered)) {
-        chrome.hovered = action;
-        chrome.invalidate();
+fn hover(self: *Chrome, action: ?action_module.Action) void {
+    if (!std.meta.eql(action, self.hovered)) {
+        self.hovered = action;
+        self.invalidate();
     }
 }
 
@@ -250,23 +250,23 @@ fn registerPanes(hits: *HitMap, projection: client.Projection) !void {
 
 /// Clears gestures when window focus is lost and no release can arrive.
 /// Example: `chrome.cancelPointer();`
-pub fn cancelPointer(chrome: *Chrome) void {
-    if (chrome.gesture_button == null and chrome.band_gesture == null and chrome.hovered == null) {
+pub fn cancelPointer(self: *Chrome) void {
+    if (self.gesture_button == null and self.band_gesture == null and self.hovered == null) {
         return;
     }
 
-    chrome.gesture_button = null;
-    chrome.band_gesture = null;
-    chrome.sidebar_resize_active = false;
-    chrome.hovered = null;
-    chrome.invalidate();
+    self.gesture_button = null;
+    self.band_gesture = null;
+    self.sidebar_resize_active = false;
+    self.hovered = null;
+    self.invalidate();
 }
 
 /// Leaving the window clears hover while an acquired drag keeps its owner.
 /// Example: `chrome.leavePointer();`
-pub fn leavePointer(chrome: *Chrome) void {
-    if (chrome.hovered != null) {
-        chrome.hovered = null;
-        chrome.invalidate();
+pub fn leavePointer(self: *Chrome) void {
+    if (self.hovered != null) {
+        self.hovered = null;
+        self.invalidate();
     }
 }

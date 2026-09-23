@@ -29,12 +29,12 @@ query_len: u16 = 0,
 /// ```zig
 /// model.path_completion.begin();
 /// ```
-pub fn begin(state: *State) void {
-    state.pending = .none;
-    state.result = .{};
-    state.query_len = 0;
-    state.forgetQuery();
-    state.revision +%= 1;
+pub fn begin(self: *State) void {
+    self.pending = .none;
+    self.result = .{};
+    self.query_len = 0;
+    self.forgetQuery();
+    self.revision +%= 1;
 }
 
 /// Forgets the wanted and in-flight queries; a running listing lands into
@@ -43,18 +43,18 @@ pub fn begin(state: *State) void {
 /// ```zig
 /// model.path_completion.forgetQuery();
 /// ```
-pub fn forgetQuery(state: *State) void {
-    state.pending = .none;
-    state.wanted_len = 0;
-    state.inflight_len = 0;
+pub fn forgetQuery(self: *State) void {
+    self.pending = .none;
+    self.wanted_len = 0;
+    self.inflight_len = 0;
 }
 
-pub fn wantedSlice(state: *const State) []const u8 {
-    return state.wanted[0..state.wanted_len];
+pub fn wantedSlice(self: *const State) []const u8 {
+    return self.wanted[0..self.wanted_len];
 }
 
-pub fn inflightSlice(state: *const State) []const u8 {
-    return state.inflight[0..state.inflight_len];
+pub fn inflightSlice(self: *const State) []const u8 {
+    return self.inflight[0..self.inflight_len];
 }
 
 /// Records the latest query and reports whether it differs from the
@@ -63,13 +63,13 @@ pub fn inflightSlice(state: *const State) []const u8 {
 /// ```zig
 /// if (!model.path_completion.want(query)) return;
 /// ```
-pub fn want(state: *State, query: []const u8) bool {
-    if (std.mem.eql(u8, state.wantedSlice(), query)) {
+pub fn want(self: *State, query: []const u8) bool {
+    if (std.mem.eql(u8, self.wantedSlice(), query)) {
         return false;
     }
 
-    @memcpy(state.wanted[0..query.len], query);
-    state.wanted_len = @intCast(query.len);
+    @memcpy(self.wanted[0..query.len], query);
+    self.wanted_len = @intCast(query.len);
     return true;
 }
 
@@ -79,12 +79,12 @@ pub fn want(state: *State, query: []const u8) bool {
 /// ```zig
 /// const id = model.path_completion.reserve();
 /// ```
-pub fn reserve(state: *State) ExecutionId {
-    const id: ExecutionId = @enumFromInt(state.next_id);
-    state.next_id += 1;
-    state.pending = id;
-    @memcpy(state.inflight[0..state.wanted_len], state.wantedSlice());
-    state.inflight_len = state.wanted_len;
+pub fn reserve(self: *State) ExecutionId {
+    const id: ExecutionId = @enumFromInt(self.next_id);
+    self.next_id += 1;
+    self.pending = id;
+    @memcpy(self.inflight[0..self.wanted_len], self.wantedSlice());
+    self.inflight_len = self.wanted_len;
     return id;
 }
 
@@ -93,18 +93,18 @@ pub fn reserve(state: *State) ExecutionId {
 /// ```zig
 /// if (!model.path_completion.retire(completion.execution_id)) return;
 /// ```
-pub fn retire(state: *State, execution_id: ExecutionId) bool {
-    if (execution_id == .none or execution_id != state.pending) {
+pub fn retire(self: *State, execution_id: ExecutionId) bool {
+    if (execution_id == .none or execution_id != self.pending) {
         return false;
     }
 
-    state.pending = .none;
+    self.pending = .none;
     return true;
 }
 
 /// Whether the wanted query moved on while the listing ran.
-pub fn superseded(state: *const State) bool {
-    return !std.mem.eql(u8, state.wantedSlice(), state.inflightSlice());
+pub fn superseded(self: *const State) bool {
+    return !std.mem.eql(u8, self.wantedSlice(), self.inflightSlice());
 }
 
 /// Lands the result of a retired execution for the query it listed.
@@ -112,12 +112,12 @@ pub fn superseded(state: *const State) bool {
 /// ```zig
 /// model.path_completion.land(.{ .query = query, .result = &result });
 /// ```
-pub fn land(state: *State, landing: Landing) void {
-    state.result = landing.result.*;
-    const len = @min(landing.query.len, state.query.len);
-    @memcpy(state.query[0..len], landing.query[0..len]);
-    state.query_len = @intCast(len);
-    state.revision +%= 1;
+pub fn land(self: *State, landing: Landing) void {
+    self.result = landing.result.*;
+    const len = @min(landing.query.len, self.query.len);
+    @memcpy(self.query[0..len], landing.query[0..len]);
+    self.query_len = @intCast(len);
+    self.revision +%= 1;
 }
 
 /// Drops the visible list because the query changed to something the
@@ -126,31 +126,31 @@ pub fn land(state: *State, landing: Landing) void {
 /// ```zig
 /// model.path_completion.invalidate();
 /// ```
-pub fn invalidate(state: *State) void {
-    if (state.result.len == 0 and state.query_len == 0 and !state.result.exact_exists) {
+pub fn invalidate(self: *State) void {
+    if (self.result.len == 0 and self.query_len == 0 and !self.result.exact_exists) {
         return;
     }
 
-    state.result = .{};
-    state.query_len = 0;
-    state.revision +%= 1;
+    self.result = .{};
+    self.query_len = 0;
+    self.revision +%= 1;
 }
 
-pub fn entries(state: *const State) []const Entry {
-    return state.result.slice();
+pub fn entries(self: *const State) []const Entry {
+    return self.result.slice();
 }
 
-pub fn querySlice(state: *const State) []const u8 {
-    return state.query[0..state.query_len];
+pub fn querySlice(self: *const State) []const u8 {
+    return self.query[0..self.query_len];
 }
 
 /// Whether a landed result describes this expanded query.
-pub fn matches(state: *const State, query: []const u8) bool {
-    return state.pending == .none and std.mem.eql(u8, state.querySlice(), query);
+pub fn matches(self: *const State, query: []const u8) bool {
+    return self.pending == .none and std.mem.eql(u8, self.querySlice(), query);
 }
 
-pub fn version(state: *const State) u64 {
-    return state.revision;
+pub fn version(self: *const State) u64 {
+    return self.revision;
 }
 
 const std = @import("std");

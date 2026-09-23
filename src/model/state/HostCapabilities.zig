@@ -21,17 +21,17 @@ terminal_colors: core.TerminalColors = .{},
 /// ```zig
 /// const cell_size = capabilities.cellSize(80, 24);
 /// ```
-pub fn cellSize(capabilities: *const HostCapabilities, cols: u16, rows: u16) struct { width: u16, height: u16 } {
-    const width = if (capabilities.cell_width_px != 0)
-        capabilities.cell_width_px
+pub fn cellSize(self: *const HostCapabilities, cols: u16, rows: u16) struct { width: u16, height: u16 } {
+    const width = if (self.cell_width_px != 0)
+        self.cell_width_px
     else if (cols != 0)
-        capabilities.window_width_px / cols
+        self.window_width_px / cols
     else
         0;
-    const height = if (capabilities.cell_height_px != 0)
-        capabilities.cell_height_px
+    const height = if (self.cell_height_px != 0)
+        self.cell_height_px
     else if (rows != 0)
-        capabilities.window_height_px / rows
+        self.window_height_px / rows
     else
         0;
 
@@ -46,8 +46,8 @@ pub fn cellSize(capabilities: *const HostCapabilities, cols: u16, rows: u16) str
 /// ```zig
 /// const next = capabilities.withObservation(.{ .pointer_pixels = .supported });
 /// ```
-pub fn withObservation(capabilities: HostCapabilities, observation: HostCapabilityObservation) HostCapabilities {
-    var next = capabilities;
+pub fn withObservation(self: HostCapabilities, observation: HostCapabilityObservation) HostCapabilities {
+    var next = self;
     switch (observation) {
         .images => |support| next.images = observedSupport(support),
         .window_pixels => |size| {

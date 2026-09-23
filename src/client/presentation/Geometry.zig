@@ -38,16 +38,16 @@ pub fn capture(projection: Projection) Geometry {
 /// Checks a new gesture against delivered geometry. Captured gestures keep
 /// their original owner and must not be reassigned on a failed match.
 /// Example: `if (!delivered.matches(current)) return;`.
-pub fn matches(delivered: *const Geometry, current: *const Geometry) bool {
-    if (!delivered.region.matches(current.region) or
-        !std.meta.eql(delivered.location, current.location) or
-        delivered.layout_revision != current.layout_revision or
-        !std.meta.eql(delivered.host_size, current.host_size) or delivered.len != current.len)
+pub fn matches(self: *const Geometry, current: *const Geometry) bool {
+    if (!self.region.matches(current.region) or
+        !std.meta.eql(self.location, current.location) or
+        self.layout_revision != current.layout_revision or
+        !std.meta.eql(self.host_size, current.host_size) or self.len != current.len)
     {
         return false;
     }
 
-    for (delivered.panes[0..delivered.len], current.panes[0..current.len]) |old, new| {
+    for (self.panes[0..self.len], current.panes[0..current.len]) |old, new| {
         if (!std.meta.eql(old, new)) {
             return false;
         }

@@ -9,31 +9,31 @@ workspace_active: [types.max_client_layout_tabs]bool = undefined,
 count: usize = 0,
 node_count: usize = 0,
 
-pub fn append(collection: *ClientLayoutCollection, entry: ClientLayoutEntry) !void {
-    for (collection.locations[0..collection.count]) |previous| {
+pub fn append(self: *ClientLayoutCollection, entry: ClientLayoutEntry) !void {
+    for (self.locations[0..self.count]) |previous| {
         if (std.meta.eql(previous, entry.location)) {
             return error.DuplicateClientLayoutTab;
         }
     }
-    for (collection.locations[0..collection.count], collection.workspace_active[0..collection.count]) |previous, previous_active| {
+    for (self.locations[0..self.count], self.workspace_active[0..self.count]) |previous, previous_active| {
         if (previous_active and entry.workspace_active and std.meta.eql(previous.workspace, entry.location.workspace)) {
             return error.DuplicateClientLayoutWorkspace;
         }
     }
 
-    collection.node_count = std.math.add(usize, collection.node_count, entry.node_count) catch
+    self.node_count = std.math.add(usize, self.node_count, entry.node_count) catch
         return error.TooManyClientLayoutNodes;
-    if (collection.node_count > types.max_client_layout_nodes) {
+    if (self.node_count > types.max_client_layout_nodes) {
         return error.TooManyClientLayoutNodes;
     }
 
-    collection.locations[collection.count] = entry.location;
-    collection.workspace_active[collection.count] = entry.workspace_active;
-    collection.count += 1;
+    self.locations[self.count] = entry.location;
+    self.workspace_active[self.count] = entry.workspace_active;
+    self.count += 1;
 }
 
-pub fn validateActive(collection: *const ClientLayoutCollection, active: TabLocation) !void {
-    for (collection.locations[0..collection.count], collection.workspace_active[0..collection.count]) |location, is_workspace_active| {
+pub fn validateActive(self: *const ClientLayoutCollection, active: TabLocation) !void {
+    for (self.locations[0..self.count], self.workspace_active[0..self.count]) |location, is_workspace_active| {
         if (std.meta.eql(location, active)) {
             if (!is_workspace_active) {
                 return error.InvalidClientLayoutActiveTab;

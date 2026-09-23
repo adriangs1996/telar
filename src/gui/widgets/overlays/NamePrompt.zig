@@ -12,9 +12,9 @@ prompt: *const shared_model.Prompt,
 title: []const u8,
 
 /// Example: `try prompt.draw(canvas);`
-pub fn draw(widget: NamePrompt, canvas: *Canvas) !void {
-    const modal: Modal = .{ .area = widget.area, .title = widget.title };
-    const prompt = widget.prompt.*;
+pub fn draw(self: NamePrompt, canvas: *Canvas) !void {
+    const modal: Modal = .{ .area = self.area, .title = self.title };
+    const prompt = self.prompt.*;
     try modal.draw(canvas);
 
     const content = modal.content();

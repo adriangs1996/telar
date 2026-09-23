@@ -38,8 +38,8 @@ pub fn syntaxStyle(self: Theme, role: role_module.Role) SyntaxStyle {
     } };
 }
 
-pub fn withOverrides(value: Theme, overrides: Overrides) Theme {
-    var result = value;
+pub fn withOverrides(self: Theme, overrides: Overrides) Theme {
+    var result = self;
     inline for (std.meta.fields(Overrides)) |field| {
         if (@field(overrides, field.name)) |color| {
             @field(result.palette, field.name) = color;

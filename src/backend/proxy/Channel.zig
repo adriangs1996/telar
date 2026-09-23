@@ -19,9 +19,9 @@ dropped: std.atomic.Value(u64) = .init(0),
 /// ```zig
 /// channel.init(gate);
 /// ```
-pub fn init(channel: *Channel, gate: CredentialGate) void {
-    channel.* = .{ .gate = gate };
-    channel.events = .init(&channel.storage);
+pub fn init(self: *Channel, gate: CredentialGate) void {
+    self.* = .{ .gate = gate };
+    self.events = .init(&self.storage);
 }
 
 /// Returns the observer registered in the immutable proxy pipeline.
@@ -29,8 +29,8 @@ pub fn init(channel: *Channel, gate: CredentialGate) void {
 /// ```zig
 /// try pipeline.add(channel.observer());
 /// ```
-pub fn observer(channel: *Channel) Observer {
-    return .{ .context = channel, .observe = observe };
+pub fn observer(self: *Channel) Observer {
+    return .{ .context = self, .observe = observe };
 }
 
 /// Returns the next observation whose credential is still live.
@@ -40,13 +40,13 @@ pub fn observer(channel: *Channel) Observer {
 /// ```zig
 /// const event = try channel.receive(io);
 /// ```
-pub fn receive(channel: *Channel, io: std.Io) anyerror!MiddlewareEvent {
+pub fn receive(self: *Channel, io: std.Io) anyerror!MiddlewareEvent {
     while (true) {
-        var event = try channel.events.getOne(io);
+        var event = try self.events.getOne(io);
         defer std.crypto.secureZero(u8, &event.credential.token);
-        channel.release();
+        self.release();
 
-        if (channel.gate.accepts(&event.credential)) {
+        if (self.gate.accepts(&event.credential)) {
             return event;
         }
     }
@@ -57,8 +57,8 @@ pub fn receive(channel: *Channel, io: std.Io) anyerror!MiddlewareEvent {
 /// ```zig
 /// channel.close(io);
 /// ```
-pub fn close(channel: *Channel, io: std.Io) void {
-    channel.events.close(io);
+pub fn close(self: *Channel, io: std.Io) void {
+    self.events.close(io);
 }
 
 /// Returns a lock-free snapshot of reserved delivery depth, its high-water
@@ -67,11 +67,11 @@ pub fn close(channel: *Channel, io: std.Io) void {
 /// ```zig
 /// const snapshot = channel.metrics();
 /// ```
-pub fn metrics(channel: *const Channel) ObservationQueueMetrics {
+pub fn metrics(self: *const Channel) ObservationQueueMetrics {
     return .{
-        .queued = channel.queued.load(.monotonic),
-        .high_water = channel.high_water.load(.monotonic),
-        .dropped = channel.dropped.load(.monotonic),
+        .queued = self.queued.load(.monotonic),
+        .high_water = self.high_water.load(.monotonic),
+        .dropped = self.dropped.load(.monotonic),
     };
 }
 
@@ -80,33 +80,33 @@ fn observe(context: *anyopaque, io: std.Io, event: MiddlewareEvent) void {
     channel.publish(io, event);
 }
 
-pub fn publish(channel: *Channel, io: std.Io, event: MiddlewareEvent) void {
-    if (!channel.gate.accepts(&event.credential)) {
+pub fn publish(self: *Channel, io: std.Io, event: MiddlewareEvent) void {
+    if (!self.gate.accepts(&event.credential)) {
         return;
     }
 
     // A waiting receiver may consume a direct handoff before `put`
     // returns, so depth must be reserved before publication.
-    const depth = channel.reserve() orelse {
-        _ = channel.dropped.fetchAdd(1, .monotonic);
+    const depth = self.reserve() orelse {
+        _ = self.dropped.fetchAdd(1, .monotonic);
         return;
     };
-    const published = channel.events.put(io, &.{event}, 0) catch 0;
+    const published = self.events.put(io, &.{event}, 0) catch 0;
 
     if (published == 0) {
-        channel.release();
-        _ = channel.dropped.fetchAdd(1, .monotonic);
+        self.release();
+        _ = self.dropped.fetchAdd(1, .monotonic);
         return;
     }
 
-    _ = channel.high_water.fetchMax(depth, .monotonic);
+    _ = self.high_water.fetchMax(depth, .monotonic);
 }
 
-fn reserve(channel: *Channel) ?u64 {
-    var current = channel.queued.load(.monotonic);
+fn reserve(self: *Channel) ?u64 {
+    var current = self.queued.load(.monotonic);
 
     while (current < observation_queue.capacity) {
-        if (channel.queued.cmpxchgWeak(current, current + 1, .monotonic, .monotonic)) |observed| {
+        if (self.queued.cmpxchgWeak(current, current + 1, .monotonic, .monotonic)) |observed| {
             current = observed;
             continue;
         }
@@ -117,7 +117,7 @@ fn reserve(channel: *Channel) ?u64 {
     return null;
 }
 
-fn release(channel: *Channel) void {
-    const previous = channel.queued.fetchSub(1, .monotonic);
+fn release(self: *Channel) void {
+    const previous = self.queued.fetchSub(1, .monotonic);
     std.debug.assert(previous != 0);
 }

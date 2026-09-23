@@ -5,9 +5,9 @@ const History = @This();
 
 entries: [core.max_workspace_list_entries]?Bookmark = @splat(null),
 
-pub fn remember(history: *History, bookmark: Bookmark) void {
+pub fn remember(self: *History, bookmark: Bookmark) void {
     var free: ?*?Bookmark = null;
-    for (&history.entries) |*slot| {
+    for (&self.entries) |*slot| {
         if (slot.*) |entry| {
             if (std.meta.eql(entry.location.workspace, bookmark.location.workspace)) {
                 slot.* = bookmark;
@@ -22,8 +22,8 @@ pub fn remember(history: *History, bookmark: Bookmark) void {
     }
 }
 
-pub fn find(history: *const History, workspace: core.WorkspaceLocation) ?Bookmark {
-    for (history.entries) |slot| {
+pub fn find(self: *const History, workspace: core.WorkspaceLocation) ?Bookmark {
+    for (self.entries) |slot| {
         const entry = slot orelse continue;
         if (std.meta.eql(entry.location.workspace, workspace)) {
             return entry;
@@ -32,8 +32,8 @@ pub fn find(history: *const History, workspace: core.WorkspaceLocation) ?Bookmar
     return null;
 }
 
-pub fn forget(history: *History, workspace: core.WorkspaceLocation) void {
-    for (&history.entries) |*slot| {
+pub fn forget(self: *History, workspace: core.WorkspaceLocation) void {
+    for (&self.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (std.meta.eql(entry.location.workspace, workspace)) {
             slot.* = null;

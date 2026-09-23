@@ -18,38 +18,38 @@ sequence: u64 = 0,
 total: u64 = 0,
 next_request: u64 = 1,
 
-pub fn push(sender: *BatchSender, entry: ImportedEntry) !void {
+pub fn push(self: *BatchSender, entry: ImportedEntry) !void {
     if (entry.command.len == 0 or entry.command.len > core.max_import_command_bytes) {
         return;
     }
-    if (sender.count == core.max_import_entries or entry.command.len > sender.storage.len - sender.used) {
-        try sender.finish();
+    if (self.count == core.max_import_entries or entry.command.len > self.storage.len - self.used) {
+        try self.finish();
     }
 
-    const copy = sender.storage[sender.used .. sender.used + entry.command.len];
+    const copy = self.storage[self.used .. self.used + entry.command.len];
     @memcpy(copy, entry.command);
-    sender.used += entry.command.len;
-    sender.entries[sender.count] = .{ .started_at_ms = entry.started_at_ms, .command = copy };
-    sender.count += 1;
+    self.used += entry.command.len;
+    self.entries[self.count] = .{ .started_at_ms = entry.started_at_ms, .command = copy };
+    self.count += 1;
 }
 
-pub fn finish(sender: *BatchSender) !void {
-    if (sender.count == 0) {
+pub fn finish(self: *BatchSender) !void {
+    if (self.count == 0) {
         return;
     }
 
     var send_buffer: [history.max_batch_payload + 1024]u8 = undefined;
-    const request_id: core.RequestId = @enumFromInt(sender.next_request);
-    sender.next_request += 1;
-    try sender.connection.send(sender.io, try core.encodeImportHistory(&send_buffer, .{
+    const request_id: core.RequestId = @enumFromInt(self.next_request);
+    self.next_request += 1;
+    try self.connection.send(self.io, try core.encodeImportHistory(&send_buffer, .{
         .request_id = request_id,
-        .source = sender.source,
-        .base_sequence = sender.sequence,
-        .entries = sender.entries[0..sender.count],
+        .source = self.source,
+        .base_sequence = self.sequence,
+        .entries = self.entries[0..self.count],
     }));
 
     var receive_buffer: [1024]u8 = undefined;
-    const response = try core.decodeServer(try sender.connection.receive(sender.io, &receive_buffer));
+    const response = try core.decodeServer(try self.connection.receive(self.io, &receive_buffer));
     switch (response) {
         .request_completed => {},
         .request_failed => |failure| {
@@ -59,8 +59,8 @@ pub fn finish(sender: *BatchSender) !void {
         else => return error.UnexpectedRuntimeResponse,
     }
 
-    sender.sequence += sender.count;
-    sender.total += sender.count;
-    sender.count = 0;
-    sender.used = 0;
+    self.sequence += self.count;
+    self.total += self.count;
+    self.count = 0;
+    self.used = 0;
 }

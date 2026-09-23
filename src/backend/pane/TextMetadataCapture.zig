@@ -18,21 +18,21 @@ pub fn init(allocator: std.mem.Allocator, rows: u16) !TextMetadataCapture {
     return .{ .current = current, .scratch = try core.TextMetadata.init(allocator, rows) };
 }
 
-pub fn deinit(capture: *TextMetadataCapture, allocator: std.mem.Allocator) void {
-    capture.current.deinit(allocator);
-    capture.scratch.deinit(allocator);
+pub fn deinit(self: *TextMetadataCapture, allocator: std.mem.Allocator) void {
+    self.current.deinit(allocator);
+    self.scratch.deinit(allocator);
 }
 
 /// The state must have just been updated while its terminal is exclusively borrowed.
 /// Example: `try capture.update(allocator, &render_state);`
-pub fn update(capture: *TextMetadataCapture, allocator: std.mem.Allocator, state: *const vt.RenderState) !void {
-    try capture.current.reserve(allocator, state.rows);
-    try capture.scratch.reserve(allocator, state.rows);
-    const previous = capture.current.view();
+pub fn update(self: *TextMetadataCapture, allocator: std.mem.Allocator, state: *const vt.RenderState) !void {
+    try self.current.reserve(allocator, state.rows);
+    try self.scratch.reserve(allocator, state.rows);
+    const previous = self.current.view();
     const rows = state.row_data.slice();
     const raw_rows = rows.items(.raw);
     const dirty = rows.items(.dirty);
-    const resized = previous.rows.len != state.rows or capture.cols != state.cols;
+    const resized = previous.rows.len != state.rows or self.cols != state.cols;
     var rebuild = resized or state.dirty == .full;
     var changed = rebuild;
     for (0..state.rows) |y| {
@@ -50,25 +50,25 @@ pub fn update(capture: *TextMetadataCapture, allocator: std.mem.Allocator, state
         return;
     }
 
-    const next = if (rebuild) capture.collect(state) else flags_only: {
-        capture.scratch.replace(previous);
+    const next = if (rebuild) self.collect(state) else flags_only: {
+        self.scratch.replace(previous);
         for (0..state.rows) |y| {
-            capture.scratch.buffer[core.text_metadata_limits.header_size + y] = @bitCast(rowFlags(state, y));
+            self.scratch.buffer[core.text_metadata_limits.header_size + y] = @bitCast(rowFlags(state, y));
         }
 
-        break :flags_only capture.scratch.view();
+        break :flags_only self.scratch.view();
     };
-    capture.cols = state.cols;
+    self.cols = state.cols;
     if (std.mem.eql(u8, previous.encoded, next.encoded)) {
         return;
     }
 
-    capture.current.replace(next);
-    revisions.advance(&capture.revision);
+    self.current.replace(next);
+    revisions.advance(&self.revision);
 }
 
-fn collect(capture: *TextMetadataCapture, state: *const vt.RenderState) core.TextMetadataView {
-    var builder = core.TextMetadataBuilder.init(capture.scratch.buffer, state.rows);
+fn collect(self: *TextMetadataCapture, state: *const vt.RenderState) core.TextMetadataView {
+    var builder = core.TextMetadataBuilder.init(self.scratch.buffer, state.rows);
     for (0..state.rows) |y| {
         builder.setRow(@intCast(y), rowFlags(state, y));
     }

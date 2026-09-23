@@ -12,6 +12,6 @@ store_path_len: u16 = 0,
 /// ```zig
 /// const destination = record.storePath();
 /// ```
-pub fn storePath(record: *const Record) []const u8 {
-    return record.store_path[0..record.store_path_len];
+pub fn storePath(self: *const Record) []const u8 {
+    return self.store_path[0..self.store_path_len];
 }

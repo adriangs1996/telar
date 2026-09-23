@@ -17,24 +17,24 @@ pub fn init(b: *std.Build) Coverage {
     };
 }
 
-pub fn instrumentModule(coverage: Coverage, module: *std.Build.Module) void {
-    if (coverage.enabled) {
+pub fn instrumentModule(self: Coverage, module: *std.Build.Module) void {
+    if (self.enabled) {
         module.fuzz = true;
     }
 }
 
-pub fn instrumentTest(coverage: Coverage, test_executable: *std.Build.Step.Compile) void {
-    if (!coverage.enabled) {
+pub fn instrumentTest(self: Coverage, test_executable: *std.Build.Step.Compile) void {
+    if (!self.enabled) {
         return;
     }
     test_executable.use_llvm = true;
     test_executable.root_module.fuzz = true;
     test_executable.root_module.link_libc = true;
-    test_executable.root_module.addObjectFile(.{ .cwd_relative = coverage.runtime_path.? });
+    test_executable.root_module.addObjectFile(.{ .cwd_relative = self.runtime_path.? });
 }
 
-pub fn excludeCSourceCoverage(coverage: Coverage, b: *std.Build, module: *std.Build.Module) void {
-    if (!coverage.enabled) {
+pub fn excludeCSourceCoverage(self: Coverage, b: *std.Build, module: *std.Build.Module) void {
+    if (!self.enabled) {
         return;
     }
     for (module.link_objects.items) |link_object| switch (link_object) {

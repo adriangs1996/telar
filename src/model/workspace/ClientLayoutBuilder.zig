@@ -7,32 +7,32 @@ layout: Layout = .{},
 iterator: *core.ClientLayoutNodeIterator,
 next_index: usize = 0,
 
-pub fn build(builder: *ClientLayoutBuilder, parent: ?layout_support.NodeIndex) !layout_support.NodeIndex {
-    const encoded = try builder.iterator.next() orelse return error.InvalidClientLayoutTree;
-    if (builder.next_index == layout_support.max_nodes) {
+pub fn build(self: *ClientLayoutBuilder, parent: ?layout_support.NodeIndex) !layout_support.NodeIndex {
+    const encoded = try self.iterator.next() orelse return error.InvalidClientLayoutTree;
+    if (self.next_index == layout_support.max_nodes) {
         return error.NodeLimitReached;
     }
 
-    const index: layout_support.NodeIndex = @intCast(builder.next_index);
-    builder.next_index += 1;
+    const index: layout_support.NodeIndex = @intCast(self.next_index);
+    self.next_index += 1;
     switch (encoded) {
         .pane => |pane| {
-            builder.layout.nodes[index] = .{
+            self.layout.nodes[index] = .{
                 .parent = parent,
                 .node = .{
                     .leaf = pane.id,
                 },
                 .surface = pane.surface,
             };
-            builder.layout.pane_count += 1;
+            self.layout.pane_count += 1;
         },
         .split => |split| {
-            builder.layout.nodes[index] = .{
+            self.layout.nodes[index] = .{
                 .parent = parent,
             };
-            const first = try builder.build(index);
-            const second = try builder.build(index);
-            builder.layout.nodes[index].node = .{
+            const first = try self.build(index);
+            const second = try self.build(index);
+            self.layout.nodes[index].node = .{
                 .split = .{
                     .axis = switch (split.axis) {
                         .horizontal => .horizontal,

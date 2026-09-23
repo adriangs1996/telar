@@ -16,6 +16,6 @@ encoded_tabs: []const u8,
 /// var tabs = snapshot.tabs();
 /// while (try tabs.next()) |tab| restore(tab);
 /// ```
-pub fn tabs(snapshot: ClientLayoutSnapshotView) ClientTabLayoutIterator {
-    return .{ .decoder = .init(snapshot.encoded_tabs), .remaining = snapshot.tab_count };
+pub fn tabs(self: ClientLayoutSnapshotView) ClientTabLayoutIterator {
+    return .{ .decoder = .init(self.encoded_tabs), .remaining = self.tab_count };
 }

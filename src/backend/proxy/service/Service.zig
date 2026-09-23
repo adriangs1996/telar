@@ -80,12 +80,12 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
 /// ```zig
 /// service.destroy();
 /// ```
-pub fn destroy(service: *Service) void {
-    const gpa = service.gpa;
-    service.listener.deinit(service.io);
-    service.interception.deinit();
-    std.crypto.secureZero(u8, std.mem.asBytes(service));
-    gpa.destroy(service);
+pub fn destroy(self: *Service) void {
+    const gpa = self.gpa;
+    self.listener.deinit(self.io);
+    self.interception.deinit();
+    std.crypto.secureZero(u8, std.mem.asBytes(self));
+    gpa.destroy(self);
 }
 
 /// Starts the listener worker. The returned worker owns the running accept
@@ -95,8 +95,8 @@ pub fn destroy(service: *Service) void {
 /// var worker = try service.start();
 /// defer service.cancel(&worker);
 /// ```
-pub fn start(service: *Service) !service_support.Worker {
-    return service.io.concurrent(run, .{service});
+pub fn start(self: *Service) !service_support.Worker {
+    return self.io.concurrent(run, .{self});
 }
 
 /// Cancels and joins the listener worker before service resources are
@@ -105,8 +105,8 @@ pub fn start(service: *Service) !service_support.Worker {
 /// ```zig
 /// service.cancel(&worker);
 /// ```
-pub fn cancel(service: *Service, worker: *service_support.Worker) void {
-    _ = worker.cancel(service.io) catch {};
+pub fn cancel(self: *Service, worker: *service_support.Worker) void {
+    _ = worker.cancel(self.io) catch {};
 }
 
 /// Closes observation delivery after the listener worker has stopped.
@@ -114,9 +114,9 @@ pub fn cancel(service: *Service, worker: *service_support.Worker) void {
 /// ```zig
 /// service.close();
 /// ```
-pub fn close(service: *Service) void {
-    service.observations.close(service.io);
-    service.captures.close(service.io);
+pub fn close(self: *Service) void {
+    self.observations.close(self.io);
+    self.captures.close(self.io);
 }
 
 /// Returns the stable connection and trust configuration inherited by
@@ -125,22 +125,22 @@ pub fn close(service: *Service) void {
 /// ```zig
 /// const client = service.clientConfiguration();
 /// ```
-pub fn clientConfiguration(service: *const Service) ClientConfiguration {
-    const trust = service.interception.clientTrust();
+pub fn clientConfiguration(self: *const Service) ClientConfiguration {
+    const trust = self.interception.clientTrust();
 
     return .{
-        .port = service.listener.port(),
+        .port = self.listener.port(),
         .certificate_path = trust.certificate_path,
         .bundle_path = trust.bundle_path,
     };
 }
 
-fn run(service: *Service) anyerror!void {
+fn run(self: *Service) anyerror!void {
     const path = core.enter(.observation);
     defer path.restore();
-    try service.configuration.beginServing(service.io);
+    try self.configuration.beginServing(self.io);
 
-    return service_support.ConnectionAdmission.run(service);
+    return service_support.ConnectionAdmission.run(self);
 }
 
 /// Waits for the next live observation. Events for credentials revoked
@@ -150,8 +150,8 @@ fn run(service: *Service) anyerror!void {
 /// var event = try service.receive(io);
 /// defer std.crypto.secureZero(u8, &event.credential.token);
 /// ```
-pub fn receive(service: *Service, io: std.Io) anyerror!MiddlewareEvent {
-    return service.observations.receive(io);
+pub fn receive(self: *Service, io: std.Io) anyerror!MiddlewareEvent {
+    return self.observations.receive(io);
 }
 
 /// Waits for one captured half whose pane credential remains live.
@@ -159,8 +159,8 @@ pub fn receive(service: *Service, io: std.Io) anyerror!MiddlewareEvent {
 /// ```zig
 /// const half = try service.receiveCapture(io);
 /// ```
-pub fn receiveCapture(service: *Service, io: std.Io) anyerror!*Half {
-    return service.captures.receive(io);
+pub fn receiveCapture(self: *Service, io: std.Io) anyerror!*Half {
+    return self.captures.receive(io);
 }
 
 /// Decodes a captured body outside the traffic relay task.
@@ -168,8 +168,8 @@ pub fn receiveCapture(service: *Service, io: std.Io) anyerror!*Half {
 /// ```zig
 /// service.decodeCapture(half);
 /// ```
-pub fn decodeCapture(service: *Service, half: *Half) void {
-    service.captures.decodeBody(half);
+pub fn decodeCapture(self: *Service, half: *Half) void {
+    self.captures.decodeBody(half);
 }
 
 /// Returns one lock-free snapshot without exposing queue, admission, or
@@ -178,11 +178,11 @@ pub fn decodeCapture(service: *Service, half: *Half) void {
 /// ```zig
 /// const snapshot = service.metrics();
 /// ```
-pub fn metrics(service: *const Service) Snapshot {
-    return service.telemetry.snapshot(.{
-        .connections = service.connection_slots.snapshot(),
-        .observations = service.observations.metrics(),
-        .captures = service.captures.metrics(),
+pub fn metrics(self: *const Service) Snapshot {
+    return self.telemetry.snapshot(.{
+        .connections = self.connection_slots.snapshot(),
+        .observations = self.observations.metrics(),
+        .captures = self.captures.metrics(),
     });
 }
 
@@ -192,8 +192,8 @@ pub fn metrics(service: *const Service) Snapshot {
 /// ```zig
 /// const url = try service.credentialUrl(&buffer, &credential);
 /// ```
-pub fn credentialUrl(service: *const Service, buffer: []u8, credential: *const Credential) ![]const u8 {
-    return identity.formatUrl(buffer, service.listener.port(), credential);
+pub fn credentialUrl(self: *const Service, buffer: []u8, credential: *const Credential) ![]const u8 {
+    return identity.formatUrl(buffer, self.listener.port(), credential);
 }
 
 /// Creates and registers a fresh capability for one pane generation. The
@@ -203,21 +203,21 @@ pub fn credentialUrl(service: *const Service, buffer: []u8, credential: *const C
 /// var credential = try service.registerPane(.{ .id = pane_id, .generation = 2 });
 /// defer std.crypto.secureZero(u8, &credential.token);
 /// ```
-pub fn registerPane(service: *Service, pane: Pane) !Credential {
+pub fn registerPane(self: *Service, pane: Pane) !Credential {
     var credential: Credential = .{
         .pane_id = pane.id,
         .pane_generation = pane.generation,
-        .token = identity.randomToken(service.io),
+        .token = identity.randomToken(self.io),
     };
     errdefer std.crypto.secureZero(u8, &credential.token);
 
-    try service.registerCredential(&credential);
+    try self.registerCredential(&credential);
 
     return credential;
 }
 
-fn registerCredential(service: *Service, credential: *const Credential) !void {
-    return service.credentials.register(service.io, credential);
+fn registerCredential(self: *Service, credential: *const Credential) !void {
+    return self.credentials.register(self.io, credential);
 }
 
 /// Revokes one exact credential, including rollback of an incomplete pane
@@ -226,8 +226,8 @@ fn registerCredential(service: *Service, credential: *const Credential) !void {
 /// ```zig
 /// service.unregisterCredential(&credential);
 /// ```
-pub fn unregisterCredential(service: *Service, credential: *const Credential) void {
-    service.credentials.remove(service.io, credential);
+pub fn unregisterCredential(self: *Service, credential: *const Credential) void {
+    self.credentials.remove(self.io, credential);
 }
 
 /// Revokes every credential issued for one exact pane generation.
@@ -235,6 +235,6 @@ pub fn unregisterCredential(service: *Service, credential: *const Credential) vo
 /// ```zig
 /// service.unregisterPane(.{ .id = pane_id, .generation = 2 });
 /// ```
-pub fn unregisterPane(service: *Service, pane: Pane) void {
-    service.credentials.removePane(service.io, .{ .id = pane.id, .generation = pane.generation });
+pub fn unregisterPane(self: *Service, pane: Pane) void {
+    self.credentials.removePane(self.io, .{ .id = pane.id, .generation = pane.generation });
 }

@@ -79,28 +79,28 @@ bom_prefix_len: usize = 0,
 ///     std.debug.assert(sink.count == 1);
 /// }
 /// ```
-pub fn feed(decoder: *Decoder, input: []const u8, sink: anytype) void {
+pub fn feed(self: *Decoder, input: []const u8, sink: anytype) void {
     for (input) |byte| {
-        if (!decoder.bom_checked) {
-            if (byte == sse.utf8_bom[decoder.bom_prefix_len]) {
-                decoder.bom_prefix_len += 1;
+        if (!self.bom_checked) {
+            if (byte == sse.utf8_bom[self.bom_prefix_len]) {
+                self.bom_prefix_len += 1;
 
-                if (decoder.bom_prefix_len == sse.utf8_bom.len) {
-                    decoder.bom_checked = true;
-                    decoder.bom_prefix_len = 0;
+                if (self.bom_prefix_len == sse.utf8_bom.len) {
+                    self.bom_checked = true;
+                    self.bom_prefix_len = 0;
                 }
 
                 continue;
             }
 
-            const prefix_len = decoder.bom_prefix_len;
-            decoder.bom_checked = true;
-            decoder.bom_prefix_len = 0;
+            const prefix_len = self.bom_prefix_len;
+            self.bom_checked = true;
+            self.bom_prefix_len = 0;
             for (sse.utf8_bom[0..prefix_len]) |prefix_byte| {
-                decoder.consumeByte(prefix_byte, sink);
+                self.consumeByte(prefix_byte, sink);
             }
         }
-        decoder.consumeByte(byte, sink);
+        self.consumeByte(byte, sink);
     }
 }
 
@@ -121,8 +121,8 @@ pub fn feed(decoder: *Decoder, input: []const u8, sink: anytype) void {
 ///     defer decoder.deinit();
 /// }
 /// ```
-pub fn deinit(decoder: *Decoder) void {
-    std.crypto.secureZero(u8, std.mem.asBytes(decoder));
+pub fn deinit(self: *Decoder) void {
+    std.crypto.secureZero(u8, std.mem.asBytes(self));
 }
 
 /// Consumes one byte after the optional stream-start BOM is resolved.
@@ -131,33 +131,33 @@ pub fn deinit(decoder: *Decoder) void {
 /// of oversized lines, and appends ordinary bytes to the current line. It
 /// may emit an event when the byte completes a blank line. It never handles
 /// BOM state; `feed` owns that stream-level decision.
-fn consumeByte(decoder: *Decoder, byte: u8, sink: anytype) void {
+fn consumeByte(self: *Decoder, byte: u8, sink: anytype) void {
     const byte_is_lf = byte == '\n';
     const byte_is_cr = byte == '\r';
 
-    if (decoder.swallow_lf) {
-        decoder.swallow_lf = false;
+    if (self.swallow_lf) {
+        self.swallow_lf = false;
         if (byte_is_lf) {
             return;
         }
     }
 
-    if (decoder.discarding_line) {
+    if (self.discarding_line) {
         if (byte_is_lf or byte_is_cr) {
-            decoder.discarding_line = false;
-            decoder.resetLine();
-            decoder.swallow_lf = byte_is_cr;
+            self.discarding_line = false;
+            self.resetLine();
+            self.swallow_lf = byte_is_cr;
         }
         return;
     }
 
     switch (byte) {
         '\r' => {
-            decoder.finishLine(sink);
-            decoder.swallow_lf = true;
+            self.finishLine(sink);
+            self.swallow_lf = true;
         },
-        '\n' => decoder.finishLine(sink),
-        else => decoder.pushByte(byte),
+        '\n' => self.finishLine(sink),
+        else => self.pushByte(byte),
     }
 }
 
@@ -171,31 +171,31 @@ fn consumeByte(decoder: *Decoder, byte: u8, sink: anytype) void {
 ///
 /// `feed` must not call this method for a discarded oversized line because
 /// that line has no valid field to process.
-fn finishLine(decoder: *Decoder, sink: anytype) void {
-    defer decoder.resetLine();
+fn finishLine(self: *Decoder, sink: anytype) void {
+    defer self.resetLine();
 
-    if (!decoder.isLineEmpty()) {
-        decoder.processLine();
+    if (!self.isLineEmpty()) {
+        self.processLine();
         return;
     }
 
-    if (decoder.has_data) {
-        const event_name = if (decoder.isEventNameEmpty())
+    if (self.has_data) {
+        const event_name = if (self.isEventNameEmpty())
             "message"
         else
-            decoder.getEventName();
+            self.getEventName();
 
         sink.emit(.{
-            .data = decoder.getEventData(),
+            .data = self.getEventData(),
             .name = event_name,
-            .truncated = decoder.event_truncated,
+            .truncated = self.event_truncated,
         });
     }
-    decoder.resetEvent();
+    self.resetEvent();
 }
 
-fn isLineEmpty(decoder: *Decoder) bool {
-    return decoder.line_len == 0;
+fn isLineEmpty(self: *Decoder) bool {
+    return self.line_len == 0;
 }
 
 /// Appends one non-terminator byte to the current line without allocating.
@@ -203,45 +203,45 @@ fn isLineEmpty(decoder: *Decoder) bool {
 /// Once the fixed line buffer is full, this method processes the retained
 /// prefix as a truncated field, then ignores the tail until the next line
 /// terminator. The prefix is processed exactly once.
-fn pushByte(decoder: *Decoder, byte: u8) void {
-    if (decoder.line_len < sse.max_line_bytes) {
-        decoder.line[decoder.line_len] = byte;
-        decoder.line_len += 1;
+fn pushByte(self: *Decoder, byte: u8) void {
+    if (self.line_len < sse.max_line_bytes) {
+        self.line[self.line_len] = byte;
+        self.line_len += 1;
     } else {
-        decoder.event_truncated = true;
-        decoder.processLine();
-        decoder.resetLine();
-        decoder.discarding_line = true;
+        self.event_truncated = true;
+        self.processLine();
+        self.resetLine();
+        self.discarding_line = true;
     }
 }
 
 /// Clears pending event metadata without wiping its buffers.
-fn resetEvent(decoder: *Decoder) void {
-    decoder.event_name_len = 0;
-    decoder.event_data_len = 0;
-    decoder.has_data = false;
-    decoder.event_truncated = false;
+fn resetEvent(self: *Decoder) void {
+    self.event_name_len = 0;
+    self.event_data_len = 0;
+    self.has_data = false;
+    self.event_truncated = false;
 }
 
 /// Clears the current line length without wiping its buffer.
-fn resetLine(decoder: *Decoder) void {
-    decoder.line_len = 0;
+fn resetLine(self: *Decoder) void {
+    self.line_len = 0;
 }
 
-fn isEventNameEmpty(decoder: *Decoder) bool {
-    return decoder.event_name_len == 0;
+fn isEventNameEmpty(self: *Decoder) bool {
+    return self.event_name_len == 0;
 }
 
-fn getEventName(decoder: *Decoder) []const u8 {
-    return decoder.event_name[0..decoder.event_name_len];
+fn getEventName(self: *Decoder) []const u8 {
+    return self.event_name[0..self.event_name_len];
 }
 
-fn getEventData(decoder: *Decoder) []const u8 {
-    return decoder.event_data[0..decoder.event_data_len];
+fn getEventData(self: *Decoder) []const u8 {
+    return self.event_data[0..self.event_data_len];
 }
 
-pub fn getLine(decoder: *Decoder) []const u8 {
-    return decoder.line[0..decoder.line_len];
+pub fn getLine(self: *Decoder) []const u8 {
+    return self.line[0..self.line_len];
 }
 
 /// Interprets the buffered SSE line and updates the pending event.
@@ -252,8 +252,8 @@ pub fn getLine(decoder: *Decoder) []const u8 {
 /// value. Comment lines and unknown fields are ignored. An `event` field
 /// replaces the pending name. A `data` field appends its value, inserting
 /// one LF between consecutive data fields. This method never emits an event.
-fn processLine(decoder: *Decoder) void {
-    const line = decoder.getLine();
+fn processLine(self: *Decoder) void {
+    const line = self.getLine();
     const colon = std.mem.indexOfScalar(u8, line, ':');
     const field_name = line[0..(colon orelse line.len)];
     var field_value = if (colon) |index|
@@ -266,12 +266,12 @@ fn processLine(decoder: *Decoder) void {
     }
 
     if (std.mem.eql(u8, field_name, "event")) {
-        decoder.setEventName(field_value);
+        self.setEventName(field_value);
     } else if (std.mem.eql(u8, field_name, "data")) {
-        if (decoder.has_data) {
-            decoder.appendData("\n");
+        if (self.has_data) {
+            self.appendData("\n");
         }
-        decoder.appendData(field_value);
+        self.appendData(field_value);
     }
 }
 
@@ -280,15 +280,15 @@ fn processLine(decoder: *Decoder) void {
 /// An empty value clears the name, which makes `finishLine` use `"message"`.
 /// If the value exceeds `max_event_name_bytes`, this method keeps the
 /// prefix that fits and marks the pending event as truncated.
-fn setEventName(decoder: *Decoder, event_name: []const u8) void {
-    decoder.event_name_len = 0;
+fn setEventName(self: *Decoder, event_name: []const u8) void {
+    self.event_name_len = 0;
     const n = @min(sse.max_event_name_bytes, event_name.len);
     if (n < event_name.len) {
-        decoder.event_truncated = true;
+        self.event_truncated = true;
     }
 
-    @memcpy(decoder.event_name[0..n], event_name[0..n]);
-    decoder.event_name_len = n;
+    @memcpy(self.event_name[0..n], event_name[0..n]);
+    self.event_name_len = n;
 }
 
 /// Appends bytes to the bounded event-data buffer.
@@ -297,14 +297,14 @@ fn setEventName(decoder: *Decoder, event_name: []const u8) void {
 /// `bytes` is empty. If the value does not fit, the method copies the
 /// prefix that fits and marks the pending event as truncated. It does not
 /// add separators. `processLine` inserts the LF between data fields.
-fn appendData(decoder: *Decoder, bytes: []const u8) void {
-    const room = sse.max_data_bytes - decoder.event_data_len;
+fn appendData(self: *Decoder, bytes: []const u8) void {
+    const room = sse.max_data_bytes - self.event_data_len;
     const n = @min(room, bytes.len);
     if (n < bytes.len) {
-        decoder.event_truncated = true;
+        self.event_truncated = true;
     }
 
-    @memcpy(decoder.event_data[decoder.event_data_len..][0..n], bytes[0..n]);
-    decoder.event_data_len += n;
-    decoder.has_data = true;
+    @memcpy(self.event_data[self.event_data_len..][0..n], bytes[0..n]);
+    self.event_data_len += n;
+    self.has_data = true;
 }

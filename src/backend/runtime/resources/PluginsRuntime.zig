@@ -11,8 +11,8 @@ pub const InitOptions = @import("PluginsRuntimeInitOptions.zig");
 /// var runtime: Runtime = undefined;
 /// try runtime.init(.{ .io = io, .gpa = gpa, .specs = specs });
 /// ```
-pub fn init(runtime: *Runtime, options: InitOptions) !void {
-    try runtime.service_value.init(.{ .io = options.io, .gpa = options.gpa, .specs = options.specs });
+pub fn init(self: *Runtime, options: InitOptions) !void {
+    try self.service_value.init(.{ .io = options.io, .gpa = options.gpa, .specs = options.specs });
 }
 
 /// Borrows the worker service while the runtime resource is alive.
@@ -20,8 +20,8 @@ pub fn init(runtime: *Runtime, options: InitOptions) !void {
 /// ```zig
 /// const service = runtime.service();
 /// ```
-pub fn service(runtime: *Runtime) *Service {
-    return &runtime.service_value;
+pub fn service(self: *Runtime) *Service {
+    return &self.service_value;
 }
 
 /// Stops every worker and releases its bounded queues.
@@ -29,6 +29,6 @@ pub fn service(runtime: *Runtime) *Service {
 /// ```zig
 /// runtime.deinit();
 /// ```
-pub fn deinit(runtime: *Runtime) void {
-    runtime.service_value.deinit();
+pub fn deinit(self: *Runtime) void {
+    self.service_value.deinit();
 }

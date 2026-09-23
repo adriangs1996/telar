@@ -19,45 +19,45 @@ pub fn io(_: *Capture) std.Io {
     return std.testing.io;
 }
 
-pub fn relayRequest(capture: *Capture, settings: *Settings) Stats {
+pub fn relayRequest(self: *Capture, settings: *Settings) Stats {
     settings.child.max_frame_size.store(32 * 1024, .seq_cst);
 
-    if (capture.request_started) |started| {
-        started.putOneUncancelable(std.testing.io, 0) catch return capture.request_stats;
+    if (self.request_started) |started| {
+        started.putOneUncancelable(std.testing.io, 0) catch return self.request_stats;
     }
 
-    if (capture.request_release) |release| {
+    if (self.request_release) |release| {
         _ = release.getOne(std.testing.io) catch {
-            capture.request_canceled.store(true, .release);
+            self.request_canceled.store(true, .release);
         };
     }
 
-    return capture.request_stats;
+    return self.request_stats;
 }
 
-pub fn relayResponse(capture: *Capture, settings: *Settings) Stats {
-    if (capture.request_started) |started| {
-        _ = started.getOne(std.testing.io) catch return capture.response_stats;
-        capture.response_saw_request = true;
+pub fn relayResponse(self: *Capture, settings: *Settings) Stats {
+    if (self.request_started) |started| {
+        _ = started.getOne(std.testing.io) catch return self.response_stats;
+        self.response_saw_request = true;
     }
 
-    capture.response_saw_shared_settings = settings.child.max_frame_size.load(.seq_cst) == 32 * 1024;
-    return capture.response_stats;
+    self.response_saw_shared_settings = settings.child.max_frame_size.load(.seq_cst) == 32 * 1024;
+    return self.response_stats;
 }
 
-pub fn recordDecodeFailure(capture: *Capture, direction: relay.Direction) void {
-    capture.record(switch (direction) {
+pub fn recordDecodeFailure(self: *Capture, direction: relay.Direction) void {
+    self.record(switch (direction) {
         .request => .request_decode_failure,
         .response => .response_decode_failure,
     });
 }
 
-pub fn settle(capture: *Capture) void {
-    capture.record(.settle);
+pub fn settle(self: *Capture) void {
+    self.record(.settle);
 }
 
-fn record(capture: *Capture, step: connection.Step) void {
-    std.debug.assert(capture.step_len < capture.steps.len);
-    capture.steps[capture.step_len] = step;
-    capture.step_len += 1;
+fn record(self: *Capture, step: connection.Step) void {
+    std.debug.assert(self.step_len < self.steps.len);
+    self.steps[self.step_len] = step;
+    self.step_len += 1;
 }

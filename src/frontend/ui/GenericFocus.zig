@@ -50,34 +50,34 @@ pub fn Type(comptime Id: type, comptime capacity: usize) type {
         /// top of the list.
         remembered: [max_layers]?Id = @splat(null),
 
-        pub fn beginFrame(f: *Self) void {
-            f.len = 0;
-            f.layer = 0;
-            f.top = 0;
+        pub fn beginFrame(self: *Self) void {
+            self.len = 0;
+            self.layer = 0;
+            self.top = 0;
         }
 
-        pub fn beginLayer(f: *Self) void {
-            if (f.layer + 1 >= max_layers) {
+        pub fn beginLayer(self: *Self) void {
+            if (self.layer + 1 >= max_layers) {
                 return;
             }
-            f.layer += 1;
-            f.top = @max(f.top, f.layer);
+            self.layer += 1;
+            self.top = @max(self.top, self.layer);
         }
 
-        pub fn endLayer(f: *Self) void {
-            if (f.layer == 0) {
+        pub fn endLayer(self: *Self) void {
+            if (self.layer == 0) {
                 return;
             }
-            f.layer -= 1;
+            self.layer -= 1;
         }
 
         /// Declares that `id` can hold the keyboard. Order is tab order.
-        pub fn register(f: *Self, id: Id) void {
-            if (f.len == capacity) {
+        pub fn register(self: *Self, id: Id) void {
+            if (self.len == capacity) {
                 return;
             }
-            f.entries[f.len] = .{ .id = id, .layer = f.layer };
-            f.len += 1;
+            self.entries[self.len] = .{ .id = id, .layer = self.layer };
+            self.len += 1;
         }
 
         /// Reconciles the surviving focus with what was actually drawn.
@@ -85,68 +85,68 @@ pub fn Type(comptime Id: type, comptime capacity: usize) type {
         /// Two things go wrong without it, and both look like a dead keyboard:
         /// the focused control stopped being drawn (a dialog closed, a list
         /// scrolled), or a new layer appeared and focus stayed underneath it.
-        pub fn endFrame(f: *Self) void {
-            if (f.len == 0) {
-                f.current = null;
+        pub fn endFrame(self: *Self) void {
+            if (self.len == 0) {
+                self.current = null;
                 return;
             }
-            if (f.current) |id| {
-                if (f.layerOf(id)) |layer| {
-                    if (layer == f.top) {
+            if (self.current) |id| {
+                if (self.layerOf(id)) |layer| {
+                    if (layer == self.top) {
                         return;
                     }
                     // Focus is valid but buried. Remember where, so closing
                     // whatever covered it puts the keyboard back.
-                    f.remembered[layer] = id;
+                    self.remembered[layer] = id;
                 }
             }
             // Prefer where this layer was left, then the declared starting
             // point, then whatever drew first.
-            if (f.remembered[f.top]) |id| {
-                if (f.layerOf(id)) |layer| {
-                    if (layer == f.top) {
-                        f.current = id;
+            if (self.remembered[self.top]) |id| {
+                if (self.layerOf(id)) |layer| {
+                    if (layer == self.top) {
+                        self.current = id;
                         return;
                     }
                 }
             }
-            if (f.initial) |id| {
-                if (f.layerOf(id)) |layer| {
-                    if (layer == f.top) {
-                        f.current = id;
+            if (self.initial) |id| {
+                if (self.layerOf(id)) |layer| {
+                    if (layer == self.top) {
+                        self.current = id;
                         return;
                     }
                 }
             }
-            f.current = f.firstIn(f.top);
+            self.current = self.firstIn(self.top);
         }
 
-        pub fn focused(f: *const Self) ?Id {
-            return f.current;
+        pub fn focused(self: *const Self) ?Id {
+            return self.current;
         }
 
         /// Whether `id` holds the keyboard, for drawing a focus ring.
-        pub fn has(f: *const Self, id: Id) bool {
-            const current = f.current orelse return false;
+        pub fn has(self: *const Self, id: Id) bool {
+            const current = self.current orelse return false;
             return std.meta.eql(current, id);
         }
 
         /// Moves focus explicitly - a click on a control, or an action that
         /// puts the keyboard somewhere. Ignored for anything not drawn, so a
         /// stale id cannot strand the keyboard.
-        pub fn set(f: *Self, id: Id) void {
-            if (f.layerOf(id)) |layer| {
-                f.remembered[layer] = id;
-                f.current = id;
+        pub fn set(self: *Self, id: Id) void {
+            if (self.layerOf(id)) |layer| {
+                self.remembered[layer] = id;
+                self.current = id;
             }
         }
 
-        pub fn next(f: *Self) void {
-            f.step(1);
+        pub fn next(self: *Self) void {
+            self.step(1);
         }
 
-        pub fn prev(f: *Self) void {
-            f.step(-1);
+        pub fn prev(self: *Self) void {
+            self.step(-1);
         }
 
         /// Cycles within the top layer, wrapping.
@@ -154,26 +154,26 @@ pub fn Type(comptime Id: type, comptime capacity: usize) type {
         /// Confined to one layer on purpose: tabbing out of a modal into the
         /// list behind it is how a user ends up typing into something they
         /// cannot see.
-        fn step(f: *Self, delta: i32) void {
-            const count = f.countIn(f.top);
+        fn step(self: *Self, delta: i32) void {
+            const count = self.countIn(self.top);
             if (count == 0) {
                 return;
             }
 
-            const at = f.indexIn(f.top, f.current) orelse {
-                f.current = f.firstIn(f.top);
+            const at = self.indexIn(self.top, self.current) orelse {
+                self.current = self.firstIn(self.top);
                 return;
             };
             const size: i32 = @intCast(count);
             const moved = @mod(@as(i32, @intCast(at)) + delta + size, size);
-            f.current = f.nthIn(f.top, @intCast(moved));
-            if (f.current) |id| {
-                f.remembered[f.top] = id;
+            self.current = self.nthIn(self.top, @intCast(moved));
+            if (self.current) |id| {
+                self.remembered[self.top] = id;
             }
         }
 
-        fn layerOf(f: *const Self, id: Id) ?u8 {
-            for (f.entries[0..f.len]) |entry| {
+        fn layerOf(self: *const Self, id: Id) ?u8 {
+            for (self.entries[0..self.len]) |entry| {
                 if (std.meta.eql(entry.id, id)) {
                     return entry.layer;
                 }
@@ -181,9 +181,9 @@ pub fn Type(comptime Id: type, comptime capacity: usize) type {
             return null;
         }
 
-        fn countIn(f: *const Self, layer: u8) usize {
+        fn countIn(self: *const Self, layer: u8) usize {
             var total: usize = 0;
-            for (f.entries[0..f.len]) |entry| {
+            for (self.entries[0..self.len]) |entry| {
                 if (entry.layer == layer) {
                     total += 1;
                 }
@@ -191,13 +191,13 @@ pub fn Type(comptime Id: type, comptime capacity: usize) type {
             return total;
         }
 
-        fn firstIn(f: *const Self, layer: u8) ?Id {
-            return f.nthIn(layer, 0);
+        fn firstIn(self: *const Self, layer: u8) ?Id {
+            return self.nthIn(layer, 0);
         }
 
-        fn nthIn(f: *const Self, layer: u8, n: usize) ?Id {
+        fn nthIn(self: *const Self, layer: u8, n: usize) ?Id {
             var seen: usize = 0;
-            for (f.entries[0..f.len]) |entry| {
+            for (self.entries[0..self.len]) |entry| {
                 if (entry.layer != layer) {
                     continue;
                 }
@@ -209,10 +209,10 @@ pub fn Type(comptime Id: type, comptime capacity: usize) type {
             return null;
         }
 
-        fn indexIn(f: *const Self, layer: u8, id: ?Id) ?usize {
+        fn indexIn(self: *const Self, layer: u8, id: ?Id) ?usize {
             const wanted = id orelse return null;
             var seen: usize = 0;
-            for (f.entries[0..f.len]) |entry| {
+            for (self.entries[0..self.len]) |entry| {
                 if (entry.layer != layer) {
                     continue;
                 }

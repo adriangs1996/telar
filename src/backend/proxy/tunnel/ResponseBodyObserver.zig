@@ -25,28 +25,28 @@ pub fn init(exchange: *Exchange, options: ResponseObserverOptions) ResponseBodyO
 /// ```zig
 /// observer.observe(.{ .payload = bytes, .forwarded_bytes = bytes.len });
 /// ```
-pub fn observe(observer: *ResponseBodyObserver, fragment: Fragment) void {
-    if (observer.capture_half) |half| {
+pub fn observe(self: *ResponseBodyObserver, fragment: Fragment) void {
+    if (self.capture_half) |half| {
         _ = half.append(.response_body, fragment.payload);
     }
 
     if (fragment.forwarded_bytes != 0) {
-        observer.exchange.publish(.response_activity, 0);
+        self.exchange.publish(.response_activity, 0);
     }
 
-    if (observer.inspect_payload and fragment.payload.len != 0) {
-        if (observer.response.dialect == .anthropic_messages) {
-            observer.exchange.record(.claude_sse_payload_fragment);
+    if (self.inspect_payload and fragment.payload.len != 0) {
+        if (self.response.dialect == .anthropic_messages) {
+            self.exchange.record(.claude_sse_payload_fragment);
         }
 
-        if (observer.response.feed(fragment.payload)) {
-            observer.exchange.publish(.provider_turn_completed, 0);
+        if (self.response.feed(fragment.payload)) {
+            self.exchange.publish(.provider_turn_completed, 0);
         }
     }
 }
 
-pub fn deinit(observer: *ResponseBodyObserver) void {
-    observer.response.deinit();
-    observer.inspect_payload = false;
-    observer.capture_half = null;
+pub fn deinit(self: *ResponseBodyObserver) void {
+    self.response.deinit();
+    self.inspect_payload = false;
+    self.capture_half = null;
 }

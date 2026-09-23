@@ -27,29 +27,29 @@ landed: ?Landing = null,
 
 /// Releases the landed image, if any, at client teardown.
 /// Example: `gui.chrome.favicons.deinit(gpa);`
-pub fn deinit(favicons: *Favicons, gpa: std.mem.Allocator) void {
-    favicons.dropLanding(gpa);
+pub fn deinit(self: *Favicons, gpa: std.mem.Allocator) void {
+    self.dropLanding(gpa);
 }
 
 /// Keeps one completed lookup until the next preparation places it.
 /// Example: `gui.chrome.favicons.land(gpa, .{ .workspace = id, .image = image });`
-pub fn land(favicons: *Favicons, gpa: std.mem.Allocator, landing: Landing) void {
-    favicons.dropLanding(gpa);
-    favicons.landed = landing;
+pub fn land(self: *Favicons, gpa: std.mem.Allocator, landing: Landing) void {
+    self.dropLanding(gpa);
+    self.landed = landing;
 }
 
 /// Follows the renderer's page and places the landed image into it. A
 /// different page forgets every placement.
 /// Example: `favicons.refresh(gpa, &renderer.sprites.?);`
-pub fn refresh(favicons: *Favicons, gpa: std.mem.Allocator, page: *SpritePage) void {
-    if (favicons.page != page.pixels.ptr) {
-        favicons.page = page.pixels.ptr;
-        favicons.count = 0;
+pub fn refresh(self: *Favicons, gpa: std.mem.Allocator, page: *SpritePage) void {
+    if (self.page != page.pixels.ptr) {
+        self.page = page.pixels.ptr;
+        self.count = 0;
     }
 
-    const landing = favicons.landed orelse return;
-    defer favicons.dropLanding(gpa);
-    const entry = favicons.find(landing.workspace) orelse return;
+    const landing = self.landed orelse return;
+    defer self.dropLanding(gpa);
+    const entry = self.find(landing.workspace) orelse return;
     const image = landing.image orelse {
         entry.state = .missing;
         return;
@@ -70,10 +70,10 @@ pub fn refresh(favicons: *Favicons, gpa: std.mem.Allocator, page: *SpritePage) v
 /// The next workspace of the list that still needs a lookup, registering
 /// new workspaces and evicting departed ones when the table is full.
 /// Example: `if (favicons.next(&model.workspace_list_snapshot)) |want| try request(want);`
-pub fn next(favicons: *Favicons, workspaces: *const data.WorkspaceListSnapshot) ?Want {
+pub fn next(self: *Favicons, workspaces: *const data.WorkspaceListSnapshot) ?Want {
     for (0..workspaces.count) |index| {
         const workspace = workspaces.workspaceAt(index);
-        const entry = favicons.find(workspace) orelse favicons.register(workspace, workspaces) orelse continue;
+        const entry = self.find(workspace) orelse self.register(workspace, workspaces) orelse continue;
         if (entry.state == .wanted) {
             return .{ .workspace = workspace, .cwd = workspaces.pathAt(index) };
         }
@@ -84,8 +84,8 @@ pub fn next(favicons: *Favicons, workspaces: *const data.WorkspaceListSnapshot) 
 
 /// Marks a workspace's lookup as accepted by the controller.
 /// Example: `if (started) favicons.started(want.workspace);`
-pub fn started(favicons: *Favicons, workspace: core.WorkspaceId) void {
-    if (favicons.find(workspace)) |entry| {
+pub fn started(self: *Favicons, workspace: core.WorkspaceId) void {
+    if (self.find(workspace)) |entry| {
         entry.state = .pending;
     }
 }
@@ -93,12 +93,12 @@ pub fn started(favicons: *Favicons, workspace: core.WorkspaceId) void {
 /// The placed favicon of a location; worktrees and unresolved workspaces
 /// draw the generic glyph.
 /// Example: `card.project_icon = favicons.sprite(agent.location.workspace);`
-pub fn sprite(favicons: *const Favicons, location: core.WorkspaceLocation) ?Sprite {
+pub fn sprite(self: *const Favicons, location: core.WorkspaceLocation) ?Sprite {
     const workspace = switch (location) {
         .workspace => |id| id,
         .worktree => return null,
     };
-    for (favicons.entries[0..favicons.count]) |entry| {
+    for (self.entries[0..self.count]) |entry| {
         if (entry.workspace == workspace) {
             return if (entry.state == .resolved) entry.sprite else null;
         }
@@ -107,8 +107,8 @@ pub fn sprite(favicons: *const Favicons, location: core.WorkspaceLocation) ?Spri
     return null;
 }
 
-pub fn stateOf(favicons: *const Favicons, workspace: core.WorkspaceId) ?Entry.State {
-    for (favicons.entries[0..favicons.count]) |entry| {
+pub fn stateOf(self: *const Favicons, workspace: core.WorkspaceId) ?Entry.State {
+    for (self.entries[0..self.count]) |entry| {
         if (entry.workspace == workspace) {
             return entry.state;
         }
@@ -117,8 +117,8 @@ pub fn stateOf(favicons: *const Favicons, workspace: core.WorkspaceId) ?Entry.St
     return null;
 }
 
-fn find(favicons: *Favicons, workspace: core.WorkspaceId) ?*Entry {
-    for (favicons.entries[0..favicons.count]) |*entry| {
+fn find(self: *Favicons, workspace: core.WorkspaceId) ?*Entry {
+    for (self.entries[0..self.count]) |*entry| {
         if (entry.workspace == workspace) {
             return entry;
         }
@@ -129,32 +129,32 @@ fn find(favicons: *Favicons, workspace: core.WorkspaceId) ?*Entry {
 
 // Entries outlive their workspace so a page cell is never placed twice;
 // they leave only when the table is full and a new workspace arrives.
-fn register(favicons: *Favicons, workspace: core.WorkspaceId, workspaces: *const data.WorkspaceListSnapshot) ?*Entry {
-    if (favicons.count == capacity) {
+fn register(self: *Favicons, workspace: core.WorkspaceId, workspaces: *const data.WorkspaceListSnapshot) ?*Entry {
+    if (self.count == capacity) {
         var kept: u8 = 0;
-        for (favicons.entries[0..favicons.count]) |entry| {
+        for (self.entries[0..self.count]) |entry| {
             if (workspaces.indexOf(entry.workspace) != null) {
-                favicons.entries[kept] = entry;
+                self.entries[kept] = entry;
                 kept += 1;
             }
         }
 
-        favicons.count = kept;
-        if (favicons.count == capacity) {
+        self.count = kept;
+        if (self.count == capacity) {
             return null;
         }
     }
 
-    favicons.entries[favicons.count] = .{ .workspace = workspace };
-    favicons.count += 1;
-    return &favicons.entries[favicons.count - 1];
+    self.entries[self.count] = .{ .workspace = workspace };
+    self.count += 1;
+    return &self.entries[self.count - 1];
 }
 
-fn dropLanding(favicons: *Favicons, gpa: std.mem.Allocator) void {
-    const landing = favicons.landed orelse return;
+fn dropLanding(self: *Favicons, gpa: std.mem.Allocator) void {
+    const landing = self.landed orelse return;
     if (landing.image) |image| {
         gpa.destroy(image);
     }
 
-    favicons.landed = null;
+    self.landed = null;
 }

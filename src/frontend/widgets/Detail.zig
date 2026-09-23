@@ -32,6 +32,6 @@ pub fn init(content: Inspection) Detail {
     return detail;
 }
 
-pub fn texts(detail: *const Detail) [8][]const u8 {
-    return .{ detail.header[0..detail.header_len], detail.content.entry.command, detail.content.entry.cwd, detail.author[0..detail.author_len], detail.time[0..detail.time_len], detail.duration[0..detail.duration_len], detail.content.output_hint, detail.content.output };
+pub fn texts(self: *const Detail) [8][]const u8 {
+    return .{ self.header[0..self.header_len], self.content.entry.command, self.content.entry.cwd, self.author[0..self.author_len], self.time[0..self.time_len], self.duration[0..self.duration_len], self.content.output_hint, self.content.output };
 }

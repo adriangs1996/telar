@@ -15,6 +15,6 @@ encoded_tabs: []const u8,
 /// var tabs = update.tabs();
 /// while (try tabs.next()) |tab| use(tab);
 /// ```
-pub fn tabs(update: ClientLayoutUpdateView) ClientTabLayoutIterator {
-    return .{ .decoder = .init(update.encoded_tabs), .remaining = update.tab_count };
+pub fn tabs(self: ClientLayoutUpdateView) ClientTabLayoutIterator {
+    return .{ .decoder = .init(self.encoded_tabs), .remaining = self.tab_count };
 }

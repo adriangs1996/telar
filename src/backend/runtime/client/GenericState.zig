@@ -20,8 +20,8 @@ pub fn Type(comptime Connection: type) type {
         ///     return;
         /// }
         /// ```
-        pub fn isPending(state: *const Self) bool {
-            return state.pending;
+        pub fn isPending(self: *const Self) bool {
+            return self.pending;
         }
 
         /// Returns the connection borrowed by the active handshake, if any.
@@ -32,12 +32,12 @@ pub fn Type(comptime Connection: type) type {
         ///     connection.shutdown(io);
         /// }
         /// ```
-        pub fn pendingConnection(state: *Self) ?*Connection {
-            if (!state.pending) {
+        pub fn pendingConnection(self: *Self) ?*Connection {
+            if (!self.pending) {
                 return null;
             }
 
-            return &state.slot.?;
+            return &self.slot.?;
         }
 
         /// Transfers the pending connection out after its actor has completed
@@ -47,18 +47,18 @@ pub fn Type(comptime Connection: type) type {
         /// var connection = state.takePending();
         /// defer connection.deinit(io);
         /// ```
-        pub fn takePending(state: *Self) Connection {
-            std.debug.assert(state.pending and state.slot != null);
-            const connection = state.slot.?;
-            state.slot = null;
-            state.pending = false;
+        pub fn takePending(self: *Self) Connection {
+            std.debug.assert(self.pending and self.slot != null);
+            const connection = self.slot.?;
+            self.slot = null;
+            self.pending = false;
             return connection;
         }
 
-        pub fn begin(state: *Self, connection: Connection) void {
-            std.debug.assert(!state.pending and state.slot == null);
-            state.slot = connection;
-            state.pending = true;
+        pub fn begin(self: *Self, connection: Connection) void {
+            std.debug.assert(!self.pending and self.slot == null);
+            self.slot = connection;
+            self.pending = true;
         }
     };
 }

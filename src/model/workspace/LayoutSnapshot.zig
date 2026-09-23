@@ -19,16 +19,16 @@ storage: [core.max_panes_per_tab]View = undefined,
 len: u8 = 0,
 index: layout_support.ViewIndex = .{},
 
-pub fn views(snapshot: *const Snapshot) []const View {
-    return snapshot.storage[0..snapshot.len];
+pub fn views(self: *const Snapshot) []const View {
+    return self.storage[0..self.len];
 }
 
-pub fn find(snapshot: *const Snapshot, pane_id: core.PaneId) ?View {
+pub fn find(self: *const Snapshot, pane_id: core.PaneId) ?View {
     if (pane_id == .invalid) {
         return null;
     }
-    const view_index = snapshot.index.get(core.raw(pane_id)) orelse return null;
-    return snapshot.storage[view_index];
+    const view_index = self.index.get(core.raw(pane_id)) orelse return null;
+    return self.storage[view_index];
 }
 
 /// Shortens one pane and returns the area immediately below it. The other
@@ -37,10 +37,10 @@ pub fn find(snapshot: *const Snapshot, pane_id: core.PaneId) ?View {
 /// ```zig
 /// const shelf = snapshot.reserveBelowPane(reservation);
 /// ```
-pub fn reserveBelowPane(snapshot: *Snapshot, reservation: ?PaneBottomReservation) core.Rect {
+pub fn reserveBelowPane(self: *Snapshot, reservation: ?PaneBottomReservation) core.Rect {
     const requested = reservation orelse return .{};
-    const view_index = snapshot.index.get(core.raw(requested.pane_id)) orelse return .{};
-    const view = &snapshot.storage[view_index];
+    const view_index = self.index.get(core.raw(requested.pane_id)) orelse return .{};
+    const view = &self.storage[view_index];
     const available = view.outer.h -| requested.minimum_pane_height;
     const height = @min(requested.preferred_height, available);
     if (height < requested.minimum_height) {
@@ -50,7 +50,7 @@ pub fn reserveBelowPane(snapshot: *Snapshot, reservation: ?PaneBottomReservation
     const pane, const reserved = view.outer.splitBottom(height);
     const borderless = std.meta.eql(view.outer, view.content);
     view.outer = pane;
-    view.content = if (borderless) pane else pane.inner(snapshot.metrics.border);
+    view.content = if (borderless) pane else pane.inner(self.metrics.border);
 
     return reserved;
 }
@@ -60,14 +60,14 @@ pub fn reserveBelowPane(snapshot: *Snapshot, reservation: ?PaneBottomReservation
 /// ```zig
 /// const split = snapshot.prospectiveSplit(.{ .pane_id = pane_id, .axis = .horizontal }, pane_count);
 /// ```
-pub fn prospectiveSplit(snapshot: *const Snapshot, target: SplitTarget, pane_count: usize) ?ProspectiveSplit {
+pub fn prospectiveSplit(self: *const Snapshot, target: SplitTarget, pane_count: usize) ?ProspectiveSplit {
     if (pane_count == core.max_panes_per_tab) {
         return null;
     }
 
-    const view = snapshot.find(target.pane_id) orelse return null;
-    const minimum_pane_extent = snapshot.metrics.minimumPaneExtent();
-    const minimum_split_extent = 2 * minimum_pane_extent + snapshot.metrics.gutter(snapshot.pane_gaps);
+    const view = self.find(target.pane_id) orelse return null;
+    const minimum_pane_extent = self.metrics.minimumPaneExtent();
+    const minimum_split_extent = 2 * minimum_pane_extent + self.metrics.gutter(self.pane_gaps);
     const enough_space = switch (target.axis) {
         .horizontal => view.outer.w >= minimum_split_extent and view.outer.h >= minimum_pane_extent,
         .vertical => view.outer.w >= minimum_pane_extent and view.outer.h >= minimum_split_extent,
@@ -81,23 +81,23 @@ pub fn prospectiveSplit(snapshot: *const Snapshot, target: SplitTarget, pane_cou
             .area = view.outer,
             .axis = target.axis,
             .ratio = layout_support.default_split_ratio,
-            .gap = snapshot.metrics.gutter(snapshot.pane_gaps),
+            .gap = self.metrics.gutter(self.pane_gaps),
         },
     );
 
     return .{
-        .existing_content = first.inner(snapshot.metrics.border),
-        .new_content = second.inner(snapshot.metrics.border),
+        .existing_content = first.inner(self.metrics.border),
+        .new_content = second.inner(self.metrics.border),
     };
 }
 
-pub fn focusTarget(snapshot: *const Snapshot, current_id: core.PaneId, direction: layout_support.Direction) ?core.PaneId {
-    const source = snapshot.find(current_id) orelse return null;
+pub fn focusTarget(self: *const Snapshot, current_id: core.PaneId, direction: layout_support.Direction) ?core.PaneId {
+    const source = self.find(current_id) orelse return null;
     var candidate: ?core.PaneId = null;
     var best_score: u64 = std.math.maxInt(u64);
     const source_x = layout_support.center(source.outer.x, source.outer.w);
     const source_y = layout_support.center(source.outer.y, source.outer.h);
-    for (snapshot.views()) |view| {
+    for (self.views()) |view| {
         if (view.pane_id == current_id) {
             continue;
         }
@@ -145,18 +145,18 @@ pub fn focusTarget(snapshot: *const Snapshot, current_id: core.PaneId, direction
     return candidate;
 }
 
-pub fn reset(snapshot: *Snapshot, state: SnapshotReset) void {
-    snapshot.area = state.area;
-    snapshot.revision = state.revision;
-    snapshot.pane_gaps = state.pane_gaps;
-    snapshot.metrics = state.metrics;
-    snapshot.len = 0;
-    snapshot.index.reset();
+pub fn reset(self: *Snapshot, state: SnapshotReset) void {
+    self.area = state.area;
+    self.revision = state.revision;
+    self.pane_gaps = state.pane_gaps;
+    self.metrics = state.metrics;
+    self.len = 0;
+    self.index.reset();
 }
 
-pub fn append(snapshot: *Snapshot, view: View) void {
-    const view_index = snapshot.len;
-    snapshot.storage[view_index] = view;
-    snapshot.len += 1;
-    snapshot.index.put(core.raw(view.pane_id), view_index);
+pub fn append(self: *Snapshot, view: View) void {
+    const view_index = self.len;
+    self.storage[view_index] = view;
+    self.len += 1;
+    self.index.put(core.raw(view.pane_id), view_index);
 }

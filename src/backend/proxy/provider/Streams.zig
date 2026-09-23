@@ -25,14 +25,14 @@ pub fn init(dialect: types.ApiDialect) Streams {
 /// ```zig
 /// const observing = streams.start(stream_id);
 /// ```
-pub fn start(streams: *Streams, stream_id: u32) bool {
-    if (stream_id == 0 or streams.dialect == .unknown) {
+pub fn start(self: *Streams, stream_id: u32) bool {
+    if (stream_id == 0 or self.dialect == .unknown) {
         return false;
     }
 
     var free: ?*StreamsSlot = null;
 
-    for (&streams.slots) |*slot| {
+    for (&self.slots) |*slot| {
         if (slot.stream_id == stream_id) {
             return false;
         }
@@ -44,7 +44,7 @@ pub fn start(streams: *Streams, stream_id: u32) bool {
 
     const slot = free orelse return false;
     slot.stream_id = stream_id;
-    slot.observer.init(streams.dialect);
+    slot.observer.init(self.dialect);
     return true;
 }
 
@@ -53,8 +53,8 @@ pub fn start(streams: *Streams, stream_id: u32) bool {
 /// ```zig
 /// streams.feed(.{ .stream_id = stream_id, .bytes = fragment });
 /// ```
-pub fn feed(streams: *Streams, fragment: Fragment) void {
-    const slot = streams.find(fragment.stream_id) orelse return;
+pub fn feed(self: *Streams, fragment: Fragment) void {
+    const slot = self.find(fragment.stream_id) orelse return;
     slot.observer.feed(fragment.bytes);
 }
 
@@ -66,8 +66,8 @@ pub fn feed(streams: *Streams, fragment: Fragment) void {
 ///     publish(classification);
 /// }
 /// ```
-pub fn finish(streams: *Streams, stream_id: u32) ?request_support.RequestClass {
-    const slot = streams.find(stream_id) orelse return null;
+pub fn finish(self: *Streams, stream_id: u32) ?request_support.RequestClass {
+    const slot = self.find(stream_id) orelse return null;
     const classification = slot.observer.finish();
     slot.observer.deinit();
     slot.* = .{};
@@ -79,8 +79,8 @@ pub fn finish(streams: *Streams, stream_id: u32) ?request_support.RequestClass {
 /// ```zig
 /// streams.discard(stream_id);
 /// ```
-pub fn discard(streams: *Streams, stream_id: u32) void {
-    const slot = streams.find(stream_id) orelse return;
+pub fn discard(self: *Streams, stream_id: u32) void {
+    const slot = self.find(stream_id) orelse return;
     slot.observer.deinit();
     slot.* = .{};
 }
@@ -90,8 +90,8 @@ pub fn discard(streams: *Streams, stream_id: u32) void {
 /// ```zig
 /// streams.deinit();
 /// ```
-pub fn deinit(streams: *Streams) void {
-    for (&streams.slots) |*slot| {
+pub fn deinit(self: *Streams) void {
+    for (&self.slots) |*slot| {
         if (slot.stream_id == 0) {
             continue;
         }
@@ -100,11 +100,11 @@ pub fn deinit(streams: *Streams) void {
         slot.* = .{};
     }
 
-    streams.dialect = .unknown;
+    self.dialect = .unknown;
 }
 
-fn find(streams: *Streams, stream_id: u32) ?*StreamsSlot {
-    for (&streams.slots) |*slot| {
+fn find(self: *Streams, stream_id: u32) ?*StreamsSlot {
+    for (&self.slots) |*slot| {
         if (slot.stream_id == stream_id) {
             return slot;
         }

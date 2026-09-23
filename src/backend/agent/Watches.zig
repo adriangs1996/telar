@@ -16,13 +16,13 @@ slots: [core.max_agent_snapshot_entries]?Watch = @splat(null),
 /// ```zig
 /// _ = watches.put(.{ .key = pane.key(), .session = reference, .kind = .claude_transcript, .path = path });
 /// ```
-pub fn put(watches: *Watches, registration: Registration) bool {
+pub fn put(self: *Watches, registration: Registration) bool {
     const path = registration.path;
     if (path.len == 0 or path.len > core.max_agent_session_file_bytes) {
         return false;
     }
 
-    if (watches.find(registration.key)) |watch| {
+    if (self.find(registration.key)) |watch| {
         if (watch.kind == registration.kind and std.mem.eql(u8, watch.pathSlice(), path) and
             std.mem.eql(u8, watch.session.slice(), registration.session.slice()))
         {
@@ -33,7 +33,7 @@ pub fn put(watches: *Watches, registration: Registration) bool {
         return true;
     }
 
-    for (&watches.slots) |*slot| {
+    for (&self.slots) |*slot| {
         if (slot.* != null) {
             continue;
         }
@@ -45,8 +45,8 @@ pub fn put(watches: *Watches, registration: Registration) bool {
     return false;
 }
 
-pub fn find(watches: *Watches, key: PaneKey) ?*Watch {
-    for (&watches.slots) |*slot| {
+pub fn find(self: *Watches, key: PaneKey) ?*Watch {
+    for (&self.slots) |*slot| {
         if (slot.*) |*watch| {
             if (watch.key.id == key.id and watch.key.generation == key.generation) {
                 return watch;
@@ -57,8 +57,8 @@ pub fn find(watches: *Watches, key: PaneKey) ?*Watch {
     return null;
 }
 
-pub fn remove(watches: *Watches, key: PaneKey) bool {
-    for (&watches.slots) |*slot| {
+pub fn remove(self: *Watches, key: PaneKey) bool {
+    for (&self.slots) |*slot| {
         if (slot.*) |watch| {
             if (watch.key.id == key.id and watch.key.generation == key.generation) {
                 slot.* = null;
@@ -76,9 +76,9 @@ pub fn remove(watches: *Watches, key: PaneKey) bool {
 /// ```zig
 /// const watch = watches.stalest(now_ms, 1_000) orelse return;
 /// ```
-pub fn stalest(watches: *Watches, now_ms: i64, interval_ms: i64) ?*Watch {
+pub fn stalest(self: *Watches, now_ms: i64, interval_ms: i64) ?*Watch {
     var chosen: ?*Watch = null;
-    for (&watches.slots) |*slot| {
+    for (&self.slots) |*slot| {
         const watch = if (slot.*) |*value| value else continue;
         if (watch.pending or now_ms - watch.checked_at_ms < interval_ms) {
             continue;
@@ -92,9 +92,9 @@ pub fn stalest(watches: *Watches, now_ms: i64, interval_ms: i64) ?*Watch {
     return chosen;
 }
 
-pub fn count(watches: *const Watches) usize {
+pub fn count(self: *const Watches) usize {
     var total: usize = 0;
-    for (&watches.slots) |slot| {
+    for (&self.slots) |slot| {
         if (slot != null) {
             total += 1;
         }

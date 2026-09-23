@@ -8,21 +8,21 @@ certificate: [std.fs.max_path_bytes]u8 = undefined,
 bundle: [std.fs.max_path_bytes]u8 = undefined,
 service: ?*Service = null,
 
-pub fn init(fixture: *TestServiceFixture, io: std.Io, gpa: std.mem.Allocator) !void {
-    fixture.temp = std.testing.tmpDir(.{});
-    errdefer fixture.temp.cleanup();
+pub fn init(self: *TestServiceFixture, io: std.Io, gpa: std.mem.Allocator) !void {
+    self.temp = std.testing.tmpDir(.{});
+    errdefer self.temp.cleanup();
 
     var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const directory_len = try fixture.temp.dir.realPath(io, &directory_buffer);
+    const directory_len = try self.temp.dir.realPath(io, &directory_buffer);
     const directory = directory_buffer[0..directory_len];
-    fixture.service = try Service.create(io, gpa, .{
-        .key = try std.fmt.bufPrint(&fixture.key, "{s}/ca-key.pem", .{directory}),
-        .certificate = try std.fmt.bufPrint(&fixture.certificate, "{s}/ca-cert.pem", .{directory}),
-        .bundle = try std.fmt.bufPrint(&fixture.bundle, "{s}/ca-bundle.pem", .{directory}),
+    self.service = try Service.create(io, gpa, .{
+        .key = try std.fmt.bufPrint(&self.key, "{s}/ca-key.pem", .{directory}),
+        .certificate = try std.fmt.bufPrint(&self.certificate, "{s}/ca-cert.pem", .{directory}),
+        .bundle = try std.fmt.bufPrint(&self.bundle, "{s}/ca-bundle.pem", .{directory}),
     });
 }
 
-pub fn deinit(fixture: *TestServiceFixture) void {
-    fixture.service.?.destroy();
-    fixture.temp.cleanup();
+pub fn deinit(self: *TestServiceFixture) void {
+    self.service.?.destroy();
+    self.temp.cleanup();
 }

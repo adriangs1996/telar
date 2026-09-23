@@ -9,14 +9,14 @@ response: ?*Half = null,
 /// ```zig
 /// exchange.deinit();
 /// ```
-pub fn deinit(exchange: *Exchange) void {
-    if (exchange.request) |request| {
+pub fn deinit(self: *Exchange) void {
+    if (self.request) |request| {
         request.deinit();
     }
 
-    if (exchange.response) |response| {
+    if (self.response) |response| {
         response.deinit();
     }
 
-    exchange.* = .{};
+    self.* = .{};
 }

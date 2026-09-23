@@ -6,6 +6,6 @@ location: core.TabLocation,
 label: [core.max_tab_label_bytes]u8,
 label_len: u8,
 
-pub fn labelSlice(renamed: *const PendingTabRenamed) []const u8 {
-    return renamed.label[0..renamed.label_len];
+pub fn labelSlice(self: *const PendingTabRenamed) []const u8 {
+    return self.label[0..self.label_len];
 }

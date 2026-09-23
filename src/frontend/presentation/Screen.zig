@@ -65,19 +65,19 @@ pub fn init(gpa: std.mem.Allocator, w: u16, h: u16) !Screen {
 /// the terminal really is blank. That happens to be true after the clear in
 /// `Host.enter_sequence`, and depending on it is how a UI ends up drawing
 /// on top of whatever the shell left behind.
-pub fn invalidate(s: *Screen) void {
+pub fn invalidate(self: *Screen) void {
     // No drawn cell is ever zero width and zero length, so nothing can
     // compare equal to this.
-    @memset(s.front.cells, .{ .len = 0, .width = 0 });
-    s.full_damage = true;
-    s.presented_mouse_pointer = null;
-    @memset(s.damage_rows, .{});
+    @memset(self.front.cells, .{ .len = 0, .width = 0 });
+    self.full_damage = true;
+    self.presented_mouse_pointer = null;
+    @memset(self.damage_rows, .{});
 }
 
-pub fn deinit(s: *Screen) void {
-    s.gpa.free(s.damage_rows);
-    s.front.deinit();
-    s.back.deinit();
+pub fn deinit(self: *Screen) void {
+    self.gpa.free(self.damage_rows);
+    self.front.deinit();
+    self.back.deinit();
 }
 
 /// The buffer to draw this frame into.
@@ -85,49 +85,49 @@ pub fn deinit(s: *Screen) void {
 /// Arbitrary drawing cannot prove which cells it will touch, so borrowing
 /// the buffer marks the whole screen. Protocol patches use `patchCells`
 /// instead and retain exact damage.
-pub fn buffer(s: *Screen) *core.Buffer {
-    s.full_damage = true;
-    return &s.back;
+pub fn buffer(self: *Screen) *core.Buffer {
+    self.full_damage = true;
+    return &self.back;
 }
 
-pub fn sizeMatches(s: *const Screen, w: u16, h: u16) bool {
-    return s.back.w == w and s.back.h == h;
+pub fn sizeMatches(self: *const Screen, w: u16, h: u16) bool {
+    return self.back.w == w and self.back.h == h;
 }
 
 /// Returns a writable linear patch and records the rows it intersects.
 /// The returned slice is valid until resize, like the backing buffer.
-pub fn patchCells(s: *Screen, start: u32, count: u32) ![]core.Cell {
+pub fn patchCells(self: *Screen, start: u32, count: u32) ![]core.Cell {
     const first: usize = start;
     const len: usize = count;
     const end = std.math.add(usize, first, len) catch return error.PatchOutOfBounds;
-    if (len == 0 or end > s.back.cells.len) {
+    if (len == 0 or end > self.back.cells.len) {
         return error.PatchOutOfBounds;
     }
 
-    data.damage.markRows(s.damage_rows, s.back.w, .{ .start = first, .count = len });
-    return s.back.cells[first..end];
+    data.damage.markRows(self.damage_rows, self.back.w, .{ .start = first, .count = len });
+    return self.back.cells[first..end];
 }
 
-pub fn resize(s: *Screen, w: u16, h: u16) !void {
-    const damage_rows = try s.gpa.alloc(data.DamageRow, h);
-    errdefer s.gpa.free(damage_rows);
+pub fn resize(self: *Screen, w: u16, h: u16) !void {
+    const damage_rows = try self.gpa.alloc(data.DamageRow, h);
+    errdefer self.gpa.free(damage_rows);
     @memset(damage_rows, .{});
-    try s.back.resize(w, h);
-    try s.front.resize(w, h);
-    s.gpa.free(s.damage_rows);
-    s.damage_rows = damage_rows;
+    try self.back.resize(w, h);
+    try self.front.resize(w, h);
+    self.gpa.free(self.damage_rows);
+    self.damage_rows = damage_rows;
     // A resized terminal kept none of what was there.
-    s.invalidate();
+    self.invalidate();
 }
 
 /// Sends the difference to `w`.
-pub fn flush(s: *Screen, w: *std.Io.Writer) !Stats {
+pub fn flush(self: *Screen, w: *std.Io.Writer) !Stats {
     core.profiling.add(.tui_flush, 1);
     // The diff commits cells into `front` as it emits them. If the writer
     // fails partway, `front` claims cells the terminal never received, so
     // the only honest recovery is to forget the terminal's contents and
     // repaint everything on the next flush.
-    errdefer s.invalidate();
+    errdefer self.invalidate();
     var stats: Stats = .{};
     const before = w.end;
 
@@ -136,25 +136,25 @@ pub fn flush(s: *Screen, w: *std.Io.Writer) !Stats {
     // draws whatever has arrived so far. herdr wraps its own draw in this.
     try w.writeAll("\x1b[?2026h");
 
-    if (s.presented_mouse_pointer == null or
-        s.presented_mouse_pointer.? != s.mouse_pointer)
+    if (self.presented_mouse_pointer == null or
+        self.presented_mouse_pointer.? != self.mouse_pointer)
     {
-        try w.writeAll(pointer.sequence(s.mouse_pointer));
+        try w.writeAll(pointer.sequence(self.mouse_pointer));
     }
 
     var last_style: ?core.Style = null;
     var cursor: ?struct { x: u16, y: u16 } = null;
 
     var y: u16 = 0;
-    while (y < s.back.h) : (y += 1) {
-        const damage = s.damage_rows[y];
-        var x: u16 = if (s.full_damage) 0 else damage.start;
-        const end: u16 = if (s.full_damage) s.back.w else damage.end;
+    while (y < self.back.h) : (y += 1) {
+        const damage = self.damage_rows[y];
+        var x: u16 = if (self.full_damage) 0 else damage.start;
+        const end: u16 = if (self.full_damage) self.back.w else damage.end;
         while (x < end) : (x += 1) {
             stats.scanned += 1;
-            const index = @as(usize, y) * @as(usize, s.back.w) + @as(usize, x);
-            const next = &s.back.cells[index];
-            const current = &s.front.cells[index];
+            const index = @as(usize, y) * @as(usize, self.back.w) + @as(usize, x);
+            const next = &self.back.cells[index];
+            const current = &self.front.cells[index];
 
             // The trailing half of a wide glyph is not addressable: the
             // terminal advanced its own cursor over it when the first half
@@ -186,14 +186,14 @@ pub fn flush(s: *Screen, w: *std.Io.Writer) !Stats {
         }
     }
 
-    if (s.graphics) |effect| {
+    if (self.graphics) |effect| {
         stats.graphics_bytes = try effect.write(effect.context, w);
     }
-    s.graphics = null;
+    self.graphics = null;
 
     // The cursor is placed after the diff, so it ends up where the caller
     // asked rather than wherever the last cell happened to be.
-    if (s.cursor) |at| {
+    if (self.cursor) |at| {
         try screen_support.writeCursorPosition(w, .{ @as(u32, at.y) + 1, @as(u32, at.x) + 1 });
         try w.writeAll("\x1b[?25h");
     } else {
@@ -204,8 +204,8 @@ pub fn flush(s: *Screen, w: *std.Io.Writer) !Stats {
     // Measured before the flush, which resets the writer's position.
     stats.bytes = w.end -| before;
     try w.flush();
-    s.presented_mouse_pointer = s.mouse_pointer;
-    s.full_damage = false;
-    @memset(s.damage_rows, .{});
+    self.presented_mouse_pointer = self.mouse_pointer;
+    self.full_damage = false;
+    @memset(self.damage_rows, .{});
     return stats;
 }

@@ -13,29 +13,29 @@ queued: bool = false,
 
 /// Keeps the latest release while ordinary admission is closed until recovery.
 /// Example: `recovery.retain(key);`.
-pub fn retain(recovery: *Recovery, key: Key) void {
+pub fn retain(self: *Recovery, key: Key) void {
     const index = key.physical.?.value - 1;
     std.debug.assert(index < capacity and key.phase == .release);
-    recovery.keys[index] = key;
-    if (recovery.pending.isSet(index)) {
+    self.keys[index] = key;
+    if (self.pending.isSet(index)) {
         return;
     }
 
-    recovery.order[(@as(usize, recovery.head) + recovery.len) % capacity] = @intCast(index);
-    recovery.len += 1;
-    recovery.pending.set(index);
+    self.order[(@as(usize, self.head) + self.len) % capacity] = @intCast(index);
+    self.len += 1;
+    self.pending.set(index);
 }
 
-pub fn next(recovery: *const Recovery) ?Key {
-    if (recovery.len == 0) {
+pub fn next(self: *const Recovery) ?Key {
+    if (self.len == 0) {
         return null;
     }
 
-    return recovery.keys[recovery.order[recovery.head]];
+    return self.keys[self.order[self.head]];
 }
 
-pub fn finish(recovery: *Recovery, key: Key) void {
-    recovery.pending.unset(key.physical.?.value - 1);
-    recovery.head +%= 1;
-    recovery.len -= 1;
+pub fn finish(self: *Recovery, key: Key) void {
+    self.pending.unset(key.physical.?.value - 1);
+    self.head +%= 1;
+    self.len -= 1;
 }

@@ -31,8 +31,8 @@ pub fn init(dialect: types.ApiDialect) ResponseObserver {
 ///     "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"}}\n\n",
 /// );
 /// ```
-pub fn feed(observer: *ResponseObserver, input: []const u8) bool {
-    if (observer.completed or observer.dialect != .anthropic_messages) {
+pub fn feed(self: *ResponseObserver, input: []const u8) bool {
+    if (self.completed or self.dialect != .anthropic_messages) {
         return false;
     }
 
@@ -43,9 +43,9 @@ pub fn feed(observer: *ResponseObserver, input: []const u8) bool {
             sink.observer.inspectEvent(event);
         }
     };
-    var sink: EventSink = .{ .observer = observer };
-    observer.decoder.feed(input, &sink);
-    return observer.completed;
+    var sink: EventSink = .{ .observer = self };
+    self.decoder.feed(input, &sink);
+    return self.completed;
 }
 
 /// Securely erases buffered provider response data.
@@ -53,12 +53,12 @@ pub fn feed(observer: *ResponseObserver, input: []const u8) bool {
 /// ```zig
 /// observer.deinit();
 /// ```
-pub fn deinit(observer: *ResponseObserver) void {
-    std.crypto.secureZero(u8, std.mem.asBytes(observer));
+pub fn deinit(self: *ResponseObserver) void {
+    std.crypto.secureZero(u8, std.mem.asBytes(self));
 }
 
-fn inspectEvent(observer: *ResponseObserver, event: SseEvent) void {
+fn inspectEvent(self: *ResponseObserver, event: SseEvent) void {
     if (claude.completesTurn(event)) {
-        observer.completed = true;
+        self.completed = true;
     }
 }

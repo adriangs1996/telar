@@ -86,33 +86,33 @@ pub fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
     return .{ .gpa = gpa, .store = store, .model = model, .output = output };
 }
 
-pub fn deinit(context: *TransmitContext) void {
-    context.gpa.free(context.output);
-    const model_gpa = context.model.gpa;
-    context.model.deinit();
-    model_gpa.destroy(context.model);
-    context.store.deinit();
+pub fn deinit(self: *TransmitContext) void {
+    self.gpa.free(self.output);
+    const model_gpa = self.model.gpa;
+    self.model.deinit();
+    model_gpa.destroy(self.model);
+    self.store.deinit();
 }
 
-pub fn deliver(context: *TransmitContext) !u64 {
-    var images = context.store.images.iterator();
+pub fn deliver(self: *TransmitContext) !u64 {
+    var images = self.store.images.iterator();
     while (images.next()) |entry| {
         entry.value_ptr.delivery.transmitted = false;
         entry.value_ptr.delivery.incompressible = false;
     }
 
-    var placements = context.store.placements.iterator();
+    var placements = self.store.placements.iterator();
     while (placements.next()) |entry| {
         entry.value_ptr.delivery.emitted_image_id = null;
         entry.value_ptr.delivery.dirty = true;
     }
-    context.store.damage = true;
+    self.store.damage = true;
     var written: u64 = 0;
-    while (context.store.damage) {
-        var output = std.Io.Writer.fixed(context.output);
+    while (self.store.damage) {
+        var output = std.Io.Writer.fixed(self.output);
         var graphics_writer: frontend.KittyGraphicsWriter = .{
-            .store = &context.store,
-            .layout_snapshot = data.tab_layout.snapshot(context.model, 0, .{ .w = main.cols, .h = main.rows }),
+            .store = &self.store,
+            .layout_snapshot = data.tab_layout.snapshot(self.model, 0, .{ .w = main.cols, .h = main.rows }),
             .cell_width = 10,
             .cell_height = 20,
             .budget = std.math.maxInt(usize),

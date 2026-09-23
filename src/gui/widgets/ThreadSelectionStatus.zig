@@ -6,11 +6,11 @@ bounds: @import("../render/Rect.zig"),
 pane_id: core.PaneId,
 
 /// Example: `try status.draw(canvas);`
-pub fn draw(status: Status, canvas: *@import("Canvas.zig")) !void {
+pub fn draw(self: Status, canvas: *@import("Canvas.zig")) !void {
     const state = canvas.widgets orelse return;
     const selection = &state.thread_selection;
     const owner = selection.owner orelse return;
-    if (owner.pane_id != status.pane_id) {
+    if (owner.pane_id != self.pane_id) {
         return;
     }
     if (selection.dragging and selection.outside != 0 and !selection.blocked_edge) {
@@ -25,6 +25,6 @@ pub fn draw(status: Status, canvas: *@import("Canvas.zig")) !void {
     } else if (selection.blocked_edge) "Clear selection with Esc to load more messages" else if (selection.keyboard) "Copy mode · arrows/hjkl · v select · y copy · Esc exit" else if (selection.selected()) "Text selected · Cmd/Ctrl+C copy · Esc clear" else return;
     var storage: [TextFit.max_bytes]u8 = undefined;
     var label: @import("Label.zig") = .{ .text = text, .face = .sans, .size = .small, .color = if (selection.problem != null or selection.blocked_edge) canvas.theme.palette.yellow else canvas.theme.palette.subtext0 };
-    label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = status.bounds.width }).fit(label, &storage);
-    _ = try canvas.textAt(status.bounds, label);
+    label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = self.bounds.width }).fit(label, &storage);
+    _ = try canvas.textAt(self.bounds, label);
 }

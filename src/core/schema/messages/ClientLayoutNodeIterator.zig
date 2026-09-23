@@ -11,11 +11,11 @@ remaining: u16,
 /// ```zig
 /// const node = (try nodes.next()) orelse return;
 /// ```
-pub fn next(iterator: *ClientLayoutNodeIterator) !?types.ClientLayoutNode {
-    if (iterator.remaining == 0) {
+pub fn next(self: *ClientLayoutNodeIterator) !?types.ClientLayoutNode {
+    if (self.remaining == 0) {
         return null;
     }
 
-    iterator.remaining -= 1;
-    return @as(?types.ClientLayoutNode, try layout.decodeClientLayoutNode(&iterator.decoder));
+    self.remaining -= 1;
+    return @as(?types.ClientLayoutNode, try layout.decodeClientLayoutNode(&self.decoder));
 }

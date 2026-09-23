@@ -11,13 +11,13 @@ generation: *Generation,
 trust: ?*core.TrustStore = null,
 registry: ?*Registry = null,
 
-pub fn abandon(partial: Partial, gpa: std.mem.Allocator, orphans: *Orphans) void {
+pub fn abandon(self: Partial, gpa: std.mem.Allocator, orphans: *Orphans) void {
     orphans.* = .{};
-    if (partial.registry) |registry| {
+    if (self.registry) |registry| {
         gpa.destroy(registry);
     }
-    partial.generation.deinit();
-    if (partial.trust) |trust| {
+    self.generation.deinit();
+    if (self.trust) |trust| {
         gpa.destroy(trust);
     }
 }

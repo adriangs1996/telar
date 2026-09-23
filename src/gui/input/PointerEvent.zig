@@ -13,12 +13,12 @@ pub const Button = enum(u2) { left, middle, right };
 
 /// Drag and release belong to the owner chosen at press, across layout changes.
 /// Example: `if (event.retained()) routeToCapture();`
-pub fn retained(event: PointerEvent) bool {
-    return event.kind == .release or event.kind == .drag;
+pub fn retained(self: PointerEvent) bool {
+    return self.kind == .release or self.kind == .drag;
 }
 
 /// Hover and leave do not interrupt a pending keyboard prefix.
 /// Example: `if (event.interruptsKeys()) router.cancelSequence();`
-pub fn interruptsKeys(event: PointerEvent) bool {
-    return event.kind != .move and event.kind != .leave;
+pub fn interruptsKeys(self: PointerEvent) bool {
+    return self.kind != .move and self.kind != .leave;
 }

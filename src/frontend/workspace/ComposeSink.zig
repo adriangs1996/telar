@@ -7,10 +7,10 @@ const ComposeSink = @This();
 patch: PatchSink,
 composed_row: []core.Cell,
 
-pub fn copyRun(sink: *ComposeSink, run_start: u16, count: u16) !void {
+pub fn copyRun(self: *ComposeSink, run_start: u16, count: u16) !void {
     @memcpy(
-        sink.composed_row[run_start..][0..count],
-        sink.patch.source_row[run_start..][0..count],
+        self.composed_row[run_start..][0..count],
+        self.patch.source_row[run_start..][0..count],
     );
-    try sink.patch.copyRun(run_start, count);
+    try self.patch.copyRun(run_start, count);
 }

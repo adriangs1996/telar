@@ -12,19 +12,19 @@ group: ?usize = null,
 
 /// Appends ordered items directly to the frame's rows, keeping folded groups compact.
 /// Example: `conversation.push(view, state);`
-pub fn push(conversation: *Conversation, view: View, state: ?*const State) void {
+pub fn push(self: *Conversation, view: View, state: ?*const State) void {
     if (!work(view)) {
-        conversation.group = null;
-        conversation.append(view);
+        self.group = null;
+        self.append(view);
         return;
     }
 
-    if (conversation.group) |index| {
-        if (!sameTurn(conversation.rows[index], view)) {
-            conversation.group = null;
+    if (self.group) |index| {
+        if (!sameTurn(self.rows[index], view)) {
+            self.group = null;
         }
     }
-    if (conversation.group == null) {
+    if (self.group == null) {
         var header = view;
         const snapshot = view.thread.transcript.?;
         header.depth = 0;
@@ -35,21 +35,21 @@ pub fn push(conversation: *Conversation, view: View, state: ?*const State) void 
         header.work_count = 1;
         header.expanded = if (state) |value| value.threadExpanded(header.control()) else false;
         header.work_count = 0;
-        conversation.group = conversation.len;
-        conversation.append(header);
+        self.group = self.len;
+        self.append(header);
     }
 
-    const header = &conversation.rows[conversation.group.?];
+    const header = &self.rows[self.group.?];
     header.work_count += 1;
     header.work_active = header.work_active or view.active();
     if (header.expanded) {
-        conversation.append(view);
+        self.append(view);
     }
 }
 
-fn append(conversation: *Conversation, view: View) void {
-    conversation.rows[conversation.len] = view;
-    conversation.len += 1;
+fn append(self: *Conversation, view: View) void {
+    self.rows[self.len] = view;
+    self.len += 1;
 }
 
 /// Identifies work that contributes only a shared disclosure while folded.

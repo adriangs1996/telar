@@ -7,8 +7,8 @@ bytes: [core.max_agent_session_title_bytes]u8 = undefined,
 len: u8 = 0,
 source: core.AgentTitleSource,
 
-pub fn slice(title: *const SessionTitle) []const u8 {
-    return title.bytes[0..title.len];
+pub fn slice(self: *const SessionTitle) []const u8 {
+    return self.bytes[0..self.len];
 }
 
 /// Copies a validated title. Only generated, manual and agent titles are

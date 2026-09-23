@@ -11,8 +11,8 @@ gpa: std.mem.Allocator,
 snapshot_id: u64 = 0,
 has_more: bool = false,
 
-pub fn deinit(result: *QueryResult) void {
-    for (result.entries) |*entry| entry.deinit(result.gpa);
-    result.gpa.free(result.entries);
-    result.gpa.destroy(result);
+pub fn deinit(self: *QueryResult) void {
+    for (self.entries) |*entry| entry.deinit(self.gpa);
+    self.gpa.free(self.entries);
+    self.gpa.destroy(self);
 }

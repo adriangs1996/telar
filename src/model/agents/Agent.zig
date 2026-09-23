@@ -37,9 +37,9 @@ status_age_s: u32,
 /// ```zig
 /// const name = agent.providerName();
 /// ```
-pub fn providerName(agent: *const Agent) []const u8 {
-    if (agent.provider_name_len != 0) {
-        return agent.provider_name[0..agent.provider_name_len];
+pub fn providerName(self: *const Agent) []const u8 {
+    if (self.provider_name_len != 0) {
+        return self.provider_name[0..self.provider_name_len];
     }
 
     return "agent";
@@ -51,9 +51,9 @@ pub fn providerName(agent: *const Agent) []const u8 {
 /// ```zig
 /// const label = agent.displayName();
 /// ```
-pub fn displayName(agent: *const Agent) []const u8 {
-    if (agent.display_name_len != 0) {
-        return agent.display_name[0..agent.display_name_len];
+pub fn displayName(self: *const Agent) []const u8 {
+    if (self.display_name_len != 0) {
+        return self.display_name[0..self.display_name_len];
     }
 
     return core.generic_display_name;
@@ -65,8 +65,8 @@ pub fn displayName(agent: *const Agent) []const u8 {
 /// ```zig
 /// const glyph = agent.iconGlyph();
 /// ```
-pub fn iconGlyph(agent: *const Agent) []const u8 {
-    return agent.icon[0..agent.icon_len];
+pub fn iconGlyph(self: *const Agent) []const u8 {
+    return self.icon[0..self.icon_len];
 }
 
 pub fn init(input: data.AgentInput) !Agent {
@@ -101,8 +101,8 @@ pub fn init(input: data.AgentInput) !Agent {
 /// ```zig
 /// const event = agent.lastEvent();
 /// ```
-pub fn lastEvent(agent: *const Agent) []const u8 {
-    return agent.last_event[0..agent.last_event_len];
+pub fn lastEvent(self: *const Agent) []const u8 {
+    return self.last_event[0..self.last_event_len];
 }
 
 /// Why the agent is blocked; `none` for every other status.
@@ -110,8 +110,8 @@ pub fn lastEvent(agent: *const Agent) []const u8 {
 /// ```zig
 /// if (agent.blockedReason() == .permission) drawPermissionIcon();
 /// ```
-pub fn blockedReason(agent: *const Agent) core.AgentBlockedReason {
-    return agent.blocked_reason;
+pub fn blockedReason(self: *const Agent) core.AgentBlockedReason {
+    return self.blocked_reason;
 }
 
 /// Seconds the current status had held when this revision was encoded.
@@ -120,8 +120,8 @@ pub fn blockedReason(agent: *const Agent) core.AgentBlockedReason {
 /// ```zig
 /// const age = agent.statusAgeSeconds();
 /// ```
-pub fn statusAgeSeconds(agent: *const Agent) u32 {
-    return agent.status_age_s;
+pub fn statusAgeSeconds(self: *const Agent) u32 {
+    return self.status_age_s;
 }
 
 /// Borrows the workspace label owned by this replica entry.
@@ -129,8 +129,8 @@ pub fn statusAgeSeconds(agent: *const Agent) u32 {
 /// ```zig
 /// const label = agent.workspaceLabel();
 /// ```
-pub fn workspaceLabel(agent: *const Agent) []const u8 {
-    return agent.workspace_label[0..agent.workspace_label_len];
+pub fn workspaceLabel(self: *const Agent) []const u8 {
+    return self.workspace_label[0..self.workspace_label_len];
 }
 
 /// Borrows the tab label owned by this replica entry.
@@ -138,8 +138,8 @@ pub fn workspaceLabel(agent: *const Agent) []const u8 {
 /// ```zig
 /// const label = agent.tabLabel();
 /// ```
-pub fn tabLabel(agent: *const Agent) []const u8 {
-    return agent.tab_label[0..agent.tab_label_len];
+pub fn tabLabel(self: *const Agent) []const u8 {
+    return self.tab_label[0..self.tab_label_len];
 }
 
 /// Borrows the session title owned by this replica entry.
@@ -147,8 +147,8 @@ pub fn tabLabel(agent: *const Agent) []const u8 {
 /// ```zig
 /// const title = agent.sessionTitle();
 /// ```
-pub fn sessionTitle(agent: *const Agent) []const u8 {
-    return agent.session_title[0..agent.session_title_len];
+pub fn sessionTitle(self: *const Agent) []const u8 {
+    return self.session_title[0..self.session_title_len];
 }
 
 /// Borrows the cwd label owned by this replica entry.
@@ -156,6 +156,6 @@ pub fn sessionTitle(agent: *const Agent) []const u8 {
 /// ```zig
 /// const cwd = agent.cwdLabel();
 /// ```
-pub fn cwdLabel(agent: *const Agent) []const u8 {
-    return agent.cwd_label[0..agent.cwd_label_len];
+pub fn cwdLabel(self: *const Agent) []const u8 {
+    return self.cwd_label[0..self.cwd_label_len];
 }

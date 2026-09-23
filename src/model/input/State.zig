@@ -34,39 +34,39 @@ pub fn init(pane_id: core.PaneId, cursor: Point, viewport_offset: u32) State {
     };
 }
 
-pub fn view(state: State) View {
+pub fn view(self: State) View {
     return .{
-        .cursor = state.cursor,
-        .pointer = state.pointer != null,
-        .anchor = state.anchor,
-        .linewise = state.linewise,
+        .cursor = self.cursor,
+        .pointer = self.pointer != null,
+        .anchor = self.anchor,
+        .linewise = self.linewise,
     };
 }
 
 /// Captures a word or line boundary once; subsequent drags retain it.
 /// Example: `state.beginPointer(.word, screen);`.
-pub fn beginPointer(state: *State, granularity: core.Granularity, screen: Screen) void {
+pub fn beginPointer(self: *State, granularity: core.Granularity, screen: Screen) void {
     const span = copy_mode.pointerSpan(
-        state.cursor,
+        self.cursor,
         granularity,
         screen,
     );
-    state.pointer = .{
+    self.pointer = .{
         .start = span[0],
         .end = span[1],
         .granularity = granularity,
         .cols = screen.buffer.w,
         .rows = screen.buffer.h,
     };
-    state.anchor = if (granularity == .character) null else span[0];
-    state.cursor = span[1];
-    state.linewise = granularity == .line;
+    self.anchor = if (granularity == .character) null else span[0];
+    self.cursor = span[1];
+    self.linewise = granularity == .line;
 }
 
 /// Extends only within the supplied pane cells, in absolute history rows.
 /// Example: `state.movePointer(motion, screen);`.
-pub fn movePointer(state: *State, motion: PointerMotion, screen: Screen) void {
-    const pointer = if (state.pointer) |*value| value else return;
+pub fn movePointer(self: *State, motion: PointerMotion, screen: Screen) void {
+    const pointer = if (self.pointer) |*value| value else return;
     if (screen.buffer.w == 0 or screen.buffer.h == 0) {
         return;
     }
@@ -81,66 +81,66 @@ pub fn movePointer(state: *State, motion: PointerMotion, screen: Screen) void {
         screen,
     );
     const backwards = copy_mode.less(point, pointer.start);
-    state.anchor = if (backwards) pointer.end else pointer.start;
-    state.cursor = if (backwards) span[0] else span[1];
+    self.anchor = if (backwards) pointer.end else pointer.start;
+    self.cursor = if (backwards) span[0] else span[1];
     if (pointer.granularity == .character and std.meta.eql(span[0], pointer.start) and std.meta.eql(span[1], pointer.end)) {
-        state.anchor = null;
+        self.anchor = null;
     }
 }
 
-pub fn toggleSelection(state: *State, linewise: bool) void {
-    if (state.anchor != null and state.linewise == linewise) {
-        state.anchor = null;
-        state.linewise = false;
+pub fn toggleSelection(self: *State, linewise: bool) void {
+    if (self.anchor != null and self.linewise == linewise) {
+        self.anchor = null;
+        self.linewise = false;
         return;
     }
-    state.anchor = state.cursor;
-    state.linewise = linewise;
+    self.anchor = self.cursor;
+    self.linewise = linewise;
 }
 
-pub fn clearSelection(state: *State) bool {
-    if (state.anchor == null) {
+pub fn clearSelection(self: *State) bool {
+    if (self.anchor == null) {
         return false;
     }
-    state.anchor = null;
-    state.linewise = false;
+    self.anchor = null;
+    self.linewise = false;
     return true;
 }
 
-pub fn horizontal(state: *State, delta: i32, cols: u16) void {
+pub fn horizontal(self: *State, delta: i32, cols: u16) void {
     if (delta < 0) {
-        state.cursor.x -|= @intCast(-delta);
+        self.cursor.x -|= @intCast(-delta);
     } else {
-        state.cursor.x = @min(cols -| 1, state.cursor.x +| @as(u16, @intCast(delta)));
+        self.cursor.x = @min(cols -| 1, self.cursor.x +| @as(u16, @intCast(delta)));
     }
 }
 
-pub fn vertical(state: *State, delta: i32, viewport: Viewport) void {
+pub fn vertical(self: *State, delta: i32, viewport: Viewport) void {
     const last = viewport.scroll.total_rows -| 1;
     if (delta < 0) {
-        state.cursor.y -|= @intCast(-delta);
+        self.cursor.y -|= @intCast(-delta);
     } else {
-        state.cursor.y = @min(last, state.cursor.y +| @as(u32, @intCast(delta)));
+        self.cursor.y = @min(last, self.cursor.y +| @as(u32, @intCast(delta)));
     }
-    state.reveal(viewport.rows, viewport.scroll);
+    self.reveal(viewport.rows, viewport.scroll);
 }
 
-pub fn top(state: *State) void {
-    state.cursor.y = 0;
-    state.viewport_offset = 0;
+pub fn top(self: *State) void {
+    self.cursor.y = 0;
+    self.viewport_offset = 0;
 }
 
-pub fn bottom(state: *State, scroll: core.Scroll, rows: u16) void {
-    state.cursor.y = scroll.total_rows -| 1;
-    state.viewport_offset = scroll.maxOffset(rows);
+pub fn bottom(self: *State, scroll: core.Scroll, rows: u16) void {
+    self.cursor.y = scroll.total_rows -| 1;
+    self.viewport_offset = scroll.maxOffset(rows);
 }
 
-pub fn lineStart(state: *State) void {
-    state.cursor.x = 0;
+pub fn lineStart(self: *State) void {
+    self.cursor.x = 0;
 }
 
-pub fn lineEnd(state: *State, cols: u16) void {
-    state.cursor.x = cols -| 1;
+pub fn lineEnd(self: *State, cols: u16) void {
+    self.cursor.x = cols -| 1;
 }
 
 /// Stores search results and selects the first match at or after the
@@ -150,19 +150,19 @@ pub fn lineEnd(state: *State, cols: u16) void {
 /// ```zig
 /// state.applyMatches(results, viewport);
 /// ```
-pub fn applyMatches(state: *State, results: []const core.SearchMatch, viewport: Viewport) void {
-    state.match_count = @intCast(@min(results.len, state.matches.len));
-    @memcpy(state.matches[0..state.match_count], results[0..state.match_count]);
-    if (state.match_count == 0) {
+pub fn applyMatches(self: *State, results: []const core.SearchMatch, viewport: Viewport) void {
+    self.match_count = @intCast(@min(results.len, self.matches.len));
+    @memcpy(self.matches[0..self.match_count], results[0..self.match_count]);
+    if (self.match_count == 0) {
         return;
     }
 
     var selected: ?u8 = null;
-    switch (state.search_direction) {
+    switch (self.search_direction) {
         .forward => {
-            for (state.matchSlice(), 0..) |match, index| {
+            for (self.matchSlice(), 0..) |match, index| {
                 if (copy_mode.less(
-                    state.cursor,
+                    self.cursor,
                     .{
                         .x = match.x,
                         .y = match.y,
@@ -174,16 +174,16 @@ pub fn applyMatches(state: *State, results: []const core.SearchMatch, viewport: 
             }
         },
         .backward => {
-            var index: usize = state.match_count;
+            var index: usize = self.match_count;
             while (index > 0) {
                 index -= 1;
-                const match = state.matches[index];
+                const match = self.matches[index];
                 if (copy_mode.less(
                     .{
                         .x = match.x,
                         .y = match.y,
                     },
-                    state.cursor,
+                    self.cursor,
                 )) {
                     selected = @intCast(index);
                     break;
@@ -192,9 +192,9 @@ pub fn applyMatches(state: *State, results: []const core.SearchMatch, viewport: 
         },
     }
 
-    state.gotoMatch(selected orelse switch (state.search_direction) {
+    self.gotoMatch(selected orelse switch (self.search_direction) {
         .forward => 0,
-        .backward => state.match_count - 1,
+        .backward => self.match_count - 1,
     }, viewport);
 }
 
@@ -203,42 +203,42 @@ pub fn applyMatches(state: *State, results: []const core.SearchMatch, viewport: 
 /// ```zig
 /// state.cycleMatch(1, viewport);
 /// ```
-pub fn cycleMatch(state: *State, delta: i2, viewport: Viewport) void {
-    if (state.match_count == 0) {
+pub fn cycleMatch(self: *State, delta: i2, viewport: Viewport) void {
+    if (self.match_count == 0) {
         return;
     }
 
-    const count: i16 = state.match_count;
-    var index: i16 = state.match_index;
+    const count: i16 = self.match_count;
+    var index: i16 = self.match_index;
     index = @mod(index + delta, count);
-    state.gotoMatch(@intCast(index), viewport);
+    self.gotoMatch(@intCast(index), viewport);
 }
 
-pub fn matchSlice(state: *const State) []const core.SearchMatch {
-    return state.matches[0..state.match_count];
+pub fn matchSlice(self: *const State) []const core.SearchMatch {
+    return self.matches[0..self.match_count];
 }
 
-fn gotoMatch(state: *State, index: u8, viewport: Viewport) void {
-    const match = state.matches[index];
-    state.match_index = index;
-    state.anchor = .{
+fn gotoMatch(self: *State, index: u8, viewport: Viewport) void {
+    const match = self.matches[index];
+    self.match_index = index;
+    self.anchor = .{
         .x = match.x,
         .y = match.y,
     };
-    state.linewise = false;
-    state.cursor = .{
+    self.linewise = false;
+    self.cursor = .{
         .x = match.x + match.len - 1,
         .y = match.y,
     };
-    state.cursor.y = @min(state.cursor.y, viewport.scroll.total_rows -| 1);
-    state.reveal(viewport.rows, viewport.scroll);
+    self.cursor.y = @min(self.cursor.y, viewport.scroll.total_rows -| 1);
+    self.reveal(viewport.rows, viewport.scroll);
 }
 
-fn reveal(state: *State, rows: u16, scroll: core.Scroll) void {
-    if (state.cursor.y < state.viewport_offset) {
-        state.viewport_offset = state.cursor.y;
-    } else if (state.cursor.y >= state.viewport_offset + rows) {
-        state.viewport_offset = state.cursor.y - rows + 1;
+fn reveal(self: *State, rows: u16, scroll: core.Scroll) void {
+    if (self.cursor.y < self.viewport_offset) {
+        self.viewport_offset = self.cursor.y;
+    } else if (self.cursor.y >= self.viewport_offset + rows) {
+        self.viewport_offset = self.cursor.y - rows + 1;
     }
-    state.viewport_offset = @min(state.viewport_offset, scroll.maxOffset(rows));
+    self.viewport_offset = @min(self.viewport_offset, scroll.maxOffset(rows));
 }

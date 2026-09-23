@@ -14,43 +14,43 @@ seen: [2 * core.max_panes_per_tab]bool = @splat(false),
 
 /// Marks a new visible set without advancing its animations.
 /// Example: `motions.begin();`
-pub fn begin(motions: *ProgressMotions) void {
-    motions.seen = @splat(false);
+pub fn begin(self: *ProgressMotions) void {
+    self.seen = @splat(false);
 }
 
 /// Samples one pane without retaining model pointers or scheduling idle frames.
 /// Example: `const filled = motions.fraction(pane, &clock);`
-pub fn fraction(motions: *ProgressMotions, pane: *const data.Pane, clock: *FrameClock) f32 {
+pub fn fraction(self: *ProgressMotions, pane: *const data.Pane, clock: *FrameClock) f32 {
     const key: data.AgentKey = .{
         .pane_id = pane.id,
         .pane_generation = pane.attachment_generation,
     };
     if (pane.progress_state == .remove) {
-        motions.remove(key);
+        self.remove(key);
         return 0;
     }
 
-    const index = motions.find(key) orelse motions.insert(.{ .key = key }) orelse return ProgressMotion.reported(pane);
-    motions.seen[index] = true;
-    return motions.entries[index].sample(pane, clock);
+    const index = self.find(key) orelse self.insert(.{ .key = key }) orelse return ProgressMotion.reported(pane);
+    self.seen[index] = true;
+    return self.entries[index].sample(pane, clock);
 }
 
 /// Retires hidden, removed and replaced attachments after the frame.
 /// Example: `motions.end();`
-pub fn end(motions: *ProgressMotions) void {
+pub fn end(self: *ProgressMotions) void {
     var kept: usize = 0;
-    for (0..motions.len) |index| {
-        if (motions.seen[index]) {
-            motions.entries[kept] = motions.entries[index];
+    for (0..self.len) |index| {
+        if (self.seen[index]) {
+            self.entries[kept] = self.entries[index];
             kept += 1;
         }
     }
 
-    motions.len = kept;
+    self.len = kept;
 }
 
-fn find(motions: *const ProgressMotions, key: data.AgentKey) ?usize {
-    for (motions.entries[0..motions.len], 0..) |entry, index| {
+fn find(self: *const ProgressMotions, key: data.AgentKey) ?usize {
+    for (self.entries[0..self.len], 0..) |entry, index| {
         if (std.meta.eql(entry.key, key)) {
             return index;
         }
@@ -59,22 +59,22 @@ fn find(motions: *const ProgressMotions, key: data.AgentKey) ?usize {
     return null;
 }
 
-fn insert(motions: *ProgressMotions, entry: ProgressMotion) ?usize {
-    if (motions.len == motions.entries.len) {
+fn insert(self: *ProgressMotions, entry: ProgressMotion) ?usize {
+    if (self.len == self.entries.len) {
         return null;
     }
 
-    const index = motions.len;
-    motions.entries[index] = entry;
-    motions.len += 1;
+    const index = self.len;
+    self.entries[index] = entry;
+    self.len += 1;
     return index;
 }
 
-fn remove(motions: *ProgressMotions, key: data.AgentKey) void {
-    const index = motions.find(key) orelse return;
-    motions.len -= 1;
-    motions.entries[index] = motions.entries[motions.len];
-    motions.seen[index] = motions.seen[motions.len];
+fn remove(self: *ProgressMotions, key: data.AgentKey) void {
+    const index = self.find(key) orelse return;
+    self.len -= 1;
+    self.entries[index] = self.entries[self.len];
+    self.seen[index] = self.seen[self.len];
 }
 
 fn testPane() !data.Pane {

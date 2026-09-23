@@ -20,41 +20,41 @@ pub const Event = union(enum) {
     end,
 };
 
-pub fn next(scanner: *OscScanner, input: u8) Event {
-    switch (scanner.state) {
+pub fn next(self: *OscScanner, input: u8) Event {
+    switch (self.state) {
         .ground => {
             if (input == escape_ops.esc) {
-                scanner.state = .escape;
+                self.state = .escape;
             }
             return .none;
         },
         .escape => {
             if (input == ']') {
-                scanner.state = .osc;
+                self.state = .osc;
                 return .start;
             }
-            scanner.state = .ground;
+            self.state = .ground;
             return .none;
         },
         .osc => switch (input) {
             escape_ops.bel => {
-                scanner.state = .ground;
+                self.state = .ground;
                 return .end;
             },
             escape_ops.esc => {
-                scanner.state = .osc_escape;
+                self.state = .osc_escape;
                 return .none;
             },
             else => return .{ .byte = input },
         },
         .osc_escape => {
             if (input == '\\') {
-                scanner.state = .ground;
+                self.state = .ground;
                 return .end;
             }
             // An ESC that was not a terminator abandons the sequence.
             // A second ESC may still open a fresh escape.
-            scanner.state = if (input == escape_ops.esc) .escape else .ground;
+            self.state = if (input == escape_ops.esc) .escape else .ground;
             return .none;
         },
     }

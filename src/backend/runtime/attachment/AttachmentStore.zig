@@ -23,9 +23,9 @@ observer: u8 = 0,
 
 /// Finds the next deferred publication that is not waiting for ingest or ACK.
 /// Example: `const deadline = attachments.cellDeadline();`.
-pub fn cellDeadline(store: *AttachmentStore) ?u64 {
+pub fn cellDeadline(self: *AttachmentStore) ?u64 {
     var earliest: ?u64 = null;
-    for (&store.items) |*slot| {
+    for (&self.items) |*slot| {
         const attachment = if (slot.*) |*value| value else continue;
         const deadline = attachment.cell_deadline_ns orelse continue;
 
@@ -39,9 +39,9 @@ pub fn cellDeadline(store: *AttachmentStore) ?u64 {
     return earliest;
 }
 
-pub fn find(store: *AttachmentStore, pane_id: core.PaneId) ?*Attachment {
-    const slot = store.index.get(core.raw(pane_id)) orelse return null;
-    const attachment = &store.items[slot].?;
+pub fn find(self: *AttachmentStore, pane_id: core.PaneId) ?*Attachment {
+    const slot = self.index.get(core.raw(pane_id)) orelse return null;
+    const attachment = &self.items[slot].?;
     std.debug.assert(attachment.pane.id == pane_id);
     return attachment;
 }
@@ -54,8 +54,8 @@ pub fn find(store: *AttachmentStore, pane_id: core.PaneId) ?*Attachment {
 ///     recordStaleMessage();
 /// }
 /// ```
-pub fn requestCellSnapshot(store: *AttachmentStore, pane_id: core.PaneId) bool {
-    const attachment = store.find(pane_id) orelse return false;
+pub fn requestCellSnapshot(self: *AttachmentStore, pane_id: core.PaneId) bool {
+    const attachment = self.find(pane_id) orelse return false;
     attachment.requestCellSnapshot();
     return true;
 }
@@ -69,8 +69,8 @@ pub fn requestCellSnapshot(store: *AttachmentStore, pane_id: core.PaneId) bool {
 ///     recordStaleMessage();
 /// }
 /// ```
-pub fn requestGraphicsSnapshot(store: *AttachmentStore, pane_id: core.PaneId) bool {
-    const attachment = store.find(pane_id) orelse return false;
+pub fn requestGraphicsSnapshot(self: *AttachmentStore, pane_id: core.PaneId) bool {
+    const attachment = self.find(pane_id) orelse return false;
     attachment.requestGraphicsSnapshot();
     return true;
 }
@@ -81,8 +81,8 @@ pub fn requestGraphicsSnapshot(store: *AttachmentStore, pane_id: core.PaneId) bo
 /// ```zig
 /// const update = store.returnGraphicsCredit(credit);
 /// ```
-pub fn returnGraphicsCredit(store: *AttachmentStore, credit: core.GraphicsCredit) attachment_namespace.GraphicsCreditUpdate {
-    const attachment = store.find(credit.pane_id) orelse return .pane_not_attached;
+pub fn returnGraphicsCredit(self: *AttachmentStore, credit: core.GraphicsCredit) attachment_namespace.GraphicsCreditUpdate {
+    const attachment = self.find(credit.pane_id) orelse return .pane_not_attached;
     const bytes = std.math.cast(usize, credit.bytes) orelse return .invalid_amount;
 
     if (!attachment.returnGraphicsCredit(bytes)) {
@@ -98,8 +98,8 @@ pub fn returnGraphicsCredit(store: *AttachmentStore, credit: core.GraphicsCredit
 /// ```zig
 /// const elapsed = store.acknowledgeFrame(ack, received_at_ns) orelse return;
 /// ```
-pub fn acknowledgeFrame(store: *AttachmentStore, ack: core.FrameAck, received_at_ns: u64) ?u64 {
-    const attachment = store.find(ack.pane_id) orelse return null;
+pub fn acknowledgeFrame(self: *AttachmentStore, ack: core.FrameAck, received_at_ns: u64) ?u64 {
+    const attachment = self.find(ack.pane_id) orelse return null;
     return attachment.acknowledgeFrame(ack.frame_id, received_at_ns);
 }
 
@@ -109,8 +109,8 @@ pub fn acknowledgeFrame(store: *AttachmentStore, ack: core.FrameAck, received_at
 /// ```zig
 /// const update = try store.setPaneViewport(viewport) orelse return;
 /// ```
-pub fn setPaneViewport(store: *AttachmentStore, viewport: core.SetPaneViewport) !?attachment_namespace.ViewportUpdate {
-    const attachment = store.find(viewport.pane_id) orelse return null;
+pub fn setPaneViewport(self: *AttachmentStore, viewport: core.SetPaneViewport) !?attachment_namespace.ViewportUpdate {
+    const attachment = self.find(viewport.pane_id) orelse return null;
     const changed = try attachment.setViewport(viewport.offset);
     return if (changed) .changed else .unchanged;
 }
@@ -125,28 +125,28 @@ pub fn setPaneViewport(store: *AttachmentStore, viewport: core.SetPaneViewport) 
 ///     .scratch = &scratch,
 /// }) orelse return;
 /// ```
-pub fn copySelection(store: *AttachmentStore, pane_id: core.PaneId, query: SelectionQuery) ?selection.Result {
-    const attachment = store.find(pane_id) orelse return null;
+pub fn copySelection(self: *AttachmentStore, pane_id: core.PaneId, query: SelectionQuery) ?selection.Result {
+    const attachment = self.find(pane_id) orelse return null;
     return attachment.copySelection(query.range, query.scratch);
 }
 
-pub fn at(store: *AttachmentStore, index: usize) ?*Attachment {
-    if (index >= store.items.len) {
+pub fn at(self: *AttachmentStore, index: usize) ?*Attachment {
+    if (index >= self.items.len) {
         return null;
     }
-    return if (store.items[index]) |*attachment| attachment else null;
+    return if (self.items[index]) |*attachment| attachment else null;
 }
 
-pub fn iterator(store: *const AttachmentStore) Iterator {
-    return .{ .store = store };
+pub fn iterator(self: *const AttachmentStore) Iterator {
+    return .{ .store = self };
 }
 
-pub fn len(store: *const AttachmentStore) usize {
-    return store.count;
+pub fn len(self: *const AttachmentStore) usize {
+    return self.count;
 }
 
-pub fn currentWorkspace(store: *const AttachmentStore) ?core.WorkspaceLocation {
-    return store.workspace;
+pub fn currentWorkspace(self: *const AttachmentStore) ?core.WorkspaceLocation {
+    return self.workspace;
 }
 
 /// Changes the transport policy for existing and future attachments as one
@@ -155,13 +155,13 @@ pub fn currentWorkspace(store: *const AttachmentStore) ?core.WorkspaceLocation {
 /// ```zig
 /// const update = store.configureGraphics(true);
 /// ```
-pub fn configureGraphics(store: *AttachmentStore, shared: bool) attachment_namespace.GraphicsConfigurationUpdate {
-    if (store.shared_graphics == shared) {
+pub fn configureGraphics(self: *AttachmentStore, shared: bool) attachment_namespace.GraphicsConfigurationUpdate {
+    if (self.shared_graphics == shared) {
         return .unchanged;
     }
 
-    store.shared_graphics = shared;
-    for (&store.items) |*slot| {
+    self.shared_graphics = shared;
+    for (&self.items) |*slot| {
         const attachment = if (slot.*) |*value| value else continue;
         attachment.configureGraphics(shared);
     }
@@ -169,29 +169,29 @@ pub fn configureGraphics(store: *AttachmentStore, shared: bool) attachment_names
     return .changed;
 }
 
-pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *Pane) !*Attachment {
+pub fn attach(self: *AttachmentStore, gpa: std.mem.Allocator, pane: *Pane) !*Attachment {
     std.debug.assert(pane.launch_state == .running);
-    if (store.find(pane.id)) |existing| {
+    if (self.find(pane.id)) |existing| {
         return existing;
     }
-    if (store.workspace) |workspace| {
+    if (self.workspace) |workspace| {
         if (!std.meta.eql(workspace, pane.location.workspace)) {
             return error.WorkspaceMismatch;
         }
     }
-    if (store.count == capacity) {
+    if (self.count == capacity) {
         return error.AttachmentLimitReached;
     }
-    for (&store.items, 0..) |*slot, position| {
+    for (&self.items, 0..) |*slot, position| {
         if (slot.* == null) {
             slot.* = try Attachment.init(gpa, pane);
-            slot.*.?.configureGraphics(store.shared_graphics);
-            pane.observers |= store.observer;
-            store.index.put(core.raw(pane.id), position);
-            if (store.workspace == null) {
-                store.workspace = pane.location.workspace;
+            slot.*.?.configureGraphics(self.shared_graphics);
+            pane.observers |= self.observer;
+            self.index.put(core.raw(pane.id), position);
+            if (self.workspace == null) {
+                self.workspace = pane.location.workspace;
             }
-            store.count += 1;
+            self.count += 1;
             return &slot.*.?;
         }
     }
@@ -208,23 +208,23 @@ pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *Pane) !*At
 ///     _ = store.leaveWorkspace(detached.workspace);
 /// }
 /// ```
-pub fn detach(store: *AttachmentStore, pane_id: core.PaneId) ?PaneDetached {
-    const position = store.index.get(core.raw(pane_id)) orelse return null;
-    const attachment = &store.items[position].?;
+pub fn detach(self: *AttachmentStore, pane_id: core.PaneId) ?PaneDetached {
+    const position = self.index.get(core.raw(pane_id)) orelse return null;
+    const attachment = &self.items[position].?;
     std.debug.assert(attachment.pane.id == pane_id);
     const workspace = attachment.pane.location.workspace;
-    std.debug.assert(store.workspace != null and std.meta.eql(store.workspace.?, workspace));
+    std.debug.assert(self.workspace != null and std.meta.eql(self.workspace.?, workspace));
 
-    attachment.pane.observers &= ~store.observer;
+    attachment.pane.observers &= ~self.observer;
     attachment.deinit();
-    store.index.remove(core.raw(pane_id));
-    store.items[position] = null;
-    store.count -= 1;
+    self.index.remove(core.raw(pane_id));
+    self.items[position] = null;
+    self.count -= 1;
 
     return .{
         .pane_id = pane_id,
         .workspace = workspace,
-        .last_attachment = store.count == 0,
+        .last_attachment = self.count == 0,
     };
 }
 
@@ -237,22 +237,22 @@ pub fn detach(store: *AttachmentStore, pane_id: core.PaneId) ?PaneDetached {
 ///     release(workspace);
 /// }
 /// ```
-pub fn leaveWorkspace(store: *AttachmentStore, workspace: core.WorkspaceLocation) bool {
-    if (store.count != 0 or store.workspace == null or !std.meta.eql(store.workspace.?, workspace)) {
+pub fn leaveWorkspace(self: *AttachmentStore, workspace: core.WorkspaceLocation) bool {
+    if (self.count != 0 or self.workspace == null or !std.meta.eql(self.workspace.?, workspace)) {
         return false;
     }
 
-    store.workspace = null;
+    self.workspace = null;
     return true;
 }
 
-pub fn observes(store: *const AttachmentStore, workspace: core.WorkspaceLocation) bool {
-    return store.workspace != null and std.meta.eql(store.workspace.?, workspace);
+pub fn observes(self: *const AttachmentStore, workspace: core.WorkspaceLocation) bool {
+    return self.workspace != null and std.meta.eql(self.workspace.?, workspace);
 }
 
-pub fn availableGraphicsCredit(store: *const AttachmentStore) usize {
+pub fn availableGraphicsCredit(self: *const AttachmentStore) usize {
     var outstanding: usize = 0;
-    for (&store.items) |*slot| {
+    for (&self.items) |*slot| {
         const attachment = if (slot.*) |*value| value else continue;
         outstanding +|= core.max_image_bytes_per_pane -
             @min(attachment.graphicsCredit(), core.max_image_bytes_per_pane);
@@ -267,22 +267,22 @@ pub fn availableGraphicsCredit(store: *const AttachmentStore) usize {
 /// ```zig
 /// store.clearAttachments();
 /// ```
-pub fn clearAttachments(store: *AttachmentStore) void {
-    for (&store.items) |*slot| {
+pub fn clearAttachments(self: *AttachmentStore) void {
+    for (&self.items) |*slot| {
         if (slot.*) |*attachment| {
-            attachment.pane.observers &= ~store.observer;
+            attachment.pane.observers &= ~self.observer;
             attachment.deinit();
         }
         slot.* = null;
     }
-    store.index.reset();
-    store.count = 0;
-    store.workspace = null;
+    self.index.reset();
+    self.count = 0;
+    self.workspace = null;
 }
 
-pub fn deinit(store: *AttachmentStore) void {
-    store.clearAttachments();
-    store.shared_graphics = false;
+pub fn deinit(self: *AttachmentStore) void {
+    self.clearAttachments();
+    self.shared_graphics = false;
 }
 
 const PaneFixture = @import("../tests/PaneFixture.zig");

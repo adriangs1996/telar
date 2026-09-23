@@ -14,7 +14,7 @@ next_id: u64 = 1,
 /// ```zig
 /// const id = center.push(now_ns, input);
 /// ```
-pub fn push(center: *Center, now_ns: u64, input: Input) notifications.Id {
+pub fn push(self: *Center, now_ns: u64, input: Input) notifications.Id {
     var item: Item = .{
         .id = .invalid,
         .level = input.level,
@@ -27,7 +27,7 @@ pub fn push(center: *Center, now_ns: u64, input: Input) notifications.Id {
     item.title_len = @intCast(notifications.copyValidUtf8(&item.title_buffer, input.title));
     item.message_len = @intCast(notifications.copyValidUtf8(&item.message_buffer, input.message));
 
-    for (center.items[0..center.count]) |*slot| {
+    for (self.items[0..self.count]) |*slot| {
         const existing = if (slot.*) |*value| value else continue;
         if (existing.phase == .exiting or !notifications.sameNotification(existing, &item)) {
             continue;
@@ -40,27 +40,27 @@ pub fn push(center: *Center, now_ns: u64, input: Input) notifications.Id {
         return existing.id;
     }
 
-    const id = center.takeId();
+    const id = self.takeId();
     item.id = id;
-    if (center.count == notifications.max_items) {
-        center.count -= 1;
+    if (self.count == notifications.max_items) {
+        self.count -= 1;
     }
-    var index: usize = center.count;
-    while (index > 0) : (index -= 1) center.items[index] = center.items[index - 1];
-    center.items[0] = item;
-    center.count += 1;
+    var index: usize = self.count;
+    while (index > 0) : (index -= 1) self.items[index] = self.items[index - 1];
+    self.items[0] = item;
+    self.count += 1;
     return id;
 }
 
-pub fn hasItems(center: *const Center) bool {
-    return center.count != 0;
+pub fn hasItems(self: *const Center) bool {
+    return self.count != 0;
 }
 
-pub fn itemAt(center: *const Center, index: usize) ?*const Item {
-    if (index >= center.count) {
+pub fn itemAt(self: *const Center, index: usize) ?*const Item {
+    if (index >= self.count) {
         return null;
     }
-    return &center.items[index].?;
+    return &self.items[index].?;
 }
 
 /// Returns the next useful wakeup. Moving notifications follow the client
@@ -69,13 +69,13 @@ pub fn itemAt(center: *const Center, index: usize) ?*const Item {
 /// ```zig
 /// const deadline = center.nextDeadline(now_ns, frame_interval_ns);
 /// ```
-pub fn nextDeadline(center: *const Center, now_ns: u64, frame_interval_ns: u64) ?u64 {
+pub fn nextDeadline(self: *const Center, now_ns: u64, frame_interval_ns: u64) ?u64 {
     std.debug.assert(frame_interval_ns != 0);
-    if (center.count == 0) {
+    if (self.count == 0) {
         return null;
     }
     var deadline: u64 = std.math.maxInt(u64);
-    for (center.items[0..center.count]) |slot| {
+    for (self.items[0..self.count]) |slot| {
         const item = slot orelse continue;
         deadline = @min(deadline, item.nextDeadline(now_ns, frame_interval_ns));
     }
@@ -88,11 +88,11 @@ pub fn nextDeadline(center: *const Center, now_ns: u64, frame_interval_ns: u64) 
 /// ```zig
 /// const changed = center.advance(now_ns);
 /// ```
-pub fn advance(center: *Center, now_ns: u64) bool {
+pub fn advance(self: *Center, now_ns: u64) bool {
     var changed = false;
     var index: usize = 0;
-    while (index < center.count) {
-        const item = &center.items[index].?;
+    while (index < self.count) {
+        const item = &self.items[index].?;
         var remove = false;
         item_transition: while (true) {
             switch (item.phase) {
@@ -119,7 +119,7 @@ pub fn advance(center: *Center, now_ns: u64) bool {
             }
         }
         if (remove) {
-            center.removeAt(index);
+            self.removeAt(index);
             changed = true;
             continue;
         }
@@ -133,8 +133,8 @@ pub fn advance(center: *Center, now_ns: u64) bool {
 /// ```zig
 /// const changed = center.dismiss(id, now_ns);
 /// ```
-pub fn dismiss(center: *Center, id: notifications.Id, now_ns: u64) bool {
-    const item = center.find(id) orelse return false;
+pub fn dismiss(self: *Center, id: notifications.Id, now_ns: u64) bool {
+    const item = self.find(id) orelse return false;
     return item.beginExit(now_ns);
 }
 
@@ -143,8 +143,8 @@ pub fn dismiss(center: *Center, id: notifications.Id, now_ns: u64) bool {
 /// ```zig
 /// const target = center.activate(id, now_ns) orelse return;
 /// ```
-pub fn activate(center: *Center, id: notifications.Id, now_ns: u64) ?notifications.Target {
-    const item = center.find(id) orelse return null;
+pub fn activate(self: *Center, id: notifications.Id, now_ns: u64) ?notifications.Target {
+    const item = self.find(id) orelse return null;
     const target = item.target;
     if (!item.beginExit(now_ns)) {
         return null;
@@ -153,8 +153,8 @@ pub fn activate(center: *Center, id: notifications.Id, now_ns: u64) ?notificatio
     return target;
 }
 
-pub fn find(center: *Center, id: notifications.Id) ?*Item {
-    for (center.items[0..center.count]) |*slot| {
+pub fn find(self: *Center, id: notifications.Id) ?*Item {
+    for (self.items[0..self.count]) |*slot| {
         const item = if (slot.*) |*value| value else continue;
         if (item.id == id) {
             return item;
@@ -163,20 +163,20 @@ pub fn find(center: *Center, id: notifications.Id) ?*Item {
     return null;
 }
 
-fn removeAt(center: *Center, removed: usize) void {
-    std.debug.assert(removed < center.count);
+fn removeAt(self: *Center, removed: usize) void {
+    std.debug.assert(removed < self.count);
     var index = removed;
-    while (index + 1 < center.count) : (index += 1)
-        center.items[index] = center.items[index + 1];
-    center.count -= 1;
-    center.items[center.count] = null;
+    while (index + 1 < self.count) : (index += 1)
+        self.items[index] = self.items[index + 1];
+    self.count -= 1;
+    self.items[self.count] = null;
 }
 
-fn takeId(center: *Center) notifications.Id {
-    if (center.next_id == 0) {
-        center.next_id = 1;
+fn takeId(self: *Center) notifications.Id {
+    if (self.next_id == 0) {
+        self.next_id = 1;
     }
-    const id: notifications.Id = @enumFromInt(center.next_id);
-    center.next_id +%= 1;
+    const id: notifications.Id = @enumFromInt(self.next_id);
+    self.next_id +%= 1;
     return id;
 }

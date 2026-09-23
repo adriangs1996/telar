@@ -13,15 +13,15 @@ active: bool = false,
 
 /// Paints a semantic control and registers its matching grid hit target.
 /// Example: `try button.draw(canvas);`
-pub fn draw(button: Button, canvas: *Canvas) !void {
+pub fn draw(self: Button, canvas: *Canvas) !void {
     const palette = canvas.theme.palette;
-    const action: action_module.Action = .{ .intent = button.intent };
-    const hovered = button.context.isHovered(action);
-    try canvas.fill(button.area, if (button.active) palette.accent else if (hovered) palette.surface1 else palette.surface0);
-    try canvas.text(button.area, .{
-        .text = button.text,
-        .color = if (button.active) palette.surface_dim else if (hovered) palette.text else palette.subtext0,
-        .bold = button.active,
+    const action: action_module.Action = .{ .intent = self.intent };
+    const hovered = self.context.isHovered(action);
+    try canvas.fill(self.area, if (self.active) palette.accent else if (hovered) palette.surface1 else palette.surface0);
+    try canvas.text(self.area, .{
+        .text = self.text,
+        .color = if (self.active) palette.surface_dim else if (hovered) palette.text else palette.subtext0,
+        .bold = self.active,
     });
-    try button.context.hits.add(.{ .area = button.area, .action = action });
+    try self.context.hits.add(.{ .area = self.area, .action = action });
 }

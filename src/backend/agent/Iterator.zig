@@ -14,16 +14,16 @@ current_index: ?usize = null,
 ///     inspect(agent);
 /// }
 /// ```
-pub fn next(cursor: *Iterator) ?*Agent {
-    cursor.current_index = null;
+pub fn next(self: *Iterator) ?*Agent {
+    self.current_index = null;
 
-    while (cursor.next_index < cursor.repository.slots.len) {
-        const index = cursor.next_index;
-        cursor.next_index += 1;
+    while (self.next_index < self.repository.slots.len) {
+        const index = self.next_index;
+        self.next_index += 1;
 
-        if (cursor.repository.occupiedAt(index)) {
-            cursor.current_index = index;
-            return &cursor.repository.slots[index].?;
+        if (self.repository.occupiedAt(index)) {
+            self.current_index = index;
+            return &self.repository.slots[index].?;
         }
     }
 
@@ -37,15 +37,15 @@ pub fn next(cursor: *Iterator) ?*Agent {
 ///     _ = iterator.removeCurrent();
 /// }
 /// ```
-pub fn removeCurrent(cursor: *Iterator) bool {
-    const index = cursor.current_index orelse return false;
+pub fn removeCurrent(self: *Iterator) bool {
+    const index = self.current_index orelse return false;
 
-    if (!cursor.repository.occupiedAt(index)) {
-        cursor.current_index = null;
+    if (!self.repository.occupiedAt(index)) {
+        self.current_index = null;
         return false;
     }
 
-    cursor.repository.release(index);
-    cursor.current_index = null;
+    self.repository.release(index);
+    self.current_index = null;
     return true;
 }

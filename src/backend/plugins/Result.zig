@@ -19,10 +19,10 @@ batch: Batch,
 /// ```zig
 /// result.deinit();
 /// ```
-pub fn deinit(result: *Result) void {
-    const gpa = result.gpa;
-    std.crypto.secureZero(u8, result.storage);
-    gpa.free(result.storage);
-    std.crypto.secureZero(u8, std.mem.asBytes(result));
-    gpa.destroy(result);
+pub fn deinit(self: *Result) void {
+    const gpa = self.gpa;
+    std.crypto.secureZero(u8, self.storage);
+    gpa.free(self.storage);
+    std.crypto.secureZero(u8, std.mem.asBytes(self));
+    gpa.destroy(self);
 }

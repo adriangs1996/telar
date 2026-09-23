@@ -41,15 +41,15 @@ pub fn open() !Tty {
     return .{ .fd = fd, .original = original };
 }
 
-pub fn deinit(t: *Tty) void {
+pub fn deinit(self: *Tty) void {
     // Disarmed before the descriptor closes, so a crash after shutdown
     // cannot write escape sequences into a recycled file descriptor.
     posix_ops.crash_restore.fd = -1;
-    std.posix.tcsetattr(t.fd, .FLUSH, t.original) catch {};
-    _ = std.c.close(t.fd);
+    std.posix.tcsetattr(self.fd, .FLUSH, self.original) catch {};
+    _ = std.c.close(self.fd);
 }
 
-pub fn size(t: *const Tty) Size {
+pub fn size(self: *const Tty) Size {
     var ws: std.posix.winsize = undefined;
     const TIOCGWINSZ: c_int = switch (builtin.os.tag) {
         .macos, .ios, .tvos, .watchos => 0x40087468,
@@ -60,7 +60,7 @@ pub fn size(t: *const Tty) Size {
     // A terminal that will not answer is not a reason to abort. Eighty by
     // twenty-four is what every terminal since 1978 has defaulted to, and
     // a wrong size draws a wrong frame where a crash draws nothing.
-    if (std.c.ioctl(t.fd, TIOCGWINSZ, &ws) != 0) {
+    if (std.c.ioctl(self.fd, TIOCGWINSZ, &ws) != 0) {
         return .{ .cols = 80, .rows = 24 };
     }
     return .{
@@ -71,12 +71,12 @@ pub fn size(t: *const Tty) Size {
     };
 }
 
-pub fn writeHandle(t: *const Tty) std.Io.File {
-    return .{ .handle = t.fd, .flags = .{ .nonblocking = false } };
+pub fn writeHandle(self: *const Tty) std.Io.File {
+    return .{ .handle = self.fd, .flags = .{ .nonblocking = false } };
 }
 
-pub fn readHandle(t: *const Tty) std.Io.File {
-    return .{ .handle = t.fd, .flags = .{ .nonblocking = false } };
+pub fn readHandle(self: *const Tty) std.Io.File {
+    return .{ .handle = self.fd, .flags = .{ .nonblocking = false } };
 }
 
 /// Hashes the controlling terminal device into a reconnect-stable key.
@@ -84,9 +84,9 @@ pub fn readHandle(t: *const Tty) std.Io.File {
 /// ```zig
 /// const identity = try tty.identity();
 /// ```
-pub fn identity(t: *const Tty) !u64 {
+pub fn identity(self: *const Tty) !u64 {
     var path: [std.fs.max_path_bytes]u8 = undefined;
-    if (posix_ops.unistd.ttyname_r(t.fd, &path, path.len) != 0) {
+    if (posix_ops.unistd.ttyname_r(self.fd, &path, path.len) != 0) {
         return error.TerminalIdentityUnavailable;
     }
 

@@ -111,7 +111,7 @@ host_input_source: HostInputSource = undefined,
 /// ```zig
 /// try AttachedClient.init(&terminal.app, .{ .gpa = gpa, .io = io, .connection = connection, .host_size = size, .options = options });
 /// ```
-pub fn init(client: *AttachedClient, params: ClientInit) !void {
+pub fn init(self: *AttachedClient, params: ClientInit) !void {
     const gpa = params.gpa;
     var capabilities: data.HostCapabilities = .{
         .window_width_px = params.window_width_px,
@@ -137,7 +137,7 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
     var runtime_transport_state = try RuntimeTransportState.init(gpa, params.connection);
     errdefer runtime_transport_state.deinit(gpa);
 
-    client.* = .{
+    self.* = .{
         .io = params.io,
         .gpa = gpa,
         .runtime_transport = runtime_transport_state,
@@ -151,7 +151,7 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
         .reload = .{ .mtime_ns = params.options.config_mtime_ns },
     };
 
-    client.model.initInto(gpa, .{
+    self.model.initInto(gpa, .{
         .pane_gaps = params.options.pane_gaps,
         .configuration_generation = configuration_generation,
         .bars = params.options.bars,
@@ -167,18 +167,18 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
         .icon_theme = params.options.icon_theme,
         .window_title = if (snapshot) |value| value.windowTitle() else "",
     });
-    errdefer client.model.deinit();
-    client.model.sound_playback = .init(params.options.sound);
-    try client.model.history_palette.prepare(gpa);
-    try client.model.to_runtime.reservePayloads(gpa);
-    _ = client.model.setSidebarVisible(params.options.sidebar_visible);
+    errdefer self.model.deinit();
+    self.model.sound_playback = .init(params.options.sound);
+    try self.model.history_palette.prepare(gpa);
+    try self.model.to_runtime.reservePayloads(gpa);
+    _ = self.model.setSidebarVisible(params.options.sidebar_visible);
 }
 
 /// The key bindings of the live configuration, borrowed from its
 /// generation until the next adoption.
 /// Example: `const router = try buildRouter(client.routerConfig());`
-pub fn routerConfig(client: *const AttachedClient) RouterConfig {
-    if (client.lua_generation) |generation| {
+pub fn routerConfig(self: *const AttachedClient) RouterConfig {
+    if (self.lua_generation) |generation| {
         const snapshot = &generation.snapshot;
         return .{
             .prefix = snapshot.prefix,
@@ -189,17 +189,17 @@ pub fn routerConfig(client: *const AttachedClient) RouterConfig {
     }
 
     return .{
-        .prefix = client.options.prefix,
-        .bindings = client.options.bindings,
-        .escape_timeout_ns = client.options.input_escape_timeout_ns,
-        .sequence_timeout_ns = client.options.input_sequence_timeout_ns,
+        .prefix = self.options.prefix,
+        .bindings = self.options.bindings,
+        .escape_timeout_ns = self.options.input_escape_timeout_ns,
+        .sequence_timeout_ns = self.options.input_sequence_timeout_ns,
     };
 }
 
 /// Returns the grid the active tab's panes share.
 /// Example: `const region = client.geometry();`.
-pub fn geometry(client: *const AttachedClient) data.Region {
-    return data.workbench.region(&client.model);
+pub fn geometry(self: *const AttachedClient) data.Region {
+    return data.workbench.region(&self.model);
 }
 
 /// Releases shared state. The adapter cancels its tasks and frees its own
@@ -208,24 +208,24 @@ pub fn geometry(client: *const AttachedClient) data.Region {
 /// ```zig
 /// terminal.app.deinit();
 /// ```
-pub fn deinit(client: *AttachedClient) void {
-    const gpa = client.gpa;
-    client.telemetry.deinit(client.io);
-    client.reload.deinit(gpa);
-    if (client.lua_generation) |generation| {
+pub fn deinit(self: *AttachedClient) void {
+    const gpa = self.gpa;
+    self.telemetry.deinit(self.io);
+    self.reload.deinit(gpa);
+    if (self.lua_generation) |generation| {
         generation.deinit();
     }
 
-    if (client.plugin_registry) |registry| {
+    if (self.plugin_registry) |registry| {
         gpa.destroy(registry);
     }
 
-    if (client.trust_store) |store| {
+    if (self.trust_store) |store| {
         gpa.destroy(store);
     }
 
-    client.model.deinit();
-    client.runtime_transport.deinit(gpa);
+    self.model.deinit();
+    self.runtime_transport.deinit(gpa);
 }
 
 /// Uses the current generation so editor changes take effect after reload.

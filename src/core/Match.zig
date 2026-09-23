@@ -10,6 +10,6 @@ end: usize,
 /// ```zig
 /// const uri = match.text(line);
 /// ```
-pub fn text(match: Match, source: []const u8) []const u8 {
-    return source[match.start..match.end];
+pub fn text(self: Match, source: []const u8) []const u8 {
+    return source[self.start..self.end];
 }

@@ -10,16 +10,16 @@ trail: f32,
 
 /// The weight of source index `index` inside the span.
 /// Example: `const w = span.weight(x);`
-pub fn weight(span: FilterSpan, index: u32) f32 {
-    if (span.end == span.first + 1) {
-        return span.lead + span.trail - 1;
+pub fn weight(self: FilterSpan, index: u32) f32 {
+    if (self.end == self.first + 1) {
+        return self.lead + self.trail - 1;
     }
 
-    if (index == span.first) {
-        return span.lead;
+    if (index == self.first) {
+        return self.lead;
     }
 
-    return if (index == span.end - 1) span.trail else 1;
+    return if (index == self.end - 1) self.trail else 1;
 }
 
 /// The span destination `index` of `side` covers over `source_extent`.

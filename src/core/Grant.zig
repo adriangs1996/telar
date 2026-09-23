@@ -12,8 +12,8 @@ capabilities: plugin.CapabilitySet,
 /// ```zig
 /// if (grant.allows(.{ .id = manifest.id(), .digest = digest }, .history_read)) readHistory();
 /// ```
-pub fn allows(grant: Grant, identity: PluginIdentity, capability: plugin.Capability) bool {
-    return grant.plugin_hash == plugin.stableId(identity.id) and
-        std.mem.eql(u8, &grant.digest, &identity.digest) and
-        grant.capabilities.contains(capability);
+pub fn allows(self: Grant, identity: PluginIdentity, capability: plugin.Capability) bool {
+    return self.plugin_hash == plugin.stableId(identity.id) and
+        std.mem.eql(u8, &self.digest, &identity.digest) and
+        self.capabilities.contains(capability);
 }

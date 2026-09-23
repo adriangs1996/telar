@@ -14,37 +14,37 @@ state: State = .normal,
 
 const State = enum { normal, escape, apc_identify, kitty, kitty_escape, other, other_escape };
 
-pub fn observe(counter: *KittyFramingCounter, bytes: []const u8) usize {
+pub fn observe(self: *KittyFramingCounter, bytes: []const u8) usize {
     var complete: usize = 0;
-    for (bytes) |byte| switch (counter.state) {
-        .normal => counter.state = if (byte == escape_ops.esc) .escape else .normal,
-        .escape => counter.state = switch (byte) {
+    for (bytes) |byte| switch (self.state) {
+        .normal => self.state = if (byte == escape_ops.esc) .escape else .normal,
+        .escape => self.state = switch (byte) {
             '_' => .apc_identify,
             escape_ops.esc => .escape,
             else => .normal,
         },
-        .apc_identify => counter.state = if (byte == 'G')
+        .apc_identify => self.state = if (byte == 'G')
             .kitty
         else if (byte == escape_ops.esc)
             .other_escape
         else
             .other,
-        .kitty => counter.state = switch (byte) {
+        .kitty => self.state = switch (byte) {
             escape_ops.esc => .kitty_escape,
             else => .kitty,
         },
-        .kitty_escape => counter.state = if (byte == '\\') state: {
+        .kitty_escape => self.state = if (byte == '\\') state: {
             complete += 1;
             break :state .normal;
         } else if (byte == escape_ops.esc)
             .kitty_escape
         else
             .kitty,
-        .other => counter.state = switch (byte) {
+        .other => self.state = switch (byte) {
             escape_ops.esc => .other_escape,
             else => .other,
         },
-        .other_escape => counter.state = if (byte == '\\')
+        .other_escape => self.state = if (byte == '\\')
             .normal
         else if (byte == escape_ops.esc)
             .other_escape

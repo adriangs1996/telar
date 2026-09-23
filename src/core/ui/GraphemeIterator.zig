@@ -21,8 +21,8 @@ const window = 16;
 
 pub const Cluster = @import("Cluster.zig");
 
-pub fn next(it: *GraphemeIterator) ?Cluster {
-    if (it.index >= it.bytes.len) {
+pub fn next(self: *GraphemeIterator) ?Cluster {
+    if (self.index >= self.bytes.len) {
         return null;
     }
 
@@ -31,16 +31,16 @@ pub fn next(it: *GraphemeIterator) ?Cluster {
     // combining mark, joiner or selector could, and those start above
     // 0x7f), so its cluster is known without decoding a window. The width
     // still comes from the table: the drawing core never assumes one.
-    const first = it.bytes[it.index];
+    const first = self.bytes[self.index];
     if (first >= 0x20 and first < 0x7f and
-        (it.index + 1 == it.bytes.len or it.bytes[it.index + 1] < 0x80))
+        (self.index + 1 == self.bytes.len or self.bytes[self.index + 1] < 0x80))
     {
-        const start = it.index;
-        it.index += 1;
+        const start = self.index;
+        self.index += 1;
         const single = [_]u21{first};
         const measured = unicode.graphemeWidth(&single);
         return .{
-            .bytes = it.bytes[start..it.index],
+            .bytes = self.bytes[start..self.index],
             .width = if (measured.width == 0) 1 else @intCast(measured.width),
         };
     }
@@ -50,15 +50,15 @@ pub fn next(it: *GraphemeIterator) ?Cluster {
     var codepoints: [window]u21 = undefined;
     var offsets: [window + 1]usize = undefined;
     var count: usize = 0;
-    var cursor = it.index;
+    var cursor = self.index;
     offsets[0] = cursor;
 
-    while (count < window and cursor < it.bytes.len) {
-        const length = std.unicode.utf8ByteSequenceLength(it.bytes[cursor]) catch break;
-        if (cursor + length > it.bytes.len) {
+    while (count < window and cursor < self.bytes.len) {
+        const length = std.unicode.utf8ByteSequenceLength(self.bytes[cursor]) catch break;
+        if (cursor + length > self.bytes.len) {
             break;
         }
-        const codepoint = std.unicode.utf8Decode(it.bytes[cursor..][0..length]) catch break;
+        const codepoint = std.unicode.utf8Decode(self.bytes[cursor..][0..length]) catch break;
         codepoints[count] = codepoint;
         count += 1;
         cursor += length;
@@ -68,13 +68,13 @@ pub fn next(it: *GraphemeIterator) ?Cluster {
     if (count == 0) {
         // Invalid or truncated UTF-8. Agents print partial writes, so this
         // is a cell to draw, not an error to propagate.
-        it.index += 1;
+        self.index += 1;
         return .{ .bytes = "\u{FFFD}", .width = 1 };
     }
 
     const measured = unicode.graphemeWidth(codepoints[0..count]);
-    const start = it.index;
-    it.index = offsets[measured.len];
+    const start = self.index;
+    self.index = offsets[measured.len];
 
     // A control character never reaches a cell as itself. The screen diff
     // writes cell text verbatim, so a raw newline or escape in a cell
@@ -85,7 +85,7 @@ pub fn next(it: *GraphemeIterator) ?Cluster {
     }
 
     return .{
-        .bytes = it.bytes[start..it.index],
+        .bytes = self.bytes[start..self.index],
         // Control characters measure zero, and a zero width cell cannot be
         // addressed. Anything unprintable becomes one blank column.
         .width = if (measured.width == 0) 1 else @intCast(measured.width),

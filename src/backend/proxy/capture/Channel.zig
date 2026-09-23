@@ -19,9 +19,9 @@ dropped: std.atomic.Value(u64) = .init(0),
 /// ```zig
 /// channel.init(gate);
 /// ```
-pub fn init(channel: *Channel, gate: CredentialGate) void {
-    channel.* = .{ .gate = gate };
-    channel.events = .init(&channel.storage);
+pub fn init(self: *Channel, gate: CredentialGate) void {
+    self.* = .{ .gate = gate };
+    self.events = .init(&self.storage);
 }
 
 /// Attempts a zero-deadline ownership transfer and frees rejected halves.
@@ -29,29 +29,29 @@ pub fn init(channel: *Channel, gate: CredentialGate) void {
 /// ```zig
 /// _ = channel.publish(io, .{ .credential = credential, .half = half });
 /// ```
-pub fn publish(channel: *Channel, io: std.Io, publication: QueuePublication) bool {
-    if (!channel.gate.accepts(&publication.credential)) {
+pub fn publish(self: *Channel, io: std.Io, publication: QueuePublication) bool {
+    if (!self.gate.accepts(&publication.credential)) {
         publication.half.deinit();
         return false;
     }
 
-    const depth = channel.reserve() orelse {
-        _ = channel.dropped.fetchAdd(1, .monotonic);
+    const depth = self.reserve() orelse {
+        _ = self.dropped.fetchAdd(1, .monotonic);
         publication.half.deinit();
         return false;
     };
     var envelope: Envelope = .{ .credential = publication.credential, .half = publication.half };
     defer std.crypto.secureZero(u8, &envelope.credential.token);
-    const published = channel.events.put(io, &.{envelope}, 0) catch 0;
+    const published = self.events.put(io, &.{envelope}, 0) catch 0;
 
     if (published == 0) {
-        channel.release();
-        _ = channel.dropped.fetchAdd(1, .monotonic);
+        self.release();
+        _ = self.dropped.fetchAdd(1, .monotonic);
         publication.half.deinit();
         return false;
     }
 
-    _ = channel.high_water.fetchMax(depth, .monotonic);
+    _ = self.high_water.fetchMax(depth, .monotonic);
     return true;
 }
 
@@ -60,13 +60,13 @@ pub fn publish(channel: *Channel, io: std.Io, publication: QueuePublication) boo
 /// ```zig
 /// const half = try channel.receive(io);
 /// ```
-pub fn receive(channel: *Channel, io: std.Io) anyerror!*Half {
+pub fn receive(self: *Channel, io: std.Io) anyerror!*Half {
     while (true) {
-        var envelope = try channel.events.getOne(io);
+        var envelope = try self.events.getOne(io);
         defer std.crypto.secureZero(u8, &envelope.credential.token);
-        channel.release();
+        self.release();
 
-        if (channel.gate.accepts(&envelope.credential)) {
+        if (self.gate.accepts(&envelope.credential)) {
             return envelope.half;
         }
 
@@ -79,12 +79,12 @@ pub fn receive(channel: *Channel, io: std.Io) anyerror!*Half {
 /// ```zig
 /// channel.close(io);
 /// ```
-pub fn close(channel: *Channel, io: std.Io) void {
-    channel.events.close(io);
+pub fn close(self: *Channel, io: std.Io) void {
+    self.events.close(io);
 
     while (true) {
         var envelopes: [1]Envelope = undefined;
-        const count = channel.events.getUncancelable(io, &envelopes, 0) catch break;
+        const count = self.events.getUncancelable(io, &envelopes, 0) catch break;
         if (count == 0) {
             break;
         }
@@ -92,7 +92,7 @@ pub fn close(channel: *Channel, io: std.Io) void {
         var envelope = envelopes[0];
         std.crypto.secureZero(u8, &envelope.credential.token);
         envelope.half.deinit();
-        channel.release();
+        self.release();
     }
 }
 
@@ -101,19 +101,19 @@ pub fn close(channel: *Channel, io: std.Io) void {
 /// ```zig
 /// const metrics = channel.metrics();
 /// ```
-pub fn metrics(channel: *const Channel) QueueMetrics {
+pub fn metrics(self: *const Channel) QueueMetrics {
     return .{
-        .queued = channel.queued.load(.monotonic),
-        .high_water = channel.high_water.load(.monotonic),
-        .dropped = channel.dropped.load(.monotonic),
+        .queued = self.queued.load(.monotonic),
+        .high_water = self.high_water.load(.monotonic),
+        .dropped = self.dropped.load(.monotonic),
     };
 }
 
-fn reserve(channel: *Channel) ?u64 {
-    var current = channel.queued.load(.monotonic);
+fn reserve(self: *Channel) ?u64 {
+    var current = self.queued.load(.monotonic);
 
     while (current < queue.capacity) {
-        if (channel.queued.cmpxchgWeak(current, current + 1, .monotonic, .monotonic)) |observed| {
+        if (self.queued.cmpxchgWeak(current, current + 1, .monotonic, .monotonic)) |observed| {
             current = observed;
             continue;
         }
@@ -124,7 +124,7 @@ fn reserve(channel: *Channel) ?u64 {
     return null;
 }
 
-fn release(channel: *Channel) void {
-    const previous = channel.queued.fetchSub(1, .monotonic);
+fn release(self: *Channel) void {
+    const previous = self.queued.fetchSub(1, .monotonic);
     std.debug.assert(previous != 0);
 }

@@ -41,9 +41,9 @@ pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture, workload: main.Work
     };
 }
 
-pub fn deinit(context: *DamageContext) void {
-    context.gpa.free(context.spans);
-    context.gpa.free(context.damaged_rows);
-    context.gpa.free(context.current);
-    context.gpa.free(context.acknowledged);
+pub fn deinit(self: *DamageContext) void {
+    self.gpa.free(self.spans);
+    self.gpa.free(self.damaged_rows);
+    self.gpa.free(self.current);
+    self.gpa.free(self.acknowledged);
 }

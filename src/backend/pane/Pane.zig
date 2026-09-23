@@ -280,21 +280,21 @@ pub fn create(resources: CreationResources, request: CreationRequest) !*Pane {
     return pane;
 }
 
-pub fn commitLaunch(pane: *Pane, shell: []const u8) void {
-    pane.launch_state.commit();
-    pane.history_session_started = pane.history_service.startSession(pane.io, .{
-        .session_id = pane.history_session_id,
-        .pane_id = pane.id,
-        .location = pane.location,
-        .workspace_path = pane.workspace_path,
+pub fn commitLaunch(self: *Pane, shell: []const u8) void {
+    self.launch_state.commit();
+    self.history_session_started = self.history_service.startSession(self.io, .{
+        .session_id = self.history_session_id,
+        .pane_id = self.id,
+        .location = self.location,
+        .workspace_path = self.workspace_path,
         .shell = shell,
-        .started_at_ms = pane.started_at_ms,
+        .started_at_ms = self.started_at_ms,
     });
 }
 
-pub fn abortLaunch(pane: *Pane) void {
-    pane.launch_state.abort();
-    _ = pane.requestClose();
+pub fn abortLaunch(self: *Pane) void {
+    self.launch_state.abort();
+    _ = self.requestClose();
 }
 
 /// Requests PTY shutdown exactly once. Pane retirement remains owned by
@@ -303,18 +303,18 @@ pub fn abortLaunch(pane: *Pane) void {
 /// ```zig
 /// const started = pane.requestClose();
 /// ```
-pub fn requestClose(pane: *Pane) bool {
-    if (pane.close_requested) {
+pub fn requestClose(self: *Pane) bool {
+    if (self.close_requested) {
         return false;
     }
 
-    pane.close_requested = true;
-    pane.session.shutdown();
+    self.close_requested = true;
+    self.session.shutdown();
     return true;
 }
 
-pub fn mouseState(pane: *const Pane) core.Mouse {
-    const modes = &pane.terminal.modes;
+pub fn mouseState(self: *const Pane) core.Mouse {
+    const modes = &self.terminal.modes;
     const tracking: core.MouseTracking = if (modes.get(.mouse_event_any))
         .any
     else if (modes.get(.mouse_event_button))
@@ -342,8 +342,8 @@ pub fn mouseState(pane: *const Pane) core.Mouse {
 /// const dump = pane.dumpText(.{ .rows = 40, .source = .recent }, &storage);
 /// const text = storage[0..dump.len];
 /// ```
-pub fn dumpText(pane: *const Pane, request: TextRequest, storage: []u8) TextDump {
-    const screen: *const vt.Screen = pane.terminal.screens.active;
+pub fn dumpText(self: *const Pane, request: TextRequest, storage: []u8) TextDump {
+    const screen: *const vt.Screen = self.terminal.screens.active;
     const pages = &screen.pages;
     const total: usize = switch (request.source) {
         .screen => pages.rows,
@@ -383,17 +383,17 @@ pub fn dumpText(pane: *const Pane, request: TextRequest, storage: []u8) TextDump
 /// var matches: [schema.max_search_matches]schema.SearchMatch = undefined;
 /// const result = pane.searchText("error", &matches);
 /// ```
-pub fn searchText(pane: *const Pane, needle: []const u8, storage: []core.SearchMatch) SearchResult {
-    std.debug.assert(!pane.ingest_pending);
+pub fn searchText(self: *const Pane, needle: []const u8, storage: []core.SearchMatch) SearchResult {
+    std.debug.assert(!self.ingest_pending);
     var cursor = PaneCursor.init(needle);
-    while (!(cursor.advance(pane) catch unreachable)) {}
+    while (!(cursor.advance(self) catch unreachable)) {}
     const count = @min(storage.len, cursor.count);
     @memcpy(storage[0..count], cursor.matches[0..count]);
     return .{ .count = @intCast(count), .truncated = cursor.truncated or cursor.count > count };
 }
 
-pub fn key(pane: *const Pane) PaneKey {
-    return .{ .id = pane.id, .generation = pane.generation };
+pub fn key(self: *const Pane) PaneKey {
+    return .{ .id = self.id, .generation = self.generation };
 }
 
 /// Ghostty's page allocator size: the same counter `max_scrollback_bytes`
@@ -402,27 +402,27 @@ pub fn key(pane: *const Pane) PaneKey {
 /// ```zig
 /// const retained_bytes = pane.vtScrollbackBytes();
 /// ```
-pub fn vtScrollbackBytes(pane: *const Pane) usize {
+pub fn vtScrollbackBytes(self: *const Pane) usize {
     var total: usize = 0;
     for (std.enums.values(vt.ScreenSet.Key)) |screen_key| {
-        const screen = pane.terminal.screens.get(screen_key) orelse continue;
+        const screen = self.terminal.screens.get(screen_key) orelse continue;
         total += screen.pages.page_size;
     }
     return total;
 }
 
-pub fn vtScreenBytes(pane: *const Pane) usize {
-    return pane.screen.cells.len * @sizeOf(core.Cell);
+pub fn vtScreenBytes(self: *const Pane) usize {
+    return self.screen.cells.len * @sizeOf(core.Cell);
 }
 
-pub fn actorStarted(pane: *Pane) void {
-    std.debug.assert(pane.actor_count < 8);
-    pane.actor_count += 1;
+pub fn actorStarted(self: *Pane) void {
+    std.debug.assert(self.actor_count < 8);
+    self.actor_count += 1;
 }
 
-pub fn actorFinished(pane: *Pane) void {
-    std.debug.assert(pane.actor_count != 0);
-    pane.actor_count -= 1;
+pub fn actorFinished(self: *Pane) void {
+    std.debug.assert(self.actor_count != 0);
+    self.actor_count -= 1;
 }
 
 /// Borrows the pane allocation until its child-wait actor completes.
@@ -432,13 +432,13 @@ pub fn actorFinished(pane: *Pane) void {
 ///     return;
 /// }
 /// ```
-pub fn beginExitWait(pane: *Pane) bool {
-    if (pane.wait_pending or pane.exit != null) {
+pub fn beginExitWait(self: *Pane) bool {
+    if (self.wait_pending or self.exit != null) {
         return false;
     }
 
-    pane.wait_pending = true;
-    pane.actorStarted();
+    self.wait_pending = true;
+    self.actorStarted();
     return true;
 }
 
@@ -447,61 +447,61 @@ pub fn beginExitWait(pane: *Pane) bool {
 /// ```zig
 /// pane.cancelExitWait();
 /// ```
-pub fn cancelExitWait(pane: *Pane) void {
-    std.debug.assert(pane.wait_pending);
+pub fn cancelExitWait(self: *Pane) void {
+    std.debug.assert(self.wait_pending);
 
-    pane.wait_pending = false;
-    pane.actorFinished();
+    self.wait_pending = false;
+    self.actorFinished();
 }
 
-pub fn completeExitWait(pane: *Pane, exit: exit_module.Exit) void {
-    std.debug.assert(pane.wait_pending);
+pub fn completeExitWait(self: *Pane, exit: exit_module.Exit) void {
+    std.debug.assert(self.wait_pending);
 
-    pane.wait_pending = false;
-    pane.exit = exit;
-    pane.actorFinished();
+    self.wait_pending = false;
+    self.exit = exit;
+    self.actorFinished();
 }
 
-pub fn pointerShape(pane: *const Pane) core.PointerShape {
-    return switch (pane.terminal.mouse_shape) {
+pub fn pointerShape(self: *const Pane) core.PointerShape {
+    return switch (self.terminal.mouse_shape) {
         inline else => |shape| @field(core.PointerShape, @tagName(shape)),
     };
 }
 
-pub fn inputModeState(pane: *const Pane) core.InputModes {
-    const modes = &pane.terminal.modes;
+pub fn inputModeState(self: *const Pane) core.InputModes {
+    const modes = &self.terminal.modes;
     return .{
         .cursor_keys = modes.get(.cursor_keys),
         .keypad_keys = modes.get(.keypad_keys),
         .bracketed_paste = modes.get(.bracketed_paste),
         .focus_events = modes.get(.focus_event),
         .alternate_scroll = modes.get(.mouse_alternate_scroll),
-        .alternate_screen = pane.terminal.screens.active_key == .alternate,
-        .kitty_keyboard_flags = pane.terminal.screens.active.kitty_keyboard.current().int(),
-        .modify_other_keys_2 = pane.terminal.flags.modify_other_keys_2,
+        .alternate_screen = self.terminal.screens.active_key == .alternate,
+        .kitty_keyboard_flags = self.terminal.screens.active.kitty_keyboard.current().int(),
+        .modify_other_keys_2 = self.terminal.flags.modify_other_keys_2,
     };
 }
 
-pub fn destroy(pane: *Pane) void {
-    const gpa = pane.gpa;
-    pane.finishHistory();
-    gpa.free(pane.workspace_path);
-    gpa.free(pane.damaged_rows);
-    pane.text_metadata.deinit(gpa);
-    pane.screen.deinit();
-    pane.render_state.deinit(gpa);
-    pane.history_observer.deinit();
-    pane.media_ingestion.prepared_transfers.discardAll(&pane.media_allocator);
-    pane.media_ingestion.transfer_preparation.deinit(&pane.media_allocator);
-    pane.media.deinit();
-    pane.stream.deinit();
-    pane.media_allocator.detach();
-    pane.terminal.deinit(gpa);
-    pane.session.deinit();
-    if (pane.agent_thread) |snapshot| {
+pub fn destroy(self: *Pane) void {
+    const gpa = self.gpa;
+    self.finishHistory();
+    gpa.free(self.workspace_path);
+    gpa.free(self.damaged_rows);
+    self.text_metadata.deinit(gpa);
+    self.screen.deinit();
+    self.render_state.deinit(gpa);
+    self.history_observer.deinit();
+    self.media_ingestion.prepared_transfers.discardAll(&self.media_allocator);
+    self.media_ingestion.transfer_preparation.deinit(&self.media_allocator);
+    self.media.deinit();
+    self.stream.deinit();
+    self.media_allocator.detach();
+    self.terminal.deinit(gpa);
+    self.session.deinit();
+    if (self.agent_thread) |snapshot| {
         gpa.destroy(snapshot);
     }
-    gpa.destroy(pane);
+    gpa.destroy(self);
 }
 
 /// Admits at most 32 ASCII cells on the cursor's resident row. No parser
@@ -509,14 +509,14 @@ pub fn destroy(pane: *Pane) void {
 /// can enter this path. Ghostty still performs the actual interpretation.
 /// Call only while holding the VT borrow, before starting its actor.
 /// Example: `if (pane.canInlineOutput(bytes)) { finishIngestInline(); }`.
-pub fn canInlineOutput(pane: *const Pane, bytes: []const u8) bool {
-    std.debug.assert(pane.ingest_pending);
+pub fn canInlineOutput(self: *const Pane, bytes: []const u8) bool {
+    std.debug.assert(self.ingest_pending);
 
-    if (bytes.len == 0 or bytes.len > 32 or !pane.stream.ground()) {
+    if (bytes.len == 0 or bytes.len > 32 or !self.stream.ground()) {
         return false;
     }
 
-    const terminal = &pane.terminal;
+    const terminal = &self.terminal;
     const screen = terminal.screens.active;
     const cursor = &screen.cursor;
 
@@ -545,34 +545,34 @@ pub fn canInlineOutput(pane: *const Pane, bytes: []const u8) bool {
     return true;
 }
 
-pub fn ingest(pane: *Pane, io: std.Io, bytes: []const u8) !u64 {
-    pane.search_revision +%= 1;
+pub fn ingest(self: *Pane, io: std.Io, bytes: []const u8) !u64 {
+    self.search_revision +%= 1;
     const started = core.now(io);
     {
         const terminal_allocations = core.enterTerminalAllocations();
         defer terminal_allocations.restore();
-        pane.stream.nextSlice(bytes);
+        self.stream.nextSlice(bytes);
     }
-    const foreground = pane.terminal.colors.foreground.override;
-    const background = pane.terminal.colors.background.override;
-    pane.mouse = pane.mouseState();
-    pane.input_modes = pane.inputModeState();
-    pane.pointer_shape = pane.pointerShape();
-    _ = pane.title.observe(pane.terminal.getTitle() orelse "");
-    if (!std.meta.eql(pane.foreground_override, foreground) or
-        !std.meta.eql(pane.background_override, background))
+    const foreground = self.terminal.colors.foreground.override;
+    const background = self.terminal.colors.background.override;
+    self.mouse = self.mouseState();
+    self.input_modes = self.inputModeState();
+    self.pointer_shape = self.pointerShape();
+    _ = self.title.observe(self.terminal.getTitle() orelse "");
+    if (!std.meta.eql(self.foreground_override, foreground) or
+        !std.meta.eql(self.background_override, background))
     {
-        pane.foreground_override = foreground;
-        pane.background_override = background;
-        pane.semantic_colors_dirty = true;
+        self.foreground_override = foreground;
+        self.background_override = background;
+        self.semantic_colors_dirty = true;
     }
-    pane.render_pending = true;
-    pane.dirty = true;
+    self.render_pending = true;
+    self.dirty = true;
     return core.elapsed(started, core.now(io));
 }
 
-pub fn queueMediaOutput(pane: *Pane, bytes: []const u8) void {
-    pane.media.queueOutput(bytes);
+pub fn queueMediaOutput(self: *Pane, bytes: []const u8) void {
+    self.media.queueOutput(bytes);
 }
 
 /// Seals pending graphics work and borrows the pane allocation for one
@@ -581,13 +581,13 @@ pub fn queueMediaOutput(pane: *Pane, bytes: []const u8) void {
 /// ```zig
 /// const media = pane.beginMediaProcessing() orelse return;
 /// ```
-pub fn beginMediaProcessing(pane: *Pane) ?MediaProcessingBorrow {
-    if (!pane.media.seal()) {
+pub fn beginMediaProcessing(self: *Pane) ?MediaProcessingBorrow {
+    if (!self.media.seal()) {
         return null;
     }
 
-    pane.actorStarted();
-    return .{ .current_size = pane.size };
+    self.actorStarted();
+    return .{ .current_size = self.size };
 }
 
 /// Releases one completed media actor and its sealed batch.
@@ -595,9 +595,9 @@ pub fn beginMediaProcessing(pane: *Pane) ?MediaProcessingBorrow {
 /// ```zig
 /// pane.completeMediaProcessing();
 /// ```
-pub fn completeMediaProcessing(pane: *Pane) void {
-    pane.actorFinished();
-    pane.media.finishSealed();
+pub fn completeMediaProcessing(self: *Pane) void {
+    self.actorFinished();
+    self.media.finishSealed();
 }
 
 /// Rolls back a media actor that could not be scheduled.
@@ -605,8 +605,8 @@ pub fn completeMediaProcessing(pane: *Pane) void {
 /// ```zig
 /// pane.cancelMediaProcessing();
 /// ```
-pub fn cancelMediaProcessing(pane: *Pane) void {
-    pane.completeMediaProcessing();
+pub fn cancelMediaProcessing(self: *Pane) void {
+    self.completeMediaProcessing();
 }
 
 /// Commits graphics damage after quota enforcement and refreshes whether
@@ -615,27 +615,27 @@ pub fn cancelMediaProcessing(pane: *Pane) void {
 /// ```zig
 /// pane.refreshGraphicsProjection();
 /// ```
-pub fn refreshGraphicsProjection(pane: *Pane) void {
-    pane.observeGraphicsDamage();
-    pane.graphics_present = pane.media.terminal.screens.active.kitty_images.images.count() != 0;
+pub fn refreshGraphicsProjection(self: *Pane) void {
+    self.observeGraphicsDamage();
+    self.graphics_present = self.media.terminal.screens.active.kitty_images.images.count() != 0;
 }
 
 /// Processes a sealed media batch through explicit resource borrows.
 /// Example: `pane.processMedia(size, &stats);`.
-pub fn processMedia(pane: *Pane, current_size: core.TerminalSize, stats: *Stats) void {
-    var processor = pane.mediaProcessor();
+pub fn processMedia(self: *Pane, current_size: core.TerminalSize, stats: *Stats) void {
+    var processor = self.mediaProcessor();
     processor.processMedia(current_size, stats);
 }
 
-fn mediaProcessor(pane: *Pane) Processor {
+fn mediaProcessor(self: *Pane) Processor {
     return .{
-        .state = &pane.media_ingestion,
-        .media = &pane.media,
-        .media_allocator = &pane.media_allocator,
-        .graphics_limits = pane.graphics_limits,
-        .graphics_storage_limit = pane.graphics_storage_limit,
-        .io = pane.io,
-        .responses = .{ .context = &pane.pty_responses, .write_fn = struct {
+        .state = &self.media_ingestion,
+        .media = &self.media,
+        .media_allocator = &self.media_allocator,
+        .graphics_limits = self.graphics_limits,
+        .graphics_storage_limit = self.graphics_storage_limit,
+        .io = self.io,
+        .responses = .{ .context = &self.pty_responses, .write_fn = struct {
             fn write(context: *anyopaque, bytes: []const u8) void {
                 const queue: *PtyResponseQueue = @ptrCast(@alignCast(context));
                 _ = queue.push(bytes);
@@ -650,19 +650,19 @@ fn mediaProcessor(pane: *Pane) Processor {
 /// ```zig
 /// pane.noteSharedTransport(true);
 /// ```
-pub fn noteSharedTransport(pane: *Pane, shared: bool) void {
-    pane.media_ingestion.noteSharedTransport(shared);
+pub fn noteSharedTransport(self: *Pane, shared: bool) void {
+    self.media_ingestion.noteSharedTransport(shared);
 }
 
 /// Freezes available image generations for shared-memory clients.
 /// Example: `pane.prepareSharedTransfers(&stats);`.
-pub fn prepareSharedTransfers(pane: *Pane, stats: *Stats) void {
-    var processor = pane.mediaProcessor();
+pub fn prepareSharedTransfers(self: *Pane, stats: *Stats) void {
+    var processor = self.mediaProcessor();
     processor.prepareSharedTransfers(stats);
 }
 
-pub fn queueHistoryInput(pane: *Pane, observation: ObserverInputObservation) void {
-    pane.history_observer.queueInput(observation);
+pub fn queueHistoryInput(self: *Pane, observation: ObserverInputObservation) void {
+    self.history_observer.queueInput(observation);
 }
 
 /// Enqueues one complete client message for the PTY writer or records the
@@ -671,8 +671,8 @@ pub fn queueHistoryInput(pane: *Pane, observation: ObserverInputObservation) voi
 /// ```zig
 /// const queued = pane.queuePtyInput(bytes);
 /// ```
-pub fn queuePtyInput(pane: *Pane, bytes: []const u8) bool {
-    return pane.input_queue.push(bytes);
+pub fn queuePtyInput(self: *Pane, bytes: []const u8) bool {
+    return self.input_queue.push(bytes);
 }
 
 /// Acquires the pane allocation for one asynchronous PTY read.
@@ -682,13 +682,13 @@ pub fn queuePtyInput(pane: *Pane, bytes: []const u8) bool {
 ///     return;
 /// }
 /// ```
-pub fn beginPtyOutputRead(pane: *Pane) bool {
-    if (pane.output_pending or pane.output_done or pane.ingest_pending) {
+pub fn beginPtyOutputRead(self: *Pane) bool {
+    if (self.output_pending or self.output_done or self.ingest_pending) {
         return false;
     }
 
-    pane.output_pending = true;
-    pane.actorStarted();
+    self.output_pending = true;
+    self.actorStarted();
     return true;
 }
 
@@ -697,15 +697,15 @@ pub fn beginPtyOutputRead(pane: *Pane) bool {
 /// ```zig
 /// pane.completePtyOutputRead(.data);
 /// ```
-pub fn completePtyOutputRead(pane: *Pane, result: pane_namespace.PtyOutputReadResult) void {
-    std.debug.assert(pane.output_pending);
-    std.debug.assert(!pane.ingest_pending);
+pub fn completePtyOutputRead(self: *Pane, result: pane_namespace.PtyOutputReadResult) void {
+    std.debug.assert(self.output_pending);
+    std.debug.assert(!self.ingest_pending);
 
-    pane.output_pending = false;
-    pane.actorFinished();
+    self.output_pending = false;
+    self.actorFinished();
 
     if (result == .finished) {
-        pane.output_done = true;
+        self.output_done = true;
     }
 }
 
@@ -714,11 +714,11 @@ pub fn completePtyOutputRead(pane: *Pane, result: pane_namespace.PtyOutputReadRe
 /// ```zig
 /// pane.cancelPtyOutputRead();
 /// ```
-pub fn cancelPtyOutputRead(pane: *Pane) void {
-    std.debug.assert(pane.output_pending);
+pub fn cancelPtyOutputRead(self: *Pane) void {
+    std.debug.assert(self.output_pending);
 
-    pane.output_pending = false;
-    pane.actorFinished();
+    self.output_pending = false;
+    self.actorFinished();
 }
 
 /// Permanently closes the output stream after a failure outside a read.
@@ -726,10 +726,10 @@ pub fn cancelPtyOutputRead(pane: *Pane) void {
 /// ```zig
 /// pane.finishPtyOutput();
 /// ```
-pub fn finishPtyOutput(pane: *Pane) void {
-    std.debug.assert(!pane.output_pending);
-    std.debug.assert(!pane.ingest_pending);
-    pane.output_done = true;
+pub fn finishPtyOutput(self: *Pane) void {
+    std.debug.assert(!self.output_pending);
+    std.debug.assert(!self.ingest_pending);
+    self.output_done = true;
 }
 
 /// Borrows the freshly read bytes while one VT ingest actor owns them.
@@ -737,15 +737,15 @@ pub fn finishPtyOutput(pane: *Pane) void {
 /// ```zig
 /// const bytes = pane.beginOutputIngest(output_len);
 /// ```
-pub fn beginOutputIngest(pane: *Pane, output_len: u16) []const u8 {
-    std.debug.assert(!pane.ingest_pending);
-    std.debug.assert(!pane.output_pending);
+pub fn beginOutputIngest(self: *Pane, output_len: u16) []const u8 {
+    std.debug.assert(!self.ingest_pending);
+    std.debug.assert(!self.output_pending);
     std.debug.assert(output_len != 0);
-    std.debug.assert(output_len <= pane.output_buffer.len);
+    std.debug.assert(output_len <= self.output_buffer.len);
 
-    pane.ingest_pending = true;
-    pane.actorStarted();
-    return pane.output_buffer[0..output_len];
+    self.ingest_pending = true;
+    self.actorStarted();
+    return self.output_buffer[0..output_len];
 }
 
 /// Releases the output buffer after VT ingestion completes.
@@ -753,12 +753,12 @@ pub fn beginOutputIngest(pane: *Pane, output_len: u16) []const u8 {
 /// ```zig
 /// pane.completeOutputIngest();
 /// ```
-pub fn completeOutputIngest(pane: *Pane) void {
-    std.debug.assert(pane.ingest_pending);
+pub fn completeOutputIngest(self: *Pane) void {
+    std.debug.assert(self.ingest_pending);
 
-    pane.ingest_pending = false;
-    pane.actorFinished();
-    pane.applyTerminalColors();
+    self.ingest_pending = false;
+    self.actorFinished();
+    self.applyTerminalColors();
 }
 
 /// Rolls back an ingest actor that could not be scheduled.
@@ -766,8 +766,8 @@ pub fn completeOutputIngest(pane: *Pane) void {
 /// ```zig
 /// pane.cancelOutputIngest();
 /// ```
-pub fn cancelOutputIngest(pane: *Pane) void {
-    pane.completeOutputIngest();
+pub fn cancelOutputIngest(self: *Pane) void {
+    self.completeOutputIngest();
 }
 
 /// Borrows the head response until one asynchronous write settles.
@@ -776,14 +776,14 @@ pub fn cancelOutputIngest(pane: *Pane) void {
 /// ```zig
 /// const response = pane.beginPtyResponseWrite() orelse return;
 /// ```
-pub fn beginPtyResponseWrite(pane: *Pane) ?[]const u8 {
-    if (pane.response_pending) {
+pub fn beginPtyResponseWrite(self: *Pane) ?[]const u8 {
+    if (self.response_pending) {
         return null;
     }
 
-    const response = pane.pty_responses.peek() orelse return null;
-    pane.response_pending = true;
-    pane.actorStarted();
+    const response = self.pty_responses.peek() orelse return null;
+    self.response_pending = true;
+    self.actorStarted();
     return response;
 }
 
@@ -793,15 +793,15 @@ pub fn beginPtyResponseWrite(pane: *Pane) ?[]const u8 {
 /// ```zig
 /// pane.completePtyResponseWrite(.succeeded);
 /// ```
-pub fn completePtyResponseWrite(pane: *Pane, result: pane_namespace.PtyWriteResult) void {
-    std.debug.assert(pane.response_pending);
+pub fn completePtyResponseWrite(self: *Pane, result: pane_namespace.PtyWriteResult) void {
+    std.debug.assert(self.response_pending);
 
-    pane.response_pending = false;
-    pane.actorFinished();
+    self.response_pending = false;
+    self.actorFinished();
 
     switch (result) {
-        .succeeded => pane.pty_responses.pop(),
-        .failed => pane.pty_responses.clear(),
+        .succeeded => self.pty_responses.pop(),
+        .failed => self.pty_responses.clear(),
     }
 }
 
@@ -811,11 +811,11 @@ pub fn completePtyResponseWrite(pane: *Pane, result: pane_namespace.PtyWriteResu
 /// ```zig
 /// pane.cancelPtyResponseWrite();
 /// ```
-pub fn cancelPtyResponseWrite(pane: *Pane) void {
-    std.debug.assert(pane.response_pending);
+pub fn cancelPtyResponseWrite(self: *Pane) void {
+    std.debug.assert(self.response_pending);
 
-    pane.response_pending = false;
-    pane.actorFinished();
+    self.response_pending = false;
+    self.actorFinished();
 }
 
 /// Borrows the next stable queue chunk for one asynchronous PTY write.
@@ -824,15 +824,15 @@ pub fn cancelPtyResponseWrite(pane: *Pane) void {
 /// ```zig
 /// const bytes = pane.beginPtyInputWrite() orelse return;
 /// ```
-pub fn beginPtyInputWrite(pane: *Pane) ?[]const u8 {
-    if (pane.input_write_pending) {
+pub fn beginPtyInputWrite(self: *Pane) ?[]const u8 {
+    if (self.input_write_pending) {
         return null;
     }
 
-    const bytes = pane.input_queue.nextChunk() orelse return null;
-    pane.input_write_pending = true;
-    pane.input_write_len = bytes.len;
-    pane.actorStarted();
+    const bytes = self.input_queue.nextChunk() orelse return null;
+    self.input_write_pending = true;
+    self.input_write_len = bytes.len;
+    self.actorStarted();
     return bytes;
 }
 
@@ -842,18 +842,18 @@ pub fn beginPtyInputWrite(pane: *Pane) ?[]const u8 {
 /// ```zig
 /// pane.completePtyInputWrite(.succeeded);
 /// ```
-pub fn completePtyInputWrite(pane: *Pane, result: pane_namespace.PtyWriteResult) void {
-    std.debug.assert(pane.input_write_pending);
-    std.debug.assert(pane.input_write_len != 0);
+pub fn completePtyInputWrite(self: *Pane, result: pane_namespace.PtyWriteResult) void {
+    std.debug.assert(self.input_write_pending);
+    std.debug.assert(self.input_write_len != 0);
 
-    const written = pane.input_write_len;
-    pane.input_write_pending = false;
-    pane.input_write_len = 0;
-    pane.actorFinished();
+    const written = self.input_write_len;
+    self.input_write_pending = false;
+    self.input_write_len = 0;
+    self.actorFinished();
 
     switch (result) {
-        .succeeded => pane.input_queue.consume(written),
-        .failed => pane.input_queue.clear(),
+        .succeeded => self.input_queue.consume(written),
+        .failed => self.input_queue.clear(),
     }
 }
 
@@ -863,17 +863,17 @@ pub fn completePtyInputWrite(pane: *Pane, result: pane_namespace.PtyWriteResult)
 /// ```zig
 /// pane.cancelPtyInputWrite();
 /// ```
-pub fn cancelPtyInputWrite(pane: *Pane) void {
-    std.debug.assert(pane.input_write_pending);
-    std.debug.assert(pane.input_write_len != 0);
+pub fn cancelPtyInputWrite(self: *Pane) void {
+    std.debug.assert(self.input_write_pending);
+    std.debug.assert(self.input_write_len != 0);
 
-    pane.input_write_pending = false;
-    pane.input_write_len = 0;
-    pane.actorFinished();
+    self.input_write_pending = false;
+    self.input_write_len = 0;
+    self.actorFinished();
 }
 
-pub fn queueHistoryOutput(pane: *Pane, observation: ObserverOutputObservation) void {
-    pane.history_observer.queueOutput(observation);
+pub fn queueHistoryOutput(self: *Pane, observation: ObserverOutputObservation) void {
+    self.history_observer.queueOutput(observation);
 }
 
 /// Seals pending history work and borrows the pane allocation for one
@@ -882,15 +882,15 @@ pub fn queueHistoryOutput(pane: *Pane, observation: ObserverOutputObservation) v
 /// ```zig
 /// const observation = pane.beginHistoryObservation() orelse return;
 /// ```
-pub fn beginHistoryObservation(pane: *Pane) ?HistoryObservationBorrow {
-    if (!pane.history_observer.seal()) {
+pub fn beginHistoryObservation(self: *Pane) ?HistoryObservationBorrow {
+    if (!self.history_observer.seal()) {
         return null;
     }
 
-    pane.actorStarted();
+    self.actorStarted();
     return .{
-        .current_size = pane.size,
-        .process_cache = pane.agent_process_cache,
+        .current_size = self.size,
+        .process_cache = self.agent_process_cache,
     };
 }
 
@@ -900,22 +900,22 @@ pub fn beginHistoryObservation(pane: *Pane) ?HistoryObservationBorrow {
 /// ```zig
 /// const transition = pane.completeHistoryObservation(probe.cache);
 /// ```
-pub fn completeHistoryObservation(pane: *Pane, process_cache: Cache) HistoryObservationCompletion {
-    pane.actorFinished();
-    pane.history_observer.finishSealed();
+pub fn completeHistoryObservation(self: *Pane, process_cache: Cache) HistoryObservationCompletion {
+    self.actorFinished();
+    self.history_observer.finishSealed();
 
-    const cwd_changed = pane.updateObservedCwd();
-    const previous_process = pane.agent_process_cache;
-    pane.agent_process_cache = process_cache;
+    const cwd_changed = self.updateObservedCwd();
+    const previous_process = self.agent_process_cache;
+    self.agent_process_cache = process_cache;
 
     if (!std.mem.eql(u8, previous_process.name(), process_cache.name())) {
-        revisions.advance(&pane.foreground_revision);
+        revisions.advance(&self.foreground_revision);
     }
 
     return .{
         .previous_process = previous_process,
         .cwd_changed = cwd_changed,
-        .shell_foreground = agent_process.shellForeground(process_cache, pane.session.processId()),
+        .shell_foreground = agent_process.shellForeground(process_cache, self.session.processId()),
     };
 }
 
@@ -924,9 +924,9 @@ pub fn completeHistoryObservation(pane: *Pane, process_cache: Cache) HistoryObse
 /// ```zig
 /// pane.cancelHistoryObservation();
 /// ```
-pub fn cancelHistoryObservation(pane: *Pane) void {
-    pane.actorFinished();
-    pane.history_observer.finishSealed();
+pub fn cancelHistoryObservation(self: *Pane) void {
+    self.actorFinished();
+    self.history_observer.finishSealed();
 }
 
 /// Replays the pane's sealed observation batch and records completed
@@ -935,11 +935,11 @@ pub fn cancelHistoryObservation(pane: *Pane) void {
 /// ```zig
 /// pane.processHistoryObservation(.{ .size = size, .provider = provider }, &stats);
 /// ```
-pub fn processHistoryObservation(pane: *Pane, context: struct { size: core.TerminalSize, provider: core.AgentProvider }, stats: *HistoryStats) void {
+pub fn processHistoryObservation(self: *Pane, context: struct { size: core.TerminalSize, provider: core.AgentProvider }, stats: *HistoryStats) void {
     var cwd_buffer: [std.fs.max_path_bytes]u8 = undefined;
-    const cwd = cwd_module.read(pane.session.processId(), &cwd_buffer);
-    var capture_context: CaptureContext = .{ .pane = pane, .observation_stats = stats };
-    pane.history_observer.processSealed(.{
+    const cwd = cwd_module.read(self.session.processId(), &cwd_buffer);
+    var capture_context: CaptureContext = .{ .pane = self, .observation_stats = stats };
+    self.history_observer.processSealed(.{
         .cwd = cwd,
         .current_size = context.size,
         .stats = stats,
@@ -947,26 +947,26 @@ pub fn processHistoryObservation(pane: *Pane, context: struct { size: core.Termi
     }, &capture_context);
 }
 
-fn updateObservedCwd(pane: *Pane) bool {
-    return pane.cwd.update(pane.history_observer.currentCwd());
+fn updateObservedCwd(self: *Pane) bool {
+    return self.cwd.update(self.history_observer.currentCwd());
 }
 
-pub fn queueGraphicsLimitResponse(pane: *Pane, image_id: u32) void {
+pub fn queueGraphicsLimitResponse(self: *Pane, image_id: u32) void {
     var response: [128]u8 = undefined;
     const bytes = std.fmt.bufPrint(
         &response,
         "\x1b_Gi={d};ENOMEM: graphics upload limit exceeded\x1b\\",
         .{image_id},
     ) catch return;
-    _ = pane.pty_responses.push(bytes);
+    _ = self.pty_responses.push(bytes);
 }
 
-pub fn observeGraphicsDamage(pane: *Pane) void {
-    const storage = &pane.media.terminal.screens.active.kitty_images;
+pub fn observeGraphicsDamage(self: *Pane) void {
+    const storage = &self.media.terminal.screens.active.kitty_images;
     if (!storage.dirty) {
         return;
     }
-    revisions.advance(&pane.graphics_revision);
+    revisions.advance(&self.graphics_revision);
     storage.dirty = false;
 }
 
@@ -997,22 +997,22 @@ pub fn reportProgress(handler: *vt.TerminalStream.Handler, report: vt.osc.Comman
 /// ```zig
 /// pane.expireProgress(pane.session.shellForeground() orelse false);
 /// ```
-pub fn expireProgress(pane: *Pane, shell_foreground: bool) void {
+pub fn expireProgress(self: *Pane, shell_foreground: bool) void {
     if (!shell_foreground) {
         return;
     }
 
-    pane.applyProgress(.remove, null);
+    self.applyProgress(.remove, null);
 }
 
-fn applyProgress(pane: *Pane, state: core.PaneProgressState, percent: ?u8) void {
-    if (pane.progress_state == state and pane.progress_percent == percent) {
+fn applyProgress(self: *Pane, state: core.PaneProgressState, percent: ?u8) void {
+    if (self.progress_state == state and self.progress_percent == percent) {
         return;
     }
 
-    pane.progress_state = state;
-    pane.progress_percent = percent;
-    revisions.advance(&pane.progress_revision);
+    self.progress_state = state;
+    self.progress_percent = percent;
+    revisions.advance(&self.progress_revision);
 }
 
 pub fn writeMediaPty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) void {
@@ -1043,18 +1043,18 @@ pub const AgentCommand = @import("AgentCommand.zig");
 
 /// Captures runtime-owned metadata without borrowing the observation worker's VT.
 /// Call only on the runtime thread. Example: `_ = pane.recordAgentCommand(report);`.
-pub fn recordAgentCommand(pane: *Pane, report: AgentCommand) bool {
-    const sequence = pane.history_sequence.reserve() orelse return false;
+pub fn recordAgentCommand(self: *Pane, report: AgentCommand) bool {
+    const sequence = self.history_sequence.reserve() orelse return false;
 
-    return pane.history_service.recordAgentCommand(pane.io, .{
+    return self.history_service.recordAgentCommand(self.io, .{
         .context = .{
-            .session_id = pane.history_session_id,
-            .pane_id = pane.id,
-            .location = pane.location,
+            .session_id = self.history_session_id,
+            .pane_id = self.id,
+            .location = self.location,
             .sequence = sequence,
-            .workspace_path = pane.workspace_path,
-            .cols = pane.size.cols,
-            .rows = pane.size.rows,
+            .workspace_path = self.workspace_path,
+            .cols = self.size.cols,
+            .rows = self.size.rows,
         },
         .command = report.command,
         .provider = report.provider,
@@ -1073,33 +1073,33 @@ pub const CaptureContext = @import("CaptureContext.zig");
 /// ```zig
 /// pane.noteInjectedSubmission();
 /// ```
-pub fn noteInjectedSubmission(pane: *Pane) void {
-    _ = pane.injected_submissions.fetchAdd(1, .monotonic);
+pub fn noteInjectedSubmission(self: *Pane) void {
+    _ = self.injected_submissions.fetchAdd(1, .monotonic);
 }
 
-pub fn finishHistory(pane: *Pane) void {
-    if (pane.history_session_finished) {
+pub fn finishHistory(self: *Pane) void {
+    if (self.history_session_finished) {
         return;
     }
-    var capture_context: CaptureContext = .{ .pane = pane };
-    if (pane.history_observer.enabled) {
-        pane.history_observer.tracker.interrupt(pane_namespace.historyClock(pane.io), &capture_context);
+    var capture_context: CaptureContext = .{ .pane = self };
+    if (self.history_observer.enabled) {
+        self.history_observer.tracker.interrupt(pane_namespace.historyClock(self.io), &capture_context);
     }
-    if (pane.history_session_started) {
-        _ = pane.history_service.finishSession(pane.io, .{
-            .id = pane.history_session_id,
-            .finished_at_ms = std.Io.Timestamp.now(pane.io, .real).toMilliseconds(),
+    if (self.history_session_started) {
+        _ = self.history_service.finishSession(self.io, .{
+            .id = self.history_session_id,
+            .finished_at_ms = std.Io.Timestamp.now(self.io, .real).toMilliseconds(),
         });
     }
-    pane.history_session_finished = true;
+    self.history_session_finished = true;
 }
 
-pub fn queueExitedHistory(pane: *Pane, exit: exit_module.Exit) void {
-    if (pane.history_exit_queued) {
+pub fn queueExitedHistory(self: *Pane, exit: exit_module.Exit) void {
+    if (self.history_exit_queued) {
         return;
     }
-    pane.history_observer.queueShellExit(pane_namespace.historyClock(pane.io), exit.code());
-    pane.history_exit_queued = true;
+    self.history_observer.queueShellExit(pane_namespace.historyClock(self.io), exit.code());
+    self.history_exit_queued = true;
 }
 
 /// True only when no actor task can still access the pane allocation.
@@ -1112,29 +1112,29 @@ pub fn queueExitedHistory(pane: *Pane, exit: exit_module.Exit) void {
 ///     pane.destroy();
 /// }
 /// ```
-pub fn readyToDestroy(pane: *const Pane) bool {
-    return pane.exit != null and pane.output_done and
-        pane.actor_count == 0 and
-        pane.history_observer.worker == null and
-        !pane.history_observer.hasPending() and
-        pane.media.worker == null and
-        !pane.media.hasPending() and
-        pane.pty_responses.len == 0;
+pub fn readyToDestroy(self: *const Pane) bool {
+    return self.exit != null and self.output_done and
+        self.actor_count == 0 and
+        self.history_observer.worker == null and
+        !self.history_observer.hasPending() and
+        self.media.worker == null and
+        !self.media.hasPending() and
+        self.pty_responses.len == 0;
 }
 
 /// Replaces host defaults without changing child overrides or cell styles.
 /// An ingest actor never shares mutable VT state with this operation.
 /// Example: `pane.setTerminalColors(.{ .background = .{ 16, 16, 16 } });`.
-pub fn setTerminalColors(pane: *Pane, colors: core.TerminalColors) void {
-    pane.pending_terminal_colors = colors;
-    if (!pane.ingest_pending) {
-        pane.applyTerminalColors();
+pub fn setTerminalColors(self: *Pane, colors: core.TerminalColors) void {
+    self.pending_terminal_colors = colors;
+    if (!self.ingest_pending) {
+        self.applyTerminalColors();
     }
 }
 
-fn applyTerminalColors(pane: *Pane) void {
-    const colors = pane.pending_terminal_colors orelse return;
-    std.debug.assert(!pane.ingest_pending);
+fn applyTerminalColors(self: *Pane) void {
+    const colors = self.pending_terminal_colors orelse return;
+    std.debug.assert(!self.ingest_pending);
     const foreground = terminalRgb(colors.foreground);
     const background = terminalRgb(colors.background);
     var palette = vt.color.default;
@@ -1143,21 +1143,21 @@ fn applyTerminalColors(pane: *Pane) void {
             palette[index] = terminalRgb(rgb).?;
         }
     }
-    pane.pending_terminal_colors = null;
-    if (std.meta.eql(pane.terminal.colors.foreground.default, foreground) and
-        std.meta.eql(pane.terminal.colors.background.default, background) and
-        std.meta.eql(pane.terminal.colors.palette.original, palette))
+    self.pending_terminal_colors = null;
+    if (std.meta.eql(self.terminal.colors.foreground.default, foreground) and
+        std.meta.eql(self.terminal.colors.background.default, background) and
+        std.meta.eql(self.terminal.colors.palette.original, palette))
     {
         return;
     }
 
-    pane.terminal.colors.foreground.default = foreground;
-    pane.terminal.colors.background.default = background;
-    pane.terminal.colors.palette.changeDefault(palette);
-    pane.terminal.flags.dirty.palette = true;
-    pane.render_pending = true;
-    pane.semantic_colors_dirty = true;
-    pane.dirty = true;
+    self.terminal.colors.foreground.default = foreground;
+    self.terminal.colors.background.default = background;
+    self.terminal.colors.palette.changeDefault(palette);
+    self.terminal.flags.dirty.palette = true;
+    self.render_pending = true;
+    self.semantic_colors_dirty = true;
+    self.dirty = true;
 }
 
 fn terminalRgb(color: ?[3]u8) ?vt.color.RGB {
@@ -1165,31 +1165,31 @@ fn terminalRgb(color: ?[3]u8) ?vt.color.RGB {
     return .{ .r = rgb[0], .g = rgb[1], .b = rgb[2] };
 }
 
-pub fn resize(pane: *Pane, size: core.TerminalSize) !void {
-    try pane.requestResize(size);
-    try pane.applyPendingResize();
+pub fn resize(self: *Pane, size: core.TerminalSize) !void {
+    try self.requestResize(size);
+    try self.applyPendingResize();
 }
 
-pub fn requestResize(pane: *Pane, size: core.TerminalSize) !void {
-    if (std.meta.eql(pane.pending_size orelse pane.size, size)) {
+pub fn requestResize(self: *Pane, size: core.TerminalSize) !void {
+    if (std.meta.eql(self.pending_size orelse self.size, size)) {
         return;
     }
-    try pane.session.resize(.{
+    try self.session.resize(.{
         .cols = size.cols,
         .rows = size.rows,
         .cell_width_px = size.cell_width_px,
         .cell_height_px = size.cell_height_px,
     });
-    pane.pending_size = size;
+    self.pending_size = size;
 }
 
-pub fn applyPendingResize(pane: *Pane) !void {
-    const size = pane.pending_size orelse return;
-    pane.search_revision +%= 1;
+pub fn applyPendingResize(self: *Pane) !void {
+    const size = self.pending_size orelse return;
+    self.search_revision +%= 1;
     {
         const terminal_allocations = core.enterTerminalAllocations();
         defer terminal_allocations.restore();
-        try pane.stream.handler.resize(.{
+        try self.stream.handler.resize(.{
             .cols = size.cols,
             .rows = size.rows,
             .cell_size_px = if (size.cell_width_px != 0 and size.cell_height_px != 0) .{
@@ -1198,21 +1198,21 @@ pub fn applyPendingResize(pane: *Pane) !void {
             } else null,
         });
     }
-    pane.observeGraphicsDamage();
+    self.observeGraphicsDamage();
     try pane_namespace.resizeScreenStorage(.{
-        .gpa = pane.gpa,
-        .screen = &pane.screen,
-        .damaged_rows = &pane.damaged_rows,
+        .gpa = self.gpa,
+        .screen = &self.screen,
+        .damaged_rows = &self.damaged_rows,
         .cols = size.cols,
         .rows = size.rows,
     });
     // Committed only after every fallible step: a failure above leaves the
     // pending size in place for a retry and the pane fully coherent.
-    pane.size = size;
-    pane.pending_size = null;
-    pane.history_observer.queueResize(size);
-    pane.media.queueResize(size);
-    try pane.render(true);
+    self.size = size;
+    self.pending_size = null;
+    self.history_observer.queueResize(size);
+    self.media.queueResize(size);
+    try self.render(true);
 }
 
 /// Whether the child is inside a synchronized-output block (DEC private
@@ -1228,46 +1228,46 @@ pub fn applyPendingResize(pane: *Pane) !void {
 ///     return;
 /// }
 /// ```
-pub fn holdFrames(pane: *Pane, io: std.Io) bool {
-    if (!pane.terminal.modes.get(.synchronized_output)) {
-        pane.sync_hold_started_ns = null;
+pub fn holdFrames(self: *Pane, io: std.Io) bool {
+    if (!self.terminal.modes.get(.synchronized_output)) {
+        self.sync_hold_started_ns = null;
         return false;
     }
     const now_ns: u64 = @intCast(@max(std.Io.Timestamp.now(io, .awake).nanoseconds, 0));
-    const started = pane.sync_hold_started_ns orelse {
-        pane.sync_hold_started_ns = now_ns;
+    const started = self.sync_hold_started_ns orelse {
+        self.sync_hold_started_ns = now_ns;
         return true;
     };
     return now_ns -| started < pane_namespace.max_sync_hold_ns;
 }
 
-pub fn render(pane: *Pane, force: bool) !void {
+pub fn render(self: *Pane, force: bool) !void {
     {
         const terminal_allocations = core.enterTerminalAllocations();
         defer terminal_allocations.restore();
-        try pane.render_state.update(pane.gpa, &pane.terminal);
+        try self.render_state.update(self.gpa, &self.terminal);
     }
-    try pane.text_metadata.update(pane.gpa, &pane.render_state);
-    const force_all = force or pane.semantic_colors_dirty;
+    try self.text_metadata.update(self.gpa, &self.render_state);
+    const force_all = force or self.semantic_colors_dirty;
     _ = blit.blit(.{
-        .buffer = &pane.screen,
-        .area = pane.screen.area(),
-        .terminal = &pane.terminal,
-        .state = &pane.render_state,
-        .options = .{ .force = force_all, .damaged_rows = pane.damaged_rows },
+        .buffer = &self.screen,
+        .area = self.screen.area(),
+        .terminal = &self.terminal,
+        .state = &self.render_state,
+        .options = .{ .force = force_all, .damaged_rows = self.damaged_rows },
     });
-    pane.semantic_colors_dirty = false;
-    pane.render_pending = false;
-    revisions.advance(&pane.cell_revision);
-    const cursor = pane.render_state.cursor;
-    pane.cursor = if (cursor.visible and cursor.viewport != null and
-        cursor.viewport.?.x < pane.screen.w and cursor.viewport.?.y < pane.screen.h)
+    self.semantic_colors_dirty = false;
+    self.render_pending = false;
+    revisions.advance(&self.cell_revision);
+    const cursor = self.render_state.cursor;
+    self.cursor = if (cursor.visible and cursor.viewport != null and
+        cursor.viewport.?.x < self.screen.w and cursor.viewport.?.y < self.screen.h)
         .{
             .visible = true,
             .x = cursor.viewport.?.x,
             .y = cursor.viewport.?.y,
             .appearance = .{
-                .shape = if (pane.terminal.cursor.is_default) .default else switch (cursor.visual_style) {
+                .shape = if (self.terminal.cursor.is_default) .default else switch (cursor.visual_style) {
                     .block => .block,
                     .bar => .bar,
                     .underline => .underline,
@@ -1278,5 +1278,5 @@ pub fn render(pane: *Pane, force: bool) !void {
         }
     else
         .{};
-    pane.dirty = true;
+    self.dirty = true;
 }

@@ -13,20 +13,20 @@ hits: GenericHits(core.TabId, core.max_tabs_per_workspace) = .{},
 workspace: ?core.WorkspaceLocation = null,
 
 /// Example: `drag.present(&view.hits, delivered_workspace);`
-pub fn present(drag: *TabDrag, hits: *const widget.Hits, workspace: ?core.WorkspaceLocation) void {
-    if (drag.gesture.source) |source| {
+pub fn present(self: *TabDrag, hits: *const widget.Hits, workspace: ?core.WorkspaceLocation) void {
+    if (self.gesture.source) |source| {
         if (!std.meta.eql(@as(?core.WorkspaceLocation, source.workspace), workspace)) {
-            drag.gesture.cancel();
+            self.gesture.cancel();
         }
     }
 
-    drag.hits.clear();
-    drag.workspace = workspace;
+    self.hits.clear();
+    self.workspace = workspace;
     for (hits.registered()) |hit| {
         if (hit.action == .select_tab) {
             const visible = hits.at(hit.rect.x, hit.rect.y);
             if (visible != null and visible.? == .select_tab and visible.?.select_tab == hit.action.select_tab) {
-                drag.hits.add(hit.rect, hit.action.select_tab);
+                self.hits.add(hit.rect, hit.action.select_tab);
             }
         }
     }
@@ -34,8 +34,8 @@ pub fn present(drag: *TabDrag, hits: *const widget.Hits, workspace: ?core.Worksp
 
 /// Includes the one-cell gaps between tabs in the nearest insertion slot.
 /// Example: `const target = drag.destination(mouse);`
-pub fn destination(drag: *const TabDrag, mouse: data.Mouse) ?core.TabMoveTarget {
-    const entries = drag.hits.registered();
+pub fn destination(self: *const TabDrag, mouse: data.Mouse) ?core.TabMoveTarget {
+    const entries = self.hits.registered();
     if (entries.len == 0) {
         return null;
     }

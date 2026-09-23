@@ -15,11 +15,11 @@ direction: types.PaneDirection,
 /// ```zig
 /// try command.validateWire();
 /// ```
-pub fn validateWire(command: PaneFocusCommand) !void {
-    try command.requester.validateWire();
-    try codec.validateRequestId(command.request_id);
-    try codec.validatePaneId(command.pane_id);
-    if (command.pane_generation == 0) {
+pub fn validateWire(self: PaneFocusCommand) !void {
+    try self.requester.validateWire();
+    try codec.validateRequestId(self.request_id);
+    try codec.validatePaneId(self.pane_id);
+    if (self.pane_generation == 0) {
         return error.InvalidPaneGeneration;
     }
 }

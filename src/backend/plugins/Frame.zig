@@ -9,13 +9,13 @@ pane_generation: u64,
 storage: []u8,
 len: usize,
 
-pub fn bytes(frame: *const Frame) []u8 {
-    return frame.storage[0..frame.len];
+pub fn bytes(self: *const Frame) []u8 {
+    return self.storage[0..self.len];
 }
 
-pub fn deinit(frame: *Frame) void {
-    const gpa = frame.gpa;
-    std.crypto.secureZero(u8, frame.storage);
-    gpa.free(frame.storage);
-    gpa.destroy(frame);
+pub fn deinit(self: *Frame) void {
+    const gpa = self.gpa;
+    std.crypto.secureZero(u8, self.storage);
+    gpa.free(self.storage);
+    gpa.destroy(self);
 }

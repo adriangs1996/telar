@@ -16,36 +16,36 @@ count: u8 = 0,
 /// const gemini = try table.add("gemini");
 /// try gemini.process_names.append("gemini");
 /// ```
-pub fn add(table: *Table, name: []const u8) agent_manifest.AddError!*AgentManifest {
+pub fn add(self: *Table, name: []const u8) agent_manifest.AddError!*AgentManifest {
     if (!agent_manifest.validName(name)) {
         return error.InvalidName;
     }
-    if (table.findByName(name)) |existing| {
+    if (self.findByName(name)) |existing| {
         if (agent_manifest.isBuiltinProvider(existing.provider)) {
             return existing;
         }
         return error.DuplicateName;
     }
-    if (table.count == types.max_agent_manifests) {
+    if (self.count == types.max_agent_manifests) {
         return error.TooManyAgents;
     }
 
     const provider: types.AgentProvider = agent_manifest.builtinProvider(name) orelse
-        @enumFromInt(types.first_custom_agent_provider + table.customCount());
-    const manifest = &table.items[table.count];
+        @enumFromInt(types.first_custom_agent_provider + self.customCount());
+    const manifest = &self.items[self.count];
     manifest.* = .{ .provider = provider };
     @memcpy(manifest.name[0..name.len], name);
     manifest.name_len = @intCast(name.len);
-    table.count += 1;
+    self.count += 1;
     return manifest;
 }
 
-pub fn slice(table: *const Table) []const AgentManifest {
-    return table.items[0..table.count];
+pub fn slice(self: *const Table) []const AgentManifest {
+    return self.items[0..self.count];
 }
 
-pub fn find(table: *const Table, provider: types.AgentProvider) ?*const AgentManifest {
-    for (table.slice()) |*manifest| {
+pub fn find(self: *const Table, provider: types.AgentProvider) ?*const AgentManifest {
+    for (self.slice()) |*manifest| {
         if (manifest.provider == provider) {
             return manifest;
         }
@@ -53,8 +53,8 @@ pub fn find(table: *const Table, provider: types.AgentProvider) ?*const AgentMan
     return null;
 }
 
-pub fn findByName(table: *Table, name: []const u8) ?*AgentManifest {
-    for (table.items[0..table.count]) |*manifest| {
+pub fn findByName(self: *Table, name: []const u8) ?*AgentManifest {
+    for (self.items[0..self.count]) |*manifest| {
         if (std.mem.eql(u8, manifest.nameSlice(), name)) {
             return manifest;
         }
@@ -67,8 +67,8 @@ pub fn findByName(table: *Table, name: []const u8) ?*AgentManifest {
 /// ```zig
 /// const name = table.providerName(entry.provider);
 /// ```
-pub fn providerName(table: *const Table, provider: types.AgentProvider) []const u8 {
-    const manifest = table.find(provider) orelse return "unknown";
+pub fn providerName(self: *const Table, provider: types.AgentProvider) []const u8 {
+    const manifest = self.find(provider) orelse return "unknown";
     return manifest.nameSlice();
 }
 
@@ -77,8 +77,8 @@ pub fn providerName(table: *const Table, provider: types.AgentProvider) []const 
 /// ```zig
 /// const label = table.displayName(entry.provider);
 /// ```
-pub fn displayName(table: *const Table, provider: types.AgentProvider) []const u8 {
-    const manifest = table.find(provider) orelse return agent_manifest.generic_display_name;
+pub fn displayName(self: *const Table, provider: types.AgentProvider) []const u8 {
+    const manifest = self.find(provider) orelse return agent_manifest.generic_display_name;
     return manifest.displayName();
 }
 
@@ -88,8 +88,8 @@ pub fn displayName(table: *const Table, provider: types.AgentProvider) []const u
 /// var buffer: [max_placeholder_bytes]u8 = undefined;
 /// const title = table.placeholderTitle(entry.provider, &buffer);
 /// ```
-pub fn placeholderTitle(table: *const Table, provider: types.AgentProvider, buffer: *[types.max_agent_session_title_bytes]u8) []const u8 {
-    const manifest = table.find(provider) orelse return agent_manifest.generic_placeholder;
+pub fn placeholderTitle(self: *const Table, provider: types.AgentProvider, buffer: *[types.max_agent_session_title_bytes]u8) []const u8 {
+    const manifest = self.find(provider) orelse return agent_manifest.generic_placeholder;
     return manifest.placeholderTitle(buffer);
 }
 
@@ -98,8 +98,8 @@ pub fn placeholderTitle(table: *const Table, provider: types.AgentProvider, buff
 /// ```zig
 /// const glyph = table.icon(entry.provider);
 /// ```
-pub fn icon(table: *const Table, provider: types.AgentProvider) []const u8 {
-    const manifest = table.find(provider) orelse return "";
+pub fn icon(self: *const Table, provider: types.AgentProvider) []const u8 {
+    const manifest = self.find(provider) orelse return "";
     return manifest.iconSlice();
 }
 
@@ -108,8 +108,8 @@ pub fn icon(table: *const Table, provider: types.AgentProvider) []const u8 {
 /// ```zig
 /// if (table.attachments(entry.provider) == .none) hideImageShelf();
 /// ```
-pub fn attachments(table: *const Table, provider: types.AgentProvider) types.AgentAttachmentMarkers {
-    const manifest = table.find(provider) orelse return .none;
+pub fn attachments(self: *const Table, provider: types.AgentProvider) types.AgentAttachmentMarkers {
+    const manifest = self.find(provider) orelse return .none;
     return manifest.attachments;
 }
 
@@ -118,8 +118,8 @@ pub fn attachments(table: *const Table, provider: types.AgentProvider) types.Age
 /// ```zig
 /// const field = table.commandField(.claude, "Bash") orelse return;
 /// ```
-pub fn commandField(table: *const Table, provider: types.AgentProvider, tool: []const u8) ?[]const u8 {
-    const manifest = table.find(provider) orelse return null;
+pub fn commandField(self: *const Table, provider: types.AgentProvider, tool: []const u8) ?[]const u8 {
+    const manifest = self.find(provider) orelse return null;
     return manifest.command_tools.commandField(tool);
 }
 
@@ -129,8 +129,8 @@ pub fn commandField(table: *const Table, provider: types.AgentProvider, tool: []
 /// ```zig
 /// if (!table.declaresReadyPrompt(signal.provider)) mergeScreenScan();
 /// ```
-pub fn declaresReadyPrompt(table: *const Table, provider: types.AgentProvider) bool {
-    const manifest = table.find(provider) orelse return false;
+pub fn declaresReadyPrompt(self: *const Table, provider: types.AgentProvider) bool {
+    const manifest = self.find(provider) orelse return false;
     return manifest.ready_prompt.count != 0;
 }
 
@@ -140,20 +140,20 @@ pub fn declaresReadyPrompt(table: *const Table, provider: types.AgentProvider) b
 /// ```zig
 /// const signal = table.detect(sample) orelse return;
 /// ```
-pub fn detect(table: *const Table, text: []const u8) ?Signal {
-    for (table.slice()) |*manifest| {
+pub fn detect(self: *const Table, text: []const u8) ?Signal {
+    for (self.slice()) |*manifest| {
         if (manifest.blocked.matches(text)) {
-            return .{ .provider = table.inferProvider(text), .status = .blocked, .confidence = 88 };
+            return .{ .provider = self.inferProvider(text), .status = .blocked, .confidence = 88 };
         }
     }
 
-    for (table.slice()) |*manifest| {
+    for (self.slice()) |*manifest| {
         if (manifest.working.matches(text)) {
-            return .{ .provider = table.inferProvider(text), .status = .working, .confidence = 78 };
+            return .{ .provider = self.inferProvider(text), .status = .working, .confidence = 78 };
         }
     }
 
-    for (table.slice()) |*manifest| {
+    for (self.slice()) |*manifest| {
         if (manifest.ready_prompt.matches(text)) {
             return .{
                 .provider = manifest.provider,
@@ -165,7 +165,7 @@ pub fn detect(table: *const Table, text: []const u8) ?Signal {
         }
     }
 
-    for (table.slice()) |*manifest| {
+    for (self.slice()) |*manifest| {
         if (manifest.identity.matches(text)) {
             return .{
                 .provider = manifest.provider,
@@ -185,8 +185,8 @@ pub fn detect(table: *const Table, text: []const u8) ?Signal {
 /// ```zig
 /// const provider = table.providerFromExecutable("claude.exe") orelse return;
 /// ```
-pub fn providerFromExecutable(table: *const Table, basename: []const u8) ?types.AgentProvider {
-    for (table.slice()) |*manifest| {
+pub fn providerFromExecutable(self: *const Table, basename: []const u8) ?types.AgentProvider {
+    for (self.slice()) |*manifest| {
         for (0..manifest.process_names.count) |index| {
             if (agent_manifest.equalExecutableName(basename, manifest.process_names.get(index))) {
                 return manifest.provider;
@@ -201,8 +201,8 @@ pub fn providerFromExecutable(table: *const Table, basename: []const u8) ?types.
 /// ```zig
 /// const provider = table.providerFromPath(argument) orelse return;
 /// ```
-pub fn providerFromPath(table: *const Table, path: []const u8) ?types.AgentProvider {
-    for (table.slice()) |*manifest| {
+pub fn providerFromPath(self: *const Table, path: []const u8) ?types.AgentProvider {
+    for (self.slice()) |*manifest| {
         if (manifest.process_paths.matches(path)) {
             return manifest.provider;
         }
@@ -210,8 +210,8 @@ pub fn providerFromPath(table: *const Table, path: []const u8) ?types.AgentProvi
     return null;
 }
 
-fn inferProvider(table: *const Table, text: []const u8) types.AgentProvider {
-    for (table.slice()) |*manifest| {
+fn inferProvider(self: *const Table, text: []const u8) types.AgentProvider {
+    for (self.slice()) |*manifest| {
         if (manifest.brand.matches(text)) {
             return manifest.provider;
         }
@@ -219,9 +219,9 @@ fn inferProvider(table: *const Table, text: []const u8) types.AgentProvider {
     return .unknown;
 }
 
-fn customCount(table: *const Table) u8 {
+fn customCount(self: *const Table) u8 {
     var count: u8 = 0;
-    for (table.slice()) |*manifest| {
+    for (self.slice()) |*manifest| {
         if (@intFromEnum(manifest.provider) >= types.first_custom_agent_provider) {
             count += 1;
         }

@@ -16,6 +16,6 @@ encoded_nodes: []const u8,
 /// var nodes = tab.nodes();
 /// while (try nodes.next()) |node| use(node);
 /// ```
-pub fn nodes(layout: ClientTabLayoutView) ClientLayoutNodeIterator {
-    return .{ .decoder = .init(layout.encoded_nodes), .remaining = layout.node_count };
+pub fn nodes(self: ClientTabLayoutView) ClientLayoutNodeIterator {
+    return .{ .decoder = .init(self.encoded_nodes), .remaining = self.node_count };
 }

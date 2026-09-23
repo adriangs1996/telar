@@ -4,14 +4,14 @@ count: u64 = 0,
 total_ns: u64 = 0,
 max_ns: u64 = 0,
 
-pub fn observe(timing: *Timing, elapsed_ns: u64) void {
-    timing.count += 1;
-    timing.total_ns +|= elapsed_ns;
-    timing.max_ns = @max(timing.max_ns, elapsed_ns);
+pub fn observe(self: *Timing, elapsed_ns: u64) void {
+    self.count += 1;
+    self.total_ns +|= elapsed_ns;
+    self.max_ns = @max(self.max_ns, elapsed_ns);
 }
 
-pub fn average(timing: Timing) u64 {
-    return if (timing.count == 0) 0 else timing.total_ns / timing.count;
+pub fn average(self: Timing) u64 {
+    return if (self.count == 0) 0 else self.total_ns / self.count;
 }
 
 /// Folds samples collected elsewhere into this timing, so a per-object
@@ -20,8 +20,8 @@ pub fn average(timing: Timing) u64 {
 /// ```zig
 /// metrics.graphics_freeze.merge(counts.freeze);
 /// ```
-pub fn merge(timing: *Timing, other: Timing) void {
-    timing.count +|= other.count;
-    timing.total_ns +|= other.total_ns;
-    timing.max_ns = @max(timing.max_ns, other.max_ns);
+pub fn merge(self: *Timing, other: Timing) void {
+    self.count +|= other.count;
+    self.total_ns +|= other.total_ns;
+    self.max_ns = @max(self.max_ns, other.max_ns);
 }

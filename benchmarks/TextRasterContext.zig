@@ -18,7 +18,7 @@ pub fn init(gpa: std.mem.Allocator) !TextRasterContext {
     return .{ .gpa = gpa, .rasterizer = rasterizer, .pixels = pixels };
 }
 
-pub fn deinit(context: *TextRasterContext) void {
-    context.gpa.free(context.pixels);
-    context.rasterizer.deinit();
+pub fn deinit(self: *TextRasterContext) void {
+    self.gpa.free(self.pixels);
+    self.rasterizer.deinit();
 }

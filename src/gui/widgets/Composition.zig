@@ -18,13 +18,13 @@ commit: data.PresentationCommit = .{},
 /// Selects the frame's widgets in painter order without emitting quads. The
 /// returned list borrows this composition and the caller's projection until draw.
 /// Example: `const widgets = try composition.render(&projection); try widgets.draw(canvas);`
-pub fn render(composition: *Composition, projection: *const client.Projection) !frame_widget.List {
+pub fn render(self: *Composition, projection: *const client.Projection) !frame_widget.List {
     var widgets: frame_widget.List = .{};
-    composition.commit = .{};
+    self.commit = .{};
     if (projection.tab) |tab| {
         const model = projection.model;
         const tab_id = model.tabs.location[tab].tab_id;
-        composition.commit.location = if (model.panes.countIn(tab_id) == 0) null else model.tabs.location[tab];
+        self.commit.location = if (model.panes.countIn(tab_id) == 0) null else model.tabs.location[tab];
         const layout = projection.layout.?;
         for (layout.views()) |view| {
             if (view.surface != .terminal) {
@@ -33,7 +33,7 @@ pub fn render(composition: *Composition, projection: *const client.Projection) !
 
             const pane = model.panes.findInConst(tab_id, view.pane_id) orelse continue;
             try widgets.append(.{ .terminal_pane = .{ .paint = .{ .pane = pane, .view = view, .copy = copy_selection.forPane(projection.copy, pane.id), .hide_cursor = projection.prompt != null } } });
-            composition.commit.append(pane);
+            self.commit.append(pane);
         }
 
         for (layout.views()) |view| {
@@ -44,12 +44,12 @@ pub fn render(composition: *Composition, projection: *const client.Projection) !
             if (projection.threadView(view.pane_id)) |thread| {
                 try widgets.append(.{ .thread = .{ .area = view.content, .thread = thread } });
                 if (model.panes.findInConst(tab_id, view.pane_id)) |pane| {
-                    composition.commit.append(pane);
+                    self.commit.append(pane);
                 }
             }
         }
 
-        if (composition.link) |hit| {
+        if (self.link) |hit| {
             if (model.panes.findInConst(tab_id, hit.pane_id)) |pane| {
                 if (pane.attachment_generation == hit.generation) {
                     try widgets.append(.{ .link = .{ .hit = hit, .pane = pane } });
@@ -58,9 +58,9 @@ pub fn render(composition: *Composition, projection: *const client.Projection) !
         }
     }
 
-    composition.context = try composition.chrome.begin(composition.canvas, projection);
-    try composition.chrome.compose(&composition.context, &widgets);
-    try widgets.append(.{ .chrome_focus = .{ .chrome = composition.chrome, .projection = projection } });
-    try composition.overlays.compose(.{ .canvas = composition.canvas, .projection = projection }, &widgets);
+    self.context = try self.chrome.begin(self.canvas, projection);
+    try self.chrome.compose(&self.context, &widgets);
+    try widgets.append(.{ .chrome_focus = .{ .chrome = self.chrome, .projection = projection } });
+    try self.overlays.compose(.{ .canvas = self.canvas, .projection = projection }, &widgets);
     return widgets;
 }

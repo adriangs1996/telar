@@ -5,12 +5,12 @@ const Reservation = @This();
 quota: *Quota,
 bytes: usize,
 
-pub fn release(reservation: *Reservation) void {
-    if (reservation.bytes == 0) {
+pub fn release(self: *Reservation) void {
+    if (self.bytes == 0) {
         return;
     }
 
-    const previous = reservation.quota.reserved.fetchSub(reservation.bytes, .monotonic);
-    std.debug.assert(previous >= reservation.bytes);
-    reservation.bytes = 0;
+    const previous = self.quota.reserved.fetchSub(self.bytes, .monotonic);
+    std.debug.assert(previous >= self.bytes);
+    self.bytes = 0;
 }

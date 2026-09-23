@@ -38,13 +38,13 @@ pub const Stats = @import("PacerStats.zig");
 /// Returning the deadline instead of a duration matters once the caller
 /// hands the wait to another actor. A relative sleep starts when that actor
 /// gets CPU time and adds dispatch latency to every frame.
-pub fn waitUntil(p: *const Pacer, now: u64) ?u64 {
-    if (p.available(now) != 0 or p.inputRecent(now)) {
+pub fn waitUntil(self: *const Pacer, now: u64) ?u64 {
+    if (self.available(now) != 0 or self.inputRecent(now)) {
         return null;
     }
 
-    const anchor = p.anchor_ns orelse now;
-    return anchor +| p.interval;
+    const anchor = self.anchor_ns orelse now;
+    return anchor +| self.interval;
 }
 
 /// Records a frame presented at `now`.
@@ -57,20 +57,20 @@ pub fn waitUntil(p: *const Pacer, now: u64) ?u64 {
 /// ```zig
 /// pacer.record(.{ .now = now_ns, .scheduled_deadline = deadline_ns, .absorbed = pending_updates });
 /// ```
-pub fn record(p: *Pacer, frame: Record) void {
-    std.debug.assert(p.interval != 0);
-    const usable = p.available(frame.now);
+pub fn record(self: *Pacer, frame: Record) void {
+    std.debug.assert(self.interval != 0);
+    const usable = self.available(frame.now);
     if (usable == 0 and frame.scheduled_deadline == null) {
-        p.input_frames_left -|= 1;
+        self.input_frames_left -|= 1;
     }
-    p.credits = usable -| 1;
-    p.anchor_ns = if (frame.scheduled_deadline) |deadline|
-        pace.latestCadenceSlot(deadline, frame.now, p.interval)
+    self.credits = usable -| 1;
+    self.anchor_ns = if (frame.scheduled_deadline) |deadline|
+        pace.latestCadenceSlot(deadline, frame.now, self.interval)
     else
         frame.now;
-    p.stats.drawn += 1;
+    self.stats.drawn += 1;
     // The first message earned the frame; the rest rode along.
-    p.stats.absorbed += frame.absorbed -| 1;
+    self.stats.absorbed += frame.absorbed -| 1;
 }
 
 /// Records host input at `now`, opening the grace window.
@@ -78,25 +78,25 @@ pub fn record(p: *Pacer, frame: Record) void {
 /// ```zig
 /// pacer.noteInput(now_ns);
 /// ```
-pub fn noteInput(p: *Pacer, now: u64) void {
-    p.last_input_ns = now;
-    p.input_frames_left = p.input_frames;
+pub fn noteInput(self: *Pacer, now: u64) void {
+    self.last_input_ns = now;
+    self.input_frames_left = self.input_frames;
 }
 
-pub fn noteThrottled(p: *Pacer) void {
-    p.stats.throttled += 1;
+pub fn noteThrottled(self: *Pacer) void {
+    self.stats.throttled += 1;
 }
 
-fn inputRecent(p: *const Pacer, now: u64) bool {
-    const input = p.last_input_ns orelse return false;
-    return p.input_frames_left != 0 and now -| input < p.input_grace;
+fn inputRecent(self: *const Pacer, now: u64) bool {
+    const input = self.last_input_ns orelse return false;
+    return self.input_frames_left != 0 and now -| input < self.input_grace;
 }
 
 /// Credits usable at `now`: what was left at the anchor plus one per
 /// interval elapsed since, capped at `burst`.
-fn available(p: *const Pacer, now: u64) u32 {
-    const anchor = p.anchor_ns orelse return p.burst;
-    const refilled = (now -| anchor) / p.interval;
-    const total = @as(u64, p.credits) +| refilled;
-    return @intCast(@min(total, p.burst));
+fn available(self: *const Pacer, now: u64) u32 {
+    const anchor = self.anchor_ns orelse return self.burst;
+    const refilled = (now -| anchor) / self.interval;
+    const total = @as(u64, self.credits) +| refilled;
+    return @intCast(@min(total, self.burst));
 }

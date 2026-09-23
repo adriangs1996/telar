@@ -49,10 +49,10 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
 /// ```zig
 /// proxy.destroy();
 /// ```
-pub fn destroy(proxy: *Proxy) void {
-    const gpa = proxy.gpa;
-    proxy.lifecycle.deinit();
-    gpa.destroy(proxy);
+pub fn destroy(self: *Proxy) void {
+    const gpa = self.gpa;
+    self.lifecycle.deinit();
+    gpa.destroy(self);
 }
 
 /// Waits for one live, heap-owned captured exchange half.
@@ -60,8 +60,8 @@ pub fn destroy(proxy: *Proxy) void {
 /// ```zig
 /// const half = try proxy.receiveCapture(io);
 /// ```
-pub fn receiveCapture(proxy: *Proxy, io: std.Io) anyerror!*Half {
-    return proxy.lifecycle.service.receiveCapture(io);
+pub fn receiveCapture(self: *Proxy, io: std.Io) anyerror!*Half {
+    return self.lifecycle.service.receiveCapture(io);
 }
 
 /// Decodes one captured body on the runtime observation path.
@@ -69,8 +69,8 @@ pub fn receiveCapture(proxy: *Proxy, io: std.Io) anyerror!*Half {
 /// ```zig
 /// proxy.decodeCapture(half);
 /// ```
-pub fn decodeCapture(proxy: *Proxy, half: *Half) void {
-    proxy.lifecycle.service.decodeCapture(half);
+pub fn decodeCapture(self: *Proxy, half: *Half) void {
+    self.lifecycle.service.decodeCapture(half);
 }
 
 /// Registers one pane generation and returns its owned child environment.
@@ -81,9 +81,9 @@ pub fn decodeCapture(proxy: *Proxy, half: *Half) void {
 /// var pane_environment = try proxy.registerPane(key, .{ .inherited = inherited, .overrides = pane_overrides });
 /// defer pane_environment.deinit();
 /// ```
-pub fn registerPane(proxy: *Proxy, key: PaneKey, options: PaneEnvironmentOptions) !PaneEnvironment {
+pub fn registerPane(self: *Proxy, key: PaneKey, options: PaneEnvironmentOptions) !PaneEnvironment {
     std.debug.assert(options.overrides.len <= proxy_namespace.max_pane_overrides);
-    const service = proxy.lifecycle.service;
+    const service = self.lifecycle.service;
     var credential = try service.registerPane(.{ .id = key.id, .generation = key.generation });
     defer std.crypto.secureZero(u8, &credential.token);
     errdefer service.unregisterCredential(&credential);
@@ -100,7 +100,7 @@ pub fn registerPane(proxy: *Proxy, key: PaneKey, options: PaneEnvironmentOptions
     var overrides: [proxy_namespace.max_pane_overrides + proxy_namespace.environment_override_count]Override = undefined;
     @memcpy(overrides[0..options.overrides.len], options.overrides);
     @memcpy(overrides[options.overrides.len .. options.overrides.len + proxy_overrides.len], &proxy_overrides);
-    return .{ .value = try ChildEnvironment.initWithOverrides(proxy.gpa, options.inherited, .{
+    return .{ .value = try ChildEnvironment.initWithOverrides(self.gpa, options.inherited, .{
         .telar_term_program = "telar",
         .overrides = overrides[0 .. options.overrides.len + proxy_overrides.len],
     }) };
@@ -111,8 +111,8 @@ pub fn registerPane(proxy: *Proxy, key: PaneKey, options: PaneEnvironmentOptions
 /// ```zig
 /// proxy.revokePane(key);
 /// ```
-pub fn revokePane(proxy: *Proxy, key: PaneKey) void {
-    proxy.lifecycle.service.unregisterPane(.{ .id = key.id, .generation = key.generation });
+pub fn revokePane(self: *Proxy, key: PaneKey) void {
+    self.lifecycle.service.unregisterPane(.{ .id = key.id, .generation = key.generation });
 }
 
 /// Revocation rejects new tunnels and filters both queued and subsequent
@@ -121,8 +121,8 @@ pub fn revokePane(proxy: *Proxy, key: PaneKey) void {
 /// ```zig
 /// const observation = try proxy.receive(io);
 /// ```
-pub fn receive(proxy: *Proxy, io: std.Io) anyerror!Observation {
-    var event = try proxy.lifecycle.service.receive(io);
+pub fn receive(self: *Proxy, io: std.Io) anyerror!Observation {
+    var event = try self.lifecycle.service.receive(io);
     defer std.crypto.secureZero(u8, &event.credential.token);
     return .{
         .pane = .{
@@ -144,12 +144,12 @@ pub fn receive(proxy: *Proxy, io: std.Io) anyerror!Observation {
 /// ```zig
 /// const snapshot = proxy.metrics();
 /// ```
-pub fn metrics(proxy: *const Proxy) Snapshot {
-    return proxy.lifecycle.service.metrics();
+pub fn metrics(self: *const Proxy) Snapshot {
+    return self.lifecycle.service.metrics();
 }
 
-pub fn address(proxy: *const Proxy) std.Io.net.IpAddress {
-    const client = proxy.lifecycle.service.clientConfiguration();
+pub fn address(self: *const Proxy) std.Io.net.IpAddress {
+    const client = self.lifecycle.service.clientConfiguration();
 
     return std.Io.net.IpAddress.parse("127.0.0.1", client.port) catch unreachable;
 }

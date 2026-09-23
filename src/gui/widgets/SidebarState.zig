@@ -19,58 +19,58 @@ ordered: SnapshotMark = .{},
 
 /// Sorts only when the snapshot identity changes, retaining indices rather
 /// than borrowed agents. Example: `state.observe(projection.agents);`
-pub fn observe(state: *SidebarState, snapshot: *const data.AgentSnapshot) void {
+pub fn observe(self: *SidebarState, snapshot: *const data.AgentSnapshot) void {
     const mark = SnapshotMark.of(snapshot);
-    if (state.ordered.eql(mark)) {
+    if (self.ordered.eql(mark)) {
         return;
     }
 
     const agents = snapshot.slice();
-    state.order_len = @intCast(@min(agents.len, state.order.len));
-    for (state.order[0..state.order_len], 0..) |*slot, index| {
+    self.order_len = @intCast(@min(agents.len, self.order.len));
+    for (self.order[0..self.order_len], 0..) |*slot, index| {
         slot.* = @intCast(index);
     }
 
-    std.sort.pdq(u8, state.order[0..state.order_len], agents, indexLessThan);
-    state.ordered = mark;
+    std.sort.pdq(u8, self.order[0..self.order_len], agents, indexLessThan);
+    self.ordered = mark;
 }
 
 /// Disables both viewports until another frame lays them out.
 /// Example: `state.hide();`
-pub fn hide(state: *SidebarState) void {
-    state.agents.hide();
-    state.projects.hide();
-    state.project_height = 0;
+pub fn hide(self: *SidebarState) void {
+    self.agents.hide();
+    self.projects.hide();
+    self.project_height = 0;
 }
 
 /// Reveals a new workspace or resized row, retaining manual scrolling otherwise.
 /// Example: `state.revealWorkspace(projection, list.height);`
-pub fn revealWorkspace(state: *SidebarState, projection: *const client.Projection, height: f32) void {
+pub fn revealWorkspace(self: *SidebarState, projection: *const client.Projection, height: f32) void {
     const location = projection.model.workspace;
     const position = if (location) |value| switch (value) {
         .workspace => |id| projection.workspaces.indexOf(id),
         .worktree => null,
     } else null;
-    const pitch: f32 = @floatFromInt(state.projects.step);
-    const changed = !std.meta.eql(state.active_workspace, location) or state.active_position != position or state.project_height != height or state.project_pitch != pitch;
-    state.active_workspace = location;
-    state.active_position = position;
-    state.project_height = height;
-    state.project_pitch = pitch;
+    const pitch: f32 = @floatFromInt(self.projects.step);
+    const changed = !std.meta.eql(self.active_workspace, location) or self.active_position != position or self.project_height != height or self.project_pitch != pitch;
+    self.active_workspace = location;
+    self.active_position = position;
+    self.project_height = height;
+    self.project_pitch = pitch;
     if (!changed) {
         return;
     }
 
     if (position) |index| {
         const top = @as(f32, @floatFromInt(index)) * pitch;
-        state.projects.reveal(.{ top, top + pitch }, height);
+        self.projects.reveal(.{ top, top + pitch }, height);
     }
 }
 
 /// The attention order of the last observed snapshot, as replica indices.
 /// Example: `for (state.ordering()) |index| { ... }`
-pub fn ordering(state: *const SidebarState) []const u8 {
-    return state.order[0..state.order_len];
+pub fn ordering(self: *const SidebarState) []const u8 {
+    return self.order[0..self.order_len];
 }
 
 fn indexLessThan(agents: []const data.Agent, left: u8, right: u8) bool {

@@ -33,29 +33,29 @@ pub fn begin(app: *client.AttachedClient, event: data.Mouse) ?Capture {
 /// Visible panes update the captured geometry. Hidden panes keep their last
 /// rectangle so a tab or fullscreen change cannot strand an acquired press.
 /// Detachment still invalidates the lease. Example: `try capture.deliver(app, mouse);`
-pub fn deliver(capture: *Capture, app: *client.AttachedClient, event: data.Mouse) !void {
-    const tab = app.model.tabs.find(capture.location.tab_id) orelse return;
-    if (!std.meta.eql(app.model.tabs.location[tab], capture.location)) {
+pub fn deliver(self: *Capture, app: *client.AttachedClient, event: data.Mouse) !void {
+    const tab = app.model.tabs.find(self.location.tab_id) orelse return;
+    if (!std.meta.eql(app.model.tabs.location[tab], self.location)) {
         return;
     }
 
-    const pane = app.model.panes.findIn(capture.location.tab_id, capture.pane_id) orelse return;
-    if (!pane.attached or pane.attachment_generation != capture.generation) {
+    const pane = app.model.panes.findIn(self.location.tab_id, self.pane_id) orelse return;
+    if (!pane.attached or pane.attachment_generation != self.generation) {
         return;
     }
 
     const size = app.model.host.host_size;
-    if (std.meta.eql(app.model.activeTabLocation(), @as(?core.TabLocation, capture.location))) {
+    if (std.meta.eql(app.model.activeTabLocation(), @as(?core.TabLocation, self.location))) {
         if (data.tab_layout.view(&app.model, tab, pane.id, app.geometry().area)) |view| {
             if (!view.content.isEmpty() and size.cell_width_px != 0 and size.cell_height_px != 0) {
-                capture.content = view.content;
-                capture.cell_width = size.cell_width_px;
-                capture.cell_height = size.cell_height_px;
+                self.content = view.content;
+                self.cell_width = size.cell_width_px;
+                self.cell_height = size.cell_height_px;
             }
         }
     }
 
-    var content = capture.content;
+    var content = self.content;
     content.w = @min(content.w, pane.buffer.w);
     content.h = @min(content.h, pane.buffer.h);
     if (content.isEmpty()) {
@@ -65,15 +65,15 @@ pub fn deliver(capture: *Capture, app: *client.AttachedClient, event: data.Mouse
     var projected = event;
     projected.x = std.math.clamp(event.x, content.x, content.x + content.w - 1);
     projected.y = std.math.clamp(event.y, content.y, content.y + content.h - 1);
-    projected.raw_x = std.math.clamp(event.raw_x, @as(u32, content.x) * capture.cell_width, @as(u32, content.x + content.w) * capture.cell_width - 1);
-    projected.raw_y = std.math.clamp(event.raw_y, @as(u32, content.y) * capture.cell_height, @as(u32, content.y + content.h) * capture.cell_height - 1);
+    projected.raw_x = std.math.clamp(event.raw_x, @as(u32, content.x) * self.cell_width, @as(u32, content.x + content.w) * self.cell_width - 1);
+    projected.raw_y = std.math.clamp(event.raw_y, @as(u32, content.y) * self.cell_height, @as(u32, content.y + content.h) * self.cell_height - 1);
     const plan = data.tab_layout.paneMousePlan(pane, content);
-    if (plan.pane_id != capture.pane_id or !plan.protocol.sgr or plan.protocol.tracking == .none or plan.protocol.tracking == .x10 or (event.kind == .drag and plan.protocol.tracking == .normal)) {
+    if (plan.pane_id != self.pane_id or !plan.protocol.sgr or plan.protocol.tracking == .none or plan.protocol.tracking == .x10 or (event.kind == .drag and plan.protocol.tracking == .normal)) {
         return;
     }
 
     try app.reportRetainedPaneMouse(.{
         .plan = plan,
-        .command = .{ .event = projected, .exterior_pixels = true, .cell_width_px = capture.cell_width, .cell_height_px = capture.cell_height },
+        .command = .{ .event = projected, .exterior_pixels = true, .cell_width_px = self.cell_width, .cell_height_px = self.cell_height },
     });
 }

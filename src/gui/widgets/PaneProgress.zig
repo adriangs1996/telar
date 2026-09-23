@@ -19,36 +19,36 @@ compact: bool = false,
 
 /// Width reserved before drawing, using the same label and ring metrics.
 /// Example: `const reserved = try progress.width(canvas);`
-pub fn width(progress: Progress, canvas: *Canvas) !f32 {
-    if (progress.pane.progress_state == .remove) {
+pub fn width(self: Progress, canvas: *Canvas) !f32 {
+    if (self.pane.progress_state == .remove) {
         return 0;
     }
 
     const side = canvas.chrome.px(14);
     const padding = canvas.chrome.px(5);
-    if (progress.compact) {
+    if (self.compact) {
         return side + 2 * padding;
     }
 
     var storage: [24]u8 = undefined;
-    return side + 3 * padding + try canvas.measure(progress.label(canvas, &storage));
+    return side + 3 * padding + try canvas.measure(self.label(canvas, &storage));
 }
 
 /// Samples the visible attachment's motion and requests frames only while
 /// moving. Error, pause and completed percentages settle without polling.
 /// Example: `try progress.draw(canvas);`
-pub fn draw(progress: Progress, canvas: *Canvas) !void {
-    if (progress.pane.progress_state == .remove or progress.area.width <= 0 or progress.area.height <= 0) {
+pub fn draw(self: Progress, canvas: *Canvas) !void {
+    if (self.pane.progress_state == .remove or self.area.width <= 0 or self.area.height <= 0) {
         return;
     }
 
     const first = canvas.quads.items().len;
-    defer canvas.quads.clipFrom(first, progress.area);
+    defer canvas.quads.clipFrom(first, self.area);
     const padding = canvas.chrome.px(5);
-    const height = @min(progress.area.height, canvas.chrome.px(20));
-    const width_value = @min(progress.area.width, try progress.width(canvas));
-    const bounds: Rect = .{ .x = progress.area.x + progress.area.width - width_value, .y = progress.area.y + (progress.area.height - height) / 2, .width = width_value, .height = height };
-    const color = progress.progressColor(canvas);
+    const height = @min(self.area.height, canvas.chrome.px(20));
+    const width_value = @min(self.area.width, try self.width(canvas));
+    const bounds: Rect = .{ .x = self.area.x + self.area.width - width_value, .y = self.area.y + (self.area.height - height) / 2, .width = width_value, .height = height };
+    const color = self.progressColor(canvas);
     try canvas.fillRoundedAt(bounds, .{ .radius = height / 2, .color = color });
     canvas.quads.fadeFrom(first, 0.1);
     const side = @max(0, @min(canvas.chrome.px(14), @min(height - canvas.chrome.px(4), bounds.width - 2 * padding)));
@@ -56,62 +56,62 @@ pub fn draw(progress: Progress, canvas: *Canvas) !void {
         return;
     }
 
-    var fraction = @as(f32, @floatFromInt(progress.pane.progress_percent orelse 0)) / 100;
+    var fraction = @as(f32, @floatFromInt(self.pane.progress_percent orelse 0)) / 100;
     var rotation: f32 = 0;
     if (canvas.animation) |clock| {
-        if (progress.motions) |motions| {
-            fraction = motions.fraction(progress.pane, clock);
+        if (self.motions) |motions| {
+            fraction = motions.fraction(self.pane, clock);
         }
 
-        if (progress.pane.progress_state == .indeterminate) {
+        if (self.pane.progress_state == .indeterminate) {
             const period = 1400 * std.time.ns_per_ms;
             const phase = @as(f32, @floatFromInt(clock.now_ns % period)) / period;
             rotation = phase;
             fraction = 0.22 + 0.18 * (1 - @cos(phase * 2 * std.math.pi));
             clock.requestAt(clock.now_ns +| Clock.frame_interval_ns);
         }
-    } else if (progress.pane.progress_state == .indeterminate) {
+    } else if (self.pane.progress_state == .indeterminate) {
         fraction = 0.35;
     }
 
     const ring: Rect = .{ .x = bounds.x + padding, .y = bounds.y + (height - side) / 2, .width = side, .height = side };
     try (ProgressRing{ .area = ring, .color = color, .fraction = fraction, .rotation = rotation }).draw(canvas);
-    try progress.stateMark(canvas, ring);
-    if (!progress.compact) {
+    try self.stateMark(canvas, ring);
+    if (!self.compact) {
         var storage: [24]u8 = undefined;
         const label_x = ring.x + side + padding;
-        _ = try canvas.textAt(.{ .x = label_x, .y = bounds.y, .width = @max(0, bounds.x + bounds.width - padding - label_x), .height = height }, progress.label(canvas, &storage));
+        _ = try canvas.textAt(.{ .x = label_x, .y = bounds.y, .width = @max(0, bounds.x + bounds.width - padding - label_x), .height = height }, self.label(canvas, &storage));
     }
 }
 
-fn stateMark(progress: Progress, canvas: *Canvas, ring: Rect) !void {
-    const color = progress.progressColor(canvas);
+fn stateMark(self: Progress, canvas: *Canvas, ring: Rect) !void {
+    const color = self.progressColor(canvas);
     const stroke = @max(1, ring.width * 0.1);
     const center = ring.x + ring.width / 2;
     const top = ring.y + ring.height * 0.32;
-    if (progress.pane.progress_state == .pause) {
+    if (self.pane.progress_state == .pause) {
         for ([_]f32{ -1.5, 0.5 }) |offset| {
             try canvas.fillRoundedAt(.{ .x = center + offset * stroke, .y = top, .width = stroke, .height = ring.height * 0.36 }, .{ .radius = stroke / 2, .color = color });
         }
-    } else if (progress.pane.progress_state == .@"error") {
+    } else if (self.pane.progress_state == .@"error") {
         try canvas.fillRoundedAt(.{ .x = center - stroke / 2, .y = top, .width = stroke, .height = ring.height * 0.24 }, .{ .radius = stroke / 2, .color = color });
         try canvas.fillRoundedAt(.{ .x = center - stroke / 2, .y = ring.y + ring.height * 0.63, .width = stroke, .height = stroke }, .{ .radius = stroke / 2, .color = color });
     }
 }
 
-fn label(progress: Progress, canvas: *Canvas, storage: []u8) Label {
-    const text: []const u8 = switch (progress.pane.progress_state) {
+fn label(self: Progress, canvas: *Canvas, storage: []u8) Label {
+    const text: []const u8 = switch (self.pane.progress_state) {
         .indeterminate => "Working",
         .pause => "Paused",
         .@"error" => "Error",
-        .set => std.fmt.bufPrint(storage, "{d}%", .{progress.pane.progress_percent orelse 0}) catch unreachable,
+        .set => std.fmt.bufPrint(storage, "{d}%", .{self.pane.progress_percent orelse 0}) catch unreachable,
         .remove => "",
     };
-    return .{ .text = text, .color = progress.progressColor(canvas), .face = .sans, .size = .small };
+    return .{ .text = text, .color = self.progressColor(canvas), .face = .sans, .size = .small };
 }
 
-fn progressColor(progress: Progress, canvas: *const Canvas) core.Color {
-    return switch (progress.pane.progress_state) {
+fn progressColor(self: Progress, canvas: *const Canvas) core.Color {
+    return switch (self.pane.progress_state) {
         .@"error" => canvas.theme.palette.red,
         .pause => canvas.theme.palette.yellow,
         else => canvas.theme.palette.teal,

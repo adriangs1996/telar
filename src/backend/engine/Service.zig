@@ -44,9 +44,9 @@ pub fn init(gpa: std.mem.Allocator, options: Options) !Service {
 /// ```zig
 /// service.stop(io);
 /// ```
-pub fn stop(service: *Service, io: std.Io) void {
-    service.requests.close(io);
-    service.responses.close(io);
+pub fn stop(self: *Service, io: std.Io) void {
+    self.requests.close(io);
+    self.responses.close(io);
 }
 
 /// Kills a live child and frees the rings. `run` must have returned.
@@ -54,11 +54,11 @@ pub fn stop(service: *Service, io: std.Io) void {
 /// ```zig
 /// service.deinit(io);
 /// ```
-pub fn deinit(service: *Service, io: std.Io) void {
-    service.responses.close(io);
-    service.closeSession(io);
-    service.gpa.free(service.request_storage);
-    service.gpa.free(service.response_storage);
+pub fn deinit(self: *Service, io: std.Io) void {
+    self.responses.close(io);
+    self.closeSession(io);
+    self.gpa.free(self.request_storage);
+    self.gpa.free(self.response_storage);
 }
 
 /// Queues one request without blocking. Returns false when the ring is
@@ -67,8 +67,8 @@ pub fn deinit(service: *Service, io: std.Io) void {
 /// ```zig
 /// if (!service.submit(io, .{ .prompt = prompt })) return error.EngineBusy;
 /// ```
-pub fn submit(service: *Service, io: std.Io, request: types.Request) bool {
-    const queued = service.requests.put(io, &.{request}, 0) catch return false;
+pub fn submit(self: *Service, io: std.Io, request: types.Request) bool {
+    const queued = self.requests.put(io, &.{request}, 0) catch return false;
     return queued == 1;
 }
 
@@ -79,17 +79,17 @@ pub fn submit(service: *Service, io: std.Io, request: types.Request) bool {
 /// ```zig
 /// service.requestIdleCheck(io);
 /// ```
-pub fn requestIdleCheck(service: *Service, io: std.Io) void {
-    if (!service.child_alive.load(.acquire)) {
+pub fn requestIdleCheck(self: *Service, io: std.Io) void {
+    if (!self.child_alive.load(.acquire)) {
         return;
     }
 
-    if (service.idle_check_pending.swap(true, .acq_rel)) {
+    if (self.idle_check_pending.swap(true, .acq_rel)) {
         return;
     }
 
-    if (!service.submit(io, .idle_check)) {
-        service.idle_check_pending.store(false, .release);
+    if (!self.submit(io, .idle_check)) {
+        self.idle_check_pending.store(false, .release);
     }
 }
 
@@ -98,8 +98,8 @@ pub fn requestIdleCheck(service: *Service, io: std.Io) void {
 /// ```zig
 /// const response = try service.receiveResponse(io);
 /// ```
-pub fn receiveResponse(service: *Service, io: std.Io) anyerror!Response {
-    return service.responses.getOne(io);
+pub fn receiveResponse(self: *Service, io: std.Io) anyerror!Response {
+    return self.responses.getOne(io);
 }
 
 /// Serves requests in order until `stop` closes the ring.
@@ -107,10 +107,10 @@ pub fn receiveResponse(service: *Service, io: std.Io) anyerror!Response {
 /// ```zig
 /// var worker = try io.concurrent(Service.run, .{ &service, io });
 /// ```
-pub fn run(service: *Service, io: std.Io) anyerror!void {
+pub fn run(self: *Service, io: std.Io) anyerror!void {
     while (true) {
-        const request = service.requests.getOne(io) catch return;
-        service.handle(io, request);
+        const request = self.requests.getOne(io) catch return;
+        self.handle(io, request);
     }
 }
 
@@ -120,18 +120,18 @@ pub fn run(service: *Service, io: std.Io) anyerror!void {
 /// ```zig
 /// service.handle(io, .idle_check);
 /// ```
-pub fn handle(service: *Service, io: std.Io, request: types.Request) void {
+pub fn handle(self: *Service, io: std.Io, request: types.Request) void {
     switch (request) {
         .idle_check => {
-            service.idle_check_pending.store(false, .release);
-            const session = service.session orelse return;
-            if (session.idleMs(io) >= service.options.idle_timeout_ms) {
-                service.closeSession(io);
+            self.idle_check_pending.store(false, .release);
+            const session = self.session orelse return;
+            if (session.idleMs(io) >= self.options.idle_timeout_ms) {
+                self.closeSession(io);
             }
         },
         .prompt => |*prompt| {
-            const response = service.answer(io, prompt);
-            service.responses.putOne(io, response) catch {};
+            const response = self.answer(io, prompt);
+            self.responses.putOne(io, response) catch {};
         },
     }
 }
@@ -139,9 +139,9 @@ pub fn handle(service: *Service, io: std.Io, request: types.Request) void {
 /// Answers on the live child, or a fresh one. A child that timed out or
 /// broke the protocol is discarded; one that merely answered badly is
 /// kept, because its next reply may be fine.
-fn answer(service: *Service, io: std.Io, prompt: *const Prompt) Response {
+fn answer(self: *Service, io: std.Io, prompt: *const Prompt) Response {
     var response: Response = .{ .purpose = prompt.purpose, .status = .failed };
-    const session = service.ensureSession(io) catch |err| {
+    const session = self.ensureSession(io) catch |err| {
         response.status = if (err == error.FileNotFound) .unavailable else .failed;
         return response;
     };
@@ -151,26 +151,26 @@ fn answer(service: *Service, io: std.Io, prompt: *const Prompt) Response {
 
     switch (response.status) {
         .success, .invalid_output => {},
-        .unavailable, .timeout, .failed => service.closeSession(io),
+        .unavailable, .timeout, .failed => self.closeSession(io),
     }
 
     return response;
 }
 
-fn ensureSession(service: *Service, io: std.Io) !*Session {
-    if (service.session) |session| {
+fn ensureSession(self: *Service, io: std.Io) !*Session {
+    if (self.session) |session| {
         return session;
     }
 
-    const session = try Session.open(io, service.gpa, service.options);
-    service.session = session;
-    service.child_alive.store(true, .release);
+    const session = try Session.open(io, self.gpa, self.options);
+    self.session = session;
+    self.child_alive.store(true, .release);
     return session;
 }
 
-fn closeSession(service: *Service, io: std.Io) void {
-    const session = service.session orelse return;
-    service.session = null;
-    service.child_alive.store(false, .release);
+fn closeSession(self: *Service, io: std.Io) void {
+    const session = self.session orelse return;
+    self.session = null;
+    self.child_alive.store(false, .release);
     session.close(io);
 }

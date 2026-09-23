@@ -25,8 +25,8 @@ pub const SidebarRendering = enum {
         return error.UnknownSidebarRenderer;
     }
 
-    pub fn resolve(value: SidebarRendering, support: EnvironmentSupport) !ResolvedSidebarRendering {
-        return switch (value) {
+    pub fn resolve(self: SidebarRendering, support: EnvironmentSupport) !ResolvedSidebarRendering {
+        return switch (self) {
             .automatic => if (support == .supported) .kitty_hybrid else .cells,
             .cells => .cells,
             .kitty_hybrid => if (support == .supported)

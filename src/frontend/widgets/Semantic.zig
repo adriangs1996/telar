@@ -11,10 +11,10 @@ cursor: ?Cursor = null,
 
 pub const ProviderMark = @import("ProviderMark.zig");
 
-pub fn addProviderMark(semantic: *Semantic, mark: ProviderMark) void {
-    if (semantic.provider_mark_count == semantic.provider_marks.len) {
+pub fn addProviderMark(self: *Semantic, mark: ProviderMark) void {
+    if (self.provider_mark_count == self.provider_marks.len) {
         return;
     }
-    semantic.provider_marks[semantic.provider_mark_count] = mark;
-    semantic.provider_mark_count += 1;
+    self.provider_marks[self.provider_mark_count] = mark;
+    self.provider_mark_count += 1;
 }

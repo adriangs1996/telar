@@ -22,12 +22,12 @@ graphics_storage_limit: usize,
 io: std.Io,
 responses: Responses,
 
-pub fn processMedia(processor: *Processor, current_size: core.TerminalSize, stats: *Stats) void {
-    if (processor.media.sealedRequiresReset()) {
-        processor.state.kitty_framing = .{};
-        processor.state.kitty_loading_chunks = 0;
-        processor.state.prepared_transfers.discardAll(processor.media_allocator);
-        processor.state.transfer_preparation.deinit(processor.media_allocator);
+pub fn processMedia(self: *Processor, current_size: core.TerminalSize, stats: *Stats) void {
+    if (self.media.sealedRequiresReset()) {
+        self.state.kitty_framing = .{};
+        self.state.kitty_loading_chunks = 0;
+        self.state.prepared_transfers.discardAll(self.media_allocator);
+        self.state.transfer_preparation.deinit(self.media_allocator);
     }
 
     const Sink = struct {
@@ -45,13 +45,13 @@ pub fn processMedia(processor: *Processor, current_size: core.TerminalSize, stat
             return sink.processor.answerFileQuery(query);
         }
     };
-    var sink: Sink = .{ .processor = processor };
-    processor.media.processSealed(.{ .current_size = current_size, .stats = stats }, &sink);
-    if (!stats.failed and processor.state.shared_transport_clients.load(.acquire) != 0) {
-        processor.prepareSharedTransfers(stats);
+    var sink: Sink = .{ .processor = self };
+    self.media.processSealed(.{ .current_size = current_size, .stats = stats }, &sink);
+    if (!stats.failed and self.state.shared_transport_clients.load(.acquire) != 0) {
+        self.prepareSharedTransfers(stats);
     }
 
-    processor.state.transfer_preparation.process(&processor.media.terminal.screens.active.kitty_images, processor.media_allocator);
+    self.state.transfer_preparation.process(&self.media.terminal.screens.active.kitty_images, self.media_allocator);
 }
 
 /// Freezes every generation the emulator holds that no local client has
@@ -62,15 +62,15 @@ pub fn processMedia(processor: *Processor, current_size: core.TerminalSize, stat
 /// ```zig
 /// processor.prepareSharedTransfers(&stats);
 /// ```
-pub fn prepareSharedTransfers(processor: *Processor, stats: *Stats) void {
-    const storage = &processor.media.terminal.screens.active.kitty_images;
-    processor.state.prepared_transfers.retain(LiveImages{ .storage = storage }, processor.media_allocator);
+pub fn prepareSharedTransfers(self: *Processor, stats: *Stats) void {
+    const storage = &self.media.terminal.screens.active.kitty_images;
+    self.state.prepared_transfers.retain(LiveImages{ .storage = storage }, self.media_allocator);
     var images = storage.images.iterator();
     while (images.next()) |entry| {
         const image = entry.value_ptr;
-        const pixels = processor.media_allocator.imagePixels(image.data.bytes()) orelse continue;
+        const pixels = self.media_allocator.imagePixels(image.data.bytes()) orelse continue;
         const image_key: core.ImageKey = .{ .image_id = image.id, .generation = image.generation };
-        if (processor.state.prepared_transfers.covers(image_key)) {
+        if (self.state.prepared_transfers.covers(image_key)) {
             continue;
         }
         const format: core.Format = switch (image.format) {
@@ -85,12 +85,12 @@ pub fn prepareSharedTransfers(processor: *Processor, stats: *Stats) void {
             .height = image.height,
             .byte_len = pixels.len,
         };
-        _ = metadata.validate(processor.graphics_storage_limit) catch continue;
-        if (!processor.media_allocator.reserveManual(pixels.len)) {
+        _ = metadata.validate(self.graphics_storage_limit) catch continue;
+        if (!self.media_allocator.reserveManual(pixels.len)) {
             continue;
         }
         const name = shared_transfer.freezeSharedPixels(pixels) orelse {
-            processor.media_allocator.releaseManual(pixels.len);
+            self.media_allocator.releaseManual(pixels.len);
             continue;
         };
         const transfer: PreparedTransfer = .{
@@ -98,9 +98,9 @@ pub fn prepareSharedTransfers(processor: *Processor, stats: *Stats) void {
             .name = name,
             .reserved_len = pixels.len,
         };
-        if (!processor.state.prepared_transfers.put(transfer, processor.media_allocator)) {
+        if (!self.state.prepared_transfers.put(transfer, self.media_allocator)) {
             _ = std.c.shm_unlink(name.sliceZ());
-            processor.media_allocator.releaseManual(pixels.len);
+            self.media_allocator.releaseManual(pixels.len);
             continue;
         }
         stats.prepared_frames +|= 1;
@@ -118,11 +118,11 @@ pub fn prepareSharedTransfers(processor: *Processor, stats: *Stats) void {
 /// ```zig
 /// if (!processor.ingestSharedFrame(frame)) processor.ingestMediaOutput(frame.bytes);
 /// ```
-fn ingestSharedFrame(processor: *Processor, frame: SharedFrameView) bool {
+fn ingestSharedFrame(self: *Processor, frame: SharedFrameView) bool {
     if (comptime !shared_transfer.shared_memory_supported) {
         return false;
     }
-    if (frame.byte_len > processor.graphics_storage_limit) {
+    if (frame.byte_len > self.graphics_storage_limit) {
         return false;
     }
     // The emulator stamps the generation on store; validate everything
@@ -134,41 +134,41 @@ fn ingestSharedFrame(processor: *Processor, frame: SharedFrameView) bool {
         .height = frame.height,
         .byte_len = frame.byte_len,
     };
-    _ = metadata.validate(processor.graphics_storage_limit) catch return false;
+    _ = metadata.validate(self.graphics_storage_limit) catch return false;
 
     const child = switch (frame.medium) {
         .shared => shared_transfer.mapChildObject(frame.encoded_name, frame.byte_len),
         .file => shared_transfer.mapChildFile(frame.encoded_name, frame.byte_len),
     } orelse return false;
     defer child.close();
-    const media = processor.media_allocator.allocator();
+    const media = self.media_allocator.allocator();
     const placeholder = media.alloc(u8, 1) catch return false;
-    if (!processor.media_allocator.reserveManual(frame.byte_len)) {
+    if (!self.media_allocator.reserveManual(frame.byte_len)) {
         media.free(placeholder);
         return false;
     }
     const name = shared_transfer.freezeSharedPixels(child.pixels) orelse {
-        processor.media_allocator.releaseManual(frame.byte_len);
+        self.media_allocator.releaseManual(frame.byte_len);
         media.free(placeholder);
         return false;
     };
     const storage = shared_transfer.mapOwnObject(name, frame.byte_len) orelse {
         _ = std.c.shm_unlink(name.sliceZ());
-        processor.media_allocator.releaseManual(frame.byte_len);
+        self.media_allocator.releaseManual(frame.byte_len);
         media.free(placeholder);
         return false;
     };
-    if (!processor.media_allocator.adoptMapping(placeholder, storage)) {
+    if (!self.media_allocator.adoptMapping(placeholder, storage)) {
         std.posix.munmap(storage);
         _ = std.c.shm_unlink(name.sliceZ());
-        processor.media_allocator.releaseManual(frame.byte_len);
+        self.media_allocator.releaseManual(frame.byte_len);
         media.free(placeholder);
         return false;
     }
 
-    processor.ingestMediaOutput(frame.bytes[0..frame.apc_start]);
-    const images = &processor.media.terminal.screens.active.kitty_images;
-    images.addImage(processor.io, media, processor.media.terminal.screens.active, .{
+    self.ingestMediaOutput(frame.bytes[0..frame.apc_start]);
+    const images = &self.media.terminal.screens.active.kitty_images;
+    images.addImage(self.io, media, self.media.terminal.screens.active, .{
         .id = frame.image_id,
         .width = frame.width,
         .height = frame.height,
@@ -182,7 +182,7 @@ fn ingestSharedFrame(processor: *Processor, frame: SharedFrameView) bool {
         // reservation exactly once.
         media.free(placeholder);
         _ = std.c.shm_unlink(name.sliceZ());
-        processor.ingestMediaOutput(frame.bytes[frame.apc_end..]);
+        self.ingestMediaOutput(frame.bytes[frame.apc_end..]);
         return true;
     };
     var placement: [64]u8 = undefined;
@@ -191,8 +191,8 @@ fn ingestSharedFrame(processor: *Processor, frame: SharedFrameView) bool {
         "\x1b_Ga=p,i={d},p={d},C=1,q=2\x1b\\",
         .{ frame.image_id, frame.placement_id },
     ) catch unreachable;
-    processor.ingestMediaOutput(command);
-    processor.ingestMediaOutput(frame.bytes[frame.apc_end..]);
+    self.ingestMediaOutput(command);
+    self.ingestMediaOutput(frame.bytes[frame.apc_end..]);
 
     const generation = images.imageById(frame.image_id).?.generation;
     var parked = metadata;
@@ -204,8 +204,8 @@ fn ingestSharedFrame(processor: *Processor, frame: SharedFrameView) bool {
         // parked name adds no bytes of its own.
         .reserved_len = 0,
     };
-    if (processor.state.shared_transport_clients.load(.acquire) == 0 or
-        !processor.state.prepared_transfers.put(transfer, processor.media_allocator))
+    if (self.state.shared_transport_clients.load(.acquire) == 0 or
+        !self.state.prepared_transfers.put(transfer, self.media_allocator))
     {
         _ = std.c.shm_unlink(name.sliceZ());
     }
@@ -219,77 +219,77 @@ fn ingestSharedFrame(processor: *Processor, frame: SharedFrameView) bool {
 /// ```zig
 /// _ = processor.answerFileQuery(query);
 /// ```
-fn answerFileQuery(processor: *Processor, query: FileQueryView) bool {
+fn answerFileQuery(self: *Processor, query: FileQueryView) bool {
     var reply: [64]u8 = undefined;
-    const accepted = query.byte_len <= processor.graphics_storage_limit and
+    const accepted = query.byte_len <= self.graphics_storage_limit and
         shared_transfer.validateChildFile(query.encoded_path, query.byte_len);
     const bytes = std.fmt.bufPrint(&reply, "\x1b_Gi={d};{s}\x1b\\", .{
         query.image_id,
         if (accepted) "OK" else "EBADF:file not accepted",
     }) catch unreachable;
-    processor.responses.write(bytes);
+    self.responses.write(bytes);
     return true;
 }
 
-fn ingestMediaOutput(processor: *Processor, bytes: []const u8) void {
-    const loading_id = if (processor.media.terminal.screens.active.kitty_images.loading) |loading|
+fn ingestMediaOutput(self: *Processor, bytes: []const u8) void {
+    const loading_id = if (self.media.terminal.screens.active.kitty_images.loading) |loading|
         loading.image.id
     else
         null;
-    const kitty_commands = processor.state.kitty_framing.observe(bytes);
-    processor.media.stream.nextSlice(bytes);
-    processor.enforceIncompleteGraphics(.{
-        .io = processor.io,
+    const kitty_commands = self.state.kitty_framing.observe(bytes);
+    self.media.stream.nextSlice(bytes);
+    self.enforceIncompleteGraphics(.{
+        .io = self.io,
         .previous_loading_id = loading_id,
         .completed_commands = kitty_commands,
     });
 }
 
-fn enforceIncompleteGraphics(processor: *Processor, observation: GraphicsIngest) void {
+fn enforceIncompleteGraphics(self: *Processor, observation: GraphicsIngest) void {
     const io = observation.io;
     const previous_loading_id = observation.previous_loading_id;
     const completed_commands = observation.completed_commands;
 
-    const storage = &processor.media.terminal.screens.active.kitty_images;
+    const storage = &self.media.terminal.screens.active.kitty_images;
     if (previous_loading_id != null or storage.loading != null) {
-        processor.state.kitty_loading_chunks +|= completed_commands;
+        self.state.kitty_loading_chunks +|= completed_commands;
     } else {
-        processor.state.kitty_loading_chunks = 0;
+        self.state.kitty_loading_chunks = 0;
     }
 
-    const chunk_limit_exceeded = processor.state.kitty_loading_chunks > processor.graphics_limits.chunks_per_image;
+    const chunk_limit_exceeded = self.state.kitty_loading_chunks > self.graphics_limits.chunks_per_image;
     const loading = storage.loading orelse {
         if (chunk_limit_exceeded) {
             if (previous_loading_id) |image_id| {
-                storage.delete(io, processor.media_allocator.allocator(), &processor.media.terminal, .{ .id = .{
+                storage.delete(io, self.media_allocator.allocator(), &self.media.terminal, .{ .id = .{
                     .delete = true,
                     .image_id = image_id,
                 } });
-                processor.queueGraphicsLimitResponse(image_id);
+                self.queueGraphicsLimitResponse(image_id);
             }
         }
-        processor.state.kitty_loading_chunks = 0;
+        self.state.kitty_loading_chunks = 0;
         return;
     };
     if (!chunk_limit_exceeded and
-        loading.data.items.len <= processor.graphics_storage_limit)
+        loading.data.items.len <= self.graphics_storage_limit)
     {
         return;
     }
 
     const image_id = loading.image.id;
-    loading.destroy(processor.media_allocator.allocator());
+    loading.destroy(self.media_allocator.allocator());
     storage.loading = null;
-    processor.state.kitty_loading_chunks = 0;
-    processor.queueGraphicsLimitResponse(image_id);
+    self.state.kitty_loading_chunks = 0;
+    self.queueGraphicsLimitResponse(image_id);
 }
 
-pub fn queueGraphicsLimitResponse(processor: *Processor, image_id: u32) void {
+pub fn queueGraphicsLimitResponse(self: *Processor, image_id: u32) void {
     var response: [128]u8 = undefined;
     const bytes = std.fmt.bufPrint(
         &response,
         "\x1b_Gi={d};ENOMEM: graphics upload limit exceeded\x1b\\",
         .{image_id},
     ) catch return;
-    processor.responses.write(bytes);
+    self.responses.write(bytes);
 }

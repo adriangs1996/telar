@@ -18,10 +18,10 @@ command_len: u16 = 0,
 cwd: [history_palette.max_entry_cwd_bytes]u8 = undefined,
 cwd_len: u16 = 0,
 
-pub fn commandSlice(entry: *const Entry) []const u8 {
-    return entry.command[0..entry.command_len];
+pub fn commandSlice(self: *const Entry) []const u8 {
+    return self.command[0..self.command_len];
 }
 
-pub fn cwdSlice(entry: *const Entry) []const u8 {
-    return entry.cwd[0..entry.cwd_len];
+pub fn cwdSlice(self: *const Entry) []const u8 {
+    return self.cwd[0..self.cwd_len];
 }

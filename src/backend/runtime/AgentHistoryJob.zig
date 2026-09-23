@@ -64,48 +64,48 @@ pub fn init(gpa: std.mem.Allocator, input: Init) !Job {
 
 /// Runs only with owned data; closing a pane never invalidates this reader.
 /// Example: `try select.concurrent(.agent_history_completed, Job.run, .{ job, io });`.
-pub fn run(job: *Job, io: std.Io) *Job {
+pub fn run(self: *Job, io: std.Io) *Job {
     const path = core.enter(.observation);
     defer path.restore();
-    const page = ProviderHistory.read(io, job.gpa, .{
-        .options = job.options,
-        .query = job.query(),
-        .thread_id = job.thread_id[0..job.thread_id_len],
+    const page = ProviderHistory.read(io, self.gpa, .{
+        .options = self.options,
+        .query = self.query(),
+        .thread_id = self.thread_id[0..self.thread_id_len],
     }) catch |err| {
-        job.failure = err;
-        return job;
+        self.failure = err;
+        return self;
     };
-    const owned = job.gpa.create(OwnedPage) catch |err| {
-        job.gpa.destroy(page);
-        job.failure = err;
-        return job;
+    const owned = self.gpa.create(OwnedPage) catch |err| {
+        self.gpa.destroy(page);
+        self.failure = err;
+        return self;
     };
-    owned.* = .{ .gpa = job.gpa, .value = page };
-    job.result = owned;
-    return job;
+    owned.* = .{ .gpa = self.gpa, .value = page };
+    self.result = owned;
+    return self;
 }
 
 /// Releases a joined job, including a completion discarded during shutdown.
 /// Example: `job.deinit();`.
-pub fn deinit(job: *Job) void {
-    if (job.result) |result| {
+pub fn deinit(self: *Job) void {
+    if (self.result) |result| {
         result.deinit();
     }
 
-    job.options.release();
-    job.result = null;
+    self.options.release();
+    self.result = null;
 }
 
-fn query(job: *const Job) core.QueryAgentHistory {
+fn query(self: *const Job) core.QueryAgentHistory {
     return .{
-        .request_id = job.request_id,
-        .pane_id = job.pane.id,
-        .pane_generation = job.pane.generation,
-        .view_generation = job.view_generation,
-        .cursor = job.cursor.slice(),
-        .anchor = job.anchor.slice(),
-        .anchor_turn = job.anchor_turn[0..job.anchor_turn_len],
-        .direction = job.direction,
+        .request_id = self.request_id,
+        .pane_id = self.pane.id,
+        .pane_generation = self.pane.generation,
+        .view_generation = self.view_generation,
+        .cursor = self.cursor.slice(),
+        .anchor = self.anchor.slice(),
+        .anchor_turn = self.anchor_turn[0..self.anchor_turn_len],
+        .direction = self.direction,
     };
 }
 

@@ -61,22 +61,22 @@ pub fn measure(metrics: Metrics, inspecting: bool) Layout {
 
 /// Moves paint and registered input geometry together during the entrance.
 /// Example: `layout.offsetY(chrome.px(12) * (1 - reveal));`
-pub fn offsetY(layout: *Layout, offset: f32) void {
+pub fn offsetY(self: *Layout, offset: f32) void {
     inline for (.{ "bounds", "header", "search", "scope", "summary", "results", "inspection", "detail", "footer" }) |field| {
-        @field(layout, field).y += offset;
+        @field(self, field).y += offset;
     }
 }
 
 /// Newest stays at the bottom, matching the existing history arrow navigation.
 /// Example: `const row = layout.row(offset);`
-pub fn row(layout: Layout, offset: u16) Rect {
-    return .{ .x = layout.results.x, .y = layout.results.y + layout.results.height - @as(f32, @floatFromInt(offset + 1)) * layout.row_height, .width = layout.results.width, .height = layout.row_height };
+pub fn row(self: Layout, offset: u16) Rect {
+    return .{ .x = self.results.x, .y = self.results.y + self.results.height - @as(f32, @floatFromInt(offset + 1)) * self.row_height, .width = self.results.width, .height = self.row_height };
 }
 
 /// Example: `const text = layout.inspectionContent(metrics);`
-pub fn inspectionContent(layout: Layout, metrics: Metrics) Rect {
-    const inset = @min(metrics.chrome.px(12), @min(layout.inspection.width, layout.inspection.height) / 8);
-    return .{ .x = layout.inspection.x + inset, .y = layout.inspection.y + inset, .width = @max(0, layout.inspection.width - inset * 2), .height = @max(0, layout.inspection.height - inset * 2) };
+pub fn inspectionContent(self: Layout, metrics: Metrics) Rect {
+    const inset = @min(metrics.chrome.px(12), @min(self.inspection.width, self.inspection.height) / 8);
+    return .{ .x = self.inspection.x + inset, .y = self.inspection.y + inset, .width = @max(0, self.inspection.width - inset * 2), .height = @max(0, self.inspection.height - inset * 2) };
 }
 
 fn take(remaining: *Rect, height: f32, gap: f32) Rect {

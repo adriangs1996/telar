@@ -6,9 +6,9 @@ const widget = @import("../../widgets/history_browser.zig");
 
 /// Returns the current inspector's scroll bound, when clamping is needed.
 /// Example: `const limit = scrollLimit(&client.model) orelse return;`.
-pub fn scrollLimit(state: *const data.ClientModel) ?u32 {
-    const prompt = state.name_prompt.currentConst() orelse return null;
-    const palette = &state.history_palette;
+pub fn scrollLimit(model: *const data.ClientModel) ?u32 {
+    const prompt = model.name_prompt.currentConst() orelse return null;
+    const palette = &model.history_palette;
     if (prompt.target() != .history or !prompt.inspecting() or prompt.detailScroll() == 0 or
         palette.phase != .ready or palette.len == 0)
     {
@@ -17,7 +17,7 @@ pub fn scrollLimit(state: *const data.ClientModel) ?u32 {
 
     const selection = @min(prompt.selection(), palette.len - 1);
     const entry = &palette.slice()[selection];
-    const size = state.host.host_size;
+    const size = model.host.host_size;
     return widget.inspectionScrollLimit(.{ .w = size.cols, .h = size.rows }, .{
         .entry = .{
             .id = entry.id,

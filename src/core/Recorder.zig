@@ -10,18 +10,18 @@ records: [capacity]Record = undefined,
 
 /// Claims a unique slot. No allocation, lock or I/O; full traces drop work.
 /// Example: `recorder.append(.{ .ns = now, .tag = .pty_read });`.
-pub fn append(recorder: *Recorder, record: Record) void {
-    const index = recorder.claimed.fetchAdd(1, .monotonic);
+pub fn append(self: *Recorder, record: Record) void {
+    const index = self.claimed.fetchAdd(1, .monotonic);
 
     if (index < capacity) {
-        recorder.records[index] = record;
+        self.records[index] = record;
     }
 }
 
 /// Writes only after every producer has joined. Never call during a borrow.
 /// Example: `try recorder.dump(io, directory);`.
-pub fn dump(recorder: *const Recorder, io: std.Io, directory: []const u8) !void {
-    const count = recorder.claimed.load(.monotonic);
+pub fn dump(self: *const Recorder, io: std.Io, directory: []const u8) !void {
+    const count = self.claimed.load(.monotonic);
     if (count == 0) {
         return;
     }
@@ -34,7 +34,7 @@ pub fn dump(recorder: *const Recorder, io: std.Io, directory: []const u8) !void 
     var buffer: [4096]u8 = undefined;
     var writer = file.writer(io, &buffer);
 
-    for (recorder.records[0..@min(count, capacity)]) |record| {
+    for (self.records[0..@min(count, capacity)]) |record| {
         if (comptime echo_trace.cpu_enabled) {
             try writer.interface.print("{{\"ns\":{d},\"event\":\"{s}\",\"cpu_ns\":{d},\"thread\":{d}}}\n", .{ record.ns, @tagName(record.tag), record.cpu_ns, record.thread });
         } else {

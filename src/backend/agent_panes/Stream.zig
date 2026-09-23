@@ -14,21 +14,21 @@ truncated: bool = false,
 
 /// Retains partial records across arbitrary pipe read boundaries.
 /// Example: `const line = try stream.next(io);`
-pub fn next(stream: *Stream, io: std.Io) anyerror![]const u8 {
-    stream.truncated = false;
-    const line = stream.external_line orelse &stream.line;
+pub fn next(self: *Stream, io: std.Io) anyerror![]const u8 {
+    self.truncated = false;
+    const line = self.external_line orelse &self.line;
     var line_len: usize = 0;
     while (true) {
-        if (stream.offset == stream.buffer_len) {
-            try stream.refill(io);
+        if (self.offset == self.buffer_len) {
+            try self.refill(io);
         }
 
-        const available = stream.buffer[stream.offset..stream.buffer_len];
+        const available = self.buffer[self.offset..self.buffer_len];
         const newline = std.mem.indexOfScalar(u8, available, '\n');
         const count = newline orelse available.len;
         if (count > line.len - line_len) {
-            if (stream.output_frame != null) {
-                return stream.readOutput(io, line[0..line_len]);
+            if (self.output_frame != null) {
+                return self.readOutput(io, line[0..line_len]);
             }
 
             return error.ProviderFrameTooLarge;
@@ -36,9 +36,9 @@ pub fn next(stream: *Stream, io: std.Io) anyerror![]const u8 {
 
         @memcpy(line[line_len..][0..count], available[0..count]);
         line_len += count;
-        stream.offset += count;
+        self.offset += count;
         if (newline != null) {
-            stream.offset += 1;
+            self.offset += 1;
             if (line_len != 0 and line[line_len - 1] == '\r') {
                 line_len -= 1;
             }
@@ -48,8 +48,8 @@ pub fn next(stream: *Stream, io: std.Io) anyerror![]const u8 {
     }
 }
 
-fn readOutput(stream: *Stream, io: std.Io, prefix: []const u8) ![]const u8 {
-    const frame = stream.output_frame.?;
+fn readOutput(self: *Stream, io: std.Io, prefix: []const u8) ![]const u8 {
+    const frame = self.output_frame.?;
     frame.reset();
     var nesting: [256]u8 = undefined;
     var allocator: std.heap.FixedBufferAllocator = .init(&nesting);
@@ -58,36 +58,36 @@ fn readOutput(stream: *Stream, io: std.Io, prefix: []const u8) ![]const u8 {
     scanner.feedInput(prefix);
     try frame.consume(&scanner);
     while (true) {
-        if (stream.offset == stream.buffer_len) {
-            try stream.refill(io);
+        if (self.offset == self.buffer_len) {
+            try self.refill(io);
         }
 
-        const available = stream.buffer[stream.offset..stream.buffer_len];
+        const available = self.buffer[self.offset..self.buffer_len];
         const newline = std.mem.indexOfScalar(u8, available, '\n');
         const count = newline orelse available.len;
         scanner.feedInput(available[0..count]);
-        stream.offset += count;
+        self.offset += count;
         if (newline != null) {
-            stream.offset += 1;
+            self.offset += 1;
             scanner.endInput();
         }
 
         try frame.consume(&scanner);
         if (newline != null) {
             std.debug.assert(frame.complete);
-            stream.truncated = frame.truncated;
+            self.truncated = frame.truncated;
             return frame.writer.buffered();
         }
     }
 }
 
-fn refill(stream: *Stream, io: std.Io) !void {
-    stream.buffer_len = stream.file.readStreaming(io, &.{&stream.buffer}) catch |err| switch (err) {
+fn refill(self: *Stream, io: std.Io) !void {
+    self.buffer_len = self.file.readStreaming(io, &.{&self.buffer}) catch |err| switch (err) {
         error.EndOfStream => return error.ProviderClosed,
         else => return err,
     };
-    stream.offset = 0;
-    if (stream.buffer_len == 0) {
+    self.offset = 0;
+    if (self.buffer_len == 0) {
         return error.ProviderClosed;
     }
 }

@@ -16,27 +16,27 @@ work_active: bool = false,
 
 /// Resolves the delivered item without carrying a snapshot pointer into input.
 /// Example: `const action = view.control();`
-pub fn control(view: View) @import("interaction/ThreadItemControl.zig") {
-    if (view.work_count != 0) {
-        return .{ .pane_id = view.thread.pane_id, .attachment_generation = view.thread.attachment_generation, .identity = view.item.identity, .source_key = view.work_key, .operation = .toggle_work };
+pub fn control(self: View) @import("interaction/ThreadItemControl.zig") {
+    if (self.work_count != 0) {
+        return .{ .pane_id = self.thread.pane_id, .attachment_generation = self.thread.attachment_generation, .identity = self.item.identity, .source_key = self.work_key, .operation = .toggle_work };
     }
 
-    return .{ .pane_id = view.thread.pane_id, .attachment_generation = view.thread.attachment_generation, .identity = view.item.identity, .source_key = if (view.item.sourceId(view.thread.transcript.?).len > 0) data.AgentHistoryWindow.itemKey(view.thread.transcript.?, view.item) else 0 };
+    return .{ .pane_id = self.thread.pane_id, .attachment_generation = self.thread.attachment_generation, .identity = self.item.identity, .source_key = if (self.item.sourceId(self.thread.transcript.?).len > 0) data.AgentHistoryWindow.itemKey(self.thread.transcript.?, self.item) else 0 };
 }
 
 /// Example: `if (view.active()) drawLiveStatus();`
-pub fn active(view: View) bool {
-    return view.thread.history == null and (view.item.status == .pending or view.item.status == .running);
+pub fn active(self: View) bool {
+    return self.thread.history == null and (self.item.status == .pending or self.item.status == .running);
 }
 
 /// Example: `try draw(view.text());`
-pub fn text(view: View) []const u8 {
-    return view.item.text(view.thread.transcript.?);
+pub fn text(self: View) []const u8 {
+    return self.item.text(self.thread.transcript.?);
 }
 
 /// Identifies immutable source bytes without retaining the snapshot borrow.
 /// Example: `const owner = view.source(.body);`
-pub fn source(view: View, section: @FieldType(@import("MessageLayoutOwner.zig"), "section")) @import("MessageLayoutOwner.zig") {
-    const snapshot = view.thread.transcript.?;
-    return .{ .pane_id = view.thread.pane_id, .attachment_generation = view.thread.attachment_generation, .pane_generation = snapshot.pane_generation, .snapshot_revision = snapshot.revision, .item_identity = view.item.identity, .section = section, .source_offset = if (section == .body) view.item.text_offset else view.item.detail_offset };
+pub fn source(self: View, section: @FieldType(@import("MessageLayoutOwner.zig"), "section")) @import("MessageLayoutOwner.zig") {
+    const snapshot = self.thread.transcript.?;
+    return .{ .pane_id = self.thread.pane_id, .attachment_generation = self.thread.attachment_generation, .pane_generation = snapshot.pane_generation, .snapshot_revision = snapshot.revision, .item_identity = self.item.identity, .section = section, .source_offset = if (section == .body) self.item.text_offset else self.item.detail_offset };
 }

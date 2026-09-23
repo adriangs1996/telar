@@ -15,8 +15,8 @@ pool_len: usize = 0,
 /// ```zig
 /// _ = try snapshot.replace(.{ .revision = 1, .entries = entries });
 /// ```
-pub fn replace(snapshot: *Snapshot, input: SnapshotInput) !bool {
-    if (input.revision <= snapshot.revision) {
+pub fn replace(self: *Snapshot, input: SnapshotInput) !bool {
+    if (input.revision <= self.revision) {
         return false;
     }
     if (input.entries.len > core.max_workspace_list_entries) {
@@ -61,7 +61,7 @@ pub fn replace(snapshot: *Snapshot, input: SnapshotInput) !bool {
         replacement.entries[index] = stored;
     }
 
-    snapshot.* = replacement;
+    self.* = replacement;
     return true;
 }
 
@@ -70,8 +70,8 @@ pub fn replace(snapshot: *Snapshot, input: SnapshotInput) !bool {
 /// ```zig
 /// const branch = snapshot.branchAt(0);
 /// ```
-pub fn branchAt(snapshot: *const Snapshot, index: usize) []const u8 {
-    const entry = &snapshot.entries[index];
+pub fn branchAt(self: *const Snapshot, index: usize) []const u8 {
+    const entry = &self.entries[index];
     return entry.branch[0..entry.branch_len];
 }
 
@@ -80,8 +80,8 @@ pub fn branchAt(snapshot: *const Snapshot, index: usize) []const u8 {
 /// ```zig
 /// const name = snapshot.nameAt(0);
 /// ```
-pub fn nameAt(snapshot: *const Snapshot, index: usize) []const u8 {
-    const entry = &snapshot.entries[index];
+pub fn nameAt(self: *const Snapshot, index: usize) []const u8 {
+    const entry = &self.entries[index];
     return entry.name[0..entry.name_len];
 }
 
@@ -90,9 +90,9 @@ pub fn nameAt(snapshot: *const Snapshot, index: usize) []const u8 {
 /// ```zig
 /// const path = snapshot.pathAt(0);
 /// ```
-pub fn pathAt(snapshot: *const Snapshot, index: usize) []const u8 {
-    const entry = &snapshot.entries[index];
-    return snapshot.path_pool[entry.path_offset..][0..entry.path_len];
+pub fn pathAt(self: *const Snapshot, index: usize) []const u8 {
+    const entry = &self.entries[index];
+    return self.path_pool[entry.path_offset..][0..entry.path_len];
 }
 
 /// Returns the workspace identity at a known valid index.
@@ -100,8 +100,8 @@ pub fn pathAt(snapshot: *const Snapshot, index: usize) []const u8 {
 /// ```zig
 /// const workspace = snapshot.workspaceAt(0);
 /// ```
-pub fn workspaceAt(snapshot: *const Snapshot, index: usize) core.WorkspaceId {
-    return snapshot.entries[index].workspace;
+pub fn workspaceAt(self: *const Snapshot, index: usize) core.WorkspaceId {
+    return self.entries[index].workspace;
 }
 
 /// Resolves a bounded zero-based navigation position.
@@ -109,12 +109,12 @@ pub fn workspaceAt(snapshot: *const Snapshot, index: usize) core.WorkspaceId {
 /// ```zig
 /// const workspace = snapshot.workspaceAtPosition(0) orelse return;
 /// ```
-pub fn workspaceAtPosition(snapshot: *const Snapshot, position: usize) ?core.WorkspaceId {
-    if (position >= snapshot.count) {
+pub fn workspaceAtPosition(self: *const Snapshot, position: usize) ?core.WorkspaceId {
+    if (position >= self.count) {
         return null;
     }
 
-    return snapshot.workspaceAt(position);
+    return self.workspaceAt(position);
 }
 
 /// Finds a runtime workspace identity without exposing entry storage.
@@ -122,8 +122,8 @@ pub fn workspaceAtPosition(snapshot: *const Snapshot, position: usize) ?core.Wor
 /// ```zig
 /// const index = snapshot.indexOf(workspace) orelse return;
 /// ```
-pub fn indexOf(snapshot: *const Snapshot, workspace: core.WorkspaceId) ?usize {
-    for (snapshot.entries[0..snapshot.count], 0..) |entry, index| {
+pub fn indexOf(self: *const Snapshot, workspace: core.WorkspaceId) ?usize {
+    for (self.entries[0..self.count], 0..) |entry, index| {
         if (entry.workspace == workspace) {
             return index;
         }

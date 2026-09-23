@@ -5,6 +5,6 @@ active: bool,
 scope: types.ProxyScope,
 system_trusted: bool,
 
-pub fn validateWire(message: ProxyStatus) !void {
-    _ = message;
+pub fn validateWire(self: ProxyStatus) !void {
+    _ = self;
 }

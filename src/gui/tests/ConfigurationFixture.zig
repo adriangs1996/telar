@@ -59,28 +59,28 @@ pub fn init(source: []const u8, profile: ?[]const u8) !Fixture {
     return fixture;
 }
 
-pub fn deinit(fixture: *Fixture) void {
-    fixture.session.deinit();
-    std.testing.allocator.free(fixture.path);
-    std.testing.allocator.free(fixture.trust_path);
-    fixture.temp.cleanup();
+pub fn deinit(self: *Fixture) void {
+    self.session.deinit();
+    std.testing.allocator.free(self.path);
+    std.testing.allocator.free(self.trust_path);
+    self.temp.cleanup();
 }
 
 /// Models editors that replace a file atomically instead of writing in place.
 /// Example: `try fixture.write("config.lua", source);`
-pub fn write(fixture: *Fixture, name: []const u8, source: []const u8) !void {
-    try fixture.temp.dir.writeFile(std.testing.io, .{ .sub_path = "save.tmp", .data = source });
-    try fixture.temp.dir.rename("save.tmp", fixture.temp.dir, name, std.testing.io);
+pub fn write(self: *Fixture, name: []const u8, source: []const u8) !void {
+    try self.temp.dir.writeFile(std.testing.io, .{ .sub_path = "save.tmp", .data = source });
+    try self.temp.dir.rename("save.tmp", self.temp.dir, name, std.testing.io);
 }
 
 /// Waits for the actual worker with a deadline, leaving adoption to the test.
 /// Example: `try fixture.wait();`
-pub fn wait(fixture: *Fixture) !void {
-    const reload = &fixture.session.gui.driver.configuration;
-    try reload.poll(&fixture.session.gui.app);
+pub fn wait(self: *Fixture) !void {
+    const reload = &self.session.gui.driver.configuration;
+    try reload.poll(&self.session.gui.app);
     for (0..1000) |_| {
         if (reload.ready.load(.acquire)) {
-            _ = try fixture.session.gui.update();
+            _ = try self.session.gui.update();
             if (!reload.ready.load(.acquire)) {
                 return;
             }
@@ -92,13 +92,13 @@ pub fn wait(fixture: *Fixture) !void {
     return error.ConfigWatchTimeout;
 }
 
-fn adoption(fixture: *Fixture) !client.ConfigAdoption {
+fn adoption(self: *Fixture) !client.ConfigAdoption {
     const gpa = std.testing.allocator;
     var diagnostic: data.Diagnostic = .{};
     const generation = try client.Generation.loadFile(.{ .gpa = gpa, .io = std.testing.io, .diagnostic = &diagnostic }, .{
-        .path = fixture.path,
+        .path = self.path,
         .number = 1,
-        .profile = fixture.session.gui.app.options.profile,
+        .profile = self.session.gui.app.options.profile,
     });
     errdefer generation.deinit();
     const registry = try gpa.create(client.Registry);

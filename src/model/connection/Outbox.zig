@@ -32,18 +32,18 @@ stats: Stats = .{},
 /// Reserves payload storage before the first message is queued. The
 /// interactive path then never allocates.
 /// Example: `try model.to_runtime.reservePayloads(gpa);`
-pub fn reservePayloads(outbox: *Outbox, gpa: std.mem.Allocator) !void {
-    if (outbox.input_bytes == null) {
-        outbox.input_bytes = try gpa.create(Payloads);
+pub fn reservePayloads(self: *Outbox, gpa: std.mem.Allocator) !void {
+    if (self.input_bytes == null) {
+        self.input_bytes = try gpa.create(Payloads);
     }
 }
 
-pub fn deinit(outbox: *Outbox, gpa: std.mem.Allocator) void {
-    if (outbox.input_bytes) |payloads| {
+pub fn deinit(self: *Outbox, gpa: std.mem.Allocator) void {
+    if (self.input_bytes) |payloads| {
         gpa.destroy(payloads);
     }
 
-    outbox.input_bytes = null;
+    self.input_bytes = null;
 }
 
 /// Example: `const init: Outbox = try .init(gpa);`
@@ -57,8 +57,8 @@ fn payloadAt(outbox: anytype, index: usize) *[data.input_limits.max_encoded_byte
     return &outbox.input_bytes.?[index];
 }
 
-pub fn hasCapacity(outbox: *const Outbox) bool {
-    return outbox.len < outbox_support.capacity;
+pub fn hasCapacity(self: *const Outbox) bool {
+    return self.len < outbox_support.capacity;
 }
 
 /// Reports how many complete messages the bounded queue can still own.
@@ -66,8 +66,8 @@ pub fn hasCapacity(outbox: *const Outbox) bool {
 /// ```zig
 /// const available = outbox.availableCapacity();
 /// ```
-pub fn availableCapacity(outbox: *const Outbox) usize {
-    return outbox_support.capacity - @as(usize, outbox.len);
+pub fn availableCapacity(self: *const Outbox) usize {
+    return outbox_support.capacity - @as(usize, self.len);
 }
 
 /// Copies the stable counters needed by client telemetry.
@@ -75,15 +75,15 @@ pub fn availableCapacity(outbox: *const Outbox) usize {
 /// ```zig
 /// const snapshot = outbox.snapshot();
 /// ```
-pub fn snapshot(outbox: *const Outbox) Snapshot {
+pub fn snapshot(self: *const Outbox) Snapshot {
     return .{
-        .depth = outbox.len,
-        .high_water = outbox.stats.high_water,
-        .saturated = outbox.stats.saturated,
-        .coalesced_input = outbox.stats.coalesced_input,
-        .coalesced_resize = outbox.stats.coalesced_resize,
-        .coalesced_ack = outbox.stats.coalesced_ack,
-        .coalesced_client_layout = outbox.stats.coalesced_client_layout,
+        .depth = self.len,
+        .high_water = self.stats.high_water,
+        .saturated = self.stats.saturated,
+        .coalesced_input = self.stats.coalesced_input,
+        .coalesced_resize = self.stats.coalesced_resize,
+        .coalesced_ack = self.stats.coalesced_ack,
+        .coalesced_client_layout = self.stats.coalesced_client_layout,
     };
 }
 
@@ -94,14 +94,14 @@ pub fn snapshot(outbox: *const Outbox) Snapshot {
 /// ```zig
 /// try model.to_runtime.pushBootstrap(.{ .graphics_shared = true, .client_identity = identity });
 /// ```
-pub fn pushBootstrap(outbox: *Outbox, request: RuntimeBootstrap) !void {
-    if (outbox.availableCapacity() < 3) {
+pub fn pushBootstrap(self: *Outbox, request: RuntimeBootstrap) !void {
+    if (self.availableCapacity() < 3) {
         return error.ClientOutboxFull;
     }
 
-    try outbox.push(.{ .configure_graphics = .{ .shared = request.graphics_shared } });
-    try outbox.push(.{ .configure_terminal_colors = request.terminal_colors });
-    try outbox.push(.{ .request_runtime_state = .{ .client_identity = request.client_identity } });
+    try self.push(.{ .configure_graphics = .{ .shared = request.graphics_shared } });
+    try self.push(.{ .configure_terminal_colors = request.terminal_colors });
+    try self.push(.{ .request_runtime_state = .{ .client_identity = request.client_identity } });
 }
 
 pub fn pushClientCompletion(self: *Outbox, reply: core.ClientCommand) !void {
@@ -112,17 +112,17 @@ pub fn pushClientCompletion(self: *Outbox, reply: core.ClientCommand) !void {
     self.items[index] = .{ .complete_client_command = @intCast(encoded.len) };
 }
 
-pub fn push(outbox: *Outbox, message: outbox_support.Message) !void {
+pub fn push(self: *Outbox, message: outbox_support.Message) !void {
     switch (message) {
-        .pane_resize => |resize| return outbox.pushResize(resize),
-        .frame_ack => |ack| return outbox.pushAck(ack),
+        .pane_resize => |resize| return self.pushResize(resize),
+        .frame_ack => |ack| return self.pushAck(ack),
         .query_history => |query| {
             if (query.offset == 0 and query.snapshot_id == 0 and query.entry_id == 0) {
-                if (outbox.mutableTailIndex()) |index| {
-                    switch (outbox.items[index]) {
+                if (self.mutableTailIndex()) |index| {
+                    switch (self.items[index]) {
                         .query_history => |old| {
                             if (old.offset == 0 and old.snapshot_id == 0 and old.entry_id == 0) {
-                                outbox.items[index] = message;
+                                self.items[index] = message;
                                 return;
                             }
                         },
@@ -134,40 +134,40 @@ pub fn push(outbox: *Outbox, message: outbox_support.Message) !void {
         .pane_input, .agent_prompt, .query_agent_history, .create_tab, .create_workspace, .rename_tab, .rename_workspace, .show_notification, .client_layout, .query_change_review, .change_review_command, .complete_client_command => unreachable,
         else => {},
     }
-    try outbox.append(message);
+    try self.append(message);
 }
 
-pub fn pushInput(outbox: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void {
+pub fn pushInput(self: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void {
     if (bytes.len == 0 or bytes.len > data.input_limits.max_encoded_bytes) {
         return error.InvalidInputLength;
     }
-    if (outbox.mutableTailIndex()) |index| {
-        switch (outbox.items[index]) {
+    if (self.mutableTailIndex()) |index| {
+        switch (self.items[index]) {
             .pane_input => |*input| {
                 if (input.pane_id == pane_id and
-                    bytes.len <= outbox.payloadAt(index).len - input.len)
+                    bytes.len <= self.payloadAt(index).len - input.len)
                 {
-                    @memcpy(outbox.payloadAt(index)[input.len..][0..bytes.len], bytes);
+                    @memcpy(self.payloadAt(index)[input.len..][0..bytes.len], bytes);
                     input.len += @intCast(bytes.len);
-                    outbox.stats.coalesced_input +|= 1;
+                    self.stats.coalesced_input +|= 1;
                     return;
                 }
             },
             else => {},
         }
     }
-    const index = try outbox.reserve();
-    outbox.item_launch_cwd[index] = null;
-    outbox.items[index] = .{ .pane_input = .{
+    const index = try self.reserve();
+    self.item_launch_cwd[index] = null;
+    self.items[index] = .{ .pane_input = .{
         .pane_id = pane_id,
         .len = @intCast(bytes.len),
     } };
-    @memcpy(outbox.payloadAt(index)[0..bytes.len], bytes);
+    @memcpy(self.payloadAt(index)[0..bytes.len], bytes);
 }
 
 /// Owns one prompt in the existing slot byte storage without coalescing turns.
 /// Example: `try outbox.pushAgentPrompt(prompt);`
-pub fn pushAgentPrompt(outbox: *Outbox, prompt: core.AgentPrompt) !void {
+pub fn pushAgentPrompt(self: *Outbox, prompt: core.AgentPrompt) !void {
     try prompt.images.validate();
     if ((prompt.text.len == 0 and prompt.images.count == 0) or prompt.text.len > core.agent_thread.max_prompt_bytes or prompt.text.len > data.input_limits.max_encoded_bytes or !std.unicode.utf8ValidateSlice(prompt.text) or std.mem.indexOfScalar(u8, prompt.text, 0) != null) {
         return error.InvalidAgentPrompt;
@@ -185,9 +185,9 @@ pub fn pushAgentPrompt(outbox: *Outbox, prompt: core.AgentPrompt) !void {
         return error.InvalidAgentPrompt;
     }
 
-    const index = try outbox.reserve();
-    outbox.item_launch_cwd[index] = null;
-    outbox.items[index] = .{ .agent_prompt = .{
+    const index = try self.reserve();
+    self.item_launch_cwd[index] = null;
+    self.items[index] = .{ .agent_prompt = .{
         .request_id = prompt.request_id,
         .pane_id = prompt.pane_id,
         .pane_generation = prompt.pane_generation,
@@ -195,30 +195,30 @@ pub fn pushAgentPrompt(outbox: *Outbox, prompt: core.AgentPrompt) !void {
         .options = prompt.options,
         .image_count = prompt.images.count,
     } };
-    @memcpy(outbox.payloadAt(index)[0..prompt.text.len], prompt.text);
+    @memcpy(self.payloadAt(index)[0..prompt.text.len], prompt.text);
     var offset = prompt.text.len;
     for (prompt.images.storage[0..prompt.images.count], 0..) |path, image_index| {
-        outbox.items[index].agent_prompt.image_lengths[image_index] = @intCast(path.len);
-        @memcpy(outbox.payloadAt(index)[offset..][0..path.len], path);
+        self.items[index].agent_prompt.image_lengths[image_index] = @intCast(path.len);
+        @memcpy(self.payloadAt(index)[offset..][0..path.len], path);
         offset += path.len;
     }
 }
 
 /// Owns cursors in the existing outbound byte slot without per-input allocation.
 /// Example: `try outbox.pushAgentHistory(query);`
-pub fn pushAgentHistory(outbox: *Outbox, query: core.QueryAgentHistory) !void {
+pub fn pushAgentHistory(self: *Outbox, query: core.QueryAgentHistory) !void {
     _ = try core.AgentHistoryCursor.init(query.cursor);
     _ = try core.AgentHistoryCursor.init(query.anchor);
     _ = try core.AgentHistoryCursor.init(query.anchor_turn);
     if (query.cursor.len + query.anchor.len + query.anchor_turn.len > data.input_limits.max_encoded_bytes) {
         return error.InvalidAgentHistoryCursor;
     }
-    const index = try outbox.reserve();
-    outbox.item_launch_cwd[index] = null;
-    outbox.items[index] = .{ .query_agent_history = .{ .request_id = query.request_id, .pane_id = query.pane_id, .pane_generation = query.pane_generation, .view_generation = query.view_generation, .cursor_len = @intCast(query.cursor.len), .anchor_len = @intCast(query.anchor.len), .anchor_turn_len = @intCast(query.anchor_turn.len), .direction = query.direction } };
-    @memcpy(outbox.payloadAt(index)[0..query.cursor.len], query.cursor);
-    @memcpy(outbox.payloadAt(index)[query.cursor.len..][0..query.anchor.len], query.anchor);
-    @memcpy(outbox.payloadAt(index)[query.cursor.len + query.anchor.len ..][0..query.anchor_turn.len], query.anchor_turn);
+    const index = try self.reserve();
+    self.item_launch_cwd[index] = null;
+    self.items[index] = .{ .query_agent_history = .{ .request_id = query.request_id, .pane_id = query.pane_id, .pane_generation = query.pane_generation, .view_generation = query.view_generation, .cursor_len = @intCast(query.cursor.len), .anchor_len = @intCast(query.anchor.len), .anchor_turn_len = @intCast(query.anchor_turn.len), .direction = query.direction } };
+    @memcpy(self.payloadAt(index)[0..query.cursor.len], query.cursor);
+    @memcpy(self.payloadAt(index)[query.cursor.len..][0..query.anchor.len], query.anchor);
+    @memcpy(self.payloadAt(index)[query.cursor.len + query.anchor.len ..][0..query.anchor_turn.len], query.anchor_turn);
 }
 
 /// Owns the complete encoded command in an existing byte slot before input returns.
@@ -245,25 +245,25 @@ fn pushReview(self: *Outbox, value: anytype) !void {
 
 /// Reserves a whole bounded paste before copying any chunk into the queue.
 /// Example: `try outbox.pushInputBatch(pane_id, encoded_paste);`.
-pub fn pushInputBatch(outbox: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void {
+pub fn pushInputBatch(self: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void {
     if (bytes.len == 0 or bytes.len > core.max_history_command_bytes + 13) {
         return error.InvalidInputLength;
     }
 
     const count = (bytes.len + data.input_limits.max_encoded_bytes - 1) / data.input_limits.max_encoded_bytes;
-    if (outbox.availableCapacity() < count) {
+    if (self.availableCapacity() < count) {
         return error.ClientOutboxFull;
     }
 
     var offset: usize = 0;
     while (offset < bytes.len) {
         const end = @min(offset + data.input_limits.max_encoded_bytes, bytes.len);
-        try outbox.pushInput(pane_id, bytes[offset..end]);
+        try self.pushInput(pane_id, bytes[offset..end]);
         offset = end;
     }
 }
 
-pub fn pushRename(outbox: *Outbox, rename: core.RenameTab) !void {
+pub fn pushRename(self: *Outbox, rename: core.RenameTab) !void {
     if (rename.label.len == 0 or rename.label.len > core.max_tab_label_bytes) {
         return error.InvalidTabLabel;
     }
@@ -274,10 +274,10 @@ pub fn pushRename(outbox: *Outbox, rename: core.RenameTab) !void {
         .len = @intCast(rename.label.len),
     };
     @memcpy(owned.label[0..rename.label.len], rename.label);
-    try outbox.append(.{ .rename_tab = owned });
+    try self.append(.{ .rename_tab = owned });
 }
 
-pub fn pushWorkspaceRename(outbox: *Outbox, rename: core.RenameWorkspace) !void {
+pub fn pushWorkspaceRename(self: *Outbox, rename: core.RenameWorkspace) !void {
     if (rename.name.len == 0 or rename.name.len > core.max_tab_label_bytes) {
         return error.InvalidWorkspaceName;
     }
@@ -287,10 +287,10 @@ pub fn pushWorkspaceRename(outbox: *Outbox, rename: core.RenameWorkspace) !void 
         .len = @intCast(rename.name.len),
     };
     @memcpy(owned.name[0..rename.name.len], rename.name);
-    try outbox.append(.{ .rename_workspace = owned });
+    try self.append(.{ .rename_workspace = owned });
 }
 
-pub fn pushCreateWorkspace(outbox: *Outbox, request: core.CreateWorkspace) !void {
+pub fn pushCreateWorkspace(self: *Outbox, request: core.CreateWorkspace) !void {
     if (request.name.len == 0 or request.name.len > core.max_tab_label_bytes) {
         return error.InvalidWorkspaceName;
     }
@@ -303,10 +303,10 @@ pub fn pushCreateWorkspace(outbox: *Outbox, request: core.CreateWorkspace) !void
         .create_cwd = request.create_cwd,
     };
     @memcpy(owned.name[0..request.name.len], request.name);
-    try outbox.append(.{ .create_workspace = owned });
+    try self.append(.{ .create_workspace = owned });
 }
 
-pub fn pushCreateTab(outbox: *Outbox, request: core.CreateTab) !void {
+pub fn pushCreateTab(self: *Outbox, request: core.CreateTab) !void {
     if (request.label.len > core.max_tab_label_bytes) {
         return error.InvalidTabLabel;
     }
@@ -320,10 +320,10 @@ pub fn pushCreateTab(outbox: *Outbox, request: core.CreateTab) !void {
         .launch = request.launch,
     };
     @memcpy(owned.label[0..request.label.len], request.label);
-    try outbox.append(.{ .create_tab = owned });
+    try self.append(.{ .create_tab = owned });
 }
 
-pub fn pushNotification(outbox: *Outbox, request: core.ShowNotification) !void {
+pub fn pushNotification(self: *Outbox, request: core.ShowNotification) !void {
     if (request.notification.title.len > core.max_notification_title_bytes or
         request.notification.message.len > core.max_notification_message_bytes)
     {
@@ -339,7 +339,7 @@ pub fn pushNotification(outbox: *Outbox, request: core.ShowNotification) !void {
     };
     @memcpy(owned.title[0..request.notification.title.len], request.notification.title);
     @memcpy(owned.message[0..request.notification.message.len], request.notification.message);
-    try outbox.append(.{ .show_notification = owned });
+    try self.append(.{ .show_notification = owned });
 }
 
 /// Encodes and coalesces the latest complete client layout without
@@ -348,54 +348,54 @@ pub fn pushNotification(outbox: *Outbox, request: core.ShowNotification) !void {
 /// ```zig
 /// try outbox.pushClientLayout(update);
 /// ```
-pub fn pushClientLayout(outbox: *Outbox, update: core.ClientLayoutUpdate) !void {
+pub fn pushClientLayout(self: *Outbox, update: core.ClientLayoutUpdate) !void {
     var offset: usize = 0;
-    const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
+    const mutable_len = self.len - @intFromBool(self.send_pending);
     while (offset < mutable_len) : (offset += 1) {
-        const index = (@as(usize, outbox.head) + outbox.len - 1 - offset) % outbox_support.capacity;
-        switch (outbox.items[index]) {
+        const index = (@as(usize, self.head) + self.len - 1 - offset) % outbox_support.capacity;
+        switch (self.items[index]) {
             .client_layout => |slot_index| {
-                const slot = &outbox.client_layouts[slot_index];
+                const slot = &self.client_layouts[slot_index];
                 var scratch: [core.max_client_layout_wire_bytes]u8 = undefined;
                 const encoded = try core.encodeClientLayoutUpdate(&scratch, update);
                 @memcpy(slot.bytes[0..encoded.len], encoded);
                 slot.len = @intCast(encoded.len);
-                outbox.stats.coalesced_client_layout +|= 1;
+                self.stats.coalesced_client_layout +|= 1;
                 return;
             },
             else => break,
         }
     }
 
-    const slot_index = try outbox.claimClientLayout(update);
-    errdefer outbox.releaseClientLayoutSlot(slot_index);
-    try outbox.append(.{ .client_layout = slot_index });
+    const slot_index = try self.claimClientLayout(update);
+    errdefer self.releaseClientLayoutSlot(slot_index);
+    try self.append(.{ .client_layout = slot_index });
 }
 
-pub fn peek(outbox: *const Outbox) ?*const outbox_support.Message {
-    if (outbox.len == 0) {
+pub fn peek(self: *const Outbox) ?*const outbox_support.Message {
+    if (self.len == 0) {
         return null;
     }
-    return &outbox.items[outbox.head];
+    return &self.items[self.head];
 }
 
 /// Claims the next queued message: encodes it into `buffer` and marks
 /// the send in flight. Null while a send is already in flight or the
 /// queue is empty. The claim ends in exactly one of `popSent` (the
 /// scheduler delivered it) or `sendFailed` (it never left).
-pub fn beginSend(outbox: *Outbox, buffer: []u8) !?[]const u8 {
-    if (outbox.send_pending or outbox.len == 0) {
+pub fn beginSend(self: *Outbox, buffer: []u8) !?[]const u8 {
+    if (self.send_pending or self.len == 0) {
         return null;
     }
-    const payload = try outbox.encodeNext(buffer);
-    outbox.send_pending = true;
+    const payload = try self.encodeNext(buffer);
+    self.send_pending = true;
     return payload;
 }
 
 /// The scheduler refused the claimed send; the message stays queued.
-pub fn sendFailed(outbox: *Outbox) void {
-    std.debug.assert(outbox.send_pending);
-    outbox.send_pending = false;
+pub fn sendFailed(self: *Outbox) void {
+    std.debug.assert(self.send_pending);
+    self.send_pending = false;
 }
 
 /// Releases one completed send claim. A failed socket write retains the
@@ -404,44 +404,44 @@ pub fn sendFailed(outbox: *Outbox) void {
 /// ```zig
 /// try outbox.finishSend(result);
 /// ```
-pub fn finishSend(outbox: *Outbox, result: anyerror!void) !void {
+pub fn finishSend(self: *Outbox, result: anyerror!void) !void {
     result catch |err| {
-        outbox.sendFailed();
+        self.sendFailed();
 
         return err;
     };
 
-    outbox.popSent();
+    self.popSent();
 }
 
 /// True while a claimed send has neither completed nor failed.
-pub fn inFlight(outbox: *const Outbox) bool {
-    return outbox.send_pending;
+pub fn inFlight(self: *const Outbox) bool {
+    return self.send_pending;
 }
 
-pub fn popSent(outbox: *Outbox) void {
-    std.debug.assert(outbox.send_pending);
-    std.debug.assert(outbox.len != 0);
-    outbox.releaseLaunchCwd(outbox.head);
-    outbox.releaseClientLayout(outbox.head);
-    outbox.send_pending = false;
-    outbox.head = @intCast((@as(usize, outbox.head) + 1) % outbox_support.capacity);
-    outbox.len -= 1;
+pub fn popSent(self: *Outbox) void {
+    std.debug.assert(self.send_pending);
+    std.debug.assert(self.len != 0);
+    self.releaseLaunchCwd(self.head);
+    self.releaseClientLayout(self.head);
+    self.send_pending = false;
+    self.head = @intCast((@as(usize, self.head) + 1) % outbox_support.capacity);
+    self.len -= 1;
 }
 
-fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
-    const message = outbox.peek() orelse return error.OutboxEmpty;
+fn encodeNext(self: *const Outbox, buffer: []u8) ![]const u8 {
+    const message = self.peek() orelse return error.OutboxEmpty;
     return switch (message.*) {
         .open_pane => |value| {
             var owned = value;
             if (owned.launch) |*launch| {
-                launch.cwd = outbox.launchCwd(outbox.head);
+                launch.cwd = self.launchCwd(self.head);
             }
             return core.encodeOpenPane(buffer, owned);
         },
         .pane_input => |value| core.encodePaneInput(buffer, .{
             .pane_id = value.pane_id,
-            .bytes = outbox.payloadAt(outbox.head)[0..value.len],
+            .bytes = self.payloadAt(self.head)[0..value.len],
         }),
         .pane_resize => |value| core.encodePaneResize(buffer, value),
         .frame_ack => |value| core.encodeFrameAck(buffer, value),
@@ -450,16 +450,16 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .request_tab_snapshot => |value| core.encodeRequestTabSnapshot(buffer, value),
         .create_pane => |value| {
             var scratch: [core.max_argument_count][]const u8 = undefined;
-            var owned = value.view(outbox.payloadAt(outbox.head), &scratch);
-            owned.launch.cwd = outbox.launchCwd(outbox.head);
+            var owned = value.view(self.payloadAt(self.head), &scratch);
+            owned.launch.cwd = self.launchCwd(self.head);
             return core.encodeCreatePane(buffer, owned);
         },
         .close_pane => |value| core.encodeClosePane(buffer, value),
         .request_workspace_snapshot => |value| core.encodeRequestWorkspaceSnapshot(buffer, value),
         .create_tab => |*value| encode: {
             var scratch: [core.max_argument_count][]const u8 = undefined;
-            var owned = value.view(outbox.payloadAt(outbox.head), &scratch);
-            owned.launch.cwd = outbox.launchCwd(outbox.head);
+            var owned = value.view(self.payloadAt(self.head), &scratch);
+            owned.launch.cwd = self.launchCwd(self.head);
             break :encode core.encodeCreateTab(buffer, owned);
         },
         .rename_tab => |*value| core.encodeRenameTab(buffer, .{
@@ -476,7 +476,7 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .request_runtime_state => |value| core.encodeRequestRuntimeState(buffer, value),
         .create_workspace => |*value| core.encodeCreateWorkspace(
             buffer,
-            value.view(outbox.launchCwd(outbox.head)),
+            value.view(self.launchCwd(self.head)),
         ),
         .rename_workspace => |*value| core.encodeRenameWorkspace(buffer, .{
             .request_id = value.request_id,
@@ -486,40 +486,40 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .set_pane_viewport => |value| core.encodeSetPaneViewport(buffer, value),
         .copy_selection => |value| core.encodeCopySelection(buffer, value),
         .show_notification => |*value| core.encodeShowNotification(buffer, value.view()),
-        .client_layout => |slot| outbox.client_layouts[slot].slice(),
+        .client_layout => |slot| self.client_layouts[slot].slice(),
         .acknowledge_agent => |value| core.encodeAcknowledgeAgent(buffer, value),
         .search_pane => |*value| core.encodeSearchPane(buffer, value.view()),
         .query_history => |*value| core.encodeQueryHistory(buffer, value.view()),
         .delete_history => |value| core.encodeDeleteHistory(buffer, value),
         .read_history_output => |value| core.encodeReadHistoryOutput(buffer, value),
         .suggest_command => |*value| core.encodeSuggestCommand(buffer, value.view()),
-        .complete_client_command => |length| outbox.payloadAt(outbox.head)[0..length],
+        .complete_client_command => |length| self.payloadAt(self.head)[0..length],
         .open_editor => |value| encode: {
             var request = value;
-            const bytes = outbox.payloadAt(outbox.head);
+            const bytes = self.payloadAt(self.head);
             request.editor = bytes[0..value.editor.len];
             request.path = bytes[value.editor.len..][0..value.path.len];
             break :encode core.encodeOpenEditor(buffer, request);
         },
         .complete_pane_focus => |value| core.encodeCompletePaneFocus(buffer, value),
-        .agent_prompt => |*value| core.encodeAgentPrompt(buffer, value.view(outbox.payloadAt(outbox.head))),
+        .agent_prompt => |*value| core.encodeAgentPrompt(buffer, value.view(self.payloadAt(self.head))),
         .agent_interrupt => |value| core.encodeAgentInterrupt(buffer, value),
         .agent_resume => |value| core.encodeAgentResume(buffer, value),
         .agent_approval => |value| core.encodeAgentApproval(buffer, value),
-        .query_change_review, .change_review_command => |len| outbox.payloadAt(outbox.head)[0..len],
+        .query_change_review, .change_review_command => |len| self.payloadAt(self.head)[0..len],
         .query_agent_thread => |value| core.encodeQueryAgentThread(buffer, value),
-        .query_agent_history => |*value| core.encodeQueryAgentHistory(buffer, value.view(outbox.payloadAt(outbox.head))),
+        .query_agent_history => |*value| core.encodeQueryAgentHistory(buffer, value.view(self.payloadAt(self.head))),
     };
 }
 
-fn append(outbox: *Outbox, message: outbox_support.Message) !void {
+fn append(self: *Outbox, message: outbox_support.Message) !void {
     const launch_slot = if (outbox_support.messageLaunchCwd(message)) |cwd|
-        try outbox.claimLaunchCwd(cwd)
+        try self.claimLaunchCwd(cwd)
     else
         null;
-    errdefer if (launch_slot) |slot| outbox.releaseLaunchSlot(slot);
-    const index = try outbox.reserve();
-    errdefer outbox.len -= 1;
+    errdefer if (launch_slot) |slot| self.releaseLaunchSlot(slot);
+    const index = try self.reserve();
+    errdefer self.len -= 1;
     var owned = message;
     if (owned == .open_editor) {
         try owned.open_editor.validateWire();
@@ -528,25 +528,25 @@ fn append(outbox: *Outbox, message: outbox_support.Message) !void {
             return error.InvalidEditorTarget;
         }
 
-        @memcpy(outbox.payloadAt(index)[0..request.editor.len], request.editor);
-        @memcpy(outbox.payloadAt(index)[request.editor.len..][0..request.path.len], request.path);
-        owned.open_editor.editor = outbox.payloadAt(index)[0..request.editor.len];
-        owned.open_editor.path = outbox.payloadAt(index)[request.editor.len..][0..request.path.len];
+        @memcpy(self.payloadAt(index)[0..request.editor.len], request.editor);
+        @memcpy(self.payloadAt(index)[request.editor.len..][0..request.path.len], request.path);
+        owned.open_editor.editor = self.payloadAt(index)[0..request.editor.len];
+        owned.open_editor.path = self.payloadAt(index)[request.editor.len..][0..request.path.len];
     } else if (owned == .create_pane) {
-        try owned.create_pane.ownArguments(outbox.payloadAt(index));
+        try owned.create_pane.ownArguments(self.payloadAt(index));
     } else if (owned == .create_tab) {
-        try owned.create_tab.ownArguments(outbox.payloadAt(index));
+        try owned.create_tab.ownArguments(self.payloadAt(index));
     }
 
-    outbox.item_launch_cwd[index] = launch_slot;
-    outbox.items[index] = owned;
+    self.item_launch_cwd[index] = launch_slot;
+    self.items[index] = owned;
 }
 
-fn claimLaunchCwd(outbox: *Outbox, cwd: []const u8) !u8 {
+fn claimLaunchCwd(self: *Outbox, cwd: []const u8) !u8 {
     if (cwd.len == 0 or cwd.len > core.max_cwd_bytes) {
         return error.InvalidCwd;
     }
-    for (&outbox.launch_cwds, 0..) |*slot, index| {
+    for (&self.launch_cwds, 0..) |*slot, index| {
         if (slot.used) {
             continue;
         }
@@ -558,26 +558,26 @@ fn claimLaunchCwd(outbox: *Outbox, cwd: []const u8) !u8 {
     return error.TooManyPendingLaunches;
 }
 
-fn launchCwd(outbox: *const Outbox, item_index: usize) []const u8 {
-    const slot = outbox.item_launch_cwd[item_index] orelse unreachable;
-    return outbox.launch_cwds[slot].slice();
+fn launchCwd(self: *const Outbox, item_index: usize) []const u8 {
+    const slot = self.item_launch_cwd[item_index] orelse unreachable;
+    return self.launch_cwds[slot].slice();
 }
 
-fn releaseLaunchCwd(outbox: *Outbox, item_index: usize) void {
-    const slot = outbox.item_launch_cwd[item_index] orelse return;
-    outbox.releaseLaunchSlot(slot);
-    outbox.item_launch_cwd[item_index] = null;
+fn releaseLaunchCwd(self: *Outbox, item_index: usize) void {
+    const slot = self.item_launch_cwd[item_index] orelse return;
+    self.releaseLaunchSlot(slot);
+    self.item_launch_cwd[item_index] = null;
 }
 
-fn releaseLaunchSlot(outbox: *Outbox, slot_index: u8) void {
-    const slot = &outbox.launch_cwds[slot_index];
+fn releaseLaunchSlot(self: *Outbox, slot_index: u8) void {
+    const slot = &self.launch_cwds[slot_index];
     std.debug.assert(slot.used);
     slot.len = 0;
     slot.used = false;
 }
 
-fn claimClientLayout(outbox: *Outbox, update: core.ClientLayoutUpdate) !u8 {
-    for (&outbox.client_layouts, 0..) |*slot, index| {
+fn claimClientLayout(self: *Outbox, update: core.ClientLayoutUpdate) !u8 {
+    for (&self.client_layouts, 0..) |*slot, index| {
         if (slot.used) {
             continue;
         }
@@ -591,84 +591,84 @@ fn claimClientLayout(outbox: *Outbox, update: core.ClientLayoutUpdate) !u8 {
     return error.TooManyPendingClientLayouts;
 }
 
-fn releaseClientLayout(outbox: *Outbox, item_index: usize) void {
-    const slot = switch (outbox.items[item_index]) {
+fn releaseClientLayout(self: *Outbox, item_index: usize) void {
+    const slot = switch (self.items[item_index]) {
         .client_layout => |slot_index| slot_index,
         else => return,
     };
 
-    outbox.releaseClientLayoutSlot(slot);
+    self.releaseClientLayoutSlot(slot);
 }
 
-fn releaseClientLayoutSlot(outbox: *Outbox, slot_index: u8) void {
-    const slot = &outbox.client_layouts[slot_index];
+fn releaseClientLayoutSlot(self: *Outbox, slot_index: u8) void {
+    const slot = &self.client_layouts[slot_index];
     std.debug.assert(slot.used);
     slot.len = 0;
     slot.used = false;
 }
 
-fn reserve(outbox: *Outbox) !usize {
-    if (outbox.len == outbox_support.capacity) {
-        outbox.stats.saturated +|= 1;
+fn reserve(self: *Outbox) !usize {
+    if (self.len == outbox_support.capacity) {
+        self.stats.saturated +|= 1;
         return error.ClientOutboxFull;
     }
-    const index = (@as(usize, outbox.head) + outbox.len) % outbox_support.capacity;
-    outbox.len += 1;
-    outbox.stats.high_water = @max(outbox.stats.high_water, outbox.len);
+    const index = (@as(usize, self.head) + self.len) % outbox_support.capacity;
+    self.len += 1;
+    self.stats.high_water = @max(self.stats.high_water, self.len);
     return index;
 }
 
-fn tailIndex(outbox: *const Outbox) ?usize {
-    if (outbox.len == 0) {
+fn tailIndex(self: *const Outbox) ?usize {
+    if (self.len == 0) {
         return null;
     }
-    return (@as(usize, outbox.head) + outbox.len - 1) % outbox_support.capacity;
+    return (@as(usize, self.head) + self.len - 1) % outbox_support.capacity;
 }
 
-fn mutableTailIndex(outbox: *const Outbox) ?usize {
-    const index = outbox.tailIndex() orelse return null;
-    if (outbox.send_pending and index == outbox.head) {
+fn mutableTailIndex(self: *const Outbox) ?usize {
+    const index = self.tailIndex() orelse return null;
+    if (self.send_pending and index == self.head) {
         return null;
     }
     return index;
 }
 
-fn pushResize(outbox: *Outbox, resize: core.PaneResize) !void {
+fn pushResize(self: *Outbox, resize: core.PaneResize) !void {
     var offset: usize = 0;
-    const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
+    const mutable_len = self.len - @intFromBool(self.send_pending);
     while (offset < mutable_len) : (offset += 1) {
-        const index = (@as(usize, outbox.head) + outbox.len - 1 - offset) % outbox_support.capacity;
-        switch (outbox.items[index]) {
+        const index = (@as(usize, self.head) + self.len - 1 - offset) % outbox_support.capacity;
+        switch (self.items[index]) {
             .pane_resize => |*pending| {
                 if (pending.pane_id == resize.pane_id) {
                     pending.* = resize;
-                    outbox.stats.coalesced_resize +|= 1;
+                    self.stats.coalesced_resize +|= 1;
                     return;
                 }
             },
             else => break,
         }
     }
-    try outbox.append(.{ .pane_resize = resize });
+    try self.append(.{ .pane_resize = resize });
 }
 
-fn pushAck(outbox: *Outbox, ack: core.FrameAck) !void {
+fn pushAck(self: *Outbox, ack: core.FrameAck) !void {
     var offset: usize = 0;
-    const mutable_len = outbox.len - @intFromBool(outbox.send_pending);
+    const mutable_len = self.len - @intFromBool(self.send_pending);
     while (offset < mutable_len) : (offset += 1) {
-        const index = (@as(usize, outbox.head) + outbox.len - 1 - offset) % outbox_support.capacity;
-        switch (outbox.items[index]) {
+        const index = (@as(usize, self.head) + self.len - 1 - offset) % outbox_support.capacity;
+        switch (self.items[index]) {
             .frame_ack => |*pending| {
                 if (pending.pane_id == ack.pane_id) {
                     pending.* = ack;
-                    outbox.stats.coalesced_ack +|= 1;
+                    self.stats.coalesced_ack +|= 1;
                     return;
                 }
             },
             else => break,
         }
     }
-    try outbox.append(.{ .frame_ack = ack });
+    try self.append(.{ .frame_ack = ack });
 }
 
 test "runtime bootstrap queues colors before subscribing to the initial layout" {

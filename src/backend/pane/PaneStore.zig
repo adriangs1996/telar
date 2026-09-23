@@ -28,20 +28,20 @@ revision: u64 = 1,
 graphics_limits: GraphicsLimits = .{},
 graphics_budget: GraphicsBudget = .init(core.max_image_bytes_global),
 
-pub fn find(store: *PaneStore, pane_id: core.PaneId) ?*Pane {
-    const slot = store.index.get(core.raw(pane_id)) orelse return null;
-    const pane = store.items[slot].?;
+pub fn find(self: *PaneStore, pane_id: core.PaneId) ?*Pane {
+    const slot = self.index.get(core.raw(pane_id)) orelse return null;
+    const pane = self.items[slot].?;
     std.debug.assert(pane.id == pane_id);
     return pane;
 }
 
-pub fn findRunning(store: *PaneStore, pane_id: core.PaneId) ?*Pane {
-    const pane = store.find(pane_id) orelse return null;
+pub fn findRunning(self: *PaneStore, pane_id: core.PaneId) ?*Pane {
+    const pane = self.find(pane_id) orelse return null;
     return if (pane.launch_state.discoverable()) pane else null;
 }
 
-pub fn resolve(store: *PaneStore, key: PaneKey) ?*Pane {
-    const pane = store.find(key.id) orelse return null;
+pub fn resolve(self: *PaneStore, key: PaneKey) ?*Pane {
+    const pane = self.find(key.id) orelse return null;
     if (pane.generation != key.generation) {
         return null;
     }
@@ -55,17 +55,17 @@ pub fn resolve(store: *PaneStore, key: PaneKey) ?*Pane {
 /// ```zig
 /// const pane = store.resolveControl(key) orelse return .pane_not_found;
 /// ```
-pub fn resolveControl(store: *PaneStore, key: PaneKey) ?*Pane {
+pub fn resolveControl(self: *PaneStore, key: PaneKey) ?*Pane {
     if (key.generation == 0) {
-        return store.find(key.id);
+        return self.find(key.id);
     }
 
-    return store.resolve(key);
+    return self.resolve(key);
 }
 
-pub fn resolveConst(store: *const PaneStore, key: PaneKey) ?*const Pane {
-    const slot = store.index.get(core.raw(key.id)) orelse return null;
-    const pane = store.items[slot].?;
+pub fn resolveConst(self: *const PaneStore, key: PaneKey) ?*const Pane {
+    const slot = self.index.get(core.raw(key.id)) orelse return null;
+    const pane = self.items[slot].?;
     std.debug.assert(pane.id == key.id);
     if (pane.generation != key.generation) {
         return null;
@@ -79,9 +79,9 @@ pub fn resolveConst(store: *const PaneStore, key: PaneKey) ?*const Pane {
 /// ```zig
 /// const pane = store.resolveControlConst(key) orelse return null;
 /// ```
-pub fn resolveControlConst(store: *const PaneStore, key: PaneKey) ?*const Pane {
-    const slot = store.index.get(core.raw(key.id)) orelse return null;
-    const pane = store.items[slot].?;
+pub fn resolveControlConst(self: *const PaneStore, key: PaneKey) ?*const Pane {
+    const slot = self.index.get(core.raw(key.id)) orelse return null;
+    const pane = self.items[slot].?;
     std.debug.assert(pane.id == key.id);
     if (key.generation != 0 and pane.generation != key.generation) {
         return null;
@@ -95,11 +95,11 @@ pub fn resolveControlConst(store: *const PaneStore, key: PaneKey) ?*const Pane {
 /// ```zig
 /// const exited = store.completeExit(key, exit) orelse return;
 /// ```
-pub fn completeExit(store: *PaneStore, key: PaneKey, exit: exit_module.Exit) ?PaneExitTransition {
-    const pane = store.resolve(key) orelse return null;
+pub fn completeExit(self: *PaneStore, key: PaneKey, exit: exit_module.Exit) ?PaneExitTransition {
+    const pane = self.resolve(key) orelse return null;
     pane.completeExitWait(exit);
-    store.exited_count += 1;
-    revisions.advance(&store.revision);
+    self.exited_count += 1;
+    revisions.advance(&self.revision);
     return .{
         .pane = pane,
         .exit = exit,
@@ -108,8 +108,8 @@ pub fn completeExit(store: *PaneStore, key: PaneKey, exit: exit_module.Exit) ?Pa
     };
 }
 
-pub fn firstAt(store: *PaneStore, location: core.TabLocation) ?*Pane {
-    for (store.items) |slot| {
+pub fn firstAt(self: *PaneStore, location: core.TabLocation) ?*Pane {
+    for (self.items) |slot| {
         const pane = slot orelse continue;
         if (pane.launch_state.discoverable() and
             !pane.close_requested and pane.exit == null and
@@ -126,9 +126,9 @@ pub fn firstAt(store: *PaneStore, location: core.TabLocation) ?*Pane {
 /// ```zig
 /// const descriptors = store.descriptorsAt(location, &storage);
 /// ```
-pub fn descriptorsAt(store: *const PaneStore, location: core.TabLocation, output: *[core.max_panes_per_tab]core.PaneDescriptor) []const core.PaneDescriptor {
+pub fn descriptorsAt(self: *const PaneStore, location: core.TabLocation, output: *[core.max_panes_per_tab]core.PaneDescriptor) []const core.PaneDescriptor {
     var len: usize = 0;
-    for (store.items) |slot| {
+    for (self.items) |slot| {
         const pane = slot orelse continue;
         if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null or
             !std.meta.eql(pane.location, location))
@@ -146,9 +146,9 @@ pub fn descriptorsAt(store: *const PaneStore, location: core.TabLocation, output
     return output[0..len];
 }
 
-pub fn positionAt(store: *const PaneStore, wanted: *const Pane) ?u16 {
+pub fn positionAt(self: *const PaneStore, wanted: *const Pane) ?u16 {
     var position: u16 = 0;
-    for (store.items) |slot| {
+    for (self.items) |slot| {
         const pane = slot orelse continue;
         if (!pane.launch_state.discoverable() or pane.close_requested or pane.exit != null or
             !std.meta.eql(pane.location, wanted.location))
@@ -163,9 +163,9 @@ pub fn positionAt(store: *const PaneStore, wanted: *const Pane) ?u16 {
     return null;
 }
 
-pub fn countAt(store: *const PaneStore, location: core.TabLocation) u16 {
+pub fn countAt(self: *const PaneStore, location: core.TabLocation) u16 {
     var count: u16 = 0;
-    for (store.items) |slot| {
+    for (self.items) |slot| {
         const pane = slot orelse continue;
         if (pane.launch_state.discoverable() and
             !pane.close_requested and pane.exit == null and
@@ -186,8 +186,8 @@ pub fn countAt(store: *const PaneStore, location: core.TabLocation) u16 {
 ///     removeTab(location);
 /// }
 /// ```
-pub fn hasAt(store: *const PaneStore, location: core.TabLocation) bool {
-    for (store.items) |slot| {
+pub fn hasAt(self: *const PaneStore, location: core.TabLocation) bool {
+    for (self.items) |slot| {
         const pane = slot orelse continue;
         if (std.meta.eql(pane.location, location)) {
             return true;
@@ -196,8 +196,8 @@ pub fn hasAt(store: *const PaneStore, location: core.TabLocation) bool {
     return false;
 }
 
-pub fn closeAt(store: *PaneStore, location: core.TabLocation) void {
-    for (store.items) |slot| {
+pub fn closeAt(self: *PaneStore, location: core.TabLocation) void {
+    for (self.items) |slot| {
         const pane = slot orelse continue;
         if (!std.meta.eql(pane.location, location)) {
             continue;
@@ -214,12 +214,12 @@ pub fn closeAt(store: *PaneStore, location: core.TabLocation) void {
 /// ```zig
 /// try store.reserveRestoredKey(pane_id, generation);
 /// ```
-pub fn reserveRestoredKey(store: *PaneStore, pane_id: u64, generation: u64) !void {
-    if (pane_id == 0 or generation == 0 or pane_id < store.next_id) {
+pub fn reserveRestoredKey(self: *PaneStore, pane_id: u64, generation: u64) !void {
+    if (pane_id == 0 or generation == 0 or pane_id < self.next_id) {
         return error.InvalidCheckpointIdentity;
     }
-    store.next_id = pane_id;
-    store.next_generation = @max(store.next_generation, generation);
+    self.next_id = pane_id;
+    self.next_generation = @max(self.next_generation, generation);
 }
 
 /// Advances the id counters past everything a checkpoint recorded.
@@ -227,48 +227,48 @@ pub fn reserveRestoredKey(store: *PaneStore, pane_id: u64, generation: u64) !voi
 /// ```zig
 /// store.advanceCounters(next_pane_id, next_generation);
 /// ```
-pub fn advanceCounters(store: *PaneStore, next_pane_id: u64, next_generation: u64) void {
-    store.next_id = @max(store.next_id, next_pane_id);
-    store.next_generation = @max(store.next_generation, next_generation);
+pub fn advanceCounters(self: *PaneStore, next_pane_id: u64, next_generation: u64) void {
+    self.next_id = @max(self.next_id, next_pane_id);
+    self.next_generation = @max(self.next_generation, next_generation);
 }
 
-pub fn allocateKey(store: *PaneStore) !PaneKey {
-    if (store.count == capacity) {
+pub fn allocateKey(self: *PaneStore) !PaneKey {
+    if (self.count == capacity) {
         return error.PaneLimitReached;
     }
-    const pane_id = try core.pane(store.next_id);
-    if (store.next_generation == 0 or store.next_generation == std.math.maxInt(u64)) {
+    const pane_id = try core.pane(self.next_id);
+    if (self.next_generation == 0 or self.next_generation == std.math.maxInt(u64)) {
         return error.PaneGenerationExhausted;
     }
-    const generation = store.next_generation;
-    store.next_id += 1;
-    store.next_generation += 1;
+    const generation = self.next_generation;
+    self.next_id += 1;
+    self.next_generation += 1;
     return .{ .id = pane_id, .generation = generation };
 }
 
-pub fn insert(store: *PaneStore, pane: *Pane) !void {
-    for (&store.items, 0..) |*slot, position| {
+pub fn insert(self: *PaneStore, pane: *Pane) !void {
+    for (&self.items, 0..) |*slot, position| {
         if (slot.* == null) {
             slot.* = pane;
-            store.index.put(core.raw(pane.id), position);
-            store.count += 1;
-            revisions.advance(&store.revision);
+            self.index.put(core.raw(pane.id), position);
+            self.count += 1;
+            revisions.advance(&self.revision);
             return;
         }
     }
     return error.PaneLimitReached;
 }
 
-pub fn removeAndDestroy(store: *PaneStore, pane: *Pane) void {
-    for (&store.items) |*slot| {
+pub fn removeAndDestroy(self: *PaneStore, pane: *Pane) void {
+    for (&self.items) |*slot| {
         if (slot.* == pane) {
-            store.index.remove(core.raw(pane.id));
+            self.index.remove(core.raw(pane.id));
             if (pane.exit != null) {
-                store.exited_count -= 1;
+                self.exited_count -= 1;
             }
             slot.* = null;
-            store.count -= 1;
-            revisions.advance(&store.revision);
+            self.count -= 1;
+            revisions.advance(&self.revision);
             pane.destroy();
             return;
         }
@@ -283,29 +283,29 @@ pub fn removeAndDestroy(store: *PaneStore, pane: *Pane) void {
 /// const pane = store.removeExitedAt(slot);
 /// pane.destroy();
 /// ```
-pub fn removeExitedAt(store: *PaneStore, slot: usize) *Pane {
-    const pane = store.items[slot].?;
+pub fn removeExitedAt(self: *PaneStore, slot: usize) *Pane {
+    const pane = self.items[slot].?;
     std.debug.assert(pane.exit != null);
-    store.index.remove(core.raw(pane.id));
-    store.exited_count -= 1;
-    store.items[slot] = null;
-    store.count -= 1;
-    revisions.advance(&store.revision);
+    self.index.remove(core.raw(pane.id));
+    self.exited_count -= 1;
+    self.items[slot] = null;
+    self.count -= 1;
+    revisions.advance(&self.revision);
     return pane;
 }
 
-pub fn shutdown(store: *PaneStore) void {
-    for (store.items) |slot| if (slot) |pane| pane.session.shutdown();
+pub fn shutdown(self: *PaneStore) void {
+    for (self.items) |slot| if (slot) |pane| pane.session.shutdown();
 }
 
-pub fn deinit(store: *PaneStore) void {
-    for (&store.items) |*slot| {
+pub fn deinit(self: *PaneStore) void {
+    for (&self.items) |*slot| {
         if (slot.*) |pane| {
             pane.destroy();
         }
         slot.* = null;
     }
-    store.index.reset();
-    store.exited_count = 0;
-    store.count = 0;
+    self.index.reset();
+    self.exited_count = 0;
+    self.count = 0;
 }

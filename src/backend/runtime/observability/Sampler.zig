@@ -16,33 +16,33 @@ previous_total: u64 = 0,
 /// ```zig
 /// sampler.sample();
 /// ```
-pub fn sample(sampler: *Sampler) void {
+pub fn sample(self: *Sampler) void {
     const raw = system_metrics.readRaw() orelse return;
-    sampler.apply(raw);
+    self.apply(raw);
 }
 
-pub fn apply(sampler: *Sampler, raw: Raw) void {
+pub fn apply(self: *Sampler, raw: Raw) void {
     const cpu = system_metrics.cpuPercent(
-        .{ .busy = sampler.previous_busy, .total = sampler.previous_total },
+        .{ .busy = self.previous_busy, .total = self.previous_total },
         .{ .busy = raw.busy_ticks, .total = raw.total_ticks },
     );
-    sampler.previous_busy = raw.busy_ticks;
-    sampler.previous_total = raw.total_ticks;
+    self.previous_busy = raw.busy_ticks;
+    self.previous_total = raw.total_ticks;
     const next: Values = .{
         .cpu_percent = cpu,
         .memory_used_decigib = system_metrics.decigib(raw.memory_used_bytes),
         .battery_percent = raw.battery_percent,
     };
-    if (sampler.latest) |current| {
+    if (self.latest) |current| {
         if (std.meta.eql(current, next)) {
             return;
         }
     }
-    sampler.latest = next;
+    self.latest = next;
     // A separate test suite roots this directory, so the backend-wide
     // `revisions.advance` helper is out of its module path.
-    sampler.revision +%= 1;
-    if (sampler.revision == 0) {
-        sampler.revision = 1;
+    self.revision +%= 1;
+    if (self.revision == 0) {
+        self.revision = 1;
     }
 }

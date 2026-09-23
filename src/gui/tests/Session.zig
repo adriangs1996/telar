@@ -96,11 +96,11 @@ pub fn init() !*Session {
     return session;
 }
 
-pub fn deinit(session: *Session) void {
-    session.gui.deinit();
-    session.connection.deinit(std.testing.io);
-    session.peer.deinit(std.testing.io);
-    std.testing.allocator.destroy(session);
+pub fn deinit(self: *Session) void {
+    self.gui.deinit();
+    self.connection.deinit(std.testing.io);
+    self.peer.deinit(std.testing.io);
+    std.testing.allocator.destroy(self);
 }
 
 /// Captures runtime sends and link opens; every other job runs on the real inbox.
@@ -122,17 +122,17 @@ pub fn startJob(context: *anyopaque, job: client.Job) !void {
     }
 }
 
-pub fn settle(session: *Session) !void {
+pub fn settle(self: *Session) !void {
     var count: usize = 0;
     while (true) {
-        if (session.pending == null) {
-            _ = try session.gui.update();
-            if (session.pending == null) {
+        if (self.pending == null) {
+            _ = try self.gui.update();
+            if (self.pending == null) {
                 break;
             }
         }
 
-        const bytes = session.pending.?;
+        const bytes = self.pending.?;
         if (count == 2048) {
             return error.UnboundedDelivery;
         }
@@ -140,61 +140,61 @@ pub fn settle(session: *Session) !void {
         count += 1;
         switch (try core.decodeClient(bytes)) {
             .frame_ack => |ack| {
-                if (session.ack_count == session.acknowledgements.len) {
+                if (self.ack_count == self.acknowledgements.len) {
                     return error.AckCapacityExceeded;
                 }
 
-                session.acknowledgements[session.ack_count] = ack;
-                session.ack_count += 1;
+                self.acknowledgements[self.ack_count] = ack;
+                self.ack_count += 1;
             },
             .pane_input => |value| {
-                session.last_input_pane = value.pane_id;
-                if (value.bytes.len > session.input.len - session.input_len) {
+                self.last_input_pane = value.pane_id;
+                if (value.bytes.len > self.input.len - self.input_len) {
                     return error.InputCapacityExceeded;
                 }
 
-                @memcpy(session.input[session.input_len..][0..value.bytes.len], value.bytes);
-                session.input_len += value.bytes.len;
+                @memcpy(self.input[self.input_len..][0..value.bytes.len], value.bytes);
+                self.input_len += value.bytes.len;
             },
-            .pane_resize => session.resize_count += 1,
+            .pane_resize => self.resize_count += 1,
             .agent_resume => |value| {
-                session.agent_resume_count += 1;
-                session.last_resume = value;
+                self.agent_resume_count += 1;
+                self.last_resume = value;
             },
             .agent_prompt => |value| {
-                session.agent_prompt_count += 1;
-                @memcpy(session.agent_prompt[0..value.text.len], value.text);
-                session.agent_prompt_len = value.text.len;
-                session.agent_images = try core.AgentImages.copy(value.images);
-                session.agent_request_id = value.request_id;
+                self.agent_prompt_count += 1;
+                @memcpy(self.agent_prompt[0..value.text.len], value.text);
+                self.agent_prompt_len = value.text.len;
+                self.agent_images = try core.AgentImages.copy(value.images);
+                self.agent_request_id = value.request_id;
             },
             .open_editor => |request| {
-                session.editor_open_count += 1;
-                session.last_editor_open = try core.OwnedEditorOpen.init(request);
+                self.editor_open_count += 1;
+                self.last_editor_open = try core.OwnedEditorOpen.init(request);
             },
             .create_pane => {
-                session.pane_creation_count += 1;
-                @memcpy(session.pane_creation_wire[0..bytes.len], bytes);
-                session.pane_creation_len = bytes.len;
+                self.pane_creation_count += 1;
+                @memcpy(self.pane_creation_wire[0..bytes.len], bytes);
+                self.pane_creation_len = bytes.len;
             },
             .create_tab => |value| {
-                session.tab_creation_count += 1;
-                session.agent_tab_count += @intFromBool(value.kind == .agent);
+                self.tab_creation_count += 1;
+                self.agent_tab_count += @intFromBool(value.kind == .agent);
             },
             .agent_approval => |value| {
-                session.approval_count += 1;
-                session.last_approval = value;
+                self.approval_count += 1;
+                self.last_approval = value;
             },
             else => {},
         }
 
-        session.pending = null;
-        try session.gui.app.completeRuntimeSend({});
+        self.pending = null;
+        try self.gui.app.completeRuntimeSend({});
     }
 }
 
-pub fn bootstrap(session: *Session) !void {
-    const app = &session.gui.app;
+pub fn bootstrap(self: *Session) !void {
+    const app = &self.gui.app;
     try app.model.request_lifecycle.tracker.add(
         client.initial_request_id,
         .{
@@ -205,11 +205,11 @@ pub fn bootstrap(session: *Session) !void {
     const opened = try core.encodePaneOpened(&buffer, .{ .request_id = client.initial_request_id, .pane_id = pane_id, .location = location, .created = true });
     _ = try app.handleServerMessage(try core.decodeServer(opened));
     app.model.startup.phase = .active;
-    try session.settle();
+    try self.settle();
 }
 
-pub fn receiveFrame(session: *Session, frame_id: u64) !void {
-    const pane = session.gui.app.model.panes.find(pane_id).?;
+pub fn receiveFrame(self: *Session, frame_id: u64) !void {
+    const pane = self.gui.app.model.panes.find(pane_id).?;
     const count = pane.buffer.cells.len;
     var cells: [256]core.Cell = @splat(.{});
     if (count > cells.len) {
@@ -229,7 +229,7 @@ pub fn receiveFrame(session: *Session, frame_id: u64) !void {
         .input_modes = .{ .bracketed_paste = true },
         .spans = &.{.{ .start = 0, .cells = if (frame_id == 1) cells[0..count] else cells[0..1] }},
     });
-    _ = try session.gui.app.handleServerMessage(try core.decodeServer(encoded));
+    _ = try self.gui.app.handleServerMessage(try core.decodeServer(encoded));
     @memset(&wire, 0xff);
 }
 

@@ -8,6 +8,6 @@ unique: u64,
 top_count: u8,
 encoded_top: []const u8,
 
-pub fn top(view: HistoryStatsView) HistoryStatsTopIterator {
-    return .{ .decoder = .init(view.encoded_top), .remaining = view.top_count };
+pub fn top(self: HistoryStatsView) HistoryStatsTopIterator {
+    return .{ .decoder = .init(self.encoded_top), .remaining = self.top_count };
 }

@@ -50,19 +50,19 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
             return map;
         }
 
-        pub fn isEmpty(map: *const Self) bool {
-            return map.len == 0;
+        pub fn isEmpty(self: *const Self) bool {
+            return self.len == 0;
         }
 
         pub const Range = struct { start: usize, end: usize };
         const Match = struct { depth: usize, key: data.Key };
 
-        pub fn matchingRange(map: *const Self, range: Range, match: Match) ?Range {
+        pub fn matchingRange(self: *const Self, range: Range, match: Match) ?Range {
             var low = range.start;
             var high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (data.keybind.keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .lt) {
+                if (data.keybind.keyOrder(self.bindingAt(middle).keys[match.depth], match.key) == .lt) {
                     low = middle + 1;
                 } else {
                     high = middle;
@@ -73,7 +73,7 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
             high = range.end;
             while (low < high) {
                 const middle = low + (high - low) / 2;
-                if (data.keybind.keyOrder(map.bindingAt(middle).keys[match.depth], match.key) == .gt) {
+                if (data.keybind.keyOrder(self.bindingAt(middle).keys[match.depth], match.key) == .gt) {
                     high = middle;
                 } else {
                     low = middle + 1;
@@ -85,8 +85,8 @@ pub fn Type(comptime Action: type, comptime max_bindings: usize, comptime max_ke
             return .{ .start = start, .end = low };
         }
 
-        pub fn bindingAt(map: *const Self, sorted_index: usize) *const BindingType {
-            return &map.bindings[map.order[sorted_index]];
+        pub fn bindingAt(self: *const Self, sorted_index: usize) *const BindingType {
+            return &self.bindings[self.order[sorted_index]];
         }
 
         fn orderLessThan(bindings: *const [max_bindings]BindingType, a: u16, b: u16) bool {

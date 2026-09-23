@@ -6,6 +6,6 @@ target_id: u64 = 0,
 generation: u64 = 0,
 
 /// Example: `if (focused.eql(target.id)) drawFocus();`
-pub fn eql(left: Id, right: Id) bool {
-    return left.target_id == right.target_id and left.generation == right.generation;
+pub fn eql(self: Id, right: Id) bool {
+    return self.target_id == right.target_id and self.generation == right.generation;
 }

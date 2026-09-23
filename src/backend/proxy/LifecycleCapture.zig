@@ -9,8 +9,8 @@ canceled: bool = false,
 closed: bool = false,
 destroyed: bool = false,
 
-pub fn record(capture: *Capture, step: lifecycle.Step) void {
-    std.debug.assert(capture.len < capture.steps.len);
-    capture.steps[capture.len] = step;
-    capture.len += 1;
+pub fn record(self: *Capture, step: lifecycle.Step) void {
+    std.debug.assert(self.len < self.steps.len);
+    self.steps[self.len] = step;
+    self.len += 1;
 }

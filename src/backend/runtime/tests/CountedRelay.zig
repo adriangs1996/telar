@@ -7,14 +7,14 @@ fake: FakeSession,
 writes: usize = 0,
 
 /// Example: `const count = counted.read(.origin, buffer);`.
-pub fn read(relay: *CountedRelay, side: Session.Side, bytes: []u8) ?usize {
-    return relay.fake.read(side, bytes);
+pub fn read(self: *CountedRelay, side: Session.Side, bytes: []u8) ?usize {
+    return self.fake.read(side, bytes);
 }
 
 /// Example: `const forwarded = counted.writeAll(.child, bytes);`.
-pub fn writeAll(relay: *CountedRelay, side: Session.Side, bytes: []const u8) bool {
-    relay.writes += 1;
-    return relay.fake.writeAll(side, bytes);
+pub fn writeAll(self: *CountedRelay, side: Session.Side, bytes: []const u8) bool {
+    self.writes += 1;
+    return self.fake.writeAll(side, bytes);
 }
 
 /// Example: `counted.observe(fragment);`.

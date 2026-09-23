@@ -15,8 +15,8 @@ segment_count: u8 = 0,
 /// ```zig
 /// try content.append(.{ .text = " CPU", .icon = .cpu });
 /// ```
-pub fn append(content: *Content, input: SegmentInput) !void {
-    if (content.segment_count == model.max_segments) {
+pub fn append(self: *Content, input: SegmentInput) !void {
+    if (self.segment_count == model.max_segments) {
         return error.TooManyBarSegments;
     }
     if (input.text.len == 0 and input.icon == null) {
@@ -26,52 +26,52 @@ pub fn append(content: *Content, input: SegmentInput) !void {
         return error.InvalidBarText;
     }
 
-    const end = @as(usize, content.text_len) + input.text.len;
-    if (end > content.text_bytes.len) {
+    const end = @as(usize, self.text_len) + input.text.len;
+    if (end > self.text_bytes.len) {
         return error.BarTextTooLong;
     }
 
-    const offset = content.text_len;
-    @memcpy(content.text_bytes[offset..end], input.text);
-    content.segments[content.segment_count] = .{
+    const offset = self.text_len;
+    @memcpy(self.text_bytes[offset..end], input.text);
+    self.segments[self.segment_count] = .{
         .text_offset = offset,
         .text_len = @intCast(input.text.len),
         .icon = input.icon,
         .style = input.style,
     };
-    content.text_len = @intCast(end);
-    content.segment_count += 1;
+    self.text_len = @intCast(end);
+    self.segment_count += 1;
 }
 
-pub fn text(content: *const Content, segment: Segment) []const u8 {
-    return content.text_bytes[segment.text_offset..][0..segment.text_len];
+pub fn text(self: *const Content, segment: Segment) []const u8 {
+    return self.text_bytes[segment.text_offset..][0..segment.text_len];
 }
 
-pub fn slice(content: *const Content) []const Segment {
-    return content.segments[0..content.segment_count];
+pub fn slice(self: *const Content) []const Segment {
+    return self.segments[0..self.segment_count];
 }
 
-pub fn width(content: *const Content) u16 {
+pub fn width(self: *const Content) u16 {
     var result: u16 = 0;
-    for (content.slice()) |segment| {
+    for (self.slice()) |segment| {
         if (segment.icon) |icon| {
             result +|= @max(@as(u16, 1), core.measure(icon.unicodeGlyph()));
         }
-        result +|= core.measure(content.text(segment));
+        result +|= core.measure(self.text(segment));
     }
 
     return result;
 }
 
-pub fn eql(left: *const Content, right: *const Content) bool {
-    if (left.text_len != right.text_len or left.segment_count != right.segment_count) {
+pub fn eql(self: *const Content, right: *const Content) bool {
+    if (self.text_len != right.text_len or self.segment_count != right.segment_count) {
         return false;
     }
-    if (!std.mem.eql(u8, left.text_bytes[0..left.text_len], right.text_bytes[0..right.text_len])) {
+    if (!std.mem.eql(u8, self.text_bytes[0..self.text_len], right.text_bytes[0..right.text_len])) {
         return false;
     }
 
-    for (left.segments[0..left.segment_count], right.segments[0..right.segment_count]) |left_segment, right_segment| {
+    for (self.segments[0..self.segment_count], right.segments[0..right.segment_count]) |left_segment, right_segment| {
         if (!std.meta.eql(left_segment, right_segment)) {
             return false;
         }

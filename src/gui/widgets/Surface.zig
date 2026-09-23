@@ -6,6 +6,6 @@ bounds: @import("../render/Rect.zig"),
 fill: @import("RoundedFill.zig"),
 
 /// Example: `try surface.draw(canvas);`
-pub fn draw(surface: Surface, canvas: *Canvas) !void {
-    try canvas.fillRoundedAt(surface.bounds, surface.fill);
+pub fn draw(self: Surface, canvas: *Canvas) !void {
+    try canvas.fillRoundedAt(self.bounds, self.fill);
 }

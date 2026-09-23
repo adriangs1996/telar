@@ -37,21 +37,21 @@ full_len: u32 = 0,
 
 /// Allocates bounded history storage once before the client input loop starts.
 /// Example: `try state.prepare(gpa);`.
-pub fn prepare(state: *State, gpa: std.mem.Allocator) !void {
-    if (state.storage != null) {
+pub fn prepare(self: *State, gpa: std.mem.Allocator) !void {
+    if (self.storage != null) {
         return;
     }
 
-    state.storage = try gpa.create(Storage);
-    state.allocator = gpa;
+    self.storage = try gpa.create(Storage);
+    self.allocator = gpa;
 }
 
 /// Releases storage after all client callbacks have stopped.
 /// Example: `defer state.deinit();`.
-pub fn deinit(state: *State) void {
-    if (state.storage) |storage| {
-        state.allocator.?.destroy(storage);
-        state.storage = null;
+pub fn deinit(self: *State) void {
+    if (self.storage) |storage| {
+        self.allocator.?.destroy(storage);
+        self.storage = null;
     }
 }
 
@@ -60,94 +60,94 @@ pub fn deinit(state: *State) void {
 /// ```zig
 /// model.history_palette.begin();
 /// ```
-pub fn begin(state: *State) void {
-    state.len = 0;
-    state.pending_request = 0;
-    state.phase = .idle;
-    state.has_page = false;
-    state.commands_len = 0;
-    state.clearOutput();
-    state.error_len = 0;
-    state.page_offset = 0;
-    state.pending_offset = 0;
-    state.snapshot_id = 0;
-    state.has_more = false;
-    state.full_id = 0;
-    state.full_request = 0;
-    state.full_len = 0;
-    state.revision +%= 1;
+pub fn begin(self: *State) void {
+    self.len = 0;
+    self.pending_request = 0;
+    self.phase = .idle;
+    self.has_page = false;
+    self.commands_len = 0;
+    self.clearOutput();
+    self.error_len = 0;
+    self.page_offset = 0;
+    self.pending_offset = 0;
+    self.snapshot_id = 0;
+    self.has_more = false;
+    self.full_id = 0;
+    self.full_request = 0;
+    self.full_len = 0;
+    self.revision +%= 1;
 }
 
 /// Starts a search generation without reusing the previous insertion boundary.
 /// Example: `state.restartQuery();`.
-pub fn restartQuery(state: *State) void {
-    state.snapshot_id = 0;
-    state.pending_offset = 0;
+pub fn restartQuery(self: *State) void {
+    self.snapshot_id = 0;
+    self.pending_offset = 0;
 }
 
-pub fn configure(state: *State, options: struct { enter_runs: bool, match_fuzzy: bool }) void {
-    state.enter_runs = options.enter_runs;
-    state.match_fuzzy = options.match_fuzzy;
+pub fn configure(self: *State, options: struct { enter_runs: bool, match_fuzzy: bool }) void {
+    self.enter_runs = options.enter_runs;
+    self.match_fuzzy = options.match_fuzzy;
 }
 
 pub const PageResult = @import("PageResult.zig");
 
 /// Reserves correlation and replaces actionable rows in one transition.
 /// Example: `if (!state.beginPageRequest(id, .global)) return;`.
-pub fn beginPageRequest(state: *State, id: u64, scope: core.HistoryScope) bool {
-    if (id == 0 or !state.track(id)) {
-        state.rejectQuery();
+pub fn beginPageRequest(self: *State, id: u64, scope: core.HistoryScope) bool {
+    if (id == 0 or !self.track(id)) {
+        self.rejectQuery();
         return false;
     }
 
-    state.effective_scope = scope;
-    state.expect(id);
+    self.effective_scope = scope;
+    self.expect(id);
     return true;
 }
 
 /// Commits entries, pagination and display time under a single revision.
 /// Example: `_ = state.acceptPageResult(page);`.
-pub fn acceptPageResult(state: *State, result: PageResult) bool {
-    if (!state.applyEntries(result.request_id, result.entries)) {
+pub fn acceptPageResult(self: *State, result: PageResult) bool {
+    if (!self.applyEntries(result.request_id, result.entries)) {
         return false;
     }
 
-    state.snapshot_id = result.snapshot_id;
-    state.has_page = true;
-    state.has_more = result.has_more;
-    state.now_ms = result.now_ms;
-    state.pending_request = 0;
-    state.revision +%= 1;
+    self.snapshot_id = result.snapshot_id;
+    self.has_page = true;
+    self.has_more = result.has_more;
+    self.now_ms = result.now_ms;
+    self.pending_request = 0;
+    self.revision +%= 1;
     return true;
 }
 
 /// Keeps the previous page, including an empty result, visible during refresh.
 /// Example: `if (state.initialLoading()) drawSearching();`.
-pub fn initialLoading(state: *const State) bool {
-    return state.phase == .loading and !state.has_page;
+pub fn initialLoading(self: *const State) bool {
+    return self.phase == .loading and !self.has_page;
 }
 
 /// Plans an adjacent bounded page; the visible page remains until its reply lands.
 /// Example: `if (state.page(.older)) requestPage();`.
-pub fn page(state: *State, direction: enum { older, newer }) bool {
-    if (state.phase != .ready or state.len == 0) {
+pub fn page(self: *State, direction: enum { older, newer }) bool {
+    if (self.phase != .ready or self.len == 0) {
         return false;
     }
 
     switch (direction) {
         .older => {
-            if (!state.has_more) {
+            if (!self.has_more) {
                 return false;
             }
 
-            state.pending_offset = state.page_offset +| state.len;
+            self.pending_offset = self.page_offset +| self.len;
         },
         .newer => {
-            if (state.page_offset == 0) {
+            if (self.page_offset == 0) {
                 return false;
             }
 
-            state.pending_offset = state.page_offset -| core.max_history_results;
+            self.pending_offset = self.page_offset -| core.max_history_results;
         },
     }
 
@@ -156,30 +156,30 @@ pub fn page(state: *State, direction: enum { older, newer }) bool {
 
 /// Prevents submitting previous results when no new request can be admitted.
 /// Example: `state.rejectQuery();`.
-fn rejectQuery(state: *State) void {
-    state.phase = .failed;
-    state.pending_request = 0;
+fn rejectQuery(self: *State) void {
+    self.phase = .failed;
+    self.pending_request = 0;
 }
 
-pub fn expectFull(state: *State, request: struct { request_id: u64, id: u64 }) void {
-    state.full_request = request.request_id;
-    state.full_id = request.id;
-    state.full_len = 0;
+pub fn expectFull(self: *State, request: struct { request_id: u64, id: u64 }) void {
+    self.full_request = request.request_id;
+    self.full_id = request.id;
+    self.full_len = 0;
 }
 
-pub fn expectDelete(state: *State, request_id: u64) void {
-    state.delete_request = request_id;
+pub fn expectDelete(self: *State, request_id: u64) void {
+    self.delete_request = request_id;
 }
 
 /// Retires deletion acknowledgements without letting an old one refresh a new search.
 /// Example: `if (state.pruned(request_id)) refresh();`.
-pub fn pruned(state: *State, request_id: u64) bool {
-    _ = state.retire(request_id);
-    if (request_id == 0 or request_id != state.delete_request) {
+pub fn pruned(self: *State, request_id: u64) bool {
+    _ = self.retire(request_id);
+    if (request_id == 0 or request_id != self.delete_request) {
         return false;
     }
 
-    state.delete_request = 0;
+    self.delete_request = 0;
     return true;
 }
 
@@ -189,15 +189,15 @@ pub fn pruned(state: *State, request_id: u64) bool {
 /// ```zig
 /// Internal half of beginPageRequest; never exposed independently.
 /// ```
-fn expect(state: *State, request_id: u64) void {
-    state.pending_request = request_id;
-    state.phase = .loading;
-    state.full_id = 0;
-    state.full_request = 0;
-    state.full_len = 0;
-    state.error_len = 0;
-    state.clearOutput();
-    state.revision +%= 1;
+fn expect(self: *State, request_id: u64) void {
+    self.pending_request = request_id;
+    self.phase = .loading;
+    self.full_id = 0;
+    self.full_request = 0;
+    self.full_len = 0;
+    self.error_len = 0;
+    self.clearOutput();
+    self.revision +%= 1;
 }
 
 /// Copies one reply's entries into bounded storage. Replies for any other
@@ -206,16 +206,16 @@ fn expect(state: *State, request_id: u64) void {
 /// ```zig
 /// Internal half of acceptPageResult; metadata commits before publication.
 /// ```
-fn applyEntries(state: *State, request_id: u64, entries: []const core.HistoryEntry) bool {
-    _ = state.retire(request_id);
-    if (request_id == 0 or request_id != state.pending_request or state.phase != .loading) {
+fn applyEntries(self: *State, request_id: u64, entries: []const core.HistoryEntry) bool {
+    _ = self.retire(request_id);
+    if (request_id == 0 or request_id != self.pending_request or self.phase != .loading) {
         return false;
     }
 
-    state.len = 0;
-    state.commands_len = 0;
+    self.len = 0;
+    self.commands_len = 0;
     for (entries) |*entry| {
-        if (state.len == core.max_history_results) {
+        if (self.len == core.max_history_results) {
             break;
         }
 
@@ -231,41 +231,41 @@ fn applyEntries(state: *State, request_id: u64, entries: []const core.HistoryEnt
         };
         if (entry.command.len <= history_palette.max_command_bytes) {
             stored.command_complete = true;
-        } else if (state.storage) |storage| {
-            if (entry.command.len <= storage.commands.len - state.commands_len) {
-                stored.full_offset = state.commands_len;
+        } else if (self.storage) |storage| {
+            if (entry.command.len <= storage.commands.len - self.commands_len) {
+                stored.full_offset = self.commands_len;
                 stored.full_len = @intCast(entry.command.len);
-                @memcpy(storage.commands[state.commands_len..][0..entry.command.len], entry.command);
-                state.commands_len += stored.full_len;
+                @memcpy(storage.commands[self.commands_len..][0..entry.command.len], entry.command);
+                self.commands_len += stored.full_len;
                 stored.command_complete = true;
             }
         }
 
         stored.command_len = history_palette.copyBounded(&stored.command, entry.command);
         stored.cwd_len = @intCast(history_palette.copyBounded(&stored.cwd, entry.cwd));
-        state.entries[state.len] = stored;
-        state.len += 1;
+        self.entries[self.len] = stored;
+        self.len += 1;
     }
 
-    state.phase = .ready;
-    state.page_offset = state.pending_offset;
+    self.phase = .ready;
+    self.page_offset = self.pending_offset;
     return true;
 }
 
 /// Returns the full command only when the current reply owns every byte.
 /// Example: `const command = state.commandAt(selection) orelse return;`.
-pub fn commandAt(state: *const State, index: u16) ?[]const u8 {
-    if (state.phase != .ready or index >= state.len) {
+pub fn commandAt(self: *const State, index: u16) ?[]const u8 {
+    if (self.phase != .ready or index >= self.len) {
         return null;
     }
 
-    const entry = &state.entries[index];
+    const entry = &self.entries[index];
     if (entry.captured_truncated) {
         return null;
     }
 
-    if (state.full_id == entry.id and state.full_len != 0) {
-        return state.storage.?.selected_command[0..state.full_len];
+    if (self.full_id == entry.id and self.full_len != 0) {
+        return self.storage.?.selected_command[0..self.full_len];
     }
 
     if (!entry.command_complete) {
@@ -276,139 +276,139 @@ pub fn commandAt(state: *const State, index: u16) ?[]const u8 {
         return entry.commandSlice();
     }
 
-    return state.storage.?.commands[entry.full_offset..][0..entry.full_len];
+    return self.storage.?.commands[entry.full_offset..][0..entry.full_len];
 }
 
 /// Invalidates a closed inspector without accepting late output.
 /// Example: `state.clearOutput();`.
-pub fn clearOutput(state: *State) void {
-    state.output_request = 0;
-    state.output_id = 0;
-    state.output_len = 0;
-    state.output_phase = .idle;
-    state.output_truncated = false;
+pub fn clearOutput(self: *State) void {
+    self.output_request = 0;
+    self.output_id = 0;
+    self.output_len = 0;
+    self.output_phase = .idle;
+    self.output_truncated = false;
 }
 
 /// Associates one bounded output read with its exact entry.
 /// Example: `state.expectOutput(.{ .request_id = 7, .id = 3 });`.
-pub fn expectOutput(state: *State, request: struct { request_id: u64, id: u64 }) void {
-    state.clearOutput();
-    state.output_request = request.request_id;
-    state.output_id = request.id;
-    state.output_phase = .loading;
-    state.revision +%= 1;
+pub fn expectOutput(self: *State, request: struct { request_id: u64, id: u64 }) void {
+    self.clearOutput();
+    self.output_request = request.request_id;
+    self.output_id = request.id;
+    self.output_phase = .loading;
+    self.revision +%= 1;
 }
 
 /// Owns output before the receive buffer is reused; stale selections are ignored.
 /// Example: `_ = state.applyOutput(reply);`.
-pub fn applyOutput(state: *State, reply: core.HistoryOutput) bool {
-    _ = state.retire(core.raw(reply.request_id));
-    if (state.output_request == 0 or core.raw(reply.request_id) != state.output_request or reply.id != state.output_id) {
+pub fn applyOutput(self: *State, reply: core.HistoryOutput) bool {
+    _ = self.retire(core.raw(reply.request_id));
+    if (self.output_request == 0 or core.raw(reply.request_id) != self.output_request or reply.id != self.output_id) {
         return false;
     }
 
-    const storage = state.storage orelse return false;
+    const storage = self.storage orelse return false;
     const len = @min(reply.content.len, storage.output.len);
     @memcpy(storage.output[0..len], reply.content[0..len]);
-    state.output_len = @intCast(len);
-    state.output_truncated = reply.truncated or len != reply.content.len;
-    state.output_phase = .ready;
-    state.revision +%= 1;
+    self.output_len = @intCast(len);
+    self.output_truncated = reply.truncated or len != reply.content.len;
+    self.output_phase = .ready;
+    self.revision +%= 1;
     return true;
 }
 
 /// Keeps observation failures local to their query or inspector.
 /// Example: `_ = state.fail(reply);`.
-pub fn fail(state: *State, failure: core.RequestFailed) bool {
+pub fn fail(self: *State, failure: core.RequestFailed) bool {
     const request = core.raw(failure.request_id);
-    const owned = state.retire(request);
-    if (request == state.pending_request and request != 0) {
-        state.phase = .failed;
-    } else if (request == state.output_request and request != 0) {
-        state.output_phase = .failed;
-    } else if (request == state.delete_request and request != 0) {
-        state.delete_request = 0;
-    } else if (request == state.full_request and request != 0) {
-        state.full_request = 0;
+    const owned = self.retire(request);
+    if (request == self.pending_request and request != 0) {
+        self.phase = .failed;
+    } else if (request == self.output_request and request != 0) {
+        self.output_phase = .failed;
+    } else if (request == self.delete_request and request != 0) {
+        self.delete_request = 0;
+    } else if (request == self.full_request and request != 0) {
+        self.full_request = 0;
     } else {
         return owned;
     }
 
-    state.setError(failure.message);
+    self.setError(failure.message);
     return true;
 }
 
 /// Records a local actionable error without closing the history browser.
 /// Example: `state.setError("Command unavailable");`.
-pub fn setError(state: *State, message: []const u8) void {
-    state.error_len = @intCast(history_palette.copyBounded(&state.error_text, message));
-    state.revision +%= 1;
+pub fn setError(self: *State, message: []const u8) void {
+    self.error_len = @intCast(history_palette.copyBounded(&self.error_text, message));
+    self.revision +%= 1;
 }
 
-pub fn errorSlice(state: *const State) []const u8 {
-    return state.error_text[0..state.error_len];
+pub fn errorSlice(self: *const State) []const u8 {
+    return self.error_text[0..self.error_len];
 }
 
-pub fn outputSlice(state: *const State) []const u8 {
-    const storage = state.storage orelse return "";
-    return storage.output[0..state.output_len];
+pub fn outputSlice(self: *const State) []const u8 {
+    const storage = self.storage orelse return "";
+    return storage.output[0..self.output_len];
 }
 
-pub fn outputHint(state: *const State) []const u8 {
-    return switch (state.output_phase) {
+pub fn outputHint(self: *const State) []const u8 {
+    return switch (self.output_phase) {
         .idle => "No captured output",
         .loading => "Loading captured output...",
         .failed => "Could not read captured output",
-        .ready => if (state.output_len == 0) "No captured output" else if (state.output_truncated) "Captured output (truncated)" else "Captured output",
+        .ready => if (self.output_len == 0) "No captured output" else if (self.output_truncated) "Captured output (truncated)" else "Captured output",
     };
 }
 
 /// Loads one complete command when the page's shared storage quota was exhausted.
 /// Example: `_ = state.applyFull(reply_id, entries);`.
-pub fn applyFull(state: *State, request_id: u64, entries: []const core.HistoryEntry) bool {
-    if (request_id == 0 or request_id != state.full_request) {
+pub fn applyFull(self: *State, request_id: u64, entries: []const core.HistoryEntry) bool {
+    if (request_id == 0 or request_id != self.full_request) {
         return false;
     }
 
-    _ = state.retire(request_id);
-    const storage = state.storage orelse return false;
-    if (entries.len != 1 or entries[0].id != state.full_id or entries[0].command_truncated or entries[0].command.len > storage.selected_command.len) {
-        state.setError("The selected command is no longer available");
-        state.full_request = 0;
+    _ = self.retire(request_id);
+    const storage = self.storage orelse return false;
+    if (entries.len != 1 or entries[0].id != self.full_id or entries[0].command_truncated or entries[0].command.len > storage.selected_command.len) {
+        self.setError("The selected command is no longer available");
+        self.full_request = 0;
         return true;
     }
 
     const command = entries[0].command;
     @memcpy(storage.selected_command[0..command.len], command);
-    state.full_len = @intCast(command.len);
-    state.full_request = 0;
-    state.error_len = 0;
-    state.revision +%= 1;
+    self.full_len = @intCast(command.len);
+    self.full_request = 0;
+    self.error_len = 0;
+    self.revision +%= 1;
     return true;
 }
 
 /// Reserves correlation before a request enters the asynchronous outbox.
 /// Example: `if (!state.track(request_id)) return;`.
-pub fn track(state: *State, request_id: u64) bool {
-    for (&state.requests) |*pending| {
+pub fn track(self: *State, request_id: u64) bool {
+    for (&self.requests) |*pending| {
         if (pending.* == 0) {
             pending.* = request_id;
             return true;
         }
     }
 
-    state.setError("History is busy; retry the search");
+    self.setError("History is busy; retry the search");
     return false;
 }
 
 /// Releases a completed request even when its visible state was replaced.
 /// Example: `_ = state.retire(request_id);`.
-pub fn retire(state: *State, request_id: u64) bool {
+pub fn retire(self: *State, request_id: u64) bool {
     if (request_id == 0) {
         return false;
     }
 
-    for (&state.requests) |*pending| {
+    for (&self.requests) |*pending| {
         if (pending.* == request_id) {
             pending.* = 0;
             return true;
@@ -418,10 +418,10 @@ pub fn retire(state: *State, request_id: u64) bool {
     return false;
 }
 
-pub fn slice(state: *const State) []const Entry {
-    return state.entries[0..state.len];
+pub fn slice(self: *const State) []const Entry {
+    return self.entries[0..self.len];
 }
 
-pub fn version(state: *const State) u64 {
-    return state.revision;
+pub fn version(self: *const State) u64 {
+    return self.revision;
 }

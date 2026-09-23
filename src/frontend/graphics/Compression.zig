@@ -15,16 +15,16 @@ offset: usize,
 
 /// Compresses only copied input; no store, image or mutable model is borrowed.
 /// Example: `const completed = Compression.run(job);`.
-pub fn run(job: *Compression) *Compression {
-    job.compress.writer.writeAll(job.input[0..job.input_len]) catch {
-        job.failed = true;
-        return job;
+pub fn run(self: *Compression) *Compression {
+    self.compress.writer.writeAll(self.input[0..self.input_len]) catch {
+        self.failed = true;
+        return self;
     };
-    if (job.finish_after) {
-        job.compress.finish() catch {
-            job.failed = true;
+    if (self.finish_after) {
+        self.compress.finish() catch {
+            self.failed = true;
         };
     }
 
-    return job;
+    return self;
 }

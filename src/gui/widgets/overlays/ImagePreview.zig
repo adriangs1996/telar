@@ -32,8 +32,8 @@ pub fn drawCurrent(canvas: *Canvas) !void {
 }
 
 /// Example: `try preview_overlay.draw(canvas);`
-pub fn draw(widget: Widget, canvas: *Canvas) !void {
-    const preview = widget.preview;
+pub fn draw(self: Widget, canvas: *Canvas) !void {
+    const preview = self.preview;
     const state = canvas.widgets orelse return;
     const window: Rect = .{ .x = 0, .y = 0, .width = @floatFromInt(canvas.viewport[0]), .height = @floatFromInt(canvas.viewport[1]) };
     const margin = @min(canvas.chrome.px(36), @min(window.width, window.height) / 12);

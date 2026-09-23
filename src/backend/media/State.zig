@@ -16,10 +16,10 @@ transfer_preparation: Queue = .{},
 shared_transport_clients: std.atomic.Value(u8) = .init(0),
 
 /// Example: `state.noteSharedTransport(true);`.
-pub fn noteSharedTransport(state: *State, shared: bool) void {
+pub fn noteSharedTransport(self: *State, shared: bool) void {
     if (shared) {
-        _ = state.shared_transport_clients.fetchAdd(1, .release);
+        _ = self.shared_transport_clients.fetchAdd(1, .release);
     } else {
-        _ = state.shared_transport_clients.fetchSub(1, .release);
+        _ = self.shared_transport_clients.fetchSub(1, .release);
     }
 }

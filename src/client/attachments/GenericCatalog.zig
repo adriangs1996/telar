@@ -27,8 +27,8 @@ pub fn Type(comptime Delivery: type) type {
             marker: ?model_data.AttachmentMarkerIdentity = null,
             retire_pending: bool = false,
 
-            pub fn markerNumber(slot: *const Slot) ?u16 {
-                const marker = slot.marker orelse return null;
+            pub fn markerNumber(self: *const Slot) ?u16 {
+                const marker = self.marker orelse return null;
 
                 return switch (marker) {
                     .number => |number| number,
@@ -36,8 +36,8 @@ pub fn Type(comptime Delivery: type) type {
                 };
             }
 
-            pub fn markerPath(slot: *const Slot) ?model_data.attachments_path_marker.Uuid {
-                const marker = slot.marker orelse return null;
+            pub fn markerPath(self: *const Slot) ?model_data.attachments_path_marker.Uuid {
+                const marker = self.marker orelse return null;
 
                 return switch (marker) {
                     .number => null,
@@ -45,8 +45,8 @@ pub fn Type(comptime Delivery: type) type {
                 };
             }
 
-            pub fn owns(slot: *const Slot, target: model_data.AttachmentTarget) bool {
-                return !slot.retire_pending and std.meta.eql(slot.target, target);
+            pub fn owns(self: *const Slot, target: model_data.AttachmentTarget) bool {
+                return !self.retire_pending and std.meta.eql(self.target, target);
             }
         };
 
@@ -68,46 +68,46 @@ pub fn Type(comptime Delivery: type) type {
             return .{ .gpa = gpa };
         }
 
-        pub fn deinit(store: *Self) void {
-            for (&store.slots) |*slot| store.freeSlot(slot);
+        pub fn deinit(self: *Self) void {
+            for (&self.slots) |*slot| self.freeSlot(slot);
         }
 
-        pub fn retainedBytes(store: *const Self) usize {
-            return store.total_bytes;
+        pub fn retainedBytes(self: *const Self) usize {
+            return self.total_bytes;
         }
 
-        pub fn ingressVersion(store: *const Self) u64 {
-            return store.ingress_version;
+        pub fn ingressVersion(self: *const Self) u64 {
+            return self.ingress_version;
         }
 
-        pub fn cleanupPending(store: *const Self) bool {
-            for (store.slots) |maybe_slot| if (maybe_slot) |slot|
+        pub fn cleanupPending(self: *const Self) bool {
+            for (self.slots) |maybe_slot| if (maybe_slot) |slot|
                 if (slot.retire_pending) return true;
             return false;
         }
 
-        pub fn reapRetired(store: *Self) void {
-            for (&store.slots) |*maybe_slot| {
+        pub fn reapRetired(self: *Self) void {
+            for (&self.slots) |*maybe_slot| {
                 if (maybe_slot.* == null or !maybe_slot.*.?.retire_pending or !Delivery.canRelease(&maybe_slot.*.?)) {
                     continue;
                 }
-                store.freeSlot(maybe_slot);
+                self.freeSlot(maybe_slot);
             }
         }
 
-        pub fn setTarget(store: *Self, target: ?model_data.AttachmentTarget) TargetChange {
-            const previous_pane = if (store.visibleCount() != 0)
-                if (store.active_target) |active| active.pane_id else null
+        pub fn setTarget(self: *Self, target: ?model_data.AttachmentTarget) TargetChange {
+            const previous_pane = if (self.visibleCount() != 0)
+                if (self.active_target) |active| active.pane_id else null
             else
                 null;
-            if (catalog.optionalTargetEql(store.active_target, target)) {
+            if (catalog.optionalTargetEql(self.active_target, target)) {
                 return .{};
             }
-            store.active_target = target;
-            store.marker_deletion_pending = null;
-            store.modal = null;
-            Delivery.targetChanged(store);
-            const current_pane = if (store.visibleCount() != 0)
+            self.active_target = target;
+            self.marker_deletion_pending = null;
+            self.modal = null;
+            Delivery.targetChanged(self);
+            const current_pane = if (self.visibleCount() != 0)
                 if (target) |active| active.pane_id else null
             else
                 null;
@@ -118,26 +118,26 @@ pub fn Type(comptime Delivery: type) type {
             };
         }
 
-        pub fn hasVisibleItems(store: *const Self) bool {
-            return store.visibleCount() != 0;
+        pub fn hasVisibleItems(self: *const Self) bool {
+            return self.visibleCount() != 0;
         }
 
-        pub fn visibleTarget(store: *const Self) ?model_data.AttachmentTarget {
-            if (store.visibleCount() == 0) {
+        pub fn visibleTarget(self: *const Self) ?model_data.AttachmentTarget {
+            if (self.visibleCount() == 0) {
                 return null;
             }
 
-            return store.active_target;
+            return self.active_target;
         }
 
-        pub fn hasModal(store: *const Self) bool {
-            return store.modal != null;
+        pub fn hasModal(self: *const Self) bool {
+            return self.modal != null;
         }
 
-        pub fn snapshot(store: *const Self) AttachmentSnapshot {
-            var result: AttachmentSnapshot = .{ .modal = store.modal };
-            for (store.slots) |maybe_slot| if (maybe_slot) |slot| {
-                if (!store.slotVisible(&slot)) {
+        pub fn snapshot(self: *const Self) AttachmentSnapshot {
+            var result: AttachmentSnapshot = .{ .modal = self.modal };
+            for (self.slots) |maybe_slot| if (maybe_slot) |slot| {
+                if (!self.slotVisible(&slot)) {
                     continue;
                 }
                 result.items[result.len] = .{
@@ -169,7 +169,7 @@ pub fn Type(comptime Delivery: type) type {
             return result;
         }
 
-        pub fn adopt(store: *Self, capture: *model_data.Capture) !void {
+        pub fn adopt(self: *Self, capture: *model_data.Capture) !void {
             if (capture.png.len == 0 or capture.png.len > model_data.attachment_types.max_png_bytes or
                 capture.width == 0 or capture.height == 0)
             {
@@ -180,20 +180,20 @@ pub fn Type(comptime Delivery: type) type {
             if (pixels > model_data.attachment_types.max_pixels) {
                 return error.ClipboardImageTooLarge;
             }
-            while (store.total_bytes + capture.png.len > model_data.attachment_types.max_retained_bytes or
-                store.freeIndex() == null)
+            while (self.total_bytes + capture.png.len > model_data.attachment_types.max_retained_bytes or
+                self.freeIndex() == null)
             {
-                store.evictOldest() orelse return error.AttachmentSelfFull;
+                self.evictOldest() orelse return error.AttachmentSelfFull;
             }
-            const delivery = try Delivery.createSlot(store);
-            const index = store.freeIndex().?;
+            const delivery = try Delivery.createSlot(self);
+            const index = self.freeIndex().?;
             const request = capture.request;
             const width = capture.width;
             const height = capture.height;
             const png = capture.png;
             capture.png = &.{};
-            store.gpa.destroy(capture);
-            store.slots[index] = .{
+            self.gpa.destroy(capture);
+            self.slots[index] = .{
                 .id = @enumFromInt(request.sequence),
                 .target = request.target,
                 .png = png,
@@ -202,48 +202,48 @@ pub fn Type(comptime Delivery: type) type {
                 .delivery = delivery,
                 .marker_policy = request.marker_policy,
             };
-            store.total_bytes += png.len;
-            store.ingress_version +%= 1;
+            self.total_bytes += png.len;
+            self.ingress_version +%= 1;
         }
 
-        pub fn remove(store: *Self, id: model_data.AttachmentId) bool {
-            for (&store.slots, 0..) |*slot, index| {
+        pub fn remove(self: *Self, id: model_data.AttachmentId) bool {
+            for (&self.slots, 0..) |*slot, index| {
                 if (slot.* == null or slot.*.?.id != id or slot.*.?.retire_pending) {
                     continue;
                 }
-                store.retireAt(index);
-                if (store.modal == id) {
-                    store.modal = null;
+                self.retireAt(index);
+                if (self.modal == id) {
+                    self.modal = null;
                 }
                 return true;
             }
             return false;
         }
 
-        pub fn removeVisible(store: *Self, target: model_data.AttachmentTarget) u8 {
+        pub fn removeVisible(self: *Self, target: model_data.AttachmentTarget) u8 {
             var removed: u8 = 0;
-            for (&store.slots, 0..) |*slot, index| {
+            for (&self.slots, 0..) |*slot, index| {
                 if (slot.* == null or slot.*.?.retire_pending or !std.meta.eql(slot.*.?.target, target)) {
                     continue;
                 }
 
-                store.retireAt(index);
+                self.retireAt(index);
                 removed += 1;
             }
             if (removed != 0) {
-                store.modal = null;
+                self.modal = null;
             }
-            if (store.pendingDeletionFor(target)) {
-                store.marker_deletion_pending = null;
+            if (self.pendingDeletionFor(target)) {
+                self.marker_deletion_pending = null;
             }
 
             return removed;
         }
 
-        pub fn planMarkerRemoval(store: *const Self, id: model_data.AttachmentId, screen: MarkerScreen) ?model_data.MarkerRemoval {
-            const visible = store.snapshot();
+        pub fn planMarkerRemoval(self: *const Self, id: model_data.AttachmentId, screen: MarkerScreen) ?model_data.MarkerRemoval {
+            const visible = self.snapshot();
             const ordinal = snapshotOrdinal(&visible, id) orelse return null;
-            const slot = store.findConst(id) orelse return null;
+            const slot = self.findConst(id) orelse return null;
             const removal = switch (slot.marker_policy) {
                 .ordered, .stable_number => markers.planPlaceholderRemoval(slot.markerNumber(), ordinal, screen),
                 .pasted_path => markers.planPathRemoval(slot.markerPath(), screen),
@@ -255,10 +255,10 @@ pub fn Type(comptime Delivery: type) type {
             return removal;
         }
 
-        pub fn idAtMarkerDeletion(store: *const Self, screen: MarkerScreen, deletion: model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId {
-            const visible = store.snapshot();
+        pub fn idAtMarkerDeletion(self: *const Self, screen: MarkerScreen, deletion: model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId {
+            const visible = self.snapshot();
             for (visible.slice(), 0..) |item, index| {
-                const slot = store.findConst(item.id) orelse continue;
+                const slot = self.findConst(item.id) orelse continue;
                 const touches = switch (slot.marker_policy) {
                     .ordered, .stable_number => screen.cursor.visible and markers.markerTouchesCursor(screen.buffer, .{
                         .ordinal = slot.markerNumber() orelse @as(u16, @intCast(index + 1)),
@@ -275,8 +275,8 @@ pub fn Type(comptime Delivery: type) type {
             return null;
         }
 
-        pub fn pendingMarkerAtDeletion(store: *const Self, screen: MarkerScreen, probe: DeletionProbe) bool {
-            const visible = store.snapshot();
+        pub fn pendingMarkerAtDeletion(self: *const Self, screen: MarkerScreen, probe: DeletionProbe) bool {
+            const visible = self.snapshot();
             if (visible.len >= model_data.attachment_types.max_items) {
                 return false;
             }
@@ -294,11 +294,11 @@ pub fn Type(comptime Delivery: type) type {
                     });
                 },
                 .pasted_path => {
-                    const target = store.active_target orelse return false;
+                    const target = self.active_target orelse return false;
                     var found: [model_data.attachment_types.max_items * 2]model_data.Marker = undefined;
                     const count = model_data.attachments_path_marker.collect(screen.buffer, &found);
                     for (found[0..count]) |marker| {
-                        if (store.pathClaimed(target, marker.uuid)) {
+                        if (self.pathClaimed(target, marker.uuid)) {
                             continue;
                         }
                         if (markers.markerCursorTouches(marker, screen, probe.deletion)) {
@@ -311,43 +311,43 @@ pub fn Type(comptime Delivery: type) type {
             }
         }
 
-        pub fn expectMarkerDeletion(store: *Self, target: model_data.AttachmentTarget) void {
-            for (store.slots) |maybe_slot| {
+        pub fn expectMarkerDeletion(self: *Self, target: model_data.AttachmentTarget) void {
+            for (self.slots) |maybe_slot| {
                 const slot = maybe_slot orelse continue;
                 if (slot.owns(target) and slot.marker_policy.learnsIdentity()) {
-                    store.marker_deletion_pending = .{ .target = target, .frames = model_data.attachment_types.deletion_watch_frames };
+                    self.marker_deletion_pending = .{ .target = target, .frames = model_data.attachment_types.deletion_watch_frames };
                     return;
                 }
             }
         }
 
-        pub fn reconcileMarkers(store: *Self, target: model_data.AttachmentTarget, screen: MarkerScreen) u8 {
-            const visible = store.snapshot();
+        pub fn reconcileMarkers(self: *Self, target: model_data.AttachmentTarget, screen: MarkerScreen) u8 {
+            const visible = self.snapshot();
             for (visible.slice()) |item| {
-                const slot = store.find(item.id) orelse continue;
+                const slot = self.find(item.id) orelse continue;
                 if (slot.marker != null or !slot.owns(target)) {
                     continue;
                 }
 
                 slot.marker = switch (slot.marker_policy) {
                     .ordered => null,
-                    .stable_number => if (markerForNextUnpaired(store, target, screen.buffer)) |number|
+                    .stable_number => if (markerForNextUnpaired(self, target, screen.buffer)) |number|
                         .{ .number = number }
                     else
                         null,
-                    .pasted_path => if (pathForNextUnpaired(store, target, screen.buffer)) |uuid|
+                    .pasted_path => if (pathForNextUnpaired(self, target, screen.buffer)) |uuid|
                         .{ .path = uuid }
                     else
                         null,
                 };
             }
 
-            if (!store.pendingDeletionFor(target)) {
+            if (!self.pendingDeletionFor(target)) {
                 return 0;
             }
 
             var removed: u8 = 0;
-            for (&store.slots, 0..) |*maybe_slot, index| {
+            for (&self.slots, 0..) |*maybe_slot, index| {
                 const slot = if (maybe_slot.*) |*value| value else continue;
                 const marker = slot.marker orelse continue;
                 if (!slot.owns(target)) {
@@ -363,30 +363,30 @@ pub fn Type(comptime Delivery: type) type {
                 }
 
                 const id = slot.id;
-                store.retireAt(index);
-                if (store.modal == id) {
-                    store.modal = null;
+                self.retireAt(index);
+                if (self.modal == id) {
+                    self.modal = null;
                 }
                 removed += 1;
             }
 
-            const pending = &store.marker_deletion_pending.?;
+            const pending = &self.marker_deletion_pending.?;
             pending.frames -= 1;
             if (removed != 0 or pending.frames == 0) {
-                store.marker_deletion_pending = null;
+                self.marker_deletion_pending = null;
             }
 
             return removed;
         }
 
-        fn pendingDeletionFor(store: *const Self, target: model_data.AttachmentTarget) bool {
-            const pending = store.marker_deletion_pending orelse return false;
+        fn pendingDeletionFor(self: *const Self, target: model_data.AttachmentTarget) bool {
+            const pending = self.marker_deletion_pending orelse return false;
 
             return std.meta.eql(pending.target, target);
         }
 
-        fn pathClaimed(store: *const Self, target: model_data.AttachmentTarget, uuid: model_data.attachments_path_marker.Uuid) bool {
-            for (store.slots) |maybe_slot| {
+        fn pathClaimed(self: *const Self, target: model_data.AttachmentTarget, uuid: model_data.attachments_path_marker.Uuid) bool {
+            for (self.slots) |maybe_slot| {
                 const slot = maybe_slot orelse continue;
                 const claimed = slot.markerPath() orelse continue;
                 if (slot.owns(target) and std.mem.eql(u8, &claimed, &uuid)) {
@@ -397,44 +397,44 @@ pub fn Type(comptime Delivery: type) type {
             return false;
         }
 
-        pub fn openModal(store: *Self, id: model_data.AttachmentId) bool {
-            const slot = store.find(id) orelse return false;
-            if (!store.slotVisible(slot)) {
+        pub fn openModal(self: *Self, id: model_data.AttachmentId) bool {
+            const slot = self.find(id) orelse return false;
+            if (!self.slotVisible(slot)) {
                 return false;
             }
-            if (store.modal == id) {
+            if (self.modal == id) {
                 return false;
             }
-            store.modal = id;
+            self.modal = id;
             return true;
         }
 
-        pub fn closeModal(store: *Self) bool {
-            if (store.modal == null) {
+        pub fn closeModal(self: *Self) bool {
+            if (self.modal == null) {
                 return false;
             }
-            store.modal = null;
+            self.modal = null;
             return true;
         }
 
-        fn visibleCount(store: *const Self) usize {
+        fn visibleCount(self: *const Self) usize {
             var count: usize = 0;
-            for (store.slots) |maybe_slot| if (maybe_slot) |slot| {
-                count += @intFromBool(store.slotVisible(&slot));
+            for (self.slots) |maybe_slot| if (maybe_slot) |slot| {
+                count += @intFromBool(self.slotVisible(&slot));
             };
             return count;
         }
 
-        pub fn slotVisible(store: *const Self, slot: *const Slot) bool {
+        pub fn slotVisible(self: *const Self, slot: *const Slot) bool {
             if (slot.retire_pending) {
                 return false;
             }
-            const target = store.active_target orelse return false;
+            const target = self.active_target orelse return false;
             return std.meta.eql(target, slot.target);
         }
 
-        pub fn find(store: *Self, id: model_data.AttachmentId) ?*Slot {
-            for (&store.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
+        pub fn find(self: *Self, id: model_data.AttachmentId) ?*Slot {
+            for (&self.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
                 if (slot.id == id) {
                     return slot;
                 }
@@ -442,8 +442,8 @@ pub fn Type(comptime Delivery: type) type {
             return null;
         }
 
-        pub fn findConst(store: *const Self, id: model_data.AttachmentId) ?*const Slot {
-            for (&store.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
+        pub fn findConst(self: *const Self, id: model_data.AttachmentId) ?*const Slot {
+            for (&self.slots) |*maybe_slot| if (maybe_slot.*) |*slot| {
                 if (slot.id == id) {
                     return slot;
                 }
@@ -451,15 +451,15 @@ pub fn Type(comptime Delivery: type) type {
             return null;
         }
 
-        fn freeIndex(store: *const Self) ?usize {
-            for (store.slots, 0..) |slot, index| if (slot == null) return index;
+        fn freeIndex(self: *const Self) ?usize {
+            for (self.slots, 0..) |slot, index| if (slot == null) return index;
             return null;
         }
 
-        fn evictOldest(store: *Self) ?void {
+        fn evictOldest(self: *Self) ?void {
             var oldest_index: ?usize = null;
             var oldest: u64 = std.math.maxInt(u64);
-            for (store.slots, 0..) |maybe_slot, index| if (maybe_slot) |slot| {
+            for (self.slots, 0..) |maybe_slot, index| if (maybe_slot) |slot| {
                 if (!Delivery.canRelease(&slot)) {
                     continue;
                 }
@@ -469,27 +469,27 @@ pub fn Type(comptime Delivery: type) type {
                     oldest_index = index;
                 }
             };
-            store.removeAt(oldest_index orelse return null);
+            self.removeAt(oldest_index orelse return null);
             return {};
         }
 
-        fn removeAt(store: *Self, index: usize) void {
-            Delivery.retireSlot(store, index);
-            store.freeSlot(&store.slots[index]);
+        fn removeAt(self: *Self, index: usize) void {
+            Delivery.retireSlot(self, index);
+            self.freeSlot(&self.slots[index]);
         }
 
-        fn retireAt(store: *Self, index: usize) void {
-            const slot = &store.slots[index].?;
-            Delivery.retireSlot(store, index);
+        fn retireAt(self: *Self, index: usize) void {
+            const slot = &self.slots[index].?;
+            Delivery.retireSlot(self, index);
             slot.retire_pending = true;
         }
 
-        fn freeSlot(store: *Self, maybe_slot: *?Slot) void {
+        fn freeSlot(self: *Self, maybe_slot: *?Slot) void {
             if (maybe_slot.*) |*slot| {
                 std.debug.assert(Delivery.canRelease(slot));
-                store.total_bytes -= slot.png.len;
+                self.total_bytes -= slot.png.len;
                 std.crypto.secureZero(u8, slot.png);
-                store.gpa.free(slot.png);
+                self.gpa.free(slot.png);
             }
             maybe_slot.* = null;
         }
@@ -503,13 +503,13 @@ pub fn Type(comptime Delivery: type) type {
             return null;
         }
 
-        pub fn pathForNextUnpaired(store: *const Self, target: model_data.AttachmentTarget, buffer: *const core.Buffer) ?model_data.attachments_path_marker.Uuid {
+        pub fn pathForNextUnpaired(self: *const Self, target: model_data.AttachmentTarget, buffer: *const core.Buffer) ?model_data.attachments_path_marker.Uuid {
             var found: [model_data.attachment_types.max_items * 2]model_data.Marker = undefined;
             const count = model_data.attachments_path_marker.collect(buffer, &found);
             var candidates: [model_data.attachment_types.max_items * 2]model_data.attachments_path_marker.Uuid = undefined;
             var candidate_count: usize = 0;
             for (found[0..count]) |marker| {
-                if (store.pathClaimed(target, marker.uuid)) {
+                if (self.pathClaimed(target, marker.uuid)) {
                     continue;
                 }
 
@@ -517,7 +517,7 @@ pub fn Type(comptime Delivery: type) type {
                 candidate_count += 1;
             }
 
-            const unpaired = unpairedPathCount(store, target);
+            const unpaired = unpairedPathCount(self, target);
             if (unpaired == 0 or candidate_count < unpaired) {
                 return null;
             }
@@ -525,9 +525,9 @@ pub fn Type(comptime Delivery: type) type {
             return candidates[candidate_count - unpaired];
         }
 
-        pub fn unpairedPathCount(store: *const Self, target: model_data.AttachmentTarget) u8 {
+        pub fn unpairedPathCount(self: *const Self, target: model_data.AttachmentTarget) u8 {
             var count: u8 = 0;
-            for (store.slots) |maybe_slot| {
+            for (self.slots) |maybe_slot| {
                 const slot = maybe_slot orelse continue;
                 if (slot.owns(target) and slot.marker_policy == .pasted_path and slot.marker == null) {
                     count += 1;
@@ -537,12 +537,12 @@ pub fn Type(comptime Delivery: type) type {
             return count;
         }
 
-        pub fn markerForNextUnpaired(store: *const Self, target: model_data.AttachmentTarget, buffer: *const core.Buffer) ?u16 {
+        pub fn markerForNextUnpaired(self: *const Self, target: model_data.AttachmentTarget, buffer: *const core.Buffer) ?u16 {
             var candidates: [model_data.attachment_types.max_items]u16 = @splat(0);
             var candidate_count: u8 = 0;
             var scan: MarkerScan = .{ .buffer = buffer };
             while (scan.next()) |marker| {
-                if (markerNumberClaimed(store, target, marker.number)) {
+                if (markerNumberClaimed(self, target, marker.number)) {
                     continue;
                 }
 
@@ -572,7 +572,7 @@ pub fn Type(comptime Delivery: type) type {
                 }
             }
 
-            const unpaired = unpairedStableCount(store, target);
+            const unpaired = unpairedStableCount(self, target);
             if (unpaired == 0 or candidate_count < unpaired) {
                 return null;
             }
@@ -580,9 +580,9 @@ pub fn Type(comptime Delivery: type) type {
             return candidates[unpaired - 1];
         }
 
-        pub fn unpairedStableCount(store: *const Self, target: model_data.AttachmentTarget) u8 {
+        pub fn unpairedStableCount(self: *const Self, target: model_data.AttachmentTarget) u8 {
             var count: u8 = 0;
-            for (store.slots) |maybe_slot| {
+            for (self.slots) |maybe_slot| {
                 const slot = maybe_slot orelse continue;
                 if (slot.owns(target) and slot.marker_policy == .stable_number and slot.marker == null) {
                     count += 1;
@@ -592,8 +592,8 @@ pub fn Type(comptime Delivery: type) type {
             return count;
         }
 
-        pub fn markerNumberClaimed(store: *const Self, target: model_data.AttachmentTarget, number: u16) bool {
-            for (store.slots) |maybe_slot| {
+        pub fn markerNumberClaimed(self: *const Self, target: model_data.AttachmentTarget, number: u16) bool {
+            for (self.slots) |maybe_slot| {
                 const slot = maybe_slot orelse continue;
                 if (slot.owns(target) and slot.markerNumber() == number) {
                     return true;

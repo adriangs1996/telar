@@ -16,24 +16,24 @@ transition: Transition = .{ .from = 0, .to = 1, .started_ns = 0, .duration_ns = 
 
 /// Retargets from the visible eased value, folding any frames that were missed.
 /// Example: `const fraction = motion.sample(pane, &clock);`
-pub fn sample(motion: *ProgressMotion, pane: *const data.Pane, clock: *FrameClock) f32 {
+pub fn sample(self: *ProgressMotion, pane: *const data.Pane, clock: *FrameClock) f32 {
     const target = reported(pane);
-    if (pane.progress_state != .set or pane.progress_percent == null or !motion.known) {
-        motion.from = target;
-        motion.to = target;
-        motion.known = pane.progress_percent != null and pane.progress_state != .indeterminate;
-        motion.transition.duration_ns = 0;
+    if (pane.progress_state != .set or pane.progress_percent == null or !self.known) {
+        self.from = target;
+        self.to = target;
+        self.known = pane.progress_percent != null and pane.progress_state != .indeterminate;
+        self.transition.duration_ns = 0;
         return target;
     }
 
-    if (target != motion.to) {
-        motion.from = motion.value(motion.transition.value(clock.now_ns));
-        motion.to = target;
-        motion.transition.started_ns = clock.now_ns;
-        motion.transition.duration_ns = if (motion.from == target) 0 else duration_ns;
+    if (target != self.to) {
+        self.from = self.value(self.transition.value(clock.now_ns));
+        self.to = target;
+        self.transition.started_ns = clock.now_ns;
+        self.transition.duration_ns = if (self.from == target) 0 else duration_ns;
     }
 
-    return motion.value(clock.sample(motion.transition));
+    return self.value(clock.sample(self.transition));
 }
 
 /// Unknown percentages have no determinate fill; bounds remain valid for all u8 values.
@@ -42,12 +42,12 @@ pub fn reported(pane: *const data.Pane) f32 {
     return @as(f32, @floatFromInt(@min(pane.progress_percent orelse 0, 100))) / 100;
 }
 
-fn value(motion: ProgressMotion, phase: f32) f32 {
+fn value(self: ProgressMotion, phase: f32) f32 {
     if (phase >= 1) {
-        return motion.to;
+        return self.to;
     }
 
     const remaining = 1 - phase;
     const eased = 1 - remaining * remaining * remaining;
-    return std.math.clamp(motion.from + (motion.to - motion.from) * eased, 0, 1);
+    return std.math.clamp(self.from + (self.to - self.from) * eased, 0, 1);
 }

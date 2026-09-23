@@ -46,13 +46,13 @@ pub fn managed(base: []const u8, directory_name: []const u8) !Local {
     return endpoint;
 }
 
-pub fn path(endpoint: *const Local) []const u8 {
-    return endpoint.storage[0..endpoint.path_len];
+pub fn path(self: *const Local) []const u8 {
+    return self.storage[0..self.path_len];
 }
 
-pub fn managedDirectory(endpoint: *const Local) ?[]const u8 {
-    if (endpoint.directory_len == 0) {
+pub fn managedDirectory(self: *const Local) ?[]const u8 {
+    if (self.directory_len == 0) {
         return null;
     }
-    return endpoint.storage[0..endpoint.directory_len];
+    return self.storage[0..self.directory_len];
 }

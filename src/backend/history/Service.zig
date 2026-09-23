@@ -56,8 +56,8 @@ pub fn init(gpa: std.mem.Allocator, config: Config) !Service {
 /// ```zig
 /// service.stop(io);
 /// ```
-pub fn stop(service: *Service, io: std.Io) void {
-    service.channel.close(io);
+pub fn stop(self: *Service, io: std.Io) void {
+    self.channel.close(io);
 }
 
 /// Releases queued values, queue storage, and the SQLite connection after
@@ -66,9 +66,9 @@ pub fn stop(service: *Service, io: std.Io) void {
 /// ```zig
 /// service.deinit(io);
 /// ```
-pub fn deinit(service: *Service, io: std.Io) void {
-    service.channel.deinit(io);
-    service.worker.deinit();
+pub fn deinit(self: *Service, io: std.Io) void {
+    self.channel.deinit(io);
+    self.worker.deinit();
 }
 
 /// Runs the sequential history worker until `stop` closes its channel.
@@ -76,8 +76,8 @@ pub fn deinit(service: *Service, io: std.Io) void {
 /// ```zig
 /// try service.run(io);
 /// ```
-pub fn run(service: *Service, io: std.Io) anyerror!void {
-    return service.worker.run(.{ .io = io, .channel = &service.channel, .metrics = &service.stats });
+pub fn run(self: *Service, io: std.Io) anyerror!void {
+    return self.worker.run(.{ .io = io, .channel = &self.channel, .metrics = &self.stats });
 }
 
 /// Waits for the next asynchronous query response and transfers ownership
@@ -86,8 +86,8 @@ pub fn run(service: *Service, io: std.Io) anyerror!void {
 /// ```zig
 /// const response = try service.receiveResponse(io);
 /// ```
-pub fn receiveResponse(service: *Service, io: std.Io) anyerror!model.Response {
-    return service.channel.receiveResponse(io);
+pub fn receiveResponse(self: *Service, io: std.Io) anyerror!model.Response {
+    return self.channel.receiveResponse(io);
 }
 
 /// Reports whether pane observers should retain bounded command output.
@@ -95,8 +95,8 @@ pub fn receiveResponse(service: *Service, io: std.Io) anyerror!model.Response {
 /// ```zig
 /// const enabled = service.capturesOutput();
 /// ```
-pub fn capturesOutput(service: *const Service) bool {
-    return service.capture_output;
+pub fn capturesOutput(self: *const Service) bool {
+    return self.capture_output;
 }
 
 /// Generates a session identifier with the runtime I/O entropy source.
@@ -115,9 +115,9 @@ pub fn newSessionId(_: *Service, io: std.Io) model.SessionId {
 /// ```zig
 /// _ = service.recordLaunchAttempt(io, request);
 /// ```
-pub fn recordLaunchAttempt(service: *Service, io: std.Io, request: LaunchAttemptRequest) bool {
-    const owned = request_factory.launchAttempt(service.gpa, io, request) catch return false;
-    return service.submit(io, owned);
+pub fn recordLaunchAttempt(self: *Service, io: std.Io, request: LaunchAttemptRequest) bool {
+    const owned = request_factory.launchAttempt(self.gpa, io, request) catch return false;
+    return self.submit(io, owned);
 }
 
 /// Copies and queues the immutable identity of one committed pane session.
@@ -125,9 +125,9 @@ pub fn recordLaunchAttempt(service: *Service, io: std.Io, request: LaunchAttempt
 /// ```zig
 /// _ = service.startSession(io, request);
 /// ```
-pub fn startSession(service: *Service, io: std.Io, request: SessionStartRequest) bool {
-    const owned = request_factory.sessionStarted(service.gpa, request) catch return false;
-    return service.submit(io, owned);
+pub fn startSession(self: *Service, io: std.Io, request: SessionStartRequest) bool {
+    const owned = request_factory.sessionStarted(self.gpa, request) catch return false;
+    return self.submit(io, owned);
 }
 
 /// Queues the terminal timestamp for one history session.
@@ -135,8 +135,8 @@ pub fn startSession(service: *Service, io: std.Io, request: SessionStartRequest)
 /// ```zig
 /// _ = service.finishSession(io, finished);
 /// ```
-pub fn finishSession(service: *Service, io: std.Io, finished: SessionFinished) bool {
-    return service.submit(io, .{ .session_finished = finished });
+pub fn finishSession(self: *Service, io: std.Io, finished: SessionFinished) bool {
+    return self.submit(io, .{ .session_finished = finished });
 }
 
 /// Validates and queues the latest authoritative title state for a session.
@@ -144,9 +144,9 @@ pub fn finishSession(service: *Service, io: std.Io, finished: SessionFinished) b
 /// ```zig
 /// _ = service.setSessionTitle(io, definition);
 /// ```
-pub fn setSessionTitle(service: *Service, io: std.Io, definition: Definition) bool {
+pub fn setSessionTitle(self: *Service, io: std.Io, definition: Definition) bool {
     const request = request_factory.sessionTitle(definition) catch return false;
-    return service.submit(io, request);
+    return self.submit(io, request);
 }
 
 /// Copies one wire import batch into owned storage and queues it for the
@@ -155,9 +155,9 @@ pub fn setSessionTitle(service: *Service, io: std.Io, definition: Definition) bo
 /// ```zig
 /// if (!service.importBatch(io, view)) return error.ImportRefused;
 /// ```
-pub fn importBatch(service: *Service, io: std.Io, view: core.ImportHistoryView) bool {
-    const request = request_factory.importBatch(service.gpa, view) catch return false;
-    return service.submit(io, request);
+pub fn importBatch(self: *Service, io: std.Io, view: core.ImportHistoryView) bool {
+    const request = request_factory.importBatch(self.gpa, view) catch return false;
+    return self.submit(io, request);
 }
 
 /// Queues one exact-entry deletion and produces an asynchronous response.
@@ -165,8 +165,8 @@ pub fn importBatch(service: *Service, io: std.Io, view: core.ImportHistoryView) 
 /// ```zig
 /// _ = service.deleteHistory(io, request);
 /// ```
-pub fn deleteHistory(service: *Service, io: std.Io, request: Delete) bool {
-    return service.submit(io, .{ .delete = request });
+pub fn deleteHistory(self: *Service, io: std.Io, request: Delete) bool {
+    return self.submit(io, .{ .delete = request });
 }
 
 /// Queues one bounded prune and produces an asynchronous response.
@@ -174,8 +174,8 @@ pub fn deleteHistory(service: *Service, io: std.Io, request: Delete) bool {
 /// ```zig
 /// _ = service.pruneHistory(io, prune);
 /// ```
-pub fn pruneHistory(service: *Service, io: std.Io, prune: Prune) bool {
-    return service.submit(io, .{ .prune = prune });
+pub fn pruneHistory(self: *Service, io: std.Io, prune: Prune) bool {
+    return self.submit(io, .{ .prune = prune });
 }
 
 /// Queues one captured-output read and produces an asynchronous response.
@@ -183,8 +183,8 @@ pub fn pruneHistory(service: *Service, io: std.Io, prune: Prune) bool {
 /// ```zig
 /// _ = service.readOutput(io, request);
 /// ```
-pub fn readOutput(service: *Service, io: std.Io, request: Delete) bool {
-    return service.submit(io, .{ .read_output = request });
+pub fn readOutput(self: *Service, io: std.Io, request: Delete) bool {
+    return self.submit(io, .{ .read_output = request });
 }
 
 /// Queues one history aggregation and produces an asynchronous response.
@@ -192,8 +192,8 @@ pub fn readOutput(service: *Service, io: std.Io, request: Delete) bool {
 /// ```zig
 /// _ = service.statsHistory(io, query);
 /// ```
-pub fn statsHistory(service: *Service, io: std.Io, stats_query: StatsQuery) bool {
-    return service.submit(io, .{ .stats = stats_query });
+pub fn statsHistory(self: *Service, io: std.Io, stats_query: StatsQuery) bool {
+    return self.submit(io, .{ .stats = stats_query });
 }
 
 /// Copies one completed command into owned storage after applying the
@@ -202,13 +202,13 @@ pub fn statsHistory(service: *Service, io: std.Io, stats_query: StatsQuery) bool
 /// ```zig
 /// _ = service.recordCommand(io, record);
 /// ```
-pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecord) bool {
-    if (!service.filters.shouldRecord(.{ .command = record.command.bytes, .cwd = record.command.cwd })) {
+pub fn recordCommand(self: *Service, io: std.Io, record: CommandRecord) bool {
+    if (!self.filters.shouldRecord(.{ .command = record.command.bytes, .cwd = record.command.cwd })) {
         return true;
     }
 
-    const request = request_factory.commandFinished(service.gpa, record) catch return false;
-    return service.submit(io, request);
+    const request = request_factory.commandFinished(self.gpa, record) catch return false;
+    return self.submit(io, request);
 }
 
 /// Queues an agent command with explicit provenance and optional secret
@@ -217,7 +217,7 @@ pub fn recordCommand(service: *Service, io: std.Io, record: CommandRecord) bool 
 /// ```zig
 /// _ = service.recordAgentCommand(io, record);
 /// ```
-pub fn recordAgentCommand(service: *Service, io: std.Io, record: AgentCommandRecord) bool {
+pub fn recordAgentCommand(self: *Service, io: std.Io, record: AgentCommandRecord) bool {
     if (record.origin == .pane) {
         return false;
     }
@@ -240,7 +240,7 @@ pub fn recordAgentCommand(service: *Service, io: std.Io, record: AgentCommandRec
     {
         return false;
     }
-    if (!service.filters.shouldRecordAgent(.{ .command = record.command.bytes, .cwd = record.command.cwd }, record.redact)) {
+    if (!self.filters.shouldRecordAgent(.{ .command = record.command.bytes, .cwd = record.command.cwd }, record.redact)) {
         return true;
     }
 
@@ -249,7 +249,7 @@ pub fn recordAgentCommand(service: *Service, io: std.Io, record: AgentCommandRec
     context.origin = record.origin;
     context.provider = record.provider;
     context.tool_call_id = record.tool_call_id;
-    var request = request_factory.commandFinished(service.gpa, .{
+    var request = request_factory.commandFinished(self.gpa, .{
         .context = context,
         .command = record.command,
     }) catch return false;
@@ -257,7 +257,7 @@ pub fn recordAgentCommand(service: *Service, io: std.Io, record: AgentCommandRec
         .started => .running,
         .finished => request.command_finished.status,
     };
-    return service.submit(io, request);
+    return self.submit(io, request);
 }
 
 /// Queues one history search and produces an asynchronous response.
@@ -265,8 +265,8 @@ pub fn recordAgentCommand(service: *Service, io: std.Io, record: AgentCommandRec
 /// ```zig
 /// _ = service.query(io, request);
 /// ```
-pub fn query(service: *Service, io: std.Io, request: Query) bool {
-    return service.submit(io, .{ .query = request });
+pub fn query(self: *Service, io: std.Io, request: Query) bool {
+    return self.submit(io, .{ .query = request });
 }
 
 /// Samples lock-free service metrics without blocking history work.
@@ -274,8 +274,8 @@ pub fn query(service: *Service, io: std.Io, request: Query) bool {
 /// ```zig
 /// const stats = service.statsSnapshot();
 /// ```
-pub fn statsSnapshot(service: *const Service) StatsSnapshot {
-    return service.stats.snapshot(service.worker.available());
+pub fn statsSnapshot(self: *const Service) StatsSnapshot {
+    return self.stats.snapshot(self.worker.available());
 }
 
 /// Samples the current on-disk SQLite file size for telemetry.
@@ -283,8 +283,8 @@ pub fn statsSnapshot(service: *const Service) StatsSnapshot {
 /// ```zig
 /// const bytes = service.sqliteBytes(io);
 /// ```
-pub fn sqliteBytes(service: *const Service, io: std.Io) u64 {
-    return service.worker.sqliteBytes(io);
+pub fn sqliteBytes(self: *const Service, io: std.Io) u64 {
+    return self.worker.sqliteBytes(io);
 }
 
 /// Returns the retained database-open error when the service is degraded.
@@ -292,10 +292,10 @@ pub fn sqliteBytes(service: *const Service, io: std.Io) u64 {
 /// ```zig
 /// const failure = service.openError();
 /// ```
-pub fn openError(service: *const Service) ?anyerror {
-    return service.worker.openError();
+pub fn openError(self: *const Service) ?anyerror {
+    return self.worker.openError();
 }
 
-fn submit(service: *Service, io: std.Io, request: model.Request) bool {
-    return service.channel.submit(.{ .io = io, .request = request, .metrics = &service.stats });
+fn submit(self: *Service, io: std.Io, request: model.Request) bool {
+    return self.channel.submit(.{ .io = io, .request = request, .metrics = &self.stats });
 }

@@ -19,21 +19,21 @@ pub fn init() !Fixture {
     return .{ .atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 15 }), .quads = QuadList.init(std.testing.allocator) };
 }
 
-pub fn deinit(fixture: *Fixture) void {
-    if (fixture.state) |state| {
+pub fn deinit(self: *Fixture) void {
+    if (self.state) |state| {
         state.deinit();
         std.testing.allocator.destroy(state);
     }
 
-    fixture.atlas.deinit();
-    fixture.quads.deinit();
-    if (fixture.syntax) |store| {
+    self.atlas.deinit();
+    self.quads.deinit();
+    if (self.syntax) |store| {
         std.testing.allocator.destroy(store);
     }
 }
 
-pub fn canvas(fixture: *Fixture) @import("../widgets/Canvas.zig") {
-    return .{ .atlas = &fixture.atlas, .quads = &fixture.quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 9, .cell_height = 22, .baseline = 17, .pixel_height = 15 }, .theme = data.theme_support.default_theme, .chrome = .{ .body = 15, .title = 18, .small = 12, .ratio = 1 }, .animation = &fixture.clock, .widgets = fixture.state, .syntax = fixture.syntax };
+pub fn canvas(self: *Fixture) @import("../widgets/Canvas.zig") {
+    return .{ .atlas = &self.atlas, .quads = &self.quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 9, .cell_height = 22, .baseline = 17, .pixel_height = 15 }, .theme = data.theme_support.default_theme, .chrome = .{ .body = 15, .title = 18, .small = 12, .ratio = 1 }, .animation = &self.clock, .widgets = self.state, .syntax = self.syntax };
 }
 
 /// Runs the worker before painting, just as the asynchronous host does.
@@ -53,8 +53,8 @@ pub fn enableSyntax(self: *Fixture, text: []const u8) !void {
     store.finish(&result);
 }
 
-pub fn enableCache(fixture: *Fixture) !void {
+pub fn enableCache(self: *Fixture) !void {
     const state = try std.testing.allocator.create(@import("../widgets/interaction/State.zig"));
     state.* = .{};
-    fixture.state = state;
+    self.state = state;
 }

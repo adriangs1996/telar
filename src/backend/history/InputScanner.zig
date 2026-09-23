@@ -22,13 +22,13 @@ pub const max_typed_bytes = 255;
 const State = enum { ground, escape, csi, paste, paste_escape, paste_csi };
 pub const Event = @import("Event.zig");
 
-pub fn reset(scanner: *InputScanner) void {
-    scanner.* = .{};
+pub fn reset(self: *InputScanner) void {
+    self.* = .{};
 }
 
-pub fn feed(scanner: *InputScanner, bytes: []const u8) Event {
+pub fn feed(self: *InputScanner, bytes: []const u8) Event {
     var event: Event = .{};
-    for (bytes) |byte| scanner.feedByte(byte, &event);
+    for (bytes) |byte| self.feedByte(byte, &event);
     return event;
 }
 
@@ -37,82 +37,82 @@ pub fn feed(scanner: *InputScanner, bytes: []const u8) Event {
 /// ```zig
 /// const pending = scanner.typedText() orelse return;
 /// ```
-pub fn typedText(scanner: *const InputScanner) ?[]const u8 {
-    if (!scanner.typed_exact) {
+pub fn typedText(self: *const InputScanner) ?[]const u8 {
+    if (!self.typed_exact) {
         return null;
     }
-    return scanner.typed[0..scanner.typed_len];
+    return self.typed[0..self.typed_len];
 }
 
-fn feedByte(scanner: *InputScanner, byte: u8, event: *Event) void {
-    switch (scanner.state) {
+fn feedByte(self: *InputScanner, byte: u8, event: *Event) void {
+    switch (self.state) {
         .ground => switch (byte) {
             escape_ops.esc => {
-                scanner.state = .escape;
-                scanner.typed_exact = false;
+                self.state = .escape;
+                self.typed_exact = false;
             },
             '\r', '\n' => event.submitted = true,
             0x03 => event.cancelled = true,
-            0x08, 0x7f => scanner.typed_len -|= 1,
+            0x08, 0x7f => self.typed_len -|= 1,
             // Clear-screen repaints the line without changing it.
             0x0c => {},
-            0x20...0x7e => scanner.recordTyped(byte),
+            0x20...0x7e => self.recordTyped(byte),
             // Editing keys and multi-byte text change the line in ways
             // this scanner does not model.
-            else => scanner.typed_exact = false,
+            else => self.typed_exact = false,
         },
         .escape => if (byte == '[') {
-            scanner.startCsi(.csi);
+            self.startCsi(.csi);
         } else {
-            scanner.state = .ground;
+            self.state = .ground;
         },
-        .csi => scanner.csiByte(byte, false),
+        .csi => self.csiByte(byte, false),
         .paste => {
             if (byte == escape_ops.esc) {
-                scanner.state = .paste_escape;
+                self.state = .paste_escape;
             }
         },
         .paste_escape => if (byte == '[') {
-            scanner.startCsi(.paste_csi);
+            self.startCsi(.paste_csi);
         } else {
-            scanner.state = .paste;
+            self.state = .paste;
         },
-        .paste_csi => scanner.csiByte(byte, true),
+        .paste_csi => self.csiByte(byte, true),
     }
 }
 
-fn recordTyped(scanner: *InputScanner, byte: u8) void {
-    if (scanner.typed_len == max_typed_bytes) {
-        scanner.typed_exact = false;
+fn recordTyped(self: *InputScanner, byte: u8) void {
+    if (self.typed_len == max_typed_bytes) {
+        self.typed_exact = false;
         return;
     }
 
-    scanner.typed[scanner.typed_len] = byte;
-    scanner.typed_len += 1;
+    self.typed[self.typed_len] = byte;
+    self.typed_len += 1;
 }
 
-fn startCsi(scanner: *InputScanner, state: State) void {
-    scanner.state = state;
-    scanner.parameter = 0;
-    scanner.has_parameter = false;
+fn startCsi(self: *InputScanner, state: State) void {
+    self.state = state;
+    self.parameter = 0;
+    self.has_parameter = false;
 }
 
-fn csiByte(scanner: *InputScanner, byte: u8, from_paste: bool) void {
+fn csiByte(self: *InputScanner, byte: u8, from_paste: bool) void {
     if (byte >= '0' and byte <= '9') {
-        scanner.has_parameter = true;
-        scanner.parameter = std.math.mul(u16, scanner.parameter, 10) catch std.math.maxInt(u16);
-        scanner.parameter = std.math.add(u16, scanner.parameter, byte - '0') catch std.math.maxInt(u16);
+        self.has_parameter = true;
+        self.parameter = std.math.mul(u16, self.parameter, 10) catch std.math.maxInt(u16);
+        self.parameter = std.math.add(u16, self.parameter, byte - '0') catch std.math.maxInt(u16);
         return;
     }
-    if (byte == '~' and scanner.has_parameter) {
-        if (!from_paste and scanner.parameter == 200) {
-            scanner.state = .paste;
+    if (byte == '~' and self.has_parameter) {
+        if (!from_paste and self.parameter == 200) {
+            self.state = .paste;
             return;
         }
-        if (from_paste and scanner.parameter == 201) {
-            scanner.state = .ground;
+        if (from_paste and self.parameter == 201) {
+            self.state = .ground;
             return;
         }
     }
-    scanner.state = if (from_paste) .paste else .ground;
+    self.state = if (from_paste) .paste else .ground;
 }

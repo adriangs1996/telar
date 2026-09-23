@@ -8,15 +8,15 @@ const Pipeline = @This();
 observers: [middleware.max_observers]Observer = undefined,
 len: u8 = 0,
 
-pub fn add(pipeline: *Pipeline, observer: Observer) !void {
-    if (pipeline.len == pipeline.observers.len) {
+pub fn add(self: *Pipeline, observer: Observer) !void {
+    if (self.len == self.observers.len) {
         return error.TooManyProxyObservers;
     }
-    pipeline.observers[pipeline.len] = observer;
-    pipeline.len += 1;
+    self.observers[self.len] = observer;
+    self.len += 1;
 }
 
-pub fn publish(pipeline: *const Pipeline, io: std.Io, event: MiddlewareEvent) void {
-    for (pipeline.observers[0..pipeline.len]) |observer|
+pub fn publish(self: *const Pipeline, io: std.Io, event: MiddlewareEvent) void {
+    for (self.observers[0..self.len]) |observer|
         observer.observe(observer.context, io, event);
 }

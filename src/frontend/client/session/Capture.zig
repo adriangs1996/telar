@@ -3,6 +3,6 @@ const Capture = @This();
 
 replies: usize = 0,
 
-pub fn terminalResponse(capture: *Capture, _: term.Event.TerminalResponse) !void {
-    capture.replies += 1;
+pub fn terminalResponse(self: *Capture, _: term.Event.TerminalResponse) !void {
+    self.replies += 1;
 }

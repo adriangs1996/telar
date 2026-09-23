@@ -25,8 +25,8 @@ observed_at_ms: i64,
 ///     refreshActivity();
 /// }
 /// ```
-pub fn impliedProvider(observation: *const ProxyObservation) core.AgentProvider {
-    return switch (observation.dialect) {
+pub fn impliedProvider(self: *const ProxyObservation) core.AgentProvider {
+    return switch (self.dialect) {
         .unknown => .unknown,
         .anthropic_messages => .claude,
         .openai_responses => .codex,
@@ -41,6 +41,6 @@ pub fn impliedProvider(observation: *const ProxyObservation) core.AgentProvider 
 ///     coalesceActivity();
 /// }
 /// ```
-pub fn isResponseActivity(observation: *const ProxyObservation) bool {
-    return observation.phase == .response_activity;
+pub fn isResponseActivity(self: *const ProxyObservation) bool {
+    return self.phase == .response_activity;
 }

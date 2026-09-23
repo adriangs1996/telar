@@ -20,6 +20,6 @@ pub fn init(gpa: std.mem.Allocator, fixture: *Fixture, workload: main.Workload) 
     };
 }
 
-pub fn deinit(context: *PipelineContext) void {
-    context.screen.deinit();
+pub fn deinit(self: *PipelineContext) void {
+    self.screen.deinit();
 }

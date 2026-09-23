@@ -23,24 +23,24 @@ progress: ?*@import("ProgressMotions.zig") = null,
 
 /// Resolves the navigation highlight without retaining retired pane or tab data.
 /// Example: `const selected = context.workspaceId() == workspace;`
-pub fn workspaceId(context: *const Context) ?core.WorkspaceId {
-    return workspace_identity.navigationId(context.projection, context.presented_workspace);
+pub fn workspaceId(self: *const Context) ?core.WorkspaceId {
+    return workspace_identity.navigationId(self.projection, self.presented_workspace);
 }
 
 /// Shares one status clock between cards and pane headers.
 /// Example: `const seconds = context.statusAge(agent);`
-pub fn statusAge(context: *const Context, agent: *const data.Agent) u32 {
-    return if (context.ages) |ages| ages.seconds(agent) else agent.statusAgeSeconds();
+pub fn statusAge(self: *const Context, agent: *const data.Agent) u32 {
+    return if (self.ages) |ages| ages.seconds(agent) else agent.statusAgeSeconds();
 }
 
 /// Keeps a sidebar paint linear by using the card's known snapshot index.
 /// Example: `const seconds = context.statusAgeAt(index);`
-pub fn statusAgeAt(context: *const Context, index: usize) u32 {
-    return if (context.ages) |ages| ages.secondsAt(index) else context.projection.agents.slice()[index].statusAgeSeconds();
+pub fn statusAgeAt(self: *const Context, index: usize) u32 {
+    return if (self.ages) |ages| ages.secondsAt(index) else self.projection.agents.slice()[index].statusAgeSeconds();
 }
 
 /// Compares the delivered hover identity with a semantic control action.
 /// Example: `const hovered = context.isHovered(.{ .intent = .toggle_sidebar });`
-pub fn isHovered(context: *const Context, action: action_module.Action) bool {
-    return if (context.hovered) |value| std.meta.eql(value, action) else false;
+pub fn isHovered(self: *const Context, action: action_module.Action) bool {
+    return if (self.hovered) |value| std.meta.eql(value, action) else false;
 }

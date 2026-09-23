@@ -10,29 +10,29 @@ after_cr: bool = false,
 multiline: bool = false,
 
 /// Example: `buffer.append(chunk);`
-pub fn append(buffer: *Buffer, input: []const u8) void {
-    if (buffer.overflow) {
+pub fn append(self: *Buffer, input: []const u8) void {
+    if (self.overflow) {
         return;
     }
 
     for (input) |byte| {
-        if (byte == '\n' and buffer.after_cr) {
-            buffer.after_cr = false;
+        if (byte == '\n' and self.after_cr) {
+            self.after_cr = false;
             continue;
         }
 
-        buffer.after_cr = byte == '\r';
-        if (buffer.len == capacity) {
-            buffer.overflow = true;
+        self.after_cr = byte == '\r';
+        if (self.len == capacity) {
+            self.overflow = true;
             return;
         }
 
-        buffer.bytes[buffer.len] = if (byte == '\r' or byte == '\n') (if (buffer.multiline) @as(u8, '\n') else ' ') else byte;
-        buffer.len += 1;
+        self.bytes[self.len] = if (byte == '\r' or byte == '\n') (if (self.multiline) @as(u8, '\n') else ' ') else byte;
+        self.len += 1;
     }
 }
 
 /// Example: `if (buffer.text()) |bytes| commit(bytes);`
-pub fn text(buffer: *const Buffer) ?[]const u8 {
-    return if (buffer.overflow) null else buffer.bytes[0..buffer.len];
+pub fn text(self: *const Buffer) ?[]const u8 {
+    return if (self.overflow) null else self.bytes[0..self.len];
 }

@@ -14,39 +14,39 @@ old_path: []const u8 = "",
 
 /// Keeps source slices intact while assigning numbers only from valid hunks.
 /// Example: `while (lines.next()) |line| render(line);`
-pub fn next(lines: *Lines) ?Line {
-    while (lines.index < lines.text.len) {
-        const start = lines.index;
-        const end = start + (std.mem.indexOfAny(u8, lines.text[start..], "\r\n") orelse lines.text.len - start);
-        lines.index = end;
-        if (lines.index < lines.text.len and lines.text[lines.index] == '\r') {
-            lines.index += 1;
+pub fn next(self: *Lines) ?Line {
+    while (self.index < self.text.len) {
+        const start = self.index;
+        const end = start + (std.mem.indexOfAny(u8, self.text[start..], "\r\n") orelse self.text.len - start);
+        self.index = end;
+        if (self.index < self.text.len and self.text[self.index] == '\r') {
+            self.index += 1;
         }
 
-        if (lines.index < lines.text.len and lines.text[lines.index] == '\n') {
-            lines.index += 1;
+        if (self.index < self.text.len and self.text[self.index] == '\n') {
+            self.index += 1;
         }
 
-        const source = lines.text[start..end];
+        const source = self.text[start..end];
         for ([_][]const u8{ "Updated ", "Added ", "Deleted ", "Moved " }) |prefix| {
             if (std.mem.startsWith(u8, source, prefix)) {
-                lines.reset();
+                self.reset();
                 return .{ .kind = .file, .text = source[prefix.len..], .operation = prefix[0 .. prefix.len - 1] };
             }
         }
 
         if (std.mem.startsWith(u8, source, "diff --git ")) {
-            lines.reset();
-            lines.git_file = true;
+            self.reset();
+            self.git_file = true;
             const path = if (std.mem.indexOf(u8, source, " b/")) |at| source[at + 3 ..] else source[11..];
             return .{ .kind = .file, .text = path };
         }
 
         if (std.mem.startsWith(u8, source, "@@")) {
-            lines.old = null;
-            lines.new = null;
-            lines.old_left = 0;
-            lines.new_left = 0;
+            self.old = null;
+            self.new = null;
+            self.old_left = 0;
+            self.new_left = 0;
             var parts = std.mem.tokenizeScalar(u8, source, ' ');
             const marker = parts.next().?;
             const old_range = parts.next() orelse return .{ .kind = .metadata, .text = source };
@@ -58,29 +58,29 @@ pub fn next(lines: *Lines) ?Line {
                 return .{ .kind = .metadata, .text = source };
             }
 
-            lines.old = before[0];
-            lines.new = after[0];
-            lines.old_left = before[1];
-            lines.new_left = after[1];
+            self.old = before[0];
+            self.new = after[0];
+            self.old_left = before[1];
+            self.new_left = after[1];
             return .{ .kind = .hunk, .text = source, .old = before[0], .new = after[0] };
         }
 
-        const in_hunk = lines.old_left > 0 or lines.new_left > 0;
-        if (!in_hunk and std.mem.startsWith(u8, source, "--- ") and (lines.git_file or std.mem.startsWith(u8, lines.text[lines.index..], "+++ "))) {
-            lines.old_path = source[4..];
+        const in_hunk = self.old_left > 0 or self.new_left > 0;
+        if (!in_hunk and std.mem.startsWith(u8, source, "--- ") and (self.git_file or std.mem.startsWith(u8, self.text[self.index..], "+++ "))) {
+            self.old_path = source[4..];
             continue;
         }
 
-        if (!in_hunk and std.mem.startsWith(u8, source, "+++ ") and (lines.git_file or lines.old_path.len > 0)) {
-            if (lines.git_file) {
+        if (!in_hunk and std.mem.startsWith(u8, source, "+++ ") and (self.git_file or self.old_path.len > 0)) {
+            if (self.git_file) {
                 continue;
             }
 
-            const path = if (std.mem.eql(u8, source[4..], "/dev/null")) lines.old_path else source[4..];
+            const path = if (std.mem.eql(u8, source[4..], "/dev/null")) self.old_path else source[4..];
             return .{ .kind = .file, .text = if (std.mem.startsWith(u8, path, "a/") or std.mem.startsWith(u8, path, "b/")) path[2..] else path };
         }
 
-        if (lines.git_file and std.mem.startsWith(u8, source, "index ")) {
+        if (self.git_file and std.mem.startsWith(u8, source, "index ")) {
             continue;
         }
 
@@ -91,16 +91,16 @@ pub fn next(lines: *Lines) ?Line {
             else => .metadata,
         };
         var line: Line = .{ .kind = kind, .text = if (kind == .added or kind == .removed or kind == .context) source[1..] else source };
-        if ((kind == .removed or kind == .context) and lines.old_left > 0) {
-            line.old = lines.old;
-            lines.old = lines.old.? +| 1;
-            lines.old_left -= 1;
+        if ((kind == .removed or kind == .context) and self.old_left > 0) {
+            line.old = self.old;
+            self.old = self.old.? +| 1;
+            self.old_left -= 1;
         }
 
-        if ((kind == .added or kind == .context) and lines.new_left > 0) {
-            line.new = lines.new;
-            lines.new = lines.new.? +| 1;
-            lines.new_left -= 1;
+        if ((kind == .added or kind == .context) and self.new_left > 0) {
+            line.new = self.new;
+            self.new = self.new.? +| 1;
+            self.new_left -= 1;
         }
 
         return line;
@@ -111,8 +111,8 @@ pub fn next(lines: *Lines) ?Line {
 
 /// Counts the next file's changes without consuming the reader or counting headers.
 /// Example: `const added_removed = lines.counts();`
-pub fn counts(lines: Lines) [2]u32 {
-    var copy = lines;
+pub fn counts(self: Lines) [2]u32 {
+    var copy = self;
     var result: [2]u32 = .{ 0, 0 };
     while (copy.next()) |line| {
         switch (line.kind) {
@@ -126,13 +126,13 @@ pub fn counts(lines: Lines) [2]u32 {
     return result;
 }
 
-fn reset(lines: *Lines) void {
-    lines.old = null;
-    lines.new = null;
-    lines.old_left = 0;
-    lines.new_left = 0;
-    lines.git_file = false;
-    lines.old_path = "";
+fn reset(self: *Lines) void {
+    self.old = null;
+    self.new = null;
+    self.old_left = 0;
+    self.new_left = 0;
+    self.git_file = false;
+    self.old_path = "";
 }
 
 fn range(text: []const u8, prefix: u8) ?[2]u32 {

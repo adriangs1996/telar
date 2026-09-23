@@ -8,6 +8,6 @@ truncated: bool,
 match_count: u16,
 encoded_matches: []const u8,
 
-pub fn matches(view: PaneMatchesView) SearchMatchIterator {
-    return .{ .decoder = .init(view.encoded_matches), .remaining = view.match_count };
+pub fn matches(self: PaneMatchesView) SearchMatchIterator {
+    return .{ .decoder = .init(self.encoded_matches), .remaining = self.match_count };
 }

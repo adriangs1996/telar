@@ -8,20 +8,20 @@ actions: [8]keybind.TestAction = undefined,
 action_len: usize = 0,
 stop_on_action: bool = false,
 
-pub fn forward(capture: *Capture, bytes: []const u8) !void {
-    if (capture.len + bytes.len > capture.bytes.len) {
+pub fn forward(self: *Capture, bytes: []const u8) !void {
+    if (self.len + bytes.len > self.bytes.len) {
         return error.CaptureOverflow;
     }
-    @memcpy(capture.bytes[capture.len..][0..bytes.len], bytes);
-    capture.len += bytes.len;
+    @memcpy(self.bytes[self.len..][0..bytes.len], bytes);
+    self.len += bytes.len;
 }
 
-pub fn action(capture: *Capture, value: keybind.TestAction) !data.KeybindControl {
-    capture.actions[capture.action_len] = value;
-    capture.action_len += 1;
-    return if (capture.stop_on_action) .stop else .continue_routing;
+pub fn action(self: *Capture, value: keybind.TestAction) !data.KeybindControl {
+    self.actions[self.action_len] = value;
+    self.action_len += 1;
+    return if (self.stop_on_action) .stop else .continue_routing;
 }
 
-pub fn slice(capture: *const Capture) []const u8 {
-    return capture.bytes[0..capture.len];
+pub fn slice(self: *const Capture) []const u8 {
+    return self.bytes[0..self.len];
 }

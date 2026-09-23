@@ -18,36 +18,36 @@ captures: ?*CaptureStreams = null,
 /// ```zig
 /// observer.emit(.{ .request_body = .{ .stream_id = 3, .bytes = fragment } });
 /// ```
-pub fn emit(observer: *EventObserver, event: relay.Event) void {
+pub fn emit(self: *EventObserver, event: relay.Event) void {
     switch (event) {
-        .lifecycle => |lifecycle| observer.observeLifecycle(lifecycle),
-        .request_headers => |headers| if (observer.captures) |captures| captures.feedHeaders(headers),
+        .lifecycle => |lifecycle| self.observeLifecycle(lifecycle),
+        .request_headers => |headers| if (self.captures) |captures| captures.feedHeaders(headers),
         .request_body => |body| {
-            if (observer.captures) |captures| {
+            if (self.captures) |captures| {
                 captures.feedBody(body.stream_id, body.bytes);
             }
 
-            const requests = observer.requests orelse return;
+            const requests = self.requests orelse return;
 
             requests.feed(.{
                 .stream_id = body.stream_id,
                 .bytes = body.bytes,
             });
         },
-        .request_finished => |finished| observer.finishRequest(finished.stream_id),
-        .response_headers => |headers| if (observer.captures) |captures| captures.feedHeaders(headers),
+        .request_finished => |finished| self.finishRequest(finished.stream_id),
+        .response_headers => |headers| if (self.captures) |captures| captures.feedHeaders(headers),
         .response_body => |body| {
-            if (observer.captures) |captures| {
+            if (self.captures) |captures| {
                 captures.feedBody(body.stream_id, body.bytes);
             }
 
-            const responses = observer.responses orelse return;
+            const responses = self.responses orelse return;
 
             if (h2.shouldInspectBody(body)) {
-                observer.exchange.record(.claude_sse_payload_fragment);
+                self.exchange.record(.claude_sse_payload_fragment);
 
                 if (responses.feed(body.stream_id, body.bytes)) {
-                    observer.exchange.publishStatus(.{
+                    self.exchange.publishStatus(.{
                         .phase = .provider_turn_completed,
                         .stream_id = body.stream_id,
                         .status_code = 0,
@@ -58,35 +58,35 @@ pub fn emit(observer: *EventObserver, event: relay.Event) void {
     }
 }
 
-fn observeLifecycle(observer: *EventObserver, lifecycle: Lifecycle) void {
-    if (observer.shouldClassifyRequest(lifecycle)) {
-        const requests = observer.requests.?;
+fn observeLifecycle(self: *EventObserver, lifecycle: Lifecycle) void {
+    if (self.shouldClassifyRequest(lifecycle)) {
+        const requests = self.requests.?;
         if (!requests.start(lifecycle.stream_id)) {
-            h2.publishRequestClass(observer.exchange, lifecycle.stream_id, .auxiliary);
+            h2.publishRequestClass(self.exchange, lifecycle.stream_id, .auxiliary);
         }
 
         return;
     }
 
     if (lifecycle.phase == .request_failed) {
-        if (observer.requests) |requests| {
+        if (self.requests) |requests| {
             requests.discard(lifecycle.stream_id);
         }
     }
 
-    observer.exchange.publishStatus(.{
+    self.exchange.publishStatus(.{
         .phase = lifecycle.phase,
         .stream_id = lifecycle.stream_id,
         .status_code = lifecycle.status_code,
     });
 
-    if (observer.captures) |captures| {
+    if (self.captures) |captures| {
         if (lifecycle.phase == .response_finished or lifecycle.phase == .request_failed) {
             captures.finish(lifecycle.stream_id, if (lifecycle.phase == .response_finished) .finished else .failed);
         }
     }
 
-    if (observer.responses) |responses| {
+    if (self.responses) |responses| {
         if (lifecycle.stream_id != 0 and
             (lifecycle.phase == .response_finished or lifecycle.phase == .request_failed))
         {
@@ -95,16 +95,16 @@ fn observeLifecycle(observer: *EventObserver, lifecycle: Lifecycle) void {
     }
 }
 
-fn shouldClassifyRequest(observer: *const EventObserver, lifecycle: Lifecycle) bool {
-    return observer.exchange.dialect == .anthropic_messages and observer.requests != null and lifecycle.phase == .request_started;
+fn shouldClassifyRequest(self: *const EventObserver, lifecycle: Lifecycle) bool {
+    return self.exchange.dialect == .anthropic_messages and self.requests != null and lifecycle.phase == .request_started;
 }
 
-fn finishRequest(observer: *EventObserver, stream_id: u32) void {
-    if (observer.captures) |captures| {
+fn finishRequest(self: *EventObserver, stream_id: u32) void {
+    if (self.captures) |captures| {
         captures.finish(stream_id, .finished);
     }
 
-    const requests = observer.requests orelse return;
+    const requests = self.requests orelse return;
     const classification = requests.finish(stream_id) orelse return;
-    h2.publishRequestClass(observer.exchange, stream_id, classification);
+    h2.publishRequestClass(self.exchange, stream_id, classification);
 }

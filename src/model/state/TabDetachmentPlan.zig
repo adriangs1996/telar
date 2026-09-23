@@ -16,6 +16,6 @@ pub const Pane = @import("PaneMembership.zig");
 /// ```zig
 /// for (plan.slice()) |pane| detach(pane.pane_id);
 /// ```
-pub fn slice(plan: *const TabDetachmentPlan) []const Pane {
-    return plan.panes[0..plan.len];
+pub fn slice(self: *const TabDetachmentPlan) []const Pane {
+    return self.panes[0..self.len];
 }

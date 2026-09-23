@@ -17,7 +17,7 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
 
         /// Copies before admission completes, without retaining native pointers.
         /// Example: `const slot = try pool.admit(event);`
-        pub fn admit(pool: *Pool, event: event_module.Event) !u8 {
+        pub fn admit(self: *Pool, event: event_module.Event) !u8 {
             const bytes = payload(event);
             if (bytes.len > byte_capacity) {
                 return error.InputTooLarge;
@@ -27,7 +27,7 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
                 return error.InvalidUtf8;
             }
 
-            for (&pool.slots, 0..) |*slot, index| {
+            for (&self.slots, 0..) |*slot, index| {
                 if (slot.used) {
                     continue;
                 }
@@ -43,16 +43,16 @@ pub fn Type(comptime byte_capacity: usize, comptime slot_capacity: usize) type {
         }
 
         /// Example: `try dispatch(pool.view(index));`
-        pub fn view(pool: *const Pool, index: u8) event_module.Event {
-            const slot = &pool.slots[index];
+        pub fn view(self: *const Pool, index: u8) event_module.Event {
+            const slot = &self.slots[index];
             std.debug.assert(slot.used);
             return withPayload(slot.event, slot.bytes[0..slot.len]);
         }
 
         /// Example: `pool.release(index);`
-        pub fn release(pool: *Pool, index: u8) void {
-            std.debug.assert(pool.slots[index].used);
-            pool.slots[index].used = false;
+        pub fn release(self: *Pool, index: u8) void {
+            std.debug.assert(self.slots[index].used);
+            self.slots[index].used = false;
         }
 
         fn payload(event: event_module.Event) []const u8 {

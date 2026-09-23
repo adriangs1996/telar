@@ -35,63 +35,63 @@ pub fn init(gpa: std.mem.Allocator) Renderer {
     };
 }
 
-pub fn deinit(renderer: *Renderer) void {
-    for (&renderer.slots) |*slot| if (slot.pixels.len != 0)
-        renderer.gpa.free(slot.pixels);
-    if (renderer.text) |*text| {
+pub fn deinit(self: *Renderer) void {
+    for (&self.slots) |*slot| if (slot.pixels.len != 0)
+        self.gpa.free(slot.pixels);
+    if (self.text) |*text| {
         text.deinit();
     }
-    if (renderer.icons) |*icons| {
+    if (self.icons) |*icons| {
         icons.deinit();
     }
 }
 
-pub fn retainedBytes(renderer: *const Renderer) usize {
+pub fn retainedBytes(self: *const Renderer) usize {
     var total: usize = 0;
-    for (renderer.slots) |slot| total += slot.pixels.len;
+    for (self.slots) |slot| total += slot.pixels.len;
     return total;
 }
 
 /// Applies host graphics support and cell geometry to toast rendering.
 /// For example: `_ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });`.
-pub fn configure(renderer: *Renderer, configuration: SidebarRendererInput) bool {
+pub fn configure(self: *Renderer, configuration: SidebarRendererInput) bool {
     const supported = configuration.support == .supported;
-    if (renderer.supported == supported and renderer.cell_width == configuration.cell_width and
-        renderer.cell_height == configuration.cell_height)
+    if (self.supported == supported and self.cell_width == configuration.cell_width and
+        self.cell_height == configuration.cell_height)
     {
         return false;
     }
-    renderer.supported = supported;
-    renderer.cell_width = configuration.cell_width;
-    renderer.cell_height = configuration.cell_height;
-    for (&renderer.slots) |*slot| {
+    self.supported = supported;
+    self.cell_width = configuration.cell_width;
+    self.cell_height = configuration.cell_height;
+    for (&self.slots) |*slot| {
         slot.key = null;
         slot.failed_key = null;
     }
     return true;
 }
 
-pub fn setMediaIdle(renderer: *Renderer, idle: bool) void {
-    renderer.media_idle = idle;
+pub fn setMediaIdle(self: *Renderer, idle: bool) void {
+    self.media_idle = idle;
 }
 
 /// Prepares visible toast slots for one themed frame.
 /// For example: `renderer.prepare(.{ .area = area, .center = center, .palette = palette });`.
-pub fn prepare(renderer: *Renderer, preparation: Preparation) void {
-    for (&renderer.slots) |*slot| slot.visible = false;
-    renderer.visible_count = 0;
-    renderer.render_deferred = false;
-    renderer.frame_usable = renderer.supported and renderer.text != null and
-        (preparation.icon_theme != .nerd_font or renderer.icons != null) and
-        renderer.cell_width != 0 and renderer.cell_height != 0 and
+pub fn prepare(self: *Renderer, preparation: Preparation) void {
+    for (&self.slots) |*slot| slot.visible = false;
+    self.visible_count = 0;
+    self.render_deferred = false;
+    self.frame_usable = self.supported and self.text != null and
+        (preparation.icon_theme != .nerd_font or self.icons != null) and
+        self.cell_width != 0 and self.cell_height != 0 and
         !preparation.area.isEmpty();
     const colors = toast.resolveColors(preparation.palette) orelse {
-        renderer.frame_usable = false;
-        renderer.retireInvisible();
+        self.frame_usable = false;
+        self.retireInvisible();
         return;
     };
-    if (!renderer.frame_usable) {
-        renderer.retireInvisible();
+    if (!self.frame_usable) {
+        self.retireInvisible();
         return;
     }
 
@@ -99,11 +99,11 @@ pub fn prepare(renderer: *Renderer, preparation: Preparation) void {
         @as(usize, preparation.center.count),
         @as(usize, (preparation.area.h + toast_module.card_gap) / (toast_module.card_height + toast_module.card_gap)),
     );
-    renderer.visible_count = @intCast(count);
+    self.visible_count = @intCast(count);
     // Release the one id that the bounded center may have evicted before
     // assigning a slot to the new front item. Existing ids retain their
     // stable host image ids even though their vertical order changed.
-    for (&renderer.slots) |*slot| {
+    for (&self.slots) |*slot| {
         if (slot.id == .invalid) {
             continue;
         }
@@ -124,16 +124,16 @@ pub fn prepare(renderer: *Renderer, preparation: Preparation) void {
     }
     for (0..count) |index| {
         const item = preparation.center.itemAt(index).?;
-        const slot = renderer.slotFor(item.id) orelse {
-            renderer.frame_usable = false;
+        const slot = self.slotFor(item.id) orelse {
+            self.frame_usable = false;
             break;
         };
         slot.visible = true;
         const key: ToastRenderKey = .{
             .id = item.id,
             .level = item.level,
-            .cell_width = renderer.cell_width,
-            .cell_height = renderer.cell_height,
+            .cell_width = self.cell_width,
+            .cell_height = self.cell_height,
             .card_columns = preparation.area.w,
             .icon_theme = preparation.icon_theme,
             .background = colors.surface0,
@@ -142,33 +142,33 @@ pub fn prepare(renderer: *Renderer, preparation: Preparation) void {
             .subtext = colors.subtext,
         };
         if (slot.key == null or !std.meta.eql(slot.key.?, key)) {
-            if (!renderer.media_idle) {
-                renderer.frame_usable = false;
-                renderer.render_deferred = true;
+            if (!self.media_idle) {
+                self.frame_usable = false;
+                self.render_deferred = true;
                 continue;
             }
             if (slot.failed_key != null and std.meta.eql(slot.failed_key.?, key)) {
-                renderer.frame_usable = false;
+                self.frame_usable = false;
                 continue;
             }
-            renderer.renderSlot(.{ .slot = slot, .item = item, .key = key }) catch {
+            self.renderSlot(.{ .slot = slot, .item = item, .key = key }) catch {
                 slot.key = null;
                 slot.failed_key = key;
-                renderer.frame_usable = false;
+                self.frame_usable = false;
                 continue;
             };
         }
         const full_width = slot.width;
         const visible_width = item.animatedPixels(full_width);
-        const right = (@as(u32, preparation.area.x) + preparation.area.w) * renderer.cell_width;
+        const right = (@as(u32, preparation.area.x) + preparation.area.w) * self.cell_width;
         const pixel_x = right -| visible_width;
         const pixel_y = (@as(u32, preparation.area.y) + @as(u32, @intCast(index)) *
-            (toast_module.card_height + toast_module.card_gap)) * renderer.cell_height;
+            (toast_module.card_height + toast_module.card_gap)) * self.cell_height;
         slot.placement = if (visible_width == 0) null else .{
-            .column = pixel_x / renderer.cell_width,
-            .row = pixel_y / renderer.cell_height,
-            .offset_x = pixel_x % renderer.cell_width,
-            .offset_y = pixel_y % renderer.cell_height,
+            .column = pixel_x / self.cell_width,
+            .row = pixel_y / self.cell_height,
+            .offset_x = pixel_x % self.cell_width,
+            .offset_y = pixel_y % self.cell_height,
             .source_x = full_width - visible_width,
             .source_y = 0,
             .source_width = visible_width,
@@ -177,17 +177,17 @@ pub fn prepare(renderer: *Renderer, preparation: Preparation) void {
             .rows = 0,
         };
     }
-    renderer.retireInvisible();
+    self.retireInvisible();
 }
 
 /// True only after every visible texture and placement reached the host.
 /// Until then the composition keeps the complete cell fallback visible.
-pub fn coversAll(renderer: *const Renderer) bool {
-    if (!renderer.frame_usable or renderer.visible_count == 0) {
+pub fn coversAll(self: *const Renderer) bool {
+    if (!self.frame_usable or self.visible_count == 0) {
         return false;
     }
     var count: u8 = 0;
-    for (&renderer.slots) |*slot| {
+    for (&self.slots) |*slot| {
         if (!slot.visible) {
             continue;
         }
@@ -199,18 +199,18 @@ pub fn coversAll(renderer: *const Renderer) bool {
             return false;
         }
     }
-    return count == renderer.visible_count;
+    return count == self.visible_count;
 }
 
 /// The notification center may change before the lower-priority media
 /// pass catches up. Never hide the cell fallback for a stale texture set.
-pub fn covers(renderer: *const Renderer, center: *const data.Center) bool {
-    if (!renderer.coversAll() or renderer.visible_count != center.count) {
+pub fn covers(self: *const Renderer, center: *const data.Center) bool {
+    if (!self.coversAll() or self.visible_count != center.count) {
         return false;
     }
     for (0..center.count) |index| {
         const id = center.itemAt(index).?.id;
-        for (renderer.slots) |slot| {
+        for (self.slots) |slot| {
             if (slot.id == id and slot.visible and slot.image_emitted and
                 !slot.image_dirty)
             {
@@ -221,19 +221,19 @@ pub fn covers(renderer: *const Renderer, center: *const data.Center) bool {
     return true;
 }
 
-pub fn damaged(renderer: *const Renderer) bool {
-    if (renderer.render_deferred) {
+pub fn damaged(self: *const Renderer) bool {
+    if (self.render_deferred) {
         return true;
     }
-    if (renderer.transmissionPending()) {
+    if (self.transmissionPending()) {
         return true;
     }
-    const placements_enabled = renderer.allImagesReady();
-    for (&renderer.slots) |*slot| {
+    const placements_enabled = self.allImagesReady();
+    for (&self.slots) |*slot| {
         if (slot.transfer_offset != 0) {
             return true;
         }
-        if (!renderer.frame_usable and slot.image_emitted) {
+        if (!self.frame_usable and slot.image_emitted) {
             return true;
         }
         const desired = if (placements_enabled and slot.visible) slot.placement else null;
@@ -247,35 +247,35 @@ pub fn damaged(renderer: *const Renderer) bool {
     return false;
 }
 
-pub fn transmissionPending(renderer: *const Renderer) bool {
-    if (!renderer.frame_usable) {
+pub fn transmissionPending(self: *const Renderer) bool {
+    if (!self.frame_usable) {
         return false;
     }
-    for (&renderer.slots) |slot| if (slot.visible and slot.image_dirty) return true;
+    for (&self.slots) |slot| if (slot.visible and slot.image_dirty) return true;
     return false;
 }
 
-pub fn preparationDeferred(renderer: *const Renderer) bool {
-    return renderer.render_deferred;
+pub fn preparationDeferred(self: *const Renderer) bool {
+    return self.render_deferred;
 }
 
-pub fn transferInProgress(renderer: *const Renderer) bool {
-    for (renderer.slots) |slot| if (slot.transfer_offset != 0) return true;
+pub fn transferInProgress(self: *const Renderer) bool {
+    for (self.slots) |slot| if (slot.transfer_offset != 0) return true;
     return false;
 }
 
 /// True when the remaining toast work cannot emit anything until the
 /// client has been idle long enough to rasterize a replacement texture.
-pub fn waitingForMediaIdle(renderer: *const Renderer) bool {
-    if (!renderer.render_deferred) {
+pub fn waitingForMediaIdle(self: *const Renderer) bool {
+    if (!self.render_deferred) {
         return false;
     }
-    const placements_enabled = renderer.allImagesReady();
-    for (renderer.slots) |slot| {
+    const placements_enabled = self.allImagesReady();
+    for (self.slots) |slot| {
         if (slot.transfer_offset != 0) {
             return false;
         }
-        if ((!slot.visible or slot.image_dirty or !renderer.frame_usable) and
+        if ((!slot.visible or slot.image_dirty or !self.frame_usable) and
             slot.image_emitted)
         {
             return false;
@@ -290,11 +290,11 @@ pub fn waitingForMediaIdle(renderer: *const Renderer) bool {
 
 /// Deletions and placements are always cheap enough to emit. A new image
 /// is sent only when the pane-media writer used no budget in this pass.
-pub fn write(renderer: *Renderer, writer: *std.Io.Writer, allow_transmission: bool) std.Io.Writer.Error!usize {
+pub fn write(self: *Renderer, writer: *std.Io.Writer, allow_transmission: bool) std.Io.Writer.Error!usize {
     var written: usize = 0;
-    for (&renderer.slots, 0..) |*slot, index| {
+    for (&self.slots, 0..) |*slot, index| {
         const transfer_stale = slot.transfer_offset != 0 and
-            (!slot.visible or !renderer.frame_usable or slot.key == null or
+            (!slot.visible or !self.frame_usable or slot.key == null or
                 slot.transfer_key == null or
                 !std.meta.eql(slot.transfer_key.?, slot.key.?));
         if (transfer_stale) {
@@ -302,22 +302,22 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer, allow_transmission: bo
             slot.transfer_offset = 0;
             slot.transfer_key = null;
         }
-        if ((!slot.visible or slot.image_dirty or !renderer.frame_usable) and
+        if ((!slot.visible or slot.image_dirty or !self.frame_usable) and
             slot.image_emitted)
         {
             written += try kitty_protocol.writeDeleteImage(writer, toast.imageId(index));
             slot.image_emitted = false;
             slot.emitted_placement = null;
-            if (renderer.render_deferred and slot.visible and slot.key != null) {
+            if (self.render_deferred and slot.visible and slot.key != null) {
                 slot.image_dirty = true;
             }
         }
     }
 
-    if ((allow_transmission or renderer.transferInProgress()) and
-        renderer.frame_usable)
+    if ((allow_transmission or self.transferInProgress()) and
+        self.frame_usable)
     transmit: {
-        for (&renderer.slots, 0..) |*slot, index| {
+        for (&self.slots, 0..) |*slot, index| {
             if (!slot.visible or !slot.image_dirty or slot.key == null) {
                 continue;
             }
@@ -350,8 +350,8 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer, allow_transmission: bo
         }
     }
 
-    const placements_enabled = renderer.allImagesReady();
-    for (&renderer.slots, 0..) |*slot, index| {
+    const placements_enabled = self.allImagesReady();
+    for (&self.slots, 0..) |*slot, index| {
         const desired = if (placements_enabled and slot.visible) slot.placement else null;
         if (toast.optionalPlacementEql(desired, slot.emitted_placement)) {
             continue;
@@ -376,16 +376,16 @@ pub fn write(renderer: *Renderer, writer: *std.Io.Writer, allow_transmission: bo
     return written;
 }
 
-fn slotFor(renderer: *Renderer, id: data.NotificationId) ?*ToastSlot {
-    for (&renderer.slots) |*slot| if (slot.id == id) return slot;
-    for (&renderer.slots) |*slot| {
+fn slotFor(self: *Renderer, id: data.NotificationId) ?*ToastSlot {
+    for (&self.slots) |*slot| if (slot.id == id) return slot;
+    for (&self.slots) |*slot| {
         if (slot.visible or slot.id != .invalid) {
             continue;
         }
         slot.id = id;
         return slot;
     }
-    for (&renderer.slots) |*slot| {
+    for (&self.slots) |*slot| {
         if (slot.visible) {
             continue;
         }
@@ -399,8 +399,8 @@ fn slotFor(renderer: *Renderer, id: data.NotificationId) ?*ToastSlot {
     return null;
 }
 
-fn retireInvisible(renderer: *Renderer) void {
-    for (&renderer.slots) |*slot| {
+fn retireInvisible(self: *Renderer) void {
+    for (&self.slots) |*slot| {
         if (slot.visible) {
             continue;
         }
@@ -412,14 +412,14 @@ fn retireInvisible(renderer: *Renderer) void {
     }
 }
 
-fn renderSlot(renderer: *Renderer, rendering: SlotRender) !void {
+fn renderSlot(self: *Renderer, rendering: SlotRender) !void {
     const slot = rendering.slot;
     const item = rendering.item;
     const key = rendering.key;
 
-    const width = std.math.mul(u32, key.card_columns, renderer.cell_width) catch
+    const width = std.math.mul(u32, key.card_columns, self.cell_width) catch
         return error.ToastTooLarge;
-    const height = std.math.mul(u32, toast_module.card_height, renderer.cell_height) catch
+    const height = std.math.mul(u32, toast_module.card_height, self.cell_height) catch
         return error.ToastTooLarge;
     const pixel_count = std.math.mul(usize, width, height) catch
         return error.ToastTooLarge;
@@ -430,9 +430,9 @@ fn renderSlot(renderer: *Renderer, rendering: SlotRender) !void {
     }
     if (slot.pixels.len != byte_count) {
         if (slot.pixels.len == 0) {
-            slot.pixels = try renderer.gpa.alloc(u8, byte_count);
+            slot.pixels = try self.gpa.alloc(u8, byte_count);
         } else {
-            slot.pixels = try renderer.gpa.realloc(slot.pixels, byte_count);
+            slot.pixels = try self.gpa.realloc(slot.pixels, byte_count);
         }
     }
     slot.width = width;
@@ -445,7 +445,7 @@ fn renderSlot(renderer: *Renderer, rendering: SlotRender) !void {
     toast.fill(surface, .{ key.background[0], key.background[1], key.background[2], 255 });
     const accent = toast.rasterColor(key.accent);
     const border = @min(
-        @max(@as(u32, 1), renderer.cell_width / 8),
+        @max(@as(u32, 1), self.cell_width / 8),
         @max(@as(u32, 1), @min(width, height) / 2),
     );
     toast.fillRect(surface, .{ .x = 0, .y = 0, .width = width, .height = border }, accent);
@@ -455,61 +455,61 @@ fn renderSlot(renderer: *Renderer, rendering: SlotRender) !void {
     toast.fillRect(surface, .{
         .x = border,
         .y = border,
-        .width = @max(border, renderer.cell_width / 3),
+        .width = @max(border, self.cell_width / 3),
         .height = height - border * 2,
     }, accent);
 
     const font_height: u16 = @intCast(std.math.clamp(
-        @as(u32, renderer.cell_height) * 3 / 4,
+        @as(u32, self.cell_height) * 3 / 4,
         6,
         64,
     ));
-    const text = &renderer.text.?;
+    const text = &self.text.?;
     try text.setPixelHeight(font_height);
     const metrics = text.metrics();
-    const left = @as(i32, renderer.cell_width) * 2;
-    const right_padding = @as(u32, renderer.cell_width) * 4;
+    const left = @as(i32, self.cell_width) * 2;
+    const right_padding = @as(u32, self.cell_width) * 4;
     const max_text_width = width -| @as(u32, @intCast(left)) -| right_padding;
     _ = try text.drawText(.{
         .surface = surface,
-        .origin = .{ .x = left, .y = toast.baseline(metrics, 0, renderer.cell_height) },
+        .origin = .{ .x = left, .y = toast.baseline(metrics, 0, self.cell_height) },
         .text = item.title(),
         .color = accent,
         .max_width = max_text_width,
     });
     _ = try text.drawText(.{
         .surface = surface,
-        .origin = .{ .x = left, .y = toast.baseline(metrics, renderer.cell_height, renderer.cell_height) },
+        .origin = .{ .x = left, .y = toast.baseline(metrics, self.cell_height, self.cell_height) },
         .text = item.message(),
         .color = toast.rasterColor(key.text),
-        .max_width = width -| @as(u32, @intCast(left)) -| @as(u32, renderer.cell_width) * 2,
+        .max_width = width -| @as(u32, @intCast(left)) -| @as(u32, self.cell_width) * 2,
     });
     const hint = if (item.clickable()) "click to open" else "click to dismiss";
     _ = try text.drawText(.{
         .surface = surface,
-        .origin = .{ .x = left, .y = toast.baseline(metrics, @as(u32, renderer.cell_height) * 2, renderer.cell_height) },
+        .origin = .{ .x = left, .y = toast.baseline(metrics, @as(u32, self.cell_height) * 2, self.cell_height) },
         .text = hint,
         .color = toast.rasterColor(key.subtext),
-        .max_width = width -| @as(u32, @intCast(left)) -| @as(u32, renderer.cell_width) * 2,
+        .max_width = width -| @as(u32, @intCast(left)) -| @as(u32, self.cell_width) * 2,
     });
-    const close_x: i32 = @intCast(width -| @as(u32, renderer.cell_width) * 3);
+    const close_x: i32 = @intCast(width -| @as(u32, self.cell_width) * 3);
     if (key.icon_theme == .nerd_font) {
-        const icons = &renderer.icons.?;
+        const icons = &self.icons.?;
         try icons.setPixelHeight(font_height);
         _ = try icons.drawText(.{
             .surface = surface,
-            .origin = .{ .x = close_x, .y = toast.baseline(icons.metrics(), 0, renderer.cell_height) },
+            .origin = .{ .x = close_x, .y = toast.baseline(icons.metrics(), 0, self.cell_height) },
             .text = data.icons.Icon.close.nerdGlyph(),
             .color = accent,
-            .max_width = @as(u32, renderer.cell_width) * 2,
+            .max_width = @as(u32, self.cell_width) * 2,
         });
     } else {
         _ = try text.drawText(.{
             .surface = surface,
-            .origin = .{ .x = close_x, .y = toast.baseline(metrics, 0, renderer.cell_height) },
+            .origin = .{ .x = close_x, .y = toast.baseline(metrics, 0, self.cell_height) },
             .text = data.icons.Icon.close.unicodeGlyph(),
             .color = accent,
-            .max_width = @as(u32, renderer.cell_width) * 2,
+            .max_width = @as(u32, self.cell_width) * 2,
         });
     }
     slot.key = key;
@@ -517,12 +517,12 @@ fn renderSlot(renderer: *Renderer, rendering: SlotRender) !void {
     slot.image_dirty = true;
 }
 
-fn allImagesReady(renderer: *const Renderer) bool {
-    if (!renderer.frame_usable or renderer.visible_count == 0) {
+fn allImagesReady(self: *const Renderer) bool {
+    if (!self.frame_usable or self.visible_count == 0) {
         return false;
     }
     var count: u8 = 0;
-    for (&renderer.slots) |slot| {
+    for (&self.slots) |slot| {
         if (!slot.visible) {
             continue;
         }
@@ -531,5 +531,5 @@ fn allImagesReady(renderer: *const Renderer) bool {
             return false;
         }
     }
-    return count == renderer.visible_count;
+    return count == self.visible_count;
 }

@@ -21,6 +21,6 @@ exchange: *Exchange,
 ///     .origin = origin,
 /// });
 /// ```
-pub fn establish(establisher: *Establisher, attempt: GenericAttempt(std.Io.net.Stream)) ?GenericRoute(*Session) {
-    return tls.Establish.execute(establisher, attempt);
+pub fn establish(self: *Establisher, attempt: GenericAttempt(std.Io.net.Stream)) ?GenericRoute(*Session) {
+    return tls.Establish.execute(self, attempt);
 }

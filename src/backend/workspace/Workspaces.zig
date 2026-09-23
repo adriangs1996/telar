@@ -565,9 +565,9 @@ fn testingTable() !*Workspaces {
     return table;
 }
 
-fn destroyTestingTable(table: *Workspaces) void {
-    table.deinit(std.testing.allocator);
-    std.testing.allocator.destroy(table);
+fn destroyTestingTable(self: *Workspaces) void {
+    self.deinit(std.testing.allocator);
+    std.testing.allocator.destroy(self);
 }
 
 fn workspaceIdOf(location: core.TabLocation) core.WorkspaceId {

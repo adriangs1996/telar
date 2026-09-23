@@ -20,8 +20,8 @@ sidebar_rendering: data.SidebarRendering,
 /// ```zig
 /// errdefer adoption.deinit(gpa);
 /// ```
-pub fn deinit(adoption: Adoption, gpa: std.mem.Allocator) void {
-    adoption.generation.deinit();
-    gpa.destroy(adoption.registry);
-    gpa.destroy(adoption.trust_store);
+pub fn deinit(self: Adoption, gpa: std.mem.Allocator) void {
+    self.generation.deinit();
+    gpa.destroy(self.registry);
+    gpa.destroy(self.trust_store);
 }

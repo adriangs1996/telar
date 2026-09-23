@@ -13,36 +13,36 @@ finished_before_body: bool = false,
 request_body: bool = false,
 request_finished: usize = 0,
 
-pub fn emit(collector: *BodyCollector, event: relay.Event) void {
+pub fn emit(self: *BodyCollector, event: relay.Event) void {
     switch (event) {
         .lifecycle => |observed| switch (observed.phase) {
-            .response_activity => collector.activity += 1,
+            .response_activity => self.activity += 1,
             .response_finished => {
-                collector.finished_before_body = collector.len == 0;
-                collector.finished += 1;
+                self.finished_before_body = self.len == 0;
+                self.finished += 1;
             },
             else => {},
         },
         .request_headers, .response_headers => {},
         .request_body => |body| {
-            std.debug.assert(body.bytes.len <= collector.bytes.len - collector.len);
-            @memcpy(collector.bytes[collector.len..][0..body.bytes.len], body.bytes);
-            collector.len += body.bytes.len;
-            collector.stream_id = body.stream_id;
-            collector.request_body = true;
+            std.debug.assert(body.bytes.len <= self.bytes.len - self.len);
+            @memcpy(self.bytes[self.len..][0..body.bytes.len], body.bytes);
+            self.len += body.bytes.len;
+            self.stream_id = body.stream_id;
+            self.request_body = true;
         },
-        .request_finished => collector.request_finished += 1,
+        .request_finished => self.request_finished += 1,
         .response_body => |body| {
-            std.debug.assert(body.bytes.len <= collector.bytes.len - collector.len);
-            @memcpy(collector.bytes[collector.len..][0..body.bytes.len], body.bytes);
-            collector.len += body.bytes.len;
-            collector.stream_id = body.stream_id;
-            collector.status_code = body.status_code;
-            collector.sse_body = body.sse_body;
+            std.debug.assert(body.bytes.len <= self.bytes.len - self.len);
+            @memcpy(self.bytes[self.len..][0..body.bytes.len], body.bytes);
+            self.len += body.bytes.len;
+            self.stream_id = body.stream_id;
+            self.status_code = body.status_code;
+            self.sse_body = body.sse_body;
         },
     }
 }
 
-pub fn payloadSlice(collector: *const BodyCollector) []const u8 {
-    return collector.bytes[0..collector.len];
+pub fn payloadSlice(self: *const BodyCollector) []const u8 {
+    return self.bytes[0..self.len];
 }

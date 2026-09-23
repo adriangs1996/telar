@@ -104,23 +104,23 @@ pub fn open(path: [:0]const u8) !Store {
     };
 }
 
-pub fn close(store: *Store) void {
-    _ = sqlite.c.sqlite3_finalize(store.read_command_output);
-    _ = sqlite.c.sqlite3_finalize(store.insert_command_output);
-    _ = sqlite.c.sqlite3_finalize(store.finish_agent_command);
-    _ = sqlite.c.sqlite3_finalize(store.delete_command);
-    _ = sqlite.c.sqlite3_finalize(store.import_command);
-    _ = sqlite.c.sqlite3_finalize(store.import_session);
-    _ = sqlite.c.sqlite3_finalize(store.insert_command);
-    _ = sqlite.c.sqlite3_finalize(store.set_session_title);
-    _ = sqlite.c.sqlite3_finalize(store.finish_session);
-    _ = sqlite.c.sqlite3_finalize(store.insert_session);
-    _ = sqlite.c.sqlite3_finalize(store.insert_launch_attempt);
-    _ = sqlite.c.sqlite3_close(store.db);
+pub fn close(self: *Store) void {
+    _ = sqlite.c.sqlite3_finalize(self.read_command_output);
+    _ = sqlite.c.sqlite3_finalize(self.insert_command_output);
+    _ = sqlite.c.sqlite3_finalize(self.finish_agent_command);
+    _ = sqlite.c.sqlite3_finalize(self.delete_command);
+    _ = sqlite.c.sqlite3_finalize(self.import_command);
+    _ = sqlite.c.sqlite3_finalize(self.import_session);
+    _ = sqlite.c.sqlite3_finalize(self.insert_command);
+    _ = sqlite.c.sqlite3_finalize(self.set_session_title);
+    _ = sqlite.c.sqlite3_finalize(self.finish_session);
+    _ = sqlite.c.sqlite3_finalize(self.insert_session);
+    _ = sqlite.c.sqlite3_finalize(self.insert_launch_attempt);
+    _ = sqlite.c.sqlite3_close(self.db);
 }
 
-pub fn insertLaunchAttempt(store: *Store, value: *const LaunchAttempt) !void {
-    const stmt = store.insert_launch_attempt;
+pub fn insertLaunchAttempt(self: *Store, value: *const LaunchAttempt) !void {
+    const stmt = self.insert_launch_attempt;
     defer sqlite.reset(stmt);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 1, @intCast(core.raw(value.pane_id)));
     _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(value.pane_generation));
@@ -137,8 +137,8 @@ pub fn insertLaunchAttempt(store: *Store, value: *const LaunchAttempt) !void {
     try sqlite.stepDone(stmt);
 }
 
-pub fn startSession(store: *Store, value: *const SessionStarted) !void {
-    const stmt = store.insert_session;
+pub fn startSession(self: *Store, value: *const SessionStarted) !void {
+    const stmt = self.insert_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(core.raw(value.pane_id)));
@@ -159,8 +159,8 @@ pub fn startSession(store: *Store, value: *const SessionStarted) !void {
 /// ```zig
 /// try store.insertCommandOutput(&value);
 /// ```
-pub fn insertCommandOutput(store: *Store, value: *const CommandFinished) !void {
-    const stmt = store.insert_command_output;
+pub fn insertCommandOutput(self: *Store, value: *const CommandFinished) !void {
+    const stmt = self.insert_command_output;
     defer sqlite.reset(stmt);
     sqlite.bindText(stmt, 1, value.output);
     _ = sqlite.c.sqlite3_bind_int(stmt, 2, @intFromBool(value.output_truncated));
@@ -174,8 +174,8 @@ pub fn insertCommandOutput(store: *Store, value: *const CommandFinished) !void {
 /// ```zig
 /// const result = try store.readCommandOutput(gpa, request);
 /// ```
-pub fn readCommandOutput(store: *Store, gpa: std.mem.Allocator, request: Delete) !*OutputResult {
-    const stmt = store.read_command_output;
+pub fn readCommandOutput(self: *Store, gpa: std.mem.Allocator, request: Delete) !*OutputResult {
+    const stmt = self.read_command_output;
     defer sqlite.reset(stmt);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 1, @intCast(request.id));
 
@@ -215,8 +215,8 @@ pub fn readCommandOutput(store: *Store, gpa: std.mem.Allocator, request: Delete)
 /// ```zig
 /// try store.importSession(&session);
 /// ```
-pub fn importSession(store: *Store, value: *const SessionStarted) !void {
-    const stmt = store.import_session;
+pub fn importSession(self: *Store, value: *const SessionStarted) !void {
+    const stmt = self.import_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(core.raw(value.pane_id)));
@@ -236,8 +236,8 @@ pub fn importSession(store: *Store, value: *const SessionStarted) !void {
 /// ```zig
 /// try store.ensureCommandSession(command);
 /// ```
-pub fn ensureCommandSession(store: *Store, value: *const CommandFinished) !void {
-    const stmt = store.import_session;
+pub fn ensureCommandSession(self: *Store, value: *const CommandFinished) !void {
+    const stmt = self.import_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.session_id);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(core.raw(value.pane_id)));
@@ -257,8 +257,8 @@ pub fn ensureCommandSession(store: *Store, value: *const CommandFinished) !void 
 /// ```zig
 /// try store.importCommand(&value);
 /// ```
-pub fn importCommand(store: *Store, value: *const CommandFinished) !void {
-    const stmt = store.import_command;
+pub fn importCommand(self: *Store, value: *const CommandFinished) !void {
+    const stmt = self.import_command;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.session_id);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(core.raw(value.pane_id)));
@@ -284,29 +284,29 @@ pub fn importCommand(store: *Store, value: *const CommandFinished) !void {
     try sqlite.stepDone(stmt);
 }
 
-pub fn finishSession(store: *Store, value: SessionFinished) !void {
-    const stmt = store.finish_session;
+pub fn finishSession(self: *Store, value: SessionFinished) !void {
+    const stmt = self.finish_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 2, value.finished_at_ms);
     try sqlite.stepDone(stmt);
 }
 
-pub fn setSessionTitle(store: *Store, value: *const SessionTitle) !void {
-    const stmt = store.set_session_title;
+pub fn setSessionTitle(self: *Store, value: *const SessionTitle) !void {
+    const stmt = self.set_session_title;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);
     sqlite.bindText(stmt, 2, value.titleSlice());
     _ = sqlite.c.sqlite3_bind_int(stmt, 3, @intFromEnum(value.source));
     _ = sqlite.c.sqlite3_bind_int(stmt, 4, @intFromEnum(value.state));
     try sqlite.stepDone(stmt);
-    if (sqlite.c.sqlite3_changes(store.db) != 1) {
+    if (sqlite.c.sqlite3_changes(self.db) != 1) {
         return error.HistorySessionNotFound;
     }
 }
 
-pub fn insertCommand(store: *Store, value: *const CommandFinished) !bool {
-    const stmt = store.insert_command;
+pub fn insertCommand(self: *Store, value: *const CommandFinished) !bool {
+    const stmt = self.insert_command;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.session_id);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 2, @intCast(core.raw(value.pane_id)));
@@ -330,7 +330,7 @@ pub fn insertCommand(store: *Store, value: *const CommandFinished) !bool {
     _ = sqlite.c.sqlite3_bind_int(stmt, 15, @intFromEnum(value.author));
     sqlite.bindCommandSource(stmt, value);
     try sqlite.stepDone(stmt);
-    return sqlite.c.sqlite3_changes(store.db) == 1;
+    return sqlite.c.sqlite3_changes(self.db) == 1;
 }
 
 /// Closes a hook-started command without changing its stable row id.
@@ -339,12 +339,12 @@ pub fn insertCommand(store: *Store, value: *const CommandFinished) !bool {
 /// ```zig
 /// if (!try store.finishAgentCommand(command)) _ = try store.insertCommand(command);
 /// ```
-pub fn finishAgentCommand(store: *Store, value: *const CommandFinished) !bool {
+pub fn finishAgentCommand(self: *Store, value: *const CommandFinished) !bool {
     if (value.tool_call_id.len == 0) {
         return false;
     }
 
-    const stmt = store.finish_agent_command;
+    const stmt = self.finish_agent_command;
     defer sqlite.reset(stmt);
     sqlite.bindText(stmt, 1, value.command);
     _ = sqlite.c.sqlite3_bind_int(stmt, 2, @intFromBool(value.command_truncated));
@@ -367,13 +367,13 @@ pub fn finishAgentCommand(store: *Store, value: *const CommandFinished) !bool {
     sqlite.bindBlob(stmt, 11, &value.session_id);
     sqlite.bindText(stmt, 12, value.tool_call_id);
     try sqlite.stepDone(stmt);
-    return sqlite.c.sqlite3_changes(store.db) == 1;
+    return sqlite.c.sqlite3_changes(self.db) == 1;
 }
 
 /// Fuzzy path: scans the newest candidates in scope and keeps the best
 /// requested page of subsequence matches. Only IDs and scores are retained
 /// while ranking; full entries are allocated for the resulting page.
-fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const Query) !*QueryResult {
+fn queryFuzzy(self: *Store, gpa: std.mem.Allocator, request: *const Query) !*QueryResult {
     const max_candidates = FuzzyPage.max_candidates;
     var sql_buffer: [1024]u8 = undefined;
     var sql = std.Io.Writer.fixed(&sql_buffer);
@@ -381,7 +381,7 @@ fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const Query) !*Qu
     try sqlite.appendQueryFilters(&sql, request);
     try sql.writeAll(" ORDER BY started_at_ms DESC, id DESC LIMIT ?;");
 
-    const stmt = try sqlite.prepare(store.db, sql.buffered());
+    const stmt = try sqlite.prepare(self.db, sql.buffered());
     defer _ = sqlite.c.sqlite3_finalize(stmt);
     var parameter: c_int = 1;
     _ = sqlite.c.sqlite3_bind_int64(stmt, parameter, @intCast(request.snapshot_id));
@@ -413,7 +413,7 @@ fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const Query) !*Qu
         else => return error.HistoryQueryFailed,
     };
 
-    const detail = try sqlite.prepare(store.db, "SELECT " ++ sqlite.entry_columns ++ " FROM command WHERE id = ?;");
+    const detail = try sqlite.prepare(self.db, "SELECT " ++ sqlite.entry_columns ++ " FROM command WHERE id = ?;");
     defer _ = sqlite.c.sqlite3_finalize(detail);
     var accumulator: Accumulator = .{ .gpa = gpa, .limit = request.limit };
     defer accumulator.deinit();
@@ -442,12 +442,12 @@ fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const Query) !*Qu
 /// ```zig
 /// const result = try store.stats(gpa, &query);
 /// ```
-pub fn stats(store: *Store, gpa: std.mem.Allocator, request: *const StatsQuery) !*StatsResult {
+pub fn stats(self: *Store, gpa: std.mem.Allocator, request: *const StatsQuery) !*StatsResult {
     var sql_buffer: [1024]u8 = undefined;
     var sql = std.Io.Writer.fixed(&sql_buffer);
     try sql.writeAll("SELECT COUNT(*), COUNT(DISTINCT command) FROM command WHERE 1=1");
     try sqlite.appendStatsFilters(&sql, request);
-    const totals_stmt = try sqlite.prepare(store.db, sql.buffered());
+    const totals_stmt = try sqlite.prepare(self.db, sql.buffered());
     var total: u64 = 0;
     var unique: u64 = 0;
     {
@@ -467,7 +467,7 @@ pub fn stats(store: *Store, gpa: std.mem.Allocator, request: *const StatsQuery) 
     try top_sql.writeAll("SELECT command, COUNT(*) AS n FROM command WHERE 1=1");
     try sqlite.appendStatsFilters(&top_sql, request);
     try top_sql.writeAll(" GROUP BY command ORDER BY n DESC LIMIT 400;");
-    const stmt = try sqlite.prepare(store.db, top_sql.buffered());
+    const stmt = try sqlite.prepare(self.db, top_sql.buffered());
     defer _ = sqlite.c.sqlite3_finalize(stmt);
     sqlite.bindStatsFilters(stmt, request);
 
@@ -540,12 +540,12 @@ pub fn stats(store: *Store, gpa: std.mem.Allocator, request: *const StatsQuery) 
 /// ```zig
 /// const removed = try store.deleteCommand(id);
 /// ```
-pub fn deleteCommand(store: *Store, command_id: u64) !u64 {
-    const stmt = store.delete_command;
+pub fn deleteCommand(self: *Store, command_id: u64) !u64 {
+    const stmt = self.delete_command;
     defer sqlite.reset(stmt);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 1, @intCast(command_id));
     try sqlite.stepDone(stmt);
-    return @intCast(sqlite.c.sqlite3_changes64(store.db));
+    return @intCast(sqlite.c.sqlite3_changes64(self.db));
 }
 
 /// Deletes every entry matching the bounded prune filters and returns
@@ -554,12 +554,12 @@ pub fn deleteCommand(store: *Store, command_id: u64) !u64 {
 /// ```zig
 /// const removed = try store.prune(&prune);
 /// ```
-pub fn prune(store: *Store, request: *const Prune) !u64 {
+pub fn prune(self: *Store, request: *const Prune) !u64 {
     var sql_buffer: [1024]u8 = undefined;
     var sql = std.Io.Writer.fixed(&sql_buffer);
     try sql.writeAll("DELETE FROM command WHERE 1=1");
     var match_buffer: [2 * core.max_history_query_bytes + 2]u8 = undefined;
-    const use_index = store.fts_available and sqlite.queryCharacters(request.matchSlice()) >= 3;
+    const use_index = self.fts_available and sqlite.queryCharacters(request.matchSlice()) >= 3;
     if (request.match_len != 0) {
         if (use_index) {
             try sql.writeAll(
@@ -583,7 +583,7 @@ pub fn prune(store: *Store, request: *const Prune) !u64 {
     }
     try sql.writeAll(";");
 
-    const stmt = try sqlite.prepare(store.db, sql.buffered());
+    const stmt = try sqlite.prepare(self.db, sql.buffered());
     defer _ = sqlite.c.sqlite3_finalize(stmt);
     var parameter: c_int = 1;
     if (request.match_len != 0) {
@@ -613,7 +613,7 @@ pub fn prune(store: *Store, request: *const Prune) !u64 {
         },
     }
     try sqlite.stepDone(stmt);
-    return @intCast(sqlite.c.sqlite3_changes64(store.db));
+    return @intCast(sqlite.c.sqlite3_changes64(self.db));
 }
 
 /// Executes one bounded history query and returns an owned result that the
@@ -622,10 +622,10 @@ pub fn prune(store: *Store, request: *const Prune) !u64 {
 /// ```zig
 /// const result = try store.query(gpa, &request);
 /// ```
-pub fn query(store: *Store, gpa: std.mem.Allocator, original: *const Query) !*QueryResult {
+pub fn query(self: *Store, gpa: std.mem.Allocator, original: *const Query) !*QueryResult {
     var bounded = original.*;
     if (bounded.snapshot_id == 0) {
-        const boundary = try sqlite.prepare(store.db, "SELECT COALESCE(MAX(id), 0) FROM command;");
+        const boundary = try sqlite.prepare(self.db, "SELECT COALESCE(MAX(id), 0) FROM command;");
         defer _ = sqlite.c.sqlite3_finalize(boundary);
         if (sqlite.c.sqlite3_step(boundary) != sqlite.c.SQLITE_ROW) {
             return error.HistoryQueryFailed;
@@ -636,7 +636,7 @@ pub fn query(store: *Store, gpa: std.mem.Allocator, original: *const Query) !*Qu
 
     const request = &bounded;
     if (request.match == .fuzzy and request.text_len != 0 and request.entry_id == 0) {
-        return store.queryFuzzy(gpa, request);
+        return self.queryFuzzy(gpa, request);
     }
 
     var sql_buffer: [1024]u8 = undefined;
@@ -649,7 +649,7 @@ pub fn query(store: *Store, gpa: std.mem.Allocator, original: *const Query) !*Qu
     // is case-insensitive like the fallback. Trigram matching needs at
     // least three characters; shorter queries take the scan.
     var match_buffer: [2 * core.max_history_query_bytes + 2]u8 = undefined;
-    const use_index = store.fts_available and sqlite.queryCharacters(request.textSlice()) >= 3;
+    const use_index = self.fts_available and sqlite.queryCharacters(request.textSlice()) >= 3;
     if (request.text_len != 0) {
         if (use_index) {
             try sql.writeAll(
@@ -662,7 +662,7 @@ pub fn query(store: *Store, gpa: std.mem.Allocator, original: *const Query) !*Qu
     try sqlite.appendQueryFilters(&sql, request);
     try sql.writeAll(" ORDER BY started_at_ms DESC, id DESC LIMIT ? OFFSET ?;");
 
-    const stmt = try sqlite.prepare(store.db, sql.buffered());
+    const stmt = try sqlite.prepare(self.db, sql.buffered());
     defer _ = sqlite.c.sqlite3_finalize(stmt);
     var parameter: c_int = 1;
     _ = sqlite.c.sqlite3_bind_int64(stmt, parameter, @intCast(request.snapshot_id));

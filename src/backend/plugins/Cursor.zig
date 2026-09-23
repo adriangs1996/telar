@@ -4,35 +4,35 @@ const Cursor = @This();
 bytes: []const u8,
 offset: usize = 0,
 
-pub fn byte(cursor: *Cursor) !u8 {
-    if (cursor.offset == cursor.bytes.len) {
+pub fn byte(self: *Cursor) !u8 {
+    if (self.offset == self.bytes.len) {
         return error.TruncatedFrame;
     }
-    defer cursor.offset += 1;
-    return cursor.bytes[cursor.offset];
+    defer self.offset += 1;
+    return self.bytes[self.offset];
 }
 
-pub fn boolean(cursor: *Cursor) !bool {
-    return switch (try cursor.byte()) {
+pub fn boolean(self: *Cursor) !bool {
+    return switch (try self.byte()) {
         0 => false,
         1 => true,
         else => error.InvalidBoolean,
     };
 }
 
-pub fn int(cursor: *Cursor, comptime T: type) !T {
-    if (cursor.bytes.len -| cursor.offset < @sizeOf(T)) {
+pub fn int(self: *Cursor, comptime T: type) !T {
+    if (self.bytes.len -| self.offset < @sizeOf(T)) {
         return error.TruncatedFrame;
     }
-    defer cursor.offset += @sizeOf(T);
-    return std.mem.readInt(T, cursor.bytes[cursor.offset..][0..@sizeOf(T)], .little);
+    defer self.offset += @sizeOf(T);
+    return std.mem.readInt(T, self.bytes[self.offset..][0..@sizeOf(T)], .little);
 }
 
-pub fn sized(cursor: *Cursor) ![]const u8 {
-    const len = try cursor.int(u32);
-    if (cursor.bytes.len -| cursor.offset < len) {
+pub fn sized(self: *Cursor) ![]const u8 {
+    const len = try self.int(u32);
+    if (self.bytes.len -| self.offset < len) {
         return error.TruncatedFrame;
     }
-    defer cursor.offset += len;
-    return cursor.bytes[cursor.offset..][0..len];
+    defer self.offset += len;
+    return self.bytes[self.offset..][0..len];
 }

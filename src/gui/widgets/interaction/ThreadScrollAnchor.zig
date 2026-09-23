@@ -12,40 +12,40 @@ prepared: ?Resolution = null,
 
 /// Captures a delivered header without retaining its snapshot.
 /// Example: `anchor.capture(.{ .control = control, .baseline = scroll, .offset = y });`
-pub fn capture(anchor: *Anchor, request: Request) void {
-    anchor.sequence +%= 1;
-    anchor.pending = request;
-    anchor.pending.?.sequence = anchor.sequence;
+pub fn capture(self: *Anchor, request: Request) void {
+    self.sequence +%= 1;
+    self.pending = request;
+    self.pending.?.sequence = self.sequence;
 }
 
 /// Explicit navigation supersedes an outstanding disclosure adjustment.
 /// Example: `anchor.cancel(pane_id);`
-pub fn cancel(anchor: *Anchor, pane_id: core.PaneId) void {
-    if (anchor.pending) |request| {
+pub fn cancel(self: *Anchor, pane_id: core.PaneId) void {
+    if (self.pending) |request| {
         if (request.control.pane_id == pane_id) {
-            anchor.pending = null;
+            self.pending = null;
         }
     }
 }
 
 /// Measures the requested item with the latest width, text and expansion state.
 /// Example: `const scroll = anchor.resolve(geometry) orelse current_scroll;`
-pub fn resolve(anchor: *Anchor, geometry: Geometry) ?f64 {
-    const request = anchor.pending orelse return null;
+pub fn resolve(self: *Anchor, geometry: Geometry) ?f64 {
+    const request = self.pending orelse return null;
     if (!request.control.sameItem(geometry.control) or request.baseline != geometry.baseline) {
         return null;
     }
 
     const desired = (@as(f64, geometry.maximum) - geometry.offset + request.offset) / geometry.step;
     const scroll = @max(0, @min(geometry.limit, desired));
-    anchor.prepared = .{ .request = request, .scroll = scroll };
-    anchor.prepared.?.request.control = geometry.control;
+    self.prepared = .{ .request = request, .scroll = scroll };
+    self.prepared.?.request.control = geometry.control;
     return scroll;
 }
 
 /// A newer click or manual scroll cannot be overwritten by an older delivery.
 /// Example: `if (anchor.current(resolution)) commitScroll(resolution.scroll);`
-pub fn current(anchor: *const Anchor, resolution: Resolution) bool {
-    const request = anchor.pending orelse return false;
+pub fn current(self: *const Anchor, resolution: Resolution) bool {
+    const request = self.pending orelse return false;
     return request.sequence == resolution.request.sequence and request.control.sameItem(resolution.request.control);
 }

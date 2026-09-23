@@ -16,20 +16,20 @@ pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture) !FrameContext {
     return .{ .damage = damage, .encode_buffer = encode_buffer };
 }
 
-pub fn deinit(context: *FrameContext) void {
-    context.damage.gpa.free(context.encode_buffer);
-    context.damage.deinit();
+pub fn deinit(self: *FrameContext) void {
+    self.damage.gpa.free(self.encode_buffer);
+    self.damage.deinit();
 }
 
-pub fn encode(context: *FrameContext) ![]const u8 {
+pub fn encode(self: *FrameContext) ![]const u8 {
     const diff = backend.collectSpans(.{
-        .current = context.damage.current,
-        .acknowledged = context.damage.acknowledged,
+        .current = self.damage.current,
+        .acknowledged = self.damage.acknowledged,
         .cols = main.cols,
-        .damaged_rows = context.damage.damaged_rows,
-    }, context.damage.spans);
+        .damaged_rows = self.damage.damaged_rows,
+    }, self.damage.spans);
     return core.encodePaneFrame(
-        context.encode_buffer,
-        main.frame(2, context.damage.spans[0..diff.span_count]),
+        self.encode_buffer,
+        main.frame(2, self.damage.spans[0..diff.span_count]),
     );
 }

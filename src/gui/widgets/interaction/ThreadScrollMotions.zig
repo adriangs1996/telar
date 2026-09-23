@@ -17,31 +17,31 @@ discarded_gesture: bool = false,
 
 /// A replaced attachment never inherits its predecessor's velocity.
 /// Example: `const entry = motions.obtain(pane, now_ns) orelse return;`
-pub fn obtain(motions: *Motions, pane: *const data.Pane, now_ns: u64) ?*Entry {
+pub fn obtain(self: *Motions, pane: *const data.Pane, now_ns: u64) ?*Entry {
     const key: data.AgentKey = .{
         .pane_id = pane.id,
         .pane_generation = pane.attachment_generation,
     };
-    if (motions.find(key)) |entry| {
+    if (self.find(key)) |entry| {
         entry.synchronize(pane, now_ns);
         return entry;
     }
 
-    motions.cancel(pane.id);
-    if (motions.len == motions.entries.len) {
+    self.cancel(pane.id);
+    if (self.len == self.entries.len) {
         return null;
     }
 
-    const entry = &motions.entries[motions.len];
-    motions.len += 1;
+    const entry = &self.entries[self.len];
+    self.len += 1;
     entry.* = .{ .key = key, .applied = pane.transcript_scroll, .anchor_revision = pane.transcript_anchor_revision };
     entry.motion.reset(pane.transcript_scroll * entry.step, now_ns);
     return entry;
 }
 
 /// Example: `const entry = motions.find(key) orelse return;`
-pub fn find(motions: *Motions, key: data.AgentKey) ?*Entry {
-    for (motions.entries[0..motions.len]) |*entry| {
+pub fn find(self: *Motions, key: data.AgentKey) ?*Entry {
+    for (self.entries[0..self.len]) |*entry| {
         if (std.meta.eql(entry.key, key)) {
             return entry;
         }
@@ -52,15 +52,15 @@ pub fn find(motions: *Motions, key: data.AgentKey) ?*Entry {
 
 /// Stops at the current position when a reader grabs content or opens a group.
 /// Example: `motions.cancel(pane_id);`
-pub fn cancel(motions: *Motions, pane_id: core.PaneId) void {
-    if (motions.gesture_pane == pane_id) {
-        motions.discarded_gesture = true;
+pub fn cancel(self: *Motions, pane_id: core.PaneId) void {
+    if (self.gesture_pane == pane_id) {
+        self.discarded_gesture = true;
     }
 
-    for (motions.entries[0..motions.len], 0..) |entry, index| {
+    for (self.entries[0..self.len], 0..) |entry, index| {
         if (entry.key.pane_id == pane_id) {
-            motions.len -= 1;
-            motions.entries[index] = motions.entries[motions.len];
+            self.len -= 1;
+            self.entries[index] = self.entries[self.len];
             return;
         }
     }
@@ -68,18 +68,18 @@ pub fn cancel(motions: *Motions, pane_id: core.PaneId) void {
 
 /// Focus loss and modal ownership retire both animation and the native lease.
 /// Example: `motions.clear();`
-pub fn clear(motions: *Motions) void {
-    motions.len = 0;
-    motions.gesture = null;
-    motions.gesture_pane = null;
-    motions.foreign_gesture = true;
-    motions.discarded_gesture = true;
+pub fn clear(self: *Motions) void {
+    self.len = 0;
+    self.gesture = null;
+    self.gesture_pane = null;
+    self.foreign_gesture = true;
+    self.discarded_gesture = true;
 }
 
 /// Hidden, settled and replaced panes request no animation frames.
 /// Example: `motions.schedule(target, clock);`
-pub fn schedule(motions: *Motions, target: Target, clock: *Clock) void {
-    const entry = motions.find(.{ .pane_id = target.action.transcript, .pane_generation = target.id.generation }) orelse return;
+pub fn schedule(self: *Motions, target: Target, clock: *Clock) void {
+    const entry = self.find(.{ .pane_id = target.action.transcript, .pane_generation = target.id.generation }) orelse return;
     const pending = @abs(entry.motion.spring.position - entry.applied * entry.step) > 0.001;
     if (!entry.waiting and (entry.motion.active() or pending)) {
         clock.requestAt(clock.now_ns +| Clock.frame_interval_ns);
@@ -88,17 +88,17 @@ pub fn schedule(motions: *Motions, target: Target, clock: *Clock) void {
 
 /// A failed frame cannot retire the previous visible set.
 /// Example: `motions.retain(registry);`
-pub fn retain(motions: *Motions, registry: *const @import("Registry.zig")) void {
+pub fn retain(self: *Motions, registry: *const @import("Registry.zig")) void {
     var kept: usize = 0;
-    for (motions.entries[0..motions.len]) |entry| {
+    for (self.entries[0..self.len]) |entry| {
         for (registry.targets[0..registry.len]) |target| {
             if (target.action == .transcript and target.action.transcript == entry.key.pane_id and target.id.generation == entry.key.pane_generation) {
-                motions.entries[kept] = entry;
+                self.entries[kept] = entry;
                 kept += 1;
                 break;
             }
         }
     }
 
-    motions.len = kept;
+    self.len = kept;
 }

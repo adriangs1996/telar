@@ -20,44 +20,44 @@ pub fn io(_: *ExchangeCapture) std.Io {
     return std.testing.io;
 }
 
-pub fn relayBody(capture: *ExchangeCapture, _: types.BodyPlan) bool {
-    _ = capture.body_calls.fetchAdd(1, .monotonic);
+pub fn relayBody(self: *ExchangeCapture, _: types.BodyPlan) bool {
+    _ = self.body_calls.fetchAdd(1, .monotonic);
 
-    if (capture.response_started) |started| {
+    if (self.response_started) |started| {
         _ = started.getOne(std.testing.io) catch return false;
     }
 
-    if (capture.body_started) |started| {
+    if (self.body_started) |started| {
         started.putOneUncancelable(std.testing.io, 0) catch return false;
     }
 
-    if (capture.body_release) |release| {
+    if (self.body_release) |release| {
         _ = release.getOne(std.testing.io) catch {
-            capture.body_canceled.store(true, .monotonic);
+            self.body_canceled.store(true, .monotonic);
             return false;
         };
     }
 
-    return capture.body_result;
+    return self.body_result;
 }
 
-pub fn relayResponse(capture: *ExchangeCapture, _: RequestHead) ?ResponseHead {
-    _ = capture.response_calls.fetchAdd(1, .monotonic);
+pub fn relayResponse(self: *ExchangeCapture, _: RequestHead) ?ResponseHead {
+    _ = self.response_calls.fetchAdd(1, .monotonic);
 
-    if (capture.body_started) |started| {
+    if (self.body_started) |started| {
         _ = started.getOne(std.testing.io) catch return null;
     }
 
-    if (capture.response_started) |started| {
+    if (self.response_started) |started| {
         started.putOneUncancelable(std.testing.io, 0) catch return null;
     }
 
-    if (capture.response_release) |release| {
+    if (self.response_release) |release| {
         _ = release.getOne(std.testing.io) catch {
-            capture.response_canceled.store(true, .monotonic);
+            self.response_canceled.store(true, .monotonic);
             return null;
         };
     }
 
-    return capture.response;
+    return self.response;
 }

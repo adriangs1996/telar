@@ -14,20 +14,20 @@ pub const DiagramTexture = extern struct {
     version: u64 = 0,
 
     /// Checks shape and quota before any pixel access. Example: `try texture.pixelCount()`.
-    pub fn pixelCount(texture: DiagramTexture) !u32 {
-        if (texture.pixels == null) {
-            if (texture.width != 0 or texture.height != 0 or texture.version != 0) {
+    pub fn pixelCount(self: DiagramTexture) !u32 {
+        if (self.pixels == null) {
+            if (self.width != 0 or self.height != 0 or self.version != 0) {
                 return error.InvalidDiagramTexture;
             }
 
             return 0;
         }
 
-        if (texture.width == 0 or texture.height == 0 or texture.width > max_side or texture.height > max_side or texture.version == 0) {
+        if (self.width == 0 or self.height == 0 or self.width > max_side or self.height > max_side or self.version == 0) {
             return error.InvalidDiagramTexture;
         }
 
-        const pixels = texture.width * texture.height;
+        const pixels = self.width * self.height;
         if (pixels > max_pixels) {
             return error.DiagramTextureTooLarge;
         }

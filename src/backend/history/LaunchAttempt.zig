@@ -13,9 +13,9 @@ workspace_path: []u8,
 shell: []u8,
 cause: []u8,
 
-pub fn deinit(value: *LaunchAttempt, gpa: std.mem.Allocator) void {
-    gpa.free(value.workspace_path);
-    gpa.free(value.shell);
-    gpa.free(value.cause);
-    gpa.destroy(value);
+pub fn deinit(self: *LaunchAttempt, gpa: std.mem.Allocator) void {
+    gpa.free(self.workspace_path);
+    gpa.free(self.shell);
+    gpa.free(self.cause);
+    gpa.destroy(self);
 }

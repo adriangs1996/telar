@@ -53,10 +53,10 @@ pub fn open(io: std.Io, gpa: std.mem.Allocator, options: Options) !*Session {
 /// ```zig
 /// session.close(io);
 /// ```
-pub fn close(session: *Session, io: std.Io) void {
-    session.stream.deinit();
-    session.child.kill(io);
-    session.gpa.destroy(session);
+pub fn close(self: *Session, io: std.Io) void {
+    self.stream.deinit();
+    self.child.kill(io);
+    self.gpa.destroy(self);
 }
 
 /// Sends one prompt and waits for the settled assistant text within the
@@ -65,8 +65,8 @@ pub fn close(session: *Session, io: std.Io) void {
 /// ```zig
 /// response.status = session.ask(io, .{ .prompt = prompt.slice(), .response = &response });
 /// ```
-pub fn ask(session: *Session, io: std.Io, request: Request) types.Status {
-    session.exchange(io, request) catch |err| return switch (err) {
+pub fn ask(self: *Session, io: std.Io, request: Request) types.Status {
+    self.exchange(io, request) catch |err| return switch (err) {
         error.Timeout => .timeout,
         error.InvalidOutput => .invalid_output,
         error.WriteFailed, error.ReadFailed, error.Closed, error.Rejected => .failed,
@@ -80,8 +80,8 @@ pub fn ask(session: *Session, io: std.Io, request: Request) types.Status {
 /// ```zig
 /// session.touch(io);
 /// ```
-pub fn touch(session: *Session, io: std.Io) void {
-    session.last_used_ms = session_support.nowMs(io);
+pub fn touch(self: *Session, io: std.Io) void {
+    self.last_used_ms = session_support.nowMs(io);
 }
 
 /// Milliseconds since the session was opened or last touched.
@@ -89,35 +89,35 @@ pub fn touch(session: *Session, io: std.Io) void {
 /// ```zig
 /// if (session.idleMs(io) >= idle_timeout_ms) session.close(io);
 /// ```
-pub fn idleMs(session: *const Session, io: std.Io) i64 {
-    return session_support.nowMs(io) - session.last_used_ms;
+pub fn idleMs(self: *const Session, io: std.Io) i64 {
+    return session_support.nowMs(io) - self.last_used_ms;
 }
 
-fn exchange(session: *Session, io: std.Io, request: Request) session_support.AskError!void {
+fn exchange(self: *Session, io: std.Io, request: Request) session_support.AskError!void {
     const timeout: std.Io.Timeout = .{ .deadline = .fromNow(io, .{
         .clock = .awake,
-        .raw = .fromMilliseconds(session.timeout_ms),
+        .raw = .fromMilliseconds(self.timeout_ms),
     }) };
 
-    const prompt_line = try rpc.encodePrompt(&session.line_buffer, request.prompt);
-    try session.writeLine(io, prompt_line);
-    try session.awaitSettled(timeout);
+    const prompt_line = try rpc.encodePrompt(&self.line_buffer, request.prompt);
+    try self.writeLine(io, prompt_line);
+    try self.awaitSettled(timeout);
 
-    const query_line = try rpc.encodeCommand(&session.line_buffer, "get_last_assistant_text");
-    try session.writeLine(io, query_line);
-    try session.readLastText(timeout, request.response);
+    const query_line = try rpc.encodeCommand(&self.line_buffer, "get_last_assistant_text");
+    try self.writeLine(io, query_line);
+    try self.readLastText(timeout, request.response);
 }
 
-fn writeLine(session: *Session, io: std.Io, line: []const u8) session_support.AskError!void {
-    const stdin = session.child.stdin orelse return error.WriteFailed;
+fn writeLine(self: *Session, io: std.Io, line: []const u8) session_support.AskError!void {
+    const stdin = self.child.stdin orelse return error.WriteFailed;
     stdin.writeStreamingAll(io, line) catch return error.WriteFailed;
 }
 
 /// Consumes records until the agent settles. A rejected prompt ends the
 /// dialogue; oversized records are ignored.
-fn awaitSettled(session: *Session, timeout: std.Io.Timeout) session_support.AskError!void {
+fn awaitSettled(self: *Session, timeout: std.Io.Timeout) session_support.AskError!void {
     while (true) {
-        var step = try session.stream.next(session.gpa, timeout);
+        var step = try self.stream.next(self.gpa, timeout);
         switch (step) {
             .closed => return error.Closed,
             .discarded => continue,
@@ -136,9 +136,9 @@ fn awaitSettled(session: *Session, timeout: std.Io.Timeout) session_support.AskE
 /// Copies the `get_last_assistant_text` reply into `response`. Here an
 /// oversized record can only be the reply itself, so it is invalid
 /// output rather than noise.
-fn readLastText(session: *Session, timeout: std.Io.Timeout, response: *Response) session_support.AskError!void {
+fn readLastText(self: *Session, timeout: std.Io.Timeout, response: *Response) session_support.AskError!void {
     while (true) {
-        var step = try session.stream.next(session.gpa, timeout);
+        var step = try self.stream.next(self.gpa, timeout);
         switch (step) {
             .closed => return error.Closed,
             .discarded => return error.InvalidOutput,

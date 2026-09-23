@@ -12,19 +12,19 @@ overflow: bool = false,
 
 /// Overflow falls back to the normal painter; an incomplete plan is never reused.
 /// Example: `plan.append(.{ .offset = start, .len = text.len, ... });`
-pub fn append(plan: *Plan, fragment: @import("MessageLayoutFragment.zig")) void {
-    if (plan.len == plan.fragments.len) {
-        plan.overflow = true;
+pub fn append(self: *Plan, fragment: @import("MessageLayoutFragment.zig")) void {
+    if (self.len == self.fragments.len) {
+        self.overflow = true;
         return;
     }
 
-    plan.fragments[plan.len] = fragment;
-    plan.len += 1;
+    self.fragments[self.len] = fragment;
+    self.len += 1;
 }
 
 /// Publishes only a successfully laid-out complete source span.
 /// Example: `plan.complete(.{ .height = y - start_y, .x = x });`
-pub fn complete(plan: *Plan, result: @import("MessageLayoutResult.zig")) void {
-    plan.result = result;
-    plan.valid = !plan.overflow;
+pub fn complete(self: *Plan, result: @import("MessageLayoutResult.zig")) void {
+    self.result = result;
+    self.valid = !self.overflow;
 }

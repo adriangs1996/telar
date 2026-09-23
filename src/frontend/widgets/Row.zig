@@ -5,6 +5,6 @@ text: [goto_picker.max_row_bytes]u8 = undefined,
 len: u8 = 0,
 selected: bool = false,
 
-pub fn slice(row: *const Row) []const u8 {
-    return row.text[0..row.len];
+pub fn slice(self: *const Row) []const u8 {
+    return self.text[0..self.len];
 }

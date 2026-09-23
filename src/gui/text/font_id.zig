@@ -28,8 +28,8 @@ pub const Id = enum(u4) {
 
     /// The pool slot behind a discovered identity; null for every embedded
     /// or configured face. Example: `if (id.fallbackSlot()) |slot| { ... }`
-    pub fn fallbackSlot(id: Id) ?u3 {
-        const raw = @intFromEnum(id);
+    pub fn fallbackSlot(self: Id) ?u3 {
+        const raw = @intFromEnum(self);
         if (raw < @intFromEnum(Id.fallback_0)) {
             return null;
         }
@@ -39,8 +39,8 @@ pub const Id = enum(u4) {
 
     /// Fallback ink is fitted into the requesting cell; natural faces keep
     /// their own advances and bearings. Example: `if (id.fitted()) { ... }`
-    pub fn fitted(id: Id) bool {
-        return id == .text or id == .symbols or id.fallbackSlot() != null;
+    pub fn fitted(self: Id) bool {
+        return self == .text or self == .symbols or self.fallbackSlot() != null;
     }
 };
 

@@ -11,7 +11,7 @@ len: u8 = 0,
 /// Accepts an explicit provider name or clear without failing its conversation.
 /// Invalid values and duplicate normalized names leave the revision unchanged.
 /// Example: `metadata.applyName(.{ .string = "Review input routing" });`
-pub fn applyName(metadata: *Metadata, value: std.json.Value) void {
+pub fn applyName(self: *Metadata, value: std.json.Value) void {
     const raw = switch (value) {
         .null => "",
         .string => |name| name,
@@ -33,20 +33,20 @@ pub fn applyName(metadata: *Metadata, value: std.json.Value) void {
         core.validateSessionTitle(name) catch return;
     }
 
-    if (metadata.revision != 0 and std.mem.eql(u8, metadata.buffer[0..metadata.len], name)) {
+    if (self.revision != 0 and std.mem.eql(u8, self.buffer[0..self.len], name)) {
         return;
     }
 
-    const revision = std.math.add(u64, metadata.revision, 1) catch return;
-    @memcpy(metadata.buffer[0..name.len], name);
-    metadata.len = @intCast(name.len);
-    metadata.revision = revision;
+    const revision = std.math.add(u64, self.revision, 1) catch return;
+    @memcpy(self.buffer[0..name.len], name);
+    self.len = @intCast(name.len);
+    self.revision = revision;
 }
 
 /// Distinguishes an unobserved name from an explicitly cleared provider name.
 /// Example: `if (metadata.nameSlice()) |name| publishAgentTitle(name);`
-pub fn nameSlice(metadata: *const Metadata) ?[]const u8 {
-    return if (metadata.revision == 0) null else metadata.buffer[0..metadata.len];
+pub fn nameSlice(self: *const Metadata) ?[]const u8 {
+    return if (self.revision == 0) null else self.buffer[0..self.len];
 }
 
 test "provider thread metadata owns names and distinguishes missing from clear" {
