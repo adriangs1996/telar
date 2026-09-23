@@ -10,7 +10,6 @@ const core = @import("telar-core");
 const png_test = @import("png_test.zig");
 const vt = @import("ghostty-vt");
 const std = @import("std");
-const FileQueryControl = @import("FileQueryControl.zig");
 const SharedFrame = @import("SharedFrame.zig");
 const SharedFrameKey = @import("SharedFrameKey.zig");
 const FrameResource = @import("FrameResource.zig");
@@ -968,4 +967,9 @@ const TestOutput = struct {
     pub fn slice(self: *const TestOutput) []const u8 {
         return self.bytes[0..self.len];
     }
+};
+
+const FileQueryControl = struct {
+    image_id: u32,
+    byte_len: usize,
 };

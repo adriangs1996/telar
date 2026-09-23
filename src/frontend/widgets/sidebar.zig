@@ -8,7 +8,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
 const Context = @import("Context.zig");
-const SidebarInput = @import("SidebarInput.zig");
 const Semantic = @import("Semantic.zig");
 const widget = @import("context_support.zig");
 const std = @import("std");
@@ -844,4 +843,17 @@ const AgentLineInput = struct {
     agent: *const data.Agent,
     line: u2,
     background: core.Color,
+};
+
+const SidebarInput = struct {
+    area: core.Rect,
+    snapshot: *const data.AgentSnapshot,
+    state: *State,
+    /// The client model and its active tab, for pane numbering.
+    model: ?*const data.ClientModel = null,
+    tab: usize = 0,
+    focused_agent: ?data.AgentKey = null,
+    transparent: bool,
+    rounded_focus: bool = false,
+    animation_frame: u8 = 0,
 };

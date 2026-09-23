@@ -15,7 +15,6 @@ const LoadContext = @import("LoadContext.zig");
 const Limits = @import("Limits.zig");
 const lua_api = @import("lua-api");
 const FileInput = @import("FileInput.zig");
-const CallbackInvocation = @import("CallbackInvocation.zig");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const bar_values = @import("bar_values.zig");
 const lua_value = @import("lua_value.zig");
@@ -1456,4 +1455,9 @@ const SourceInput = struct {
 const CallbackPreparation = struct {
     invocation: CallbackInvocation,
     expression: bool,
+};
+
+const CallbackInvocation = struct {
+    reference: data.InputCallbackRef,
+    context: data.CallbackContext,
 };

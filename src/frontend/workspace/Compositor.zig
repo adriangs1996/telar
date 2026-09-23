@@ -3,7 +3,6 @@ const client = @import("telar-client");
 const data = @import("model");
 const std = @import("std");
 const Plan = @import("../presentation/Plan.zig");
-const Composition = @import("Composition.zig");
 const CompositionResult = @import("CompositionResult.zig");
 const RenderStats = @import("RenderStats.zig");
 const multiplexer = @import("multiplexer.zig");
@@ -470,4 +469,12 @@ const IncrementalComposition = struct {
     target: *core.Buffer,
     previous_copy: ?client.CopyProjection,
     copy_changed: bool,
+};
+
+const Composition = struct {
+    model: *const data.ClientModel,
+    /// The composed tab's slot in `model.tabs`.
+    tab: usize,
+    screen: *Screen,
+    input: CompositionInput,
 };

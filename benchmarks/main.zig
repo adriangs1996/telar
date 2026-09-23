@@ -6,7 +6,6 @@ const core = @import("telar-core");
 const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
 const client = @import("telar-client");
-const Case = @import("Case.zig");
 const std = @import("std");
 const Measurement = @import("Measurement.zig");
 const DamageContext = @import("DamageContext.zig");
@@ -979,4 +978,12 @@ const DecodeContext = struct {
 
 const HistoryInputContext = struct {
     scanner: backend.InputScanner = .{},
+};
+
+const Case = struct {
+    name: []const u8,
+    work_per_op: u64,
+    work_unit: []const u8,
+    payload_bytes_per_op: u64 = 0,
+    p99_budget_ns: u64 = std.time.ns_per_ms,
 };

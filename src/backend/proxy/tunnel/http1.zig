@@ -16,7 +16,6 @@ const buffer_support = @import("../capture/buffer_support.zig");
 const ResponseHead = @import("../http/ResponseHead.zig");
 const Exchange = @import("Exchange.zig");
 const ResponseObserver = @import("../provider/ResponseObserver.zig");
-const ResponseObserverOptions = @import("ResponseObserverOptions.zig");
 const Fragment = @import("../http/Fragment.zig");
 const Head = @import("../http/Head.zig");
 const request_support = @import("../provider/request_support.zig");
@@ -729,4 +728,9 @@ const RequestBodyObserver = struct {
             _ = half.append(.request_body, fragment.payload);
         }
     }
+};
+
+const ResponseObserverOptions = struct {
+    inspect_payload: bool,
+    capture_half: ?*Half,
 };

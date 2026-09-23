@@ -3,7 +3,6 @@
 const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
-const CopySelectionRange = @import("CopySelectionRange.zig");
 const std = @import("std");
 const ComposeSink = @import("ComposeSink.zig");
 const diff = @import("../presentation/diff.zig");
@@ -1303,4 +1302,9 @@ const PaneRange = struct {
     start: u16,
     end: u16,
     copy: ?data.CopyModeView,
+};
+
+const CopySelectionRange = struct {
+    start: u16,
+    end: u16,
 };
