@@ -96,6 +96,8 @@ pub fn settle(self: *TestHarness) !void {
             else => return error.UnexpectedEvent,
         }
     }
+
+    try data.model_invariants.check(&self.client.model);
 }
 
 /// Draws the chrome facts and delivers the host requests a direct client
@@ -104,6 +106,7 @@ pub fn settle(self: *TestHarness) !void {
 pub fn deliverHostEffects(self: *TestHarness) !void {
     try view_chrome.refresh(self.terminal);
     try host_effects.deliver(self.terminal);
+    try data.model_invariants.check(&self.client.model);
 }
 
 pub fn settleModelPresentation(self: *TestHarness) !void {

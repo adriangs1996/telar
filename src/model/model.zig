@@ -46,6 +46,7 @@ pub const sidebar = @import("layout/sidebar.zig");
 pub const GridRegions = @import("layout/GridRegions.zig");
 pub const workbench = @import("workspace/workbench.zig");
 pub const pane_frame = @import("panes/pane_frame.zig");
+pub const model_invariants = @import("state/model_invariants.zig");
 const sidebar_rendering = @import("config/sidebar_rendering.zig");
 pub const SidebarRendering = sidebar_rendering.SidebarRendering;
 pub const ResolvedSidebarRendering = sidebar_rendering.ResolvedSidebarRendering;
@@ -337,6 +338,7 @@ pub const WorkspaceTabInput = @import("workspace/WorkspaceTabInput.zig");
 
 test {
     _ = @import("config/SoundPolicy.zig");
+    _ = @import("state/model_invariants.zig");
     _ = @import("config/sidebar_rendering.zig");
     _ = @import("layout/GridRegions.zig");
     _ = @import("workspace/workbench.zig");

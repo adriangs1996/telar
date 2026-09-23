@@ -20,6 +20,7 @@ const tab_snapshot_reconciliation = @import("tab_snapshot_reconciliation.zig");
 const workspace_handoff = @import("workspace_handoff.zig");
 const workspace_reconciliation = @import("workspace_reconciliation.zig");
 const pane_split = @import("pane_split.zig");
+const model_invariants = @import("../state/model_invariants.zig");
 
 test "selection wraps and moving tabs preserves the active identity" {
     var model = ClientModel.init(std.testing.allocator, true);
@@ -49,6 +50,7 @@ test "selection wraps and moving tabs preserves the active identity" {
     try std.testing.expectEqual(Change.unchanged, try tab_move.move(&model, @enumFromInt(1), 1));
     try std.testing.expectError(error.TabNotFound, tab_move.move(&model, @enumFromInt(9), 0));
     try std.testing.expectError(error.InvalidTabPosition, tab_move.move(&model, @enumFromInt(1), 2));
+    try model_invariants.check(&model);
 }
 
 test "canonical tab labels distinguish changes and reject invalid values" {
@@ -70,6 +72,7 @@ test "canonical tab labels distinguish changes and reject invalid values" {
     try std.testing.expectError(error.InvalidUtf8, tab_rename.rename(&model, location.tab_id, &invalid_utf8));
     try std.testing.expectError(error.TabNotFound, tab_rename.rename(&model, @enumFromInt(9), "missing"));
     try std.testing.expectEqualStrings("server", tab_label.text(&model, model.tabs.active));
+    try model_invariants.check(&model);
 }
 
 test "automatic tab labels follow foreground focus until explicitly renamed" {
@@ -109,6 +112,7 @@ test "automatic tab labels follow foreground focus until explicitly renamed" {
     try std.testing.expectEqualStrings("nvim", tab_label.text(&model, tab));
     try std.testing.expect(model.tabs.layout[tab].focusPane(second));
     try std.testing.expectEqualStrings("nvim", tab_label.text(&model, tab));
+    try model_invariants.check(&model);
 }
 
 test "automatic and manual tab labels survive canonical workspace snapshots" {
@@ -143,6 +147,7 @@ test "automatic and manual tab labels survive canonical workspace snapshots" {
     try std.testing.expectEqual(icons.Icon.provider_claude, tab_label.icon(&model, model.tabs.find(first).?).?);
     try std.testing.expect(!tab_label.automatic(&model, model.tabs.find(second).?));
     try std.testing.expectEqualStrings("tab 45", tab_label.text(&model, model.tabs.find(second).?));
+    try model_invariants.check(&model);
 }
 
 test "failed tab construction does not publish a shifted slot" {
@@ -167,6 +172,7 @@ test "failed tab construction does not publish a shifted slot" {
     try std.testing.expectEqual(@as(usize, 1), model.tabs.count);
     try std.testing.expectEqualDeep(first, model.tabs.location[model.tabs.active]);
     try std.testing.expect(model.panes.find(@enumFromInt(2)) == null);
+    try model_invariants.check(&model);
 }
 
 test "root replacement constructs before retiring the current workspace" {
@@ -207,6 +213,7 @@ test "root replacement constructs before retiring the current workspace" {
     try std.testing.expectEqualDeep(replacement, model.tabs.location[model.tabs.active]);
     try std.testing.expect(model.panes.find(previous_pane) == null);
     try std.testing.expect(model.panes.find(replacement_pane) != null);
+    try model_invariants.check(&model);
 }
 
 test "displayed workspace name stays canonical when pane cwd changes" {
@@ -235,6 +242,7 @@ test "displayed workspace name stays canonical when pane cwd changes" {
     try std.testing.expectEqualStrings("telar", model.workspaceName());
     try std.testing.expect(model.tabs.layout[tab].focusPane(@enumFromInt(1)));
     try std.testing.expectEqualStrings("telar", model.workspaceName());
+    try model_invariants.check(&model);
 }
 
 test "pane gap configuration reaches current and future tabs" {
@@ -260,6 +268,7 @@ test "pane gap configuration reaches current and future tabs" {
     for (model.tabs.layout[0..model.tabs.count]) |layout| {
         try std.testing.expect(layout.pane_gaps);
     }
+    try model_invariants.check(&model);
 }
 
 test "pane content size carries the host cell geometry" {
@@ -276,6 +285,7 @@ test "pane content size carries the host cell geometry" {
     const size = tab_layout.contentSize(&model, model.tabs.active, @enumFromInt(1), .{ .w = 20, .h = 5 }).?;
     try std.testing.expectEqual(@as(u16, 8), size.cell_width_px);
     try std.testing.expectEqual(@as(u16, 16), size.cell_height_px);
+    try model_invariants.check(&model);
 }
 
 test "workspace snapshots restore labels and order without losing pane layouts" {
@@ -308,6 +318,7 @@ test "workspace snapshots restore labels and order without losing pane layouts" 
     try std.testing.expectEqualStrings("logs", tab_label.text(&model, 0));
     try std.testing.expectEqualStrings("main", tab_label.text(&model, 1));
     try std.testing.expect(model.panes.findIn(@enumFromInt(1), @enumFromInt(7)) != null);
+    try model_invariants.check(&model);
 }
 
 test "workspace reconciliation rejects malformed snapshots before mutation" {
@@ -405,6 +416,7 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
     try std.testing.expectEqual(root_tab, model.tabs.location[model.tabs.active].tab_id);
     try std.testing.expect(model.panes.find(root_pane) != null);
     try std.testing.expectEqualStrings("", model.workspaceName());
+    try model_invariants.check(&model);
 }
 
 test "workspace reconciliation replaces a tab at full capacity" {
@@ -449,6 +461,7 @@ test "workspace reconciliation replaces a tab at full capacity" {
     try std.testing.expect(model.tabs.find(@enumFromInt(1)) == null);
     try std.testing.expect(model.tabs.find(@enumFromInt(core.max_tabs_per_workspace + 1)) != null);
     try std.testing.expectEqual(@as(core.TabId, @enumFromInt(core.max_tabs_per_workspace)), model.tabs.location[model.tabs.active].tab_id);
+    try model_invariants.check(&model);
 }
 
 test "tab reconciliation preserves the pane selected for workspace restoration" {
@@ -471,6 +484,7 @@ test "tab reconciliation preserves the pane selected for workspace restoration" 
     try std.testing.expectEqual(@as(u16, 1), model.tabs.layout[restored_tab].displayIndex(@enumFromInt(10)).?);
     try std.testing.expectEqual(@as(u16, 2), model.tabs.layout[restored_tab].displayIndex(restored).?);
     try std.testing.expectEqual(@as(u16, 3), model.tabs.layout[restored_tab].displayIndex(@enumFromInt(77)).?);
+    try model_invariants.check(&model);
 }
 
 test "initial tab reconciliation replaces a vanished focused pane" {
@@ -493,6 +507,7 @@ test "initial tab reconciliation replaces a vanished focused pane" {
     try std.testing.expect(model.panes.find(vanished) == null);
     try std.testing.expect(model.panes.find(replacement) != null);
     try std.testing.expectEqual(replacement, model.tabs.layout[reconciled].focused().?);
+    try model_invariants.check(&model);
 }
 
 test "tab reconciliation rejects duplicate pane membership atomically" {
@@ -516,6 +531,7 @@ test "tab reconciliation rejects duplicate pane membership atomically" {
     try std.testing.expectEqual(@as(usize, 1), model.panes.countIn(location.tab_id));
     try std.testing.expectEqual(root_pane, model.tabs.layout[tab].focused().?);
     try std.testing.expect(!model.tabs.snapshot_loaded[tab]);
+    try model_invariants.check(&model);
 }
 
 test "tab reconciliation restores a bookmarked nested split tree" {
@@ -554,6 +570,7 @@ test "tab reconciliation restores a bookmarked nested split tree" {
     for ([_]core.PaneId{ left, top_right, bottom_right }) |pane_id|
         try std.testing.expectEqual(expected.find(pane_id).?.outer, actual.find(pane_id).?.outer);
     try std.testing.expectEqual(top_right, model.tabs.layout[restored].focused().?);
+    try model_invariants.check(&model);
 }
 
 test "client layout reconciliation restores its saved pane focus" {
@@ -580,6 +597,7 @@ test "client layout reconciliation restores its saved pane focus" {
     const restored = try tab_snapshot_reconciliation.reconcile(&model, snapshot, .{ .w = 60, .h = 20 });
 
     try std.testing.expectEqual(left, model.tabs.layout[restored].focused().?);
+    try model_invariants.check(&model);
 }
 
 test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
@@ -607,6 +625,7 @@ test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
     try std.testing.expectEqual(@as(u16, 1), model.tabs.layout[restored].displayIndex(@enumFromInt(10)).?);
     try std.testing.expectEqual(@as(u16, 2), model.tabs.layout[restored].displayIndex(selected).?);
     try std.testing.expectEqual(@as(u16, 3), model.tabs.layout[restored].displayIndex(@enumFromInt(88)).?);
+    try model_invariants.check(&model);
 }
 
 test "later tab reconciliation preserves the client layout order" {
@@ -633,4 +652,5 @@ test "later tab reconciliation preserves the client layout order" {
     try std.testing.expectEqual(@as(u16, 1), model.tabs.layout[tab].displayIndex(@enumFromInt(10)).?);
     try std.testing.expectEqual(@as(u16, 2), model.tabs.layout[tab].displayIndex(@enumFromInt(77)).?);
     try std.testing.expectEqual(@as(u16, 3), model.tabs.layout[tab].displayIndex(@enumFromInt(42)).?);
+    try model_invariants.check(&model);
 }

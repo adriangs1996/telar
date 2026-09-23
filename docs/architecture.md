@@ -69,48 +69,55 @@ files named after [`docs/flows`](flows/README.md).
 - Any code reads any column.
 - Tables own their structural changes only: adding and removing rows, and
   keeping `count` and the index consistent (`panes.add`, `panes.remove`,
-  `panes.slotOf`).
+  `panes.find`).
 - Flow procedures write ordinary columns directly.
 - A transition that must change several columns together happens inside one
   procedure, never split across callers.
-- Invariants that span tables are checked by a `debugCheck(model)` that tests
-  run after every step.
+- Invariants that span tables are checked by `model_invariants.check(model)`,
+  which the TUI test harness runs after every settled step and the model's
+  flow tests run after every scenario.
 
 ```zig
-// pane_frame.zig
-pub fn receive(model: *ClientModel, frame: core.FrameView) !FrameReceipt {
-    const slot = model.panes.slotOf(frame.pane_id) orelse return .detached;
-
-    if (!model.panes.attached[slot]) {
+// src/model/panes/pane_frame.zig
+pub fn receive(model: *ClientModel, frame: core.FrameView) !PaneFrameOutcome {
+    const pane = model.panes.find(frame.pane_id) orelse return .detached;
+    if (!pane.attached) {
         return .detached;
     }
 
-    if (frame.base_frame_id != 0 and frame.base_frame_id != model.panes.applied_frame[slot]) {
-        return .{ .needs_snapshot = model.panes.applied_frame[slot] };
+    if (frame.base_frame_id != 0 and frame.base_frame_id != pane.applied_frame_id) {
+        try model.to_runtime.push(.{ .request_snapshot = .{ .pane_id = frame.pane_id, .known_frame_id = pane.applied_frame_id } });
+        return .{ .resync = .{ .pane_id = frame.pane_id, .known_frame_id = pane.applied_frame_id } };
     }
 
-    try model.panes.buffer[slot].apply(frame);
-    model.panes.applied_frame[slot] = frame.frame_id;
-    try model.to_runtime.pushAck(frame);
-    return .accepted;
+    const applied = try pane.applyFrame(frame);
+    model.frame_revision +%= 1;
+    try model.to_runtime.push(.{ .frame_ack = .{ .pane_id = frame.pane_id, .frame_id = frame.frame_id } });
+    // ...
 }
 ```
 
 ## Dispatch
 
-Each process has one `update(model, message)`. Host input, runtime and client
-messages, worker completions and timers are all messages. The switch calls
-one procedure per branch; a reader follows any flow from there.
+Each process has one `update`. Runtime messages, worker completions and
+timers are all messages; the switch calls one procedure per branch, and a
+reader follows any flow from there. The client's `update` lives on
+`AttachedClient` (`src/client/AttachedClient.zig`) because some branches also
+touch the Lua VM and the transport, which are not model state; each adapter
+wraps `client.Message` as one variant of its own event union and handles only
+its host events itself.
 
 ```zig
-pub fn update(model: *ClientModel, message: Message) !void {
+pub fn update(self: *AttachedClient, message: Message) !?u8 {
     switch (message) {
-        .pane_frame => |frame| _ = try pane_frame.receive(model, frame),
-        .host_input => |input| try input_routing.route(model, input),
-        .tab_renamed => |reply| try tab_rename.receive(model, reply),
-        .config_loaded => |generation| try config_reload.finish(model, generation),
+        .server => |result| return self.receiveRuntime(result),
+        .sent => |result| try self.completeRuntimeSend(result),
+        .bar_tick => |result| try bar_updates.handleTick(self, result),
+        .config_reload => |result| _ = try self.completeConfigReload(result),
         // ...
     }
+
+    return null;
 }
 ```
 
