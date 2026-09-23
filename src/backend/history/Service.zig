@@ -1,20 +1,20 @@
 const core = @import("telar-core");
 const std = @import("std");
-const ChannelType = @import("Channel.zig");
-const WorkerType = @import("Worker.zig");
+const Channel = @import("Channel.zig");
+const Worker = @import("Worker.zig");
 const model = @import("model.zig");
 const request_factory = @import("request_factory.zig");
-const SessionFinishedType = @import("SessionFinished.zig");
-const DefinitionType = @import("Definition.zig");
-const DeleteType = @import("Delete.zig");
-const PruneType = @import("Prune.zig");
-const StatsQueryType = @import("StatsQuery.zig");
-const QueryType = @import("Query.zig");
+const SessionFinished = @import("SessionFinished.zig");
+const Definition = @import("Definition.zig");
+const Delete = @import("Delete.zig");
+const Prune = @import("Prune.zig");
+const StatsQuery = @import("StatsQuery.zig");
+const Query = @import("Query.zig");
 const Service = @This();
 
 gpa: std.mem.Allocator,
-channel: ChannelType,
-worker: WorkerType,
+channel: Channel,
+worker: Worker,
 filters: core.Filters,
 capture_output: bool,
 stats: Stats = .{},
@@ -37,13 +37,13 @@ pub const AgentCommandRecord = @import("AgentCommandRecord.zig");
 /// var service = try Service.init(gpa, .{ .database_path = ":memory:" });
 /// ```
 pub fn init(gpa: std.mem.Allocator, config: Config) !Service {
-    const channel = try ChannelType.init(gpa);
+    const channel = try Channel.init(gpa);
     var stats: Stats = .{};
 
     return .{
         .gpa = gpa,
         .channel = channel,
-        .worker = WorkerType.init(gpa, config.database_path, &stats),
+        .worker = Worker.init(gpa, config.database_path, &stats),
         .filters = config.filters,
         .capture_output = config.capture_output,
         .stats = stats,
@@ -135,7 +135,7 @@ pub fn startSession(service: *Service, io: std.Io, request: SessionStartRequest)
 /// ```zig
 /// _ = service.finishSession(io, finished);
 /// ```
-pub fn finishSession(service: *Service, io: std.Io, finished: SessionFinishedType) bool {
+pub fn finishSession(service: *Service, io: std.Io, finished: SessionFinished) bool {
     return service.submit(io, .{ .session_finished = finished });
 }
 
@@ -144,7 +144,7 @@ pub fn finishSession(service: *Service, io: std.Io, finished: SessionFinishedTyp
 /// ```zig
 /// _ = service.setSessionTitle(io, definition);
 /// ```
-pub fn setSessionTitle(service: *Service, io: std.Io, definition: DefinitionType) bool {
+pub fn setSessionTitle(service: *Service, io: std.Io, definition: Definition) bool {
     const request = request_factory.sessionTitle(definition) catch return false;
     return service.submit(io, request);
 }
@@ -165,7 +165,7 @@ pub fn importBatch(service: *Service, io: std.Io, view: core.ImportHistoryView) 
 /// ```zig
 /// _ = service.deleteHistory(io, request);
 /// ```
-pub fn deleteHistory(service: *Service, io: std.Io, request: DeleteType) bool {
+pub fn deleteHistory(service: *Service, io: std.Io, request: Delete) bool {
     return service.submit(io, .{ .delete = request });
 }
 
@@ -174,7 +174,7 @@ pub fn deleteHistory(service: *Service, io: std.Io, request: DeleteType) bool {
 /// ```zig
 /// _ = service.pruneHistory(io, prune);
 /// ```
-pub fn pruneHistory(service: *Service, io: std.Io, prune: PruneType) bool {
+pub fn pruneHistory(service: *Service, io: std.Io, prune: Prune) bool {
     return service.submit(io, .{ .prune = prune });
 }
 
@@ -183,7 +183,7 @@ pub fn pruneHistory(service: *Service, io: std.Io, prune: PruneType) bool {
 /// ```zig
 /// _ = service.readOutput(io, request);
 /// ```
-pub fn readOutput(service: *Service, io: std.Io, request: DeleteType) bool {
+pub fn readOutput(service: *Service, io: std.Io, request: Delete) bool {
     return service.submit(io, .{ .read_output = request });
 }
 
@@ -192,7 +192,7 @@ pub fn readOutput(service: *Service, io: std.Io, request: DeleteType) bool {
 /// ```zig
 /// _ = service.statsHistory(io, query);
 /// ```
-pub fn statsHistory(service: *Service, io: std.Io, stats_query: StatsQueryType) bool {
+pub fn statsHistory(service: *Service, io: std.Io, stats_query: StatsQuery) bool {
     return service.submit(io, .{ .stats = stats_query });
 }
 
@@ -265,7 +265,7 @@ pub fn recordAgentCommand(service: *Service, io: std.Io, record: AgentCommandRec
 /// ```zig
 /// _ = service.query(io, request);
 /// ```
-pub fn query(service: *Service, io: std.Io, request: QueryType) bool {
+pub fn query(service: *Service, io: std.Io, request: Query) bool {
     return service.submit(io, .{ .query = request });
 }
 

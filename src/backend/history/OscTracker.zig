@@ -1,4 +1,4 @@
-const OscScannerType = @import("OscScanner.zig");
+const OscScanner = @import("OscScanner.zig");
 const osc_ops = @import("osc.zig");
 const std = @import("std");
 const Observation = @import("Observation.zig");
@@ -8,7 +8,7 @@ const SemanticObservation = @import("SemanticObservation.zig");
 const OscCompletion = @import("OscCompletion.zig");
 const Tracker = @This();
 
-scanner: OscScannerType = .{},
+scanner: OscScanner = .{},
 zone: Zone = .unknown,
 osc: [osc_ops.max_osc_bytes]u8 = undefined,
 osc_len: usize = 0,

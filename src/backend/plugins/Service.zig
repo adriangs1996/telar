@@ -2,10 +2,10 @@ const core = @import("telar-core");
 const std = @import("std");
 const service_support = @import("service_support.zig");
 const Worker = @import("Worker.zig");
-const ResultType = @import("Result.zig");
+const Result = @import("Result.zig");
 const InitOptions = @import("InitOptions.zig");
 const Exchange = @import("../proxy/capture/Exchange.zig");
-const ExchangeIdentityType = @import("ExchangeIdentity.zig");
+const ExchangeIdentity = @import("ExchangeIdentity.zig");
 const Frame = @import("Frame.zig");
 const protocol = @import("protocol.zig");
 const Service = @This();
@@ -14,8 +14,8 @@ gpa: std.mem.Allocator,
 io: std.Io,
 workers: [service_support.max_workers]Worker = undefined,
 worker_count: u8 = 0,
-results: std.Io.Queue(*ResultType) = undefined,
-result_storage: [service_support.queue_depth]*ResultType = undefined,
+results: std.Io.Queue(*Result) = undefined,
+result_storage: [service_support.queue_depth]*Result = undefined,
 next_event_id: std.atomic.Value(u64) = .init(1),
 
 /// Starts one actor for every configured and trusted tap plugin.
@@ -49,7 +49,7 @@ pub fn deinit(service: *Service) void {
     for (service.workers[0..service.worker_count]) |*worker| worker.stop(service.io);
     service.results.close(service.io);
     while (true) {
-        var pending: [1]*ResultType = undefined;
+        var pending: [1]*Result = undefined;
         const count = service.results.getUncancelable(service.io, &pending, 0) catch break;
         if (count == 0) {
             break;
@@ -70,7 +70,7 @@ pub fn submit(service: *Service, captured: *Exchange) void {
     }
     const event_id = service.next_event_id.fetchAdd(1, .monotonic);
     for (service.workers[0..service.worker_count]) |*worker| {
-        const identity: ExchangeIdentityType = .{ .id = event_id, .generation = worker.spec.generation };
+        const identity: ExchangeIdentity = .{ .id = event_id, .generation = worker.spec.generation };
         const frame = service.encodeFrame(captured, identity) catch continue;
         worker.submit(service.io, frame);
     }
@@ -81,7 +81,7 @@ pub fn submit(service: *Service, captured: *Exchange) void {
 /// ```zig
 /// const result = try service.receive(io);
 /// ```
-pub fn receive(service: *Service, io: std.Io) anyerror!*ResultType {
+pub fn receive(service: *Service, io: std.Io) anyerror!*Result {
     return service.results.getOne(io);
 }
 
@@ -90,7 +90,7 @@ pub fn receive(service: *Service, io: std.Io) anyerror!*ResultType {
 /// ```zig
 /// try service.authorize(result);
 /// ```
-pub fn authorize(service: *const Service, result: *const ResultType) !void {
+pub fn authorize(service: *const Service, result: *const Result) !void {
     if (result.package_index >= service.worker_count) {
         return error.PluginNotConfigured;
     }
@@ -109,7 +109,7 @@ pub fn authorize(service: *const Service, result: *const ResultType) !void {
     }
 }
 
-fn encodeFrame(service: *Service, captured: *const Exchange, identity: ExchangeIdentityType) !*Frame {
+fn encodeFrame(service: *Service, captured: *const Exchange, identity: ExchangeIdentity) !*Frame {
     const size = service_support.capturedBytes(captured) + protocol.overhead_bytes;
     const bytes = try service.gpa.alloc(u8, size);
     errdefer service.gpa.free(bytes);

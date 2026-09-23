@@ -2,8 +2,8 @@ const client = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
 const tab_rename = @import("tab_rename.zig");
-const StateType = @import("State.zig");
-const MetricsType = @import("Metrics.zig");
+const State = @import("State.zig");
+const Metrics = @import("Metrics.zig");
 const Input = @This();
 
 regions: data.GridRegions,
@@ -16,14 +16,14 @@ rename_kind: tab_rename.Kind,
 prompt: ?*const data.Prompt = null,
 path_completion: ?*const data.PathCompletionState = null,
 sidebar_snapshot: *const data.AgentSnapshot,
-sidebar_state: *StateType,
+sidebar_state: *State,
 sidebar_transparent: bool,
 sidebar_rounded_focus: bool,
 sidebar_animation_frame: u8,
 proxy_tls_active: bool,
 proxy_tls_scope: core.ProxyScope = .exact,
 proxy_system_trusted: bool = false,
-system_metrics: ?MetricsType,
+system_metrics: ?Metrics,
 status_mode: client.Mode,
 workspaces: *const data.WorkspaceListSnapshot,
 workspace_list_collapsed: bool,

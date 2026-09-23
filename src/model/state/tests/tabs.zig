@@ -3,7 +3,7 @@ const core = @import("telar-core");
 const model_data = @import("../../model.zig");
 const ClientModel = @import("../ClientModel.zig");
 const std = @import("std");
-const VersionType = @import("../Version.zig");
+const Version = @import("../Version.zig");
 const WorkspaceSnapshotInput = @import("../../workspace/WorkspaceSnapshotInput.zig");
 
 test "fresh workspace snapshots name inactive automatic tabs before pane attachment" {
@@ -190,7 +190,7 @@ test "rejected tab positions do not advance the model" {
         .tab_id = @enumFromInt(9),
     }, 0));
     try std.testing.expectError(error.InvalidTabPosition, model.applyTabPosition(location, 1));
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "tab rename advances only the collection revision for a semantic change" {
@@ -259,7 +259,7 @@ test "rejected tab renames preserve labels and revisions" {
     }));
 
     try std.testing.expectEqualStrings("shell", model_data.tab_label.text(&model, model.tabs.active));
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "tab creation advances collection and active identity revisions" {
@@ -401,7 +401,7 @@ test "rejected tab creations preserve state and revisions" {
 
     try std.testing.expectEqualDeep(first, model.activeTabLocation().?);
     try std.testing.expectEqual(@as(usize, 1), model.tabs.count);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "active tab removal advances collection and active identity revisions" {
@@ -511,7 +511,7 @@ test "workspace closure is validated before the last tab is removed" {
         .workspace_removed = false,
     }));
     try std.testing.expectEqual(@as(usize, 1), model.tabs.count);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 
     const removal = (try model.removeTab(.{
         .location = location,
@@ -573,7 +573,7 @@ test "missing tab removal captures exact tab and workspace absence" {
     try std.testing.expect(missing_workspace == .stale);
     try std.testing.expectEqualDeep(foreign, missing_workspace.stale.location);
     try std.testing.expectEqual(model_data.TabRemovalAbsence.workspace, missing_workspace.stale.absence);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "tab selection resolves identity position and wrapping offset" {

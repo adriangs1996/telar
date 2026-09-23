@@ -1,20 +1,20 @@
 //! Time-bounded facts used to project one agent's visible state.
 
 const core = @import("telar-core");
-const IdentityType = @import("Identity.zig");
-const ProxyExchangeType = @import("ProxyExchange.zig");
+const Identity = @import("Identity.zig");
+const ProxyExchange = @import("ProxyExchange.zig");
 const types = @import("types.zig");
-const ProxyObservationType = @import("ProxyObservation.zig");
+const ProxyObservation = @import("ProxyObservation.zig");
 const Evidence = @import("Evidence.zig");
 const std = @import("std");
 
 test "proxy evidence derives confidence and expiry from phase and aggregate status" {
-    const identity: IdentityType = .{
+    const identity: Identity = .{
         .key = .{ .id = try core.pane(7), .generation = 3 },
         .process_id = 42,
         .session_id = .{0xa5} ** 16,
     };
-    const exchange: ProxyExchangeType = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
+    const exchange: ProxyExchange = .{ .protocol = .h2, .connection_id = 7, .stream_id = 1 };
     const observed_at_ms: i64 = 100;
     const expectations = [_]struct {
         phase: types.ProxyPhase,
@@ -31,7 +31,7 @@ test "proxy evidence derives confidence and expiry from phase and aggregate stat
     };
 
     for (expectations) |expectation| {
-        const observation: ProxyObservationType = .{
+        const observation: ProxyObservation = .{
             .identity = identity,
             .dialect = .anthropic_messages,
             .phase = expectation.phase,

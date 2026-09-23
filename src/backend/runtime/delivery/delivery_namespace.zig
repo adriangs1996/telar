@@ -2,9 +2,9 @@
 
 const core_module = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
-const QueryResultType = @import("../../history/QueryResult.zig");
-const OutputResultType = @import("../../history/OutputResult.zig");
-const StatsResultType = @import("../../history/StatsResult.zig");
+const QueryResult = @import("../../history/QueryResult.zig");
+const OutputResult = @import("../../history/OutputResult.zig");
+const StatsResult = @import("../../history/StatsResult.zig");
 const AttachmentWork = @import("AttachmentWork.zig");
 const Transaction = @import("Transaction.zig");
 const Completion = @import("Completion.zig");
@@ -13,8 +13,8 @@ const Delivery = @import("Delivery.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
-const TrackerType = @import("../../agent/Tracker.zig");
-const SamplerType = @import("../observability/Sampler.zig");
+const Tracker = @import("../../agent/Tracker.zig");
+const Sampler = @import("../observability/Sampler.zig");
 const Sources = @import("Sources.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
 const ForegroundProjection = @import("ForegroundProjection.zig");
@@ -23,9 +23,9 @@ pub const Effect = union(enum) {
     stopping,
     response: struct {
         offset: u8,
-        history_result: ?*QueryResultType,
-        history_output: ?*OutputResultType,
-        history_stats: ?*StatsResultType,
+        history_result: ?*QueryResult,
+        history_output: ?*OutputResult,
+        history_stats: ?*StatsResult,
         agent_history: ?*@import("OwnedAgentHistoryPage.zig") = null,
         change_review: ?*ReviewResult = null,
     },
@@ -276,8 +276,8 @@ test "delivery preserves management before resync wire order" {
     defer attachments.deinit();
     var panes: PaneStore = .{};
     var workspaces: Workspaces = .{};
-    var agents: TrackerType = .{};
-    var system_metrics: SamplerType = .{};
+    var agents: Tracker = .{};
+    var system_metrics: Sampler = .{};
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
     const workspace: core_module.WorkspaceLocation = .{
         .workspace = try core_module.workspace(7),
@@ -326,8 +326,8 @@ test "agent conversation delivery coalesces revisions independently for reconnec
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
     var panes: PaneStore = .{};
     var workspaces: Workspaces = .{};
-    var agents: TrackerType = .{};
-    var system_metrics: SamplerType = .{};
+    var agents: Tracker = .{};
+    var system_metrics: Sampler = .{};
     var snapshot: core_module.AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 8, .revision = 1, .status = .ready };
     var pane: @import("../../pane/Pane.zig") = undefined;
     pane.id = snapshot.pane_id;

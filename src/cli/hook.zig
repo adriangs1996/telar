@@ -13,11 +13,11 @@ const PiHookInput = @import("PiHookInput.zig");
 const Report = @import("Report.zig");
 const ClaudeHookInput = @import("ClaudeHookInput.zig");
 const CodexHookInput = @import("CodexHookInput.zig");
-const HookOptionsType = @import("arguments/HookOptions.zig");
+const HookOptions = @import("arguments/HookOptions.zig");
 const control = @import("control.zig");
 const Target = @import("Target.zig");
 const Reports = @import("Reports.zig");
-const SessionType = @import("Session.zig");
+const Session = @import("Session.zig");
 const hook_event = @import("hook_event.zig");
 
 pub const max_input_bytes = 64 * 1024;
@@ -298,7 +298,7 @@ pub fn mapCodexHook(input: CodexHookInput, buffer: *hook_event.Buffer) ?Report {
 /// ```zig
 /// try hook.run(process_init, options);
 /// ```
-pub fn run(init: std.process.Init, options: HookOptionsType) !void {
+pub fn run(init: std.process.Init, options: HookOptions) !void {
     const environ = init.minimal.environ;
     const pane_id = control.currentPaneId(environ) catch return;
     const generation_text = std.process.Environ.getPosix(environ, "TELAR_PANE_GENERATION") orelse return;
@@ -387,7 +387,7 @@ fn sendReports(init: std.process.Init, target: Target, reports: Reports) void {
 
     // Attach only. The pane environment survives a stopped runtime, and a
     // hook that started one would resurrect it from every orphaned agent.
-    var session = SessionType.attach(init, target.socket) catch return;
+    var session = Session.attach(init, target.socket) catch return;
     defer session.close();
     const pane = target.pane;
     if (reports.lifecycle) |lifecycle| {

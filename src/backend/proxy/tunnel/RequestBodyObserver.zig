@@ -1,10 +1,10 @@
 const Observer = @import("../provider/Observer.zig");
-const HalfType = @import("../capture/Half.zig");
+const Half = @import("../capture/Half.zig");
 const Fragment = @import("../http/Fragment.zig");
 const RequestBodyObserver = @This();
 
 request: *Observer,
-capture_half: ?*HalfType = null,
+capture_half: ?*Half = null,
 
 /// Feeds one already-forwarded payload fragment to request classification.
 ///

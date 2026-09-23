@@ -1,6 +1,6 @@
-const PaneKeyType = @import("../../pane/PaneKey.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
 const Completion = @This();
 
-pane: PaneKeyType,
+pane: PaneKey,
 started_ns: u64,
 result: anyerror!void,

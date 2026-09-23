@@ -3,10 +3,10 @@
 //! settlement pending confirmation by a newer, complete idle screen. Active
 //! tool reports and intermediate model responses never announce completion.
 
-const CapabilitiesType = @import("Capabilities.zig");
+const Capabilities = @import("Capabilities.zig");
 const std = @import("std");
 
-pub const capabilities: CapabilitiesType = .{
+pub const capabilities: Capabilities = .{
     .completion_requires_agent_signal = true,
     .resume_prefix = "codex resume ",
     .ready_prompt_settles_report = true,

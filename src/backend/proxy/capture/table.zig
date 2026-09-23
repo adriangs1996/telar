@@ -1,10 +1,10 @@
 //! Runtime-side pairing table for independently published capture halves.
 
 const Exchange = @import("Exchange.zig");
-const HalfType = @import("Half.zig");
-const QuotaType = @import("Quota.zig");
+const Half = @import("Half.zig");
+const Quota = @import("Quota.zig");
 const buffer = @import("buffer_support.zig");
-const CredentialType = @import("../Credential.zig");
+const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
 const std = @import("std");
 const Joiner = @import("Joiner.zig");
@@ -17,21 +17,21 @@ pub const PushResult = union(enum) {
     partial: Exchange,
 };
 
-pub fn sideExchange(half: *HalfType) Exchange {
+pub fn sideExchange(half: *Half) Exchange {
     return switch (half.side) {
         .request => .{ .request = half },
         .response => .{ .response = half },
     };
 }
 
-fn testHalf(quota: *QuotaType, side: buffer.Side) *HalfType {
-    const credential: CredentialType = .{
+fn testHalf(quota: *Quota, side: buffer.Side) *Half {
+    const credential: Credential = .{
         .pane_id = @enumFromInt(7),
         .pane_generation = 1,
         .token = .{0x5a} ** identity.token_bytes,
     };
 
-    return HalfType.create(.{
+    return Half.create(.{
         .gpa = std.testing.allocator,
         .quota = quota,
         .config = .{
@@ -51,7 +51,7 @@ fn testHalf(quota: *QuotaType, side: buffer.Side) *HalfType {
 }
 
 test "joiner pairs independently delivered request and response halves" {
-    var quota = QuotaType.init(16);
+    var quota = Quota.init(16);
     var joiner = Joiner.init(30);
     defer joiner.deinit();
 
@@ -66,7 +66,7 @@ test "joiner pairs independently delivered request and response halves" {
 }
 
 test "joiner returns a partial exchange only after its deadline" {
-    var quota = QuotaType.init(16);
+    var quota = Quota.init(16);
     var joiner = Joiner.init(30);
     defer joiner.deinit();
 

@@ -4,7 +4,7 @@ const client = @import("telar-client");
 const data = @import("model");
 const std = @import("std");
 const Selection = @import("Selection.zig");
-const ConfigCheckOptionsType = @import("arguments/ConfigCheckOptions.zig");
+const ConfigCheckOptions = @import("arguments/ConfigCheckOptions.zig");
 const ResolvedSelection = @import("ResolvedSelection.zig");
 
 /// Loads one config generation or returns null when configuration is disabled
@@ -51,7 +51,7 @@ pub fn loadGeneration(init: std.process.Init, selection: Selection, path_buffer:
 /// ```zig
 /// try config.runCheck(process_init, options);
 /// ```
-pub fn runCheck(init: std.process.Init, options: ConfigCheckOptionsType) !void {
+pub fn runCheck(init: std.process.Init, options: ConfigCheckOptions) !void {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = if (options.path) |value|
         std.mem.span(value)

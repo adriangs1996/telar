@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const widget = @import("context_support.zig");
 const modal = @import("modal.zig");
 const ModalInput = @import("ModalInput.zig");
@@ -15,7 +15,7 @@ pub const shelf_height: u16 = 6;
 pub const shelf_minimum_height: u16 = 3;
 pub const pane_minimum_height: u16 = 3;
 
-pub fn renderShelf(context: *ContextType, area: core.Rect, snapshot: *const client.AttachmentSnapshot) client.Plan {
+pub fn renderShelf(context: *Context, area: core.Rect, snapshot: *const client.AttachmentSnapshot) client.Plan {
     var plan: client.Plan = .{};
     if (area.isEmpty() or snapshot.len == 0) {
         return plan;
@@ -90,7 +90,7 @@ pub fn modalArea(application: core.Rect) core.Rect {
 /// ```zig
 /// const area = renderModal(context, input);
 /// ```
-pub fn renderModal(context: *ContextType, input: ModalInput) core.Rect {
+pub fn renderModal(context: *Context, input: ModalInput) core.Rect {
     const id = input.snapshot.modal orelse return .{};
     const area = modalArea(input.application);
     if (area.isEmpty()) {
@@ -137,7 +137,7 @@ test "shelf publishes one bounded image placement and two hit targets" {
     var buffer = try core.Buffer.init(std.testing.allocator, 40, 8);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,
@@ -155,7 +155,7 @@ test "cell modal draws a connected border" {
     defer buffer.deinit();
     var hits: widget.Hits = .{};
     const palette = &data.theme_support.default_theme.palette;
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = palette,
@@ -191,7 +191,7 @@ test "graphical modal leaves corner cells to its rounded frame" {
     buffer.fill(buffer.area(), .{ .glyph = ".", .style = .{} });
     var hits: widget.Hits = .{};
     const palette = &data.theme_support.default_theme.palette;
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = palette,

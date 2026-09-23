@@ -1,6 +1,6 @@
-const ImageType = @import("Image.zig");
+const Image = @import("Image.zig");
 const SharedTransmission = @This();
 
 image_id: u32,
-image: ImageType,
+image: Image,
 name: []const u8,

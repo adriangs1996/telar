@@ -4,9 +4,9 @@ const std = @import("std");
 const TunnelOptions = @import("TunnelOptions.zig");
 const head_support = @import("../http/head_support.zig");
 const tunnel_namespace = @import("tunnel_namespace.zig");
-const ExchangeType = @import("Exchange.zig");
+const Exchange = @import("Exchange.zig");
 const dialect_module = @import("../provider/dialect.zig");
-const EstablisherType = @import("Establisher.zig");
+const Establisher = @import("Establisher.zig");
 const H2Connection = @import("H2Connection.zig");
 const Http1Connection = @import("Http1Connection.zig");
 const Tunnel = @This();
@@ -58,7 +58,7 @@ pub fn run(tunnel: *Tunnel) std.Io.Cancelable!void {
     defer std.crypto.secureZero(u8, &authenticated.credential.token);
 
     const target = authenticated.target;
-    var exchange: ExchangeType = .{
+    var exchange: Exchange = .{
         .io = io,
         .pipeline = dependencies.pipeline,
         .telemetry = dependencies.tls.telemetry,
@@ -79,7 +79,7 @@ pub fn run(tunnel: *Tunnel) std.Io.Cancelable!void {
     defer upstream.close(io);
     tunnel_namespace.reply(io, tunnel.child, "HTTP/1.1 200 Connection Established\r\n\r\n");
 
-    var tls_establisher: EstablisherType = .{
+    var tls_establisher: Establisher = .{
         .resources = dependencies.tls,
         .exchange = &exchange,
     };

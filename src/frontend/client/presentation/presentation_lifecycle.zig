@@ -7,7 +7,7 @@ const common = @import("telar-client");
 
 const TerminalClient = @import("../TerminalClient.zig");
 const presentation_projection = @import("presentation_projection.zig");
-const OutputType = @import("../resources/Output.zig");
+const Output = @import("../resources/Output.zig");
 
 /// Publishes every revision the presenter uses after one client event commits.
 ///
@@ -115,7 +115,7 @@ pub fn pumpOutput(terminal: *TerminalClient) anyerror!void {
         return;
     }
 
-    try terminal.inbox.start(.host_written, .{ OutputType.write, .{work} });
+    try terminal.inbox.start(.host_written, .{ Output.write, .{work} });
 }
 
 /// Commits only the presentation whose bytes reached the host, then folds work.

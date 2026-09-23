@@ -1,13 +1,13 @@
-const PipelineType = @import("../Pipeline.zig");
-const ChannelType = @import("../Channel.zig");
+const Pipeline = @import("../Pipeline.zig");
+const Channel = @import("../Channel.zig");
 const CredentialGate = @import("../CredentialGate.zig");
 const std = @import("std");
 const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const ObservationQueueMetrics = @import("../ObservationQueueMetrics.zig");
 const Observations = @This();
 
-pipeline_value: PipelineType,
-channel: ChannelType,
+pipeline_value: Pipeline,
+channel: Channel,
 
 /// Wires one bounded channel into a fresh publication pipeline. The
 /// component must already be at its final address because the pipeline
@@ -49,7 +49,7 @@ pub fn receive(observations: *Observations, io: std.Io) anyerror!MiddlewareEvent
 /// ```zig
 /// const pipeline = observations.pipeline();
 /// ```
-pub fn pipeline(observations: *const Observations) *const PipelineType {
+pub fn pipeline(observations: *const Observations) *const Pipeline {
     return &observations.pipeline_value;
 }
 

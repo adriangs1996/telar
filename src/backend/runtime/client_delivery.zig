@@ -8,7 +8,7 @@ const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
-const PaneType = @import("../pane/Pane.zig");
+const Pane = @import("../pane/Pane.zig");
 const change_review = @import("change_review.zig");
 const agent_snapshot = @import("agent_snapshot.zig");
 const Sources = @import("delivery/Sources.zig");
@@ -177,7 +177,7 @@ fn scheduleCellPublication(model: *RuntimeModel) !void {
 
 /// Clears a rendered pane's damage once every attached client observed its
 /// current cells. Only this pane's observers are visited.
-fn settleDamage(model: *RuntimeModel, pane: *PaneType) void {
+fn settleDamage(model: *RuntimeModel, pane: *Pane) void {
     if (!pane.dirty or pane.render_pending) {
         return;
     }

@@ -5,7 +5,7 @@
 const core = @import("telar-core");
 const HistoryPaletteState = @import("HistoryPaletteState.zig");
 const std = @import("std");
-const PageResultType = @import("PageResult.zig");
+const PageResult = @import("PageResult.zig");
 
 pub const max_command_bytes = 512;
 pub const max_entry_cwd_bytes = 256;
@@ -36,7 +36,7 @@ test "page results commit metadata once and stale replies cannot alter it" {
     try std.testing.expectEqual(core.HistoryScope.cwd, state.effective_scope);
     try std.testing.expect(state.beginPageRequest(2, .workspace));
     const before = state.revision;
-    const page: PageResultType = .{ .request_id = 2, .entries = &.{}, .snapshot_id = 30, .has_more = true, .now_ms = 100 };
+    const page: PageResult = .{ .request_id = 2, .entries = &.{}, .snapshot_id = 30, .has_more = true, .now_ms = 100 };
     var stale = page;
     stale.request_id = 1;
     stale.snapshot_id = 99;

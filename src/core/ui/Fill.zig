@@ -1,5 +1,5 @@
-const StyleType = @import("Style.zig");
+const Style = @import("Style.zig");
 const Fill = @This();
 
 glyph: []const u8 = " ",
-style: StyleType = .{},
+style: Style = .{},

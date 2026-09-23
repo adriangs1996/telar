@@ -1,11 +1,11 @@
 const FakeSession = @import("FakeSession.zig");
 const request_support = @import("../provider/request_support.zig");
 const std = @import("std");
-const RequestHeadType = @import("RequestHead.zig");
+const RequestHead = @import("RequestHead.zig");
 const http = @import("http.zig");
 const types = @import("types.zig");
 const IgnoreTestObserver = @import("IgnoreTestObserver.zig");
-const ResponseHeadType = @import("ResponseHead.zig");
+const ResponseHead = @import("ResponseHead.zig");
 const connection_module = @import("connection.zig");
 const ConnectionIntegration = @This();
 
@@ -21,7 +21,7 @@ pub fn io(_: *ConnectionIntegration) std.Io {
     return std.testing.io;
 }
 
-pub fn readRequest(context: *ConnectionIntegration) ?RequestHeadType {
+pub fn readRequest(context: *ConnectionIntegration) ?RequestHead {
     const parsed = http.relayHead(&context.session, .{
         .from = .child,
         .to = .origin,
@@ -45,7 +45,7 @@ pub fn relayRequestBody(context: *ConnectionIntegration, plan: types.BodyPlan) b
     );
 }
 
-pub fn relayResponse(context: *ConnectionIntegration, request: RequestHeadType) ?ResponseHeadType {
+pub fn relayResponse(context: *ConnectionIntegration, request: RequestHead) ?ResponseHead {
     while (true) {
         const parsed = http.relayHead(&context.session, .{
             .from = .origin,
@@ -75,16 +75,16 @@ pub fn relayResponse(context: *ConnectionIntegration, request: RequestHeadType) 
     }
 }
 
-pub fn exchange(context: *ConnectionIntegration, request: RequestHeadType) connection_module.ExchangeOutcome {
+pub fn exchange(context: *ConnectionIntegration, request: RequestHead) connection_module.ExchangeOutcome {
     return http.IntegrationExchange.execute(context, request);
 }
 
-pub fn publishRequest(context: *ConnectionIntegration, request: RequestHeadType) void {
+pub fn publishRequest(context: *ConnectionIntegration, request: RequestHead) void {
     context.request_classes[context.request_count] = request.classification;
     context.request_count += 1;
 }
 
-pub fn publishResponse(context: *ConnectionIntegration, response: ResponseHeadType) void {
+pub fn publishResponse(context: *ConnectionIntegration, response: ResponseHead) void {
     context.response_statuses[context.response_count] = response.status_code;
     context.response_count += 1;
 }

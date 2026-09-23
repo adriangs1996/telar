@@ -3,8 +3,8 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
 const std = @import("std");
-const ServerOptionsType = @import("arguments/ServerOptions.zig");
-const RuntimeConnectorType = @import("RuntimeConnector.zig");
+const ServerOptions = @import("arguments/ServerOptions.zig");
+const RuntimeConnector = @import("RuntimeConnector.zig");
 const HistoryPath = @import("HistoryPath.zig");
 const ServerPreparation = @import("ServerPreparation.zig");
 const config = @import("config.zig");
@@ -14,8 +14,8 @@ const plugin_cli = @import("plugin.zig");
 const Launch = @This();
 
 process: std.process.Init,
-options: ServerOptionsType,
-connector: RuntimeConnectorType,
+options: ServerOptions,
+connector: RuntimeConnector,
 config_generation: ?*client.Generation = null,
 config_path_buffer: [std.fs.max_path_bytes]u8 = undefined,
 configured_history_buffer: [std.fs.max_path_bytes]u8 = undefined,

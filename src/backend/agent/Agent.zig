@@ -4,12 +4,12 @@
 //! one pane generation crosses this type.
 
 const core = @import("telar-core");
-const JobType = @import("Job.zig");
+const Job = @import("Job.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const Evidence = @import("Evidence.zig");
 const ProxyState = @import("ProxyState.zig");
 const Title = @import("Title.zig");
-const SessionReferenceType = @import("SessionReference.zig");
+const SessionReference = @import("SessionReference.zig");
 const Identity = @import("Identity.zig");
 const ProcessObservation = @import("ProcessObservation.zig");
 const ProxyObservation = @import("ProxyObservation.zig");
@@ -18,9 +18,9 @@ const ReportObservation = @import("ReportObservation.zig");
 const ScreenObservation = @import("ScreenObservation.zig");
 const std = @import("std");
 const description = @import("description.zig");
-const ResultType = @import("Result.zig");
+const Result = @import("Result.zig");
 const DescriptionFinished = @import("DescriptionFinished.zig");
-const SessionTitleType = @import("SessionTitle.zig");
+const SessionTitle = @import("SessionTitle.zig");
 const types = @import("types.zig");
 const ProxyExchange = @import("ProxyExchange.zig");
 const ReportDetail = @import("ReportDetail.zig");
@@ -39,7 +39,7 @@ pub const ProjectionResult = enum {
 pub const DescriptionJobResult = union(enum) {
     not_queued,
     failed,
-    started: JobType,
+    started: Job,
 };
 
 pub const TitlePhase = enum {
@@ -74,7 +74,7 @@ title: Title = .{},
 /// False from a completed turn until a client acknowledges it; the projection
 /// reports `done` instead of `ready` while unseen.
 seen: bool = true,
-session_reference: ?SessionReferenceType = null,
+session_reference: ?SessionReference = null,
 projected: core.AgentSnapshotEntry,
 
 /// Creates the candidate aggregate for one exact pane generation.
@@ -477,7 +477,7 @@ pub fn projectedStatus(agent: *const Agent) core.AgentStatus {
 /// ```zig
 /// if (agent.applySessionReference(reference)) persist();
 /// ```
-pub fn applySessionReference(agent: *Agent, reference: SessionReferenceType) bool {
+pub fn applySessionReference(agent: *Agent, reference: SessionReference) bool {
     if (agent.session_reference) |existing| {
         if (std.mem.eql(u8, existing.slice(), reference.slice())) {
             return false;
@@ -578,7 +578,7 @@ pub fn startDescriptionJob(agent: *Agent) DescriptionJobResult {
         return .failed;
     };
 
-    var job: JobType = .{
+    var job: Job = .{
         .pane = agent.key,
         .session_id = agent.session_id,
         .provider = agent.provider(),
@@ -597,7 +597,7 @@ pub fn startDescriptionJob(agent: *Agent) DescriptionJobResult {
 /// ```zig
 /// const finished = agent.finishDescription(&result) orelse return;
 /// ```
-pub fn finishDescription(agent: *Agent, result: *const ResultType) ?DescriptionFinished {
+pub fn finishDescription(agent: *Agent, result: *const Result) ?DescriptionFinished {
     if (!agent.matches(result.pane) or agent.title.phase != .running or
         !std.mem.eql(u8, &agent.session_id, &result.session_id))
     {
@@ -687,7 +687,7 @@ pub fn reportTitle(agent: *Agent, value: []const u8) !bool {
 /// ```zig
 /// agent.restoreTitle(title);
 /// ```
-pub fn restoreTitle(agent: *Agent, title: SessionTitleType) void {
+pub fn restoreTitle(agent: *Agent, title: SessionTitle) void {
     agent.applyReadyTitle(title.slice(), title.source);
 }
 
@@ -697,12 +697,12 @@ pub fn restoreTitle(agent: *Agent, title: SessionTitleType) void {
 /// ```zig
 /// const title = agent.durableTitle() orelse return;
 /// ```
-pub fn durableTitle(agent: *const Agent) ?SessionTitleType {
+pub fn durableTitle(agent: *const Agent) ?SessionTitle {
     if (agent.title.state != .ready) {
         return null;
     }
 
-    return SessionTitleType.init(agent.title.slice(), agent.title.source) catch null;
+    return SessionTitle.init(agent.title.slice(), agent.title.source) catch null;
 }
 
 fn applyReadyTitle(agent: *Agent, value: []const u8, source: core.AgentTitleSource) void {

@@ -4,10 +4,10 @@ const types = @import("../types.zig");
 const id = @import("../id.zig");
 const CreateWorkspace = @import("CreateWorkspace.zig");
 const codec = @import("../codec.zig");
-const EncoderType = @import("../Encoder.zig");
+const Encoder = @import("../Encoder.zig");
 const tags = @import("tags.zig");
 const launch_mod = @import("launch.zig");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const CreateWorkspaceView = @import("CreateWorkspaceView.zig");
 const RenameWorkspace = @import("RenameWorkspace.zig");
 const RequestWorkspaceSnapshot = @import("RequestWorkspaceSnapshot.zig");
@@ -39,7 +39,7 @@ pub fn encodeCreateWorkspace(buffer: []u8, message: CreateWorkspace) ![]const u8
     try codec.validateRequestId(message.request_id);
     try message.size.validate();
     try codec.validateTabLabel(message.name, false);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.create_workspace));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try codec.encodeSize(&encoder, message.size);
@@ -49,7 +49,7 @@ pub fn encodeCreateWorkspace(buffer: []u8, message: CreateWorkspace) ![]const u8
     return encoder.finish();
 }
 
-pub fn decodeCreateWorkspace(decoder: *DecoderType) !CreateWorkspaceView {
+pub fn decodeCreateWorkspace(decoder: *Decoder) !CreateWorkspaceView {
     const request_id = try id.request(try decoder.readInt(u64));
     const size = try codec.decodeSize(decoder);
     const name = try decoder.readSized16();
@@ -71,7 +71,7 @@ pub fn decodeCreateWorkspace(decoder: *DecoderType) !CreateWorkspaceView {
 pub fn encodeRenameWorkspace(buffer: []u8, message: RenameWorkspace) ![]const u8 {
     try codec.validateRequestId(message.request_id);
     try codec.validateTabLabel(message.name, false);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.rename_workspace));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try codec.encodeWorkspaceLocation(&encoder, message.workspace);
@@ -79,7 +79,7 @@ pub fn encodeRenameWorkspace(buffer: []u8, message: RenameWorkspace) ![]const u8
     return encoder.finish();
 }
 
-pub fn decodeRenameWorkspace(decoder: *DecoderType) !RenameWorkspace {
+pub fn decodeRenameWorkspace(decoder: *Decoder) !RenameWorkspace {
     const request_id = try id.request(try decoder.readInt(u64));
     const workspace = try codec.decodeWorkspaceLocation(decoder);
     const name = try decoder.readSized16();
@@ -101,7 +101,7 @@ pub fn encodeWorkspaceSnapshot(buffer: []u8, message: WorkspaceSnapshot) ![]cons
     if (message.tabs.len > types.max_tabs_per_workspace) {
         return error.TooManyTabs;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.workspace_snapshot));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try codec.encodeWorkspaceLocation(&encoder, message.workspace);
@@ -143,7 +143,7 @@ pub fn encodeWorkspaceSnapshot(buffer: []u8, message: WorkspaceSnapshot) ![]cons
     return encoder.finish();
 }
 
-pub fn decodeWorkspaceSnapshot(decoder: *DecoderType) !WorkspaceSnapshotView {
+pub fn decodeWorkspaceSnapshot(decoder: *Decoder) !WorkspaceSnapshotView {
     const request_id = try id.request(try decoder.readInt(u64));
     const workspace = try codec.decodeWorkspaceLocation(decoder);
     const name = try decoder.readSized16();
@@ -210,7 +210,7 @@ pub fn encodeWorkspaceList(buffer: []u8, message: WorkspaceList) ![]const u8 {
     if (message.entries.len > types.max_workspace_list_entries) {
         return error.TooManyWorkspaces;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.workspace_list));
     try encoder.writeInt(u64, message.revision);
     try encoder.writeInt(u16, @intCast(message.entries.len));
@@ -239,7 +239,7 @@ pub fn encodeWorkspaceList(buffer: []u8, message: WorkspaceList) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeWorkspaceList(decoder: *DecoderType) !WorkspaceListView {
+pub fn decodeWorkspaceList(decoder: *Decoder) !WorkspaceListView {
     const revision = try decoder.readInt(u64);
     if (revision == 0) {
         return error.InvalidWorkspaceListRevision;
@@ -266,7 +266,7 @@ pub fn decodeWorkspaceList(decoder: *DecoderType) !WorkspaceListView {
     };
 }
 
-pub fn decodeWorkspaceListEntry(decoder: *DecoderType) !WorkspaceListEntry {
+pub fn decodeWorkspaceListEntry(decoder: *Decoder) !WorkspaceListEntry {
     const workspace = try id.workspace(try decoder.readInt(u64));
     const name = try decoder.readSized16();
     try codec.validateBytes(name, types.max_workspace_name_bytes, false);

@@ -1,6 +1,6 @@
-const ConfigType = @import("Config.zig");
-const CredentialGateType = @import("../CredentialGate.zig");
+const Config = @import("Config.zig");
+const CredentialGate = @import("../CredentialGate.zig");
 const InitOptions = @This();
 
-config: ConfigType,
-gate: CredentialGateType,
+config: Config,
+gate: CredentialGate,

@@ -1,8 +1,8 @@
 const revisions = @import("../revisions.zig");
 const core = @import("telar-core");
 const Pane = @import("Pane.zig");
-const GraphicsLimitsType = @import("../media/GraphicsLimits.zig");
-const GraphicsBudgetType = @import("../media/GraphicsBudget.zig");
+const GraphicsLimits = @import("../media/GraphicsLimits.zig");
+const GraphicsBudget = @import("../media/GraphicsBudget.zig");
 const std = @import("std");
 const PaneKey = @import("PaneKey.zig");
 const exit_module = @import("../pty/exit.zig");
@@ -25,8 +25,8 @@ next_generation: u64 = 1,
 /// Advances when a pane joins, leaves or exits and when a flow changes pane
 /// metadata other projections read (cwd). Zero stays unseen.
 revision: u64 = 1,
-graphics_limits: GraphicsLimitsType = .{},
-graphics_budget: GraphicsBudgetType = .init(core.max_image_bytes_global),
+graphics_limits: GraphicsLimits = .{},
+graphics_budget: GraphicsBudget = .init(core.max_image_bytes_global),
 
 pub fn find(store: *PaneStore, pane_id: core.PaneId) ?*Pane {
     const slot = store.index.get(core.raw(pane_id)) orelse return null;

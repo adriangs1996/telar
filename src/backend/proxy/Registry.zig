@@ -1,12 +1,12 @@
 const core = @import("telar-core");
 const std = @import("std");
-const CredentialType = @import("Credential.zig");
+const Credential = @import("Credential.zig");
 const credential_registry = @import("credential_registry.zig");
 const PaneGeneration = @import("PaneGeneration.zig");
 const Registry = @This();
 
 mutex: std.Io.Mutex = .init,
-slots: [core.max_agent_snapshot_entries]?CredentialType = @splat(null),
+slots: [core.max_agent_snapshot_entries]?Credential = @splat(null),
 
 /// Copies one live capability into bounded registry storage. Exact
 /// duplicate credentials are rejected.
@@ -14,11 +14,11 @@ slots: [core.max_agent_snapshot_entries]?CredentialType = @splat(null),
 /// ```zig
 /// try registry.register(io, &credential);
 /// ```
-pub fn register(registry: *Registry, io: std.Io, credential: *const CredentialType) !void {
+pub fn register(registry: *Registry, io: std.Io, credential: *const Credential) !void {
     registry.mutex.lockUncancelable(io);
     defer registry.mutex.unlock(io);
 
-    var free: ?*?CredentialType = null;
+    var free: ?*?Credential = null;
 
     for (&registry.slots) |*slot| {
         if (slot.*) |*existing| {
@@ -39,7 +39,7 @@ pub fn register(registry: *Registry, io: std.Io, credential: *const CredentialTy
 /// ```zig
 /// registry.remove(io, &credential);
 /// ```
-pub fn remove(registry: *Registry, io: std.Io, credential: *const CredentialType) void {
+pub fn remove(registry: *Registry, io: std.Io, credential: *const Credential) void {
     registry.mutex.lockUncancelable(io);
     defer registry.mutex.unlock(io);
 
@@ -81,7 +81,7 @@ pub fn removePane(registry: *Registry, io: std.Io, pane: PaneGeneration) void {
 ///     rejectTunnel();
 /// }
 /// ```
-pub fn contains(registry: *Registry, io: std.Io, credential: *const CredentialType) bool {
+pub fn contains(registry: *Registry, io: std.Io, credential: *const Credential) bool {
     registry.mutex.lockUncancelable(io);
     defer registry.mutex.unlock(io);
 

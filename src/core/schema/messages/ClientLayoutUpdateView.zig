@@ -1,11 +1,11 @@
-const TabLocationType = @import("../TabLocation.zig");
+const TabLocation = @import("../TabLocation.zig");
 const ClientTabLayoutIterator = @import("ClientTabLayoutIterator.zig");
 const ClientLayoutUpdateView = @This();
 
 sidebar_visible: bool,
 sidebar_width: u16,
 workspace_list_collapsed: bool,
-active_tab: TabLocationType,
+active_tab: TabLocation,
 tab_count: u16,
 encoded_tabs: []const u8,
 

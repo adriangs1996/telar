@@ -4,21 +4,21 @@
 //! middleware headers, applies the bounded pipeline, re-encodes the result, and
 //! accepts it only when HTTP framing and connection semantics stay unchanged.
 
-const HeadType = @import("Head.zig");
-const HeadersType = @import("../Headers.zig");
+const Head = @import("Head.zig");
+const Headers = @import("../Headers.zig");
 const head = @import("head_support.zig");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
 const Encoding = @import("Encoding.zig");
 const TestDecisionInput = @import("TestDecisionInput.zig");
-const TransformationType = @import("../Transformation.zig");
-const TransformPipelineType = @import("../TransformPipeline.zig");
+const Transformation = @import("../Transformation.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
 const request_support = @import("../provider/request_support.zig");
 
 pub const Decision = union(enum) {
     preserve,
     replace: struct {
-        head: HeadType,
+        head: Head,
         len: usize,
     },
 };
@@ -40,7 +40,7 @@ pub fn decide(input: Input) Decision {
     const response_to_head = input.response_to_head;
     const output = input.output;
 
-    var headers: HeadersType = .{};
+    var headers: Headers = .{};
     const start_line = parseHeaders(original, is_response, &headers) orelse return .preserve;
     if (!input.pipeline.apply(.{ .io = input.io, .context = input.context, .headers = &headers })) {
         return .preserve;
@@ -59,14 +59,14 @@ pub fn decide(input: Input) Decision {
     return .{ .replace = .{ .head = transformed, .len = len } };
 }
 
-fn compatible(original: HeadType, transformed: HeadType) bool {
+fn compatible(original: Head, transformed: Head) bool {
     return std.meta.eql(original.framing, transformed.framing) and
         original.message.informational == transformed.message.informational and
         original.message.upgrade == transformed.message.upgrade and
         original.message.closes == transformed.message.closes;
 }
 
-fn parseHeaders(bytes: []const u8, is_response: bool, headers: *HeadersType) ?[]const u8 {
+fn parseHeaders(bytes: []const u8, is_response: bool, headers: *Headers) ?[]const u8 {
     const first_line_end = std.mem.indexOf(u8, bytes, "\r\n") orelse return null;
     const start_line = bytes[0..first_line_end];
     if (is_response) {
@@ -151,7 +151,7 @@ fn encodeHead(encoding: Encoding) ?usize {
     return len;
 }
 
-fn hasOneNonemptyHeader(headers: *const HeadersType, wanted: []const u8) bool {
+fn hasOneNonemptyHeader(headers: *const Headers, wanted: []const u8) bool {
     var count: usize = 0;
     for (headers.fields[0..headers.len]) |field| {
         if (!std.ascii.eqlIgnoreCase(headers.name(field), wanted)) {
@@ -207,13 +207,13 @@ fn testDecision(input: TestDecisionInput) Decision {
 
 test "a safe header transformation produces a replacement" {
     const AddHeader = struct {
-        fn apply(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
+        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
             transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = AddHeader.apply });
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
@@ -232,12 +232,12 @@ test "a safe header transformation produces a replacement" {
 
 test "a transformer without effects preserves the original" {
     const NoEffects = struct {
-        fn apply(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+        fn apply(_: *anyopaque, _: Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = NoEffects.apply });
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
@@ -247,13 +247,13 @@ test "a transformer without effects preserves the original" {
 
 test "a transformation cannot change body framing" {
     const ChangeLength = struct {
-        fn apply(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
+        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
             transformation.effects.set(.{ .name = "content-length", .value = "5" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = ChangeLength.apply });
     const original = "POST /upload HTTP/1.1\r\nHost: example.test\r\nContent-Length: 4\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
@@ -263,13 +263,13 @@ test "a transformation cannot change body framing" {
 
 test "invalid transformed request lines preserve the original" {
     const InvalidMethod = struct {
-        fn apply(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
+        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
             transformation.effects.set(.{ .name = ":method", .value = "NOT VALID" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = InvalidMethod.apply });
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;
@@ -279,13 +279,13 @@ test "invalid transformed request lines preserve the original" {
 
 test "an encoded head that exceeds the output bound is preserved" {
     const AddHeader = struct {
-        fn apply(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
+        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
             transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = AddHeader.apply });
     const original = "GET / HTTP/1.1\r\nHost: example.test\r\n\r\n";
     var output: [8]u8 = undefined;
@@ -295,14 +295,14 @@ test "an encoded head that exceeds the output bound is preserved" {
 
 test "request classification remains tied to the original route" {
     const RewriteRoute = struct {
-        fn apply(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
+        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
             transformation.effects.set(.{ .name = ":method", .value = "PUT" }) catch return .preserve;
             transformation.effects.set(.{ .name = ":path", .value = "/v1/responses" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = RewriteRoute.apply });
     const original = "POST /v1/messages HTTP/1.1\r\nHost: example.test\r\nContent-Length: 0\r\n\r\n";
     var output: [head.max_bytes]u8 = undefined;

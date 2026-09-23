@@ -3,7 +3,7 @@ const Envelope = @import("Envelope.zig");
 const std = @import("std");
 const CredentialGate = @import("../CredentialGate.zig");
 const QueuePublication = @import("QueuePublication.zig");
-const HalfType = @import("Half.zig");
+const Half = @import("Half.zig");
 const QueueMetrics = @import("QueueMetrics.zig");
 const Channel = @This();
 
@@ -60,7 +60,7 @@ pub fn publish(channel: *Channel, io: std.Io, publication: QueuePublication) boo
 /// ```zig
 /// const half = try channel.receive(io);
 /// ```
-pub fn receive(channel: *Channel, io: std.Io) anyerror!*HalfType {
+pub fn receive(channel: *Channel, io: std.Io) anyerror!*Half {
     while (true) {
         var envelope = try channel.events.getOne(io);
         defer std.crypto.secureZero(u8, &envelope.credential.token);

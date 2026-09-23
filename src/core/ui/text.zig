@@ -11,7 +11,7 @@
 
 const GraphemeIterator = @import("GraphemeIterator.zig");
 const std = @import("std");
-const ClusterType = @import("Cluster.zig");
+const Cluster = @import("Cluster.zig");
 
 pub fn measure(text: []const u8) u16 {
     var total: u16 = 0;
@@ -54,7 +54,7 @@ test "a control character becomes a blank cell rather than its own byte" {
         const cluster = it.next().?;
         try std.testing.expectEqualStrings(" ", cluster.bytes);
         try std.testing.expectEqual(@as(u8, 1), cluster.width);
-        try std.testing.expectEqual(@as(?ClusterType, null), it.next());
+        try std.testing.expectEqual(@as(?Cluster, null), it.next());
     }
 
     var it: GraphemeIterator = .{ .bytes = "a\nb" };
@@ -95,7 +95,7 @@ test "a wide glyph is two columns and one cluster" {
     const cluster = it.next().?;
     try std.testing.expectEqual(@as(u8, 2), cluster.width);
     try std.testing.expectEqualStrings("\u{6f22}", cluster.bytes);
-    try std.testing.expectEqual(@as(?ClusterType, null), it.next());
+    try std.testing.expectEqual(@as(?Cluster, null), it.next());
 }
 
 test "an unprintable character still occupies a column" {

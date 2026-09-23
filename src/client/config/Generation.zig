@@ -2,10 +2,10 @@ const lua = @import("telar-lua");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const SnapshotType = @import("Snapshot.zig");
+const Snapshot = @import("Snapshot.zig");
 const Callback = @import("Callback.zig");
 const BarCallback = @import("BarCallback.zig");
-const StateType = @import("State.zig");
+const State = @import("State.zig");
 const generation_support = @import("generation_support.zig");
 
 test {
@@ -14,11 +14,11 @@ test {
 }
 const LoadContext = @import("LoadContext.zig");
 const SourceInput = @import("SourceInput.zig");
-const LimitsType = @import("Limits.zig");
+const Limits = @import("Limits.zig");
 const lua_api = @import("lua-api");
 const FileInput = @import("FileInput.zig");
 const CallbackInvocation = @import("CallbackInvocation.zig");
-const BarInvocationType = @import("BarInvocation.zig");
+const BarInvocation = @import("BarInvocation.zig");
 const bar_values = @import("bar_values.zig");
 const CallbackPreparation = @import("CallbackPreparation.zig");
 const lua_value = @import("lua_value.zig");
@@ -39,12 +39,12 @@ const Generation = @This();
 gpa: std.mem.Allocator,
 number: u64,
 vm: *lua.Vm,
-snapshot: SnapshotType = .{},
+snapshot: Snapshot = .{},
 callbacks: [data.config_values.max_bindings]Callback = undefined,
 callback_count: u16 = 0,
 bar_callbacks: [data.config_values.max_bar_callbacks]BarCallback = undefined,
 bar_callback_count: u8 = 0,
-modules: StateType,
+modules: State,
 profile_bytes: [generation_support.max_profile_name_bytes]u8 = undefined,
 profile_len: u8 = 0,
 
@@ -65,7 +65,7 @@ pub fn loadSource(context: LoadContext, spec: SourceInput) !*Generation {
         .vm = try lua.Vm.init(context.io, .{
             .memory = data.config_values.default_memory_limit,
             .instructions = data.config_values.default_load_instruction_limit,
-            .deadline_after_ns = (LimitsType{}).deadline_after_ns,
+            .deadline_after_ns = (Limits{}).deadline_after_ns,
         }),
         .modules = undefined,
     };
@@ -177,7 +177,7 @@ pub fn invokeExpression(generation: *Generation, invocation: CallbackInvocation,
     return generation_support.parseInputDecision(state, .{ .index = -1, .callback = callback }, diagnostic);
 }
 
-pub fn invokeBar(generation: *Generation, invocation: BarInvocationType, diagnostic: *data.Diagnostic) !data.Content {
+pub fn invokeBar(generation: *Generation, invocation: BarInvocation, diagnostic: *data.Diagnostic) !data.Content {
     const reference = invocation.reference;
     if (reference.generation != generation.number or reference.id >= generation.bar_callback_count) {
         diagnostic.set("bar callback belongs to an obsolete configuration generation", .{});
@@ -372,7 +372,7 @@ fn parseProfiles(generation: *Generation, index: c_int, diagnostic: *data.Diagno
     const state = generation.vm.state;
     const absolute = lua_api.c.lua_absindex(state, index);
     const base_snapshot = generation.snapshot;
-    var selected_snapshot: ?SnapshotType = null;
+    var selected_snapshot: ?Snapshot = null;
     const selected_name = generation.profile_bytes[0..generation.profile_len];
     lua_api.c.lua_pushnil(state);
     while (lua_api.c.lua_next(state, absolute) != 0) {

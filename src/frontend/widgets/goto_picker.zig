@@ -4,7 +4,7 @@ const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const modal = @import("modal.zig");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const GotoPickerInput = @import("GotoPickerInput.zig");
 const GotoPickerOutput = @import("GotoPickerOutput.zig");
 const std = @import("std");
@@ -34,7 +34,7 @@ pub fn modalArea(application: core.Rect) core.Rect {
 /// ```zig
 /// const output = render(context, context.buffer.area(), picker_input);
 /// ```
-pub fn render(context: *ContextType, application: core.Rect, input: GotoPickerInput) GotoPickerOutput {
+pub fn render(context: *Context, application: core.Rect, input: GotoPickerInput) GotoPickerOutput {
     const area = modalArea(application);
     if (area.isEmpty()) {
         return .{ .area = area, .cursor = null };
@@ -122,7 +122,7 @@ test "cell fallback connects every border edge and graphical frame keeps corners
     const outside: core.Style = .{ .bg = .rgb(.{ 1, 2, 3 }) };
     buffer.fill(buffer.area(), .{ .glyph = "#", .style = outside });
     var hits: widget.Hits = .{};
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,

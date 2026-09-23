@@ -1,4 +1,4 @@
-const PhysicalType = @import("Physical.zig");
+const Physical = @import("Physical.zig");
 
 /// Stores at most `capacity` simultaneously pressed physical keys.
 ///
@@ -17,7 +17,7 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
         const Self = @This();
 
         const Entry = struct {
-            identity: PhysicalType,
+            identity: Physical,
             owner: Owner,
         };
 
@@ -27,7 +27,7 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
         /// ```zig
         /// if (!leases.acquire(identity, owner)) dropInput();
         /// ```
-        pub fn acquire(leases: *Self, identity: PhysicalType, assigned_owner: Owner) bool {
+        pub fn acquire(leases: *Self, identity: Physical, assigned_owner: Owner) bool {
             if (leases.indexOf(identity)) |index| {
                 leases.entries[index].owner = assigned_owner;
 
@@ -54,7 +54,7 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
         /// ```zig
         /// const owner = leases.owner(identity) orelse return;
         /// ```
-        pub fn owner(leases: *const Self, identity: PhysicalType) ?Owner {
+        pub fn owner(leases: *const Self, identity: Physical) ?Owner {
             const index = leases.indexOf(identity) orelse return null;
 
             return leases.entries[index].owner;
@@ -65,7 +65,7 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
         /// ```zig
         /// const owner = leases.release(identity) orelse return;
         /// ```
-        pub fn release(leases: *Self, identity: PhysicalType) ?Owner {
+        pub fn release(leases: *Self, identity: Physical) ?Owner {
             const index = leases.indexOf(identity) orelse return null;
             const owner_value = leases.entries[index].owner;
             leases.len -= 1;
@@ -104,7 +104,7 @@ pub fn Type(comptime Owner: type, comptime capacity: usize) type {
             return leases.overflows;
         }
 
-        fn indexOf(leases: *const Self, identity: PhysicalType) ?usize {
+        fn indexOf(leases: *const Self, identity: Physical) ?usize {
             for (leases.entries[0..leases.len], 0..) |entry, index| {
                 if (entry.identity.eql(identity)) {
                     return index;

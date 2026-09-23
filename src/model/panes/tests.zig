@@ -1,11 +1,11 @@
-const InitialType = @import("Initial.zig");
+const Initial = @import("Initial.zig");
 const FrameInput = @import("FrameInput.zig");
 const Pane = @import("Pane.zig");
 const std = @import("std");
-const PresentationCommitType = @import("PresentationCommit.zig");
+const PresentationCommit = @import("PresentationCommit.zig");
 const core = @import("telar-core");
 
-const initial: InitialType = .{
+const initial: Initial = .{
     .spec = .{
         .pane_id = @enumFromInt(1),
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
@@ -147,7 +147,7 @@ test "an obsolete presentation cannot retire newer pane damage" {
     defer pane.deinit();
     var bytes: [1024]u8 = undefined;
     _ = try pane.applyFrame(try frame(&bytes, .{}));
-    var commit: PresentationCommitType = .{ .location = initial.spec.location };
+    var commit: PresentationCommit = .{ .location = initial.spec.location };
     commit.append(&pane);
     _ = try pane.applyFrame(try frame(&bytes, .{ .id = 2, .base = 1, .character = 'b' }));
     pane.commitPresentation(commit.slice()[0].frame_id);

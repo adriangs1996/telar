@@ -1,5 +1,5 @@
-const HalfType = @import("../capture/Half.zig");
+const Half = @import("../capture/Half.zig");
 const ResponseObserverOptions = @This();
 
 inspect_payload: bool,
-capture_half: ?*HalfType,
+capture_half: ?*Half,

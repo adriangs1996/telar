@@ -4,17 +4,17 @@ const core = @import("telar-core");
 const std = @import("std");
 const ColumnMigration = @import("ColumnMigration.zig");
 const model = @import("../model.zig");
-const CommandFinishedType = @import("../CommandFinished.zig");
+const CommandFinished = @import("../CommandFinished.zig");
 const LocationColumns = @import("LocationColumns.zig");
-const EntryType = @import("../Entry.zig");
-const StatsQueryType = @import("../StatsQuery.zig");
+const Entry = @import("../Entry.zig");
+const StatsQuery = @import("../StatsQuery.zig");
 const Store = @import("Store.zig");
-const LaunchAttemptType = @import("../LaunchAttempt.zig");
-const SessionStartedType = @import("../SessionStarted.zig");
-const SessionTitleType = @import("../SessionTitle.zig");
-const QueryType = @import("../Query.zig");
-const QueryOriginType = @import("../QueryOrigin.zig");
-const PruneType = @import("../Prune.zig");
+const LaunchAttempt = @import("../LaunchAttempt.zig");
+const SessionStarted = @import("../SessionStarted.zig");
+const SessionTitle = @import("../SessionTitle.zig");
+const Query = @import("../Query.zig");
+const QueryOrigin = @import("../QueryOrigin.zig");
+const Prune = @import("../Prune.zig");
 
 pub const entry_columns = "id, pane_id, started_at_ms, duration_ns, exit_code, status, command, cwd, workspace_path, author, origin, provider, command_truncated";
 
@@ -300,7 +300,7 @@ pub fn bindBlob(stmt: *c.sqlite3_stmt, index: c_int, value: *const model.Session
     _ = c.sqlite3_bind_blob(stmt, index, value, value.len, null);
 }
 
-pub fn bindCommandSource(stmt: *c.sqlite3_stmt, value: *const CommandFinishedType) void {
+pub fn bindCommandSource(stmt: *c.sqlite3_stmt, value: *const CommandFinished) void {
     _ = c.sqlite3_bind_int(stmt, 16, @intFromEnum(value.origin));
     if (value.provider.len == 0) {
         _ = c.sqlite3_bind_null(stmt, 17);
@@ -321,7 +321,7 @@ pub fn locationColumns(location: core.TabLocation) LocationColumns {
     };
 }
 
-pub fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !EntryType {
+pub fn readEntry(gpa: std.mem.Allocator, stmt: *c.sqlite3_stmt) !Entry {
     const command = try columnText(gpa, stmt, 6);
     errdefer gpa.free(command);
     const cwd = try columnText(gpa, stmt, 7);
@@ -389,7 +389,7 @@ pub fn commandHash(stmt: *c.sqlite3_stmt) u64 {
     return std.hash.Wyhash.hash(0x74656c6172, columnSlice(stmt, 6));
 }
 
-pub fn appendStatsFilters(sql: *std.Io.Writer, request: *const StatsQueryType) !void {
+pub fn appendStatsFilters(sql: *std.Io.Writer, request: *const StatsQuery) !void {
     if (request.since_ms != 0) {
         try sql.writeAll(" AND started_at_ms >= ?");
     }
@@ -401,7 +401,7 @@ pub fn appendStatsFilters(sql: *std.Io.Writer, request: *const StatsQueryType) !
     }
 }
 
-pub fn bindStatsFilters(stmt: *c.sqlite3_stmt, request: *const StatsQueryType) void {
+pub fn bindStatsFilters(stmt: *c.sqlite3_stmt, request: *const StatsQuery) void {
     var parameter: c_int = 1;
     if (request.since_ms != 0) {
         _ = c.sqlite3_bind_int64(stmt, parameter, request.since_ms);
@@ -452,7 +452,7 @@ test "persists sessions and filters command history" {
         .workspace = .{ .workspace = try core.workspace(3) },
         .tab_id = try core.tab(2),
     };
-    const attempt: LaunchAttemptType = .{
+    const attempt: LaunchAttempt = .{
         .pane_id = pane_id,
         .pane_generation = 11,
         .location = location,
@@ -486,7 +486,7 @@ test "persists sessions and filters command history" {
     try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(empty_session_stmt));
     try std.testing.expectEqual(@as(c_longlong, 0), c.sqlite3_column_int64(empty_session_stmt, 0));
 
-    const session: SessionStartedType = .{
+    const session: SessionStarted = .{
         .id = session_id,
         .pane_id = pane_id,
         .location = location,
@@ -495,7 +495,7 @@ test "persists sessions and filters command history" {
         .shell = @constCast("/bin/zsh"),
     };
     try store.startSession(&session);
-    const session_title = try SessionTitleType.init(.{
+    const session_title = try SessionTitle.init(.{
         .id = session_id,
         .title = "Improve agent sidebar",
         .source = .generated,
@@ -521,7 +521,7 @@ test "persists sessions and filters command history" {
         c.sqlite3_column_int(title_stmt, 2),
     );
 
-    const successful: CommandFinishedType = .{
+    const successful: CommandFinished = .{
         .session_id = session_id,
         .pane_id = pane_id,
         .location = location,
@@ -555,7 +555,7 @@ test "persists sessions and filters command history" {
     try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(tab_stmt));
     try std.testing.expectEqual(@as(c_longlong, 2), c.sqlite3_column_int64(tab_stmt, 0));
 
-    const request = try QueryType.init(.{
+    const request = try Query.init(.{
         .request_id = @enumFromInt(1),
         .origin = .{
             .client = .{ .id = 1, .generation = 1 },
@@ -578,7 +578,7 @@ test "persists sessions and filters command history" {
     try std.testing.expect(store.fts_available);
 
     // Index path: case-insensitive and substring-capable.
-    const indexed = try QueryType.init(.{
+    const indexed = try Query.init(.{
         .request_id = @enumFromInt(2),
         .origin = .{
             .client = .{ .id = 1, .generation = 1 },
@@ -592,7 +592,7 @@ test "persists sessions and filters command history" {
     try std.testing.expectEqualStrings("git commit", indexed_result.entries[0].command);
 
     // Below three characters the query takes the scan fallback.
-    const short = try QueryType.init(.{
+    const short = try Query.init(.{
         .request_id = @enumFromInt(3),
         .origin = .{
             .client = .{ .id = 1, .generation = 1 },
@@ -612,7 +612,7 @@ test "author filters partition query results" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const session: SessionStartedType = .{
+    const session: SessionStarted = .{
         .id = @splat(9),
         .pane_id = @enumFromInt(1),
         .location = location,
@@ -622,7 +622,7 @@ test "author filters partition query results" {
     };
     try store.startSession(&session);
 
-    var base: CommandFinishedType = .{
+    var base: CommandFinished = .{
         .session_id = session.id,
         .pane_id = session.pane_id,
         .location = location,
@@ -648,11 +648,11 @@ test "author filters partition query results" {
     base.command = @constCast("zig build test");
     _ = try store.insertCommand(&base);
 
-    const origin: QueryOriginType = .{
+    const origin: QueryOrigin = .{
         .client = .{ .id = 1, .generation = 1 },
         .close_after_reply = false,
     };
-    const humans = try store.query(std.testing.allocator, &(try QueryType.init(.{
+    const humans = try store.query(std.testing.allocator, &(try Query.init(.{
         .request_id = @enumFromInt(1),
         .origin = origin,
         .author = .human,
@@ -662,7 +662,7 @@ test "author filters partition query results" {
     try std.testing.expectEqualStrings("git status", humans.entries[0].command);
     try std.testing.expectEqual(core.HistoryAuthor.human, humans.entries[0].author);
 
-    const agents = try store.query(std.testing.allocator, &(try QueryType.init(.{
+    const agents = try store.query(std.testing.allocator, &(try Query.init(.{
         .request_id = @enumFromInt(2),
         .origin = origin,
         .author = .agent,
@@ -671,7 +671,7 @@ test "author filters partition query results" {
     try std.testing.expectEqual(@as(usize, 1), agents.entries.len);
     try std.testing.expectEqualStrings("zig build test", agents.entries[0].command);
 
-    const all = try store.query(std.testing.allocator, &(try QueryType.init(.{
+    const all = try store.query(std.testing.allocator, &(try Query.init(.{
         .request_id = @enumFromInt(3),
         .origin = origin,
     })));
@@ -682,7 +682,7 @@ test "author filters partition query results" {
 test "agent command synthesis persists provenance and deduplicates tool calls" {
     var store = try Store.open(":memory:");
     defer store.close();
-    var value: CommandFinishedType = .{
+    var value: CommandFinished = .{
         .session_id = @splat(0x44),
         .pane_id = @enumFromInt(9),
         .location = .{ .workspace = .{ .workspace = @enumFromInt(3) }, .tab_id = @enumFromInt(5) },
@@ -729,7 +729,7 @@ test "agent command synthesis persists provenance and deduplicates tool calls" {
     try std.testing.expectEqual(@as(c_int, c.SQLITE_ROW), c.sqlite3_step(session_count));
     try std.testing.expectEqual(@as(c_longlong, 1), c.sqlite3_column_int64(session_count, 0));
 
-    const query = try QueryType.init(.{
+    const query = try Query.init(.{
         .request_id = @enumFromInt(1),
         .origin = .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
         .author = .agent,
@@ -781,7 +781,7 @@ test "delete and prune remove rows and keep the FTS index consistent" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const session: SessionStartedType = .{
+    const session: SessionStarted = .{
         .id = @splat(4),
         .pane_id = @enumFromInt(1),
         .location = location,
@@ -791,7 +791,7 @@ test "delete and prune remove rows and keep the FTS index consistent" {
     };
     try store.startSession(&session);
 
-    var value: CommandFinishedType = .{
+    var value: CommandFinished = .{
         .session_id = session.id,
         .pane_id = session.pane_id,
         .location = location,
@@ -818,11 +818,11 @@ test "delete and prune remove rows and keep the FTS index consistent" {
     value.command = @constCast("git status");
     _ = try store.insertCommand(&value);
 
-    const origin: QueryOriginType = .{
+    const origin: QueryOrigin = .{
         .client = .{ .id = 1, .generation = 1 },
         .close_after_reply = false,
     };
-    const found = try store.query(std.testing.allocator, &(try QueryType.init(.{
+    const found = try store.query(std.testing.allocator, &(try Query.init(.{
         .request_id = @enumFromInt(1),
         .origin = origin,
         .text = "unique-needle",
@@ -832,7 +832,7 @@ test "delete and prune remove rows and keep the FTS index consistent" {
 
     try std.testing.expectEqual(@as(u64, 1), try store.deleteCommand(first_id));
     try std.testing.expectEqual(@as(u64, 0), try store.deleteCommand(first_id));
-    const gone = try store.query(std.testing.allocator, &(try QueryType.init(.{
+    const gone = try store.query(std.testing.allocator, &(try Query.init(.{
         .request_id = @enumFromInt(2),
         .origin = origin,
         .text = "unique-needle",
@@ -840,7 +840,7 @@ test "delete and prune remove rows and keep the FTS index consistent" {
     defer gone.deinit();
     try std.testing.expectEqual(@as(usize, 0), gone.entries.len);
 
-    const pruned = try store.prune(&(try PruneType.init(.{
+    const pruned = try store.prune(&(try Prune.init(.{
         .request_id = @enumFromInt(3),
         .origin = origin,
         .before_ms = 10_000,
@@ -855,7 +855,7 @@ test "command output rows round trip through the store" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const session: SessionStartedType = .{
+    const session: SessionStarted = .{
         .id = @splat(6),
         .pane_id = @enumFromInt(1),
         .location = location,
@@ -865,7 +865,7 @@ test "command output rows round trip through the store" {
     };
     try store.startSession(&session);
 
-    const value: CommandFinishedType = .{
+    const value: CommandFinished = .{
         .session_id = session.id,
         .pane_id = session.pane_id,
         .location = location,
@@ -888,11 +888,11 @@ test "command output rows round trip through the store" {
     _ = try store.insertCommand(&value);
     try store.insertCommandOutput(&value);
 
-    const origin: QueryOriginType = .{
+    const origin: QueryOrigin = .{
         .client = .{ .id = 1, .generation = 1 },
         .close_after_reply = false,
     };
-    const found = try store.query(std.testing.allocator, &(try QueryType.init(.{
+    const found = try store.query(std.testing.allocator, &(try Query.init(.{
         .request_id = @enumFromInt(1),
         .origin = origin,
     })));
@@ -926,7 +926,7 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    const session: SessionStartedType = .{
+    const session: SessionStarted = .{
         .id = @splat(8),
         .pane_id = @enumFromInt(1),
         .location = location,
@@ -936,7 +936,7 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
     };
     try store.startSession(&session);
 
-    var value: CommandFinishedType = .{
+    var value: CommandFinished = .{
         .session_id = session.id,
         .pane_id = session.pane_id,
         .location = location,
@@ -964,11 +964,11 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
         _ = try store.insertCommand(&value);
     }
 
-    const origin: QueryOriginType = .{
+    const origin: QueryOrigin = .{
         .client = .{ .id = 1, .generation = 1 },
         .close_after_reply = false,
     };
-    var query_value = try QueryType.init(.{
+    var query_value = try Query.init(.{
         .request_id = @enumFromInt(1),
         .origin = origin,
         .text = "zbt",
@@ -982,7 +982,7 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
     try std.testing.expectEqualStrings("zebra-tail", fuzzy.entries[0].command);
     try std.testing.expectEqualStrings("zig build test", fuzzy.entries[1].command);
 
-    var distinct_query = try QueryType.init(.{
+    var distinct_query = try Query.init(.{
         .request_id = @enumFromInt(2),
         .origin = origin,
         .distinct = true,
@@ -999,7 +999,7 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
         _ = try store.insertCommand(&value);
     }
 
-    var page_query = try QueryType.init(.{ .request_id = @enumFromInt(3), .origin = origin, .text = "zig", .match = .fuzzy, .limit = 100 });
+    var page_query = try Query.init(.{ .request_id = @enumFromInt(3), .origin = origin, .text = "zig", .match = .fuzzy, .limit = 100 });
     const first = try store.query(std.testing.allocator, &page_query);
     defer first.deinit();
     try std.testing.expectEqual(@as(usize, 100), first.entries.len);
@@ -1031,14 +1031,14 @@ test "fuzzy matching ranks subsequences and collapses duplicates" {
     try std.testing.expectEqual(@as(usize, 7), fts_page.entries.len);
     try std.testing.expect(!fts_page.has_more);
 
-    const exact_query = try QueryType.init(.{ .request_id = @enumFromInt(4), .origin = origin, .entry_id = second.entries[0].id, .limit = 1 });
+    const exact_query = try Query.init(.{ .request_id = @enumFromInt(4), .origin = origin, .entry_id = second.entries[0].id, .limit = 1 });
     const exact = try store.query(std.testing.allocator, &exact_query);
     defer exact.deinit();
     try std.testing.expectEqual(@as(usize, 1), exact.entries.len);
     try std.testing.expectEqual(second.entries[0].id, exact.entries[0].id);
 }
 
-pub fn appendQueryFilters(sql: *std.Io.Writer, request: *const QueryType) !void {
+pub fn appendQueryFilters(sql: *std.Io.Writer, request: *const Query) !void {
     if (request.failed_only) {
         try sql.writeAll(" AND exit_code IS NOT NULL AND exit_code <> 0");
     }
@@ -1053,7 +1053,7 @@ pub fn appendQueryFilters(sql: *std.Io.Writer, request: *const QueryType) !void 
     }
 }
 
-pub fn bindQueryFilters(stmt: *c.sqlite3_stmt, parameter: *c_int, request: *const QueryType) void {
+pub fn bindQueryFilters(stmt: *c.sqlite3_stmt, parameter: *c_int, request: *const Query) void {
     if (request.author != .all) {
         const author: core.HistoryAuthor = if (request.author == .human) .human else .agent;
         _ = c.sqlite3_bind_int(stmt, parameter.*, @intFromEnum(author));

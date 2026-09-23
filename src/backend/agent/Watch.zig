@@ -1,12 +1,12 @@
 const core = @import("telar-core");
-const PaneKeyType = @import("../pane/PaneKey.zig");
-const SessionReferenceType = @import("SessionReference.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
+const SessionReference = @import("SessionReference.zig");
 const std = @import("std");
 /// One agent's session file and the probe state that belongs to it.
 const Watch = @This();
 
-key: PaneKeyType,
-session: SessionReferenceType,
+key: PaneKey,
+session: SessionReference,
 kind: core.AgentSessionFileKind,
 path: [core.max_agent_session_file_bytes]u8 = undefined,
 path_len: u16 = 0,

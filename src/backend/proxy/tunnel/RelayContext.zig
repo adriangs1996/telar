@@ -1,17 +1,17 @@
 const std = @import("std");
-const TransformPipelineType = @import("../TransformPipeline.zig");
-const SessionType = @import("../Session.zig");
-const ExchangeType = @import("Exchange.zig");
-const ResponseStreamsType = @import("../provider/ResponseStreams.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
+const Session = @import("../Session.zig");
+const Exchange = @import("Exchange.zig");
+const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Streams = @import("../provider/Streams.zig");
-const ProducerType = @import("../capture/Producer.zig");
+const Producer = @import("../capture/Producer.zig");
 const RelayContext = @This();
 
 io: std.Io,
-transforms: *const TransformPipelineType,
+transforms: *const TransformPipeline,
 has_custom_transformers: bool,
-session: *SessionType,
-exchange: *ExchangeType,
-responses: ?*ResponseStreamsType,
+session: *Session,
+exchange: *Exchange,
+responses: ?*ResponseStreams,
 requests: ?*Streams,
-captures: ?*ProducerType = null,
+captures: ?*Producer = null,

@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const HistoryBrowserInput = @import("HistoryBrowserInput.zig");
 const Text = @import("Text.zig");
 const history_browser = @import("history_browser.zig");
@@ -10,7 +10,7 @@ const Wrapped = @import("Wrapped.zig");
 const Detail = @import("Detail.zig");
 const Drawing = @This();
 
-context: *ContextType,
+context: *Context,
 input: HistoryBrowserInput,
 background: core.Color,
 

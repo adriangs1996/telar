@@ -1,18 +1,18 @@
 const core = @import("telar-core");
 const H2Capture = @import("H2Capture.zig");
-const PipelineType = @import("../Pipeline.zig");
-const CountersType = @import("../Counters.zig");
-const ExchangeType = @import("Exchange.zig");
+const Pipeline = @import("../Pipeline.zig");
+const Counters = @import("../Counters.zig");
+const Exchange = @import("Exchange.zig");
 const std = @import("std");
 const identity = @import("../identity.zig");
 const ExpectedObservation = @import("ExpectedObservation.zig");
-const SnapshotType = @import("../Snapshot.zig");
+const Snapshot = @import("../Snapshot.zig");
 const TestHarness = @This();
 
 capture: H2Capture = .{},
-pipeline: PipelineType = .{},
-counters: CountersType = .{},
-exchange: ExchangeType = undefined,
+pipeline: Pipeline = .{},
+counters: Counters = .{},
+exchange: Exchange = undefined,
 
 pub fn init(harness: *TestHarness) !void {
     try harness.pipeline.add(.{ .context = &harness.capture, .observe = H2Capture.observe });
@@ -40,7 +40,7 @@ pub fn expectObservations(harness: *const TestHarness, expected: []const Expecte
     }
 }
 
-pub fn snapshot(harness: *const TestHarness) SnapshotType {
+pub fn snapshot(harness: *const TestHarness) Snapshot {
     return harness.counters.snapshot(.{
         .connections = .{ .active = 0, .limit_drops = 0 },
         .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },

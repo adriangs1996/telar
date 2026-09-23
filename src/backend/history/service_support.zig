@@ -3,8 +3,8 @@
 const core = @import("telar-core");
 const std = @import("std");
 const Service = @import("Service.zig");
-const CommandContextType = @import("CommandContext.zig");
-const CommandType = @import("Command.zig");
+const CommandContext = @import("CommandContext.zig");
+const Command = @import("Command.zig");
 
 test "service configuration controls recording and output capture" {
     const io = std.testing.io;
@@ -19,7 +19,7 @@ test "service configuration controls recording and output capture" {
         service.stop(io);
         service.deinit(io);
     }
-    const context: CommandContextType = .{
+    const context: CommandContext = .{
         .session_id = @splat(7),
         .pane_id = @enumFromInt(1),
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
@@ -28,7 +28,7 @@ test "service configuration controls recording and output capture" {
         .cols = 80,
         .rows = 24,
     };
-    const command: CommandType = .{
+    const command: Command = .{
         .bytes = "vault kv get secret/x",
         .cwd = "/work",
         .started_at_ms = 1,
@@ -73,7 +73,7 @@ test "agent recording applies secret filtering by default but keeps leading spac
         service.stop(io);
         service.deinit(io);
     }
-    const context: CommandContextType = .{
+    const context: CommandContext = .{
         .session_id = @splat(4),
         .pane_id = @enumFromInt(2),
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
@@ -82,7 +82,7 @@ test "agent recording applies secret filtering by default but keeps leading spac
         .cols = 80,
         .rows = 24,
     };
-    const secret: CommandType = .{
+    const secret: Command = .{
         .bytes = "deploy token=cleartext",
         .cwd = "/work",
         .started_at_ms = 1,

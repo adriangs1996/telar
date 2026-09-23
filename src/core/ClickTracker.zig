@@ -1,5 +1,5 @@
 const std = @import("std");
-const PointType = @import("ui/Point.zig");
+const Point = @import("ui/Point.zig");
 const select = @import("select.zig");
 /// Turns a stream of presses into a granularity.
 ///
@@ -14,10 +14,10 @@ const ClickTracker = @This();
 /// into a double.
 interval_ns: u64 = 500 * std.time.ns_per_ms,
 last_ns: u64 = 0,
-last: PointType = .{ .x = 0, .y = 0 },
+last: Point = .{ .x = 0, .y = 0 },
 count: u8 = 0,
 
-pub fn press(t: *ClickTracker, at: PointType, now_ns: u64) select.Granularity {
+pub fn press(t: *ClickTracker, at: Point, now_ns: u64) select.Granularity {
     const near = at.y == t.last.y and (if (at.x > t.last.x) at.x - t.last.x else t.last.x - at.x) <= 1;
     const soon = t.count > 0 and now_ns -| t.last_ns <= t.interval_ns;
 

@@ -1,6 +1,6 @@
 const core = @import("telar-core");
 const data = @import("model");
-const CreditType = @import("Credit.zig");
+const Credit = @import("Credit.zig");
 /// The client's retained-graphics store as controllers see it. Each adapter
 /// instantiates the shared `GenericResourceStore` with its own per-entry
 /// delivery state and binds it here; controllers never learn that type.
@@ -13,8 +13,8 @@ set_pane_visible_fn: *const fn (*anyopaque, core.PaneId, bool) anyerror!void,
 pane_visible_fn: *const fn (*anyopaque, core.PaneId) bool,
 has_pane_graphics_fn: *const fn (*anyopaque, core.PaneId) bool,
 ingress_version_fn: *const fn (*anyopaque) u64,
-peek_credit_fn: *const fn (*anyopaque) ?CreditType,
-consume_credit_fn: *const fn (*anyopaque, CreditType) void,
+peek_credit_fn: *const fn (*anyopaque) ?Credit,
+consume_credit_fn: *const fn (*anyopaque, Credit) void,
 
 /// Applies one decoded graphics message. Example: `try client.graphics.apply(command);`.
 pub fn apply(port: GraphicsRetention, command: data.PaneGraphicsCommand) !void {
@@ -45,10 +45,10 @@ pub fn ingressVersion(port: GraphicsRetention) u64 {
 }
 
 /// Example: `while (client.graphics.peekCredit()) |credit| { ... client.graphics.consumeCredit(credit); }`.
-pub fn peekCredit(port: GraphicsRetention) ?CreditType {
+pub fn peekCredit(port: GraphicsRetention) ?Credit {
     return port.peek_credit_fn(port.context);
 }
 
-pub fn consumeCredit(port: GraphicsRetention, credit: CreditType) void {
+pub fn consumeCredit(port: GraphicsRetention, credit: Credit) void {
     port.consume_credit_fn(port.context, credit);
 }

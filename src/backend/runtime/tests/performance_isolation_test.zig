@@ -2,17 +2,17 @@
 
 const core = @import("telar-core");
 const std = @import("std");
-const PaneFixtureType = @import("PaneFixture.zig");
+const PaneFixture = @import("PaneFixture.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
 const Cursor = @import("../../pane/Cursor.zig");
 const attachment_mod = @import("../attachment/attachment_namespace.zig");
-const StatsType = @import("../../media/Stats.zig");
+const Stats = @import("../../media/Stats.zig");
 const system_metrics = @import("../observability/system_metrics.zig");
 const RequestFixture = @import("RequestFixture.zig");
 const CountedRelay = @import("CountedRelay.zig");
 const body = @import("../../proxy/http/body.zig");
-const ServiceType = @import("../../history/Service.zig");
-const QueryType = @import("../../history/Query.zig");
+const Service = @import("../../history/Service.zig");
+const Query = @import("../../history/Query.zig");
 const model_module = @import("../../history/model.zig");
 
 fn now() i96 {
@@ -31,7 +31,7 @@ fn report(name: []const u8, values: []u64) void {
 }
 
 test "performance probe measures bounded search turns against the complete query" {
-    var fixture: PaneFixtureType = .{};
+    var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
     try fixture.pane.resize(.{ .cols = 128, .rows = 5 });
@@ -75,7 +75,7 @@ test "performance probe measures bounded search turns against the complete query
 }
 
 test "performance probe measures runtime staging of a 4K RGBA transfer" {
-    var fixture: PaneFixtureType = .{};
+    var fixture: PaneFixture = .{};
     try fixture.init();
     defer fixture.deinit();
     const pane = fixture.pane;
@@ -101,7 +101,7 @@ test "performance probe measures runtime staging of a 4K RGBA transfer" {
         stage.* = elapsed(started);
         if (result == .blocked) {
             const borrow = pane.beginMediaProcessing().?;
-            var stats: StatsType = .{};
+            var stats: Stats = .{};
             pane.processMedia(borrow.current_size, &stats);
             pane.completeMediaProcessing();
             const adoption_started = now();
@@ -141,10 +141,10 @@ test "performance probe counts TLS-facing writes without changing chunk framing"
 }
 
 test "performance probe executes a queued history burst and preserves every correlation" {
-    var service = try ServiceType.init(std.testing.allocator, .{ .database_path = ":memory:" });
+    var service = try Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
     defer service.deinit(std.testing.io);
     for (1..33) |id| {
-        const query = try QueryType.init(.{
+        const query = try Query.init(.{
             .request_id = @enumFromInt(id),
             .origin = .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
             .text = "needle",
@@ -152,7 +152,7 @@ test "performance probe executes a queued history burst and preserves every corr
         try std.testing.expect(service.query(std.testing.io, query));
     }
     const started = now();
-    var worker = try std.testing.io.concurrent(ServiceType.run, .{ &service, std.testing.io });
+    var worker = try std.testing.io.concurrent(Service.run, .{ &service, std.testing.io });
     defer {
         service.stop(std.testing.io);
         worker.await(std.testing.io) catch {};

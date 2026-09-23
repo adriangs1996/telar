@@ -1,21 +1,21 @@
 const std = @import("std");
-const AuthorityType = @import("../Authority.zig");
-const RootsType = @import("../Roots.zig");
+const Authority = @import("../Authority.zig");
+const Roots = @import("../Roots.zig");
 const Trust = @import("Trust.zig");
-const PolicyType = @import("../Policy.zig");
+const Policy = @import("../Policy.zig");
 const Paths = @import("Paths.zig");
-const ResourcesType = @import("../Resources.zig");
-const AuthorityFilesType = @import("../AuthorityFiles.zig");
-const CountersType = @import("../Counters.zig");
+const Resources = @import("../Resources.zig");
+const AuthorityFiles = @import("../AuthorityFiles.zig");
+const Counters = @import("../Counters.zig");
 const TunnelResources = @import("../tunnel/Resources.zig");
 const Interception = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
-authority: AuthorityType,
-roots: RootsType,
+authority: Authority,
+roots: Roots,
 trust: Trust,
-hosts: PolicyType,
+hosts: Policy,
 
 /// Loads or creates Telar's private authority, writes the combined trust
 /// bundle, loads platform roots, and validates the interception policy as
@@ -26,16 +26,16 @@ hosts: PolicyType,
 /// defer interception.deinit();
 /// ```
 pub fn init(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !Interception {
-    const resources: ResourcesType = .{ .io = io, .allocator = gpa };
-    const files: AuthorityFilesType = .{ .key = paths.key, .certificate = paths.certificate };
+    const resources: Resources = .{ .io = io, .allocator = gpa };
+    const files: AuthorityFiles = .{ .key = paths.key, .certificate = paths.certificate };
     var authority = if (paths.system_authority)
-        try AuthorityType.loadOrCreateSystem(resources, files)
+        try Authority.loadOrCreateSystem(resources, files)
     else
-        try AuthorityType.loadOrCreate(resources, files);
+        try Authority.loadOrCreate(resources, files);
     defer std.crypto.secureZero(u8, std.mem.asBytes(&authority));
     try authority.writeBundle(resources, paths.bundle);
 
-    var roots = try RootsType.load(io, gpa);
+    var roots = try Roots.load(io, gpa);
     errdefer roots.deinit(gpa);
 
     return .{
@@ -76,7 +76,7 @@ pub fn clientTrust(interception: *const Interception) Trust {
 /// ```zig
 /// const resources = interception.tunnelResources(&telemetry);
 /// ```
-pub fn tunnelResources(interception: *Interception, telemetry: *CountersType) TunnelResources {
+pub fn tunnelResources(interception: *Interception, telemetry: *Counters) TunnelResources {
     return .{
         .io = interception.io,
         .gpa = interception.gpa,

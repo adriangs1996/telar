@@ -1,7 +1,7 @@
 const core = @import("telar-core");
-const ClientKeyType = @import("../../history/ClientKey.zig");
+const ClientKey = @import("../../history/ClientKey.zig");
 const Wake = @This();
 
-client: ClientKeyType,
+client: ClientKey,
 request_id: core.RequestId,
 result: anyerror!void = {},

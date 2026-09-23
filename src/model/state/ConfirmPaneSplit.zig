@@ -1,8 +1,8 @@
 const core = @import("telar-core");
-const PaneSplitType = @import("PaneSplit.zig");
+const PaneSplit = @import("PaneSplit.zig");
 const ConfirmPaneSplit = @This();
 
-requested: PaneSplitType,
+requested: PaneSplit,
 confirmed_pane: core.PaneId,
 confirmed_location: core.TabLocation,
 created: bool,

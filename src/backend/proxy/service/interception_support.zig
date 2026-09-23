@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const Interception = @import("Interception.zig");
-const CountersType = @import("../Counters.zig");
+const Counters = @import("../Counters.zig");
 
 test "interception owns trust paths and exposes bounded tunnel resources" {
     const io = std.testing.io;
@@ -27,7 +27,7 @@ test "interception owns trust paths and exposes bounded tunnel resources" {
     });
     defer interception.deinit();
     const trust = interception.clientTrust();
-    var telemetry: CountersType = .{};
+    var telemetry: Counters = .{};
     const resources = interception.tunnelResources(&telemetry);
 
     try std.testing.expectEqualStrings(certificate_path, trust.certificate_path);

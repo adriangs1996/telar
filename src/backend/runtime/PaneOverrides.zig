@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const OverrideType = @import("../pty/Override.zig");
+const Override = @import("../pty/Override.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const std = @import("std");
 /// Fixed storage for the environment variables that let a child find the
@@ -13,7 +13,7 @@ pane_id: [20]u8 = undefined,
 pane_generation: [20]u8 = undefined,
 workspace_id: [20]u8 = undefined,
 tab_id: [20]u8 = undefined,
-entries: [count]OverrideType = undefined,
+entries: [count]Override = undefined,
 
 /// Formats the identity into owned decimal storage and returns the
 /// override slice borrowed from `overrides`.
@@ -22,7 +22,7 @@ entries: [count]OverrideType = undefined,
 /// var overrides: PaneOverrides = .{};
 /// const entries = overrides.build(key, location, socket_path, executable_path);
 /// ```
-pub fn build(self: *PaneOverrides, key: PaneKey, location: core.TabLocation, socket_path: []const u8, executable_path: []const u8) []const OverrideType {
+pub fn build(self: *PaneOverrides, key: PaneKey, location: core.TabLocation, socket_path: []const u8, executable_path: []const u8) []const Override {
     const pane_id = std.fmt.bufPrint(&self.pane_id, "{d}", .{core.raw(key.id)}) catch unreachable;
     const pane_generation = std.fmt.bufPrint(&self.pane_generation, "{d}", .{key.generation}) catch unreachable;
     const workspace_id = std.fmt.bufPrint(&self.workspace_id, "{d}", .{core.raw(location.workspace.workspace)}) catch unreachable;

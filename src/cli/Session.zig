@@ -1,5 +1,5 @@
 const std = @import("std");
-const RuntimeConnectorType = @import("RuntimeConnector.zig");
+const RuntimeConnector = @import("RuntimeConnector.zig");
 const Snapshot = @import("Snapshot.zig");
 const control = @import("control.zig");
 const ControlAgent = @import("ControlAgent.zig");
@@ -24,7 +24,7 @@ review_failure: ?[]const u8 = null,
 /// defer session.close();
 /// ```
 pub fn open(init: std.process.Init, socket: ?[*:0]const u8) !Session {
-    const connector = try RuntimeConnectorType.init(init, socket);
+    const connector = try RuntimeConnector.init(init, socket);
     return adopt(init, try connector.connectOrStart(.{}));
 }
 
@@ -38,7 +38,7 @@ pub fn open(init: std.process.Init, socket: ?[*:0]const u8) !Session {
 /// defer session.close();
 /// ```
 pub fn attach(init: std.process.Init, socket: ?[*:0]const u8) !Session {
-    const connector = try RuntimeConnectorType.init(init, socket);
+    const connector = try RuntimeConnector.init(init, socket);
     return adopt(init, try connector.connect());
 }
 

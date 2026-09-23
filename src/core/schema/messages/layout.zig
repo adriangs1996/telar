@@ -3,10 +3,10 @@
 //! validated as a complete pre-order binary tree before either side trusts it.
 
 const ClientLayoutUpdate = @import("../ClientLayoutUpdate.zig");
-const EncoderType = @import("../Encoder.zig");
+const Encoder = @import("../Encoder.zig");
 const tags = @import("tags.zig");
 const codec = @import("../codec.zig");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const ClientLayoutUpdateView = @import("ClientLayoutUpdateView.zig");
 const types = @import("../types.zig");
 const ClientLayoutCollection = @import("ClientLayoutCollection.zig");
@@ -26,7 +26,7 @@ const ClientLayoutTreeValidation = @import("ClientLayoutTreeValidation.zig");
 /// ```
 pub fn encodeClientLayoutUpdate(buffer: []u8, message: ClientLayoutUpdate) ![]const u8 {
     try validateClientLayoutUpdate(message);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.update_client_layout));
     try encoder.writeByte(@intFromBool(message.sidebar_visible));
     try encoder.writeInt(u16, message.sidebar_width);
@@ -40,7 +40,7 @@ pub fn encodeClientLayoutUpdate(buffer: []u8, message: ClientLayoutUpdate) ![]co
     return encoder.finish();
 }
 
-pub fn decodeClientLayoutUpdate(decoder: *DecoderType) !ClientLayoutUpdateView {
+pub fn decodeClientLayoutUpdate(decoder: *Decoder) !ClientLayoutUpdateView {
     const sidebar_visible = try decoder.readBool();
     const sidebar_width = try decoder.readInt(u16);
     const workspace_list_collapsed = try decoder.readBool();
@@ -82,7 +82,7 @@ pub fn decodeClientLayoutUpdate(decoder: *DecoderType) !ClientLayoutUpdateView {
 /// ```
 pub fn encodeClientLayoutSnapshot(buffer: []u8, message: ClientLayoutSnapshot) ![]const u8 {
     try validateClientLayoutSnapshot(message);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.client_layout_snapshot));
     try encoder.writeByte(@intFromBool(message.restored));
     try encoder.writeByte(@intFromBool(message.sidebar_visible));
@@ -94,7 +94,7 @@ pub fn encodeClientLayoutSnapshot(buffer: []u8, message: ClientLayoutSnapshot) !
     return encoder.finish();
 }
 
-pub fn decodeClientLayoutSnapshot(decoder: *DecoderType) !ClientLayoutSnapshotView {
+pub fn decodeClientLayoutSnapshot(decoder: *Decoder) !ClientLayoutSnapshotView {
     const restored = try decoder.readBool();
     const sidebar_visible = try decoder.readBool();
     const sidebar_width = try decoder.readInt(u16);
@@ -137,14 +137,14 @@ pub fn decodeClientLayoutSnapshot(decoder: *DecoderType) !ClientLayoutSnapshotVi
     };
 }
 
-fn encodeOptionalTabLocation(encoder: *EncoderType, location: ?TabLocation) !void {
+fn encodeOptionalTabLocation(encoder: *Encoder, location: ?TabLocation) !void {
     try encoder.writeByte(@intFromBool(location != null));
     if (location) |value| {
         try codec.encodeTabLocation(encoder, value);
     }
 }
 
-fn decodeOptionalTabLocation(decoder: *DecoderType) !?TabLocation {
+fn decodeOptionalTabLocation(decoder: *Decoder) !?TabLocation {
     if (!try decoder.readBool()) {
         return null;
     }
@@ -152,7 +152,7 @@ fn decodeOptionalTabLocation(decoder: *DecoderType) !?TabLocation {
     return try codec.decodeTabLocation(decoder);
 }
 
-fn encodeClientLayoutNode(encoder: *EncoderType, node: types.ClientLayoutNode) !void {
+fn encodeClientLayoutNode(encoder: *Encoder, node: types.ClientLayoutNode) !void {
     switch (node) {
         .pane => |pane| {
             try codec.validatePaneId(pane.id);
@@ -172,7 +172,7 @@ fn encodeClientLayoutNode(encoder: *EncoderType, node: types.ClientLayoutNode) !
     }
 }
 
-pub fn decodeClientLayoutNode(decoder: *DecoderType) !types.ClientLayoutNode {
+pub fn decodeClientLayoutNode(decoder: *Decoder) !types.ClientLayoutNode {
     return switch (try decoder.readByte()) {
         0 => pane: {
             const pane_id = try id.pane(try decoder.readInt(u64));
@@ -195,7 +195,7 @@ pub fn decodeClientLayoutNode(decoder: *DecoderType) !types.ClientLayoutNode {
     };
 }
 
-fn encodeClientTabLayout(encoder: *EncoderType, layout: ClientTabLayout) !void {
+fn encodeClientTabLayout(encoder: *Encoder, layout: ClientTabLayout) !void {
     try validateClientTabLayout(layout);
     try codec.encodeTabLocation(encoder, layout.location);
     try encoder.writeInt(u64, id.raw(layout.focused_pane));
@@ -207,7 +207,7 @@ fn encodeClientTabLayout(encoder: *EncoderType, layout: ClientTabLayout) !void {
     }
 }
 
-pub fn decodeClientTabLayout(decoder: *DecoderType) !ClientTabLayoutView {
+pub fn decodeClientTabLayout(decoder: *Decoder) !ClientTabLayoutView {
     const location = try codec.decodeTabLocation(decoder);
     const focused_pane = try id.pane(try decoder.readInt(u64));
     const fullscreen = try decoder.readBool();

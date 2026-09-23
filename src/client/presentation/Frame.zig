@@ -1,7 +1,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const headless = @import("headless.zig");
-const GeometryType = @import("Geometry.zig");
+const Geometry = @import("Geometry.zig");
 const Frame = @This();
 
 cells: [headless.cell_capacity]core.Cell = undefined,
@@ -10,6 +10,6 @@ panes: [core.max_panes_per_tab]Pane = undefined,
 pane_count: usize = 0,
 version: data.Version = .{},
 focused: ?core.PaneId = null,
-geometry: GeometryType = .{},
+geometry: Geometry = .{},
 
 pub const Pane = @import("FramePane.zig");

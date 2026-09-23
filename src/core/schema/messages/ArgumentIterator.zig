@@ -1,9 +1,9 @@
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const codec = @import("../codec.zig");
 const std = @import("std");
 const ArgumentIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 index: u16 = 0,
 

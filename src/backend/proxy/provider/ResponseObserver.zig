@@ -1,5 +1,5 @@
 const types = @import("../../agent/types.zig");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const SseEvent = @import("../SseEvent.zig");
 const std = @import("std");
 const claude = @import("claude.zig");
@@ -7,7 +7,7 @@ const claude = @import("claude.zig");
 const ResponseObserver = @This();
 
 dialect: types.ApiDialect = .unknown,
-decoder: DecoderType = .{},
+decoder: Decoder = .{},
 completed: bool = false,
 
 /// Starts observing one response from `provider`.

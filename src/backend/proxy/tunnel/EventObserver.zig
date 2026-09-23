@@ -1,14 +1,14 @@
-const ExchangeType = @import("Exchange.zig");
-const ResponseStreamsType = @import("../provider/ResponseStreams.zig");
+const Exchange = @import("Exchange.zig");
+const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Streams = @import("../provider/Streams.zig");
 const CaptureStreams = @import("CaptureStreams.zig");
 const relay = @import("../h2/relay.zig");
 const h2 = @import("h2.zig");
-const LifecycleType = @import("../h2/Lifecycle.zig");
+const Lifecycle = @import("../h2/Lifecycle.zig");
 const EventObserver = @This();
 
-exchange: *ExchangeType,
-responses: ?*ResponseStreamsType = null,
+exchange: *Exchange,
+responses: ?*ResponseStreams = null,
 requests: ?*Streams = null,
 captures: ?*CaptureStreams = null,
 
@@ -58,7 +58,7 @@ pub fn emit(observer: *EventObserver, event: relay.Event) void {
     }
 }
 
-fn observeLifecycle(observer: *EventObserver, lifecycle: LifecycleType) void {
+fn observeLifecycle(observer: *EventObserver, lifecycle: Lifecycle) void {
     if (observer.shouldClassifyRequest(lifecycle)) {
         const requests = observer.requests.?;
         if (!requests.start(lifecycle.stream_id)) {
@@ -95,7 +95,7 @@ fn observeLifecycle(observer: *EventObserver, lifecycle: LifecycleType) void {
     }
 }
 
-fn shouldClassifyRequest(observer: *const EventObserver, lifecycle: LifecycleType) bool {
+fn shouldClassifyRequest(observer: *const EventObserver, lifecycle: Lifecycle) bool {
     return observer.exchange.dialect == .anthropic_messages and observer.requests != null and lifecycle.phase == .request_started;
 }
 

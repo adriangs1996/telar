@@ -1,30 +1,30 @@
 const core = @import("telar-core");
-const DependenciesType = @import("../Dependencies.zig");
+const Dependencies = @import("../Dependencies.zig");
 const std = @import("std");
-const ChildEnvironmentType = @import("../../pty/ChildEnvironment.zig");
+const ChildEnvironment = @import("../../pty/ChildEnvironment.zig");
 const ProxyRuntime = @import("ProxyRuntime.zig");
-const LocalListenerType = @import("../../transport/LocalListener.zig");
-const StateType = @import("../observability/State.zig");
+const LocalListener = @import("../../transport/LocalListener.zig");
+const State = @import("../observability/State.zig");
 const HistoryRuntime = @import("HistoryRuntime.zig");
 const PluginsRuntime = @import("PluginsRuntime.zig");
 const EngineRuntime = @import("EngineRuntime.zig");
-const InitializationType = @import("../Initialization.zig");
+const Initialization = @import("../Initialization.zig");
 const resources_namespace = @import("resources_namespace.zig");
 const attachment = @import("../attachment/attachment_namespace.zig");
-const ServiceType = @import("../../engine/Service.zig");
+const Service = @import("../../engine/Service.zig");
 const PluginsService = @import("../../plugins/Service.zig");
 /// Owns runtime-wide physical resources acquired during startup.
 const Resources = @This();
 
-dependencies: DependenciesType,
+dependencies: Dependencies,
 heap: core.Heap,
 gpa: std.mem.Allocator,
-child_environment: ChildEnvironmentType,
+child_environment: ChildEnvironment,
 /// Immutable after startup; observation workers borrow it by pointer.
 agent_manifests: core.Table,
 proxy: ProxyRuntime,
-listener: LocalListenerType,
-telemetry: StateType,
+listener: LocalListener,
+telemetry: State,
 history: HistoryRuntime,
 plugins: PluginsRuntime,
 /// Present only when `runtime.engine` is configured.
@@ -37,11 +37,11 @@ engine: ?EngineRuntime,
 /// var resources: Resources = undefined;
 /// try resources.init(initialization);
 /// ```
-pub fn init(resources: *Resources, initialization: InitializationType) !void {
+pub fn init(resources: *Resources, initialization: Initialization) !void {
     return resources.acquire(initialization, null);
 }
 
-pub fn acquire(resources: *Resources, initialization: InitializationType, comptime fail_after: ?resources_namespace.AcquisitionPhase) !void {
+pub fn acquire(resources: *Resources, initialization: Initialization, comptime fail_after: ?resources_namespace.AcquisitionPhase) !void {
     resources.dependencies = initialization.dependencies;
     resources.heap = core.Heap.init(initialization.dependencies.allocator);
     resources.gpa = resources.heap.allocator();
@@ -50,7 +50,7 @@ pub fn acquire(resources: *Resources, initialization: InitializationType, compti
     attachment.initSharedFreezeNonce(resources.io());
 
     resources.agent_manifests = initialization.options.agent_manifests;
-    resources.child_environment = try ChildEnvironmentType.init(resources.gpa, initialization.options.environment, "telar");
+    resources.child_environment = try ChildEnvironment.init(resources.gpa, initialization.options.environment, "telar");
     errdefer resources.child_environment.deinit();
     try resources_namespace.checkpoint(fail_after, .child_environment);
 
@@ -65,7 +65,7 @@ pub fn acquire(resources: *Resources, initialization: InitializationType, compti
     errdefer resources.proxy.deinit();
     try resources_namespace.checkpoint(fail_after, .proxy);
 
-    resources.listener = try LocalListenerType.listen(resources.io(), initialization.options.endpoint);
+    resources.listener = try LocalListener.listen(resources.io(), initialization.options.endpoint);
     errdefer resources.listener.deinit(resources.io());
     try resources_namespace.checkpoint(fail_after, .listener);
 
@@ -102,7 +102,7 @@ pub fn acquire(resources: *Resources, initialization: InitializationType, compti
 /// ```zig
 /// const service = resources.engineService() orelse return;
 /// ```
-pub fn engineService(resources: *Resources) ?*ServiceType {
+pub fn engineService(resources: *Resources) ?*Service {
     if (resources.engine) |*engine| {
         return engine.service();
     }

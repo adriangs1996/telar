@@ -8,7 +8,7 @@ const platform = @import("../../../platform/platform.zig");
 const Source = @import("Source.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const std = @import("std");
-const SizeType = @import("../../../platform/Size.zig");
+const Size = @import("../../../platform/Size.zig");
 
 /// Registers the next platform resize observation for this client.
 ///
@@ -44,7 +44,7 @@ fn wait(io: std.Io, watcher: *platform.ResizeWatcher) anyerror!void {
 /// ```zig
 /// const commit = try apply(terminal, measurement);
 /// ```
-pub fn apply(terminal: *TerminalClient, measurement: SizeType) !?data.HostCommit {
+pub fn apply(terminal: *TerminalClient, measurement: Size) !?data.HostCommit {
     const client = &terminal.app;
 
     const update = resolve(client.model.host.host_capabilities, measurement);
@@ -57,11 +57,11 @@ pub fn apply(terminal: *TerminalClient, measurement: SizeType) !?data.HostCommit
 /// ```zig
 /// const size = initialSize(tty.size());
 /// ```
-pub fn initialSize(measurement: SizeType) core.TerminalSize {
+pub fn initialSize(measurement: Size) core.TerminalSize {
     return resolve(.{}, measurement).size;
 }
 
-fn resolve(current: data.HostCapabilities, measurement: SizeType) data.HostUpdate {
+fn resolve(current: data.HostCapabilities, measurement: Size) data.HostUpdate {
     var capabilities = current;
     const cols = if (measurement.cols == 0) 80 else measurement.cols;
     const rows = if (measurement.rows == 0) 24 else measurement.rows;

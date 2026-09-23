@@ -1,34 +1,34 @@
 const core = @import("telar-core");
 const std = @import("std");
-const ListenerType = @import("Listener.zig");
-const InterceptionType = @import("Interception.zig");
-const RegistryType = @import("../Registry.zig");
-const ConfigurationType = @import("Configuration.zig");
-const ObservationsType = @import("Observations.zig");
-const ProducerType = @import("../capture/Producer.zig");
-const SlotsType = @import("../Slots.zig");
+const Listener = @import("Listener.zig");
+const Interception = @import("Interception.zig");
+const Registry = @import("../Registry.zig");
+const Configuration = @import("Configuration.zig");
+const Observations = @import("Observations.zig");
+const Producer = @import("../capture/Producer.zig");
+const Slots = @import("../Slots.zig");
 const service_support = @import("service_support.zig");
-const CountersType = @import("../Counters.zig");
-const PathsType = @import("Paths.zig");
+const Counters = @import("../Counters.zig");
+const Paths = @import("Paths.zig");
 const ClientConfiguration = @import("ClientConfiguration.zig");
 const MiddlewareEvent = @import("../MiddlewareEvent.zig");
-const HalfType = @import("../capture/Half.zig");
-const SnapshotType = @import("../Snapshot.zig");
-const CredentialType = @import("../Credential.zig");
+const Half = @import("../capture/Half.zig");
+const Snapshot = @import("../Snapshot.zig");
+const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
 const Pane = @import("Pane.zig");
 const Service = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
-listener: ListenerType,
-interception: InterceptionType,
-credentials: RegistryType = .{},
-configuration: ConfigurationType,
-observations: ObservationsType = undefined,
-captures: ProducerType = undefined,
-connection_slots: SlotsType = .init(service_support.max_connections),
-telemetry: CountersType = .{},
+listener: Listener,
+interception: Interception,
+credentials: Registry = .{},
+configuration: Configuration,
+observations: Observations = undefined,
+captures: Producer = undefined,
+connection_slots: Slots = .init(service_support.max_connections),
+telemetry: Counters = .{},
 next_connection_id: std.atomic.Value(u64) = .init(1),
 
 /// Builds the loopback listener and every bounded dependency without
@@ -39,14 +39,14 @@ next_connection_id: std.atomic.Value(u64) = .init(1),
 /// const service = try Service.create(io, gpa, paths);
 /// defer service.destroy();
 /// ```
-pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: PathsType) !*Service {
-    var interception = try InterceptionType.init(io, gpa, paths);
+pub fn create(io: std.Io, gpa: std.mem.Allocator, paths: Paths) !*Service {
+    var interception = try Interception.init(io, gpa, paths);
     errdefer interception.deinit();
 
-    var listener = try ListenerType.bind(io);
+    var listener = try Listener.bind(io);
     errdefer listener.deinit(io);
 
-    const configuration = try ConfigurationType.init();
+    const configuration = try Configuration.init();
 
     const service = try gpa.create(Service);
     errdefer gpa.destroy(service);
@@ -159,7 +159,7 @@ pub fn receive(service: *Service, io: std.Io) anyerror!MiddlewareEvent {
 /// ```zig
 /// const half = try service.receiveCapture(io);
 /// ```
-pub fn receiveCapture(service: *Service, io: std.Io) anyerror!*HalfType {
+pub fn receiveCapture(service: *Service, io: std.Io) anyerror!*Half {
     return service.captures.receive(io);
 }
 
@@ -168,7 +168,7 @@ pub fn receiveCapture(service: *Service, io: std.Io) anyerror!*HalfType {
 /// ```zig
 /// service.decodeCapture(half);
 /// ```
-pub fn decodeCapture(service: *Service, half: *HalfType) void {
+pub fn decodeCapture(service: *Service, half: *Half) void {
     service.captures.decodeBody(half);
 }
 
@@ -178,7 +178,7 @@ pub fn decodeCapture(service: *Service, half: *HalfType) void {
 /// ```zig
 /// const snapshot = service.metrics();
 /// ```
-pub fn metrics(service: *const Service) SnapshotType {
+pub fn metrics(service: *const Service) Snapshot {
     return service.telemetry.snapshot(.{
         .connections = service.connection_slots.snapshot(),
         .observations = service.observations.metrics(),
@@ -192,7 +192,7 @@ pub fn metrics(service: *const Service) SnapshotType {
 /// ```zig
 /// const url = try service.credentialUrl(&buffer, &credential);
 /// ```
-pub fn credentialUrl(service: *const Service, buffer: []u8, credential: *const CredentialType) ![]const u8 {
+pub fn credentialUrl(service: *const Service, buffer: []u8, credential: *const Credential) ![]const u8 {
     return identity.formatUrl(buffer, service.listener.port(), credential);
 }
 
@@ -203,8 +203,8 @@ pub fn credentialUrl(service: *const Service, buffer: []u8, credential: *const C
 /// var credential = try service.registerPane(.{ .id = pane_id, .generation = 2 });
 /// defer std.crypto.secureZero(u8, &credential.token);
 /// ```
-pub fn registerPane(service: *Service, pane: Pane) !CredentialType {
-    var credential: CredentialType = .{
+pub fn registerPane(service: *Service, pane: Pane) !Credential {
+    var credential: Credential = .{
         .pane_id = pane.id,
         .pane_generation = pane.generation,
         .token = identity.randomToken(service.io),
@@ -216,7 +216,7 @@ pub fn registerPane(service: *Service, pane: Pane) !CredentialType {
     return credential;
 }
 
-fn registerCredential(service: *Service, credential: *const CredentialType) !void {
+fn registerCredential(service: *Service, credential: *const Credential) !void {
     return service.credentials.register(service.io, credential);
 }
 
@@ -226,7 +226,7 @@ fn registerCredential(service: *Service, credential: *const CredentialType) !voi
 /// ```zig
 /// service.unregisterCredential(&credential);
 /// ```
-pub fn unregisterCredential(service: *Service, credential: *const CredentialType) void {
+pub fn unregisterCredential(service: *Service, credential: *const Credential) void {
     service.credentials.remove(service.io, credential);
 }
 

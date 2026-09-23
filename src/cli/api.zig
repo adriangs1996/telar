@@ -3,7 +3,7 @@
 
 const core = @import("telar-core");
 const std = @import("std");
-const ApiOptionsType = @import("arguments/ApiOptions.zig");
+const ApiOptions = @import("arguments/ApiOptions.zig");
 const Bound = @import("Bound.zig");
 const control = @import("control.zig");
 
@@ -12,7 +12,7 @@ const control = @import("control.zig");
 /// ```zig
 /// try api.run(process_init, options);
 /// ```
-pub fn run(init: std.process.Init, options: ApiOptionsType) !void {
+pub fn run(init: std.process.Init, options: ApiOptions) !void {
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
     const writer = &output.interface;

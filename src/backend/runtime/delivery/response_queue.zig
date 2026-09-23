@@ -8,11 +8,11 @@ const PendingWorkspaceSnapshot = @import("PendingWorkspaceSnapshot.zig");
 const PendingTabCreated = @import("PendingTabCreated.zig");
 const PendingTabRenamed = @import("PendingTabRenamed.zig");
 const PendingNotification = @import("PendingNotification.zig");
-const QueryResultType = @import("../../history/QueryResult.zig");
+const QueryResult = @import("../../history/QueryResult.zig");
 const PendingPaneText = @import("PendingPaneText.zig");
 const PendingPaneMatches = @import("PendingPaneMatches.zig");
-const OutputResultType = @import("../../history/OutputResult.zig");
-const StatsResultType = @import("../../history/StatsResult.zig");
+const OutputResult = @import("../../history/OutputResult.zig");
+const StatsResult = @import("../../history/StatsResult.zig");
 const PendingSuggestion = @import("PendingSuggestion.zig");
 const ResponseQueue = @import("ResponseQueue.zig");
 const std = @import("std");
@@ -35,15 +35,15 @@ pub const PendingResponse = union(enum) {
     notification: PendingNotification,
     notification_shown: core.NotificationShown,
     agent_sound: core.AgentSoundNotification,
-    history_result: *QueryResultType,
+    history_result: *QueryResult,
     change_review: *ReviewResult,
     agent_history_page: *@import("OwnedAgentHistoryPage.zig"),
     request_completed: core.RequestCompleted,
     pane_text: PendingPaneText,
     pane_matches: PendingPaneMatches,
     history_pruned: core.HistoryPruned,
-    history_output: *OutputResultType,
-    history_stats: *StatsResultType,
+    history_output: *OutputResult,
+    history_stats: *StatsResult,
     pane_focus_command: core.PaneFocusCommand,
     pane_focus_result: core.PaneFocusResult,
     command_suggestion: PendingSuggestion,
@@ -51,8 +51,8 @@ pub const PendingResponse = union(enum) {
 
 test "management responses overtake observation work" {
     var queue: ResponseQueue = .{};
-    const fake_history: *QueryResultType =
-        @ptrFromInt(@alignOf(QueryResultType));
+    const fake_history: *QueryResult =
+        @ptrFromInt(@alignOf(QueryResult));
     try queue.push(.{ .history_result = fake_history });
     try queue.push(.{ .request_failed = .{
         .request_id = @enumFromInt(2),

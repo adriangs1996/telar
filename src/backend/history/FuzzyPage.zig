@@ -1,6 +1,6 @@
 const core = @import("telar-core");
 const Scored = @import("Scored.zig");
-const QueryType = @import("Query.zig");
+const Query = @import("Query.zig");
 const FuzzyPage = @This();
 
 pub const max_candidates = 1000;
@@ -10,7 +10,7 @@ count: usize = 0,
 wanted: usize,
 
 /// Example: `var ranking = FuzzyPage.init(request);`.
-pub fn init(request: *const QueryType) FuzzyPage {
+pub fn init(request: *const Query) FuzzyPage {
     return .{ .wanted = @intCast(@min(@as(u64, request.offset) + request.limit + 1, max_candidates)) };
 }
 

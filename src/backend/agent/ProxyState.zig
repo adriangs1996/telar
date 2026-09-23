@@ -1,8 +1,8 @@
 const core = @import("telar-core");
-const EvidenceType = @import("Evidence.zig");
+const Evidence = @import("Evidence.zig");
 const types = @import("types.zig");
-const ProxyExchangeType = @import("ProxyExchange.zig");
-const ProxyObservationType = @import("ProxyObservation.zig");
+const ProxyExchange = @import("ProxyExchange.zig");
+const ProxyObservation = @import("ProxyObservation.zig");
 const proxy_state = @import("proxy_state.zig");
 const ProxyState = @This();
 
@@ -12,8 +12,8 @@ pub const ApplyResult = enum {
     evidence_replaced,
 };
 
-evidence: ?EvidenceType = null,
-active: [types.max_active_proxy_requests]?ProxyExchangeType = @splat(null),
+evidence: ?Evidence = null,
+active: [types.max_active_proxy_requests]?ProxyExchange = @splat(null),
 active_count: u16 = 0,
 
 /// Applies one lifecycle observation while rejecting activity and
@@ -25,7 +25,7 @@ active_count: u16 = 0,
 ///     .activity_refreshed, .evidence_replaced => publish(),
 /// }
 /// ```
-pub fn apply(state: *ProxyState, observation: ProxyObservationType) ApplyResult {
+pub fn apply(state: *ProxyState, observation: ProxyObservation) ApplyResult {
     if (observation.phase == .request_started and state.isOlderThanEvidence(observation.observed_at_ms)) {
         return .ignored;
     }
@@ -99,20 +99,20 @@ pub fn awaitingToolResult(state: *const ProxyState) bool {
 /// ```zig
 /// const evidence = state.currentEvidence();
 /// ```
-pub fn currentEvidence(state: *const ProxyState) ?EvidenceType {
+pub fn currentEvidence(state: *const ProxyState) ?Evidence {
     return state.evidence;
 }
 
-fn replaceEvidence(state: *ProxyState, observation: *const ProxyObservationType, status: core.AgentStatus) bool {
+fn replaceEvidence(state: *ProxyState, observation: *const ProxyObservation, status: core.AgentStatus) bool {
     if (state.isOlderThanEvidence(observation.observed_at_ms)) {
         return false;
     }
 
-    state.evidence = EvidenceType.fromProxy(observation, status);
+    state.evidence = Evidence.fromProxy(observation, status);
     return true;
 }
 
-fn track(state: *ProxyState, phase: types.ProxyPhase, exchange: ProxyExchangeType) bool {
+fn track(state: *ProxyState, phase: types.ProxyPhase, exchange: ProxyExchange) bool {
     return switch (phase) {
         .request_started => state.start(exchange),
         .response_activity => state.contains(exchange),
@@ -134,8 +134,8 @@ fn isOlderThanEvidence(state: *const ProxyState, observed_at_ms: i64) bool {
     return observed_at_ms < evidence.observed_at_ms;
 }
 
-pub fn start(state: *ProxyState, exchange: ProxyExchangeType) bool {
-    var free: ?*?ProxyExchangeType = null;
+pub fn start(state: *ProxyState, exchange: ProxyExchange) bool {
+    var free: ?*?ProxyExchange = null;
 
     for (&state.active) |*slot| {
         if (slot.*) |active| {
@@ -153,7 +153,7 @@ pub fn start(state: *ProxyState, exchange: ProxyExchangeType) bool {
     return true;
 }
 
-pub fn contains(state: *const ProxyState, exchange: ProxyExchangeType) bool {
+pub fn contains(state: *const ProxyState, exchange: ProxyExchange) bool {
     for (state.active) |active| {
         if (active != null and proxy_state.sameExchange(active.?, exchange)) {
             return true;
@@ -163,7 +163,7 @@ pub fn contains(state: *const ProxyState, exchange: ProxyExchangeType) bool {
     return false;
 }
 
-pub fn settle(state: *ProxyState, exchange: ProxyExchangeType) bool {
+pub fn settle(state: *ProxyState, exchange: ProxyExchange) bool {
     for (&state.active) |*slot| {
         const active = slot.* orelse continue;
 
@@ -179,7 +179,7 @@ pub fn settle(state: *ProxyState, exchange: ProxyExchangeType) bool {
     return false;
 }
 
-pub fn settleFailure(state: *ProxyState, exchange: ProxyExchangeType) bool {
+pub fn settleFailure(state: *ProxyState, exchange: ProxyExchange) bool {
     if (exchange.protocol == .h2 and exchange.stream_id == 0) {
         var removed = false;
 

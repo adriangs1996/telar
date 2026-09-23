@@ -1,10 +1,10 @@
 const relay = @import("relay.zig");
 const types = @import("../../agent/types.zig");
 const TranscodeConfiguration = @import("TranscodeConfiguration.zig");
-const ReaderType = @import("Reader.zig");
-const TrackerType = @import("Tracker.zig");
+const Reader = @import("Reader.zig");
+const Tracker = @import("Tracker.zig");
 const std = @import("std");
-const HeadersType = @import("../Headers.zig");
+const Headers = @import("../Headers.zig");
 const provider = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
 const framing_module = @import("framing.zig");
@@ -20,7 +20,7 @@ configuration: TranscodeConfiguration,
 applied_table_size: u32 = 4096,
 applied_inflate_table_size: u32 = relay.max_header_block_bytes,
 
-framing: ReaderType = .{},
+framing: Reader = .{},
 
 continuation_stream: u32 = 0,
 block_type: u8 = 0,
@@ -35,7 +35,7 @@ compressed_len: usize = 0,
 encoded: [2 * relay.max_header_block_bytes]u8 = undefined,
 setting: [6]u8 = undefined,
 setting_len: u8 = 0,
-streams: TrackerType = .{},
+streams: Tracker = .{},
 
 pub fn init(dialect: types.ApiDialect, configuration: TranscodeConfiguration) Transcoder {
     var transcoder: Transcoder = .{ .dialect = dialect, .configuration = configuration };
@@ -289,7 +289,7 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
             .headers = &original,
         });
     }
-    var transformed: HeadersType = undefined;
+    var transformed: Headers = undefined;
     transformed.copyFrom(&original);
     var context = configuration.transform_context;
     context.stream_id = if (transcoder.block_type == relay.frame_push_promise)
@@ -385,9 +385,9 @@ fn finishHeaderBlock(transcoder: *Transcoder, port: anytype) bool {
     return true;
 }
 
-fn decodeHeaders(transcoder: *Transcoder) ?HeadersType {
+fn decodeHeaders(transcoder: *Transcoder) ?Headers {
     const inflater = transcoder.inflater orelse return null;
-    var headers: HeadersType = .{};
+    var headers: Headers = .{};
     var input = transcoder.compressed[0..transcoder.compressed_len];
     while (true) {
         var field: relay.c.nghttp2_nv = undefined;

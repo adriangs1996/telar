@@ -1,9 +1,9 @@
-const InputScannerType = @import("../history/InputScanner.zig");
+const InputScanner = @import("../history/InputScanner.zig");
 const description = @import("description.zig");
 const std = @import("std");
 const Capture = @This();
 
-scanner: InputScannerType = .{},
+scanner: InputScanner = .{},
 bytes: [description.max_query_bytes]u8 = undefined,
 len: u16 = 0,
 truncated: bool = false,

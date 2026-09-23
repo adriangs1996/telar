@@ -1,28 +1,28 @@
 const core = @import("telar-core");
 const State = @import("State.zig");
-const PipelineType = @import("Pipeline.zig");
-const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
-const GraphicsLimitsType = @import("GraphicsLimits.zig");
+const Pipeline = @import("Pipeline.zig");
+const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
+const GraphicsLimits = @import("GraphicsLimits.zig");
 const std = @import("std");
 const Responses = @import("Responses.zig");
-const StatsType = @import("Stats.zig");
-const SharedFrameViewType = @import("SharedFrameView.zig");
-const FileQueryViewType = @import("FileQueryView.zig");
+const Stats = @import("Stats.zig");
+const SharedFrameView = @import("SharedFrameView.zig");
+const FileQueryView = @import("FileQueryView.zig");
 const LiveImages = @import("LiveImages.zig");
 const shared_transfer = @import("shared_transfer.zig");
-const PreparedTransferType = @import("PreparedTransfer.zig");
+const PreparedTransfer = @import("PreparedTransfer.zig");
 const GraphicsIngest = @import("GraphicsIngest.zig");
 const Processor = @This();
 
 state: *State,
-media: *PipelineType,
-media_allocator: *PaneMediaAllocatorType,
-graphics_limits: GraphicsLimitsType,
+media: *Pipeline,
+media_allocator: *PaneMediaAllocator,
+graphics_limits: GraphicsLimits,
 graphics_storage_limit: usize,
 io: std.Io,
 responses: Responses,
 
-pub fn processMedia(processor: *Processor, current_size: core.TerminalSize, stats: *StatsType) void {
+pub fn processMedia(processor: *Processor, current_size: core.TerminalSize, stats: *Stats) void {
     if (processor.media.sealedRequiresReset()) {
         processor.state.kitty_framing = .{};
         processor.state.kitty_loading_chunks = 0;
@@ -37,11 +37,11 @@ pub fn processMedia(processor: *Processor, current_size: core.TerminalSize, stat
             sink.processor.ingestMediaOutput(bytes);
         }
 
-        pub fn observeSharedFrame(sink: *@This(), frame: SharedFrameViewType) bool {
+        pub fn observeSharedFrame(sink: *@This(), frame: SharedFrameView) bool {
             return sink.processor.ingestSharedFrame(frame);
         }
 
-        pub fn observeFileQuery(sink: *@This(), query: FileQueryViewType) bool {
+        pub fn observeFileQuery(sink: *@This(), query: FileQueryView) bool {
             return sink.processor.answerFileQuery(query);
         }
     };
@@ -62,7 +62,7 @@ pub fn processMedia(processor: *Processor, current_size: core.TerminalSize, stat
 /// ```zig
 /// processor.prepareSharedTransfers(&stats);
 /// ```
-pub fn prepareSharedTransfers(processor: *Processor, stats: *StatsType) void {
+pub fn prepareSharedTransfers(processor: *Processor, stats: *Stats) void {
     const storage = &processor.media.terminal.screens.active.kitty_images;
     processor.state.prepared_transfers.retain(LiveImages{ .storage = storage }, processor.media_allocator);
     var images = storage.images.iterator();
@@ -93,7 +93,7 @@ pub fn prepareSharedTransfers(processor: *Processor, stats: *StatsType) void {
             processor.media_allocator.releaseManual(pixels.len);
             continue;
         };
-        const transfer: PreparedTransferType = .{
+        const transfer: PreparedTransfer = .{
             .metadata = metadata,
             .name = name,
             .reserved_len = pixels.len,
@@ -118,7 +118,7 @@ pub fn prepareSharedTransfers(processor: *Processor, stats: *StatsType) void {
 /// ```zig
 /// if (!processor.ingestSharedFrame(frame)) processor.ingestMediaOutput(frame.bytes);
 /// ```
-fn ingestSharedFrame(processor: *Processor, frame: SharedFrameViewType) bool {
+fn ingestSharedFrame(processor: *Processor, frame: SharedFrameView) bool {
     if (comptime !shared_transfer.shared_memory_supported) {
         return false;
     }
@@ -197,7 +197,7 @@ fn ingestSharedFrame(processor: *Processor, frame: SharedFrameViewType) bool {
     const generation = images.imageById(frame.image_id).?.generation;
     var parked = metadata;
     parked.key.generation = generation;
-    const transfer: PreparedTransferType = .{
+    const transfer: PreparedTransfer = .{
         .metadata = parked,
         .name = name,
         // The mapping's reservation belongs to emulator storage; the
@@ -219,7 +219,7 @@ fn ingestSharedFrame(processor: *Processor, frame: SharedFrameViewType) bool {
 /// ```zig
 /// _ = processor.answerFileQuery(query);
 /// ```
-fn answerFileQuery(processor: *Processor, query: FileQueryViewType) bool {
+fn answerFileQuery(processor: *Processor, query: FileQueryView) bool {
     var reply: [64]u8 = undefined;
     const accepted = query.byte_len <= processor.graphics_storage_limit and
         shared_transfer.validateChildFile(query.encoded_path, query.byte_len);

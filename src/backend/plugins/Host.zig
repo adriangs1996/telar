@@ -2,8 +2,8 @@ const lua = @import("telar-lua");
 const std = @import("std");
 const lua_api = @import("lua-api");
 const host_support = @import("host_support.zig");
-const ExchangeType = @import("Exchange.zig");
-const BatchType = @import("Batch.zig");
+const Exchange = @import("Exchange.zig");
+const Batch = @import("Batch.zig");
 const Host = @This();
 
 io: std.Io,
@@ -90,7 +90,7 @@ fn loadPlugin(host: *Host, entry_path: []const u8) !void {
     lua_api.c.lua_settop(state, 0);
 }
 
-pub fn invoke(host: *Host, exchange: ExchangeType) !BatchType {
+pub fn invoke(host: *Host, exchange: Exchange) !Batch {
     const state = host.vm.state;
     lua_api.c.lua_settop(state, 0);
     defer lua_api.c.lua_settop(state, 0);

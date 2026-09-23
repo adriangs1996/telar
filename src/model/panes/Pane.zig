@@ -3,8 +3,8 @@ const agent_options_module = @import("agent_options.zig");
 const icons = @import("../layout/icons.zig");
 const std = @import("std");
 const builtin = @import("builtin");
-const DamageRowType = @import("DamageRow.zig");
-const AppliedType = @import("Applied.zig");
+const DamageRow = @import("DamageRow.zig");
+const Applied = @import("Applied.zig");
 const frames = @import("frame.zig");
 const damage = @import("damage.zig");
 const pane_support = @import("pane_support.zig");
@@ -20,7 +20,7 @@ id: core.PaneId,
 location: core.TabLocation,
 buffer: core.Buffer,
 text_metadata: *core.TextMetadata,
-damage_rows: []DamageRowType,
+damage_rows: []DamageRow,
 attached: bool,
 attachment_generation: u64 = 0,
 cursor: core.Cursor = .{},
@@ -70,7 +70,7 @@ pub fn init(gpa: std.mem.Allocator, initial: Initial) !Pane {
     var buffer = try core.Buffer.init(gpa, initial.spec.size.cols, initial.spec.size.rows);
     errdefer buffer.deinit();
 
-    const rows = try gpa.alloc(DamageRowType, initial.spec.size.rows);
+    const rows = try gpa.alloc(DamageRow, initial.spec.size.rows);
     errdefer gpa.free(rows);
     @memset(rows, .{});
     const text_metadata = try gpa.create(core.TextMetadata);
@@ -109,7 +109,7 @@ pub fn deinit(pane: *Pane) void {
 
 /// Applies a decoded frame after identity and base admission. Only a
 /// snapshot may resize storage. Example: const work = try pane.applyFrame(frame);
-pub fn applyFrame(pane: *Pane, frame: core.FrameView) !AppliedType {
+pub fn applyFrame(pane: *Pane, frame: core.FrameView) !Applied {
     core.profiling.add(.pane_apply_frame, 1);
     if (frame.pane_id != pane.id) {
         return error.PaneMismatch;
@@ -147,7 +147,7 @@ pub fn applyFrame(pane: *Pane, frame: core.FrameView) !AppliedType {
     }
 
     try pane.text_metadata.reserve(pane.gpa, frame.rows);
-    const replacement_damage = if (resized) try pane.gpa.alloc(DamageRowType, frame.rows) else null;
+    const replacement_damage = if (resized) try pane.gpa.alloc(DamageRow, frame.rows) else null;
     errdefer if (replacement_damage) |rows| pane.gpa.free(rows);
 
     const applied = try frames.applyBuffer(&pane.buffer, &pane.cursor, frame);

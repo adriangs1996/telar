@@ -4,7 +4,7 @@ const client = @import("telar-client");
 const data = @import("model");
 const context_support = @import("../../widgets/context_support.zig");
 const WidgetsState = @import("../../widgets/State.zig");
-const KittySidebarRendererType = @import("../../graphics/KittySidebarRenderer.zig");
+const KittySidebarRenderer = @import("../../graphics/KittySidebarRenderer.zig");
 const IconsRenderer = @import("../../graphics/IconsRenderer.zig");
 const ToastRenderer = @import("../../graphics/ToastRenderer.zig");
 const ModalRenderer = @import("../../graphics/ModalRenderer.zig");
@@ -17,16 +17,16 @@ const Appearance = @import("Appearance.zig");
 const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
 const screen_support = @import("../../presentation/screen_support.zig");
 const view_ops = @import("view.zig");
-const ScreenType = @import("../../presentation/Screen.zig");
+const Screen = @import("../../presentation/Screen.zig");
 const RenderInput = @import("RenderInput.zig");
 const RenderStats = @import("RenderStats.zig");
-const ContextType = @import("../../widgets/Context.zig");
+const Context = @import("../../widgets/Context.zig");
 const composition_module = @import("../../widgets/composition.zig");
 const history_browser_module = @import("../../widgets/history_browser.zig");
 const goto_picker_module = @import("../../widgets/goto_picker.zig");
 const toast_module = @import("../../widgets/toast.zig");
-const CursorType = @import("../../widgets/Cursor.zig");
-const SidebarProviderPlacementType = @import("../../graphics/SidebarProviderPlacement.zig");
+const Cursor = @import("../../widgets/Cursor.zig");
+const SidebarProviderPlacement = @import("../../graphics/SidebarProviderPlacement.zig");
 const kitty_sidebar_module = @import("../../graphics/kitty_sidebar.zig");
 const State = @This();
 
@@ -50,7 +50,7 @@ dirty: bool = true,
 interaction_revision: u64 = 0,
 sidebar_rendering: data.ResolvedSidebarRendering = .cells,
 toast_overlay_drawn: bool = false,
-kitty_sidebar: KittySidebarRendererType,
+kitty_sidebar: KittySidebarRenderer,
 kitty_icons: IconsRenderer,
 kitty_toasts: ToastRenderer,
 kitty_modal: ModalRenderer,
@@ -257,7 +257,7 @@ pub fn configureSidebar(state: *State, requested: data.SidebarRendering, configu
     }
 }
 
-pub fn kittySidebar(state: *State) *KittySidebarRendererType {
+pub fn kittySidebar(state: *State) *KittySidebarRenderer {
     return &state.kitty_sidebar;
 }
 
@@ -585,7 +585,7 @@ fn recordInteraction(state: *State) void {
 
 /// A rejected configuration paints one red line over the bottom row so
 /// the message survives until the next successful reload.
-fn renderDiagnosticBanner(state: *State, screen: *ScreenType, diagnostic: ?[]const u8) void {
+fn renderDiagnosticBanner(state: *State, screen: *Screen, diagnostic: ?[]const u8) void {
     const message = diagnostic orelse return;
     const banner = state.regions.bottom;
     if (banner.isEmpty()) {
@@ -602,7 +602,7 @@ fn renderDiagnosticBanner(state: *State, screen: *ScreenType, diagnostic: ?[]con
     _ = screen.back.writeText(banner, .{ .point = .{ .x = banner.x + prefix_width, .y = banner.y }, .text = message, .style = style });
 }
 
-pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderStats {
+pub fn render(state: *State, screen: *Screen, input: RenderInput) !RenderStats {
     defer state.renderTabInsertion(screen);
     // Resolve against rebuilt hits on chrome/layout changes, and against
     // current pane metadata even when cell/chrome rendering is a no-op.
@@ -622,7 +622,7 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
     const hybrid = state.sidebar_rendering == .kitty_hybrid or
         state.sidebar_rendering == .kitty_full;
     const focused_card_color: ?[3]u8 = if (hybrid) state.palette().surface0.rgbChannels() else null;
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &state.scratch,
         .hits = &state.hits,
         .palette = state.palette(),
@@ -741,7 +741,7 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
         .plan = &attachment_plan,
         .graphical_frame = graphical_modal,
     });
-    var picker_cursor: ?CursorType = null;
+    var picker_cursor: ?Cursor = null;
     if (picker_prompt) |prompt| {
         if (drawn_modal_area.isEmpty()) {
             const picker_output = view_ops.renderGotoPicker(&context, application_area, .{
@@ -758,7 +758,7 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
         }
     }
     if (hybrid) {
-        var provider_marks: [core.max_agent_snapshot_entries]SidebarProviderPlacementType = undefined;
+        var provider_marks: [core.max_agent_snapshot_entries]SidebarProviderPlacement = undefined;
         var provider_mark_count: usize = 0;
         for (composed.sidebar.provider_marks[0..composed.sidebar.provider_mark_count]) |mark| {
             const provider = kitty_sidebar_module.SidebarProvider.fromAgent(mark.provider) orelse continue;
@@ -882,7 +882,7 @@ fn panePointerShape(state: *State, input: RenderInput, pane_id: core.PaneId) cor
     return pane.pointer_shape;
 }
 
-fn renderTabInsertion(state: *State, screen: *ScreenType) void {
+fn renderTabInsertion(state: *State, screen: *Screen) void {
     const target = state.tab_drag.gesture.destination orelse return;
     for (state.hits.registered()) |hit| {
         if (hit.action != .select_tab or hit.action.select_tab != target.relative_to) {

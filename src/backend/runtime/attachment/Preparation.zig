@@ -1,10 +1,10 @@
 const std = @import("std");
-const PaneType = @import("../../pane/Pane.zig");
-const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
+const Pane = @import("../../pane/Pane.zig");
+const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const Preparation = @This();
 
 io: std.Io,
 buffer: []u8,
-pane: *PaneType,
+pane: *Pane,
 force_snapshot: bool,
-metrics: *RuntimeMetricsType,
+metrics: *RuntimeMetrics,

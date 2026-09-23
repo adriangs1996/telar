@@ -1,6 +1,6 @@
-const PaneMousePlanType = @import("../../workspace/PaneMousePlan.zig");
+const PaneMousePlan = @import("../../workspace/PaneMousePlan.zig");
 const PointerCommand = @import("PointerCommand.zig");
 const ReportEffect = @This();
 
-plan: PaneMousePlanType,
+plan: PaneMousePlan,
 command: PointerCommand,

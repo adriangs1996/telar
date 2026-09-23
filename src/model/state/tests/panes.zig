@@ -2,7 +2,7 @@ const core = @import("telar-core");
 const model_data = @import("../../model.zig");
 const ClientModel = @import("../ClientModel.zig");
 const std = @import("std");
-const VersionType = @import("../Version.zig");
+const Version = @import("../Version.zig");
 
 test "pane focus resolves identity and direction through one visible revision" {
     var model = ClientModel.init(std.testing.allocator, true);
@@ -57,7 +57,7 @@ test "pane focus resolves identity and direction through one visible revision" {
         .target = .{ .direction = .right },
         .area = area,
     })) == null);
-    try std.testing.expectEqual(VersionType{ .panes = 2 }, model.version());
+    try std.testing.expectEqual(Version{ .panes = 2 }, model.version());
 }
 
 test "fullscreen directional focus publishes geometry only for horizontal moves" {
@@ -127,16 +127,16 @@ test "pane resize owns direction resolution geometry and visible revisions" {
     try std.testing.expectEqualDeep(area, resized.area);
     try std.testing.expect(!resized.fullscreen);
     try std.testing.expect(model_data.tab_layout.contentSize(&model, model.tabs.active, first, area).?.cols > width_before);
-    try std.testing.expectEqual(VersionType{ .panes = 1 }, model.version());
+    try std.testing.expectEqual(Version{ .panes = 1 }, model.version());
     try std.testing.expect((model.resizePane(.{ .direction = .up, .area = area })) == null);
-    try std.testing.expectEqual(VersionType{ .panes = 1 }, model.version());
+    try std.testing.expectEqual(Version{ .panes = 1 }, model.version());
 
     try std.testing.expect(model.tabs.layout[model.tabs.active].toggleFullscreen());
     const fullscreen_resize = model.resizePane(.{ .direction = .left, .area = area }).?;
     try std.testing.expect(model.tabs.layout[model.tabs.active].isFullscreen());
     try std.testing.expectEqual(model.version().panes, fullscreen_resize.panes_revision);
     try std.testing.expect(fullscreen_resize.fullscreen);
-    try std.testing.expectEqual(VersionType{ .panes = 2 }, model.version());
+    try std.testing.expectEqual(Version{ .panes = 2 }, model.version());
     try std.testing.expect(model.tabs.layout[model.tabs.active].toggleFullscreen());
     try std.testing.expectEqual(width_before, model_data.tab_layout.contentSize(&model, model.tabs.active, first, area).?.cols);
 
@@ -165,7 +165,7 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
     const second: core.PaneId = @enumFromInt(2);
     const area: core.Rect = .{ .w = 101, .h = 41 };
     try std.testing.expect(model.togglePaneFullscreen(.{ .area = area }) == null);
-    try std.testing.expectEqual(VersionType{}, model.version());
+    try std.testing.expectEqual(Version{}, model.version());
     try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 101, .rows = 41 } });
     try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(model.tabs.layout[model.tabs.active].focusPane(first));
@@ -181,18 +181,18 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
     try std.testing.expect(entered.fullscreen);
     try std.testing.expectEqual(core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, model_data.tab_layout.contentSize(&model, model.tabs.active, first, area).?);
     try std.testing.expect(model_data.tab_layout.contentSize(&model, model.tabs.active, second, area) == null);
-    try std.testing.expectEqual(VersionType{ .panes = 1 }, model.version());
+    try std.testing.expectEqual(Version{ .panes = 1 }, model.version());
 
     const exited = model.togglePaneFullscreen(.{ .area = area }).?;
 
     try std.testing.expect(!exited.fullscreen);
     try std.testing.expectEqual(first_tiled, model_data.tab_layout.contentSize(&model, model.tabs.active, first, area).?);
     try std.testing.expectEqual(second_tiled, model_data.tab_layout.contentSize(&model, model.tabs.active, second, area).?);
-    try std.testing.expectEqual(VersionType{ .panes = 2 }, model.version());
+    try std.testing.expectEqual(Version{ .panes = 2 }, model.version());
 
     model_data.workspace_handoff.clear(&model);
     try std.testing.expect(model.togglePaneFullscreen(.{ .area = area }) == null);
-    try std.testing.expectEqual(VersionType{ .panes = 2 }, model.version());
+    try std.testing.expectEqual(Version{ .panes = 2 }, model.version());
 }
 
 test "splitting a single fullscreen pane focuses the new pane without leaving fullscreen" {
@@ -242,12 +242,12 @@ test "pane closure planning requires the active attached pane without mutation" 
 
     try std.testing.expectEqual(pane_id, closure.pane_id);
     try std.testing.expectEqualDeep(location, closure.location);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 
     model.panes.find(pane_id).?.attached = false;
 
     try std.testing.expect(model.planPaneClosure() == null);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "active pane retirement advances the visible pane revision once" {
@@ -280,7 +280,7 @@ test "active pane retirement advances the visible pane revision once" {
     try std.testing.expectEqual(model.version().panes, retirement.retired.panes_revision);
     try std.testing.expect(model.panes.find(second) == null);
     try std.testing.expectEqual(first, model.tabs.layout[model.tabs.active].focused().?);
-    try std.testing.expectEqualDeep(VersionType{ .panes = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
 
     const repeated = model.retirePane(second);
 
@@ -290,7 +290,7 @@ test "active pane retirement advances the visible pane revision once" {
     try std.testing.expectEqual(model.version().tabs, repeated.stale.tabs_revision);
     try std.testing.expectEqual(model.version().active_tab, repeated.stale.active_tab_revision);
     try std.testing.expectEqual(model.version().panes, repeated.stale.panes_revision);
-    try std.testing.expectEqualDeep(VersionType{ .panes = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
 }
 
 test "inactive pane retirement changes membership without a visible revision" {
@@ -325,7 +325,7 @@ test "inactive pane retirement changes membership without a visible revision" {
     try std.testing.expectEqual(model.version().panes, retirement.retired.panes_revision);
     try std.testing.expect(model.panes.find(inactive_pane) == null);
     try std.testing.expectEqualDeep(active, model.activeTabLocation().?);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "split confirmation replaces a target retired during pane creation" {
@@ -356,7 +356,7 @@ test "split confirmation replaces a target retired during pane creation" {
     try std.testing.expect(model.panes.find(target) == null);
     try std.testing.expect(model.panes.find(created).?.attached);
     try std.testing.expectEqual(created, model.tabs.layout[model.tabs.active].focused().?);
-    try std.testing.expectEqualDeep(VersionType{ .panes = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .panes = 1 }, model.version());
     try std.testing.expectEqualDeep(core.Rect{ .w = 40, .h = 10 }, commit.area);
     try std.testing.expectEqual(model.tabs.layout[model.tabs.active].currentRevision(), commit.layout_revision);
     try std.testing.expectEqual(model.version().workspace, commit.workspace_revision);
@@ -400,7 +400,7 @@ test "inactive split confirmation retains membership without visible revision" {
     try std.testing.expectEqual(model_data.PaneSplitDisposition.inactive, commit.disposition);
     try std.testing.expectEqual(model_data.Change.unchanged, commit.change);
     try std.testing.expect(!model.panes.find(created).?.attached);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
     try std.testing.expectEqual(model.tabs.layout[model.tabs.find(first.tab_id).?].currentRevision(), commit.layout_revision);
     try std.testing.expectEqual(model.version().panes, commit.panes_revision);
     try std.testing.expect(model.recoverPaneSplit(.{
@@ -440,7 +440,7 @@ test "split confirmation leaves a retired tab unrepresented" {
     try std.testing.expectEqual(model_data.PaneSplitDisposition.stale, commit.disposition);
     try std.testing.expectEqual(model_data.Change.unchanged, commit.change);
     try std.testing.expect(model.panes.find(created) == null);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
     try std.testing.expectEqual(@as(u64, 0), commit.layout_revision);
     try std.testing.expectEqual(model.version().workspace, commit.workspace_revision);
     try std.testing.expectEqual(model.version().tabs, commit.tabs_revision);

@@ -8,7 +8,7 @@
 const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const TopBarInput = @import("TopBarInput.zig");
 const status_bar = @import("status_bar.zig");
 const bar_content = @import("bar_content.zig");
@@ -17,11 +17,11 @@ const std = @import("std");
 const WorkspaceDraw = @import("WorkspaceDraw.zig");
 const widget = @import("context_support.zig");
 const WorkspaceNames = @import("WorkspaceNames.zig");
-const PlanType = @import("../ui/Plan.zig");
+const Plan = @import("../ui/Plan.zig");
 
 pub const empty_right: data.bar_values.Slot = .empty;
 
-pub fn render(context: *ContextType, input: TopBarInput) void {
+pub fn render(context: *Context, input: TopBarInput) void {
     const area = input.area;
 
     if (area.isEmpty()) {
@@ -137,7 +137,7 @@ fn rightDesiredWidth(input: TopBarInput) u16 {
     };
 }
 
-fn renderRight(context: *ContextType, area: core.Rect, input: TopBarInput) void {
+fn renderRight(context: *Context, area: core.Rect, input: TopBarInput) void {
     switch (input.right.*) {
         .content => |*content| bar_content.render(context, area, .{
             .content = content,
@@ -148,7 +148,7 @@ fn renderRight(context: *ContextType, area: core.Rect, input: TopBarInput) void 
     }
 }
 
-fn renderList(context: *ContextType, input: TopBarInput, list: ListInput) void {
+fn renderList(context: *Context, input: TopBarInput, list: ListInput) void {
     const snapshot = input.workspaces;
     const row_end = list.area.x + list.area.w;
     const active_index = if (list.active_id) |id| snapshot.indexOf(id) else null;
@@ -202,7 +202,7 @@ fn renderList(context: *ContextType, input: TopBarInput, list: ListInput) void {
     }
 }
 
-fn drawWorkspace(context: *ContextType, draw: WorkspaceDraw) u16 {
+fn drawWorkspace(context: *Context, draw: WorkspaceDraw) u16 {
     var label_buffer: [data.workspace_list.max_name_bytes + 4]u8 = undefined;
     const label = std.fmt.bufPrint(&label_buffer, " {s} ", .{
         workspaceNameAt(.{
@@ -244,7 +244,7 @@ fn drawWorkspace(context: *ContextType, draw: WorkspaceDraw) u16 {
     return draw.area.x + width;
 }
 
-fn renderFallback(context: *ContextType, input: TopBarInput, area: core.Rect) void {
+fn renderFallback(context: *Context, input: TopBarInput, area: core.Rect) void {
     var workspace_buffer: [core.max_workspace_name_bytes + 16]u8 = undefined;
     const workspace = workspaceLabel(input.location, input.workspace_name, &workspace_buffer);
     const width = @min(core.measure(workspace) + 1, area.w);
@@ -367,7 +367,7 @@ test "the workspace label ignores git branch and dirty state" {
     var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,
@@ -419,8 +419,8 @@ test "the telar mark toggles the sidebar and dims while it is hidden" {
     var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var plan: PlanType = .{};
-    var context: ContextType = .{
+    var plan: Plan = .{};
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,
@@ -461,7 +461,7 @@ test "proxy badge reserves the right edge before workspace navigation" {
     var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,
@@ -491,7 +491,7 @@ test "wildcard proxy scope renders a distinct warning badge" {
     var buffer = try core.Buffer.init(std.testing.allocator, 20, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,
@@ -519,7 +519,7 @@ test "installed system trust keeps a yellow badge while the proxy is off" {
     var buffer = try core.Buffer.init(std.testing.allocator, 20, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,
@@ -547,7 +547,7 @@ test "configured right content stops before the permanent proxy badge" {
     var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,
@@ -585,7 +585,7 @@ test "workspace navigation starts right after the telar mark" {
     var buffer = try core.Buffer.init(std.testing.allocator, 40, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,

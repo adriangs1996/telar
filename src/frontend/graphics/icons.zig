@@ -11,15 +11,15 @@ const data = @import("model");
 const assets = @import("assets");
 const client = @import("telar-client");
 const std = @import("std");
-const MarkType = @import("../ui/Mark.zig");
+const Mark = @import("../ui/Mark.zig");
 const IconsSlot = @import("IconsSlot.zig");
 const ui_icons = @import("../ui/icons.zig");
 const Placement = @import("Placement.zig");
 const RasterSize = @import("RasterSize.zig");
-const RasterizerType = @import("Rasterizer.zig");
+const Rasterizer = @import("Rasterizer.zig");
 const AtlasInput = @import("AtlasInput.zig");
-const SurfaceType = @import("Surface.zig");
-const BitmapType = @import("Bitmap.zig");
+const Surface = @import("Surface.zig");
+const Bitmap = @import("Bitmap.zig");
 const bitmap = @import("bitmap_support.zig");
 const IconsRenderer = @import("IconsRenderer.zig");
 
@@ -42,7 +42,7 @@ pub const max_atlas_bytes: usize = 1536 * 1024;
 
 const max_columns: u8 = 2;
 
-pub fn slotFromMark(mark: MarkType) IconsSlot {
+pub fn slotFromMark(mark: Mark) IconsSlot {
     return .{
         .icon = mark.icon,
         .foreground = mark.foreground,
@@ -137,7 +137,7 @@ fn scaledDimension(value: u16, longest: u16) u16 {
 // Every slot is drawn into one contiguous cell-sized surface, then copied
 // into its atlas row. Rows are as wide as the widest slot; a narrower slot
 // leaves the rest of its row transparent and never places it.
-pub fn renderAtlas(text: *RasterizerType, atlas: AtlasInput) !void {
+pub fn renderAtlas(text: *Rasterizer, atlas: AtlasInput) !void {
     const icon_size = @min(atlas.raster_size.width, atlas.raster_size.height);
     try text.setPixelHeight(icon_size);
     const metrics = text.metrics();
@@ -150,7 +150,7 @@ pub fn renderAtlas(text: *RasterizerType, atlas: AtlasInput) !void {
     var cell_pixels: [@as(usize, max_columns) * max_pixel_dimension * max_pixel_dimension * 4]u8 = undefined;
     for (atlas.slots, 0..) |slot, index| {
         const width = @as(u32, atlas.raster_size.width) * slot.columns;
-        const surface: SurfaceType = .{
+        const surface: Surface = .{
             .pixels = cell_pixels[0 .. @as(usize, width) * atlas.raster_size.height * 4],
             .width = width,
             .height = atlas.raster_size.height,
@@ -192,12 +192,12 @@ const mark_taps: u32 = 4;
 /// Paints the embedded mark into the slot with straight alpha: transparent
 /// outside its square and its rounded corners, so the host terminal composes
 /// it over whatever it paints behind the bar.
-fn paintMark(surface: SurfaceType) void {
+fn paintMark(surface: Surface) void {
     @memset(surface.pixels, 0);
     const icon_size = @min(surface.width, surface.height);
     const offset_x = (surface.width - icon_size) / 2;
     const offset_y = (surface.height - icon_size) / 2;
-    const source: BitmapType = .{ .pixels = mark_source, .stride = mark_source_side, .side = mark_source_side };
+    const source: Bitmap = .{ .pixels = mark_source, .stride = mark_source_side, .side = mark_source_side };
     const fine_size = icon_size * mark_taps;
     const tap_count: u32 = mark_taps * mark_taps;
 
@@ -231,7 +231,7 @@ fn paintMark(surface: SurfaceType) void {
     }
 }
 
-fn fill(surface: SurfaceType, color: [3]u8) void {
+fn fill(surface: Surface, color: [3]u8) void {
     var pixel: usize = 0;
     while (pixel < surface.pixels.len) : (pixel += 4) {
         surface.pixels[pixel] = color[0];
@@ -246,7 +246,7 @@ test "embedded subset rasterizes every configured Nerd Font icon" {
     defer renderer.deinit();
     try std.testing.expect(renderer.text != null);
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var marks: [std.meta.fields(data.icons.Icon).len]MarkType = undefined;
+    var marks: [std.meta.fields(data.icons.Icon).len]Mark = undefined;
     inline for (std.meta.fields(data.icons.Icon), 0..) |field, index| {
         marks[index] = .{
             .area = .{ .x = @intCast(index), .w = 1, .h = 1 },
@@ -386,7 +386,7 @@ test "working animation changes placements without retransmitting the atlas" {
     var renderer = IconsRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    const style = MarkType{
+    const style = Mark{
         .area = .{ .x = 2, .y = 3, .w = 1, .h = 1 },
         .icon = .agent_working_0,
         .foreground = .{ 255, 255, 255 },

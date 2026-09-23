@@ -1,8 +1,8 @@
 const table = @import("table.zig");
 const Entry = @import("Entry.zig");
-const HalfType = @import("Half.zig");
+const Half = @import("Half.zig");
 const Exchange = @import("Exchange.zig");
-const KeyType = @import("Key.zig");
+const Key = @import("Key.zig");
 const std = @import("std");
 const Joiner = @This();
 
@@ -38,7 +38,7 @@ pub fn deinit(joiner: *Joiner) void {
 /// ```zig
 /// const result = joiner.push(now_ms, half);
 /// ```
-pub fn push(joiner: *Joiner, now_ms: i64, half: *HalfType) table.PushResult {
+pub fn push(joiner: *Joiner, now_ms: i64, half: *Half) table.PushResult {
     const index = joiner.find(half.key) orelse joiner.empty() orelse {
         return .{ .partial = table.sideExchange(half) };
     };
@@ -88,7 +88,7 @@ pub fn expire(joiner: *Joiner, now_ms: i64) ?Exchange {
     return null;
 }
 
-fn find(joiner: *const Joiner, key: KeyType) ?usize {
+fn find(joiner: *const Joiner, key: Key) ?usize {
     for (joiner.slots, 0..) |slot, index| {
         const entry = slot orelse continue;
         if (std.meta.eql(entry.key, key)) {

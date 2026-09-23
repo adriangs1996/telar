@@ -1,15 +1,15 @@
-const ResourcesType = @import("Resources.zig");
-const RegistryType = @import("../Registry.zig");
-const PipelineType = @import("../Pipeline.zig");
-const TransformPipelineType = @import("../TransformPipeline.zig");
+const Resources = @import("Resources.zig");
+const Registry = @import("../Registry.zig");
+const Pipeline = @import("../Pipeline.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
 const std = @import("std");
-const ProducerType = @import("../capture/Producer.zig");
+const Producer = @import("../capture/Producer.zig");
 const Dependencies = @This();
 
-tls: ResourcesType,
-credentials: *RegistryType,
-pipeline: *const PipelineType,
-transforms: *const TransformPipelineType,
+tls: Resources,
+credentials: *Registry,
+pipeline: *const Pipeline,
+transforms: *const TransformPipeline,
 has_custom_transformers: bool,
 connection_ids: *std.atomic.Value(u64),
-captures: *ProducerType,
+captures: *Producer,

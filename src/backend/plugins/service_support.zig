@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const ServiceSpec = @import("ServiceSpec.zig");
 const Exchange = @import("../proxy/capture/Exchange.zig");
 const Service = @import("Service.zig");
-const ResultType = @import("Result.zig");
+const Result = @import("Result.zig");
 const std = @import("std");
 const Worker = @import("Worker.zig");
 const Frame = @import("Frame.zig");
@@ -51,7 +51,7 @@ test "effect authorization checks exact identity, declaration and grant" {
     service.worker_count = 1;
     service.workers[0].spec = spec;
     var storage: [1]u8 = .{0};
-    var result: ResultType = .{
+    var result: Result = .{
         .gpa = std.testing.allocator,
         .package_index = 0,
         .plugin_id = core.stableId("tap.test"),
@@ -86,8 +86,8 @@ test "effect authorization checks exact identity, declaration and grant" {
 
 test "worker queue drops the oldest frame when full" {
     const io = std.testing.io;
-    var result_storage: [1]*ResultType = undefined;
-    var results: std.Io.Queue(*ResultType) = .init(&result_storage);
+    var result_storage: [1]*Result = undefined;
+    var results: std.Io.Queue(*Result) = .init(&result_storage);
     var worker: Worker = undefined;
     worker.init(.{ .gpa = std.testing.allocator, .spec = undefined, .results = &results });
     defer worker.stop(io);
@@ -110,8 +110,8 @@ test "worker queue drops the oldest frame when full" {
 
 test "five restarts in one window disable a worker" {
     var worker: Worker = undefined;
-    var result_storage: [1]*ResultType = undefined;
-    var results: std.Io.Queue(*ResultType) = .init(&result_storage);
+    var result_storage: [1]*Result = undefined;
+    var results: std.Io.Queue(*Result) = .init(&result_storage);
     worker.init(.{ .gpa = std.testing.allocator, .spec = undefined, .results = &results });
 
     for (0..restart_limit) |_| worker.recordRestart(std.testing.io);

@@ -3,10 +3,10 @@
 const core = @import("telar-core");
 const request_support = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
-const PipelineType = @import("../Pipeline.zig");
-const CountersType = @import("../Counters.zig");
+const Pipeline = @import("../Pipeline.zig");
+const Counters = @import("../Counters.zig");
 const Exchange = @import("Exchange.zig");
-const CredentialType = @import("../Credential.zig");
+const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
 const std = @import("std");
 const ExchangeCapture = @import("ExchangeCapture.zig");
@@ -25,8 +25,8 @@ pub fn requestPhase(classification: request_support.RequestClass) middleware.Pha
     };
 }
 
-fn testExchange(pipeline: *const PipelineType, counters: *CountersType) !Exchange {
-    const credential: CredentialType = .{
+fn testExchange(pipeline: *const Pipeline, counters: *Counters) !Exchange {
+    const credential: Credential = .{
         .pane_id = try core.pane(7),
         .pane_generation = 11,
         .token = .{0x42} ** identity.token_bytes,
@@ -45,8 +45,8 @@ fn testExchange(pipeline: *const PipelineType, counters: *CountersType) !Exchang
 
 test "published status carries authenticated exchange identity" {
     var capture: ExchangeCapture = .{};
-    var counters: CountersType = .{};
-    var pipeline: PipelineType = .{};
+    var counters: Counters = .{};
+    var pipeline: Pipeline = .{};
     try pipeline.add(.{ .context = &capture, .observe = ExchangeCapture.observe });
     var exchange = try testExchange(&pipeline, &counters);
 
@@ -69,8 +69,8 @@ test "published status carries authenticated exchange identity" {
 
 test "only lifecycle evidence for Claude increments Claude counters" {
     var capture: ExchangeCapture = .{};
-    var counters: CountersType = .{};
-    var pipeline: PipelineType = .{};
+    var counters: Counters = .{};
+    var pipeline: Pipeline = .{};
     try pipeline.add(.{ .context = &capture, .observe = ExchangeCapture.observe });
     var exchange = try testExchange(&pipeline, &counters);
 

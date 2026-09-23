@@ -1,17 +1,17 @@
 const std = @import("std");
-const StreamType = @import("Stream.zig");
+const Stream = @import("Stream.zig");
 const rpc = @import("rpc.zig");
-const OptionsType = @import("Options.zig");
+const Options = @import("Options.zig");
 const session_support = @import("session_support.zig");
 const Request = @import("Request.zig");
 const types = @import("types.zig");
-const ResponseType = @import("Response.zig");
+const Response = @import("Response.zig");
 const Session = @This();
 
 gpa: std.mem.Allocator,
 timeout_ms: u32,
 child: std.process.Child,
-stream: StreamType = .{},
+stream: Stream = .{},
 line_buffer: [rpc.max_line_bytes]u8 = undefined,
 last_used_ms: i64,
 
@@ -22,7 +22,7 @@ last_used_ms: i64,
 /// const session = try Session.open(io, gpa, options);
 /// defer session.close(io);
 /// ```
-pub fn open(io: std.Io, gpa: std.mem.Allocator, options: OptionsType) !*Session {
+pub fn open(io: std.Io, gpa: std.mem.Allocator, options: Options) !*Session {
     if (options.arguments.len == 0) {
         return error.FileNotFound;
     }
@@ -136,7 +136,7 @@ fn awaitSettled(session: *Session, timeout: std.Io.Timeout) session_support.AskE
 /// Copies the `get_last_assistant_text` reply into `response`. Here an
 /// oversized record can only be the reply itself, so it is invalid
 /// output rather than noise.
-fn readLastText(session: *Session, timeout: std.Io.Timeout, response: *ResponseType) session_support.AskError!void {
+fn readLastText(session: *Session, timeout: std.Io.Timeout, response: *Response) session_support.AskError!void {
     while (true) {
         var step = try session.stream.next(session.gpa, timeout);
         switch (step) {

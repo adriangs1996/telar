@@ -18,10 +18,10 @@ const RecentConversations = @import("RecentConversations.zig");
 const std = @import("std");
 const schema = @import("schema/schema.zig");
 const Entry = @import("Entry.zig");
-const TabLocationType = @import("schema/TabLocation.zig");
-const EnvironmentEntryType = @import("schema/EnvironmentEntry.zig");
+const TabLocation = @import("schema/TabLocation.zig");
+const EnvironmentEntry = @import("schema/EnvironmentEntry.zig");
 const types = @import("schema/types.zig");
-const ClientTabLayoutType = @import("schema/ClientTabLayout.zig");
+const ClientTabLayout = @import("schema/ClientTabLayout.zig");
 const EntryMetadata = @import("EntryMetadata.zig");
 const golden = @import("golden.zig");
 const pane_module = @import("schema/messages/pane.zig");
@@ -29,33 +29,33 @@ const workspace_module = @import("schema/messages/workspace.zig");
 const runtime = @import("schema/messages/runtime.zig");
 const tab_module = @import("schema/messages/tab.zig");
 const history = @import("schema/messages/history.zig");
-const ImportEntryType = @import("schema/messages/ImportEntry.zig");
+const ImportEntry = @import("schema/messages/ImportEntry.zig");
 const graphics = @import("schema/messages/graphics.zig");
 const notification_support = @import("schema/messages/notification_support.zig");
 const layout = @import("schema/messages/layout.zig");
 const agent_module = @import("schema/messages/agent.zig");
 const focus = @import("schema/messages/focus.zig");
-const CellType = @import("ui/Cell.zig");
-const SpanType = @import("schema/Span.zig");
-const PaneDescriptorType = @import("schema/PaneDescriptor.zig");
-const HistoryEntryType = @import("schema/HistoryEntry.zig");
-const HistoryStatsTopType = @import("schema/messages/HistoryStatsTop.zig");
+const Cell = @import("ui/Cell.zig");
+const Span = @import("schema/Span.zig");
+const PaneDescriptor = @import("schema/PaneDescriptor.zig");
+const HistoryEntry = @import("schema/HistoryEntry.zig");
+const HistoryStatsTop = @import("schema/messages/HistoryStatsTop.zig");
 const suggestion = @import("schema/messages/suggestion.zig");
-const TabDescriptorType = @import("schema/TabDescriptor.zig");
-const ShmNameType = @import("ShmName.zig");
-const AgentSnapshotEntryType = @import("schema/AgentSnapshotEntry.zig");
-const WorkspaceListEntryType = @import("schema/messages/WorkspaceListEntry.zig");
+const TabDescriptor = @import("schema/TabDescriptor.zig");
+const ShmName = @import("ShmName.zig");
+const AgentSnapshotEntry = @import("schema/AgentSnapshotEntry.zig");
+const WorkspaceListEntry = @import("schema/messages/WorkspaceListEntry.zig");
 const root = @import("schema/messages/messages.zig");
-const TerminalColorsType = @import("schema/TerminalColors.zig");
-const PlacementType = @import("schema/Placement.zig");
+const TerminalColors = @import("schema/TerminalColors.zig");
+const Placement = @import("schema/Placement.zig");
 const id_module = @import("schema/id.zig");
-const TerminalSizeType = @import("schema/TerminalSize.zig");
-const FrameViewType = @import("schema/FrameView.zig");
-const LaunchViewType = @import("schema/messages/LaunchView.zig");
+const TerminalSize = @import("schema/TerminalSize.zig");
+const FrameView = @import("schema/FrameView.zig");
+const LaunchView = @import("schema/messages/LaunchView.zig");
 const frame = @import("schema/frame_support.zig");
 const handshake = @import("schema/handshake.zig");
-const OpenPaneType = @import("schema/messages/OpenPane.zig");
-const FrameType = @import("schema/Frame.zig");
+const OpenPane = @import("schema/messages/OpenPane.zig");
+const Frame = @import("schema/Frame.zig");
 const tags = @import("schema/messages/tags.zig");
 const TextMetadataBuilder = @import("text_metadata/Builder.zig");
 const text_metadata_limits = @import("text_metadata/limits.zig");
@@ -75,13 +75,13 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     var used: usize = 0;
     var index: usize = 0;
 
-    const location: TabLocationType = .{
+    const location: TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
 
     const arguments = [_][]const u8{ "/bin/sh", "-l" };
-    const environment = [_]EnvironmentEntryType{
+    const environment = [_]EnvironmentEntry{
         .{ .name = "TERM", .value = "xterm-256color" },
         .{ .name = "EMPTY", .value = "" },
     };
@@ -90,7 +90,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
         .{ .pane = .{ .id = @enumFromInt(5) } },
         .{ .pane = .{ .id = @enumFromInt(6), .surface = .thread } },
     };
-    const client_layout_tabs = [_]ClientTabLayoutType{.{
+    const client_layout_tabs = [_]ClientTabLayout{.{
         .location = location,
         .focused_pane = @enumFromInt(5),
         .fullscreen = false,
@@ -246,7 +246,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .limit = 12,
         }),
     ));
-    const import_entries = [_]ImportEntryType{
+    const import_entries = [_]ImportEntry{
         .{ .started_at_ms = 1700000002000, .command = "git status" },
         .{ .started_at_ms = 1700000003000, .command = "make -j4" },
     };
@@ -514,10 +514,10 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .created = true,
         }),
     ));
-    const frame_cells = [_]CellType{
+    const frame_cells = [_]Cell{
         .{},
         .{
-            .bytes = [_]u8{'x'} ++ [_]u8{0} ** (CellType.max_bytes - 1),
+            .bytes = [_]u8{'x'} ++ [_]u8{0} ** (Cell.max_bytes - 1),
             .len = 1,
             .width = 1,
             .style = .{
@@ -527,7 +527,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             },
         },
     };
-    const frame_spans = [_]SpanType{.{ .start = 0, .cells = &frame_cells }};
+    const frame_spans = [_]Span{.{ .start = 0, .cells = &frame_cells }};
     var metadata_scratch: [text_metadata_limits.capacity(1)]u8 = undefined;
     var metadata_builder = TextMetadataBuilder.init(&metadata_scratch, 1);
     metadata_builder.setRow(0, .{ .wrap = true, .hyperlinks = true });
@@ -607,7 +607,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     helper.add(.{ .name = "runtime_stopping", .direction = .server, .golden_hex = golden.runtime_stopping }, helper.commit(
         try runtime.encodeRuntimeStopping(helper.space()),
     ));
-    const panes = [_]PaneDescriptorType{
+    const panes = [_]PaneDescriptor{
         .{ .pane_id = @enumFromInt(3), .lifecycle = .running },
         .{ .pane_id = @enumFromInt(9), .lifecycle = .exited },
     };
@@ -621,7 +621,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .panes = &panes,
         }),
     ));
-    const history_entries = [_]HistoryEntryType{
+    const history_entries = [_]HistoryEntry{
         .{
             .id = 11,
             .pane_id = @enumFromInt(3),
@@ -655,7 +655,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .content = "error: exit 1\n",
         }),
     ));
-    const stats_top = [_]HistoryStatsTopType{
+    const stats_top = [_]HistoryStatsTop{
         .{ .count = 30, .command = "git status" },
         .{ .count = 12, .command = "zig build" },
     };
@@ -693,7 +693,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .text = "ls -lS",
         }),
     ));
-    const descriptors = [_]TabDescriptorType{
+    const descriptors = [_]TabDescriptor{
         .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "", .foregrounds = &.{
             .{ .pane_id = @enumFromInt(5), .name = "nvim" },
             .{ .pane_id = @enumFromInt(6), .name = "codex" },
@@ -786,7 +786,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
                 .height = 2,
                 .byte_len = 16,
             },
-            .name = try ShmNameType.init("/tlr0000002a-7"),
+            .name = try ShmName.init("/tlr0000002a-7"),
         }),
     ));
     helper.add(.{ .name = "graphics_placement", .direction = .server, .golden_hex = golden.graphics_placement }, helper.commit(
@@ -825,7 +825,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     helper.add(.{ .name = "proxy_status", .direction = .server, .golden_hex = golden.proxy_status }, helper.commit(
         try runtime.encodeProxyStatus(helper.space(), .{ .active = true, .scope = .wildcard, .system_trusted = true }),
     ));
-    const agent_entries = [_]AgentSnapshotEntryType{.{
+    const agent_entries = [_]AgentSnapshotEntry{.{
         .pane_id = @enumFromInt(5),
         .pane_generation = 7,
         .location = .{
@@ -871,7 +871,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .battery_percent = 84,
         }),
     ));
-    const workspace_list_entries = [_]WorkspaceListEntryType{
+    const workspace_list_entries = [_]WorkspaceListEntry{
         .{
             .workspace = @enumFromInt(7),
             .name = "telar",
@@ -1125,7 +1125,7 @@ test "terminal color configuration preserves partial unknowns and rejects malfor
     var buffer: [16]u8 = undefined;
     for ([_]?[3]u8{ null, .{ 1, 2, 3 } }) |foreground| {
         for ([_]?[3]u8{ null, .{ 4, 5, 6 } }) |background| {
-            const colors: TerminalColorsType = .{ .foreground = foreground, .background = background };
+            const colors: TerminalColors = .{ .foreground = foreground, .background = background };
             const encoded = try runtime.encodeConfigureTerminalColors(&buffer, colors);
             const decoded = try root.decodeClient(encoded);
             try std.testing.expectEqualDeep(colors, decoded.configure_terminal_colors);
@@ -1137,7 +1137,7 @@ test "terminal color configuration preserves partial unknowns and rejects malfor
 
 test "terminal palette configuration is owned by the decoded value and rejects incomplete colors" {
     var buffer: [128]u8 = undefined;
-    const colors: TerminalColorsType = .{ .palette = .{.{ 12, 34, 56 }} ** 16 };
+    const colors: TerminalColors = .{ .palette = .{.{ 12, 34, 56 }} ** 16 };
     const encoded = try runtime.encodeConfigureTerminalColors(&buffer, colors);
     const decoded = (try root.decodeClient(encoded)).configure_terminal_colors;
     try std.testing.expectEqualDeep(colors, decoded);
@@ -1236,7 +1236,7 @@ test "a workspace snapshot with zero tabs round trips" {
 
 test "placements with a zero virtual id are rejected on both sides" {
     var buffer: [128]u8 = undefined;
-    const placement: PlacementType = .{
+    const placement: Placement = .{
         .pane_id = @enumFromInt(1),
         .revision = 3,
         .placement = .{
@@ -1294,14 +1294,14 @@ test "pane cwd rejects empty nul-containing and oversized paths" {
 test "a large real-world screen fits the frame budget" {
     // 480x150 is a 5K display with a small font. The worst-case single-frame
     // bound must not reject screens that real terminals produce.
-    const size: TerminalSizeType = .{ .cols = 480, .rows = 150 };
+    const size: TerminalSize = .{ .cols = 480, .rows = 150 };
     try size.validate();
 
     const gpa = std.testing.allocator;
-    const cells = try gpa.alloc(CellType, 480 * 150);
+    const cells = try gpa.alloc(Cell, 480 * 150);
     defer gpa.free(cells);
     @memset(cells, .{});
-    const spans = [_]SpanType{.{ .start = 0, .cells = cells }};
+    const spans = [_]Span{.{ .start = 0, .cells = cells }};
     const buffer = try gpa.alloc(u8, 1024 * 1024);
     defer gpa.free(buffer);
     const payload = try pane_module.encodePaneFrame(buffer, .{
@@ -1322,7 +1322,7 @@ test "iterators over malformed view bytes return errors instead of trapping" {
     // Views carry raw encoded regions; nothing stops code from constructing
     // one over bytes the decoder never validated. Iteration must fail loudly,
     // not hit unreachable code.
-    var spans = (FrameViewType{
+    var spans = (FrameView{
         .pane_id = @enumFromInt(1),
         .frame_id = 1,
         .base_frame_id = 0,
@@ -1337,7 +1337,7 @@ test "iterators over malformed view bytes return errors instead of trapping" {
     }).spans();
     try std.testing.expectError(error.Truncated, spans.next());
 
-    var arguments = (LaunchViewType{
+    var arguments = (LaunchView{
         .cwd = "/work",
         .argument_count = 1,
         .encoded_arguments = &.{0x04},
@@ -1353,8 +1353,8 @@ test "malformed cell bytes surface as errors during iteration" {
     // structural decode no longer inspects: the error must appear when the
     // consumer iterates the cells.
     var buffer: [128]u8 = undefined;
-    const cells = [_]CellType{.{}};
-    const spans = [_]SpanType{.{ .start = 0, .cells = &cells }};
+    const cells = [_]Cell{.{}};
+    const spans = [_]Span{.{ .start = 0, .cells = &cells }};
     const payload = try pane_module.encodePaneFrame(&buffer, .{
         .pane_id = @enumFromInt(1),
         .frame_id = 1,
@@ -1401,11 +1401,11 @@ test "the handshake fingerprint derives from the golden corpus" {
 // ---------------------------------------------------------------------------
 test "default pane open round trips launch data without allocation" {
     const arguments = [_][]const u8{ "/bin/sh", "-l" };
-    const environment = [_]EnvironmentEntryType{
+    const environment = [_]EnvironmentEntry{
         .{ .name = "TERM", .value = "xterm-256color" },
         .{ .name = "EMPTY", .value = "" },
     };
-    const message = OpenPaneType{
+    const message = OpenPane{
         .request_id = @enumFromInt(9),
         .size = .{ .cols = 120, .rows = 40 },
         .launch = .{
@@ -1531,7 +1531,7 @@ test "fixed client messages round trip" {
         .pane_id = @enumFromInt(3),
         .size = .{ .cols = 90, .rows = 30 },
     }))).pane_resize;
-    try std.testing.expectEqual(TerminalSizeType{ .cols = 90, .rows = 30 }, resize.size);
+    try std.testing.expectEqual(TerminalSize{ .cols = 90, .rows = 30 }, resize.size);
 
     const ack = (try root.decodeClient(try pane_module.encodeFrameAck(&buffer, .{
         .pane_id = @enumFromInt(3),
@@ -1563,7 +1563,7 @@ test "fixed client messages round trip" {
 
 test "multi-pane client messages round trip" {
     var buffer: [512]u8 = undefined;
-    const location: TabLocationType = .{
+    const location: TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
@@ -1609,7 +1609,7 @@ test "multi-pane client messages round trip" {
 test "tab lifecycle client messages round trip" {
     var buffer: [4096]u8 = undefined;
     const workspace: types.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
-    const location: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
+    const location: TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
 
     const requested = (try root.decodeClient(try workspace_module.encodeRequestWorkspaceSnapshot(&buffer, .{
         .request_id = @enumFromInt(40),
@@ -1656,8 +1656,8 @@ test "tab lifecycle client messages round trip" {
 test "tab lifecycle server messages preserve automatic and explicit labels" {
     var buffer: [4096]u8 = undefined;
     const workspace: types.WorkspaceLocation = .{ .workspace = @enumFromInt(7) };
-    const location: TabLocationType = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
-    const descriptors = [_]TabDescriptorType{
+    const location: TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(3) };
+    const descriptors = [_]TabDescriptor{
         .{ .tab_id = @enumFromInt(3), .position = 0, .pane_count = 2, .label = "", .foregrounds = &.{
             .{ .pane_id = @enumFromInt(5), .name = "nvim" },
             .{ .pane_id = @enumFromInt(6), .name = "codex" },
@@ -1812,7 +1812,7 @@ test "fixed server messages round trip" {
 }
 
 test "tab snapshots preserve ordered pane descriptors" {
-    const panes = [_]PaneDescriptorType{
+    const panes = [_]PaneDescriptor{
         .{ .pane_id = @enumFromInt(3), .lifecycle = .running },
         .{ .pane_id = @enumFromInt(9), .lifecycle = .exited },
     };
@@ -1834,7 +1834,7 @@ test "tab snapshots preserve ordered pane descriptors" {
 }
 
 test "history results preserve nullable exits and command metadata" {
-    const entries = [_]HistoryEntryType{
+    const entries = [_]HistoryEntry{
         .{
             .id = 11,
             .pane_id = @enumFromInt(3),
@@ -1872,10 +1872,10 @@ test "history results preserve nullable exits and command metadata" {
 }
 
 test "pane frames use the server envelope" {
-    const cells = [_]CellType{.{}};
-    const spans = [_]SpanType{.{ .start = 0, .cells = &cells }};
+    const cells = [_]Cell{.{}};
+    const spans = [_]Span{.{ .start = 0, .cells = &cells }};
     var buffer: [128]u8 = undefined;
-    const message = FrameType{
+    const message = Frame{
         .pane_id = @enumFromInt(4),
         .frame_id = 1,
         .base_frame_id = 0,
@@ -1944,7 +1944,7 @@ test "malformed application messages are rejected" {
         .bytes = "x",
     }));
 
-    const agent_entry: AgentSnapshotEntryType = .{
+    const agent_entry: AgentSnapshotEntry = .{
         .pane_id = @enumFromInt(3),
         .pane_generation = 4,
         .location = .{
@@ -1967,7 +1967,7 @@ test "malformed application messages are rejected" {
         .observed_at_ms = 7,
         .expires_at_ms = 8,
     };
-    const duplicate_entries = [_]AgentSnapshotEntryType{ agent_entry, agent_entry };
+    const duplicate_entries = [_]AgentSnapshotEntry{ agent_entry, agent_entry };
     var agent_buffer: [1024]u8 = undefined;
     try std.testing.expectError(error.DuplicateAgentEntry, agent_module.encodeAgentSnapshot(
         &agent_buffer,
@@ -1993,7 +1993,7 @@ test "agent snapshot display fields are bounded and validated before allocation"
     const tab = [_]u8{'t'} ** types.max_tab_label_bytes;
     const title = [_]u8{'s'} ** types.max_agent_session_title_bytes;
     const cwd = [_]u8{'c'} ** types.max_agent_cwd_label_bytes;
-    var entry: AgentSnapshotEntryType = .{
+    var entry: AgentSnapshotEntry = .{
         .pane_id = @enumFromInt(3),
         .pane_generation = 4,
         .location = .{
@@ -2079,7 +2079,7 @@ test "agent snapshot display fields are bounded and validated before allocation"
 }
 
 test "agent snapshot attention fields are bounded and tied to the blocked status" {
-    var entry: AgentSnapshotEntryType = .{
+    var entry: AgentSnapshotEntry = .{
         .pane_id = @enumFromInt(5),
         .pane_generation = 1,
         .location = .{
@@ -2196,7 +2196,7 @@ test "truncated client and server messages are rejected" {
 }
 
 test "client layout schema validates trees focus and chrome-only recovery" {
-    const location: TabLocationType = .{
+    const location: TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
@@ -2275,7 +2275,7 @@ test "client layout schema validates trees focus and chrome-only recovery" {
 
 test "workspace closure handoffs are present only for a different surviving workspace" {
     var buffer: [128]u8 = undefined;
-    const location: TabLocationType = .{
+    const location: TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(3),
     };
@@ -2310,11 +2310,11 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
     const span_count = frame.max_span_count;
     const per_span = total / span_count;
 
-    const cells = try gpa.alloc(CellType, total);
+    const cells = try gpa.alloc(Cell, total);
     defer gpa.free(cells);
     for (cells, 0..) |*cell, index| {
         cell.* = .{
-            .len = CellType.max_bytes,
+            .len = Cell.max_bytes,
             .width = 1,
             .style = .{
                 .fg = if (index % 2 == 0)
@@ -2325,10 +2325,10 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
                 .underline_color = .rgb(.{ 4, 5, 6 }),
             },
         };
-        @memset(cell.bytes[0..CellType.max_bytes], 'a');
+        @memset(cell.bytes[0..Cell.max_bytes], 'a');
     }
 
-    const spans = try gpa.alloc(SpanType, span_count);
+    const spans = try gpa.alloc(Span, span_count);
     defer gpa.free(spans);
     for (spans, 0..) |*span, index| {
         const start: u32 = @intCast(index * per_span);

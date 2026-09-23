@@ -8,17 +8,17 @@ const PaneRange = @import("PaneRange.zig");
 const std = @import("std");
 const ComposeSink = @import("ComposeSink.zig");
 const diff = @import("../presentation/diff.zig");
-const ScreenType = @import("../presentation/Screen.zig");
+const Screen = @import("../presentation/Screen.zig");
 const PaneCursor = @import("PaneCursor.zig");
-const PatchSinkType = @import("../presentation/PatchSink.zig");
+const PatchSink = @import("../presentation/PatchSink.zig");
 const BorderInput = @import("BorderInput.zig");
-const PlanType = @import("../presentation/Plan.zig");
-const ResultType = @import("Result.zig");
+const Plan = @import("../presentation/Plan.zig");
+const Result = @import("Result.zig");
 const fullscreen_tabs = @import("fullscreen_tabs.zig");
 const Compositor = @import("Compositor.zig");
 const TestingComposition = @import("TestingComposition.zig");
 const RenderStats = @import("RenderStats.zig");
-const PositionType = @import("../presentation/Position.zig");
+const Position = @import("../presentation/Position.zig");
 const term = @import("../presentation/screen_support.zig");
 
 pub fn copyView(copy: ?client.CopyProjection, pane_id: core.PaneId) ?data.CopyModeView {
@@ -122,7 +122,7 @@ pub fn syncPaneRange(range: PaneRange) !usize {
     }, &sink);
 }
 
-pub fn setPaneCursor(screen: *ScreenType, pane: *const data.Pane, projection: PaneCursor) void {
+pub fn setPaneCursor(screen: *Screen, pane: *const data.Pane, projection: PaneCursor) void {
     if (projection.copy != null and !projection.copy.?.pointer) {
         const selection = projection.copy.?;
         if (selection.cursor.y < pane.scroll.offset or selection.cursor.x >= projection.content.w) {
@@ -147,14 +147,14 @@ pub fn setPaneCursor(screen: *ScreenType, pane: *const data.Pane, projection: Pa
     };
 }
 
-pub fn syncComposed(screen: *ScreenType, composed: *const core.Buffer) !usize {
+pub fn syncComposed(screen: *Screen, composed: *const core.Buffer) !usize {
     std.debug.assert(screen.sizeMatches(composed.w, composed.h));
     var damaged: usize = 0;
     var y: u16 = 0;
     while (y < composed.h) : (y += 1) {
         const row_start = @as(usize, y) * composed.w;
         const source_row = composed.cells[row_start..][0..composed.w];
-        var sink: PatchSinkType = .{
+        var sink: PatchSink = .{
             .screen = screen,
             .source_row = source_row,
             .base = row_start,
@@ -169,7 +169,7 @@ pub fn syncComposed(screen: *ScreenType, composed: *const core.Buffer) !usize {
     return damaged;
 }
 
-pub fn syncComposedRow(screen: *ScreenType, composed: *const core.Buffer, y: u16) !usize {
+pub fn syncComposedRow(screen: *Screen, composed: *const core.Buffer, y: u16) !usize {
     std.debug.assert(screen.sizeMatches(composed.w, composed.h));
     if (y >= composed.h) {
         return 0;
@@ -177,7 +177,7 @@ pub fn syncComposedRow(screen: *ScreenType, composed: *const core.Buffer, y: u16
 
     const row_start = @as(usize, y) * composed.w;
     const source_row = composed.cells[row_start..][0..composed.w];
-    var sink: PatchSinkType = .{
+    var sink: PatchSink = .{
         .screen = screen,
         .source_row = source_row,
         .base = row_start,
@@ -190,7 +190,7 @@ pub fn syncComposedRow(screen: *ScreenType, composed: *const core.Buffer, y: u16
     }, &sink);
 }
 
-pub fn drawBorder(buffer: *core.Buffer, input: BorderInput) PlanType {
+pub fn drawBorder(buffer: *core.Buffer, input: BorderInput) Plan {
     const style: core.Style = if (input.view.focused)
         .{ .fg = input.palette.accent, .flags = .{ .bold = true } }
     else
@@ -214,7 +214,7 @@ pub fn drawBorder(buffer: *core.Buffer, input: BorderInput) PlanType {
     return .{};
 }
 
-fn drawFullscreenTabs(buffer: *core.Buffer, input: BorderInput) ResultType {
+fn drawFullscreenTabs(buffer: *core.Buffer, input: BorderInput) Result {
     const model = input.fullscreen_model.?;
     const outer = input.view.outer;
     if (outer.w <= 4 or outer.h < 2) {
@@ -365,7 +365,7 @@ fn testingRender(compositor: *Compositor, composition: TestingComposition) !Rend
     return rendered.stats;
 }
 
-fn testingRenderDefault(compositor: *Compositor, model: *data.ClientModel, screen: *ScreenType) !RenderStats {
+fn testingRenderDefault(compositor: *Compositor, model: *data.ClientModel, screen: *Screen) !RenderStats {
     return testingRender(compositor, .{
         .model = model,
         .screen = screen,
@@ -386,7 +386,7 @@ test "two pane buffers compose into their layout rectangles" {
     model.panes.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "a", .width = 1, .style = .{} });
     model.panes.find(@enumFromInt(2)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "b", .width = 1, .style = .{} });
 
-    var screen = try ScreenType.init(gpa, 40, 7);
+    var screen = try Screen.init(gpa, 40, 7);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -419,7 +419,7 @@ test "compositor places a bottom reservation below only its target pane" {
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 40, .rows = 12 } });
     try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
 
-    var screen = try ScreenType.init(gpa, area.w, area.h);
+    var screen = try Screen.init(gpa, area.w, area.h);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -474,7 +474,7 @@ test "copy mode highlights an absolute scrollback selection" {
         .linewise = false,
     } };
 
-    var screen = try ScreenType.init(gpa, 4, 2);
+    var screen = try Screen.init(gpa, 4, 2);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -490,7 +490,7 @@ test "copy mode highlights an absolute scrollback selection" {
     try std.testing.expect(screen.back.cells[1].style.flags.inverse);
     try std.testing.expect(screen.back.cells[6].style.flags.inverse);
     try std.testing.expect(!screen.back.cells[7].style.flags.inverse);
-    try std.testing.expectEqual(PositionType{ .x = 2, .y = 1 }, screen.cursor.?);
+    try std.testing.expectEqual(Position{ .x = 2, .y = 1 }, screen.cursor.?);
 }
 
 test "copy mode projection stays outside the multiplexer model" {
@@ -503,7 +503,7 @@ test "copy mode projection stays outside the multiplexer model" {
         .tab_id = @enumFromInt(1),
     };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 4, .rows = 2 } });
-    var screen = try ScreenType.init(gpa, 4, 2);
+    var screen = try Screen.init(gpa, 4, 2);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -523,7 +523,7 @@ test "copy mode projection stays outside the multiplexer model" {
     });
     try std.testing.expect(!cursor_only.full);
     try std.testing.expectEqual(@as(usize, 0), cursor_only.cells);
-    try std.testing.expectEqual(PositionType{ .x = 2, .y = 1 }, screen.cursor.?);
+    try std.testing.expectEqual(Position{ .x = 2, .y = 1 }, screen.cursor.?);
 
     const selection: client.CopyProjection = .{ .pane_id = pane_id, .view = .{
         .anchor = .{ .x = 1, .y = 0 },
@@ -590,7 +590,7 @@ test "fullscreen composes only the focused pane across the whole tab" {
         data.tab_layout.contentSize(&model, 0, @enumFromInt(1), area).?,
     );
     try std.testing.expectEqual(@as(?core.TerminalSize, null), data.tab_layout.contentSize(&model, 0, @enumFromInt(2), area));
-    var screen = try ScreenType.init(gpa, area.w, area.h);
+    var screen = try Screen.init(gpa, area.w, area.h);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -622,7 +622,7 @@ test "single-pane fullscreen draws labels and progress and restores borderless c
     const pane = model.panes.find(pane_id).?;
     pane.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
     try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
-    var screen = try ScreenType.init(gpa, area.w, area.h);
+    var screen = try Screen.init(gpa, area.w, area.h);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -667,7 +667,7 @@ test "fullscreen border keeps the pane's tiled display index" {
     try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
     try std.testing.expect(model.tabs.layout[0].focusPane(@enumFromInt(2)));
     try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
-    var screen = try ScreenType.init(gpa, area.w, area.h);
+    var screen = try Screen.init(gpa, area.w, area.h);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -706,7 +706,7 @@ test "fullscreen tabs follow focus and survive progress animation without idle r
     _ = model.panes.find(first).?.setForegroundName("nvim");
     _ = model.panes.find(third).?.setForegroundName("claude");
     try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
-    var screen = try ScreenType.init(gpa, 64, 14);
+    var screen = try Screen.init(gpa, 64, 14);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -772,7 +772,7 @@ test "pane borders use the selected theme without coloring pane contents" {
     try std.testing.expect(second.setForegroundName("Claude Code"));
     first.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
     const selected = data.theme_support.builtin(.tokyo_night);
-    var screen = try ScreenType.init(gpa, 20, 4);
+    var screen = try Screen.init(gpa, 20, 4);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -814,7 +814,7 @@ test "one pane has no telar border" {
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 12, .rows = 3 } });
     model.panes.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
 
-    var screen = try ScreenType.init(gpa, 12, 3);
+    var screen = try Screen.init(gpa, 12, 3);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -868,7 +868,7 @@ test "composition damage retires only after its presentation commits" {
     pane.pending_frame_id = 7;
     pane.damage_rows[0].mark(0, 1);
 
-    var screen = try ScreenType.init(gpa, 2, 1);
+    var screen = try Screen.init(gpa, 2, 1);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -903,7 +903,7 @@ test "stale presentation commits preserve newer pane work" {
     pane.pending_frame_id = 7;
     pane.damage_rows[0].mark(0, 1);
 
-    var screen = try ScreenType.init(gpa, 2, 1);
+    var screen = try Screen.init(gpa, 2, 1);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -940,7 +940,7 @@ test "fullscreen presentation commits include hidden panes" {
     model.panes.find(@enumFromInt(1)).?.pending_frame_id = 3;
     model.panes.find(@enumFromInt(2)).?.pending_frame_id = 4;
 
-    var screen = try ScreenType.init(gpa, area.w, area.h);
+    var screen = try Screen.init(gpa, area.w, area.h);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -1001,7 +1001,7 @@ test "unchanged composition produces no terminal damage" {
         .tab_id = @enumFromInt(1),
     };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 8, .rows = 3 } });
-    var screen = try ScreenType.init(gpa, 8, 3);
+    var screen = try Screen.init(gpa, 8, 3);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -1074,7 +1074,7 @@ test "compositor detects focus changes while stable focus stays incremental" {
     };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
     try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 6 } });
-    var screen = try ScreenType.init(gpa, 40, 6);
+    var screen = try Screen.init(gpa, 40, 6);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
@@ -1100,7 +1100,7 @@ test "compositor detects pane projection changes without model cache flags" {
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 24, .rows = 3 } });
     const pane = model.panes.find(pane_id).?;
 
-    var screen = try ScreenType.init(gpa, 24, 3);
+    var screen = try Screen.init(gpa, 24, 3);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();

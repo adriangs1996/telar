@@ -1,4 +1,4 @@
-const CommandType = @import("Command.zig");
+const Command = @import("Command.zig");
 const CodexTestSink = @This();
 
-pub fn emit(_: *@This(), _: CommandType) void {}
+pub fn emit(_: *@This(), _: Command) void {}

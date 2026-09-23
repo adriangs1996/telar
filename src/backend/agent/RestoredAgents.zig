@@ -1,7 +1,7 @@
 const core = @import("telar-core");
 const RestoredAgent = @import("RestoredAgent.zig");
-const PaneKeyType = @import("../pane/PaneKey.zig");
-const SessionTitleType = @import("SessionTitle.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
+const SessionTitle = @import("SessionTitle.zig");
 const ResumeSession = @import("ResumeSession.zig");
 const RestoredAgents = @This();
 
@@ -13,7 +13,7 @@ slots: [core.max_agent_snapshot_entries]?RestoredAgent = .{null} ** core.max_age
 /// ```zig
 /// _ = restored.putTitle(pane.key(), title);
 /// ```
-pub fn putTitle(restored: *RestoredAgents, key: PaneKeyType, title: SessionTitleType) bool {
+pub fn putTitle(restored: *RestoredAgents, key: PaneKey, title: SessionTitle) bool {
     const entry = restored.ensure(key) orelse return false;
     entry.title = title;
     return true;
@@ -21,7 +21,7 @@ pub fn putTitle(restored: *RestoredAgents, key: PaneKeyType, title: SessionTitle
 
 /// Keeps the intended resume durable until the actual process is observed.
 /// Example: `_ = restored.putSession(key, session);`.
-pub fn putSession(restored: *RestoredAgents, key: PaneKeyType, session: ResumeSession) bool {
+pub fn putSession(restored: *RestoredAgents, key: PaneKey, session: ResumeSession) bool {
     const entry = restored.ensure(key) orelse return false;
     entry.session = session;
     return true;
@@ -29,7 +29,7 @@ pub fn putSession(restored: *RestoredAgents, key: PaneKeyType, session: ResumeSe
 
 /// Reads pending metadata without making it live agent evidence.
 /// Example: `const pending = restored.get(key) orelse return;`.
-pub fn get(restored: *const RestoredAgents, key: PaneKeyType) ?RestoredAgent {
+pub fn get(restored: *const RestoredAgents, key: PaneKey) ?RestoredAgent {
     const index = restored.indexOf(key) orelse return null;
     return restored.slots[index];
 }
@@ -48,7 +48,7 @@ pub fn containsSession(restored: *const RestoredAgents, session: ResumeSession) 
     return false;
 }
 
-fn ensure(restored: *RestoredAgents, key: PaneKeyType) ?*RestoredAgent {
+fn ensure(restored: *RestoredAgents, key: PaneKey) ?*RestoredAgent {
     if (restored.indexOf(key)) |index| {
         return &restored.slots[index].?;
     }
@@ -70,14 +70,14 @@ fn ensure(restored: *RestoredAgents, key: PaneKeyType) ?*RestoredAgent {
 /// ```zig
 /// _ = restored.take(identity.key);
 /// ```
-pub fn take(restored: *RestoredAgents, key: PaneKeyType) ?RestoredAgent {
+pub fn take(restored: *RestoredAgents, key: PaneKey) ?RestoredAgent {
     const index = restored.indexOf(key) orelse return null;
     const entry = restored.slots[index];
     restored.slots[index] = null;
     return entry;
 }
 
-fn indexOf(restored: *const RestoredAgents, key: PaneKeyType) ?usize {
+fn indexOf(restored: *const RestoredAgents, key: PaneKey) ?usize {
     for (restored.slots, 0..) |slot, index| {
         const entry = slot orelse continue;
 

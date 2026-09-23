@@ -3,16 +3,16 @@ const client_module = @import("telar-client");
 const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
-const RunOptionsType = @import("arguments/RunOptions.zig");
+const RunOptions = @import("arguments/RunOptions.zig");
 const ClientPreparation = @import("ClientPreparation.zig");
 const config = @import("config.zig");
-const LaunchDefaultsType = @import("LaunchDefaults.zig");
+const LaunchDefaults = @import("LaunchDefaults.zig");
 const plugin = @import("plugin.zig");
 const client = @import("client.zig");
 const Launch = @This();
 
 process: std.process.Init,
-options: *const RunOptionsType,
+options: *const RunOptions,
 endpoint: []const u8,
 argument_storage: [backend.max_args][]const u8 = undefined,
 argument_count: usize = 0,
@@ -59,7 +59,7 @@ pub fn prepare(launch: *Launch, preparation: ClientPreparation) !void {
     }
 }
 
-pub fn prepareChild(launch: *Launch, defaults: ?LaunchDefaultsType) !void {
+pub fn prepareChild(launch: *Launch, defaults: ?LaunchDefaults) !void {
     if (defaults) |remote_launch| {
         if (remote_launch.cwd.len > launch.cwd_buffer.len) {
             return error.NameTooLong;

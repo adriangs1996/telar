@@ -5,7 +5,7 @@ const GenericCredentialPort = @import("GenericCredentialPort.zig").Type;
 const GenericConnectAuthenticationCommand = @import("GenericConnectAuthenticationCommand.zig").Type;
 const std = @import("std");
 const TestStore = @import("TestStore.zig");
-const CredentialType = @import("Credential.zig");
+const Credential = @import("Credential.zig");
 const ExpectedRejection = @import("ExpectedRejection.zig");
 
 const authentication_required_response =
@@ -112,7 +112,7 @@ const test_credential_port: GenericCredentialPort(TestStore) = .{
 
 const TestCommand = GenericConnectAuthenticationCommand(TestStore, test_credential_port);
 
-fn testCredential() CredentialType {
+fn testCredential() Credential {
     return .{
         .pane_id = @enumFromInt(7),
         .pane_generation = 12,

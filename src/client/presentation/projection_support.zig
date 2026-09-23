@@ -3,7 +3,7 @@
 const data = @import("model");
 const Context = @import("Context.zig");
 const Projection = @import("Projection.zig");
-const CopyProjectionType = @import("../workspace/CopyProjection.zig");
+const CopyProjection = @import("../workspace/CopyProjection.zig");
 
 /// Borrows model data only until the synchronous preparation call returns.
 /// Refreshes the model's layout snapshot for the active tab first, so the
@@ -12,7 +12,7 @@ const CopyProjectionType = @import("../workspace/CopyProjection.zig");
 pub fn capture(model: *data.ClientModel, context: Context) Projection {
     const tab = model.tabs.activeSlot();
     const layout: ?*const data.LayoutSnapshot = if (tab) |slot| data.tab_layout.snapshot(model, slot, context.geometry.area) else null;
-    const copy: ?CopyProjectionType = if (model.copyModeProjection()) |value|
+    const copy: ?CopyProjection = if (model.copyModeProjection()) |value|
         .{ .pane_id = value.pane_id, .view = value.view }
     else
         null;

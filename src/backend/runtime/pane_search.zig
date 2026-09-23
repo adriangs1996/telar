@@ -11,7 +11,7 @@ const Cursor = @import("../pane/Cursor.zig");
 const std = @import("std");
 const client_request = @import("client_request.zig");
 const Wake = @import("events/Wake.zig");
-const MatchesType = @import("delivery/Matches.zig");
+const Matches = @import("delivery/Matches.zig");
 
 /// Starts a search, replacing only this client's previous search.
 /// Example: `try start(model, session, request);`.
@@ -77,7 +77,7 @@ pub fn advance(model: *RuntimeModel, completion: Wake) !void {
         return;
     };
     if (complete) {
-        const matches: MatchesType = .{
+        const matches: Matches = .{
             .items = pending.cursor.matches,
             .count = pending.cursor.count,
             .truncated = pending.cursor.truncated,

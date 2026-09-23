@@ -3,12 +3,12 @@
 
 const OpenPane = @import("OpenPane.zig");
 const codec = @import("../codec.zig");
-const EncoderType = @import("../Encoder.zig");
+const Encoder = @import("../Encoder.zig");
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
 const Launch = @import("../Launch.zig");
 const launch_mod = @import("launch.zig");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const OpenPaneView = @import("OpenPaneView.zig");
 const types = @import("../types.zig");
 const PaneInput = @import("PaneInput.zig");
@@ -30,7 +30,7 @@ const PaneText = @import("PaneText.zig");
 const PaneTitle = @import("PaneTitle.zig");
 const CopySelection = @import("CopySelection.zig");
 const PaneOpened = @import("PaneOpened.zig");
-const FrameType = @import("../Frame.zig");
+const Frame = @import("../Frame.zig");
 const frame = @import("../frame_support.zig");
 const PaneClipboard = @import("PaneClipboard.zig");
 const PaneExited = @import("PaneExited.zig");
@@ -52,7 +52,7 @@ pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
     try codec.validateRequestId(message.request_id);
     try message.size.validate();
 
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.open_pane));
     try encoder.writeInt(u64, id.raw(message.request_id));
     var default_launch: ?Launch = null;
@@ -87,7 +87,7 @@ pub fn encodeOpenPane(buffer: []u8, message: OpenPane) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeOpenPane(decoder: *DecoderType) !OpenPaneView {
+pub fn decodeOpenPane(decoder: *Decoder) !OpenPaneView {
     const request_id = try id.request(try decoder.readInt(u64));
     const target_tag = try decoder.readByte();
     const target: types.PaneTarget = switch (target_tag) {
@@ -116,14 +116,14 @@ pub fn encodePaneInput(buffer: []u8, message: PaneInput) ![]const u8 {
         return error.InvalidInputLength;
     }
 
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.pane_input));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeBytes(message.bytes);
     return encoder.finish();
 }
 
-pub fn decodePaneInput(decoder: *DecoderType) !PaneInput {
+pub fn decodePaneInput(decoder: *Decoder) !PaneInput {
     const pane_id = try id.pane(try decoder.readInt(u64));
     const bytes = try decoder.readBytes(decoder.bytes.len - decoder.index);
     if (bytes.len == 0 or bytes.len > types.max_input_bytes) {
@@ -151,7 +151,7 @@ pub fn encodeDetachPane(buffer: []u8, message: DetachPane) ![]const u8 {
 pub fn encodeCreatePane(buffer: []u8, message: CreatePane) ![]const u8 {
     try codec.validateRequestId(message.request_id);
     try message.size.validate();
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.create_pane));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try codec.encodeTabLocation(&encoder, message.location);
@@ -160,7 +160,7 @@ pub fn encodeCreatePane(buffer: []u8, message: CreatePane) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeCreatePane(decoder: *DecoderType) !CreatePaneView {
+pub fn decodeCreatePane(decoder: *Decoder) !CreatePaneView {
     return .{
         .request_id = try id.request(try decoder.readInt(u64)),
         .location = try codec.decodeTabLocation(decoder),
@@ -189,7 +189,7 @@ pub fn encodeSendPaneText(buffer: []u8, message: SendPaneText) ![]const u8 {
     try codec.validateRequestId(message.request_id);
     try codec.validatePaneId(message.pane_id);
     try codec.validateBytes(message.text, types.max_pane_text_input_bytes, false);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.send_pane_text));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -199,7 +199,7 @@ pub fn encodeSendPaneText(buffer: []u8, message: SendPaneText) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeSendPaneText(decoder: *DecoderType) !SendPaneText {
+pub fn decodeSendPaneText(decoder: *Decoder) !SendPaneText {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const pane_generation = try decoder.readInt(u64);
@@ -223,7 +223,7 @@ pub fn encodeSearchPane(buffer: []u8, message: SearchPane) ![]const u8 {
     if (!std.unicode.utf8ValidateSlice(message.needle)) {
         return error.InvalidUtf8;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.search_pane));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -231,7 +231,7 @@ pub fn encodeSearchPane(buffer: []u8, message: SearchPane) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeSearchPane(decoder: *DecoderType) !SearchPane {
+pub fn decodeSearchPane(decoder: *Decoder) !SearchPane {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const needle = try decoder.readSized16();
@@ -248,7 +248,7 @@ pub fn encodePaneMatches(buffer: []u8, message: PaneMatches) ![]const u8 {
     if (message.matches.len > types.max_search_matches) {
         return error.TooManySearchMatches;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.pane_matches));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -265,7 +265,7 @@ pub fn encodePaneMatches(buffer: []u8, message: PaneMatches) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodePaneMatches(decoder: *DecoderType) !PaneMatchesView {
+pub fn decodePaneMatches(decoder: *Decoder) !PaneMatchesView {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const truncated = try decoder.readBool();
@@ -296,7 +296,7 @@ pub fn encodePaneText(buffer: []u8, message: PaneText) ![]const u8 {
     if (message.text.len > types.max_pane_text_bytes) {
         return error.InvalidByteString;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.pane_text));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -305,7 +305,7 @@ pub fn encodePaneText(buffer: []u8, message: PaneText) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodePaneText(decoder: *DecoderType) !PaneText {
+pub fn decodePaneText(decoder: *Decoder) !PaneText {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const truncated = try decoder.readBool();
@@ -324,14 +324,14 @@ pub fn decodePaneText(decoder: *DecoderType) !PaneText {
 pub fn encodePaneTitle(buffer: []u8, message: PaneTitle) ![]const u8 {
     try codec.validatePaneId(message.pane_id);
     try codec.validateBytes(message.title, types.max_pane_title_bytes, true);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.pane_title));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeSized16(message.title);
     return encoder.finish();
 }
 
-pub fn decodePaneTitle(decoder: *DecoderType) !PaneTitle {
+pub fn decodePaneTitle(decoder: *Decoder) !PaneTitle {
     const pane_id = try id.pane(try decoder.readInt(u64));
     const title = try decoder.readSized16();
     try codec.validateBytes(title, types.max_pane_title_bytes, true);
@@ -350,8 +350,8 @@ pub fn encodePaneOpened(buffer: []u8, message: PaneOpened) ![]const u8 {
     return codec.encodeDerived(@intFromEnum(tags.ServerTag.pane_opened), buffer, message);
 }
 
-pub fn encodePaneFrame(buffer: []u8, message: FrameType) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+pub fn encodePaneFrame(buffer: []u8, message: Frame) ![]const u8 {
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.pane_frame));
     try frame.encodeBody(&encoder, message);
     return encoder.finish();
@@ -362,14 +362,14 @@ pub fn encodePaneClipboard(buffer: []u8, message: PaneClipboard) ![]const u8 {
     if (message.bytes.len > max_clipboard_bytes) {
         return error.ClipboardTooLarge;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.pane_clipboard));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeSized32(message.bytes);
     return encoder.finish();
 }
 
-pub fn decodePaneClipboard(decoder: *DecoderType) !PaneClipboard {
+pub fn decodePaneClipboard(decoder: *Decoder) !PaneClipboard {
     const clipboard: PaneClipboard = .{
         .pane_id = try id.pane(try decoder.readInt(u64)),
         .bytes = try decoder.readSized32(),
@@ -387,14 +387,14 @@ pub fn encodePaneExited(buffer: []u8, message: PaneExited) ![]const u8 {
 pub fn encodePaneCwd(buffer: []u8, message: PaneCwd) ![]const u8 {
     try codec.validatePaneId(message.pane_id);
     try codec.validateBytes(message.cwd, types.max_cwd_bytes, false);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.pane_cwd));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeSized16(message.cwd);
     return encoder.finish();
 }
 
-pub fn decodePaneCwd(decoder: *DecoderType) !PaneCwd {
+pub fn decodePaneCwd(decoder: *Decoder) !PaneCwd {
     const pane_id = try id.pane(try decoder.readInt(u64));
     const cwd = try decoder.readSized16();
     try codec.validateBytes(cwd, types.max_cwd_bytes, false);
@@ -404,14 +404,14 @@ pub fn decodePaneCwd(decoder: *DecoderType) !PaneCwd {
 pub fn encodePaneForeground(buffer: []u8, message: PaneForeground) ![]const u8 {
     try codec.validatePaneId(message.pane_id);
     try codec.validateBytes(message.name, types.max_foreground_name_bytes, false);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.pane_foreground));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeSized16(message.name);
     return encoder.finish();
 }
 
-pub fn decodePaneForeground(decoder: *DecoderType) !PaneForeground {
+pub fn decodePaneForeground(decoder: *Decoder) !PaneForeground {
     const pane_id = try id.pane(try decoder.readInt(u64));
     const name = try decoder.readSized16();
     try codec.validateBytes(name, types.max_foreground_name_bytes, false);
@@ -422,7 +422,7 @@ pub fn encodePaneProgress(buffer: []u8, message: PaneProgress) ![]const u8 {
     try codec.validatePaneId(message.pane_id);
     try message.validateWire();
 
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.pane_progress));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeByte(@intFromEnum(message.state));
@@ -430,7 +430,7 @@ pub fn encodePaneProgress(buffer: []u8, message: PaneProgress) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodePaneProgress(decoder: *DecoderType) !PaneProgress {
+pub fn decodePaneProgress(decoder: *Decoder) !PaneProgress {
     const pane_id = try id.pane(try decoder.readInt(u64));
     const state: PaneProgressState = switch (try decoder.readByte()) {
         0 => .remove,

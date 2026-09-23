@@ -15,8 +15,8 @@ const CallbackRequest = @import("CallbackRequest.zig");
 const CommandOutput = @import("CommandOutput.zig");
 const BarCommandFailure = @import("BarCommandFailure.zig");
 const BarUpdateCommand = @import("BarUpdateCommand.zig");
-const BarCallbackContextType = @import("../../config/BarCallbackContext.zig");
-const BarMetricsType = @import("../../config/BarMetrics.zig");
+const BarCallbackContext = @import("../../config/BarCallbackContext.zig");
+const BarMetrics = @import("../../config/BarMetrics.zig");
 
 pub const no_deadline = data.bar_timing.no_deadline;
 pub const position_count = data.bar_timing.position_count;
@@ -153,9 +153,9 @@ fn publishEvaluation(client: *Client, command: BarUpdateCommand) !bar_update.Out
     };
 }
 
-fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContextType {
+fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContext {
     const local = local_time.now();
-    const metrics: ?BarMetricsType = if (client.model.system_metrics) |value| .{
+    const metrics: ?BarMetrics = if (client.model.system_metrics) |value| .{
         .cpu_percent = value.cpu_percent,
         .memory_used_decigib = value.memory_used_decigib,
         .battery_percent = value.battery_percent,

@@ -9,18 +9,18 @@ const shared_transfer = @import("../../media/shared_transfer.zig");
 const Pane = @import("../../pane/Pane.zig");
 const vt = @import("ghostty-vt");
 const Attachment = @import("Attachment.zig");
-const GraphicsPreparationType = @import("GraphicsPreparation.zig");
-const KnownImageType = @import("KnownImage.zig");
-const KnownPlacementType = @import("KnownPlacement.zig");
-const TransferType = @import("Transfer.zig");
+const GraphicsPreparation = @import("GraphicsPreparation.zig");
+const KnownImage = @import("KnownImage.zig");
+const KnownPlacement = @import("KnownPlacement.zig");
+const Transfer = @import("Transfer.zig");
 const media_mod = @import("../../media/media.zig");
-const PlacementSourceType = @import("../../media/PlacementSource.zig");
-const ServiceType = @import("../../history/Service.zig");
+const PlacementSource = @import("../../media/PlacementSource.zig");
+const Service = @import("../../history/Service.zig");
 const GraphicsBudget = @import("../../media/GraphicsBudget.zig");
-const CommandType = @import("../../pty/Command.zig");
+const Command = @import("../../pty/Command.zig");
 const AttachmentStore = @import("AttachmentStore.zig");
 const support_module = @import("../tests/support.zig");
-const CellPreparationType = @import("CellPreparation.zig");
+const CellPreparation = @import("CellPreparation.zig");
 const graphics = @import("graphics.zig");
 
 pub fn initSharedFreezeNonce(io: std.Io) void {
@@ -102,7 +102,7 @@ pub fn abandonGraphicsBatch(attachment: *Attachment) void {
     attachment.graphics.observed_revision = attachment.pane.graphics_revision;
 }
 
-pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparationType) !?[]const u8 {
+pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparation) !?[]const u8 {
     const buffer = preparation.buffer;
     const global_credit = preparation.global_credit;
     const live_storage_available = preparation.live_storage_available;
@@ -117,8 +117,8 @@ pub fn encodeNextGraphics(attachment: *Attachment, preparation: GraphicsPreparat
     const revision = attachment.graphics.revision;
 
     if (attachment.graphics.snapshot == .begin_pending) {
-        attachment.graphics.known_images = [_]?KnownImageType{null} ** core.max_images_per_pane;
-        attachment.graphics.known_placements = [_]?KnownPlacementType{null} ** core.max_placements_per_pane;
+        attachment.graphics.known_images = [_]?KnownImage{null} ** core.max_images_per_pane;
+        attachment.graphics.known_placements = [_]?KnownPlacement{null} ** core.max_placements_per_pane;
         attachment.freeTransfer();
         attachment.graphics.snapshot = .open;
         return try core.encodeGraphicsSnapshot(buffer, .{
@@ -344,7 +344,7 @@ pub fn stageNextTransfer(attachment: *Attachment, global_credit: usize) !StageRe
             attachment.graphics.stage_blocked +|= 1;
             return .blocked;
         }
-        var transfer: TransferType = .{
+        var transfer: Transfer = .{
             .metadata = metadata,
             .pixels = &.{},
             .reserved_len = pixels.len,
@@ -442,7 +442,7 @@ pub fn forgetPlacementsForImage(attachment: *Attachment, key: core.ImageKey) voi
     }
 }
 
-pub fn knownPlacement(attachment: *Attachment, virtual_id: u64) ?*KnownPlacementType {
+pub fn knownPlacement(attachment: *Attachment, virtual_id: u64) ?*KnownPlacement {
     for (&attachment.graphics.known_placements) |*slot| {
         const known = if (slot.*) |*value| value else continue;
         if (known.placement.virtual_id == virtual_id) {
@@ -474,21 +474,21 @@ pub fn findPlacement(storage: *vt.kitty.graphics.ImageStorage, virtual_id: u64) 
     return null;
 }
 
-fn placementValue(pane: *Pane, source: PlacementSourceType) ?core.Placement {
+fn placementValue(pane: *Pane, source: PlacementSource) ?core.Placement {
     return media_mod.placementValue(&pane.media.terminal, source);
 }
 
 test "attachment store reports and commits workspace departure on the last pane" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
         service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&args);
+    const command = try Command.fromArgv(&args);
     const workspace: core.WorkspaceLocation = .{ .workspace = try core.workspace(1) };
     const first = try Pane.create(.{
         .io = io,
@@ -567,7 +567,7 @@ test "pointer-only frames coalesce independently and survive snapshot recovery" 
     var second = try Attachment.init(std.testing.allocator, fixture.pane);
     defer second.deinit();
     var buffer: [4096]u8 = undefined;
-    const preparation: CellPreparationType = .{ .io = std.testing.io, .buffer = &buffer, .metrics = &fixture.metrics };
+    const preparation: CellPreparation = .{ .io = std.testing.io, .buffer = &buffer, .metrics = &fixture.metrics };
 
     const initial = (try core.decodeServer((try first.prepareNextCells(preparation)).?.bytes)).pane_frame;
     try std.testing.expectEqual(core.PointerShape.text, initial.pointer_shape);
@@ -609,14 +609,14 @@ test "pointer-only frames coalesce independently and survive snapshot recovery" 
 test "attachments keep independent scrollback viewports" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
         service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&args);
+    const command = try Command.fromArgv(&args);
     const pane = try Pane.create(.{
         .io = io,
         .gpa = gpa,
@@ -663,14 +663,14 @@ test "attachments keep independent scrollback viewports" {
 test "an unsupported stored image degrades graphics sync instead of killing it" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
         service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&args);
+    const command = try Command.fromArgv(&args);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = try core.workspace(1) },
         .tab_id = try core.tab(1),
@@ -737,14 +737,14 @@ test "an unsupported stored image degrades graphics sync instead of killing it" 
 test "graphics transfers wait for pane and client memory credit" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
         service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&args);
+    const command = try Command.fromArgv(&args);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = try core.workspace(1) },
         .tab_id = try core.tab(1),
@@ -806,14 +806,14 @@ test "graphics transfers wait for pane and client memory credit" {
 test "a staged transfer drains while the media actor stays busy" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
         service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&args);
+    const command = try Command.fromArgv(&args);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = try core.workspace(1) },
         .tab_id = try core.tab(1),
@@ -896,7 +896,7 @@ test "a staged transfer drains while the media actor stays busy" {
 test "completed replacements do not exhaust attachment image slots" {
     var attachment: Attachment = undefined;
     attachment.graphics.known_images =
-        [_]?KnownImageType{null} ** core.max_images_per_pane;
+        [_]?KnownImage{null} ** core.max_images_per_pane;
 
     const replacements = core.max_images_per_pane * 2;
     for (1..replacements + 1) |generation| {
@@ -917,14 +917,14 @@ test "completed replacements do not exhaust attachment image slots" {
 test "graphics quota enforcement evicts oldest images on the ingested pane" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
         service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&args);
+    const command = try Command.fromArgv(&args);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = try core.workspace(1) },
         .tab_id = try core.tab(1),
@@ -976,14 +976,14 @@ test "a shared-transport attachment ships one name instead of pixel chunks" {
     }
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
         service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&args);
+    const command = try Command.fromArgv(&args);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = try core.workspace(1) },
         .tab_id = try core.tab(1),
@@ -1078,14 +1078,14 @@ test "an abandoned unsent shared transfer unlinks its object" {
     }
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer {
         service.stop(io);
         service.deinit(io);
     }
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const args = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&args);
+    const command = try Command.fromArgv(&args);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = try core.workspace(1) },
         .tab_id = try core.tab(1),

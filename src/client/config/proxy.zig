@@ -3,12 +3,12 @@
 const data = @import("model");
 const core = @import("telar-core");
 const lua_api = @import("lua-api");
-const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
+const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
 const std = @import("std");
 const PositiveField = @import("PositiveField.zig");
 
-pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *data.Diagnostic) !void {
+pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.proxy must be a table", .{});
@@ -113,7 +113,7 @@ pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnos
     runtime.proxy_intercept_hosts.sortAndDeduplicate();
 }
 
-fn parseCapture(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *data.Diagnostic) !void {
+fn parseCapture(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.proxy.capture must be a table", .{});

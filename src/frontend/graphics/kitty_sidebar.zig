@@ -3,9 +3,9 @@
 const core = @import("telar-core");
 const SidebarProviderPlacement = @import("SidebarProviderPlacement.zig");
 const std = @import("std");
-const SizeType = @import("Size.zig");
+const Size = @import("Size.zig");
 const ProviderAtlasInput = @import("ProviderAtlasInput.zig");
-const BitmapType = @import("Bitmap.zig");
+const Bitmap = @import("Bitmap.zig");
 const KittySidebarRenderer = @import("KittySidebarRenderer.zig");
 const bitmap = @import("bitmap_support.zig");
 const SidebarFocus = @import("SidebarFocus.zig");
@@ -43,7 +43,7 @@ pub fn rgbaLength(width: u32, height: u32) !usize {
     return std.math.mul(usize, pixels, 4) catch return error.SidebarTooLarge;
 }
 
-pub fn fitWithinPixels(width: u32, height: u32, max_pixels: usize) SizeType {
+pub fn fitWithinPixels(width: u32, height: u32, max_pixels: usize) Size {
     if (@as(u64, width) * height <= max_pixels) {
         return .{ .width = width, .height = height };
     }
@@ -85,7 +85,7 @@ pub fn renderProviderAtlas(input: ProviderAtlasInput) void {
     const offset_y = (input.slot.height - icon_size) / 2;
     var provider: u32 = 0;
     while (provider < providerAtlasSourceCount()) : (provider += 1) {
-        const source: BitmapType = .{
+        const source: Bitmap = .{
             .pixels = KittySidebarRenderer.provider_source_pixels,
             .stride = KittySidebarRenderer.provider_source_width,
             .origin_x = provider * KittySidebarRenderer.provider_source_size,

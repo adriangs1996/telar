@@ -4,7 +4,7 @@ const view_interaction = @import("view_interaction.zig");
 const Client = @import("../../AttachedClient.zig");
 const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
 const ViewInteractionOutcome = @import("ViewInteractionOutcome.zig");
-const IntentOutcomeType = @import("IntentOutcome.zig");
+const IntentOutcome = @import("IntentOutcome.zig");
 
 /// Applies one interaction emitted by the view and returns its pane-input
 /// routing decision.
@@ -32,8 +32,8 @@ pub fn apply(client: *Client, tab: usize, interaction: ViewInteractionCommand) !
     };
 }
 
-fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcomeType {
-    var outcome: IntentOutcomeType = .{};
+fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome {
+    var outcome: IntentOutcome = .{};
 
     switch (intent) {
         .none => {},

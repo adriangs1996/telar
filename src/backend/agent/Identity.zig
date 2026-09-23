@@ -1,6 +1,6 @@
-const PaneKeyType = @import("../pane/PaneKey.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
 const Identity = @This();
 
-key: PaneKeyType,
+key: PaneKey,
 process_id: u32,
 session_id: [16]u8,

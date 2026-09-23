@@ -1,7 +1,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const GeometryPane = @import("GeometryPane.zig");
-const ProjectionType = @import("Projection.zig");
+const Projection = @import("Projection.zig");
 const std = @import("std");
 const Geometry = @This();
 
@@ -14,7 +14,7 @@ len: u8 = 0,
 
 /// Captures coordinate identity, not cells or model pointers.
 /// Example: `const geometry = Geometry.capture(projection);`.
-pub fn capture(projection: ProjectionType) Geometry {
+pub fn capture(projection: Projection) Geometry {
     var geometry: Geometry = .{ .region = projection.geometry, .host_size = projection.host_size };
     const slot = projection.tab orelse return geometry;
     const model = projection.model;

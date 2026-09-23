@@ -3,10 +3,10 @@
 const relay_mod = @import("relay.zig");
 const GenericConnectionPort = @import("GenericConnectionPort.zig").Type;
 const GenericConnection = @import("GenericConnection.zig").Type;
-const TransformPipelineType = @import("../TransformPipeline.zig");
-const TransformContextType = @import("../TransformContext.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
+const TransformContext = @import("../TransformContext.zig");
 const std = @import("std");
-const SessionType = @import("../Session.zig");
+const Session = @import("../Session.zig");
 const types = @import("../../agent/types.zig");
 const IntegrationContext = @import("IntegrationContext.zig");
 const middleware = @import("../middleware.zig");
@@ -108,12 +108,12 @@ pub fn relay(session: anytype, options: RelayOptions, sink: anytype) Stats {
 
 test "relay options map direction and peer settings" {
     var settings: Settings = .{};
-    var pipeline: TransformPipelineType = .{};
-    const context: TransformContextType = undefined;
+    var pipeline: TransformPipeline = .{};
+    const context: TransformContext = undefined;
 
     const observed_request = relayOptions(.request, &settings, .{ .dialect = .unknown });
-    try std.testing.expectEqual(SessionType.Side.child, observed_request.route.from);
-    try std.testing.expectEqual(SessionType.Side.origin, observed_request.route.to);
+    try std.testing.expectEqual(Session.Side.child, observed_request.route.from);
+    try std.testing.expectEqual(Session.Side.origin, observed_request.route.to);
     try std.testing.expectEqual(types.ApiDialect.unknown, observed_request.dialect);
     try std.testing.expect(observed_request.transformation == null);
 
@@ -125,8 +125,8 @@ test "relay options map direction and peer settings" {
             .context = context,
         },
     });
-    try std.testing.expectEqual(SessionType.Side.child, request.route.from);
-    try std.testing.expectEqual(SessionType.Side.origin, request.route.to);
+    try std.testing.expectEqual(Session.Side.child, request.route.from);
+    try std.testing.expectEqual(Session.Side.origin, request.route.to);
     try std.testing.expectEqual(types.ApiDialect.anthropic_messages, request.dialect);
     try std.testing.expect(request.transformation.?.source_settings == &settings.child);
     try std.testing.expect(request.transformation.?.target_settings == &settings.origin);
@@ -139,8 +139,8 @@ test "relay options map direction and peer settings" {
             .context = context,
         },
     });
-    try std.testing.expectEqual(SessionType.Side.origin, response.route.from);
-    try std.testing.expectEqual(SessionType.Side.child, response.route.to);
+    try std.testing.expectEqual(Session.Side.origin, response.route.from);
+    try std.testing.expectEqual(Session.Side.child, response.route.to);
     try std.testing.expectEqual(types.ApiDialect.openai_responses, response.dialect);
     try std.testing.expect(response.transformation.?.source_settings == &settings.origin);
     try std.testing.expect(response.transformation.?.target_settings == &settings.child);

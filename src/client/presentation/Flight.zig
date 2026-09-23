@@ -1,10 +1,10 @@
 const lifecycle = @import("lifecycle.zig");
-const ObservationType = @import("Observation.zig");
-const GeometryType = @import("Geometry.zig");
-const DeliveryType = @import("PresentationDelivery.zig");
+const Observation = @import("Observation.zig");
+const Geometry = @import("Geometry.zig");
+const PresentationDelivery = @import("PresentationDelivery.zig");
 const Flight = @This();
 
 token: lifecycle.Token,
-observation: ObservationType,
-geometry: GeometryType,
-delivery: DeliveryType,
+observation: Observation,
+geometry: Geometry,
+delivery: PresentationDelivery,

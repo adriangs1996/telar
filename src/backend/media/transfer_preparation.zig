@@ -1,13 +1,13 @@
 //! Bounded transfer requests executed only while the media actor owns storage.
 
 const Entry = @import("Entry.zig");
-const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
+const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 const std = @import("std");
 const Request = @import("Request.zig");
 const Frozen = @import("Frozen.zig");
 const shared = @import("shared_transfer.zig");
 
-pub fn discardEntry(slot: *?Entry, media: *PaneMediaAllocatorType) void {
+pub fn discardEntry(slot: *?Entry, media: *PaneMediaAllocator) void {
     const entry = slot.* orelse return;
     if (entry.result) |result| {
         if (result) |frozen| {
@@ -28,7 +28,7 @@ pub fn same(a: Request, b: Request) bool {
         a.allocator.ptr == b.allocator.ptr and a.allocator.vtable == b.allocator.vtable;
 }
 
-pub fn freeze(request: Request, pixels: []const u8, media: *PaneMediaAllocatorType) !Frozen {
+pub fn freeze(request: Request, pixels: []const u8, media: *PaneMediaAllocator) !Frozen {
     if (!media.reserveManual(pixels.len)) {
         return error.GraphicsQuotaExceeded;
     }

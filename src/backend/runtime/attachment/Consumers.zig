@@ -1,11 +1,11 @@
 const core = @import("telar-core");
-const AttachmentStoreType = @import("AttachmentStore.zig");
+const AttachmentStore = @import("AttachmentStore.zig");
 const attachment_mod = @import("attachment_namespace.zig");
 const std = @import("std");
 const Consumers = @This();
 
 pane_id: core.PaneId,
-stores: []const *AttachmentStoreType,
+stores: []const *AttachmentStore,
 
 /// Example: `const needed = consumers.wants(key, true);`.
 pub fn wants(consumers: Consumers, key: core.ImageKey, shared: bool) bool {

@@ -11,10 +11,10 @@ const core = @import("telar-core");
 
 const Input = @import("Input.zig");
 const Output = @import("Output.zig");
-const ClockType = @import("Clock.zig");
+const Clock = @import("Clock.zig");
 const vt = @import("ghostty-vt");
 const std = @import("std");
-const CommandType = @import("Command.zig");
+const Command = @import("Command.zig");
 const CodexTestSink = @import("CodexTestSink.zig");
 
 pub const batch_bytes = 4 * 16 * 1024;
@@ -39,7 +39,7 @@ pub const Event = union(enum) {
     output: Output,
     resize: core.TerminalSize,
     shell_exit: struct {
-        clock: ClockType,
+        clock: Clock,
         exit_code: i32,
     },
 };
@@ -88,13 +88,13 @@ test "input and output are observed in enqueue order" {
         bytes: [64]u8 = undefined,
         len: usize = 0,
 
-        pub fn emit(collector: *@This(), command: CommandType) void {
+        pub fn emit(collector: *@This(), command: Command) void {
             collector.len = @min(command.bytes.len, collector.bytes.len);
             @memcpy(collector.bytes[0..collector.len], command.bytes[0..collector.len]);
         }
     };
     var collector: Collector = .{};
-    const started: ClockType = .{ .real_ms = 10, .awake_ns = 100 };
+    const started: Clock = .{ .real_ms = 10, .awake_ns = 100 };
     observer.queueOutput(.{ .bytes = "$ ", .shell_foreground = true, .clock = started });
     observer.queueInput(.{ .bytes = "echo isolated\r", .shell_foreground = true, .clock = started });
     observer.queueOutput(.{ .bytes = "echo isolated\r\n", .shell_foreground = false, .clock = started });
@@ -192,7 +192,7 @@ fn agentSignalForOutput(output: []const u8, size: core.TerminalSize) !?core.Sign
     defer observer.deinit();
 
     const Noop = struct {
-        pub fn emit(_: *@This(), _: CommandType) void {}
+        pub fn emit(_: *@This(), _: Command) void {}
     };
     var noop: Noop = .{};
     observer.queueOutput(.{ .bytes = output, .shell_foreground = false, .clock = .{ .real_ms = 1, .awake_ns = 1 } });

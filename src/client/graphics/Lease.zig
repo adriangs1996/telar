@@ -1,5 +1,5 @@
-const ImageIdentityType = @import("ImageIdentity.zig");
+const ImageIdentity = @import("ImageIdentity.zig");
 const Lease = @This();
 
-identity: ImageIdentityType,
+identity: ImageIdentity,
 pixels: []const u8

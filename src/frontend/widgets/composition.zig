@@ -6,12 +6,12 @@
 const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const CompositionInput = @import("CompositionInput.zig");
 const CompositionOutput = @import("CompositionOutput.zig");
 const top_bar = @import("top_bar.zig");
 const sidebar = @import("sidebar.zig");
-const CursorType = @import("Cursor.zig");
+const Cursor = @import("Cursor.zig");
 const tab_rename = @import("tab_rename.zig");
 const status_bar = @import("status_bar.zig");
 const workbench = @import("workbench.zig");
@@ -19,7 +19,7 @@ const BarLayoutRegions = @import("BarLayoutRegions.zig");
 const tab_bar = @import("tab_bar.zig");
 const bar_content = @import("bar_content.zig");
 
-pub fn render(context: *ContextType, input: CompositionInput) CompositionOutput {
+pub fn render(context: *Context, input: CompositionInput) CompositionOutput {
     top_bar.render(context, .{
         .area = input.regions.top,
         .sidebar_visible = !input.regions.sidebar.isEmpty(),
@@ -60,7 +60,7 @@ pub fn render(context: *ContextType, input: CompositionInput) CompositionOutput 
     }
 
     context.buffer.fill(input.regions.bottom, .{ .glyph = " ", .style = bottomStyle(context) });
-    const cursor: ?CursorType = if (input.rename_field) |field|
+    const cursor: ?Cursor = if (input.rename_field) |field|
         tab_rename.render(context, .{
             .area = input.regions.bottom,
             .field = field,
@@ -86,7 +86,7 @@ pub fn render(context: *ContextType, input: CompositionInput) CompositionOutput 
     };
 }
 
-fn renderBottom(context: *ContextType, input: CompositionInput) void {
+fn renderBottom(context: *Context, input: CompositionInput) void {
     const slots = &input.bar_state.layout.bottom;
     const tab_index: u2 = for (slots, 0..) |slot, index| {
         if (slot == .tabs) {
@@ -139,7 +139,7 @@ fn bottomDesiredWidth(slot: *const data.bar_values.Slot, input: CompositionInput
     };
 }
 
-fn bottomStyle(context: *const ContextType) core.Style {
+fn bottomStyle(context: *const Context) core.Style {
     return .{
         .fg = context.palette.subtext0,
         .bg = context.palette.panel_bg,

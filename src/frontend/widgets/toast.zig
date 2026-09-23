@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const data = @import("model");
 const client = @import("telar-client");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const RenderMode = @import("RenderMode.zig");
 const CardInput = @import("CardInput.zig");
 const widget = @import("context_support.zig");
@@ -36,17 +36,17 @@ pub fn overlayArea(workbench: core.Rect) core.Rect {
 
 /// Renders visible notification cards and their semantic targets.
 /// For example: `render(context, area, center);`.
-pub fn render(context: *ContextType, area: core.Rect, center: *const data.Center) void {
+pub fn render(context: *Context, area: core.Rect, center: *const data.Center) void {
     renderMode(context, .{ .area = area, .center = center, .paint = true });
 }
 
 /// Keeps the cell-aligned semantic targets when KGP owns the pixels.
 /// For example: `registerHits(context, area, center);`.
-pub fn registerHits(context: *ContextType, area: core.Rect, center: *const data.Center) void {
+pub fn registerHits(context: *Context, area: core.Rect, center: *const data.Center) void {
     renderMode(context, .{ .area = area, .center = center, .paint = false });
 }
 
-fn renderMode(context: *ContextType, mode: RenderMode) void {
+fn renderMode(context: *Context, mode: RenderMode) void {
     const area = mode.area;
     const center = mode.center;
 
@@ -73,7 +73,7 @@ fn renderMode(context: *ContextType, mode: RenderMode) void {
     }
 }
 
-fn drawCard(context: *ContextType, input: CardInput) void {
+fn drawCard(context: *Context, input: CardInput) void {
     const card = input.area;
     const item = input.item;
 
@@ -146,7 +146,7 @@ fn drawCard(context: *ContextType, input: CardInput) void {
     }
 }
 
-fn levelColor(context: *const ContextType, level: data.NotificationLevel) core.Color {
+fn levelColor(context: *const Context, level: data.NotificationLevel) core.Color {
     return switch (level) {
         .info => context.palette.blue,
         .success => context.palette.green,
@@ -168,7 +168,7 @@ test "toast cards register activation and a separate close target" {
         .target = .{ .select_tab = @enumFromInt(7) },
     });
     _ = center.advance(data.notifications.transition_duration_ns);
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &theme.default_theme.palette,

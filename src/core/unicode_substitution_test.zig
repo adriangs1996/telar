@@ -6,12 +6,12 @@
 //! which is the point: it can only pass if the substitution took effect.
 
 const std = @import("std");
-const BufferType = @import("ui/Buffer.zig");
+const Buffer = @import("ui/Buffer.zig");
 const text_module = @import("ui/text.zig");
 
 test "layout follows the injected table, not the bytes" {
     const gpa = std.testing.allocator;
-    var buf = try BufferType.init(gpa, 20, 1);
+    var buf = try Buffer.init(gpa, 20, 1);
     defer buf.deinit();
 
     // Plain ASCII, which every real table calls one column wide.
@@ -32,7 +32,7 @@ test "truncation measures with the injected table too" {
     // whole arrangement exists to make impossible. Right alignment and
     // ellipsis both depend on them agreeing.
     const gpa = std.testing.allocator;
-    var buf = try BufferType.init(gpa, 10, 1);
+    var buf = try Buffer.init(gpa, 10, 1);
     defer buf.deinit();
 
     // "abcd" is eight columns here, so it does not fit in five.

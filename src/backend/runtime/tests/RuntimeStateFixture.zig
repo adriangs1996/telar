@@ -1,29 +1,29 @@
 const core = @import("telar-core");
-const DeliveryType = @import("../delivery/Delivery.zig");
-const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
-const PaneStoreType = @import("../../pane/PaneStore.zig");
-const TrackerType = @import("../../agent/Tracker.zig");
-const SamplerType = @import("../observability/Sampler.zig");
-const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
+const Delivery = @import("../delivery/Delivery.zig");
+const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const PaneStore = @import("../../pane/PaneStore.zig");
+const Tracker = @import("../../agent/Tracker.zig");
+const Sampler = @import("../observability/Sampler.zig");
+const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const std = @import("std");
-const SourcesType = @import("../delivery/Sources.zig");
+const Sources = @import("../delivery/Sources.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
 const RuntimeStateFixture = @This();
 
-delivery: DeliveryType,
-attachments: AttachmentStoreType = .{},
-panes: PaneStoreType = .{},
+delivery: Delivery,
+attachments: AttachmentStore = .{},
+panes: PaneStore = .{},
 workspaces: Workspaces = .{},
-agents: TrackerType = .{},
-system_metrics: SamplerType = .{},
-metrics: RuntimeMetricsType = .{ .started_ns = 0 },
+agents: Tracker = .{},
+system_metrics: Sampler = .{},
+metrics: RuntimeMetrics = .{ .started_ns = 0 },
 
 pub fn create() !*RuntimeStateFixture {
     const fixture = try std.testing.allocator.create(RuntimeStateFixture);
     errdefer std.testing.allocator.destroy(fixture);
 
     fixture.* = .{
-        .delivery = try DeliveryType.init(std.testing.allocator),
+        .delivery = try Delivery.init(std.testing.allocator),
     };
     fixture.system_metrics = .{
         .revision = 7,
@@ -42,7 +42,7 @@ pub fn destroy(fixture: *RuntimeStateFixture) void {
     std.testing.allocator.destroy(fixture);
 }
 
-fn sources(fixture: *RuntimeStateFixture) SourcesType {
+fn sources(fixture: *RuntimeStateFixture) Sources {
     return .{
         .panes = &fixture.panes,
         .workspaces = &fixture.workspaces,

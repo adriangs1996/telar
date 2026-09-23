@@ -1,6 +1,6 @@
-const StyleType = @import("Style.zig");
+const Style = @import("Style.zig");
 const RightAlignedText = @This();
 
 y: u16,
 text: []const u8,
-style: StyleType = .{},
+style: Style = .{},

@@ -3,8 +3,8 @@
 const std = @import("std");
 const GenericConnectionAdmissionPort = @import("../GenericConnectionAdmissionPort.zig").Type;
 const GenericRunner = @import("../GenericRunner.zig").Type;
-const TunnelType = @import("../tunnel/Tunnel.zig");
-const CredentialType = @import("../Credential.zig");
+const Tunnel = @import("../tunnel/Tunnel.zig");
+const Credential = @import("../Credential.zig");
 
 pub const max_connections: u32 = 64;
 
@@ -45,7 +45,7 @@ fn serveConnection(service: *Service, stream: std.Io.net.Stream) std.Io.Cancelab
     defer service.connection_slots.release();
     const configuration = service.configuration.view();
 
-    var tunnel = TunnelType.init(.{
+    var tunnel = Tunnel.init(.{
         .dependencies = .{
             .tls = service.interception.tunnelResources(&service.telemetry),
             .credentials = &service.credentials,
@@ -73,7 +73,7 @@ fn cancelConnections(service: *Service, connections: *std.Io.Group) void {
     connections.cancel(service.io);
 }
 
-pub fn observationCredentialIsLive(context: *anyopaque, credential: *const CredentialType) bool {
+pub fn observationCredentialIsLive(context: *anyopaque, credential: *const Credential) bool {
     const service: *Service = @ptrCast(@alignCast(context));
     return service.credentials.contains(service.io, credential);
 }

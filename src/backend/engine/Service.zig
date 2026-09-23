@@ -1,19 +1,19 @@
 const std = @import("std");
-const OptionsType = @import("Options.zig");
+const Options = @import("Options.zig");
 const types = @import("types.zig");
-const ResponseType = @import("Response.zig");
-const SessionType = @import("Session.zig");
-const PromptType = @import("Prompt.zig");
+const Response = @import("Response.zig");
+const Session = @import("Session.zig");
+const Prompt = @import("Prompt.zig");
 /// The service must live at a stable address for as long as `run` executes.
 const Service = @This();
 
 gpa: std.mem.Allocator,
-options: OptionsType,
+options: Options,
 requests: std.Io.Queue(types.Request),
-responses: std.Io.Queue(ResponseType),
+responses: std.Io.Queue(Response),
 request_storage: []types.Request,
-response_storage: []ResponseType,
-session: ?*SessionType = null,
+response_storage: []Response,
+session: ?*Session = null,
 child_alive: std.atomic.Value(bool) = .init(false),
 idle_check_pending: std.atomic.Value(bool) = .init(false),
 
@@ -23,10 +23,10 @@ idle_check_pending: std.atomic.Value(bool) = .init(false),
 /// var service = try Service.init(gpa, options);
 /// defer service.deinit(io);
 /// ```
-pub fn init(gpa: std.mem.Allocator, options: OptionsType) !Service {
+pub fn init(gpa: std.mem.Allocator, options: Options) !Service {
     const request_storage = try gpa.alloc(types.Request, types.max_pending_requests);
     errdefer gpa.free(request_storage);
-    const response_storage = try gpa.alloc(ResponseType, types.max_pending_requests);
+    const response_storage = try gpa.alloc(Response, types.max_pending_requests);
     errdefer gpa.free(response_storage);
 
     return .{
@@ -98,7 +98,7 @@ pub fn requestIdleCheck(service: *Service, io: std.Io) void {
 /// ```zig
 /// const response = try service.receiveResponse(io);
 /// ```
-pub fn receiveResponse(service: *Service, io: std.Io) anyerror!ResponseType {
+pub fn receiveResponse(service: *Service, io: std.Io) anyerror!Response {
     return service.responses.getOne(io);
 }
 
@@ -139,8 +139,8 @@ pub fn handle(service: *Service, io: std.Io, request: types.Request) void {
 /// Answers on the live child, or a fresh one. A child that timed out or
 /// broke the protocol is discarded; one that merely answered badly is
 /// kept, because its next reply may be fine.
-fn answer(service: *Service, io: std.Io, prompt: *const PromptType) ResponseType {
-    var response: ResponseType = .{ .purpose = prompt.purpose, .status = .failed };
+fn answer(service: *Service, io: std.Io, prompt: *const Prompt) Response {
+    var response: Response = .{ .purpose = prompt.purpose, .status = .failed };
     const session = service.ensureSession(io) catch |err| {
         response.status = if (err == error.FileNotFound) .unavailable else .failed;
         return response;
@@ -157,12 +157,12 @@ fn answer(service: *Service, io: std.Io, prompt: *const PromptType) ResponseType
     return response;
 }
 
-fn ensureSession(service: *Service, io: std.Io) !*SessionType {
+fn ensureSession(service: *Service, io: std.Io) !*Session {
     if (service.session) |session| {
         return session;
     }
 
-    const session = try SessionType.open(io, service.gpa, service.options);
+    const session = try Session.open(io, service.gpa, service.options);
     service.session = session;
     service.child_alive.store(true, .release);
     return session;

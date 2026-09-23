@@ -4,10 +4,10 @@
 const QueryHistory = @import("QueryHistory.zig");
 const codec = @import("../codec.zig");
 const types = @import("../types.zig");
-const EncoderType = @import("../Encoder.zig");
+const Encoder = @import("../Encoder.zig");
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const std = @import("std");
 const HistoryResults = @import("HistoryResults.zig");
 const HistoryResultsView = @import("HistoryResultsView.zig");
@@ -56,7 +56,7 @@ pub fn encodeQueryHistory(buffer: []u8, message: QueryHistory) ![]const u8 {
             }
         },
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.query_history));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeSized16(message.query);
@@ -77,7 +77,7 @@ pub fn encodeQueryHistory(buffer: []u8, message: QueryHistory) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeQueryHistory(decoder: *DecoderType) !QueryHistory {
+pub fn decodeQueryHistory(decoder: *Decoder) !QueryHistory {
     const request_id = try id.request(try decoder.readInt(u64));
     const query = try decoder.readSized16();
     try codec.validateBytes(query, types.max_history_query_bytes, true);
@@ -124,7 +124,7 @@ pub fn encodeHistoryResults(buffer: []u8, message: HistoryResults) ![]const u8 {
     if (message.entries.len > types.max_history_results) {
         return error.TooManyHistoryResults;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.history_results));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u16, @intCast(message.entries.len));
@@ -134,7 +134,7 @@ pub fn encodeHistoryResults(buffer: []u8, message: HistoryResults) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeHistoryResults(decoder: *DecoderType) !HistoryResultsView {
+pub fn decodeHistoryResults(decoder: *Decoder) !HistoryResultsView {
     const request_id = try id.request(try decoder.readInt(u64));
     const entry_count = try decoder.readInt(u16);
     if (entry_count > types.max_history_results) {
@@ -159,7 +159,7 @@ pub fn encodeImportHistory(buffer: []u8, message: ImportHistory) ![]const u8 {
     if (message.entries.len == 0 or message.entries.len > max_import_entries) {
         return error.InvalidImportBatch;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.import_history));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeSized16(message.source);
@@ -173,7 +173,7 @@ pub fn encodeImportHistory(buffer: []u8, message: ImportHistory) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeImportHistory(decoder: *DecoderType) !ImportHistoryView {
+pub fn decodeImportHistory(decoder: *Decoder) !ImportHistoryView {
     const request_id = try id.request(try decoder.readInt(u64));
     const source = try decoder.readSized16();
     try codec.validateBytes(source, max_import_source_bytes, false);
@@ -209,7 +209,7 @@ pub fn encodeDeleteHistory(buffer: []u8, message: DeleteHistory) ![]const u8 {
 pub fn encodePruneHistory(buffer: []u8, message: PruneHistory) ![]const u8 {
     try codec.validateRequestId(message.request_id);
     try codec.validateBytes(message.match, types.max_history_query_bytes, true);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.prune_history));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeByte(@intFromEnum(message.scope));
@@ -240,7 +240,7 @@ pub fn encodePruneHistory(buffer: []u8, message: PruneHistory) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodePruneHistory(decoder: *DecoderType) !PruneHistory {
+pub fn decodePruneHistory(decoder: *Decoder) !PruneHistory {
     const request_id = try id.request(try decoder.readInt(u64));
     const scope = try codec.decodeHistoryScope(try decoder.readByte());
     var scope_value: []const u8 = "";
@@ -284,7 +284,7 @@ pub fn encodeReadHistoryOutput(buffer: []u8, message: ReadHistoryOutput) ![]cons
 pub fn encodeHistoryOutput(buffer: []u8, message: HistoryOutput) ![]const u8 {
     try codec.validateRequestId(message.request_id);
     try codec.validateBytes(message.content, max_history_output_bytes, true);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.history_output));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, message.id);
@@ -294,7 +294,7 @@ pub fn encodeHistoryOutput(buffer: []u8, message: HistoryOutput) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeHistoryOutput(decoder: *DecoderType) !HistoryOutput {
+pub fn decodeHistoryOutput(decoder: *Decoder) !HistoryOutput {
     const request_id = try id.request(try decoder.readInt(u64));
     const history_id = try decoder.readInt(u64);
     const truncated = try decoder.readBool();
@@ -314,7 +314,7 @@ pub fn decodeHistoryOutput(decoder: *DecoderType) !HistoryOutput {
 
 pub fn encodeHistoryStatsQuery(buffer: []u8, message: HistoryStatsQuery) ![]const u8 {
     try codec.validateRequestId(message.request_id);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.history_stats));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeByte(@intFromEnum(message.scope));
@@ -343,7 +343,7 @@ pub fn encodeHistoryStatsQuery(buffer: []u8, message: HistoryStatsQuery) ![]cons
     return encoder.finish();
 }
 
-pub fn decodeHistoryStatsQuery(decoder: *DecoderType) !HistoryStatsQuery {
+pub fn decodeHistoryStatsQuery(decoder: *Decoder) !HistoryStatsQuery {
     const request_id = try id.request(try decoder.readInt(u64));
     const scope = try codec.decodeHistoryScope(try decoder.readByte());
     var scope_value: []const u8 = "";
@@ -371,7 +371,7 @@ pub fn encodeHistoryStats(buffer: []u8, message: HistoryStats) ![]const u8 {
     if (message.top.len > max_history_stats_top) {
         return error.InvalidHistoryStats;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.history_stats_result));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, message.total);
@@ -385,7 +385,7 @@ pub fn encodeHistoryStats(buffer: []u8, message: HistoryStats) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeHistoryStats(decoder: *DecoderType) !HistoryStatsView {
+pub fn decodeHistoryStats(decoder: *Decoder) !HistoryStatsView {
     const request_id = try id.request(try decoder.readInt(u64));
     const total = try decoder.readInt(u64);
     const unique = try decoder.readInt(u64);
@@ -409,7 +409,7 @@ pub fn decodeHistoryStats(decoder: *DecoderType) !HistoryStatsView {
     };
 }
 
-fn encodeHistoryEntry(encoder: *EncoderType, entry: HistoryEntry) !void {
+fn encodeHistoryEntry(encoder: *Encoder, entry: HistoryEntry) !void {
     if (entry.id == 0) {
         return error.InvalidHistoryId;
     }
@@ -439,7 +439,7 @@ fn encodeHistoryEntry(encoder: *EncoderType, entry: HistoryEntry) !void {
     try encoder.writeByte(@intFromBool(entry.command_truncated));
 }
 
-pub fn decodeHistoryEntry(decoder: *DecoderType) !HistoryEntry {
+pub fn decodeHistoryEntry(decoder: *Decoder) !HistoryEntry {
     const history_id = try decoder.readInt(u64);
     if (history_id == 0) {
         return error.InvalidHistoryId;
@@ -483,7 +483,7 @@ pub fn decodeHistoryEntry(decoder: *DecoderType) !HistoryEntry {
 
 /// Walks one entry's field boundaries and byte budgets without scanning its
 /// content; `HistoryEntryIterator` validates content as the consumer decodes.
-fn skipHistoryEntry(decoder: *DecoderType) !void {
+fn skipHistoryEntry(decoder: *Decoder) !void {
     _ = try decoder.readInt(u64); // id
     _ = try decoder.readInt(u64); // pane_id
     _ = try decoder.readInt(i64); // started_at_ms
@@ -513,13 +513,13 @@ test "history page and exact-entry requests preserve their fields" {
     var buffer: [128]u8 = undefined;
     const request: QueryHistory = .{ .request_id = @enumFromInt(7), .offset = 200, .snapshot_id = 900, .entry_id = 42, .limit = 1 };
     const encoded = try encodeQueryHistory(&buffer, request);
-    var decoder = DecoderType.init(encoded[1..]);
+    var decoder = Decoder.init(encoded[1..]);
     const decoded = try decodeQueryHistory(&decoder);
     try std.testing.expectEqual(request.offset, decoded.offset);
     try std.testing.expectEqual(request.snapshot_id, decoded.snapshot_id);
     try std.testing.expectEqual(request.entry_id, decoded.entry_id);
     const reply = try encodeHistoryResults(&buffer, .{ .request_id = request.request_id, .entries = &.{}, .snapshot_id = 900, .has_more = true });
-    decoder = DecoderType.init(reply[1..]);
+    decoder = Decoder.init(reply[1..]);
     const result = try decodeHistoryResults(&decoder);
     try std.testing.expectEqual(@as(u64, 900), result.snapshot_id);
     try std.testing.expect(result.has_more);

@@ -1,14 +1,14 @@
 const std = @import("std");
 const OscTracker = @import("OscTracker.zig");
 const vt = @import("ghostty-vt");
-const InputScannerType = @import("InputScanner.zig");
+const InputScanner = @import("InputScanner.zig");
 const terminal_ops = @import("terminal.zig");
 const TerminalInputObservation = @import("TerminalInputObservation.zig");
 const builtin = @import("builtin");
 const osc = @import("osc.zig");
 const TerminalOutputObservation = @import("TerminalOutputObservation.zig");
-const ClockType = @import("Clock.zig");
-const CommandType = @import("Command.zig");
+const Clock = @import("Clock.zig");
+const Command = @import("Command.zig");
 const ExitObservation = @import("ExitObservation.zig");
 const TerminalCompletion = @import("TerminalCompletion.zig");
 const Tracker = @This();
@@ -29,7 +29,7 @@ right_prompt_hash: u64 = 0,
 /// prompt to re-anchor at yet.
 anchor_erased: bool = false,
 phase: Phase = .idle,
-input: InputScannerType = .{},
+input: InputScanner = .{},
 command: ?[:0]const u8 = null,
 command_truncated: bool = false,
 command_cwd: [std.fs.max_path_bytes]u8 = undefined,
@@ -270,10 +270,10 @@ pub fn observeOutput(tracker: *Tracker, observation: TerminalOutputObservation, 
 
     const Relay = struct {
         tracker: *Tracker,
-        clock: ClockType,
+        clock: Clock,
         sink: @TypeOf(sink),
 
-        pub fn emit(relay: *@This(), value: CommandType) void {
+        pub fn emit(relay: *@This(), value: Command) void {
             if (relay.tracker.phase != .running) {
                 return;
             }
@@ -324,7 +324,7 @@ pub fn shellExited(tracker: *Tracker, observation: ExitObservation, sink: anytyp
 /// ```zig
 /// tracker.interrupt(clock, &sink);
 /// ```
-pub fn interrupt(tracker: *Tracker, clock: ClockType, sink: anytype) void {
+pub fn interrupt(tracker: *Tracker, clock: Clock, sink: anytype) void {
     if (tracker.phase == .running) {
         tracker.finish(.{ .clock = clock, .exit_code = null, .status = .interrupted }, sink);
     } else {

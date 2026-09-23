@@ -8,7 +8,7 @@ const Options = @import("Options.zig");
 const Runtime = @import("Runtime.zig");
 const Initialization = @import("Initialization.zig");
 const agent_identity = @import("agent_identity.zig");
-const SessionReferenceType = @import("../agent/SessionReference.zig");
+const SessionReference = @import("../agent/SessionReference.zig");
 const PersistenceEncoder = @import("../persistence/Encoder.zig");
 
 /// Runs one runtime instance until a stop event or fatal runtime error.
@@ -234,7 +234,7 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     const pane_generation = pane.generation;
     try std.testing.expect(first.model.agents.observeSessionReference(
         agent_identity.fromPane(pane),
-        try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1_000),
+        try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1_000),
     ));
     try std.testing.expect(first.model.agents.observeProcess(.{
         .identity = agent_identity.fromPane(pane),
@@ -518,7 +518,7 @@ test "process observation checkpoints a session reported before provider detecti
         .launch_cwd = directory,
         .workspace_path = directory,
     });
-    try std.testing.expect(runtime.model.agents.observeSessionReference(agent_identity.fromPane(pane), try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100)));
+    try std.testing.expect(runtime.model.agents.observeSessionReference(agent_identity.fromPane(pane), try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100)));
     try std.testing.expect(runtime.model.agents.resumeSession(pane.key()) == null);
 
     for ([_]bool{ true, false }) |agent_foreground| {

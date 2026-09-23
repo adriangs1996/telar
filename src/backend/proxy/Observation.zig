@@ -1,9 +1,9 @@
-const PaneKeyType = @import("../pane/PaneKey.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
 const types = @import("../agent/types.zig");
 const middleware = @import("middleware.zig");
 const Observation = @This();
 
-pane: PaneKeyType,
+pane: PaneKey,
 dialect: types.ApiDialect,
 phase: middleware.Phase,
 protocol: middleware.Protocol,

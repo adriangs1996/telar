@@ -1,7 +1,7 @@
 const std = @import("std");
 const SessionSpec = @import("SessionSpec.zig");
 const Request = @import("Request.zig");
-const ResultType = @import("Result.zig");
+const Result = @import("Result.zig");
 const protocol = @import("protocol.zig");
 const effects = @import("effects.zig");
 const Session = @This();
@@ -89,7 +89,7 @@ fn drainStderr(session: *Session) anyerror!void {
 /// ```zig
 /// const result = try session.exchange(spec, request);
 /// ```
-pub fn exchange(session: *Session, spec: SessionSpec, request: Request) !*ResultType {
+pub fn exchange(session: *Session, spec: SessionSpec, request: Request) !*Result {
     var prefix: [protocol.prefix_bytes]u8 = undefined;
     std.mem.writeInt(u32, &prefix, @intCast(request.bytes.len), .little);
     const stdin = session.child.stdin orelse return error.WorkerClosed;
@@ -118,7 +118,7 @@ pub fn exchange(session: *Session, spec: SessionSpec, request: Request) !*Result
     if (decoded.event_id != request.event_id) {
         return error.StaleWorkerReply;
     }
-    const result = try session.gpa.create(ResultType);
+    const result = try session.gpa.create(Result);
     result.* = .{
         .gpa = session.gpa,
         .package_index = spec.package_index,

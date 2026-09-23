@@ -1,5 +1,5 @@
 const std = @import("std");
-const ConfigType = @import("../../proxy/Config.zig");
+const Config = @import("../../proxy/Config.zig");
 const ProxyTestFiles = @This();
 
 temp: std.testing.TmpDir,
@@ -27,7 +27,7 @@ pub fn deinit(files: *ProxyTestFiles) void {
     files.temp.cleanup();
 }
 
-pub fn config(files: *const ProxyTestFiles) ConfigType {
+pub fn config(files: *const ProxyTestFiles) Config {
     return .{
         .key_path = files.key[0..files.key_len],
         .certificate_path = files.certificate[0..files.certificate_len],

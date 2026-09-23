@@ -1,8 +1,8 @@
 //! Application policy for one synchronous, bounded client Lua action.
 
-const EffectBatchType = @import("../../config/EffectBatch.zig");
+const EffectBatch = @import("../../config/EffectBatch.zig");
 const Failure = @import("Failure.zig");
-const DiagnosticType = @import("../../config/Diagnostic.zig");
+const Diagnostic = @import("../../config/Diagnostic.zig");
 const action_module = @import("../../input/action.zig");
 
 pub const Command = @import("../../types/LuaActionCommand.zig").LuaActionCommand;
@@ -16,7 +16,7 @@ pub const Disposition = @import("../../types/LuaDisposition.zig").LuaDisposition
 pub const Outcome = @import("../../types/LuaActionOutcome.zig").LuaActionOutcome;
 
 fn diagnosticFailure(reason: anyerror, message: []const u8) Failure {
-    var diagnostic: DiagnosticType = .{};
+    var diagnostic: Diagnostic = .{};
     diagnostic.set(
         "{s}",
         .{
@@ -30,7 +30,7 @@ fn diagnosticFailure(reason: anyerror, message: []const u8) Failure {
 }
 
 fn callbackInvocation(effects: []const action_module.Action) Invocation {
-    var batch: EffectBatchType = .{};
+    var batch: EffectBatch = .{};
     for (effects, 0..) |effect, index| {
         batch.items[index] = effect;
     }

@@ -1,12 +1,12 @@
-const DecoderType = @import("../Decoder.zig");
-const AgentSnapshotEntryType = @import("../AgentSnapshotEntry.zig");
+const Decoder = @import("../Decoder.zig");
+const AgentSnapshotEntry = @import("../AgentSnapshotEntry.zig");
 const agent = @import("agent.zig");
 const AgentSnapshotIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *AgentSnapshotIterator) !?AgentSnapshotEntryType {
+pub fn next(iterator: *AgentSnapshotIterator) !?AgentSnapshotEntry {
     if (iterator.remaining == 0) {
         return null;
     }

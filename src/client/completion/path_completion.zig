@@ -5,7 +5,7 @@
 
 const data = @import("model");
 const std = @import("std");
-const JobType = @import("PathCompletionJob.zig");
+const PathCompletionJob = @import("PathCompletionJob.zig");
 
 /// Splits the query at its last `/`: the part before is the directory to
 /// list and the rest filters the names. Hidden directories are listed only
@@ -15,7 +15,7 @@ const JobType = @import("PathCompletionJob.zig");
 /// const result = try run(io, gpa, job);
 /// defer gpa.destroy(result);
 /// ```
-pub fn run(io: std.Io, gpa: std.mem.Allocator, job: JobType) !*data.PathCompletionResult {
+pub fn run(io: std.Io, gpa: std.mem.Allocator, job: PathCompletionJob) !*data.PathCompletionResult {
     const result = try gpa.create(data.PathCompletionResult);
     errdefer gpa.destroy(result);
     result.* = .{};
@@ -133,7 +133,7 @@ test "listing stops at the entry bound and a missing base lists nothing" {
     try std.testing.expectEqual(@as(usize, 0), result.slice().len);
     try std.testing.expect(!result.exact_exists);
 
-    const job: JobType = .init(@enumFromInt(1), try std.fmt.bufPrint(&query_buffer, "{s}/d1", .{root}));
+    const job: PathCompletionJob = .init(@enumFromInt(1), try std.fmt.bufPrint(&query_buffer, "{s}/d1", .{root}));
     const owned = try run(io, std.testing.allocator, job);
     defer std.testing.allocator.destroy(owned);
     try std.testing.expect(owned.slice().len >= 1);

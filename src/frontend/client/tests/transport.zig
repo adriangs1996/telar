@@ -5,7 +5,7 @@ const client_module = @import("telar-client");
 const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
 const TestHarness = @import("TestHarness.zig");
-const ChunkType = @import("../controllers/input/Chunk.zig");
+const Chunk = @import("../controllers/input/Chunk.zig");
 const std = @import("std");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const client_startup = @import("../controllers/session/client_startup.zig");
@@ -21,7 +21,7 @@ test "host input arriving while no tab exists is dropped, not a crash" {
     try harness.init();
     defer harness.deinit();
 
-    var chunk: ChunkType = .{};
+    var chunk: Chunk = .{};
     chunk.bytes[0] = 'x';
     chunk.len = 1;
     try std.testing.expect(!try host_inputs.handleRead(harness.terminal, chunk));
@@ -322,7 +322,7 @@ test "startup replays early typing exactly once after pane activation" {
     const terminal = harness.terminal;
     client.model.startup.phase = .opening;
     const bytes = "abc\x1b]11;rgb:10/10/10\x07";
-    var chunk: ChunkType = .{ .len = bytes.len };
+    var chunk: Chunk = .{ .len = bytes.len };
     @memcpy(chunk.bytes[0..bytes.len], bytes);
     try std.testing.expect(!try host_inputs.handleRead(terminal, chunk));
     try std.testing.expectEqual(@as(u8, 0), client.model.to_runtime.len);

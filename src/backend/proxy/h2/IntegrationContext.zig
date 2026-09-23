@@ -1,8 +1,8 @@
 const FakeSession = @import("FakeSession.zig");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
-const SettingsType = @import("Settings.zig");
-const StatsType = @import("Stats.zig");
+const Settings = @import("Settings.zig");
+const Stats = @import("Stats.zig");
 const h2 = @import("h2.zig");
 const relay_module = @import("relay.zig");
 const IntegrationContext = @This();
@@ -18,13 +18,13 @@ pub fn io(_: *IntegrationContext) std.Io {
     return std.testing.io;
 }
 
-pub fn relayRequest(context: *IntegrationContext, settings: *SettingsType) StatsType {
+pub fn relayRequest(context: *IntegrationContext, settings: *Settings) Stats {
     const stats = h2.relay(&context.session, h2.relayOptions(.request, settings, .{ .dialect = .anthropic_messages }), context);
     context.request_done.putOneUncancelable(std.testing.io, 0) catch unreachable;
     return stats;
 }
 
-pub fn relayResponse(context: *IntegrationContext, settings: *SettingsType) StatsType {
+pub fn relayResponse(context: *IntegrationContext, settings: *Settings) Stats {
     _ = context.request_done.getOne(std.testing.io) catch return .{ .decode_failed = true };
     return h2.relay(&context.session, h2.relayOptions(.response, settings, .{ .dialect = .anthropic_messages }), context);
 }

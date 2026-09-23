@@ -1,8 +1,8 @@
-const ImageType = @import("Image.zig");
+const Image = @import("Image.zig");
 const TransmissionChunks = @This();
 
 image_id: u32,
-image: ImageType,
+image: Image,
 pixels: []const u8,
 start_offset: usize,
 budget: usize,

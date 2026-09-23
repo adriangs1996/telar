@@ -1,7 +1,7 @@
 const data = @import("model");
-const OutputType = @import("../../bars/Output.zig");
+const Output = @import("../../bars/Output.zig");
 const CommandOutput = @This();
 
 execution: data.CommandExecution,
 command: data.BarCommand,
-output: OutputType,
+output: Output,

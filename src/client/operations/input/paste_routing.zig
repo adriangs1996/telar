@@ -2,7 +2,7 @@
 
 const Client = @import("../../AttachedClient.zig");
 const PasteRoutingAuthority = @import("PasteRoutingAuthority.zig");
-const RouteType = @import("Route.zig");
+const Route = @import("Route.zig");
 
 /// Routes one opening boundary using the current client authority.
 ///
@@ -52,7 +52,7 @@ fn snapshot(client: *const Client) PasteRoutingAuthority {
     };
 }
 
-fn route(client: *Client, value: RouteType) !void {
+fn route(client: *Client, value: Route) !void {
     switch (value.owner) {
         .prompt => switch (value.command) {
             .start => _ = try client.inputPrompt(.paste_start),

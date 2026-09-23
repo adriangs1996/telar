@@ -4,7 +4,7 @@ const std = @import("std");
 const attachment_namespace = @import("attachment_namespace.zig");
 const SelectionQuery = @import("SelectionQuery.zig");
 const selection = @import("selection.zig");
-const PaneType = @import("../../pane/Pane.zig");
+const Pane = @import("../../pane/Pane.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const PaneDetached = @import("PaneDetached.zig");
 pub const AttachmentStore = @This();
@@ -169,7 +169,7 @@ pub fn configureGraphics(store: *AttachmentStore, shared: bool) attachment_names
     return .changed;
 }
 
-pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *PaneType) !*Attachment {
+pub fn attach(store: *AttachmentStore, gpa: std.mem.Allocator, pane: *Pane) !*Attachment {
     std.debug.assert(pane.launch_state == .running);
     if (store.find(pane.id)) |existing| {
         return existing;

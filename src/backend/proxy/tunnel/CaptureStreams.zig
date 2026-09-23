@@ -1,14 +1,14 @@
-const ProducerType = @import("../capture/Producer.zig");
-const ExchangeType = @import("Exchange.zig");
+const Producer = @import("../capture/Producer.zig");
+const Exchange = @import("Exchange.zig");
 const buffer_support = @import("../capture/buffer_support.zig");
 const CaptureSlot = @import("CaptureSlot.zig");
-const HeaderBlockType = @import("../h2/HeaderBlock.zig");
+const HeaderBlock = @import("../h2/HeaderBlock.zig");
 const std = @import("std");
-const HalfType = @import("../capture/Half.zig");
+const Half = @import("../capture/Half.zig");
 const CaptureStreams = @This();
 
-producer: *ProducerType,
-exchange: *ExchangeType,
+producer: *Producer,
+exchange: *Exchange,
 side: buffer_support.Side,
 slots: [128]?CaptureSlot = .{null} ** 128,
 
@@ -20,7 +20,7 @@ pub fn deinit(streams: *CaptureStreams) void {
     }
 }
 
-pub fn feedHeaders(streams: *CaptureStreams, block: HeaderBlockType) void {
+pub fn feedHeaders(streams: *CaptureStreams, block: HeaderBlock) void {
     const half = streams.ensure(block.stream_id) orelse return;
     const part: buffer_support.Part = if (streams.side == .request) .request_head else .response_head;
 
@@ -63,7 +63,7 @@ pub fn finish(streams: *CaptureStreams, stream_id: u32, outcome: buffer_support.
     streams.publish(slot.half, outcome);
 }
 
-fn ensure(streams: *CaptureStreams, stream_id: u32) ?*HalfType {
+fn ensure(streams: *CaptureStreams, stream_id: u32) ?*Half {
     if (streams.find(stream_id)) |index| {
         return streams.slots[index].?.half;
     }
@@ -104,7 +104,7 @@ fn empty(streams: *const CaptureStreams) ?usize {
     return null;
 }
 
-fn publish(streams: *CaptureStreams, half: *HalfType, outcome: buffer_support.Outcome) void {
+fn publish(streams: *CaptureStreams, half: *Half, outcome: buffer_support.Outcome) void {
     half.finish(outcome, std.Io.Timestamp.now(streams.exchange.io, .real).toMilliseconds());
     streams.producer.publish(streams.exchange.io, .{
         .credential = streams.exchange.credential,

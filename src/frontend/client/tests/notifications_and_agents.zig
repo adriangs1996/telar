@@ -9,7 +9,7 @@ const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const term = @import("../../presentation/screen_support.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
-const ScreenType = @import("../../presentation/Screen.zig");
+const Screen = @import("../../presentation/Screen.zig");
 const support = @import("support.zig");
 
 test "a failed request surfaces as a notification" {
@@ -622,7 +622,7 @@ test "system metrics commit before presenter-owned projection" {
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, "80%") != null);
 }
 
-fn screenText(screen: *const ScreenType, area: core.Rect, storage: *[512]u8) ![]const u8 {
+fn screenText(screen: *const Screen, area: core.Rect, storage: *[512]u8) ![]const u8 {
     var len: usize = 0;
     for (area.x..area.x + area.w) |x| {
         const cell = screen.front.cells[@as(usize, area.y) * screen.front.w + x];

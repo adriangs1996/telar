@@ -7,13 +7,13 @@ const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
-const ScreenType = @import("../../presentation/Screen.zig");
-const CompositorType = @import("../../workspace/Compositor.zig");
-const StateType = @import("../../presentation/State.zig");
+const Screen = @import("../../presentation/Screen.zig");
+const Compositor = @import("../../workspace/Compositor.zig");
+const State = @import("../../presentation/State.zig");
 const toast_graphics = @import("../../graphics/toast.zig");
 const CombinedGraphicsWriter = @import("CombinedGraphicsWriter.zig");
 const kitty_codec = @import("../../graphics/kitty_codec.zig");
-const StatsType = @import("../../graphics/Stats.zig");
+const Stats = @import("../../graphics/Stats.zig");
 const delivery_module = @import("../../attachments/delivery.zig");
 const CellPresentation = @import("CellPresentation.zig");
 const Presented = @import("Presented.zig");
@@ -36,13 +36,13 @@ pub const Scheduler = @import("Scheduler.zig");
 io: std.Io,
 scheduler: Scheduler,
 metrics: *client.TelemetryMetrics,
-screen: ScreenType,
-compositor: CompositorType,
+screen: Screen,
+compositor: Compositor,
 pacer: core.Pacer = .{},
 /// The client's one presentation lifecycle, borrowed for the presenter's
 /// life.
 presentation_state: *client.PresentationLifecycleState,
-window_title: StateType = .{},
+window_title: State = .{},
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,
 /// Whether the presentation being delivered waited for a pacer deadline.
@@ -391,7 +391,7 @@ pub fn presentMedia(presenter: *Presenter, projection: client.Projection, resour
     }
 }
 
-fn notePaneGraphics(presenter: *Presenter, graphics_stats: StatsType) void {
+fn notePaneGraphics(presenter: *Presenter, graphics_stats: Stats) void {
     if (comptime !core.enabled) {
         return;
     }

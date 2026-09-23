@@ -3,13 +3,13 @@
 //! the exact pane generation so a stale request never moves focus.
 
 const RequestPaneFocus = @import("RequestPaneFocus.zig");
-const EncoderType = @import("../Encoder.zig");
+const Encoder = @import("../Encoder.zig");
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
 const CompletePaneFocus = @import("CompletePaneFocus.zig");
 const PaneFocusCommand = @import("PaneFocusCommand.zig");
 const PaneFocusResult = @import("PaneFocusResult.zig");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const ClientRoute = @import("ClientRoute.zig");
 const types = @import("../types.zig");
 const std = @import("std");
@@ -17,7 +17,7 @@ const std = @import("std");
 pub fn encodeRequestPaneFocus(buffer: []u8, message: RequestPaneFocus) ![]const u8 {
     try message.validateWire();
 
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.request_pane_focus));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -29,7 +29,7 @@ pub fn encodeRequestPaneFocus(buffer: []u8, message: RequestPaneFocus) ![]const 
 pub fn encodeCompletePaneFocus(buffer: []u8, message: CompletePaneFocus) ![]const u8 {
     try message.validateWire();
 
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.complete_pane_focus));
     try encodeClientRoute(&encoder, message.requester);
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -43,7 +43,7 @@ pub fn encodeCompletePaneFocus(buffer: []u8, message: CompletePaneFocus) ![]cons
 pub fn encodePaneFocusCommand(buffer: []u8, message: PaneFocusCommand) ![]const u8 {
     try message.validateWire();
 
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.pane_focus_command));
     try encodeClientRoute(&encoder, message.requester);
     try encoder.writeInt(u64, id.raw(message.request_id));
@@ -56,7 +56,7 @@ pub fn encodePaneFocusCommand(buffer: []u8, message: PaneFocusCommand) ![]const 
 pub fn encodePaneFocusResult(buffer: []u8, message: PaneFocusResult) ![]const u8 {
     try message.validateWire();
 
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.pane_focus_result));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeByte(@intFromEnum(message.outcome));
@@ -64,7 +64,7 @@ pub fn encodePaneFocusResult(buffer: []u8, message: PaneFocusResult) ![]const u8
     return encoder.finish();
 }
 
-pub fn decodeRequestPaneFocus(decoder: *DecoderType) !RequestPaneFocus {
+pub fn decodeRequestPaneFocus(decoder: *Decoder) !RequestPaneFocus {
     const request: RequestPaneFocus = .{
         .request_id = try id.request(try decoder.readInt(u64)),
         .pane_id = try id.pane(try decoder.readInt(u64)),
@@ -75,7 +75,7 @@ pub fn decodeRequestPaneFocus(decoder: *DecoderType) !RequestPaneFocus {
     return request;
 }
 
-pub fn decodeCompletePaneFocus(decoder: *DecoderType) !CompletePaneFocus {
+pub fn decodeCompletePaneFocus(decoder: *Decoder) !CompletePaneFocus {
     const completion: CompletePaneFocus = .{
         .requester = try decodeClientRoute(decoder),
         .request_id = try id.request(try decoder.readInt(u64)),
@@ -88,7 +88,7 @@ pub fn decodeCompletePaneFocus(decoder: *DecoderType) !CompletePaneFocus {
     return completion;
 }
 
-pub fn decodePaneFocusCommand(decoder: *DecoderType) !PaneFocusCommand {
+pub fn decodePaneFocusCommand(decoder: *Decoder) !PaneFocusCommand {
     const command: PaneFocusCommand = .{
         .requester = try decodeClientRoute(decoder),
         .request_id = try id.request(try decoder.readInt(u64)),
@@ -100,7 +100,7 @@ pub fn decodePaneFocusCommand(decoder: *DecoderType) !PaneFocusCommand {
     return command;
 }
 
-pub fn decodePaneFocusResult(decoder: *DecoderType) !PaneFocusResult {
+pub fn decodePaneFocusResult(decoder: *Decoder) !PaneFocusResult {
     const result: PaneFocusResult = .{
         .request_id = try id.request(try decoder.readInt(u64)),
         .outcome = try decodePaneFocusOutcome(decoder),
@@ -110,13 +110,13 @@ pub fn decodePaneFocusResult(decoder: *DecoderType) !PaneFocusResult {
     return result;
 }
 
-fn encodeClientRoute(encoder: *EncoderType, route: ClientRoute) !void {
+fn encodeClientRoute(encoder: *Encoder, route: ClientRoute) !void {
     try route.validateWire();
     try encoder.writeInt(u64, route.id);
     try encoder.writeInt(u64, route.generation);
 }
 
-fn decodeClientRoute(decoder: *DecoderType) !ClientRoute {
+fn decodeClientRoute(decoder: *Decoder) !ClientRoute {
     const route: ClientRoute = .{
         .id = try decoder.readInt(u64),
         .generation = try decoder.readInt(u64),
@@ -125,10 +125,10 @@ fn decodeClientRoute(decoder: *DecoderType) !ClientRoute {
     return route;
 }
 
-fn decodePaneDirection(decoder: *DecoderType) !types.PaneDirection {
+fn decodePaneDirection(decoder: *Decoder) !types.PaneDirection {
     return std.enums.fromInt(types.PaneDirection, try decoder.readByte()) orelse return error.InvalidPaneDirection;
 }
 
-fn decodePaneFocusOutcome(decoder: *DecoderType) !types.PaneFocusOutcome {
+fn decodePaneFocusOutcome(decoder: *Decoder) !types.PaneFocusOutcome {
     return std.enums.fromInt(types.PaneFocusOutcome, try decoder.readByte()) orelse return error.InvalidPaneFocusOutcome;
 }

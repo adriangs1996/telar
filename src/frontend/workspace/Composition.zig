@@ -1,11 +1,11 @@
 const data = @import("model");
 const client = @import("telar-client");
-const ScreenType = @import("../presentation/Screen.zig");
+const Screen = @import("../presentation/Screen.zig");
 const CompositionInput = @import("CompositionInput.zig");
 const Composition = @This();
 
 model: *const data.ClientModel,
 /// The composed tab's slot in `model.tabs`.
 tab: usize,
-screen: *ScreenType,
+screen: *Screen,
 input: CompositionInput,

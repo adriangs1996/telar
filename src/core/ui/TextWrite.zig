@@ -1,7 +1,7 @@
-const PointType = @import("Point.zig");
-const StyleType = @import("Style.zig");
+const Point = @import("Point.zig");
+const Style = @import("Style.zig");
 const TextWrite = @This();
 
-point: PointType,
+point: Point,
 text: []const u8,
-style: StyleType = .{},
+style: Style = .{},

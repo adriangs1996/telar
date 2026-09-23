@@ -1,10 +1,10 @@
-const PointType = @import("ui/Point.zig");
+const Point = @import("ui/Point.zig");
 const select = @import("select.zig");
-const BufferType = @import("ui/Buffer.zig");
+const Buffer = @import("ui/Buffer.zig");
 const Range = @This();
 
-anchor: PointType,
-head: PointType,
+anchor: Point,
+head: Point,
 mode: select.Mode = .linear,
 granularity: select.Granularity = .character,
 
@@ -15,7 +15,7 @@ pub fn isEmpty(r: Range) bool {
 }
 
 /// Anchor and head in reading order.
-pub fn ordered(r: Range) [2]PointType {
+pub fn ordered(r: Range) [2]Point {
     return if (select.pointBefore(r.anchor, r.head) or
         (r.anchor.x == r.head.x and r.anchor.y == r.head.y))
         .{ r.anchor, r.head }
@@ -52,7 +52,7 @@ pub fn contains(r: Range, x: u16, y: u16) bool {
 /// Applied on every drag rather than once at the start, because a
 /// double-click-and-drag selects by word all the way along - the behaviour
 /// people rely on without noticing it exists.
-pub fn expanded(r: Range, b: *const BufferType) Range {
+pub fn expanded(r: Range, b: *const Buffer) Range {
     var from, var to = r.ordered();
     switch (r.granularity) {
         .character => {},

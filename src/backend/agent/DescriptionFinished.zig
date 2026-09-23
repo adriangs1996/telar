@@ -1,10 +1,10 @@
 const core = @import("telar-core");
-const PaneKeyType = @import("../pane/PaneKey.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
 /// Owned title projection emitted only after the agent aggregate accepts and
 /// validates a description result.
 const DescriptionFinished = @This();
 
-pane: PaneKeyType,
+pane: PaneKey,
 session_id: [16]u8,
 title: [core.max_agent_session_title_bytes]u8 = undefined,
 title_len: u8 = 0,

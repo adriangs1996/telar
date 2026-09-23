@@ -3,9 +3,9 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const std = @import("std");
 const tab_bar = @import("tab_bar.zig");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const Placement = @import("Placement.zig");
-const PlanType = @import("../ui/Plan.zig");
+const Plan = @import("../ui/Plan.zig");
 const widget = @import("context_support.zig");
 /// A tab's shortcut, optional application icon, name and fullscreen marker.
 const Label = @This();
@@ -48,7 +48,7 @@ pub fn width(label: *const Label) u16 {
 }
 
 /// Draws clipped text and icons only when their slots fit. Example: label.draw(context, placement);
-pub fn draw(label: *const Label, context: *ContextType, placement: Placement) void {
+pub fn draw(label: *const Label, context: *Context, placement: Placement) void {
     const rect = placement.rect;
     const text_width = @min(core.measure(label.text()), rect.w);
     _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = rect.x, .y = rect.y }, .text = label.text(), .max_width = text_width, .style = placement.style });
@@ -91,8 +91,8 @@ test "automatic tab labels draw the application icon while manual labels retain 
     var buffer = try core.Buffer.init(std.testing.allocator, 30, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var plan: PlanType = .{};
-    var context: ContextType = .{
+    var plan: Plan = .{};
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,
@@ -132,8 +132,8 @@ test "tab application icons remain within clipped labels" {
     var buffer = try core.Buffer.init(std.testing.allocator, 30, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var plan: PlanType = .{};
-    var context: ContextType = .{
+    var plan: Plan = .{};
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,

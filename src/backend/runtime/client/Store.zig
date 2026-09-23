@@ -1,6 +1,6 @@
 const core = @import("telar-core");
 const store_support = @import("store_support.zig");
-const SessionType = @import("Session.zig");
+const Session = @import("Session.zig");
 const std = @import("std");
 const ClientKey = @import("../../history/ClientKey.zig");
 const RemovalResources = @import("RemovalResources.zig");
@@ -10,7 +10,7 @@ comptime {
     std.debug.assert(store_support.max_clients <= @bitSizeOf(u8));
 }
 
-items: [store_support.max_clients]?*SessionType = @splat(null),
+items: [store_support.max_clients]?*Session = @splat(null),
 count: usize = 0,
 next_id: u64 = 1,
 next_generation: u64 = 1,
@@ -30,7 +30,7 @@ pub fn hasCapacity(store: *const Store) bool {
 /// ```zig
 /// const session = try store.add(gpa, connection);
 /// ```
-pub fn add(store: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel) !*SessionType {
+pub fn add(store: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel) !*Session {
     if (!store.hasCapacity()) {
         return error.ClientLimitReached;
     }
@@ -51,7 +51,7 @@ pub fn add(store: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel
             continue;
         }
 
-        const session = try SessionType.create(gpa, key, connection);
+        const session = try Session.create(gpa, key, connection);
         session.attachments.observer = @as(u8, 1) << @intCast(index);
         slot.* = session;
         store.next_id += 1;
@@ -68,7 +68,7 @@ pub fn add(store: *Store, gpa: std.mem.Allocator, connection: core.SocketChannel
 /// var observers = pane.observers;
 /// while (store.nextObserver(&observers)) |session| { ... }
 /// ```
-pub fn nextObserver(store: *Store, observers: *u8) ?*SessionType {
+pub fn nextObserver(store: *Store, observers: *u8) ?*Session {
     while (observers.* != 0) {
         const index = @ctz(observers.*);
         observers.* &= observers.* - 1;
@@ -85,7 +85,7 @@ pub fn nextObserver(store: *Store, observers: *u8) ?*SessionType {
 /// ```zig
 /// const session = store.resolve(key) orelse return error.StaleClient;
 /// ```
-pub fn resolve(store: *Store, key: ClientKey) ?*SessionType {
+pub fn resolve(store: *Store, key: ClientKey) ?*Session {
     for (&store.items) |*slot| {
         const session = slot.* orelse continue;
         if (session.key.id == key.id and session.key.generation == key.generation) {

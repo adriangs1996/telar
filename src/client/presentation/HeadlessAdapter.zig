@@ -1,12 +1,12 @@
 const data = @import("model");
 const LifecycleState = @import("LifecycleState.zig");
 const Frame = @import("Frame.zig");
-const ProjectionType = @import("Projection.zig");
+const Projection = @import("Projection.zig");
 const lifecycle_module = @import("lifecycle.zig");
-const ObservationType = @import("Observation.zig");
+const Observation = @import("Observation.zig");
 const headless = @import("headless.zig");
-const GeometryType = @import("Geometry.zig");
-const DeliveryType = @import("PresentationDelivery.zig");
+const Geometry = @import("Geometry.zig");
+const PresentationDelivery = @import("PresentationDelivery.zig");
 const Adapter = @This();
 
 /// The client's presentation lifecycle, borrowed.
@@ -18,8 +18,8 @@ fail_preparation: bool = false,
 /// Copies one bounded projection synchronously, then holds it until complete.
 /// Busy attempts coalesce observations without overwriting the in-flight frame.
 /// Example: `const token = try adapter.prepare(projection) orelse return;`.
-pub fn prepare(adapter: *Adapter, projection: ProjectionType) !?lifecycle_module.Token {
-    const observation: ObservationType = .{
+pub fn prepare(adapter: *Adapter, projection: Projection) !?lifecycle_module.Token {
+    const observation: Observation = .{
         .model = projection.version,
         .presentation_ingress = projection.presentation_ingress,
         .geometry_revision = projection.geometry.revision,
@@ -54,7 +54,7 @@ pub fn prepare(adapter: *Adapter, projection: ProjectionType) !?lifecycle_module
     adapter.frame.cell_count = 0;
     adapter.frame.pane_count = 0;
     adapter.frame.version = projection.version;
-    adapter.frame.geometry = GeometryType.capture(projection);
+    adapter.frame.geometry = Geometry.capture(projection);
     adapter.frame.focused = null;
     if (projection.tab) |slot| {
         adapter.frame.focused = model.tabs.layout[slot].focused();
@@ -88,6 +88,6 @@ pub fn prepare(adapter: *Adapter, projection: ProjectionType) !?lifecycle_module
 /// Reports completion only after all consumers stop borrowing frame storage.
 /// Failed and cancelled work releases its slot without retiring model damage.
 /// Example: `const delivery = adapter.complete(token, .delivered) orelse return;`.
-pub fn complete(adapter: *Adapter, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) ?DeliveryType {
+pub fn complete(adapter: *Adapter, token: lifecycle_module.Token, outcome: lifecycle_module.Outcome) ?PresentationDelivery {
     return adapter.state.complete(token, outcome);
 }

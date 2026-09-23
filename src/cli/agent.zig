@@ -3,13 +3,13 @@
 
 const std = @import("std");
 const AgentOptions = @import("arguments/AgentOptions.zig");
-const SessionType = @import("Session.zig");
+const Session = @import("Session.zig");
 const control = @import("control.zig");
-const ExecutionContextType = @import("ExecutionContext.zig");
-const SnapshotType = @import("Snapshot.zig");
-const PaneRefType = @import("PaneRef.zig");
+const ExecutionContext = @import("ExecutionContext.zig");
+const Snapshot = @import("Snapshot.zig");
+const PaneRef = @import("PaneRef.zig");
 const ControlAgent = @import("ControlAgent.zig");
-const TextType = @import("Text.zig");
+const Text = @import("Text.zig");
 const ManagedAgent = @import("ManagedAgent.zig");
 const AgentWatch = @import("AgentWatch.zig");
 const AgentReports = @import("AgentReports.zig");
@@ -32,8 +32,8 @@ pub const exit_timeout: u8 = 3;
 /// ```
 pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
     var session = switch (options.action) {
-        .list, .get, .wait, .prompt, .read, .report_session => try SessionType.open(init, options.socket),
-        else => try SessionType.attach(init, options.socket),
+        .list, .get, .wait, .prompt, .read, .report_session => try Session.open(init, options.socket),
+        else => try Session.attach(init, options.socket),
     };
     defer session.close();
     var output_buffer: [16 * 1024]u8 = undefined;
@@ -51,14 +51,14 @@ pub fn run(init: std.process.Init, options: AgentOptions) !u8 {
     };
 }
 
-fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContextType) !u8 {
+fn execute(session: *Session, options: AgentOptions, output: ExecutionContext) !u8 {
     if (options.action == .report_title or options.action == .report_state or options.action == .report_command) {
         var reports: AgentReports = .{ .session = session, .options = options, .output = output };
         try reports.run();
         return exit_ok;
     }
 
-    var snapshot: SnapshotType = .{};
+    var snapshot: Snapshot = .{};
     try session.fetchAgents(&snapshot);
 
     switch (options.action) {
@@ -74,7 +74,7 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
         },
         .acknowledge => {
             const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
-            const pane: PaneRefType = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation };
+            const pane: PaneRef = .{ .pane_id = target.pane_id, .pane_generation = target.pane_generation };
             try session.acknowledge(pane);
             try session.fetchAgents(&snapshot);
             const updated = try snapshot.resolve(.{ .pane = pane.pane_id }, output.environ) orelse return error.AgentNotFound;
@@ -166,7 +166,7 @@ fn execute(session: *SessionType, options: AgentOptions, output: ExecutionContex
     }
 }
 
-fn writeAcknowledgement(writer: *std.Io.Writer, pane: PaneRefType, json: bool) !void {
+fn writeAcknowledgement(writer: *std.Io.Writer, pane: PaneRef, json: bool) !void {
     if (json) {
         try std.json.Stringify.value(.{ .pane_id = pane.pane_id, .pane_generation = pane.pane_generation, .accepted = true }, .{}, writer);
         try writer.writeByte('\n');
@@ -175,9 +175,9 @@ fn writeAcknowledgement(writer: *std.Io.Writer, pane: PaneRefType, json: bool) !
     }
 }
 
-fn waitFor(session: *SessionType, options: AgentOptions, output: ExecutionContextType) !u8 {
+fn waitFor(session: *Session, options: AgentOptions, output: ExecutionContext) !u8 {
     const deadline = session.nowMs() + @as(i64, options.timeout_seconds) * std.time.ms_per_s;
-    var snapshot: SnapshotType = .{};
+    var snapshot: Snapshot = .{};
 
     while (true) {
         try session.fetchAgents(&snapshot);
@@ -199,11 +199,11 @@ fn waitFor(session: *SessionType, options: AgentOptions, output: ExecutionContex
     }
 }
 
-fn prompt(session: *SessionType, options: AgentOptions, output: ExecutionContextType) !u8 {
-    var snapshot: SnapshotType = .{};
+fn prompt(session: *Session, options: AgentOptions, output: ExecutionContext) !u8 {
+    var snapshot: Snapshot = .{};
     try session.fetchAgents(&snapshot);
     const target = try snapshot.resolve(options.target.?, output.environ) orelse return error.AgentNotFound;
-    const pane: PaneRefType = .{
+    const pane: PaneRef = .{
         .pane_id = target.pane_id,
         .pane_generation = target.pane_generation,
     };
@@ -257,7 +257,7 @@ fn prompt(session: *SessionType, options: AgentOptions, output: ExecutionContext
     }
 }
 
-fn writeList(writer: *std.Io.Writer, snapshot: *const SnapshotType, json: bool) !void {
+fn writeList(writer: *std.Io.Writer, snapshot: *const Snapshot, json: bool) !void {
     if (json) {
         try writer.print("{{\"revision\":{d},\"agents\":[", .{snapshot.revision});
         for (snapshot.slice(), 0..) |*agent, index| {
@@ -288,7 +288,7 @@ fn writeOne(writer: *std.Io.Writer, agent: *const ControlAgent, json: bool) !voi
     try control.writeAgentRow(writer, agent);
 }
 
-fn writeText(writer: *std.Io.Writer, text: TextType, json: bool) !void {
+fn writeText(writer: *std.Io.Writer, text: Text, json: bool) !void {
     if (json) {
         try writer.print("{{\"pane_id\":{d},\"truncated\":{},\"text\":", .{ text.pane_id, text.truncated });
         try control.writeJsonString(writer, text.text);
@@ -305,7 +305,7 @@ fn writeText(writer: *std.Io.Writer, text: TextType, json: bool) !void {
     }
 }
 
-fn isManaged(session: *SessionType, target: *const ControlAgent) !bool {
+fn isManaged(session: *Session, target: *const ControlAgent) !bool {
     const location: core.TabLocation = .{ .workspace = .{ .workspace = try core.workspace(target.workspace_id) }, .tab_id = try core.tab(target.tab_id) };
     const response = try session.exchange(core.encodeRequestTabSnapshot, core.RequestTabSnapshot{ .request_id = .none, .location = location });
     if (response != .tab_snapshot or !std.meta.eql(response.tab_snapshot.location, location)) {

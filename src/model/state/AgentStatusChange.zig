@@ -1,8 +1,8 @@
 const core = @import("telar-core");
-const AgentKeyType = @import("../agents/AgentKey.zig");
+const AgentKey = @import("../agents/AgentKey.zig");
 const AgentStatusChange = @This();
 
-key: AgentKeyType,
+key: AgentKey,
 pane_index: u16,
 provider: core.AgentProvider,
 previous: core.AgentStatus,

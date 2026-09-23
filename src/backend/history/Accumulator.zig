@@ -1,13 +1,13 @@
 const core = @import("telar-core");
 const std = @import("std");
-const EntryType = @import("Entry.zig");
+const Entry = @import("Entry.zig");
 const model = @import("model.zig");
-const QueryType = @import("Query.zig");
-const QueryResultType = @import("QueryResult.zig");
+const Query = @import("Query.zig");
+const QueryResult = @import("QueryResult.zig");
 const Accumulator = @This();
 
 gpa: std.mem.Allocator,
-entries: std.ArrayList(EntryType) = .empty,
+entries: std.ArrayList(Entry) = .empty,
 encoded_bytes: usize = model.encoded_result_header_bytes,
 limit: usize,
 has_more: bool = false,
@@ -24,7 +24,7 @@ pub fn deinit(accumulator: *Accumulator) void {
 
 /// Takes ownership even on rejection or allocation failure.
 /// Example: `if (!try accumulator.append(entry)) break;`.
-pub fn append(accumulator: *Accumulator, owned: EntryType) !bool {
+pub fn append(accumulator: *Accumulator, owned: Entry) !bool {
     var entry = owned;
     const bytes = model.encoded_entry_overhead_bytes + entry.command.len + entry.cwd.len + entry.workspace_path.len + entry.provider.len;
     if (accumulator.entries.items.len == accumulator.limit or bytes > core.max_frame_size - accumulator.encoded_bytes) {
@@ -41,8 +41,8 @@ pub fn append(accumulator: *Accumulator, owned: EntryType) !bool {
 
 /// Transfers entries only after result allocation succeeds.
 /// Example: `return accumulator.finish(request, more_candidates);`.
-pub fn finish(accumulator: *Accumulator, request: *const QueryType, more_candidates: bool) !*QueryResultType {
-    const result = try accumulator.gpa.create(QueryResultType);
+pub fn finish(accumulator: *Accumulator, request: *const Query, more_candidates: bool) !*QueryResult {
+    const result = try accumulator.gpa.create(QueryResult);
     errdefer accumulator.gpa.destroy(result);
     result.* = .{
         .request_id = request.request_id,

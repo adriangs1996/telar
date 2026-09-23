@@ -2,12 +2,12 @@
 
 const data = @import("model");
 const lua_api = @import("lua-api");
-const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
+const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
 const std = @import("std");
 const OptionalBoolean = @import("OptionalBoolean.zig");
 
-pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *data.Diagnostic) !void {
+pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.session must be a table", .{});

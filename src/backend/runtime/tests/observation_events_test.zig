@@ -3,12 +3,12 @@
 const core = @import("telar-core");
 const std = @import("std");
 const pane_mod = @import("../../pane/pane_namespace.zig");
-const CacheType = @import("../../process/Cache.zig");
+const Cache = @import("../../process/Cache.zig");
 const Pane = @import("../../pane/Pane.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const agent_identity = @import("../agent_identity.zig");
-const StatsType = @import("../../history/Stats.zig");
-const TrackerType = @import("../../agent/Tracker.zig");
+const Stats = @import("../../history/Stats.zig");
+const Tracker = @import("../../agent/Tracker.zig");
 const sound_module = @import("../../agent/sound.zig");
 const ResumeSession = @import("../../agent/ResumeSession.zig");
 const SessionReference = @import("../../agent/SessionReference.zig");
@@ -19,8 +19,8 @@ fn queueFollowUp(fixture: *EventFixture) void {
     fixture.pane.queueHistoryOutput(.{ .bytes = "follow-up", .shell_foreground = false, .clock = pane_mod.historyClock(std.testing.io) });
 }
 
-fn processCache(provider: core.AgentProvider, process_id: u32, executable: []const u8) CacheType {
-    var cache = CacheType.init(executable);
+fn processCache(provider: core.AgentProvider, process_id: u32, executable: []const u8) Cache {
+    var cache = Cache.init(executable);
     cache.process_group_id = process_id;
     cache.provider = provider;
     return cache;
@@ -166,7 +166,7 @@ test "shell startup observations preserve a queued resume until the agent starts
     try std.testing.expect(fixture.agents.resumeSession(key).?.eql(session));
     try std.testing.expect(fixture.agents.projectedStatus(key) == null);
 
-    for ([_]CacheType{
+    for ([_]Cache{
         processCache(.unknown, nonShellProcessId(fixture.pane), "git"),
         processCache(.unknown, shell_id, "sh"),
     }) |cache| {
@@ -340,7 +340,7 @@ test "Codex PTY frames and continuing Stop hooks publish exactly one final compl
 
         fixture.pane.queueHistoryOutput(.{ .bytes = case.output, .shell_foreground = false, .clock = .{ .real_ms = case.now_ms + 1, .awake_ns = @intCast(case.now_ms * 1_000_000) } });
         try std.testing.expect(fixture.pane.beginHistoryObservation() != null);
-        var stats: StatsType = .{};
+        var stats: Stats = .{};
         fixture.pane.processHistoryObservation(.{ .size = size, .provider = .codex }, &stats);
         try fixture.observed(.{ .pane = fixture.pane.key(), .stats = stats, .process_probe = .{ .cache = processCache(.codex, process_id, "Codex") } });
         try std.testing.expectEqual(case.status, fixture.agents.projectedStatus(identity.key).?);

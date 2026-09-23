@@ -1,9 +1,9 @@
-const KittyGraphicsWriterType = @import("../../graphics/KittyGraphicsWriter.zig");
+const KittyGraphicsWriter = @import("../../graphics/KittyGraphicsWriter.zig");
 const PillRenderer = @import("../../graphics/PillRenderer.zig");
 const std = @import("std");
 const CellGraphicsWriter = @This();
 
-panes: ?KittyGraphicsWriterType = null,
+panes: ?KittyGraphicsWriter = null,
 pill: *PillRenderer,
 pill_bytes: usize = 0,
 

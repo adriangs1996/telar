@@ -1,7 +1,7 @@
-const SessionType = @import("../Session.zig");
+const Session = @import("../Session.zig");
 const relay = @import("relay.zig");
 const Route = @This();
 
-from: SessionType.Side,
-to: SessionType.Side,
+from: Session.Side,
+to: Session.Side,
 direction: relay.Direction,

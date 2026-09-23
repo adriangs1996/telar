@@ -1,25 +1,25 @@
 const core = @import("telar-core");
 const std = @import("std");
-const StoreType = @import("persistence/Store.zig");
-const CountersType = @import("Counters.zig");
+const Store = @import("persistence/Store.zig");
+const Counters = @import("Counters.zig");
 const Context = @import("Context.zig");
 const model = @import("model.zig");
 const worker_support = @import("worker_support.zig");
-const LaunchAttemptType = @import("LaunchAttempt.zig");
-const SessionStartedType = @import("SessionStarted.zig");
-const SessionFinishedType = @import("SessionFinished.zig");
-const SessionTitleType = @import("SessionTitle.zig");
-const CommandFinishedType = @import("CommandFinished.zig");
-const ImportBatchType = @import("ImportBatch.zig");
-const StatsQueryType = @import("StatsQuery.zig");
-const DeleteType = @import("Delete.zig");
-const PruneType = @import("Prune.zig");
-const QueryType = @import("Query.zig");
+const LaunchAttempt = @import("LaunchAttempt.zig");
+const SessionStarted = @import("SessionStarted.zig");
+const SessionFinished = @import("SessionFinished.zig");
+const SessionTitle = @import("SessionTitle.zig");
+const CommandFinished = @import("CommandFinished.zig");
+const ImportBatch = @import("ImportBatch.zig");
+const StatsQuery = @import("StatsQuery.zig");
+const Delete = @import("Delete.zig");
+const Prune = @import("Prune.zig");
+const Query = @import("Query.zig");
 const Worker = @This();
 
 gpa: std.mem.Allocator,
 database_path: [:0]const u8,
-database: ?StoreType,
+database: ?Store,
 open_error: ?anyerror,
 
 /// Opens the selected SQLite database or creates an explicit degraded
@@ -30,9 +30,9 @@ open_error: ?anyerror,
 /// var worker = Worker.init(gpa, database_path, metrics);
 /// defer worker.deinit();
 /// ```
-pub fn init(gpa: std.mem.Allocator, database_path: [:0]const u8, metrics: *CountersType) Worker {
+pub fn init(gpa: std.mem.Allocator, database_path: [:0]const u8, metrics: *Counters) Worker {
     var open_error: ?anyerror = null;
-    const database = StoreType.open(database_path) catch |err| unavailable: {
+    const database = Store.open(database_path) catch |err| unavailable: {
         open_error = err;
         break :unavailable null;
     };
@@ -156,7 +156,7 @@ fn execute(worker: *Worker, context: Context, request: model.Request) anyerror!w
     return .continue_running;
 }
 
-fn writeLaunchAttempt(worker: *Worker, context: Context, value: *LaunchAttemptType) void {
+fn writeLaunchAttempt(worker: *Worker, context: Context, value: *LaunchAttempt) void {
     defer value.deinit(worker.gpa);
     const started = std.Io.Timestamp.now(context.io, .awake);
     const result = if (worker.database) |*database|
@@ -167,7 +167,7 @@ fn writeLaunchAttempt(worker: *Worker, context: Context, value: *LaunchAttemptTy
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeSessionStart(worker: *Worker, context: Context, value: *SessionStartedType) void {
+fn writeSessionStart(worker: *Worker, context: Context, value: *SessionStarted) void {
     defer value.deinit(worker.gpa);
     const started = std.Io.Timestamp.now(context.io, .awake);
     const result = if (worker.database) |*database|
@@ -178,7 +178,7 @@ fn writeSessionStart(worker: *Worker, context: Context, value: *SessionStartedTy
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeSessionFinish(worker: *Worker, context: Context, value: SessionFinishedType) void {
+fn writeSessionFinish(worker: *Worker, context: Context, value: SessionFinished) void {
     const started = std.Io.Timestamp.now(context.io, .awake);
     const result = if (worker.database) |*database|
         database.finishSession(value)
@@ -188,7 +188,7 @@ fn writeSessionFinish(worker: *Worker, context: Context, value: SessionFinishedT
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeSessionTitle(worker: *Worker, context: Context, value: SessionTitleType) void {
+fn writeSessionTitle(worker: *Worker, context: Context, value: SessionTitle) void {
     const started = std.Io.Timestamp.now(context.io, .awake);
     const result = if (worker.database) |*database|
         database.setSessionTitle(&value)
@@ -198,7 +198,7 @@ fn writeSessionTitle(worker: *Worker, context: Context, value: SessionTitleType)
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeCommand(worker: *Worker, context: Context, value: *CommandFinishedType) void {
+fn writeCommand(worker: *Worker, context: Context, value: *CommandFinished) void {
     defer value.deinit(worker.gpa);
     const started = std.Io.Timestamp.now(context.io, .awake);
     const result = if (worker.database) |*database| write: {
@@ -223,7 +223,7 @@ fn writeCommand(worker: *Worker, context: Context, value: *CommandFinishedType) 
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn writeImport(worker: *Worker, context: Context, batch: *ImportBatchType) void {
+fn writeImport(worker: *Worker, context: Context, batch: *ImportBatch) void {
     defer batch.deinit(worker.gpa);
     const started = std.Io.Timestamp.now(context.io, .awake);
     const result = if (worker.database) |*database|
@@ -234,7 +234,7 @@ fn writeImport(worker: *Worker, context: Context, batch: *ImportBatchType) void 
     context.metrics.observeWrite(worker_support.elapsedSince(context.io, started), result);
 }
 
-fn queryStats(worker: *Worker, context: Context, request: StatsQueryType) void {
+fn queryStats(worker: *Worker, context: Context, request: StatsQuery) void {
     const response: model.Response = if (worker.database) |*database| result: {
         const value = database.stats(worker.gpa, &request) catch break :result .{ .failed = .{
             .request_id = request.request_id,
@@ -250,7 +250,7 @@ fn queryStats(worker: *Worker, context: Context, request: StatsQueryType) void {
     };
 }
 
-fn readOutput(worker: *Worker, context: Context, request: DeleteType) void {
+fn readOutput(worker: *Worker, context: Context, request: Delete) void {
     const response: model.Response = if (worker.database) |*database| result: {
         const value = database.readCommandOutput(worker.gpa, request) catch break :result .{ .failed = .{
             .request_id = request.request_id,
@@ -266,7 +266,7 @@ fn readOutput(worker: *Worker, context: Context, request: DeleteType) void {
     };
 }
 
-fn deleteCommand(worker: *Worker, context: Context, request: DeleteType) void {
+fn deleteCommand(worker: *Worker, context: Context, request: Delete) void {
     const removed: u64 = if (worker.database) |*database|
         database.deleteCommand(request.id) catch 0
     else
@@ -279,7 +279,7 @@ fn deleteCommand(worker: *Worker, context: Context, request: DeleteType) void {
     });
 }
 
-fn prune(worker: *Worker, context: Context, request: PruneType) void {
+fn prune(worker: *Worker, context: Context, request: Prune) void {
     const removed: u64 = if (worker.database) |*database|
         database.prune(&request) catch 0
     else
@@ -292,7 +292,7 @@ fn prune(worker: *Worker, context: Context, request: PruneType) void {
     });
 }
 
-fn query(worker: *Worker, context: Context, request: QueryType) anyerror!worker_support.Execution {
+fn query(worker: *Worker, context: Context, request: Query) anyerror!worker_support.Execution {
     const started = std.Io.Timestamp.now(context.io, .awake);
     const response: model.Response = if (worker.database) |*database|
         if (database.query(worker.gpa, &request)) |result|

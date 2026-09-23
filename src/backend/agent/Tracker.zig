@@ -1,31 +1,31 @@
 const revisions = @import("../revisions.zig");
 const core = @import("telar-core");
-const RepositoryType = @import("Repository.zig");
+const Repository = @import("Repository.zig");
 const RestoredAgents = @import("RestoredAgents.zig");
 const ResumeSession = @import("ResumeSession.zig");
-const WatchesType = @import("Watches.zig");
-const ReportObservationType = @import("ReportObservation.zig");
-const IdentityType = @import("Identity.zig");
-const SessionReferenceType = @import("SessionReference.zig");
-const PaneKeyType = @import("../pane/PaneKey.zig");
-const SessionTitleType = @import("SessionTitle.zig");
+const Watches = @import("Watches.zig");
+const ReportObservation = @import("ReportObservation.zig");
+const Identity = @import("Identity.zig");
+const SessionReference = @import("SessionReference.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
+const SessionTitle = @import("SessionTitle.zig");
 const tracker_support = @import("tracker_support.zig");
-const ProcessObservationType = @import("ProcessObservation.zig");
-const ProxyObservationType = @import("ProxyObservation.zig");
-const ScreenObservationType = @import("ScreenObservation.zig");
+const ProcessObservation = @import("ProcessObservation.zig");
+const ProxyObservation = @import("ProxyObservation.zig");
+const ScreenObservation = @import("ScreenObservation.zig");
 const std = @import("std");
-const JobType = @import("Job.zig");
-const ResultType = @import("Result.zig");
-const DescriptionFinishedType = @import("DescriptionFinished.zig");
-const WatchType = @import("Watch.zig");
-const CompletionType = @import("Completion.zig");
+const Job = @import("Job.zig");
+const Result = @import("Result.zig");
+const DescriptionFinished = @import("DescriptionFinished.zig");
+const Watch = @import("Watch.zig");
+const Completion = @import("Completion.zig");
 const Agent = @import("Agent.zig");
 const description = @import("description.zig");
 const Tracker = @This();
 
-repository: RepositoryType = .{},
+repository: Repository = .{},
 restored_agents: RestoredAgents = .{},
-watches: WatchesType = .{},
+watches: Watches = .{},
 revision: u64 = 1,
 /// Advances whenever an agent's session reference changes; the session
 /// reference names the change-review owner, which the projection
@@ -39,7 +39,7 @@ sequence: u64 = 0,
 /// ```zig
 /// _ = tracker.observeReport(.{ .identity = identity, .state = .working, .observed_at_ms = now_ms });
 /// ```
-pub fn observeReport(tracker: *Tracker, observation: ReportObservationType) bool {
+pub fn observeReport(tracker: *Tracker, observation: ReportObservation) bool {
     if (observation.session) |session| {
         tracker.supersedeRestoredSession(observation.identity.key, session);
     }
@@ -76,7 +76,7 @@ pub fn observeReport(tracker: *Tracker, observation: ReportObservationType) bool
 /// ```zig
 /// if (tracker.observeSessionReference(identity, reference)) noteSessionChange();
 /// ```
-pub fn observeSessionReference(tracker: *Tracker, identity: IdentityType, reference: SessionReferenceType) bool {
+pub fn observeSessionReference(tracker: *Tracker, identity: Identity, reference: SessionReference) bool {
     tracker.supersedeRestoredSession(identity.key, reference);
     const agent = tracker.ensure(identity) orelse return false;
     const changed = agent.applySessionReference(reference);
@@ -87,7 +87,7 @@ pub fn observeSessionReference(tracker: *Tracker, identity: IdentityType, refere
 /// Returns durable resume data from an observed process or a pending restore,
 /// never from screen or proxy provider guesses.
 /// Example: `const session = tracker.resumeSession(key) orelse return;`.
-pub fn resumeSession(tracker: *const Tracker, key: PaneKeyType) ?ResumeSession {
+pub fn resumeSession(tracker: *const Tracker, key: PaneKey) ?ResumeSession {
     if (tracker.repository.findConst(key)) |agent| {
         if (agent.session_reference) |reference| {
             if (agent.process) |process| {
@@ -102,7 +102,7 @@ pub fn resumeSession(tracker: *const Tracker, key: PaneKeyType) ?ResumeSession {
 
 /// Retains a validated resume until matching process evidence arrives.
 /// Example: `_ = tracker.restoreSession(key, session);`.
-pub fn restoreSession(tracker: *Tracker, key: PaneKeyType, session: ResumeSession) bool {
+pub fn restoreSession(tracker: *Tracker, key: PaneKey, session: ResumeSession) bool {
     return tracker.restored_agents.putSession(key, session);
 }
 
@@ -114,7 +114,7 @@ pub fn hasRestoredSession(tracker: *const Tracker, session: ResumeSession) bool 
 
 /// Distinguishes a starting resume from an observed foreground agent.
 /// Example: `if (tracker.awaitingResume(key)) return;`.
-pub fn awaitingResume(tracker: *const Tracker, key: PaneKeyType) bool {
+pub fn awaitingResume(tracker: *const Tracker, key: PaneKey) bool {
     const pending = tracker.restored_agents.get(key) orelse return false;
     return pending.session != null;
 }
@@ -124,7 +124,7 @@ pub fn awaitingResume(tracker: *const Tracker, key: PaneKeyType) bool {
 /// ```zig
 /// const provider = tracker.projectedProvider(key);
 /// ```
-pub fn projectedProvider(tracker: *const Tracker, key: PaneKeyType) core.AgentProvider {
+pub fn projectedProvider(tracker: *const Tracker, key: PaneKey) core.AgentProvider {
     const agent = tracker.repository.findConst(key) orelse return .unknown;
     return agent.snapshot(0).provider;
 }
@@ -134,7 +134,7 @@ pub fn projectedProvider(tracker: *const Tracker, key: PaneKeyType) core.AgentPr
 /// ```zig
 /// const reference = tracker.sessionReference(key) orelse return;
 /// ```
-pub fn sessionReference(tracker: *const Tracker, key: PaneKeyType) ?SessionReferenceType {
+pub fn sessionReference(tracker: *const Tracker, key: PaneKey) ?SessionReference {
     const agent = tracker.repository.findConst(key) orelse return null;
     return agent.session_reference;
 }
@@ -145,14 +145,14 @@ pub fn sessionReference(tracker: *const Tracker, key: PaneKeyType) ?SessionRefer
 /// ```zig
 /// const title = tracker.durableTitle(key) orelse return;
 /// ```
-pub fn durableTitle(tracker: *const Tracker, key: PaneKeyType) ?SessionTitleType {
+pub fn durableTitle(tracker: *const Tracker, key: PaneKey) ?SessionTitle {
     const agent = tracker.repository.findConst(key) orelse return null;
     return agent.durableTitle();
 }
 
 /// Preserves a title across checkpoints while its resumed process starts.
 /// Example: `const title = tracker.checkpointTitle(key);`.
-pub fn checkpointTitle(tracker: *const Tracker, key: PaneKeyType) ?SessionTitleType {
+pub fn checkpointTitle(tracker: *const Tracker, key: PaneKey) ?SessionTitle {
     if (tracker.repository.findConst(key)) |agent| {
         if (agent.durableTitle()) |title| {
             return title;
@@ -170,7 +170,7 @@ pub fn checkpointTitle(tracker: *const Tracker, key: PaneKeyType) ?SessionTitleT
 /// ```zig
 /// _ = tracker.restoreTitle(pane.key(), title);
 /// ```
-pub fn restoreTitle(tracker: *Tracker, key: PaneKeyType, title: SessionTitleType) bool {
+pub fn restoreTitle(tracker: *Tracker, key: PaneKey, title: SessionTitle) bool {
     if (tracker.restored_agents.get(key)) |pending| {
         if (pending.session != null) {
             return tracker.restored_agents.putTitle(key, title);
@@ -194,7 +194,7 @@ pub fn restoreTitle(tracker: *Tracker, key: PaneKeyType, title: SessionTitleType
 ///     pumpClients();
 /// }
 /// ```
-pub fn acknowledge(tracker: *Tracker, key: PaneKeyType, now_ms: i64) tracker_support.AcknowledgeResult {
+pub fn acknowledge(tracker: *Tracker, key: PaneKey, now_ms: i64) tracker_support.AcknowledgeResult {
     const agent = tracker.repository.find(key) orelse return .unknown_agent;
 
     if (!agent.acknowledge()) {
@@ -216,7 +216,7 @@ pub fn acknowledge(tracker: *Tracker, key: PaneKeyType, now_ms: i64) tracker_sup
 ///     .observed_at_ms = 1_000,
 /// });
 /// ```
-pub fn observeProcess(tracker: *Tracker, observation: ProcessObservationType) bool {
+pub fn observeProcess(tracker: *Tracker, observation: ProcessObservation) bool {
     if (observation.provider == .unknown or observation.process_id == 0) {
         return false;
     }
@@ -263,7 +263,7 @@ pub fn observeProcess(tracker: *Tracker, observation: ProcessObservationType) bo
 /// ```zig
 /// _ = tracker.clearProcess(pane_key);
 /// ```
-pub fn clearProcess(tracker: *Tracker, key: PaneKeyType) bool {
+pub fn clearProcess(tracker: *Tracker, key: PaneKey) bool {
     const agent = tracker.repository.find(key) orelse return false;
 
     if (!agent.processExited()) {
@@ -318,7 +318,7 @@ pub fn clearProcess(tracker: *Tracker, key: PaneKeyType) bool {
 ///     });
 /// }
 /// ```
-pub fn observeProxy(tracker: *Tracker, observation: ProxyObservationType) bool {
+pub fn observeProxy(tracker: *Tracker, observation: ProxyObservation) bool {
     if (observation.dialect == .unknown) {
         return false;
     }
@@ -342,7 +342,7 @@ pub fn observeProxy(tracker: *Tracker, observation: ProxyObservationType) bool {
 ///     .observed_at_ms = 1_000,
 /// });
 /// ```
-pub fn observeScreen(tracker: *Tracker, observation: ScreenObservationType) bool {
+pub fn observeScreen(tracker: *Tracker, observation: ScreenObservation) bool {
     const agent = tracker.repository.find(observation.identity.key) orelse return false;
 
     if (!agent.applyScreen(observation)) {
@@ -382,7 +382,7 @@ pub fn expire(tracker: *Tracker, now_ms: i64) bool {
 /// ```zig
 /// _ = tracker.remove(pane_key);
 /// ```
-pub fn remove(tracker: *Tracker, key: PaneKeyType) bool {
+pub fn remove(tracker: *Tracker, key: PaneKey) bool {
     _ = tracker.restored_agents.take(key);
     const agent = tracker.repository.find(key) orelse return false;
     agent.retire();
@@ -413,7 +413,7 @@ pub fn snapshot(tracker: *const Tracker, entries: *[core.max_agent_snapshot_entr
 /// ```zig
 /// const status = tracker.projectedStatus(pane_key);
 /// ```
-pub fn projectedStatus(tracker: *const Tracker, key: PaneKeyType) ?core.AgentStatus {
+pub fn projectedStatus(tracker: *const Tracker, key: PaneKey) ?core.AgentStatus {
     const agent = tracker.repository.findConst(key) orelse return null;
     return agent.projectedStatus();
 }
@@ -424,14 +424,14 @@ pub fn projectedStatus(tracker: *const Tracker, key: PaneKeyType) ?core.AgentSta
 /// ```zig
 /// _ = tracker.observeInput(pane_key, bytes);
 /// ```
-pub fn observeInput(tracker: *Tracker, key: PaneKeyType, bytes: []const u8) bool {
+pub fn observeInput(tracker: *Tracker, key: PaneKey, bytes: []const u8) bool {
     const agent = tracker.repository.find(key) orelse return false;
     return agent.observeInput(bytes);
 }
 
 /// Captures the first accepted managed prompt when the caller opted into title generation.
 /// Example: `_ = tracker.observeSubmittedPrompt(identity, "Fix tests\nKeep behavior");`.
-pub fn observeSubmittedPrompt(tracker: *Tracker, identity: IdentityType, text: []const u8) bool {
+pub fn observeSubmittedPrompt(tracker: *Tracker, identity: Identity, text: []const u8) bool {
     const agent = tracker.ensure(identity) orelse return false;
     if (!agent.observeSubmittedPrompt(text, tracker.pendingDescriptionCount() < description.max_pending_jobs)) {
         return false;
@@ -447,7 +447,7 @@ pub fn observeSubmittedPrompt(tracker: *Tracker, identity: IdentityType, text: [
 /// ```zig
 /// const job = tracker.nextDescriptionJob();
 /// ```
-pub fn nextDescriptionJob(tracker: *Tracker) ?JobType {
+pub fn nextDescriptionJob(tracker: *Tracker) ?Job {
     var running = tracker.repository.constIterator();
 
     while (running.next()) |agent| {
@@ -476,7 +476,7 @@ pub fn nextDescriptionJob(tracker: *Tracker) ?JobType {
 /// ```zig
 /// const finished = tracker.finishDescription(&result) orelse return;
 /// ```
-pub fn finishDescription(tracker: *Tracker, result: *const ResultType) ?DescriptionFinishedType {
+pub fn finishDescription(tracker: *Tracker, result: *const Result) ?DescriptionFinished {
     const agent = tracker.repository.find(result.pane) orelse return null;
 
     const finished = agent.finishDescription(result) orelse return null;
@@ -490,7 +490,7 @@ pub fn finishDescription(tracker: *Tracker, result: *const ResultType) ?Descript
 /// ```zig
 /// _ = try tracker.setManualTitle(pane_key, "Review proxy lifecycle");
 /// ```
-pub fn setManualTitle(tracker: *Tracker, key: PaneKeyType, value: []const u8) !bool {
+pub fn setManualTitle(tracker: *Tracker, key: PaneKey, value: []const u8) !bool {
     const agent = tracker.repository.find(key) orelse return false;
     try agent.setManualTitle(value);
     tracker.bumpRevision();
@@ -504,7 +504,7 @@ pub fn setManualTitle(tracker: *Tracker, key: PaneKeyType, value: []const u8) !b
 /// ```zig
 /// if (try tracker.reportTitle(identity, "Fix proxy")) noteSessionChange();
 /// ```
-pub fn reportTitle(tracker: *Tracker, identity: IdentityType, value: []const u8) !bool {
+pub fn reportTitle(tracker: *Tracker, identity: Identity, value: []const u8) !bool {
     const agent = tracker.ensure(identity) orelse return false;
     if (!try agent.reportTitle(value)) {
         return false;
@@ -520,7 +520,7 @@ pub fn reportTitle(tracker: *Tracker, identity: IdentityType, value: []const u8)
 /// ```zig
 /// const watch = tracker.nextSessionFileProbe(now_ms, 1_000) orelse return;
 /// ```
-pub fn nextSessionFileProbe(tracker: *Tracker, now_ms: i64, interval_ms: i64) ?WatchType {
+pub fn nextSessionFileProbe(tracker: *Tracker, now_ms: i64, interval_ms: i64) ?Watch {
     while (tracker.watches.stalest(now_ms, interval_ms)) |watch| {
         if (tracker.repository.find(watch.key) == null) {
             _ = tracker.watches.remove(watch.key);
@@ -541,7 +541,7 @@ pub fn nextSessionFileProbe(tracker: *Tracker, now_ms: i64, interval_ms: i64) ?W
 /// ```zig
 /// if (tracker.finishSessionFileProbe(completion, now_ms)) noteSessionChange();
 /// ```
-pub fn finishSessionFileProbe(tracker: *Tracker, completion: CompletionType, now_ms: i64) bool {
+pub fn finishSessionFileProbe(tracker: *Tracker, completion: Completion, now_ms: i64) bool {
     const watch = tracker.watches.find(completion.key) orelse return false;
     watch.pending = false;
     watch.checked_at_ms = now_ms;
@@ -562,14 +562,14 @@ pub fn finishSessionFileProbe(tracker: *Tracker, completion: CompletionType, now
     return changed;
 }
 
-fn resolveProxyAgent(tracker: *Tracker, observation: *const ProxyObservationType) ?*Agent {
+fn resolveProxyAgent(tracker: *Tracker, observation: *const ProxyObservation) ?*Agent {
     return switch (observation.phase) {
         .request_started => tracker.ensure(observation.identity),
         .response_activity, .provider_turn_completed, .response_finished, .request_failed => tracker.repository.find(observation.identity.key),
     };
 }
 
-fn ensure(tracker: *Tracker, identity: IdentityType) ?*Agent {
+fn ensure(tracker: *Tracker, identity: Identity) ?*Agent {
     if (tracker.repository.find(identity.key)) |agent| {
         return agent;
     }
@@ -588,7 +588,7 @@ fn ensure(tracker: *Tracker, identity: IdentityType) ?*Agent {
     return agent;
 }
 
-fn supersedeRestoredSession(tracker: *Tracker, key: PaneKeyType, reference: SessionReferenceType) void {
+fn supersedeRestoredSession(tracker: *Tracker, key: PaneKey, reference: SessionReference) void {
     const pending = tracker.restored_agents.get(key) orelse return;
     const session = pending.session orelse return;
     if (!std.mem.eql(u8, session.reference.slice(), reference.slice())) {
@@ -596,7 +596,7 @@ fn supersedeRestoredSession(tracker: *Tracker, key: PaneKeyType, reference: Sess
     }
 }
 
-fn removeStored(tracker: *Tracker, key: PaneKeyType) bool {
+fn removeStored(tracker: *Tracker, key: PaneKey) bool {
     _ = tracker.watches.remove(key);
     if (!tracker.repository.remove(key)) {
         return false;
@@ -656,7 +656,7 @@ fn bumpRevision(tracker: *Tracker) void {
 
 /// Updates the lifecycle projection for one runtime-owned provider session.
 /// Example: `_ = tracker.observeManaged(identity, state);`.
-pub fn observeManaged(tracker: *Tracker, identity: IdentityType, state: @import("ManagedState.zig")) bool {
+pub fn observeManaged(tracker: *Tracker, identity: Identity, state: @import("ManagedState.zig")) bool {
     const agent = tracker.ensure(identity) orelse return false;
     agent.applyManaged(state);
     return tracker.reproject(agent, state.observed_at_ms);

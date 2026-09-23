@@ -4,7 +4,7 @@ const data = @import("model");
 const std = @import("std");
 const Input = @import("Input.zig");
 const generation_support = @import("../config/generation_support.zig");
-const GenerationType = @import("../config/Generation.zig");
+const Generation = @import("../config/Generation.zig");
 const protocol = @import("protocol.zig");
 
 /// Runs one validated plugin callback and writes its encoded effect batch.
@@ -51,7 +51,7 @@ pub fn run(init: std.process.Init, input: Input) !void {
     );
 
     var diagnostic: data.Diagnostic = .{};
-    const generation = GenerationType.loadSource(.{
+    const generation = Generation.loadSource(.{
         .gpa = init.gpa,
         .io = init.io,
         .diagnostic = &diagnostic,

@@ -1,6 +1,6 @@
 const model_data = @import("model");
-const MarkerScreenType = @import("MarkerScreen.zig");
-const DeletionProbeType = @import("DeletionProbe.zig");
+const MarkerScreen = @import("MarkerScreen.zig");
+const DeletionProbe = @import("DeletionProbe.zig");
 /// The attachment shelf a host that draws image previews owns: the catalog
 /// it instantiates from `GenericCatalog` with its own preview state, marker
 /// plans over that catalog, and the preview modal's input ownership. A host
@@ -9,7 +9,7 @@ const AttachmentShelf = @This();
 
 context: *anyopaque,
 adopt_fn: *const fn (*anyopaque, *model_data.Capture) anyerror!bool,
-reconcile_markers_fn: *const fn (*anyopaque, model_data.AttachmentTarget, MarkerScreenType) ?bool,
+reconcile_markers_fn: *const fn (*anyopaque, model_data.AttachmentTarget, MarkerScreen) ?bool,
 sync_target_fn: *const fn (*anyopaque, ?model_data.AttachmentTarget) bool,
 remove_fn: *const fn (*anyopaque, model_data.AttachmentId) ?bool,
 remove_prompt_fn: *const fn (*anyopaque, model_data.AttachmentTarget) ?bool,
@@ -17,9 +17,9 @@ modal_active_fn: *const fn (*anyopaque) bool,
 close_modal_fn: *const fn (*anyopaque) bool,
 reservation_fn: *const fn (*anyopaque) ?model_data.PaneBottomReservation,
 visible_target_fn: *const fn (*anyopaque) ?model_data.AttachmentTarget,
-plan_marker_removal_fn: *const fn (*anyopaque, model_data.AttachmentId, MarkerScreenType) ?model_data.MarkerRemoval,
-id_at_marker_deletion_fn: *const fn (*anyopaque, MarkerScreenType, model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId,
-pending_marker_at_deletion_fn: *const fn (*anyopaque, MarkerScreenType, DeletionProbeType) bool,
+plan_marker_removal_fn: *const fn (*anyopaque, model_data.AttachmentId, MarkerScreen) ?model_data.MarkerRemoval,
+id_at_marker_deletion_fn: *const fn (*anyopaque, MarkerScreen, model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId,
+pending_marker_at_deletion_fn: *const fn (*anyopaque, MarkerScreen, DeletionProbe) bool,
 expect_marker_deletion_fn: *const fn (*anyopaque, model_data.AttachmentTarget) void,
 
 /// Takes ownership of one capture; reports whether the layout changed.
@@ -28,7 +28,7 @@ pub fn adopt(port: AttachmentShelf, capture: *model_data.Capture) !bool {
     return port.adopt_fn(port.context, capture);
 }
 
-pub fn reconcileMarkers(port: AttachmentShelf, target: model_data.AttachmentTarget, screen: MarkerScreenType) ?bool {
+pub fn reconcileMarkers(port: AttachmentShelf, target: model_data.AttachmentTarget, screen: MarkerScreen) ?bool {
     return port.reconcile_markers_fn(port.context, target, screen);
 }
 
@@ -63,15 +63,15 @@ pub fn visibleTarget(port: AttachmentShelf) ?model_data.AttachmentTarget {
     return port.visible_target_fn(port.context);
 }
 
-pub fn planMarkerRemoval(port: AttachmentShelf, id: model_data.AttachmentId, screen: MarkerScreenType) ?model_data.MarkerRemoval {
+pub fn planMarkerRemoval(port: AttachmentShelf, id: model_data.AttachmentId, screen: MarkerScreen) ?model_data.MarkerRemoval {
     return port.plan_marker_removal_fn(port.context, id, screen);
 }
 
-pub fn idAtMarkerDeletion(port: AttachmentShelf, screen: MarkerScreenType, deletion: model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId {
+pub fn idAtMarkerDeletion(port: AttachmentShelf, screen: MarkerScreen, deletion: model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId {
     return port.id_at_marker_deletion_fn(port.context, screen, deletion);
 }
 
-pub fn pendingMarkerAtDeletion(port: AttachmentShelf, screen: MarkerScreenType, probe: DeletionProbeType) bool {
+pub fn pendingMarkerAtDeletion(port: AttachmentShelf, screen: MarkerScreen, probe: DeletionProbe) bool {
     return port.pending_marker_at_deletion_fn(port.context, screen, probe);
 }
 

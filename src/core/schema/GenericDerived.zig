@@ -1,19 +1,19 @@
 const pane_kind = @import("pane_kind.zig");
 const tab = @import("messages/tab.zig");
-const EncoderType = @import("Encoder.zig");
-const DecoderType = @import("Decoder.zig");
+const Encoder = @import("Encoder.zig");
+const Decoder = @import("Decoder.zig");
 const id = @import("id.zig");
 const codec = @import("codec.zig");
-const TabLocationType = @import("TabLocation.zig");
+const TabLocation = @import("TabLocation.zig");
 const types = @import("types.zig");
-const TerminalSizeType = @import("TerminalSize.zig");
+const TerminalSize = @import("TerminalSize.zig");
 const std = @import("std");
 
 pub fn Type(comptime T: type) type {
     const allow_zero_request_id =
         @hasDecl(T, "wire_allow_zero_request_id") and T.wire_allow_zero_request_id;
     return struct {
-        pub fn encode(encoder: *EncoderType, message: T) !void {
+        pub fn encode(encoder: *Encoder, message: T) !void {
             if (@hasDecl(T, "validateWire")) {
                 try message.validateWire();
             }
@@ -22,7 +22,7 @@ pub fn Type(comptime T: type) type {
             }
         }
 
-        pub fn decode(decoder: *DecoderType) !T {
+        pub fn decode(decoder: *Decoder) !T {
             var message: T = undefined;
             inline for (@typeInfo(T).@"struct".fields) |field| {
                 @field(message, field.name) = try decodeField(field.type, decoder);
@@ -33,7 +33,7 @@ pub fn Type(comptime T: type) type {
             return message;
         }
 
-        fn encodeField(comptime F: type, encoder: *EncoderType, value: F) !void {
+        fn encodeField(comptime F: type, encoder: *Encoder, value: F) !void {
             switch (F) {
                 id.RequestId => {
                     if (!allow_zero_request_id) {
@@ -61,9 +61,9 @@ pub fn Type(comptime T: type) type {
                         try encoder.writeInt(u64, id.raw(tab_id));
                     }
                 },
-                TabLocationType => try codec.encodeTabLocation(encoder, value),
+                TabLocation => try codec.encodeTabLocation(encoder, value),
                 types.WorkspaceLocation => try codec.encodeWorkspaceLocation(encoder, value),
-                TerminalSizeType => {
+                TerminalSize => {
                     try value.validate();
                     try codec.encodeSize(encoder, value);
                 },
@@ -77,7 +77,7 @@ pub fn Type(comptime T: type) type {
             }
         }
 
-        fn decodeField(comptime F: type, decoder: *DecoderType) !F {
+        fn decodeField(comptime F: type, decoder: *Decoder) !F {
             return switch (F) {
                 id.RequestId => if (allow_zero_request_id)
                     @enumFromInt(try decoder.readInt(u64))
@@ -92,9 +92,9 @@ pub fn Type(comptime T: type) type {
                     try id.tab(try decoder.readInt(u64))
                 else
                     null,
-                TabLocationType => try codec.decodeTabLocation(decoder),
+                TabLocation => try codec.decodeTabLocation(decoder),
                 types.WorkspaceLocation => try codec.decodeWorkspaceLocation(decoder),
-                TerminalSizeType => try codec.decodeSize(decoder),
+                TerminalSize => try codec.decodeSize(decoder),
                 bool => try decoder.readBool(),
                 u8 => try decoder.readByte(),
                 u16, u32, u64, i32, i64 => try decoder.readInt(F),

@@ -1,9 +1,9 @@
-const TabLocationType = @import("../TabLocation.zig");
+const TabLocation = @import("../TabLocation.zig");
 const id = @import("../id.zig");
 const ClientLayoutNodeIterator = @import("ClientLayoutNodeIterator.zig");
 const ClientTabLayoutView = @This();
 
-location: TabLocationType,
+location: TabLocation,
 focused_pane: id.PaneId,
 fullscreen: bool,
 workspace_active: bool,

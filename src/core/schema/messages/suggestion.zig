@@ -3,10 +3,10 @@
 const SuggestCommand = @import("SuggestCommand.zig");
 const codec = @import("../codec.zig");
 const types = @import("../types.zig");
-const EncoderType = @import("../Encoder.zig");
+const Encoder = @import("../Encoder.zig");
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const CommandSuggestion = @import("CommandSuggestion.zig");
 const std = @import("std");
 
@@ -19,7 +19,7 @@ pub fn encodeSuggestCommand(buffer: []u8, message: SuggestCommand) ![]const u8 {
     try codec.validateRequestId(message.request_id);
     try codec.validatePaneId(message.pane_id);
     try codec.validateBytes(message.text, types.max_suggestion_request_bytes, false);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.suggest_command));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -27,7 +27,7 @@ pub fn encodeSuggestCommand(buffer: []u8, message: SuggestCommand) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeSuggestCommand(decoder: *DecoderType) !SuggestCommand {
+pub fn decodeSuggestCommand(decoder: *Decoder) !SuggestCommand {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const text = try decoder.readSized16();
@@ -46,7 +46,7 @@ pub fn encodeCommandSuggestion(buffer: []u8, message: CommandSuggestion) ![]cons
     if (message.status != .ready and message.text.len != 0) {
         return error.InvalidSuggestion;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.command_suggestion));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeByte(@intFromEnum(message.status));
@@ -54,7 +54,7 @@ pub fn encodeCommandSuggestion(buffer: []u8, message: CommandSuggestion) ![]cons
     return encoder.finish();
 }
 
-pub fn decodeCommandSuggestion(decoder: *DecoderType) !CommandSuggestion {
+pub fn decodeCommandSuggestion(decoder: *Decoder) !CommandSuggestion {
     const request_id = try id.request(try decoder.readInt(u64));
     const status = std.enums.fromInt(types.SuggestionStatus, try decoder.readByte()) orelse return error.InvalidSuggestion;
     const text = try decoder.readSized16();

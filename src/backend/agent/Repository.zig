@@ -1,7 +1,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const Agent = @import("Agent.zig");
-const PaneKeyType = @import("../pane/PaneKey.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
 pub const Repository = @This();
 
 pub const capacity = core.max_agent_snapshot_entries;
@@ -14,7 +14,7 @@ const Occupancy = std.bit_set.IntegerBitSet(capacity);
 /// aggregate's key never changes after insertion, and every insertion and
 /// removal updates all four fields together.
 slots: [capacity]?Agent = @splat(null),
-keys: [capacity]PaneKeyType = undefined,
+keys: [capacity]PaneKey = undefined,
 occupied: Occupancy = .initEmpty(),
 index: core.GenericSlotIndex(2 * capacity) = .{},
 
@@ -51,7 +51,7 @@ pub fn insert(repository: *Repository, candidate: Agent) ?*Agent {
 /// ```zig
 /// const agent = repository.find(pane_key) orelse return;
 /// ```
-pub fn find(repository: *Repository, key: PaneKeyType) ?*Agent {
+pub fn find(repository: *Repository, key: PaneKey) ?*Agent {
     const index = repository.indexOf(key) orelse return null;
     return &repository.slots[index].?;
 }
@@ -61,7 +61,7 @@ pub fn find(repository: *Repository, key: PaneKeyType) ?*Agent {
 /// ```zig
 /// const agent = repository.findConst(pane_key) orelse return;
 /// ```
-pub fn findConst(repository: *const Repository, key: PaneKeyType) ?*const Agent {
+pub fn findConst(repository: *const Repository, key: PaneKey) ?*const Agent {
     const index = repository.indexOf(key) orelse return null;
     return &repository.slots[index].?;
 }
@@ -71,7 +71,7 @@ pub fn findConst(repository: *const Repository, key: PaneKeyType) ?*const Agent 
 /// ```zig
 /// _ = repository.remove(pane_key);
 /// ```
-pub fn remove(repository: *Repository, key: PaneKeyType) bool {
+pub fn remove(repository: *Repository, key: PaneKey) bool {
     const index = repository.indexOf(key) orelse return false;
     repository.release(index);
     return true;
@@ -90,7 +90,7 @@ pub fn release(repository: *Repository, index: usize) void {
     repository.occupied.unset(index);
 }
 
-fn indexOf(repository: *const Repository, key: PaneKeyType) ?usize {
+fn indexOf(repository: *const Repository, key: PaneKey) ?usize {
     const slot = repository.index.get(core.raw(key.id)) orelse return null;
     if (repository.keys[slot].generation != key.generation) {
         return null;

@@ -1,11 +1,11 @@
-const RequestHeadType = @import("RequestHead.zig");
+const RequestHead = @import("RequestHead.zig");
 const connection = @import("connection.zig");
 const request_support = @import("../provider/request_support.zig");
 const std = @import("std");
-const ResponseHeadType = @import("ResponseHead.zig");
+const ResponseHead = @import("ResponseHead.zig");
 const ConnectionCapture = @This();
 
-requests: [3]RequestHeadType = undefined,
+requests: [3]RequestHead = undefined,
 request_len: usize = 0,
 request_index: usize = 0,
 outcomes: [3]connection.ExchangeOutcome = undefined,
@@ -21,7 +21,7 @@ fn record(capture: *ConnectionCapture, step: connection.Step) void {
     capture.step_len += 1;
 }
 
-pub fn readRequest(capture: *ConnectionCapture) ?RequestHeadType {
+pub fn readRequest(capture: *ConnectionCapture) ?RequestHead {
     capture.record(.read_request);
 
     if (capture.request_index == capture.request_len) {
@@ -32,18 +32,18 @@ pub fn readRequest(capture: *ConnectionCapture) ?RequestHeadType {
     return capture.requests[capture.request_index];
 }
 
-pub fn exchange(capture: *ConnectionCapture, _: RequestHeadType) connection.ExchangeOutcome {
+pub fn exchange(capture: *ConnectionCapture, _: RequestHead) connection.ExchangeOutcome {
     capture.record(.exchange);
     defer capture.outcome_index += 1;
     return capture.outcomes[capture.outcome_index];
 }
 
-pub fn publishRequest(capture: *ConnectionCapture, request: RequestHeadType) void {
+pub fn publishRequest(capture: *ConnectionCapture, request: RequestHead) void {
     capture.record(.publish_request);
     capture.published_class = request.classification;
 }
 
-pub fn publishResponse(capture: *ConnectionCapture, final: ResponseHeadType) void {
+pub fn publishResponse(capture: *ConnectionCapture, final: ResponseHead) void {
     capture.record(.publish_response);
     capture.published_status = final.status_code;
 }

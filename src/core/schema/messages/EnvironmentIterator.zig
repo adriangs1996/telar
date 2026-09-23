@@ -1,17 +1,17 @@
-const DecoderType = @import("../Decoder.zig");
-const EnvironmentEntryType = @import("../EnvironmentEntry.zig");
+const Decoder = @import("../Decoder.zig");
+const EnvironmentEntry = @import("../EnvironmentEntry.zig");
 const codec = @import("../codec.zig");
 const EnvironmentIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *EnvironmentIterator) !?EnvironmentEntryType {
+pub fn next(iterator: *EnvironmentIterator) !?EnvironmentEntry {
     if (iterator.remaining == 0) {
         return null;
     }
     iterator.remaining -= 1;
-    const entry: EnvironmentEntryType = .{
+    const entry: EnvironmentEntry = .{
         .name = try iterator.decoder.readSized16(),
         .value = try iterator.decoder.readSized32(),
     };

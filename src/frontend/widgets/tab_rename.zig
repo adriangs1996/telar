@@ -2,9 +2,9 @@
 
 const data = @import("model");
 const core = @import("telar-core");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const TabRenameInput = @import("TabRenameInput.zig");
-const CursorType = @import("Cursor.zig");
+const Cursor = @import("Cursor.zig");
 const LabelInput = @import("InlineLabel.zig");
 const FieldInput = @import("InlineField.zig");
 
@@ -16,7 +16,7 @@ pub const create_hint = " create? ↵";
 /// Renders one tab or workspace name prompt and returns its cursor. The
 /// new-context form shows both fields and its completions on the same row.
 /// For example: `const cursor = render(context, .{ .area = area, .field = field, .kind = .rename_tab });`.
-pub fn render(context: *ContextType, input: TabRenameInput) CursorType {
+pub fn render(context: *Context, input: TabRenameInput) Cursor {
     if (input.kind == .create_workspace) {
         if (input.prompt) |prompt| {
             if (prompt.form()) |form| {
@@ -61,7 +61,7 @@ pub fn render(context: *ContextType, input: TabRenameInput) CursorType {
 /// `new context: name  dir: directory  completions…` in one row; the
 /// completion names follow the directory field and the selected one is
 /// highlighted. A pending confirmation replaces the list.
-fn renderCreateForm(context: *ContextType, input: TabRenameInput, form: *const data.WorkspaceForm) CursorType {
+fn renderCreateForm(context: *Context, input: TabRenameInput, form: *const data.WorkspaceForm) Cursor {
     const area = input.area;
     const prompt = input.prompt.?;
     const label_style: core.Style = .{ .fg = context.palette.accent, .bg = context.palette.panel_bg, .flags = .{ .bold = true } };
@@ -111,7 +111,7 @@ fn renderCreateForm(context: *ContextType, input: TabRenameInput, form: *const d
         .{ .cursor_x = directory_area.x + @min(directory_view.cursor, directory_area.w -| 1), .cursor_y = area.y };
 }
 
-fn writeLabel(context: *ContextType, input: LabelInput) u16 {
+fn writeLabel(context: *Context, input: LabelInput) u16 {
     const area = input.area;
     const x = input.x;
     const text = input.text;
@@ -125,7 +125,7 @@ fn writeLabel(context: *ContextType, input: LabelInput) u16 {
     return width;
 }
 
-fn writeField(context: *ContextType, input: FieldInput) void {
+fn writeField(context: *Context, input: FieldInput) void {
     const area = input.area;
     const text = input.text;
     const focused = input.focused;

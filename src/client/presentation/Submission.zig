@@ -1,9 +1,9 @@
 const data = @import("model");
-const ObservationType = @import("Observation.zig");
-const GeometryType = @import("Geometry.zig");
+const Observation = @import("Observation.zig");
+const Geometry = @import("Geometry.zig");
 const Submission = @This();
 
-observation: ObservationType,
+observation: Observation,
 commit: data.PresentationCommit,
-geometry: GeometryType = .{},
+geometry: Geometry = .{},
 media_pending: bool = false,

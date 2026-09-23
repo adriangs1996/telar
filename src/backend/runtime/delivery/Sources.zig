@@ -1,16 +1,16 @@
 const core = @import("telar-core");
-const PaneStoreType = @import("../../pane/PaneStore.zig");
+const PaneStore = @import("../../pane/PaneStore.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
-const TrackerType = @import("../../agent/Tracker.zig");
-const SamplerType = @import("../observability/Sampler.zig");
+const Tracker = @import("../../agent/Tracker.zig");
+const Sampler = @import("../observability/Sampler.zig");
 const ClientLayouts = @import("../ClientLayouts.zig");
 const Sources = @This();
 
-panes: *const PaneStoreType,
+panes: *const PaneStore,
 workspaces: *const Workspaces,
-agents: *const TrackerType,
+agents: *const Tracker,
 manifests: *const core.Table = &core.builtin_table,
-system_metrics: *const SamplerType,
+system_metrics: *const Sampler,
 proxy_active: bool,
 proxy_scope: core.ProxyScope = .exact,
 proxy_system_trusted: bool = false,

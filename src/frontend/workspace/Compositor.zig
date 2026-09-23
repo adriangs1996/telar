@@ -3,7 +3,7 @@ const client = @import("telar-client");
 const data = @import("model");
 const std = @import("std");
 const BorderTheme = @import("BorderTheme.zig");
-const PlanType = @import("../presentation/Plan.zig");
+const Plan = @import("../presentation/Plan.zig");
 const PaneProjection = @import("PaneProjection.zig");
 const Composition = @import("Composition.zig");
 const CompositionResult = @import("CompositionResult.zig");
@@ -27,7 +27,7 @@ copy: ?client.CopyProjection = null,
 bottom_reservation: ?data.PaneBottomReservation = null,
 bottom_reservation_area: core.Rect = .{},
 layout_snapshot: data.LayoutSnapshot = .{},
-fullscreen_labels: PlanType = .{},
+fullscreen_labels: Plan = .{},
 panes: [core.max_panes_per_tab]PaneProjection = undefined,
 pane_count: u8 = 0,
 progress_animation_frame: u8 = 0,
@@ -258,7 +258,7 @@ pub fn bottomReservationArea(compositor: *const Compositor) core.Rect {
 
 /// Returns owned labels from the last cell composition for deferred media.
 /// Example: `const labels = compositor.fullscreenLabels();`.
-pub fn fullscreenLabels(compositor: *const Compositor) *const PlanType {
+pub fn fullscreenLabels(compositor: *const Compositor) *const Plan {
     return &compositor.fullscreen_labels;
 }
 

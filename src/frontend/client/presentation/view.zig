@@ -3,24 +3,24 @@
 const client = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
-const PlanType = @import("../../presentation/Plan.zig");
+const Plan = @import("../../presentation/Plan.zig");
 const tab_rename_module = @import("../../widgets/tab_rename.zig");
-const ContextType = @import("../../widgets/Context.zig");
+const Context = @import("../../widgets/Context.zig");
 const PickerSources = @import("PickerSources.zig");
 const GotoPickerOutput = @import("../../widgets/GotoPickerOutput.zig");
 const goto_picker_module = @import("../../widgets/goto_picker.zig");
-const RowType = @import("../../widgets/Row.zig");
-const EntryType = @import("../../widgets/Entry.zig");
+const Row = @import("../../widgets/Row.zig");
+const Entry = @import("../../widgets/Entry.zig");
 const history_browser_module = @import("../../widgets/history_browser.zig");
 const context_support = @import("../../widgets/context_support.zig");
 const std = @import("std");
 const RenderStats = @import("RenderStats.zig");
-const ScreenType = @import("../../presentation/Screen.zig");
-const PatchSinkType = @import("../../presentation/PatchSink.zig");
+const Screen = @import("../../presentation/Screen.zig");
+const PatchSink = @import("../../presentation/PatchSink.zig");
 const diff = @import("../../presentation/diff.zig");
-const CompositorType = @import("../../workspace/Compositor.zig");
+const Compositor = @import("../../workspace/Compositor.zig");
 const TestingComposition = @import("TestingComposition.zig");
-const StateType = @import("State.zig");
+const State = @import("State.zig");
 const term = @import("../../presentation/screen_support.zig");
 const RenderInput = @import("RenderInput.zig");
 const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
@@ -33,7 +33,7 @@ pub const empty_suggestion: data.SuggestionState = .{};
 pub const empty_path_completion: data.PathCompletionState = .{};
 pub const empty_notifications: data.Center = .{};
 pub const empty_workspace_list: data.WorkspaceListSnapshot = .{};
-pub const empty_pane_labels: PlanType = .{};
+pub const empty_pane_labels: Plan = .{};
 pub const default_bars_state: data.BarsState = .{};
 
 pub fn promptKind(prompt: ?*const data.Prompt) tab_rename_module.Kind {
@@ -68,7 +68,7 @@ pub fn promptField(prompt: ?*data.Prompt) ?*tab_rename_module.Field {
 
 /// Computes the deterministic result set and renders the visible window with
 /// the clamped selection highlighted, scrolled so the selection stays visible.
-pub fn renderGotoPicker(context: *ContextType, application: core.Rect, sources: PickerSources) GotoPickerOutput {
+pub fn renderGotoPicker(context: *Context, application: core.Rect, sources: PickerSources) GotoPickerOutput {
     var results: data.Results = .{};
     const match_sources: data.Sources = .{
         .agents = sources.agents,
@@ -89,12 +89,12 @@ pub fn renderGotoPicker(context: *ContextType, application: core.Rect, sources: 
     const window: u16 = @min(@as(u16, goto_picker_module.max_rows), total);
     const start: u16 = if (selected + 1 > window) selected + 1 - window else 0;
 
-    var rows: [goto_picker_module.max_rows]RowType = undefined;
+    var rows: [goto_picker_module.max_rows]Row = undefined;
     for (0..window) |offset| {
         const index = start + offset;
         var label: [data.goto_picker.max_label_bytes]u8 = undefined;
         const text = data.goto_picker.describe(match_sources, results.slice()[index].item, &label);
-        var row: RowType = .{ .selected = index == selected };
+        var row: Row = .{ .selected = index == selected };
         const len = @min(text.len, goto_picker_module.max_row_bytes);
         @memcpy(row.text[0..len], text[0..len]);
         row.len = @intCast(len);
@@ -111,9 +111,9 @@ pub fn renderGotoPicker(context: *ContextType, application: core.Rect, sources: 
 }
 
 /// Projects owned history into the specialized compact browser.
-fn renderHistoryPalette(context: *ContextType, application: core.Rect, sources: PickerSources) GotoPickerOutput {
+fn renderHistoryPalette(context: *Context, application: core.Rect, sources: PickerSources) GotoPickerOutput {
     const entries = sources.history.slice();
-    var rows: [core.max_history_results]EntryType = undefined;
+    var rows: [core.max_history_results]Entry = undefined;
     for (entries, 0..) |*entry, index| {
         rows[index] = .{
             .command = sources.history.commandAt(@intCast(index)) orelse entry.commandSlice(),
@@ -151,7 +151,7 @@ fn renderHistoryPalette(context: *ContextType, application: core.Rect, sources: 
 /// Renders the suggestion palette through the same list modal: one row
 /// holding the suggested command, the waiting state or the failure, and a
 /// footer that says what Enter does next.
-fn renderSuggestPalette(context: *ContextType, application: core.Rect, sources: PickerSources) GotoPickerOutput {
+fn renderSuggestPalette(context: *Context, application: core.Rect, sources: PickerSources) GotoPickerOutput {
     const state = sources.suggestion;
     const text: []const u8 = switch (state.phase) {
         .idle => "",
@@ -171,10 +171,10 @@ fn renderSuggestPalette(context: *ContextType, application: core.Rect, sources: 
         .failed => "enter: ask again",
     };
 
-    var rows: [1]RowType = undefined;
+    var rows: [1]Row = undefined;
     var total: u16 = 0;
     if (text.len != 0) {
-        var row: RowType = .{ .selected = state.phase == .ready };
+        var row: Row = .{ .selected = state.phase == .ready };
         const len = @min(text.len, goto_picker_module.max_row_bytes);
         @memcpy(row.text[0..len], text[0..len]);
         row.len = @intCast(len);
@@ -203,13 +203,13 @@ pub fn addStats(a: RenderStats, b: RenderStats) RenderStats {
     return .{ .scanned = a.scanned + b.scanned, .damaged = a.damaged + b.damaged };
 }
 
-pub fn syncRegion(screen: *ScreenType, source: *const core.Buffer, area: core.Rect) !RenderStats {
+pub fn syncRegion(screen: *Screen, source: *const core.Buffer, area: core.Rect) !RenderStats {
     var stats: RenderStats = .{};
     var y = area.y;
     while (y < area.y + area.h) : (y += 1) {
         const row_start = @as(usize, y) * source.w;
         const source_row = source.cells[row_start..][0..source.w];
-        var sink: PatchSinkType = .{
+        var sink: PatchSink = .{
             .screen = screen,
             .source_row = source_row,
             .base = row_start,
@@ -225,7 +225,7 @@ pub fn syncRegion(screen: *ScreenType, source: *const core.Buffer, area: core.Re
     return stats;
 }
 
-fn testingCompose(compositor: *CompositorType, composition: TestingComposition) !void {
+fn testingCompose(compositor: *Compositor, composition: TestingComposition) !void {
     const rendered = try compositor.render(.{
         .model = composition.model,
         .tab = composition.tab,
@@ -248,7 +248,7 @@ test "visible regions reserve top bottom sidebar and workbench" {
 }
 
 test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
-    var state = try StateType.init(std.testing.allocator, 80, 24);
+    var state = try State.init(std.testing.allocator, 80, 24);
     defer state.deinit();
 
     var model = data.ClientModel.init(std.testing.allocator, true);
@@ -280,7 +280,7 @@ test "narrow clients hide the sidebar without forgetting user intent" {
 
 test "sidebar toggle changes only the disposable client layout" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 100, 30);
+    var state = try State.init(gpa, 100, 30);
     defer state.deinit();
     try std.testing.expectEqual(@as(u16, data.sidebar.default_width), state.regions.sidebar.w);
     try std.testing.expectEqual(core.Rect{ .x = 42, .w = 58, .h = 1 }, state.regions.top);
@@ -296,7 +296,7 @@ test "sidebar toggle changes only the disposable client layout" {
 
 test "sidebar separator drag reports exact preferred widths" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 120, 30);
+    var state = try State.init(gpa, 120, 30);
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
@@ -305,7 +305,7 @@ test "sidebar separator drag reports exact preferred widths" {
         .tab_id = @enumFromInt(1),
     };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 58, .rows = 27 } });
-    var screen = try ScreenType.init(gpa, 120, 30);
+    var screen = try Screen.init(gpa, 120, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{ .model = &model, .tab = 0, .force = true });
 
@@ -332,7 +332,7 @@ test "sidebar separator drag reports exact preferred widths" {
 }
 
 test "empty production sidebar has no task controls" {
-    var state = try StateType.init(std.testing.allocator, 100, 30);
+    var state = try State.init(std.testing.allocator, 100, 30);
     defer state.deinit();
     var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
@@ -341,7 +341,7 @@ test "empty production sidebar has no task controls" {
         .tab_id = @enumFromInt(1),
     };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
-    var screen = try ScreenType.init(std.testing.allocator, 100, 30);
+    var screen = try Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{ .model = &model, .tab = 0, .force = true });
 
@@ -351,7 +351,7 @@ test "empty production sidebar has no task controls" {
 
 test "the inline new-context form shows both fields and the selected completion on the bottom row" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 120, 30);
+    var state = try State.init(gpa, 120, 30);
     defer state.deinit();
     state.toggleSidebar();
     var model = data.ClientModel.init(gpa, true);
@@ -361,7 +361,7 @@ test "the inline new-context form shows both fields and the selected completion 
         .tab_id = @enumFromInt(1),
     };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 120, .rows = 28 } });
-    var screen = try ScreenType.init(gpa, 120, 30);
+    var screen = try Screen.init(gpa, 120, 30);
     defer screen.deinit();
     var prompt: data.Prompt = .{ .mode = .{ .create_workspace = .{ .focus = .directory, .selection = 1 } }, .field = .init("agents"), .directory = .init("/work/te") };
     var completion: data.PathCompletionState = .{};
@@ -408,7 +408,7 @@ test "the inline new-context form shows both fields and the selected completion 
 
 test "workbench clicks return focus intent without mutating pane layout" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 80, 24);
+    var state = try State.init(gpa, 80, 24);
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
@@ -421,9 +421,9 @@ test "workbench clicks return focus intent without mutating pane layout" {
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 50, .rows = 22 } });
     try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = state.workbench() });
     try std.testing.expect(model.tabs.layout[0].focusPane(first));
-    var screen = try ScreenType.init(gpa, 80, 24);
+    var screen = try Screen.init(gpa, 80, 24);
     defer screen.deinit();
-    var compositor = CompositorType.init(gpa);
+    var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -511,7 +511,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
 
 test "sidebar agent snapshots version changed hover only once" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 100, 30);
+    var state = try State.init(gpa, 100, 30);
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
@@ -531,9 +531,9 @@ test "sidebar agent snapshots version changed hover only once" {
     }};
     var snapshot: data.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var screen = try ScreenType.init(gpa, 100, 30);
+    var screen = try Screen.init(gpa, 100, 30);
     defer screen.deinit();
-    var compositor = CompositorType.init(gpa);
+    var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -564,7 +564,7 @@ test "sidebar agent snapshots version changed hover only once" {
 
 test "focused agent image preview reserves space below its pane and opens a modal layer" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 100, 30);
+    var state = try State.init(gpa, 100, 30);
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
@@ -603,9 +603,9 @@ test "focused agent image preview reserves space below its pane and opens a moda
     try std.testing.expect(try state.adoptAttachment(capture));
     try std.testing.expectEqual(@as(u16, 28), state.workbench().h);
 
-    var screen = try ScreenType.init(gpa, 100, 30);
+    var screen = try Screen.init(gpa, 100, 30);
     defer screen.deinit();
-    var compositor = CompositorType.init(gpa);
+    var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -689,7 +689,7 @@ test "focused agent image preview reserves space below its pane and opens a moda
 
 test "sidebar highlight follows pane focus and the rendered workspace" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 100, 30);
+    var state = try State.init(gpa, 100, 30);
     defer state.deinit();
     const first_location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -740,7 +740,7 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
     };
     var snapshot: data.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var screen = try ScreenType.init(gpa, 100, 30);
+    var screen = try Screen.init(gpa, 100, 30);
     defer screen.deinit();
     const palette = state.palette();
 
@@ -768,7 +768,7 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
 }
 
 test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
-    var state = try StateType.init(std.testing.allocator, 100, 30);
+    var state = try State.init(std.testing.allocator, 100, 30);
     defer state.deinit();
     try state.configureSidebar(.kitty_hybrid, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var model = data.ClientModel.init(std.testing.allocator, true);
@@ -787,7 +787,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     }};
     var snapshot: data.AgentSnapshot = .{};
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
-    var screen = try ScreenType.init(std.testing.allocator, 100, 30);
+    var screen = try Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{ .model = &model, .tab = 0, .agents = &snapshot, .force = true });
     _ = try state.prepareGraphics(&empty_notifications, true);
@@ -805,7 +805,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
 }
 
 test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
-    var state = try StateType.initWithAppearance(
+    var state = try State.initWithAppearance(
         std.testing.allocator,
         .{ .width = 100, .height = 30 },
         .{ .theme = data.theme_support.default_theme, .icons = .nerd_font },
@@ -819,7 +819,7 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
         .tab_id = @enumFromInt(1),
     };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 28 } });
-    var screen = try ScreenType.init(std.testing.allocator, 100, 30);
+    var screen = try Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
 
     _ = try state.render(&screen, .{ .model = &model, .tab = 0, .force = true });
@@ -840,7 +840,7 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
 }
 
 test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
-    var state = try StateType.initWithAppearance(
+    var state = try State.initWithAppearance(
         std.testing.allocator,
         .{ .width = 100, .height = 30 },
         .{ .theme = data.theme_support.default_theme, .icons = .nerd_font },
@@ -854,7 +854,7 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
         .tab_id = @enumFromInt(1),
     };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 28 } });
-    var screen = try ScreenType.init(std.testing.allocator, 100, 30);
+    var screen = try Screen.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
 
     _ = try state.render(&screen, .{ .model = &model, .tab = 0, .force = true });
@@ -873,7 +873,7 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
 
 test "fullscreen labels keep small-font text across focus changes and fall back on geometry changes" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 100, 24);
+    var state = try State.init(gpa, 100, 24);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
     var model = data.ClientModel.init(gpa, true);
@@ -888,9 +888,9 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 6 } });
     try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .vertical, .area = area });
     try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
-    var screen = try ScreenType.init(gpa, 100, 24);
+    var screen = try Screen.init(gpa, 100, 24);
     defer screen.deinit();
-    var compositor = CompositorType.init(gpa);
+    var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     _ = try state.render(&screen, .{ .model = &model, .tab = 0, .compositor = &compositor, .force = true });
@@ -957,7 +957,7 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
 
 test "cell rendering leaves toast rasterization to the media pass" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 120, 30);
+    var state = try State.init(gpa, 120, 30);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
     var model = data.ClientModel.init(gpa, true);
@@ -972,9 +972,9 @@ test "cell rendering leaves toast rasterization to the media pass" {
     } });
     var center: data.Center = .{};
     _ = center.push(0, .{ .title = "Ready", .message = "Open result" });
-    var screen = try ScreenType.init(gpa, 120, 30);
+    var screen = try Screen.init(gpa, 120, 30);
     defer screen.deinit();
-    var compositor = CompositorType.init(gpa);
+    var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -1006,7 +1006,7 @@ test "cell rendering leaves toast rasterization to the media pass" {
 
 test "client chrome uses Shade by default" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 80, 24);
+    var state = try State.init(gpa, 80, 24);
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
@@ -1015,9 +1015,9 @@ test "client chrome uses Shade by default" {
         .tab_id = @enumFromInt(1),
     };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 50, .rows = 22 } });
-    var screen = try ScreenType.init(gpa, 80, 24);
+    var screen = try Screen.init(gpa, 80, 24);
     defer screen.deinit();
-    var compositor = CompositorType.init(gpa);
+    var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -1041,11 +1041,11 @@ test "client chrome uses Shade by default" {
 
 test "configuration diagnostics stay inside the bottom bar" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 80, 24);
+    var state = try State.init(gpa, 80, 24);
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
-    var screen = try ScreenType.init(gpa, 80, 24);
+    var screen = try Screen.init(gpa, 80, 24);
     defer screen.deinit();
 
     _ = try state.render(&screen, .{
@@ -1076,7 +1076,7 @@ test "configuration diagnostics stay inside the bottom bar" {
 
 test "terminal theme leaves client chrome backgrounds to the host terminal" {
     const gpa = std.testing.allocator;
-    var state = try StateType.initWithTheme(gpa, .{ .width = 80, .height = 24 }, data.theme_support.builtin(.terminal));
+    var state = try State.initWithTheme(gpa, .{ .width = 80, .height = 24 }, data.theme_support.builtin(.terminal));
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
@@ -1085,9 +1085,9 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
         .tab_id = @enumFromInt(1),
     };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 50, .rows = 22 } });
-    var screen = try ScreenType.init(gpa, 80, 24);
+    var screen = try Screen.init(gpa, 80, 24);
     defer screen.deinit();
-    var compositor = CompositorType.init(gpa);
+    var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -1113,7 +1113,7 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
 
 test "clickable toast restores pane cells after its exit animation" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 120, 30);
+    var state = try State.init(gpa, 120, 30);
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
@@ -1142,9 +1142,9 @@ test "clickable toast restores pane cells after its exit animation" {
         .{ .x = click_x - state.workbench().x, .y = click_y - state.workbench().y },
         .{ .text = "u" },
     );
-    var screen = try ScreenType.init(gpa, 120, 30);
+    var screen = try Screen.init(gpa, 120, 30);
     defer screen.deinit();
-    var compositor = CompositorType.init(gpa);
+    var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -1184,7 +1184,7 @@ test "clickable toast restores pane cells after its exit animation" {
 }
 
 test "changing themes invalidates client chrome" {
-    var state = try StateType.init(std.testing.allocator, 80, 24);
+    var state = try State.init(std.testing.allocator, 80, 24);
     defer state.deinit();
     state.dirty = false;
     state.hovered = .active_workspace;
@@ -1198,7 +1198,7 @@ test "changing themes invalidates client chrome" {
 
 test "tab bar renders ordered labels and clicks carry runtime ids" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 80, 24);
+    var state = try State.init(gpa, 80, 24);
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
@@ -1213,9 +1213,9 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 50, .rows = 22 });
-    var screen = try ScreenType.init(gpa, 80, 24);
+    var screen = try Screen.init(gpa, 80, 24);
     defer screen.deinit();
-    var compositor = CompositorType.init(gpa);
+    var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -1260,7 +1260,7 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
 
 test "tab bar marks the tab whose pane is fullscreen" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 100, 30);
+    var state = try State.init(gpa, 100, 30);
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
@@ -1279,9 +1279,9 @@ test "tab bar marks the tab whose pane is fullscreen" {
     // Creating "logs" made it the active tab; its root pane is pane 2.
     try data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(3), .location = logs, .axis = .horizontal, .area = state.workbench() });
     try std.testing.expect(model.tabs.layout[model.tabs.active].toggleFullscreen());
-    var screen = try ScreenType.init(gpa, 100, 30);
+    var screen = try Screen.init(gpa, 100, 30);
     defer screen.deinit();
-    var compositor = CompositorType.init(gpa);
+    var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
@@ -1316,7 +1316,7 @@ test "tab bar marks the tab whose pane is fullscreen" {
 
 test "the top bar lists open workspaces and clicking one requests a switch" {
     const gpa = std.testing.allocator;
-    var state = try StateType.init(gpa, 100, 30);
+    var state = try State.init(gpa, 100, 30);
     defer state.deinit();
     var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
@@ -1334,7 +1334,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
         .revision = 1,
         .entries = &entries,
     }));
-    var screen = try ScreenType.init(gpa, 100, 30);
+    var screen = try Screen.init(gpa, 100, 30);
     defer screen.deinit();
     _ = try state.render(&screen, .{
         .model = &model,

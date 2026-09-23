@@ -1,7 +1,7 @@
 //! Converts a local file URI into an owned path suitable for an argv entry.
 
 const std = @import("std");
-const TargetType = @import("LinkTarget.zig");
+const LinkTarget = @import("LinkTarget.zig");
 const FilePath = @import("FilePath.zig");
 
 pub fn validateEscapes(text: []const u8) !void {
@@ -21,19 +21,19 @@ pub fn validateEscapes(text: []const u8) !void {
 }
 
 test "file paths decode local URIs and reject remote authority" {
-    const target = try TargetType.init("file://localhost/tmp/a%20b.txt");
+    const target = try LinkTarget.init("file://localhost/tmp/a%20b.txt");
     const path = try FilePath.init(&target);
 
     try std.testing.expectEqualStrings("/tmp/a b.txt", path.slice());
 
-    const remote = try TargetType.init("file://server/tmp/a.txt");
+    const remote = try LinkTarget.init("file://server/tmp/a.txt");
     try std.testing.expectError(error.RemoteFileLink, FilePath.init(&remote));
 }
 
 test "file paths reject query fragments malformed escapes and null bytes" {
-    const query = try TargetType.init("file:///tmp/a?line=2");
-    const malformed = try TargetType.init("file:///tmp/a%xx");
-    const null_byte = try TargetType.init("file:///tmp/a%00b");
+    const query = try LinkTarget.init("file:///tmp/a?line=2");
+    const malformed = try LinkTarget.init("file:///tmp/a%xx");
+    const null_byte = try LinkTarget.init("file:///tmp/a%00b");
 
     try std.testing.expectError(error.InvalidFileLink, FilePath.init(&query));
     try std.testing.expectError(error.InvalidFileLink, FilePath.init(&malformed));

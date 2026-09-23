@@ -1,18 +1,18 @@
 //! Header-transform configuration frozen before concurrent traffic begins.
 
-const TransformationType = @import("../Transformation.zig");
+const Transformation = @import("../Transformation.zig");
 const middleware = @import("../middleware.zig");
-const TransformerType = @import("../Transformer.zig");
+const Transformer = @import("../Transformer.zig");
 const Configuration = @import("Configuration.zig");
 const std = @import("std");
 
 var test_transformer_context: u8 = 0;
 
-fn preserveHeaders(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+fn preserveHeaders(_: *anyopaque, _: Transformation) middleware.TransformStatus {
     return .preserve;
 }
 
-fn testTransformer() TransformerType {
+fn testTransformer() Transformer {
     return .{ .context = &test_transformer_context, .transform = preserveHeaders };
 }
 

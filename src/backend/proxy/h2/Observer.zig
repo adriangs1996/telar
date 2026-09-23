@@ -1,7 +1,7 @@
 const relay = @import("relay.zig");
 const types = @import("../../agent/types.zig");
-const ReaderType = @import("Reader.zig");
-const TrackerType = @import("Tracker.zig");
+const Reader = @import("Reader.zig");
+const Tracker = @import("Tracker.zig");
 const std = @import("std");
 const Decoded = @import("Decoded.zig");
 const HeaderField = @import("HeaderField.zig");
@@ -14,7 +14,7 @@ failed: bool = false,
 dialect: types.ApiDialect,
 direction: relay.Direction,
 
-framing: ReaderType = .{},
+framing: Reader = .{},
 padding: usize = 0,
 
 continuation_stream: u32 = 0,
@@ -23,7 +23,7 @@ block_kind: relay.HeaderKind = .none,
 block_end_stream: bool = false,
 block: [relay.max_header_block_bytes]u8 = undefined,
 block_len: usize = 0,
-streams: TrackerType = .{},
+streams: Tracker = .{},
 
 pub fn init(dialect: types.ApiDialect, direction: relay.Direction) Observer {
     var observer: Observer = .{ .dialect = dialect, .direction = direction };

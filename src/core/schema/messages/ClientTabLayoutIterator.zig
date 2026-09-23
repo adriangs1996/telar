@@ -1,9 +1,9 @@
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const ClientTabLayoutView = @import("ClientTabLayoutView.zig");
 const layout = @import("layout.zig");
 const ClientTabLayoutIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 
 /// Decodes the next tab layout, returning null after the declared count.

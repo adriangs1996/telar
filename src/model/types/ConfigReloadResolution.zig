@@ -1,7 +1,7 @@
-const DiagnosticType = @import("../config/Diagnostic.zig");
+const Diagnostic = @import("../config/Diagnostic.zig");
 
 pub const ConfigReloadResolution = union(enum) {
     unchanged,
-    rejected: DiagnosticType,
+    rejected: Diagnostic,
     adopted,
 };

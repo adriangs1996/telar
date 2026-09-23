@@ -1,8 +1,8 @@
 const std = @import("std");
-const ResponseHeadType = @import("ResponseHead.zig");
+const ResponseHead = @import("ResponseHead.zig");
 const connection = @import("connection.zig");
 const types = @import("types.zig");
-const RequestHeadType = @import("RequestHead.zig");
+const RequestHead = @import("RequestHead.zig");
 const ExchangeCapture = @This();
 
 body_calls: std.atomic.Value(u32) = .init(0),
@@ -14,7 +14,7 @@ response_release: ?*std.Io.Queue(u8) = null,
 body_result: bool = true,
 body_canceled: std.atomic.Value(bool) = .init(false),
 response_canceled: std.atomic.Value(bool) = .init(false),
-response: ?ResponseHeadType = connection.testingResponse(200, .final, .keep_alive),
+response: ?ResponseHead = connection.testingResponse(200, .final, .keep_alive),
 
 pub fn io(_: *ExchangeCapture) std.Io {
     return std.testing.io;
@@ -41,7 +41,7 @@ pub fn relayBody(capture: *ExchangeCapture, _: types.BodyPlan) bool {
     return capture.body_result;
 }
 
-pub fn relayResponse(capture: *ExchangeCapture, _: RequestHeadType) ?ResponseHeadType {
+pub fn relayResponse(capture: *ExchangeCapture, _: RequestHead) ?ResponseHead {
     _ = capture.response_calls.fetchAdd(1, .monotonic);
 
     if (capture.body_started) |started| {

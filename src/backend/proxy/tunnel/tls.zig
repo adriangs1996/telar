@@ -3,14 +3,14 @@
 const GenericTlsTunnelPort = @import("../GenericTlsTunnelPort.zig").Type;
 const Establisher = @import("Establisher.zig");
 const std = @import("std");
-const SessionType = @import("../Session.zig");
+const Session = @import("../Session.zig");
 const GenericTlsTunnelCommand = @import("../GenericTlsTunnelCommand.zig").Type;
 const GenericAttempt = @import("../GenericAttempt.zig").Type;
 const tls_transport = @import("../tls.zig");
 const GenericEstablished = @import("../GenericEstablished.zig").Type;
 const metrics = @import("../metrics.zig");
 
-const port: GenericTlsTunnelPort(Establisher, std.Io.net.Stream, *SessionType) = .{
+const port: GenericTlsTunnelPort(Establisher, std.Io.net.Stream, *Session) = .{
     .should_intercept = shouldIntercept,
     .record_passthrough = recordPassthrough,
     .intercept = intercept,
@@ -28,7 +28,7 @@ fn recordPassthrough(establisher: *Establisher) void {
     establisher.resources.telemetry.record(.passthrough_connection);
 }
 
-fn intercept(establisher: *Establisher, attempt: GenericAttempt(std.Io.net.Stream)) tls_transport.Error!GenericEstablished(*SessionType) {
+fn intercept(establisher: *Establisher, attempt: GenericAttempt(std.Io.net.Stream)) tls_transport.Error!GenericEstablished(*Session) {
     const resources = establisher.resources;
     const session = try tls_transport.intercept(.{
         .io = resources.io,

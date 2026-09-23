@@ -1,12 +1,12 @@
 const id = @import("../id.zig");
-const TabLocationType = @import("../TabLocation.zig");
+const TabLocation = @import("../TabLocation.zig");
 const workspace = @import("workspace.zig");
 const TabClosed = @This();
 
 /// `.none` identifies a lifecycle event emitted by the runtime rather than
 /// the response to an explicit close request.
 request_id: id.RequestId,
-location: TabLocationType,
+location: TabLocation,
 workspace_closed: bool,
 /// Canonical predecessor in the runtime's workspace order. Present only
 /// when this close removed the workspace and another workspace survives.

@@ -1,6 +1,6 @@
 const core = @import("telar-core");
-const PaneType = @import("../../pane/Pane.zig");
+const Pane = @import("../../pane/Pane.zig");
 const Work = @This();
 
-pane: *PaneType,
+pane: *Pane,
 current_size: core.TerminalSize,

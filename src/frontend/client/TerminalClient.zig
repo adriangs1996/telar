@@ -7,12 +7,12 @@ const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
 const Params = @import("Params.zig");
-const CompressionType = @import("../graphics/Compression.zig");
-const OutputType = @import("resources/Output.zig");
+const Compression = @import("../graphics/Compression.zig");
+const Output = @import("resources/Output.zig");
 const HostNegotiationState = @import("resources/HostNegotiationState.zig");
 const Presenter = @import("presentation/Presenter.zig");
 const PresentationState = @import("presentation/State.zig");
-const ScreenType = @import("../presentation/Screen.zig");
+const Screen = @import("../presentation/Screen.zig");
 const kitty_delivery = @import("../graphics/kitty_delivery.zig");
 const InputState = @import("controllers/input/State.zig");
 const host_inputs = @import("controllers/input/host_inputs.zig");
@@ -38,7 +38,7 @@ pub const ClientEvent = union(enum) {
     draw: anyerror!void,
     media_tick: anyerror!void,
     host_written: anyerror!void,
-    compression_done: *CompressionType,
+    compression_done: *Compression,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     clipboard_image: client_module.operations.ClipboardImageCompletion,
@@ -48,7 +48,7 @@ const TerminalClient = @This();
 
 app: client_module.AttachedClient,
 writer: *std.Io.Writer,
-output: ?OutputType = null,
+output: ?Output = null,
 inbox: client_module.GenericInbox(ClientEvent),
 host_negotiation: HostNegotiationState = .{},
 presenter: Presenter,
@@ -76,7 +76,7 @@ pub fn init(params: Params) !*TerminalClient {
     });
     errdefer terminal.app.deinit();
     const host_size = terminal.app.model.host.host_size;
-    var screen = try ScreenType.init(gpa, host_size.cols, host_size.rows);
+    var screen = try Screen.init(gpa, host_size.cols, host_size.rows);
     errdefer screen.deinit();
     var view = try PresentationState.initWithAppearance(
         gpa,
@@ -95,7 +95,7 @@ pub fn init(params: Params) !*TerminalClient {
         .escape_timeout_ns = params.options.input_escape_timeout_ns,
         .sequence_timeout_ns = params.options.input_sequence_timeout_ns,
     });
-    var output: ?OutputType = if (params.async_output) try .init(gpa, params.writer) else null;
+    var output: ?Output = if (params.async_output) try .init(gpa, params.writer) else null;
     if (output) |*value| {
         value.fast_write = params.fast_output;
     }
@@ -146,9 +146,9 @@ pub fn init(params: Params) !*TerminalClient {
     return terminal;
 }
 
-fn scheduleCompression(context: *anyopaque, job: *CompressionType) !void {
+fn scheduleCompression(context: *anyopaque, job: *Compression) !void {
     const terminal: *TerminalClient = @ptrCast(@alignCast(context));
-    try terminal.inbox.start(.compression_done, .{ CompressionType.run, .{job} });
+    try terminal.inbox.start(.compression_done, .{ Compression.run, .{job} });
 }
 
 fn scheduleDraw(context: *anyopaque, deadline_ns: u64) !void {

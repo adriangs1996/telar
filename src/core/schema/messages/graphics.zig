@@ -6,15 +6,15 @@ const codec = @import("../codec.zig");
 const tags = @import("tags.zig");
 const GraphicsCredit = @import("GraphicsCredit.zig");
 const ConfigureGraphics = @import("ConfigureGraphics.zig");
-const SnapshotType = @import("../Snapshot.zig");
-const EncoderType = @import("../Encoder.zig");
+const Snapshot = @import("../Snapshot.zig");
+const Encoder = @import("../Encoder.zig");
 const bodies = @import("../graphics.zig");
-const ImageType = @import("../Image.zig");
-const SharedImageType = @import("../SharedImage.zig");
-const ImageChunkType = @import("../ImageChunk.zig");
-const PlacementType = @import("../Placement.zig");
-const DeleteImageType = @import("../DeleteImage.zig");
-const DeletePlacementType = @import("../DeletePlacement.zig");
+const Image = @import("../Image.zig");
+const SharedImage = @import("../SharedImage.zig");
+const ImageChunk = @import("../ImageChunk.zig");
+const Placement = @import("../Placement.zig");
+const DeleteImage = @import("../DeleteImage.zig");
+const DeletePlacement = @import("../DeletePlacement.zig");
 
 pub fn encodeRequestGraphicsSnapshot(buffer: []u8, message: RequestGraphicsSnapshot) ![]const u8 {
     return codec.encodeDerived(
@@ -32,50 +32,50 @@ pub fn encodeConfigureGraphics(buffer: []u8, message: ConfigureGraphics) ![]cons
     return codec.encodeDerived(@intFromEnum(tags.ClientTag.configure_graphics), buffer, message);
 }
 
-pub fn encodeGraphicsSnapshot(buffer: []u8, message: SnapshotType) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+pub fn encodeGraphicsSnapshot(buffer: []u8, message: Snapshot) ![]const u8 {
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.graphics_snapshot));
     try bodies.encodeSnapshot(&encoder, message);
     return encoder.finish();
 }
 
-pub fn encodeGraphicsImage(buffer: []u8, message: ImageType) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+pub fn encodeGraphicsImage(buffer: []u8, message: Image) ![]const u8 {
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.graphics_image));
     try bodies.encodeImage(&encoder, message);
     return encoder.finish();
 }
 
-pub fn encodeGraphicsSharedImage(buffer: []u8, message: SharedImageType) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+pub fn encodeGraphicsSharedImage(buffer: []u8, message: SharedImage) ![]const u8 {
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.graphics_shared_image));
     try bodies.encodeSharedImage(&encoder, message);
     return encoder.finish();
 }
 
-pub fn encodeGraphicsImageChunk(buffer: []u8, message: ImageChunkType) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+pub fn encodeGraphicsImageChunk(buffer: []u8, message: ImageChunk) ![]const u8 {
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.graphics_image_chunk));
     try bodies.encodeImageChunk(&encoder, message);
     return encoder.finish();
 }
 
-pub fn encodeGraphicsPlacement(buffer: []u8, message: PlacementType) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+pub fn encodeGraphicsPlacement(buffer: []u8, message: Placement) ![]const u8 {
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.graphics_placement));
     try bodies.encodePlacement(&encoder, message);
     return encoder.finish();
 }
 
-pub fn encodeGraphicsDeleteImage(buffer: []u8, message: DeleteImageType) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+pub fn encodeGraphicsDeleteImage(buffer: []u8, message: DeleteImage) ![]const u8 {
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.graphics_delete_image));
     try bodies.encodeDeleteImage(&encoder, message);
     return encoder.finish();
 }
 
-pub fn encodeGraphicsDeletePlacement(buffer: []u8, message: DeletePlacementType) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+pub fn encodeGraphicsDeletePlacement(buffer: []u8, message: DeletePlacement) ![]const u8 {
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.graphics_delete_placement));
     try bodies.encodeDeletePlacement(&encoder, message);
     return encoder.finish();

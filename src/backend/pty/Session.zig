@@ -1,5 +1,5 @@
 const std = @import("std");
-const CommandType = @import("Command.zig");
+const Command = @import("Command.zig");
 const Size = @import("Size.zig");
 const session_support = @import("session_support.zig");
 const spawn_mod = @import("spawn.zig");
@@ -22,7 +22,7 @@ lifecycle_mutex: std.c.pthread_mutex_t = .{},
 /// var session = try Session.spawn(&command, .{ .cols = 80, .rows = 24 });
 /// defer session.deinit();
 /// ```
-pub fn spawn(command: *const CommandType, initial_size: Size) !Session {
+pub fn spawn(command: *const Command, initial_size: Size) !Session {
     var window = session_support.windowSize(initial_size);
     const spawned = try spawn_mod.spawn(command, &window);
     return .{ .master = spawned.master, .pid = spawned.pid };

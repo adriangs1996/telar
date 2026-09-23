@@ -1,8 +1,8 @@
-const RepositoryType = @import("Repository.zig");
+const Repository = @import("Repository.zig");
 const Agent = @import("Agent.zig");
 const Iterator = @This();
 
-repository: *RepositoryType,
+repository: *Repository,
 next_index: usize = 0,
 current_index: ?usize = null,
 

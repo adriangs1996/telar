@@ -1,6 +1,6 @@
-const TargetType = @import("LinkTarget.zig");
+const LinkTarget = @import("LinkTarget.zig");
 const Outcome = @This();
 
 consumed: bool = false,
-open: ?TargetType = null,
-copy: ?TargetType = null,
+open: ?LinkTarget = null,
+copy: ?LinkTarget = null,

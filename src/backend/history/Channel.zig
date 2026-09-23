@@ -2,7 +2,7 @@ const std = @import("std");
 const model = @import("model.zig");
 const channel_support = @import("channel_support.zig");
 const Submission = @import("Submission.zig");
-const CountersType = @import("Counters.zig");
+const Counters = @import("Counters.zig");
 const Channel = @This();
 
 gpa: std.mem.Allocator,
@@ -107,7 +107,7 @@ pub fn submit(channel: *Channel, submission: Submission) bool {
 /// ```zig
 /// const request = try channel.receiveRequest(io, metrics);
 /// ```
-pub fn receiveRequest(channel: *Channel, io: std.Io, metrics: *CountersType) !model.Request {
+pub fn receiveRequest(channel: *Channel, io: std.Io, metrics: *Counters) !model.Request {
     const request = try channel.requests.getOne(io);
     metrics.completeDequeue();
     return request;
@@ -115,7 +115,7 @@ pub fn receiveRequest(channel: *Channel, io: std.Io, metrics: *CountersType) !mo
 
 /// Drains a bounded batch, waiting only for its first request.
 /// Example: `const count = try channel.receiveBatch(io, .{ .items = &items, .metrics = metrics });`.
-pub fn receiveBatch(channel: *Channel, io: std.Io, batch: struct { items: []model.Request, metrics: *CountersType }) !usize {
+pub fn receiveBatch(channel: *Channel, io: std.Io, batch: struct { items: []model.Request, metrics: *Counters }) !usize {
     const count = try channel.requests.get(io, batch.items, 1);
     for (0..count) |_| {
         batch.metrics.completeDequeue();

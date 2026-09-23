@@ -1,12 +1,12 @@
-const CredentialType = @import("Credential.zig");
+const Credential = @import("Credential.zig");
 const std = @import("std");
 const TestStore = @This();
 
-expected: CredentialType,
+expected: Credential,
 live: bool = true,
 lookups: usize = 0,
 
-pub fn contains(store: *TestStore, credential: *const CredentialType) bool {
+pub fn contains(store: *TestStore, credential: *const Credential) bool {
     store.lookups += 1;
     return store.live and std.meta.eql(store.expected, credential.*);
 }

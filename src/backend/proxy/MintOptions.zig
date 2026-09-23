@@ -1,8 +1,8 @@
 const std = @import("std");
-const AuthorityType = @import("Authority.zig");
+const Authority = @import("Authority.zig");
 const MintOptions = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
-authority: *const AuthorityType,
+authority: *const Authority,
 host: []const u8,

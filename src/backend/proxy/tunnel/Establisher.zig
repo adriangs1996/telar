@@ -1,14 +1,14 @@
 const Resources = @import("Resources.zig");
-const ExchangeType = @import("Exchange.zig");
+const Exchange = @import("Exchange.zig");
 const GenericAttempt = @import("../GenericAttempt.zig").Type;
 const std = @import("std");
 const GenericRoute = @import("../GenericRoute.zig").Type;
-const SessionType = @import("../Session.zig");
+const Session = @import("../Session.zig");
 const tls = @import("tls.zig");
 const Establisher = @This();
 
 resources: Resources,
-exchange: *ExchangeType,
+exchange: *Exchange,
 
 /// Applies the interception allowlist or establishes an opaque tunnel.
 /// Interception failures record their exact stage and publish one failed
@@ -21,6 +21,6 @@ exchange: *ExchangeType,
 ///     .origin = origin,
 /// });
 /// ```
-pub fn establish(establisher: *Establisher, attempt: GenericAttempt(std.Io.net.Stream)) ?GenericRoute(*SessionType) {
+pub fn establish(establisher: *Establisher, attempt: GenericAttempt(std.Io.net.Stream)) ?GenericRoute(*Session) {
     return tls.Establish.execute(establisher, attempt);
 }

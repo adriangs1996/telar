@@ -1,6 +1,6 @@
 const std = @import("std");
 const test_support = @import("test_support.zig");
-const SessionType = @import("../Session.zig");
+const Session = @import("../Session.zig");
 const FakeSession = @This();
 
 child_input: []const u8 = "",
@@ -15,7 +15,7 @@ origin_output_len: usize = 0,
 write_calls: usize = 0,
 fail_write_at: ?usize = null,
 
-pub fn read(fake: *FakeSession, side: SessionType.Side, buffer: []u8) ?usize {
+pub fn read(fake: *FakeSession, side: Session.Side, buffer: []u8) ?usize {
     const input, const offset = switch (side) {
         .child => .{ fake.child_input, &fake.child_offset },
         .origin => .{ fake.origin_input, &fake.origin_offset },
@@ -31,7 +31,7 @@ pub fn read(fake: *FakeSession, side: SessionType.Side, buffer: []u8) ?usize {
     return take;
 }
 
-pub fn writeAll(fake: *FakeSession, side: SessionType.Side, bytes: []const u8) bool {
+pub fn writeAll(fake: *FakeSession, side: Session.Side, bytes: []const u8) bool {
     const index = fake.write_calls;
     fake.write_calls += 1;
     if (fake.fail_write_at == index) {

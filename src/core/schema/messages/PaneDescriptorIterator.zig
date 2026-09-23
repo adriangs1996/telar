@@ -1,14 +1,14 @@
 const tab = @import("tab.zig");
-const DecoderType = @import("../Decoder.zig");
-const PaneDescriptorType = @import("../PaneDescriptor.zig");
+const Decoder = @import("../Decoder.zig");
+const PaneDescriptor = @import("../PaneDescriptor.zig");
 const id = @import("../id.zig");
 const codec = @import("../codec.zig");
 const PaneDescriptorIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *PaneDescriptorIterator) !?PaneDescriptorType {
+pub fn next(iterator: *PaneDescriptorIterator) !?PaneDescriptor {
     if (iterator.remaining == 0) {
         return null;
     }

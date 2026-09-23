@@ -8,7 +8,7 @@ const Exact = @import("Exact.zig");
 const std = @import("std");
 const FakeSessionType = @import("FakeSession.zig");
 const Activity = @import("Activity.zig");
-const SessionType = @import("../Session.zig");
+const Session = @import("../Session.zig");
 const types = @import("types.zig");
 
 pub const max_chunk_line_bytes = 128;
@@ -173,7 +173,7 @@ test "an incomplete chunk line forwards its prefix once" {
     try std.testing.expectEqual(@as(usize, 1), fake.write_calls);
 }
 
-fn testRoute(from: SessionType.Side, to: SessionType.Side, framing: types.BodyPlan) Route {
+fn testRoute(from: Session.Side, to: Session.Side, framing: types.BodyPlan) Route {
     return .{ .from = from, .to = to, .framing = framing };
 }
 

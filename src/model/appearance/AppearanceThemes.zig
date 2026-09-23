@@ -1,5 +1,5 @@
-const ThemeType = @import("Theme.zig");
+const Theme = @import("Theme.zig");
 const AppearanceThemes = @This();
 
-light: ?ThemeType = null,
-dark: ?ThemeType = null,
+light: ?Theme = null,
+dark: ?Theme = null,

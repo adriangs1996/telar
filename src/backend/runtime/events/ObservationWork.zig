@@ -1,8 +1,8 @@
 const core = @import("telar-core");
-const PaneType = @import("../../pane/Pane.zig");
-const CacheType = @import("../../process/Cache.zig");
+const Pane = @import("../../pane/Pane.zig");
+const Cache = @import("../../process/Cache.zig");
 const Work = @This();
 
-pane: *PaneType,
+pane: *Pane,
 current_size: core.TerminalSize,
-process_cache: CacheType,
+process_cache: Cache,

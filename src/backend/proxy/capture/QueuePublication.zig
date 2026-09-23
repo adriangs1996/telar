@@ -1,6 +1,6 @@
-const CredentialType = @import("../Credential.zig");
-const HalfType = @import("Half.zig");
+const Credential = @import("../Credential.zig");
+const Half = @import("Half.zig");
 const Publication = @This();
 
-credential: CredentialType,
-half: *HalfType,
+credential: Credential,
+half: *Half,

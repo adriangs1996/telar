@@ -2,9 +2,9 @@
 //! Leases must be returned before catalog teardown. No host protocol is involved.
 
 const GenericResourceStore = @import("GenericResourceStore.zig").Type;
-const ImageIdentityType = @import("ImageIdentity.zig");
+const ImageIdentity = @import("ImageIdentity.zig");
 const std = @import("std");
-const PlacementIdentityType = @import("PlacementIdentity.zig");
+const PlacementIdentity = @import("PlacementIdentity.zig");
 
 pub const Store = GenericResourceStore(@This());
 pub const State = @import("State.zig");
@@ -14,7 +14,7 @@ pub const Lease = @import("Lease.zig");
 
 /// Borrows completed pixels until the matching release, without retaining map pointers.
 /// Example: `const lease = try retain(&store, identity); defer release(&store, lease);`.
-pub fn retain(store: *Store, identity: ImageIdentityType) !Lease {
+pub fn retain(store: *Store, identity: ImageIdentity) !Lease {
     const image = store.images.getPtr(identity) orelse return error.UnknownGraphicsImage;
     if (image.received != image.pixels.len or image.retire_pending) {
         return error.GraphicsImageUnavailable;
@@ -44,9 +44,9 @@ pub fn releaseImage(_: *Store, image: *Store.ImageEntry) void {
 }
 pub fn imageDeleted(_: *Store, _: Store.ImageEntry) void {}
 pub fn placementDeleted(_: *Store, _: Store.PlacementEntry) void {}
-pub fn placementChanged(_: *Store, _: PlacementIdentityType, _: *Store.PlacementEntry) void {}
+pub fn placementChanged(_: *Store, _: PlacementIdentity, _: *Store.PlacementEntry) void {}
 pub fn placementVisibility(_: *Store, _: *Store.PlacementEntry, _: bool) void {}
-pub fn canRelease(_: *Store, _: ImageIdentityType, image: *const Store.ImageEntry) bool {
+pub fn canRelease(_: *Store, _: ImageIdentity, image: *const Store.ImageEntry) bool {
     return image.delivery.leases == 0;
 }
 pub fn deinit(_: *Store) void {}

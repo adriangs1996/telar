@@ -3,11 +3,11 @@ const core = @import("telar-core");
 
 const EncodeContext = @import("EncodeContext.zig");
 const response_queue = @import("response_queue.zig");
-const QueryResultType = @import("../../history/QueryResult.zig");
+const QueryResult = @import("../../history/QueryResult.zig");
 const std = @import("std");
 const PaneStore = @import("../../pane/PaneStore.zig");
-const OutputResultType = @import("../../history/OutputResult.zig");
-const StatsResultType = @import("../../history/StatsResult.zig");
+const OutputResult = @import("../../history/OutputResult.zig");
+const StatsResult = @import("../../history/StatsResult.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
 
 /// Encodes one queued response against the *current* stores. A response can
@@ -192,7 +192,7 @@ pub fn encodeResponse(context: EncodeContext, response: *response_queue.PendingR
     };
 }
 
-fn encodeHistoryResult(buffer: []u8, result: *const QueryResultType, storage: *[core.max_history_results]core.HistoryEntry) ![]const u8 {
+fn encodeHistoryResult(buffer: []u8, result: *const QueryResult, storage: *[core.max_history_results]core.HistoryEntry) ![]const u8 {
     std.debug.assert(result.entries.len <= storage.len);
     for (result.entries, 0..) |entry, index| {
         storage[index] = .{
@@ -231,9 +231,9 @@ test "a workspace snapshot for a vanished workspace becomes a failure reply" {
         .workspace = .{ .workspace = try core.workspace(77) },
     } };
     var buffer: [1024]u8 = undefined;
-    var history_result: ?*QueryResultType = null;
-    var history_output: ?*OutputResultType = null;
-    var history_stats: ?*StatsResultType = null;
+    var history_result: ?*QueryResult = null;
+    var history_output: ?*OutputResult = null;
+    var history_stats: ?*StatsResult = null;
 
     const payload = try encodeResponse(.{
         .buffer = &buffer,
@@ -253,9 +253,9 @@ test "a command suggestion encodes its owned text and a bare status" {
     var workspaces: Workspaces = .{};
     var panes: PaneStore = .{};
     var buffer: [2048]u8 = undefined;
-    var history_result: ?*QueryResultType = null;
-    var history_output: ?*OutputResultType = null;
-    var history_stats: ?*StatsResultType = null;
+    var history_result: ?*QueryResult = null;
+    var history_output: ?*OutputResult = null;
+    var history_stats: ?*StatsResult = null;
     const context: EncodeContext = .{
         .buffer = &buffer,
         .panes = &panes,

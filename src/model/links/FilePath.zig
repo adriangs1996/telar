@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const TargetType = @import("LinkTarget.zig");
+const LinkTarget = @import("LinkTarget.zig");
 const std = @import("std");
 const file_uri = @import("file_uri.zig");
 const FilePath = @This();
@@ -12,7 +12,7 @@ len: u16,
 /// ```zig
 /// const path = try FilePath.init(&target);
 /// ```
-pub fn init(target: *const TargetType) !FilePath {
+pub fn init(target: *const LinkTarget) !FilePath {
     if (target.scheme != .file) {
         return error.NotFileLink;
     }
@@ -73,7 +73,7 @@ pub fn fromDestination(text: []const u8) !FilePath {
     }
 
     if (text[0] != '/') {
-        const target = try TargetType.init(text);
+        const target = try LinkTarget.init(text);
         return init(&target);
     }
 

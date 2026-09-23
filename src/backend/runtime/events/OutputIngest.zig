@@ -1,8 +1,8 @@
 const std = @import("std");
-const PaneType = @import("../../pane/Pane.zig");
+const Pane = @import("../../pane/Pane.zig");
 /// Output-buffer borrow handed to the VT ingest actor.
 const Ingest = @This();
 
 io: std.Io,
-pane: *PaneType,
+pane: *Pane,
 bytes: []const u8,

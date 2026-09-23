@@ -1,9 +1,9 @@
-const RequestHeadType = @import("RequestHead.zig");
+const RequestHead = @import("RequestHead.zig");
 const connection = @import("connection.zig");
 const std = @import("std");
 const ExchangeState = @import("ExchangeState.zig");
 const types = @import("types.zig");
-const ResponseHeadType = @import("ResponseHead.zig");
+const ResponseHead = @import("ResponseHead.zig");
 
 /// Creates the executor for one HTTP/1.1 exchange.
 ///
@@ -20,7 +20,7 @@ pub fn Type(comptime Context: type, comptime port: anytype) type {
         /// ```zig
         /// const outcome = RelayExchange.execute(&context, request);
         /// ```
-        pub fn execute(context: *Context, request: RequestHeadType) connection.ExchangeOutcome {
+        pub fn execute(context: *Context, request: RequestHead) connection.ExchangeOutcome {
             if (!request.body.hasBody()) {
                 const response = port.relay_response(context, request) orelse return .failed;
                 return .{ .complete = response };
@@ -51,7 +51,7 @@ pub fn Type(comptime Context: type, comptime port: anytype) type {
             return port.relay_body(context, body);
         }
 
-        fn relayResponse(context: *Context, request: RequestHeadType) ?ResponseHeadType {
+        fn relayResponse(context: *Context, request: RequestHead) ?ResponseHead {
             return port.relay_response(context, request);
         }
     };

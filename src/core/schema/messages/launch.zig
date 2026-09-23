@@ -1,16 +1,16 @@
 //! The launch body shared by every message that starts a child: cwd,
 //! arguments and environment, bounded before any consumer allocates.
 
-const EncoderType = @import("../Encoder.zig");
+const Encoder = @import("../Encoder.zig");
 const Launch = @import("../Launch.zig");
 const codec = @import("../codec.zig");
 const types = @import("../types.zig");
 const id = @import("../id.zig");
 const std = @import("std");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const LaunchView = @import("LaunchView.zig");
 
-pub fn encodeLaunch(encoder: *EncoderType, launch: Launch) !void {
+pub fn encodeLaunch(encoder: *Encoder, launch: Launch) !void {
     try codec.validateBytes(launch.cwd, types.max_cwd_bytes, false);
     if (launch.cwd_source) |pane_id| {
         try codec.validatePaneId(pane_id);
@@ -53,7 +53,7 @@ pub fn encodeLaunch(encoder: *EncoderType, launch: Launch) !void {
     }
 }
 
-pub fn decodeLaunch(decoder: *DecoderType) !LaunchView {
+pub fn decodeLaunch(decoder: *Decoder) !LaunchView {
     // Structural walk only: field boundaries and byte budgets, so every wire
     // length is checked before a consumer allocates from it. Content rules
     // (embedded NULs, '=' in names) are enforced by the iterators as the
@@ -108,7 +108,7 @@ pub fn decodeLaunch(decoder: *DecoderType) !LaunchView {
 
 /// Encodes an agent launch location without executable or environment authority.
 /// Example: `try encodeAgentCwd(&encoder, launch);`.
-pub fn encodeAgentCwd(encoder: *EncoderType, launch: Launch) !void {
+pub fn encodeAgentCwd(encoder: *Encoder, launch: Launch) !void {
     try codec.validateBytes(launch.cwd, types.max_cwd_bytes, false);
     if (launch.arguments.len != 0 or launch.environment.len != 0 or launch.environment_mode != .inherit_runtime) {
         return error.InvalidAgentLaunch;
@@ -122,7 +122,7 @@ pub fn encodeAgentCwd(encoder: *EncoderType, launch: Launch) !void {
 
 /// Decodes the only client-selected input to a fixed provider launch.
 /// Example: `const launch = try decodeAgentCwd(&decoder);`.
-pub fn decodeAgentCwd(decoder: *DecoderType) !LaunchView {
+pub fn decodeAgentCwd(decoder: *Decoder) !LaunchView {
     const cwd = try decoder.readSized16();
     try codec.validateBytes(cwd, types.max_cwd_bytes, false);
     const source = try decoder.readInt(u64);

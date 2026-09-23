@@ -1,5 +1,5 @@
-const PaneKeyType = @import("../../pane/PaneKey.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
 const Completion = @This();
 
-pane: PaneKeyType,
+pane: PaneKey,
 result: anyerror!void,

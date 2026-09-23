@@ -1,5 +1,5 @@
-const PreparedType = @import("../attachment/Prepared.zig");
+const Prepared = @import("../attachment/Prepared.zig");
 const AttachmentWork = @This();
 
 index: usize,
-prepared: PreparedType,
+prepared: Prepared,

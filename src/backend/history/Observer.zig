@@ -3,12 +3,12 @@ const std = @import("std");
 const vt = @import("ghostty-vt");
 const TerminalTracker = @import("TerminalTracker.zig");
 const Batch = @import("Batch.zig");
-const SampleType = @import("Sample.zig");
+const Sample = @import("Sample.zig");
 const Initialization = @import("Initialization.zig");
 const observer_support = @import("observer_support.zig");
 const ObserverInputObservation = @import("ObserverInputObservation.zig");
 const ObserverOutputObservation = @import("ObserverOutputObservation.zig");
-const ClockType = @import("Clock.zig");
+const Clock = @import("Clock.zig");
 const Processing = @import("Processing.zig");
 const codex_screen = @import("codex_screen.zig");
 const prompt_scan = @import("prompt_scan.zig");
@@ -26,7 +26,7 @@ dropped_events: u64 = 0,
 dropped_bytes: u64 = 0,
 resets: u64 = 0,
 failures: u64 = 0,
-sample: SampleType = .{},
+sample: Sample = .{},
 manifests: *const core.Table = &core.builtin_table,
 last_signal: ?core.Signal = null,
 last_signal_ms: i64 = 0,
@@ -121,7 +121,7 @@ pub fn queueResize(observer: *Observer, size: core.TerminalSize) void {
     observer.pushControl(.{ .resize = size });
 }
 
-pub fn queueShellExit(observer: *Observer, clock: ClockType, exit_code: i32) void {
+pub fn queueShellExit(observer: *Observer, clock: Clock, exit_code: i32) void {
     observer.pushControl(.{ .shell_exit = .{ .clock = clock, .exit_code = exit_code } });
 }
 
@@ -166,7 +166,7 @@ pub fn processSealed(observer: *Observer, processing: Processing, sink: anytype)
 
     const index = observer.worker orelse return;
     const batch = &observer.batches[index];
-    var latest_clock: ?ClockType = null;
+    var latest_clock: ?Clock = null;
     if (batch.reset_before) {
         const reset_cwd = cwd orelse if (observer.enabled)
             observer.tracker.currentCwd()

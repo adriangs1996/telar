@@ -1,18 +1,18 @@
 const std = @import("std");
 const ServiceSpec = @import("ServiceSpec.zig");
-const ResultType = @import("Result.zig");
+const Result = @import("Result.zig");
 const Frame = @import("Frame.zig");
 const service_support = @import("service_support.zig");
-const SessionType = @import("Session.zig");
+const Session = @import("Session.zig");
 const WorkerInitOptions = @import("WorkerInitOptions.zig");
 const Worker = @This();
 
 gpa: std.mem.Allocator,
 spec: ServiceSpec,
-results: *std.Io.Queue(*ResultType),
+results: *std.Io.Queue(*Result),
 requests: std.Io.Queue(*Frame) = undefined,
 request_storage: [service_support.queue_depth]*Frame = undefined,
-session: ?*SessionType = null,
+session: ?*Session = null,
 future: ?std.Io.Future(anyerror!void) = null,
 restarts: [service_support.restart_limit]i64 = .{0} ** service_support.restart_limit,
 restart_count: u8 = 0,
@@ -99,11 +99,11 @@ fn run(worker: *Worker, io: std.Io) anyerror!void {
     }
 }
 
-fn ensureSession(worker: *Worker, io: std.Io) !*SessionType {
+fn ensureSession(worker: *Worker, io: std.Io) !*Session {
     if (worker.session) |session| {
         return session;
     }
-    worker.session = try SessionType.open(io, worker.gpa, .{ .entry = worker.spec.entry(), .timeout_ms = 200 });
+    worker.session = try Session.open(io, worker.gpa, .{ .entry = worker.spec.entry(), .timeout_ms = 200 });
     return worker.session.?;
 }
 

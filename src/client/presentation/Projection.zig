@@ -2,8 +2,8 @@ const data = @import("model");
 const core = @import("telar-core");
 const PresentationIngress = @import("PresentationIngress.zig");
 const hints_support = @import("../input/hints_support.zig");
-const CopyProjectionType = @import("../workspace/CopyProjection.zig");
-const ThreadViewType = @import("ThreadView.zig");
+const CopyProjection = @import("../workspace/CopyProjection.zig");
+const ThreadView = @import("ThreadView.zig");
 const Projection = @This();
 
 version: data.Version,
@@ -31,7 +31,7 @@ system_metrics: ?data.SystemMetrics,
 bar_state: *const data.BarsState,
 status_mode: hints_support.Mode,
 diagnostic: ?[]const u8,
-copy: ?CopyProjectionType,
+copy: ?CopyProjection,
 sidebar_visible: bool,
 sidebar_width: u16,
 workspace_list_collapsed: bool,
@@ -45,11 +45,11 @@ window_title_template: []const u8 = "",
 /// ```zig
 /// const thread = projection.threadView(pane_id) orelse return;
 /// ```
-pub fn threadView(projection: *const Projection, pane_id: core.PaneId) ?ThreadViewType {
+pub fn threadView(projection: *const Projection, pane_id: core.PaneId) ?ThreadView {
     const slot = projection.tab orelse return null;
     const model = projection.model;
     const pane = model.panes.findInConst(model.tabs.location[slot].tab_id, pane_id) orelse return null;
-    var thread = ThreadViewType.capture(model, projection.agents, pane_id) orelse return null;
+    var thread = ThreadView.capture(model, projection.agents, pane_id) orelse return null;
     const workspace_id = switch (pane.location.workspace) {
         .workspace => |id| id,
         .worktree => return thread,

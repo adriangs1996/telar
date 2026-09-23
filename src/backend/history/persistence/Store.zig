@@ -1,22 +1,22 @@
 const core = @import("telar-core");
 const sqlite = @import("sqlite.zig");
 const std = @import("std");
-const LaunchAttemptType = @import("../LaunchAttempt.zig");
-const SessionStartedType = @import("../SessionStarted.zig");
-const CommandFinishedType = @import("../CommandFinished.zig");
-const DeleteType = @import("../Delete.zig");
-const OutputResultType = @import("../OutputResult.zig");
-const SessionFinishedType = @import("../SessionFinished.zig");
-const SessionTitleType = @import("../SessionTitle.zig");
-const QueryType = @import("../Query.zig");
-const QueryResultType = @import("../QueryResult.zig");
-const FuzzyPageType = @import("../FuzzyPage.zig");
+const LaunchAttempt = @import("../LaunchAttempt.zig");
+const SessionStarted = @import("../SessionStarted.zig");
+const CommandFinished = @import("../CommandFinished.zig");
+const Delete = @import("../Delete.zig");
+const OutputResult = @import("../OutputResult.zig");
+const SessionFinished = @import("../SessionFinished.zig");
+const SessionTitle = @import("../SessionTitle.zig");
+const Query = @import("../Query.zig");
+const QueryResult = @import("../QueryResult.zig");
+const FuzzyPage = @import("../FuzzyPage.zig");
 const Accumulator = @import("../Accumulator.zig");
-const StatsQueryType = @import("../StatsQuery.zig");
-const StatsResultType = @import("../StatsResult.zig");
+const StatsQuery = @import("../StatsQuery.zig");
+const StatsResult = @import("../StatsResult.zig");
 const policy = @import("../search_policy.zig");
-const StatsTopType = @import("../StatsTop.zig");
-const PruneType = @import("../Prune.zig");
+const StatsTop = @import("../StatsTop.zig");
+const Prune = @import("../Prune.zig");
 const Store = @This();
 
 db: *sqlite.c.sqlite3,
@@ -119,7 +119,7 @@ pub fn close(store: *Store) void {
     _ = sqlite.c.sqlite3_close(store.db);
 }
 
-pub fn insertLaunchAttempt(store: *Store, value: *const LaunchAttemptType) !void {
+pub fn insertLaunchAttempt(store: *Store, value: *const LaunchAttempt) !void {
     const stmt = store.insert_launch_attempt;
     defer sqlite.reset(stmt);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 1, @intCast(core.raw(value.pane_id)));
@@ -137,7 +137,7 @@ pub fn insertLaunchAttempt(store: *Store, value: *const LaunchAttemptType) !void
     try sqlite.stepDone(stmt);
 }
 
-pub fn startSession(store: *Store, value: *const SessionStartedType) !void {
+pub fn startSession(store: *Store, value: *const SessionStarted) !void {
     const stmt = store.insert_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);
@@ -159,7 +159,7 @@ pub fn startSession(store: *Store, value: *const SessionStartedType) !void {
 /// ```zig
 /// try store.insertCommandOutput(&value);
 /// ```
-pub fn insertCommandOutput(store: *Store, value: *const CommandFinishedType) !void {
+pub fn insertCommandOutput(store: *Store, value: *const CommandFinished) !void {
     const stmt = store.insert_command_output;
     defer sqlite.reset(stmt);
     sqlite.bindText(stmt, 1, value.output);
@@ -174,12 +174,12 @@ pub fn insertCommandOutput(store: *Store, value: *const CommandFinishedType) !vo
 /// ```zig
 /// const result = try store.readCommandOutput(gpa, request);
 /// ```
-pub fn readCommandOutput(store: *Store, gpa: std.mem.Allocator, request: DeleteType) !*OutputResultType {
+pub fn readCommandOutput(store: *Store, gpa: std.mem.Allocator, request: Delete) !*OutputResult {
     const stmt = store.read_command_output;
     defer sqlite.reset(stmt);
     _ = sqlite.c.sqlite3_bind_int64(stmt, 1, @intCast(request.id));
 
-    const result = try gpa.create(OutputResultType);
+    const result = try gpa.create(OutputResult);
     errdefer gpa.destroy(result);
     result.* = .{
         .request_id = request.request_id,
@@ -215,7 +215,7 @@ pub fn readCommandOutput(store: *Store, gpa: std.mem.Allocator, request: DeleteT
 /// ```zig
 /// try store.importSession(&session);
 /// ```
-pub fn importSession(store: *Store, value: *const SessionStartedType) !void {
+pub fn importSession(store: *Store, value: *const SessionStarted) !void {
     const stmt = store.import_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);
@@ -236,7 +236,7 @@ pub fn importSession(store: *Store, value: *const SessionStartedType) !void {
 /// ```zig
 /// try store.ensureCommandSession(command);
 /// ```
-pub fn ensureCommandSession(store: *Store, value: *const CommandFinishedType) !void {
+pub fn ensureCommandSession(store: *Store, value: *const CommandFinished) !void {
     const stmt = store.import_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.session_id);
@@ -257,7 +257,7 @@ pub fn ensureCommandSession(store: *Store, value: *const CommandFinishedType) !v
 /// ```zig
 /// try store.importCommand(&value);
 /// ```
-pub fn importCommand(store: *Store, value: *const CommandFinishedType) !void {
+pub fn importCommand(store: *Store, value: *const CommandFinished) !void {
     const stmt = store.import_command;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.session_id);
@@ -284,7 +284,7 @@ pub fn importCommand(store: *Store, value: *const CommandFinishedType) !void {
     try sqlite.stepDone(stmt);
 }
 
-pub fn finishSession(store: *Store, value: SessionFinishedType) !void {
+pub fn finishSession(store: *Store, value: SessionFinished) !void {
     const stmt = store.finish_session;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);
@@ -292,7 +292,7 @@ pub fn finishSession(store: *Store, value: SessionFinishedType) !void {
     try sqlite.stepDone(stmt);
 }
 
-pub fn setSessionTitle(store: *Store, value: *const SessionTitleType) !void {
+pub fn setSessionTitle(store: *Store, value: *const SessionTitle) !void {
     const stmt = store.set_session_title;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.id);
@@ -305,7 +305,7 @@ pub fn setSessionTitle(store: *Store, value: *const SessionTitleType) !void {
     }
 }
 
-pub fn insertCommand(store: *Store, value: *const CommandFinishedType) !bool {
+pub fn insertCommand(store: *Store, value: *const CommandFinished) !bool {
     const stmt = store.insert_command;
     defer sqlite.reset(stmt);
     sqlite.bindBlob(stmt, 1, &value.session_id);
@@ -339,7 +339,7 @@ pub fn insertCommand(store: *Store, value: *const CommandFinishedType) !bool {
 /// ```zig
 /// if (!try store.finishAgentCommand(command)) _ = try store.insertCommand(command);
 /// ```
-pub fn finishAgentCommand(store: *Store, value: *const CommandFinishedType) !bool {
+pub fn finishAgentCommand(store: *Store, value: *const CommandFinished) !bool {
     if (value.tool_call_id.len == 0) {
         return false;
     }
@@ -373,8 +373,8 @@ pub fn finishAgentCommand(store: *Store, value: *const CommandFinishedType) !boo
 /// Fuzzy path: scans the newest candidates in scope and keeps the best
 /// requested page of subsequence matches. Only IDs and scores are retained
 /// while ranking; full entries are allocated for the resulting page.
-fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const QueryType) !*QueryResultType {
-    const max_candidates = FuzzyPageType.max_candidates;
+fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const Query) !*QueryResult {
+    const max_candidates = FuzzyPage.max_candidates;
     var sql_buffer: [1024]u8 = undefined;
     var sql = std.Io.Writer.fixed(&sql_buffer);
     try sql.writeAll("SELECT " ++ sqlite.entry_columns ++ " FROM command WHERE id <= ?");
@@ -389,7 +389,7 @@ fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const QueryType) 
     sqlite.bindQueryFilters(stmt, &parameter, request);
     _ = sqlite.c.sqlite3_bind_int(stmt, parameter, max_candidates);
 
-    var ranking = FuzzyPageType.init(request);
+    var ranking = FuzzyPage.init(request);
     var seen: std.AutoHashMapUnmanaged(u64, void) = .empty;
     defer seen.deinit(gpa);
 
@@ -442,7 +442,7 @@ fn queryFuzzy(store: *Store, gpa: std.mem.Allocator, request: *const QueryType) 
 /// ```zig
 /// const result = try store.stats(gpa, &query);
 /// ```
-pub fn stats(store: *Store, gpa: std.mem.Allocator, request: *const StatsQueryType) !*StatsResultType {
+pub fn stats(store: *Store, gpa: std.mem.Allocator, request: *const StatsQuery) !*StatsResult {
     var sql_buffer: [1024]u8 = undefined;
     var sql = std.Io.Writer.fixed(&sql_buffer);
     try sql.writeAll("SELECT COUNT(*), COUNT(DISTINCT command) FROM command WHERE 1=1");
@@ -511,9 +511,9 @@ pub fn stats(store: *Store, gpa: std.mem.Allocator, request: *const StatsQueryTy
         best[index] = .{ .count = count, .key = entry.key_ptr.* };
     }
 
-    const result = try gpa.create(StatsResultType);
+    const result = try gpa.create(StatsResult);
     errdefer gpa.destroy(result);
-    const top = try gpa.alloc(StatsTopType, best_len);
+    const top = try gpa.alloc(StatsTop, best_len);
     var copied: usize = 0;
     errdefer {
         for (top[0..copied]) |entry| gpa.free(entry.command);
@@ -554,7 +554,7 @@ pub fn deleteCommand(store: *Store, command_id: u64) !u64 {
 /// ```zig
 /// const removed = try store.prune(&prune);
 /// ```
-pub fn prune(store: *Store, request: *const PruneType) !u64 {
+pub fn prune(store: *Store, request: *const Prune) !u64 {
     var sql_buffer: [1024]u8 = undefined;
     var sql = std.Io.Writer.fixed(&sql_buffer);
     try sql.writeAll("DELETE FROM command WHERE 1=1");
@@ -622,7 +622,7 @@ pub fn prune(store: *Store, request: *const PruneType) !u64 {
 /// ```zig
 /// const result = try store.query(gpa, &request);
 /// ```
-pub fn query(store: *Store, gpa: std.mem.Allocator, original: *const QueryType) !*QueryResultType {
+pub fn query(store: *Store, gpa: std.mem.Allocator, original: *const Query) !*QueryResult {
     var bounded = original.*;
     if (bounded.snapshot_id == 0) {
         const boundary = try sqlite.prepare(store.db, "SELECT COALESCE(MAX(id), 0) FROM command;");

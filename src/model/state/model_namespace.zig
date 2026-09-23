@@ -2,7 +2,7 @@
 const core = @import("telar-core");
 const model_data = @import("../model.zig");
 
-const PaneType = @import("../panes/Pane.zig");
+const Pane = @import("../panes/Pane.zig");
 const std = @import("std");
 const ClientModel = @import("ClientModel.zig");
 const LaunchSource = @import("LaunchSource.zig");
@@ -18,7 +18,7 @@ test {
     _ = @import("tests/workspaces.zig");
 }
 
-pub fn paneViewportOffset(pane: *const PaneType, target: model_data.PaneViewportTarget) u32 {
+pub fn paneViewportOffset(pane: *const Pane, target: model_data.PaneViewportTarget) u32 {
     const maximum = pane.scroll.maxOffset(pane.buffer.h);
 
     return switch (target) {
@@ -32,7 +32,7 @@ pub fn paneViewportOffset(pane: *const PaneType, target: model_data.PaneViewport
     };
 }
 
-pub fn commitPaneViewport(model: *ClientModel, pane: *PaneType, offset: u32) ?model_data.PaneViewportChange {
+pub fn commitPaneViewport(model: *ClientModel, pane: *Pane, offset: u32) ?model_data.PaneViewportChange {
     if (pane.scroll.offset == offset) {
         return null;
     }
@@ -48,7 +48,7 @@ pub fn commitPaneViewport(model: *ClientModel, pane: *PaneType, offset: u32) ?mo
     };
 }
 
-pub fn copyModeViewport(pane: *const PaneType, wanted: u32) ?core.SetPaneViewport {
+pub fn copyModeViewport(pane: *const Pane, wanted: u32) ?core.SetPaneViewport {
     const offset = paneViewportOffset(pane, .{ .absolute = wanted });
     if (pane.scroll.offset == offset) {
         return null;
@@ -103,7 +103,7 @@ pub fn inheritCellSize(size: *core.TerminalSize, source: core.TerminalSize) void
     size.cell_height_px = source.cell_height_px;
 }
 
-pub fn detachPane(pane: *PaneType) void {
+pub fn detachPane(pane: *Pane) void {
     pane.attached = false;
     pane.pending_frame_id = 0;
 }

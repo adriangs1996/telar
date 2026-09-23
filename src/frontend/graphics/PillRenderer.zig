@@ -4,13 +4,13 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
-const RasterizerType = @import("Rasterizer.zig");
-const PlanType = @import("../presentation/Plan.zig");
+const Rasterizer = @import("Rasterizer.zig");
+const Plan = @import("../presentation/Plan.zig");
 const Key = @import("Key.zig");
 const pill = @import("pill.zig");
 const kitty_codec = @import("kitty_codec.zig");
 const labels = @import("../presentation/pane_labels.zig");
-const SurfaceType = @import("Surface.zig");
+const Surface = @import("Surface.zig");
 const rounded = @import("rounded_rectangle.zig");
 const Renderer = @This();
 
@@ -18,16 +18,16 @@ gpa: std.mem.Allocator,
 supported: bool = false,
 cell_width: u16 = 0,
 cell_height: u16 = 0,
-text: ?RasterizerType = null,
+text: ?Rasterizer = null,
 pixels: []u8 = &.{},
-plan: PlanType = .{},
+plan: Plan = .{},
 key: ?Key = null,
 failed: bool = false,
 generation: u64 = 0,
 emitted_generation: u64 = 0,
 desired: ?core.Rect = null,
 emitted: ?core.Rect = null,
-emitted_plan: PlanType = .{},
+emitted_plan: Plan = .{},
 emitted_key: ?Key = null,
 emitted_image_id: u32 = pill.image_id,
 image_dirty: bool = false,
@@ -74,7 +74,7 @@ pub fn configure(renderer: *Renderer, configuration: SidebarRendererInput) bool 
 /// Rasterizes the bounded, owned label snapshot only on the media pass.
 /// Position-only changes reuse the image; text, focus or theme replace it.
 /// Example: `renderer.prepare(plan, palette);`.
-pub fn prepare(renderer: *Renderer, plan: *const PlanType, palette: *const data.Palette) void {
+pub fn prepare(renderer: *Renderer, plan: *const Plan, palette: *const data.Palette) void {
     const key = renderer.renderKey(plan, palette) orelse {
         renderer.hide();
         return;
@@ -109,7 +109,7 @@ pub fn prepare(renderer: *Renderer, plan: *const PlanType, palette: *const data.
 
 /// Only exact text, focus, theme and geometry may replace fallback cells.
 /// Example: `if (renderer.covers(plan, palette)) hideCellLabels();`.
-pub fn covers(renderer: *const Renderer, plan: *const PlanType, palette: *const data.Palette) bool {
+pub fn covers(renderer: *const Renderer, plan: *const Plan, palette: *const data.Palette) bool {
     const key = renderer.renderKey(plan, palette) orelse return false;
     return renderer.matches(plan, key) and !renderer.failed and !renderer.transferInProgress() and
         renderer.image_emitted and !renderer.image_dirty and renderer.generation == renderer.emitted_generation and
@@ -120,7 +120,7 @@ pub fn covers(renderer: *const Renderer, plan: *const PlanType, palette: *const 
 /// Keeps small-font text visible while only its selection is being replaced.
 /// Unlike covers, this permits the previous focus but never stale text or geometry.
 /// Example: `if (renderer.coversText(plan, palette)) hideCellLabels();`.
-pub fn coversText(renderer: *const Renderer, plan: *const PlanType, palette: *const data.Palette) bool {
+pub fn coversText(renderer: *const Renderer, plan: *const Plan, palette: *const data.Palette) bool {
     const key = renderer.renderKey(plan, palette) orelse return false;
     return !renderer.failed and renderer.image_emitted and
         std.meta.eql(renderer.desired, @as(?core.Rect, plan.area)) and renderer.emittedTextMatches(plan, key);
@@ -128,7 +128,7 @@ pub fn coversText(renderer: *const Renderer, plan: *const PlanType, palette: *co
 
 /// Retires stale text before the next cell frame, without rasterization.
 /// Example: `renderer.observe(plan, palette);`.
-pub fn observe(renderer: *Renderer, plan: *const PlanType, palette: *const data.Palette) void {
+pub fn observe(renderer: *Renderer, plan: *const Plan, palette: *const data.Palette) void {
     const key = renderer.renderKey(plan, palette) orelse {
         renderer.hide();
         return;
@@ -265,16 +265,16 @@ fn hide(renderer: *Renderer) void {
     renderer.image_dirty = false;
 }
 
-fn emittedTextMatches(renderer: *const Renderer, plan: *const PlanType, key: Key) bool {
+fn emittedTextMatches(renderer: *const Renderer, plan: *const Plan, key: Key) bool {
     return renderer.emitted_key != null and std.meta.eql(renderer.emitted_key.?, key) and
         std.meta.eql(renderer.emitted, @as(?core.Rect, plan.area)) and renderer.emitted_plan.sameText(plan);
 }
 
-fn matches(renderer: *const Renderer, plan: *const PlanType, key: Key) bool {
+fn matches(renderer: *const Renderer, plan: *const Plan, key: Key) bool {
     return renderer.key != null and std.meta.eql(renderer.key.?, key) and renderer.plan.sameContent(plan);
 }
 
-fn renderKey(renderer: *const Renderer, plan: *const PlanType, palette: *const data.Palette) ?Key {
+fn renderKey(renderer: *const Renderer, plan: *const Plan, palette: *const data.Palette) ?Key {
     if (!renderer.supported or renderer.cell_width == 0 or renderer.cell_height < 8 or renderer.cell_height > 256 or
         plan.len == 0 or plan.len > core.max_panes_per_tab or plan.area.h != 1 or plan.area.w == 0 or
         palette.accent.kind != .rgb or palette.surface_dim.kind != .rgb or palette.subtext0.kind != .rgb)
@@ -323,7 +323,7 @@ fn rasterize(renderer: *Renderer, key: Key) !void {
             try renderer.gpa.realloc(renderer.pixels, len);
     }
     if (renderer.text == null) {
-        renderer.text = try RasterizerType.init();
+        renderer.text = try Rasterizer.init();
     }
 
     const text = &renderer.text.?;
@@ -331,7 +331,7 @@ fn rasterize(renderer: *Renderer, key: Key) !void {
     @memset(renderer.pixels, 0);
     const metrics = text.metrics();
     const baseline = @divTrunc(@as(i32, key.height) - @as(i32, @intCast(metrics.line_height)), 2) + metrics.ascender;
-    const surface: SurfaceType = .{ .pixels = renderer.pixels, .width = key.width, .height = key.height };
+    const surface: Surface = .{ .pixels = renderer.pixels, .width = key.width, .height = key.height };
     for (renderer.plan.slice()) |*label| {
         const available = @as(u32, label.width) * key.cell_width;
         const advance = try text.measureText(label.text());

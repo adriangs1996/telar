@@ -12,14 +12,14 @@ const IngestCompletion = @import("events/IngestCompletion.zig");
 const ObservationCompletion = @import("events/ObservationCompletion.zig");
 const MediaCompletion = @import("events/MediaCompletion.zig");
 const ExitCompletion = @import("events/ExitCompletion.zig");
-const WakeType = @import("events/Wake.zig");
-const ObservationType = @import("../proxy/Observation.zig");
+const Wake = @import("events/Wake.zig");
+const Observation = @import("../proxy/Observation.zig");
 const Half = @import("../proxy/capture/Half.zig");
-const ResultType = @import("../plugins/Result.zig");
+const Result = @import("../plugins/Result.zig");
 const AgentResult = @import("../agent/Result.zig");
-const ResponseType = @import("../engine/Response.zig");
+const Response = @import("../engine/Response.zig");
 const SystemMetricsSample = @import("observability/SystemMetricsSample.zig");
-const CompletionType = @import("resources/Completion.zig");
+const Completion = @import("resources/Completion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
 const std = @import("std");
 
@@ -37,22 +37,22 @@ pub const Event = union(enum) {
     pane_observed: ObservationCompletion,
     pane_media: MediaCompletion,
     pane_exit: ExitCompletion,
-    pane_search: WakeType,
+    pane_search: Wake,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
-    proxy_event: anyerror!ObservationType,
+    proxy_event: anyerror!Observation,
     proxy_capture: anyerror!*Half,
-    plugin_effects: anyerror!*ResultType,
+    plugin_effects: anyerror!*Result,
     agent_tick: anyerror!void,
     agent_description: AgentResult,
-    engine_response: anyerror!ResponseType,
+    engine_response: anyerror!Response,
     agent_thread_changed: @import("events/AgentThreadChanged.zig"),
     change_review_completed: *@import("../change_review/Job.zig"),
     agent_history_completed: *@import("AgentHistoryJob.zig"),
     metrics_tick: anyerror!void,
     metrics_sampled: SystemMetricsSample,
     checkpoint_written: anyerror!void,
-    git_status: CompletionType,
+    git_status: Completion,
     editor_opened: *EditorJob,
     session_name: AgentCompletion,
     stopped: anyerror!void,

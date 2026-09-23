@@ -11,13 +11,13 @@ const TestReadyPrompt = @import("TestReadyPrompt.zig");
 const Tracker = @import("Tracker.zig");
 const std = @import("std");
 const Agent = @import("Agent.zig");
-const ResultType = @import("Result.zig");
+const Result = @import("Result.zig");
 const description = @import("description.zig");
 const ProxyExchange = @import("ProxyExchange.zig");
-const SessionReferenceType = @import("SessionReference.zig");
+const SessionReference = @import("SessionReference.zig");
 const SessionTitle = @import("SessionTitle.zig");
-const SessionFileType = @import("SessionFile.zig");
-const CompletionType = @import("Completion.zig");
+const SessionFile = @import("SessionFile.zig");
+const Completion = @import("Completion.zig");
 
 pub const AcknowledgeResult = enum {
     unknown_agent,
@@ -424,7 +424,7 @@ test "first working turn starts one generated session title" {
     var job = tracker.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &job.query);
     try std.testing.expectEqualStrings("improve the sidebar", job.querySlice());
-    var result: ResultType = .{
+    var result: Result = .{
         .pane = job.pane,
         .session_id = job.session_id,
         .status = .success,
@@ -463,7 +463,7 @@ test "submitted managed prompt queues once even when working is coalesced into r
     defer std.crypto.secureZero(u8, &job.query);
     try std.testing.expectEqualStrings("Fix the sidebar Keep UTF-8 界 intact", job.querySlice());
     try std.testing.expect(tracker.nextDescriptionJob() == null);
-    var result: ResultType = .{ .pane = job.pane, .session_id = job.session_id, .status = .success, .title_len = "Fix sidebar".len };
+    var result: Result = .{ .pane = job.pane, .session_id = job.session_id, .status = .success, .title_len = "Fix sidebar".len };
     @memcpy(result.title[0..result.title_len], "Fix sidebar");
     _ = tracker.finishDescription(&result).?;
     try std.testing.expectEqualStrings("Fix sidebar", tracker.snapshot(&entries, 200)[0].session_title);
@@ -528,7 +528,7 @@ test "manual title wins over a late generated result" {
     defer std.crypto.secureZero(u8, &job.query);
     try std.testing.expect(try tracker.setManualTitle(identity.key, "Release audit"));
 
-    var result: ResultType = .{
+    var result: Result = .{
         .pane = job.pane,
         .session_id = job.session_id,
         .status = .success,
@@ -1089,17 +1089,17 @@ test "session references attach to the exact generation and replace only on chan
         .process_id = 40,
         .session_id = .{1} ** 16,
     };
-    const first = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 10);
+    const first = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 10);
 
     try std.testing.expect(tracker.observeSessionReference(identity, first));
     try std.testing.expect(!tracker.observeSessionReference(identity, first));
     try std.testing.expectEqualStrings(first.slice(), tracker.sessionReference(identity.key).?.slice());
     try std.testing.expect(tracker.sessionReference(.{ .id = identity.key.id, .generation = 3 }) == null);
 
-    const second = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0001", 20);
+    const second = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0001", 20);
     try std.testing.expect(tracker.observeSessionReference(identity, second));
-    try std.testing.expectError(error.InvalidSessionReference, SessionReferenceType.init("-rf", 0));
-    try std.testing.expectError(error.InvalidSessionReference, SessionReferenceType.init("a b", 0));
+    try std.testing.expectError(error.InvalidSessionReference, SessionReference.init("-rf", 0));
+    try std.testing.expectError(error.InvalidSessionReference, SessionReference.init("a b", 0));
 }
 
 test "a restored title waits for the resumed agent and skips title generation" {
@@ -1127,7 +1127,7 @@ test "a pending resume survives observation ticks without inventing an active ag
     const ResumeSession = @import("ResumeSession.zig");
     var tracker: Tracker = .{};
     const identity = try testIdentity();
-    const reference = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0);
+    const reference = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0);
     const session = try ResumeSession.init(.claude, reference);
     const title = try SessionTitle.init("Keep resume metadata", .manual);
     try std.testing.expect(tracker.restoreSession(identity.key, session));
@@ -1152,7 +1152,7 @@ test "a pending resume survives observation ticks without inventing an active ag
 test "a pending resume is discarded for another provider or a different reported session" {
     const ResumeSession = @import("ResumeSession.zig");
     const identity = try testIdentity();
-    const reference = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0);
+    const reference = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 0);
     const session = try ResumeSession.init(.claude, reference);
     const title = try SessionTitle.init("Old session", .manual);
 
@@ -1170,7 +1170,7 @@ test "a pending resume is discarded for another provider or a different reported
     try std.testing.expect(other_session.restoreTitle(identity.key, title));
     try std.testing.expect(other_session.observeReport(.{ .identity = identity, .state = .ready, .observed_at_ms = 99 }));
     try std.testing.expect(other_session.durableTitle(identity.key) == null);
-    const replacement = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0001", 100);
+    const replacement = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0001", 100);
     try std.testing.expect(other_session.observeSessionReference(identity, replacement));
     try std.testing.expect(!other_session.hasRestoredSession(session));
     try std.testing.expect(other_session.durableTitle(identity.key) == null);
@@ -1181,7 +1181,7 @@ test "a pending resume is discarded for another provider or a different reported
 test "a proxy provider guess cannot authorize resume for a reported session" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
-    const reference = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100);
+    const reference = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100);
     try std.testing.expect(tracker.observeSessionReference(identity, reference));
     try std.testing.expect(tracker.observeProxy(.{
         .identity = identity,
@@ -1218,8 +1218,8 @@ test "an agent title outranks generated titles, never clears a manual one and is
 test "a reported session file is watched, probed once at a time and its names become agent titles" {
     var tracker: Tracker = .{};
     const identity = try testIdentity();
-    const reference = try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100);
-    const file: SessionFileType = .{ .kind = .codex_state, .path = "/state_5.sqlite" };
+    const reference = try SessionReference.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100);
+    const file: SessionFile = .{ .kind = .codex_state, .path = "/state_5.sqlite" };
 
     try std.testing.expect(tracker.observeReport(.{ .identity = identity, .state = .ready, .observed_at_ms = 100, .session_file = file }));
     try std.testing.expect(tracker.nextSessionFileProbe(2_000, 1_000) == null);
@@ -1235,7 +1235,7 @@ test "a reported session file is watched, probed once at a time and its names be
     try std.testing.expect(tracker.nextSessionFileProbe(2_500, 1_000) == null);
     try std.testing.expectEqual(@as(?u64, 300), tracker.nextSessionFileProbe(3_200, 1_000).?.offset);
 
-    var named: CompletionType = .{ .key = identity.key, .offset = 420 };
+    var named: Completion = .{ .key = identity.key, .offset = 420 };
     named.setTitle("Fix proxy");
     try std.testing.expect(tracker.finishSessionFileProbe(named, 3_300));
     try std.testing.expectEqualStrings("Fix proxy", tracker.durableTitle(identity.key).?.slice());
@@ -1247,7 +1247,7 @@ test "a reported session file is watched, probed once at a time and its names be
     try std.testing.expect(!tracker.finishSessionFileProbe(named, 3_500));
     try std.testing.expectEqualStrings("Release audit", tracker.durableTitle(identity.key).?.slice());
 
-    var cleared: CompletionType = .{ .key = identity.key, .offset = 420 };
+    var cleared: Completion = .{ .key = identity.key, .offset = 420 };
     cleared.setTitle("");
     try std.testing.expect(!tracker.finishSessionFileProbe(cleared, 3_600));
     try std.testing.expectEqualStrings("Release audit", tracker.durableTitle(identity.key).?.slice());

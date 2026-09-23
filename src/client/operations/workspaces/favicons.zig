@@ -6,10 +6,10 @@
 const favicon_outcome = @import("favicon_outcome.zig");
 const std = @import("std");
 const Client = @import("../../AttachedClient.zig");
-const CompletionType = @import("../../completion/FaviconCompletion.zig");
-const ImageType = @import("../../completion/FaviconImage.zig");
-const RequestType = @import("FaviconRequest.zig");
-const JobType = @import("../../completion/FaviconJob.zig");
+const FaviconCompletion = @import("../../completion/FaviconCompletion.zig");
+const FaviconImage = @import("../../completion/FaviconImage.zig");
+const FaviconRequest = @import("FaviconRequest.zig");
+const FaviconJob = @import("../../completion/FaviconJob.zig");
 
 /// Reserves the one lookup slot and returns the job the adapter runs. Null
 /// when another lookup is in flight or the cell cannot hold an image; the
@@ -19,8 +19,8 @@ const JobType = @import("../../completion/FaviconJob.zig");
 /// ```zig
 /// const job = request(client, .{ .workspace = id, .cwd = path, .cell = 32 }) orelse return;
 /// ```
-pub fn request(client: *Client, wanted: RequestType) ?JobType {
-    if (client.model.favicons.busy() or wanted.cell == 0 or wanted.cell > ImageType.max_side) {
+pub fn request(client: *Client, wanted: FaviconRequest) ?FaviconJob {
+    if (client.model.favicons.busy() or wanted.cell == 0 or wanted.cell > FaviconImage.max_side) {
         return null;
     }
 
@@ -36,7 +36,7 @@ pub fn request(client: *Client, wanted: RequestType) ?JobType {
 /// ```zig
 /// switch (complete(client, completion)) { .image => |image| place(image), else => {} }
 /// ```
-pub fn complete(client: *Client, completion: CompletionType) favicon_outcome.FaviconOutcome {
+pub fn complete(client: *Client, completion: FaviconCompletion) favicon_outcome.FaviconOutcome {
     const answered = client.model.favicons.finish(completion.execution_id);
     const result = completion.result catch |err| {
         if (answered and err != error.FaviconNotFound) {
@@ -63,8 +63,8 @@ pub fn cancel(client: *Client) void {
     client.model.favicons.reset();
 }
 
-pub const Request = RequestType;
-pub const Completion = CompletionType;
+pub const Request = FaviconRequest;
+pub const Completion = FaviconCompletion;
 
 test "one lookup runs at a time and stale and cancelled results are released" {
     var client: Client = undefined;
@@ -76,12 +76,12 @@ test "one lookup runs at a time and stale and cancelled results are released" {
     try std.testing.expect(request(&client, .{ .workspace = @enumFromInt(2), .cwd = "/b", .cell = 16 }) == null);
     try std.testing.expectEqualStrings("/a", first.cwdSlice());
 
-    const stale = try std.testing.allocator.create(ImageType);
+    const stale = try std.testing.allocator.create(FaviconImage);
     stale.* = .{ .side = 16 };
     try std.testing.expect(complete(&client, .{ .execution_id = @enumFromInt(99), .workspace = @enumFromInt(1), .result = stale }) == .stale);
     try std.testing.expect(client.model.favicons.busy());
 
-    const landed = try std.testing.allocator.create(ImageType);
+    const landed = try std.testing.allocator.create(FaviconImage);
     landed.* = .{ .side = 16 };
     const owned = complete(&client, .{ .execution_id = first.execution_id, .workspace = @enumFromInt(1), .result = landed });
     std.testing.allocator.destroy(owned.image);
@@ -89,7 +89,7 @@ test "one lookup runs at a time and stale and cancelled results are released" {
 
     const second = request(&client, .{ .workspace = @enumFromInt(2), .cwd = "/b", .cell = 16 }).?;
     cancel(&client);
-    const cancelled = try std.testing.allocator.create(ImageType);
+    const cancelled = try std.testing.allocator.create(FaviconImage);
     cancelled.* = .{ .side = 16 };
     try std.testing.expect(complete(&client, .{ .execution_id = second.execution_id, .workspace = @enumFromInt(2), .result = cancelled }) == .stale);
 

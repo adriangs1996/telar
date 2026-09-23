@@ -4,14 +4,14 @@ const core = @import("telar-core");
 const std = @import("std");
 const LaunchAttemptRequest = @import("LaunchAttemptRequest.zig");
 const model = @import("model.zig");
-const LaunchAttemptType = @import("LaunchAttempt.zig");
+const LaunchAttempt = @import("LaunchAttempt.zig");
 const SessionStartRequest = @import("SessionStartRequest.zig");
-const SessionStartedType = @import("SessionStarted.zig");
-const DefinitionType = @import("Definition.zig");
-const SessionTitleType = @import("SessionTitle.zig");
-const ImportBatchType = @import("ImportBatch.zig");
+const SessionStarted = @import("SessionStarted.zig");
+const Definition = @import("Definition.zig");
+const SessionTitle = @import("SessionTitle.zig");
+const ImportBatch = @import("ImportBatch.zig");
 const CommandRecord = @import("CommandRecord.zig");
-const CommandFinishedType = @import("CommandFinished.zig");
+const CommandFinished = @import("CommandFinished.zig");
 
 /// Copies a failed launch into one request whose ownership can cross the
 /// history channel. Partial allocation failure releases every prior copy.
@@ -20,7 +20,7 @@ const CommandFinishedType = @import("CommandFinished.zig");
 /// const request = try launchAttempt(gpa, io, input);
 /// ```
 pub fn launchAttempt(gpa: std.mem.Allocator, io: std.Io, input: LaunchAttemptRequest) !model.Request {
-    const value = try gpa.create(LaunchAttemptType);
+    const value = try gpa.create(LaunchAttempt);
     errdefer gpa.destroy(value);
 
     const workspace_path = try gpa.dupe(u8, input.workspace_path);
@@ -54,7 +54,7 @@ pub fn launchAttempt(gpa: std.mem.Allocator, io: std.Io, input: LaunchAttemptReq
 /// const request = try sessionStarted(gpa, input);
 /// ```
 pub fn sessionStarted(gpa: std.mem.Allocator, input: SessionStartRequest) !model.Request {
-    const value = try gpa.create(SessionStartedType);
+    const value = try gpa.create(SessionStarted);
     errdefer gpa.destroy(value);
 
     const workspace_path = try gpa.dupe(u8, input.workspace_path);
@@ -80,8 +80,8 @@ pub fn sessionStarted(gpa: std.mem.Allocator, input: SessionStartRequest) !model
 /// ```zig
 /// const request = try sessionTitle(definition);
 /// ```
-pub fn sessionTitle(definition: DefinitionType) !model.Request {
-    return .{ .session_title = try SessionTitleType.init(definition) };
+pub fn sessionTitle(definition: Definition) !model.Request {
+    return .{ .session_title = try SessionTitle.init(definition) };
 }
 
 /// Copies one decoded wire batch before its borrowed transport buffer is
@@ -91,7 +91,7 @@ pub fn sessionTitle(definition: DefinitionType) !model.Request {
 /// const request = try importBatch(gpa, view);
 /// ```
 pub fn importBatch(gpa: std.mem.Allocator, view: core.ImportHistoryView) !model.Request {
-    return .{ .import = try ImportBatchType.init(gpa, view) };
+    return .{ .import = try ImportBatch.init(gpa, view) };
 }
 
 /// Copies a completed command and every borrowed byte slice into one aligned
@@ -103,12 +103,12 @@ pub fn importBatch(gpa: std.mem.Allocator, view: core.ImportHistoryView) !model.
 pub fn commandFinished(gpa: std.mem.Allocator, record: CommandRecord) !model.Request {
     const context = record.context;
     const command = record.command;
-    const allocation_len = @sizeOf(CommandFinishedType) + command.bytes.len +
+    const allocation_len = @sizeOf(CommandFinished) + command.bytes.len +
         command.cwd.len + context.workspace_path.len + context.provider.len +
         context.tool_call_id.len + command.output.len;
-    const allocation = try gpa.alignedAlloc(u8, .of(CommandFinishedType), allocation_len);
-    const value: *CommandFinishedType = @ptrCast(allocation);
-    var cursor: usize = @sizeOf(CommandFinishedType);
+    const allocation = try gpa.alignedAlloc(u8, .of(CommandFinished), allocation_len);
+    const value: *CommandFinished = @ptrCast(allocation);
+    var cursor: usize = @sizeOf(CommandFinished);
 
     const command_copy = allocation[cursor..][0..command.bytes.len];
     cursor += command_copy.len;

@@ -1,6 +1,6 @@
-const PaneKeyType = @import("../../pane/PaneKey.zig");
-const StatsType = @import("../../media/Stats.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
+const Stats = @import("../../media/Stats.zig");
 const Completion = @This();
 
-pane: PaneKeyType,
-stats: StatsType,
+pane: PaneKey,
+stats: Stats,

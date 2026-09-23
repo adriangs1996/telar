@@ -3,12 +3,12 @@
 
 const id = @import("id.zig");
 const std = @import("std");
-const EnvironmentEntryType = @import("EnvironmentEntry.zig");
+const EnvironmentEntry = @import("EnvironmentEntry.zig");
 const types = @import("types.zig");
-const EncoderType = @import("Encoder.zig");
-const TerminalSizeType = @import("TerminalSize.zig");
-const DecoderType = @import("Decoder.zig");
-const TabLocationType = @import("TabLocation.zig");
+const Encoder = @import("Encoder.zig");
+const TerminalSize = @import("TerminalSize.zig");
+const Decoder = @import("Decoder.zig");
+const TabLocation = @import("TabLocation.zig");
 const GenericDerived = @import("GenericDerived.zig").Type;
 
 // -- validators -------------------------------------------------------------
@@ -34,7 +34,7 @@ pub fn validateBytes(bytes: []const u8, maximum: usize, empty_allowed: bool) !vo
     }
 }
 
-pub fn validateEnvironmentEntry(entry: EnvironmentEntryType) !void {
+pub fn validateEnvironmentEntry(entry: EnvironmentEntry) !void {
     try validateBytes(entry.name, std.math.maxInt(u16), false);
     try validateBytes(entry.value, std.math.maxInt(u32), true);
     if (std.mem.findScalar(u8, entry.name, '=') != null) {
@@ -61,15 +61,15 @@ pub fn validateTabLabel(label: []const u8, empty_allowed: bool) !void {
 
 // -- composite values -------------------------------------------------------
 
-pub fn encodeSize(encoder: *EncoderType, size: TerminalSizeType) !void {
+pub fn encodeSize(encoder: *Encoder, size: TerminalSize) !void {
     try encoder.writeInt(u16, size.cols);
     try encoder.writeInt(u16, size.rows);
     try encoder.writeInt(u16, size.cell_width_px);
     try encoder.writeInt(u16, size.cell_height_px);
 }
 
-pub fn decodeSize(decoder: *DecoderType) !TerminalSizeType {
-    const size = TerminalSizeType{
+pub fn decodeSize(decoder: *Decoder) !TerminalSize {
+    const size = TerminalSize{
         .cols = try decoder.readInt(u16),
         .rows = try decoder.readInt(u16),
         .cell_width_px = try decoder.readInt(u16),
@@ -79,7 +79,7 @@ pub fn decodeSize(decoder: *DecoderType) !TerminalSizeType {
     return size;
 }
 
-pub fn encodeTabLocation(encoder: *EncoderType, location: TabLocationType) !void {
+pub fn encodeTabLocation(encoder: *Encoder, location: TabLocation) !void {
     try encodeWorkspaceLocation(encoder, location.workspace);
     if (location.tab_id == .invalid) {
         return error.InvalidTabId;
@@ -87,7 +87,7 @@ pub fn encodeTabLocation(encoder: *EncoderType, location: TabLocationType) !void
     try encoder.writeInt(u64, id.raw(location.tab_id));
 }
 
-pub fn encodeWorkspaceLocation(encoder: *EncoderType, location: types.WorkspaceLocation) !void {
+pub fn encodeWorkspaceLocation(encoder: *Encoder, location: types.WorkspaceLocation) !void {
     switch (location) {
         .workspace => |workspace_id| {
             if (workspace_id == .invalid) {
@@ -106,14 +106,14 @@ pub fn encodeWorkspaceLocation(encoder: *EncoderType, location: types.WorkspaceL
     }
 }
 
-pub fn decodeTabLocation(decoder: *DecoderType) !TabLocationType {
+pub fn decodeTabLocation(decoder: *Decoder) !TabLocation {
     return .{
         .workspace = try decodeWorkspaceLocation(decoder),
         .tab_id = try id.tab(try decoder.readInt(u64)),
     };
 }
 
-pub fn decodeWorkspaceLocation(decoder: *DecoderType) !types.WorkspaceLocation {
+pub fn decodeWorkspaceLocation(decoder: *Decoder) !types.WorkspaceLocation {
     return switch (try decoder.readByte()) {
         0 => .{ .workspace = try id.workspace(try decoder.readInt(u64)) },
         1 => .{ .worktree = try id.worktree(try decoder.readInt(u64)) },
@@ -161,7 +161,7 @@ pub fn decodeFailureCode(value: u16) error{UnknownFailureCode}!types.FailureCode
 // Variable-length messages (views, iterators, raw tails) stay hand-written.
 
 pub fn encodeDerived(comptime tag: u8, buffer: []u8, message: anytype) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(tag);
     try GenericDerived(@TypeOf(message)).encode(&encoder, message);
     return encoder.finish();

@@ -1,17 +1,17 @@
 //! Bounded registry for the proxy capabilities issued to pane generations.
 
 const core = @import("telar-core");
-const CredentialType = @import("Credential.zig");
+const Credential = @import("Credential.zig");
 const std = @import("std");
 const identity = @import("identity.zig");
 const Registry = @import("Registry.zig");
 
-pub fn erase(slot: *?CredentialType, credential: *CredentialType) void {
+pub fn erase(slot: *?Credential, credential: *Credential) void {
     std.crypto.secureZero(u8, &credential.token);
     slot.* = null;
 }
 
-pub fn sameCredential(left: *const CredentialType, right: *const CredentialType) bool {
+pub fn sameCredential(left: *const Credential, right: *const Credential) bool {
     if (left.pane_id != right.pane_id or left.pane_generation != right.pane_generation) {
         return false;
     }
@@ -19,7 +19,7 @@ pub fn sameCredential(left: *const CredentialType, right: *const CredentialType)
     return std.crypto.timing_safe.eql([identity.token_bytes]u8, left.token, right.token);
 }
 
-fn testCredential(pane_id: u32, generation: u64, token: u8) !CredentialType {
+fn testCredential(pane_id: u32, generation: u64, token: u8) !Credential {
     return .{
         .pane_id = try core.pane(pane_id),
         .pane_generation = generation,

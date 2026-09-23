@@ -1,7 +1,7 @@
 const data = @import("model");
 const core = @import("telar-core");
-const GenerationType = @import("config/Generation.zig");
-const RegistryType = @import("plugins/Registry.zig");
+const Generation = @import("config/Generation.zig");
+const Registry = @import("plugins/Registry.zig");
 const std = @import("std");
 const Options = @This();
 
@@ -23,12 +23,12 @@ bars: data.BarLayout = .{},
 host_shared_memory: bool = false,
 input_escape_timeout_ns: u64 = data.keybind.default_escape_timeout_ns,
 input_sequence_timeout_ns: u64 = data.keybind.default_sequence_timeout_ns,
-lua_generation: ?*GenerationType = null,
+lua_generation: ?*Generation = null,
 config_path: ?[]const u8 = null,
 config_mtime_ns: i128 = 0,
 theme_locked: bool = false,
 sidebar_renderer_locked: bool = false,
-plugin_registry: ?*RegistryType = null,
+plugin_registry: ?*Registry = null,
 trust_store: ?*core.TrustStore = null,
 trust_path: ?[]const u8 = null,
 profile: ?[]const u8 = null,

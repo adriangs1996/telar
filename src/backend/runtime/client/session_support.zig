@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const Session = @import("Session.zig");
-const ClientKeyType = @import("../../history/ClientKey.zig");
+const ClientKey = @import("../../history/ClientKey.zig");
 const PendingPaneFocus = @import("PendingPaneFocus.zig");
 const std = @import("std");
 
@@ -11,7 +11,7 @@ pub const Role = enum { undecided, ui, control };
 test "focus exchange rejects duplicate reservations and stale UI completions" {
     var session: Session = undefined;
     session.pending_pane_focus = null;
-    const target: ClientKeyType = .{ .id = 2, .generation = 3 };
+    const target: ClientKey = .{ .id = 2, .generation = 3 };
     const pending: PendingPaneFocus = .{ .request_id = @enumFromInt(4), .pane_id = @enumFromInt(5), .pane_generation = 6, .target = target };
     try session.reserveFocus(pending);
     try std.testing.expectError(error.FocusAlreadyPending, session.reserveFocus(pending));

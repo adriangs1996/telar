@@ -1,8 +1,8 @@
-const TransformPipelineType = @import("../TransformPipeline.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
 const std = @import("std");
-const TransformContextType = @import("../TransformContext.zig");
+const TransformContext = @import("../TransformContext.zig");
 const Transform = @This();
 
-pipeline: *const TransformPipelineType,
+pipeline: *const TransformPipeline,
 io: std.Io,
-context: TransformContextType,
+context: TransformContext,

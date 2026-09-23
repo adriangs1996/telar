@@ -1,7 +1,7 @@
-const ServiceType = @import("../../plugins/Service.zig");
+const Service = @import("../../plugins/Service.zig");
 const Runtime = @This();
 
-service_value: ServiceType,
+service_value: Service,
 
 pub const InitOptions = @import("PluginsRuntimeInitOptions.zig");
 
@@ -20,7 +20,7 @@ pub fn init(runtime: *Runtime, options: InitOptions) !void {
 /// ```zig
 /// const service = runtime.service();
 /// ```
-pub fn service(runtime: *Runtime) *ServiceType {
+pub fn service(runtime: *Runtime) *Service {
     return &runtime.service_value;
 }
 

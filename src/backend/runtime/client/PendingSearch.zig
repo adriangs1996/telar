@@ -1,9 +1,9 @@
 const core = @import("telar-core");
-const PaneKeyType = @import("../../pane/PaneKey.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
 const Cursor = @import("../../pane/Cursor.zig");
 const PendingSearch = @This();
 
 request_id: core.RequestId,
-pane: PaneKeyType,
+pane: PaneKey,
 cursor: Cursor,
 deadline_ns: i128,

@@ -1,23 +1,23 @@
 const std = @import("std");
-const TransformPipelineType = @import("../TransformPipeline.zig");
-const SessionType = @import("../Session.zig");
-const ExchangeType = @import("Exchange.zig");
-const ProducerType = @import("../capture/Producer.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
+const Session = @import("../Session.zig");
+const Exchange = @import("Exchange.zig");
+const Producer = @import("../capture/Producer.zig");
 const Observer = @import("../provider/Observer.zig");
-const HalfType = @import("../capture/Half.zig");
+const Half = @import("../capture/Half.zig");
 const Http1Options = @import("Http1Options.zig");
 const http1 = @import("http1.zig");
-const StartOptionsType = @import("../capture/StartOptions.zig");
+const StartOptions = @import("../capture/StartOptions.zig");
 const Connection = @This();
 
 io: std.Io,
-transforms: *const TransformPipelineType,
-session: *SessionType,
-exchange: *ExchangeType,
-captures: ?*ProducerType,
+transforms: *const TransformPipeline,
+session: *Session,
+exchange: *Exchange,
+captures: ?*Producer,
 request: Observer = .{},
-request_capture: ?*HalfType = null,
-response_capture: ?*HalfType = null,
+request_capture: ?*Half = null,
+response_capture: ?*Half = null,
 
 /// Binds an intercepted TLS session to its exchange and immutable header
 /// transformation pipeline.
@@ -63,7 +63,7 @@ pub fn beginCapture(connection: *Connection) void {
     connection.discardCaptures();
     const producer = connection.captures orelse return;
     const started_at_ms = std.Io.Timestamp.now(connection.io, .real).toMilliseconds();
-    const base: StartOptionsType = .{
+    const base: StartOptions = .{
         .credential = connection.exchange.credential,
         .dialect = connection.exchange.dialect,
         .protocol = connection.exchange.protocol,

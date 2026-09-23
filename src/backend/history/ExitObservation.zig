@@ -1,5 +1,5 @@
-const ClockType = @import("Clock.zig");
+const Clock = @import("Clock.zig");
 const ExitObservation = @This();
 
-clock: ClockType,
+clock: Clock,
 exit_code: i32,

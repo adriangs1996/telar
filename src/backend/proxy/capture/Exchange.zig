@@ -1,8 +1,8 @@
-const HalfType = @import("Half.zig");
+const Half = @import("Half.zig");
 const Exchange = @This();
 
-request: ?*HalfType = null,
-response: ?*HalfType = null,
+request: ?*Half = null,
+response: ?*Half = null,
 
 /// Erases and frees both owned halves that are present.
 ///

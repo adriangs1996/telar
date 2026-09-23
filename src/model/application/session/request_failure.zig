@@ -2,14 +2,14 @@
 
 const core = @import("telar-core");
 const Command = @import("Command.zig");
-const InputType = @import("../../notifications/NotificationInput.zig");
+const NotificationInput = @import("../../notifications/NotificationInput.zig");
 const std = @import("std");
 const client_requests = @import("../../connection/requests.zig");
 const notifications = @import("../../notifications/notifications.zig");
 
 pub const Outcome = @import("../../types/RequestFailureOutcome.zig").RequestFailureOutcome;
 
-pub fn notification(command: Command) InputType {
+pub fn notification(command: Command) NotificationInput {
     return .{
         .level = .failure,
         .title = failureTitle(command.continuation),

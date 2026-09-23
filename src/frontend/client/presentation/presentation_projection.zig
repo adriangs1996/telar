@@ -3,7 +3,7 @@
 
 const client_module = @import("telar-client");
 const TerminalClient = @import("../TerminalClient.zig");
-const ResourcesType = @import("Resources.zig");
+const Resources = @import("Resources.zig");
 
 /// Captures the bounded revisions observed by the presenter after one client
 /// event without exposing the client aggregate.
@@ -52,7 +52,7 @@ fn presentationIngress(terminal: *const TerminalClient) client_module.Presentati
 /// ```zig
 /// const target = resources(terminal);
 /// ```
-pub fn resources(terminal: *TerminalClient) ResourcesType {
+pub fn resources(terminal: *TerminalClient) Resources {
     return .{
         .view = &terminal.view,
         .graphics_store = &terminal.graphics_store,

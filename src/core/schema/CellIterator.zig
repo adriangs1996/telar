@@ -1,14 +1,14 @@
-const DecoderType = @import("Decoder.zig");
-const StyleType = @import("../ui/Style.zig");
-const CellType = @import("../ui/Cell.zig");
+const Decoder = @import("Decoder.zig");
+const Style = @import("../ui/Style.zig");
+const Cell = @import("../ui/Cell.zig");
 const frame_support = @import("frame_support.zig");
 const CellIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u32,
-style: ?StyleType = null,
+style: ?Style = null,
 
-pub fn next(iterator: *CellIterator) !?CellType {
+pub fn next(iterator: *CellIterator) !?Cell {
     if (iterator.remaining == 0) {
         return null;
     }

@@ -1,6 +1,6 @@
 const core = @import("telar-core");
 const Drawing = @import("Drawing.zig");
-const TextType = @import("Text.zig");
+const Text = @import("Text.zig");
 const Wrapped = @This();
 
 draw: *Drawing,
@@ -8,7 +8,7 @@ area: core.Rect,
 row: u16 = 0,
 skip: u32,
 
-pub fn text(wrapped: *Wrapped, value: TextType) void {
+pub fn text(wrapped: *Wrapped, value: Text) void {
     if (wrapped.area.w == 0 or wrapped.row >= wrapped.area.h) {
         return;
     }

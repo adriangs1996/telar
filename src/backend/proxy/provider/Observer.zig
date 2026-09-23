@@ -1,11 +1,11 @@
 const types = @import("../../agent/types.zig");
-const DecoderType = @import("Decoder.zig");
+const Decoder = @import("Decoder.zig");
 const request_support = @import("request_support.zig");
 /// Owns the body classifier for one candidate provider request.
 const Observer = @This();
 
 dialect: types.ApiDialect = .unknown,
-claude_decoder: DecoderType = .{},
+claude_decoder: Decoder = .{},
 active: bool = false,
 
 /// Initializes one observer at its final memory address.

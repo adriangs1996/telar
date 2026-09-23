@@ -1,8 +1,8 @@
 const core = @import("telar-core");
 const kitty = @import("kitty.zig");
-const CompressionSchedulerType = @import("CompressionScheduler.zig");
-const CompressionType = @import("Compression.zig");
-const PartialTransmissionType = @import("PartialTransmission.zig");
+const CompressionScheduler = @import("CompressionScheduler.zig");
+const Compression = @import("Compression.zig");
+const PartialTransmission = @import("PartialTransmission.zig");
 const State = @This();
 
 delete_queue: [core.max_placements_per_pane * 2]kitty.Delete = undefined,
@@ -12,12 +12,12 @@ delete_overflow: bool = false,
 next_image_id: u32 = 1,
 next_placement_id: u32 = 1,
 host_zlib: bool = false,
-compression_scheduler: ?CompressionSchedulerType = null,
-pending_compression: ?*CompressionType = null,
+compression_scheduler: ?CompressionScheduler = null,
+pending_compression: ?*Compression = null,
 orphan_compression: bool = false,
 compression_input: []u8 = &.{},
 pass_counter: u64 = 0,
 shared_expiries: u8 = 0,
 clock_ns: u64 = 0,
 retire_latency: core.Timing = .{},
-partial: ?PartialTransmissionType = null,
+partial: ?PartialTransmission = null,

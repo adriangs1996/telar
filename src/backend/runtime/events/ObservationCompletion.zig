@@ -1,8 +1,8 @@
-const PaneKeyType = @import("../../pane/PaneKey.zig");
-const StatsType = @import("../../history/Stats.zig");
-const ProbeType = @import("../../process/Probe.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
+const Stats = @import("../../history/Stats.zig");
+const Probe = @import("../../process/Probe.zig");
 const Completion = @This();
 
-pane: PaneKeyType,
-stats: StatsType,
-process_probe: ProbeType,
+pane: PaneKey,
+stats: Stats,
+process_probe: Probe,

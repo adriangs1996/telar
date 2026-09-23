@@ -8,10 +8,10 @@ const middleware = @import("middleware.zig");
 const types = @import("../agent/types.zig");
 const buffer_support = @import("capture/buffer_support.zig");
 const GenericLifecyclePort = @import("GenericLifecyclePort.zig").Type;
-const ServiceType = @import("service/Service.zig");
+const Service = @import("service/Service.zig");
 const service_support = @import("service/service_support.zig");
 const GenericLifecycle = @import("GenericLifecycle.zig").Type;
-const OverrideType = @import("../pty/Override.zig");
+const Override = @import("../pty/Override.zig");
 const std = @import("std");
 const ProxyTestFiles = @import("ProxyTestFiles.zig");
 const connection_admission = @import("connection_admission.zig");
@@ -49,14 +49,14 @@ pub const PaneEnvironment = @import("PaneEnvironment.zig");
 
 pub const PaneEnvironmentOptions = @import("PaneEnvironmentOptions.zig");
 
-const lifecycle_port: GenericLifecyclePort(ServiceType, service_support.Worker) = .{
-    .start = ServiceType.start,
-    .cancel = ServiceType.cancel,
-    .close = ServiceType.close,
-    .destroy = ServiceType.destroy,
+const lifecycle_port: GenericLifecyclePort(Service, service_support.Worker) = .{
+    .start = Service.start,
+    .cancel = Service.cancel,
+    .close = Service.close,
+    .destroy = Service.destroy,
 };
 
-pub const ServiceLifecycle = GenericLifecycle(ServiceType, service_support.Worker, lifecycle_port);
+pub const ServiceLifecycle = GenericLifecycle(Service, service_support.Worker, lifecycle_port);
 
 pub const Proxy = @import("Proxy.zig");
 
@@ -66,7 +66,7 @@ pub const environment_override_count = 11;
 /// own overrides.
 pub const max_pane_overrides = 6;
 
-pub fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8, bundle_path: []const u8) [environment_override_count]OverrideType {
+pub fn environmentOverrides(proxy_url: []const u8, certificate_path: []const u8, bundle_path: []const u8) [environment_override_count]Override {
     return .{
         .{ .name = "HTTPS_PROXY", .value = proxy_url },
         .{ .name = "https_proxy", .value = proxy_url },

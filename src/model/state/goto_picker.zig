@@ -9,7 +9,7 @@ const tab_label = @import("../workspace/tab_label.zig");
 const Results = @import("Results.zig");
 const Scorer = @import("Scorer.zig");
 const std = @import("std");
-const SnapshotType = @import("../agents/AgentSnapshot.zig");
+const AgentSnapshot = @import("../agents/AgentSnapshot.zig");
 const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
 
 pub const max_results = 64;
@@ -113,7 +113,7 @@ fn insert(results: *Results, item: Item, item_score: u32) void {
 
 test "collect keeps matches ordered by score with a stable bound" {
     var results: Results = .{};
-    var snapshot: SnapshotType = .{};
+    var snapshot: AgentSnapshot = .{};
     var workspaces: WorkspaceListSnapshot = .{};
     const sources: Sources = .{
         .agents = &snapshot,

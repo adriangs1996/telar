@@ -1,10 +1,10 @@
 //! Connection-level messages: runtime lifecycle, subscription to retained
 //! runtime state, generic request outcomes and host status.
 
-const TerminalColorsType = @import("../TerminalColors.zig");
-const EncoderType = @import("../Encoder.zig");
+const TerminalColors = @import("../TerminalColors.zig");
+const Encoder = @import("../Encoder.zig");
 const tags = @import("tags.zig");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const RequestRuntimeState = @import("RequestRuntimeState.zig");
 const RequestFailed = @import("RequestFailed.zig");
 const codec = @import("../codec.zig");
@@ -14,8 +14,8 @@ const ProxyStatus = @import("ProxyStatus.zig");
 const SystemMetrics = @import("SystemMetrics.zig");
 
 /// Example: `const bytes = try encodeConfigureTerminalColors(&buffer, colors);`.
-pub fn encodeConfigureTerminalColors(buffer: []u8, colors: TerminalColorsType) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+pub fn encodeConfigureTerminalColors(buffer: []u8, colors: TerminalColors) ![]const u8 {
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.configure_terminal_colors));
 
     for ([_]?[3]u8{ colors.foreground, colors.background }) |color| {
@@ -36,8 +36,8 @@ pub fn encodeConfigureTerminalColors(buffer: []u8, colors: TerminalColorsType) !
 }
 
 /// Example: `const colors = try decodeConfigureTerminalColors(&decoder);`.
-pub fn decodeConfigureTerminalColors(decoder: *DecoderType) !TerminalColorsType {
-    var colors: TerminalColorsType = .{};
+pub fn decodeConfigureTerminalColors(decoder: *Decoder) !TerminalColors {
+    var colors: TerminalColors = .{};
     for ([_]*?[3]u8{ &colors.foreground, &colors.background }) |color| {
         if (try decoder.readBool()) {
             color.* = (try decoder.readBytes(3))[0..3].*;
@@ -56,7 +56,7 @@ pub fn decodeConfigureTerminalColors(decoder: *DecoderType) !TerminalColorsType 
 }
 
 pub fn encodeRuntimeStop(buffer: []u8) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.runtime_stop));
     return encoder.finish();
 }
@@ -70,14 +70,14 @@ pub fn encodeRuntimeStop(buffer: []u8) ![]const u8 {
 /// ```
 pub fn encodeRequestRuntimeState(buffer: []u8, message: RequestRuntimeState) ![]const u8 {
     try message.validateWire();
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.request_runtime_state));
     try encoder.writeInt(u64, @intFromEnum(message.client_identity));
     try encoder.writeByte(@intFromBool(message.interactive));
     return encoder.finish();
 }
 
-pub fn decodeRequestRuntimeState(decoder: *DecoderType) !RequestRuntimeState {
+pub fn decodeRequestRuntimeState(decoder: *Decoder) !RequestRuntimeState {
     const request: RequestRuntimeState = .{
         .client_identity = @enumFromInt(try decoder.readInt(u64)),
         .interactive = try decoder.readBool(),
@@ -87,14 +87,14 @@ pub fn decodeRequestRuntimeState(decoder: *DecoderType) !RequestRuntimeState {
 }
 
 pub fn encodeRuntimeStopping(buffer: []u8) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.runtime_stopping));
     return encoder.finish();
 }
 
 pub fn encodeRequestFailed(buffer: []u8, message: RequestFailed) ![]const u8 {
     try codec.validateErrorMessage(message.message);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.request_failed));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u16, @intFromEnum(message.code));
@@ -102,7 +102,7 @@ pub fn encodeRequestFailed(buffer: []u8, message: RequestFailed) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeRequestFailed(decoder: *DecoderType) !RequestFailed {
+pub fn decodeRequestFailed(decoder: *Decoder) !RequestFailed {
     const request_id: id.RequestId = @enumFromInt(try decoder.readInt(u64));
     const code = try codec.decodeFailureCode(try decoder.readInt(u16));
     const message = try decoder.readBytes(decoder.bytes.len - decoder.index);

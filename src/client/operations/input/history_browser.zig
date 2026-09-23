@@ -2,7 +2,7 @@
 //! Operations own wire decoding and delivery; bounded model APIs own storage.
 
 const data = @import("model");
-const ReadType = @import("Read.zig");
+const Read = @import("Read.zig");
 const std = @import("std");
 
 pub fn begin(model: *data.ClientModel, options: struct { enter_runs: bool, match_fuzzy: bool }) void {
@@ -67,7 +67,7 @@ pub fn navigate(model: *data.ClientModel) bool {
     return true;
 }
 
-pub fn nextRead(model: *data.ClientModel) ?ReadType {
+pub fn nextRead(model: *data.ClientModel) ?Read {
     const palette = &model.history_palette;
     const prompt = model.name_prompt.currentConst();
     if (prompt == null or prompt.?.target() != .history or palette.phase != .ready or palette.len == 0) {
@@ -102,7 +102,7 @@ pub fn scrollInspection(model: *data.ClientModel, lines: i16) void {
     }
 }
 
-pub fn requestRead(model: *data.ClientModel, request_id: u64, read: ReadType) bool {
+pub fn requestRead(model: *data.ClientModel, request_id: u64, read: Read) bool {
     const palette = &model.history_palette;
     if (!palette.track(request_id)) {
         return false;

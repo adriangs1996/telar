@@ -6,8 +6,8 @@ const ParkingMutex = @import("ParkingMutex.zig");
 const vt = @import("ghostty-vt");
 const std = @import("std");
 const wuffs = @import("wuffs");
-const GraphicsBudgetType = @import("GraphicsBudget.zig");
-const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
+const GraphicsBudget = @import("GraphicsBudget.zig");
+const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 
 var install_mutex: ParkingMutex = .{};
 var installed = false;
@@ -88,8 +88,8 @@ test "PNG decoder charges workspace and rejects oversized pixels before allocati
     const previous_log_level = std.testing.log_level;
     std.testing.log_level = .err;
     defer std.testing.log_level = previous_log_level;
-    var budget = GraphicsBudgetType.init(1024 * 1024);
-    var tracked = PaneMediaAllocatorType.init(std.testing.allocator, &budget, budget.limit);
+    var budget = GraphicsBudget.init(1024 * 1024);
+    var tracked = PaneMediaAllocator.init(std.testing.allocator, &budget, budget.limit);
 
     try expectDecoded(tracked.allocator());
     try std.testing.expectEqual(@as(usize, 0), budget.used);

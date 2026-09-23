@@ -1,16 +1,16 @@
 const core = @import("telar-core");
-const GraphicsLimitsType = @import("../media/GraphicsLimits.zig");
+const GraphicsLimits = @import("../media/GraphicsLimits.zig");
 const std = @import("std");
 const Config = @import("../proxy/Config.zig");
 const ServiceSpec = @import("../plugins/ServiceSpec.zig");
 const AgentDescriptionOptions = @import("AgentDescriptionOptions.zig");
 const OptionsType = @import("../engine/Options.zig");
 const IngestTestGate = @import("IngestTestGate.zig");
-const LaunchTestFaultType = @import("LaunchTestFault.zig");
+const LaunchTestFault = @import("LaunchTestFault.zig");
 const Options = @This();
 
 endpoint: []const u8,
-graphics: GraphicsLimitsType = .{},
+graphics: GraphicsLimits = .{},
 environment: std.process.Environ,
 /// SQLite database for durable history; the default keeps it in memory.
 history_path: [:0]const u8 = ":memory:",
@@ -37,4 +37,4 @@ stop: ?*std.Io.Queue(u8) = null,
 /// Test seam: holds a pane's ingest actor open.
 ingest_gate: ?*IngestTestGate = null,
 /// Test seam: fails one pane launch at a selected post-spawn phase.
-launch_fault: ?*LaunchTestFaultType = null,
+launch_fault: ?*LaunchTestFault = null,

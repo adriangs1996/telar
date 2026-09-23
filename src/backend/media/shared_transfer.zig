@@ -13,7 +13,7 @@ const builtin = @import("builtin");
 const std = @import("std");
 const ChildObject = @import("ChildObject.zig");
 const PreparedTransfer = @import("PreparedTransfer.zig");
-const GraphicsBudgetType = @import("GraphicsBudget.zig");
+const GraphicsBudget = @import("GraphicsBudget.zig");
 const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 const PreparedTransfers = @import("PreparedTransfers.zig");
 const TestAlive = @import("TestAlive.zig");
@@ -306,7 +306,7 @@ test "a newer generation replaces the parked object of its image" {
     if (comptime !shm_supported) {
         return error.SkipZigTest;
     }
-    var budget = GraphicsBudgetType.init(1024);
+    var budget = GraphicsBudget.init(1024);
     var media = PaneMediaAllocator.init(std.testing.allocator, &budget, 1024);
     var prepared: PreparedTransfers = .{};
     defer prepared.discardAll(&media);
@@ -337,7 +337,7 @@ test "parking is bounded and releases what the emulator dropped" {
     if (comptime !shm_supported) {
         return error.SkipZigTest;
     }
-    var budget = GraphicsBudgetType.init(1024);
+    var budget = GraphicsBudget.init(1024);
     var media = PaneMediaAllocator.init(std.testing.allocator, &budget, 1024);
     var prepared: PreparedTransfers = .{};
     defer prepared.discardAll(&media);

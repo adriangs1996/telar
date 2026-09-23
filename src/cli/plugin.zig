@@ -4,7 +4,7 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
 const PluginOptions = @import("arguments/PluginOptions.zig");
-const PluginWorkerOptionsType = @import("arguments/PluginWorkerOptions.zig");
+const PluginWorkerOptions = @import("arguments/PluginWorkerOptions.zig");
 const TestEnvironment = @import("TestEnvironment.zig");
 
 /// Inspects one package and performs the requested read-only, installation or
@@ -28,7 +28,7 @@ pub fn run(init: std.process.Init, options: PluginOptions) !void {
 /// ```zig
 /// try plugin.runWorker(process_init, options);
 /// ```
-pub fn runWorker(init: std.process.Init, options: PluginWorkerOptionsType) !void {
+pub fn runWorker(init: std.process.Init, options: PluginWorkerOptions) !void {
     return client.runPluginWorker(init, .{
         .entry_path = std.mem.span(options.entry),
         .action_name = std.mem.span(options.action),

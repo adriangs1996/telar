@@ -17,9 +17,9 @@ const transform = @import("transform.zig");
 const std = @import("std");
 const FakeSession = @import("FakeSession.zig");
 const IgnoreTestObserver = @import("IgnoreTestObserver.zig");
-const TransformationType = @import("../Transformation.zig");
+const Transformation = @import("../Transformation.zig");
 const middleware = @import("../middleware.zig");
-const TransformPipelineType = @import("../TransformPipeline.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
 const ConnectionIntegration = @import("ConnectionIntegration.zig");
 
 pub const max_head_bytes = head.max_bytes;
@@ -184,13 +184,13 @@ test "request head is forwarded before its body is consumed" {
 
 test "transformed head selection is the only head written" {
     const AddHeader = struct {
-        fn apply(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
+        fn apply(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
             transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = AddHeader.apply });
     const request = "POST /upload HTTP/1.1\r\nHost: example.test\r\nContent-Length: 4\r\n\r\ndata";
     var fake: FakeSession = .{ .child_input = request };
@@ -214,12 +214,12 @@ test "transformed head selection is the only head written" {
 
 test "a preserved transformation forwards the original head exactly" {
     const NoEffects = struct {
-        fn apply(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+        fn apply(_: *anyopaque, _: Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = NoEffects.apply });
     const request = "GET / HTTP/1.1\r\nhOsT:\texample.test\r\nX-Duplicate: one\r\nX-Duplicate: two\r\n\r\n";
     var fake: FakeSession = .{ .child_input = request };

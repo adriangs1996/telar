@@ -1,9 +1,9 @@
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const TabDescriptorView = @import("TabDescriptorView.zig");
 const id = @import("../id.zig");
 const TabDescriptorIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 
 pub fn next(iterator: *TabDescriptorIterator) !?TabDescriptorView {

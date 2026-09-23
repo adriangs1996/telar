@@ -1,5 +1,5 @@
 const Command = @import("PointerCommand.zig");
-const TargetType = @import("LinkTarget.zig");
+const LinkTarget = @import("LinkTarget.zig");
 const Outcome = @import("Outcome.zig");
 const Pointer = @This();
 
@@ -10,7 +10,7 @@ owned: bool = false,
 /// ```zig
 /// const outcome = pointer.handle(command, target);
 /// ```
-pub fn handle(self: *Pointer, command: Command, target: ?TargetType) Outcome {
+pub fn handle(self: *Pointer, command: Command, target: ?LinkTarget) Outcome {
     if (self.owned) {
         if (command.kind == .release) {
             self.owned = false;

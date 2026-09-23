@@ -1,8 +1,8 @@
-const PointType = @import("Point.zig");
-const StyleType = @import("Style.zig");
+const Point = @import("Point.zig");
+const Style = @import("Style.zig");
 const TruncatedText = @This();
 
-point: PointType,
+point: Point,
 text: []const u8,
 max_width: u16,
-style: StyleType = .{},
+style: Style = .{},

@@ -1,6 +1,6 @@
-const ConfigurationType = @import("../../bars/BarConfiguration.zig");
+const BarConfiguration = @import("../../bars/BarConfiguration.zig");
 const Synchronization = @This();
 
 generation: u64,
-configuration: ?*const ConfigurationType,
+configuration: ?*const BarConfiguration,
 now_ns: u64,

@@ -1,9 +1,9 @@
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const ImportEntry = @import("ImportEntry.zig");
 const history = @import("history.zig");
 const ImportEntryIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 
 pub fn next(iterator: *ImportEntryIterator) !?ImportEntry {

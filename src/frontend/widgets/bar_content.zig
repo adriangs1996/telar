@@ -3,10 +3,10 @@
 const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const BarContentInput = @import("BarContentInput.zig");
 
-pub fn render(context: *ContextType, area: core.Rect, input: BarContentInput) void {
+pub fn render(context: *Context, area: core.Rect, input: BarContentInput) void {
     if (area.isEmpty()) {
         return;
     }
@@ -31,7 +31,7 @@ pub fn render(context: *ContextType, area: core.Rect, input: BarContentInput) vo
     }
 }
 
-fn resolveStyle(context: *const ContextType, configured: data.Style) core.Style {
+fn resolveStyle(context: *const Context, configured: data.Style) core.Style {
     return .{
         .fg = if (configured.foreground) |color| resolveColor(context, color) else context.palette.subtext0,
         .bg = if (configured.background) |color| resolveColor(context, color) else context.palette.panel_bg,
@@ -45,7 +45,7 @@ fn resolveStyle(context: *const ContextType, configured: data.Style) core.Style 
     };
 }
 
-fn resolveColor(context: *const ContextType, color: data.bar_values.Color) core.Color {
+fn resolveColor(context: *const Context, color: data.bar_values.Color) core.Color {
     return switch (color) {
         .value => |value| value,
         .palette => |role| switch (role) {

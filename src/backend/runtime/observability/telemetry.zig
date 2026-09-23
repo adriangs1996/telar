@@ -5,7 +5,7 @@ const TelemetrySample = @import("TelemetrySample.zig");
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const State = @import("State.zig");
-const ServiceType = @import("../../history/Service.zig");
+const Service = @import("../../history/Service.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const RuntimeMetrics = @import("RuntimeMetrics.zig");
 
@@ -456,7 +456,7 @@ test "a failed telemetry write releases the buffer before retiring its sink" {
 
 test "runtime telemetry reports retained memory domains" {
     const io = std.testing.io;
-    var service = try ServiceType.init(std.testing.allocator, .{ .database_path = ":memory:" });
+    var service = try Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
     defer service.deinit(io);
     var heap = core.Heap.init(std.testing.allocator);
     {

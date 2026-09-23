@@ -14,9 +14,9 @@ const WaitArgs = @import("WaitArgs.zig");
 const Adoption = @import("Adoption.zig");
 const ResolveArgs = @import("ResolveArgs.zig");
 const RejectContext = @import("RejectContext.zig");
-const GenerationType = @import("../config/Generation.zig");
+const Generation = @import("../config/Generation.zig");
 const Partial = @import("Partial.zig");
-const RegistryType = @import("../plugins/Registry.zig");
+const Registry = @import("../plugins/Registry.zig");
 const std = @import("std");
 const Job = @import("../execution/Job.zig").Job;
 
@@ -122,7 +122,7 @@ pub fn wait(args: WaitArgs) anyerror!ConfigReload {
         return .{ .unchanged = mtime_ns };
     }
     var diagnostic: data.Diagnostic = .{};
-    const generation = GenerationType.loadFile(.{
+    const generation = Generation.loadFile(.{
         .gpa = args.gpa,
         .io = args.io,
         .diagnostic = &diagnostic,
@@ -144,13 +144,13 @@ pub fn wait(args: WaitArgs) anyerror!ConfigReload {
     };
     args.orphans.trust = trust;
     partial.trust = trust;
-    const registry = args.gpa.create(RegistryType) catch {
+    const registry = args.gpa.create(Registry) catch {
         partial.abandon(args.gpa, args.orphans);
         diagnostic.set("cannot allocate reloaded plugin registry", .{});
         return .{ .failed = .{ .diagnostic = diagnostic, .mtime_ns = mtime_ns } };
     };
     partial.registry = registry;
-    registry.* = RegistryType.loadWithTrust(
+    registry.* = Registry.loadWithTrust(
         .{
             .gpa = args.gpa,
             .io = args.io,
@@ -216,11 +216,11 @@ test "a rejected load is freed once and reports why" {
     // the three objects and clears the orphan slots in one place.
     var state: ConfigReloadState = .{ .mtime_ns = 0 };
     const gpa = std.testing.allocator;
-    const registry = try gpa.create(RegistryType);
+    const registry = try gpa.create(Registry);
     const trust = try gpa.create(core.TrustStore);
     trust.* = .{};
     var diagnostic: data.Diagnostic = .{};
-    const generation = try GenerationType.loadSource(.{
+    const generation = try Generation.loadSource(.{
         .gpa = gpa,
         .io = std.testing.io,
         .diagnostic = &diagnostic,
@@ -262,7 +262,7 @@ test "forced reload survives scheduling failure and is consumed by a successful 
     };
     var capture: Capture = .{};
     var state: ConfigReloadState = .{ .mtime_ns = 0, .force_next = true };
-    const args: ScheduleArgs = .{ .io = std.testing.io, .gpa = std.testing.allocator, .workers = .{ .context = &capture, .start_fn = Capture.start }, .path = "/config.lua", .profile = null, .trust_path = "/trust.json", .current_generation = @ptrFromInt(@alignOf(GenerationType)), .current_registry = @ptrFromInt(@alignOf(RegistryType)) };
+    const args: ScheduleArgs = .{ .io = std.testing.io, .gpa = std.testing.allocator, .workers = .{ .context = &capture, .start_fn = Capture.start }, .path = "/config.lua", .profile = null, .trust_path = "/trust.json", .current_generation = @ptrFromInt(@alignOf(Generation)), .current_registry = @ptrFromInt(@alignOf(Registry)) };
     try std.testing.expectError(error.WatcherBusy, schedule(&state, args));
     try std.testing.expect(state.force_next);
     capture.fail = false;

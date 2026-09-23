@@ -6,24 +6,24 @@ const GenericExchange = @import("../http/GenericExchange.zig").Type;
 const GenericPort = @import("../http/GenericPort.zig").Type;
 const GenericConnection = @import("../http/GenericConnection.zig").Type;
 const std = @import("std");
-const RequestHeadType = @import("../http/RequestHead.zig");
+const RequestHead = @import("../http/RequestHead.zig");
 const http = @import("../http/http.zig");
 const connection_module = @import("../http/connection.zig");
 const types = @import("../http/types.zig");
 const RequestBodyObserver = @import("RequestBodyObserver.zig");
 const exchange_mod = @import("exchange_support.zig");
-const HalfType = @import("../capture/Half.zig");
+const Half = @import("../capture/Half.zig");
 const buffer_support = @import("../capture/buffer_support.zig");
-const ResponseHeadType = @import("../http/ResponseHead.zig");
+const ResponseHead = @import("../http/ResponseHead.zig");
 const ResponseBodyObserver = @import("ResponseBodyObserver.zig");
-const HeadType = @import("../http/Head.zig");
+const Head = @import("../http/Head.zig");
 const request_support = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
 const UpgradeRoute = @import("UpgradeRoute.zig");
 const Http1TestHarness = @import("Http1TestHarness.zig");
 const FakeSessionType = @import("../http/FakeSession.zig");
-const ProducerType = @import("../capture/Producer.zig");
-const ConfigType = @import("../capture/Config.zig");
+const Producer = @import("../capture/Producer.zig");
+const Config = @import("../capture/Config.zig");
 const Http1CaptureGate = @import("Http1CaptureGate.zig");
 const Observer = @import("../provider/Observer.zig");
 
@@ -50,7 +50,7 @@ fn connectionIo(connection: *Http1Connection) std.Io {
     return connection.io;
 }
 
-fn relayRequestHead(connection: *Http1Connection) ?RequestHeadType {
+fn relayRequestHead(connection: *Http1Connection) ?RequestHead {
     connection.request.deinit();
     connection.beginCapture();
 
@@ -79,7 +79,7 @@ fn relayRequestHead(connection: *Http1Connection) ?RequestHeadType {
     };
 }
 
-fn relayExchange(connection: *Http1Connection, request: RequestHeadType) connection_module.ExchangeOutcome {
+fn relayExchange(connection: *Http1Connection, request: RequestHead) connection_module.ExchangeOutcome {
     return RelayExchange.execute(connection, request);
 }
 
@@ -127,7 +127,7 @@ fn finishCapture(connection: *Http1Connection, side: buffer_support.Side, outcom
     });
 }
 
-fn relayResponse(connection: *Http1Connection, request: RequestHeadType) ?ResponseHeadType {
+fn relayResponse(connection: *Http1Connection, request: RequestHead) ?ResponseHead {
     while (true) {
         const head = http.relayHeadTransformed(connection.session, .{
             .route = .{
@@ -178,7 +178,7 @@ fn relayResponse(connection: *Http1Connection, request: RequestHeadType) ?Respon
     }
 }
 
-fn semanticResponse(head: HeadType) ResponseHeadType {
+fn semanticResponse(head: Head) ResponseHead {
     return .{
         .status_code = head.message.status_code,
         .body = head.framing,
@@ -192,7 +192,7 @@ fn semanticResponse(head: HeadType) ResponseHeadType {
     };
 }
 
-fn publishRequest(connection: *Http1Connection, request: RequestHeadType) void {
+fn publishRequest(connection: *Http1Connection, request: RequestHead) void {
     if (shouldClassifyRequest(connection, request)) {
         connection.request.init(connection.exchange.dialect);
         return;
@@ -208,11 +208,11 @@ fn publishRequest(connection: *Http1Connection, request: RequestHeadType) void {
     }
 }
 
-fn shouldClassifyRequest(connection: *const Http1Connection, request: RequestHeadType) bool {
+fn shouldClassifyRequest(connection: *const Http1Connection, request: RequestHead) bool {
     return connection.exchange.dialect == .anthropic_messages and request.classification == .inference and request.body.hasBody();
 }
 
-fn publishResponse(connection: *Http1Connection, response: ResponseHeadType) void {
+fn publishResponse(connection: *Http1Connection, response: ResponseHead) void {
     connection.exchange.status_code = response.status_code;
     connection.exchange.publish(responsePhase(response.status_code), 0);
     finishCapture(connection, .response, if (response.status_code >= 400) .failed else .finished);
@@ -233,7 +233,7 @@ fn upgrade(connection: *Http1Connection) void {
     relayUpgrade(connection);
 }
 
-fn shouldInspectResponse(request: RequestHeadType, head: HeadType) bool {
+fn shouldInspectResponse(request: RequestHead, head: Head) bool {
     return request.classification == .inference and
         head.sse_body and
         head.message.status_code >= 200 and head.message.status_code < 300;
@@ -288,7 +288,7 @@ test "Claude request bodies refine route candidates before publication" {
         .exchange = &harness.exchange,
     });
     defer connection.request.deinit();
-    const candidate: RequestHeadType = .{
+    const candidate: RequestHead = .{
         .classification = .inference,
         .body = .{ .content_length = claude_startup_request.len },
         .response_context = .normal,
@@ -327,12 +327,12 @@ test "Claude request bodies refine route candidates before publication" {
 }
 
 test "only successful inference SSE responses are inspected" {
-    const request: RequestHeadType = .{
+    const request: RequestHead = .{
         .classification = .inference,
         .body = .none,
         .response_context = .normal,
     };
-    const successful: HeadType = .{
+    const successful: Head = .{
         .message = .{ .status_code = 200 },
         .framing = .none,
         .classification = .auxiliary,
@@ -380,7 +380,7 @@ test "Claude SSE completion is published after forwarded response activity" {
         .response_to_head = false,
         .dialect = harness.exchange.dialect,
     }).?;
-    const request: RequestHeadType = .{
+    const request: RequestHead = .{
         .classification = parsed_request.classification,
         .body = parsed_request.framing,
         .response_context = .normal,
@@ -461,7 +461,7 @@ test "final status maps to response completion or failure" {
     }
 }
 
-fn testCaptureProducer(producer: *ProducerType, context: *u8, config: ConfigType) !void {
+fn testCaptureProducer(producer: *Producer, context: *u8, config: Config) !void {
     try producer.init(std.testing.allocator, .{
         .config = config,
         .gate = .{ .context = context, .is_live = Http1CaptureGate.accepts },
@@ -477,7 +477,7 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
 
     for (1..request.len + 1) |split_size| {
         var gate_context: u8 = 0;
-        var producer: ProducerType = undefined;
+        var producer: Producer = undefined;
         try testCaptureProducer(&producer, &gate_context, .{
             .enabled = true,
             .max_part_bytes = 512,
@@ -570,7 +570,7 @@ test "capture truncation never truncates HTTP1 forwarding" {
     const FakeSession = FakeSessionType;
     const wire = "9\r\nWikipedia\r\n0\r\n\r\n";
     var gate_context: u8 = 0;
-    var producer: ProducerType = undefined;
+    var producer: Producer = undefined;
     try testCaptureProducer(&producer, &gate_context, .{
         .enabled = true,
         .max_part_bytes = 5,

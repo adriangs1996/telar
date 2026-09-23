@@ -2,8 +2,8 @@
 
 const std = @import("std");
 const Accumulator = @import("Accumulator.zig");
-const EntryType = @import("Entry.zig");
-const QueryType = @import("Query.zig");
+const Entry = @import("Entry.zig");
+const Query = @import("Query.zig");
 
 test "result accumulation releases rejected entries and survives allocation failures" {
     try std.testing.checkAllAllocationFailures(std.testing.allocator, exerciseOwnership, .{});
@@ -12,7 +12,7 @@ test "result accumulation releases rejected entries and survives allocation fail
 fn exerciseOwnership(gpa: std.mem.Allocator) !void {
     var accumulator: Accumulator = .{ .gpa = gpa, .limit = 1 };
     defer accumulator.deinit();
-    const entry: EntryType = .{
+    const entry: Entry = .{
         .id = 1,
         .pane_id = @enumFromInt(1),
         .started_at_ms = 0,
@@ -28,7 +28,7 @@ fn exerciseOwnership(gpa: std.mem.Allocator) !void {
     var rejected = entry;
     rejected.command = try gpa.dupe(u8, "pwd");
     try std.testing.expect(!try accumulator.append(rejected));
-    const query = try QueryType.init(.{
+    const query = try Query.init(.{
         .request_id = @enumFromInt(1),
         .origin = .{ .client = .{ .id = 1, .generation = 1 }, .close_after_reply = false },
     });

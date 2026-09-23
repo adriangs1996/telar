@@ -6,13 +6,13 @@ const core = @import("telar-core");
 const PaneWatcher = @import("PaneWatcher.zig");
 const PaneCatalog = @import("PaneCatalog.zig");
 const PaneOptions = @import("arguments/PaneOptions.zig");
-const SessionType = @import("Session.zig");
+const Session = @import("Session.zig");
 const control = @import("control.zig");
 const agent = @import("agent.zig");
-const ExecutionContextType = @import("ExecutionContext.zig");
-const PaneRefType = @import("PaneRef.zig");
+const ExecutionContext = @import("ExecutionContext.zig");
+const PaneRef = @import("PaneRef.zig");
 const values = @import("arguments/values.zig");
-const SnapshotType = @import("Snapshot.zig");
+const Snapshot = @import("Snapshot.zig");
 
 /// Runs one pane command and returns the process exit code.
 ///
@@ -20,7 +20,7 @@ const SnapshotType = @import("Snapshot.zig");
 /// std.process.exit(try pane.run(process_init, options));
 /// ```
 pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
-    var session = if (options.action == .list or options.action == .get or options.action == .search or options.action == .watch) try SessionType.attach(init, options.socket) else try SessionType.open(init, options.socket);
+    var session = if (options.action == .list or options.action == .get or options.action == .search or options.action == .watch) try Session.attach(init, options.socket) else try Session.open(init, options.socket);
     defer session.close();
     var output_buffer: [16 * 1024]u8 = undefined;
     var output = std.Io.File.stdout().writerStreaming(init.io, &output_buffer);
@@ -36,7 +36,7 @@ pub fn run(init: std.process.Init, options: PaneOptions) !u8 {
     };
 }
 
-fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContextType) !u8 {
+fn execute(session: *Session, options: PaneOptions, context: ExecutionContext) !u8 {
     if (options.action == .list or options.action == .get) {
         return inspect(session, options, context);
     }
@@ -47,7 +47,7 @@ fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContex
         return agent.exit_ok;
     }
 
-    const pane: PaneRefType = if (options.action == .focus)
+    const pane: PaneRef = if (options.action == .focus)
         .{
             .pane_id = try control.currentPaneId(context.environ),
             .pane_generation = try control.currentPaneGeneration(context.environ),
@@ -130,14 +130,14 @@ fn execute(session: *SessionType, options: PaneOptions, context: ExecutionContex
 /// Panes without an agent are still addressable: the generation comes from
 /// the agent snapshot when one exists, and otherwise generation 0 asks the
 /// runtime for the pane's current generation.
-fn resolvePane(session: *SessionType, target: values.Target, environ: std.process.Environ) !PaneRefType {
+fn resolvePane(session: *Session, target: values.Target, environ: std.process.Environ) !PaneRef {
     const pane_id: u64 = switch (target) {
         .current => try control.currentPaneId(environ),
         .pane => |pane| pane,
         .name => return error.InvalidPaneId,
     };
 
-    var snapshot: SnapshotType = .{};
+    var snapshot: Snapshot = .{};
     try session.fetchAgents(&snapshot);
     if (try snapshot.resolve(.{ .pane = pane_id }, environ)) |known| {
         return .{ .pane_id = known.pane_id, .pane_generation = known.pane_generation };
@@ -146,7 +146,7 @@ fn resolvePane(session: *SessionType, target: values.Target, environ: std.proces
     return .{ .pane_id = pane_id, .pane_generation = 0 };
 }
 
-fn inspect(session: *SessionType, options: PaneOptions, context: ExecutionContextType) !u8 {
+fn inspect(session: *Session, options: PaneOptions, context: ExecutionContext) !u8 {
     var catalog: PaneCatalog = .{
         .session = session,
         .workspace = if (options.workspace) |target| try core.workspace(try target.resolve(context.environ, "TELAR_WORKSPACE_ID")) else null,

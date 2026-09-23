@@ -6,8 +6,8 @@
 const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const PlanType = @import("../presentation/Plan.zig");
-const LabelType = @import("../presentation/Label.zig");
+const Plan = @import("../presentation/Plan.zig");
+const Label = @import("../presentation/Label.zig");
 const std = @import("std");
 const PillRenderer = @import("PillRenderer.zig");
 const kitty_codec = @import("kitty_codec.zig");
@@ -16,10 +16,10 @@ pub const max_cache_bytes = 1024 * 1024;
 pub const image_id: u32 = 0x80003000;
 pub const placement_id: u32 = 0x80003100;
 
-fn testingPlan(names: []const []const u8, selected: usize) PlanType {
-    var plan: PlanType = .{ .area = .{ .x = 2, .y = 1, .h = 1 } };
+fn testingPlan(names: []const []const u8, selected: usize) Plan {
+    var plan: Plan = .{ .area = .{ .x = 2, .y = 1, .h = 1 } };
     for (names, 0..) |name, index| {
-        var label: LabelType = .{ .offset = plan.area.w, .width = 0, .selected = index == selected };
+        var label: Label = .{ .offset = plan.area.w, .width = 0, .selected = index == selected };
         const text = std.fmt.bufPrint(&label.bytes, "{d} {s}", .{ index + 1, name }) catch unreachable;
         label.len = @intCast(text.len);
         label.width = core.measure(text) + 2;

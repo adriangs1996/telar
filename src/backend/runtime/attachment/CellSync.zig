@@ -3,12 +3,12 @@ const core = @import("telar-core");
 const vt = @import("ghostty-vt");
 const Outstanding = @import("Outstanding.zig");
 const std = @import("std");
-const PaneType = @import("../../pane/Pane.zig");
+const Pane = @import("../../pane/Pane.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
 const Projection = @import("Projection.zig");
 const blit_module = @import("../../pane/blit.zig");
 const Preparation = @import("Preparation.zig");
-const DiffType = @import("../../pane/Diff.zig");
+const Diff = @import("../../pane/Diff.zig");
 const damage_module = @import("../../pane/damage.zig");
 const Sync = @This();
 
@@ -33,7 +33,7 @@ outstanding: ?Outstanding = null,
 snapshot_pending: bool = true,
 gpa: std.mem.Allocator,
 
-pub fn init(gpa: std.mem.Allocator, pane: *PaneType) !Sync {
+pub fn init(gpa: std.mem.Allocator, pane: *Pane) !Sync {
     var acknowledged = try core.Buffer.init(gpa, pane.screen.w, pane.screen.h);
     errdefer acknowledged.deinit();
     var projected = try core.Buffer.init(gpa, pane.screen.w, pane.screen.h);
@@ -52,7 +52,7 @@ pub fn init(gpa: std.mem.Allocator, pane: *PaneType) !Sync {
     };
 }
 
-pub fn deinit(sync: *Sync, pane: *PaneType) void {
+pub fn deinit(sync: *Sync, pane: *Pane) void {
     sync.clearViewport(pane);
     sync.projected_text_metadata.deinit(sync.gpa);
     sync.projected_state.deinit(sync.gpa);
@@ -61,7 +61,7 @@ pub fn deinit(sync: *Sync, pane: *PaneType) void {
     sync.acknowledged.deinit();
 }
 
-pub fn resizeIfNeeded(sync: *Sync, pane: *PaneType) !bool {
+pub fn resizeIfNeeded(sync: *Sync, pane: *Pane) !bool {
     if (sync.acknowledged.w == pane.screen.w and
         sync.acknowledged.h == pane.screen.h)
     {
@@ -80,7 +80,7 @@ pub fn resizeIfNeeded(sync: *Sync, pane: *PaneType) !bool {
     return true;
 }
 
-fn syncViewportScreen(sync: *Sync, pane: *PaneType) void {
+fn syncViewportScreen(sync: *Sync, pane: *Pane) void {
     const active_key = pane.terminal.screens.active_key;
     if (sync.viewport_screen == active_key) {
         return;
@@ -89,7 +89,7 @@ fn syncViewportScreen(sync: *Sync, pane: *PaneType) void {
     sync.viewport_screen = active_key;
 }
 
-pub fn clearViewport(sync: *Sync, pane: *PaneType) void {
+pub fn clearViewport(sync: *Sync, pane: *Pane) void {
     if (sync.viewport_pin) |pin| {
         const screen = pane.terminal.screens.get(sync.viewport_screen).?;
         screen.scroll(.{ .active = {} });
@@ -105,7 +105,7 @@ pub fn clearViewport(sync: *Sync, pane: *PaneType) void {
 /// ```zig
 /// const changed = try sync.setViewport(pane, requested_offset);
 /// ```
-pub fn setViewport(sync: *Sync, pane: *PaneType, requested: u32) !bool {
+pub fn setViewport(sync: *Sync, pane: *Pane, requested: u32) !bool {
     const terminal_allocations = core.enterTerminalAllocations();
     defer terminal_allocations.restore();
 
@@ -163,7 +163,7 @@ pub fn acknowledge(sync: *Sync, frame_id: u64, now_ns: u64) ?u64 {
     return core.elapsed(outstanding.sent_ns, now_ns);
 }
 
-pub fn project(sync: *Sync, pane: *PaneType, force: bool) !Projection {
+pub fn project(sync: *Sync, pane: *Pane, force: bool) !Projection {
     sync.syncViewportScreen(pane);
     const screen = pane.terminal.screens.active;
     if (sync.viewport_pin) |pin| {
@@ -237,7 +237,7 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     var span_storage: [core.max_span_count]core.Span = undefined;
     var snapshot = force_snapshot;
     const diff = if (snapshot)
-        DiffType{}
+        Diff{}
     else
         damage_module.collectSpans(.{
             .current = source.cells,
@@ -337,7 +337,7 @@ pub fn prepare(sync: *Sync, preparation: Preparation) !?[]const u8 {
     return payload;
 }
 
-fn observeProjection(sync: *Sync, pane: *const PaneType, projection: Projection) void {
+fn observeProjection(sync: *Sync, pane: *const Pane, projection: Projection) void {
     if (projection.buffer == &sync.projected) {
         @memset(sync.projected_damage, false);
     }

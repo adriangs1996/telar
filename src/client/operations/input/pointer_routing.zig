@@ -4,7 +4,7 @@ const data = @import("model");
 const core = @import("telar-core");
 const projection_support = @import("../../presentation/projection_support.zig");
 const Client = @import("../../AttachedClient.zig");
-const GeometryType = @import("../../presentation/Geometry.zig");
+const Geometry = @import("../../presentation/Geometry.zig");
 const std = @import("std");
 const copy_mode_pointer = @import("copy_mode_pointer.zig");
 const view_interactions = @import("view_interactions.zig");
@@ -58,7 +58,7 @@ fn resolve(client: *Client, event: data.Mouse) Authority {
     if (begins_gesture and !captured and client.presentation.active != null) {
         const delivered = client.presentation.delivered_geometry orelse return .unavailable;
         const projection = projection_support.capture(&client.model, .{ .geometry = client.geometry() });
-        const current = GeometryType.capture(projection);
+        const current = Geometry.capture(projection);
         if (!delivered.matches(&current)) {
             return .unavailable;
         }

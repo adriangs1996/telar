@@ -1,12 +1,12 @@
 const core = @import("telar-core");
 const std = @import("std");
-const ServiceType = @import("../../history/Service.zig");
-const GraphicsBudgetType = @import("../../media/GraphicsBudget.zig");
-const PaneType = @import("../../pane/Pane.zig");
-const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
-const TrackerType = @import("../../agent/Tracker.zig");
-const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
-const CommandType = @import("../../pty/Command.zig");
+const Service = @import("../../history/Service.zig");
+const GraphicsBudget = @import("../../media/GraphicsBudget.zig");
+const Pane = @import("../../pane/Pane.zig");
+const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const Tracker = @import("../../agent/Tracker.zig");
+const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
+const Command = @import("../../pty/Command.zig");
 const support = @import("support.zig");
 const PaneFixture = @This();
 
@@ -18,12 +18,12 @@ pub const location: core.TabLocation = .{
 
 pane_allocator: std.testing.FailingAllocator = undefined,
 attachment_allocator: std.testing.FailingAllocator = undefined,
-history_service: ServiceType = undefined,
-budget: GraphicsBudgetType = undefined,
-pane: *PaneType = undefined,
-attachments: AttachmentStoreType = .{},
-agents: TrackerType = .{},
-metrics: RuntimeMetricsType = .{ .started_ns = 0 },
+history_service: Service = undefined,
+budget: GraphicsBudget = undefined,
+pane: *Pane = undefined,
+attachments: AttachmentStore = .{},
+agents: Tracker = .{},
+metrics: RuntimeMetrics = .{ .started_ns = 0 },
 
 /// Creates one running pane and one client attachment with independently
 /// injectable allocators.
@@ -39,13 +39,13 @@ pub fn init(fixture: *PaneFixture) !void {
     fixture.* = .{};
     fixture.pane_allocator = .init(std.testing.allocator, .{});
     fixture.attachment_allocator = .init(std.testing.allocator, .{});
-    fixture.history_service = try ServiceType.init(std.testing.allocator, .{ .database_path = ":memory:" });
+    fixture.history_service = try Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
     errdefer {
         fixture.history_service.stop(io);
         fixture.history_service.deinit(io);
     }
 
-    fixture.budget = GraphicsBudgetType.init(core.max_image_bytes_global);
+    fixture.budget = GraphicsBudget.init(core.max_image_bytes_global);
     fixture.pane = try fixture.createPane(try core.pane(7));
     errdefer {
         fixture.pane.session.shutdown();
@@ -75,10 +75,10 @@ pub fn deinit(fixture: *PaneFixture) void {
 /// ```zig
 /// const second = try fixture.createPane(try schema.id.pane(8));
 /// ```
-pub fn createPane(fixture: *PaneFixture, pane_id: core.PaneId) !*PaneType {
+pub fn createPane(fixture: *PaneFixture, pane_id: core.PaneId) !*Pane {
     const arguments = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&arguments);
-    const pane = try PaneType.create(.{
+    const command = try Command.fromArgv(&arguments);
+    const pane = try Pane.create(.{
         .io = std.testing.io,
         .gpa = fixture.pane_allocator.allocator(),
         .history_service = &fixture.history_service,

@@ -3,7 +3,7 @@ const Watch = @import("Watch.zig");
 const Registration = @import("Registration.zig");
 const std = @import("std");
 const session_file = @import("session_file.zig");
-const PaneKeyType = @import("../pane/PaneKey.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
 const Watches = @This();
 
 slots: [core.max_agent_snapshot_entries]?Watch = @splat(null),
@@ -45,7 +45,7 @@ pub fn put(watches: *Watches, registration: Registration) bool {
     return false;
 }
 
-pub fn find(watches: *Watches, key: PaneKeyType) ?*Watch {
+pub fn find(watches: *Watches, key: PaneKey) ?*Watch {
     for (&watches.slots) |*slot| {
         if (slot.*) |*watch| {
             if (watch.key.id == key.id and watch.key.generation == key.generation) {
@@ -57,7 +57,7 @@ pub fn find(watches: *Watches, key: PaneKeyType) ?*Watch {
     return null;
 }
 
-pub fn remove(watches: *Watches, key: PaneKeyType) bool {
+pub fn remove(watches: *Watches, key: PaneKey) bool {
     for (&watches.slots) |*slot| {
         if (slot.*) |watch| {
             if (watch.key.id == key.id and watch.key.generation == key.generation) {

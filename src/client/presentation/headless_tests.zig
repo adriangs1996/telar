@@ -3,7 +3,7 @@ const data = @import("model");
 const Fixture = @import("Fixture.zig");
 const FrameInput = @import("FrameInput.zig");
 const std = @import("std");
-const GeometryType = @import("Geometry.zig");
+const Geometry = @import("Geometry.zig");
 const retained = @import("../graphics/retained.zig");
 const store = @import("../graphics/store.zig");
 
@@ -166,7 +166,7 @@ test "broken bases request recovery and geometry ABA does not authorize a new ge
     host.host_revision +%= 1;
     try fixture.complete(token, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
-    const current_geometry = GeometryType.capture(fixture.projection());
+    const current_geometry = Geometry.capture(fixture.projection());
     try std.testing.expect(!fixture.adapter.state.delivered_geometry.?.matches(&current_geometry));
     const replacement = try fixture.prepare();
     try fixture.complete(replacement, .delivered);

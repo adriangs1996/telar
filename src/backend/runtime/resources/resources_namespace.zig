@@ -1,7 +1,7 @@
 //! Physical resources acquired and owned for one runtime lifetime.
 
 const std = @import("std");
-const StateType = @import("../observability/State.zig");
+const State = @import("../observability/State.zig");
 const Resources = @import("Resources.zig");
 
 pub const AcquisitionPhase = enum {
@@ -20,10 +20,10 @@ pub fn checkpoint(comptime fail_after: ?AcquisitionPhase, comptime phase: Acquis
     }
 }
 
-pub fn initTelemetry(io: std.Io, endpoint: []const u8) StateType {
+pub fn initTelemetry(io: std.Io, endpoint: []const u8) State {
     var suffix_buffer: [64]u8 = undefined;
     const suffix = std.fmt.bufPrint(&suffix_buffer, "runtime-{d}", .{std.c.getpid()}) catch "runtime";
-    return StateType.init(io, endpoint, suffix);
+    return State.init(io, endpoint, suffix);
 }
 
 test "every resource acquisition checkpoint rolls back" {

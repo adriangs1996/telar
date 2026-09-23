@@ -7,11 +7,11 @@
 const core = @import("telar-core");
 const text_search = @import("text_search.zig");
 const std = @import("std");
-const ClockType = @import("../history/Clock.zig");
+const Clock = @import("../history/Clock.zig");
 const vt = @import("ghostty-vt");
-const ServiceType = @import("../history/Service.zig");
+const Service = @import("../history/Service.zig");
 const model_module = @import("../history/model.zig");
-const CommandType = @import("../pty/Command.zig");
+const Command = @import("../pty/Command.zig");
 
 pub const blit = @import("blit.zig");
 pub const damage = @import("damage.zig");
@@ -160,7 +160,7 @@ pub const PaneExitTransition = @import("PaneExitTransition.zig");
 
 pub const PaneStore = @import("PaneStore.zig");
 
-pub fn historyClock(io: std.Io) ClockType {
+pub fn historyClock(io: std.Io) Clock {
     return .{
         .real_ms = std.Io.Timestamp.now(io, .real).toMilliseconds(),
         .awake_ns = @intCast(std.Io.Timestamp.now(io, .awake).toNanoseconds()),
@@ -274,7 +274,7 @@ test "pane frames follow VT cursor style blink and visibility across every read 
 
 test "agent reports capture runtime geometry without accessing the observation terminal" {
     const io = std.testing.io;
-    var service = try ServiceType.init(std.testing.allocator, .{ .database_path = ":memory:" });
+    var service = try Service.init(std.testing.allocator, .{ .database_path = ":memory:" });
     defer service.deinit(io);
     const pane = try std.testing.allocator.create(Pane);
     defer std.testing.allocator.destroy(pane);
@@ -438,10 +438,10 @@ test "PaneStore discovers only committed launches" {
 test "pane creation releases every partial allocation" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var history_service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var history_service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{"/usr/bin/true"};
-    const command = try CommandType.fromArgv(&argv);
+    const command = try Command.fromArgv(&argv);
     const limits: GraphicsLimits = .{};
     var fail_index: usize = 0;
     var completed = false;
@@ -480,10 +480,10 @@ test "pane creation releases every partial allocation" {
 test "pane keeps launch cwd separate from workspace path" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var history_service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var history_service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&argv);
+    const command = try Command.fromArgv(&argv);
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const pane = try Pane.create(.{
         .io = io,
@@ -513,10 +513,10 @@ test "pane keeps launch cwd separate from workspace path" {
 test "pane retains OSC 9 progress without painting it into terminal cells" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var history_service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var history_service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&argv);
+    const command = try Command.fromArgv(&argv);
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const pane = try Pane.create(.{
         .io = io,
@@ -555,10 +555,10 @@ test "pane retains OSC 9 progress without painting it into terminal cells" {
 test "shell regaining the terminal expires the job's progress report" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var history_service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var history_service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&argv);
+    const command = try Command.fromArgv(&argv);
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const pane = try Pane.create(.{
         .io = io,
@@ -601,10 +601,10 @@ test "shell regaining the terminal expires the job's progress report" {
 test "pane close requests shut down the PTY exactly once" {
     const io = std.testing.io;
     const gpa = std.testing.allocator;
-    var history_service = try ServiceType.init(gpa, .{ .database_path = ":memory:" });
+    var history_service = try Service.init(gpa, .{ .database_path = ":memory:" });
     defer history_service.deinit(io);
     const argv = [_][*:0]const u8{ "/bin/sleep", "600" };
-    const command = try CommandType.fromArgv(&argv);
+    const command = try Command.fromArgv(&argv);
     var budget = GraphicsBudget.init(core.max_image_bytes_global);
     const pane = try Pane.create(.{
         .io = io,

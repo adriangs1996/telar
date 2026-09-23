@@ -1,5 +1,5 @@
-const ConfigType = @import("../../proxy/Config.zig");
+const Config = @import("../../proxy/Config.zig");
 const InitOptions = @This();
 
-config: ?ConfigType,
+config: ?Config,
 system_trusted: bool,

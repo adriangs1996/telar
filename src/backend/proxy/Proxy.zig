@@ -1,13 +1,13 @@
 const std = @import("std");
 const proxy_namespace = @import("proxy_namespace.zig");
 const Config = @import("Config.zig");
-const ServiceType = @import("service/Service.zig");
-const HalfType = @import("capture/Half.zig");
-const PaneKeyType = @import("../pane/PaneKey.zig");
+const Service = @import("service/Service.zig");
+const Half = @import("capture/Half.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
 const PaneEnvironmentOptions = @import("PaneEnvironmentOptions.zig");
 const PaneEnvironment = @import("PaneEnvironment.zig");
-const OverrideType = @import("../pty/Override.zig");
-const ChildEnvironmentType = @import("../pty/ChildEnvironment.zig");
+const Override = @import("../pty/Override.zig");
+const ChildEnvironment = @import("../pty/ChildEnvironment.zig");
 const Observation = @import("Observation.zig");
 const Snapshot = @import("Snapshot.zig");
 const Proxy = @This();
@@ -25,7 +25,7 @@ pub fn create(io: std.Io, gpa: std.mem.Allocator, config: Config) !*Proxy {
     const proxy = try gpa.create(Proxy);
     errdefer gpa.destroy(proxy);
 
-    const service = try ServiceType.create(io, gpa, .{
+    const service = try Service.create(io, gpa, .{
         .key = config.key_path,
         .certificate = config.certificate_path,
         .bundle = config.bundle_path,
@@ -60,7 +60,7 @@ pub fn destroy(proxy: *Proxy) void {
 /// ```zig
 /// const half = try proxy.receiveCapture(io);
 /// ```
-pub fn receiveCapture(proxy: *Proxy, io: std.Io) anyerror!*HalfType {
+pub fn receiveCapture(proxy: *Proxy, io: std.Io) anyerror!*Half {
     return proxy.lifecycle.service.receiveCapture(io);
 }
 
@@ -69,7 +69,7 @@ pub fn receiveCapture(proxy: *Proxy, io: std.Io) anyerror!*HalfType {
 /// ```zig
 /// proxy.decodeCapture(half);
 /// ```
-pub fn decodeCapture(proxy: *Proxy, half: *HalfType) void {
+pub fn decodeCapture(proxy: *Proxy, half: *Half) void {
     proxy.lifecycle.service.decodeCapture(half);
 }
 
@@ -81,7 +81,7 @@ pub fn decodeCapture(proxy: *Proxy, half: *HalfType) void {
 /// var pane_environment = try proxy.registerPane(key, .{ .inherited = inherited, .overrides = pane_overrides });
 /// defer pane_environment.deinit();
 /// ```
-pub fn registerPane(proxy: *Proxy, key: PaneKeyType, options: PaneEnvironmentOptions) !PaneEnvironment {
+pub fn registerPane(proxy: *Proxy, key: PaneKey, options: PaneEnvironmentOptions) !PaneEnvironment {
     std.debug.assert(options.overrides.len <= proxy_namespace.max_pane_overrides);
     const service = proxy.lifecycle.service;
     var credential = try service.registerPane(.{ .id = key.id, .generation = key.generation });
@@ -97,10 +97,10 @@ pub fn registerPane(proxy: *Proxy, key: PaneKeyType, options: PaneEnvironmentOpt
         client.certificate_path,
         client.bundle_path,
     );
-    var overrides: [proxy_namespace.max_pane_overrides + proxy_namespace.environment_override_count]OverrideType = undefined;
+    var overrides: [proxy_namespace.max_pane_overrides + proxy_namespace.environment_override_count]Override = undefined;
     @memcpy(overrides[0..options.overrides.len], options.overrides);
     @memcpy(overrides[options.overrides.len .. options.overrides.len + proxy_overrides.len], &proxy_overrides);
-    return .{ .value = try ChildEnvironmentType.initWithOverrides(proxy.gpa, options.inherited, .{
+    return .{ .value = try ChildEnvironment.initWithOverrides(proxy.gpa, options.inherited, .{
         .telar_term_program = "telar",
         .overrides = overrides[0 .. options.overrides.len + proxy_overrides.len],
     }) };
@@ -111,7 +111,7 @@ pub fn registerPane(proxy: *Proxy, key: PaneKeyType, options: PaneEnvironmentOpt
 /// ```zig
 /// proxy.revokePane(key);
 /// ```
-pub fn revokePane(proxy: *Proxy, key: PaneKeyType) void {
+pub fn revokePane(proxy: *Proxy, key: PaneKey) void {
     proxy.lifecycle.service.unregisterPane(.{ .id = key.id, .generation = key.generation });
 }
 

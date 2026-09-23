@@ -2,7 +2,7 @@ const observation_queue = @import("observation_queue.zig");
 const MiddlewareEvent = @import("MiddlewareEvent.zig");
 const std = @import("std");
 const CredentialGate = @import("CredentialGate.zig");
-const ObserverType = @import("Observer.zig");
+const Observer = @import("Observer.zig");
 const ObservationQueueMetrics = @import("ObservationQueueMetrics.zig");
 const Channel = @This();
 
@@ -29,7 +29,7 @@ pub fn init(channel: *Channel, gate: CredentialGate) void {
 /// ```zig
 /// try pipeline.add(channel.observer());
 /// ```
-pub fn observer(channel: *Channel) ObserverType {
+pub fn observer(channel: *Channel) Observer {
     return .{ .context = channel, .observe = observe };
 }
 

@@ -1,10 +1,10 @@
 const std = @import("std");
-const ConfigType = @import("Config.zig");
-const QuotaType = @import("Quota.zig");
-const ChannelType = @import("Channel.zig");
+const Config = @import("Config.zig");
+const Quota = @import("Quota.zig");
+const Channel = @import("Channel.zig");
 const InitOptions = @import("InitOptions.zig");
 const StartOptions = @import("StartOptions.zig");
-const HalfType = @import("Half.zig");
+const Half = @import("Half.zig");
 const CapturePublication = @import("CapturePublication.zig");
 const decode_mod = @import("decode.zig");
 const buffer = @import("buffer_support.zig");
@@ -12,9 +12,9 @@ const CaptureMetrics = @import("CaptureMetrics.zig");
 const Producer = @This();
 
 gpa: std.mem.Allocator,
-config: ConfigType,
-quota: QuotaType,
-channel: ChannelType = undefined,
+config: Config,
+quota: Quota,
+channel: Channel = undefined,
 started: std.atomic.Value(u64) = .init(0),
 truncated: std.atomic.Value(u64) = .init(0),
 skipped_quota: std.atomic.Value(u64) = .init(0),
@@ -40,8 +40,8 @@ pub fn init(producer: *Producer, gpa: std.mem.Allocator, options: InitOptions) !
 /// ```zig
 /// const half = producer.start(options) orelse return;
 /// ```
-pub fn start(producer: *Producer, options: StartOptions) ?*HalfType {
-    const half = HalfType.create(.{
+pub fn start(producer: *Producer, options: StartOptions) ?*Half {
+    const half = Half.create(.{
         .gpa = producer.gpa,
         .quota = &producer.quota,
         .config = producer.config,
@@ -88,7 +88,7 @@ pub fn publish(producer: *Producer, io: std.Io, publication: CapturePublication)
 /// ```zig
 /// const half = try producer.receive(io);
 /// ```
-pub fn receive(producer: *Producer, io: std.Io) anyerror!*HalfType {
+pub fn receive(producer: *Producer, io: std.Io) anyerror!*Half {
     return producer.channel.receive(io);
 }
 
@@ -115,7 +115,7 @@ pub fn recordDecodeFailure(producer: *Producer) void {
 /// ```zig
 /// producer.decodeBody(half);
 /// ```
-pub fn decodeBody(producer: *Producer, half: *HalfType) void {
+pub fn decodeBody(producer: *Producer, half: *Half) void {
     if (half.encoding().len == 0 or std.ascii.eqlIgnoreCase(half.encoding(), "identity")) {
         half.body_decoded = true;
         return;

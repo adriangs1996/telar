@@ -1,7 +1,7 @@
-const ClockType = @import("Clock.zig");
+const Clock = @import("Clock.zig");
 const osc = @import("osc.zig");
 const Completion = @This();
 
-clock: ClockType,
+clock: Clock,
 exit_code: ?i32,
 status: osc.Status,

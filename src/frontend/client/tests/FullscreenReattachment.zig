@@ -1,12 +1,12 @@
 const core = @import("telar-core");
 const data = @import("model");
 const TerminalClient = @import("../TerminalClient.zig");
-const TestHarnessType = @import("TestHarness.zig");
+const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const FullscreenReattachment = @This();
 
-harness: *TestHarnessType,
+harness: *TestHarness,
 
 pub fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const core.PaneDescriptor) !void {
     const client = scenario.harness.client;

@@ -1,5 +1,5 @@
 const std = @import("std");
-const StatsType = @import("Stats.zig");
+const Stats = @import("Stats.zig");
 const connection = @import("connection.zig");
 const Settings = @import("Settings.zig");
 const relay = @import("relay.zig");
@@ -10,8 +10,8 @@ request_release: ?*std.Io.Queue(u8) = null,
 request_canceled: std.atomic.Value(bool) = .init(false),
 response_saw_request: bool = false,
 response_saw_shared_settings: bool = false,
-request_stats: StatsType = .{},
-response_stats: StatsType = .{},
+request_stats: Stats = .{},
+response_stats: Stats = .{},
 steps: [3]connection.Step = undefined,
 step_len: usize = 0,
 
@@ -19,7 +19,7 @@ pub fn io(_: *Capture) std.Io {
     return std.testing.io;
 }
 
-pub fn relayRequest(capture: *Capture, settings: *Settings) StatsType {
+pub fn relayRequest(capture: *Capture, settings: *Settings) Stats {
     settings.child.max_frame_size.store(32 * 1024, .seq_cst);
 
     if (capture.request_started) |started| {
@@ -35,7 +35,7 @@ pub fn relayRequest(capture: *Capture, settings: *Settings) StatsType {
     return capture.request_stats;
 }
 
-pub fn relayResponse(capture: *Capture, settings: *Settings) StatsType {
+pub fn relayResponse(capture: *Capture, settings: *Settings) Stats {
     if (capture.request_started) |started| {
         _ = started.getOne(std.testing.io) catch return capture.response_stats;
         capture.response_saw_request = true;

@@ -12,14 +12,14 @@ const Observer = @import("Observer.zig");
 const std = @import("std");
 const TranscodeConfiguration = @import("TranscodeConfiguration.zig");
 const Transcoder = @import("Transcoder.zig");
-const HeadersType = @import("../Headers.zig");
+const Headers = @import("../Headers.zig");
 const middleware = @import("../middleware.zig");
 const FrameHeader = @import("FrameHeader.zig");
 const HeaderEmission = @import("HeaderEmission.zig");
 const BodyCollector = @import("BodyCollector.zig");
 const TestTranscodeSetup = @import("TestTranscodeSetup.zig");
-const TransformationType = @import("../Transformation.zig");
-const TransformPipelineType = @import("../TransformPipeline.zig");
+const Transformation = @import("../Transformation.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
 const FakeWriteSession = @import("FakeWriteSession.zig");
 
 pub const c = @cImport({
@@ -182,7 +182,7 @@ pub fn relayTransformed(session: anytype, transformed_route: TransformedRoute, s
     return .{ .decode_failed = transcoder.failed };
 }
 
-pub fn headerKind(block_type: u8, headers: *const HeadersType) middleware.HeaderKind {
+pub fn headerKind(block_type: u8, headers: *const Headers) middleware.HeaderKind {
     if (block_type == frame_push_promise) {
         return .push_promise;
     }
@@ -195,11 +195,11 @@ pub fn headerKind(block_type: u8, headers: *const HeadersType) middleware.Header
     return .trailers;
 }
 
-pub fn parseStatusHeader(headers: *const HeadersType) u16 {
+pub fn parseStatusHeader(headers: *const Headers) u16 {
     return std.fmt.parseInt(u16, headers.find(":status") orelse return 0, 10) catch 0;
 }
 
-pub fn validH2Headers(headers: *const HeadersType, kind: middleware.HeaderKind) bool {
+pub fn validH2Headers(headers: *const Headers, kind: middleware.HeaderKind) bool {
     var regular_seen = false;
     var method_seen = false;
     var scheme_seen = false;
@@ -276,7 +276,7 @@ fn pseudoAllowed(kind: middleware.HeaderKind, name: []const u8) bool {
     };
 }
 
-fn requestPseudosValid(headers: *const HeadersType, kind: middleware.HeaderKind) bool {
+fn requestPseudosValid(headers: *const Headers, kind: middleware.HeaderKind) bool {
     const method = headers.find(":method") orelse return false;
     if (!validToken(method)) {
         return false;
@@ -355,7 +355,7 @@ fn validStatus(value: []const u8) bool {
     return status >= 100 and status <= 599 and status != 101;
 }
 
-pub fn compatibleH2Headers(original: *const HeadersType, transformed: *const HeadersType, kind: middleware.HeaderKind) bool {
+pub fn compatibleH2Headers(original: *const Headers, transformed: *const Headers, kind: middleware.HeaderKind) bool {
     if (!validH2Headers(transformed, kind) or
         !sameHeaderValues(original, transformed, "content-length"))
     {
@@ -383,7 +383,7 @@ fn statusSemantics(status: u16) StatusSemantics {
     return .invalid;
 }
 
-fn sameHeaderValues(left: *const HeadersType, right: *const HeadersType, wanted: []const u8) bool {
+fn sameHeaderValues(left: *const Headers, right: *const Headers, wanted: []const u8) bool {
     var left_index: usize = 0;
     var right_index: usize = 0;
     while (true) {
@@ -398,7 +398,7 @@ fn sameHeaderValues(left: *const HeadersType, right: *const HeadersType, wanted:
     }
 }
 
-fn nextHeaderValue(headers: *const HeadersType, wanted: []const u8, index: *usize) ?[]const u8 {
+fn nextHeaderValue(headers: *const Headers, wanted: []const u8, index: *usize) ?[]const u8 {
     while (index.* < headers.len) {
         const field = headers.fields[index.*];
         index.* += 1;
@@ -823,8 +823,8 @@ test "HPACK dynamic table survives padded response blocks" {
     try std.testing.expectEqual(@as(usize, 2), collector.completed);
 }
 
-fn decodeTestHeaderBlock(inflater: *c.nghttp2_hd_inflater, block: []const u8) !HeadersType {
-    var headers: HeadersType = .{};
+fn decodeTestHeaderBlock(inflater: *c.nghttp2_hd_inflater, block: []const u8) !Headers {
+    var headers: Headers = .{};
     var input = block;
     while (true) {
         var field: c.nghttp2_nv = undefined;
@@ -900,13 +900,13 @@ test "HTTP2 transcoder applies a header transform across arbitrary input splits"
     );
 
     const AddHeader = struct {
-        fn transform(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
+        fn transform(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
             transformation.effects.set(.{ .name = "x-telar", .value = "enabled" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = AddHeader.transform });
     var session: FakeWriteSession = .{};
     const Collector = struct {
@@ -1007,12 +1007,12 @@ test "HTTP2 transcoder preserves continuation padding priority and HPACK state" 
     defer c.nghttp2_hd_inflate_del(output_inflater);
 
     const Identity = struct {
-        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     const Collector = struct {
         completed: usize = 0,
@@ -1140,12 +1140,12 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
     }
 
     const Identity = struct {
-        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
@@ -1209,12 +1209,12 @@ test "HTTP2 transcoder fragments encoded heads to the peer frame limit" {
 
 test "HTTP2 SETTINGS update the opposite encoder bounds without changing wire bytes" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
@@ -1267,12 +1267,12 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
     @memcpy(data[framing.header_bytes..], payload);
 
     const Identity = struct {
-        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     var collector: BodyCollector = .{};
     var session: FakeWriteSession = .{};
@@ -1303,12 +1303,12 @@ test "HTTP2 transform mode carries SSE response metadata into DATA events" {
 
 test "HTTP2 transform mode exposes unpadded response DATA without changing wire bytes" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
 
     const payload = "event: message_delta\ndata: transformed\n\n";
@@ -1342,12 +1342,12 @@ test "HTTP2 transform mode exposes unpadded response DATA without changing wire 
 
 test "HTTP2 transform mode exposes request DATA without changing wire bytes" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
 
     const payload = "{\"stream\":true}";
@@ -1384,12 +1384,12 @@ test "HTTP2 transform mode exposes request DATA without changing wire bytes" {
 
 test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
 
     const payload = "payload";
@@ -1423,12 +1423,12 @@ test "HTTP2 transform mode excludes DATA padding under single-byte reads" {
 
 test "HTTP2 transform mode relays DATA and control frames byte for byte" {
     const Identity = struct {
-        fn transform(_: *anyopaque, _: TransformationType) middleware.TransformStatus {
+        fn transform(_: *anyopaque, _: Transformation) middleware.TransformStatus {
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Identity.transform });
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
@@ -1493,14 +1493,14 @@ test "HTTP2 invalid transform effects preserve the original semantic head" {
     );
 
     const Invalid = struct {
-        fn transform(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
+        fn transform(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
             transformation.effects.remove(":scheme") catch return .preserve;
             transformation.effects.set(.{ .name = "content-length", .value = "9" }) catch return .preserve;
             return .apply;
         }
     };
     var ignored: u8 = 0;
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &ignored, .transform = Invalid.transform });
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}
@@ -1562,7 +1562,7 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
     const Capture = struct {
         stream_id: u32 = 0,
         kind: middleware.HeaderKind = .trailers,
-        fn transform(raw: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
+        fn transform(raw: *anyopaque, transformation: Transformation) middleware.TransformStatus {
             const self: *@This() = @ptrCast(@alignCast(raw));
             self.stream_id = transformation.snapshot.context.stream_id;
             self.kind = transformation.snapshot.context.kind;
@@ -1570,7 +1570,7 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
         }
     };
     var capture: Capture = .{};
-    var pipeline: TransformPipelineType = .{};
+    var pipeline: TransformPipeline = .{};
     try pipeline.add(.{ .context = &capture, .transform = Capture.transform });
     const Collector = struct {
         pub fn emit(_: *@This(), _: Event) void {}

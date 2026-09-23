@@ -3,7 +3,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const TabBarInput = @import("TabBarInput.zig");
 const Label = @import("Label.zig");
 const widget = @import("context_support.zig");
@@ -13,7 +13,7 @@ const tab_gap: u16 = 1;
 /// The fullscreen marker is one icon cell plus the trailing padding cell.
 pub const fullscreen_marker_width: u16 = 2;
 
-pub fn render(context: *ContextType, input: TabBarInput) void {
+pub fn render(context: *Context, input: TabBarInput) void {
     const model = input.model;
     if (model.tabs.count == 0) {
         return;
@@ -71,11 +71,11 @@ pub fn desiredWidth(input: TabBarInput) u16 {
     return total;
 }
 
-pub fn barStyle(context: *const ContextType) core.Style {
+pub fn barStyle(context: *const Context) core.Style {
     return .{ .fg = context.palette.subtext0, .bg = context.palette.panel_bg };
 }
 
-fn activeStyle(context: *const ContextType) core.Style {
+fn activeStyle(context: *const Context) core.Style {
     return .{
         .fg = context.palette.surface_dim,
         .bg = context.palette.accent,
@@ -85,11 +85,11 @@ fn activeStyle(context: *const ContextType) core.Style {
 
 /// Inactive tabs sit one surface above the bar so they read as buttons; the
 /// gap between them keeps the bar's own background.
-fn inactiveStyle(context: *const ContextType) core.Style {
+fn inactiveStyle(context: *const Context) core.Style {
     return .{ .fg = context.palette.subtext0, .bg = context.palette.surface0 };
 }
 
-fn hoveredStyle(context: *const ContextType) core.Style {
+fn hoveredStyle(context: *const Context) core.Style {
     return .{
         .fg = context.palette.text,
         .bg = context.palette.surface1,
@@ -97,7 +97,7 @@ fn hoveredStyle(context: *const ContextType) core.Style {
     };
 }
 
-fn decorateProgress(context: *ContextType, input: TabBarInput, rect: core.Rect) void {
+fn decorateProgress(context: *Context, input: TabBarInput, rect: core.Rect) void {
     const pane = data.tab_layout.focusedPaneConst(input.model, input.tab) orelse return;
     if (pane.progress_state == .remove or rect.w == 0) {
         return;

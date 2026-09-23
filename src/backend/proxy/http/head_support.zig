@@ -5,7 +5,7 @@
 //! into the input.
 
 const types = @import("types.zig");
-const SessionType = @import("../Session.zig");
+const Session = @import("../Session.zig");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
 const types_module = @import("../../agent/types.zig");
@@ -31,7 +31,7 @@ pub const AnalyzeOptions = @import("AnalyzeOptions.zig");
 /// ```zig
 /// const head_len = read(session, .child, &buffer) orelse return;
 /// ```
-pub fn read(session: anytype, side: SessionType.Side, buffer: []u8) ?usize {
+pub fn read(session: anytype, side: Session.Side, buffer: []u8) ?usize {
     var len: usize = 0;
     while (len < buffer.len) {
         const read_len = session.read(side, buffer[len..][0..1]) orelse return null;

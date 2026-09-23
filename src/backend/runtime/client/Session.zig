@@ -1,7 +1,7 @@
 const core = @import("telar-core");
 const ClientKey = @import("../../history/ClientKey.zig");
-const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
-const DeliveryType = @import("../delivery/Delivery.zig");
+const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const Delivery = @import("../delivery/Delivery.zig");
 const session_support = @import("session_support.zig");
 const PendingPaneFocus = @import("PendingPaneFocus.zig");
 const PendingSearch = @import("PendingSearch.zig");
@@ -13,8 +13,8 @@ key: ClientKey,
 connection: core.SocketChannel,
 receive_buffer: []u8,
 read_buffer: []u8,
-attachments: AttachmentStoreType = .{},
-delivery: DeliveryType,
+attachments: AttachmentStore = .{},
+delivery: Delivery,
 role: session_support.Role = .undecided,
 read_pending: bool = false,
 send_pending: bool = false,
@@ -76,7 +76,7 @@ pub fn create(gpa: std.mem.Allocator, key: ClientKey, connection: core.SocketCha
     const read_buffer = try gpa.alloc(u8, core.read_buffer_size);
     errdefer gpa.free(read_buffer);
 
-    var delivery = try DeliveryType.init(gpa);
+    var delivery = try Delivery.init(gpa);
     errdefer delivery.deinit(gpa);
 
     const session = try gpa.create(Session);

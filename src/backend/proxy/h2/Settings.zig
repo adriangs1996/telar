@@ -1,5 +1,5 @@
-const PeerSettingsType = @import("PeerSettings.zig");
+const PeerSettings = @import("PeerSettings.zig");
 const Settings = @This();
 
-child: PeerSettingsType = .{},
-origin: PeerSettingsType = .{},
+child: PeerSettings = .{},
+origin: PeerSettings = .{},

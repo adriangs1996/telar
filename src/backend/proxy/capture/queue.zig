@@ -1,16 +1,16 @@
 //! Bounded pointer-transfer queue for captured exchange halves.
 
-const CredentialType = @import("../Credential.zig");
+const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
-const QuotaType = @import("Quota.zig");
-const HalfType = @import("Half.zig");
+const Quota = @import("Quota.zig");
+const Half = @import("Half.zig");
 const std = @import("std");
 const GateState = @import("GateState.zig");
 const Channel = @import("Channel.zig");
 
 pub const capacity = 256;
 
-fn testCredential(generation: u64) CredentialType {
+fn testCredential(generation: u64) Credential {
     return .{
         .pane_id = @enumFromInt(7),
         .pane_generation = generation,
@@ -18,8 +18,8 @@ fn testCredential(generation: u64) CredentialType {
     };
 }
 
-fn testHalf(quota: *QuotaType, credential: CredentialType, stream_id: u32) *HalfType {
-    return HalfType.create(.{
+fn testHalf(quota: *Quota, credential: Credential, stream_id: u32) *Half {
+    return Half.create(.{
         .gpa = std.testing.allocator,
         .quota = quota,
         .config = .{
@@ -42,7 +42,7 @@ test "queue saturation drops and frees the rejected half" {
     var gate_state: GateState = .{};
     var channel: Channel = undefined;
     channel.init(.{ .context = &gate_state, .is_live = GateState.accepts });
-    var quota = QuotaType.init(capacity + 1);
+    var quota = Quota.init(capacity + 1);
     const credential = testCredential(1);
 
     for (0..capacity) |index| {
@@ -68,7 +68,7 @@ test "delivery rejects a credential revoked after publication" {
     var channel: Channel = undefined;
     channel.init(.{ .context = &gate_state, .is_live = GateState.accepts });
     defer channel.close(std.testing.io);
-    var quota = QuotaType.init(2);
+    var quota = Quota.init(2);
     const credential = testCredential(1);
     try std.testing.expect(channel.publish(std.testing.io, .{
         .credential = credential,

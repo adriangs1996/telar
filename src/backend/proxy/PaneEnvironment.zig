@@ -1,16 +1,16 @@
-const ChildEnvironmentType = @import("../pty/ChildEnvironment.zig");
+const ChildEnvironment = @import("../pty/ChildEnvironment.zig");
 /// Ephemeral child environment. Its proxy credential is scrubbed by
 /// `pty.ChildEnvironment.deinit`; the runtime must not retain or inspect it.
 const PaneEnvironment = @This();
 
-value: ChildEnvironmentType,
+value: ChildEnvironment,
 
 /// Borrows the environment while this owner remains alive.
 ///
 /// ```zig
 /// const child_environment = pane_environment.environment();
 /// ```
-pub fn environment(pane_environment: *const PaneEnvironment) *const ChildEnvironmentType {
+pub fn environment(pane_environment: *const PaneEnvironment) *const ChildEnvironment {
     return &pane_environment.value;
 }
 

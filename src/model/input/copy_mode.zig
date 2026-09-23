@@ -6,7 +6,7 @@ const core = @import("telar-core");
 const Point = @import("Point.zig");
 const Screen = @import("Screen.zig");
 const State = @import("State.zig");
-const KeyType = @import("Key.zig");
+const Key = @import("Key.zig");
 const Effect = @import("Effect.zig");
 const Viewport = @import("Viewport.zig");
 const std = @import("std");
@@ -52,7 +52,7 @@ pub fn less(a: Point, b: Point) bool {
 
 /// Interprets one key over the pane's visible cells. Pure: the only mutation
 /// is the copy-mode state itself.
-pub fn applyKey(state: *State, pressed: KeyType, screen: Screen) Effect {
+pub fn applyKey(state: *State, pressed: Key, screen: Screen) Effect {
     const buffer = screen.buffer;
     const scroll = screen.scroll;
     const page: i32 = @intCast(@max(@as(u16, 1), buffer.h -| 1));

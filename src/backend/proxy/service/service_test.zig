@@ -2,10 +2,10 @@
 
 const core = @import("telar-core");
 const std = @import("std");
-const CredentialType = @import("../Credential.zig");
+const Credential = @import("../Credential.zig");
 const TestServiceFixture = @import("TestServiceFixture.zig");
 const Pane = @import("Pane.zig");
-const HeadersType = @import("../Headers.zig");
+const Headers = @import("../Headers.zig");
 const TestOrigin = @import("TestOrigin.zig");
 const Service = @import("Service.zig");
 const MiddlewareEvent = @import("../MiddlewareEvent.zig");
@@ -15,7 +15,7 @@ const middleware = @import("../middleware.zig");
 const basic_raw_capacity = 128;
 const basic_encoded_capacity = std.base64.standard.Encoder.calcSize(basic_raw_capacity);
 
-fn encodeBasic(credential: *const CredentialType, raw_buffer: *[basic_raw_capacity]u8, encoded_buffer: *[basic_encoded_capacity]u8) ![]const u8 {
+fn encodeBasic(credential: *const Credential, raw_buffer: *[basic_raw_capacity]u8, encoded_buffer: *[basic_encoded_capacity]u8) ![]const u8 {
     const raw = try std.fmt.bufPrint(raw_buffer, "telar:{d}.{d}.{x}", .{
         core.raw(credential.pane_id),
         credential.pane_generation,
@@ -51,7 +51,7 @@ test "service negotiates identity encoding for Claude message requests" {
     try fixture.init(std.testing.io, std.testing.allocator);
     defer fixture.deinit();
     const service = fixture.service.?;
-    var headers: HeadersType = .{};
+    var headers: Headers = .{};
     try headers.append(.{ .name = ":method", .value = "POST" });
     try headers.append(.{ .name = ":path", .value = "/v1/messages" });
     try headers.append(.{ .name = "accept-encoding", .value = "gzip, br" });

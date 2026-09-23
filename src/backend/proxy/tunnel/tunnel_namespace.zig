@@ -3,11 +3,11 @@
 const GenericCredentialPort = @import("../GenericCredentialPort.zig").Type;
 const Tunnel = @import("Tunnel.zig");
 const GenericConnectAuthenticationCommand = @import("../GenericConnectAuthenticationCommand.zig").Type;
-const CredentialType = @import("../Credential.zig");
-const CountersType = @import("../Counters.zig");
+const Credential = @import("../Credential.zig");
+const Counters = @import("../Counters.zig");
 const connect_authentication = @import("../connect_authentication.zig");
 const std = @import("std");
-const SnapshotType = @import("../Snapshot.zig");
+const Snapshot = @import("../Snapshot.zig");
 
 const credential_port: GenericCredentialPort(Tunnel) = .{
     .contains = containsCredential,
@@ -15,11 +15,11 @@ const credential_port: GenericCredentialPort(Tunnel) = .{
 
 pub const Authenticate = GenericConnectAuthenticationCommand(Tunnel, credential_port);
 
-fn containsCredential(tunnel: *Tunnel, credential: *const CredentialType) bool {
+fn containsCredential(tunnel: *Tunnel, credential: *const Credential) bool {
     return tunnel.dependencies.credentials.contains(tunnel.dependencies.tls.io, credential);
 }
 
-pub fn recordAuthenticationRejection(telemetry: *CountersType, rejection: connect_authentication.RejectionMetric) void {
+pub fn recordAuthenticationRejection(telemetry: *Counters, rejection: connect_authentication.RejectionMetric) void {
     telemetry.record(.rejected_connection);
 
     switch (rejection) {
@@ -106,7 +106,7 @@ pub fn connectUpstream(host: std.Io.net.HostName, io: std.Io, port: u16) !std.Io
 }
 
 test "authentication rejection records total and exact reason" {
-    var invalid: CountersType = .{};
+    var invalid: Counters = .{};
     recordAuthenticationRejection(&invalid, .invalid_authorization);
     const invalid_snapshot = snapshot(&invalid);
 
@@ -114,7 +114,7 @@ test "authentication rejection records total and exact reason" {
     try std.testing.expectEqual(@as(u64, 1), invalid_snapshot.invalid_authorization_rejections);
     try std.testing.expectEqual(@as(u64, 0), invalid_snapshot.unknown_credential_rejections);
 
-    var unknown: CountersType = .{};
+    var unknown: Counters = .{};
     recordAuthenticationRejection(&unknown, .unknown_credential);
     const unknown_snapshot = snapshot(&unknown);
 
@@ -123,7 +123,7 @@ test "authentication rejection records total and exact reason" {
     try std.testing.expectEqual(@as(u64, 1), unknown_snapshot.unknown_credential_rejections);
 }
 
-fn snapshot(telemetry: *const CountersType) SnapshotType {
+fn snapshot(telemetry: *const Counters) Snapshot {
     return telemetry.snapshot(.{
         .connections = .{ .active = 0, .limit_drops = 0 },
         .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },

@@ -2,7 +2,7 @@
 
 const data = @import("model");
 const LifecycleState = @import("LifecycleState.zig");
-const ObservationType = @import("Observation.zig");
+const Observation = @import("Observation.zig");
 const std = @import("std");
 
 pub const Token = enum(u64) { _ };
@@ -10,7 +10,7 @@ pub const Outcome = enum { delivered, failed, cancelled };
 
 test "failed and cancelled frames remain pending; stale completions cannot retire replacements" {
     var state: LifecycleState = .{};
-    const observation: ObservationType = .{ .model = .{ .frame = 1 } };
+    const observation: Observation = .{ .model = .{ .frame = 1 } };
     try std.testing.expect(state.observe(observation));
     const first = try state.begin(.{ .observation = observation, .commit = .{} });
     try std.testing.expect(!state.needsPreparation());
@@ -29,8 +29,8 @@ test "failed and cancelled frames remain pending; stale completions cannot retir
 
 test "delivery returns only captured frames even after receiving newer model state" {
     var state: LifecycleState = .{};
-    const old: ObservationType = .{ .model = .{ .frame = 1 } };
-    const newer: ObservationType = .{ .model = .{ .frame = 2 } };
+    const old: Observation = .{ .model = .{ .frame = 1 } };
+    const newer: Observation = .{ .model = .{ .frame = 2 } };
     _ = state.observe(old);
     var commit: data.PresentationCommit = .{ .len = 1 };
     commit.panes[0] = .{ .pane_id = @enumFromInt(1), .frame_id = 7, .attached = true };

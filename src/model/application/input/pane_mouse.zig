@@ -1,7 +1,7 @@
 //! Shared pointer and focused-scroll policy after pane resolution.
 
 const PointerCommand = @import("PointerCommand.zig");
-const PaneMousePlanType = @import("../../workspace/PaneMousePlan.zig");
+const PaneMousePlan = @import("../../workspace/PaneMousePlan.zig");
 const Mouse = @import("../../input/Mouse.zig");
 const Resolved = @import("Resolved.zig");
 
@@ -11,7 +11,7 @@ pub const Effect = @import("../../types/PaneMouseEffect.zig").PaneMouseEffect;
 
 pub const Outcome = @import("../../types/PaneMouseOutcome.zig").PaneMouseOutcome;
 
-fn testingPlan() PaneMousePlanType {
+fn testingPlan() PaneMousePlan {
     return .{
         .pane_id = @enumFromInt(3),
         .content = .{

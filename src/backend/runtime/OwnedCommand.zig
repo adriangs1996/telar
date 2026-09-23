@@ -1,10 +1,10 @@
-const CommandType = @import("../pty/Command.zig");
+const Command = @import("../pty/Command.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const ChildEnvironment = @import("../pty/ChildEnvironment.zig");
 const OwnedCommand = @This();
 
-command: CommandType,
+command: Command,
 arguments: []const [:0]u8,
 cwd: [:0]u8,
 gpa: std.mem.Allocator,
@@ -34,7 +34,7 @@ pub fn init(gpa: std.mem.Allocator, launch: core.LaunchView, cwd_path: []const u
     const cwd = try gpa.dupeZ(u8, cwd_path);
     errdefer gpa.free(cwd);
 
-    var command: CommandType = .{
+    var command: Command = .{
         .file = arguments[0].ptr,
         .cwd = cwd.ptr,
         .environment = environment,

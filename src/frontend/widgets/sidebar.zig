@@ -7,7 +7,7 @@
 const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const SidebarInput = @import("SidebarInput.zig");
 const Semantic = @import("Semantic.zig");
 const AgentLineInput = @import("AgentLineInput.zig");
@@ -26,13 +26,13 @@ const agent_row_spacing = 1;
 const agent_row_stride = agent_card_rows + agent_row_spacing;
 const minions_icon = "\u{2687}";
 
-pub fn render(context: *ContextType, input: SidebarInput) Semantic {
+pub fn render(context: *Context, input: SidebarInput) Semantic {
     var semantic: Semantic = .{ .area = input.area };
     renderCells(context, input, &semantic);
     return semantic;
 }
 
-fn renderCells(context: *ContextType, input: SidebarInput, semantic: *Semantic) void {
+fn renderCells(context: *Context, input: SidebarInput, semantic: *Semantic) void {
     const area = input.area;
     if (area.isEmpty()) {
         return;
@@ -63,7 +63,7 @@ fn renderCells(context: *ContextType, input: SidebarInput, semantic: *Semantic) 
     drawAgents(context, input, semantic);
 }
 
-fn drawHeader(context: *ContextType, area: core.Rect, background: core.Color) void {
+fn drawHeader(context: *Context, area: core.Rect, background: core.Color) void {
     const row: core.Rect = .{ .x = area.x + 2, .y = area.y, .w = area.w -| 3, .h = 1 };
     context.buffer.fill(row, .{ .glyph = " ", .style = .{ .bg = background } });
     _ = context.buffer.writeText(row, .{ .point = .{ .x = row.x, .y = row.y }, .text = minions_icon, .style = .{
@@ -77,7 +77,7 @@ fn drawHeader(context: *ContextType, area: core.Rect, background: core.Color) vo
     } });
 }
 
-fn drawAgents(context: *ContextType, input: SidebarInput, semantic: *Semantic) void {
+fn drawAgents(context: *Context, input: SidebarInput, semantic: *Semantic) void {
     const area = semantic.list_area;
     const background = cellBackground(context, input.transparent);
     context.buffer.fill(area, .{ .glyph = " ", .style = .{ .bg = background } });
@@ -117,7 +117,7 @@ fn drawAgents(context: *ContextType, input: SidebarInput, semantic: *Semantic) v
     drawScrollbar(context, .{ .state = input.state, .list = area, .total = total, .background = background });
 }
 
-fn drawAgentLine(context: *ContextType, line_input: AgentLineInput) void {
+fn drawAgentLine(context: *Context, line_input: AgentLineInput) void {
     const input = line_input.sidebar;
     const semantic = line_input.semantic;
     const y = line_input.y;
@@ -189,7 +189,7 @@ fn drawAgentLine(context: *ContextType, line_input: AgentLineInput) void {
     context.hits.add(row, action);
 }
 
-fn drawAgentTitle(context: *ContextType, line_input: AgentLineInput, area: core.Rect) void {
+fn drawAgentTitle(context: *Context, line_input: AgentLineInput, area: core.Rect) void {
     const input = line_input.sidebar;
     const semantic = line_input.semantic;
     const agent = line_input.agent;
@@ -222,7 +222,7 @@ fn drawAgentTitle(context: *ContextType, line_input: AgentLineInput, area: core.
     });
 }
 
-fn drawAgentLocation(context: *ContextType, input: AgentLocationInput) void {
+fn drawAgentLocation(context: *Context, input: AgentLocationInput) void {
     var location_buffer: [256]u8 = undefined;
     const workspace_label = input.agent.workspaceLabel();
     const tab = input.agent.tabLabel();
@@ -262,7 +262,7 @@ fn projectedPaneIndex(input: SidebarInput, agent: *const data.Agent) u16 {
     return model.tabs.layout[input.tab].displayIndex(agent.key.pane_id) orelse agent.pane_index;
 }
 
-fn drawAgentMeta(context: *ContextType, input: AgentMetaInput) void {
+fn drawAgentMeta(context: *Context, input: AgentMetaInput) void {
     const area = input.area;
     const agent = input.agent;
     const background = input.background;
@@ -296,7 +296,7 @@ fn drawAgentMeta(context: *ContextType, input: AgentMetaInput) void {
     });
 }
 
-fn drawStatus(context: *ContextType, input: AgentStatusInput) void {
+fn drawStatus(context: *Context, input: AgentStatusInput) void {
     const area = input.area;
     const status = input.status;
     const background = input.background;
@@ -346,7 +346,7 @@ fn statusLabel(status: core.AgentStatus) []const u8 {
     };
 }
 
-fn statusColor(context: *const ContextType, status: core.AgentStatus) core.Color {
+fn statusColor(context: *const Context, status: core.AgentStatus) core.Color {
     return switch (status) {
         .unknown => context.palette.overlay0,
         .working => context.palette.accent,
@@ -357,7 +357,7 @@ fn statusColor(context: *const ContextType, status: core.AgentStatus) core.Color
     };
 }
 
-fn drawEmpty(context: *ContextType, area: core.Rect, background: core.Color) void {
+fn drawEmpty(context: *Context, area: core.Rect, background: core.Color) void {
     if (area.h < 2) {
         return;
     }
@@ -371,7 +371,7 @@ fn drawEmpty(context: *ContextType, area: core.Rect, background: core.Color) voi
     }
 }
 
-fn drawScrollbar(context: *ContextType, input: ScrollbarInput) void {
+fn drawScrollbar(context: *Context, input: ScrollbarInput) void {
     const state = input.state;
     const list = input.list;
     const total = input.total;
@@ -397,7 +397,7 @@ fn drawScrollbar(context: *ContextType, input: ScrollbarInput) void {
     }
 }
 
-fn drawRule(context: *ContextType, input: RuleInput) u16 {
+fn drawRule(context: *Context, input: RuleInput) u16 {
     const area = input.area;
     const y = input.y;
     const background = input.background;
@@ -409,7 +409,7 @@ fn drawRule(context: *ContextType, input: RuleInput) u16 {
     return y + 1;
 }
 
-fn drawRightSeparator(context: *ContextType, area: core.Rect, background: core.Color) void {
+fn drawRightSeparator(context: *Context, area: core.Rect, background: core.Color) void {
     if (area.w == 0) {
         return;
     }
@@ -423,7 +423,7 @@ fn drawRightSeparator(context: *ContextType, area: core.Rect, background: core.C
     }
 }
 
-fn cellBackground(context: *const ContextType, transparent: bool) core.Color {
+fn cellBackground(context: *const Context, transparent: bool) core.Color {
     return if (transparent) .default else context.palette.panel_bg;
 }
 
@@ -434,7 +434,7 @@ test "empty snapshot renders the minions header" {
     var state: State = .{};
     const snapshot: data.AgentSnapshot = .{};
     const palette = data.theme_support.default_theme.palette;
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &palette,
@@ -478,7 +478,7 @@ test "agent snapshot renders compact selectable rows and status" {
     var hits: widget.Hits = .{};
     var state: State = .{};
     const palette = data.theme_support.default_theme.palette;
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &palette,
@@ -555,7 +555,7 @@ test "agent without pane focus remains unhighlighted" {
     var hits: widget.Hits = .{};
     var state: State = .{};
     const palette = data.theme_support.default_theme.palette;
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &palette,
@@ -592,7 +592,7 @@ test "transparent Codex row publishes an official provider mark" {
     var hits: widget.Hits = .{};
     var state: State = .{};
     const palette = data.theme_support.default_theme.palette;
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &palette,
@@ -628,7 +628,7 @@ test "graphical focus exposes only the four rounded card corners" {
     var hits: widget.Hits = .{};
     var state: State = .{};
     const palette = data.theme_support.default_theme.palette;
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &palette,
@@ -674,7 +674,7 @@ test "hover covers the complete three-row agent card" {
     var state: State = .{};
     const palette = data.theme_support.default_theme.palette;
     const action: widget.Action = .{ .sidebar_focus_agent = agent.key };
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &palette,
@@ -727,7 +727,7 @@ test "partial card scroll preserves visible rows, spacing, and hit targets" {
     var hits: widget.Hits = .{};
     var state: State = .{ .scroll = 1 };
     const palette = data.theme_support.default_theme.palette;
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &palette,
@@ -797,7 +797,7 @@ test "42 and 62 column cards reserve status before truncating context" {
         var hits: widget.Hits = .{};
         var state: State = .{};
         const palette = data.theme_support.default_theme.palette;
-        var context: ContextType = .{
+        var context: Context = .{
             .buffer = &buffer,
             .hits = &hits,
             .palette = &palette,

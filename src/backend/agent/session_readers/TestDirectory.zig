@@ -1,7 +1,7 @@
 const core = @import("telar-core");
 const std = @import("std");
-const WatchType = @import("../Watch.zig");
-const SessionReferenceType = @import("../SessionReference.zig");
+const Watch = @import("../Watch.zig");
+const SessionReference = @import("../SessionReference.zig");
 const TestDirectory = @This();
 
 temp: std.testing.TmpDir,
@@ -18,10 +18,10 @@ pub fn deinit(directory: *TestDirectory) void {
     directory.temp.cleanup();
 }
 
-pub fn watch(directory: *const TestDirectory, kind: core.AgentSessionFileKind, name: []const u8) !WatchType {
-    var value: WatchType = .{
+pub fn watch(directory: *const TestDirectory, kind: core.AgentSessionFileKind, name: []const u8) !Watch {
+    var value: Watch = .{
         .key = .{ .id = try core.pane(7), .generation = 3 },
-        .session = try SessionReferenceType.init("abc", 1),
+        .session = try SessionReference.init("abc", 1),
         .kind = kind,
     };
     const path = try std.fmt.bufPrint(&value.path, "{s}/{s}", .{ directory.buffer[0..directory.len], name });

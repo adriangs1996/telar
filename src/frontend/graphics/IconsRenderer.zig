@@ -3,17 +3,17 @@ const SidebarRendererInput = @import("SidebarRendererInput.zig");
 const client = @import("telar-client");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
-const RasterizerType = @import("Rasterizer.zig");
+const Rasterizer = @import("Rasterizer.zig");
 const ui_icons = @import("../ui/icons.zig");
 const IconsSlot = @import("IconsSlot.zig");
 const Placement = @import("Placement.zig");
 const icons = @import("icons.zig");
-const MarkType = @import("../ui/Mark.zig");
+const Mark = @import("../ui/Mark.zig");
 const kitty_codec = @import("kitty_codec.zig");
 const Renderer = @This();
 
 gpa: std.mem.Allocator,
-text: ?RasterizerType,
+text: ?Rasterizer,
 supported: bool = false,
 failed: bool = false,
 cell_width: u16 = 0,
@@ -38,7 +38,7 @@ transfer_abort_pending: bool = false,
 pub fn init(gpa: std.mem.Allocator) Renderer {
     return .{
         .gpa = gpa,
-        .text = RasterizerType.initFont(icons.embedded_font) catch null,
+        .text = Rasterizer.initFont(icons.embedded_font) catch null,
     };
 }
 
@@ -82,7 +82,7 @@ pub fn disable(renderer: *Renderer) void {
     renderer.placements_dirty = renderer.image_emitted or renderer.transfer_offset != 0;
 }
 
-pub fn prepare(renderer: *Renderer, marks: []const MarkType) !void {
+pub fn prepare(renderer: *Renderer, marks: []const Mark) !void {
     if (marks.len > ui_icons.max_marks) {
         return error.TooManyIconMarks;
     }

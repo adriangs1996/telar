@@ -1,11 +1,11 @@
-const TransformPipelineType = @import("../TransformPipeline.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
 const std = @import("std");
 const claude_transport = @import("../provider/claude_transport.zig");
-const TransformerType = @import("../Transformer.zig");
+const Transformer = @import("../Transformer.zig");
 const View = @import("View.zig");
 const Configuration = @This();
 
-transforms: TransformPipelineType = .{},
+transforms: TransformPipeline = .{},
 has_custom_transformers: bool = false,
 mutex: std.Io.Mutex = .init,
 serving: bool = false,
@@ -28,7 +28,7 @@ pub fn init() !Configuration {
 /// ```zig
 /// try configuration.add(io, transformer);
 /// ```
-pub fn add(configuration: *Configuration, io: std.Io, transformer: TransformerType) !void {
+pub fn add(configuration: *Configuration, io: std.Io, transformer: Transformer) !void {
     configuration.mutex.lockUncancelable(io);
     defer configuration.mutex.unlock(io);
     if (configuration.serving) {

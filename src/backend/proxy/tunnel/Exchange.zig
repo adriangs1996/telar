@@ -1,19 +1,19 @@
 const std = @import("std");
-const PipelineType = @import("../Pipeline.zig");
-const CountersType = @import("../Counters.zig");
-const CredentialType = @import("../Credential.zig");
+const Pipeline = @import("../Pipeline.zig");
+const Counters = @import("../Counters.zig");
+const Credential = @import("../Credential.zig");
 const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
 const Status = @import("Status.zig");
 const metrics = @import("../metrics.zig");
 const TransformTarget = @import("TransformTarget.zig");
-const TransformContextType = @import("../TransformContext.zig");
+const TransformContext = @import("../TransformContext.zig");
 const Exchange = @This();
 
 io: std.Io,
-pipeline: *const PipelineType,
-telemetry: *CountersType,
-credential: CredentialType,
+pipeline: *const Pipeline,
+telemetry: *Counters,
+credential: Credential,
 dialect: types.ApiDialect,
 connection_id: u64,
 protocol: middleware.Protocol,
@@ -80,7 +80,7 @@ pub fn publishStatus(exchange: *Exchange, status: Status) void {
 ///     .stream_id = 0,
 /// });
 /// ```
-pub fn transformContext(exchange: *const Exchange, target: TransformTarget) TransformContextType {
+pub fn transformContext(exchange: *const Exchange, target: TransformTarget) TransformContext {
     return .{
         .pane_id = exchange.credential.pane_id,
         .pane_generation = exchange.credential.pane_generation,

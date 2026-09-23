@@ -6,7 +6,7 @@ const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
 const FormatRequest = @import("FormatRequest.zig");
 const std = @import("std");
-const SnapshotType = @import("Snapshot.zig");
+const Snapshot = @import("Snapshot.zig");
 
 pub const buffer_size = client_module.TelemetryState.buffer_size;
 
@@ -274,7 +274,7 @@ pub fn handleWritten(terminal: *TerminalClient, result: anyerror!void) void {
     finishWrite(&client.telemetry, client.io, result);
 }
 
-fn capture(terminal: *TerminalClient, heap: core.SnapshotSnapshot) ?SnapshotType {
+fn capture(terminal: *TerminalClient, heap: core.SnapshotSnapshot) ?Snapshot {
     const client = &terminal.app;
 
     const active = client.model.tabs.activeSlot() orelse return null;

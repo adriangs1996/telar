@@ -2,14 +2,14 @@
 
 const data = @import("model");
 const lua_api = @import("lua-api");
-const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
+const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
 const CommandInput = @import("CommandInput.zig");
-const CommandSpecType = @import("CommandSpec.zig");
+const CommandSpec = @import("CommandSpec.zig");
 const std = @import("std");
 const IntegerInput = @import("IntegerInput.zig");
 
-pub fn parseAgentDescriptions(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *data.Diagnostic) !void {
+pub fn parseAgentDescriptions(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.agent_descriptions must be a table", .{});
@@ -28,7 +28,7 @@ pub fn parseAgentDescriptions(state: *lua_api.c.lua_State, runtime: *RuntimeSnap
     }, diagnostic);
 }
 
-pub fn parseEngine(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *data.Diagnostic) !void {
+pub fn parseEngine(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.engine must be a table", .{});
@@ -57,7 +57,7 @@ pub fn parseEngine(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, d
     }, diagnostic);
 }
 
-fn parseCommand(state: *lua_api.c.lua_State, input: CommandInput, diagnostic: *data.Diagnostic) !CommandSpecType {
+fn parseCommand(state: *lua_api.c.lua_State, input: CommandInput, diagnostic: *data.Diagnostic) !CommandSpec {
     _ = lua_api.c.lua_getfield(state, input.table, "command");
     defer value.pop(state, 1);
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TTABLE) {
@@ -77,7 +77,7 @@ fn parseCommand(state: *lua_api.c.lua_State, input: CommandInput, diagnostic: *d
         .path = input.command_path,
     }, diagnostic);
 
-    var command: CommandSpecType = .{};
+    var command: CommandSpec = .{};
     for (0..count) |argument_index| {
         _ = lua_api.c.lua_geti(state, command_table, @intCast(argument_index + 1));
         defer value.pop(state, 1);

@@ -1,21 +1,21 @@
-const FakeSessionType = @import("../../proxy/http/FakeSession.zig");
-const SessionType = @import("../../proxy/Session.zig");
-const FragmentType = @import("../../proxy/http/Fragment.zig");
+const FakeSession = @import("../../proxy/http/FakeSession.zig");
+const Session = @import("../../proxy/Session.zig");
+const Fragment = @import("../../proxy/http/Fragment.zig");
 const CountedRelay = @This();
 
-fake: FakeSessionType,
+fake: FakeSession,
 writes: usize = 0,
 
 /// Example: `const count = counted.read(.origin, buffer);`.
-pub fn read(relay: *CountedRelay, side: SessionType.Side, bytes: []u8) ?usize {
+pub fn read(relay: *CountedRelay, side: Session.Side, bytes: []u8) ?usize {
     return relay.fake.read(side, bytes);
 }
 
 /// Example: `const forwarded = counted.writeAll(.child, bytes);`.
-pub fn writeAll(relay: *CountedRelay, side: SessionType.Side, bytes: []const u8) bool {
+pub fn writeAll(relay: *CountedRelay, side: Session.Side, bytes: []const u8) bool {
     relay.writes += 1;
     return relay.fake.writeAll(side, bytes);
 }
 
 /// Example: `counted.observe(fragment);`.
-pub fn observe(_: *CountedRelay, _: FragmentType) void {}
+pub fn observe(_: *CountedRelay, _: Fragment) void {}

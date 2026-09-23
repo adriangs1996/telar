@@ -7,7 +7,7 @@ const table = @import("table.zig");
 const Producer = @import("Producer.zig");
 const std = @import("std");
 const TestGate = @import("TestGate.zig");
-const CredentialType = @import("../Credential.zig");
+const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
 
 test {
@@ -25,7 +25,7 @@ test "disabled capture does not allocate or reserve quota" {
         .gate = .{ .context = &gate_context, .is_live = TestGate.accepts },
     });
     defer producer.close(std.testing.io);
-    const credential: CredentialType = .{
+    const credential: Credential = .{
         .pane_id = @enumFromInt(1),
         .pane_generation = 1,
         .token = .{0x5a} ** identity.token_bytes,

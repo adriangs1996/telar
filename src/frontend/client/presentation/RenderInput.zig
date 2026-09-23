@@ -1,14 +1,14 @@
 const client = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
-const CompositorType = @import("../../workspace/Compositor.zig");
+const Compositor = @import("../../workspace/Compositor.zig");
 const view = @import("view.zig");
 const RenderInput = @This();
 
 model: *const data.ClientModel,
 /// The active tab's slot in `model.tabs`.
 tab: usize,
-compositor: ?*const CompositorType = null,
+compositor: ?*const Compositor = null,
 agents: *const data.AgentSnapshot = &view.empty_agent_snapshot,
 sidebar_animation_frame: u8 = 0,
 notifications: *const data.Center = &view.empty_notifications,

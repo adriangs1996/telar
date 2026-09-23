@@ -1,11 +1,11 @@
-const DecoderType = @import("../Decoder.zig");
-const SearchMatchType = @import("../SearchMatch.zig");
+const Decoder = @import("../Decoder.zig");
+const SearchMatch = @import("../SearchMatch.zig");
 const SearchMatchIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *SearchMatchIterator) !?SearchMatchType {
+pub fn next(iterator: *SearchMatchIterator) !?SearchMatch {
     if (iterator.remaining == 0) {
         return null;
     }

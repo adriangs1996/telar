@@ -1,9 +1,9 @@
 const core = @import("telar-core");
-const PaneType = @import("../../pane/Pane.zig");
+const Pane = @import("../../pane/Pane.zig");
 const CellSync = @import("CellSync.zig");
 const GraphicsSync = @import("GraphicsSync.zig");
 const std = @import("std");
-const RangeType = @import("Range.zig");
+const Range = @import("Range.zig");
 const selection = @import("selection.zig");
 const attachment_namespace = @import("attachment_namespace.zig");
 const ReviewContext = @import("../../change_review/Context.zig");
@@ -17,7 +17,7 @@ pub const GraphicsPreparation = @import("GraphicsPreparation.zig");
 pub const Prepared = @import("Prepared.zig");
 
 pub const CommitEffect = @import("CommitEffect.zig");
-pane: *PaneType,
+pane: *Pane,
 cells: CellSync,
 graphics: GraphicsSync,
 cell_pacer: core.Pacer = .{},
@@ -31,7 +31,7 @@ observed_progress_revision: u64 = 1,
 observed_review_revision: u64 = 0,
 exit_sent: bool = false,
 
-pub fn init(gpa: std.mem.Allocator, pane: *PaneType) !Attachment {
+pub fn init(gpa: std.mem.Allocator, pane: *Pane) !Attachment {
     return .{
         .pane = pane,
         .cells = try .init(gpa, pane),
@@ -59,7 +59,7 @@ pub fn requestCellSnapshot(attachment: *Attachment) void {
     attachment.cells.requestSnapshot();
 }
 
-pub fn copySelection(attachment: *Attachment, range: RangeType, scratch: []u8) selection.Result {
+pub fn copySelection(attachment: *Attachment, range: Range, scratch: []u8) selection.Result {
     return selection.extract(attachment.pane, range, scratch);
 }
 
@@ -102,7 +102,7 @@ pub fn prepareReview(self: *Attachment, buffer: []u8) !?Prepared {
 }
 
 test "review discovery replays on attach and reconnect without losing changes during send" {
-    var pane: PaneType = undefined;
+    var pane: Pane = undefined;
     pane.review_availability = .{};
     const context = try ReviewContext.init(.{ .id = @enumFromInt(1), .generation = 4 }, .claude, "hook-session");
     var first: Attachment = undefined;

@@ -6,7 +6,7 @@ const claude = @import("claude.zig");
 const codex = @import("codex.zig");
 const std = @import("std");
 const TestDirectory = @import("TestDirectory.zig");
-const SessionReferenceType = @import("../SessionReference.zig");
+const SessionReference = @import("../SessionReference.zig");
 
 const c = @cImport({
     @cInclude("sqlite3.h");
@@ -107,13 +107,13 @@ test "codex state probe reads the thread name, a NULL name as empty and nothing 
     try std.testing.expect(named.offset == null);
 
     var unnamed = watch;
-    unnamed.session = try SessionReferenceType.init("unnamed", 1);
+    unnamed.session = try SessionReference.init("unnamed", 1);
     const cleared = probe(.{ .io = io, .watch = unnamed });
     try std.testing.expect(cleared.has_title);
     try std.testing.expectEqualStrings("", cleared.titleSlice());
 
     var unknown = watch;
-    unknown.session = try SessionReferenceType.init("nope", 1);
+    unknown.session = try SessionReference.init("nope", 1);
     try std.testing.expect(!probe(.{ .io = io, .watch = unknown }).has_title);
 
     var missing = watch;

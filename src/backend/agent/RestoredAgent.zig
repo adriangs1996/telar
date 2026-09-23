@@ -1,8 +1,8 @@
-const PaneKeyType = @import("../pane/PaneKey.zig");
-const SessionTitleType = @import("SessionTitle.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
+const SessionTitle = @import("SessionTitle.zig");
 const ResumeSession = @import("ResumeSession.zig");
 const RestoredAgent = @This();
 
-key: PaneKeyType,
-title: ?SessionTitleType = null,
+key: PaneKey,
+title: ?SessionTitle = null,
 session: ?ResumeSession = null,

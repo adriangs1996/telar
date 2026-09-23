@@ -1,14 +1,14 @@
 //! Mouse-gesture ownership for textual links inside pane content.
 
 const Pointer = @import("Pointer.zig");
-const TargetType = @import("LinkTarget.zig");
+const LinkTarget = @import("LinkTarget.zig");
 const std = @import("std");
 
 pub const Kind = @import("../types/PointerSupportKind.zig").PointerSupportKind;
 
 test "a link press owns its drag and release" {
     var pointer: Pointer = .{};
-    const target = try TargetType.init("https://example.com");
+    const target = try LinkTarget.init("https://example.com");
 
     const pressed = pointer.handle(
         .{
@@ -38,7 +38,7 @@ test "a link press owns its drag and release" {
 
 test "non-link and non-left presses remain unowned" {
     var pointer: Pointer = .{};
-    const target = try TargetType.init("https://example.com");
+    const target = try LinkTarget.init("https://example.com");
 
     try std.testing.expect(!pointer.handle(
         .{
@@ -58,7 +58,7 @@ test "non-link and non-left presses remain unowned" {
 
 test "right link press copies once and owns drag and release" {
     var pointer: Pointer = .{};
-    const target = try TargetType.init("file:///tmp/a%20b.txt");
+    const target = try LinkTarget.init("file:///tmp/a%20b.txt");
     const pressed = pointer.handle(
         .{
             .kind = .press,

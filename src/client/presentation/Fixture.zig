@@ -5,12 +5,12 @@ const core = @import("telar-core");
 const presentation_delivery = @import("../operations/session/presentation_delivery.zig");
 const TransportState = @import("../connection/RuntimeTransportState.zig");
 const Credit = @import("../graphics/Credit.zig");
-const AdapterType = @import("HeadlessAdapter.zig");
+const HeadlessAdapter = @import("HeadlessAdapter.zig");
 const retained_module = @import("../graphics/retained.zig");
 const std = @import("std");
 const Job = @import("../execution/Job.zig").Job;
 const headless_tests = @import("headless_tests.zig");
-const ProjectionType = @import("Projection.zig");
+const Projection = @import("Projection.zig");
 const projection_support = @import("projection_support.zig");
 const lifecycle_module = @import("lifecycle.zig");
 const GenericInbox = @import("../execution/GenericInbox.zig").Type;
@@ -25,7 +25,7 @@ inbox: GenericInbox(headless_event.Message),
 receive_buffer: [64 * 1024]u8 = undefined,
 received: model_data.RuntimeMessage = undefined,
 receive_pending: bool = false,
-adapter: AdapterType = undefined,
+adapter: HeadlessAdapter = undefined,
 outbox: *model_data.Outbox,
 graphics: retained_module.Store,
 activations: usize = 0,
@@ -80,7 +80,7 @@ pub fn arrive(fixture: *Fixture) !void {
     fixture.activations += 1;
 }
 
-pub fn projection(fixture: *Fixture) ProjectionType {
+pub fn projection(fixture: *Fixture) Projection {
     return projection_support.capture(fixture.model, .{ .geometry = model_data.workbench.region(fixture.model) });
 }
 

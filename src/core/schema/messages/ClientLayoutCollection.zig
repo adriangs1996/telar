@@ -1,10 +1,10 @@
 const types = @import("../types.zig");
-const TabLocationType = @import("../TabLocation.zig");
+const TabLocation = @import("../TabLocation.zig");
 const ClientLayoutEntry = @import("ClientLayoutEntry.zig");
 const std = @import("std");
 const ClientLayoutCollection = @This();
 
-locations: [types.max_client_layout_tabs]TabLocationType = undefined,
+locations: [types.max_client_layout_tabs]TabLocation = undefined,
 workspace_active: [types.max_client_layout_tabs]bool = undefined,
 count: usize = 0,
 node_count: usize = 0,
@@ -32,7 +32,7 @@ pub fn append(collection: *ClientLayoutCollection, entry: ClientLayoutEntry) !vo
     collection.count += 1;
 }
 
-pub fn validateActive(collection: *const ClientLayoutCollection, active: TabLocationType) !void {
+pub fn validateActive(collection: *const ClientLayoutCollection, active: TabLocation) !void {
     for (collection.locations[0..collection.count], collection.workspace_active[0..collection.count]) |location, is_workspace_active| {
         if (std.meta.eql(location, active)) {
             if (!is_workspace_active) {

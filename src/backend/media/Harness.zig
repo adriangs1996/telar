@@ -1,18 +1,18 @@
 const core = @import("telar-core");
-const PipelineType = @import("Pipeline.zig");
-const GraphicsBudgetType = @import("GraphicsBudget.zig");
-const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
+const Pipeline = @import("Pipeline.zig");
+const GraphicsBudget = @import("GraphicsBudget.zig");
+const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 const State = @import("State.zig");
 const std = @import("std");
 const png_test = @import("png_test.zig");
-const ProcessorType = @import("Processor.zig");
-const StatsType = @import("Stats.zig");
+const Processor = @import("Processor.zig");
+const Stats = @import("Stats.zig");
 const vt = @import("ghostty-vt");
 const Harness = @This();
 
-pipeline: PipelineType,
-budget: GraphicsBudgetType,
-allocator: PaneMediaAllocatorType,
+pipeline: Pipeline,
+budget: GraphicsBudget,
+allocator: PaneMediaAllocator,
 ingestion: State = .{},
 replies: [1024]u8 = undefined,
 reply_len: usize = 0,
@@ -50,7 +50,7 @@ pub fn feed(harness: *Harness, bytes: []const u8) void {
     std.debug.assert(harness.pipeline.seal());
     defer harness.pipeline.finishSealed();
 
-    var processor: ProcessorType = .{
+    var processor: Processor = .{
         .state = &harness.ingestion,
         .media = &harness.pipeline,
         .media_allocator = &harness.allocator,
@@ -59,14 +59,14 @@ pub fn feed(harness: *Harness, bytes: []const u8) void {
         .io = std.testing.io,
         .responses = .{ .context = harness, .write_fn = writeResponse },
     };
-    var stats: StatsType = .{};
+    var stats: Stats = .{};
     processor.processMedia(png_test.size, &stats);
     std.debug.assert(!stats.failed);
 }
 
 fn writePty(handler: *vt.TerminalStream.Handler, response: [:0]const u8) void {
     const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
-    const pipeline: *PipelineType = @fieldParentPtr("stream", stream);
+    const pipeline: *Pipeline = @fieldParentPtr("stream", stream);
     const harness: *Harness = @fieldParentPtr("pipeline", pipeline);
     writeResponse(harness, response);
 }

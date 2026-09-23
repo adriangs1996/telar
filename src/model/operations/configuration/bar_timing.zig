@@ -1,6 +1,6 @@
 const std = @import("std");
 const model = @import("../../bars/model.zig");
-const ConfigurationType = @import("../../bars/BarConfiguration.zig");
+const BarConfiguration = @import("../../bars/BarConfiguration.zig");
 const State = @import("../../bars/BarUpdatesState.zig");
 const command_execution = @import("../../bars/command_execution.zig");
 
@@ -20,7 +20,7 @@ pub fn followingDeadline(deadline_ns: u64, interval_ns: u64, now_ns: u64) u64 {
 }
 
 test "bar deadlines start immediately and coalesce elapsed intervals" {
-    const configuration: ConfigurationType = .{
+    const configuration: BarConfiguration = .{
         .bottom = .{
             .{ .dynamic = .{ .callback = .{ .generation = 4, .id = 0 }, .interval_ns = 100 } },
             .{ .command = .{ .generation = 4, .interval_ns = 250, .timeout_ms = 100 } },

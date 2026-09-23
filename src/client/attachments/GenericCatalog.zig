@@ -1,14 +1,14 @@
 const core = @import("telar-core");
 const model_data = @import("model");
 const std = @import("std");
-const PendingDeletionType = @import("PendingDeletion.zig");
+const PendingDeletion = @import("PendingDeletion.zig");
 const catalog = @import("catalog.zig");
-const SnapshotType = @import("AttachmentSnapshot.zig");
-const ItemType = @import("Item.zig");
-const MarkerScreenType = @import("MarkerScreen.zig");
+const AttachmentSnapshot = @import("AttachmentSnapshot.zig");
+const Item = @import("Item.zig");
+const MarkerScreen = @import("MarkerScreen.zig");
 const markers = @import("markers.zig");
-const DeletionProbeType = @import("DeletionProbe.zig");
-const MarkerScanType = @import("MarkerScan.zig");
+const DeletionProbe = @import("DeletionProbe.zig");
+const MarkerScan = @import("MarkerScan.zig");
 
 /// Creates an attachment catalog with presentation-owned slot resources.
 /// Example: `var catalog = Catalog(Delivery).init(gpa);`.
@@ -58,7 +58,7 @@ pub fn Type(comptime Delivery: type) type {
         gpa: std.mem.Allocator,
         slots: [model_data.attachment_types.max_items]?Slot = @splat(null),
         active_target: ?model_data.AttachmentTarget = null,
-        marker_deletion_pending: ?PendingDeletionType = null,
+        marker_deletion_pending: ?PendingDeletion = null,
         modal: ?model_data.AttachmentId = null,
         total_bytes: usize = 0,
         ingress_version: u64 = 0,
@@ -134,8 +134,8 @@ pub fn Type(comptime Delivery: type) type {
             return store.modal != null;
         }
 
-        pub fn snapshot(store: *const Self) SnapshotType {
-            var result: SnapshotType = .{ .modal = store.modal };
+        pub fn snapshot(store: *const Self) AttachmentSnapshot {
+            var result: AttachmentSnapshot = .{ .modal = store.modal };
             for (store.slots) |maybe_slot| if (maybe_slot) |slot| {
                 if (!store.slotVisible(&slot)) {
                     continue;
@@ -155,7 +155,7 @@ pub fn Type(comptime Delivery: type) type {
                     while (at != 0 and @intFromEnum(result.items[at - 1].id) >
                         @intFromEnum(result.items[at].id)) : (at -= 1)
                     {
-                        std.mem.swap(ItemType, &result.items[at - 1], &result.items[at]);
+                        std.mem.swap(Item, &result.items[at - 1], &result.items[at]);
                     }
                 }
             }
@@ -240,7 +240,7 @@ pub fn Type(comptime Delivery: type) type {
             return removed;
         }
 
-        pub fn planMarkerRemoval(store: *const Self, id: model_data.AttachmentId, screen: MarkerScreenType) ?model_data.MarkerRemoval {
+        pub fn planMarkerRemoval(store: *const Self, id: model_data.AttachmentId, screen: MarkerScreen) ?model_data.MarkerRemoval {
             const visible = store.snapshot();
             const ordinal = snapshotOrdinal(&visible, id) orelse return null;
             const slot = store.findConst(id) orelse return null;
@@ -255,7 +255,7 @@ pub fn Type(comptime Delivery: type) type {
             return removal;
         }
 
-        pub fn idAtMarkerDeletion(store: *const Self, screen: MarkerScreenType, deletion: model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId {
+        pub fn idAtMarkerDeletion(store: *const Self, screen: MarkerScreen, deletion: model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId {
             const visible = store.snapshot();
             for (visible.slice(), 0..) |item, index| {
                 const slot = store.findConst(item.id) orelse continue;
@@ -275,7 +275,7 @@ pub fn Type(comptime Delivery: type) type {
             return null;
         }
 
-        pub fn pendingMarkerAtDeletion(store: *const Self, screen: MarkerScreenType, probe: DeletionProbeType) bool {
+        pub fn pendingMarkerAtDeletion(store: *const Self, screen: MarkerScreen, probe: DeletionProbe) bool {
             const visible = store.snapshot();
             if (visible.len >= model_data.attachment_types.max_items) {
                 return false;
@@ -321,7 +321,7 @@ pub fn Type(comptime Delivery: type) type {
             }
         }
 
-        pub fn reconcileMarkers(store: *Self, target: model_data.AttachmentTarget, screen: MarkerScreenType) u8 {
+        pub fn reconcileMarkers(store: *Self, target: model_data.AttachmentTarget, screen: MarkerScreen) u8 {
             const visible = store.snapshot();
             for (visible.slice()) |item| {
                 const slot = store.find(item.id) orelse continue;
@@ -493,7 +493,7 @@ pub fn Type(comptime Delivery: type) type {
             }
             maybe_slot.* = null;
         }
-        pub fn snapshotOrdinal(projection: *const SnapshotType, id: model_data.AttachmentId) ?u8 {
+        pub fn snapshotOrdinal(projection: *const AttachmentSnapshot, id: model_data.AttachmentId) ?u8 {
             for (projection.slice(), 0..) |item, index| {
                 if (item.id == id) {
                     return @intCast(index);
@@ -540,7 +540,7 @@ pub fn Type(comptime Delivery: type) type {
         pub fn markerForNextUnpaired(store: *const Self, target: model_data.AttachmentTarget, buffer: *const core.Buffer) ?u16 {
             var candidates: [model_data.attachment_types.max_items]u16 = @splat(0);
             var candidate_count: u8 = 0;
-            var scan: MarkerScanType = .{ .buffer = buffer };
+            var scan: MarkerScan = .{ .buffer = buffer };
             while (scan.next()) |marker| {
                 if (markerNumberClaimed(store, target, marker.number)) {
                     continue;

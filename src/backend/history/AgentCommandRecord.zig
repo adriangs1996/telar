@@ -1,10 +1,10 @@
 const core = @import("telar-core");
-const CommandContextType = @import("CommandContext.zig");
-const CommandType = @import("Command.zig");
+const CommandContext = @import("CommandContext.zig");
+const Command = @import("Command.zig");
 const AgentCommandRecord = @This();
 
-context: CommandContextType,
-command: CommandType,
+context: CommandContext,
+command: Command,
 provider: []const u8 = "",
 tool_call_id: []const u8 = "",
 origin: core.HistoryOrigin,

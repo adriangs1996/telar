@@ -1,11 +1,11 @@
-const PeerSettingsType = @import("PeerSettings.zig");
-const TransformPipelineType = @import("../TransformPipeline.zig");
+const PeerSettings = @import("PeerSettings.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
 const std = @import("std");
-const TransformContextType = @import("../TransformContext.zig");
+const TransformContext = @import("../TransformContext.zig");
 const Transformation = @This();
 
-source_settings: *PeerSettingsType,
-target_settings: *PeerSettingsType,
-pipeline: *const TransformPipelineType,
+source_settings: *PeerSettings,
+target_settings: *PeerSettings,
+pipeline: *const TransformPipeline,
 io: std.Io,
-context: TransformContextType,
+context: TransformContext,

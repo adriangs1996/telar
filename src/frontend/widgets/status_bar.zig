@@ -7,7 +7,7 @@
 const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
-const ContextType = @import("Context.zig");
+const Context = @import("Context.zig");
 const Metrics = @import("Metrics.zig");
 const std = @import("std");
 const icons_module = @import("../ui/icons.zig");
@@ -15,7 +15,7 @@ const PairInput = @import("PairInput.zig");
 const WriteInput = @import("WriteInput.zig");
 const widget = @import("context_support.zig");
 
-pub fn render(context: *ContextType, area: core.Rect, metrics: ?Metrics) void {
+pub fn render(context: *Context, area: core.Rect, metrics: ?Metrics) void {
     if (area.isEmpty()) {
         return;
     }
@@ -82,7 +82,7 @@ fn iconWidth(icon: data.icons.Icon) u16 {
     return @max(@as(u16, 1), core.measure(icon.unicodeGlyph()));
 }
 
-pub fn renderMode(context: *ContextType, area: core.Rect, mode: client.Mode) void {
+pub fn renderMode(context: *Context, area: core.Rect, mode: client.Mode) void {
     if (area.isEmpty() or mode == .normal) {
         return;
     }
@@ -94,7 +94,7 @@ pub fn renderMode(context: *ContextType, area: core.Rect, mode: client.Mode) voi
     }
 }
 
-fn renderPrefix(context: *ContextType, area: core.Rect, hints: *const client.Hints) void {
+fn renderPrefix(context: *Context, area: core.Rect, hints: *const client.Hints) void {
     var x = renderModeLabel(context, area, " PREFIX ");
     renderPair(context, .{ .area = area, .x = &x, .key = "Esc", .label = "cancel" });
     for (hints.slice()) |hint| {
@@ -103,7 +103,7 @@ fn renderPrefix(context: *ContextType, area: core.Rect, hints: *const client.Hin
     }
 }
 
-fn renderCopy(context: *ContextType, area: core.Rect) void {
+fn renderCopy(context: *Context, area: core.Rect) void {
     var x = renderModeLabel(context, area, " COPY ");
     renderPair(context, .{ .area = area, .x = &x, .key = "h/j/k/l", .label = "move" });
     renderPair(context, .{ .area = area, .x = &x, .key = "w/b/e", .label = "word" });
@@ -115,7 +115,7 @@ fn renderCopy(context: *ContextType, area: core.Rect) void {
     renderPair(context, .{ .area = area, .x = &x, .key = "q/Esc", .label = "exit" });
 }
 
-fn renderModeLabel(context: *ContextType, area: core.Rect, label: []const u8) u16 {
+fn renderModeLabel(context: *Context, area: core.Rect, label: []const u8) u16 {
     return area.x + context.buffer.writeTruncated(area, .{ .point = .{ .x = area.x, .y = area.y }, .text = label, .max_width = area.w, .style = .{
         .fg = context.palette.surface_dim,
         .bg = context.palette.accent,
@@ -123,7 +123,7 @@ fn renderModeLabel(context: *ContextType, area: core.Rect, label: []const u8) u1
     } });
 }
 
-fn renderPair(context: *ContextType, pair: PairInput) void {
+fn renderPair(context: *Context, pair: PairInput) void {
     const area = pair.area;
     const x = pair.x;
 
@@ -151,7 +151,7 @@ fn renderPair(context: *ContextType, pair: PairInput) void {
     write(context, .{ .area = area, .x = x, .text = " ", .style = .{ .bg = context.palette.panel_bg } });
 }
 
-fn write(context: *ContextType, input_write: WriteInput) void {
+fn write(context: *Context, input_write: WriteInput) void {
     const remaining = input_write.area.x + input_write.area.w -| input_write.x.*;
     if (remaining == 0) {
         return;
@@ -202,7 +202,7 @@ fn append(buffer: *[32]u8, len: *usize, text: []const u8) void {
     len.* += take;
 }
 
-fn cpuColor(context: *const ContextType, cpu_percent: u8) core.Color {
+fn cpuColor(context: *const Context, cpu_percent: u8) core.Color {
     if (cpu_percent > 90) {
         return context.palette.red;
     }
@@ -216,7 +216,7 @@ test "mode bars render prefix and copy hints" {
     var buffer = try core.Buffer.init(std.testing.allocator, 120, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
-    var context: ContextType = .{
+    var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
         .palette = &data.theme_support.default_theme.palette,

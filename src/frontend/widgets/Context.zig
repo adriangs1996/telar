@@ -2,7 +2,7 @@ const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const context_support = @import("context_support.zig");
-const PlanType = @import("../ui/Plan.zig");
+const Plan = @import("../ui/Plan.zig");
 const std = @import("std");
 const IconDraw = @import("IconDraw.zig");
 /// Widgets receive no client state and cannot mutate navigation, layout,
@@ -14,7 +14,7 @@ hits: *context_support.Hits,
 palette: *const data.Palette,
 hovered: ?context_support.Action,
 icon_theme: data.icons.Theme = .unicode,
-icon_plan: ?*PlanType = null,
+icon_plan: ?*Plan = null,
 
 pub fn isHovered(context: *const Context, action: context_support.Action) bool {
     const hovered = context.hovered orelse return false;

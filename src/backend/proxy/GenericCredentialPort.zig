@@ -1,4 +1,4 @@
-const CredentialType = @import("Credential.zig");
+const Credential = @import("Credential.zig");
 
 /// Defines live credential lookup supplied by the proxy credential registry.
 ///
@@ -7,6 +7,6 @@ const CredentialType = @import("Credential.zig");
 /// ```
 pub fn Type(comptime Context: type) type {
     return struct {
-        contains: *const fn (*Context, *const CredentialType) bool,
+        contains: *const fn (*Context, *const Credential) bool,
     };
 }

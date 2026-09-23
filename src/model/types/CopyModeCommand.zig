@@ -1,10 +1,10 @@
-const KeyType = @import("../input/Key.zig");
-const PointerMotionType = @import("../input/PointerMotion.zig");
+const Key = @import("../input/Key.zig");
+const PointerMotion = @import("../input/PointerMotion.zig");
 const CopyModeMatches = @import("../state/CopyModeMatches.zig");
 
 pub const CopyModeCommand = union(enum) {
-    key: KeyType,
-    pointer: PointerMotionType,
+    key: Key,
+    pointer: PointerMotion,
     cancel_pointer,
     vertical: i32,
     matches: CopyModeMatches,

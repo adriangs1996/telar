@@ -1,12 +1,12 @@
-const DecoderType = @import("../Decoder.zig");
-const HistoryEntryType = @import("../HistoryEntry.zig");
+const Decoder = @import("../Decoder.zig");
+const HistoryEntry = @import("../HistoryEntry.zig");
 const history = @import("history.zig");
 const HistoryEntryIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 
-pub fn next(iterator: *HistoryEntryIterator) !?HistoryEntryType {
+pub fn next(iterator: *HistoryEntryIterator) !?HistoryEntry {
     if (iterator.remaining == 0) {
         return null;
     }

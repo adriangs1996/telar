@@ -1,10 +1,10 @@
-const SessionType = @import("../Session.zig");
+const Session = @import("../Session.zig");
 const types = @import("../../agent/types.zig");
 const Half = @import("../capture/Half.zig");
 const MessageRoute = @This();
 
-from: SessionType.Side,
-to: SessionType.Side,
+from: Session.Side,
+to: Session.Side,
 is_response: bool,
 response_to_head: bool,
 dialect: types.ApiDialect = .unknown,

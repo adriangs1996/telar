@@ -3,10 +3,10 @@
 const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const ScreenType = @import("Screen.zig");
+const Screen = @import("Screen.zig");
 const std = @import("std");
 
-pub fn apply(screen: *ScreenType, frame: core.FrameView) !data.Applied {
+pub fn apply(screen: *Screen, frame: core.FrameView) !data.Applied {
     if (frame.base_frame_id == 0 and
         !screen.sizeMatches(frame.cols, frame.rows))
     {
@@ -36,7 +36,7 @@ pub fn apply(screen: *ScreenType, frame: core.FrameView) !data.Applied {
 }
 
 test "a patch updates the screen and reports its work" {
-    var screen = try ScreenType.init(std.testing.allocator, 4, 2);
+    var screen = try Screen.init(std.testing.allocator, 4, 2);
     defer screen.deinit();
 
     const cells = [_]core.Cell{
@@ -64,7 +64,7 @@ test "a patch updates the screen and reports its work" {
 }
 
 test "a patch cannot silently resize the client screen" {
-    var screen = try ScreenType.init(std.testing.allocator, 4, 2);
+    var screen = try Screen.init(std.testing.allocator, 4, 2);
     defer screen.deinit();
 
     const cells = [_]core.Cell{.{}};

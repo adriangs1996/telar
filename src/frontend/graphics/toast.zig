@@ -13,8 +13,8 @@ const data = @import("model");
 const std = @import("std");
 const Colors = @import("Colors.zig");
 const GraphicsColor = @import("Color.zig");
-const MetricsType = @import("Metrics.zig");
-const SurfaceType = @import("Surface.zig");
+const Metrics = @import("Metrics.zig");
+const Surface = @import("Surface.zig");
 const PixelRectangle = @import("PixelRectangle.zig");
 const ToastRenderer = @import("ToastRenderer.zig");
 const kitty_codec = @import("kitty_codec.zig");
@@ -45,19 +45,19 @@ pub fn rasterColor(value: [3]u8) GraphicsColor {
     return .{ .red = value[0], .green = value[1], .blue = value[2] };
 }
 
-pub fn baseline(metrics: MetricsType, row_y: u32, row_height: u16) i32 {
+pub fn baseline(metrics: Metrics, row_y: u32, row_height: u16) i32 {
     const spare = @as(i32, row_height) - @as(i32, @intCast(metrics.line_height));
     const centered_y: i32 = @intCast(row_y + @as(u32, @intCast(@max(0, @divTrunc(spare, 2)))));
     return centered_y + metrics.ascender;
 }
 
-pub fn fill(surface: SurfaceType, color: [4]u8) void {
+pub fn fill(surface: Surface, color: [4]u8) void {
     var index: usize = 0;
     while (index < surface.pixels.len) : (index += 4)
         @memcpy(surface.pixels[index..][0..4], &color);
 }
 
-pub fn fillRect(surface: SurfaceType, rectangle: PixelRectangle, color: GraphicsColor) void {
+pub fn fillRect(surface: Surface, rectangle: PixelRectangle, color: GraphicsColor) void {
     const right = @min(surface.width, rectangle.x +| rectangle.width);
     const bottom = @min(surface.height, rectangle.y +| rectangle.height);
     var row = rectangle.y;

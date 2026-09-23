@@ -1,7 +1,7 @@
-const SessionType = @import("../Session.zig");
+const Session = @import("../Session.zig");
 const types = @import("types.zig");
 const Route = @This();
 
-from: SessionType.Side,
-to: SessionType.Side,
+from: Session.Side,
+to: Session.Side,
 framing: types.BodyPlan,

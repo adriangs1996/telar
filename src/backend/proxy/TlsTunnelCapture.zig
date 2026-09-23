@@ -1,6 +1,6 @@
 const tls_tunnel = @import("tls_tunnel.zig");
 const tls = @import("tls.zig");
-const SessionType = @import("Session.zig");
+const Session = @import("Session.zig");
 const std = @import("std");
 const GenericAttempt = @import("GenericAttempt.zig").Type;
 const GenericEstablished = @import("GenericEstablished.zig").Type;
@@ -10,7 +10,7 @@ steps: [5]tls_tunnel.Step = undefined,
 len: usize = 0,
 allow_interception: bool = false,
 failure: ?tls.Error = null,
-protocol: SessionType.Protocol = .http11,
+protocol: Session.Protocol = .http11,
 expected_host: []const u8 = "api.openai.com",
 expected_child: u8 = 3,
 expected_origin: u8 = 5,

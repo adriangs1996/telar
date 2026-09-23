@@ -1,7 +1,7 @@
 const client = @import("telar-client");
 const core = @import("telar-core");
-const KittyGraphicsWriterType = @import("../../graphics/KittyGraphicsWriter.zig");
-const KittySidebarRendererType = @import("../../graphics/KittySidebarRenderer.zig");
+const KittyGraphicsWriter = @import("../../graphics/KittyGraphicsWriter.zig");
+const KittySidebarRenderer = @import("../../graphics/KittySidebarRenderer.zig");
 const IconsRenderer = @import("../../graphics/IconsRenderer.zig");
 const ToastRenderer = @import("../../graphics/ToastRenderer.zig");
 const ModalRenderer = @import("../../graphics/ModalRenderer.zig");
@@ -10,8 +10,8 @@ const delivery_module = @import("../../attachments/delivery.zig");
 const std = @import("std");
 const CombinedGraphicsWriter = @This();
 
-panes: KittyGraphicsWriterType,
-sidebar: *KittySidebarRendererType,
+panes: KittyGraphicsWriter,
+sidebar: *KittySidebarRenderer,
 icons: *IconsRenderer,
 toasts: *ToastRenderer,
 modal: *ModalRenderer,

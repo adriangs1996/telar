@@ -3,9 +3,9 @@
 //! controller or the adapter that consumes it.
 const data = @import("model");
 const core = @import("telar-core");
-const ImageType = @import("FaviconImage.zig");
+const FaviconImage = @import("FaviconImage.zig");
 const Completion = @This();
 
 execution_id: data.FaviconsState.ExecutionId,
 workspace: core.WorkspaceId,
-result: anyerror!*ImageType,
+result: anyerror!*FaviconImage,

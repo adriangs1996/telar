@@ -1,7 +1,7 @@
 const Entry = @import("Entry.zig");
 const transfer_preparation = @import("transfer_preparation.zig");
 const Frozen = @import("Frozen.zig");
-const PaneMediaAllocatorType = @import("PaneMediaAllocator.zig");
+const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 const Queue = @This();
 
 pub const Input = @import("Request.zig");
@@ -46,7 +46,7 @@ pub fn take(queue: *Queue, value: Input) !?Frozen {
 
 /// Freezes requests against the media actor's current immutable read borrow.
 /// Example: `queue.process(storage, media_allocator);`.
-pub fn process(queue: *Queue, storage: anytype, media: *PaneMediaAllocatorType) void {
+pub fn process(queue: *Queue, storage: anytype, media: *PaneMediaAllocator) void {
     for (&queue.entries) |*slot| {
         const entry = if (slot.*) |*entry| entry else continue;
         const image = storage.imageById(entry.request.key.image_id) orelse {
@@ -71,7 +71,7 @@ pub fn process(queue: *Queue, storage: anytype, media: *PaneMediaAllocatorType) 
 
 /// Releases parked results after joining the actor, including detach cleanup.
 /// Example: `queue.deinit(media_allocator);`.
-pub fn deinit(queue: *Queue, media: *PaneMediaAllocatorType) void {
+pub fn deinit(queue: *Queue, media: *PaneMediaAllocator) void {
     for (&queue.entries) |*slot| {
         transfer_preparation.discardEntry(slot, media);
     }
@@ -79,7 +79,7 @@ pub fn deinit(queue: *Queue, media: *PaneMediaAllocatorType) void {
 
 /// Releases work no remaining consumer needs, including detach and reset.
 /// Example: `queue.retain(consumers, media_allocator);`.
-pub fn retain(queue: *Queue, consumers: anytype, media: *PaneMediaAllocatorType) void {
+pub fn retain(queue: *Queue, consumers: anytype, media: *PaneMediaAllocator) void {
     for (&queue.entries) |*slot| {
         const entry = slot.* orelse continue;
         if (!consumers.wants(entry.request.key, entry.request.shared_transport)) {

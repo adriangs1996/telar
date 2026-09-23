@@ -10,7 +10,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const lua_api = @import("lua-api");
-const RuntimeSnapshotType = @import("RuntimeSnapshot.zig");
+const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
 const EntryInput = @import("EntryInput.zig");
 const FieldLookup = @import("FieldLookup.zig");
@@ -20,7 +20,7 @@ const TextValue = @import("TextValue.zig");
 const phrase_fields = .{ "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt" };
 const text_fields = .{ "display_name", "placeholder", "icon" };
 
-pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshotType, diagnostic: *data.Diagnostic) !void {
+pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
     if (lua_api.c.lua_type(state, absolute) != lua_api.c.LUA_TTABLE) {
         diagnostic.set("config.runtime.agents must be an array", .{});

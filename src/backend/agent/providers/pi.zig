@@ -2,10 +2,10 @@
 //! status phrases; its state comes from process detection, the proxy and its
 //! own lifecycle reports through the Telar extension.
 
-const CapabilitiesType = @import("Capabilities.zig");
+const Capabilities = @import("Capabilities.zig");
 const std = @import("std");
 
-pub const capabilities: CapabilitiesType = .{
+pub const capabilities: Capabilities = .{
     .completion_requires_agent_signal = true,
     .resume_prefix = "pi --session ",
 };

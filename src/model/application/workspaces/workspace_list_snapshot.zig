@@ -1,6 +1,6 @@
 //! Application use case for reconciling the runtime workspace-list replica.
 
-const WorkspaceListCommitType = @import("../../state/WorkspaceListCommit.zig");
+const WorkspaceListCommit = @import("../../state/WorkspaceListCommit.zig");
 
 pub const Rejection = enum {
     too_many_workspaces,
@@ -12,7 +12,7 @@ pub const Rejection = enum {
 pub const Outcome = union(enum) {
     stale,
     rejected: Rejection,
-    applied: WorkspaceListCommitType,
+    applied: WorkspaceListCommit,
 };
 
 pub fn classifyRejection(err: anyerror) ?Rejection {

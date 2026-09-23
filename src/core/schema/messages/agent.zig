@@ -8,9 +8,9 @@ const codec = @import("../codec.zig");
 const tags = @import("tags.zig");
 const QueryAgents = @import("QueryAgents.zig");
 const ReportAgentSession = @import("ReportAgentSession.zig");
-const EncoderType = @import("../Encoder.zig");
+const Encoder = @import("../Encoder.zig");
 const id = @import("../id.zig");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const ReportAgent = @import("ReportAgent.zig");
 const ReportAgentCommand = @import("ReportAgentCommand.zig");
 const ReportAgentTitle = @import("ReportAgentTitle.zig");
@@ -95,7 +95,7 @@ pub fn encodeReportAgentSession(buffer: []u8, message: ReportAgentSession) ![]co
     try codec.validateRequestId(message.request_id);
     try codec.validatePaneId(message.pane_id);
     try validateSessionReference(message.session);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.report_agent_session));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -104,7 +104,7 @@ pub fn encodeReportAgentSession(buffer: []u8, message: ReportAgentSession) ![]co
     return encoder.finish();
 }
 
-pub fn decodeReportAgentSession(decoder: *DecoderType) !ReportAgentSession {
+pub fn decodeReportAgentSession(decoder: *Decoder) !ReportAgentSession {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const pane_generation = try decoder.readInt(u64);
@@ -124,7 +124,7 @@ pub fn encodeReportAgent(buffer: []u8, message: ReportAgent) ![]const u8 {
     if (message.session.len != 0) {
         try validateSessionReference(message.session);
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.report_agent));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -141,7 +141,7 @@ pub fn encodeReportAgent(buffer: []u8, message: ReportAgent) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeReportAgent(decoder: *DecoderType) !ReportAgent {
+pub fn decodeReportAgent(decoder: *Decoder) !ReportAgent {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const pane_generation = try decoder.readInt(u64);
@@ -187,7 +187,7 @@ pub fn encodeReportAgentCommand(buffer: []u8, message: ReportAgentCommand) ![]co
         return error.InvalidAgentCommandExitCode;
     }
 
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.report_agent_command));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -205,7 +205,7 @@ pub fn encodeReportAgentCommand(buffer: []u8, message: ReportAgentCommand) ![]co
     return encoder.finish();
 }
 
-pub fn decodeReportAgentCommand(decoder: *DecoderType) !ReportAgentCommand {
+pub fn decodeReportAgentCommand(decoder: *Decoder) !ReportAgentCommand {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const pane_generation = try decoder.readInt(u64);
@@ -248,7 +248,7 @@ pub fn encodeReportAgentTitle(buffer: []u8, message: ReportAgentTitle) ![]const 
         try validateSessionTitle(message.title);
     }
 
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.report_agent_title));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encoder.writeInt(u64, id.raw(message.pane_id));
@@ -257,7 +257,7 @@ pub fn encodeReportAgentTitle(buffer: []u8, message: ReportAgentTitle) ![]const 
     return encoder.finish();
 }
 
-pub fn decodeReportAgentTitle(decoder: *DecoderType) !ReportAgentTitle {
+pub fn decodeReportAgentTitle(decoder: *Decoder) !ReportAgentTitle {
     const request_id = try id.request(try decoder.readInt(u64));
     const pane_id = try id.pane(try decoder.readInt(u64));
     const pane_generation = try decoder.readInt(u64);
@@ -279,7 +279,7 @@ pub fn encodeAgentSound(buffer: []u8, message: AgentSoundNotification) ![]const 
     if (message.pane_generation == 0) {
         return error.InvalidPaneGeneration;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.agent_sound));
     try encoder.writeInt(u64, id.raw(message.pane_id));
     try encoder.writeInt(u64, message.pane_generation);
@@ -287,7 +287,7 @@ pub fn encodeAgentSound(buffer: []u8, message: AgentSoundNotification) ![]const 
     return encoder.finish();
 }
 
-pub fn decodeAgentSound(decoder: *DecoderType) !AgentSoundNotification {
+pub fn decodeAgentSound(decoder: *Decoder) !AgentSoundNotification {
     const notification: AgentSoundNotification = .{
         .pane_id = try id.pane(try decoder.readInt(u64)),
         .pane_generation = try decoder.readInt(u64),
@@ -307,7 +307,7 @@ pub fn encodeAgentSnapshot(buffer: []u8, message: AgentSnapshot) ![]const u8 {
     if (message.entries.len > types.max_agent_snapshot_entries) {
         return error.TooManyAgentEntries;
     }
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.agent_snapshot));
     try encoder.writeInt(u64, message.revision);
     try encoder.writeInt(u16, @intCast(message.entries.len));
@@ -324,7 +324,7 @@ pub fn encodeAgentSnapshot(buffer: []u8, message: AgentSnapshot) ![]const u8 {
     return encoder.finish();
 }
 
-pub fn decodeAgentSnapshot(decoder: *DecoderType) !AgentSnapshotView {
+pub fn decodeAgentSnapshot(decoder: *Decoder) !AgentSnapshotView {
     const revision = try decoder.readInt(u64);
     if (revision == 0) {
         return error.InvalidAgentRevision;
@@ -353,7 +353,7 @@ pub fn decodeAgentSnapshot(decoder: *DecoderType) !AgentSnapshotView {
     };
 }
 
-fn encodeAgentSnapshotEntry(encoder: *EncoderType, entry: AgentSnapshotEntry) !void {
+fn encodeAgentSnapshotEntry(encoder: *Encoder, entry: AgentSnapshotEntry) !void {
     try codec.validatePaneId(entry.pane_id);
     if (entry.pane_generation == 0 or entry.pane_index == 0 or
         entry.sequence == 0 or entry.confidence > 100)
@@ -403,7 +403,7 @@ fn encodeAgentSnapshotEntry(encoder: *EncoderType, entry: AgentSnapshotEntry) !v
     try encoder.writeInt(i64, entry.expires_at_ms);
 }
 
-pub fn decodeAgentSnapshotEntry(decoder: *DecoderType) !AgentSnapshotEntry {
+pub fn decodeAgentSnapshotEntry(decoder: *Decoder) !AgentSnapshotEntry {
     const entry: AgentSnapshotEntry = .{
         .pane_id = try id.pane(try decoder.readInt(u64)),
         .pane_generation = try decoder.readInt(u64),

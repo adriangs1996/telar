@@ -1,8 +1,8 @@
-const AttachmentStoreType = @import("AttachmentStore.zig");
+const AttachmentStore = @import("AttachmentStore.zig");
 const Attachment = @import("Attachment.zig");
 const Iterator = @This();
 
-store: *const AttachmentStoreType,
+store: *const AttachmentStore,
 position: usize = 0,
 
 pub fn next(self: *Iterator) ?*const Attachment {

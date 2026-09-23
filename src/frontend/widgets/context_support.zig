@@ -5,7 +5,7 @@ const data = @import("model");
 const client = @import("telar-client");
 const GenericHits = @import("../ui/GenericHits.zig").Type;
 const std = @import("std");
-const PlanType = @import("../ui/Plan.zig");
+const Plan = @import("../ui/Plan.zig");
 const Context = @import("Context.zig");
 
 pub const Action = union(enum) {
@@ -37,7 +37,7 @@ test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
     var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
-    var plan: PlanType = .{};
+    var plan: Plan = .{};
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -65,7 +65,7 @@ test "the telar mark stays graphical over a host-provided background" {
     var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
-    var plan: PlanType = .{};
+    var plan: Plan = .{};
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -84,7 +84,7 @@ test "the telar mark publishes a graphical mark under the Unicode theme too" {
     var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
-    var plan: PlanType = .{};
+    var plan: Plan = .{};
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,
@@ -112,7 +112,7 @@ test "Nerd Font theme keeps Unicode when terminal colors cannot be reproduced" {
     var buffer = try core.Buffer.init(std.testing.allocator, 4, 1);
     defer buffer.deinit();
     var hits: Hits = .{};
-    var plan: PlanType = .{};
+    var plan: Plan = .{};
     var context: Context = .{
         .buffer = &buffer,
         .hits = &hits,

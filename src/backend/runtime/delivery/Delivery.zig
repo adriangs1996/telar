@@ -1,15 +1,15 @@
 const Workspaces = @import("../../workspace/Workspaces.zig");
 const core = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
-const ResponseQueueType = @import("ResponseQueue.zig");
+const ResponseQueue = @import("ResponseQueue.zig");
 const delivery_namespace = @import("delivery_namespace.zig");
 const std = @import("std");
 const response_queue = @import("response_queue.zig");
 const Preparation = @import("Preparation.zig");
 const Prepared = @import("Prepared.zig");
-const QueryResultType = @import("../../history/QueryResult.zig");
-const OutputResultType = @import("../../history/OutputResult.zig");
-const StatsResultType = @import("../../history/StatsResult.zig");
+const QueryResult = @import("../../history/QueryResult.zig");
+const OutputResult = @import("../../history/OutputResult.zig");
+const StatsResult = @import("../../history/StatsResult.zig");
 const runtime_encoder = @import("encoder.zig");
 const LayoutSnapshotStorage = @import("../LayoutSnapshotStorage.zig");
 const Commit = @import("Commit.zig");
@@ -22,7 +22,7 @@ const PaneKey = @import("../../pane/PaneKey.zig");
 const Delivery = @This();
 
 send_buffer: []u8,
-responses: ResponseQueueType = .{},
+responses: ResponseQueue = .{},
 phase: delivery_namespace.Phase = .ready,
 next_ticket: u64 = 1,
 next_attachment: usize = 0,
@@ -166,9 +166,9 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     }
 
     if (delivery.responses.peekManagement()) |entry| {
-        var history_result: ?*QueryResultType = null;
-        var history_output: ?*OutputResultType = null;
-        var history_stats: ?*StatsResultType = null;
+        var history_result: ?*QueryResult = null;
+        var history_output: ?*OutputResult = null;
+        var history_stats: ?*StatsResult = null;
         var agent_history: ?*@import("OwnedAgentHistoryPage.zig") = null;
         var change_review: ?*ReviewResult = null;
         const payload = try runtime_encoder.encodeResponse(.{
@@ -351,9 +351,9 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     }
 
     if (delivery.responses.peekObservation()) |entry| {
-        var history_result: ?*QueryResultType = null;
-        var history_output: ?*OutputResultType = null;
-        var history_stats: ?*StatsResultType = null;
+        var history_result: ?*QueryResult = null;
+        var history_output: ?*OutputResult = null;
+        var history_stats: ?*StatsResult = null;
         var agent_history: ?*@import("OwnedAgentHistoryPage.zig") = null;
         var change_review: ?*ReviewResult = null;
         const payload = try runtime_encoder.encodeResponse(.{

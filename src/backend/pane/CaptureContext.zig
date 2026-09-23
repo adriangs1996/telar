@@ -1,13 +1,13 @@
 const core = @import("telar-core");
-const PaneType = @import("Pane.zig");
-const StatsType = @import("../history/Stats.zig");
-const CommandType = @import("../history/Command.zig");
+const Pane = @import("Pane.zig");
+const Stats = @import("../history/Stats.zig");
+const Command = @import("../history/Command.zig");
 const CaptureContext = @This();
 
-pane: *PaneType,
-observation_stats: ?*StatsType = null,
+pane: *Pane,
+observation_stats: ?*Stats = null,
 
-pub fn emit(context: *CaptureContext, command: CommandType) void {
+pub fn emit(context: *CaptureContext, command: Command) void {
     const pane = context.pane;
     if (!pane.history_session_started) {
         return;

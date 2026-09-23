@@ -3,9 +3,9 @@ const model_data = @import("../../model.zig");
 const TestingPaneFrame = @import("TestingPaneFrame.zig");
 const ClientModel = @import("../ClientModel.zig");
 const std = @import("std");
-const ReportedPaneFocusType = @import("../ReportedPaneFocus.zig");
-const VersionType = @import("../Version.zig");
-const CopyModeProjectionType = @import("../CopyModeProjection.zig");
+const ReportedPaneFocus = @import("../ReportedPaneFocus.zig");
+const Version = @import("../Version.zig");
+const CopyModeProjection = @import("../CopyModeProjection.zig");
 
 fn testingPaneFrame(buffer: []u8, input: TestingPaneFrame) !core.FrameView {
     var spans: [1]core.Span = undefined;
@@ -117,7 +117,7 @@ test "reported pane focus derives protocol edges outside presentation versions" 
 
     const disabled = model.syncReportedPaneFocus().?;
 
-    try std.testing.expectEqualDeep(ReportedPaneFocusType{
+    try std.testing.expectEqualDeep(ReportedPaneFocus{
         .pane_id = first,
         .focus_events = false,
     }, disabled.current.?);
@@ -138,7 +138,7 @@ test "reported pane focus derives protocol edges outside presentation versions" 
 
     try std.testing.expectEqual(first, moved.focus_out.?);
     try std.testing.expectEqual(second, moved.focus_in.?);
-    try std.testing.expectEqualDeep(ReportedPaneFocusType{
+    try std.testing.expectEqualDeep(ReportedPaneFocus{
         .pane_id = second,
         .focus_events = true,
     }, model.reported_pane_focus.?);
@@ -300,7 +300,7 @@ test "pane frame application commits screen copy state and one frame revision" {
     try std.testing.expectEqual(@as(u64, 7), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 7), pane.pending_frame_id);
     try std.testing.expectEqual(@as(u32, 2), model.copyModeProjection().?.view.cursor.y);
-    try std.testing.expectEqualDeep(VersionType{ .copy = 2, .frame = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .copy = 2, .frame = 1 }, model.version());
 }
 
 test "pane frame application separates detached panes from patch recovery" {
@@ -326,7 +326,7 @@ test "pane frame application separates detached panes from patch recovery" {
         .pane_id = pane_id,
         .known_frame_id = 3,
     }, recovery.resync);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
 
     pane.attached = false;
@@ -336,7 +336,7 @@ test "pane frame application separates detached panes from patch recovery" {
         .cells = &[_]core.Cell{ .{}, .{}, .{}, .{} },
     }));
     try std.testing.expect(detached == .detached);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 
     pane.attached = true;
     const absent = try model_data.pane_frame.receive(&model, try testingPaneFrame(&encoded, .{
@@ -346,7 +346,7 @@ test "pane frame application separates detached panes from patch recovery" {
     try std.testing.expect(absent == .detached);
     try std.testing.expectEqual(@as(u64, 3), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "pane frame apply failure does not publish a frame revision" {
@@ -371,7 +371,7 @@ test "pane frame apply failure does not publish a frame revision" {
 
     try std.testing.expectEqual(@as(u64, 3), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
-    try std.testing.expectEqualDeep(VersionType{}, model.version());
+    try std.testing.expectEqualDeep(Version{}, model.version());
 }
 
 test "pane graphics fallback versions only semantic changes" {
@@ -389,18 +389,18 @@ test "pane graphics fallback versions only semantic changes" {
     try std.testing.expect(shown.visible);
     try std.testing.expectEqual(@as(u64, 1), shown.pane_graphics_revision);
     try std.testing.expect(model.panes.find(pane_id).?.graphics_placeholder);
-    try std.testing.expectEqualDeep(VersionType{ .pane_graphics = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .pane_graphics = 1 }, model.version());
 
     try std.testing.expect(model.setPaneGraphicsFallback(pane_id, true) == null);
     try std.testing.expect(model.setPaneGraphicsFallback(@enumFromInt(9), true) == null);
-    try std.testing.expectEqualDeep(VersionType{ .pane_graphics = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .pane_graphics = 1 }, model.version());
 
     const hidden = model.setPaneGraphicsFallback(pane_id, false).?;
 
     try std.testing.expect(!hidden.visible);
     try std.testing.expectEqual(@as(u64, 2), hidden.pane_graphics_revision);
     try std.testing.expect(!model.panes.find(pane_id).?.graphics_placeholder);
-    try std.testing.expectEqualDeep(VersionType{ .pane_graphics = 2 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .pane_graphics = 2 }, model.version());
 }
 
 test "pane cwd metadata stores exact paths and versions only display changes" {
@@ -423,7 +423,7 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
     try std.testing.expectEqual(@as(u64, 1), visible.pane_metadata_revision);
     try std.testing.expectEqual(@as(u64, 0), visible.pane_foreground_revision);
     try std.testing.expectEqualStrings("/work/telar", model.panes.find(pane_id).?.cwdSlice());
-    try std.testing.expectEqualDeep(VersionType{ .pane_metadata = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .pane_metadata = 1 }, model.version());
 
     const stored = (try model.updatePaneMetadata(.{ .cwd = .{
         .pane_id = pane_id,
@@ -433,7 +433,7 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
     try std.testing.expect(!stored.display_changed);
     try std.testing.expectEqual(@as(u64, 1), stored.pane_metadata_revision);
     try std.testing.expectEqualStrings("/other/telar", model.panes.find(pane_id).?.cwdSlice());
-    try std.testing.expectEqualDeep(VersionType{ .pane_metadata = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .pane_metadata = 1 }, model.version());
     try std.testing.expect((try model.updatePaneMetadata(.{ .cwd = .{
         .pane_id = pane_id,
         .path = "/other/telar",
@@ -447,7 +447,7 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
         .pane_id = pane_id,
         .path = "/other/api",
     } })).?;
-    try std.testing.expectEqualDeep(VersionType{ .pane_metadata = 2 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .pane_metadata = 2 }, model.version());
 }
 
 test "pane foreground metadata versions display changes independently" {
@@ -470,7 +470,7 @@ test "pane foreground metadata versions display changes independently" {
     try std.testing.expectEqual(@as(u64, 1), first.pane_metadata_revision);
     try std.testing.expectEqual(@as(u64, 1), first.pane_foreground_revision);
     try std.testing.expectEqualStrings("zsh", model.panes.find(pane_id).?.foregroundName());
-    try std.testing.expectEqualDeep(VersionType{
+    try std.testing.expectEqualDeep(Version{
         .pane_metadata = 1,
         .pane_foreground = 1,
     }, model.version());
@@ -487,7 +487,7 @@ test "pane foreground metadata versions display changes independently" {
         .pane_id = pane_id,
         .name = "bash",
     } })).?;
-    try std.testing.expectEqualDeep(VersionType{
+    try std.testing.expectEqualDeep(Version{
         .pane_metadata = 2,
         .pane_foreground = 2,
     }, model.version());
@@ -542,7 +542,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
     try std.testing.expectEqual(@as(u32, 0), top.offset);
     try std.testing.expect(!top.at_bottom);
     try std.testing.expectEqual(@as(u64, 1), top.viewport_revision);
-    try std.testing.expectEqualDeep(VersionType{ .viewport = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .viewport = 1 }, model.version());
     try std.testing.expect(model.setPaneViewport(.{
         .pane_id = pane_id,
         .target = .{ .absolute = 0 },
@@ -564,7 +564,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
         .pane_id = @enumFromInt(9),
         .target = .bottom,
     }) == null);
-    try std.testing.expectEqualDeep(VersionType{ .viewport = 2 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .viewport = 2 }, model.version());
 
     pane.scroll.offset = 10;
     try std.testing.expect(model.enterCopyMode());
@@ -603,7 +603,7 @@ test "copy mode entry owns one independent model revision" {
 
     try std.testing.expect(model.copyModeActive());
     try std.testing.expectEqual(pane_id, model.copyModeTarget().?);
-    try std.testing.expectEqualDeep(CopyModeProjectionType{
+    try std.testing.expectEqualDeep(CopyModeProjection{
         .pane_id = pane_id,
         .view = .{
             .cursor = .{ .x = 4, .y = 12 },
@@ -611,9 +611,9 @@ test "copy mode entry owns one independent model revision" {
             .linewise = false,
         },
     }, model.copyModeProjection().?);
-    try std.testing.expectEqualDeep(VersionType{ .copy = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .copy = 1 }, model.version());
     try std.testing.expect(!model.enterCopyMode());
-    try std.testing.expectEqualDeep(VersionType{ .copy = 1 }, model.version());
+    try std.testing.expectEqualDeep(Version{ .copy = 1 }, model.version());
 
     const leave = model.planCopyMode(.leave).?;
     _ = model.commitCopyMode(leave).?;

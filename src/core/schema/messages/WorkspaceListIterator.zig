@@ -1,9 +1,9 @@
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const WorkspaceListEntry = @import("WorkspaceListEntry.zig");
 const workspace = @import("workspace.zig");
 const WorkspaceListIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 
 pub fn next(iterator: *WorkspaceListIterator) !?WorkspaceListEntry {

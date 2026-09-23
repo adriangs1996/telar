@@ -2,10 +2,10 @@
 
 const ShowNotification = @import("ShowNotification.zig");
 const codec = @import("../codec.zig");
-const EncoderType = @import("../Encoder.zig");
+const Encoder = @import("../Encoder.zig");
 const tags = @import("tags.zig");
 const id = @import("../id.zig");
-const DecoderType = @import("../Decoder.zig");
+const Decoder = @import("../Decoder.zig");
 const Notification = @import("Notification.zig");
 const std = @import("std");
 const types = @import("../types.zig");
@@ -13,14 +13,14 @@ const NotificationShown = @import("NotificationShown.zig");
 
 pub fn encodeShowNotification(buffer: []u8, message: ShowNotification) ![]const u8 {
     try codec.validateRequestId(message.request_id);
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ClientTag.show_notification));
     try encoder.writeInt(u64, id.raw(message.request_id));
     try encodeNotificationBody(&encoder, message.notification);
     return encoder.finish();
 }
 
-pub fn decodeShowNotification(decoder: *DecoderType) !ShowNotification {
+pub fn decodeShowNotification(decoder: *Decoder) !ShowNotification {
     return .{
         .request_id = try id.request(try decoder.readInt(u64)),
         .notification = try decodeNotification(decoder),
@@ -28,13 +28,13 @@ pub fn decodeShowNotification(decoder: *DecoderType) !ShowNotification {
 }
 
 pub fn encodeNotification(buffer: []u8, message: Notification) ![]const u8 {
-    var encoder = EncoderType.init(buffer);
+    var encoder = Encoder.init(buffer);
     try encoder.writeByte(@intFromEnum(tags.ServerTag.notification));
     try encodeNotificationBody(&encoder, message);
     return encoder.finish();
 }
 
-pub fn decodeNotification(decoder: *DecoderType) !Notification {
+pub fn decodeNotification(decoder: *Decoder) !Notification {
     const level = std.enums.fromInt(types.NotificationLevel, try decoder.readByte()) orelse
         return error.InvalidNotificationLevel;
     const duration_ms = try decoder.readInt(u32);
@@ -64,7 +64,7 @@ pub fn encodeNotificationShown(buffer: []u8, message: NotificationShown) ![]cons
     );
 }
 
-fn encodeNotificationBody(encoder: *EncoderType, notification: Notification) !void {
+fn encodeNotificationBody(encoder: *Encoder, notification: Notification) !void {
     try validateNotification(notification);
     try encoder.writeByte(@intFromEnum(notification.level));
     try encoder.writeInt(u32, notification.duration_ms);

@@ -1,13 +1,13 @@
 //! HTTP negotiation required to observe Claude's streaming protocol.
 
-const TransformerType = @import("../Transformer.zig");
-const TransformationType = @import("../Transformation.zig");
+const Transformer = @import("../Transformer.zig");
+const Transformation = @import("../Transformation.zig");
 const middleware = @import("../middleware.zig");
 const request = @import("request_support.zig");
-const HeaderViewType = @import("../HeaderView.zig");
+const HeaderView = @import("../HeaderView.zig");
 const std = @import("std");
 const TransformCase = @import("TransformCase.zig");
-const EffectBatchType = @import("../EffectBatch.zig");
+const EffectBatch = @import("../EffectBatch.zig");
 
 var stateless_context: u8 = 0;
 
@@ -18,11 +18,11 @@ var stateless_context: u8 = 0;
 /// ```zig
 /// try pipeline.add(claude_transport.requestTransformer());
 /// ```
-pub fn requestTransformer() TransformerType {
+pub fn requestTransformer() Transformer {
     return .{ .context = &stateless_context, .transform = transform };
 }
 
-fn transform(_: *anyopaque, transformation: TransformationType) middleware.TransformStatus {
+fn transform(_: *anyopaque, transformation: Transformation) middleware.TransformStatus {
     const snapshot = transformation.snapshot;
 
     if (snapshot.context.dialect != .anthropic_messages or
@@ -45,7 +45,7 @@ fn transform(_: *anyopaque, transformation: TransformationType) middleware.Trans
     return .apply;
 }
 
-fn uniqueHeader(fields: []const HeaderViewType, wanted: []const u8) ?[]const u8 {
+fn uniqueHeader(fields: []const HeaderView, wanted: []const u8) ?[]const u8 {
     var found: ?[]const u8 = null;
 
     for (fields) |field| {
@@ -63,8 +63,8 @@ fn uniqueHeader(fields: []const HeaderViewType, wanted: []const u8) ?[]const u8 
     return found;
 }
 
-fn apply(case: TransformCase, effects: *EffectBatchType) middleware.TransformStatus {
-    var fields: [3]HeaderViewType = undefined;
+fn apply(case: TransformCase, effects: *EffectBatch) middleware.TransformStatus {
+    var fields: [3]HeaderView = undefined;
     fields[0] = .{ .name = ":method", .value = case.method };
     fields[1] = .{ .name = ":path", .value = case.target };
     var len: usize = 2;
@@ -93,7 +93,7 @@ fn apply(case: TransformCase, effects: *EffectBatchType) middleware.TransformSta
     });
 }
 
-fn expectIdentityEffect(effects: *const EffectBatchType) !void {
+fn expectIdentityEffect(effects: *const EffectBatch) !void {
     try std.testing.expectEqual(@as(u8, 1), effects.len);
 
     switch (effects.effects[0]) {
@@ -112,7 +112,7 @@ test "Claude inference requests negotiate identity encoding" {
         TransformCase{ .target = "/v1/messages?beta=true" },
         TransformCase{ .encoding = null },
     }) |case| {
-        var effects: EffectBatchType = .{};
+        var effects: EffectBatch = .{};
 
         try std.testing.expectEqual(middleware.TransformStatus.apply, apply(case, &effects));
         try expectIdentityEffect(&effects);
@@ -128,7 +128,7 @@ test "Claude identity negotiation preserves unrelated traffic" {
         TransformCase{ .target = "/v1/messages/count_tokens" },
         TransformCase{ .target = "/api/event_logging/v2/batch" },
     }) |case| {
-        var effects: EffectBatchType = .{};
+        var effects: EffectBatch = .{};
 
         try std.testing.expectEqual(middleware.TransformStatus.preserve, apply(case, &effects));
         try std.testing.expectEqual(@as(u8, 0), effects.len);
@@ -136,12 +136,12 @@ test "Claude identity negotiation preserves unrelated traffic" {
 }
 
 test "Claude identity negotiation rejects ambiguous pseudo headers" {
-    const fields = [_]HeaderViewType{
+    const fields = [_]HeaderView{
         .{ .name = ":method", .value = "POST" },
         .{ .name = ":path", .value = "/v1/messages" },
         .{ .name = ":path", .value = "/v1/messages" },
     };
-    var effects: EffectBatchType = .{};
+    var effects: EffectBatch = .{};
     const status = transform(&stateless_context, .{
         .io = std.testing.io,
         .snapshot = .{

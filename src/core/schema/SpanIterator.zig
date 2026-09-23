@@ -1,8 +1,8 @@
-const DecoderType = @import("Decoder.zig");
+const Decoder = @import("Decoder.zig");
 const SpanView = @import("SpanView.zig");
 const SpanIterator = @This();
 
-decoder: DecoderType,
+decoder: Decoder,
 remaining: u16,
 
 pub fn next(iterator: *SpanIterator) error{Truncated}!?SpanView {

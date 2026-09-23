@@ -4,7 +4,7 @@ const data = @import("model");
 const mouse_protocol = @import("../../input/mouse_protocol.zig");
 const core = @import("telar-core");
 const std = @import("std");
-const PixelProjectionType = @import("../../input/PixelProjection.zig");
+const PixelProjection = @import("../../input/PixelProjection.zig");
 
 /// Projects host pixels into pane coordinates before encoding the report.
 /// Example: `const bytes = try pane_mouse_inputs.encodeReport(&buffer, report);`
@@ -22,7 +22,7 @@ pub fn encodeReport(buffer: []u8, report: data.ReportEffect) ![]const u8 {
         break :exact command.event.raw_y - origin;
     } else null;
 
-    const pixels: ?PixelProjectionType = if (plan.protocol.pixels) .{
+    const pixels: ?PixelProjection = if (plan.protocol.pixels) .{
         .cell = .{ .width = command.cell_width_px, .height = command.cell_height_px },
         .exact = if (exact_x != null and exact_y != null) .{ .x = exact_x.?, .y = exact_y.? } else null,
     } else null;

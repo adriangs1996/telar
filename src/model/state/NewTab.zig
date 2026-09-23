@@ -1,6 +1,6 @@
 const core = @import("telar-core");
-const CreatedTabType = @import("../workspace/CreatedTab.zig");
+const CreatedTab = @import("../workspace/CreatedTab.zig");
 const NewTab = @This();
 
-created: CreatedTabType,
+created: CreatedTab,
 size: core.TerminalSize,

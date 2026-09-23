@@ -1,23 +1,23 @@
-const ObservationType = @import("Observation.zig");
-const GeometryType = @import("Geometry.zig");
+const Observation = @import("Observation.zig");
+const Geometry = @import("Geometry.zig");
 const Flight = @import("Flight.zig");
 const std = @import("std");
 const Submission = @import("Submission.zig");
 const lifecycle = @import("lifecycle.zig");
-const DeliveryType = @import("PresentationDelivery.zig");
+const PresentationDelivery = @import("PresentationDelivery.zig");
 const State = @This();
 
-observed: ObservationType = .{},
-prepared: ObservationType = .{},
-delivered: ObservationType = .{},
-delivered_geometry: ?GeometryType = null,
+observed: Observation = .{},
+prepared: Observation = .{},
+delivered: Observation = .{},
+delivered_geometry: ?Geometry = null,
 preparation_invalid: bool = false,
 next_token: u64 = 1,
 active: ?Flight = null,
 
 /// Coalesces an observation without retaining model or projection pointers.
 /// Example: `if (state.observe(observation)) requestDraw();`.
-pub fn observe(state: *State, observation: ObservationType) bool {
+pub fn observe(state: *State, observation: Observation) bool {
     if (std.meta.eql(state.observed, observation)) {
         return false;
     }
@@ -67,7 +67,7 @@ pub fn begin(state: *State, submission: Submission) !lifecycle.Token {
 /// Releases exactly one flight. Old completions cannot consume newer work.
 /// An older successful delivery leaves subsequently received damage pending.
 /// Example: `const delivery = state.complete(token, .delivered) orelse return;`.
-pub fn complete(state: *State, token: lifecycle.Token, outcome: lifecycle.Outcome) ?DeliveryType {
+pub fn complete(state: *State, token: lifecycle.Token, outcome: lifecycle.Outcome) ?PresentationDelivery {
     const flight = state.active orelse return null;
     if (flight.token != token) {
         return null;

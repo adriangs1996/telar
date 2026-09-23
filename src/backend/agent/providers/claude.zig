@@ -1,10 +1,10 @@
 //! Claude Code: resumable by session id. Its idle prompt is a bare `❯`, read
 //! off the live screen by `history.prompt_scan`.
 
-const CapabilitiesType = @import("Capabilities.zig");
+const Capabilities = @import("Capabilities.zig");
 const std = @import("std");
 
-pub const capabilities: CapabilitiesType = .{
+pub const capabilities: Capabilities = .{
     .resume_prefix = "claude --resume ",
 };
 

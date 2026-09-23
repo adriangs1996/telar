@@ -5,13 +5,13 @@ const host_effects = @import("../resources/host_effects.zig");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
 const data = @import("model");
-const ResourcesType = @import("../entrypoints/Resources.zig");
+const Resources = @import("../entrypoints/Resources.zig");
 const std = @import("std");
 const TestHarness = @import("TestHarness.zig");
 const TerminalClient = @import("../TerminalClient.zig");
 const TestingPlugin = @import("TestingPlugin.zig");
 
-pub fn clientEventResourcesForTest(heap: *const core.Heap) ResourcesType {
+pub fn clientEventResourcesForTest(heap: *const core.Heap) Resources {
     return .{
         .tty = undefined,
         .resize_watcher = undefined,

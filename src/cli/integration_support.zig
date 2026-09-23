@@ -4,7 +4,7 @@
 //! files; Pi gets a Telar extension in its global extension directory.
 
 const std = @import("std");
-const IntegrationOptionsType = @import("arguments/IntegrationOptions.zig");
+const IntegrationOptions = @import("arguments/IntegrationOptions.zig");
 const values = @import("arguments/values.zig");
 const Integration = @import("Integration.zig");
 const TempFile = @import("TempFile.zig");
@@ -34,7 +34,7 @@ pub const pane_guard = "[ -n \"$TELAR_PANE_ID\" ] && [ -n \"$TELAR_PANE_GENERATI
 /// ```zig
 /// std.process.exit(try integration.run(process_init, options));
 /// ```
-pub fn run(init: std.process.Init, options: IntegrationOptionsType) !u8 {
+pub fn run(init: std.process.Init, options: IntegrationOptions) !u8 {
     if (options.agent == .pi) {
         return runPi(init, options);
     }
@@ -123,7 +123,7 @@ fn integrationFor(agent: values.HookAgent) Integration {
 
 /// Installs, removes or reports the Telar extension for Pi. `--settings`
 /// overrides the extension file path.
-fn runPi(init: std.process.Init, options: IntegrationOptionsType) !u8 {
+fn runPi(init: std.process.Init, options: IntegrationOptions) !u8 {
     var path_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const path = if (options.settings) |value|
         std.mem.span(value)

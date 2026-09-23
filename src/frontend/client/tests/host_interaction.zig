@@ -5,7 +5,7 @@ const data = @import("model");
 const client_module = @import("telar-client");
 const TerminalClient = @import("../TerminalClient.zig");
 const TestHarness = @import("TestHarness.zig");
-const SizeType = @import("../../platform/Size.zig");
+const Size = @import("../../platform/Size.zig");
 const host_resizes = @import("../controllers/host/host_resizes.zig");
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
@@ -23,7 +23,7 @@ test "host resize commits before resources and presents by model version" {
     const client = harness.client;
     const terminal = harness.terminal;
     const pending_updates = terminal.presenter.pending_updates;
-    const measurement: SizeType = .{
+    const measurement: Size = .{
         .cols = 100,
         .rows = 30,
         .width_px = 1000,
@@ -92,7 +92,7 @@ test "host resize retains committed geometry after outbox backpressure" {
         try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const pending_updates = terminal.presenter.pending_updates;
-    const measurement: SizeType = .{
+    const measurement: Size = .{
         .cols = 90,
         .rows = 28,
         .width_px = 900,

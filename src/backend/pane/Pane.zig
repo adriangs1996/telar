@@ -5,19 +5,19 @@ const core = @import("telar-core");
 const process = @import("process.zig");
 const pane_namespace = @import("pane_namespace.zig");
 const vt = @import("ghostty-vt");
-const PipelineType = @import("../media/Pipeline.zig");
+const Pipeline = @import("../media/Pipeline.zig");
 const PtyResponseQueue = @import("PtyResponseQueue.zig");
-const GraphicsLimitsType = @import("../media/GraphicsLimits.zig");
-const PaneMediaAllocatorType = @import("../media/PaneMediaAllocator.zig");
+const GraphicsLimits = @import("../media/GraphicsLimits.zig");
+const PaneMediaAllocator = @import("../media/PaneMediaAllocator.zig");
 const std = @import("std");
 const PaneInputQueue = @import("PaneInputQueue.zig");
 const State = @import("../media/State.zig");
 const exit_module = @import("../pty/exit.zig");
-const ServiceType = @import("../history/Service.zig");
-const ObserverType = @import("../history/Observer.zig");
-const CacheType = @import("../process/Cache.zig");
+const Service = @import("../history/Service.zig");
+const Observer = @import("../history/Observer.zig");
+const Cache = @import("../process/Cache.zig");
 const model = @import("../history/model.zig");
-const SequenceType = @import("../history/Sequence.zig");
+const Sequence = @import("../history/Sequence.zig");
 const CwdState = @import("CwdState.zig");
 const TitleState = @import("TitleState.zig");
 const LaunchRecord = @import("LaunchRecord.zig");
@@ -27,8 +27,8 @@ const SearchResult = @import("SearchResult.zig");
 const PaneCursor = @import("Cursor.zig");
 const PaneKey = @import("PaneKey.zig");
 const MediaProcessingBorrow = @import("MediaProcessingBorrow.zig");
-const StatsType = @import("../media/Stats.zig");
-const ProcessorType = @import("../media/Processor.zig");
+const Stats = @import("../media/Stats.zig");
+const Processor = @import("../media/Processor.zig");
 const ObserverInputObservation = @import("../history/ObserverInputObservation.zig");
 const ObserverOutputObservation = @import("../history/ObserverOutputObservation.zig");
 const HistoryObservationBorrow = @import("HistoryObservationBorrow.zig");
@@ -57,11 +57,11 @@ review_availability: ReviewAvailability = .{},
 observers: u8 = 0,
 terminal: vt.Terminal,
 stream: vt.TerminalStream,
-media: PipelineType,
+media: Pipeline,
 pty_responses: PtyResponseQueue = .{},
-graphics_limits: GraphicsLimitsType,
+graphics_limits: GraphicsLimits,
 graphics_storage_limit: usize,
-media_allocator: PaneMediaAllocatorType,
+media_allocator: PaneMediaAllocator,
 pty_write_mutex: std.Io.Mutex = .init,
 response_pending: bool = false,
 input_queue: PaneInputQueue = .{},
@@ -96,16 +96,16 @@ output_done: bool = false,
 wait_pending: bool = false,
 close_requested: bool = false,
 exit: ?exit_module.Exit = null,
-history_service: *ServiceType,
-history_observer: ObserverType,
-agent_process_cache: CacheType = .{},
+history_service: *Service,
+history_observer: Observer,
+agent_process_cache: Cache = .{},
 foreground_revision: u64 = 1,
 progress_state: core.PaneProgressState = .remove,
 progress_percent: ?u8 = null,
 progress_revision: u64 = 1,
 history_session_id: model.SessionId,
 started_at_ms: i64,
-history_sequence: SequenceType = .{},
+history_sequence: Sequence = .{},
 /// Command submissions injected through the control API or a session
 /// restore that have not completed yet. Written by the runtime thread,
 /// consumed by the observation actor when the next command finishes.
@@ -622,12 +622,12 @@ pub fn refreshGraphicsProjection(pane: *Pane) void {
 
 /// Processes a sealed media batch through explicit resource borrows.
 /// Example: `pane.processMedia(size, &stats);`.
-pub fn processMedia(pane: *Pane, current_size: core.TerminalSize, stats: *StatsType) void {
+pub fn processMedia(pane: *Pane, current_size: core.TerminalSize, stats: *Stats) void {
     var processor = pane.mediaProcessor();
     processor.processMedia(current_size, stats);
 }
 
-fn mediaProcessor(pane: *Pane) ProcessorType {
+fn mediaProcessor(pane: *Pane) Processor {
     return .{
         .state = &pane.media_ingestion,
         .media = &pane.media,
@@ -656,7 +656,7 @@ pub fn noteSharedTransport(pane: *Pane, shared: bool) void {
 
 /// Freezes available image generations for shared-memory clients.
 /// Example: `pane.prepareSharedTransfers(&stats);`.
-pub fn prepareSharedTransfers(pane: *Pane, stats: *StatsType) void {
+pub fn prepareSharedTransfers(pane: *Pane, stats: *Stats) void {
     var processor = pane.mediaProcessor();
     processor.prepareSharedTransfers(stats);
 }
@@ -900,7 +900,7 @@ pub fn beginHistoryObservation(pane: *Pane) ?HistoryObservationBorrow {
 /// ```zig
 /// const transition = pane.completeHistoryObservation(probe.cache);
 /// ```
-pub fn completeHistoryObservation(pane: *Pane, process_cache: CacheType) HistoryObservationCompletion {
+pub fn completeHistoryObservation(pane: *Pane, process_cache: Cache) HistoryObservationCompletion {
     pane.actorFinished();
     pane.history_observer.finishSealed();
 
@@ -1020,7 +1020,7 @@ pub fn writeMediaPty(handler: *vt.TerminalStream.Handler, response: [:0]const u8
         return;
     }
     const stream: *vt.TerminalStream = @fieldParentPtr("handler", handler);
-    const media: *PipelineType = @fieldParentPtr("stream", stream);
+    const media: *Pipeline = @fieldParentPtr("stream", stream);
     const pane: *Pane = @fieldParentPtr("media", media);
     _ = pane.pty_responses.push(response);
 }

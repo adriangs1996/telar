@@ -7,7 +7,7 @@ const frontend = @import("telar-frontend");
 const std = @import("std");
 const builtin = @import("builtin");
 const RunOptions = @import("arguments/RunOptions.zig");
-const ForwardType = @import("Forward.zig");
+const Forward = @import("Forward.zig");
 const remote = @import("remote.zig");
 const RuntimeConnector = @import("RuntimeConnector.zig");
 const ClientLaunch = @import("ClientLaunch.zig");
@@ -43,7 +43,7 @@ pub fn runNative(init: std.process.Init, options: RunOptions) !u8 {
 pub const Adapter = *const fn (std.process.Init, *core.SocketChannel, client.Options) anyerror!u8;
 
 fn launch(init: std.process.Init, options: RunOptions, adapter: Adapter) !u8 {
-    var forward: ?ForwardType = null;
+    var forward: ?Forward = null;
     defer if (forward) |*owned| owned.stop(init.io);
     if (options.remote) |destination| {
         forward = try remote.establish(init, std.mem.span(destination));

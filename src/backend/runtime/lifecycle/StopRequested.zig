@@ -1,4 +1,4 @@
-const ClientKeyType = @import("../../history/ClientKey.zig");
+const ClientKey = @import("../../history/ClientKey.zig");
 const StopRequested = @This();
 
-initiator: ClientKeyType,
+initiator: ClientKey,

@@ -1,5 +1,5 @@
-const ResponseType = @import("Response.zig");
+const Response = @import("Response.zig");
 const Request = @This();
 
 prompt: []const u8,
-response: *ResponseType,
+response: *Response,

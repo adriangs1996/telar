@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const PaneType = @import("../../pane/Pane.zig");
+const Pane = @import("../../pane/Pane.zig");
 const graphics = @import("graphics.zig");
 const std = @import("std");
 const Sync = @This();
@@ -8,7 +8,7 @@ pub const KnownImage = @import("KnownImage.zig");
 pub const KnownPlacement = @import("KnownPlacement.zig");
 pub const Transfer = @import("Transfer.zig");
 
-pane: *PaneType,
+pane: *Pane,
 snapshot: graphics.SnapshotState,
 revision: u64 = 1,
 target_revision: u64 = 0,
@@ -30,7 +30,7 @@ known_placements: [core.max_placements_per_pane]?KnownPlacement =
     [_]?KnownPlacement{null} ** core.max_placements_per_pane,
 gpa: std.mem.Allocator,
 
-pub fn init(gpa: std.mem.Allocator, pane: *PaneType) Sync {
+pub fn init(gpa: std.mem.Allocator, pane: *Pane) Sync {
     return .{
         .pane = pane,
         .gpa = gpa,

@@ -6,10 +6,10 @@ const Host = @import("Host.zig");
 const protocol = @import("protocol.zig");
 const effects = @import("effects.zig");
 const lua_api = @import("lua-api");
-const ExchangeType = @import("Exchange.zig");
+const Exchange = @import("Exchange.zig");
 const LuaTable = @import("LuaTable.zig");
-const HalfType = @import("Half.zig");
-const BatchType = @import("Batch.zig");
+const Half = @import("Half.zig");
+const Batch = @import("Batch.zig");
 const types = @import("../agent/types.zig");
 
 const max_frame_bytes = 128 * 1024 * 1024;
@@ -62,7 +62,7 @@ pub fn run(init_process: std.process.Init, entry_path: []const u8) !void {
     }
 }
 
-pub fn pushExchange(state: *lua_api.c.lua_State, exchange: ExchangeType) void {
+pub fn pushExchange(state: *lua_api.c.lua_State, exchange: Exchange) void {
     lua_api.c.lua_createtable(state, 0, 14);
     const destination = LuaTable.init(state, -1);
     destination.setInteger("id", exchange.id);
@@ -86,7 +86,7 @@ pub fn pushExchange(state: *lua_api.c.lua_State, exchange: ExchangeType) void {
     freezeTable(state);
 }
 
-fn pushHalf(state: *lua_api.c.lua_State, optional: ?HalfType) void {
+fn pushHalf(state: *lua_api.c.lua_State, optional: ?Half) void {
     const half = optional orelse {
         lua_api.c.lua_pushnil(state);
         return;
@@ -130,7 +130,7 @@ fn pushHead(state: *lua_api.c.lua_State, raw: []const u8) void {
     freezeTable(state);
 }
 
-pub fn parseEffects(state: *lua_api.c.lua_State, index: c_int) !BatchType {
+pub fn parseEffects(state: *lua_api.c.lua_State, index: c_int) !Batch {
     if (lua_api.c.lua_type(state, index) == lua_api.c.LUA_TNIL) {
         return .{};
     }
@@ -142,7 +142,7 @@ pub fn parseEffects(state: *lua_api.c.lua_State, index: c_int) !BatchType {
     if (count > effects.max_effects) {
         return error.TooManyEffects;
     }
-    var batch: BatchType = .{ .len = @intCast(count) };
+    var batch: Batch = .{ .len = @intCast(count) };
 
     for (0..count) |effect_index| {
         _ = lua_api.c.lua_geti(state, absolute, @intCast(effect_index + 1));
@@ -458,7 +458,7 @@ test "shipped agent command tap maps non-stream shell commands and rejects unusa
     try std.testing.expectEqual(@as(u8, 0), undecoded.len);
 }
 
-fn testExchange(dialect: types.ApiDialect, body: []const u8) ExchangeType {
+fn testExchange(dialect: types.ApiDialect, body: []const u8) Exchange {
     return .{
         .id = 1,
         .generation = 1,

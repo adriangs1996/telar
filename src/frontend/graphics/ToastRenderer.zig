@@ -3,7 +3,7 @@ const SidebarRendererInput = @import("SidebarRendererInput.zig");
 const client = @import("telar-client");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
-const RasterizerType = @import("Rasterizer.zig");
+const Rasterizer = @import("Rasterizer.zig");
 const ToastSlot = @import("ToastSlot.zig");
 const icon_graphics = @import("icons.zig");
 const Preparation = @import("Preparation.zig");
@@ -12,12 +12,12 @@ const toast_module = @import("../widgets/toast.zig");
 const ToastRenderKey = @import("ToastRenderKey.zig");
 const kitty_codec = @import("kitty_codec.zig");
 const SlotRender = @import("SlotRender.zig");
-const SurfaceType = @import("Surface.zig");
+const Surface = @import("Surface.zig");
 const Renderer = @This();
 
 gpa: std.mem.Allocator,
-text: ?RasterizerType,
-icons: ?RasterizerType,
+text: ?Rasterizer,
+icons: ?Rasterizer,
 supported: bool = false,
 media_idle: bool = false,
 cell_width: u16 = 0,
@@ -30,8 +30,8 @@ slots: [data.notifications.max_items]ToastSlot = @splat(.{}),
 pub fn init(gpa: std.mem.Allocator) Renderer {
     return .{
         .gpa = gpa,
-        .text = RasterizerType.init() catch null,
-        .icons = RasterizerType.initFont(icon_graphics.embedded_font) catch null,
+        .text = Rasterizer.init() catch null,
+        .icons = Rasterizer.initFont(icon_graphics.embedded_font) catch null,
     };
 }
 
@@ -437,7 +437,7 @@ fn renderSlot(renderer: *Renderer, rendering: SlotRender) !void {
     }
     slot.width = width;
     slot.height = height;
-    const surface: SurfaceType = .{
+    const surface: Surface = .{
         .pixels = slot.pixels,
         .width = width,
         .height = height,

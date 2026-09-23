@@ -1,18 +1,18 @@
 const data = @import("model");
-const ViewInteractionCommandType = @import("../operations/input/ViewInteractionCommand.zig");
+const ViewInteractionCommand = @import("../operations/input/ViewInteractionCommand.zig");
 /// Questions only the adapter's drawn chrome can answer: what a pointer hit
 /// and how far the inspector scrolls under its layout. Everything the chrome
 /// draws, the adapter reads from the model.
 const HostChrome = @This();
 
 context: *anyopaque,
-pointer_fn: *const fn (*anyopaque, data.Mouse) ViewInteractionCommandType,
+pointer_fn: *const fn (*anyopaque, data.Mouse) ViewInteractionCommand,
 inspection_scroll_limit_fn: *const fn (*anyopaque) ?u32,
 link_pointer_fn: ?*const fn (*anyopaque, data.Mouse) bool = null,
 
 /// Resolves one pointer event against the adapter's chrome hit map.
 /// Example: `const interaction = client.chrome.pointer(event);`.
-pub fn pointer(port: HostChrome, event: data.Mouse) ViewInteractionCommandType {
+pub fn pointer(port: HostChrome, event: data.Mouse) ViewInteractionCommand {
     return port.pointer_fn(port.context, event);
 }
 

@@ -2,9 +2,9 @@
 //! pane whose credential made the request.
 
 const core = @import("telar-core");
-const ObservationType = @import("../proxy/Observation.zig");
+const Observation = @import("../proxy/Observation.zig");
 const Pane = @import("../pane/Pane.zig");
-const ProxyObservationType = @import("../agent/ProxyObservation.zig");
+const ProxyObservation = @import("../agent/ProxyObservation.zig");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Sources = @import("Sources.zig");
 const types = @import("../agent/types.zig");
@@ -18,7 +18,7 @@ const std = @import("std");
 /// ```zig
 /// try proxy_observation.receive(model, result);
 /// ```
-pub fn receive(model: *RuntimeModel, result: anyerror!ObservationType) !void {
+pub fn receive(model: *RuntimeModel, result: anyerror!Observation) !void {
     const event = result catch return;
     var sources = Sources.init(model.io, model.select);
     try sources.receiveProxyObservation(&model.resources.proxy);
@@ -37,7 +37,7 @@ pub fn receive(model: *RuntimeModel, result: anyerror!ObservationType) !void {
     agent_description.start(model);
 }
 
-fn translate(event: ObservationType, pane: *const Pane) ?ProxyObservationType {
+fn translate(event: Observation, pane: *const Pane) ?ProxyObservation {
     const phase: types.ProxyPhase = switch (event.phase) {
         .request_started => .request_started,
         .auxiliary_request_started => return null,
@@ -66,7 +66,7 @@ fn translate(event: ObservationType, pane: *const Pane) ?ProxyObservationType {
     };
 }
 
-pub fn eventFor(pane: *const Pane, phase: middleware.Phase, protocol: middleware.Protocol) ObservationType {
+pub fn eventFor(pane: *const Pane, phase: middleware.Phase, protocol: middleware.Protocol) Observation {
     return .{
         .pane = pane.key(),
         .dialect = .openai_responses,

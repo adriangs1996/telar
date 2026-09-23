@@ -1,4 +1,4 @@
-const ResponseHeadType = @import("ResponseHead.zig");
+const ResponseHead = @import("ResponseHead.zig");
 
 /// Creates the lifecycle runner for one intercepted HTTP/1.1 connection.
 ///
@@ -52,7 +52,7 @@ pub fn Type(comptime Context: type, comptime port: anytype) type {
             }
         }
 
-        fn publishFinal(context: *Context, response: ResponseHeadType) bool {
+        fn publishFinal(context: *Context, response: ResponseHead) bool {
             if (response.kind == .informational) {
                 port.publish_failure(context);
                 return false;

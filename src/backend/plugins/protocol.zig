@@ -8,7 +8,7 @@ const ExchangeType = @import("Exchange.zig");
 const Cursor = @import("Cursor.zig");
 const middleware = @import("../proxy/middleware.zig");
 const types = @import("../agent/types.zig");
-const BatchType = @import("Batch.zig");
+const Batch = @import("Batch.zig");
 const effects = @import("effects.zig");
 const Half = @import("../proxy/capture/Half.zig");
 const HalfType = @import("Half.zig");
@@ -94,7 +94,7 @@ pub fn decodeExchange(bytes: []const u8) !ExchangeType {
 /// ```zig
 /// const payload = try encodeEffects(buffer, event_id, &batch);
 /// ```
-pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const BatchType) ![]const u8 {
+pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const Batch) ![]const u8 {
     if (batch.len > effects.max_effects) {
         return error.TooManyEffects;
     }
@@ -142,7 +142,7 @@ pub fn encodeEffects(buffer: []u8, event_id: u64, batch: *const BatchType) ![]co
 /// ```zig
 /// const decoded = try decodeEffects(payload);
 /// ```
-pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: BatchType } {
+pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: Batch } {
     var cursor: Cursor = .{ .bytes = bytes };
     if (try cursor.byte() != 2) {
         return error.UnknownFrame;
@@ -152,7 +152,7 @@ pub fn decodeEffects(bytes: []const u8) !struct { event_id: u64, batch: BatchTyp
     if (count > effects.max_effects) {
         return error.TooManyEffects;
     }
-    var batch: BatchType = .{ .len = count };
+    var batch: Batch = .{ .len = count };
 
     for (0..count) |index| {
         batch.items[index] = switch (try cursor.byte()) {
@@ -264,7 +264,7 @@ fn writeInt(writer: *std.Io.Writer, comptime T: type, value: T) !void {
 }
 
 test "effect protocol round trips all effect variants and rejects trailing bytes" {
-    var batch: BatchType = .{ .len = 3 };
+    var batch: Batch = .{ .len = 3 };
     batch.items[0] = .{ .record_command = .{
         .command = "git status",
         .cwd = "/work",

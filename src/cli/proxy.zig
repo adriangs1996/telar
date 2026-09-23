@@ -2,7 +2,7 @@
 
 const backend = @import("telar-backend");
 const std = @import("std");
-const ProxyOptionsType = @import("arguments/ProxyOptions.zig");
+const ProxyOptions = @import("arguments/ProxyOptions.zig");
 const AuthorityPaths = @import("AuthorityPaths.zig");
 const InspectionContext = @import("InspectionContext.zig");
 const Inspection = @import("Inspection.zig");
@@ -44,7 +44,7 @@ pub const Status = enum {
 /// ```zig
 /// std.process.exit(try proxy.run(init, options));
 /// ```
-pub fn run(init: std.process.Init, options: ProxyOptionsType) !u8 {
+pub fn run(init: std.process.Init, options: ProxyOptions) !u8 {
     var directory_buffer: [std.fs.max_path_bytes]u8 = undefined;
     const directory = if (options.ca_dir) |value|
         std.mem.span(value)

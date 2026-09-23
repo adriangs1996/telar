@@ -1,5 +1,5 @@
-const AgentSnapshotEntryType = @import("../AgentSnapshotEntry.zig");
+const AgentSnapshotEntry = @import("../AgentSnapshotEntry.zig");
 const AgentSnapshot = @This();
 
 revision: u64,
-entries: []const AgentSnapshotEntryType,
+entries: []const AgentSnapshotEntry,

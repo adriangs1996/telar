@@ -4,7 +4,7 @@
 const std = @import("std");
 const WorkspaceOptions = @import("arguments/WorkspaceOptions.zig");
 const agent = @import("agent.zig");
-const SessionType = @import("Session.zig");
+const Session = @import("Session.zig");
 const control = @import("control.zig");
 const workspace = @import("arguments/workspace.zig");
 const workspace_output = @import("workspace_output.zig");
@@ -54,7 +54,7 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
         return error.MissingWorkspaceName;
     }
 
-    var session = try SessionType.open(init, options.socket);
+    var session = try Session.open(init, options.socket);
     defer session.close();
     const workspace_id = try session.createWorkspace(.{
         .name = name,
@@ -75,7 +75,7 @@ fn execute(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wr
 
 fn rename(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
     const id = try options.target.?.resolve(init.minimal.environ, "TELAR_WORKSPACE_ID");
-    var session = try SessionType.attach(init, options.socket);
+    var session = try Session.attach(init, options.socket);
     defer session.close();
     const response = try session.exchange(core.encodeRenameWorkspace, core.RenameWorkspace{
         .request_id = .none,
@@ -103,7 +103,7 @@ fn rename(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Wri
 
 fn list(init: std.process.Init, options: WorkspaceOptions, writer: *std.Io.Writer) !u8 {
     const wanted: ?u64 = if (options.target) |target| try target.resolve(init.minimal.environ, "TELAR_WORKSPACE_ID") else null;
-    var session = try SessionType.attach(init, options.socket);
+    var session = try Session.attach(init, options.socket);
     defer session.close();
     try session.subscribeRuntime();
 

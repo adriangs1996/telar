@@ -1,9 +1,9 @@
 const core = @import("telar-core");
-const PaneKeyType = @import("../pane/PaneKey.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
 const description = @import("description.zig");
 const Result = @This();
 
-pane: PaneKeyType,
+pane: PaneKey,
 session_id: [16]u8,
 status: description.ResultStatus,
 title: [core.max_agent_session_title_bytes]u8 = undefined,

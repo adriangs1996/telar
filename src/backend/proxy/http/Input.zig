@@ -1,14 +1,14 @@
-const HeadType = @import("Head.zig");
-const TransformPipelineType = @import("../TransformPipeline.zig");
+const Head = @import("Head.zig");
+const TransformPipeline = @import("../TransformPipeline.zig");
 const std = @import("std");
-const TransformContextType = @import("../TransformContext.zig");
+const TransformContext = @import("../TransformContext.zig");
 const Input = @This();
 
 original: []const u8,
-original_head: HeadType,
+original_head: Head,
 is_response: bool,
 response_to_head: bool,
-pipeline: *const TransformPipelineType,
+pipeline: *const TransformPipeline,
 io: std.Io,
-context: TransformContextType,
+context: TransformContext,
 output: []u8,

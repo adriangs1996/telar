@@ -1,5 +1,5 @@
 const H2Options = @import("H2Options.zig");
-const ResponseStreamsType = @import("../provider/ResponseStreams.zig");
+const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Streams = @import("../provider/Streams.zig");
 const RelayContext = @import("RelayContext.zig");
 const h2 = @import("h2.zig");
@@ -25,7 +25,7 @@ pub fn init(options: H2Options) Connection {
 /// ```
 pub fn run(connection: *Connection) void {
     const options = connection.options;
-    var responses = ResponseStreamsType.init(options.gpa, options.exchange.dialect);
+    var responses = ResponseStreams.init(options.gpa, options.exchange.dialect);
     defer responses.deinit();
     var requests = Streams.init(options.exchange.dialect);
     defer requests.deinit();

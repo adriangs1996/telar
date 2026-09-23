@@ -20,8 +20,8 @@
 //! No terminal and no buffer ownership: a range is four numbers and a mode.
 
 const Point = @import("ui/Point.zig");
-const CellType = @import("ui/Cell.zig");
-const BufferType = @import("ui/Buffer.zig");
+const Cell = @import("ui/Cell.zig");
+const Buffer = @import("ui/Buffer.zig");
 const Range = @import("Range.zig");
 const std = @import("std");
 const text_module = @import("ui/text.zig");
@@ -53,7 +53,7 @@ pub const Mode = enum {
 /// that gets it subtly wrong feels wrong without the user being able to say why.
 pub const Granularity = enum { character, word, line };
 
-fn isWordByte(cell: *const CellType) bool {
+fn isWordByte(cell: *const Cell) bool {
     if (cell.width == 0) {
         return true;
     }
@@ -68,7 +68,7 @@ fn isWordByte(cell: *const CellType) bool {
     return glyph[0] != ' ';
 }
 
-pub fn wordStart(b: *const BufferType, at: Point) u16 {
+pub fn wordStart(b: *const Buffer, at: Point) u16 {
     const current = cellAt(b, at.x, at.y) orelse return at.x;
     const word = isWordByte(current);
     var x = at.x;
@@ -81,7 +81,7 @@ pub fn wordStart(b: *const BufferType, at: Point) u16 {
     return x;
 }
 
-pub fn wordEnd(b: *const BufferType, at: Point) u16 {
+pub fn wordEnd(b: *const Buffer, at: Point) u16 {
     const current = cellAt(b, at.x, at.y) orelse return at.x;
     const word = isWordByte(current);
     var x = at.x;
@@ -94,7 +94,7 @@ pub fn wordEnd(b: *const BufferType, at: Point) u16 {
     return x;
 }
 
-fn cellAt(b: *const BufferType, x: u16, y: u16) ?*const CellType {
+fn cellAt(b: *const Buffer, x: u16, y: u16) ?*const Cell {
     if (x >= b.w or y >= b.h) {
         return null;
     }
@@ -113,7 +113,7 @@ fn cellAt(b: *const BufferType, x: u16, y: u16) ?*const CellType {
 /// Rows are joined with a newline. That newline is real for chrome, which was
 /// never one long line - unlike a pane, where the emulator knows which breaks
 /// it invented and `blit` asks it instead.
-pub fn text(b: *const BufferType, range: Range, out: []u8) []const u8 {
+pub fn text(b: *const Buffer, range: Range, out: []u8) []const u8 {
     if (range.isEmpty()) {
         return out[0..0];
     }
@@ -173,16 +173,16 @@ pub fn text(b: *const BufferType, range: Range, out: []u8) []const u8 {
 // ---------------------------------------------------------------------------
 
 /// Draws `rows` into a buffer, so the tests read like a screen.
-fn screen(gpa: std.mem.Allocator, rows: []const []const u8) !BufferType {
+fn screen(gpa: std.mem.Allocator, rows: []const []const u8) !Buffer {
     var width: u16 = 0;
     for (rows) |row| width = @max(width, text_module.measure(row));
-    var b = try BufferType.init(gpa, width, @intCast(rows.len));
+    var b = try Buffer.init(gpa, width, @intCast(rows.len));
     b.fill(b.area(), .{ .glyph = " ", .style = .{} });
     for (rows, 0..) |row, y| _ = b.writeText(b.area(), .{ .point = .{ .x = 0, .y = @intCast(y) }, .text = row, .style = .{} });
     return b;
 }
 
-fn copied(b: *const BufferType, range: Range, out: []u8) []const u8 {
+fn copied(b: *const Buffer, range: Range, out: []u8) []const u8 {
     return text(b, range.expanded(b), out);
 }
 

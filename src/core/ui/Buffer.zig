@@ -1,9 +1,9 @@
-const CellType = @import("Cell.zig");
+const Cell = @import("Cell.zig");
 const std = @import("std");
-const RectType = @import("Rect.zig");
-const StyleType = @import("Style.zig");
-const PointType = @import("Point.zig");
-const GraphemeIteratorType = @import("GraphemeIterator.zig");
+const Rect = @import("Rect.zig");
+const Style = @import("Style.zig");
+const Point = @import("Point.zig");
+const GraphemeIterator = @import("GraphemeIterator.zig");
 const text_module = @import("text.zig");
 const Buffer = @This();
 
@@ -19,14 +19,14 @@ pub const RightAlignedText = @import("RightAlignedText.zig");
 
 pub const Box = @import("Box.zig");
 
-cells: []CellType,
+cells: []Cell,
 w: u16,
 h: u16,
 gpa: std.mem.Allocator,
 
 /// Nothing is written outside this. Starts as the whole buffer.
-clip: RectType,
-stack: [max_clip_depth]RectType = undefined,
+clip: Rect,
+stack: [max_clip_depth]Rect = undefined,
 depth: u8 = 0,
 
 /// Base, a pane, a dropdown, a modal, a tooltip inside it. More nesting
@@ -34,7 +34,7 @@ depth: u8 = 0,
 pub const max_clip_depth = 8;
 
 pub fn init(gpa: std.mem.Allocator, w: u16, h: u16) !Buffer {
-    const cells = try gpa.alloc(CellType, @as(usize, w) * @as(usize, h));
+    const cells = try gpa.alloc(Cell, @as(usize, w) * @as(usize, h));
     @memset(cells, .{});
     return .{
         .cells = cells,
@@ -55,7 +55,7 @@ pub fn init(gpa: std.mem.Allocator, w: u16, h: u16) !Buffer {
 /// Silently ignored past `max_clip_depth`, because the alternative is a
 /// draw path that can fail, and a frame that draws one widget unclipped is
 /// a cosmetic bug where a frame that returns an error is a blank screen.
-pub fn pushClip(b: *Buffer, r: RectType) void {
+pub fn pushClip(b: *Buffer, r: Rect) void {
     if (b.depth == max_clip_depth) {
         return;
     }
@@ -79,7 +79,7 @@ pub fn deinit(b: *Buffer) void {
 pub fn resize(b: *Buffer, w: u16, h: u16) !void {
     // Fresh allocation rather than realloc: the old cells are cleared
     // below anyway, so copying them into the new block is wasted work.
-    const cells = try b.gpa.alloc(CellType, @as(usize, w) * @as(usize, h));
+    const cells = try b.gpa.alloc(Cell, @as(usize, w) * @as(usize, h));
     b.gpa.free(b.cells);
     b.cells = cells;
     b.w = w;
@@ -91,22 +91,22 @@ pub fn resize(b: *Buffer, w: u16, h: u16) !void {
     @memset(b.cells, .{});
 }
 
-pub fn area(b: *const Buffer) RectType {
+pub fn area(b: *const Buffer) Rect {
     return .{ .w = b.w, .h = b.h };
 }
 
-pub fn at(b: *Buffer, x: u16, y: u16) ?*CellType {
+pub fn at(b: *Buffer, x: u16, y: u16) ?*Cell {
     if (x >= b.w or y >= b.h) {
         return null;
     }
     return &b.cells[@as(usize, y) * @as(usize, b.w) + @as(usize, x)];
 }
 
-pub fn clear(b: *Buffer, style: StyleType) void {
+pub fn clear(b: *Buffer, style: Style) void {
     @memset(b.cells, .{ .style = style });
 }
 
-pub fn fill(b: *Buffer, r: RectType, fill_value: Fill) void {
+pub fn fill(b: *Buffer, r: Rect, fill_value: Fill) void {
     // Edge sums in u32: `x + w` may exceed maxInt(u16), and positions past
     // it are unaddressable anyway.
     const x_end = @min(@as(u32, r.x) + r.w, @as(u32, std.math.maxInt(u16)) + 1);
@@ -129,7 +129,7 @@ pub fn fill(b: *Buffer, r: RectType, fill_value: Fill) void {
 /// ```zig
 /// buffer.setCell(.{ .x = 4, .y = 2 }, .{ .text = "界", .width = 2 });
 /// ```
-pub fn setCell(b: *Buffer, point: PointType, value: CellWrite) void {
+pub fn setCell(b: *Buffer, point: Point, value: CellWrite) void {
     if (!b.clip.contains(point.x, point.y)) {
         return;
     }
@@ -144,7 +144,7 @@ pub fn setCell(b: *Buffer, point: PointType, value: CellWrite) void {
     const drawn: u8 = if (fits) value.width else 1;
 
     const cell = b.at(point.x, point.y) orelse return;
-    var len: u8 = @intCast(@min(text.len, CellType.max_bytes));
+    var len: u8 = @intCast(@min(text.len, Cell.max_bytes));
     // A cluster longer than the cell is cut, but never mid-codepoint:
     // invalid UTF-8 stored here would reach the host terminal verbatim.
     if (len < text.len) {
@@ -175,14 +175,14 @@ pub fn setCell(b: *Buffer, point: PointType, value: CellWrite) void {
 /// ```zig
 /// const width = buffer.writeText(area, .{ .point = .{ .x = 2, .y = 1 }, .text = "ready" });
 /// ```
-pub fn writeText(b: *Buffer, r: RectType, write: TextWrite) u16 {
+pub fn writeText(b: *Buffer, r: Rect, write: TextWrite) u16 {
     if (write.point.y < r.y or write.point.y >= @as(u32, r.y) + r.h) {
         return 0;
     }
 
     var column: u32 = write.point.x;
     const limit = @min(@as(u32, r.x) + r.w, @as(u32, std.math.maxInt(u16)) + 1);
-    var it: GraphemeIteratorType = .{ .bytes = write.text };
+    var it: GraphemeIterator = .{ .bytes = write.text };
 
     while (it.next()) |cluster| {
         if (column >= limit) {
@@ -210,7 +210,7 @@ pub fn writeText(b: *Buffer, r: RectType, write: TextWrite) u16 {
 /// ```zig
 /// buffer.writeTruncated(area, .{ .point = .{ .x = 0, .y = 0 }, .text = name, .max_width = 12 });
 /// ```
-pub fn writeTruncated(b: *Buffer, r: RectType, truncated: TruncatedText) u16 {
+pub fn writeTruncated(b: *Buffer, r: Rect, truncated: TruncatedText) u16 {
     const write: TextWrite = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
 
     if (truncated.max_width == 0) {
@@ -232,7 +232,7 @@ pub fn writeTruncated(b: *Buffer, r: RectType, truncated: TruncatedText) u16 {
     }
     const budget = truncated.max_width - marker;
 
-    var it: GraphemeIteratorType = .{ .bytes = write.text };
+    var it: GraphemeIterator = .{ .bytes = write.text };
     var used: u32 = 0;
     var cut: usize = 0;
     while (it.next()) |cluster| {
@@ -257,7 +257,7 @@ pub fn writeTruncated(b: *Buffer, r: RectType, truncated: TruncatedText) u16 {
 /// ```zig
 /// buffer.writeLeftTruncated(area, .{ .point = .{ .x = 0, .y = 0 }, .text = path, .max_width = 20 });
 /// ```
-pub fn writeLeftTruncated(b: *Buffer, r: RectType, truncated: TruncatedText) u16 {
+pub fn writeLeftTruncated(b: *Buffer, r: Rect, truncated: TruncatedText) u16 {
     const write: TextWrite = .{ .point = truncated.point, .text = truncated.text, .style = truncated.style };
 
     if (truncated.max_width == 0) {
@@ -274,7 +274,7 @@ pub fn writeLeftTruncated(b: *Buffer, r: RectType, truncated: TruncatedText) u16
         return 0;
     }
     const budget = truncated.max_width - marker;
-    var it: GraphemeIteratorType = .{ .bytes = write.text };
+    var it: GraphemeIterator = .{ .bytes = write.text };
     var prefix_width: u32 = 0;
     var cut: usize = write.text.len;
     while (true) {
@@ -299,7 +299,7 @@ pub fn writeLeftTruncated(b: *Buffer, r: RectType, truncated: TruncatedText) u16
 /// ```zig
 /// buffer.writeRight(area, .{ .y = area.y, .text = "100%" });
 /// ```
-pub fn writeRight(b: *Buffer, r: RectType, write: RightAlignedText) u16 {
+pub fn writeRight(b: *Buffer, r: Rect, write: RightAlignedText) u16 {
     const width = text_module.measure(write.text);
     if (width > r.w) {
         return b.writeTruncated(r, .{ .point = .{ .x = r.x, .y = write.y }, .text = write.text, .max_width = r.w, .style = write.style });
@@ -316,7 +316,7 @@ pub fn writeRight(b: *Buffer, r: RectType, write: RightAlignedText) u16 {
 /// ```zig
 /// buffer.box(area, .{ .style = border, .title = " session " });
 /// ```
-pub fn box(b: *Buffer, r: RectType, box_value: Box) void {
+pub fn box(b: *Buffer, r: Rect, box_value: Box) void {
     if (r.w < 2 or r.h < 2) {
         return;
     }
@@ -346,7 +346,7 @@ pub fn box(b: *Buffer, r: RectType, box_value: Box) void {
     b.setCell(.{ .x = right, .y = bottom }, .{ .text = "╯", .width = 1, .style = box_value.style });
 
     if (box_value.title) |title| {
-        const inside: RectType = .{ .x = r.x + 2, .y = r.y, .w = r.w -| 4, .h = 1 };
+        const inside: Rect = .{ .x = r.x + 2, .y = r.y, .w = r.w -| 4, .h = 1 };
         _ = b.writeText(inside, .{ .point = .{ .x = r.x + 2, .y = r.y }, .text = title, .style = box_value.style });
     }
 }
@@ -360,7 +360,7 @@ pub fn box(b: *Buffer, r: RectType, box_value: Box) void {
 /// ```zig
 /// buffer.fillWithoutCorners(area, .{ .bg = palette.panel_bg });
 /// ```
-pub fn fillWithoutCorners(b: *Buffer, r: RectType, style: StyleType) void {
+pub fn fillWithoutCorners(b: *Buffer, r: Rect, style: Style) void {
     if (r.w < 2 or r.h < 2) {
         return;
     }

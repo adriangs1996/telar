@@ -1,16 +1,16 @@
-const ExchangeType = @import("Exchange.zig");
-const ResponseObserverType = @import("../provider/ResponseObserver.zig");
-const HalfType = @import("../capture/Half.zig");
+const Exchange = @import("Exchange.zig");
+const ResponseObserver = @import("../provider/ResponseObserver.zig");
+const Half = @import("../capture/Half.zig");
 const ResponseObserverOptions = @import("ResponseObserverOptions.zig");
 const Fragment = @import("../http/Fragment.zig");
 const ResponseBodyObserver = @This();
 
-exchange: *ExchangeType,
-response: ResponseObserverType,
+exchange: *Exchange,
+response: ResponseObserver,
 inspect_payload: bool,
-capture_half: ?*HalfType,
+capture_half: ?*Half,
 
-pub fn init(exchange: *ExchangeType, options: ResponseObserverOptions) ResponseBodyObserver {
+pub fn init(exchange: *Exchange, options: ResponseObserverOptions) ResponseBodyObserver {
     return .{
         .exchange = exchange,
         .response = .init(exchange.dialect),

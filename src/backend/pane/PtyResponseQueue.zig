@@ -1,9 +1,9 @@
-const ParkingMutexType = @import("../media/ParkingMutex.zig");
+const ParkingMutex = @import("../media/ParkingMutex.zig");
 const pane_namespace = @import("pane_namespace.zig");
 const std = @import("std");
 const PtyResponseQueue = @This();
 
-mutex: ParkingMutexType = .{},
+mutex: ParkingMutex = .{},
 bytes: [pane_namespace.max_pty_responses][pane_namespace.max_pty_response_bytes]u8 = undefined,
 lengths: [pane_namespace.max_pty_responses]u16 = @splat(0),
 head: u8 = 0,

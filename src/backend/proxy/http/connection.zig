@@ -8,9 +8,9 @@ const GenericExchangePort = @import("GenericExchangePort.zig").Type;
 const GenericExchange = @import("GenericExchange.zig").Type;
 const GenericPort = @import("GenericPort.zig").Type;
 const GenericConnection = @import("GenericConnection.zig").Type;
-const ResponseHeadType = @import("ResponseHead.zig");
+const ResponseHead = @import("ResponseHead.zig");
 const types = @import("types.zig");
-const RequestHeadType = @import("RequestHead.zig");
+const RequestHead = @import("RequestHead.zig");
 const ExchangeState = @import("ExchangeState.zig");
 const std = @import("std");
 const ExchangeCapture = @import("ExchangeCapture.zig");
@@ -18,17 +18,17 @@ const ConnectionCapture = @import("ConnectionCapture.zig");
 const request_support = @import("../provider/request_support.zig");
 
 pub const ExchangeOutcome = union(enum) {
-    complete: ResponseHeadType,
-    early_response: ResponseHeadType,
+    complete: ResponseHead,
+    early_response: ResponseHead,
     failed,
 };
 
 pub const Event = union(enum) {
     request_body: bool,
-    response: ?ResponseHeadType,
+    response: ?ResponseHead,
 };
 
-fn testingRequest(body: types.BodyPlan) RequestHeadType {
+fn testingRequest(body: types.BodyPlan) RequestHead {
     return .{
         .classification = .inference,
         .body = body,
@@ -36,7 +36,7 @@ fn testingRequest(body: types.BodyPlan) RequestHeadType {
     };
 }
 
-pub fn testingResponse(status_code: u16, kind: types.ResponseKind, connection: types.ConnectionPolicy) ResponseHeadType {
+pub fn testingResponse(status_code: u16, kind: types.ResponseKind, connection: types.ConnectionPolicy) ResponseHead {
     return .{
         .status_code = status_code,
         .body = .none,
