@@ -26,5 +26,5 @@ pub fn tick(model: *RuntimeModel, result: anyerror!void) !void {
     workspace_git.start(model);
     agent_rename.start(model);
     suggest_command.stopIdleEngine(model);
-    model.resources.proxy.expireCaptures(std.Io.Timestamp.now(model.io, .real).toMilliseconds());
+    model.resources.proxy.expireCaptures(std.Io.Timestamp.now(model.io, .real).toMilliseconds(), model.resources.pluginService());
 }

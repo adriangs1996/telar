@@ -27,8 +27,5 @@ pub fn receive(model: *RuntimeModel, result: anyerror!*Half) !void {
     }
 
     model.resources.proxy.decodeCapture(half);
-    model.resources.proxy.acceptCapture(.{
-        .now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
-        .half = half,
-    });
+    model.resources.proxy.acceptCapture(std.Io.Timestamp.now(model.io, .real).toMilliseconds(), half, model.resources.pluginService());
 }

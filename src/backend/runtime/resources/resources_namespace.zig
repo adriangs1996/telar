@@ -1,7 +1,5 @@
 //! Physical resources acquired and owned for one runtime lifetime.
 
-const Exchange = @import("../../proxy/capture/Exchange.zig");
-const ServiceType = @import("../../plugins/Service.zig");
 const std = @import("std");
 const StateType = @import("../observability/State.zig");
 const Resources = @import("Resources.zig");
@@ -15,11 +13,6 @@ pub const AcquisitionPhase = enum {
     plugins,
     engine,
 };
-
-pub fn submitCapture(context: *anyopaque, exchange: *Exchange) void {
-    const service: *ServiceType = @ptrCast(@alignCast(context));
-    service.submit(exchange);
-}
 
 pub fn checkpoint(comptime fail_after: ?AcquisitionPhase, comptime phase: AcquisitionPhase) !void {
     if (comptime fail_after == phase) {

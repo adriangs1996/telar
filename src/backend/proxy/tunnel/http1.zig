@@ -13,7 +13,6 @@ const types = @import("../http/types.zig");
 const RequestBodyObserver = @import("RequestBodyObserver.zig");
 const exchange_mod = @import("exchange_support.zig");
 const HalfType = @import("../capture/Half.zig");
-const HeadSinkType = @import("../http/HeadSink.zig");
 const buffer_support = @import("../capture/buffer_support.zig");
 const ResponseHeadType = @import("../http/ResponseHead.zig");
 const ResponseBodyObserver = @import("ResponseBodyObserver.zig");
@@ -70,7 +69,7 @@ fn relayRequestHead(connection: *Http1Connection) ?RequestHeadType {
             .kind = .request,
             .stream_id = 0,
         }),
-        .capture = headSink(connection.request_capture),
+        .capture = connection.request_capture,
     }) orelse return null;
 
     return .{
@@ -113,47 +112,6 @@ fn finishRequest(connection: *Http1Connection) void {
     connection.exchange.publish(exchange_mod.requestPhase(connection.request.finish()), 0);
 }
 
-fn headSink(half: ?*HalfType) ?HeadSinkType {
-    const owned = half orelse return null;
-
-    return .{ .context = owned, .append_fn = captureHead };
-}
-
-fn captureHead(context: *anyopaque, bytes: []const u8) void {
-    const half: *HalfType = @ptrCast(@alignCast(context));
-    const part: buffer_support.Part = if (half.side == .request) .request_head else .response_head;
-    _ = half.append(part, bytes);
-
-    if (half.side == .request) {
-        const line_end = std.mem.indexOf(u8, bytes, "\r\n") orelse return;
-        var fields = std.mem.splitScalar(u8, bytes[0..line_end], ' ');
-        const method = fields.next() orelse return;
-        const target = fields.next() orelse return;
-        half.setRoute(method, target);
-    }
-
-    if (headerValue(bytes, "content-encoding")) |encoding| {
-        half.setEncoding(encoding);
-    }
-}
-
-fn headerValue(bytes: []const u8, wanted: []const u8) ?[]const u8 {
-    var lines = std.mem.splitSequence(u8, bytes, "\r\n");
-    _ = lines.next();
-
-    while (lines.next()) |line| {
-        const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
-        const name = std.mem.trim(u8, line[0..colon], " \t");
-        if (!std.ascii.eqlIgnoreCase(name, wanted)) {
-            continue;
-        }
-
-        return std.mem.trim(u8, line[colon + 1 ..], " \t");
-    }
-
-    return null;
-}
-
 fn finishCapture(connection: *Http1Connection, side: buffer_support.Side, outcome: buffer_support.Outcome) void {
     const producer = connection.captures orelse return;
     const slot = switch (side) {
@@ -185,7 +143,7 @@ fn relayResponse(connection: *Http1Connection, request: RequestHeadType) ?Respon
                 .kind = .response,
                 .stream_id = 0,
             }),
-            .capture = headSink(connection.response_capture),
+            .capture = connection.response_capture,
         }) orelse return null;
 
         if (head.message.informational) {
@@ -551,7 +509,7 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
             .to = .origin,
             .is_response = false,
             .response_to_head = false,
-            .capture = headSink(request_half),
+            .capture = request_half,
         }).?;
         var request_observer: Observer = .{};
         try std.testing.expect(http.relayBody(&session, .{
@@ -576,7 +534,7 @@ test "HTTP1 capture de-frames split bodies without changing forwarded bytes" {
             .to = .child,
             .is_response = true,
             .response_to_head = false,
-            .capture = headSink(response_half),
+            .capture = response_half,
         }).?;
         var response_observer = ResponseBodyObserver.init(&harness.exchange, .{
             .inspect_payload = false,

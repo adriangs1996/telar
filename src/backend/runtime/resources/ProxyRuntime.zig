@@ -1,64 +1,62 @@
 const core = @import("telar-core");
-const proxy_ops = @import("proxy.zig");
-const Joiner = @import("../../proxy/capture/Joiner.zig");
-const CaptureSink = @import("CaptureSink.zig");
 const std = @import("std");
+const Joiner = @import("../../proxy/capture/Joiner.zig");
 const InitOptions = @import("InitOptions.zig");
-const ProxyType = @import("../../proxy/Proxy.zig");
+const Proxy = @import("../../proxy/Proxy.zig");
 const Config = @import("../../proxy/capture/Config.zig");
-const ObservationScheduler = @import("ObservationScheduler.zig");
-const CaptureScheduler = @import("CaptureScheduler.zig");
-const CaptureInput = @import("CaptureInput.zig");
 const Half = @import("../../proxy/capture/Half.zig");
 const Exchange = @import("../../proxy/capture/Exchange.zig");
 const Snapshot = @import("../../proxy/Snapshot.zig");
-const Runtime = @This();
+const PluginsService = @import("../../plugins/Service.zig");
+const ProxyTestFiles = @import("ProxyTestFiles.zig");
+/// The runtime's optional observation proxy and the join table that pairs
+/// the captured halves of each exchange.
+const ProxyRuntime = @This();
 
-owner: proxy_ops.ProxyOwner,
+/// Null while the proxy is disabled, and again after `deinit`.
+proxy: ?*Proxy,
 scope: core.ProxyScope,
 system_trusted: bool,
 captures: Joiner,
-capture_sink: ?CaptureSink = null,
 
-/// Creates the configured proxy, or an inactive owner when disabled.
+/// Creates the configured proxy, or an inactive runtime when disabled.
 ///
 /// ```zig
-/// var proxy_runtime = try Runtime.init(io, gpa, .{ .config = config, .system_trusted = false });
+/// var proxy_runtime = try ProxyRuntime.init(io, gpa, .{ .config = config, .system_trusted = false });
 /// defer proxy_runtime.deinit();
 /// ```
-pub fn init(io: std.Io, gpa: std.mem.Allocator, options: InitOptions) !Runtime {
+pub fn init(io: std.Io, gpa: std.mem.Allocator, options: InitOptions) !ProxyRuntime {
     const owned_proxy = if (options.config) |value|
-        try ProxyType.create(io, gpa, value)
+        try Proxy.create(io, gpa, value)
     else
         null;
 
     const timeout_ms = if (options.config) |value| value.capture.join_timeout_ms else (Config{}).join_timeout_ms;
 
     return .{
-        .owner = .init(owned_proxy),
-        .scope = if (options.config) |value| proxy_ops.configuredScope(value.intercept_hosts) else .exact,
+        .proxy = owned_proxy,
+        .scope = if (options.config) |value| configuredScope(value.intercept_hosts) else .exact,
         .system_trusted = options.system_trusted,
         .captures = .init(timeout_ms),
-        .capture_sink = null,
     };
 }
 
-/// Borrows the proxy capability while this owner remains active.
+/// Borrows the proxy while it is active.
 ///
 /// ```zig
-/// const proxy = proxy_runtime.capability();
+/// const proxy = proxy_runtime.capability() orelse return;
 /// ```
-pub fn capability(runtime: *const Runtime) ?*ProxyType {
-    return runtime.owner.capability;
+pub fn capability(self: *const ProxyRuntime) ?*Proxy {
+    return self.proxy;
 }
 
-/// Reports whether this runtime owns an active proxy capability.
+/// Reports whether this runtime owns an active proxy.
 ///
 /// ```zig
 /// if (proxy_runtime.active()) { ... }
 /// ```
-pub fn active(runtime: *const Runtime) bool {
-    return runtime.owner.capability != null;
+pub fn active(self: *const ProxyRuntime) bool {
+    return self.proxy != null;
 }
 
 /// Reports whether active interception includes wildcard host rules.
@@ -66,8 +64,8 @@ pub fn active(runtime: *const Runtime) bool {
 /// ```zig
 /// if (proxy_runtime.interceptionScope() == .wildcard) warnExpandedScope();
 /// ```
-pub fn interceptionScope(runtime: *const Runtime) core.ProxyScope {
-    return runtime.scope;
+pub fn interceptionScope(self: *const ProxyRuntime) core.ProxyScope {
+    return self.scope;
 }
 
 /// Reports whether Telar's short-lived authority is installed in the
@@ -76,42 +74,24 @@ pub fn interceptionScope(runtime: *const Runtime) core.ProxyScope {
 /// ```zig
 /// if (proxy_runtime.systemTrusted()) warnPersistentTrust();
 /// ```
-pub fn systemTrusted(runtime: *const Runtime) bool {
-    return runtime.system_trusted;
+pub fn systemTrusted(self: *const ProxyRuntime) bool {
+    return self.system_trusted;
 }
 
-/// Schedules one observation receive when the proxy is active.
-/// Disabled runtimes treat scheduling as a successful no-op.
+/// Joins one captured half and submits every completed or expired exchange
+/// to the plugin tap.
 ///
 /// ```zig
-/// try proxy_runtime.schedule(scheduler);
+/// proxy_runtime.acceptCapture(now_ms, half, plugins);
 /// ```
-pub fn schedule(runtime: *Runtime, scheduler: ObservationScheduler) !void {
-    return runtime.owner.schedule(scheduler);
-}
+pub fn acceptCapture(self: *ProxyRuntime, now_ms: i64, half: *Half, tap: *PluginsService) void {
+    self.expireCaptures(now_ms, tap);
 
-/// Arms one runtime receive operation when the proxy is active.
-///
-/// ```zig
-/// try runtime.scheduleCapture(scheduler);
-/// ```
-pub fn scheduleCapture(runtime: *Runtime, scheduler: CaptureScheduler) !void {
-    return runtime.owner.schedule(scheduler);
-}
-
-/// Adds a half to the join table and releases completed exchange data.
-///
-/// ```zig
-/// runtime.acceptCapture(.{ .now_ms = now_ms, .half = half });
-/// ```
-pub fn acceptCapture(runtime: *Runtime, input: CaptureInput) void {
-    runtime.expireCaptures(input.now_ms);
-
-    switch (runtime.captures.push(input.now_ms, input.half)) {
+    switch (self.captures.push(now_ms, half)) {
         .pending => {},
         .complete => |value| {
             var exchange = value;
-            runtime.submitCapture(&exchange);
+            tap.submit(&exchange);
         },
         .partial => |value| {
             var exchange = value;
@@ -120,39 +100,26 @@ pub fn acceptCapture(runtime: *Runtime, input: CaptureInput) void {
     }
 }
 
-/// Delegates bounded content decoding to the active proxy service.
+/// Delegates bounded content decoding to the active proxy.
 ///
 /// ```zig
-/// runtime.decodeCapture(half);
+/// proxy_runtime.decodeCapture(half);
 /// ```
-pub fn decodeCapture(runtime: *Runtime, half: *Half) void {
-    const proxy = runtime.owner.capability orelse return;
+pub fn decodeCapture(self: *ProxyRuntime, half: *Half) void {
+    const proxy = self.proxy orelse return;
     proxy.decodeCapture(half);
 }
 
-/// Releases every partial capture whose join deadline has elapsed.
+/// Submits every partial capture whose join deadline has elapsed.
 ///
 /// ```zig
-/// runtime.expireCaptures(now_ms);
+/// proxy_runtime.expireCaptures(now_ms, plugins);
 /// ```
-pub fn expireCaptures(runtime: *Runtime, now_ms: i64) void {
-    while (runtime.captures.expire(now_ms)) |value| {
+pub fn expireCaptures(self: *ProxyRuntime, now_ms: i64, tap: *PluginsService) void {
+    while (self.captures.expire(now_ms)) |value| {
         var exchange = value;
-        runtime.submitCapture(&exchange);
+        tap.submit(&exchange);
     }
-}
-
-pub fn setCaptureSink(runtime: *Runtime, sink: CaptureSink) void {
-    runtime.capture_sink = sink;
-}
-
-fn submitCapture(runtime: *Runtime, exchange: *Exchange) void {
-    if (runtime.capture_sink) |sink| {
-        sink.submit(exchange);
-        return;
-    }
-
-    exchange.deinit();
 }
 
 /// Returns active proxy metrics or an all-zero inactive snapshot.
@@ -160,19 +127,63 @@ fn submitCapture(runtime: *Runtime, exchange: *Exchange) void {
 /// ```zig
 /// const metrics = proxy_runtime.metrics();
 /// ```
-pub fn metrics(runtime: *const Runtime) Snapshot {
-    const owned_proxy = runtime.owner.capability orelse return .{};
-    return owned_proxy.metrics();
+pub fn metrics(self: *const ProxyRuntime) Snapshot {
+    const proxy = self.proxy orelse return .{};
+    return proxy.metrics();
 }
 
 /// Destroys the proxy at most once. Outstanding receives must already be
-/// canceled by the runtime's event scheduler.
+/// canceled by the runtime's event loop.
 ///
 /// ```zig
 /// loop.cancel();
 /// proxy_runtime.deinit();
 /// ```
-pub fn deinit(runtime: *Runtime) void {
-    runtime.captures.deinit();
-    runtime.owner.deinit();
+pub fn deinit(self: *ProxyRuntime) void {
+    self.captures.deinit();
+    const proxy = self.proxy orelse return;
+    self.proxy = null;
+    proxy.destroy();
+}
+
+fn configuredScope(hosts: []const []const u8) core.ProxyScope {
+    for (hosts) |host| {
+        if (std.mem.startsWith(u8, host, "*")) {
+            return .wildcard;
+        }
+    }
+
+    return .exact;
+}
+
+test "runtime scope distinguishes exact and wildcard policies" {
+    try std.testing.expectEqual(core.ProxyScope.exact, configuredScope(&.{"api.openai.com"}));
+    try std.testing.expectEqual(core.ProxyScope.wildcard, configuredScope(&.{"*.openai.com"}));
+    try std.testing.expectEqual(core.ProxyScope.wildcard, configuredScope(&.{"*"}));
+}
+
+test "a disabled proxy runtime exposes zero state and tears down twice" {
+    var runtime = try ProxyRuntime.init(std.testing.io, std.testing.allocator, .{ .config = null, .system_trusted = true });
+
+    try std.testing.expect(!runtime.active());
+    try std.testing.expect(runtime.systemTrusted());
+    try std.testing.expect(runtime.capability() == null);
+    try std.testing.expectEqualDeep(Snapshot{}, runtime.metrics());
+
+    runtime.deinit();
+    runtime.deinit();
+}
+
+test "a configured proxy runtime owns its proxy and destroys it exactly once" {
+    const io = std.testing.io;
+    var files = try ProxyTestFiles.init(io);
+    defer files.deinit();
+    var runtime = try ProxyRuntime.init(io, std.testing.allocator, .{ .config = files.config(), .system_trusted = false });
+
+    try std.testing.expect(runtime.active());
+    try std.testing.expectEqualDeep(runtime.capability().?.metrics(), runtime.metrics());
+
+    runtime.deinit();
+    runtime.deinit();
+    try std.testing.expect(!runtime.active());
 }

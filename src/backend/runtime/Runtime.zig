@@ -79,7 +79,7 @@ fn scheduleInitialEvents(runtime: *Runtime) !void {
     var sources = Sources.init(resources.io(), runtime.loop.selector());
 
     try sources.acceptClient(&resources.listener);
-    try sources.waitForStop(runtime.loop.stopCoordinator());
+    try sources.waitForStop(runtime.loop.stop);
     try sources.receiveHistory(resources.history.service());
     if (resources.engineService()) |engine_service| {
         try sources.receiveEngine(engine_service);

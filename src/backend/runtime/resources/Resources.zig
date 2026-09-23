@@ -87,10 +87,6 @@ pub fn acquire(resources: *Resources, initialization: InitializationType, compti
         .specs = initialization.options.plugins,
     });
     errdefer resources.plugins.deinit();
-    resources.proxy.setCaptureSink(.{
-        .context = resources.plugins.service(),
-        .submit_fn = resources_namespace.submitCapture,
-    });
     try resources_namespace.checkpoint(fail_after, .plugins);
 
     resources.engine = if (initialization.options.engine) |options|
