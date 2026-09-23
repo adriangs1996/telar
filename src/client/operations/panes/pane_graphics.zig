@@ -10,17 +10,12 @@ const core = @import("telar-core");
 pub fn syncFallbacks(model: *data.Model, graphics: GraphicsRetention) void {
     const fallback_required = model.hostCapabilities().images != .supported;
     var inspected: usize = 0;
-    var tabs = model.workspace.tabIterator();
-
-    while (tabs.next()) |tab| {
-        var panes = tab.model.paneIterator();
-
-        while (panes.next()) |pane| {
-            inspected += 1;
-            const has_graphics = fallback_required and
-                graphics.hasPaneGraphics(pane.id);
-            _ = model.setPaneGraphicsFallback(pane.id, has_graphics);
-        }
+    var panes = model.panes.iterate(null);
+    while (panes.next()) |pane| {
+        inspected += 1;
+        const has_graphics = fallback_required and
+            graphics.hasPaneGraphics(pane.id);
+        _ = model.setPaneGraphicsFallback(pane.id, has_graphics);
     }
 
     std.debug.assert(inspected <= core.max_tabs_per_workspace * core.max_panes_per_tab);

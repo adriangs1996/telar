@@ -399,15 +399,16 @@ pub fn wakeupAfter(self: *const GuiClient) u32 {
 pub fn frameDelayNs(self: *GuiClient) u64 {
     var visible: [core.max_panes_per_tab]FramePacer.Pane = undefined;
     var count: usize = 0;
-    if (self.app.model.activeTabModelConst()) |model| {
+    const model = &self.app.model;
+    if (model.tabs.activeSlot()) |tab| {
         var layout: shared_model.LayoutSnapshot = .{};
-        model.layout.snapshot(self.region.area, &layout);
+        model.tabs.layout[tab].snapshot(self.region.area, &layout);
         for (layout.views()) |view| {
             if (view.surface != .terminal or view.content.w == 0 or view.content.h == 0) {
                 continue;
             }
 
-            const pane = model.findConst(view.pane_id) orelse continue;
+            const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, view.pane_id) orelse continue;
             visible[count] = .{
                 .pane_id = pane.id,
                 .attachment_generation = pane.attachment_generation,
@@ -428,7 +429,7 @@ pub fn frameDelayNs(self: *GuiClient) u64 {
 pub fn windowTitle(self: *GuiClient, out: *native.WindowTitle) !bool {
     out.* = .{};
     const model = &self.app.model;
-    const tab_label = if (model.workspace.activeConst()) |tab| tab.labelSlice() else "";
+    const tab_label = if (model.tabs.activeSlot()) |tab| shared_model.tab_label.text(model, tab) else "";
     return self.window_title.sync(
         .{
             .context = out,
@@ -437,7 +438,7 @@ pub fn windowTitle(self: *GuiClient, out: *native.WindowTitle) !bool {
         .{
             .template = model.windowTitleTemplate(),
             .tokens = .{
-                .workspace = model.workspace.workspaceName(),
+                .workspace = model.workspaceName(),
                 .tab = tab_label,
                 .pane_title = model.focusedPaneTitle(),
                 .hostname = self.hostname[0..self.hostname_len],
@@ -1012,8 +1013,8 @@ fn readTerminalClipboard(self: *GuiClient) !void {
         return;
     }
 
-    const model = self.app.model.activeTabModelConst() orelse return;
-    const pane = model.focusedPaneConst() orelse return;
+    const tab = self.app.model.tabs.activeSlot() orelse return;
+    const pane = shared_model.tab_layout.focusedPaneConst(&self.app.model, tab) orelse return;
     clipboard.request_id = try self.host.read(
         .{
             .generation = pane.attachment_generation,
@@ -1039,8 +1040,8 @@ fn takeTerminalClipboard(self: *GuiClient, result: ClipboardResult) bool {
         return false;
     }
 
-    const model = self.app.model.activeTabModelConst() orelse return false;
-    const pane = model.focusedPaneConst() orelse return false;
+    const tab = self.app.model.tabs.activeSlot() orelse return false;
+    const pane = shared_model.tab_layout.focusedPaneConst(&self.app.model, tab) orelse return false;
 
     return pane.id == clipboard.pane_id and pane.attachment_generation == clipboard.generation;
 }
@@ -1256,10 +1257,10 @@ fn dispatchBandPointer(self: *GuiClient, event: PointerEvent) !void {
         return;
     }
 
-    const model = app.model.activeTabModel() orelse return;
+    const tab = app.model.tabs.activeSlot() orelse return;
     _ = try client.operations.view_interactions.apply(
         app,
-        model,
+        tab,
         command.interaction,
     );
 }
@@ -1289,13 +1290,13 @@ fn releasePointer(self: *GuiClient) !void {
 
     if (app.model.pointerSelection()) |pointer_selection| {
         if (pointer_selection.dragging) {
-            if (app.model.activeTabModel()) |model| {
+            if (app.model.tabs.activeSlot()) |tab| {
                 var released = pointer.last[@intFromEnum(PointerEvent.Button.left)];
                 released.kind = .release;
                 released.button = @intFromEnum(PointerEvent.Button.left);
                 _ = try client.operations.copy_mode_pointer.apply(
                     app,
-                    model,
+                    tab,
                     released,
                 );
             }
@@ -1504,14 +1505,14 @@ fn cursorTarget(self: *const GuiClient) CursorTarget {
         return .{};
     }
 
-    const model = self.app.model.activeTabModelConst() orelse return .{};
-    const pane = model.focusedPaneConst() orelse return .{};
+    const tab = self.app.model.tabs.activeSlot() orelse return .{};
+    const pane = shared_model.tab_layout.focusedPaneConst(&self.app.model, tab) orelse return .{};
     const copy = self.app.model.copyModeProjection();
     const copy_view: ?shared_model.CopyModeView = if (copy) |value| if (value.pane_id == pane.id) value.view else null else null;
     const cursor = selection.cursor(pane, copy_view);
     var layout: shared_model.LayoutSnapshot = .{};
 
-    model.layout.snapshot(self.region.area, &layout);
+    self.app.model.tabs.layout[tab].snapshot(self.region.area, &layout);
 
     for (layout.views()) |view| {
         if (view.pane_id == pane.id and view.surface == .terminal and cursor.x < view.content.w and cursor.y < view.content.h) {
@@ -1920,7 +1921,7 @@ test "widget draw failure preserves delivered targets and pending pane damage be
             },
         },
     );
-    const pane = gui.app.model.workspace.findPane(TestSession.pane_id).?;
+    const pane = gui.app.model.panes.find(TestSession.pane_id).?;
     const limit = session.gui.renderer.quads.limit;
     session.gui.renderer.quads.limit = 1;
     defer session.gui.renderer.quads.limit = limit;

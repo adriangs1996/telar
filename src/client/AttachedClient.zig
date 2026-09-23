@@ -642,8 +642,8 @@ pub fn synchronizePaneAttachments(self: *AttachedClient) !bool {
         return false;
     }
 
-    if (self.model.workspace.active()) |tab| {
-        try self.resizeAttachedPanes(&tab.model, self.geometry().area);
+    if (self.model.tabs.activeSlot()) |tab| {
+        try self.resizeAttachedPanes(tab, self.geometry().area);
     }
 
     return true;
@@ -756,11 +756,11 @@ pub fn reconcileHostCapabilities(self: *AttachedClient, capabilities: data.HostC
 }
 
 /// Offers sizes for attached visible panes, reserving space for the attachment shelf.
-/// Example: `try self.resizeAttachedPanes(&tab.model, area);`
-pub fn resizeAttachedPanes(self: *AttachedClient, model: *data.MultiplexerModel, area: core.Rect) !void {
-    var layout = model.layoutSnapshot(area).*;
+/// Example: `try self.resizeAttachedPanes(tab, area);`
+pub fn resizeAttachedPanes(self: *AttachedClient, tab: usize, area: core.Rect) !void {
+    var layout = data.tab_layout.snapshot(&self.model, tab, area).*;
     _ = layout.reserveBelowPane(self.attachment_shelf.reservation());
-    var panes = model.paneIterator();
+    var panes = self.model.panes.iterate(self.model.tabs.location[tab].tab_id);
 
     while (panes.next()) |pane| {
         if (!pane.attached) {
@@ -769,8 +769,8 @@ pub fn resizeAttachedPanes(self: *AttachedClient, model: *data.MultiplexerModel,
 
         const view = layout.find(pane.id) orelse continue;
         var size = data.multiplexer.rectSize(view.content) orelse continue;
-        size.cell_width_px = model.cell_width_px;
-        size.cell_height_px = model.cell_height_px;
+        size.cell_width_px = self.model.host.host_size.cell_width_px;
+        size.cell_height_px = self.model.host.host_size.cell_height_px;
         try self.sendRuntime(
             .{
                 .pane_resize = .{
@@ -851,8 +851,8 @@ pub fn repeatPane(self: *const AttachedClient) ?core.PaneId {
         return null;
     }
 
-    const model = self.model.activeTabModelConst() orelse return null;
-    const pane = model.focusedPaneConst() orelse return null;
+    const model = self.model.tabs.activeSlot() orelse return null;
+    const pane = data.tab_layout.focusedPaneConst(&self.model, model) orelse return null;
     return if (pane.attached) pane.id else null;
 }
 
@@ -979,8 +979,8 @@ pub fn openLink(self: *AttachedClient, target: data.LinkTarget) !bool {
 }
 
 /// Gives a textual link first refusal before child mouse reporting.
-/// Example: `_ = try app.inputLinkPointer(model, event);`
-pub fn inputLinkPointer(self: *AttachedClient, model: *data.MultiplexerModel, event: data.Mouse) !bool {
+/// Example: `_ = try app.inputLinkPointer(tab, event);`
+pub fn inputLinkPointer(self: *AttachedClient, tab: usize, event: data.Mouse) !bool {
     const command: data.LinksPointerCommand = .{
         .kind = switch (event.kind) {
             .press => .press,
@@ -994,7 +994,8 @@ pub fn inputLinkPointer(self: *AttachedClient, model: *data.MultiplexerModel, ev
 
     const target = if (command.kind == .press and (command.left_button or command.right_button) and event.button & 4 == 0)
         linkTargetAt(
-            model,
+            &self.model,
+            tab,
             event,
             self.geometry().area,
         )
@@ -1044,8 +1045,8 @@ pub fn flushAgentHistory(self: *AttachedClient) !void {
         return;
     }
 
-    const tab = self.model.activeTabModel() orelse return;
-    var panes = tab.paneIterator();
+    const tab = self.model.tabs.activeSlot() orelse return;
+    var panes = self.model.panes.iterate(self.model.tabs.location[tab].tab_id);
     while (panes.next()) |pane| {
         if (pane.history_intent == null) {
             continue;
@@ -1391,13 +1392,13 @@ pub fn requestTabMove(self: *AttachedClient, command: data.RequestTabMove) !bool
     }
 
     const location = command.location orelse self.model.activeTabLocation() orelse return false;
-    const workspace = self.model.workspace.workspace orelse return false;
-    if (!std.meta.eql(workspace, location.workspace) or self.model.workspace.indexOf(location.tab_id) == null) {
+    const workspace = self.model.workspace orelse return false;
+    if (!std.meta.eql(workspace, location.workspace) or self.model.tabs.find(location.tab_id) == null) {
         return false;
     }
 
     if (command.relative_to) |anchor| {
-        if (anchor == location.tab_id or self.model.workspace.indexOf(anchor) == null) {
+        if (anchor == location.tab_id or self.model.tabs.find(anchor) == null) {
             return false;
         }
     }
@@ -1487,8 +1488,8 @@ pub fn canSubmitHistory(self: *AttachedClient, selection: u16) bool {
         return false;
     };
 
-    const active = self.model.workspace.activeConst() orelse return false;
-    const pane = active.model.focusedPaneConst() orelse return false;
+    const active = self.model.tabs.activeSlot() orelse return false;
+    const pane = data.tab_layout.focusedPaneConst(&self.model, active) orelse return false;
     const pane_input = pane_input_module;
     pane_input.validateHistoryText(command, pane.input_modes.bracketed_paste) catch |err| {
         self.model.history_palette.setError(if (err == error.UnframedHistoryText) "Multiline/tab paste requires shell bracketed-paste support" else "Command contains terminal controls; cannot paste");
@@ -1581,8 +1582,8 @@ pub fn selectTab(self: *AttachedClient, command: data.SelectTab) !?data.TabSelec
     } orelse return null;
     try self.detachTab(selection.previous);
 
-    const selected = self.model.workspace.find(selection.selected.tab_id) orelse return error.StaleTabSelection;
-    var panes = selected.model.paneIterator();
+    const selected = self.model.tabs.find(selection.selected.tab_id) orelse return error.StaleTabSelection;
+    var panes = self.model.panes.iterate(self.model.tabs.location[selected].tab_id);
     while (panes.next()) |pane| {
         try self.graphics.setPaneVisible(pane.id, true);
     }
@@ -1744,16 +1745,16 @@ pub fn finishPanePaste(self: *AttachedClient) !data.PanePasteOutcome {
 
 /// Resolves a pointer event or focused scroll without exposing pane storage
 /// or child mouse modes to the caller.
-/// Example: `_ = try app.inputPaneMouse(model, command);`
-pub fn inputPaneMouse(self: *AttachedClient, model: *data.MultiplexerModel, command: data.PaneMouseCommand) !data.PaneMouseOutcome {
+/// Example: `_ = try app.inputPaneMouse(tab, command);`
+pub fn inputPaneMouse(self: *AttachedClient, tab: usize, command: data.PaneMouseCommand) !data.PaneMouseOutcome {
     const area = self.geometry().area;
     const resolved: data.Resolved = switch (command) {
         .pointer => |pointer| .{
-            .plan = model.planPaneMouse(pointer.event, area) orelse return .ignored,
+            .plan = data.tab_layout.planPaneMouse(&self.model, tab, pointer.event, area) orelse return .ignored,
             .pointer = pointer,
         },
         .focused_scroll => |direction| focused: {
-            const plan = model.planFocusedPaneMouse(area) orelse return .ignored;
+            const plan = data.tab_layout.planFocusedPaneMouse(&self.model, tab, area) orelse return .ignored;
             const host_size = self.model.hostSize();
 
             break :focused .{
@@ -2015,17 +2016,17 @@ pub fn openNamePrompt(self: *AttachedClient, intent: name_prompt_opening.Intent)
             break :rename .{
                 .rename_workspace = .{
                     .workspace = workspace,
-                    .name = self.model.workspace.workspaceName(),
+                    .name = self.model.workspaceName(),
                 },
             };
         },
         .rename_active_tab => rename: {
-            const active = self.model.workspace.activeConst() orelse return false;
-            break :rename name_prompt_opening.renameTab(active.location.tab_id, active.labelSlice());
+            const active = self.model.tabs.activeSlot() orelse return false;
+            break :rename name_prompt_opening.renameTab(self.model.tabs.location[active].tab_id, data.tab_label.text(&self.model, active));
         },
         .rename_tab => |tab_id| rename: {
-            const tab = self.model.workspace.find(tab_id) orelse return false;
-            break :rename name_prompt_opening.renameTab(tab_id, tab.labelSlice());
+            const tab = self.model.tabs.find(tab_id) orelse return false;
+            break :rename name_prompt_opening.renameTab(tab_id, data.tab_label.text(&self.model, tab));
         },
         .goto_picker => .goto_picker,
         .history_palette => .history_palette,
@@ -2246,8 +2247,8 @@ pub fn completeClipboardCapture(self: *AttachedClient, completion: data.Completi
             };
             owned_capture = null;
             if (layout_changed) {
-                if (self.model.workspace.active()) |tab| {
-                    try self.resizeAttachedPanes(&tab.model, self.geometry().area);
+                if (self.model.tabs.activeSlot()) |tab| {
+                    try self.resizeAttachedPanes(tab, self.geometry().area);
                 }
             }
 
@@ -2351,16 +2352,16 @@ fn requestWorkspaceSnapshot(self: *AttachedClient, workspace: core.WorkspaceLoca
 /// Connects visible detached panes after canonical membership is loaded.
 /// Pending attachments are coalesced; failed delivery rolls back its correlation.
 /// Example: `if (tab.snapshot_loaded) { try self.attachVisiblePanes(tab, area); }`
-fn attachVisiblePanes(self: *AttachedClient, tab: *data.Tab, area: core.Rect) !void {
-    std.debug.assert(tab.snapshot_loaded);
-    var panes = tab.model.paneIterator();
+fn attachVisiblePanes(self: *AttachedClient, tab: usize, area: core.Rect) !void {
+    std.debug.assert(self.model.tabs.snapshot_loaded[tab]);
+    var panes = self.model.panes.iterate(self.model.tabs.location[tab].tab_id);
 
     while (panes.next()) |pane| {
         if (pane.attached or self.request_lifecycle.tracker.hasPane(.attachment, pane.id)) {
             continue;
         }
 
-        const size = tab.model.contentSize(pane.id, area) orelse continue;
+        const size = data.tab_layout.contentSize(&self.model, tab, pane.id, area) orelse continue;
         const request_id = try self.request_lifecycle.nextId();
         try self.sendRuntimeRequest(
             .{
@@ -2369,7 +2370,7 @@ fn attachVisiblePanes(self: *AttachedClient, tab: *data.Tab, area: core.Rect) !v
                     .continuation = .{
                         .attach_pane = .{
                             .pane_id = pane.id,
-                            .location = tab.location,
+                            .location = self.model.tabs.location[tab],
                         },
                     },
                 },
@@ -2585,9 +2586,9 @@ fn sendNotificationRequest(self: *AttachedClient, request: core.ShowNotification
 
 /// Delivers resources for a committed focus, including newly revealed panes. Example: `try self.deliverPaneFocus(focus, area);`
 fn deliverPaneFocus(self: *AttachedClient, focus: data.PaneFocus, area: core.Rect) !void {
-    const active = self.model.workspace.active() orelse return error.StalePaneFocus;
-    if (!std.meta.eql(active.location, focus.location) or
-        active.model.layout.focused() != focus.focused or
+    const active = self.model.tabs.activeSlot() orelse return error.StalePaneFocus;
+    if (!std.meta.eql(self.model.tabs.location[active], focus.location) or
+        self.model.tabs.layout[active].focused() != focus.focused or
         self.model.version().panes != focus.panes_revision)
     {
         return error.StalePaneFocus;
@@ -2599,9 +2600,9 @@ fn deliverPaneFocus(self: *AttachedClient, focus: data.PaneFocus, area: core.Rec
     }
 
     self.host_graphics.invalidatePlacements();
-    try self.resizeAttachedPanes(&active.model, area);
+    try self.resizeAttachedPanes(active, area);
 
-    if (active.snapshot_loaded) {
+    if (self.model.tabs.snapshot_loaded[active]) {
         try self.attachVisiblePanes(active, area);
     }
 }
@@ -2760,8 +2761,8 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
         },
         .pane_copy => {
             const selection = try core.CopySelection.fromText(@enumFromInt(reply.target_id), reply.text());
-            const tab = self.model.activeTabModelConst() orelse return error.NoActiveTab;
-            const pane = tab.findConst(selection.pane_id) orelse return error.PaneNotFound;
+            const tab = self.model.tabs.activeSlot() orelse return error.NoActiveTab;
+            const pane = self.model.panes.findInConst(self.model.tabs.location[tab].tab_id, selection.pane_id) orelse return error.PaneNotFound;
             if (!pane.attached or pane.kind != .terminal) {
                 return error.TerminalPaneNotAttached;
             }
@@ -2777,8 +2778,8 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
         .pane_scroll => {
             const delta = std.math.cast(i32, reply.value) orelse return error.InvalidScrollDelta;
             const pane_id: core.PaneId = @enumFromInt(reply.target_id);
-            const tab = self.model.activeTabModelConst() orelse return error.NoActiveTab;
-            const pane = tab.findConst(pane_id) orelse return error.PaneNotFound;
+            const tab = self.model.tabs.activeSlot() orelse return error.NoActiveTab;
+            const pane = self.model.panes.findInConst(self.model.tabs.location[tab].tab_id, pane_id) orelse return error.PaneNotFound;
             if (!pane.attached or self.copyModeActive()) {
                 return error.PaneViewportUnavailable;
             }
@@ -3121,9 +3122,9 @@ fn focusCommandPane(self: *AttachedClient, target_id: u64) !void {
     }
 
     const pane_id: core.PaneId = @enumFromInt(target_id);
-    const tab = self.model.activeTabModelConst() orelse return error.NoActiveTab;
-    _ = tab.findConst(pane_id) orelse return error.PaneNotFound;
-    if (tab.layout.focused() == pane_id) {
+    const tab = self.model.tabs.activeSlot() orelse return error.NoActiveTab;
+    _ = self.model.panes.findInConst(self.model.tabs.location[tab].tab_id, pane_id) orelse return error.PaneNotFound;
+    if (self.model.tabs.layout[tab].focused() == pane_id) {
         return;
     }
 
@@ -3166,16 +3167,16 @@ fn writeCommandSidebarState(self: *const AttachedClient, reply: *core.ClientComm
 
 /// Encodes the active layout with stable pane identities into the bounded reply.
 fn writeCommandLayout(self: *const AttachedClient, reply: *core.ClientCommand) !void {
-    const tab = self.model.workspace.activeConst() orelse return error.NoActiveTab;
-    const focused = tab.model.layout.focused() orelse return error.NoFocusedPane;
+    const tab = self.model.tabs.activeSlot() orelse return error.NoActiveTab;
+    const focused = self.model.tabs.layout[tab].focused() orelse return error.NoFocusedPane;
     var nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
     const tabs = [_]core.ClientTabLayout{
         .{
-            .location = tab.location,
+            .location = self.model.tabs.location[tab],
             .focused_pane = focused,
-            .fullscreen = tab.model.layout.isFullscreen(),
+            .fullscreen = self.model.tabs.layout[tab].isFullscreen(),
             .workspace_active = true,
-            .nodes = tab.model.layout.clientLayoutNodes(&nodes),
+            .nodes = self.model.tabs.layout[tab].clientLayoutNodes(&nodes),
         },
     };
 
@@ -3187,7 +3188,7 @@ fn writeCommandLayout(self: *const AttachedClient, reply: *core.ClientCommand) !
             .sidebar_visible = self.model.sidebarVisible(),
             .sidebar_width = self.model.sidebarWidth(),
             .workspace_list_collapsed = self.model.workspaceListCollapsed(),
-            .active_tab = tab.location,
+            .active_tab = self.model.tabs.location[tab],
             .tabs = &tabs,
         },
     );
@@ -3299,7 +3300,7 @@ fn navigationKey(direction: data.InputDirection) data.Key {
 }
 
 fn scrollPane(self: *AttachedClient, direction: data.ScrollDirection) !void {
-    const model = self.model.activeTabModel() orelse return;
+    const model = self.model.tabs.activeSlot() orelse return;
 
     _ = try self.inputPaneMouse(
         model,
@@ -3351,19 +3352,19 @@ fn executeLuaAction(self: *AttachedClient, command: data.LuaActionCommand) !data
 
 /// Rejects obsolete geometry before invalidating placements and resizing attachments.
 fn deliverPaneGeometry(self: *AttachedClient, change: data.PaneGeometryChange) !void {
-    const active = self.model.workspace.active() orelse return error.StalePaneGeometry;
-    if (!std.meta.eql(active.location, change.location) or
-        active.model.layout.focused() != change.focused or
-        active.model.layout.isFullscreen() != change.fullscreen or
+    const active = self.model.tabs.activeSlot() orelse return error.StalePaneGeometry;
+    if (!std.meta.eql(self.model.tabs.location[active], change.location) or
+        self.model.tabs.layout[active].focused() != change.focused or
+        self.model.tabs.layout[active].isFullscreen() != change.fullscreen or
         self.model.version().panes != change.panes_revision)
     {
         return error.StalePaneGeometry;
     }
 
     self.host_graphics.invalidatePlacements();
-    try self.resizeAttachedPanes(&active.model, change.area);
+    try self.resizeAttachedPanes(active, change.area);
 
-    if (active.snapshot_loaded) {
+    if (self.model.tabs.snapshot_loaded[active]) {
         try self.attachVisiblePanes(active, change.area);
     }
 }
@@ -3427,8 +3428,8 @@ fn confirmPaneSplit(self: *AttachedClient, command: data.ConfirmPaneSplit) !data
     );
     switch (commit.disposition) {
         .active => {
-            const tab = self.model.workspace.find(commit.location.tab_id).?;
-            try self.resizeAttachedPanes(&tab.model, commit.area);
+            const tab = self.model.tabs.find(commit.location.tab_id).?;
+            try self.resizeAttachedPanes(tab, commit.area);
             try self.synchronizeActivePane();
         },
         .inactive => {
@@ -3444,7 +3445,7 @@ fn confirmPaneSplit(self: *AttachedClient, command: data.ConfirmPaneSplit) !data
         .stale => {
             // A late reply may reference an identity now represented elsewhere.
             // Never detach a pane belonging to the current workspace view.
-            if (self.model.workspace.findPane(commit.pane_id) != null) {
+            if (self.model.panes.find(commit.pane_id) != null) {
                 return error.StalePaneSplitConfirmation;
             }
 
@@ -3455,7 +3456,7 @@ fn confirmPaneSplit(self: *AttachedClient, command: data.ConfirmPaneSplit) !data
                     },
                 },
             );
-            if (self.model.workspace.workspace) |workspace| {
+            if (self.model.workspace) |workspace| {
                 if (std.meta.eql(workspace, commit.location.workspace) and !self.request_lifecycle.tracker.has(.workspace_snapshot)) {
                     try self.requestWorkspaceSnapshot(workspace);
                 }
@@ -3780,11 +3781,11 @@ fn deliverHostCommit(self: *AttachedClient, commit: data.HostCommit) !void {
         }
 
         self.host_graphics.invalidatePlacements();
-        if (self.model.workspace.active()) |tab| {
+        if (self.model.tabs.activeSlot()) |tab| {
             const area = self.geometry().area;
-            try self.resizeAttachedPanes(&tab.model, area);
+            try self.resizeAttachedPanes(tab, area);
 
-            if (tab.snapshot_loaded) {
+            if (self.model.tabs.snapshot_loaded[tab]) {
                 try self.attachVisiblePanes(tab, area);
             }
         }
@@ -3931,7 +3932,7 @@ fn reportChangeReview(self: *AttachedClient, message: []const u8) void {
 }
 
 fn findReviewPane(model: *data.Model, pane_id: core.PaneId) ?*data.Pane {
-    const pane = model.workspace.findPane(pane_id) orelse return null;
+    const pane = model.panes.find(pane_id) orelse return null;
     return if (pane.attached and pane.pane_generation != 0) pane else null;
 }
 
@@ -3940,9 +3941,9 @@ fn resolveReviewPane(model: *data.Model, owner: data.ChangeReviewOperation) ?*co
     return if (pane.pane_generation == owner.pane_generation and pane.attachment_generation == owner.attachment_generation) pane else null;
 }
 
-fn linkTargetAt(model: *data.MultiplexerModel, event: data.Mouse, area: core.Rect) ?data.LinkTarget {
-    const plan = model.planPaneMouse(event, area) orelse return null;
-    const pane = model.findConst(plan.pane_id) orelse return null;
+fn linkTargetAt(model: *data.Model, tab: usize, event: data.Mouse, area: core.Rect) ?data.LinkTarget {
+    const plan = data.tab_layout.planPaneMouse(model, tab, event, area) orelse return null;
+    const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, plan.pane_id) orelse return null;
 
     return data.cells.extract(
         &pane.buffer,
@@ -3997,8 +3998,8 @@ fn openEditorPane(self: *AttachedClient, pane_id: core.PaneId, path: data.FilePa
         return error.EditorUnavailable;
     }
 
-    const model = self.model.activeTabModel() orelse return error.PaneNotFound;
-    const source = model.findConst(pane_id) orelse return error.PaneNotFound;
+    const model = self.model.tabs.activeSlot() orelse return error.PaneNotFound;
+    const source = self.model.panes.findInConst(self.model.tabs.location[model].tab_id, pane_id) orelse return error.PaneNotFound;
     var request: core.OwnedEditorOpen = .{
         .request_id = .none,
         .pane_id = pane_id,
@@ -4009,7 +4010,7 @@ fn openEditorPane(self: *AttachedClient, pane_id: core.PaneId, path: data.FilePa
     const kind = core.editor.identify(editor);
     var reusable = false;
     if (kind != .unsupported and source.pane_generation != 0) {
-        var panes = model.paneConstIterator();
+        var panes = self.model.panes.iterateConst(self.model.tabs.location[model].tab_id);
         while (panes.next()) |pane| {
             reusable = reusable or core.editor.identify(pane.foregroundName()) == kind;
         }
@@ -4051,8 +4052,8 @@ fn completeEditorOpen(self: *AttachedClient, reply: core.EditorOpened) !void {
     }
 
     const operation = continuation.editor_open;
-    const model = self.model.activeTabModel() orelse return;
-    const source = model.findConst(operation.pane_id) orelse return;
+    const model = self.model.tabs.activeSlot() orelse return;
+    const source = self.model.panes.findInConst(self.model.tabs.location[model].tab_id, operation.pane_id) orelse return;
     if (source.pane_generation != operation.pane_generation or source.attachment_generation != operation.attachment_generation or !std.meta.eql(source.location, operation.location)) {
         return;
     }
@@ -4061,7 +4062,7 @@ fn completeEditorOpen(self: *AttachedClient, reply: core.EditorOpened) !void {
         .unavailable => self.splitEditorPane(request) catch |err| try self.reportLinkFailure(err),
         .failed => try self.reportLinkFailure(error.EditorOpenFailed),
         .opened => {
-            const pane = model.findConst(reply.pane_id) orelse return;
+            const pane = self.model.panes.findInConst(self.model.tabs.location[model].tab_id, reply.pane_id) orelse return;
             if (pane.pane_generation != reply.pane_generation) {
                 return;
             }
@@ -4246,9 +4247,9 @@ fn applyTabSnapshot(self: *AttachedClient, snapshot: core.TabSnapshotView) !TabS
     }
 
     if (reconciliation.active) {
-        const tab = self.model.workspace.find(reconciliation.location.tab_id) orelse return error.StaleTabReconciliation;
+        const tab = self.model.tabs.find(reconciliation.location.tab_id) orelse return error.StaleTabReconciliation;
         try self.synchronizeActivePane();
-        try self.resizeAttachedPanes(&tab.model, reconciliation.area);
+        try self.resizeAttachedPanes(tab, reconciliation.area);
         try self.attachVisiblePanes(tab, reconciliation.area);
     }
 
@@ -4313,10 +4314,10 @@ fn applyWorkspaceSnapshot(self: *AttachedClient, snapshot: core.WorkspaceSnapsho
         self.releasePaneResources(pane_id);
     }
 
-    const active = self.model.workspace.active() orelse return error.StaleWorkspaceReconciliation;
+    const active = self.model.tabs.activeSlot() orelse return error.StaleWorkspaceReconciliation;
     if (reconciliation.active_tab_changed) {
         _ = self.model.forgetReportedPaneFocus();
-        var panes = active.model.paneIterator();
+        var panes = self.model.panes.iterate(self.model.tabs.location[active].tab_id);
         while (panes.next()) |pane| {
             try self.graphics.setPaneVisible(pane.id, true);
         }
@@ -4333,7 +4334,7 @@ fn applyWorkspaceSnapshot(self: *AttachedClient, snapshot: core.WorkspaceSnapsho
         return;
     }
 
-    try self.resizeAttachedPanes(&active.model, self.geometry().area);
+    try self.resizeAttachedPanes(active, self.geometry().area);
 }
 
 fn completeTabCreation(self: *AttachedClient, created: core.TabCreated) !data.TabCreation {
@@ -4486,8 +4487,8 @@ fn completeTabClose(self: *AttachedClient, closed: core.TabClosed) !TabCloseOutc
     if (removal.was_active) {
         _ = self.model.forgetReportedPaneFocus();
         if (removal.active) |location| {
-            const active = self.model.workspace.find(location.tab_id) orelse return error.StaleTabRemoval;
-            var panes = active.model.paneIterator();
+            const active = self.model.tabs.find(location.tab_id) orelse return error.StaleTabRemoval;
+            var panes = self.model.panes.iterate(self.model.tabs.location[active].tab_id);
             while (panes.next()) |pane| {
                 try self.graphics.setPaneVisible(pane.id, true);
             }
@@ -4577,18 +4578,16 @@ fn requestWorkspaceSwitch(self: *AttachedClient, target: WorkspaceSwitchTarget, 
 
     try self.request_lifecycle.ensureCanStart(2);
     var required: usize = 1;
-    var tabs = self.model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        required += try self.tabDetachmentCapacity(tab.location);
+    for (self.model.tabs.location[0..self.model.tabs.count]) |location| {
+        required += try self.tabDetachmentCapacity(location);
     }
 
     if (required > self.runtime_transport.outbox.availableCapacity()) {
         return error.ClientOutboxFull;
     }
 
-    tabs = self.model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        self.detachTab(tab.location) catch |err| {
+    for (self.model.tabs.location[0..self.model.tabs.count]) |location| {
+        self.detachTab(location) catch |err| {
             self.restoreDepartingWorkspace() catch {};
             return err;
         };
@@ -4701,12 +4700,12 @@ fn releaseWorkspace(self: *AttachedClient, departure: *const data.WorkspaceDepar
 
 /// Validates the committed root before resuming input and requesting canonical snapshots.
 fn activateWorkspace(self: *AttachedClient, activation: data.WorkspaceActivation) !void {
-    const active = self.model.workspace.activeConst() orelse return error.StaleWorkspaceActivation;
-    const root = active.model.findConst(activation.pane_id) orelse return error.StaleWorkspaceActivation;
+    const active = self.model.tabs.activeSlot() orelse return error.StaleWorkspaceActivation;
+    const root = self.model.panes.findInConst(self.model.tabs.location[active].tab_id, activation.pane_id) orelse return error.StaleWorkspaceActivation;
     const version = self.model.version();
-    if (!std.meta.eql(active.location, activation.location) or
-        active.model.pane_count != 1 or
-        active.model.layout.focused() != activation.pane_id or
+    if (!std.meta.eql(self.model.tabs.location[active], activation.location) or
+        self.model.panes.countIn(self.model.tabs.location[active].tab_id) != 1 or
+        self.model.tabs.layout[active].focused() != activation.pane_id or
         !std.meta.eql(root.location, activation.location) or
         !root.attached or
         version.workspace != activation.workspace_revision or
@@ -4766,7 +4765,7 @@ fn applyPaneFrame(self: *AttachedClient, frame: core.FrameView) !data.PaneFrameO
                 try self.graphics.setPaneVisible(commit.pane_id, commit.graphics_visible);
             }
 
-            if (self.model.workspace.activeConst() != null) {
+            if (self.model.tabs.activeSlot() != null) {
                 try self.synchronizeActivePane();
             }
         },
@@ -4784,8 +4783,8 @@ fn applyPaneFrame(self: *AttachedClient, frame: core.FrameView) !data.PaneFrameO
 
         if (self.reconcileAttachmentFrame(commit.pane_id)) {
             self.host_graphics.invalidatePlacements();
-            if (self.model.workspace.active()) |tab| {
-                try self.resizeAttachedPanes(&tab.model, self.geometry().area);
+            if (self.model.tabs.activeSlot()) |tab| {
+                try self.resizeAttachedPanes(tab, self.geometry().area);
             }
         }
     }
@@ -4938,8 +4937,8 @@ fn applyPaneExit(self: *AttachedClient, exited: core.PaneExited) !data.PaneExit 
     self.host_graphics.invalidatePlacements();
     try self.synchronizeActivePane();
     if (!retirement.tab_empty) {
-        const tab = self.model.workspace.find(retirement.location.tab_id) orelse return error.StalePaneExit;
-        try self.resizeAttachedPanes(&tab.model, self.geometry().area);
+        const tab = self.model.tabs.find(retirement.location.tab_id) orelse return error.StalePaneExit;
+        try self.resizeAttachedPanes(tab, self.geometry().area);
     }
 
     return transition;
@@ -4947,8 +4946,8 @@ fn applyPaneExit(self: *AttachedClient, exited: core.PaneExited) !data.PaneExit 
 
 /// Enters copy mode on the attached focused pane.
 fn enterCopyMode(self: *AttachedClient) bool {
-    const tab = self.model.activeTabModelConst() orelse return false;
-    const pane = tab.focusedPaneConst() orelse return false;
+    const tab = self.model.tabs.activeSlot() orelse return false;
+    const pane = data.tab_layout.focusedPaneConst(&self.model, tab) orelse return false;
     if (pane.kind == .agent) {
         if (!pane.attached or self.model.copyModeActive() or self.model.name_prompt.active() or self.model.pane_paste != null) {
             return false;
@@ -5063,8 +5062,8 @@ fn resolveHistoryScope(model: *const data.Model, owned: *data.OwnedHistoryQuery)
             owned.scope_value_len = @intCast(path.len);
         },
         .cwd => {
-            const active = model.workspace.activeConst() orelse return;
-            const pane = active.model.focusedPaneConst() orelse return;
+            const active = model.tabs.activeSlot() orelse return;
+            const pane = data.tab_layout.focusedPaneConst(model, active) orelse return;
             const cwd = pane.cwdSlice();
             if (cwd.len == 0 or cwd.len > data.OwnedHistoryQuery.max_scope_bytes) {
                 return;
@@ -5075,8 +5074,8 @@ fn resolveHistoryScope(model: *const data.Model, owned: *data.OwnedHistoryQuery)
             owned.scope_value_len = @intCast(cwd.len);
         },
         .pane => {
-            const active = model.workspace.activeConst() orelse return;
-            const pane = active.model.focusedPaneConst() orelse return;
+            const active = model.tabs.activeSlot() orelse return;
+            const pane = data.tab_layout.focusedPaneConst(model, active) orelse return;
             owned.scope = .pane;
             owned.pane_id = pane.id;
         },
@@ -5442,8 +5441,8 @@ fn beginSuggestion(self: *AttachedClient) !bool {
 }
 
 fn suggestionPane(model: *const data.Model) ?core.PaneId {
-    const active = model.workspace.activeConst() orelse return null;
-    const pane = active.model.focusedPaneConst() orelse return null;
+    const active = model.tabs.activeSlot() orelse return null;
+    const pane = data.tab_layout.focusedPaneConst(model, active) orelse return null;
     return pane.id;
 }
 
@@ -5678,10 +5677,9 @@ fn scheduleNotificationTimer(self: *AttachedClient) !void {
 fn detachAllTabs(self: *AttachedClient) !void {
     var locations: [core.max_tabs_per_workspace]core.TabLocation = undefined;
     var count: usize = 0;
-    var tabs = self.model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
+    for (self.model.tabs.location[0..self.model.tabs.count]) |location| {
         std.debug.assert(count < locations.len);
-        locations[count] = tab.location;
+        locations[count] = location;
         count += 1;
     }
 
@@ -5739,8 +5737,8 @@ fn applyPaneViewport(self: *AttachedClient, command: data.PaneViewportCommand) !
 
 /// Delivers a viewport committed by this or a compound input operation. Example: `try deliver(client, change);`
 fn deliverPaneViewport(self: *AttachedClient, change: data.PaneViewportChange) !void {
-    const active = self.model.workspace.activeConst() orelse return error.StalePaneViewport;
-    const pane = active.model.findConst(change.pane_id) orelse return error.StalePaneViewport;
+    const active = self.model.tabs.activeSlot() orelse return error.StalePaneViewport;
+    const pane = self.model.panes.findInConst(self.model.tabs.location[active].tab_id, change.pane_id) orelse return error.StalePaneViewport;
     if (!pane.attached or
         pane.scroll.offset != change.offset or
         pane.scroll.atBottom(pane.buffer.h) != change.at_bottom or
@@ -5771,8 +5769,8 @@ fn deliverSidebarLayout(self: *AttachedClient, change: data.SidebarLayout) !void
 
     self.chrome.setSidebarLayout(change.visible, change.width);
     self.host_graphics.invalidatePlacements();
-    const active = self.model.workspace.active() orelse return;
-    try self.resizeAttachedPanes(&active.model, self.geometry().area);
+    const active = self.model.tabs.activeSlot() orelse return;
+    try self.resizeAttachedPanes(active, self.geometry().area);
 }
 
 /// Delivers one synthetic key sequence in a single pane-input transaction.
@@ -6058,8 +6056,8 @@ fn routePaneKey(self: *AttachedClient, command: data.PaneCommand) !?core.PaneId 
     const completed = delivery orelse return null;
     if (self.observeAttachmentInput(completed.pane_id, command.input)) {
         self.host_graphics.invalidatePlacements();
-        if (self.model.workspace.active()) |tab| {
-            try self.resizeAttachedPanes(&tab.model, self.geometry().area);
+        if (self.model.tabs.activeSlot()) |tab| {
+            try self.resizeAttachedPanes(tab, self.geometry().area);
         }
     }
 
@@ -6428,7 +6426,7 @@ fn pickerSources(model: *const data.Model) data.Sources {
     return .{
         .agents = model.agentSnapshot(),
         .workspaces = model.workspaceListSnapshot(),
-        .tabs = &model.workspace,
+        .model = model,
     };
 }
 
@@ -6653,8 +6651,7 @@ fn reconcileAttachmentFrame(self: *AttachedClient, pane_id: core.PaneId) bool {
         return false;
     }
 
-    const tab = self.model.workspace.tabForPaneConst(pane_id) orelse return false;
-    const pane = tab.model.findConst(pane_id) orelse return false;
+    const pane = self.model.panes.findConst(pane_id) orelse return false;
 
     return self.attachment_shelf.reconcileMarkers(
         target,
@@ -6667,8 +6664,8 @@ fn reconcileAttachmentFrame(self: *AttachedClient, pane_id: core.PaneId) bool {
 
 fn planAttachmentRemoval(self: *AttachedClient, id: data.AttachmentId) ?data.RemovalCommand {
     const target = self.attachment_catalog.visibleTarget() orelse return null;
-    const model = self.model.activeTabModelConst() orelse return null;
-    const pane = model.findConst(target.pane_id) orelse return null;
+    const model = self.model.tabs.activeSlot() orelse return null;
+    const pane = self.model.panes.findInConst(self.model.tabs.location[model].tab_id, target.pane_id) orelse return null;
     const marker = self.attachment_catalog.planMarkerRemoval(
         id,
         .{
@@ -6729,8 +6726,8 @@ fn deliverAttachmentRemoval(self: *AttachedClient, command: data.RemovalCommand)
 
 fn attachmentMarkerAtCursor(self: *AttachedClient, deletion: data.AttachmentMarkerDeletion) ?data.AttachmentId {
     const target = self.attachment_catalog.visibleTarget() orelse return null;
-    const model = self.model.activeTabModelConst() orelse return null;
-    const pane = model.findConst(target.pane_id) orelse return null;
+    const model = self.model.tabs.activeSlot() orelse return null;
+    const pane = self.model.panes.findInConst(self.model.tabs.location[model].tab_id, target.pane_id) orelse return null;
 
     return self.attachment_catalog.idAtMarkerDeletion(
         .{
@@ -6743,8 +6740,8 @@ fn attachmentMarkerAtCursor(self: *AttachedClient, deletion: data.AttachmentMark
 
 fn pendingAttachmentMarkerAtCursor(self: *AttachedClient, deletion: data.AttachmentMarkerDeletion) bool {
     const target = self.model.focusedAttachmentTarget() orelse return false;
-    const model = self.model.activeTabModelConst() orelse return false;
-    const pane = model.findConst(target.pane_id) orelse return false;
+    const model = self.model.tabs.activeSlot() orelse return false;
+    const pane = self.model.panes.findInConst(self.model.tabs.location[model].tab_id, target.pane_id) orelse return false;
 
     const markers = self.model.attachmentMarkers(target) orelse return false;
 
@@ -6769,8 +6766,8 @@ fn attachmentPromptContinues(self: *AttachedClient, target: data.AttachmentTarge
         return false;
     }
 
-    const model = self.model.activeTabModelConst() orelse return false;
-    const pane = model.findConst(target.pane_id) orelse return false;
+    const model = self.model.tabs.activeSlot() orelse return false;
+    const pane = self.model.panes.findInConst(self.model.tabs.location[model].tab_id, target.pane_id) orelse return false;
 
     return markers_module.promptContinuesAtCursor(
         .{
@@ -6844,8 +6841,8 @@ fn adoptConfiguration(self: *AttachedClient, adoption: Adoption) !data.Configura
         try self.deliverSidebarLayout(sidebar);
     } else if (commit.pane_gaps_changed) {
         self.host_graphics.invalidatePlacements();
-        if (self.model.workspace.active()) |tab| {
-            try self.resizeAttachedPanes(&tab.model, self.geometry().area);
+        if (self.model.tabs.activeSlot()) |tab| {
+            try self.resizeAttachedPanes(tab, self.geometry().area);
         }
     }
 
@@ -7391,8 +7388,8 @@ fn startPathCompletion(self: *AttachedClient) !void {
 }
 
 fn focusedPaneCwd(model: *const data.Model) []const u8 {
-    const active = model.workspace.activeConst() orelse return "";
-    const pane = active.model.focusedPaneConst() orelse return "";
+    const active = model.tabs.activeSlot() orelse return "";
+    const pane = data.tab_layout.focusedPaneConst(model, active) orelse return "";
     return pane.cwdSlice();
 }
 
@@ -7432,9 +7429,7 @@ fn adoptClipboardCapture(self: *AttachedClient, capture: *data.Capture) !bool {
     const request = capture.request;
     var layout_changed = try self.attachment_shelf.adopt(capture);
     if (request.marker_policy.learnsIdentity()) {
-        const tab = self.model.workspace.tabForPaneConst(request.target.pane_id);
-        const pane = if (tab) |value| value.model.findConst(request.target.pane_id) else null;
-        if (pane) |value| {
+        if (self.model.panes.findConst(request.target.pane_id)) |value| {
             layout_changed = layout_changed or (self.attachment_shelf.reconcileMarkers(
                 request.target,
                 .{

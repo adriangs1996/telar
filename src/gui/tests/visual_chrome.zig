@@ -56,9 +56,9 @@ test "chrome bands leave complete cells below them and share the pointer origin"
 test "tab strip hits keep stable tab identities and the plus creates a tab" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const tabs = &fixture.session.gui.app.model.workspace;
-    _ = try tabs.addCreated(.{ .location = second_location, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
-    _ = tabs.select(Session.location.tab_id);
+    const model = &fixture.session.gui.app.model;
+    _ = try data.tab_creation.add(model, .{ .location = second_location, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
+    _ = data.tab_selection.select(model, Session.location.tab_id);
     try fixture.paint(fixture.projection());
     const strip = fixture.chrome.presented().bands.top_bar;
     const first = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
@@ -126,9 +126,9 @@ fn matchesColor(quad: Quad, color: core.Color) bool {
 test "a blocked agent marks its tab and project independently of selection" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const tabs = &fixture.session.gui.app.model.workspace;
-    _ = try tabs.addCreated(.{ .location = second_location, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
-    _ = tabs.select(Session.location.tab_id);
+    const model = &fixture.session.gui.app.model;
+    _ = try data.tab_creation.add(model, .{ .location = second_location, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
+    _ = data.tab_selection.select(model, Session.location.tab_id);
     var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/telar", .tab_count = 2 },
@@ -191,16 +191,16 @@ fn ringQuads(quads: []const Quad, outer: Rect) usize {
 test "the attention ring surrounds an unfocused blocked pane only and the header carries its chip" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const model = fixture.session.gui.app.model.activeTabModel().?;
+    const tab = fixture.session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
-    _ = model.layout.focusPane(Session.pane_id);
+    try data.pane_split.split(&fixture.session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
+    _ = fixture.session.gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
     var agents = try blockedAgents(Session.location, .blocked);
     var projection = fixture.projection();
     projection.agents = &agents;
     try fixture.paint(projection);
     var layout: data.LayoutSnapshot = .{};
-    model.layout.snapshot(projection.geometry.area, &layout);
+    fixture.session.gui.app.model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
     const renderer = &fixture.session.gui.renderer;
     const blocked_outer = renderer.metrics.rect(renderer.origin, layout.find(second).?.outer);
     const focused_outer = renderer.metrics.rect(renderer.origin, layout.find(Session.pane_id).?.outer);
@@ -222,7 +222,7 @@ test "the attention ring surrounds an unfocused blocked pane only and the header
 
     try std.testing.expect(chip);
 
-    _ = model.layout.focusPane(second);
+    _ = fixture.session.gui.app.model.tabs.layout[tab].focusPane(second);
     projection = fixture.projection();
     projection.agents = &agents;
     try fixture.paint(projection);
@@ -281,10 +281,10 @@ test "warm chrome with rings chips dots and toasts allocates and shapes nothing"
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.resize(160, 50);
-    const model = fixture.session.gui.app.model.activeTabModel().?;
+    const tab = fixture.session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .vertical, .area = fixture.projection().geometry.area });
-    _ = model.layout.focusPane(Session.pane_id);
+    try data.pane_split.split(&fixture.session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .vertical, .area = fixture.projection().geometry.area });
+    _ = fixture.session.gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
     var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "telar", .path = "/Users/me/sandbox/telar", .branch = "main", .tab_count = 1 },

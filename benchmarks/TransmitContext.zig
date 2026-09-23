@@ -15,17 +15,17 @@ const raw_len = width * height * 4;
 
 gpa: std.mem.Allocator,
 store: frontend.Store,
-model: data.MultiplexerModel,
+model: data.Model,
 output: []u8,
 
 pub fn init(gpa: std.mem.Allocator, zlib: bool) !TransmitContext {
     var store = frontend.Store.init(gpa);
     errdefer store.deinit();
     store.delivery.host_zlib = zlib;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     errdefer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
-    try model.addRoot(.{
+    try data.workspace_handoff.bootstrap(&model, .{
         .pane_id = pane_id,
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
         .size = .{ .cols = main.cols, .rows = main.rows },
@@ -108,7 +108,7 @@ pub fn deliver(context: *TransmitContext) !u64 {
         var output = std.Io.Writer.fixed(context.output);
         var graphics_writer: frontend.KittyGraphicsWriter = .{
             .store = &context.store,
-            .layout_snapshot = context.model.layoutSnapshot(.{ .w = main.cols, .h = main.rows }),
+            .layout_snapshot = data.tab_layout.snapshot(&context.model, 0, .{ .w = main.cols, .h = main.rows }),
             .cell_width = 10,
             .cell_height = 20,
             .budget = std.math.maxInt(usize),

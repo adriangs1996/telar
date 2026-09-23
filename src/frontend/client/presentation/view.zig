@@ -74,7 +74,7 @@ pub fn renderGotoPicker(context: *ContextType, application: core.Rect, sources: 
     const match_sources: data.Sources = .{
         .agents = sources.agents,
         .workspaces = sources.workspaces,
-        .tabs = sources.tabs,
+        .model = sources.model,
     };
     if (sources.prompt.target() == .suggest) {
         return renderSuggestPalette(context, application, sources);
@@ -229,6 +229,7 @@ pub fn syncRegion(screen: *ScreenType, source: *const core.Buffer, area: core.Re
 fn testingCompose(compositor: *CompositorType, composition: TestingComposition) !void {
     const rendered = try compositor.render(.{
         .model = composition.model,
+        .tab = composition.tab,
         .screen = composition.screen,
         .input = .{
             .area = composition.area,
@@ -251,25 +252,25 @@ test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
     var state = try StateType.init(std.testing.allocator, 80, 24);
     defer state.deinit();
 
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     const area: core.Rect = .{ .w = 1, .h = 1 };
     state.pointer_position = .{ .x = 0, .y = 0 };
     state.hits.add(area, .toggle_sidebar);
-    try std.testing.expectEqual(core.PointerShape.pointer, state.mousePointerShape(.{ .model = &model }));
-    try std.testing.expectEqual(core.PointerShape.default, state.mousePointerShape(.{ .model = &model, .copy_mode_active = true }));
+    try std.testing.expectEqual(core.PointerShape.pointer, state.mousePointerShape(.{ .model = &model, .tab = 0 }));
+    try std.testing.expectEqual(core.PointerShape.default, state.mousePointerShape(.{ .model = &model, .tab = 0, .copy_mode_active = true }));
 
     state.hits.clear();
     state.hits.add(area, .{ .focus_pane = @enumFromInt(7) });
-    try std.testing.expectEqual(core.PointerShape.default, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(core.PointerShape.default, state.mousePointerShape(.{ .model = &model, .tab = 0 }));
 
     state.hits.clear();
     state.hits.add(area, .resize_sidebar);
-    try std.testing.expectEqual(core.PointerShape.ew_resize, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(core.PointerShape.ew_resize, state.mousePointerShape(.{ .model = &model, .tab = 0 }));
 
     state.pointer_position = null;
     state.sidebar_resize_active = true;
-    try std.testing.expectEqual(core.PointerShape.ew_resize, state.mousePointerShape(.{ .model = &model }));
+    try std.testing.expectEqual(core.PointerShape.ew_resize, state.mousePointerShape(.{ .model = &model, .tab = 0 }));
 }
 
 test "narrow clients hide the sidebar without forgetting user intent" {
@@ -298,16 +299,16 @@ test "sidebar separator drag reports exact preferred widths" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 58, .rows = 27 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 58, .rows = 27 } });
     var screen = try ScreenType.init(gpa, 120, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .force = true });
 
     const pressed = state.handleMouse(.{
         .x = state.regions.sidebar.w - 1,
@@ -334,16 +335,16 @@ test "sidebar separator drag reports exact preferred widths" {
 test "empty production sidebar has no task controls" {
     var state = try StateType.init(std.testing.allocator, 100, 30);
     defer state.deinit();
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
     var screen = try ScreenType.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .force = true });
 
     try std.testing.expect(state.hits.at(3, 2) == null);
     try std.testing.expect(state.hits.at(state.regions.sidebar.w - 4, 2) == null);
@@ -354,13 +355,13 @@ test "the inline new-context form shows both fields and the selected completion 
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
     state.toggleSidebar();
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 120, .rows = 28 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 120, .rows = 28 } });
     var screen = try ScreenType.init(gpa, 120, 30);
     defer screen.deinit();
     var prompt: data.Prompt = .{ .mode = .{ .create_workspace = .{ .focus = .directory, .selection = 1 } }, .field = .init("agents"), .directory = .init("/work/te") };
@@ -372,7 +373,7 @@ test "the inline new-context form shows both fields and the selected completion 
     try result.append("tests");
     try std.testing.expect(completion.apply(@enumFromInt(1), .{ .query = "/work/te", .result = &result }));
 
-    _ = try state.render(&screen, .{ .model = &model, .prompt = &prompt, .path_completion = &completion, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .prompt = &prompt, .path_completion = &completion, .force = true });
 
     var row: [256]u8 = undefined;
     var len: usize = 0;
@@ -396,7 +397,7 @@ test "the inline new-context form shows both fields and the selected completion 
     try std.testing.expectEqual(state.palette().surface1, screen.back.cells[bottom.y * screen.back.w + selected_x].style.bg);
 
     prompt.mode.create_workspace.confirm_create = true;
-    _ = try state.render(&screen, .{ .model = &model, .prompt = &prompt, .path_completion = &completion, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .prompt = &prompt, .path_completion = &completion, .force = true });
     len = 0;
     for (screen.back.cells[bottom.y * screen.back.w ..][0..bottom.w]) |cell| {
         const glyph = cell.text();
@@ -411,7 +412,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -419,24 +420,26 @@ test "workbench clicks return focus intent without mutating pane layout" {
     };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
-    try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 50, .rows = 22 } });
-    try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = state.workbench() });
-    try std.testing.expect(model.focusPane(first));
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 50, .rows = 22 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = state.workbench() });
+    try std.testing.expect(model.tabs.layout[0].focusPane(first));
     var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
     var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = state.workbench(),
     });
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .compositor = &compositor,
         .force = true,
     });
-    const second_view = model.layoutSnapshot(state.workbench()).find(second).?;
+    const second_view = data.tab_layout.snapshot(&model, 0, state.workbench()).find(second).?;
     const point = term.Event.Mouse{
         .x = second_view.content.x,
         .y = second_view.content.y,
@@ -444,7 +447,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     };
     _ = state.handleMouse(point);
     state.dirty = false;
-    const revision = model.layout.currentRevision();
+    const revision = model.tabs.layout[0].currentRevision();
     const interaction_revision = state.interactionVersion();
 
     var click = point;
@@ -453,30 +456,30 @@ test "workbench clicks return focus intent without mutating pane layout" {
 
     try std.testing.expectEqualDeep(client.Intent{ .focus_pane = second }, interaction.intent);
     try std.testing.expect(!interaction.layout_changed);
-    try std.testing.expectEqual(first, model.layout.focused().?);
-    try std.testing.expectEqual(revision, model.layout.currentRevision());
+    try std.testing.expectEqual(first, model.tabs.layout[0].focused().?);
+    try std.testing.expectEqual(revision, model.tabs.layout[0].currentRevision());
     try std.testing.expectEqual(interaction_revision, state.interactionVersion());
     try std.testing.expect(!state.dirty);
 
-    model.find(first).?.pointer_shape = .crosshair;
-    model.find(second).?.pointer_shape = .text;
-    const input: RenderInput = .{ .model = &model, .compositor = &compositor };
+    model.panes.find(first).?.pointer_shape = .crosshair;
+    model.panes.find(second).?.pointer_shape = .text;
+    const input: RenderInput = .{ .model = &model, .tab = 0, .compositor = &compositor };
     _ = try state.render(&screen, input);
     try std.testing.expectEqual(core.PointerShape.text, screen.mouse_pointer);
-    try std.testing.expectEqual(first, model.layout.focused().?);
+    try std.testing.expectEqual(first, model.tabs.layout[0].focused().?);
 
     inline for (std.meta.tags(core.PointerShape)) |shape| {
-        model.find(second).?.pointer_shape = shape;
+        model.panes.find(second).?.pointer_shape = shape;
         const stats = try state.render(&screen, input);
         try std.testing.expectEqual(@as(usize, 0), stats.scanned);
         try std.testing.expectEqual(shape, screen.mouse_pointer);
     }
 
-    model.find(second).?.pointer_shape = .text;
-    _ = try state.render(&screen, .{ .model = &model, .copy_mode_active = true });
+    model.panes.find(second).?.pointer_shape = .text;
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .copy_mode_active = true });
     try std.testing.expectEqual(core.PointerShape.default, screen.mouse_pointer);
     var prompt: data.Prompt = .{ .mode = .{ .create_workspace = .{} }, .field = .{} };
-    _ = try state.render(&screen, .{ .model = &model, .prompt = &prompt });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .prompt = &prompt });
     try std.testing.expectEqual(core.PointerShape.default, screen.mouse_pointer);
     _ = try state.render(&screen, input);
     try std.testing.expectEqual(core.PointerShape.text, screen.mouse_pointer);
@@ -497,14 +500,14 @@ test "workbench clicks return focus intent without mutating pane layout" {
     _ = try state.render(&screen, input);
     try std.testing.expectEqual(core.PointerShape.ew_resize, screen.mouse_pointer);
     state.sidebar_resize_active = false;
-    model.find(second).?.attached = false;
+    model.panes.find(second).?.attached = false;
     _ = try state.render(&screen, input);
     try std.testing.expectEqual(core.PointerShape.default, screen.mouse_pointer);
 
-    try std.testing.expect(model.removePane(second));
+    try std.testing.expect(data.tab_layout.removePane(&model, second));
     _ = try state.render(&screen, input);
     try std.testing.expectEqual(core.PointerShape.default, screen.mouse_pointer);
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .force = true });
     try std.testing.expectEqual(core.PointerShape.crosshair, screen.mouse_pointer);
 }
 
@@ -512,15 +515,15 @@ test "sidebar agent snapshots version changed hover only once" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 34, .rows = 27 } });
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = state.workbench() });
-    try std.testing.expect(model.toggleFullscreen());
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 34, .rows = 27 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = state.workbench() });
+    try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
     const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 },
         .location = location,
@@ -536,11 +539,13 @@ test "sidebar agent snapshots version changed hover only once" {
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = state.workbench(),
     });
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .compositor = &compositor,
         .agents = &snapshot,
         .force = true,
@@ -556,14 +561,14 @@ test "sidebar agent snapshots version changed hover only once" {
     const interaction = state.handleMouse(click);
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = agent_entries[0].key }, interaction.intent);
     try std.testing.expectEqual(before_hover + 1, state.interactionVersion());
-    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(2)), model.layout.focused().?);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(2)), model.tabs.layout[0].focused().?);
 }
 
 test "focused agent image preview reserves space below its pane and opens a modal layer" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -571,11 +576,11 @@ test "focused agent image preview reserves space below its pane and opens a moda
     };
     const first_pane: core.PaneId = @enumFromInt(1);
     const target_pane: core.PaneId = @enumFromInt(2);
-    try model.addRoot(.{ .pane_id = first_pane, .location = location, .size = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first_pane, .location = location, .size = .{
         .cols = state.workbench().w,
         .rows = state.workbench().h,
     } });
-    try model.split(.{ .existing_pane = first_pane, .new_pane = target_pane, .location = location, .axis = .horizontal, .area = state.workbench() });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = first_pane, .new_pane = target_pane, .location = location, .axis = .horizontal, .area = state.workbench() });
     const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = target_pane, .pane_generation = 4 },
         .location = location,
@@ -606,12 +611,14 @@ test "focused agent image preview reserves space below its pane and opens a moda
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = state.workbench(),
         .bottom_reservation = state.attachmentReservation(),
     });
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .compositor = &compositor,
         .agents = &snapshot,
         .force = true,
@@ -653,15 +660,16 @@ test "focused agent image preview reserves space below its pane and opens a moda
 
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .compositor = &compositor,
         .agents = &snapshot,
     });
     try std.testing.expectEqual(core.Rect{ .x = 10, .y = 3, .w = 80, .h = 24 }, state.graphics_plan.modal_area);
     try std.testing.expect(!sidebar_before_modal.eqlPublic(screen.back.at(20, 4).?));
 
-    model.find(first_pane).?.pointer_shape = .crosshair;
+    model.panes.find(first_pane).?.pointer_shape = .crosshair;
     _ = state.handleMouse(.{ .x = first_view.content.x, .y = first_view.content.y, .kind = .move });
-    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .compositor = &compositor });
     try std.testing.expectEqual(core.PointerShape.pointer, screen.mouse_pointer);
 
     const modal_scroll = state.handleMouse(.{
@@ -674,6 +682,7 @@ test "focused agent image preview reserves space below its pane and opens a moda
 
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .compositor = &compositor,
         .agents = &snapshot,
     });
@@ -697,16 +706,16 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
     const shell_pane: core.PaneId = @enumFromInt(3);
     const workspace_pane: core.PaneId = @enumFromInt(4);
 
-    var first_model = data.MultiplexerModel.init(gpa);
+    var first_model = data.Model.init(gpa, true);
     defer first_model.deinit();
-    try first_model.addRoot(.{ .pane_id = first_pane, .location = first_location, .size = .{ .cols = 34, .rows = 27 } });
-    try first_model.split(.{ .existing_pane = first_pane, .new_pane = second_pane, .location = first_location, .axis = .horizontal, .area = state.workbench() });
-    try first_model.split(.{ .existing_pane = second_pane, .new_pane = shell_pane, .location = first_location, .axis = .vertical, .area = state.workbench() });
-    try std.testing.expect(first_model.focusPane(first_pane));
+    try data.workspace_handoff.bootstrap(&first_model, .{ .pane_id = first_pane, .location = first_location, .size = .{ .cols = 34, .rows = 27 } });
+    try data.pane_split.split(&first_model, 0, .{ .existing_pane = first_pane, .new_pane = second_pane, .location = first_location, .axis = .horizontal, .area = state.workbench() });
+    try data.pane_split.split(&first_model, 0, .{ .existing_pane = second_pane, .new_pane = shell_pane, .location = first_location, .axis = .vertical, .area = state.workbench() });
+    try std.testing.expect(first_model.tabs.layout[0].focusPane(first_pane));
 
-    var second_model = data.MultiplexerModel.init(gpa);
+    var second_model = data.Model.init(gpa, true);
     defer second_model.deinit();
-    try second_model.addRoot(.{ .pane_id = workspace_pane, .location = second_location, .size = .{ .cols = 38, .rows = 27 } });
+    try data.workspace_handoff.bootstrap(&second_model, .{ .pane_id = workspace_pane, .location = second_location, .size = .{ .cols = 38, .rows = 27 } });
 
     const agent_entries = [_]data.AgentInput{
         .{
@@ -737,24 +746,24 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
     defer screen.deinit();
     const palette = state.palette();
 
-    _ = try state.render(&screen, .{ .model = &first_model, .agents = &snapshot, .force = true });
+    _ = try state.render(&screen, .{ .model = &first_model, .tab = 0, .agents = &snapshot, .force = true });
     try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
 
-    try std.testing.expect(first_model.focusPane(second_pane));
+    try std.testing.expect(first_model.tabs.layout[0].focusPane(second_pane));
     state.invalidate();
-    _ = try state.render(&screen, .{ .model = &first_model, .agents = &snapshot });
+    _ = try state.render(&screen, .{ .model = &first_model, .tab = 0, .agents = &snapshot });
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 7).?.style.bg);
 
-    try std.testing.expect(first_model.focusPane(shell_pane));
+    try std.testing.expect(first_model.tabs.layout[0].focusPane(shell_pane));
     state.invalidate();
-    _ = try state.render(&screen, .{ .model = &first_model, .agents = &snapshot });
+    _ = try state.render(&screen, .{ .model = &first_model, .tab = 0, .agents = &snapshot });
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
 
     state.invalidate();
-    _ = try state.render(&screen, .{ .model = &second_model, .agents = &snapshot });
+    _ = try state.render(&screen, .{ .model = &second_model, .tab = 0, .agents = &snapshot });
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 4).?.style.bg);
     try std.testing.expectEqualDeep(palette.panel_bg, screen.back.at(10, 7).?.style.bg);
     try std.testing.expectEqualDeep(palette.surface0, screen.back.at(10, 10).?.style.bg);
@@ -764,13 +773,13 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     var state = try StateType.init(std.testing.allocator, 100, 30);
     defer state.deinit();
     try state.configureSidebar(.kitty_hybrid, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 30, .rows = 20 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 30, .rows = 20 } });
     const agent_entries = [_]data.AgentInput{.{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 4 },
         .location = location,
@@ -782,7 +791,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     _ = try snapshot.replace(.{ .revision = 1, .agents = &agent_entries });
     var screen = try ScreenType.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
-    _ = try state.render(&screen, .{ .model = &model, .agents = &snapshot, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .agents = &snapshot, .force = true });
     _ = try state.prepareGraphics(&empty_notifications, true);
     try std.testing.expect(state.kittySidebar().focused_card != null);
     try std.testing.expectEqualDeep(
@@ -793,7 +802,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     const interaction = state.handleMouse(.{ .x = 4, .y = 4, .kind = .press });
     try std.testing.expectEqual(interaction_revision + 1, state.interactionVersion());
     try std.testing.expectEqualDeep(client.Intent{ .focus_agent = agent_entries[0].key }, interaction.intent);
-    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(1)), model.layout.focused().?);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(1)), model.tabs.layout[0].focused().?);
     try std.testing.expect(state.kittySidebar().damaged());
 }
 
@@ -805,17 +814,17 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 28 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 28 } });
     var screen = try ScreenType.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
 
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .force = true });
     const logo_mark = for (state.graphics_plan.icons.slice()) |mark| {
         if (mark.icon == .telar_mark) {
             break mark;
@@ -840,17 +849,17 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .{ .support = .unsupported, .cell_width = 10, .cell_height = 20 });
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 28 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 28 } });
     var screen = try ScreenType.init(std.testing.allocator, 100, 30);
     defer screen.deinit();
 
-    _ = try state.render(&screen, .{ .model = &model, .force = true });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .force = true });
     const logo = for (state.hits.registered()) |entry| {
         if (std.meta.activeTag(entry.action) == .toggle_sidebar) {
             break entry.rect;
@@ -869,7 +878,7 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
     var state = try StateType.init(gpa, 100, 24);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -878,15 +887,15 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
     const area = state.workbench();
-    try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 6 } });
-    try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .vertical, .area = area });
-    try std.testing.expect(model.toggleFullscreen());
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 6 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .vertical, .area = area });
+    try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
     var screen = try ScreenType.init(gpa, 100, 24);
     defer screen.deinit();
     var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
-    try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = area });
-    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
+    try testingCompose(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .compositor = &compositor, .force = true });
     const original = compositor.fullscreenLabels().*;
     try std.testing.expectEqual(@as(u8, 2), original.len);
     try std.testing.expectEqual(@as(usize, 0), state.kittyPill().retainedBytes());
@@ -901,7 +910,7 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
     _ = try state.kittyPill().write(&writer);
     try std.testing.expect(state.graphicalPillCoversPlan());
     state.invalidate();
-    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .compositor = &compositor });
     for (original.slice()) |label| {
         for (0..label.width) |offset| {
             const cell = screen.back.at(original.area.x + label.offset + @as(u16, @intCast(offset)), original.area.y).?;
@@ -912,11 +921,11 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
 
     // Gaps still show the pane border; only label rectangles are replaced.
     try std.testing.expectEqualStrings("─", screen.back.at(original.area.x + original.labels[0].width, original.area.y).?.text());
-    const idle = try state.render(&screen, .{ .model = &model, .compositor = &compositor });
+    const idle = try state.render(&screen, .{ .model = &model, .tab = 0, .compositor = &compositor });
     try std.testing.expectEqual(@as(usize, 0), idle.scanned);
-    try std.testing.expectEqual(first, model.focusDirection(.left, area).?);
-    try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = area });
-    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
+    try std.testing.expectEqual(first, model.tabs.layout[0].focusDirection(.left, area).?);
+    try testingCompose(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .compositor = &compositor, .force = true });
     try std.testing.expect(!original.sameContent(compositor.fullscreenLabels()));
     try std.testing.expect(state.graphicalPillCoversPlan());
     try std.testing.expect(!state.kittyPill().retirementPending());
@@ -933,14 +942,14 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
     try state.resize(40, 8);
     try screen.resize(40, 8);
     const resized_area = state.workbench();
-    try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = resized_area });
-    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
+    try testingCompose(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = resized_area });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .compositor = &compositor, .force = true });
     const resized_labels = compositor.fullscreenLabels().area;
     try std.testing.expectEqual(resized_labels, resized_labels.intersect(screen.back.area()));
     try std.testing.expect(!state.graphicalPillCoversPlan());
-    try std.testing.expect(model.toggleFullscreen());
-    try testingCompose(&compositor, .{ .model = &model, .screen = &screen, .area = resized_area });
-    _ = try state.render(&screen, .{ .model = &model, .compositor = &compositor, .force = true });
+    try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
+    try testingCompose(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = resized_area });
+    _ = try state.render(&screen, .{ .model = &model, .tab = 0, .compositor = &compositor, .force = true });
     try std.testing.expectEqual(@as(u8, 0), state.graphics_plan.pill_labels.len);
     writer = std.Io.Writer.fixed(&storage);
     _ = try state.kittyPill().writeRetirements(&writer);
@@ -953,13 +962,13 @@ test "cell rendering leaves toast rasterization to the media pass" {
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{
         .cols = state.workbench().w,
         .rows = state.workbench().h,
     } });
@@ -971,11 +980,13 @@ test "cell rendering leaves toast rasterization to the media pass" {
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = state.workbench(),
     });
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .compositor = &compositor,
         .notifications = &center,
         .force = true,
@@ -999,24 +1010,26 @@ test "client chrome uses Shade by default" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 50, .rows = 22 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 50, .rows = 22 } });
     var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
     var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = state.workbench(),
     });
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .compositor = &compositor,
         .force = true,
     });
@@ -1032,13 +1045,14 @@ test "configuration diagnostics stay inside the bottom bar" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
 
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .force = true,
         .diagnostic = "invalid config",
     });
@@ -1052,6 +1066,7 @@ test "configuration diagnostics stay inside the bottom bar" {
     state.toggleSidebar();
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .diagnostic = "invalid config",
     });
 
@@ -1065,25 +1080,27 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
     const gpa = std.testing.allocator;
     var state = try StateType.initWithTheme(gpa, .{ .width = 80, .height = 24 }, data.theme_support.builtin(.terminal));
     defer state.deinit();
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 50, .rows = 22 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 50, .rows = 22 } });
     var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
     var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = state.workbench(),
         .palette = state.palette(),
     });
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .compositor = &compositor,
         .force = true,
     });
@@ -1100,13 +1117,13 @@ test "clickable toast restores pane cells after its exit animation" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(7),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{
         .cols = state.workbench().w,
         .rows = state.workbench().h,
     } });
@@ -1123,7 +1140,7 @@ test "clickable toast restores pane cells after its exit animation" {
     const visible_width = center.itemAt(0).?.animatedWidth(overlay.w);
     const click_x = overlay.x + overlay.w - visible_width;
     const click_y = overlay.y;
-    model.find(@enumFromInt(1)).?.buffer.setCell(
+    model.panes.find(@enumFromInt(1)).?.buffer.setCell(
         .{ .x = click_x - state.workbench().x, .y = click_y - state.workbench().y },
         .{ .text = "u" },
     );
@@ -1133,11 +1150,13 @@ test "clickable toast restores pane cells after its exit animation" {
     defer compositor.deinit();
     try testingCompose(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = state.workbench(),
     });
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .compositor = &compositor,
         .notifications = &center,
     });
@@ -1157,6 +1176,7 @@ test "clickable toast restores pane cells after its exit animation" {
     try std.testing.expect(!center.hasItems());
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .compositor = &compositor,
         .notifications = &center,
     });
@@ -1182,14 +1202,14 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var tabs = data.TabsModel.init(gpa);
-    defer tabs.deinit();
+    var model = data.Model.init(gpa, true);
+    defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try tabs.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(4),
     }, .size = .{ .cols = 50, .rows = 22 } });
-    _ = try tabs.addCreated(.{
+    _ = try data.tab_creation.add(&model, .{
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(9) },
         .position = 1,
         .label = "logs",
@@ -1197,17 +1217,17 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     }, .{ .cols = 50, .rows = 22 });
     var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
-    const model = &tabs.active().?.model;
     var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
-        .model = model,
+        .model = &model,
+        .tab = model.tabs.active,
         .screen = &screen,
         .area = state.workbench(),
     });
     _ = try state.render(&screen, .{
-        .tabs = &tabs,
-        .model = model,
+        .model = &model,
+        .tab = model.tabs.active,
         .compositor = &compositor,
         .force = true,
     });
@@ -1244,36 +1264,36 @@ test "tab bar marks the tab whose pane is fullscreen" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var tabs = data.TabsModel.init(gpa);
-    defer tabs.deinit();
+    var model = data.Model.init(gpa, true);
+    defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const logs: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(9) };
-    try tabs.bootstrap(.{ .pane_id = @enumFromInt(1), .location = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = .{
         .workspace = workspace,
         .tab_id = @enumFromInt(4),
     }, .size = .{ .cols = 50, .rows = 22 } });
-    _ = try tabs.addCreated(.{
+    _ = try data.tab_creation.add(&model, .{
         .location = logs,
         .position = 1,
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 50, .rows = 22 });
     // Creating "logs" made it the active tab; its root pane is pane 2.
-    const model = &tabs.active().?.model;
-    try model.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(3), .location = logs, .axis = .horizontal, .area = state.workbench() });
-    try std.testing.expect(model.toggleFullscreen());
+    try data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(3), .location = logs, .axis = .horizontal, .area = state.workbench() });
+    try std.testing.expect(model.tabs.layout[model.tabs.active].toggleFullscreen());
     var screen = try ScreenType.init(gpa, 100, 30);
     defer screen.deinit();
     var compositor = CompositorType.init(gpa);
     defer compositor.deinit();
     try testingCompose(&compositor, .{
-        .model = model,
+        .model = &model,
+        .tab = model.tabs.active,
         .screen = &screen,
         .area = state.workbench(),
     });
     _ = try state.render(&screen, .{
-        .tabs = &tabs,
-        .model = model,
+        .model = &model,
+        .tab = model.tabs.active,
         .compositor = &compositor,
         .force = true,
     });
@@ -1300,13 +1320,13 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 38, .rows = 27 } });
     var workspaces: data.WorkspaceListSnapshot = .{};
     const entries = [_]data.EntryInput{
         .{ .workspace = @enumFromInt(1), .name = "telar", .path = "/w/telar", .tab_count = 1 },
@@ -1320,6 +1340,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     defer screen.deinit();
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .workspaces = &workspaces,
         .force = true,
     });
@@ -1360,6 +1381,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     state.workspace_list_collapsed = true;
     _ = try state.render(&screen, .{
         .model = &model,
+        .tab = 0,
         .workspaces = &workspaces,
         .force = true,
     });

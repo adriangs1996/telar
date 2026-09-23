@@ -12,7 +12,7 @@ test "captured native link consumes stationary modifier motion before release" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const session = fixture.session;
-    session.gui.app.model.workspace.findPane(Session.pane_id).?.mouse = .{ .tracking = .any, .sgr = true };
+    session.gui.app.model.panes.find(Session.pane_id).?.mouse = .{ .tracking = .any, .sgr = true };
     try fixture.present();
     var event = fixture.event(1);
     event.mods |= 1;
@@ -36,7 +36,7 @@ test "native link click cannot open a replacement URL before its frame is presen
     defer fixture.deinit();
     try receiveLink(fixture, 2, "https://b.c");
     try fixture.session.settle();
-    try std.testing.expectEqual(@as(u64, 2), fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 2), fixture.session.gui.app.model.panes.find(Session.pane_id).?.pending_frame_id);
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(2));
     try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
@@ -167,12 +167,12 @@ fn prefixAfterPointer(code: u32) !void {
     try fixture.send(pointer);
     try std.testing.expect(gui.router.prefixPending());
     try fixture.send(.{ .kind = 1, .text = "z".ptr, .len = 1 });
-    try std.testing.expect(gui.app.model.activeTabModel().?.layout.isFullscreen());
+    try std.testing.expect(gui.app.model.tabs.layout[gui.app.model.tabs.active].isFullscreen());
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
 }
 
 fn receiveLink(fixture: *Fixture, frame_id: u64, text: []const u8) !void {
-    const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
     var cells: [256]core.Cell = @splat(.{});
     const count = pane.buffer.cells.len;
     if (count > cells.len or text.len > pane.buffer.w) {
@@ -202,7 +202,7 @@ test "native displayed link previews consume hidden URL clicks until replacement
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = pane.buffer.h - 1 }, .text = "https://b.c", .style = .{} });
     pane.markSpan(0, @intCast(pane.buffer.cells.len));
     try fixture.present();
@@ -263,7 +263,7 @@ test "native preview coverage survives pointer leave failed presentation and lat
     try fixture.session.settle();
     try std.testing.expectEqualDeep(@as(?core.Rect, preview), gui.pointer.hover.shown_preview);
 
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .tracking = .button, .sgr = true };
     const size = gui.app.model.hostSize();
     var pointer = fixture.event(1);
@@ -290,10 +290,10 @@ test "native hover computes absolute rows without adding the host offset to hist
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    const model = gui.app.model.activeTabModel().?;
+    const tab = gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .vertical, .area = gui.region.area });
-    const pane = model.find(second).?;
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .vertical, .area = gui.region.area });
+    const pane = gui.app.model.panes.find(second).?;
     pane.attached = true;
     pane.cursor.visible = false;
     pane.scroll = .{ .total_rows = std.math.maxInt(u32), .offset = std.math.maxInt(u32) - @as(u32, pane.buffer.h) };
@@ -301,7 +301,7 @@ test "native hover computes absolute rows without adding the host offset to hist
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://b.c", .style = .{} });
     pane.markSpan(0, @intCast(pane.buffer.cells.len));
     try fixture.present();
-    const view = model.viewForPane(second, gui.region.area).?;
+    const view = data.tab_layout.view(&gui.app.model, tab, second, gui.region.area).?;
     try std.testing.expect(view.content.y > pane.buffer.h);
     const size = gui.app.model.hostSize();
     var pointer = fixture.event(6);
@@ -344,7 +344,7 @@ test "native right click copies a link without modifiers or child mouse reports"
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const session = fixture.session;
-    session.gui.app.model.workspace.findPane(Session.pane_id).?.mouse = .{ .tracking = .any, .sgr = true };
+    session.gui.app.model.panes.find(Session.pane_id).?.mouse = .{ .tracking = .any, .sgr = true };
     try fixture.present();
     var event = fixture.event(1);
     event.button = 2;

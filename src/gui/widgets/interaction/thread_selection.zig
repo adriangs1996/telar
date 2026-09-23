@@ -68,9 +68,9 @@ pub fn prepare(gui: *GuiClient) !void {
     }
     const owner = selection.owner orelse return;
     const pane = gui.app.model.agentPane(owner.pane_id);
-    const tab = gui.app.model.activeTabModelConst();
+    const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
     const focused = gui.widgets.dispatcher.focusedTarget();
-    const current = focused != null and focused.?.action == .transcript and focused.?.action.transcript == owner.pane_id and gui.focused and pane != null and pane.?.attachment_generation == owner.attachment_generation and tab != null and tab.?.layout.focused() == owner.pane_id and !gui.app.model.name_prompt.active() and gui.widgets.composer_menu.selector == null;
+    const current = focused != null and focused.?.action == .transcript and focused.?.action.transcript == owner.pane_id and gui.focused and pane != null and pane.?.attachment_generation == owner.attachment_generation and focused_pane == owner.pane_id and !gui.app.model.name_prompt.active() and gui.widgets.composer_menu.selector == null;
     const head = selection.head;
     if (!current or head == null or !valid(gui, head.?)) {
         cancel(gui);
@@ -207,8 +207,8 @@ fn pointer(gui: *GuiClient, event: @import("../../input/PointerEvent.zig"), targ
         gui.widgets.cancelComposition();
         gui.widgets.dispatcher.captures[0] = container.id;
         _ = gui.widgets.dispatcher.focus(container.id);
-        const model = gui.app.model.activeTabModel() orelse return true;
-        _ = try client.operations.view_interactions.apply(&gui.app, model, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
+        const tab = gui.app.model.tabs.activeSlot() orelse return true;
+        _ = try client.operations.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
         message_links.clear(gui);
         gui.widgets.dispatcher.revision +%= 1;
         return true;

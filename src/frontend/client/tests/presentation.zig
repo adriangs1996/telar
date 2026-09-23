@@ -2,6 +2,7 @@
 
 const client_module = @import("telar-client");
 const core = @import("telar-core");
+const data = @import("model");
 const TerminalClient = @import("../TerminalClient.zig");
 const TestHarness = @import("TestHarness.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
@@ -191,7 +192,7 @@ test "presentation flushes an explicit empty model before bootstrap" {
     defer harness.deinit();
     const client = harness.client;
 
-    try std.testing.expect(client.model.activeTabModel() == null);
+    try std.testing.expect(client.model.tabs.activeSlot() == null);
     _ = try client.model.setDiagnostic("pre-bootstrap revision", .{});
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
@@ -367,7 +368,7 @@ test "TUI frame ACKs advance while a sealed host write retains its presentation 
         try harness.bootstrap();
         try harness.settleModelPresentation();
         const client = harness.client;
-        const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+        const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
         try receiveCellFrame(&harness, 1);
         var wire: [1024]u8 = undefined;
         try std.testing.expectEqual(@as(u64, 1), (try harness.nextClientMessage(&wire)).frame_ack.frame_id);
@@ -375,7 +376,7 @@ test "TUI frame ACKs advance while a sealed host write retains its presentation 
         const before = TerminalClient.of(client).presenter.presentation_state.delivered;
         const token = try TerminalClient.of(client).presenter.presentation_state.begin(.{
             .observation = TerminalClient.of(client).presenter.presentation_state.observed,
-            .commit = client.model.activeTabModelConst().?.presentationCommit(),
+            .commit = data.presentation_delivery.capture(&client.model, client.model.tabs.active),
         });
         TerminalClient.of(client).output = try Output.init(std.testing.allocator, TerminalClient.of(client).writer);
         const output = &TerminalClient.of(client).output.?;

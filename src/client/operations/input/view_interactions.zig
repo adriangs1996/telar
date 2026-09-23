@@ -1,36 +1,30 @@
 //! Wires semantic view interactions to existing client use cases.
 
-const data = @import("model");
 const view_interaction = @import("../../application/input/view_interaction.zig");
 const Client = @import("../../AttachedClient.zig");
 const ViewInteractionCommand = @import("../../application/input/ViewInteractionCommand.zig");
 const ViewInteractionOutcome = @import("../../application/input/ViewInteractionOutcome.zig");
-const ViewInteractionsContext = @import("ViewInteractionsContext.zig");
 const IntentOutcomeType = @import("../../application/input/IntentOutcome.zig");
 
 /// Applies one interaction emitted by the view and returns its pane-input
 /// routing decision.
 ///
 /// ```zig
-/// const outcome = try apply(client, model, interaction);
+/// const outcome = try apply(client, tab, interaction);
 /// ```
-pub fn apply(client: *Client, model: *data.MultiplexerModel, interaction: ViewInteractionCommand) !ViewInteractionOutcome {
-    var context: ViewInteractionsContext = .{
-        .client = client,
-        .model = model,
-    };
+pub fn apply(client: *Client, tab: usize, interaction: ViewInteractionCommand) !ViewInteractionOutcome {
     var layout_changed = interaction.layout_changed;
     switch (interaction.intent) {
         .none => {},
         else => {
-            const applied = try applyIntent(&context, interaction.intent);
+            const applied = try applyIntent(client, interaction.intent);
             layout_changed = layout_changed or applied.layout_changed;
         },
     }
 
     if (layout_changed) {
         client.host_graphics.invalidatePlacements();
-        try client.resizeAttachedPanes(model, client.geometry().area);
+        try client.resizeAttachedPanes(tab, client.geometry().area);
     }
 
     return .{
@@ -38,8 +32,7 @@ pub fn apply(client: *Client, model: *data.MultiplexerModel, interaction: ViewIn
     };
 }
 
-fn applyIntent(context: *ViewInteractionsContext, intent: view_interaction.Intent) !IntentOutcomeType {
-    const client = context.client;
+fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcomeType {
     var outcome: IntentOutcomeType = .{};
 
     switch (intent) {

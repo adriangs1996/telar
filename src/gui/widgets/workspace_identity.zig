@@ -4,7 +4,7 @@ const core = @import("telar-core");
 /// The workspace the tabs model currently shows, if it is not a worktree.
 /// Example: `const active = workspace_identity.activeId(projection);`
 pub fn activeId(projection: *const client.Projection) ?core.WorkspaceId {
-    const location = projection.tabs.workspace orelse return null;
+    const location = projection.model.workspace orelse return null;
     return switch (location) {
         .workspace => |id| id,
         .worktree => null,
@@ -15,7 +15,7 @@ pub fn activeId(projection: *const client.Projection) ?core.WorkspaceId {
 /// A confirmed worktree or unlisted workspace never inherits the old selection.
 /// Example: `const id = workspace_identity.navigationId(projection, presented);`
 pub fn navigationId(projection: *const client.Projection, presented: ?core.WorkspaceId) ?core.WorkspaceId {
-    if (projection.tabs.workspace != null) {
+    if (projection.model.workspace != null) {
         return activeId(projection);
     }
 

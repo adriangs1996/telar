@@ -16,7 +16,7 @@ const Time = enum(u64) {
 const Frame = enum(u64) { initial = 1, echo = 2 };
 
 fn currentPane(session: *const Session) FramePacer.Pane {
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     return .{
         .pane_id = pane.id,
         .attachment_generation = pane.attachment_generation,
@@ -165,7 +165,7 @@ test "native older GPU completion preserves a newer input hint and sends no extr
     try std.testing.expectEqual(@as(?u64, null), session.gui.driver.frame_pacer.waitUntil(&.{
         currentPane(session),
     }, @intFromEnum(Time.after_input)));
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     try std.testing.expectEqual(@intFromEnum(Frame.echo), pane.pending_frame_id);
 
     try input_support.presented(

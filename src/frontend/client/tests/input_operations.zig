@@ -39,10 +39,10 @@ test "physical key repeat and release keep their pane after focus and prompt cha
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const tab = client.model.activeTabModel().?;
+    const tab = client.model.tabs.active;
     const other: core.PaneId = @enumFromInt(11);
-    try tab.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
-    try std.testing.expect(tab.focusPane(TestHarness.bootstrap_pane));
+    try data.pane_split.split(&client.model, tab, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    try std.testing.expect(client.model.tabs.layout[tab].focusPane(TestHarness.bootstrap_pane));
     var key = try data.chord.parseKey("x");
     key.physical = .{ .value = 41 };
     try std.testing.expect((try client.routeKeyInput(
@@ -55,7 +55,7 @@ test "physical key repeat and release keep their pane after focus and prompt cha
     const press = try harness.nextClientMessage(&buffer);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, press.pane_input.pane_id);
 
-    try std.testing.expect(tab.focusPane(other));
+    try std.testing.expect(client.model.tabs.layout[tab].focusPane(other));
     client.model.name_prompt.begin(.goto_picker);
     key.phase = .repeat;
     try std.testing.expect((try client.routeKeyInput(
@@ -120,7 +120,7 @@ test "failed opening paste marker rolls back the captured session" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
     try fillOutbox(client);
 
     try std.testing.expectError(error.ClientOutboxFull, client.startPanePaste());
@@ -133,7 +133,7 @@ test "failed closing paste marker releases the session without repeating it" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
     try std.testing.expectEqual(.applied, try client.startPanePaste());
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -153,7 +153,7 @@ test "retired paste target cannot redirect its remaining content" {
     try harness.bootstrap();
     const client = harness.client;
     try std.testing.expectEqual(.applied, try client.startPanePaste());
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached = false;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.attached = false;
 
     try std.testing.expectEqual(.unavailable, try client.appendPanePaste("private text"));
     _ = try client.finishPanePaste();

@@ -50,12 +50,12 @@ test "host resize commits before resources and presents by model version" {
     try std.testing.expect(TerminalClient.of(client).presenter.screen.sizeMatches(100, 30));
     try std.testing.expectEqual(@as(u16, 100), TerminalClient.of(client).view.scratch.w);
     try std.testing.expectEqual(@as(u16, 30), TerminalClient.of(client).view.scratch.h);
-    const active = client.model.workspace.active().?;
-    try std.testing.expectEqual(@as(u16, 10), active.model.cell_width_px);
-    try std.testing.expectEqual(@as(u16, 20), active.model.cell_height_px);
+    const active = client.model.tabs.active;
+    try std.testing.expectEqual(@as(u16, 10), client.model.hostSize().cell_width_px);
+    try std.testing.expectEqual(@as(u16, 20), client.model.hostSize().cell_height_px);
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 
-    const expected_pane_size = active.model.contentSize(
+    const expected_pane_size = data.tab_layout.contentSize(&client.model, active, 
         TestHarness.bootstrap_pane,
         TerminalClient.of(client).view.workbench(),
     ).?;
@@ -119,16 +119,16 @@ test "host resize waits for canonical membership then resizes before attaching w
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const tab = client.model.workspace.active().?;
+    const tab = client.model.tabs.active;
     const sibling: core.PaneId = @enumFromInt(20);
-    try tab.model.addDiscovered(
+    try data.tab_snapshot_reconciliation.addDiscovered(&client.model, tab, 
         .{
             .pane_id = sibling,
-            .location = tab.location,
+            .location = client.model.tabs.location[tab],
             .area = client.geometry().area,
         },
     );
-    try std.testing.expect(!tab.snapshot_loaded);
+    try std.testing.expect(!client.model.tabs.snapshot_loaded[tab]);
     const initial_request_id = client.request_lifecycle.next_request_id;
     var buffer: [256]u8 = undefined;
 
@@ -150,7 +150,7 @@ test "host resize waits for canonical membership then resizes before attaching w
 
     _ = try client.model.reconcileTab(
         .{
-            .location = tab.location,
+            .location = client.model.tabs.location[tab],
             .panes = &.{
                 TestHarness.bootstrap_pane,
                 sibling,
@@ -174,7 +174,7 @@ test "host resize waits for canonical membership then resizes before attaching w
     const opened = try harness.nextClientMessage(&buffer);
     try std.testing.expect(opened == .open_pane);
     try std.testing.expectEqual(sibling, opened.open_pane.target.pane);
-    try std.testing.expectEqualDeep(tab.model.contentSize(sibling, client.geometry().area).?, opened.open_pane.size);
+    try std.testing.expectEqualDeep(data.tab_layout.contentSize(&client.model, tab, sibling, client.geometry().area).?, opened.open_pane.size);
     try std.testing.expect(client.request_lifecycle.tracker.hasPane(.attachment, sibling));
     const pending_request_id = client.request_lifecycle.next_request_id;
 
@@ -237,7 +237,7 @@ test "host resize rolls back rejected attachment correlation after offering conn
     try std.testing.expect(!client.request_lifecycle.tracker.hasPane(.attachment, sibling));
     try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(@as(u16, 100), client.model.hostSize().cols);
-    try std.testing.expect(!client.model.workspace.active().?.model.find(sibling).?.attached);
+    try std.testing.expect(!client.model.panes.find(sibling).?.attached);
 }
 
 test "oversized host measurement changes neither model nor capabilities" {
@@ -282,9 +282,8 @@ test "terminal pixel response keeps model host geometry authoritative" {
     }, client.model.hostSize());
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host);
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host_capabilities);
-    const active = client.model.workspace.active().?;
-    try std.testing.expectEqual(@as(u16, 12), active.model.cell_width_px);
-    try std.testing.expectEqual(@as(u16, 24), active.model.cell_height_px);
+    try std.testing.expectEqual(@as(u16, 12), client.model.hostSize().cell_width_px);
+    try std.testing.expectEqual(@as(u16, 24), client.model.hostSize().cell_height_px);
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
@@ -336,7 +335,7 @@ test "a Kitty capability response commits before fallback projection and present
         },
     });
     _ = try client.handleServerMessage(try core.decodeServer(encoded));
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.graphics_placeholder);
     const version = client.model.version();
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
 
@@ -346,7 +345,7 @@ test "a Kitty capability response commits before fallback projection and present
     } });
 
     try std.testing.expectEqual(data.EnvironmentSupport.supported, client.model.hostCapabilities().images);
-    try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
+    try std.testing.expect(!client.model.panes.find(TestHarness.bootstrap_pane).?.graphics_placeholder);
     try std.testing.expectEqual(version.host_capabilities + 1, client.model.version().host_capabilities);
     try std.testing.expectEqual(version.pane_graphics + 1, client.model.version().pane_graphics);
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
@@ -506,16 +505,16 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     _ = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
-    const active = client.model.workspace.active().?;
+    const active = client.model.tabs.active;
     pane.scroll = .{
         .total_rows = @as(u32, pane.buffer.h) + 10,
         .offset = 10,
     };
     const version = client.model.version();
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
-    const pane_view = active.model.viewForPane(pane.id, TerminalClient.of(client).view.workbench()).?;
+    const pane_view = data.tab_layout.view(&client.model, active, pane.id, TerminalClient.of(client).view.workbench()).?;
     try host_inputs.mouse(client, .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
@@ -567,7 +566,7 @@ test "native scroll actions reuse bounded viewport delivery without forwarding i
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     const version = client.model.version();
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
@@ -615,7 +614,7 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.scroll = .{
         .total_rows = @as(u32, pane.buffer.h) + 10,
         .offset = 0,
@@ -645,7 +644,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = 30, .offset = 6 };
     pane.cursor = .{ .visible = true, .x = 0, .y = 0 };
     const version_before = client.model.version();
@@ -674,7 +673,7 @@ test "copy mode round trip: enter, select, copy, leave" {
     );
     const painted_cursor_y = TerminalClient.of(client).presenter.compositor.copy.?.view.cursor.y;
 
-    const pane_view = client.model.workspace.active().?.model.viewForPane(
+    const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
         pane.id,
         TerminalClient.of(client).view.workbench(),
     ).?;
@@ -741,7 +740,7 @@ test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
     try harness.bootstrap();
     const client = harness.client;
     client.options.editor = "nvim";
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "file:///tmp/a%20b.txt", .style = .{} });
     pane.cursor = .{ .visible = true, .x = 12, .y = 0 };
@@ -770,10 +769,10 @@ test "a left click opens a file URI and owns the complete mouse gesture" {
     try harness.bootstrap();
     const client = harness.client;
     client.options.editor = "nvim";
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "file:///tmp/click.txt", .style = .{} });
-    const pane_view = client.model.workspace.active().?.model.viewForPane(
+    const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
         pane.id,
         TerminalClient.of(client).view.workbench(),
     ).?;
@@ -833,7 +832,6 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const model = &client.model.workspace.active().?.model;
     _ = try client.executeAction(.enter_copy_mode, .effect);
     const active_version = client.model.version();
 
@@ -847,7 +845,7 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
     try std.testing.expectEqualDeep(active_version, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
-    try std.testing.expect(model.removePane(TestHarness.bootstrap_pane));
+    try std.testing.expect(data.tab_layout.removePane(&client.model, TestHarness.bootstrap_pane));
     try host_inputs.mouse(client, .{ .x = 0, .y = 0, .kind = .move });
 
     try std.testing.expect(!client.model.copyModeActive());

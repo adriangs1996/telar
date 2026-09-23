@@ -1,6 +1,5 @@
-//! One tab of the strip with its position in the collection and its slot.
-const data = @import("model");
-const client = @import("telar-client");
-tab: *const data.Tab,
+//! One tab of the strip: its slot in the tabs table and its painted bounds.
+const Rect = @import("../render/Rect.zig");
+
 index: usize,
-bounds: @import("../render/Rect.zig"),
+bounds: Rect,

@@ -103,8 +103,8 @@ fn snapshot(gui: *const GuiClient, target: Target) ?*const core.AgentThreadSnaps
     }
 
     const control = target.action.thread_item;
-    const model = gui.app.model.activeTabModelConst() orelse return null;
-    const pane = model.findConst(control.pane_id) orelse return null;
+    const tab = gui.app.model.tabs.activeSlot() orelse return null;
+    const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, control.pane_id) orelse return null;
     if (!pane.attached or pane.kind != .agent or pane.attachment_generation != control.attachment_generation or target.id.generation != control.attachment_generation or control.identity == 0) {
         return null;
     }

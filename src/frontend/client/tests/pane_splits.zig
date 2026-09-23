@@ -1,6 +1,7 @@
 //! Split behavior through the concrete client, its model and real transport.
 const std = @import("std");
 const core = @import("telar-core");
+const data = @import("model");
 const client = @import("telar-client");
 const TestHarness = @import("TestHarness.zig");
 
@@ -130,8 +131,8 @@ test "split retains the runtime creation when confirmation delivery fails" {
             },
         },
     ));
-    try std.testing.expect(app.model.workspace.findPane(pane).?.attached);
-    try std.testing.expectEqual(pane, app.model.workspace.active().?.model.layout.focused().?);
+    try std.testing.expect(app.model.panes.find(pane).?.attached);
+    try std.testing.expectEqual(pane, app.model.tabs.layout[app.model.tabs.active].focused().?);
     try std.testing.expectEqual(before.panes + 1, app.model.version().panes);
 }
 
@@ -144,7 +145,7 @@ test "late split confirmation never detaches a currently represented pane" {
     const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
     const current: core.PaneId = @enumFromInt(21);
     _ = try harness.addTab(@enumFromInt(2), current);
-    try std.testing.expect(app.model.workspace.remove(plan.split.location.tab_id));
+    try std.testing.expect(data.tab_removal.remove(&app.model, plan.split.location.tab_id));
     const before = app.model.version();
 
     const request_id: core.RequestId = @enumFromInt(4);
@@ -170,7 +171,7 @@ test "late split confirmation never detaches a currently represented pane" {
             },
         },
     ));
-    try std.testing.expect(app.model.workspace.findPane(current).?.attached);
+    try std.testing.expect(app.model.panes.find(current).?.attached);
     try std.testing.expectEqualDeep(before, app.model.version());
     try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
 }
@@ -215,8 +216,8 @@ test "editor split retains its explicit target and arguments despite another foc
     try harness.bootstrap();
     const app = harness.client;
     const focused: core.PaneId = @enumFromInt(21);
-    const panes = app.model.activeTabModel().?;
-    try panes.split(.{
+    const panes = app.model.tabs.active;
+    try data.pane_split.split(&app.model, panes, .{
         .existing_pane = TestHarness.bootstrap_pane,
         .new_pane = focused,
         .location = TestHarness.bootstrap_location,
@@ -231,7 +232,7 @@ test "editor split retains its explicit target and arguments despite another foc
         .arguments = &.{ "nvim", "src/main.zig" },
     })).?;
     try std.testing.expectEqual(TestHarness.bootstrap_pane, plan.split.target_pane);
-    try std.testing.expectEqual(focused, panes.layout.focused().?);
+    try std.testing.expectEqual(focused, app.model.tabs.layout[panes].focused().?);
     try std.testing.expectEqualDeep(before, app.model.version());
     try harness.settle();
     var buffer: [512]u8 = undefined;

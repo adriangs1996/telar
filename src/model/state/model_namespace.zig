@@ -6,8 +6,8 @@ const PaneType = @import("../panes/Pane.zig");
 const std = @import("std");
 const Model = @import("Model.zig");
 const LaunchSource = @import("LaunchSource.zig");
-const TabsModel = @import("../workspace/TabsModel.zig");
-const TabType = @import("../workspace/Tab.zig");
+const tab_layout = @import("../workspace/tab_layout.zig");
+const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 
 test {
     _ = @import("tests/configuration_and_host.zig");
@@ -59,11 +59,7 @@ pub fn copyModeViewport(pane: *const PaneType, wanted: u32) ?core.SetPaneViewpor
 
 pub fn releaseInvalidCopyMode(model: *Model) void {
     const state = model.copy_state orelse return;
-    const active = model.workspace.activeConst() orelse {
-        _ = model.releaseCopyMode(state.pane_id);
-        return;
-    };
-    if (active.model.findConst(state.pane_id) != null) {
+    if (model.activePaneConst(state.pane_id) != null) {
         return;
     }
 
@@ -71,37 +67,35 @@ pub fn releaseInvalidCopyMode(model: *Model) void {
 }
 
 pub fn captureWorkspace(model: *Model) model_data.WorkspaceDeparture {
-    const source = model.workspace.workspace orelse return .{};
+    const source = model.workspace orelse return .{};
     var departure: model_data.WorkspaceDeparture = .{ .source = source };
-    if (model.workspace.activeConst()) |tab| {
-        if (tab.model.focusedPaneConst()) |pane| {
+    if (model.tabs.activeSlot()) |slot| {
+        if (tab_layout.focusedPaneConst(model, slot)) |pane| {
             departure.bookmark = .{
-                .location = tab.location,
+                .location = model.tabs.location[slot],
                 .pane_id = pane.id,
-                .tab_layout = tab.model.layout,
+                .tab_layout = model.tabs.layout[slot],
             };
         }
     }
 
-    var tabs = model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        var panes = tab.model.paneIterator();
-        while (panes.next()) |pane| {
-            departure.panes.append(pane.id);
-        }
+    var panes = model.panes.iterateConst(null);
+    while (panes.next()) |pane| {
+        departure.panes.append(pane.id);
     }
 
     return departure;
 }
 
 pub fn focusedLaunchSource(model: *const Model) ?LaunchSource {
-    const active = model.workspace.activeConst() orelse return null;
-    const pane = active.model.focusedPaneConst() orelse return null;
-    if (!pane.attached or !std.meta.eql(pane.location, active.location)) {
+    const slot = model.tabs.activeSlot() orelse return null;
+    const location = model.tabs.location[slot];
+    const pane = tab_layout.focusedPaneConst(model, slot) orelse return null;
+    if (!pane.attached or !std.meta.eql(pane.location, location)) {
         return null;
     }
 
-    return .{ .location = active.location, .pane_id = pane.id };
+    return .{ .location = location, .pane_id = pane.id };
 }
 
 pub fn inheritCellSize(size: *core.TerminalSize, source: core.TerminalSize) void {
@@ -114,23 +108,14 @@ pub fn detachPane(pane: *PaneType) void {
     pane.pending_frame_id = 0;
 }
 
-pub fn findTab(workspace: *TabsModel, location: core.TabLocation) ?*TabType {
-    const tab = workspace.find(location.tab_id) orelse return null;
-    if (!std.meta.eql(tab.location, location)) {
+/// The slot of the tab at exactly `location`, including its workspace.
+pub fn findTab(model: *const Model, location: core.TabLocation) ?usize {
+    const slot = model.tabs.find(location.tab_id) orelse return null;
+    if (!std.meta.eql(model.tabs.location[slot], location)) {
         return null;
     }
 
-    return tab;
-}
-
-pub fn findTabConst(workspace: *const TabsModel, location: core.TabLocation) ?*const TabType {
-    const index = workspace.indexOf(location.tab_id) orelse return null;
-    const tab = &workspace.items[index].?;
-    if (!std.meta.eql(tab.location, location)) {
-        return null;
-    }
-
-    return tab;
+    return slot;
 }
 
 test "resizing a mouse-selected pane cancels coordinates but retains gesture ownership" {
@@ -141,10 +126,10 @@ test "resizing a mouse-selected pane cancels coordinates but retains gesture own
         .tab_id = @enumFromInt(1),
     };
     const pane_id: core.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    try workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     try std.testing.expect(model.beginPointerSelection(.{ .pane_id = pane_id, .position = .{ .x = 15, .y = 0 }, .now_ns = 0 }));
     const version = model.version();
-    const pane = model.workspace.findPane(pane_id).?;
+    const pane = model.panes.find(pane_id).?;
     try pane.buffer.resize(10, 5);
 
     try std.testing.expect(model.reconcileCopyModeFrame(.{ .pane_id = pane_id, .previous_offset = 0, .scroll = pane.scroll }));
@@ -164,8 +149,8 @@ test "copy mode frame reconciliation and pane release are exact" {
         .tab_id = @enumFromInt(1),
     };
     const pane_id: core.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    const pane = model.workspace.findPane(pane_id).?;
+    try workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    const pane = model.panes.find(pane_id).?;
     pane.scroll = .{ .total_rows = 15, .offset = 10 };
     pane.cursor = .{ .visible = true, .x = 2, .y = 4 };
     try std.testing.expect(model.enterCopyMode());

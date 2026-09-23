@@ -66,7 +66,7 @@ test "headless inbox owns delayed wire state and preserves patches before depend
     const input = fixture.pending.?;
     try std.testing.expectEqualStrings("\x1b[A", (try core.decodeClient(input)).pane_input.bytes);
     try fixture.sendOne();
-    try std.testing.expectEqual(@as(u64, 2), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 2), fixture.model.panes.find(pane_id).?.pending_frame_id);
     const latest = try fixture.prepare();
     try std.testing.expectEqualStrings("B", fixture.adapter.frame.cells[0].text());
     try fixture.complete(latest, .delivered);
@@ -113,12 +113,12 @@ test "applied patches are acknowledged and coalesced while headless delivery own
     try fixture.sendOne();
     try fixture.complete(first, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
-    try std.testing.expectEqual(@as(u64, 65), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 65), fixture.model.panes.find(pane_id).?.pending_frame_id);
     const second = try fixture.prepare();
     try std.testing.expectEqualStrings("Z", fixture.adapter.frame.cells[0].text());
     try fixture.complete(second, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
-    try std.testing.expectEqual(@as(u64, 0), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 0), fixture.model.panes.find(pane_id).?.pending_frame_id);
     try std.testing.expect((try fixture.adapter.prepare(fixture.projection())) == null);
 }
 
@@ -142,7 +142,7 @@ test "presentation failure cancellation and stale completion preserve acknowledg
     try fixture.complete(cancelled, .delivered);
     try std.testing.expectEqual(current, fixture.adapter.state.active.?.token);
     try std.testing.expect(fixture.outbox.peek() == null);
-    try std.testing.expectEqual(@as(u64, 1), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 1), fixture.model.panes.find(pane_id).?.pending_frame_id);
     try fixture.complete(current, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
     try fixture.complete(current, .delivered);
@@ -176,16 +176,16 @@ test "a reconstructed attachment cannot inherit a completed old frame with the s
     try sendFrame(fixture, .{});
     try fixture.expectAck(1);
     const old = try fixture.prepare();
-    const generation = fixture.model.workspace.findPane(pane_id).?.attachment_generation;
+    const generation = fixture.model.panes.find(pane_id).?.attachment_generation;
     _ = fixture.model.departWorkspace();
     try std.testing.expectEqualStrings("A", fixture.adapter.frame.cells[0].text());
     try fixture.arrive();
     try sendFrame(fixture, .{ .text = 'B' });
     try fixture.expectAck(1);
-    try std.testing.expect(fixture.model.workspace.findPane(pane_id).?.attachment_generation != generation);
+    try std.testing.expect(fixture.model.panes.find(pane_id).?.attachment_generation != generation);
     try fixture.complete(old, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
-    try std.testing.expectEqual(@as(u64, 1), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 1), fixture.model.panes.find(pane_id).?.pending_frame_id);
     const current = try fixture.prepare();
     try fixture.complete(current, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
@@ -245,12 +245,12 @@ test "reattachment prevents old presentation completion from retiring replacemen
             },
         },
     );
-    try std.testing.expect(fixture.model.workspace.findPane(pane_id).?.attached);
+    try std.testing.expect(fixture.model.panes.find(pane_id).?.attached);
     try sendFrame(fixture, .{ .text = 'B' });
     try fixture.expectAck(1);
     try fixture.complete(old, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
-    try std.testing.expectEqual(@as(u64, 1), fixture.model.workspace.findPane(pane_id).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 1), fixture.model.panes.find(pane_id).?.pending_frame_id);
     const current = try fixture.prepare();
     try fixture.complete(current, .delivered);
     try std.testing.expect(fixture.outbox.peek() == null);
@@ -306,8 +306,8 @@ test "independent client assemblies produce identical semantic state and request
     try std.testing.expect(first.outbox.peek() == null);
     try std.testing.expect(second.outbox.peek() == null);
     _ = first.model.departWorkspace();
-    try std.testing.expect(second.model.activeTabModelConst() != null);
-    try std.testing.expectEqualStrings("A", second.model.workspace.findPane(pane_id).?.buffer.cells[0].text());
+    try std.testing.expect(second.model.tabs.activeSlot() != null);
+    try std.testing.expectEqualStrings("A", second.model.panes.find(pane_id).?.buffer.cells[0].text());
 }
 
 test "runtime stop exits production dispatch without changing client state" {
@@ -332,6 +332,6 @@ test "production dispatch owns borrowed pane metadata before receive reuse" {
         },
     ));
     @memset(&title, 'x');
-    try std.testing.expectEqualStrings("review title", fixture.model.workspace.findPane(pane_id).?.titleSlice());
+    try std.testing.expectEqualStrings("review title", fixture.model.panes.find(pane_id).?.titleSlice());
     try std.testing.expect(fixture.outbox.peek() == null);
 }

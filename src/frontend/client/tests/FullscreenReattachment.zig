@@ -31,7 +31,7 @@ pub fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const cor
         .panes = panes,
     });
     _ = try client.handleServerMessage(try core.decodeServer(snapshot));
-    try scenario.confirmAttachment(client.model.workspace.active().?.model.layout.focused().?);
+    try scenario.confirmAttachment(client.model.tabs.layout[client.model.tabs.active].focused().?);
 }
 
 pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: core.PaneId) !void {
@@ -43,7 +43,7 @@ pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: core.PaneId)
     try std.testing.expect(message == .open_pane);
     try std.testing.expectEqualDeep(core.PaneTarget{ .pane = pane_id }, message.open_pane.target);
     try std.testing.expectEqualDeep(
-        client.model.workspace.active().?.model.contentSize(pane_id, TerminalClient.of(client).view.workbench()).?,
+        data.tab_layout.contentSize(&client.model, client.model.tabs.active, pane_id, TerminalClient.of(client).view.workbench()).?,
         message.open_pane.size,
     );
     const opened = try core.encodePaneOpened(&buffer, .{
@@ -53,7 +53,7 @@ pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: core.PaneId)
         .created = false,
     });
     _ = try client.handleServerMessage(try core.decodeServer(opened));
-    try std.testing.expect(client.model.workspace.findPane(pane_id).?.attached);
+    try std.testing.expect(client.model.panes.find(pane_id).?.attached);
 }
 
 pub fn expectInput(scenario: FullscreenReattachment, pane_id: core.PaneId) !void {

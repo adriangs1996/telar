@@ -53,8 +53,8 @@ pub fn draw(row: WorkspaceRow, canvas: *Canvas) !void {
     const title: Rect = .{ .x = left, .y = bounds.y + canvas.chrome.px(10), .width = available, .height = canvas.chrome.rowHeight(.body) };
     const reserved = try row.drawAttention(canvas, title);
     var name = projection.workspaces.nameAt(row.index);
-    if (selected and projection.tabs.displayedWorkspaceName().len != 0) {
-        name = projection.tabs.displayedWorkspaceName();
+    if (selected and projection.model.workspaceName().len != 0) {
+        name = projection.model.workspaceName();
     }
 
     try fittedText(canvas, .{ .x = title.x, .y = title.y, .width = @max(0, available - reserved), .height = title.height }, .{ .text = name, .color = ink, .bold = true, .face = .sans, .size = .body });

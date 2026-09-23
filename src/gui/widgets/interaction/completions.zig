@@ -10,14 +10,19 @@ const Target = @import("Target.zig");
 /// Example: `completions.refresh(gui);`
 pub fn refresh(gui: *GuiClient) void {
     const state = &gui.widgets.completions;
-    const model = gui.app.model.activeTabModelConst() orelse return;
+    const tab = gui.app.model.tabs.activeSlot() orelse return;
     const target = gui.widgets.dispatcher.focusedTarget();
     if (gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null or gui.widgets.preedit.owner != null or target == null or target.?.action != .composer) {
         state.open = false;
         return;
     }
 
-    const thread = client.ThreadView.capture(model, null, target.?.action.composer) orelse return;
+    const pane_id = target.?.action.composer;
+    if (gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, pane_id) == null) {
+        return;
+    }
+
+    const thread = client.ThreadView.capture(&gui.app.model, null, pane_id) orelse return;
     if (thread.focused) {
         state.update(thread);
     } else {

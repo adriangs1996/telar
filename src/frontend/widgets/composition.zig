@@ -23,8 +23,8 @@ pub fn render(context: *ContextType, input: CompositionInput) CompositionOutput 
     top_bar.render(context, .{
         .area = input.regions.top,
         .sidebar_visible = !input.regions.sidebar.isEmpty(),
-        .location = input.model.location,
-        .workspace_name = if (input.tabs) |tabs| tabs.displayedWorkspaceName() else "",
+        .location = input.model.tabs.location[input.tab],
+        .workspace_name = input.model.workspaceName(),
         .workspaces = input.workspaces,
         .collapsed = input.workspace_list_collapsed,
         .proxy_tls_active = input.proxy_tls_active,
@@ -35,15 +35,16 @@ pub fn render(context: *ContextType, input: CompositionInput) CompositionOutput 
     });
 
     const focused_agent = block: {
-        const location = input.model.location orelse break :block null;
-        const pane_id = input.model.layout.focused() orelse break :block null;
+        const location = input.model.tabs.location[input.tab];
+        const pane_id = input.model.tabs.layout[input.tab].focused() orelse break :block null;
         break :block input.sidebar_snapshot.keyForPane(location, pane_id);
     };
     const sidebar_output = sidebar.render(context, .{
         .area = input.regions.sidebar,
         .snapshot = input.sidebar_snapshot,
         .state = input.sidebar_state,
-        .active_model = input.model,
+        .model = input.model,
+        .tab = input.tab,
         .focused_agent = focused_agent,
         .transparent = input.sidebar_transparent,
         .rounded_focus = input.sidebar_rounded_focus,
@@ -111,8 +112,8 @@ fn renderBottom(context: *ContextType, input: CompositionInput) void {
             .empty => {},
             .tabs => tab_bar.render(context, .{
                 .area = area,
-                .tabs = input.tabs,
                 .model = input.model,
+                .tab = input.tab,
                 .alignment = alignment,
                 .animation_frame = input.sidebar_animation_frame,
             }),
@@ -132,8 +133,8 @@ fn bottomDesiredWidth(slot: *const data.bar_values.Slot, input: CompositionInput
         .metrics => status_bar.desiredWidth(input.system_metrics),
         .tabs => tab_bar.desiredWidth(.{
             .area = input.regions.bottom,
-            .tabs = input.tabs,
             .model = input.model,
+            .tab = input.tab,
         }),
     };
 }

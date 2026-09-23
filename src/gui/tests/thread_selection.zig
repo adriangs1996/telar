@@ -1,5 +1,6 @@
 const native = @import("../native/native.zig");
 const input_support = @import("input_support.zig");
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -37,7 +38,7 @@ test "user text is literal and warm drag and copy allocate nothing" {
     const first = try fixture.point(1, "User");
     const last = try fixture.point(1, " request");
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
-    const pane = gui.app.model.workspace.findPane(Fixture.pane_id).?;
+    const pane = gui.app.model.panes.find(Fixture.pane_id).?;
     pane.gpa = failing.allocator();
     gui.app.gpa = failing.allocator();
     defer pane.gpa = std.testing.allocator;
@@ -99,18 +100,18 @@ test "a selected pane cannot steal focus from another agent composer" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    const panes = gui.app.model.activeTabModel().?;
+    const tab = gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try panes.split(.{ .existing_pane = Fixture.pane_id, .new_pane = second, .location = Fixture.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Fixture.pane_id, .new_pane = second, .location = Fixture.location, .axis = .horizontal, .area = gui.region.area });
     try std.testing.expect(gui.app.model.identifyPane(.{ .request_id = @enumFromInt(2), .pane_id = second, .location = Fixture.location, .created = false, .kind = .agent, .pane_generation = 8 }));
     const snapshot = try std.testing.allocator.create(core.AgentThreadSnapshot);
     defer std.testing.allocator.destroy(snapshot);
-    snapshot.* = panes.findConst(Fixture.pane_id).?.agent_thread.?.*;
+    snapshot.* = gui.app.model.panes.findConst(Fixture.pane_id).?.agent_thread.?.*;
     snapshot.pane_id = second;
     snapshot.pane_generation = 8;
     var bytes: [4096]u8 = undefined;
     _ = try gui.app.model.applyAgentThread((try core.decodeServer(try core.encodeAgentThreadSnapshot(&bytes, snapshot))).agent_thread_snapshot);
-    _ = panes.focusPane(Fixture.pane_id);
+    _ = gui.app.model.tabs.layout[tab].focusPane(Fixture.pane_id);
     try fixture.publish();
     try fixture.drag(.{ try fixture.point(3, "Second"), try fixture.point(3, "words") });
     try fixture.publish();
@@ -124,11 +125,11 @@ test "a selected pane cannot steal focus from another agent composer" {
     try fixture.send(.{ .pointer = .{ .kind = .release, .x = composer.bounds.x + 4, .y = composer.bounds.y + 4 } });
     try fixture.publish();
     try fixture.send(.{ .text = .{ .bytes = "belongs to B" } });
-    try std.testing.expectEqual(second, panes.layout.focused());
-    try std.testing.expectEqualStrings("belongs to B", panes.findConst(second).?.composerSlice());
-    try std.testing.expectEqualStrings("", panes.findConst(Fixture.pane_id).?.composerSlice());
+    try std.testing.expectEqual(second, gui.app.model.tabs.layout[tab].focused());
+    try std.testing.expectEqualStrings("belongs to B", gui.app.model.panes.findConst(second).?.composerSlice());
+    try std.testing.expectEqualStrings("", gui.app.model.panes.findConst(Fixture.pane_id).?.composerSlice());
     try std.testing.expect(gui.widgets.thread_selection.owner == null);
-    try std.testing.expect(panes.findConst(Fixture.pane_id).?.agent_history == null);
+    try std.testing.expect(gui.app.model.panes.findConst(Fixture.pane_id).?.agent_history == null);
 }
 
 test "stale text starts and focus loss cannot retain an invisible selection" {
@@ -166,7 +167,7 @@ test "stationary drag scrolls delivered text and parks at the retained window ed
     try std.testing.expect(gui.widgets.thread_selection.head.?.before(previous));
     try std.testing.expect(gui.widgets.thread_selection.next_scroll_ns > 0);
     try std.testing.expect(pane.agent_history.?.retained);
-    gui.app.model.workspace.findPane(Fixture.pane_id).?.transcript_scroll = (try fixture.target(.transcript)).scroll_limit;
+    gui.app.model.panes.find(Fixture.pane_id).?.transcript_scroll = (try fixture.target(.transcript)).scroll_limit;
     gui.widgets.thread_selection.next_scroll_ns = 0;
     try fixture.publish();
     try std.testing.expect(gui.widgets.thread_selection.blocked_edge);

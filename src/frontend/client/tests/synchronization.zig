@@ -188,7 +188,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
     _ = try client.requestWorkspace(@enumFromInt(2));
 
     try std.testing.expect(client.model.workspaceLocation() == null);
-    try std.testing.expectEqual(@as(usize, 0), client.model.workspace.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.tabs.count);
     try std.testing.expectEqual(version_before_departure.workspace + 1, client.model.version().workspace);
     try std.testing.expectEqual(version_before_departure.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_departure.active_tab + 1, client.model.version().active_tab);
@@ -271,7 +271,7 @@ test "workspace handoff capacity failure preserves the source model" {
 
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqualDeep(focus_before, client.model.reportedPaneFocus());
     try std.testing.expect(client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null);
     try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
@@ -298,7 +298,7 @@ test "workspace handoff request exhaustion preserves the source model" {
 
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqualDeep(focus_before, client.model.reportedPaneFocus());
     try std.testing.expectEqual(std.math.maxInt(u64) - 1, client.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
@@ -312,7 +312,7 @@ test "workspace handoff reserves its focus-out message" {
     try harness.bootstrap();
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     try client.synchronizeActivePane();
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -332,7 +332,7 @@ test "workspace handoff reserves its focus-out message" {
 
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqualDeep(reported, client.model.reportedPaneFocus());
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
 }
 
@@ -343,7 +343,7 @@ test "workspace handoff reserves its captured paste closing marker" {
     try harness.bootstrap();
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
     _ = try client_module.operations.paste_routing.start(client);
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -363,7 +363,7 @@ test "workspace handoff reserves its captured paste closing marker" {
     try std.testing.expect(client.model.panePasteActive());
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
 }
 
 test "clicking a sidebar agent hands off directly to its pane" {
@@ -401,10 +401,10 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .revision = 1,
         .agents = &.{agent},
     });
-    const model = &client.model.workspace.active().?.model;
+    const model = client.model.tabs.active;
     _ = try TerminalClient.of(client).view.render(&TerminalClient.of(client).presenter.screen, .{
-        .tabs = &client.model.workspace,
-        .model = model,
+        .model = &client.model,
+        .tab = model,
         .agents = client.model.agentSnapshot(),
         .force = true,
     });
@@ -449,10 +449,10 @@ test "clicking a sidebar agent hands off directly to its pane" {
     try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
     try std.testing.expectEqualDeep(
         @as(?core.WorkspaceLocation, agent.location.workspace),
-        client.model.workspace.workspace,
+        client.model.workspace,
     );
-    try std.testing.expectEqual(agent.location.tab_id, client.model.workspace.activeConst().?.location.tab_id);
-    try std.testing.expectEqual(agent_pane, client.model.workspace.activeConst().?.model.layout.focused().?);
+    try std.testing.expectEqual(agent.location.tab_id, client.model.tabs.location[client.model.tabs.active].tab_id);
+    try std.testing.expectEqual(agent_pane, client.model.tabs.layout[client.model.tabs.active].focused().?);
 
     var tab_snapshot_request: core.RequestId = .none;
     while (tab_snapshot_request == .none) switch (try harness.nextClientMessage(&buffer)) {
@@ -475,13 +475,13 @@ test "clicking a sidebar agent hands off directly to its pane" {
     });
     _ = try client.handleServerMessage(try core.decodeServer(snapshot));
 
-    const restored = &client.model.workspace.activeConst().?.model;
-    try std.testing.expectEqual(agent_pane, restored.layout.focused().?);
-    try std.testing.expect(restored.layout.isFullscreen());
-    try std.testing.expectEqual(@as(u16, 2), restored.displayIndex(agent_pane).?);
+    const restored = client.model.tabs.active;
+    try std.testing.expectEqual(agent_pane, client.model.tabs.layout[restored].focused().?);
+    try std.testing.expect(client.model.tabs.layout[restored].isFullscreen());
+    try std.testing.expectEqual(@as(u16, 2), client.model.tabs.layout[restored].displayIndex(agent_pane).?);
     var expected_geometry: data.LayoutSnapshot = .{};
     var actual_geometry: data.LayoutSnapshot = .{};
-    var actual_tiled = restored.layout;
+    var actual_tiled = client.model.tabs.layout[restored];
     try std.testing.expect(saved_layout.toggleFullscreen());
     try std.testing.expect(actual_tiled.toggleFullscreen());
     saved_layout.snapshot(TerminalClient.of(client).view.workbench(), &expected_geometry);
@@ -504,13 +504,13 @@ test "sidebar workspace round trip restores fullscreen in a previously inactive 
     const clicked: core.PaneId = @enumFromInt(21);
     const area = TerminalClient.of(client).view.workbench();
     _ = try client.model.reconcileTab(.{ .location = TestHarness.bootstrap_location, .panes = &.{first} }, area);
-    const fullscreen_tab = &client.model.workspace.active().?.model;
-    try fullscreen_tab.split(.{ .existing_pane = first, .new_pane = clicked, .location = TestHarness.bootstrap_location, .axis = .vertical, .area = area });
-    try std.testing.expect(fullscreen_tab.focusPane(first));
-    try std.testing.expect(fullscreen_tab.resizeFocused(.down, area));
-    try std.testing.expect(fullscreen_tab.toggleFullscreen());
+    const fullscreen_tab = client.model.tabs.active;
+    try data.pane_split.split(&client.model, fullscreen_tab, .{ .existing_pane = first, .new_pane = clicked, .location = TestHarness.bootstrap_location, .axis = .vertical, .area = area });
+    try std.testing.expect(client.model.tabs.layout[fullscreen_tab].focusPane(first));
+    try std.testing.expect(client.model.tabs.layout[fullscreen_tab].resizeFocused(.down, area));
+    try std.testing.expect(client.model.tabs.layout[fullscreen_tab].toggleFullscreen());
     var original_nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
-    const expected = fullscreen_tab.layout.clientLayoutNodes(&original_nodes);
+    const expected = client.model.tabs.layout[fullscreen_tab].clientLayoutNodes(&original_nodes);
     const other_location = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
     try std.testing.expectEqual(other_location, client.model.activeTabLocation().?);
     const destinations = [_]data.AgentInput{
@@ -588,13 +588,13 @@ test "sidebar workspace round trip restores fullscreen in a previously inactive 
         _ = try client.handleServerMessage(try core.decodeServer(tab_snapshot));
     }
 
-    const restored = &client.model.workspace.active().?.model;
-    try std.testing.expect(restored.layout.isFullscreen());
-    try std.testing.expectEqual(clicked, restored.layout.focused().?);
+    const restored = client.model.tabs.active;
+    try std.testing.expect(client.model.tabs.layout[restored].isFullscreen());
+    try std.testing.expectEqual(clicked, client.model.tabs.layout[restored].focused().?);
     var actual_nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
-    try std.testing.expectEqualDeep(expected, restored.layout.clientLayoutNodes(&actual_nodes));
-    try std.testing.expectEqual(core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, restored.contentSize(clicked, area).?);
-    try std.testing.expect(restored.contentSize(first, area) == null);
+    try std.testing.expectEqualDeep(expected, client.model.tabs.layout[restored].clientLayoutNodes(&actual_nodes));
+    try std.testing.expectEqual(core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, data.tab_layout.contentSize(&client.model, restored, clicked, area).?);
+    try std.testing.expect(data.tab_layout.contentSize(&client.model, restored, first, area) == null);
     try std.testing.expect(client.model.saved_layouts.find(other_location) != null);
 }
 
@@ -630,7 +630,7 @@ test "local agent navigation selects its tab before focusing its pane" {
     );
 
     try std.testing.expectEqualDeep(location, client.model.activeTabLocation().?);
-    try std.testing.expectEqual(agent_pane, client.model.workspace.activeConst().?.model.layout.focused().?);
+    try std.testing.expectEqual(agent_pane, client.model.tabs.layout[client.model.tabs.active].focused().?);
     try std.testing.expectEqual(version.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version.panes, client.model.version().panes);
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
@@ -655,11 +655,11 @@ test "local sidebar agent navigation keeps fullscreen when targeting a different
     const first: core.PaneId = @enumFromInt(20);
     const clicked: core.PaneId = @enumFromInt(21);
     const location = try harness.addInactiveTab(@enumFromInt(2), first);
-    const tab = client.model.workspace.find(location.tab_id).?;
+    const tab = client.model.tabs.find(location.tab_id).?;
     const area = TerminalClient.of(client).view.workbench();
-    try tab.model.split(.{ .existing_pane = first, .new_pane = clicked, .location = location, .axis = .vertical, .area = area });
-    try std.testing.expect(tab.model.focusPane(first));
-    try std.testing.expect(tab.model.toggleFullscreen());
+    try data.pane_split.split(&client.model, tab, .{ .existing_pane = first, .new_pane = clicked, .location = location, .axis = .vertical, .area = area });
+    try std.testing.expect(client.model.tabs.layout[tab].focusPane(first));
+    try std.testing.expect(client.model.tabs.layout[tab].toggleFullscreen());
     const key: data.AgentKey = .{ .pane_id = clicked, .pane_generation = 1 };
     _ = try client.model.reconcileAgentSnapshot(.{
         .revision = 1,
@@ -667,8 +667,8 @@ test "local sidebar agent navigation keeps fullscreen when targeting a different
     });
 
     try std.testing.expectEqual(.focused, try client.navigateAgent(key));
-    try std.testing.expect(tab.model.layout.isFullscreen());
-    try std.testing.expectEqual(clicked, tab.model.layout.focused().?);
+    try std.testing.expect(client.model.tabs.layout[tab].isFullscreen());
+    try std.testing.expectEqual(clicked, client.model.tabs.layout[tab].focused().?);
     try harness.settle();
     var buffer: [256]u8 = undefined;
     var snapshot_request: core.RequestId = .none;
@@ -686,10 +686,10 @@ test "local sidebar agent navigation keeps fullscreen when targeting a different
         .panes = &.{ .{ .pane_id = first, .lifecycle = .running }, .{ .pane_id = clicked, .lifecycle = .running } },
     });
     _ = try client.handleServerMessage(try core.decodeServer(payload));
-    try std.testing.expect(tab.model.layout.isFullscreen());
-    try std.testing.expectEqual(clicked, tab.model.layout.focused().?);
-    try std.testing.expect(tab.model.contentSize(first, area) == null);
-    try std.testing.expectEqual(core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, tab.model.contentSize(clicked, area).?);
+    try std.testing.expect(client.model.tabs.layout[tab].isFullscreen());
+    try std.testing.expectEqual(clicked, client.model.tabs.layout[tab].focused().?);
+    try std.testing.expect(data.tab_layout.contentSize(&client.model, tab, first, area) == null);
+    try std.testing.expectEqual(core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, data.tab_layout.contentSize(&client.model, tab, clicked, area).?);
 }
 
 test "tab snapshots commit pane revisions before attaching and presenting" {
@@ -746,7 +746,7 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
     try std.testing.expectEqual(pending_updates_before + 1, TerminalClient.of(client).presenter.pending_updates);
     try harness.settle();
 
-    const pane = client.model.workspace.findPane(discovered).?;
+    const pane = client.model.panes.find(discovered).?;
     try std.testing.expect(!pane.attached);
     var buffer: [256]u8 = undefined;
     var attach_requested = false;
@@ -817,8 +817,8 @@ test "tab reconciliation retires removed pane resources and continuations" {
     try harness.settle();
 
     const retired: core.PaneId = @enumFromInt(11);
-    const model = &client.model.workspace.active().?.model;
-    try model.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = retired, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    const model = client.model.tabs.active;
+    try data.pane_split.split(&client.model, model, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = retired, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
     try client.synchronizeActivePane();
     try std.testing.expect(client.model.enterCopyMode());
     try TerminalClient.of(client).graphics_store.applyImage(.{
@@ -847,7 +847,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
 
     _ = try client.handleServerMessage(try core.decodeServer(reconciled));
 
-    try std.testing.expect(client.model.workspace.findPane(retired) == null);
+    try std.testing.expect(client.model.panes.find(retired) == null);
     try std.testing.expect(!TerminalClient.of(client).graphics_store.hasPaneGraphics(retired));
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expectEqual(@as(?core.PaneId, TestHarness.bootstrap_pane), support.reportedPaneId(client));
@@ -1142,8 +1142,8 @@ test "workspace snapshots commit semantic revisions before presentation" {
         },
     );
 
-    try std.testing.expectEqual(@as(usize, 2), client.model.workspace.count);
-    try std.testing.expect(client.model.workspace.find(@enumFromInt(2)) != null);
+    try std.testing.expectEqual(@as(usize, 2), client.model.tabs.count);
+    try std.testing.expect(client.model.tabs.find(@enumFromInt(2)) != null);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqual(version_before.workspace + 1, client.model.version().workspace);
     try std.testing.expectEqual(version_before.tabs + 1, client.model.version().tabs);
@@ -1251,7 +1251,7 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    client.model.workspace.workspace = TestHarness.bootstrap_location.workspace;
+    client.model.workspace = TestHarness.bootstrap_location.workspace;
     const version_before = client.model.version();
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
     const required: core.ResyncRequired = .{
@@ -1291,7 +1291,7 @@ test "resync rejects a workspace other than the current projection" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    client.model.workspace.workspace = TestHarness.bootstrap_location.workspace;
+    client.model.workspace = TestHarness.bootstrap_location.workspace;
     const next_request_id = client.request_lifecycle.next_request_id;
 
     try std.testing.expectError(

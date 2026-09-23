@@ -376,8 +376,8 @@ fn runClientUi(context: *ClientUiContext, iterations: usize) !u64 {
         context.view.hovered = if (iteration & 1 == 0) .active_workspace else .toggle_workspace_list;
         context.view.invalidate();
         const stats = try context.view.render(&context.screen, .{
-            .tabs = &context.tabs,
-            .model = &context.tabs.active().?.model,
+            .model = &context.model,
+            .tab = context.model.tabs.active,
         });
         checksum +%= stats.scanned + stats.damaged;
     }
@@ -422,9 +422,10 @@ fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
 
 /// Composes one model over the whole host screen with the default palette,
 /// the way the presenter does for a client without chrome.
-pub fn composeFullScreen(compositor: *frontend.Compositor, model: *const data.MultiplexerModel, screen: *frontend.Screen) !frontend.CompositionResult {
+pub fn composeFullScreen(compositor: *frontend.Compositor, model: *const data.Model, tab: usize, screen: *frontend.Screen) !frontend.CompositionResult {
     return compositor.render(.{
         .model = model,
+        .tab = tab,
         .screen = screen,
         .input = .{ .area = screen.back.area(), .palette = &data.theme_support.default_theme.palette },
     });
@@ -433,8 +434,8 @@ pub fn composeFullScreen(compositor: *frontend.Compositor, model: *const data.Mu
 fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
-        _ = context.model.focusPane(@enumFromInt(iteration % 4 + 1));
-        const composed = try composeFullScreen(&context.compositor, &context.model, &context.screen);
+        _ = context.model.tabs.layout[0].focusPane(@enumFromInt(iteration % 4 + 1));
+        const composed = try composeFullScreen(&context.compositor, &context.model, 0, &context.screen);
         checksum +%= composed.stats.cells + composed.stats.panes;
     }
     return checksum;
@@ -443,12 +444,12 @@ fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
 fn runIncrementalCompose(context: *IncrementalComposeContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
-        context.model.find(@enumFromInt(1)).?.applied_frame_id = 1;
+        context.model.panes.find(@enumFromInt(1)).?.applied_frame_id = 1;
         const frame_view = (try core.decodeServer(
             context.payloads[iteration & 1],
         )).pane_frame;
-        _ = try context.model.applyFrame(frame_view);
-        const composed = try composeFullScreen(&context.compositor, &context.model, &context.screen);
+        _ = try context.model.panes.find(frame_view.pane_id).?.applyFrame(frame_view);
+        const composed = try composeFullScreen(&context.compositor, &context.model, 0, &context.screen);
         checksum +%= composed.stats.cells + composed.stats.damaged_cells;
     }
     return checksum;

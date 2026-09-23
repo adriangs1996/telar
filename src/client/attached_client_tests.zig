@@ -20,7 +20,7 @@ pub fn layoutRoundTrip(comptime write_layout: fn (*const AttachedClient, *core.C
         .tab_id = @enumFromInt(2),
     };
 
-    try app.model.workspace.bootstrap(
+    try data.workspace_handoff.bootstrap(&app.model, 
         .{
             .pane_id = @enumFromInt(3),
             .location = location,
@@ -335,7 +335,7 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient
         .tab_id = @enumFromInt(1),
     };
 
-    try model.workspace.bootstrap(
+    try data.workspace_handoff.bootstrap(model, 
         .{
             .pane_id = pane_id,
             .location = location,
@@ -345,7 +345,7 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient
             },
         },
     );
-    const pane = model.workspace.findPane(pane_id).?;
+    const pane = model.panes.find(pane_id).?;
     _ = pane.identify(.terminal, 3);
     try open_session(app, pane_id);
     try std.testing.expect(app.isChangeReviewAttached());
@@ -389,7 +389,7 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
         .tab_id = @enumFromInt(1),
     };
 
-    try model.workspace.bootstrap(
+    try data.workspace_handoff.bootstrap(model, 
         .{
             .pane_id = pane_id,
             .location = location,
@@ -399,7 +399,7 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
             },
         },
     );
-    const pane = model.workspace.findPane(pane_id).?;
+    const pane = model.panes.find(pane_id).?;
     _ = pane.identify(.terminal, 3);
     var notification: core.ChangeReviewChanged = .{
         .pane_id = pane_id,

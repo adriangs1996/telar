@@ -106,15 +106,15 @@ fn populateMultiplexer(fixture: *Fixture) !void {
         .{ .workspace = @enumFromInt(3), .name = "web", .path = "/web", .tab_count = 1 },
     } });
     for (2..5) |id| {
-        _ = try model.workspace.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "terminal", .root_pane_id = @enumFromInt(id + 200) }, model.hostSize());
+        _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "terminal", .root_pane_id = @enumFromInt(id + 200) }, model.hostSize());
     }
 
-    _ = model.workspace.select(Session.location.tab_id);
-    const panes = model.activeTabModel().?;
+    _ = data.tab_selection.select(model, Session.location.tab_id);
+    const tab = model.tabs.active;
     const area = Regions.calculate(160, 60).workbench;
     for (1..8) |index| {
         var layout: data.LayoutSnapshot = .{};
-        panes.layout.snapshot(area, &layout);
+        model.tabs.layout[tab].snapshot(area, &layout);
         var largest = layout.views()[0];
         for (layout.views()[1..]) |view| {
             if (@as(u32, view.content.w) * view.content.h > @as(u32, largest.content.w) * largest.content.h) {
@@ -122,15 +122,15 @@ fn populateMultiplexer(fixture: *Fixture) !void {
             }
         }
 
-        try panes.split(.{ .existing_pane = largest.pane_id, .new_pane = @enumFromInt(100 + index), .location = Session.location, .axis = if (largest.content.w > largest.content.h * 2) .horizontal else .vertical, .area = area });
+        try data.pane_split.split(model, tab, .{ .existing_pane = largest.pane_id, .new_pane = @enumFromInt(100 + index), .location = Session.location, .axis = if (largest.content.w > largest.content.h * 2) .horizontal else .vertical, .area = area });
     }
 
     var identities: [core.max_panes_per_tab]core.PaneId = undefined;
-    const visible = panes.layout.orderedPanes(&identities);
+    const visible = model.tabs.layout[tab].orderedPanes(&identities);
     var agents: [8]data.AgentInput = undefined;
     for (&agents, visible, 0..) |*agent, id, index| {
         agent.* = .{ .key = .{ .pane_id = id, .pane_generation = 1 }, .location = Session.location, .pane_index = @intCast(index + 1), .provider = .codex, .status = .working, .display_name = "Codex", .session_title = "Implement native GUI", .workspace_label = "telar", .cwd_label = "/telar" };
-        const pane = panes.find(id).?;
+        const pane = model.panes.find(id).?;
         for (pane.buffer.cells, 0..) |*cell, cell_index| {
             cell.bytes[0] = 'a' + @as(u8, @intCast(cell_index % 26));
             cell.style.flags.bold = index % 2 == 0;

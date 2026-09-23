@@ -8,8 +8,9 @@ const MetricsType = @import("Metrics.zig");
 const Input = @This();
 
 regions: LayoutRegions,
-tabs: ?*const data.TabsModel,
-model: *const data.MultiplexerModel,
+model: *const data.Model,
+/// The active tab's slot in `model.tabs`.
+tab: usize,
 layout: *const data.LayoutSnapshot,
 rename_field: ?*tab_rename.Field,
 rename_kind: tab_rename.Kind,

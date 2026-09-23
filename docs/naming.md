@@ -43,7 +43,7 @@ how much they already know.
 
 ## 3. Tables, columns and identities
 
-- A table is a plural domain noun: `tabs`, `panes`, `agents`, `layouts`. Its
+- A table is a plural domain noun: `tabs`, `panes`, `agents`. Its
   type has the same name in PascalCase: `Panes`.
 - A column is the plain field name: `model.panes.cursor[slot]`, not
   `pane_cursor` or `getCursor()`.

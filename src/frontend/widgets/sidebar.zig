@@ -253,13 +253,13 @@ fn drawAgentLocation(context: *ContextType, input: AgentLocationInput) void {
 }
 
 fn projectedPaneIndex(input: SidebarInput, agent: *const data.Agent) u16 {
-    const active = input.active_model orelse return agent.pane_index;
-    const location = active.location orelse return agent.pane_index;
-    if (!std.meta.eql(location, agent.location)) {
+    const model = input.model orelse return agent.pane_index;
+    const location = model.tabs.location[input.tab];
+    if (model.panes.countIn(location.tab_id) == 0 or !std.meta.eql(location, agent.location)) {
         return agent.pane_index;
     }
 
-    return active.displayIndex(agent.key.pane_id) orelse agent.pane_index;
+    return model.tabs.layout[input.tab].displayIndex(agent.key.pane_id) orelse agent.pane_index;
 }
 
 fn drawAgentMeta(context: *ContextType, input: AgentMetaInput) void {
@@ -508,10 +508,10 @@ test "active layout projects pane indices without mutating runtime agent state" 
     };
     const first: core.PaneId = @enumFromInt(41);
     const second: core.PaneId = @enumFromInt(42);
-    var active = data.MultiplexerModel.init(std.testing.allocator);
-    defer active.deinit();
-    try active.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
-    try active.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 80, .h = 24 } });
+    var model = data.Model.init(std.testing.allocator, true);
+    defer model.deinit();
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 80, .h = 24 } });
     var snapshot: data.AgentSnapshot = .{};
     const agent: data.AgentInput = .{
         .key = .{ .pane_id = second, .pane_generation = 1 },
@@ -527,7 +527,7 @@ test "active layout projects pane indices without mutating runtime agent state" 
         .area = .{},
         .snapshot = &snapshot,
         .state = &state,
-        .active_model = &active,
+        .model = &model,
         .transparent = false,
     };
 

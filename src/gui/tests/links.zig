@@ -59,7 +59,7 @@ test "native link drags changed targets pointer leave and focus loss cancel open
 test "native links require Shift to override child reporting and never leak a captured gesture" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
-    const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .tracking = .button, .sgr = true };
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(2));
@@ -83,7 +83,7 @@ test "native pane pointer shapes refresh under a stationary pointer and modal bl
     move.mods = 0;
     try fixture.send(move);
     fixture.text("plain text");
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     inline for (@typeInfo(core.PointerShape).@"enum".fields) |field| {
         const shape: core.PointerShape = @enumFromInt(field.value);
         pane.pointer_shape = shape;

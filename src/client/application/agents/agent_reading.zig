@@ -215,9 +215,9 @@ pub fn failed(model: *data.Model, operation: data.AgentHistoryOperation, message
 /// Retiring a stale response wakes only visible navigation waiting for its slot.
 /// Example: `retired(model);`
 pub fn retired(model: *data.Model) void {
-    const tab = model.activeTabModelConst() orelse return;
-    for (tab.panes) |entry| {
-        const value = entry orelse continue;
+    const tab = model.tabs.activeSlot() orelse return;
+    var panes = model.panes.iterateConst(model.tabs.location[tab].tab_id);
+    while (panes.next()) |value| {
         if (value.history_intent != null) {
             model.panes_revision +%= 1;
             return;
@@ -262,8 +262,8 @@ pub fn reverse(model: *data.Model, id: core.PaneId, direction: core.agent_histor
 }
 
 fn invalidate(model: *data.Model, id: core.PaneId) void {
-    const tab = model.activeTabModelConst() orelse return;
-    if (tab.findConst(id) != null) {
+    const tab = model.tabs.activeSlot() orelse return;
+    if (model.panes.findInConst(model.tabs.location[tab].tab_id, id) != null) {
         model.panes_revision +%= 1;
     }
 }
@@ -278,7 +278,7 @@ fn resolve(model: *data.Model, operation: data.AgentHistoryOperation) ?*data.Pan
 }
 
 fn findPane(model: *data.Model, id: core.PaneId) ?*data.Pane {
-    const value = model.workspace.findPane(id) orelse return null;
+    const value = model.panes.find(id) orelse return null;
     return if (value.attached and value.kind == .agent) value else null;
 }
 
@@ -298,15 +298,14 @@ fn ensureWindow(model: *data.Model, pane: *data.Pane) !?*data.AgentHistoryWindow
 fn reserveWindow(model: *data.Model) !void {
     var count: usize = 0;
     var inactive: ?*data.Pane = null;
-    for (&model.workspace.items, 0..) |*slot, index| {
-        const tab = if (slot.*) |*value| value else continue;
-        var panes = tab.model.paneIterator();
-        while (panes.next()) |value| {
-            if (value.agent_history != null) {
-                count += 1;
-                if (index != model.workspace.active_index and !value.agent_history.?.retained) {
-                    inactive = value;
-                }
+    const active = model.activeTabLocation();
+    var panes = model.panes.iterate(null);
+    while (panes.next()) |value| {
+        if (value.agent_history != null) {
+            count += 1;
+            const visible = if (active) |location| value.location.tab_id == location.tab_id else false;
+            if (!visible and !value.agent_history.?.retained) {
+                inactive = value;
             }
         }
     }

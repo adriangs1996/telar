@@ -21,16 +21,18 @@ commit: data.PresentationCommit = .{},
 pub fn render(composition: *Composition, projection: *const client.Projection) !frame_widget.List {
     var widgets: frame_widget.List = .{};
     composition.commit = .{};
-    if (projection.model) |model| {
-        composition.commit.location = model.location;
+    if (projection.tab) |tab| {
+        const model = projection.model;
+        const tab_id = model.tabs.location[tab].tab_id;
+        composition.commit.location = if (model.panes.countIn(tab_id) == 0) null else model.tabs.location[tab];
         var layout: data.LayoutSnapshot = .{};
-        model.layout.snapshot(projection.geometry.area, &layout);
+        model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
         for (layout.views()) |view| {
             if (view.surface != .terminal) {
                 continue;
             }
 
-            const pane = model.findConst(view.pane_id) orelse continue;
+            const pane = model.panes.findInConst(tab_id, view.pane_id) orelse continue;
             try widgets.append(.{ .terminal_pane = .{ .paint = .{ .pane = pane, .view = view, .copy = copy_selection.forPane(projection.copy, pane.id), .hide_cursor = projection.prompt != null } } });
             composition.commit.append(pane);
         }
@@ -42,14 +44,14 @@ pub fn render(composition: *Composition, projection: *const client.Projection) !
 
             if (projection.threadView(view.pane_id)) |thread| {
                 try widgets.append(.{ .thread = .{ .area = view.content, .thread = thread } });
-                if (model.findConst(view.pane_id)) |pane| {
+                if (model.panes.findInConst(tab_id, view.pane_id)) |pane| {
                     composition.commit.append(pane);
                 }
             }
         }
 
         if (composition.link) |hit| {
-            if (model.findConst(hit.pane_id)) |pane| {
+            if (model.panes.findInConst(tab_id, hit.pane_id)) |pane| {
                 if (pane.attachment_generation == hit.generation) {
                     try widgets.append(.{ .link = .{ .hit = hit, .pane = pane } });
                 }

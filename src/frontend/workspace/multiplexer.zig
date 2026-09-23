@@ -222,11 +222,11 @@ fn drawFullscreenTabs(buffer: *core.Buffer, input: BorderInput) ResultType {
     }
 
     var storage: [core.max_panes_per_tab]core.PaneId = undefined;
-    const panes = model.layout.orderedPanes(&storage);
+    const panes = model.tabs.layout[input.tab].orderedPanes(&storage);
     var names: [core.max_panes_per_tab][]const u8 = undefined;
 
     for (panes, 0..) |pane_id, index| {
-        names[index] = if (model.findConst(pane_id)) |pane| pane.foregroundName() else "";
+        names[index] = if (model.panes.findConst(pane_id)) |pane| pane.foregroundName() else "";
     }
 
     const available = outer.w - 4;
@@ -351,6 +351,7 @@ test "progress thread weaves determinate state and moves indeterminate shuttle" 
 fn testingRender(compositor: *Compositor, composition: TestingComposition) !RenderStats {
     const rendered = try compositor.render(.{
         .model = composition.model,
+        .tab = composition.tab,
         .screen = composition.screen,
         .input = .{
             .area = composition.area,
@@ -364,7 +365,7 @@ fn testingRender(compositor: *Compositor, composition: TestingComposition) !Rend
     return rendered.stats;
 }
 
-fn testingRenderDefault(compositor: *Compositor, model: *data.MultiplexerModel, screen: *ScreenType) !RenderStats {
+fn testingRenderDefault(compositor: *Compositor, model: *data.Model, screen: *ScreenType) !RenderStats {
     return testingRender(compositor, .{
         .model = model,
         .screen = screen,
@@ -374,16 +375,16 @@ fn testingRenderDefault(compositor: *Compositor, model: *data.MultiplexerModel, 
 
 test "two pane buffers compose into their layout rectangles" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 7 } });
-    model.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "a", .width = 1, .style = .{} });
-    model.find(@enumFromInt(2)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "b", .width = 1, .style = .{} });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 7 } });
+    model.panes.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "a", .width = 1, .style = .{} });
+    model.panes.find(@enumFromInt(2)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "b", .width = 1, .style = .{} });
 
     var screen = try ScreenType.init(gpa, 40, 7);
     defer screen.deinit();
@@ -409,14 +410,14 @@ test "compositor places a bottom reservation below only its target pane" {
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
     const area: core.Rect = .{ .w = 40, .h = 12 };
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 40, .rows = 12 } });
-    try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 40, .rows = 12 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
 
     var screen = try ScreenType.init(gpa, area.w, area.h);
     defer screen.deinit();
@@ -424,6 +425,7 @@ test "compositor places a bottom reservation below only its target pane" {
     defer compositor.deinit();
     _ = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = area,
         .bottom_reservation = .{
@@ -446,6 +448,7 @@ test "compositor places a bottom reservation below only its target pane" {
 
     const restored = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = area,
     });
@@ -456,14 +459,14 @@ test "compositor places a bottom reservation below only its target pane" {
 
 test "copy mode highlights an absolute scrollback selection" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 4, .rows = 2 } });
-    const pane = model.find(@enumFromInt(1)).?;
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 4, .rows = 2 } });
+    const pane = model.panes.find(@enumFromInt(1)).?;
     pane.scroll = .{ .total_rows = 12, .offset = 10 };
     const copy: client.CopyProjection = .{ .pane_id = pane.id, .view = .{
         .anchor = .{ .x = 1, .y = 10 },
@@ -477,6 +480,7 @@ test "copy mode highlights an absolute scrollback selection" {
     defer compositor.deinit();
     _ = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = screen.back.area(),
         .copy = copy,
@@ -491,14 +495,14 @@ test "copy mode highlights an absolute scrollback selection" {
 
 test "copy mode projection stays outside the multiplexer model" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 4, .rows = 2 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 4, .rows = 2 } });
     var screen = try ScreenType.init(gpa, 4, 2);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
@@ -512,6 +516,7 @@ test "copy mode projection stays outside the multiplexer model" {
     } };
     const cursor_only = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = screen.back.area(),
         .copy = cursor,
@@ -527,6 +532,7 @@ test "copy mode projection stays outside the multiplexer model" {
     } };
     const selected = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = screen.back.area(),
         .copy = selection,
@@ -537,11 +543,12 @@ test "copy mode projection stays outside the multiplexer model" {
     try std.testing.expect(screen.back.cells[1].style.flags.inverse);
     try std.testing.expect(screen.back.cells[2].style.flags.inverse);
 
-    const pane = model.find(pane_id).?;
+    const pane = model.panes.find(pane_id).?;
     pane.buffer.setCell(.{ .x = 1, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
     pane.markSpan(1, 1);
     const patched = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = screen.back.area(),
         .copy = selection,
@@ -553,6 +560,7 @@ test "copy mode projection stays outside the multiplexer model" {
 
     const idle = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = screen.back.area(),
         .copy = selection,
@@ -563,31 +571,32 @@ test "copy mode projection stays outside the multiplexer model" {
 
 test "fullscreen composes only the focused pane across the whole tab" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     const area: core.Rect = .{ .w = 40, .h = 7 };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
-    try std.testing.expect(model.focusPane(@enumFromInt(1)));
-    model.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
-    model.find(@enumFromInt(2)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "y", .width = 1, .style = .{} });
-    try std.testing.expect(model.toggleFullscreen());
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
+    try std.testing.expect(model.tabs.layout[0].focusPane(@enumFromInt(1)));
+    model.panes.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
+    model.panes.find(@enumFromInt(2)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "y", .width = 1, .style = .{} });
+    try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
 
     try std.testing.expectEqual(
         core.TerminalSize{ .cols = 38, .rows = 5 },
-        model.contentSize(@enumFromInt(1), area).?,
+        data.tab_layout.contentSize(&model, 0, @enumFromInt(1), area).?,
     );
-    try std.testing.expectEqual(@as(?core.TerminalSize, null), model.contentSize(@enumFromInt(2), area));
+    try std.testing.expectEqual(@as(?core.TerminalSize, null), data.tab_layout.contentSize(&model, 0, @enumFromInt(2), area));
     var screen = try ScreenType.init(gpa, area.w, area.h);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     const stats = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = area,
     });
@@ -595,13 +604,13 @@ test "fullscreen composes only the focused pane across the whole tab" {
     try std.testing.expectEqualStrings("╭", screen.back.cells[0].text());
     try std.testing.expectEqualStrings("x", screen.back.cells[area.w + 1].text());
 
-    try std.testing.expect(model.toggleFullscreen());
-    try std.testing.expect(model.contentSize(@enumFromInt(2), area) != null);
+    try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
+    try std.testing.expect(data.tab_layout.contentSize(&model, 0, @enumFromInt(2), area) != null);
 }
 
 test "single-pane fullscreen draws labels and progress and restores borderless content" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -609,27 +618,28 @@ test "single-pane fullscreen draws labels and progress and restores borderless c
     };
     const area: core.Rect = .{ .w = 40, .h = 7 };
     const pane_id: core.PaneId = @enumFromInt(1);
-    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
-    const pane = model.find(pane_id).?;
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = area.w, .rows = area.h } });
+    const pane = model.panes.find(pane_id).?;
     pane.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
-    try std.testing.expect(model.toggleFullscreen());
+    try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
     var screen = try ScreenType.init(gpa, area.w, area.h);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
-    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    _ = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     try std.testing.expectEqualStrings("╭", screen.back.at(0, 0).?.text());
     try std.testing.expectEqualStrings("1", screen.back.at(3, 0).?.text());
     try std.testing.expectEqualStrings("x", screen.back.at(1, 1).?.text());
     try std.testing.expectEqual(@as(u8, 1), compositor.fullscreenLabels().len);
-    const idle = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    const idle = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     try std.testing.expect(!idle.full);
     try std.testing.expectEqual(@as(usize, 0), idle.cells);
 
     pane.progress_state = .indeterminate;
-    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    _ = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     const animated = try compositor.render(.{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .input = .{ .area = area, .palette = &data.theme_support.default_theme.palette, .progress_animation_frame = 127 },
     });
@@ -637,32 +647,33 @@ test "single-pane fullscreen draws labels and progress and restores borderless c
     try std.testing.expectEqualStrings("◇", screen.back.at(38, 0).?.text());
     try std.testing.expectEqual(@as(u8, 1), compositor.fullscreenLabels().len);
 
-    try std.testing.expect(model.toggleFullscreen());
-    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
+    _ = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     try std.testing.expectEqualStrings("x", screen.back.at(0, 0).?.text());
     try std.testing.expectEqual(@as(u8, 0), compositor.fullscreenLabels().len);
-    try std.testing.expectEqual(core.TerminalSize{ .cols = area.w, .rows = area.h }, model.contentSize(pane_id, area).?);
+    try std.testing.expectEqual(core.TerminalSize{ .cols = area.w, .rows = area.h }, data.tab_layout.contentSize(&model, 0, pane_id, area).?);
 }
 
 test "fullscreen border keeps the pane's tiled display index" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     const area: core.Rect = .{ .w = 40, .h = 7 };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
-    try std.testing.expect(model.focusPane(@enumFromInt(2)));
-    try std.testing.expect(model.toggleFullscreen());
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 6 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
+    try std.testing.expect(model.tabs.layout[0].focusPane(@enumFromInt(2)));
+    try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
     var screen = try ScreenType.init(gpa, area.w, area.h);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     _ = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = area,
     });
@@ -679,7 +690,7 @@ test "fullscreen border keeps the pane's tiled display index" {
 
 test "fullscreen tabs follow focus and survive progress animation without idle redraws" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -689,37 +700,38 @@ test "fullscreen tabs follow focus and survive progress animation without idle r
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
     const third: core.PaneId = @enumFromInt(3);
-    try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 6 } });
-    try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
-    try model.split(.{ .existing_pane = first, .new_pane = third, .location = location, .axis = .vertical, .area = area });
-    _ = model.setPaneForeground(first, "nvim");
-    _ = model.setPaneForeground(third, "claude");
-    try std.testing.expect(model.toggleFullscreen());
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 20, .rows = 6 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = third, .location = location, .axis = .vertical, .area = area });
+    _ = model.panes.find(first).?.setForegroundName("nvim");
+    _ = model.panes.find(third).?.setForegroundName("claude");
+    try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
     var screen = try ScreenType.init(gpa, 64, 14);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
     const palette = &data.theme_support.default_theme.palette;
-    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    _ = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     try std.testing.expectEqualStrings("1", screen.back.at(5, 1).?.text());
     try std.testing.expectEqualStrings("2", screen.back.at(14, 1).?.text());
     try std.testing.expectEqualStrings("c", screen.back.at(16, 1).?.text());
     try std.testing.expectEqual(palette.accent, screen.back.at(14, 1).?.style.bg);
     try std.testing.expectEqualStrings("3", screen.back.at(25, 1).?.text());
 
-    try std.testing.expectEqual(second, model.focusDirection(.right, area).?);
-    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    try std.testing.expectEqual(second, model.tabs.layout[0].focusDirection(.right, area).?);
+    _ = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     try std.testing.expectEqual(core.Color.default, screen.back.at(14, 1).?.style.bg);
     try std.testing.expectEqual(palette.accent, screen.back.at(25, 1).?.style.bg);
-    const idle = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    const idle = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     try std.testing.expect(!idle.full);
     try std.testing.expectEqual(@as(usize, 0), idle.cells);
     try std.testing.expectEqual(@as(usize, 0), idle.damaged_cells);
 
-    model.find(second).?.progress_state = .indeterminate;
-    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    model.panes.find(second).?.progress_state = .indeterminate;
+    _ = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     const animated = try compositor.render(.{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .input = .{ .area = area, .palette = palette, .progress_animation_frame = 127 },
     });
@@ -732,32 +744,32 @@ test "fullscreen tabs follow focus and survive progress animation without idle r
 
     // Presenter invalidates composition when any pane's foreground changes,
     // including a hidden pane whose label is now part of the border.
-    _ = model.setPaneForeground(first, "zig");
+    _ = model.panes.find(first).?.setForegroundName("zig");
     compositor.invalidate();
-    _ = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area });
+    _ = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area });
     try std.testing.expectEqualStrings("z", screen.back.at(7, 1).?.text());
 
     var changed_palette = palette.*;
     changed_palette.surface_dim = .rgb(.{ 1, 2, 3 });
-    const restyled = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area, .palette = &changed_palette });
+    const restyled = try testingRender(&compositor, .{ .model = &model, .tab = 0, .screen = &screen, .area = area, .palette = &changed_palette });
     try std.testing.expect(restyled.full);
     try std.testing.expectEqual(changed_palette.surface_dim, screen.back.at(24, 1).?.style.fg);
 }
 
 test "pane borders use the selected theme without coloring pane contents" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(10), .location = location, .size = .{ .cols = 10, .rows = 3 } });
-    try model.split(.{ .existing_pane = @enumFromInt(10), .new_pane = @enumFromInt(41), .location = location, .axis = .horizontal, .area = .{ .w = 20, .h = 4 } });
-    const first = model.find(@enumFromInt(10)).?;
-    const second = model.find(@enumFromInt(41)).?;
-    try std.testing.expectEqual(data.multiplexer.MetadataChange.display_changed, model.setPaneForeground(first.id, "zsh"));
-    try std.testing.expectEqual(data.multiplexer.MetadataChange.display_changed, model.setPaneForeground(second.id, "Claude Code"));
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(10), .location = location, .size = .{ .cols = 10, .rows = 3 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(10), .new_pane = @enumFromInt(41), .location = location, .axis = .horizontal, .area = .{ .w = 20, .h = 4 } });
+    const first = model.panes.find(@enumFromInt(10)).?;
+    const second = model.panes.find(@enumFromInt(41)).?;
+    try std.testing.expect(first.setForegroundName("zsh"));
+    try std.testing.expect(second.setForegroundName("Claude Code"));
     first.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
     const selected = data.theme_support.builtin(.tokyo_night);
     var screen = try ScreenType.init(gpa, 20, 4);
@@ -766,6 +778,7 @@ test "pane borders use the selected theme without coloring pane contents" {
     defer compositor.deinit();
     _ = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = screen.back.area(),
         .palette = &selected.palette,
@@ -781,6 +794,7 @@ test "pane borders use the selected theme without coloring pane contents" {
     const replacement = data.theme_support.builtin(.catppuccin);
     const replaced = try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = screen.back.area(),
         .palette = &replacement.palette,
@@ -791,14 +805,14 @@ test "pane borders use the selected theme without coloring pane contents" {
 
 test "one pane has no telar border" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 12, .rows = 3 } });
-    model.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 12, .rows = 3 } });
+    model.panes.find(@enumFromInt(1)).?.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x", .width = 1, .style = .{} });
 
     var screen = try ScreenType.init(gpa, 12, 3);
     defer screen.deinit();
@@ -812,14 +826,14 @@ test "one pane has no telar border" {
 
 test "frame state and pending acknowledgements stay per pane" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 2, .rows = 1 } });
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 7, .h = 3 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 2, .rows = 1 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 7, .h = 3 } });
 
     const cells = [_]core.Cell{ .{}, .{} };
     const spans = [_]core.Span{.{ .start = 0, .cells = &cells }};
@@ -833,23 +847,24 @@ test "frame state and pending acknowledgements stay per pane" {
         .scroll = .{ .total_rows = 1, .offset = 0 },
         .spans = &spans,
     });
-    _ = try model.applyFrame((try core.decodeServer(payload)).pane_frame);
+    const frame = (try core.decodeServer(payload)).pane_frame;
+    _ = try model.panes.find(frame.pane_id).?.applyFrame(frame);
 
-    try std.testing.expectEqual(@as(u64, 0), model.find(@enumFromInt(1)).?.pending_frame_id);
-    try std.testing.expectEqual(@as(u64, 1), model.find(@enumFromInt(2)).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 0), model.panes.find(@enumFromInt(1)).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 1), model.panes.find(@enumFromInt(2)).?.pending_frame_id);
 }
 
 test "composition damage retires only after its presentation commits" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 1 } });
-    const pane = model.find(pane_id).?;
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 1 } });
+    const pane = model.panes.find(pane_id).?;
     pane.pending_frame_id = 7;
     pane.damage_rows[0].mark(0, 1);
 
@@ -859,6 +874,7 @@ test "composition damage retires only after its presentation commits" {
     defer compositor.deinit();
     const composed = try compositor.render(.{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .input = .{ .area = screen.back.area(), .palette = &data.theme_support.default_theme.palette },
     });
@@ -867,7 +883,7 @@ test "composition damage retires only after its presentation commits" {
     try std.testing.expect(pane.damage_rows[0].dirty());
     try std.testing.expectEqual(@as(u64, 7), composed.commit.slice()[0].frame_id);
 
-    _ = model.commitPresentation(composed.commit);
+    _ = data.presentation_delivery.retire(&model, composed.commit);
 
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try std.testing.expect(!pane.damage_rows[0].dirty());
@@ -875,15 +891,15 @@ test "composition damage retires only after its presentation commits" {
 
 test "stale presentation commits preserve newer pane work" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 1 } });
-    const pane = model.find(pane_id).?;
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 2, .rows = 1 } });
+    const pane = model.panes.find(pane_id).?;
     pane.pending_frame_id = 7;
     pane.damage_rows[0].mark(0, 1);
 
@@ -893,13 +909,14 @@ test "stale presentation commits preserve newer pane work" {
     defer compositor.deinit();
     const stale = try compositor.render(.{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .input = .{ .area = screen.back.area(), .palette = &data.theme_support.default_theme.palette },
     });
     pane.pending_frame_id = 8;
     pane.damage_rows[0].mark(1, 2);
 
-    _ = model.commitPresentation(stale.commit);
+    _ = data.presentation_delivery.retire(&model, stale.commit);
 
     try std.testing.expectEqual(@as(u64, 8), pane.pending_frame_id);
     try std.testing.expect(pane.damage_rows[0].dirty());
@@ -909,19 +926,19 @@ test "stale presentation commits preserve newer pane work" {
 
 test "fullscreen presentation commits include hidden panes" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     const area: core.Rect = .{ .w = 20, .h = 4 };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 9, .rows = 3 } });
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
-    try std.testing.expect(model.focusPane(@enumFromInt(1)));
-    try std.testing.expect(model.toggleFullscreen());
-    model.find(@enumFromInt(1)).?.pending_frame_id = 3;
-    model.find(@enumFromInt(2)).?.pending_frame_id = 4;
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 9, .rows = 3 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
+    try std.testing.expect(model.tabs.layout[0].focusPane(@enumFromInt(1)));
+    try std.testing.expect(model.tabs.layout[0].toggleFullscreen());
+    model.panes.find(@enumFromInt(1)).?.pending_frame_id = 3;
+    model.panes.find(@enumFromInt(2)).?.pending_frame_id = 4;
 
     var screen = try ScreenType.init(gpa, area.w, area.h);
     defer screen.deinit();
@@ -929,6 +946,7 @@ test "fullscreen presentation commits include hidden panes" {
     defer compositor.deinit();
     const composed = try compositor.render(.{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .input = .{ .area = area, .palette = &data.theme_support.default_theme.palette },
     });
@@ -940,49 +958,49 @@ test "fullscreen presentation commits include hidden panes" {
 
 test "snapshot discovery does not imply a runtime attachment" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 40, .rows = 8 } });
-    try model.addDiscovered(.{ .pane_id = @enumFromInt(2), .location = location, .area = .{ .w = 40, .h = 8 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 40, .rows = 8 } });
+    try data.tab_snapshot_reconciliation.addDiscovered(&model, 0, .{ .pane_id = @enumFromInt(2), .location = location, .area = .{ .w = 40, .h = 8 } });
 
-    try std.testing.expect(model.find(@enumFromInt(1)).?.attached);
-    try std.testing.expect(!model.find(@enumFromInt(2)).?.attached);
-    try model.markAttached(@enumFromInt(2), 1);
-    try std.testing.expect(model.find(@enumFromInt(2)).?.attached);
+    try std.testing.expect(model.panes.find(@enumFromInt(1)).?.attached);
+    try std.testing.expect(!model.panes.find(@enumFromInt(2)).?.attached);
+    model.panes.find(@enumFromInt(2)).?.attach(1);
+    try std.testing.expect(model.panes.find(@enumFromInt(2)).?.attached);
 }
 
 test "snapshot discovery keeps a pane the area cannot fit" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     const area: core.Rect = .{ .w = 4, .h = 3 };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 4, .rows = 3 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 4, .rows = 3 } });
 
-    try model.addDiscovered(.{ .pane_id = @enumFromInt(2), .location = location, .area = area });
+    try data.tab_snapshot_reconciliation.addDiscovered(&model, 0, .{ .pane_id = @enumFromInt(2), .location = location, .area = area });
 
-    try std.testing.expectEqual(@as(usize, 2), model.pane_count);
-    try std.testing.expect(model.layout.contains(@enumFromInt(2)));
-    try std.testing.expect(!model.find(@enumFromInt(2)).?.attached);
-    try std.testing.expectEqual(@as(?core.TerminalSize, null), model.contentSize(@enumFromInt(2), area));
+    try std.testing.expectEqual(@as(usize, 2), model.panes.count);
+    try std.testing.expect(model.tabs.layout[0].contains(@enumFromInt(2)));
+    try std.testing.expect(!model.panes.find(@enumFromInt(2)).?.attached);
+    try std.testing.expectEqual(@as(?core.TerminalSize, null), data.tab_layout.contentSize(&model, 0, @enumFromInt(2), area));
 }
 
 test "unchanged composition produces no terminal damage" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 8, .rows = 3 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 8, .rows = 3 } });
     var screen = try ScreenType.init(gpa, 8, 3);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
@@ -1008,7 +1026,8 @@ test "unchanged composition produces no terminal damage" {
         .scroll = .{ .total_rows = 3, .offset = 0 },
         .spans = &snapshot_spans,
     });
-    _ = try model.applyFrame((try core.decodeServer(snapshot_payload)).pane_frame);
+    const snapshot_frame = (try core.decodeServer(snapshot_payload)).pane_frame;
+    _ = try model.panes.find(snapshot_frame.pane_id).?.applyFrame(snapshot_frame);
     const snapshot = try testingRenderDefault(&compositor, &model, &screen);
     var snapshot_writer = std.Io.Writer.fixed(&output);
     _ = try screen.flush(&snapshot_writer);
@@ -1035,7 +1054,8 @@ test "unchanged composition produces no terminal damage" {
         .scroll = .{ .total_rows = 3, .offset = 0 },
         .spans = &patch_spans,
     });
-    _ = try model.applyFrame((try core.decodeServer(patch_payload)).pane_frame);
+    const patch_frame = (try core.decodeServer(patch_payload)).pane_frame;
+    _ = try model.panes.find(patch_frame.pane_id).?.applyFrame(patch_frame);
     const changed = try testingRenderDefault(&compositor, &model, &screen);
     var changed_writer = std.Io.Writer.fixed(&output);
     const changed_flush = try screen.flush(&changed_writer);
@@ -1046,23 +1066,23 @@ test "unchanged composition produces no terminal damage" {
 
 test "compositor detects focus changes while stable focus stays incremental" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 6 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 6 } });
     var screen = try ScreenType.init(gpa, 40, 6);
     defer screen.deinit();
     var compositor = Compositor.init(gpa);
     defer compositor.deinit();
 
     try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
-    try std.testing.expect(model.focusPane(@enumFromInt(1)));
+    try std.testing.expect(model.tabs.layout[0].focusPane(@enumFromInt(1)));
     try std.testing.expect((try testingRenderDefault(&compositor, &model, &screen)).full);
-    try std.testing.expect(model.focusPane(@enumFromInt(1)));
+    try std.testing.expect(model.tabs.layout[0].focusPane(@enumFromInt(1)));
     const stable = try testingRenderDefault(&compositor, &model, &screen);
     try std.testing.expect(!stable.full);
     try std.testing.expectEqual(@as(usize, 0), stable.cells);
@@ -1070,15 +1090,15 @@ test "compositor detects focus changes while stable focus stays incremental" {
 
 test "compositor detects pane projection changes without model cache flags" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 24, .rows = 3 } });
-    const pane = model.find(pane_id).?;
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 24, .rows = 3 } });
+    const pane = model.panes.find(pane_id).?;
 
     var screen = try ScreenType.init(gpa, 24, 3);
     defer screen.deinit();
@@ -1102,6 +1122,7 @@ test "compositor detects pane projection changes without model cache flags" {
     } };
     try std.testing.expect((try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = screen.back.area(),
         .copy = copy,
@@ -1109,6 +1130,7 @@ test "compositor detects pane projection changes without model cache flags" {
     pane.scroll = .{ .total_rows = 5, .offset = 2 };
     try std.testing.expect((try testingRender(&compositor, .{
         .model = &model,
+        .tab = 0,
         .screen = &screen,
         .area = screen.back.area(),
         .copy = copy,
@@ -1126,52 +1148,52 @@ test "compositor detects pane projection changes without model cache flags" {
 
 test "pane index survives collisions removal and slot reuse" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
     const area: core.Rect = .{ .w = 80, .h = 24 };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 80, .rows = 24 } });
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(129), .location = location, .axis = .horizontal, .area = area });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 80, .rows = 24 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(129), .location = location, .axis = .horizontal, .area = area });
 
-    try std.testing.expect(model.removePane(@enumFromInt(1)));
-    try std.testing.expect(model.find(@enumFromInt(1)) == null);
-    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(129)), model.find(@enumFromInt(129)).?.id);
+    try std.testing.expect(data.tab_layout.removePane(&model, @enumFromInt(1)));
+    try std.testing.expect(model.panes.find(@enumFromInt(1)) == null);
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(129)), model.panes.find(@enumFromInt(129)).?.id);
 
-    try model.addDiscovered(.{ .pane_id = @enumFromInt(257), .location = location, .area = area });
-    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(257)), model.find(@enumFromInt(257)).?.id);
-    try std.testing.expectEqual(@as(usize, 2), model.pane_count);
+    try data.tab_snapshot_reconciliation.addDiscovered(&model, 0, .{ .pane_id = @enumFromInt(257), .location = location, .area = area });
+    try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(257)), model.panes.find(@enumFromInt(257)).?.id);
+    try std.testing.expectEqual(@as(usize, 2), model.panes.count);
 }
 
 test "layout snapshot cache invalidates on geometry and revision" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 80, .rows = 24 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 80, .rows = 24 } });
 
-    const first = model.layoutSnapshot(.{ .w = 80, .h = 24 });
+    const first = data.tab_layout.snapshot(&model, 0, .{ .w = 80, .h = 24 });
     const first_revision = first.revision;
     try std.testing.expectEqual(@as(u16, 80), first.find(@enumFromInt(1)).?.content.w);
 
-    const resized = model.layoutSnapshot(.{ .w = 40, .h = 12 });
+    const resized = data.tab_layout.snapshot(&model, 0, .{ .w = 40, .h = 12 });
     try std.testing.expectEqual(first_revision, resized.revision);
     try std.testing.expectEqual(@as(u16, 40), resized.find(@enumFromInt(1)).?.content.w);
 
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 12 } });
-    const split = model.layoutSnapshot(.{ .w = 40, .h = 12 });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = .{ .w = 40, .h = 12 } });
+    const split = data.tab_layout.snapshot(&model, 0, .{ .w = 40, .h = 12 });
     try std.testing.expect(split.revision != first_revision);
     try std.testing.expectEqual(@as(usize, 2), split.views().len);
 }
 
 test "pane mouse planning keeps buttons focused and wheels pointer-local" {
     const gpa = std.testing.allocator;
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1180,25 +1202,25 @@ test "pane mouse planning keeps buttons focused and wheels pointer-local" {
     const area: core.Rect = .{ .w = 80, .h = 24 };
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
-    try model.addRoot(.{ .pane_id = first, .location = location, .size = .{ .cols = 39, .rows = 24 } });
-    try model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
-    try std.testing.expect(model.focusPane(first));
-    const second_pane = model.find(second).?;
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 39, .rows = 24 } });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
+    try std.testing.expect(model.tabs.layout[0].focusPane(first));
+    const second_pane = model.panes.find(second).?;
     second_pane.mouse = .{ .tracking = .any, .sgr = true, .pixels = true };
     second_pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
     second_pane.scroll = .{ .total_rows = second_pane.buffer.h, .offset = 0 };
-    const second_view = model.layoutSnapshot(area).find(second).?;
+    const second_view = data.tab_layout.snapshot(&model, 0, area).find(second).?;
     const second_point: term.Event.Mouse = .{
         .x = second_view.content.x,
         .y = second_view.content.y,
         .kind = .press,
     };
 
-    try std.testing.expect(model.planPaneMouse(second_point, area) == null);
+    try std.testing.expect(data.tab_layout.planPaneMouse(&model, 0, second_point, area) == null);
 
     var wheel = second_point;
     wheel.kind = .scroll_up;
-    const plan = model.planPaneMouse(wheel, area).?;
+    const plan = data.tab_layout.planPaneMouse(&model, 0, wheel, area).?;
 
     try std.testing.expectEqual(second, plan.pane_id);
     try std.testing.expectEqualDeep(second_view.content, plan.content);
@@ -1206,28 +1228,28 @@ test "pane mouse planning keeps buttons focused and wheels pointer-local" {
     try std.testing.expect(plan.alternate_scroll);
     try std.testing.expect(plan.at_bottom);
 
-    const first_view = model.layoutSnapshot(area).find(first).?;
-    const focused = model.planPaneMouse(.{
+    const first_view = data.tab_layout.snapshot(&model, 0, area).find(first).?;
+    const focused = data.tab_layout.planPaneMouse(&model, 0, .{
         .x = first_view.content.x,
         .y = first_view.content.y,
         .kind = .release,
     }, area).?;
     try std.testing.expectEqual(first, focused.pane_id);
 
-    const revision = model.layout.currentRevision();
-    const focused_scroll = model.planFocusedPaneMouse(area).?;
+    const revision = model.tabs.layout[0].currentRevision();
+    const focused_scroll = data.tab_layout.planFocusedPaneMouse(&model, 0, area).?;
     try std.testing.expectEqual(first, focused_scroll.pane_id);
     try std.testing.expectEqualDeep(first_view.content, focused_scroll.content);
-    try std.testing.expectEqualDeep(model.find(first).?.mouse, focused_scroll.protocol);
-    try std.testing.expectEqual(revision, model.layout.currentRevision());
-    try std.testing.expectEqual(first, model.layout.focused().?);
+    try std.testing.expectEqualDeep(model.panes.find(first).?.mouse, focused_scroll.protocol);
+    try std.testing.expectEqual(revision, model.tabs.layout[0].currentRevision());
+    try std.testing.expectEqual(first, model.tabs.layout[0].focused().?);
 
-    try std.testing.expect(model.focusPane(second));
-    try std.testing.expectEqualDeep(plan, model.planFocusedPaneMouse(area).?);
+    try std.testing.expect(model.tabs.layout[0].focusPane(second));
+    try std.testing.expectEqualDeep(plan, data.tab_layout.planFocusedPaneMouse(&model, 0, area).?);
 }
 
 test "focused pane mouse planning ignores missing and empty pane content" {
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
     const area: core.Rect = .{ .w = 80, .h = 24 };
     const pane_id: core.PaneId = @enumFromInt(1);
@@ -1236,12 +1258,12 @@ test "focused pane mouse planning ignores missing and empty pane content" {
         .tab_id = @enumFromInt(1),
     };
 
-    try std.testing.expect(model.planFocusedPaneMouse(area) == null);
-    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 80, .rows = 24 } });
-    try std.testing.expect(model.planFocusedPaneMouse(.{ .w = 0, .h = 24 }) == null);
-    try std.testing.expect(model.planFocusedPaneMouse(.{ .w = 80, .h = 0 }) == null);
-    try std.testing.expectEqual(pane_id, model.planFocusedPaneMouse(area).?.pane_id);
+    try std.testing.expect(data.tab_layout.planFocusedPaneMouse(&model, 0, area) == null);
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 80, .rows = 24 } });
+    try std.testing.expect(data.tab_layout.planFocusedPaneMouse(&model, 0, .{ .w = 0, .h = 24 }) == null);
+    try std.testing.expect(data.tab_layout.planFocusedPaneMouse(&model, 0, .{ .w = 80, .h = 0 }) == null);
+    try std.testing.expectEqual(pane_id, data.tab_layout.planFocusedPaneMouse(&model, 0, area).?.pane_id);
 
-    try std.testing.expect(model.removePane(pane_id));
-    try std.testing.expect(model.planFocusedPaneMouse(area) == null);
+    try std.testing.expect(data.tab_layout.removePane(&model, pane_id));
+    try std.testing.expect(data.tab_layout.planFocusedPaneMouse(&model, 0, area) == null);
 }

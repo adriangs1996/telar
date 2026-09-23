@@ -1,5 +1,6 @@
 const event_module = @import("../input/event.zig");
 const input_support = @import("input_support.zig");
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -22,7 +23,7 @@ pub fn base() !*Session {
     );
     try session.gui.resize(size, session.gui.renderer.theme);
     session.gui.pointer.configure(session.gui.renderer.origin, size);
-    _ = session.gui.app.model.workspace.findPane(Session.pane_id).?.identify(.terminal, 77);
+    _ = session.gui.app.model.panes.find(Session.pane_id).?.identify(.terminal, 77);
     try session.settle();
     return session;
 }
@@ -258,7 +259,7 @@ test "runtime review modal consumes new terminal input" {
 test "runtime review modal releases previously held terminal keys without forwarding new presses" {
     const session = try base();
     defer session.deinit();
-    session.gui.app.model.workspace.findPane(Session.pane_id).?.input_modes.kitty_keyboard_flags = 10;
+    session.gui.app.model.panes.find(Session.pane_id).?.input_modes.kitty_keyboard_flags = 10;
     try publish(session);
     try send(session, .{ .key = .{ .code = .enter, .physical = .{ .value = 91 } } });
     try session.settle();
@@ -276,10 +277,10 @@ test "runtime review modal retires a held terminal mouse gesture before swallowi
     const session = try base();
     defer session.deinit();
     const gui = session.gui;
-    const model = gui.app.model.activeTabModel().?;
-    model.find(Session.pane_id).?.mouse = .{ .sgr = true, .tracking = .button };
+    const tab = gui.app.model.tabs.active;
+    gui.app.model.panes.find(Session.pane_id).?.mouse = .{ .sgr = true, .tracking = .button };
     try publish(session);
-    const view = model.viewForPane(Session.pane_id, gui.region.area).?;
+    const view = data.tab_layout.view(&gui.app.model, tab, Session.pane_id, gui.region.area).?;
     const x = @as(f64, @floatFromInt(view.content.x)) * gui.app.model.hostSize().cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
     const y = @as(f64, @floatFromInt(view.content.y)) * gui.app.model.hostSize().cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
     try send(session, .{ .pointer = .{ .kind = .press, .button = .right, .x = x, .y = y } });

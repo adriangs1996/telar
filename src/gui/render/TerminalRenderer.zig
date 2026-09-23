@@ -213,16 +213,20 @@ pub fn begin(renderer: *Renderer) void {
 /// widget list in Scene instead. Example: `try renderer.prepare(projection);`
 pub fn prepare(renderer: *Renderer, projection: client.Projection) !data.PresentationCommit {
     renderer.begin();
-    const model = projection.model orelse return .{};
+    const tab = projection.tab orelse return .{};
+    const model = projection.model;
+    const location = model.tabs.location[tab];
     var layout: data.LayoutSnapshot = .{};
-    model.layout.snapshot(projection.geometry.area, &layout);
-    var commit: data.PresentationCommit = .{ .location = model.location };
+    model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
+    var commit: data.PresentationCommit = .{
+        .location = if (model.panes.countIn(location.tab_id) == 0) null else location,
+    };
     for (layout.views()) |view| {
         if (view.surface != .terminal) {
             continue;
         }
 
-        const pane = model.findConst(view.pane_id) orelse continue;
+        const pane = model.panes.findInConst(location.tab_id, view.pane_id) orelse continue;
         try renderer.drawPane(.{
             .pane = pane,
             .view = view,

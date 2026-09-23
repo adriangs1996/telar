@@ -5,8 +5,9 @@ const CompositorType = @import("../../workspace/Compositor.zig");
 const view = @import("view.zig");
 const RenderInput = @This();
 
-tabs: ?*const data.TabsModel = null,
-model: *const data.MultiplexerModel,
+model: *const data.Model,
+/// The active tab's slot in `model.tabs`.
+tab: usize,
 compositor: ?*const CompositorType = null,
 agents: *const data.AgentSnapshot = &view.empty_agent_snapshot,
 sidebar_animation_frame: u8 = 0,

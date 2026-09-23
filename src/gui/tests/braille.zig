@@ -15,7 +15,7 @@ test "Braille pattern replacement removes retained dots and blank Braille erases
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.cursor.visible = false;
     pane.buffer.cells[0] = cell(0xff);
     const shape_calls = session.gui.renderer.atlas.?.shape_calls;
@@ -63,7 +63,7 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.buffer.cells[0] = cell(0x05);
     pane.buffer.cells[0].style = .{ .fg = .rgb(.{ 255, 0, 0 }), .bg = .rgb(.{ 0, 0, 255 }), .flags = .{ .inverse = true, .faint = true, .underline = .single, .strikethrough = true } };
     pane.cursor.x = 0;
@@ -171,7 +171,7 @@ test "Braille animation stays within retained budgets without allocating or touc
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.cursor.visible = false;
     pane.buffer.cells[0] = cell(0);
     try paint(session);
@@ -217,8 +217,8 @@ fn cell(pattern: u8) core.Cell {
 }
 
 fn paneContent(session: *Session) core.Rect {
-    const model = session.gui.app.model.activeTabModel().?;
-    return model.viewForPane(Session.pane_id, session.gui.region.area).?.content;
+    const tab = session.gui.app.model.tabs.active;
+    return data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, session.gui.region.area).?.content;
 }
 
 fn paint(session: *Session) !void {

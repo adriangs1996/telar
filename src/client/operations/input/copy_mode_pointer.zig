@@ -1,32 +1,27 @@
-//! Wires copy-mode pointer ownership to geometry and copy-mode effects.
+//! Gives copy mode first refusal for pointer events inside its pane.
 
 const data = @import("model");
 const core = @import("telar-core");
 const CopyModePointerCommand = @import("../../application/input/CopyModePointerCommand.zig");
 const copy_mode_pointer = @import("../../application/input/copy_mode_pointer.zig");
 const Client = @import("../../AttachedClient.zig");
-const CopyModePointerContext = @import("CopyModePointerContext.zig");
 
-/// Gives copy mode first refusal for one cell-based pointer event.
+/// Gives copy mode first refusal for one cell-based pointer event on tab
+/// `tab`, and reports whether copy mode took it.
 ///
 /// ```zig
-/// if (try apply(client, model, event)) return;
+/// if (try apply(client, tab, event)) return;
 /// ```
-pub fn apply(client: *Client, model: *data.MultiplexerModel, event: data.Mouse) !bool {
-    var context: CopyModePointerContext = .{
-        .client = client,
-        .model = model,
-        .area = client.geometry().area,
-    };
-
+pub fn apply(client: *Client, tab: usize, event: data.Mouse) !bool {
     const command: CopyModePointerCommand = .{ .kind = event.kind, .left_button = event.button & 0b11 == 0 };
-    const outcome = try route(&context, command, resolve(&context, event));
+    const outcome = try route(client, command, resolve(client, tab, event));
     return outcome != .unowned;
 }
 
-fn resolve(context: *CopyModePointerContext, event: data.Mouse) copy_mode_pointer.Authority {
-    if (context.client.model.pointerSelection()) |selection| {
-        const view = context.model.viewForPane(selection.pane_id, context.area);
+fn resolve(client: *Client, tab: usize, event: data.Mouse) copy_mode_pointer.Authority {
+    const area = client.geometry().area;
+    if (client.model.pointerSelection()) |selection| {
+        const view = data.tab_layout.view(&client.model, tab, selection.pane_id, area);
         const position: ?core.Point = if (view != null and view.?.content.w > 0 and view.?.content.h > 0) .{
             .x = @min(event.x -| view.?.content.x, view.?.content.w - 1),
             .y = @min(event.y -| view.?.content.y, view.?.content.h - 1),
@@ -35,12 +30,12 @@ fn resolve(context: *CopyModePointerContext, event: data.Mouse) copy_mode_pointe
         return .{ .selection = .{ .dragging = selection.dragging, .position = position } };
     }
 
-    const pane_id = context.client.model.copyModeTarget() orelse return .unowned;
-    if (context.model.find(pane_id) == null) {
+    const pane_id = client.model.copyModeTarget() orelse return .unowned;
+    if (client.model.panes.findIn(client.model.tabs.location[tab].tab_id, pane_id) == null) {
         return .target_missing;
     }
 
-    const view = context.model.viewForPane(pane_id, context.area) orelse
+    const view = data.tab_layout.view(&client.model, tab, pane_id, area) orelse
         return .{ .owned = .{ .pointer_inside = false } };
 
     return .{ .owned = .{
@@ -48,48 +43,22 @@ fn resolve(context: *CopyModePointerContext, event: data.Mouse) copy_mode_pointe
     } };
 }
 
-fn leave(context: *CopyModePointerContext) !void {
-    _ = try context.client.leaveCopyMode();
-}
-
-fn cancelPointer(context: *CopyModePointerContext) !void {
-    _ = try context.client.applyCopyMode(.cancel_pointer);
-}
-
-fn pointer(context: *CopyModePointerContext, motion: data.PointerMotion) !void {
-    _ = try context.client.applyCopyMode(
-        .{
-            .pointer = motion,
-        },
-    );
-}
-
-fn vertical(context: *CopyModePointerContext, delta: i32) !void {
-    _ = try context.client.applyCopyMode(
-        .{
-            .vertical = delta,
-        },
-    );
-}
-
-fn route(context: *CopyModePointerContext, command: CopyModePointerCommand, authority: copy_mode_pointer.Authority) !copy_mode_pointer.Outcome {
+fn route(client: *Client, command: CopyModePointerCommand, authority: copy_mode_pointer.Authority) !copy_mode_pointer.Outcome {
     const pointer_inside = switch (authority) {
         .unowned => return .unowned,
         .target_missing => {
-            try leave(context);
-
+            _ = try client.leaveCopyMode();
             return .exited;
         },
         .selection => |selection| {
             if (selection.dragging and command.kind == .press and command.left_button) {
-                try cancelPointer(context);
-
+                _ = try client.applyCopyMode(.cancel_pointer);
                 return .unowned;
             }
 
             if (!selection.dragging) {
                 if (command.kind == .press or command.kind == .scroll_up or command.kind == .scroll_down) {
-                    try cancelPointer(context);
+                    _ = try client.applyCopyMode(.cancel_pointer);
                 }
 
                 return .unowned;
@@ -101,14 +70,16 @@ fn route(context: *CopyModePointerContext, command: CopyModePointerCommand, auth
 
             const position = selection.position orelse {
                 if (command.kind == .release) {
-                    try cancelPointer(context);
+                    _ = try client.applyCopyMode(.cancel_pointer);
                 }
 
                 return .consumed;
             };
-            try pointer(context, .{
-                .position = position,
-                .release = command.kind == .release,
+            _ = try client.applyCopyMode(.{
+                .pointer = .{
+                    .position = position,
+                    .release = command.kind == .release,
+                },
             });
             return .moved;
         },
@@ -125,6 +96,8 @@ fn route(context: *CopyModePointerContext, command: CopyModePointerCommand, auth
         return .consumed;
     }
 
-    try vertical(context, delta);
+    _ = try client.applyCopyMode(.{
+        .vertical = delta,
+    });
     return .moved;
 }

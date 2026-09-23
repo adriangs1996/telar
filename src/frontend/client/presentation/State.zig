@@ -652,7 +652,7 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
     const layout = if (input.compositor) |compositor|
         compositor.layoutSnapshot()
     else layout: {
-        input.model.layout.snapshot(state.workbench(), &fallback_layout);
+        input.model.tabs.layout[input.tab].snapshot(state.workbench(), &fallback_layout);
         fallback_attachment_area = fallback_layout.reserveBelowPane(state.attachmentReservation());
         break :layout &fallback_layout;
     };
@@ -670,8 +670,8 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
 
     const composed = composition_module.render(&context, .{
         .regions = state.regions,
-        .tabs = input.tabs,
         .model = input.model,
+        .tab = input.tab,
         .layout = layout,
         .rename_field = view_ops.promptField(input.prompt),
         .rename_kind = view_ops.promptKind(input.prompt),
@@ -762,7 +762,7 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
                 .prompt = prompt,
                 .agents = input.agents,
                 .workspaces = input.workspaces,
-                .tabs = input.tabs,
+                .model = input.model,
                 .history = input.history,
                 .suggestion = input.suggestion,
                 .graphical_frame = graphical_modal,
@@ -873,7 +873,7 @@ fn panePointerShape(state: *State, input: RenderInput, pane_id: core.PaneId) cor
         return .default;
     }
 
-    const pane = input.model.findConst(pane_id) orelse return .default;
+    const pane = input.model.panes.findInConst(input.model.tabs.location[input.tab].tab_id, pane_id) orelse return .default;
     if (!pane.attached) {
         return .default;
     }
@@ -882,7 +882,7 @@ fn panePointerShape(state: *State, input: RenderInput, pane_id: core.PaneId) cor
     const layout = if (input.compositor) |compositor|
         compositor.layoutSnapshot()
     else layout: {
-        input.model.layout.snapshot(state.workbench(), &fallback);
+        input.model.tabs.layout[input.tab].snapshot(state.workbench(), &fallback);
         _ = fallback.reserveBelowPane(state.attachmentReservation());
         break :layout &fallback;
     };

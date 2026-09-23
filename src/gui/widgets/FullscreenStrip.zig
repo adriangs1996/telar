@@ -11,7 +11,8 @@ const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const FullscreenStrip = @This();
 
 context: *const Context,
-model: *const data.MultiplexerModel,
+model: *const data.Model,
+tab: usize,
 area: core.Rect,
 
 /// Fullscreen hides terminal leaves, but every pane remains directly reachable.
@@ -22,7 +23,10 @@ pub fn draw(fullscreen: FullscreenStrip, canvas: *Canvas) !void {
         return;
     }
 
-    if (fullscreen.model.focusedPaneConst()) |pane| {
+    const model = fullscreen.model;
+    const tab = fullscreen.tab;
+    const layout = &model.tabs.layout[tab];
+    if (data.tab_layout.focusedPaneConst(model, tab)) |pane| {
         const review_width = try (ChangeReviewButton{ .area = canvas.rect(area), .pane = pane, .placement = .fullscreen }).draw(canvas);
         const review_columns: u16 = @intFromFloat(@min(65535, @ceil(review_width / @as(f32, @floatFromInt(canvas.metrics.cell_width)))));
         area.w -|= review_columns;
@@ -40,7 +44,7 @@ pub fn draw(fullscreen: FullscreenStrip, canvas: *Canvas) !void {
     }
 
     var identities: [core.max_panes_per_tab]core.PaneId = undefined;
-    const panes = fullscreen.model.layout.orderedPanes(&identities);
+    const panes = layout.orderedPanes(&identities);
     if (panes.len == 0) {
         return;
     }
@@ -49,10 +53,10 @@ pub fn draw(fullscreen: FullscreenStrip, canvas: *Canvas) !void {
     var total: u16 = @intCast(panes.len - 1);
     var focused: usize = 0;
     for (panes, 0..) |id, index| {
-        const name = if (fullscreen.model.findConst(id)) |pane| pane.foregroundName() else "";
+        const name = if (model.panes.findInConst(model.tabs.location[tab].tab_id, id)) |pane| pane.foregroundName() else "";
         labels[index] = .init(name, @intCast(index + 1));
         total +|= labels[index].width();
-        if (fullscreen.model.layout.focused() == id) {
+        if (layout.focused() == id) {
             focused = index;
         }
     }

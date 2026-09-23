@@ -4,7 +4,8 @@ const client = @import("telar-client");
 const Input = @This();
 
 area: core.Rect,
-tabs: ?*const data.TabsModel,
-model: *const data.MultiplexerModel,
+model: *const data.Model,
+/// The active tab's slot in `model.tabs`.
+tab: usize,
 alignment: data.bar_values.Alignment = .right,
 animation_frame: u8 = 0,

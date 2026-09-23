@@ -31,10 +31,10 @@ test "pane focus commits before reports resize and presentation" {
         .new_pane = second,
     });
     try std.testing.expect(split.disposition == .active);
-    const model = &client.model.workspace.active().?.model;
-    try std.testing.expect(model.toggleFullscreen());
-    model.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
-    model.find(second).?.input_modes.focus_events = true;
+    const model = client.model.tabs.active;
+    try std.testing.expect(client.model.tabs.layout[model].toggleFullscreen());
+    client.model.panes.findIn(client.model.tabs.location[model].tab_id, TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    client.model.panes.findIn(client.model.tabs.location[model].tab_id, second).?.input_modes.focus_events = true;
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
 
@@ -49,13 +49,13 @@ test "pane focus commits before reports resize and presentation" {
         .effect,
     );
 
-    try std.testing.expectEqual(TestHarness.bootstrap_pane, model.layout.focused().?);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.tabs.layout[model].focused().?);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(version_before.workspace, client.model.version().workspace);
     try std.testing.expectEqual(version_before.tabs, client.model.version().tabs);
     try std.testing.expectEqual(version_before.active_tab, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
-    const expected_size = model.contentSize(TestHarness.bootstrap_pane, area).?;
+    const expected_size = data.tab_layout.contentSize(&client.model, model, TestHarness.bootstrap_pane, area).?;
 
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -107,15 +107,15 @@ test "fullscreen tab round trip reconnects panes revealed by focus or tiled layo
         }, TerminalClient.of(client).view.workbench());
         const sibling: core.PaneId = @enumFromInt(20);
         const other_tab_pane: core.PaneId = @enumFromInt(30);
-        const model = &client.model.workspace.active().?.model;
-        try model.split(.{
+        const model = client.model.tabs.active;
+        try data.pane_split.split(&client.model, model, .{
             .existing_pane = TestHarness.bootstrap_pane,
             .new_pane = sibling,
             .location = TestHarness.bootstrap_location,
             .axis = .horizontal,
             .area = TerminalClient.of(client).view.workbench(),
         });
-        try std.testing.expect(model.toggleFullscreen());
+        try std.testing.expect(client.model.tabs.layout[model].toggleFullscreen());
         _ = try harness.addInactiveTab(@enumFromInt(2), other_tab_pane);
         const scenario: FullscreenReattachment = .{ .harness = &harness };
         const original_panes = [_]core.PaneDescriptor{
@@ -125,8 +125,8 @@ test "fullscreen tab round trip reconnects panes revealed by focus or tiled layo
 
         try scenario.selectTab(1, &.{.{ .pane_id = other_tab_pane, .lifecycle = .running }});
         try scenario.selectTab(0, &original_panes);
-        try std.testing.expect(model.layout.isFullscreen());
-        try std.testing.expect(!model.find(TestHarness.bootstrap_pane).?.attached);
+        try std.testing.expect(client.model.tabs.layout[model].isFullscreen());
+        try std.testing.expect(!client.model.panes.findIn(client.model.tabs.location[model].tab_id, TestHarness.bootstrap_pane).?.attached);
         try scenario.expectInput(sibling);
 
         if (exit_fullscreen) {
@@ -287,7 +287,7 @@ test "navigation lets Neovim consume internal movement before Telar focus" {
         },
         .effect,
     );
-    try std.testing.expectEqual(second, client.model.workspace.active().?.model.layout.focused().?);
+    try std.testing.expectEqual(second, client.model.tabs.layout[client.model.tabs.active].focused().?);
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
@@ -303,7 +303,7 @@ test "navigation lets Neovim consume internal movement before Telar focus" {
         },
         .effect,
     );
-    try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.workspace.active().?.model.layout.focused().?);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.tabs.layout[client.model.tabs.active].focused().?);
 }
 
 test "mouse focus precedes forwarding its triggering press" {
@@ -325,15 +325,15 @@ test "mouse focus precedes forwarding its triggering press" {
         },
         .new_pane = second,
     });
-    const model = &client.model.workspace.active().?.model;
-    model.find(first).?.input_modes.focus_events = true;
-    model.find(first).?.mouse = .{ .tracking = .normal, .sgr = true };
-    model.find(second).?.input_modes.focus_events = true;
+    const model = client.model.tabs.active;
+    client.model.panes.findIn(client.model.tabs.location[model].tab_id, first).?.input_modes.focus_events = true;
+    client.model.panes.findIn(client.model.tabs.location[model].tab_id, first).?.mouse = .{ .tracking = .normal, .sgr = true };
+    client.model.panes.findIn(client.model.tabs.location[model].tab_id, second).?.input_modes.focus_events = true;
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
 
     _ = client.model.syncReportedPaneFocus().?;
-    const first_view = model.viewForPane(first, area).?;
+    const first_view = data.tab_layout.view(&client.model, model, first, area).?;
     const point = term.Event.Mouse{
         .x = first_view.content.x,
         .y = first_view.content.y,
@@ -346,7 +346,7 @@ test "mouse focus precedes forwarding its triggering press" {
 
     try host_inputs.mouse(client, press);
 
-    try std.testing.expectEqual(first, model.layout.focused().?);
+    try std.testing.expectEqual(first, client.model.tabs.layout[model].focused().?);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
     try harness.settle();
 
@@ -368,8 +368,8 @@ test "pane geometry delivery offers only attached visible panes" {
     try harness.bootstrap();
     const client = harness.client;
     const area = TerminalClient.of(client).view.workbench();
-    const active = &client.model.workspace.active().?.model;
-    const expected_size = active.contentSize(TestHarness.bootstrap_pane, area).?;
+    const active = client.model.tabs.active;
+    const expected_size = data.tab_layout.contentSize(&client.model, active, TestHarness.bootstrap_pane, area).?;
 
     try client.resizeAttachedPanes(active, area);
     try harness.settle();
@@ -381,7 +381,7 @@ test "pane geometry delivery offers only attached visible panes" {
     try std.testing.expectEqual(expected_size, offered.pane_resize.size);
 
     const detached_location = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
-    const detached = &client.model.workspace.find(detached_location.tab_id).?.model;
+    const detached = client.model.tabs.find(detached_location.tab_id).?;
     try client.resizeAttachedPanes(detached, area);
 
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
@@ -409,9 +409,9 @@ test "pane resize publishes committed geometry before presentation" {
     });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    const model = &client.model.workspace.active().?.model;
-    const first_before = model.contentSize(first, area).?;
-    const second_before = model.contentSize(second, area).?;
+    const model = client.model.tabs.active;
+    const first_before = data.tab_layout.contentSize(&client.model, model, first, area).?;
+    const second_before = data.tab_layout.contentSize(&client.model, model, second, area).?;
     const version_before = client.model.version();
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
 
@@ -422,11 +422,11 @@ test "pane resize publishes committed geometry before presentation" {
         .effect,
     );
 
-    const first_after = model.contentSize(first, area).?;
-    const second_after = model.contentSize(second, area).?;
+    const first_after = data.tab_layout.contentSize(&client.model, model, first, area).?;
+    const second_after = data.tab_layout.contentSize(&client.model, model, second, area).?;
     try std.testing.expect(first_after.cols < first_before.cols);
     try std.testing.expect(second_after.cols > second_before.cols);
-    try std.testing.expectEqual(second, model.layout.focused().?);
+    try std.testing.expectEqual(second, client.model.tabs.layout[model].focused().?);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(version_before.workspace, client.model.version().workspace);
     try std.testing.expectEqual(version_before.tabs, client.model.version().tabs);
@@ -475,8 +475,8 @@ test "single-pane fullscreen publishes bordered and restored geometry" {
     const client = harness.client;
     const pane_id = TestHarness.bootstrap_pane;
     const area = TerminalClient.of(client).view.workbench();
-    const model = &client.model.workspace.active().?.model;
-    const initial = model.contentSize(pane_id, area).?;
+    const model = client.model.tabs.active;
+    const initial = data.tab_layout.contentSize(&client.model, model, pane_id, area).?;
     var message_buffer: [256]u8 = undefined;
 
     for ([_]bool{ true, false }) |fullscreen| {
@@ -487,8 +487,8 @@ test "single-pane fullscreen publishes bordered and restored geometry" {
             core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }
         else
             initial;
-        try std.testing.expectEqual(fullscreen, model.layout.isFullscreen());
-        try std.testing.expectEqual(expected, model.contentSize(pane_id, area).?);
+        try std.testing.expectEqual(fullscreen, client.model.tabs.layout[model].isFullscreen());
+        try std.testing.expectEqual(expected, data.tab_layout.contentSize(&client.model, model, pane_id, area).?);
         try std.testing.expectEqual(version.panes + 1, client.model.version().panes);
         try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
         try harness.settle();
@@ -523,17 +523,17 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     });
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    const model = &client.model.workspace.active().?.model;
-    const first_tiled = model.contentSize(first, area).?;
-    const second_tiled = model.contentSize(second, area).?;
+    const model = client.model.tabs.active;
+    const first_tiled = data.tab_layout.contentSize(&client.model, model, first, area).?;
+    const second_tiled = data.tab_layout.contentSize(&client.model, model, second, area).?;
     const version_before_enter = client.model.version();
     const pending_updates_before_enter = TerminalClient.of(client).presenter.pending_updates;
 
     _ = try client.executeAction(.toggle_pane_fullscreen, .effect);
 
-    try std.testing.expect(model.layout.isFullscreen());
-    try std.testing.expect(model.contentSize(first, area) == null);
-    const fullscreen_size = model.contentSize(second, area).?;
+    try std.testing.expect(client.model.tabs.layout[model].isFullscreen());
+    try std.testing.expect(data.tab_layout.contentSize(&client.model, model, first, area) == null);
+    const fullscreen_size = data.tab_layout.contentSize(&client.model, model, second, area).?;
     try std.testing.expectEqual(core.TerminalSize{ .cols = area.w - 2, .rows = area.h - 2 }, fullscreen_size);
     try std.testing.expectEqual(version_before_enter.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_enter, TerminalClient.of(client).presenter.pending_updates);
@@ -555,9 +555,9 @@ test "pane fullscreen publishes visible geometry without direct presentation sch
     const pending_updates_before_exit = TerminalClient.of(client).presenter.pending_updates;
     _ = try client.executeAction(.toggle_pane_fullscreen, .effect);
 
-    try std.testing.expect(!model.layout.isFullscreen());
-    try std.testing.expectEqual(first_tiled, model.contentSize(first, area).?);
-    try std.testing.expectEqual(second_tiled, model.contentSize(second, area).?);
+    try std.testing.expect(!client.model.tabs.layout[model].isFullscreen());
+    try std.testing.expectEqual(first_tiled, data.tab_layout.contentSize(&client.model, model, first, area).?);
+    try std.testing.expectEqual(second_tiled, data.tab_layout.contentSize(&client.model, model, second, area).?);
     try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_exit, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expect(!TerminalClient.of(client).view.dirty);
@@ -765,9 +765,9 @@ test "an active split commits once and presentation observes the model" {
     });
     _ = try client.handleServerMessage(try core.decodeServer(opened));
 
-    const pane = client.model.workspace.findPane(split_pane).?;
+    const pane = client.model.panes.find(split_pane).?;
     try std.testing.expect(pane.attached);
-    try std.testing.expectEqual(split_pane, client.model.workspace.active().?.model.layout.focused().?);
+    try std.testing.expectEqual(split_pane, client.model.tabs.layout[client.model.tabs.active].focused().?);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
 
@@ -782,9 +782,13 @@ test "an inactive split is retained detached without a visible revision" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const first = client.model.workspace.active().?;
+    const first = client.model.tabs.active;
     const second_location = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
-    data.TabsModel.detachAll(first);
+    var first_panes = client.model.panes.iterate(client.model.tabs.location[first].tab_id);
+    while (first_panes.next()) |pane| {
+        pane.attached = false;
+        pane.pending_frame_id = 0;
+    }
     try std.testing.expectEqualDeep(second_location, client.model.activeTabLocation().?);
 
     const split_pane: core.PaneId = @enumFromInt(21);
@@ -806,7 +810,7 @@ test "an inactive split is retained detached without a visible revision" {
 
     _ = try client.handleServerMessage(try core.decodeServer(opened));
 
-    try std.testing.expect(!client.model.workspace.findPane(split_pane).?.attached);
+    try std.testing.expect(!client.model.panes.find(split_pane).?.attached);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expect(!TerminalClient.of(client).graphics_store.paneVisible(split_pane));
@@ -834,7 +838,7 @@ test "a split reply for a retired tab detaches and refreshes canonical state" {
         .area = TerminalClient.of(client).view.workbench(),
     } });
     client.request_lifecycle.tracker.ignoreTab(TestHarness.bootstrap_location.tab_id);
-    try std.testing.expect(client.model.workspace.remove(TestHarness.bootstrap_location.tab_id));
+    try std.testing.expect(data.tab_removal.remove(&client.model, TestHarness.bootstrap_location.tab_id));
     const version_before = client.model.version();
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
     var payload: [128]u8 = undefined;
@@ -847,7 +851,7 @@ test "a split reply for a retired tab detaches and refreshes canonical state" {
 
     _ = try client.handleServerMessage(try core.decodeServer(opened));
 
-    try std.testing.expect(client.model.workspace.findPane(split_pane) == null);
+    try std.testing.expect(client.model.panes.find(split_pane) == null);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
     try harness.settle();
@@ -874,7 +878,7 @@ test "a split reply replaces its target after canonical retirement" {
         .axis = .horizontal,
         .area = TerminalClient.of(client).view.workbench(),
     } });
-    try std.testing.expect(client.model.workspace.active().?.model.removePane(TestHarness.bootstrap_pane));
+    try std.testing.expect(data.tab_layout.removePane(&client.model, TestHarness.bootstrap_pane));
     client.request_lifecycle.tracker.ignorePane(TestHarness.bootstrap_pane);
     const version_before = client.model.version();
     var payload: [128]u8 = undefined;
@@ -887,8 +891,8 @@ test "a split reply replaces its target after canonical retirement" {
 
     _ = try client.handleServerMessage(try core.decodeServer(opened));
 
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
-    try std.testing.expect(client.model.workspace.findPane(split_pane).?.attached);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) == null);
+    try std.testing.expect(client.model.panes.find(split_pane).?.attached);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
 }
 
@@ -898,9 +902,13 @@ test "a failed split never resizes the tab selected afterwards" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const first = client.model.workspace.active().?;
+    const first = client.model.tabs.active;
     _ = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
-    data.TabsModel.detachAll(first);
+    var first_panes = client.model.panes.iterate(client.model.tabs.location[first].tab_id);
+    while (first_panes.next()) |pane| {
+        pane.attached = false;
+        pane.pending_frame_id = 0;
+    }
 
     try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
@@ -935,7 +943,7 @@ test "a failed split for a retired target is silent" {
         .axis = .horizontal,
         .area = TerminalClient.of(client).view.workbench(),
     } });
-    try std.testing.expect(client.model.workspace.active().?.model.removePane(TestHarness.bootstrap_pane));
+    try std.testing.expect(data.tab_layout.removePane(&client.model, TestHarness.bootstrap_pane));
     client.request_lifecycle.tracker.ignorePane(TestHarness.bootstrap_pane);
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
     var payload: [128]u8 = undefined;
@@ -961,7 +969,7 @@ test "an attach reply marks the discovered pane attached" {
     const discovered: core.PaneId = @enumFromInt(11);
     var payload: [256]u8 = undefined;
     const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
-    try std.testing.expect(!client.model.workspace.findPane(discovered).?.attached);
+    try std.testing.expect(!client.model.panes.find(discovered).?.attached);
 
     const version_before_confirmation = client.model.version();
     const pending_updates_before_confirmation = TerminalClient.of(client).presenter.pending_updates;
@@ -974,7 +982,7 @@ test "an attach reply marks the discovered pane attached" {
     });
     _ = try client.handleServerMessage(try core.decodeServer(opened));
 
-    try std.testing.expect(client.model.workspace.findPane(discovered).?.attached);
+    try std.testing.expect(client.model.panes.find(discovered).?.attached);
     try std.testing.expectEqualDeep(version_before_confirmation, client.model.version());
     try std.testing.expectEqual(pending_updates_before_confirmation, TerminalClient.of(client).presenter.pending_updates);
 }
@@ -989,7 +997,7 @@ test "tab detachment retires an in-flight pane attachment" {
     const discovered: core.PaneId = @enumFromInt(11);
     var payload: [256]u8 = undefined;
     const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
-    try client.detachTab(client.model.workspace.active().?.location);
+    try client.detachTab(client.model.tabs.location[client.model.tabs.active]);
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
@@ -1019,7 +1027,7 @@ test "tab detachment retires an in-flight pane attachment" {
     });
     _ = try client.handleServerMessage(try core.decodeServer(opened));
 
-    try std.testing.expect(!client.model.workspace.findPane(discovered).?.attached);
+    try std.testing.expect(!client.model.panes.find(discovered).?.attached);
     try std.testing.expectEqual(pending_updates_before_confirmation, TerminalClient.of(client).presenter.pending_updates);
 }
 
@@ -1029,7 +1037,7 @@ test "tab detachment closes a captured bracketed paste before the pane detaches"
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
 
     _ = try client_module.operations.paste_routing.start(client);
     try harness.settle();
@@ -1039,7 +1047,7 @@ test "tab detachment closes a captured bracketed paste before the pane detaches"
     try std.testing.expect(opening == .pane_input);
     try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
 
-    try client.detachTab(client.model.workspace.active().?.location);
+    try client.detachTab(client.model.tabs.location[client.model.tabs.active]);
 
     try std.testing.expect(!client.model.panePasteActive());
     try harness.settle();
@@ -1057,7 +1065,7 @@ test "tab detachment sends focus-out before the pane detaches" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
 
     try client.synchronizeActivePane();
     try harness.settle();
@@ -1066,7 +1074,7 @@ test "tab detachment sends focus-out before the pane detaches" {
     try std.testing.expect(focus_in == .pane_input);
     try std.testing.expectEqualStrings("\x1b[I", focus_in.pane_input.bytes);
 
-    try client.detachTab(client.model.workspace.active().?.location);
+    try client.detachTab(client.model.tabs.location[client.model.tabs.active]);
 
     try std.testing.expect(client.model.reportedPaneFocus() == null);
     try harness.settle();
@@ -1085,7 +1093,7 @@ test "tab detachment preserves focus reported by another tab" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     try client.synchronizeActivePane();
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -1095,11 +1103,11 @@ test "tab detachment preserves focus reported by another tab" {
 
     const inactive_pane: core.PaneId = @enumFromInt(20);
     const inactive = try harness.addInactiveTab(@enumFromInt(2), inactive_pane);
-    const tab = client.model.workspace.find(inactive.tab_id).?;
-    tab.model.find(inactive_pane).?.attached = true;
+    const tab = client.model.tabs.find(inactive.tab_id).?;
+    client.model.panes.findIn(client.model.tabs.location[tab].tab_id, inactive_pane).?.attached = true;
     const reported = client.model.reportedPaneFocus().?;
 
-    try client.detachTab(tab.location);
+    try client.detachTab(client.model.tabs.location[tab]);
 
     try std.testing.expectEqualDeep(reported, client.model.reportedPaneFocus().?);
     try harness.settle();
@@ -1125,8 +1133,8 @@ test "detach action releases every tab before stopping the client" {
         try client.executeAction(.detach, .effect),
     );
 
-    try std.testing.expect(!client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expect(!client.model.workspace.findPane(second_pane).?.attached);
+    try std.testing.expect(!client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(!client.model.panes.find(second_pane).?.attached);
     try std.testing.expect(!TerminalClient.of(client).graphics_store.paneVisible(TestHarness.bootstrap_pane));
     try std.testing.expect(!TerminalClient.of(client).graphics_store.paneVisible(second_pane));
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -1148,8 +1156,8 @@ test "detach action captures layout changes from the same input batch" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const active = client.model.workspace.active().?;
-    active.snapshot_loaded = true;
+    const active = client.model.tabs.active;
+    client.model.tabs.snapshot_loaded[active] = true;
     try client.client_layouts.markSnapshotReceived();
 
     _ = try client.executeAction(
@@ -1191,7 +1199,7 @@ test "a missing pane attachment keeps local membership until a canonical snapsho
     });
     _ = try client.handleServerMessage(try core.decodeServer(failed));
 
-    const pane = client.model.workspace.findPane(discovered) orelse return error.PaneRemovedBeforeSnapshot;
+    const pane = client.model.panes.find(discovered) orelse return error.PaneRemovedBeforeSnapshot;
     try std.testing.expect(!pane.attached);
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(client.request_lifecycle.tracker.has(.tab_snapshot));
@@ -1223,7 +1231,7 @@ test "an internal pane attachment failure waits for a later resync" {
     });
     _ = try client.handleServerMessage(try core.decodeServer(failed));
 
-    const pane = client.model.workspace.findPane(discovered) orelse return error.PaneRemovedAfterInternalFailure;
+    const pane = client.model.panes.find(discovered) orelse return error.PaneRemovedAfterInternalFailure;
     try std.testing.expect(!pane.attached);
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(!client.request_lifecycle.tracker.has(.tab_snapshot));
@@ -1249,7 +1257,7 @@ test "a late pane attachment confirmation retired by a snapshot is ignored" {
         .panes = &.{.{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running }},
     });
     _ = try client.handleServerMessage(try core.decodeServer(reconciled));
-    try std.testing.expect(client.model.workspace.findPane(discovered) == null);
+    try std.testing.expect(client.model.panes.find(discovered) == null);
     const pending_updates_before_confirmation = TerminalClient.of(client).presenter.pending_updates;
 
     const opened = try core.encodePaneOpened(&payload, .{

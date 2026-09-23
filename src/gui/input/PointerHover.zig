@@ -98,7 +98,7 @@ pub fn refresh(hover: *Hover, gui: *const GuiClient) void {
     const target = hover_target.resolve(gui, mouse, event.mods);
     hover.assign(target.link, target.shape);
     if (target.link) |hit| {
-        const pane = gui.app.model.activeTabModelConst().?.findConst(hit.pane_id).?;
+        const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[gui.app.model.tabs.active].tab_id, hit.pane_id).?;
         if (pane.pending_frame_id == 0) {
             hover.shown_link = hit;
         }

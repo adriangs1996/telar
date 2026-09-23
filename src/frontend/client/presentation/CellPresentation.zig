@@ -5,5 +5,6 @@ const CellPresentation = @This();
 
 projection: client.Projection,
 resources: Resources,
-model: *const data.MultiplexerModel,
+/// The active tab's slot in `projection.model.tabs`.
+tab: usize,
 force: bool,

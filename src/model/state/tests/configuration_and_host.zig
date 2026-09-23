@@ -137,7 +137,7 @@ test "callback context is a value projection of committed client state" {
         .tab_id = @enumFromInt(5),
     };
     const pane_id: core.PaneId = @enumFromInt(7);
-    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     _ = model.toggleSidebar();
 
     try std.testing.expectEqualDeep(model_data.CallbackContext{

@@ -15,7 +15,7 @@ test "terminal box borders join adjacent cells for light heavy double and mixed 
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.cursor.visible = false;
     const frames = [_][5][]const u8{
         .{ "┌─┬─┐", "│ │ │", "├─┼─┤", "│ │ │", "└─┴─┘" },
@@ -66,7 +66,7 @@ test "faint straight box glyphs never blend overlapping strokes or consult a fon
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.cursor.visible = false;
     const shapes = session.gui.renderer.atlas.?.shape_calls;
     const rasters = session.gui.renderer.atlas.?.raster_attempts;
@@ -101,7 +101,7 @@ test "box replacement and erasure match full rebuilding with cached rounded corn
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.cursor.visible = false;
     pane.buffer.cells[0] = cell(0x253c);
     try paint(session);
@@ -180,7 +180,7 @@ test "all box glyphs animate within retained capacity without allocation after w
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.cursor.visible = false;
     for (0x2500..0x2580) |cp| {
         pane.buffer.cells[0] = cell(@intCast(cp));
@@ -239,8 +239,8 @@ fn paint(session: *Session) !void {
 }
 
 fn mesh(session: *Session, x: u16, y: u16) CellMesh {
-    const model = session.gui.app.model.activeTabModel().?;
-    const area = model.viewForPane(Session.pane_id, session.gui.region.area).?.content;
+    const tab = session.gui.app.model.tabs.active;
+    const area = data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, session.gui.region.area).?.content;
     return session.gui.renderer.retained.at(
         .{
             area.x + x,

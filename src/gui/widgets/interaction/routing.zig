@@ -28,8 +28,7 @@ const GenericField = data.GenericField;
 /// Example: `routing.reconcileFocus(gui);`
 pub fn reconcileFocus(gui: *GuiClient) void {
     const state = &gui.widgets;
-    const model = gui.app.model.activeTabModelConst();
-    const focused_pane: ?core.PaneId = if (model) |value| value.layout.focused() else null;
+    const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
 
     if (state.composer_menu.selector) |selector| {
         if (focused_pane != selector.pane_id) {
@@ -402,8 +401,8 @@ fn routeAgentBinding(gui: *GuiClient, event: event_module.Event) !bool {
 /// Example: `try routing.replayBindingKey(gui, owner, key);`
 pub fn replayBindingKey(gui: *GuiClient, owner: Id, key: data.Key) !void {
     const target = gui.widgets.dispatcher.focusedTarget();
-    const model = gui.app.model.activeTabModelConst();
-    const valid = gui.widgets.dispatcher.window_focused and gui.widgets.dispatcher.maps.presented().modal_layer == 0 and gui.widgets.composer_menu.selector == null and target != null and target.?.id.eql(owner) and target.?.action == .composer and model != null and model.?.layout.focused() == target.?.action.composer and field(gui, target.?) != null;
+    const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
+    const valid = gui.widgets.dispatcher.window_focused and gui.widgets.dispatcher.maps.presented().modal_layer == 0 and gui.widgets.composer_menu.selector == null and target != null and target.?.id.eql(owner) and target.?.action == .composer and focused_pane == target.?.action.composer and field(gui, target.?) != null;
     if (key.physical) |physical| {
         gui.router.relinquishKey(physical);
         const lease = gui.widgets.dispatcher.keys.owner(physical);
@@ -502,8 +501,8 @@ pub fn eligible(gui: *const GuiClient, target: Target) bool {
         .message_link => |control| control.owner.pane_id,
         else => return target.layer == 0,
     };
-    const model = gui.app.model.activeTabModelConst() orelse return false;
-    const pane = model.findConst(pane_id) orelse return false;
+    const tab = gui.app.model.tabs.activeSlot() orelse return false;
+    const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, pane_id) orelse return false;
     return target.layer == 0 and pane.attached and (if (target.action == .change_review) pane.hasChangeReview() else pane.kind == .agent) and pane.attachment_generation == target.id.generation;
 }
 
@@ -518,8 +517,8 @@ fn focus(gui: *GuiClient, target: Target) !void {
         }
 
         _ = gui.widgets.dispatcher.focus(target.id);
-        const model = gui.app.model.activeTabModel() orelse return;
-        _ = try client.operations.view_interactions.apply(&gui.app, model, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
+        const tab = gui.app.model.tabs.activeSlot() orelse return;
+        _ = try client.operations.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
         return;
     }
 
@@ -852,8 +851,8 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
 }
 
 fn dispatchIntent(gui: *GuiClient, intent: client.Intent) !void {
-    const model = gui.app.model.activeTabModel() orelse return;
-    _ = try client.operations.view_interactions.apply(&gui.app, model, .{ .intent = intent, .consumed = true });
+    const tab = gui.app.model.tabs.activeSlot() orelse return;
+    _ = try client.operations.view_interactions.apply(&gui.app, tab, .{ .intent = intent, .consumed = true });
     _ = gui.widgets.dispatcher.focus(null);
 }
 
@@ -925,8 +924,8 @@ fn threadScrollTarget(gui: *const GuiClient, target: Target) Target {
 /// Routes a pane scroll binding through the delivered transcript's wheel policy.
 /// Example: `_ = try routing.scrollFocusedThread(gui, .up);`
 pub fn scrollFocusedThread(gui: *GuiClient, direction: data.actions.ScrollDirection) !bool {
-    const model = gui.app.model.activeTabModelConst() orelse return false;
-    const pane = model.focusedPaneConst() orelse return false;
+    const tab = gui.app.model.tabs.activeSlot() orelse return false;
+    const pane = data.tab_layout.focusedPaneConst(&gui.app.model, tab) orelse return false;
     if (pane.kind != .agent) {
         return false;
     }

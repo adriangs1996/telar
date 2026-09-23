@@ -33,22 +33,24 @@ rings: *RingFades,
 pub fn draw(decorations: PaneDecorations, canvas: *Canvas) !void {
     const context = decorations.context;
     const projection = context.projection;
-    const model = projection.model orelse return;
+    const tab = projection.tab orelse return;
+    const model = projection.model;
+    const location = model.tabs.location[tab];
     decorations.rings.begin();
     defer decorations.rings.end();
-    if (!model.layout.hasBorders()) {
+    if (!model.tabs.layout[tab].hasBorders()) {
         return;
     }
 
     var layout: data.LayoutSnapshot = .{};
-    model.layout.snapshot(projection.geometry.area, &layout);
+    model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
     for (layout.views()) |view| {
-        const pane = model.findConst(view.pane_id) orelse continue;
-        const agent = if (model.location) |location| attention.paneAgent(projection, location, view.pane_id) else null;
+        const pane = model.panes.findInConst(location.tab_id, view.pane_id) orelse continue;
+        const agent = attention.paneAgent(projection, location, view.pane_id);
         try decorations.border(canvas, view);
         const title = view.outer.row(0);
-        if (model.layout.isFullscreen()) {
-            const strip: FullscreenStrip = .{ .context = context, .model = model, .area = title };
+        if (model.tabs.layout[tab].isFullscreen()) {
+            const strip: FullscreenStrip = .{ .context = context, .model = model, .tab = tab, .area = title };
             try strip.draw(canvas);
         } else {
             const header: PaneHeader = .{ .context = context, .pane = pane, .agent = agent, .index = view.display_index, .area = canvas.rect(title) };
@@ -115,7 +117,8 @@ fn border(decorations: PaneDecorations, canvas: *Canvas, view: data.LayoutView) 
 // moving terminal cells or their input coordinates.
 fn frameRect(self: PaneDecorations, canvas: *const Canvas, view: data.LayoutView) Rect {
     var frame = canvas.rect(view.outer);
-    const layout = &self.context.projection.model.?.layout;
+    const projection = self.context.projection;
+    const layout = &projection.model.tabs.layout[projection.tab.?];
     const gap = layout.metrics.gutter(layout.pane_gaps);
     const cell = canvas.metrics;
     const minimum = @min(cell.cell_width, cell.cell_height);

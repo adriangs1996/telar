@@ -1,3 +1,4 @@
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
@@ -20,7 +21,7 @@ test "DejaVu italic New preserves rasterized overhang with font thickening" {
 fn expectNaturalWord(thicken: bool) !void {
     const session = try configured(thicken, 1.4);
     defer session.deinit();
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     for ([_]bool{ false, true }) |bold| {
         word(session, .{ 2, 1 }, "New");
         for (pane.buffer.cells) |*cell| {
@@ -59,7 +60,7 @@ fn expectNaturalWord(thicken: bool) !void {
 test "italic overhang stays above adjacent backgrounds and the block cursor" {
     const session = try configured(true, 1.4);
     defer session.deinit();
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     word(session, .{ 2, 1 }, "New");
     pane.buffer.cells[pane.buffer.w + 3].style.bg = .rgb(.{ 255, 0, 0 });
     pane.cursor = .{ .visible = true, .x = 3, .y = 1, .appearance = .{ .shape = .block } };
@@ -94,7 +95,7 @@ test "italic clipping follows pane geometry while retained ink keeps its full te
     const session = try configured(true, 0.75);
     defer session.deinit();
     const renderer = &session.gui.renderer;
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const area = content(session);
     const last: u16 = @min(area.w, pane.buffer.w) - 1;
     word(session, .{ last, 1 }, "N");
@@ -132,7 +133,7 @@ test "italic selection and replacement reuse meshes without leaving stale overha
     const session = try configured(true, 1.4);
     defer session.deinit();
     const renderer = &session.gui.renderer;
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     word(session, .{ 2, 1 }, "New");
     var projection = session.gui.projection();
     _ = try renderer.prepare(projection);
@@ -202,18 +203,18 @@ fn configured(thicken: bool, line_height: f32) !*Session {
     try session.gui.resize(size, renderer.theme);
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     @memset(pane.buffer.cells, .{});
     pane.cursor.visible = false;
     return session;
 }
 
 fn content(session: *Session) core.Rect {
-    return session.gui.app.model.activeTabModel().?.viewForPane(Session.pane_id, session.gui.region.area).?.content;
+    return data.tab_layout.view(&session.gui.app.model, session.gui.app.model.tabs.active, Session.pane_id, session.gui.region.area).?.content;
 }
 
 fn word(session: *Session, point: [2]u16, text: []const u8) void {
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     for (text, 0..) |byte, index| {
         const cell = &pane.buffer.cells[@as(usize, point[1]) * pane.buffer.w + point[0] + index];
         cell.* = .{};
@@ -226,7 +227,7 @@ fn naturalWord(session: *Session, point: [2]u16, text: []const u8) !QuadList {
     var list = QuadList.init(std.testing.allocator);
     errdefer list.deinit();
     const renderer = &session.gui.renderer;
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const area = content(session);
     for (0..text.len) |index| {
         const cell = pane.buffer.cells[@as(usize, point[1]) * pane.buffer.w + point[0] + index];

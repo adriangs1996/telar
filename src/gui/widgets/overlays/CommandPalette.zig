@@ -148,7 +148,7 @@ fn drawLegend(canvas: *Canvas, row: core.Rect, mode: data.command_palette.Prefix
 }
 
 fn sources(palette: CommandPalette) data.Sources {
-    return .{ .agents = palette.projection.agents, .workspaces = palette.projection.workspaces, .tabs = palette.projection.tabs };
+    return .{ .agents = palette.projection.agents, .workspaces = palette.projection.workspaces, .model = palette.projection.model };
 }
 
 // The prefix byte is painted over the field text in the accent color; the

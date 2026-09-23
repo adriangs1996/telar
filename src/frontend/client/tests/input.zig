@@ -30,7 +30,7 @@ test "closing a preview deletes its matching atomic image marker" {
         };
         _ = try TerminalClient.of(client).view.adoptAttachment(capture);
     }
-    const pane = client.model.activeTabModel().?.find(target.pane_id).?;
+    const pane = client.model.panes.findIn(client.model.tabs.location[client.model.tabs.active].tab_id, target.pane_id).?;
     pane.buffer.clear(.{});
     const prompt = "> [Image #1]xx[Image #2]tail";
     pane.cursor = .{
@@ -39,7 +39,7 @@ test "closing a preview deletes its matching atomic image marker" {
         .y = 0,
     };
     const first = TerminalClient.of(client).view.kittyAttachments().snapshot().items[0].id;
-    const model = client.model.activeTabModel().?;
+    const model = client.model.tabs.active;
 
     _ = try client_module.operations.view_interactions.apply(client, model, .{
         .intent = .{ .attachment_dismiss = first },
@@ -74,7 +74,7 @@ test "child marker deletion and prompt submission retire paired previews" {
         .height = 2,
     };
     _ = try TerminalClient.of(client).view.adoptAttachment(capture);
-    const pane = client.model.activeTabModel().?.find(target.pane_id).?;
+    const pane = client.model.panes.findIn(client.model.tabs.location[client.model.tabs.active].tab_id, target.pane_id).?;
     pane.buffer.clear(.{});
     pane.cursor = .{
         .visible = true,
@@ -200,7 +200,7 @@ test "closing a Pi preview deletes its whole pasted path from the editor" {
     var ack_wire: [512]u8 = undefined;
     try std.testing.expectEqual(@as(u64, 1), (try harness.nextClientMessage(&ack_wire)).frame_ack.frame_id);
     const id = TerminalClient.of(client).view.kittyAttachments().snapshot().items[0].id;
-    const model = client.model.activeTabModel().?;
+    const model = client.model.tabs.active;
 
     _ = try client_module.operations.view_interactions.apply(client, model, .{
         .intent = .{ .attachment_dismiss = id },
@@ -338,11 +338,11 @@ test "streamed paste captures target and framing while restoring its live viewpo
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const tab = &client.model.workspace.active().?.model;
+    const tab = client.model.tabs.active;
     const other_pane: core.PaneId = @enumFromInt(11);
-    try tab.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
-    try std.testing.expect(tab.focusPane(TestHarness.bootstrap_pane));
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    try data.pane_split.split(&client.model, tab, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    try std.testing.expect(client.model.tabs.layout[tab].focusPane(TestHarness.bootstrap_pane));
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.input_modes.bracketed_paste = true;
     pane.scroll = .{
         .total_rows = @as(u32, pane.buffer.h) + 10,
@@ -358,7 +358,7 @@ test "streamed paste captures target and framing while restoring its live viewpo
     try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.panePasteSession().?.pane_id);
     try std.testing.expect(client.model.panePasteSession().?.bracketed_paste);
     pane.input_modes.bracketed_paste = false;
-    try std.testing.expect(tab.focusPane(other_pane));
+    try std.testing.expect(client.model.tabs.layout[tab].focusPane(other_pane));
     _ = try client_module.operations.paste_routing.content(client, "pasted");
     _ = try client_module.operations.paste_routing.finish(client);
 
@@ -446,9 +446,9 @@ test "name prompt rejects pointer routing after host telemetry" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true };
-    const pane_view = client.model.workspace.active().?.model.viewForPane(
+    const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
         pane.id,
         TerminalClient.of(client).view.workbench(),
     ).?;
@@ -477,13 +477,13 @@ test "mouse reports preserve scrollback and remain outside user-input telemetry"
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true };
     pane.scroll = .{
         .total_rows = @as(u32, pane.buffer.h) + 10,
         .offset = 0,
     };
-    const pane_view = client.model.workspace.active().?.model.viewForPane(
+    const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
         pane.id,
         TerminalClient.of(client).view.workbench(),
     ).?;
@@ -531,9 +531,9 @@ test "mouse reports preserve exact host pixels relative to pane content" {
         .height = 20,
     } });
     _ = try client.model.observeHostCapability(.{ .pointer_pixels = .supported });
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = true };
-    const pane_view = client.model.workspace.active().?.model.viewForPane(
+    const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
         pane.id,
         TerminalClient.of(client).view.workbench(),
     ).?;
@@ -560,15 +560,15 @@ test "alternate-screen wheel sends cursor keys to the pane under the pointer" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const model = &client.model.workspace.active().?.model;
+    const model = client.model.tabs.active;
     const focused = TestHarness.bootstrap_pane;
     const hovered: core.PaneId = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
-    try std.testing.expect(model.focusPane(focused));
-    const pane = model.find(hovered).?;
+    try data.pane_split.split(&client.model, model, .{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    try std.testing.expect(client.model.tabs.layout[model].focusPane(focused));
+    const pane = client.model.panes.findIn(client.model.tabs.location[model].tab_id, hovered).?;
     pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
     pane.scroll = .{ .total_rows = pane.buffer.h, .offset = 0 };
-    const hovered_view = model.viewForPane(hovered, TerminalClient.of(client).view.workbench()).?;
+    const hovered_view = data.tab_layout.view(&client.model, model, hovered, TerminalClient.of(client).view.workbench()).?;
     const version = client.model.version();
 
     try host_inputs.mouse(client, .{
@@ -577,7 +577,7 @@ test "alternate-screen wheel sends cursor keys to the pane under the pointer" {
         .kind = .scroll_up,
     });
 
-    try std.testing.expectEqual(focused, model.layout.focused().?);
+    try std.testing.expectEqual(focused, client.model.tabs.layout[model].focused().?);
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
     try std.testing.expectEqualDeep(version, client.model.version());
     try harness.settle();
@@ -612,16 +612,16 @@ test "focused scroll bindings target focus rather than hover and normal input re
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const model = client.model.activeTabModel().?;
+    const model = client.model.tabs.active;
     const focused = TestHarness.bootstrap_pane;
     const hovered: core.PaneId = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
-    try std.testing.expect(model.focusPane(focused));
-    const pane = model.find(focused).?;
-    const other = model.find(hovered).?;
+    try data.pane_split.split(&client.model, model, .{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    try std.testing.expect(client.model.tabs.layout[model].focusPane(focused));
+    const pane = client.model.panes.findIn(client.model.tabs.location[model].tab_id, focused).?;
+    const other = client.model.panes.findIn(client.model.tabs.location[model].tab_id, hovered).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 10, .offset = 10 };
-    const hovered_view = model.viewForPane(hovered, TerminalClient.of(client).view.workbench()).?;
+    const hovered_view = data.tab_layout.view(&client.model, model, hovered, TerminalClient.of(client).view.workbench()).?;
     try host_inputs.mouse(client, .{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
     const version = client.model.version();
 
@@ -629,7 +629,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
 
     try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
     try std.testing.expectEqual(@as(u32, 10), other.scroll.offset);
-    try std.testing.expectEqual(focused, model.layout.focused().?);
+    try std.testing.expectEqual(focused, client.model.tabs.layout[model].focused().?);
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!TerminalClient.of(client).graphics_store.paneVisible(focused));
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
@@ -667,7 +667,7 @@ test "held scroll suffixes pace both viewport directions without queued steps" {
         defer harness.deinit();
         try harness.bootstrap();
         const client = harness.client;
-        const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+        const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
         pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 50 };
         const press = if (up) "\x02\x1b[45::45;1:1u" else "\x02\x1b[61::61;1:1u";
         const repeated = if (up) "\x1b[45::45;1:2u" else "\x1b[61::61;1:2u";
@@ -710,13 +710,13 @@ test "a held global scroll cannot move a newly focused pane or resume after retu
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const model = client.model.activeTabModel().?;
+    const model = client.model.tabs.active;
     const focused = TestHarness.bootstrap_pane;
     const second: core.PaneId = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = second, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
-    try std.testing.expect(model.focusPane(focused));
-    const pane = model.find(focused).?;
-    const other = model.find(second).?;
+    try data.pane_split.split(&client.model, model, .{ .existing_pane = focused, .new_pane = second, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    try std.testing.expect(client.model.tabs.layout[model].focusPane(focused));
+    const pane = client.model.panes.findIn(client.model.tabs.location[model].tab_id, focused).?;
+    const other = client.model.panes.findIn(client.model.tabs.location[model].tab_id, second).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
     other.scroll = .{ .total_rows = @as(u32, other.buffer.h) + 100, .offset = 100 };
     const binding = try data.config_values.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
@@ -726,10 +726,10 @@ test "a held global scroll cannot move a newly focused pane or resume after retu
     _ = try host_inputs.feed(client, .{ .bytes = "\x1b[45::45;3:1u", .now_ns = 0 });
     _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 100 * std.time.ns_per_ms });
     try std.testing.expectEqual(@as(u32, 94), pane.scroll.offset);
-    try std.testing.expect(model.focusPane(second));
+    try std.testing.expect(client.model.tabs.layout[model].focusPane(second));
     _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 200 * std.time.ns_per_ms });
     try std.testing.expectEqual(@as(u32, 100), other.scroll.offset);
-    try std.testing.expect(model.focusPane(focused));
+    try std.testing.expect(client.model.tabs.layout[model].focusPane(focused));
     _ = try host_inputs.feed(client, .{ .bytes = repeated, .now_ns = 300 * std.time.ns_per_ms });
     try std.testing.expectEqual(@as(u32, 94), pane.scroll.offset);
     try std.testing.expectEqual(@as(u32, 100), other.scroll.offset);
@@ -741,7 +741,7 @@ test "copy mode takes authority away from a held scroll binding" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
 
     _ = try host_inputs.feed(client, .{ .bytes = "\x02\x1b[45::45;1:1u", .now_ns = 0 });
@@ -762,7 +762,7 @@ test "focused scroll bindings emit unmodified SGR wheel reports in cells or pixe
         const client = harness.client;
         _ = try client.model.observeHostCapability(.{ .cell_pixels = .{ .width = 10, .height = 20 } });
         _ = try client.model.observeHostCapability(.{ .pointer_pixels = .supported });
-        const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+        const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
         pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = pixels };
         pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
         pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 2 };
@@ -795,7 +795,7 @@ test "held global scroll paces SGR reports without forwarding the binding chord"
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true };
     const binding = try data.config_values.ConfiguredBinding.parse(&.{"alt+-"}, .{ .scroll_pane = .up });
     TerminalClient.of(client).host_input.replaceRouter(client.io, try host_inputs.Router.init(&.{binding}));
@@ -832,15 +832,15 @@ test "focused scroll sends alternate-screen cursor keys only to the focused pane
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const model = client.model.activeTabModel().?;
+    const model = client.model.tabs.active;
     const focused = TestHarness.bootstrap_pane;
     const hovered: core.PaneId = @enumFromInt(20);
-    try model.split(.{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
-    try std.testing.expect(model.focusPane(focused));
-    const pane = model.find(focused).?;
+    try data.pane_split.split(&client.model, model, .{ .existing_pane = focused, .new_pane = hovered, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    try std.testing.expect(client.model.tabs.layout[model].focusPane(focused));
+    const pane = client.model.panes.findIn(client.model.tabs.location[model].tab_id, focused).?;
     pane.input_modes = .{ .alternate_screen = true, .alternate_scroll = true };
     pane.scroll = .{ .total_rows = pane.buffer.h, .offset = 0 };
-    const hovered_view = model.viewForPane(hovered, TerminalClient.of(client).view.workbench()).?;
+    const hovered_view = data.tab_layout.view(&client.model, model, hovered, TerminalClient.of(client).view.workbench()).?;
     try host_inputs.mouse(client, .{ .x = hovered_view.content.x, .y = hovered_view.content.y, .kind = .move });
     const version = client.model.version();
 
@@ -852,7 +852,7 @@ test "focused scroll sends alternate-screen cursor keys only to the focused pane
             .effect,
         );
         try std.testing.expectEqualDeep(version, client.model.version());
-        try std.testing.expectEqual(focused, model.layout.focused().?);
+        try std.testing.expectEqual(focused, client.model.tabs.layout[model].focused().?);
         try harness.settle();
         var buffer: [256]u8 = undefined;
         var received: [9]u8 = undefined;
@@ -902,7 +902,7 @@ test "focused scroll retires copy mode before moving the restored viewport" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     _ = try client.executeAction(.enter_copy_mode, .effect);
     try host_inputs.key(client, try data.chord.parseKey("g"));
@@ -938,8 +938,8 @@ test "focus reporting emits focus-in only after the pane opts in" {
     try std.testing.expectEqual(TestHarness.bootstrap_pane, support.reportedPaneId(client));
     try std.testing.expect(!client.model.reportedPaneFocus().?.focus_events);
 
-    const model = &client.model.workspace.active().?.model;
-    model.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    const model = client.model.tabs.active;
+    client.model.panes.findIn(client.model.tabs.location[model].tab_id, TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     const input_events = client.telemetry.metrics.input_events;
     try client.synchronizeActivePane();
     try harness.settle();
@@ -960,7 +960,7 @@ test "canonical reported focus retirement is silent and idempotent" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     _ = client.model.syncReportedPaneFocus().?;
     const version = client.model.version();
     const outbox_len = client.runtime_transport.outbox.len;
@@ -981,16 +981,16 @@ test "native thread view action flips the focused pane surface" {
 
     const client = harness.client;
     var expected_version = client.model.version();
-    const active = client.model.activeTabModelConst().?;
-    const focused = active.layout.focused().?;
-    try std.testing.expectEqual(core.PaneSurface.terminal, active.layout.surface(focused));
+    const active = client.model.tabs.active;
+    const focused = client.model.tabs.layout[active].focused().?;
+    try std.testing.expectEqual(core.PaneSurface.terminal, client.model.tabs.layout[active].surface(focused));
 
     for ([_]core.PaneSurface{ .thread, .terminal }) |expected_surface| {
         const control = try client.executeAction(.toggle_thread_view, .effect);
 
         expected_version.panes +%= 1;
         try std.testing.expectEqual(data.KeybindControl.continue_routing, control);
-        try std.testing.expectEqual(expected_surface, active.layout.surface(focused));
+        try std.testing.expectEqual(expected_surface, client.model.tabs.layout[active].surface(focused));
         try std.testing.expectEqualDeep(expected_version, client.model.version());
     }
 }

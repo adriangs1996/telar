@@ -34,8 +34,8 @@ pub fn captureClient(app: *const client.AttachedClient, target: Target) ?FieldVi
             return null;
         }
 
-        const model = app.model.activeTabModelConst() orelse return null;
-        const pane = model.findConst(target.action.composer) orelse return null;
+        const tab = app.model.tabs.activeSlot() orelse return null;
+        const pane = app.model.panes.findInConst(app.model.tabs.location[tab].tab_id, target.action.composer) orelse return null;
         if (!pane.attached or pane.kind != .agent or pane.attachment_generation != target.id.generation) {
             return null;
         }
@@ -52,8 +52,8 @@ pub fn captureClient(app: *const client.AttachedClient, target: Target) ?FieldVi
 /// Example: `const revision = FieldView.revision(app, target);`
 pub fn revision(app: *const client.AttachedClient, target: Target) u64 {
     if (target.action == .composer) {
-        const model = app.model.activeTabModelConst() orelse return 0;
-        const pane = model.findConst(target.action.composer) orelse return 0;
+        const tab = app.model.tabs.activeSlot() orelse return 0;
+        const pane = app.model.panes.findInConst(app.model.tabs.location[tab].tab_id, target.action.composer) orelse return 0;
         return if (pane.attachment_generation == target.id.generation) pane.composer_revision else 0;
     }
 

@@ -427,8 +427,8 @@ test "bootstrap answers the initial open with both snapshot requests" {
     defer harness.deinit();
     try harness.bootstrap();
 
-    try std.testing.expectEqual(@as(usize, 1), harness.client.model.workspace.count);
-    const pane = harness.client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    try std.testing.expectEqual(@as(usize, 1), harness.client.model.tabs.count);
+    const pane = harness.client.model.panes.find(TestHarness.bootstrap_pane).?;
     try std.testing.expect(pane.attached);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, support.reportedPaneId(harness.client));
     try std.testing.expectEqual(@as(u64, 1), harness.client.model.version().workspace);
@@ -447,7 +447,7 @@ test "client layout observation sends one canonical workspace update" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.model.workspace.active().?.snapshot_loaded = true;
+    client.model.tabs.snapshot_loaded[client.model.tabs.active] = true;
     try client.client_layouts.markSnapshotReceived();
     try std.testing.expect(client.model.restoreSidebarLayout(true, 53) != null);
     try std.testing.expect(client.model.setWorkspaceListCollapsed(true) != null);

@@ -653,7 +653,7 @@ test "native tab drag sends one anchored move after release and waits for runtim
     const y = source.bounds.y + source.bounds.height / 2;
     try send(session, .{ .pointer = .{ .kind = .press, .x = source.bounds.x + 10, .y = y } });
     try send(session, .{ .pointer = .{ .kind = .drag, .x = target.bounds.x + 2, .y = y } });
-    try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.workspace.indexOf(third));
+    try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.tabs.find(third));
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
     try std.testing.expectEqual(Session.location.tab_id, session.gui.widgets.tab_drag.destination.?.relative_to.?);
     const size = try session.gui.resizeViewport(
@@ -683,7 +683,7 @@ test "native tab drag sends one anchored move after release and waits for runtim
     try std.testing.expectEqual(third, request.location.tab_id);
     try std.testing.expectEqual(Session.location.tab_id, request.relative_to.?);
     try std.testing.expectEqual(core.TabMoveDirection.previous, request.direction);
-    try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.workspace.indexOf(third));
+    try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.tabs.find(third));
     try session.settle();
     _ = try session.gui.app.handleServerMessage(
         .{
@@ -694,7 +694,7 @@ test "native tab drag sends one anchored move after release and waits for runtim
             },
         },
     );
-    try std.testing.expectEqual(@as(?usize, 0), session.gui.app.model.workspace.indexOf(third));
+    try std.testing.expectEqual(@as(?usize, 0), session.gui.app.model.tabs.find(third));
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
 
@@ -718,7 +718,7 @@ test "native tab drag cancels on Escape focus loss and outside drops without pan
         try send(session, .{ .pointer = .{ .kind = .release, .x = 500, .y = 200 } });
         try session.settle();
         try std.testing.expectEqual(@as(usize, 0), session.input_len);
-        try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.workspace.indexOf(@enumFromInt(3)));
+        try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.tabs.find(@enumFromInt(3)));
         try std.testing.expect(!session.gui.app.request_lifecycle.tracker.has(.tab_operation));
     }
 }
@@ -877,13 +877,13 @@ test "composer menus reject stale draft catalog attachment and retired menu choi
     try publish(session);
     try std.testing.expectEqual(opened, session.gui.widgets.composer_menu.generation);
     try std.testing.expect(session.gui.widgets.composer_menu.selector != null);
-    session.gui.app.model.activeTabModel().?.find(Session.pane_id).?.catalog_revision +%= 1;
+    session.gui.app.model.panes.find(Session.pane_id).?.catalog_revision +%= 1;
     try send(session, .{ .key = .{ .code = .enter } });
     try std.testing.expect(session.gui.widgets.composer_menu.selector == null);
     try std.testing.expectEqual(.workspace, pane.agentOptions().access);
     try publish(session);
     const trigger = try composerSelector(session, .model);
-    session.gui.app.model.activeTabModel().?.find(Session.pane_id).?.attachment_generation +%= 1;
+    session.gui.app.model.panes.find(Session.pane_id).?.attachment_generation +%= 1;
     try pressControl(session, trigger);
     try std.testing.expect(session.gui.widgets.composer_menu.selector == null);
     try std.testing.expectEqualStrings("codex-test", pane.agentOptions().modelSlice());
@@ -935,11 +935,11 @@ test "composer menu preserves terminal repeats and releases across pane focus ch
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    const panes = gui.app.model.activeTabModel().?;
+    const tab = gui.app.model.tabs.active;
     const terminal: core.PaneId = @enumFromInt(21);
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
-    _ = panes.focusPane(terminal);
-    panes.find(terminal).?.input_modes.kitty_keyboard_flags = 10;
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
+    gui.app.model.panes.find(terminal).?.input_modes.kitty_keyboard_flags = 10;
     try publish(session);
     _ = gui.widgets.dispatcher.focus(null);
     try send(session, .{ .key = .{ .code = .enter, .physical = .{ .value = 93 } } });
@@ -963,26 +963,26 @@ test "composer menu preserves terminal repeats and releases across pane focus ch
     try std.testing.expectEqual(@as(usize, 0), gui.widgets.dispatcher.keys.len);
     try std.testing.expectEqual(@as(usize, 0), gui.router.leases.len);
     try std.testing.expectEqual(@as(usize, 0), gui.app.input_leases.len);
-    try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
+    try std.testing.expectEqualStrings("", gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
     try std.testing.expect(gui.widgets.composer_menu.selector != null);
 }
 
 test "opening a selector focuses its agent split and closing restores that exact composer" {
     const session = try agentSession();
     defer session.deinit();
-    const panes = session.gui.app.model.activeTabModel().?;
+    const tab = session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
-    try std.testing.expect(panes.focusPane(second));
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try std.testing.expect(session.gui.app.model.tabs.layout[tab].focusPane(second));
     try publish(session);
     try pressControl(session, try composerSelector(session, .model));
-    try std.testing.expectEqual(Session.pane_id, panes.layout.focused());
+    try std.testing.expectEqual(Session.pane_id, session.gui.app.model.tabs.layout[tab].focused());
     try publish(session);
     try send(session, .{ .key = .{ .code = .escape } });
     try std.testing.expectEqual(Session.pane_id, session.gui.widgets.dispatcher.focusedTarget().?.action.composer);
 
     try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(2), .pane_id = second, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 78 }));
-    const source = panes.findConst(Session.pane_id).?.agent_thread.?;
+    const source = session.gui.app.model.panes.findConst(Session.pane_id).?.agent_thread.?;
     const snapshot = try std.testing.allocator.create(core.AgentThreadSnapshot);
     defer std.testing.allocator.destroy(snapshot);
     snapshot.* = source.*;
@@ -1001,13 +1001,13 @@ test "opening a selector focuses its agent split and closing restores that exact
     }
 
     try pressControl(session, trigger orelse return error.MissingSecondComposerSelector);
-    try std.testing.expectEqual(second, panes.layout.focused());
+    try std.testing.expectEqual(second, session.gui.app.model.tabs.layout[tab].focused());
     try publish(session);
     try send(session, .{ .key = .{ .code = .escape } });
     try std.testing.expectEqual(second, session.gui.widgets.dispatcher.focusedTarget().?.action.composer);
     try send(session, .{ .text = .{ .bytes = "second draft" } });
-    try std.testing.expectEqualStrings("second draft", panes.findConst(second).?.composerSlice());
-    try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
+    try std.testing.expectEqualStrings("second draft", session.gui.app.model.panes.findConst(second).?.composerSlice());
+    try std.testing.expectEqualStrings("", session.gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
 }
 
 test "agent composer owns multiline IME editing and submits one complete prompt" {
@@ -1263,7 +1263,7 @@ test "agent thread warm drawing allocates no glyph or quad storage and clips sma
             .theme = session.gui.theme,
             .chrome = session.gui.renderer.chrome,
         };
-        const thread = client.ThreadView.capture(session.gui.app.model.activeTabModel().?, null, Session.pane_id).?;
+        const thread = client.ThreadView.capture(&session.gui.app.model, null, Session.pane_id).?;
         try (@import("../widgets/ThreadPane.zig"){ .area = session.gui.region.area, .thread = thread }).draw(&canvas);
         for (session.gui.renderer.quads.items()) |quad| {
             try std.testing.expect(quad.x >= 0 and quad.y >= 0);
@@ -1342,7 +1342,7 @@ test "work disclosure toggles with pointer and keyboard without copying hidden a
     const current = session.gui.widgets.dispatcher.focusedTarget().?;
     try std.testing.expectEqual(.toggle_work, current.action.thread_item.operation);
     try std.testing.expectApproxEqAbs(header.bounds.y, current.bounds.y, 25);
-    const pane = session.gui.app.model.activeTabModel().?.find(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.attachment_generation += 1;
     try send(session, .{ .accessibility = .{ .target_id = current.id.target_id, .generation = current.id.generation, .action = .press } });
     try std.testing.expect(session.gui.widgets.threadExpanded(header.action.thread_item));
@@ -1398,7 +1398,7 @@ test "an evicted conversation item cannot activate a replacement through stale d
     try std.testing.expect(!session.gui.widgets.threadExpanded(replacement.action.thread_item));
     try pressControl(session, replacement);
     try std.testing.expect(session.gui.widgets.threadExpanded(replacement.action.thread_item));
-    const pane = session.gui.app.model.activeTabModel().?.find(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.attachment_generation += 1;
     try send(session, .{ .accessibility = .{ .target_id = replacement.id.target_id, .generation = replacement.id.generation, .action = .press } });
     try std.testing.expect(session.gui.widgets.threadExpanded(replacement.action.thread_item));
@@ -1591,21 +1591,21 @@ test "conversation controls focus their pane and stale controls cannot focus a r
     const session = try agentSession();
     defer session.deinit();
     try activitySnapshot(session);
-    const panes = session.gui.app.model.activeTabModel().?;
+    const tab = session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(22);
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
-    _ = panes.focusPane(second);
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    _ = session.gui.app.model.tabs.layout[tab].focusPane(second);
     try publish(session);
     const target = try threadItemTarget(session, 42);
     try pressControl(session, target);
-    try std.testing.expectEqual(Session.pane_id, panes.layout.focused());
-    _ = panes.focusPane(second);
+    try std.testing.expectEqual(Session.pane_id, session.gui.app.model.tabs.layout[tab].focused());
+    _ = session.gui.app.model.tabs.layout[tab].focusPane(second);
     var snapshot = session.gui.app.model.agentPane(Session.pane_id).?.agent_thread.?.*;
     snapshot.revision += 1;
     snapshot.item_storage[0].identity = 43;
     try receiveThread(session, &snapshot);
     try send(session, .{ .accessibility = .{ .target_id = target.id.target_id, .generation = target.id.generation, .action = .focus } });
-    try std.testing.expectEqual(second, panes.layout.focused());
+    try std.testing.expectEqual(second, session.gui.app.model.tabs.layout[tab].focused());
 }
 
 fn adoptAgentBinding(session: *Session, binding: data.config_values.ConfiguredBinding) void {
@@ -1752,7 +1752,7 @@ test "agent scroll bindings respect transcript bounds and attachment identity" {
     defer session.deinit();
     try linkSnapshot(session, "Earlier output\n" ** 80);
     try publish(session);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const registry = session.gui.widgets.dispatcher.maps.presented();
     const transcript = for (registry.targets[0..registry.len]) |target| {
         if (target.action == .transcript and target.action.transcript == pane.id) {
@@ -1913,11 +1913,11 @@ test "a terminal split receives typing while the sibling agent composer stays vi
         const session = try agentSession();
         defer session.deinit();
         const gui = session.gui;
-        const panes = gui.app.model.activeTabModel().?;
+        const tab = gui.app.model.tabs.active;
         const token = if (timing == .during_frame) try session.draw() else 0;
         const terminal: core.PaneId = @enumFromInt(21);
-        try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
-        _ = panes.focusPane(terminal);
+        try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+        _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
         if (timing == .after_frame) {
             try publish(session);
         } else if (timing == .during_frame) {
@@ -1930,8 +1930,8 @@ test "a terminal split receives typing while the sibling agent composer stays vi
 
         try send(session, .{ .text = .{ .bytes = "x" } });
         try session.settle();
-        try std.testing.expectEqual(terminal, panes.layout.focused());
-        try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
+        try std.testing.expectEqual(terminal, gui.app.model.tabs.layout[tab].focused());
+        try std.testing.expectEqualStrings("", gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
         try std.testing.expectEqualStrings("x", session.input[0..session.input_len]);
         try std.testing.expectEqual(terminal, session.last_input_pane.?);
         var context: native.TextContext = .{};
@@ -1945,10 +1945,10 @@ test "leaving an agent pane retires native text context and queued editor input 
     const gui = session.gui;
     const target = try composerTarget(session);
     try send(session, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "pending", .selection_start = 7, .selection_end = 7 } });
-    const panes = gui.app.model.activeTabModel().?;
+    const tab = gui.app.model.tabs.active;
     const terminal: core.PaneId = @enumFromInt(21);
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
-    _ = panes.focusPane(terminal);
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
     var context: native.TextContext = .{};
     try std.testing.expect(!gui.widgetTextContext(&context));
     try std.testing.expect(gui.widgets.preedit.owner == null);
@@ -1957,8 +1957,8 @@ test "leaving an agent pane retires native text context and queued editor input 
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "z", .physical = .{ .value = 120 }, .phase = .release } });
     try send(session, .{ .paste = "terminal paste" });
     try session.settle();
-    try std.testing.expectEqual(terminal, panes.layout.focused());
-    try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
+    try std.testing.expectEqual(terminal, gui.app.model.tabs.layout[tab].focused());
+    try std.testing.expectEqualStrings("", gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
     try std.testing.expectEqualStrings("terminal paste", session.input[0..session.input_len]);
     try std.testing.expectEqual(terminal, session.last_input_pane.?);
     try expectReleasedKeys(session);
@@ -1971,15 +1971,15 @@ test "an agent chord timeout cannot restore pane focus before repaint" {
     const target = try composerTarget(session);
     adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 121 } } });
-    const panes = gui.app.model.activeTabModel().?;
+    const tab = gui.app.model.tabs.active;
     const terminal: core.PaneId = @enumFromInt(21);
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
-    _ = panes.focusPane(terminal);
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
     gui.router.binding_since_ns = 0;
     gui.router.sequence_timeout_ns = 0;
     try input_support.bindingExpired(gui);
-    try std.testing.expectEqual(terminal, panes.layout.focused());
-    try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
+    try std.testing.expectEqual(terminal, gui.app.model.tabs.layout[tab].focused());
+    try std.testing.expectEqualStrings("", gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 121 }, .phase = .release } });
     try expectReleasedKeys(session);
     try send(session, .{ .text = .{ .bytes = "x" } });
@@ -1992,25 +1992,25 @@ test "agent direct navigation binding leaves the composer and releases its origi
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    const panes = gui.app.model.activeTabModel().?;
+    const tab = gui.app.model.tabs.active;
     const terminal: core.PaneId = @enumFromInt(21);
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
-    _ = panes.focusPane(Session.pane_id);
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    _ = gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
     try publish(session);
     const target = try composerTarget(session);
     adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{"ctrl+l"}, .{ .navigate_pane = .right }));
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation, .code = .{ .char = .init("l") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 101 } } });
-    try std.testing.expectEqual(terminal, panes.layout.focused());
+    try std.testing.expectEqual(terminal, gui.app.model.tabs.layout[tab].focused());
     try publish(session);
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation, .code = .{ .char = .init("l") }, .physical = .{ .value = 101 }, .phase = .release } });
     try session.settle();
     try expectReleasedKeys(session);
-    try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
+    try std.testing.expectEqualStrings("", gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
     try send(session, .{ .text = .{ .bytes = "x" } });
     try session.settle();
-    try std.testing.expectEqual(terminal, panes.layout.focused());
-    try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
+    try std.testing.expectEqual(terminal, gui.app.model.tabs.layout[tab].focused());
+    try std.testing.expectEqualStrings("", gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
     try std.testing.expectEqualStrings("x", session.input[0..session.input_len]);
     try std.testing.expectEqual(terminal, session.last_input_pane.?);
 }
@@ -2096,7 +2096,7 @@ test "agent global shortcuts reject stale native generations and replaced attach
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation + 1, .code = .{ .char = .init("r") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 107 } } });
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation + 1, .code = .{ .char = .init("r") }, .physical = .{ .value = 107 }, .phase = .release } });
     try std.testing.expect(!session.gui.app.model.name_prompt.active());
-    session.gui.app.model.activeTabModel().?.find(Session.pane_id).?.attachment_generation += 1;
+    session.gui.app.model.panes.find(Session.pane_id).?.attachment_generation += 1;
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation, .code = .{ .char = .init("r") }, .mods = .{ .ctrl = true }, .physical = .{ .value = 108 } } });
     try send(session, .{ .key = .{ .target_id = target.id.target_id, .generation = target.id.generation, .code = .{ .char = .init("r") }, .physical = .{ .value = 108 }, .phase = .release } });
     try std.testing.expect(!session.gui.app.model.name_prompt.active());
@@ -2187,13 +2187,13 @@ test "one native input batch retires composer replay ownership before a terminal
     defer session.deinit();
     const gui = session.gui;
     adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
-    const panes = gui.app.model.activeTabModel().?;
+    const tab = gui.app.model.tabs.active;
     const terminal: core.PaneId = @enumFromInt(21);
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
-    _ = panes.focusPane(Session.pane_id);
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    _ = gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
     try publish(session);
     const target = try composerTarget(session);
-    const view = panes.viewForPane(terminal, gui.region.area).?;
+    const view = data.tab_layout.view(&gui.app.model, tab, terminal, gui.region.area).?;
     const size = gui.app.model.hostSize();
     const x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
     const y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
@@ -2203,15 +2203,15 @@ test "one native input batch retires composer replay ownership before a terminal
     try input_support.accept(gui, .{ .pointer = .{ .kind = .release, .x = x, .y = y } });
     try input_support.accept(gui, .{ .text = .{ .bytes = "g", .physical = .{ .value = 115 } } });
     try input_support.pump(gui);
-    try std.testing.expectEqual(terminal, panes.layout.focused());
+    try std.testing.expectEqual(terminal, gui.app.model.tabs.layout[tab].focused());
     try std.testing.expect(gui.router.bindingDeadline() != null);
-    try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
+    try std.testing.expectEqualStrings("", gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
     gui.router.binding_since_ns = 0;
     gui.router.sequence_timeout_ns = 0;
     try input_support.bindingExpired(gui);
     try session.settle();
     try std.testing.expectEqualStrings("g", session.input[0..session.input_len]);
-    try std.testing.expectEqualStrings("", panes.findConst(Session.pane_id).?.composerSlice());
+    try std.testing.expectEqualStrings("", gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
     try send(session, .{ .text = .{ .bytes = "g", .physical = .{ .value = 115 }, .phase = .release } });
     try expectReleasedKeys(session);
 }
@@ -2282,7 +2282,7 @@ test "message link hover rejects stale snapshots and failed delivery before acce
     invalid = replacement.action.message_link;
     invalid.owner.item_identity += 1;
     try std.testing.expect(links.destination(session.gui, invalid) == null);
-    session.gui.app.model.activeTabModel().?.find(Session.pane_id).?.attachment_generation += 1;
+    session.gui.app.model.panes.find(Session.pane_id).?.attachment_generation += 1;
     try session.settle();
     try std.testing.expect(session.gui.widgets.message_link_preview == null);
 }
@@ -2394,11 +2394,11 @@ test "delayed composer cut cannot steal focus from another agent split" {
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    const panes = gui.app.model.activeTabModel().?;
+    const tab = gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
     try std.testing.expect(gui.app.model.identifyPane(.{ .request_id = @enumFromInt(2), .pane_id = second, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 78 }));
-    var snapshot = panes.findConst(Session.pane_id).?.agent_thread.?.*;
+    var snapshot = gui.app.model.panes.findConst(Session.pane_id).?.agent_thread.?.*;
     snapshot.pane_id = second;
     snapshot.pane_generation = 78;
     try receiveThread(session, &snapshot);
@@ -2419,11 +2419,11 @@ test "delayed composer cut cannot steal focus from another agent split" {
     } else return error.MissingSecondComposer;
     try send(session, .{ .accessibility = .{ .action = .focus, .target_id = other.id.target_id, .generation = other.id.generation } });
     try send(session, .{ .clipboard = .{ .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .status = .success } });
-    try std.testing.expectEqualStrings("keep", panes.findConst(Session.pane_id).?.composerSlice());
+    try std.testing.expectEqualStrings("keep", gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
     try std.testing.expect(other.id.eql(gui.widgets.dispatcher.focused.?));
-    try std.testing.expectEqual(second, panes.layout.focused());
+    try std.testing.expectEqual(second, gui.app.model.tabs.layout[tab].focused());
     try send(session, .{ .text = .{ .bytes = "second" } });
-    try std.testing.expectEqualStrings("second", panes.findConst(second).?.composerSlice());
+    try std.testing.expectEqualStrings("second", gui.app.model.panes.findConst(second).?.composerSlice());
 }
 
 test "delayed composer paste rejects changed draft and caret but preserves an unchanged selection" {
@@ -2566,7 +2566,7 @@ test "image paste keeps text fallback and rejects edited or replaced drafts" {
         if (attempt == 0) {
             try send(session, .{ .text = .{ .bytes = " edited" } });
         } else {
-            gui.app.model.activeTabModel().?.find(Session.pane_id).?.attachment_generation += 1;
+            gui.app.model.panes.find(Session.pane_id).?.attachment_generation += 1;
         }
 
         try send(session, .{ .clipboard = .{ .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation, .status = .success, .image = true, .text = "/tmp/stale.png" } });
@@ -2659,7 +2659,7 @@ test "image preview closes with its button and backdrop and rejects obsolete ima
     }
     try publish(session);
     try pressControl(session, try promptControl(session, "Preview image 1"));
-    gui.app.model.activeTabModel().?.find(Session.pane_id).?.attachment_generation += 1;
+    gui.app.model.panes.find(Session.pane_id).?.attachment_generation += 1;
     try publish(session);
     try std.testing.expect(gui.widgets.image_preview == null);
 }
@@ -2708,12 +2708,12 @@ test "clicking an agent file link creates an editor pane in its source tab" {
     const opened = try core.encodePaneOpened(&response, .{ .request_id = request.request_id, .pane_id = editor_id, .location = request.location, .created = true });
     _ = try session.gui.app.handleServerMessage(try core.decodeServer(opened));
     try session.settle();
-    const tab = session.gui.app.model.workspace.active().?;
-    try std.testing.expectEqualDeep(Session.location, tab.location);
-    try std.testing.expectEqual(@as(usize, 2), tab.model.pane_count);
-    try std.testing.expectEqual(editor_id, tab.model.layout.focused());
-    try std.testing.expectEqual(core.PaneKind.terminal, tab.model.findConst(editor_id).?.kind);
-    try std.testing.expectEqual(core.PaneKind.agent, tab.model.findConst(Session.pane_id).?.kind);
+    const tab = session.gui.app.model.tabs.active;
+    try std.testing.expectEqualDeep(Session.location, session.gui.app.model.tabs.location[tab]);
+    try std.testing.expectEqual(@as(usize, 2), session.gui.app.model.panes.countIn(session.gui.app.model.tabs.location[tab].tab_id));
+    try std.testing.expectEqual(editor_id, session.gui.app.model.tabs.layout[tab].focused());
+    try std.testing.expectEqual(core.PaneKind.terminal, session.gui.app.model.panes.findConst(editor_id).?.kind);
+    try std.testing.expectEqual(core.PaneKind.agent, session.gui.app.model.panes.findConst(Session.pane_id).?.kind);
 }
 
 test "agent file link clicks reject replaced snapshots and missing editors" {
@@ -2776,7 +2776,7 @@ fn reviewControl(session: *Session) !Target {
 test "review changes stays hidden in terminal and managed panes without editions" {
     const terminal = try initSession();
     defer terminal.deinit();
-    _ = terminal.gui.app.model.workspace.findPane(Session.pane_id).?.identify(.terminal, 77);
+    _ = terminal.gui.app.model.panes.find(Session.pane_id).?.identify(.terminal, 77);
     try publish(terminal);
     try std.testing.expectEqual(@as(usize, 0), reviewControlCount(terminal));
 
@@ -2789,7 +2789,7 @@ test "hook editions show one terminal review action and retired availability rej
     const session = try initSession();
     defer session.deinit();
     const gui = session.gui;
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     _ = pane.identify(.terminal, 77);
     const notice: core.ChangeReviewChanged = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = "hook-thread", .latest_edition_id = 1 };
     _ = try gui.app.handleServerMessage(
@@ -2834,8 +2834,8 @@ test "managed review has exactly one action across single split and fullscreen l
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    const panes = gui.app.model.activeTabModel().?;
-    var snapshot = panes.findConst(Session.pane_id).?.agent_thread.?.*;
+    const tab = gui.app.model.tabs.active;
+    var snapshot = gui.app.model.panes.findConst(Session.pane_id).?.agent_thread.?.*;
     const thread = "review-thread";
     @memcpy(snapshot.thread_id[0..thread.len], thread);
     snapshot.thread_id_len = thread.len;
@@ -2856,11 +2856,11 @@ test "managed review has exactly one action across single split and fullscreen l
 
     const terminal: core.PaneId = @enumFromInt(21);
     const other_terminal: core.PaneId = @enumFromInt(22);
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
-    _ = panes.find(terminal).?.identify(.terminal, 78);
-    try panes.split(.{ .existing_pane = terminal, .new_pane = other_terminal, .location = Session.location, .axis = .vertical, .area = gui.region.area });
-    _ = panes.find(other_terminal).?.identify(.terminal, 79);
-    _ = panes.focusPane(Session.pane_id);
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    _ = gui.app.model.panes.find(terminal).?.identify(.terminal, 78);
+    try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = terminal, .new_pane = other_terminal, .location = Session.location, .axis = .vertical, .area = gui.region.area });
+    _ = gui.app.model.panes.find(other_terminal).?.identify(.terminal, 79);
+    _ = gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
     try publish(session);
     try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
     {
@@ -2874,7 +2874,7 @@ test "managed review has exactly one action across single split and fullscreen l
     try std.testing.expect(gui.app.model.togglePaneFullscreen(.{ .area = gui.region.area }) != null);
     try publish(session);
     try std.testing.expectEqual(@as(usize, 1), reviewControlCount(session));
-    _ = panes.focusPane(terminal);
+    _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
     try publish(session);
     try std.testing.expectEqual(@as(usize, 0), reviewControlCount(session));
     try std.testing.expect(gui.app.model.togglePaneFullscreen(.{ .area = gui.region.area }) != null);
@@ -2986,11 +2986,11 @@ test "agent link hand cursor follows links and rejects stale or covered targets"
 
 fn existingEditor(session: *Session, name: []const u8) !core.PaneId {
     const editor_id: core.PaneId = @enumFromInt(99);
-    const panes = session.gui.app.model.activeTabModel().?;
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = editor_id, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    const tab = session.gui.app.model.tabs.active;
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = editor_id, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
     try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(2), .pane_id = editor_id, .location = Session.location, .created = false, .kind = .terminal, .pane_generation = 88 }));
-    _ = panes.setPaneForeground(editor_id, name);
-    _ = panes.focusPane(Session.pane_id);
+    _ = session.gui.app.model.panes.find(editor_id).?.setForegroundName(name);
+    _ = session.gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
     return editor_id;
 }
 
@@ -3016,9 +3016,9 @@ test "agent file links reuse supported editors without splitting or typing into 
         try std.testing.expectEqualStrings("/tmp/reused.md", session.last_editor_open.?.path());
         try std.testing.expectEqual(Session.pane_id, session.last_editor_open.?.pane_id);
         try editorReply(session, .opened);
-        const panes = session.gui.app.model.activeTabModel().?;
-        try std.testing.expectEqual(@as(usize, 2), panes.pane_count);
-        try std.testing.expectEqual(editor_id, panes.layout.focused());
+        const tab = session.gui.app.model.tabs.active;
+        try std.testing.expectEqual(@as(usize, 2), session.gui.app.model.panes.countIn(session.gui.app.model.tabs.location[tab].tab_id));
+        try std.testing.expectEqual(editor_id, session.gui.app.model.tabs.layout[tab].focused());
         try std.testing.expectEqual(@as(usize, 0), session.input_len);
         try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
         try editorReply(session, .opened);

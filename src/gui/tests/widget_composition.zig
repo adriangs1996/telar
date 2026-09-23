@@ -16,13 +16,13 @@ test "projection composes terminal thread link chrome notifications and modal be
     const session = fixture.session;
     const gui = session.gui;
     const model = &gui.app.model;
-    const panes = model.activeTabModel().?;
+    const tab = model.tabs.active;
     const thread_id: core.PaneId = @enumFromInt(20);
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = thread_id, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
-    try std.testing.expect(panes.layout.setSurface(thread_id, .thread));
-    _ = panes.layout.focusPane(Session.pane_id);
-    try panes.find(thread_id).?.setComposer("Borrowed thread draft");
-    const pane = panes.find(Session.pane_id).?;
+    try data.pane_split.split(model, tab, .{ .existing_pane = Session.pane_id, .new_pane = thread_id, .location = Session.location, .axis = .horizontal, .area = gui.region.area });
+    try std.testing.expect(model.tabs.layout[tab].setSurface(thread_id, .thread));
+    _ = model.tabs.layout[tab].focusPane(Session.pane_id);
+    try model.panes.find(thread_id).?.setComposer("Borrowed thread draft");
+    const pane = model.panes.find(Session.pane_id).?;
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "https://example.com", .style = .{} });
     pane.cursor = .{ .x = 0, .y = 0, .visible = true, .appearance = .{ .shape = .bar } };
     const hit = try linkFor(&fixture);
@@ -46,7 +46,7 @@ test "projection composes terminal thread link chrome notifications and modal be
     try std.testing.expect(widgets.storage[0].terminal_pane.paint.hide_cursor);
     try std.testing.expectEqual(&composition.context, widgets.storage[3].top_bar.context);
     try std.testing.expectEqual(&projection, composition.context.projection);
-    try std.testing.expectEqual(panes.find(thread_id).?.composerSlice().ptr, widgets.storage[1].thread.thread.composer.ptr);
+    try std.testing.expectEqual(model.panes.find(thread_id).?.composerSlice().ptr, widgets.storage[1].thread.thread.composer.ptr);
     try std.testing.expectEqualStrings("Borrowed thread draft", widgets.storage[1].thread.thread.composer);
     try std.testing.expect(widgets.storage[widgets.len - 1].modal == .name_prompt);
     try widgets.draw(&canvas);
@@ -84,10 +84,10 @@ test "complete widget list fits the maximum pane count with every optional layer
     defer fixture.deinit();
     try fixture.resize(128, 64);
     const gui = fixture.session.gui;
-    const panes = gui.app.model.activeTabModel().?;
+    const tab = gui.app.model.tabs.active;
     for (1..core.max_panes_per_tab) |index| {
         var layout: data.LayoutSnapshot = .{};
-        panes.layout.snapshot(gui.region.area, &layout);
+        gui.app.model.tabs.layout[tab].snapshot(gui.region.area, &layout);
         var largest = layout.views()[0];
         for (layout.views()[1..]) |view| {
             if (@as(u32, view.content.w) * view.content.h > @as(u32, largest.content.w) * largest.content.h) {
@@ -95,7 +95,7 @@ test "complete widget list fits the maximum pane count with every optional layer
             }
         }
 
-        try panes.split(.{ .existing_pane = largest.pane_id, .new_pane = @enumFromInt(index + 100), .location = Session.location, .axis = if (largest.content.w > largest.content.h * 2) .horizontal else .vertical, .area = gui.region.area });
+        try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = largest.pane_id, .new_pane = @enumFromInt(index + 100), .location = Session.location, .axis = if (largest.content.w > largest.content.h * 2) .horizontal else .vertical, .area = gui.region.area });
     }
 
     _ = gui.app.model.publishNotification(0, .{ .title = "First", .message = "Finished" });
@@ -169,7 +169,7 @@ test "composed frame survives local widgets and replaced projection borrows unti
     );
     try std.testing.expect(targets.equivalent(gui.widgets.dispatcher.maps.presented()));
     try std.testing.expectEqual(generation, gui.widgets.editors.presented().items[0].id.generation);
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
     const next = try session.draw();
     try input_support.presented(
@@ -209,8 +209,8 @@ fn begin(fixture: *Fixture, projection: *const client.Projection) Canvas {
 
 fn linkFor(fixture: *Fixture) !@import("../input/LinkHit.zig") {
     const gui = fixture.session.gui;
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
-    const view = gui.app.model.activeTabModel().?.viewForPane(pane.id, gui.region.area).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
+    const view = data.tab_layout.view(&gui.app.model, gui.app.model.tabs.active, pane.id, gui.region.area).?;
     return .{
         .pane_id = pane.id,
         .generation = pane.attachment_generation,

@@ -12,8 +12,8 @@ const Destination = @import("../MessageLinkDestination.zig");
 /// Example: `const text = message_links.destination(gui, control) orelse return;`
 pub fn destination(gui: *const GuiClient, control: Control) ?[]const u8 {
     const owner = control.owner;
-    const model = gui.app.model.activeTabModelConst() orelse return null;
-    const pane = model.findConst(owner.pane_id) orelse return null;
+    const tab = gui.app.model.tabs.activeSlot() orelse return null;
+    const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, owner.pane_id) orelse return null;
     if (!pane.attached or pane.kind != .agent or pane.attachment_generation != owner.attachment_generation) {
         return null;
     }

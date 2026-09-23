@@ -305,7 +305,7 @@ test "history request admission failure is retryable and stale failure only wake
     const session = try historySession();
     defer session.deinit();
     const app = &session.gui.app;
-    const pane = app.model.workspace.findPane(Session.pane_id).?;
+    const pane = app.model.panes.find(Session.pane_id).?;
     app.request_lifecycle.next_request_id = std.math.maxInt(u64);
     _ = client.agent_reading.navigate(
         &app.model,
@@ -349,7 +349,7 @@ test "history page loading starts after successful delivery and not after a fail
     const session = try historySession();
     defer session.deinit();
     const gui = session.gui;
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     _ = client.agent_reading.navigate(
         &gui.app.model,
         pane.id,
@@ -476,7 +476,7 @@ test "historical copy and link targets resolve owned page bytes and retire on ev
     const session = try historySession();
     defer session.deinit();
     const gui = session.gui;
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     const window = try std.testing.allocator.create(data.AgentHistoryWindow);
     window.start(pane.agent_thread.?, 1);
     pane.agent_history = window;
@@ -549,7 +549,7 @@ test "reused provider item IDs in different turns retain both messages anchors a
 fn foldedHistorySession() !*Session {
     const session = try historySession();
     errdefer session.deinit();
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const live = pane.agent_thread.?;
     for (live.item_storage[0..3]) |*item| {
         item.role = .tool;

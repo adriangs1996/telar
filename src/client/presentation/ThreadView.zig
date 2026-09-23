@@ -31,8 +31,9 @@ branch: []const u8 = "",
 /// ```zig
 /// const thread = ThreadView.capture(model, agents, pane_id) orelse return;
 /// ```
-pub fn capture(model: *const data.MultiplexerModel, agents: ?*const data.AgentSnapshot, pane_id: core.PaneId) ?ThreadView {
-    const pane = model.findConst(pane_id) orelse return null;
+pub fn capture(model: *const data.Model, agents: ?*const data.AgentSnapshot, pane_id: core.PaneId) ?ThreadView {
+    const pane = model.panes.findConst(pane_id) orelse return null;
+    const tab = model.tabs.find(pane.location.tab_id) orelse return null;
     const agent = if (agents) |snapshot| found: {
         const key = snapshot.keyForPane(pane.location, pane_id) orelse break :found null;
         break :found snapshot.find(key);
@@ -52,7 +53,7 @@ pub fn capture(model: *const data.MultiplexerModel, agents: ?*const data.AgentSn
         .history_generation = pane.history_generation,
         .transcript_scroll = pane.transcript_scroll,
         .transcript_anchor_revision = pane.transcript_anchor_revision,
-        .focused = model.layout.focused() == pane_id,
+        .focused = model.tabs.layout[tab].focused() == pane_id,
         .options = pane.agentOptions(),
         .options_revision = pane.options_revision,
         .catalog_revision = pane.catalog_revision,

@@ -20,15 +20,15 @@ test "a created workspace bookmarks and replaces the prior layout" {
     const top_right: core.PaneId = @enumFromInt(11);
     const bottom_right: core.PaneId = @enumFromInt(12);
     const workbench = TerminalClient.of(client).view.workbench();
-    const prior_model = &client.model.workspace.active().?.model;
-    try prior_model.split(.{ .existing_pane = left, .new_pane = top_right, .location = prior_location, .axis = .horizontal, .area = workbench });
-    try prior_model.split(.{ .existing_pane = top_right, .new_pane = bottom_right, .location = prior_location, .axis = .vertical, .area = workbench });
-    prior_model.find(left).?.input_modes.focus_events = true;
-    try std.testing.expect(prior_model.focusPane(left));
+    const prior_model = client.model.tabs.active;
+    try data.pane_split.split(&client.model, prior_model, .{ .existing_pane = left, .new_pane = top_right, .location = prior_location, .axis = .horizontal, .area = workbench });
+    try data.pane_split.split(&client.model, prior_model, .{ .existing_pane = top_right, .new_pane = bottom_right, .location = prior_location, .axis = .vertical, .area = workbench });
+    client.model.panes.findIn(client.model.tabs.location[prior_model].tab_id, left).?.input_modes.focus_events = true;
+    try std.testing.expect(client.model.tabs.layout[prior_model].focusPane(left));
     _ = client.model.syncReportedPaneFocus().?;
-    try std.testing.expect(prior_model.focusPane(bottom_right));
+    try std.testing.expect(client.model.tabs.layout[prior_model].focusPane(bottom_right));
     var expected_geometry: data.LayoutSnapshot = .{};
-    prior_model.layout.snapshot(workbench, &expected_geometry);
+    client.model.tabs.layout[prior_model].snapshot(workbench, &expected_geometry);
 
     const new_location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
@@ -49,12 +49,12 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try std.testing.expect(!client.notification_scheduler.pending);
     try std.testing.expectEqualDeep(
         @as(?core.WorkspaceLocation, new_location.workspace),
-        client.model.workspace.workspace,
+        client.model.workspace,
     );
-    const created_pane = client.model.workspace.findPane(@enumFromInt(30)).?;
+    const created_pane = client.model.panes.find(@enumFromInt(30)).?;
     try std.testing.expectEqual(@as(u16, 80), created_pane.buffer.w);
     try std.testing.expectEqual(@as(u16, 20), created_pane.buffer.h);
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) == null);
     try std.testing.expectEqual(version_before_creation.workspace + 1, client.model.version().workspace);
     try std.testing.expectEqual(version_before_creation.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_creation.active_tab + 1, client.model.version().active_tab);
@@ -129,7 +129,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     _ = try client.handleServerMessage(try core.decodeServer(snapshot));
 
     var restored_geometry: data.LayoutSnapshot = .{};
-    client.model.workspace.activeConst().?.model.layout.snapshot(workbench, &restored_geometry);
+    client.model.tabs.layout[client.model.tabs.active].snapshot(workbench, &restored_geometry);
     for ([_]core.PaneId{ left, top_right, bottom_right }) |pane_id|
         try std.testing.expectEqual(
             expected_geometry.find(pane_id).?.outer,
@@ -158,7 +158,7 @@ test "a failed workspace creation preserves the current projection" {
 
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) != null);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) != null);
     try std.testing.expect(client.notification_scheduler.pending);
 }
 
@@ -215,7 +215,7 @@ test "workspace creation outbox failure releases correlation and retains the cur
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
 }
 
 test "canonical workspace replacement survives failure to deliver activation snapshots" {
@@ -241,8 +241,8 @@ test "canonical workspace replacement survives failure to deliver activation sna
     try std.testing.expectError(error.ClientOutboxFull, client.handleServerMessage(try core.decodeServer(opened)));
 
     try std.testing.expectEqualDeep(location, client.model.activeTabLocation().?);
-    try std.testing.expect(client.model.workspace.findPane(@enumFromInt(30)).?.attached);
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
+    try std.testing.expect(client.model.panes.find(@enumFromInt(30)).?.attached);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) == null);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.navigation_history.find(TestHarness.bootstrap_location.workspace).?.location);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
     try std.testing.expectError(error.UnexpectedRequest, client.handleServerMessage(try core.decodeServer(opened)));

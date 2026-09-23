@@ -46,7 +46,7 @@ pub fn hide(state: *SidebarState) void {
 /// Reveals a new workspace or resized row, retaining manual scrolling otherwise.
 /// Example: `state.revealWorkspace(projection, list.height);`
 pub fn revealWorkspace(state: *SidebarState, projection: *const client.Projection, height: f32) void {
-    const location = projection.tabs.workspace;
+    const location = projection.model.workspace;
     const position = if (location) |value| switch (value) {
         .workspace => |id| projection.workspaces.indexOf(id),
         .worktree => null,

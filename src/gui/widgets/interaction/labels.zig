@@ -1,3 +1,4 @@
+const data = @import("model");
 const Target = @import("Target.zig");
 const client = @import("telar-client");
 
@@ -45,12 +46,8 @@ pub fn forAction(projection: *const client.Projection, action: Target.Action) []
             .create_tab => "Create tab",
             .move_tab => "Move tab",
             .select_tab, .rename_tab => |id| blk: {
-                for (projection.tabs.items[0..projection.tabs.count]) |*slot| {
-                    if (slot.*) |*tab| {
-                        if (tab.location.tab_id == id) {
-                            break :blk tab.labelSlice();
-                        }
-                    }
+                if (projection.model.tabs.find(id)) |tab| {
+                    break :blk data.tab_label.text(projection.model, tab);
                 }
 
                 break :blk "Tab";

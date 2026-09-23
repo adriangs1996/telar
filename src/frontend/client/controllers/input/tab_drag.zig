@@ -20,12 +20,12 @@ pub fn press(app: *client.AttachedClient, mouse: data.Mouse) ?client.ViewInterac
         return .{ .consumed = true };
     }
 
-    if (view.attachment_store.hasModal() or !std.meta.eql(tabs.workspace, app.model.workspace.workspace)) {
+    if (view.attachment_store.hasModal() or !std.meta.eql(tabs.workspace, app.model.workspace)) {
         return .{ .consumed = true };
     }
 
     const workspace = tabs.workspace orelse return .{ .consumed = true };
-    if (app.model.workspace.indexOf(tab_id) == null) {
+    if (app.model.tabs.find(tab_id) == null) {
         return .{ .consumed = true };
     }
 
@@ -65,7 +65,7 @@ pub fn retained(app: *client.AttachedClient, event: data.Mouse) !bool {
     view.interaction_revision +%= 1;
     if (mouse.kind == .release) {
         if (tabs.gesture.finish()) |move| {
-            const model = app.model.activeTabModel() orelse return true;
+            const model = app.model.tabs.activeSlot() orelse return true;
             _ = try client.operations.view_interactions.apply(app, model, .{ .intent = .{ .move_tab = move }, .consumed = true });
         }
     }

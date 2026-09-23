@@ -30,7 +30,7 @@ verify: bool = false,
 
 /// Reports sizes and runs validated fixed workloads. Example: `try probe.run();`
 pub fn run(self: *Probe) !void {
-    inline for (.{ core.Cell, data.Pane, data.MultiplexerModel, data.Tab, data.TabsModel, client.AttachedClient, Renderer, CellMesh, Quad.Quad, ThreadFlow, Widget, core.ProfileStore }) |T| {
+    inline for (.{ core.Cell, data.Pane, data.Tabs, data.Panes, client.AttachedClient, Renderer, CellMesh, Quad.Quad, ThreadFlow, Widget, core.ProfileStore }) |T| {
         try self.writer.print("{{\"type\":\"layout\",\"name\":\"{s}\",\"size\":{d},\"alignment\":{d},\"fields\":[", .{ @typeName(T), @sizeOf(T), @alignOf(T) });
         inline for (std.meta.fields(T), 0..) |field, index| {
             try self.writer.print("{s}{{\"name\":\"{s}\",\"offset\":{d},\"size\":{d}}}", .{ if (index == 0) "" else ",", field.name, @offsetOf(T, field.name), @sizeOf(field.type) });
@@ -293,22 +293,22 @@ fn conversation(self: *Probe, transcript: Transcript) !void {
 
 fn workspace(self: *Probe, count: usize) !void {
     var accounting = std.testing.FailingAllocator.init(self.gpa, .{});
-    const tabs = try accounting.allocator().create(data.TabsModel);
-    defer accounting.allocator().destroy(tabs);
-    tabs.* = .init(accounting.allocator());
-    defer tabs.deinit();
+    const model = try accounting.allocator().create(data.Model);
+    defer accounting.allocator().destroy(model);
+    model.* = .init(accounting.allocator(), true);
+    defer model.deinit();
     const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
     const size: core.TerminalSize = .{ .cols = 80, .rows = 40 };
-    try tabs.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = size });
+    try data.workspace_handoff.bootstrap(model, .{ .pane_id = @enumFromInt(1), .location = location, .size = size });
     for (1..count) |index| {
-        _ = try tabs.addCreated(.{ .location = .{ .workspace = location.workspace, .tab_id = @enumFromInt(index + 1) }, .position = @intCast(index), .label = "probe", .root_pane_id = @enumFromInt(index + 1) }, size);
+        _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = location.workspace, .tab_id = @enumFromInt(index + 1) }, .position = @intCast(index), .label = "probe", .root_pane_id = @enumFromInt(index + 1) }, size);
     }
     var checksum: usize = 0;
     const before = core.profiling.snapshot();
     const started = std.Io.Clock.awake.now(self.io).nanoseconds;
     for (0..iterations) |_| {
         for (1..count + 1) |index| {
-            const pane = tabs.findPane(@enumFromInt(index)) orelse return error.MissingWorkspacePane;
+            const pane = model.panes.find(@enumFromInt(index)) orelse return error.MissingWorkspacePane;
             checksum +%= core.raw(pane.id);
         }
     }

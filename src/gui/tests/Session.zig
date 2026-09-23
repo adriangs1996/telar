@@ -191,7 +191,7 @@ pub fn bootstrap(session: *Session) !void {
 }
 
 pub fn receiveFrame(session: *Session, frame_id: u64) !void {
-    const pane = session.gui.app.model.workspace.findPane(pane_id).?;
+    const pane = session.gui.app.model.panes.find(pane_id).?;
     const count = pane.buffer.cells.len;
     var cells: [256]core.Cell = @splat(.{});
     if (count > cells.len) {

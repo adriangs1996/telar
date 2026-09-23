@@ -9,9 +9,9 @@ const Selector = @import("ComposerSelector.zig");
 /// Example: `if (!composer_menu.eligible(gui, target)) return;`
 pub fn eligible(gui: *const GuiClient, target: Target) bool {
     const selector = selectorOf(target) orelse return false;
-    const model = gui.app.model.activeTabModelConst() orelse return false;
-    const thread = client.ThreadView.capture(model, null, selector.pane_id) orelse return false;
-    const pane = model.findConst(selector.pane_id) orelse return false;
+    const tab = gui.app.model.tabs.activeSlot() orelse return false;
+    const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, selector.pane_id) orelse return false;
+    const thread = client.ThreadView.capture(&gui.app.model, null, selector.pane_id) orelse return false;
     if (selector.kind == .recent and (thread.transcript == null or !thread.transcript.?.canResume())) {
         return false;
     }
@@ -28,7 +28,7 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
     }
 
     const selector = selectorOf(target).?;
-    const thread = client.ThreadView.capture(gui.app.model.activeTabModelConst().?, null, selector.pane_id).?;
+    const thread = client.ThreadView.capture(&gui.app.model, null, selector.pane_id).?;
     const options: @import("../ComposerOptions.zig") = .{ .thread = thread, .kind = selector.kind };
     const state = &gui.widgets.composer_menu;
     if (target.action == .composer_selector) {
@@ -40,8 +40,8 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
 
         gui.widgets.cancelComposition();
         gui.cancelBinding();
-        const model = gui.app.model.activeTabModel() orelse return;
-        _ = try client.operations.view_interactions.apply(&gui.app, model, .{ .intent = .{ .focus_pane = selector.pane_id }, .consumed = true });
+        const tab = gui.app.model.tabs.activeSlot() orelse return;
+        _ = try client.operations.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = selector.pane_id }, .consumed = true });
         state.* = .{ .selector = selector, .attachment_generation = target.id.generation, .generation = state.generation +% 1, .anchor = target.bounds, .selected = options.selected() };
         state.reveal(options.count());
         gui.widgets.dispatcher.revision +%= 1;
@@ -99,7 +99,7 @@ pub fn route(gui: *GuiClient, event: event_module.Event, decision: @import("Rout
         return true;
     }
 
-    const thread = client.ThreadView.capture(gui.app.model.activeTabModelConst().?, null, selector.pane_id).?;
+    const thread = client.ThreadView.capture(&gui.app.model, null, selector.pane_id).?;
     const options: @import("../ComposerOptions.zig") = .{ .thread = thread, .kind = selector.kind };
     if (event == .key and event.key.target_id != 0 and decision.target == null) {
         return true;

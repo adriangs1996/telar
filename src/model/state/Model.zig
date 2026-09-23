@@ -6,7 +6,22 @@ const EntryInputType = @import("../workspace/EntryInput.zig");
 const AgentPromptIntent = @import("../application/agents/AgentPromptIntent.zig");
 const AgentPane = @import("../panes/Pane.zig");
 const model_namespace = @import("model_namespace.zig");
-const TabsModel = @import("../workspace/TabsModel.zig");
+const Tabs = @import("../workspace/Tabs.zig");
+const Panes = @import("../panes/Panes.zig");
+const LayoutSnapshot = @import("../workspace/LayoutSnapshot.zig");
+const PendingLayoutRestore = @import("../workspace/PendingLayoutRestore.zig");
+const tab_layout = @import("../workspace/tab_layout.zig");
+const tab_label = @import("../workspace/tab_label.zig");
+const tab_creation = @import("../workspace/tab_creation.zig");
+const tab_removal = @import("../workspace/tab_removal.zig");
+const tab_move = @import("../workspace/tab_move.zig");
+const tab_rename = @import("../workspace/tab_rename.zig");
+const tab_selection = @import("../workspace/tab_selection.zig");
+const tab_snapshot_reconciliation = @import("../workspace/tab_snapshot_reconciliation.zig");
+const workspace_reconciliation = @import("../workspace/workspace_reconciliation.zig");
+const workspace_handoff = @import("../workspace/workspace_handoff.zig");
+const pane_split = @import("../workspace/pane_split.zig");
+const presentation_delivery = @import("../panes/presentation_delivery.zig");
 const LayoutsType = @import("../workspace/SavedLayouts.zig");
 const ClipboardCaptureState = @import("ClipboardCaptureState.zig");
 const PluginExecutionState = @import("PluginExecutionState.zig");
@@ -21,7 +36,6 @@ const ReportedPaneFocusType = @import("ReportedPaneFocus.zig");
 const std = @import("std");
 const InitialClientStateType = @import("InitialClientState.zig");
 const VersionType = @import("Version.zig");
-const MultiplexerModel = @import("../workspace/MultiplexerModel.zig");
 const PresentationCommitType = @import("../panes/PresentationCommit.zig");
 const PluginExecutionType = @import("PluginExecution.zig");
 const ConfigurationInputType = @import("ConfigurationInput.zig");
@@ -57,7 +71,20 @@ const NewTabType = @import("NewTab.zig");
 const RemoveTabType = @import("RemoveTab.zig");
 const Model = @This();
 
-workspace: TabsModel,
+gpa: std.mem.Allocator,
+tabs: Tabs = .{},
+panes: Panes = .{},
+/// The runtime workspace this client shows; null before arrival and after
+/// departure.
+workspace: ?core.WorkspaceLocation = null,
+workspace_name: [core.max_workspace_name_bytes]u8 = undefined,
+workspace_name_len: u16 = 0,
+pane_gaps: bool = true,
+/// A retained client layout applied when its tab's next snapshot arrives.
+pending_layout_restore: ?PendingLayoutRestore = null,
+/// Geometry of the most recently queried tab, see `tab_layout.snapshot`.
+layout_snapshot: LayoutSnapshot = .{},
+layout_snapshot_tab: core.TabId = .invalid,
 saved_layouts: LayoutsType = .{},
 clipboard: ClipboardCaptureState = .{},
 plugins: PluginExecutionState = .{},
@@ -158,16 +185,13 @@ pub fn initInto(self: *Model, gpa: std.mem.Allocator, initial: InitialClientStat
     std.debug.assert(initial.host_size.cell_height_px == cell_size.height);
 
     self.* = .{
-        .workspace = undefined,
+        .gpa = gpa,
+        .pane_gaps = initial.pane_gaps,
         .configuration_generation = initial.configuration_generation,
         .bars = .init(initial.bars),
         .host = .{ .host_size = initial.host_size, .host_capabilities = initial.host_capabilities },
         .sidebar_width = @max(model_data.sidebar.minimum_width, initial.sidebar_width),
     };
-
-    self.workspace.initInto(gpa);
-    self.workspace.setPaneGaps(initial.pane_gaps);
-    self.workspace.setCellSize(initial.host_size.cell_width_px, initial.host_size.cell_height_px);
 }
 
 /// Releases all semantic workspace state owned by the model.
@@ -177,7 +201,7 @@ pub fn initInto(self: *Model, gpa: std.mem.Allocator, initial: InitialClientStat
 /// ```
 pub fn deinit(model: *Model) void {
     model.history_palette.deinit();
-    model.workspace.deinit();
+    workspace_handoff.clear(model);
     model.saved_layouts = .{};
 }
 
@@ -195,19 +219,20 @@ pub fn restoreClientLayouts(model: *Model, layouts: LayoutsType) void {
 /// const surface = model.togglePaneSurface() orelse return;
 /// ```
 pub fn togglePaneSurface(model: *Model) ?core.PaneSurface {
-    const active = model.workspace.active() orelse return null;
-    const focused = active.model.layout.focused() orelse return null;
-    if (active.model.findConst(focused)) |pane| {
+    const slot = model.tabs.activeSlot() orelse return null;
+    const layout = &model.tabs.layout[slot];
+    const focused = layout.focused() orelse return null;
+    if (model.panes.findInConst(model.tabs.location[slot].tab_id, focused)) |pane| {
         if (pane.kind == .agent) {
             return .thread;
         }
     }
 
-    const next: core.PaneSurface = switch (active.model.layout.surface(focused)) {
+    const next: core.PaneSurface = switch (layout.surface(focused)) {
         .terminal => .thread,
         .thread => .terminal,
     };
-    if (!active.model.setSurface(focused, next)) {
+    if (!layout.setSurface(focused, next)) {
         return null;
     }
 
@@ -218,22 +243,21 @@ pub fn togglePaneSurface(model: *Model) ?core.PaneSurface {
 /// Captures an attached agent pane without granting mutation authority.
 /// Example: `const pane = model.agentPane(pane_id) orelse return;`
 pub fn agentPane(model: *const Model, pane_id: core.PaneId) ?*const AgentPane {
-    const tab = model.workspace.tabForPaneConst(pane_id) orelse return null;
-    const pane = tab.model.findConst(pane_id) orelse return null;
+    const pane = model.panes.findConst(pane_id) orelse return null;
     return if (pane.attached and pane.kind == .agent) pane else null;
 }
 
 /// Installs runtime pane identity after a correlated attachment succeeds.
 /// Example: `_ = model.identifyPane(opened);`
 pub fn identifyPane(model: *Model, opened: core.PaneOpened) bool {
-    const tab = model.workspace.tabForPane(opened.pane_id) orelse return false;
-    const pane = tab.model.find(opened.pane_id) orelse return false;
+    const pane = model.panes.find(opened.pane_id) orelse return false;
     if (!pane.attached or !std.meta.eql(pane.location, opened.location)) {
         return false;
     }
 
+    const slot = model.tabs.find(pane.location.tab_id) orelse return false;
     const changed = pane.identify(opened.kind, opened.pane_generation);
-    const surface_changed = if (pane.kind == .agent) tab.model.setSurface(pane.id, .thread) else false;
+    const surface_changed = if (pane.kind == .agent) model.tabs.layout[slot].setSurface(pane.id, .thread) else false;
 
     if (changed or surface_changed) {
         model.panes_revision +%= 1;
@@ -245,7 +269,7 @@ pub fn identifyPane(model: *Model, opened: core.PaneOpened) bool {
 /// Copies canonical conversation state only for the current runtime pane.
 /// Example: `_ = try model.applyAgentThread(snapshot);`
 pub fn applyAgentThread(model: *Model, snapshot: core.AgentThreadSnapshotView) !bool {
-    const pane = model.workspace.findPane(snapshot.pane_id) orelse return false;
+    const pane = model.panes.find(snapshot.pane_id) orelse return false;
     if (!try pane.applyAgentThread(snapshot)) {
         return false;
     }
@@ -256,7 +280,7 @@ pub fn applyAgentThread(model: *Model, snapshot: core.AgentThreadSnapshotView) !
 
 /// Mutates the composer through its owning pane. Example: `_ = model.editAgentComposer(id, .backspace);`
 pub fn editAgentComposer(model: *Model, pane_id: core.PaneId, command: model_data.PromptCommand) bool {
-    const pane = model.workspace.findPane(pane_id) orelse return false;
+    const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.editComposer(command)) {
         return false;
     }
@@ -267,7 +291,7 @@ pub fn editAgentComposer(model: *Model, pane_id: core.PaneId, command: model_dat
 
 /// Adds an image through its attached draft owner. Example: `_ = try model.attachAgentImage(id, path);`
 pub fn attachAgentImage(model: *Model, pane_id: core.PaneId, path: []const u8) !bool {
-    const pane = model.workspace.findPane(pane_id) orelse return false;
+    const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent) {
         return false;
     }
@@ -279,7 +303,7 @@ pub fn attachAgentImage(model: *Model, pane_id: core.PaneId, path: []const u8) !
 
 /// Example: `_ = model.removeAgentImage(id, removal);`
 pub fn removeAgentImage(model: *Model, pane_id: core.PaneId, removal: AgentPane.ImageRemoval) bool {
-    const pane = model.workspace.findPane(pane_id) orelse return false;
+    const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.removeComposerImage(removal)) {
         return false;
     }
@@ -291,7 +315,7 @@ pub fn removeAgentImage(model: *Model, pane_id: core.PaneId, removal: AgentPane.
 /// Clears only the submitted draft revision; later typing stays intact.
 /// Example: `_ = model.acceptAgentPrompt(pane_id, composer_revision);`
 pub fn acceptAgentPrompt(model: *Model, pane_id: core.PaneId, revision: u64) bool {
-    const pane = model.workspace.findPane(pane_id) orelse return false;
+    const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.acceptComposer(revision)) {
         return false;
     }
@@ -303,7 +327,7 @@ pub fn acceptAgentPrompt(model: *Model, pane_id: core.PaneId, revision: u64) boo
 /// Stores disposable transcript navigation independently of provider state.
 /// Example: `_ = model.scrollAgentThread(pane_id, 3);`
 pub fn scrollAgentThread(model: *Model, pane_id: core.PaneId, delta: f64) bool {
-    const pane = model.workspace.findPane(pane_id) orelse return false;
+    const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.scrollConversation(delta)) {
         return false;
     }
@@ -314,7 +338,7 @@ pub fn scrollAgentThread(model: *Model, pane_id: core.PaneId, delta: f64) bool {
 
 /// Commits one provider-backed composer selection. Example: `_ = model.changeAgentOption(id, .{ .access = .read_only });`
 pub fn changeAgentOption(model: *Model, pane_id: core.PaneId, change: agent_options.Change) bool {
-    const pane = model.workspace.findPane(pane_id) orelse return false;
+    const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.changeAgentOption(change)) {
         return false;
     }
@@ -360,29 +384,6 @@ pub fn version(model: *const Model) VersionType {
     };
 }
 
-/// Returns the active tab model, or null during bootstrap and workspace
-/// handoff when the client intentionally has no presentable tab.
-///
-/// ```zig
-/// const active = model.activeTabModel() orelse return;
-/// ```
-pub fn activeTabModel(model: *Model) ?*MultiplexerModel {
-    const active = model.workspace.active() orelse return null;
-
-    return &active.model;
-}
-
-/// Borrows the active tab model for one immutable presentation projection.
-///
-/// ```zig
-/// const active = model.activeTabModelConst() orelse return;
-/// ```
-pub fn activeTabModelConst(model: *const Model) ?*const MultiplexerModel {
-    const active = model.workspace.activeConst() orelse return null;
-
-    return &active.model;
-}
-
 /// Retires the exact pane damage and frame identifiers included in a
 /// successful host presentation without advancing semantic versions.
 ///
@@ -390,13 +391,7 @@ pub fn activeTabModelConst(model: *const Model) ?*const MultiplexerModel {
 /// const accepted = model.commitPresentation(commit);
 /// ```
 pub fn commitPresentation(model: *Model, commit: PresentationCommitType) PresentationCommitType {
-    const location = commit.location orelse return .{};
-    const tab = model.workspace.find(location.tab_id) orelse return .{};
-    if (!std.meta.eql(tab.location, location)) {
-        return .{};
-    }
-
-    return tab.model.commitPresentation(commit);
+    return presentation_delivery.retire(model, commit);
 }
 
 /// Returns the active configuration generation owned by this client.
@@ -484,20 +479,20 @@ pub fn clearDiagnostic(model: *Model) model_data.Change {
 /// const context = model.callbackContext();
 /// ```
 pub fn callbackContext(model: *const Model) model_data.CallbackContext {
-    const active = model.workspace.activeConst() orelse return .{
+    const slot = model.tabs.activeSlot() orelse return .{
         .sidebar_visible = model.sidebar_visible,
         .tab_count = 0,
         .active_tab_index = 0,
         .pane_count = 0,
         .focused_pane_id = 0,
     };
-    const focused = active.model.layout.focused();
+    const focused = model.tabs.layout[slot].focused();
 
     return .{
         .sidebar_visible = model.sidebar_visible,
-        .tab_count = @intCast(model.workspace.count),
-        .active_tab_index = @intCast(model.workspace.activeIndex() orelse 0),
-        .pane_count = @intCast(active.model.pane_count),
+        .tab_count = @intCast(model.tabs.count),
+        .active_tab_index = @intCast(slot),
+        .pane_count = @intCast(model.panes.countIn(model.tabs.location[slot].tab_id)),
         .focused_pane_id = if (focused) |pane_id| core.raw(pane_id) else 0,
     };
 }
@@ -575,7 +570,7 @@ pub fn cancelClipboardCapture(model: *Model, target: model_data.AttachmentTarget
 /// if (model.paneGaps()) drawGutters();
 /// ```
 pub fn paneGaps(model: *const Model) bool {
-    return model.workspace.pane_gaps;
+    return model.pane_gaps;
 }
 
 /// Returns the resolved host grid and cell geometry.
@@ -602,7 +597,7 @@ pub fn hostCapabilities(model: *const Model) model_data.HostCapabilities {
 /// const commit = try model.reconcileHost(update) orelse return;
 /// ```
 pub fn reconcileHost(model: *Model, update: model_data.HostUpdate) !?model_data.HostCommit {
-    return model.applyHostCommit(try model.host.reconcileHost(update));
+    return model.host.reconcileHost(update);
 }
 
 /// Commits one semantic capability observation and its resolved geometry.
@@ -611,17 +606,7 @@ pub fn reconcileHost(model: *Model, update: model_data.HostUpdate) !?model_data.
 /// const commit = try model.observeHostCapability(observation) orelse return;
 /// ```
 pub fn observeHostCapability(model: *Model, observation: model_data.HostCapabilityObservation) !?model_data.HostCommit {
-    return model.applyHostCommit(try model.host.observeHostCapability(observation));
-}
-
-fn applyHostCommit(model: *Model, commit: ?model_data.HostCommit) ?model_data.HostCommit {
-    if (commit) |change| {
-        if (change.resize) |resize| {
-            model.workspace.setCellSize(resize.current.cell_width_px, resize.current.cell_height_px);
-        }
-    }
-
-    return commit;
+    return model.host.observeHostCapability(observation);
 }
 
 /// Atomically adopts one newer configuration's semantic client settings.
@@ -635,9 +620,9 @@ pub fn applyConfiguration(model: *Model, input: ConfigurationInputType) !model_d
     }
 
     const sidebar = model.setSidebarVisible(input.sidebar_visible);
-    const pane_gaps_changed = model.workspace.pane_gaps != input.pane_gaps;
+    const pane_gaps_changed = model.pane_gaps != input.pane_gaps;
     if (pane_gaps_changed) {
-        model.workspace.setPaneGaps(input.pane_gaps);
+        tab_layout.setPaneGaps(model, input.pane_gaps);
         model.panes_revision +%= 1;
     }
 
@@ -1154,9 +1139,8 @@ pub fn agentSnapshot(model: *const Model) *const SnapshotType {
 /// const title = model.focusedPaneTitle();
 /// ```
 pub fn focusedPaneTitle(model: *const Model) []const u8 {
-    const active = model.workspace.activeConst() orelse return "";
-    const pane_id = active.model.layout.focused() orelse return "";
-    const pane = active.model.findConst(pane_id) orelse return "";
+    const slot = model.tabs.activeSlot() orelse return "";
+    const pane = tab_layout.focusedPaneConst(model, slot) orelse return "";
     return pane.titleSlice();
 }
 
@@ -1168,8 +1152,8 @@ pub fn focusedPaneTitle(model: *const Model) []const u8 {
 /// }
 /// ```
 pub fn focusedPaneForeground(model: *const Model) []const u8 {
-    const active = model.workspace.activeConst() orelse return "";
-    const pane = active.model.focusedPaneConst() orelse return "";
+    const slot = model.tabs.activeSlot() orelse return "";
+    const pane = tab_layout.focusedPaneConst(model, slot) orelse return "";
     return pane.foregroundName();
 }
 
@@ -1190,9 +1174,9 @@ pub fn knowsAgent(model: *const Model, key: model_data.AgentKey) bool {
 /// const key = model.takeAgentAcknowledgement() orelse return;
 /// ```
 pub fn takeAgentAcknowledgement(model: *Model) ?model_data.AgentKey {
-    const active = model.workspace.activeConst() orelse return null;
-    const pane_id = active.model.layout.focused() orelse return null;
-    const key = model.agent_snapshot.keyForPane(active.location, pane_id) orelse return null;
+    const slot = model.tabs.activeSlot() orelse return null;
+    const pane_id = model.tabs.layout[slot].focused() orelse return null;
+    const key = model.agent_snapshot.keyForPane(model.tabs.location[slot], pane_id) orelse return null;
     const agent = model.agent_snapshot.find(key).?;
     const already = if (model.acknowledged_agent) |acknowledged| std.meta.eql(acknowledged, key) else false;
 
@@ -1222,15 +1206,13 @@ pub fn sidebarAnimationActive(model: *const Model) bool {
         return true;
     }
 
-    for (&model.workspace.items) |*tab_slot| {
-        const tab = if (tab_slot.*) |*value| value else continue;
-        var panes = tab.model.paneConstIterator();
-        while (panes.next()) |pane| {
-            if (pane.progress_state == .set or pane.progress_state == .indeterminate) {
-                return true;
-            }
+    var panes = model.panes.iterateConst(null);
+    while (panes.next()) |pane| {
+        if (pane.progress_state == .set or pane.progress_state == .indeterminate) {
+            return true;
         }
     }
+
     return false;
 }
 
@@ -1272,15 +1254,13 @@ pub fn advanceSidebarAnimation(model: *Model) ?model_data.SidebarAnimationChange
 /// ```
 pub fn planAgentNavigation(model: *const Model, key: model_data.AgentKey) ?model_data.AgentNavigationPlan {
     const agent = model.agent_snapshot.find(key) orelse return null;
-    if (model.workspace.tabForPaneConst(key.pane_id)) |tab| {
-        const active = model.workspace.activeConst() orelse return null;
+    if (model.panes.findConst(key.pane_id)) |pane| {
+        const active = model.tabs.activeSlot() orelse return null;
+        const tab_id = pane.location.tab_id;
 
         return .{ .local = .{
             .pane_id = key.pane_id,
-            .select_tab = if (active.location.tab_id == tab.location.tab_id)
-                null
-            else
-                tab.location.tab_id,
+            .select_tab = if (model.tabs.location[active].tab_id == tab_id) null else tab_id,
         } };
     }
 
@@ -1300,9 +1280,9 @@ pub fn planAgentNavigation(model: *const Model, key: model_data.AgentKey) ?model
 /// const key = model.focusedAttachmentAgent() orelse return;
 /// ```
 pub fn focusedAttachmentAgent(model: *const Model) ?model_data.AgentKey {
-    const active = model.workspace.activeConst() orelse return null;
-    const pane_id = active.model.layout.focused() orelse return null;
-    const key = model.agent_snapshot.keyForPane(active.location, pane_id) orelse return null;
+    const slot = model.tabs.activeSlot() orelse return null;
+    const pane_id = model.tabs.layout[slot].focused() orelse return null;
+    const key = model.agent_snapshot.keyForPane(model.tabs.location[slot], pane_id) orelse return null;
     const agent = model.agent_snapshot.find(key).?;
     if (agent.attachments == .none) {
         return null;
@@ -1358,9 +1338,9 @@ pub fn reportedPaneFocus(model: *const Model) ?ReportedPaneFocusType {
 /// ```
 pub fn syncReportedPaneFocus(model: *Model) ?PaneFocusReportTransitionType {
     const current: ?ReportedPaneFocusType = current: {
-        const active = model.workspace.active() orelse break :current null;
-        const pane_id = active.model.layout.focused() orelse break :current null;
-        const pane = active.model.find(pane_id) orelse break :current null;
+        const slot = model.tabs.activeSlot() orelse break :current null;
+        const pane = tab_layout.focusedPane(model, slot) orelse break :current null;
+        const pane_id = pane.id;
 
         break :current .{
             .pane_id = pane_id,
@@ -1425,7 +1405,7 @@ fn commitReportedPaneFocus(model: *Model, current: ?ReportedPaneFocusType) ?Pane
         else
             true;
         if (moved and reported.focus_events) {
-            if (model.workspace.findPane(reported.pane_id)) |pane| {
+            if (model.panes.find(reported.pane_id)) |pane| {
                 if (pane.attached) {
                     transition.focus_out = reported.pane_id;
                 }
@@ -1540,21 +1520,15 @@ pub fn planPaneInput(model: *const Model, target: model_data.PaneInputTarget) ?m
 
     const pane = switch (target) {
         .focused => focused: {
-            const active = model.workspace.activeConst() orelse return null;
-            break :focused active.model.focusedPaneConst() orelse return null;
+            const slot = model.tabs.activeSlot() orelse return null;
+            break :focused tab_layout.focusedPaneConst(model, slot) orelse return null;
         },
         .pane => |pane_id| explicit: {
-            const active = model.workspace.activeConst() orelse return null;
-            break :explicit active.model.findConst(pane_id) orelse return null;
+            const slot = model.tabs.activeSlot() orelse return null;
+            break :explicit model.panes.findInConst(model.tabs.location[slot].tab_id, pane_id) orelse return null;
         },
-        .key_lease, .pointer_lease => |pane_id| leased: {
-            const tab = model.workspace.tabForPaneConst(pane_id) orelse return null;
-            break :leased tab.model.findConst(pane_id) orelse return null;
-        },
-        .paste_session => |session| captured: {
-            const tab = model.workspace.tabForPaneConst(session.pane_id) orelse return null;
-            break :captured tab.model.findConst(session.pane_id) orelse return null;
-        },
+        .key_lease, .pointer_lease => |pane_id| model.panes.findConst(pane_id) orelse return null,
+        .paste_session => |session| model.panes.findConst(session.pane_id) orelse return null,
     };
     if (!pane.attached or pane.kind == .agent) {
         return null;
@@ -1575,8 +1549,7 @@ pub fn planPaneInput(model: *const Model, target: model_data.PaneInputTarget) ?m
 /// const outcome = try model.applyPaneFrame(frame);
 /// ```
 pub fn applyPaneFrame(model: *Model, frame: core.FrameView) !model_data.PaneFrameOutcome {
-    const tab = model.workspace.tabForPane(frame.pane_id) orelse return .detached;
-    const pane = tab.model.find(frame.pane_id) orelse return .detached;
+    const pane = model.panes.find(frame.pane_id) orelse return .detached;
     if (!pane.attached) {
         return .detached;
     }
@@ -1589,7 +1562,7 @@ pub fn applyPaneFrame(model: *Model, frame: core.FrameView) !model_data.PaneFram
 
     const generation = if (pane.attachment_generation == 0) try model.allocateAttachmentGeneration() else pane.attachment_generation;
     const previous_scroll_offset = pane.scroll.offset;
-    const applied = try tab.model.applyFrame(frame);
+    const applied = try pane.applyFrame(frame);
     pane.attach(generation);
     _ = model.reconcileCopyModeFrame(.{
         .pane_id = frame.pane_id,
@@ -1597,14 +1570,14 @@ pub fn applyPaneFrame(model: *Model, frame: core.FrameView) !model_data.PaneFram
         .scroll = frame.scroll,
     });
     model.frame_revision +%= 1;
-    const active = model.workspace.activeConst();
+    const active = model.activeTabLocation();
 
     return .{ .applied = .{
         .pane_id = frame.pane_id,
-        .location = tab.location,
+        .location = pane.location,
         .frame_id = frame.frame_id,
         .graphics_visible = frame.scroll.atBottom(frame.rows) and
-            active != null and std.meta.eql(active.?.location, tab.location),
+            active != null and std.meta.eql(active.?, pane.location),
         .snapshot = frame.base_frame_id == 0,
         .spans = applied.spans,
         .cells = applied.cells,
@@ -1623,10 +1596,12 @@ pub fn applyPaneFrame(model: *Model, frame: core.FrameView) !model_data.PaneFram
 /// const commit = model.setPaneGraphicsFallback(pane_id, true) orelse return;
 /// ```
 pub fn setPaneGraphicsFallback(model: *Model, pane_id: core.PaneId, visible: bool) ?model_data.PaneGraphicsFallbackCommit {
-    const tab = model.workspace.tabForPane(pane_id) orelse return null;
-    if (!tab.model.setGraphicsPlaceholder(pane_id, visible)) {
+    const pane = model.panes.find(pane_id) orelse return null;
+    if (pane.graphics_placeholder == visible) {
         return null;
     }
+
+    pane.graphics_placeholder = visible;
 
     model.pane_graphics_revision +%= 1;
 
@@ -1650,30 +1625,26 @@ pub fn updatePaneMetadata(model: *Model, command: model_data.PaneMetadataCommand
         .foreground => |foreground| foreground.pane_id,
         .title => |title| title.pane_id,
     };
-    const tab = model.workspace.tabForPane(pane_id) orelse fallback: {
-        if (command != .foreground) {
-            return null;
-        }
-
-        var tabs = model.workspace.tabIterator();
-        while (tabs.next()) |candidate| {
-            if (candidate.foreground_pane == pane_id) {
-                break :fallback candidate;
-            }
-        }
-
-        return null;
-    };
     const kind = std.meta.activeTag(command);
-    const change: multiplexer_module.MetadataChange = switch (command) {
-        .cwd => |cwd| try tab.model.setPaneCwd(cwd.pane_id, cwd.path),
-        .foreground => |foreground| if (tab.model.find(foreground.pane_id) != null)
-            tab.model.setPaneForeground(foreground.pane_id, foreground.name)
-        else if (tab.applyForegroundReport(.{ .pane_id = foreground.pane_id, .name = foreground.name }))
+    const change: multiplexer_module.MetadataChange = if (model.panes.find(pane_id)) |pane| switch (command) {
+        .cwd => |cwd| if (std.mem.eql(u8, pane.cwdSlice(), cwd.path))
+            .unchanged
+        else if (try pane.setCwd(cwd.path))
             .display_changed
         else
-            .unchanged,
-        .title => |title| try tab.model.setPaneTitle(title.pane_id, title.title),
+            .stored,
+        .foreground => |foreground| if (pane.setForegroundName(foreground.name)) .display_changed else .unchanged,
+        .title => |title| if (try pane.setTitle(title.title)) .display_changed else .unchanged,
+    } else switch (command) {
+        .foreground => |foreground| detached: {
+            const slot = std.mem.findScalar(core.PaneId, model.tabs.foreground_pane[0..model.tabs.count], pane_id) orelse return null;
+            const report: core.PaneForeground = .{
+                .pane_id = foreground.pane_id,
+                .name = foreground.name,
+            };
+            break :detached if (tab_label.applyForegroundReport(model, slot, report)) .display_changed else .unchanged;
+        },
+        .cwd, .title => return null,
     };
     if (change == .unchanged) {
         return null;
@@ -1703,8 +1674,7 @@ pub fn updatePaneMetadata(model: *Model, command: model_data.PaneMetadataCommand
 /// const commit = model.updatePaneProgress(progress) orelse return;
 /// ```
 pub fn updatePaneProgress(model: *Model, progress: core.PaneProgress) ?model_data.PaneProgressCommit {
-    const tab = model.workspace.tabForPane(progress.pane_id) orelse return null;
-    const pane = tab.model.find(progress.pane_id) orelse return null;
+    const pane = model.panes.find(progress.pane_id) orelse return null;
     if (!pane.setProgress(progress)) {
         return null;
     }
@@ -1728,8 +1698,8 @@ pub fn setPaneViewport(model: *Model, command: model_data.PaneViewportCommand) ?
         return null;
     }
 
-    const active = model.workspace.active() orelse return null;
-    const pane = active.model.find(command.pane_id) orelse return null;
+    const slot = model.tabs.activeSlot() orelse return null;
+    const pane = model.panes.findIn(model.tabs.location[slot].tab_id, command.pane_id) orelse return null;
     if (!pane.attached) {
         return null;
     }
@@ -1787,8 +1757,8 @@ pub fn beginPointerSelection(model: *Model, press: PointerPressType) bool {
         return false;
     }
 
-    const active = model.workspace.active() orelse return false;
-    const pane = active.model.focusedPane() orelse return false;
+    const slot = model.tabs.activeSlot() orelse return false;
+    const pane = tab_layout.focusedPane(model, slot) orelse return false;
     if (pane.id != press.pane_id or !pane.attached or pane.kind != .terminal or
         press.position.x >= pane.buffer.w or press.position.y >= pane.buffer.h)
     {
@@ -1845,8 +1815,8 @@ pub fn enterCopyMode(model: *Model) bool {
         return false;
     }
 
-    const active = model.workspace.active() orelse return false;
-    const pane = active.model.focusedPane() orelse return false;
+    const slot = model.tabs.activeSlot() orelse return false;
+    const pane = tab_layout.focusedPane(model, slot) orelse return false;
     if (!pane.attached or pane.kind != .terminal) {
         return false;
     }
@@ -1868,8 +1838,7 @@ pub fn enterCopyMode(model: *Model) bool {
 /// ```
 pub fn planCopyMode(model: *const Model, command: model_data.CopyModeCommand) ?CopyModePlanType {
     const previous = model.copy_state orelse return null;
-    const active = model.workspace.activeConst() orelse return model.planCopyModeExit(previous, null);
-    const pane = active.model.findConst(previous.pane_id) orelse
+    const pane = model.activePaneConst(previous.pane_id) orelse
         return model.planCopyModeExit(previous, null);
     var next = previous;
 
@@ -1985,16 +1954,15 @@ pub fn commitCopyMode(model: *Model, plan: CopyModePlanType) ?CopyModeCommitType
     }
 
     if (plan.next) |next| {
-        const active = model.workspace.active() orelse return null;
-        if (active.model.find(next.pane_id) == null) {
+        if (model.activePaneConst(next.pane_id) == null) {
             return null;
         }
     }
 
     var viewport_change: ?model_data.PaneViewportChange = null;
     if (plan.viewport) |viewport| {
-        const active = model.workspace.active() orelse return null;
-        const pane = active.model.find(viewport.pane_id) orelse return null;
+        const slot = model.tabs.activeSlot() orelse return null;
+        const pane = model.panes.findIn(model.tabs.location[slot].tab_id, viewport.pane_id) orelse return null;
         if (viewport.offset > pane.scroll.maxOffset(pane.buffer.h)) {
             return null;
         }
@@ -2037,8 +2005,7 @@ pub fn reconcileCopyModeFrame(model: *Model, command: CopyModeFrameType) bool {
     }
 
     if (state.pointer) |pointer| {
-        const active = model.workspace.activeConst() orelse return model.releaseCopyMode(state.pane_id);
-        const pane = active.model.findConst(state.pane_id) orelse return model.releaseCopyMode(state.pane_id);
+        const pane = model.activePaneConst(state.pane_id) orelse return model.releaseCopyMode(state.pane_id);
         if (pointer.cols != pane.buffer.w or pointer.rows != pane.buffer.h) {
             return model.releaseCopyMode(state.pane_id);
         }
@@ -2056,10 +2023,7 @@ pub fn reconcileCopyModeFrame(model: *Model, command: CopyModeFrameType) bool {
 }
 
 fn planCopyModeExit(model: *const Model, previous: model_data.State, selection: ?core.CopySelection) CopyModePlanType {
-    const pane = if (model.workspace.activeConst()) |active|
-        active.model.findConst(previous.pane_id)
-    else
-        null;
+    const pane = model.activePaneConst(previous.pane_id);
     const viewport = if (pane != null and previous.pointer == null)
         model_namespace.copyModeViewport(pane.?, previous.entry_offset)
     else
@@ -2080,9 +2044,18 @@ fn planCopyModeExit(model: *const Model, previous: model_data.State, selection: 
 /// const location = model.activeTabLocation() orelse return;
 /// ```
 pub fn activeTabLocation(model: *const Model) ?core.TabLocation {
-    const active = model.workspace.activeConst() orelse return null;
+    const slot = model.tabs.activeSlot() orelse return null;
+    return model.tabs.location[slot];
+}
 
-    return active.location;
+/// A pane of the active tab, or null when it belongs elsewhere.
+///
+/// ```zig
+/// const pane = model.activePaneConst(pane_id) orelse return;
+/// ```
+pub fn activePaneConst(model: *const Model, pane_id: core.PaneId) ?*const AgentPane {
+    const slot = model.tabs.activeSlot() orelse return null;
+    return model.panes.findInConst(model.tabs.location[slot].tab_id, pane_id);
 }
 
 /// Returns the runtime workspace currently projected by this client.
@@ -2091,7 +2064,16 @@ pub fn activeTabLocation(model: *const Model) ?core.TabLocation {
 /// const workspace = model.workspaceLocation() orelse return;
 /// ```
 pub fn workspaceLocation(model: *const Model) ?core.WorkspaceLocation {
-    return model.workspace.workspace;
+    return model.workspace;
+}
+
+/// The canonical name of the workspace this client shows.
+///
+/// ```zig
+/// const name = model.workspaceName();
+/// ```
+pub fn workspaceName(model: *const Model) []const u8 {
+    return model.workspace_name[0..model.workspace_name_len];
 }
 
 /// Resolves one tab identity inside the currently observed workspace.
@@ -2100,9 +2082,8 @@ pub fn workspaceLocation(model: *const Model) ?core.WorkspaceLocation {
 /// const location = model.tabLocation(tab_id) orelse return;
 /// ```
 pub fn tabLocation(model: *const Model, tab_id: core.TabId) ?core.TabLocation {
-    const index = model.workspace.indexOf(tab_id) orelse return null;
-
-    return model.workspace.items[index].?.location;
+    const slot = model.tabs.find(tab_id) orelse return null;
+    return model.tabs.location[slot];
 }
 
 /// Returns the attached focused pane that may authorize a new workspace
@@ -2144,12 +2125,12 @@ pub fn departWorkspace(model: *Model) model_data.WorkspaceDeparture {
         return departure;
     }
 
-    const active = model.workspace.activeConst();
-    const had_tabs = model.workspace.count != 0;
+    const active = model.tabs.activeSlot();
+    const had_tabs = model.tabs.count != 0;
     const had_active = active != null;
-    const had_visible_panes = if (active) |tab| tab.model.pane_count != 0 else false;
+    const had_visible_panes = if (active) |slot| model.panes.countIn(model.tabs.location[slot].tab_id) != 0 else false;
     model.retainWorkspaceLayouts();
-    model.workspace.deinit();
+    workspace_handoff.clear(model);
     model.workspace_revision +%= 1;
     if (had_tabs) {
         model.tabs_revision +%= 1;
@@ -2173,12 +2154,19 @@ pub fn departWorkspace(model: *Model) model_data.WorkspaceDeparture {
 /// const activation = try model.arriveWorkspace(arrival);
 /// ```
 pub fn arriveWorkspace(model: *Model, arrival: model_data.WorkspaceArrival) !model_data.WorkspaceActivation {
-    if (model.workspace.count != 0 or model.workspace.workspace != null) {
+    if (model.tabs.count != 0 or model.workspace != null) {
         return error.ModelNotEmpty;
     }
 
     const version_before = model.version();
-    try model.workspace.bootstrap(.{ .pane_id = arrival.pane_id, .location = arrival.location, .size = arrival.size });
+    try workspace_handoff.bootstrap(
+        model,
+        .{
+            .pane_id = arrival.pane_id,
+            .location = arrival.location,
+            .size = arrival.size,
+        },
+    );
     model.stageArrivalLayout(arrival);
 
     model.workspace_revision +%= 1;
@@ -2213,7 +2201,7 @@ pub fn replaceWorkspace(model: *Model, arrival: model_data.WorkspaceArrival) !Wo
     const saved_before = model.saved_layouts;
     model.retainWorkspaceLayouts();
     errdefer model.saved_layouts = saved_before;
-    try model.workspace.replaceWithRoot(.{
+    try workspace_handoff.replaceWithRoot(model, .{
         .pane_id = arrival.pane_id,
         .location = arrival.location,
         .size = arrival.size,
@@ -2238,20 +2226,20 @@ pub fn replaceWorkspace(model: *Model, arrival: model_data.WorkspaceArrival) !Wo
 
 fn retainWorkspaceLayouts(model: *Model) void {
     const active = model.activeTabLocation() orelse return;
-    var tabs = model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
+    for (0..model.tabs.count) |slot| {
         // A provisional root must not replace the complete retained tree
         // while its canonical membership response is still pending.
-        if (!tab.snapshot_loaded) {
+        if (!model.tabs.snapshot_loaded[slot]) {
             continue;
         }
 
-        const focused = tab.model.layout.focused() orelse continue;
+        const location = model.tabs.location[slot];
+        const focused = model.tabs.layout[slot].focused() orelse continue;
         model.saved_layouts.retain(.{
-            .location = tab.location,
+            .location = location,
             .pane_id = focused,
-            .workspace_active = std.meta.eql(active, tab.location),
-            .layout = tab.model.layout,
+            .workspace_active = std.meta.eql(active, location),
+            .layout = model.tabs.layout[slot],
         });
     }
 }
@@ -2259,8 +2247,11 @@ fn retainWorkspaceLayouts(model: *Model) void {
 fn stageArrivalLayout(model: *Model, arrival: model_data.WorkspaceArrival) void {
     const saved_layout = if (model.saved_layouts.find(arrival.location)) |saved| saved.layout else arrival.saved_layout;
     if (saved_layout) |saved| {
-        const staged = model.workspace.restoreLayoutOnNextSnapshot(arrival.location, saved);
-        std.debug.assert(staged);
+        std.debug.assert(model.tabs.find(arrival.location.tab_id) != null);
+        model.pending_layout_restore = .{
+            .location = arrival.location,
+            .layout = saved,
+        };
     }
 }
 
@@ -2290,7 +2281,7 @@ fn workspaceActivation(model: *const Model, seed: WorkspaceActivationSeedType) m
 /// const reconciliation = try model.reconcileWorkspace(snapshot);
 /// ```
 pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !WorkspaceReconciliationType {
-    const current_workspace = model.workspace.workspace orelse return error.UnexpectedWorkspace;
+    const current_workspace = model.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(current_workspace, snapshot.workspace)) {
         return error.UnexpectedWorkspace;
     }
@@ -2311,48 +2302,47 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !Work
     var reconciliation: WorkspaceReconciliationType = .{
         .previous_active = previous_active,
         .active = previous_active,
-        .workspace_changed = !std.mem.eql(u8, model.workspace.workspaceName(), snapshot.name),
-        .tabs_changed = snapshot.tabs.len != model.workspace.count,
+        .workspace_changed = !std.mem.eql(u8, model.workspaceName(), snapshot.name),
+        .tabs_changed = snapshot.tabs.len != model.tabs.count,
     };
     var canonical_tabs: [core.max_tabs_per_workspace]core.TabId = undefined;
     for (snapshot.tabs, 0..) |descriptor, index| {
         canonical_tabs[index] = descriptor.tab_id;
-        if (index >= model.workspace.count) {
+        if (index >= model.tabs.count) {
             reconciliation.tabs_changed = true;
         } else {
-            const current = &model.workspace.items[index].?;
-            if (current.location.tab_id != descriptor.tab_id or
-                !std.mem.eql(u8, current.canonicalLabel(), descriptor.label))
+            if (model.tabs.location[index].tab_id != descriptor.tab_id or
+                !std.mem.eql(u8, model.tabs.canonicalLabel(index), descriptor.label))
             {
                 reconciliation.tabs_changed = true;
             }
         }
     }
 
-    var tabs = model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        if (std.mem.findScalar(core.TabId, canonical_tabs[0..snapshot.tabs.len], tab.location.tab_id) != null) {
+    for (model.tabs.location[0..model.tabs.count]) |location| {
+        if (std.mem.findScalar(core.TabId, canonical_tabs[0..snapshot.tabs.len], location.tab_id) != null) {
             continue;
         }
 
-        reconciliation.removed_tabs.append(tab.location);
-        var panes = tab.model.paneIterator();
+        reconciliation.removed_tabs.append(location);
+        var panes = model.panes.iterateConst(location.tab_id);
         while (panes.next()) |pane| {
             reconciliation.removed_panes.append(pane.id);
         }
     }
 
-    try model.workspace.reconcileWorkspace(snapshot);
+    try workspace_reconciliation.reconcileTabs(model, snapshot);
     for (snapshot.tabs) |descriptor| {
-        const tab = model.workspace.find(descriptor.tab_id).?;
+        const slot = model.tabs.find(descriptor.tab_id).?;
         for (descriptor.foregrounds) |foreground| {
-            if (tab.model.find(foreground.pane_id) != null) {
+            if (model.panes.findIn(descriptor.tab_id, foreground.pane_id) != null) {
                 _ = try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = foreground.pane_id, .name = foreground.name } });
             }
         }
 
-        const saved_focus = if (model.saved_layouts.find(tab.location)) |saved| saved.pane_id else null;
-        if (tab.applyForegroundSnapshot(descriptor.foregrounds, saved_focus)) {
+        const location = model.tabs.location[slot];
+        const saved_focus = if (model.saved_layouts.find(location)) |saved| saved.pane_id else null;
+        if (tab_label.applyForegroundSnapshot(model, slot, descriptor.foregrounds, saved_focus)) {
             reconciliation.tabs_changed = true;
         }
     }
@@ -2373,8 +2363,8 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !Work
     }
     model_namespace.releaseInvalidCopyMode(model);
 
-    const active = model.workspace.activeConst() orelse return error.WorkspaceHasNoTabs;
-    reconciliation.active_snapshot_loaded = active.snapshot_loaded;
+    const active = model.tabs.activeSlot() orelse return error.WorkspaceHasNoTabs;
+    reconciliation.active_snapshot_loaded = model.tabs.snapshot_loaded[active];
     reconciliation.workspace_revision = model.workspace_revision;
     reconciliation.tabs_revision = model.tabs_revision;
     reconciliation.active_tab_revision = model.active_tab_revision;
@@ -2390,8 +2380,8 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !Work
 /// const reconciliation = try model.reconcileTab(snapshot, workbench);
 /// ```
 pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !TabReconciliationType {
-    const tab = model.workspace.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
-    if (!std.meta.eql(tab.location, snapshot.location)) {
+    const tab = model.tabs.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
+    if (!std.meta.eql(model.tabs.location[tab], snapshot.location)) {
         return error.UnexpectedTab;
     }
 
@@ -2404,7 +2394,7 @@ pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !Tab
             return error.DuplicatePane;
         }
 
-        const existing = model.workspace.findPane(pane_id);
+        const existing = model.panes.findConst(pane_id);
         if (existing != null and !std.meta.eql(existing.?.location, snapshot.location)) {
             return error.PaneAlreadyExists;
         }
@@ -2412,14 +2402,14 @@ pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !Tab
 
     const active_location = model.activeTabLocation() orelse return error.NoActiveTab;
     const active = std.meta.eql(active_location, snapshot.location);
-    const previous_layout_revision = tab.model.layout.currentRevision();
+    const previous_layout_revision = model.tabs.layout[tab].currentRevision();
     var reconciliation: TabReconciliationType = .{
         .location = snapshot.location,
         .area = area,
         .active = active,
         .panes_changed = false,
     };
-    var panes = tab.model.paneIterator();
+    var panes = model.panes.iterateConst(snapshot.location.tab_id);
     while (panes.next()) |pane| {
         if (std.mem.findScalar(core.PaneId, snapshot.panes, pane.id) == null) {
             reconciliation.removed_panes.append(pane.id);
@@ -2427,19 +2417,25 @@ pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !Tab
     }
 
     if (model.saved_layouts.find(snapshot.location)) |saved| {
-        const staged = model.workspace.restoreClientLayoutOnNextSnapshot(snapshot.location, saved.layout);
-        std.debug.assert(staged);
+        const already_staged = if (model.pending_layout_restore) |pending| std.meta.eql(pending.location, snapshot.location) else false;
+        if (!already_staged) {
+            model.pending_layout_restore = .{
+                .location = snapshot.location,
+                .layout = saved.layout,
+                .restore_saved_focus = true,
+            };
+        }
     }
 
-    const reconciled = try model.workspace.reconcileTab(snapshot, area);
+    const reconciled = try tab_snapshot_reconciliation.reconcile(model, snapshot, area);
     model.saved_layouts.forget(snapshot.location);
-    reconciliation.panes_changed = reconciled.model.layout.currentRevision() != previous_layout_revision;
+    reconciliation.panes_changed = model.tabs.layout[reconciled].currentRevision() != previous_layout_revision;
     if (reconciliation.active and reconciliation.panes_changed) {
         model.panes_revision +%= 1;
     }
 
-    reconciliation.snapshot_loaded = reconciled.snapshot_loaded;
-    reconciliation.layout_revision = reconciled.model.layout.currentRevision();
+    reconciliation.snapshot_loaded = model.tabs.snapshot_loaded[reconciled];
+    reconciliation.layout_revision = model.tabs.layout[reconciled].currentRevision();
     reconciliation.workspace_revision = model.workspace_revision;
     reconciliation.tabs_revision = model.tabs_revision;
     reconciliation.active_tab_revision = model.active_tab_revision;
@@ -2456,17 +2452,17 @@ pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !Tab
 /// const result = model.confirmPaneAttachment(attachment);
 /// ```
 pub fn confirmPaneAttachment(model: *Model, attachment: model_data.PaneAttachment) !model_data.StateTypesPaneAttachmentConfirmation {
-    const active = model.workspace.active() orelse return .stale;
-    if (!std.meta.eql(active.location, attachment.location)) {
+    const active = model.activeTabLocation() orelse return .stale;
+    if (!std.meta.eql(active, attachment.location)) {
         return .stale;
     }
 
-    const pane = active.model.find(attachment.pane_id) orelse return .stale;
+    const pane = model.panes.findIn(active.tab_id, attachment.pane_id) orelse return .stale;
     if (!std.meta.eql(pane.location, attachment.location) or pane.attached) {
         return .stale;
     }
 
-    try active.model.markAttached(attachment.pane_id, try model.allocateAttachmentGeneration());
+    pane.attach(try model.allocateAttachmentGeneration());
     return .confirmed;
 }
 
@@ -2487,12 +2483,12 @@ fn allocateAttachmentGeneration(model: *Model) !u64 {
 /// if (model.needsPaneAttachment(attachment)) requestSnapshot();
 /// ```
 pub fn needsPaneAttachment(model: *const Model, attachment: model_data.PaneAttachment) bool {
-    const active = model.workspace.activeConst() orelse return false;
-    if (!std.meta.eql(active.location, attachment.location)) {
+    const active = model.activeTabLocation() orelse return false;
+    if (!std.meta.eql(active, attachment.location)) {
         return false;
     }
 
-    const pane = active.model.findConst(attachment.pane_id) orelse return false;
+    const pane = model.panes.findInConst(active.tab_id, attachment.pane_id) orelse return false;
     return std.meta.eql(pane.location, attachment.location) and !pane.attached;
 }
 
@@ -2503,10 +2499,10 @@ pub fn needsPaneAttachment(model: *const Model, attachment: model_data.PaneAttac
 /// const plan = try model.planTabDetachment(location);
 /// ```
 pub fn planTabDetachment(model: *const Model, location: core.TabLocation) !TabDetachmentPlanType {
-    const tab = model_namespace.findTabConst(&model.workspace, location) orelse return error.UnexpectedTab;
+    _ = model_namespace.findTab(model, location) orelse return error.UnexpectedTab;
     var plan: TabDetachmentPlanType = .{ .location = location };
 
-    var panes = tab.model.paneConstIterator();
+    var panes = model.panes.iterateConst(location.tab_id);
     while (panes.next()) |pane| {
         plan.panes[plan.len] = .{
             .pane_id = pane.id,
@@ -2516,14 +2512,14 @@ pub fn planTabDetachment(model: *const Model, location: core.TabLocation) !TabDe
     }
 
     if (model.pane_paste) |session| {
-        if (tab.model.findConst(session.pane_id) != null) {
+        if (model.panes.findInConst(location.tab_id, session.pane_id) != null) {
             plan.owns_paste = true;
             plan.paste_marker_required = session.bracketed_paste;
         }
     }
 
     if (model.reported_pane_focus) |reported| {
-        if (tab.model.findConst(reported.pane_id)) |pane| {
+        if (model.panes.findInConst(location.tab_id, reported.pane_id)) |pane| {
             plan.owns_reported_focus = true;
             plan.focus_out_required = reported.focus_events and pane.attached;
         }
@@ -2543,8 +2539,9 @@ pub fn commitTabDetachment(model: *Model, plan: TabDetachmentPlanType) !void {
         return error.InvalidTabDetachment;
     }
 
-    const tab = model_namespace.findTab(&model.workspace, plan.location) orelse return error.StaleTabDetachment;
-    if (tab.model.pane_count != plan.len) {
+    _ = model_namespace.findTab(model, plan.location) orelse return error.StaleTabDetachment;
+    const tab_id = plan.location.tab_id;
+    if (model.panes.countIn(tab_id) != plan.len) {
         return error.StaleTabDetachment;
     }
 
@@ -2555,14 +2552,14 @@ pub fn commitTabDetachment(model: *Model, plan: TabDetachmentPlanType) !void {
             }
         }
 
-        const pane = tab.model.find(planned.pane_id) orelse return error.StaleTabDetachment;
+        const pane = model.panes.findIn(tab_id, planned.pane_id) orelse return error.StaleTabDetachment;
         if (pane.attached != planned.attached) {
             return error.StaleTabDetachment;
         }
     }
 
     for (plan.slice()) |planned| {
-        model_namespace.detachPane(tab.model.find(planned.pane_id).?);
+        model_namespace.detachPane(model.panes.findIn(tab_id, planned.pane_id).?);
     }
 }
 
@@ -2574,27 +2571,28 @@ pub fn commitTabDetachment(model: *Model, plan: TabDetachmentPlanType) !void {
 /// const focus = model.focusPane(.{ .target = .{ .direction = .left }, .area = area }) orelse return;
 /// ```
 pub fn focusPane(model: *Model, request: model_data.PaneFocusRequest) ?model_data.PaneFocus {
-    const active = model.workspace.active() orelse return null;
-    const previous = active.model.layout.focused() orelse return null;
+    const slot = model.tabs.activeSlot() orelse return null;
+    const layout = &model.tabs.layout[slot];
+    const previous = layout.focused() orelse return null;
     const focused = switch (request.target) {
         .pane_id => |pane_id| focused: {
-            if (pane_id == previous or !active.model.focusPane(pane_id)) {
+            if (pane_id == previous or !layout.focusPane(pane_id)) {
                 return null;
             }
 
             break :focused pane_id;
         },
-        .direction => |direction| active.model.focusDirection(direction, request.area) orelse return null,
+        .direction => |direction| layout.focusDirection(direction, request.area) orelse return null,
     };
     std.debug.assert(focused != previous);
 
     model.panes_revision +%= 1;
 
     return .{
-        .location = active.location,
+        .location = model.tabs.location[slot],
         .previous = previous,
         .focused = focused,
-        .geometry_changed = active.model.layout.isFullscreen(),
+        .geometry_changed = layout.isFullscreen(),
         .panes_revision = model.panes_revision,
     };
 }
@@ -2606,20 +2604,21 @@ pub fn focusPane(model: *Model, request: model_data.PaneFocusRequest) ?model_dat
 /// const resize = model.resizePane(.{ .direction = .right, .area = area }) orelse return;
 /// ```
 pub fn resizePane(model: *Model, request: model_data.ResizePaneRequest) ?model_data.PaneGeometryChange {
-    const active = model.workspace.active() orelse return null;
-    const focused = active.model.layout.focused() orelse return null;
-    if (!active.model.resizeFocused(request.direction, request.area)) {
+    const slot = model.tabs.activeSlot() orelse return null;
+    const layout = &model.tabs.layout[slot];
+    const focused = layout.focused() orelse return null;
+    if (!layout.resizeFocused(request.direction, request.area)) {
         return null;
     }
 
     model.panes_revision +%= 1;
 
     return .{
-        .location = active.location,
+        .location = model.tabs.location[slot],
         .focused = focused,
         .panes_revision = model.panes_revision,
         .area = request.area,
-        .fullscreen = active.model.layout.isFullscreen(),
+        .fullscreen = layout.isFullscreen(),
     };
 }
 
@@ -2630,20 +2629,21 @@ pub fn resizePane(model: *Model, request: model_data.ResizePaneRequest) ?model_d
 /// const change = model.togglePaneFullscreen(.{ .area = area }) orelse return;
 /// ```
 pub fn togglePaneFullscreen(model: *Model, request: model_data.TogglePaneFullscreenRequest) ?model_data.PaneGeometryChange {
-    const active = model.workspace.active() orelse return null;
-    const focused = active.model.layout.focused() orelse return null;
-    if (!active.model.toggleFullscreen()) {
+    const slot = model.tabs.activeSlot() orelse return null;
+    const layout = &model.tabs.layout[slot];
+    const focused = layout.focused() orelse return null;
+    if (!layout.toggleFullscreen()) {
         return null;
     }
 
     model.panes_revision +%= 1;
 
     return .{
-        .location = active.location,
+        .location = model.tabs.location[slot],
         .focused = focused,
         .panes_revision = model.panes_revision,
         .area = request.area,
-        .fullscreen = active.model.layout.isFullscreen(),
+        .fullscreen = layout.isFullscreen(),
     };
 }
 
@@ -2654,14 +2654,15 @@ pub fn togglePaneFullscreen(model: *Model, request: model_data.TogglePaneFullscr
 /// const plan = model.planPaneSplit(.{ .axis = .horizontal, .area = area }) orelse return;
 /// ```
 pub fn planPaneSplit(model: *Model, request: model_data.RequestPaneSplit) ?model_data.PaneSplitPlan {
-    const active = model.workspace.active() orelse return null;
-    const target = (if (request.target_pane) |id| active.model.findConst(id) else active.model.focusedPane()) orelse return null;
-    if (!target.attached or !std.meta.eql(target.location, active.location)) {
+    const slot = model.tabs.activeSlot() orelse return null;
+    const location = model.tabs.location[slot];
+    const target: *const AgentPane = (if (request.target_pane) |id| model.panes.findInConst(location.tab_id, id) else tab_layout.focusedPaneConst(model, slot)) orelse return null;
+    if (!target.attached or !std.meta.eql(target.location, location)) {
         return null;
     }
 
-    const restore_size = active.model.contentSize(target.id, request.area) orelse return null;
-    const prospective = active.model.prospectiveSplit(.{ .pane_id = target.id, .axis = request.axis }, request.area) orelse
+    const restore_size = tab_layout.contentSize(model, slot, target.id, request.area) orelse return null;
+    const prospective = tab_layout.prospectiveSplit(model, slot, .{ .pane_id = target.id, .axis = request.axis }, request.area) orelse
         return null;
     var provisional_size = multiplexer_module.rectSize(prospective.existing_content) orelse return null;
     var new_pane_size = multiplexer_module.rectSize(prospective.new_content) orelse return null;
@@ -2671,7 +2672,7 @@ pub fn planPaneSplit(model: *Model, request: model_data.RequestPaneSplit) ?model
     return .{
         .split = .{
             .target_pane = target.id,
-            .location = active.location,
+            .location = location,
             .axis = request.axis,
             .area = request.area,
         },
@@ -2695,24 +2696,26 @@ pub fn commitPaneSplit(model: *Model, command: CommitPaneSplitType) !model_data.
         .change = .unchanged,
         .layout_revision = 0,
     });
-    const workspace = model.workspace.workspace orelse return stale;
+    const workspace = model.workspace orelse return stale;
     if (!std.meta.eql(workspace, command.split.location.workspace)) {
         return stale;
     }
 
-    const tab = model_namespace.findTab(&model.workspace, command.split.location) orelse return stale;
-    const active = if (model.workspace.activeConst()) |current|
-        std.meta.eql(current.location, command.split.location)
+    const tab = model_namespace.findTab(model, command.split.location) orelse return stale;
+    const tab_id = command.split.location.tab_id;
+    const active = if (model.activeTabLocation()) |current|
+        std.meta.eql(current, command.split.location)
     else
         false;
-    if (model.workspace.tabForPane(command.new_pane)) |owner| {
-        if (owner != tab or command.new_pane == command.split.target_pane) {
+    if (model.panes.find(command.new_pane)) |pane| {
+        if (pane.location.tab_id != tab_id or command.new_pane == command.split.target_pane) {
             return error.PaneAlreadyExists;
         }
 
-        const pane = tab.model.find(command.new_pane).?;
         if (active) {
-            try tab.model.markAttached(command.new_pane, try model.allocateAttachmentGeneration());
+            if (!pane.attached) {
+                pane.attach(try model.allocateAttachmentGeneration());
+            }
         } else {
             model_namespace.detachPane(pane);
         }
@@ -2720,19 +2723,19 @@ pub fn commitPaneSplit(model: *Model, command: CommitPaneSplitType) !model_data.
         return model.finishPaneSplit(command, .{
             .disposition = if (active) .active else .inactive,
             .change = .unchanged,
-            .layout_revision = tab.model.layout.currentRevision(),
+            .layout_revision = model.tabs.layout[tab].currentRevision(),
         });
     }
 
-    if (tab.model.find(command.split.target_pane) != null) {
-        try tab.model.split(.{ .existing_pane = command.split.target_pane, .new_pane = command.new_pane, .location = command.split.location, .axis = command.split.axis, .area = command.split.area });
+    if (model.panes.findIn(tab_id, command.split.target_pane) != null) {
+        try pane_split.split(model, tab, .{ .existing_pane = command.split.target_pane, .new_pane = command.new_pane, .location = command.split.location, .axis = command.split.axis, .area = command.split.area });
     } else {
-        try tab.model.addDiscovered(.{ .pane_id = command.new_pane, .location = command.split.location, .area = command.split.area });
-        try tab.model.markAttached(command.new_pane, try model.allocateAttachmentGeneration());
+        try tab_snapshot_reconciliation.addDiscovered(model, tab, .{ .pane_id = command.new_pane, .location = command.split.location, .area = command.split.area });
+        model.panes.find(command.new_pane).?.attach(try model.allocateAttachmentGeneration());
     }
 
     if (!active) {
-        model_namespace.detachPane(tab.model.find(command.new_pane).?);
+        model_namespace.detachPane(model.panes.find(command.new_pane).?);
     } else {
         model.panes_revision +%= 1;
     }
@@ -2740,7 +2743,7 @@ pub fn commitPaneSplit(model: *Model, command: CommitPaneSplitType) !model_data.
     return model.finishPaneSplit(command, .{
         .disposition = if (active) .active else .inactive,
         .change = if (active) .changed else .unchanged,
-        .layout_revision = tab.model.layout.currentRevision(),
+        .layout_revision = model.tabs.layout[tab].currentRevision(),
     });
 }
 
@@ -2766,23 +2769,23 @@ fn finishPaneSplit(model: *const Model, command: CommitPaneSplitType, state: Pan
 /// const recovery = model.recoverPaneSplit(.{ .split = split, .area = area });
 /// ```
 pub fn recoverPaneSplit(model: *Model, command: RecoverPaneSplitType) model_data.PaneSplitRecovery {
-    const workspace = model.workspace.workspace orelse return .stale;
+    const workspace = model.workspace orelse return .stale;
     if (!std.meta.eql(workspace, command.split.location.workspace)) {
         return .stale;
     }
 
-    const tab = model_namespace.findTab(&model.workspace, command.split.location) orelse return .stale;
-    const pane = tab.model.find(command.split.target_pane) orelse return .stale;
+    const tab = model_namespace.findTab(model, command.split.location) orelse return .stale;
+    const pane = model.panes.findIn(command.split.location.tab_id, command.split.target_pane) orelse return .stale;
     if (!std.meta.eql(pane.location, command.split.location)) {
         return .stale;
     }
 
-    const active = model.workspace.activeConst() orelse return .stale;
-    if (!std.meta.eql(active.location, command.split.location) or !pane.attached) {
+    const active = model.activeTabLocation() orelse return .stale;
+    if (!std.meta.eql(active, command.split.location) or !pane.attached) {
         return .not_required;
     }
 
-    const size = tab.model.contentSize(command.split.target_pane, command.area) orelse
+    const size = tab_layout.contentSize(model, tab, command.split.target_pane, command.area) orelse
         return .not_required;
     return .{ .resize = .{ .pane_id = command.split.target_pane, .size = size } };
 }
@@ -2794,13 +2797,14 @@ pub fn recoverPaneSplit(model: *Model, command: RecoverPaneSplitType) model_data
 /// const closure = model.planPaneClosure() orelse return;
 /// ```
 pub fn planPaneClosure(model: *const Model) ?model_data.PaneClosure {
-    const active = model.workspace.activeConst() orelse return null;
-    const focused = active.model.focusedPaneConst() orelse return null;
-    if (!focused.attached or !std.meta.eql(focused.location, active.location)) {
+    const slot = model.tabs.activeSlot() orelse return null;
+    const location = model.tabs.location[slot];
+    const focused = tab_layout.focusedPaneConst(model, slot) orelse return null;
+    if (!focused.attached or !std.meta.eql(focused.location, location)) {
         return null;
     }
 
-    return .{ .pane_id = focused.id, .location = active.location };
+    return .{ .pane_id = focused.id, .location = location };
 }
 
 /// Applies one authoritative pane exit. Missing identities are stale
@@ -2810,18 +2814,18 @@ pub fn planPaneClosure(model: *const Model) ?model_data.PaneClosure {
 /// const transition = model.retirePane(pane_id);
 /// ```
 pub fn retirePane(model: *Model, pane_id: core.PaneId) model_data.PaneExit {
-    const tab = model.workspace.tabForPane(pane_id) orelse return model.stalePaneExit(pane_id);
-    const pane = tab.model.find(pane_id) orelse return model.stalePaneExit(pane_id);
-    if (!std.meta.eql(pane.location, tab.location)) {
+    const pane = model.panes.find(pane_id) orelse return model.stalePaneExit(pane_id);
+    const tab = model.tabs.find(pane.location.tab_id) orelse return model.stalePaneExit(pane_id);
+    const location = model.tabs.location[tab];
+    if (!std.meta.eql(pane.location, location)) {
         return model.stalePaneExit(pane_id);
     }
 
-    const active = if (model.workspace.activeConst()) |current|
-        std.meta.eql(current.location, tab.location)
+    const active = if (model.activeTabLocation()) |current|
+        std.meta.eql(current, location)
     else
         false;
-    const location = tab.location;
-    std.debug.assert(tab.model.removePane(pane_id));
+    _ = tab_layout.removePane(model, pane_id);
     if (active) {
         model.panes_revision +%= 1;
     }
@@ -2830,8 +2834,8 @@ pub fn retirePane(model: *Model, pane_id: core.PaneId) model_data.PaneExit {
         .pane_id = pane_id,
         .location = location,
         .active = active,
-        .tab_empty = tab.model.pane_count == 0,
-        .layout_revision = tab.model.layout.currentRevision(),
+        .tab_empty = model.panes.countIn(location.tab_id) == 0,
+        .layout_revision = model.tabs.layout[tab].currentRevision(),
         .workspace_revision = model.workspace_revision,
         .tabs_revision = model.tabs_revision,
         .active_tab_revision = model.active_tab_revision,
@@ -2855,12 +2859,12 @@ fn stalePaneExit(model: *const Model, pane_id: core.PaneId) model_data.PaneExit 
 /// const change = try model.applyTabPosition(location, position);
 /// ```
 pub fn applyTabPosition(model: *Model, location: core.TabLocation, position: u16) !model_data.Change {
-    const current_workspace = model.workspace.workspace orelse return error.UnexpectedWorkspace;
+    const current_workspace = model.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(current_workspace, location.workspace)) {
         return error.UnexpectedWorkspace;
     }
 
-    const change = try model.workspace.applyPosition(location.tab_id, position);
+    const change = try tab_move.move(model, location.tab_id, position);
     if (change == .unchanged) {
         return .unchanged;
     }
@@ -2875,12 +2879,12 @@ pub fn applyTabPosition(model: *Model, location: core.TabLocation, position: u16
 /// const change = try model.renameTab(command);
 /// ```
 pub fn renameTab(model: *Model, command: RenameTabType) !model_data.Change {
-    const current_workspace = model.workspace.workspace orelse return error.UnexpectedWorkspace;
+    const current_workspace = model.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(current_workspace, command.location.workspace)) {
         return error.UnexpectedWorkspace;
     }
 
-    const change = try model.workspace.applyLabel(command.location.tab_id, command.label);
+    const change = try tab_rename.rename(model, command.location.tab_id, command.label);
     if (change == .unchanged) {
         return .unchanged;
     }
@@ -2895,14 +2899,14 @@ pub fn renameTab(model: *Model, command: RenameTabType) !model_data.Change {
 /// const creation = try model.createTab(command);
 /// ```
 pub fn createTab(model: *Model, command: NewTabType) !model_data.TabCreation {
-    const previous = model.workspace.activeConst() orelse return error.NoActiveTab;
-    const previous_location = previous.location;
-    const previous_layout_revision = previous.model.layout.currentRevision();
+    const previous = model.tabs.activeSlot() orelse return error.NoActiveTab;
+    const previous_location = model.tabs.location[previous];
+    const previous_layout_revision = model.tabs.layout[previous].currentRevision();
     const tabs_revision_before = model.tabs_revision;
     const active_tab_revision_before = model.active_tab_revision;
     const copy_revision_before = model.copy_revision;
 
-    const created = try model.workspace.addCreated(command.created, command.size);
+    const created = try tab_creation.add(model, command.created, command.size);
     model.tabs_revision +%= 1;
     model.active_tab_revision +%= 1;
     model_namespace.releaseInvalidCopyMode(model);
@@ -2913,7 +2917,7 @@ pub fn createTab(model: *Model, command: NewTabType) !model_data.TabCreation {
         .created_root_pane_id = command.created.root_pane_id,
         .created_position = command.created.position,
         .previous_layout_revision = previous_layout_revision,
-        .created_layout_revision = created.model.layout.currentRevision(),
+        .created_layout_revision = model.tabs.layout[created].currentRevision(),
         .tabs_revision_before = tabs_revision_before,
         .active_tab_revision_before = active_tab_revision_before,
         .copy_revision_before = copy_revision_before,
@@ -2933,34 +2937,33 @@ pub fn createTab(model: *Model, command: NewTabType) !model_data.TabCreation {
 /// const commit = try model.removeTab(command);
 /// ```
 pub fn removeTab(model: *Model, command: RemoveTabType) !model_data.TabRemovalCommit {
-    const workspace = model.workspace.workspace orelse
+    const workspace = model.workspace orelse
         return model.staleTabRemoval(command.location, .workspace);
     if (!std.meta.eql(workspace, command.location.workspace)) {
         return model.staleTabRemoval(command.location, .workspace);
     }
 
-    const closing = model.workspace.find(command.location.tab_id) orelse
+    const closing = model.tabs.find(command.location.tab_id) orelse
         return model.staleTabRemoval(command.location, .tab);
-    if (!std.meta.eql(closing.location, command.location)) {
+    if (!std.meta.eql(model.tabs.location[closing], command.location)) {
         return error.UnexpectedTab;
     }
 
-    const workspace_removed = model.workspace.count == 1;
+    const workspace_removed = model.tabs.count == 1;
     if (workspace_removed != command.workspace_removed) {
         return error.UnexpectedWorkspaceRemoval;
     }
 
-    const was_active = model.workspace.active_index ==
-        model.workspace.indexOf(command.location.tab_id).?;
+    const was_active = model.tabs.active == closing;
     const active_tab_revision_before = model.active_tab_revision;
     var panes: model_data.RemovedPanes = .{};
-    var iterator = closing.model.paneIterator();
+    var iterator = model.panes.iterateConst(command.location.tab_id);
     while (iterator.next()) |pane| {
         panes.append(pane.id);
     }
 
-    std.debug.assert(model.workspace.remove(command.location.tab_id));
-    const active = if (model.workspace.activeConst()) |tab| tab.location else null;
+    _ = tab_removal.remove(model, command.location.tab_id);
+    const active = model.activeTabLocation();
     model.tabs_revision +%= 1;
     if (was_active) {
         model.active_tab_revision +%= 1;
@@ -2973,8 +2976,8 @@ pub fn removeTab(model: *Model, command: RemoveTabType) !model_data.TabRemovalCo
         .was_active = was_active,
         .active = active,
         .workspace_removed = workspace_removed,
-        .active_layout_revision = if (model.workspace.activeConst()) |tab|
-            tab.model.layout.currentRevision()
+        .active_layout_revision = if (model.tabs.activeSlot()) |slot|
+            model.tabs.layout[slot].currentRevision()
         else
             0,
         .active_tab_revision_before = active_tab_revision_before,
@@ -3004,30 +3007,32 @@ fn staleTabRemoval(model: *const Model, location: core.TabLocation, absence: mod
 /// const selection = try model.selectTab(.{ .position = 1 }) orelse return;
 /// ```
 pub fn selectTab(model: *Model, target: model_data.TabSelectionTarget) !?model_data.TabSelection {
-    const previous = model.workspace.activeConst() orelse return error.NoActiveTab;
+    const previous = model.tabs.activeSlot() orelse return error.NoActiveTab;
+    const previous_location = model.tabs.location[previous];
+    const previous_layout_revision = model.tabs.layout[previous].currentRevision();
 
     const changed = switch (target) {
         .tab_id => |tab_id| changed: {
-            const position = model.workspace.indexOf(tab_id) orelse return error.TabNotFound;
+            const position = model.tabs.find(tab_id) orelse return error.TabNotFound;
 
-            break :changed model.workspace.selectPosition(position);
+            break :changed tab_selection.selectPosition(model, position);
         },
-        .offset => |offset| model.workspace.selectOffset(offset),
-        .position => |position| model.workspace.selectPosition(position),
+        .offset => |offset| tab_selection.selectOffset(model, offset),
+        .position => |position| tab_selection.selectPosition(model, position),
     };
     if (!changed) {
         return null;
     }
 
-    const selected = model.workspace.activeConst().?;
+    const selected = model.tabs.active;
     model.active_tab_revision +%= 1;
     model_namespace.releaseInvalidCopyMode(model);
 
     return .{
-        .previous = previous.location,
-        .selected = selected.location,
-        .previous_layout_revision = previous.model.layout.currentRevision(),
-        .selected_layout_revision = selected.model.layout.currentRevision(),
+        .previous = previous_location,
+        .selected = model.tabs.location[selected],
+        .previous_layout_revision = previous_layout_revision,
+        .selected_layout_revision = model.tabs.layout[selected].currentRevision(),
         .workspace_revision = model.workspace_revision,
         .tabs_revision = model.tabs_revision,
         .active_tab_revision = model.active_tab_revision,
@@ -3038,25 +3043,26 @@ pub fn selectTab(model: *Model, target: model_data.TabSelectionTarget) !?model_d
 
 /// Replaces only a matching active tab layout after validating all members. Example: `const change = try model.applyPaneLayout(request);`
 pub fn applyPaneLayout(self: *Model, request: model_data.PaneLayoutRequest) !model_data.PaneFocus {
-    const active = self.workspace.active() orelse return error.NoActiveTab;
-    if (!std.meta.eql(active.location, request.location)) {
+    const slot = self.tabs.activeSlot() orelse return error.NoActiveTab;
+    const location = self.tabs.location[slot];
+    if (!std.meta.eql(location, request.location)) {
         return error.LayoutTabMismatch;
     }
 
-    const previous = active.model.layout.focused() orelse return error.NoFocusedPane;
+    const previous = self.tabs.layout[slot].focused() orelse return error.NoFocusedPane;
     for (request.panes.ids) |pane_id| {
-        const pane = active.model.findConst(pane_id) orelse return error.LayoutPaneMismatch;
+        const pane = self.panes.findInConst(location.tab_id, pane_id) orelse return error.LayoutPaneMismatch;
         if (pane.kind == .agent and request.layout.surface(pane_id) != .thread) {
             return error.InvalidAgentSurface;
         }
     }
 
-    if (!active.model.restoreSavedLayout(request.layout, request.panes)) {
+    if (!tab_layout.restoreSaved(self, slot, request.layout, request.panes)) {
         return error.LayoutPaneMismatch;
     }
 
     self.panes_revision +%= 1;
-    return .{ .location = active.location, .previous = previous, .focused = request.panes.focused, .geometry_changed = true, .panes_revision = self.panes_revision };
+    return .{ .location = location, .previous = previous, .focused = request.panes.focused, .geometry_changed = true, .panes_revision = self.panes_revision };
 }
 
 /// Example: `_ = model.planAgentPrompt(pane_id);`

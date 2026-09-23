@@ -304,7 +304,7 @@ test "agent navigation and focused attachments derive from committed client stat
         .pane_id = @enumFromInt(9),
         .pane_generation = 3,
     };
-    try model.workspace.bootstrap(.{ .pane_id = local_key.pane_id, .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = local_key.pane_id, .location = first, .size = .{ .cols = 20, .rows = 5 } });
     const agent_entries = [_]model_data.AgentInput{
         .{
             .key = local_key,
@@ -342,7 +342,7 @@ test "agent navigation and focused attachments derive from committed client stat
         .fallback_workspace = @enumFromInt(3),
     }, model.planAgentNavigation(remote_key).?.handoff);
 
-    _ = try model.workspace.addCreated(.{
+    _ = try model_data.tab_creation.add(&model, .{
         .location = second,
         .position = 1,
         .label = "logs",
@@ -372,7 +372,7 @@ test "focused done agent is acknowledged once per completion without a version c
         .pane_id = @enumFromInt(1),
         .pane_generation = 4,
     };
-    try model.workspace.bootstrap(.{ .pane_id = key.pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = key.pane_id, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     var entry: model_data.AgentInput = .{
         .key = key,
         .location = location,
@@ -411,8 +411,8 @@ test "an unfocused done agent is never acknowledged" {
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
     const area: core.Rect = .{ .w = 80, .h = 24 };
-    try model.workspace.bootstrap(.{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
-    try model.workspace.active().?.model.split(.{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
+    try model_data.pane_split.split(&model, model.tabs.active, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = area });
     const done_key: model_data.AgentKey = .{ .pane_id = first, .pane_generation = 2 };
     const entry: model_data.AgentInput = .{
         .key = done_key,
@@ -439,7 +439,7 @@ test "pane titles are stored per pane and exposed for the focused pane" {
         .tab_id = @enumFromInt(1),
     };
     const pane: core.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(.{ .pane_id = pane, .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane, .location = location, .size = .{ .cols = 20, .rows = 5 } });
     try std.testing.expectEqualStrings("", model.focusedPaneTitle());
 
     const commit = (try model.updatePaneMetadata(.{ .title = .{ .pane_id = pane, .title = "vim" } })).?;

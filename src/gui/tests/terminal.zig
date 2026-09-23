@@ -146,7 +146,7 @@ test "background opacity preserves cell ink cursor and explicit backgrounds" {
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.buffer.cells[0].style.bg = .rgb(.{ 255, 0, 0 });
     try present(session);
     const shape_calls = session.gui.renderer.atlas.?.shape_calls;
@@ -190,7 +190,7 @@ test "cursor shapes focus and blink reuse retained ink without changing the atla
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const content = paneContent(session);
     const bounds = session.gui.renderer.metrics.rect(session.gui.renderer.origin, content);
     pane.cursor.x = 0;
@@ -254,7 +254,7 @@ test "a block cursor recolors wide cell ink and ANSI colors belong to the GUI th
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     pane.buffer.cells[0] = .{ .bytes = .{ 0xe7, 0x95, 0x8c } ++ .{0} ** 13, .len = 3, .width = 2, .style = .{ .fg = .indexed(1) } };
     pane.buffer.cells[1].width = 0;
     const content = paneContent(session);
@@ -328,7 +328,7 @@ test "native terminal acknowledges received patches while presentation is busy o
         frozen,
         session.gui.renderer.quads.items(),
     );
-    try std.testing.expectEqualStrings("H", session.gui.app.model.workspace.findPane(Session.pane_id).?.buffer.cells[0].text());
+    try std.testing.expectEqualStrings("H", session.gui.app.model.panes.find(Session.pane_id).?.buffer.cells[0].text());
     try input_support.presented(
         session.gui,
         first,
@@ -342,9 +342,9 @@ test "native terminal acknowledges received patches while presentation is busy o
     );
     try session.settle();
     try std.testing.expectEqual(@as(u64, 1), session.acknowledgements[0].frame_id);
-    try std.testing.expectEqual(@as(u64, 33), session.gui.app.model.workspace.findPane(Session.pane_id).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 33), session.gui.app.model.panes.find(Session.pane_id).?.pending_frame_id);
     try present(session);
-    try std.testing.expectEqual(@as(u64, 0), session.gui.app.model.workspace.findPane(Session.pane_id).?.pending_frame_id);
+    try std.testing.expectEqual(@as(u64, 0), session.gui.app.model.panes.find(Session.pane_id).?.pending_frame_id);
     try std.testing.expectEqual(@as(usize, 33), session.ack_count);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
@@ -382,7 +382,7 @@ test "native resize publishes exact grid pixels and preserves runtime-owned pane
     try std.testing.expectEqual(size, session.gui.app.model.hostSize());
     try std.testing.expectEqual(size.cell_width_px, session.gui.app.model.hostSize().cell_width_px);
     try std.testing.expect(session.resize_count > 0);
-    try std.testing.expect(session.gui.app.model.workspace.findPane(Session.pane_id) != null);
+    try std.testing.expect(session.gui.app.model.panes.find(Session.pane_id) != null);
 }
 
 test "native rendering visits every terminal leaf and clips to shared layout geometry" {
@@ -391,9 +391,9 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     try session.bootstrap();
     try session.receiveFrame(1);
     try present(session);
-    const model = session.gui.app.model.activeTabModel().?;
+    const tab = session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
     const token = try session.draw();
     const commit = session.gui.lifecycle.active.?.delivery.commit;
     try std.testing.expectEqual(@as(u8, 2), commit.len);
@@ -415,7 +415,7 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     try expectFullRedraw(session);
     try paintTerminal(session);
     var layout: data.LayoutSnapshot = .{};
-    model.layout.snapshot(session.gui.region.area, &layout);
+    session.gui.app.model.tabs.layout[tab].snapshot(session.gui.region.area, &layout);
     for (session.gui.renderer.quads.items()) |quad| {
         const contained = for (layout.views()) |view| {
             const bounds = session.gui.renderer.metrics.rect(session.gui.renderer.origin, view.content);
@@ -465,8 +465,8 @@ test "native inbox holds input and GPU completion until the consumer runs" {
 }
 
 fn paneContent(session: *Session) core.Rect {
-    const model = session.gui.app.model.activeTabModel().?;
-    return model.viewForPane(Session.pane_id, session.gui.region.area).?.content;
+    const tab = session.gui.app.model.tabs.active;
+    return data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, session.gui.region.area).?.content;
 }
 
 fn paintTerminal(session: *Session) !void {
@@ -503,7 +503,7 @@ test "retained cell damage rebuilds only changed cells and a cursor move reuses 
     try session.bootstrap();
     try session.receiveFrame(1);
     try present(session);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     try std.testing.expectEqual(pane.buffer.cells.len, session.gui.renderer.repainted_cells);
     const shape_calls = session.gui.renderer.atlas.?.shape_calls;
     try present(session);
@@ -540,7 +540,7 @@ test "retained geometry matches full redraw through erasure wide cells styles an
     try session.bootstrap();
     try session.receiveFrame(1);
     try present(session);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const texts = [_][]const u8{ "x", " ", "e\u{301}", "界" };
     for (0..32) |index| {
         const col = index % (pane.buffer.w - 1);
@@ -602,7 +602,7 @@ test "warm retained rendering and repeated glyph edits allocate no adapter stora
         renderer.atlas.?.allocator = std.testing.allocator;
     }
 
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     for (0..8) |index| {
         pane.buffer.cells[1].bytes[0] = if (index % 2 == 0) '$' else ' ';
         try present(session);

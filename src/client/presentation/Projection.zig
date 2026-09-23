@@ -9,8 +9,10 @@ const Projection = @This();
 version: data.Version,
 geometry: data.Region,
 presentation_ingress: PresentationIngress = .{},
-model: ?*const data.MultiplexerModel,
-tabs: *const data.TabsModel,
+/// The client model, borrowed for one synchronous preparation.
+model: *const data.Model,
+/// The active tab's slot, null during bootstrap and workspace handoff.
+tab: ?usize,
 agents: *const data.AgentSnapshot,
 sidebar_animation_frame: u8,
 notifications: *const data.Center,
@@ -41,10 +43,10 @@ window_title_template: []const u8 = "",
 /// const thread = projection.threadView(pane_id) orelse return;
 /// ```
 pub fn threadView(projection: *const Projection, pane_id: core.PaneId) ?ThreadViewType {
-    const model = projection.model orelse return null;
-
+    const slot = projection.tab orelse return null;
+    const model = projection.model;
+    const pane = model.panes.findInConst(model.tabs.location[slot].tab_id, pane_id) orelse return null;
     var thread = ThreadViewType.capture(model, projection.agents, pane_id) orelse return null;
-    const pane = model.findConst(pane_id) orelse return null;
     const workspace_id = switch (pane.location.workspace) {
         .workspace => |id| id,
         .worktree => return thread,

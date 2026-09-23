@@ -10,8 +10,8 @@ test "native theme backgrounds share window opacity across bands and pane header
     const renderer = &fixture.session.gui.renderer;
     const model = &fixture.session.gui.app.model;
     const projection = fixture.projection();
-    const panes = model.activeTabModel().?;
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = projection.geometry.area });
+    const tab = model.tabs.active;
+    try model_data.pane_split.split(model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = projection.geometry.area });
     var overlays: @import("../widgets/overlays/Overlays.zig") = .{};
     var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
 
@@ -32,7 +32,7 @@ test "native theme backgrounds share window opacity across bands and pane header
             }
 
             var layout: model_data.LayoutSnapshot = .{};
-            panes.layout.snapshot(projection.geometry.area, &layout);
+            model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
             for (layout.views()) |view| {
                 const header = renderer.metrics.rect(renderer.origin, view.outer.row(0));
                 try std.testing.expectApproxEqAbs(opacity, (try backgroundColor(renderer, .{ header.x + header.width / 2, header.y + header.height / 2 }))[3], 0.0001);
@@ -53,8 +53,8 @@ test "agent and terminal panes share the configured theme background opacity and
     defer fixture.deinit();
     const renderer = &fixture.session.gui.renderer;
     const model = &fixture.session.gui.app.model;
-    const panes = model.activeTabModel().?;
-    try panes.split(.{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
+    const tab = model.tabs.active;
+    try model_data.pane_split.split(model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
     try std.testing.expect(model.identifyPane(.{ .request_id = @enumFromInt(1), .pane_id = Session.pane_id, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 77 }));
     var overlays: @import("../widgets/overlays/Overlays.zig") = .{};
     var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
@@ -70,9 +70,9 @@ test "agent and terminal panes share the configured theme background opacity and
             renderer.config.window.background_opacity = opacity;
             const projection = fixture.projection();
             var layout: model_data.LayoutSnapshot = .{};
-            panes.layout.snapshot(projection.geometry.area, &layout);
+            model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
             for (layout.views()) |view| {
-                _ = panes.focusPane(view.pane_id);
+                _ = model.tabs.layout[tab].focusPane(view.pane_id);
                 _ = try scene.prepare(fixture.projection());
                 try std.testing.expectEqual(@as(u32, 40), renderer.frame(1).background_blur);
                 const bounds = renderer.metrics.rect(renderer.origin, view.content);
@@ -120,10 +120,10 @@ test "native scene captures terminal and thread damage in the same presentation"
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     _ = try session.gui.update();
     try std.testing.expectEqual(pane.id, session.gui.cursor_clock.target.pane_id);
-    const layout = &session.gui.app.model.activeTabModel().?.layout;
+    const layout = &session.gui.app.model.tabs.layout[session.gui.app.model.tabs.active];
     try std.testing.expect(layout.setSurface(pane.id, .thread));
     const token = try session.draw();
     const commit = session.gui.lifecycle.active.?.delivery.commit;
@@ -145,9 +145,9 @@ test "native copy selection recolors only projected cells and restores retained 
     defer session.deinit();
     try session.bootstrap();
     try session.receiveFrame(1);
-    const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const canonical = pane.buffer.cells[0];
-    const view = session.gui.app.model.activeTabModel().?.viewForPane(pane.id, session.gui.region.area).?;
+    const view = model_data.tab_layout.view(&session.gui.app.model, session.gui.app.model.tabs.active, pane.id, session.gui.region.area).?;
     const position = [2]u16{ view.content.x, view.content.y };
     var projection = session.gui.projection();
     _ = try session.gui.renderer.prepare(projection);

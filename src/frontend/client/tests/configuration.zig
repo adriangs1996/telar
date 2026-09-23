@@ -411,7 +411,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
 
     try std.testing.expect(!exit);
     try std.testing.expect(client.model.pluginExecution() == null);
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) != null);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) != null);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(client.model.version().notifications > version_before.notifications);
     try std.testing.expect(std.mem.indexOf(
@@ -668,7 +668,7 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
     const configured = try support.installTestingLuaBinding(client,
         \\local telar = require("telar")
         \\return {

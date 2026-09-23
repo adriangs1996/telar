@@ -90,10 +90,10 @@ fn sendAt(session: *Session, target: Target, event: Event) !void {
 }
 
 fn addAgentPane(session: *Session) !void {
-    const model = session.gui.app.model.activeTabModel().?;
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second_pane_id, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    const tab = session.gui.app.model.tabs.active;
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second_pane_id, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
     try std.testing.expect(session.gui.app.model.identifyPane(.{ .request_id = @enumFromInt(2), .pane_id = second_pane_id, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 78 }));
-    var snapshot = model.findConst(Session.pane_id).?.agent_thread.?.*;
+    var snapshot = session.gui.app.model.panes.findConst(Session.pane_id).?.agent_thread.?.*;
     snapshot.pane_id = second_pane_id;
     snapshot.pane_generation = 78;
     var wire: [65536]u8 = undefined;
@@ -236,7 +236,7 @@ test "replacement attachments cannot inherit an old transcript trajectory" {
     try pinClock(session);
     try advance(session, 16 * std.time.ns_per_ms);
     try publish(session);
-    const pane = session.gui.app.model.activeTabModel().?.find(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const stopped = pane.transcript_scroll;
     const old_key = (try entry(session)).key;
     pane.attachment_generation += 1;
@@ -253,7 +253,7 @@ test "failed hidden frames retain motion until a successful presentation retires
     try pinClock(session);
     try advance(session, 16 * std.time.ns_per_ms);
     try publish(session);
-    const pane = session.gui.app.model.activeTabModel().?.find(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const saved = (try entry(session)).*;
     pane.kind = .terminal;
     const failed = try session.draw();
@@ -340,7 +340,7 @@ test "cancelled native gestures consume their remaining events until fresh input
 test "animated return to the live tail adopts the latest snapshot without another input event" {
     const session = try fixture();
     defer session.deinit();
-    const pane = session.gui.app.model.activeTabModel().?.find(Session.pane_id).?;
+    const pane = session.gui.app.model.panes.find(Session.pane_id).?;
     const window = try std.testing.allocator.create(data.AgentHistoryWindow);
     window.start(pane.agent_thread.?, pane.history_generation);
     window.pages[0].has_before = false;

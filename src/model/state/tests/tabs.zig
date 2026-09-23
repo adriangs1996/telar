@@ -13,7 +13,7 @@ test "fresh workspace snapshots name inactive automatic tabs before pane attachm
     const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
     const second: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     var name = "codex".*;
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     const snapshot: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = "project",
@@ -24,27 +24,27 @@ test "fresh workspace snapshots name inactive automatic tabs before pane attachm
         },
     };
     _ = try model.reconcileWorkspace(snapshot);
-    const inactive = model.workspace.find(second.tab_id).?;
-    try std.testing.expectEqualStrings("codex", inactive.labelSlice());
-    try std.testing.expectEqual(icons.Icon.provider_codex, inactive.labelIcon().?);
-    try std.testing.expectEqualStrings("", inactive.canonicalLabel());
-    try std.testing.expectEqual(@as(usize, 0), inactive.model.pane_count);
-    try std.testing.expect(!inactive.snapshot_loaded);
+    const inactive = model.tabs.find(second.tab_id).?;
+    try std.testing.expectEqualStrings("codex", model_data.tab_label.text(&model, inactive));
+    try std.testing.expectEqual(icons.Icon.provider_codex, model_data.tab_label.icon(&model, inactive).?);
+    try std.testing.expectEqualStrings("", model.tabs.canonicalLabel(inactive));
+    try std.testing.expectEqual(@as(usize, 0), model.panes.countIn(second.tab_id));
+    try std.testing.expect(!model.tabs.snapshot_loaded[inactive]);
     try std.testing.expectEqualDeep(first, model.activeTabLocation().?);
     const version = model.version();
     _ = try model.reconcileWorkspace(snapshot);
     try std.testing.expectEqualDeep(version, model.version());
     @memset(&name, 'x');
-    try std.testing.expectEqualStrings("codex", inactive.labelSlice());
+    try std.testing.expectEqualStrings("codex", model_data.tab_label.text(&model, inactive));
 
     const changed = (try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "claude" } })).?;
     try std.testing.expect(changed.display_changed);
-    try std.testing.expectEqualStrings("claude", inactive.labelSlice());
-    try std.testing.expectEqual(@as(usize, 0), inactive.model.pane_count);
+    try std.testing.expectEqualStrings("claude", model_data.tab_label.text(&model, inactive));
+    try std.testing.expectEqual(@as(usize, 0), model.panes.countIn(model.tabs.location[inactive].tab_id));
     try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "claude" } })) == null);
     try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "nvim" } })) == null);
-    try std.testing.expectEqualStrings("logs", model.workspace.find(@enumFromInt(3)).?.labelSlice());
-    try std.testing.expect(model.workspace.find(@enumFromInt(3)).?.labelIcon() == null);
+    try std.testing.expectEqualStrings("logs", model_data.tab_label.text(&model, model.tabs.find(@enumFromInt(3)).?));
+    try std.testing.expect(model_data.tab_label.icon(&model, model.tabs.find(@enumFromInt(3)).?) == null);
 
     _ = model.departWorkspace();
     try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(2), .name = "git" } })) == null);
@@ -64,15 +64,15 @@ test "workspace return names inactive tabs using each client's saved pane focus"
     const second: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     const size: core.TerminalSize = .{ .cols = 40, .rows = 10 };
     const area = core.Rect{ .w = 40, .h = 10 };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = size });
+    try model_data.workspace_handoff.bootstrap(model, .{ .pane_id = @enumFromInt(1), .location = first, .size = size });
     _ = try model.reconcileTab(.{ .location = first, .panes = &.{@enumFromInt(1)} }, area);
-    const inactive = try model.workspace.addCreated(.{ .location = second, .position = 1, .label = "", .root_pane_id = @enumFromInt(2) }, size);
-    try inactive.model.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(3), .location = second, .axis = .horizontal, .area = area });
+    const inactive = try model_data.tab_creation.add(model, .{ .location = second, .position = 1, .label = "", .root_pane_id = @enumFromInt(2) }, size);
+    try model_data.pane_split.split(model, inactive, .{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(3), .location = second, .axis = .horizontal, .area = area });
     _ = try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "codex" } });
-    try std.testing.expect(model.workspace.select(first.tab_id));
+    try std.testing.expect(model_data.tab_selection.select(model, first.tab_id));
     _ = model.departWorkspace();
     _ = try model.arriveWorkspace(.{ .pane_id = @enumFromInt(1), .location = first, .size = size });
-    try fresh.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = size });
+    try model_data.workspace_handoff.bootstrap(fresh, .{ .pane_id = @enumFromInt(1), .location = first, .size = size });
     const snapshot: WorkspaceSnapshotInput = .{
         .workspace = workspace,
         .name = "project",
@@ -86,16 +86,16 @@ test "workspace return names inactive tabs using each client's saved pane focus"
     };
     _ = try model.reconcileWorkspace(snapshot);
     _ = try fresh.reconcileWorkspace(snapshot);
-    try std.testing.expectEqualStrings("claude", model.workspace.find(second.tab_id).?.labelSlice());
-    try std.testing.expectEqualStrings("nvim", fresh.workspace.find(second.tab_id).?.labelSlice());
-    try std.testing.expectEqual(@as(usize, 0), model.workspace.find(second.tab_id).?.model.pane_count);
-    try std.testing.expectEqual(@as(usize, 0), fresh.workspace.find(second.tab_id).?.model.pane_count);
+    try std.testing.expectEqualStrings("claude", model_data.tab_label.text(model, model.tabs.find(second.tab_id).?));
+    try std.testing.expectEqualStrings("nvim", model_data.tab_label.text(fresh, fresh.tabs.find(second.tab_id).?));
+    try std.testing.expectEqual(@as(usize, 0), model.panes.countIn(second.tab_id));
+    try std.testing.expectEqual(@as(usize, 0), fresh.panes.countIn(second.tab_id));
 
     _ = try model.selectTab(.{ .tab_id = second.tab_id });
     _ = try model.reconcileTab(.{ .location = second, .panes = &.{ @enumFromInt(2), @enumFromInt(3) } }, area);
-    try std.testing.expectEqualStrings("claude", model.workspace.find(second.tab_id).?.labelSlice());
+    try std.testing.expectEqualStrings("claude", model_data.tab_label.text(model, model.tabs.find(second.tab_id).?));
     _ = try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = @enumFromInt(3), .name = "git" } });
-    try std.testing.expectEqualStrings("git", model.workspace.find(second.tab_id).?.labelSlice());
+    try std.testing.expectEqualStrings("git", model_data.tab_label.text(model, model.tabs.find(second.tab_id).?));
 }
 
 test "inactive automatic tabs publish foreground changes without changing canonical snapshots" {
@@ -105,8 +105,8 @@ test "inactive automatic tabs publish foreground changes without changing canoni
     const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
     const second: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(2) };
     const pane: core.PaneId = @enumFromInt(1);
-    try model.workspace.bootstrap(.{ .pane_id = pane, .location = first, .size = .{ .cols = 20, .rows = 5 } });
-    _ = try model.workspace.addCreated(.{
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane, .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    _ = try model_data.tab_creation.add(&model, .{
         .location = second,
         .position = 1,
         .label = "",
@@ -125,7 +125,7 @@ test "inactive automatic tabs publish foreground changes without changing canoni
 
     _ = (try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = pane, .name = "nvim" } })).?;
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
-    try std.testing.expectEqualStrings("nvim", model.workspace.find(first.tab_id).?.labelSlice());
+    try std.testing.expectEqualStrings("nvim", model_data.tab_label.text(&model, model.tabs.find(first.tab_id).?));
     try std.testing.expectEqual(before.pane_foreground + 1, model.version().pane_foreground);
     try std.testing.expectEqual(before.pane_metadata + 1, model.version().pane_metadata);
     const foreground_version = model.version();
@@ -133,7 +133,7 @@ test "inactive automatic tabs publish foreground changes without changing canoni
     const repeated = try model.reconcileWorkspace(snapshot);
     try std.testing.expect(!repeated.tabs_changed);
     try std.testing.expectEqualDeep(foreground_version, model.version());
-    try std.testing.expectEqualStrings("nvim", model.workspace.find(first.tab_id).?.labelSlice());
+    try std.testing.expectEqualStrings("nvim", model_data.tab_label.text(&model, model.tabs.find(first.tab_id).?));
     try std.testing.expect((try model.updatePaneMetadata(.{ .foreground = .{ .pane_id = pane, .name = "nvim" } })) == null);
     try std.testing.expectEqualDeep(foreground_version, model.version());
 }
@@ -151,14 +151,14 @@ test "tab position commits version semantic changes only" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-    _ = try model.workspace.addCreated(.{
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    _ = try model_data.tab_creation.add(&model, .{
         .location = second,
         .position = 1,
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
-    try std.testing.expect(model.workspace.select(first.tab_id));
+    try std.testing.expect(model_data.tab_selection.select(&model, first.tab_id));
 
     try std.testing.expectEqual(model_data.Change.changed, try model.applyTabPosition(first, 1));
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
@@ -178,7 +178,7 @@ test "rejected tab positions do not advance the model" {
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     const other_workspace: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
@@ -206,20 +206,20 @@ test "tab rename advances only the collection revision for a semantic change" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-    _ = try model.workspace.addCreated(.{
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    _ = try model_data.tab_creation.add(&model, .{
         .location = second,
         .position = 1,
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
-    try std.testing.expect(model.workspace.select(first.tab_id));
+    try std.testing.expect(model_data.tab_selection.select(&model, first.tab_id));
 
     try std.testing.expectEqual(model_data.Change.changed, try model.renameTab(.{
         .location = second,
         .label = "server",
     }));
-    try std.testing.expectEqualStrings("server", model.workspace.find(second.tab_id).?.labelSlice());
+    try std.testing.expectEqualStrings("server", model_data.tab_label.text(&model, model.tabs.find(second.tab_id).?));
     try std.testing.expectEqualDeep(first, model.activeTabLocation().?);
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 0), model.version().active_tab);
@@ -240,7 +240,7 @@ test "rejected tab renames preserve labels and revisions" {
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectError(error.UnexpectedWorkspace, model.renameTab(.{
         .location = .{
@@ -258,7 +258,7 @@ test "rejected tab renames preserve labels and revisions" {
         .label = "",
     }));
 
-    try std.testing.expectEqualStrings("shell", model.workspace.activeConst().?.labelSlice());
+    try std.testing.expectEqualStrings("shell", model_data.tab_label.text(&model, model.tabs.active));
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
@@ -275,7 +275,7 @@ test "tab creation advances collection and active identity revisions" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
 
     const creation = try model.createTab(.{
         .created = .{
@@ -292,11 +292,11 @@ test "tab creation advances collection and active identity revisions" {
     try std.testing.expectEqual(@as(core.PaneId, @enumFromInt(2)), creation.created_root_pane_id);
     try std.testing.expectEqual(@as(u16, 0), creation.created_position);
     try std.testing.expectEqual(
-        model.workspace.find(first.tab_id).?.model.layout.currentRevision(),
+        model.tabs.layout[model.tabs.find(first.tab_id).?].currentRevision(),
         creation.previous_layout_revision,
     );
     try std.testing.expectEqual(
-        model.workspace.find(second.tab_id).?.model.layout.currentRevision(),
+        model.tabs.layout[model.tabs.find(second.tab_id).?].currentRevision(),
         creation.created_layout_revision,
     );
     try std.testing.expectEqual(@as(u64, 0), creation.tabs_revision_before);
@@ -309,7 +309,7 @@ test "tab creation advances collection and active identity revisions" {
     try std.testing.expectEqual(model.version().panes, creation.panes_revision);
     try std.testing.expectEqual(model.version().copy, creation.copy_revision);
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
-    try std.testing.expectEqual(@as(usize, 2), model.workspace.count);
+    try std.testing.expectEqual(@as(usize, 2), model.tabs.count);
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
 }
@@ -327,7 +327,7 @@ test "tab creation captures invalid copy-mode release" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     try std.testing.expect(model.enterCopyMode());
     const version_before = model.version();
 
@@ -356,7 +356,7 @@ test "rejected tab creations preserve state and revisions" {
         .workspace = workspace,
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
     const size: core.TerminalSize = .{ .cols = 20, .rows = 5 };
 
     try std.testing.expectError(error.UnexpectedWorkspace, model.createTab(.{
@@ -400,7 +400,7 @@ test "rejected tab creations preserve state and revisions" {
     }));
 
     try std.testing.expectEqualDeep(first, model.activeTabLocation().?);
-    try std.testing.expectEqual(@as(usize, 1), model.workspace.count);
+    try std.testing.expectEqual(@as(usize, 1), model.tabs.count);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
@@ -417,14 +417,14 @@ test "active tab removal advances collection and active identity revisions" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-    _ = try model.workspace.addCreated(.{
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    _ = try model_data.tab_creation.add(&model, .{
         .location = second,
         .position = 1,
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
-    try std.testing.expect(model.workspace.select(first.tab_id));
+    try std.testing.expect(model_data.tab_selection.select(&model, first.tab_id));
     try std.testing.expect(model.enterCopyMode());
     const version_before_removal = model.version();
 
@@ -438,7 +438,7 @@ test "active tab removal advances collection and active identity revisions" {
     try std.testing.expectEqualDeep(second, removal.active.?);
     try std.testing.expectEqualSlices(core.PaneId, &.{@enumFromInt(1)}, removal.panes.slice());
     try std.testing.expectEqual(
-        model.workspace.activeConst().?.model.layout.currentRevision(),
+        model.tabs.layout[model.tabs.active].currentRevision(),
         removal.active_layout_revision,
     );
     try std.testing.expectEqual(@as(u64, 0), removal.active_tab_revision_before);
@@ -466,14 +466,14 @@ test "inactive tab removal preserves the active identity revision" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-    _ = try model.workspace.addCreated(.{
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    _ = try model_data.tab_creation.add(&model, .{
         .location = second,
         .position = 1,
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
-    try std.testing.expect(model.workspace.select(first.tab_id));
+    try std.testing.expect(model_data.tab_selection.select(&model, first.tab_id));
 
     const removal = (try model.removeTab(.{
         .location = second,
@@ -483,7 +483,7 @@ test "inactive tab removal preserves the active identity revision" {
     try std.testing.expect(!removal.was_active);
     try std.testing.expectEqualDeep(first, removal.active.?);
     try std.testing.expectEqual(
-        model.workspace.activeConst().?.model.layout.currentRevision(),
+        model.tabs.layout[model.tabs.active].currentRevision(),
         removal.active_layout_revision,
     );
     try std.testing.expectEqual(removal.active_tab_revision_before, removal.active_tab_revision);
@@ -504,13 +504,13 @@ test "workspace closure is validated before the last tab is removed" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
 
     try std.testing.expectError(error.UnexpectedWorkspaceRemoval, model.removeTab(.{
         .location = location,
         .workspace_removed = false,
     }));
-    try std.testing.expectEqual(@as(usize, 1), model.workspace.count);
+    try std.testing.expectEqual(@as(usize, 1), model.tabs.count);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 
     const removal = (try model.removeTab(.{
@@ -528,7 +528,7 @@ test "workspace closure is validated before the last tab is removed" {
     try std.testing.expectEqual(model.version().active_tab, removal.active_tab_revision);
     try std.testing.expectEqual(model.version().panes, removal.panes_revision);
     try std.testing.expectEqual(model.version().copy, removal.copy_revision);
-    try std.testing.expectEqual(@as(usize, 0), model.workspace.count);
+    try std.testing.expectEqual(@as(usize, 0), model.tabs.count);
     try std.testing.expectEqual(@as(u64, 1), model.version().tabs);
     try std.testing.expectEqual(@as(u64, 1), model.version().active_tab);
 }
@@ -541,7 +541,7 @@ test "missing tab removal captures exact tab and workspace absence" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 20, .rows = 5 } });
     const missing: core.TabLocation = .{
         .workspace = location.workspace,
         .tab_id = @enumFromInt(9),
@@ -589,25 +589,25 @@ test "tab selection resolves identity position and wrapping offset" {
         .workspace = workspace,
         .tab_id = @enumFromInt(2),
     };
-    try model.workspace.bootstrap(.{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
-    _ = try model.workspace.addCreated(.{
+    try model_data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = first, .size = .{ .cols = 20, .rows = 5 } });
+    _ = try model_data.tab_creation.add(&model, .{
         .location = second,
         .position = 1,
         .label = "logs",
         .root_pane_id = @enumFromInt(2),
     }, .{ .cols = 20, .rows = 5 });
-    try std.testing.expect(model.workspace.select(first.tab_id));
+    try std.testing.expect(model_data.tab_selection.select(&model, first.tab_id));
 
     const selection = (try model.selectTab(.{ .position = 1 })).?;
 
     try std.testing.expectEqualDeep(first, selection.previous);
     try std.testing.expectEqualDeep(second, selection.selected);
     try std.testing.expectEqual(
-        model.workspace.find(first.tab_id).?.model.layout.currentRevision(),
+        model.tabs.layout[model.tabs.find(first.tab_id).?].currentRevision(),
         selection.previous_layout_revision,
     );
     try std.testing.expectEqual(
-        model.workspace.find(second.tab_id).?.model.layout.currentRevision(),
+        model.tabs.layout[model.tabs.find(second.tab_id).?].currentRevision(),
         selection.selected_layout_revision,
     );
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);

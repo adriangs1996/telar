@@ -1,3 +1,4 @@
+const data = @import("model");
 const LifecycleState = @import("LifecycleState.zig");
 const Frame = @import("Frame.zig");
 const ProjectionType = @import("Projection.zig");
@@ -36,8 +37,9 @@ pub fn prepare(adapter: *Adapter, projection: ProjectionType) !?lifecycle_module
     }
 
     var count: usize = 0;
-    if (projection.model) |model| {
-        var panes = model.paneConstIterator();
+    const model = projection.model;
+    if (projection.tab) |slot| {
+        var panes = model.panes.iterateConst(model.tabs.location[slot].tab_id);
         while (panes.next()) |pane| {
             const len = pane.buffer.cells.len;
             if (len > headless.cell_capacity - count) {
@@ -53,9 +55,9 @@ pub fn prepare(adapter: *Adapter, projection: ProjectionType) !?lifecycle_module
     adapter.frame.version = projection.version;
     adapter.frame.geometry = GeometryType.capture(projection);
     adapter.frame.focused = null;
-    if (projection.model) |model| {
-        adapter.frame.focused = model.layout.focused();
-        var panes = model.paneConstIterator();
+    if (projection.tab) |slot| {
+        adapter.frame.focused = model.tabs.layout[slot].focused();
+        var panes = model.panes.iterateConst(model.tabs.location[slot].tab_id);
         while (panes.next()) |pane| {
             const start = adapter.frame.cell_count;
             const len = pane.buffer.cells.len;
@@ -77,7 +79,7 @@ pub fn prepare(adapter: *Adapter, projection: ProjectionType) !?lifecycle_module
 
     return try adapter.state.begin(.{
         .observation = observation,
-        .commit = if (projection.model) |model| model.presentationCommit() else .{},
+        .commit = if (projection.tab) |slot| data.presentation_delivery.capture(model, slot) else .{},
         .geometry = adapter.frame.geometry,
     });
 }

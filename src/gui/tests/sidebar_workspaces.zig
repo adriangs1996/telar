@@ -87,11 +87,10 @@ test "workspace changes reveal the selected row without rewinding manual scroll 
     defer fixture.deinit();
     try projects(&fixture, core.max_workspace_list_entries);
     try fixture.measure(.{ .width = 1100, .height = 500, .scale = 1 });
-    const tabs = &fixture.session.gui.app.model.workspace;
+    const model = &fixture.session.gui.app.model;
     const last = workspaceId(core.max_workspace_list_entries - 1);
-    try tabs.replaceWithRoot(.{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = last }, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
-    var projection = fixture.projection();
-    projection.tabs = tabs;
+    try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = last }, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
+    const projection = fixture.projection();
     try fixture.paint(projection);
     const hit = fixture.bandTarget(.{ .select_workspace = last }).?;
     const region = fixture.chrome.presented().sidebar_regions.projects;
@@ -102,7 +101,7 @@ test "workspace changes reveal the selected row without rewinding manual scroll 
     const manual = fixture.chrome.sidebar.projects.scroll;
     try fixture.paint(projection);
     try std.testing.expectEqual(manual, fixture.chrome.sidebar.projects.scroll);
-    try tabs.replaceWithRoot(.{ .pane_id = Session.pane_id, .location = Session.location, .size = fixture.session.gui.app.model.hostSize() });
+    try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = Session.location, .size = fixture.session.gui.app.model.hostSize() });
     try fixture.paint(fixture.projection());
     try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.projects.scroll);
     try std.testing.expect(fixture.bandTarget(.{ .select_workspace = workspaceId(0) }) != null);

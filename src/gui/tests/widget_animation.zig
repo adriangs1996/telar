@@ -11,10 +11,10 @@ const Quad = @import("../render/Quad.zig").Quad;
 test "a blocked pane animates without working agents and folds a rejected and late frame" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const model = fixture.session.gui.app.model.activeTabModel().?;
+    const tab = fixture.session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
-    _ = model.layout.focusPane(Session.pane_id);
+    try data.pane_split.split(&fixture.session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
+    _ = fixture.session.gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
     var agents: data.AgentSnapshot = .{};
     _ = try agents.replace(.{ .revision = 1, .agents = &.{.{
         .key = .{ .pane_id = second, .pane_generation = 1 },
@@ -49,7 +49,7 @@ test "a blocked pane animates without working agents and folds a rejected and la
     try std.testing.expectEqual(@as(u32, 0), fixture.chrome.animation.wakeupAfter(fixture.chrome.now_ns));
     try std.testing.expectEqual(version, fixture.session.gui.app.model.version());
 
-    _ = model.layout.focusPane(second);
+    _ = fixture.session.gui.app.model.tabs.layout[tab].focusPane(second);
     projection = fixture.projection();
     projection.agents = &agents;
     try fixture.paint(projection);
@@ -109,7 +109,7 @@ test "native indeterminate progress paints each frame without model ticks and fo
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const app = &fixture.session.gui.app;
-    const pane = app.model.workspace.findPane(Session.pane_id).?;
+    const pane = app.model.panes.find(Session.pane_id).?;
     _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .indeterminate });
     const version = app.model.version();
     fixture.chrome.now_ns = std.time.ns_per_s;
@@ -138,7 +138,7 @@ test "native indeterminate progress paints each frame without model ticks and fo
 test "native paused failed and removed progress stop their frame clock" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
     for ([_]core.PaneProgressState{ .pause, .@"error", .remove }) |state| {
         _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .indeterminate });
         fixture.chrome.now_ns += std.time.ns_per_s;
@@ -160,23 +160,23 @@ test "hiding native pane progress retires its retained motion and stops repainti
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
     const second: core.TabId = @enumFromInt(2);
-    _ = try model.workspace.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = second }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, model.hostSize());
-    _ = model.workspace.select(Session.location.tab_id);
-    const pane = model.workspace.findPane(Session.pane_id).?;
+    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, model.hostSize());
+    _ = data.tab_selection.select(model, Session.location.tab_id);
+    const pane = model.panes.find(Session.pane_id).?;
     _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .indeterminate });
     fixture.chrome.now_ns = std.time.ns_per_s;
     try fixture.paint(fixture.projection());
     try std.testing.expectEqual(@as(usize, 1), fixture.chrome.progress.len);
     try std.testing.expect(fixture.chrome.animation.deadline_ns != null);
 
-    _ = model.workspace.select(second);
+    _ = data.tab_selection.select(model, second);
     fixture.chrome.now_ns += std.time.ns_per_s;
     try fixture.paint(fixture.projection());
     try std.testing.expectEqual(@as(usize, 0), fixture.chrome.progress.len);
     try std.testing.expectEqual(@as(?u64, null), fixture.chrome.animation.deadline_ns);
     try std.testing.expect(!fixture.chrome.animation.due(std.math.maxInt(u64)));
 
-    _ = model.workspace.select(Session.location.tab_id);
+    _ = data.tab_selection.select(model, Session.location.tab_id);
     fixture.chrome.now_ns += std.time.ns_per_s;
     try fixture.paint(fixture.projection());
     try std.testing.expectEqual(@as(usize, 1), fixture.chrome.progress.len);

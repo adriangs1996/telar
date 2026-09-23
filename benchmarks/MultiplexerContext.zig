@@ -6,23 +6,23 @@ const std = @import("std");
 const main = @import("main.zig");
 const MultiplexerContext = @This();
 
-model: data.MultiplexerModel,
+model: data.Model,
 screen: frontend.Screen,
 compositor: frontend.Compositor,
 
 pub fn init(gpa: std.mem.Allocator) !MultiplexerContext {
-    var model = data.MultiplexerModel.init(gpa);
+    var model = data.Model.init(gpa, true);
     errdefer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = main.cols, .rows = main.rows } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = main.cols, .rows = main.rows } });
     const area: core.Rect = .{ .w = main.cols, .h = main.rows };
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
-    try model.split(.{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(3), .location = location, .axis = .vertical, .area = area });
-    try model.split(.{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(4), .location = location, .axis = .vertical, .area = area });
-    var panes = model.paneIterator();
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(2), .location = location, .axis = .horizontal, .area = area });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(1), .new_pane = @enumFromInt(3), .location = location, .axis = .vertical, .area = area });
+    try data.pane_split.split(&model, 0, .{ .existing_pane = @enumFromInt(2), .new_pane = @enumFromInt(4), .location = location, .axis = .vertical, .area = area });
+    var panes = model.panes.iterate(null);
     while (panes.next()) |pane| {
         pane.buffer.setCell(.{ .x = 0, .y = 0 }, .{ .text = "x" });
     }

@@ -12,15 +12,14 @@ pub fn captureVersion(model: *data.Model) ?data.LayoutSyncVersion {
         .chrome = model.version().chrome,
         .active_tab = active_tab,
     };
-    var tabs = model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        if (!tab.snapshot_loaded) {
+    for (0..model.tabs.count) |tab| {
+        if (!model.tabs.snapshot_loaded[tab]) {
             continue;
         }
 
         version.tabs[version.tab_count] = .{
-            .location = tab.location,
-            .layout_revision = tab.model.layout.currentRevision(),
+            .location = model.tabs.location[tab],
+            .layout_revision = model.tabs.layout[tab].currentRevision(),
         };
         version.tab_count += 1;
     }
@@ -39,24 +38,25 @@ pub fn buildUpdate(model: *data.Model, nodes: *[core.max_client_layout_nodes]cor
     var node_count: usize = 0;
     var tab_count: usize = 0;
     var active_included = false;
-    var tabs = model.workspace.tabIterator();
-    while (tabs.next()) |tab| {
-        if (!tab.snapshot_loaded) {
+    for (0..model.tabs.count) |tab| {
+        if (!model.tabs.snapshot_loaded[tab]) {
             continue;
         }
 
-        const focused_pane = tab.model.layout.focused() orelse continue;
-        const encoded = tab.model.layout.clientLayoutNodes(&scratch);
+        const location = model.tabs.location[tab];
+        const layout = &model.tabs.layout[tab];
+        const focused_pane = layout.focused() orelse continue;
+        const encoded = layout.clientLayoutNodes(&scratch);
         if (encoded.len > nodes.len - node_count) {
             return null;
         }
 
         @memcpy(nodes[node_count..][0..encoded.len], encoded);
-        const is_active = std.meta.eql(tab.location, active_tab);
+        const is_active = std.meta.eql(location, active_tab);
         output[tab_count] = .{
-            .location = tab.location,
+            .location = location,
             .focused_pane = focused_pane,
-            .fullscreen = tab.model.layout.isFullscreen(),
+            .fullscreen = layout.isFullscreen(),
             .workspace_active = is_active,
             .nodes = nodes[node_count..][0..encoded.len],
         };

@@ -192,8 +192,8 @@ fn noteInput(_: *anyopaque, _: u64) void {}
 fn notePaneInput(context: *anyopaque, pane_id: core.PaneId, now_ns: u64) void {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
     const gui = GuiClient.of(client);
-    const model = client.model.activeTabModelConst() orelse return;
-    const pane = model.findConst(pane_id) orelse return;
+    const tab = client.model.tabs.activeSlot() orelse return;
+    const pane = client.model.panes.findInConst(client.model.tabs.location[tab].tab_id, pane_id) orelse return;
     gui.driver.frame_pacer.noteInput(.{
         .pane_id = pane.id,
         .attachment_generation = pane.attachment_generation,

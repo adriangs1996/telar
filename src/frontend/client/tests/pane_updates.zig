@@ -58,7 +58,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
         .spans = &.{.{ .start = 0, .cells = &cells }},
     });
     _ = try client.handleServerMessage(try core.decodeServer(snapshot));
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
 
     try std.testing.expectEqual(
         @as(u64, 5),
@@ -94,7 +94,7 @@ test "a frame made stale by detach has no state resources or presentation effect
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pane = client.model.workspace.findPane(TestHarness.bootstrap_pane).?;
+    const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.attached = false;
     const version = client.model.version();
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
@@ -177,7 +177,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     }
 
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) == null);
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expectEqual(graphics_version, TerminalClient.of(client).graphics_store.ingressVersion());
     try std.testing.expectEqual(graphics_visible, TerminalClient.of(client).graphics_store.paneVisible(TestHarness.bootstrap_pane));
@@ -207,8 +207,8 @@ test "a frame already sent before workspace departure is harmless during handoff
     }
 
     try std.testing.expectEqualDeep(destination.workspace, client.model.workspaceLocation().?);
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
-    const pane = client.model.workspace.findPane(destination_pane).?;
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) == null);
+    const pane = client.model.panes.find(destination_pane).?;
     try std.testing.expect(pane.attached);
     try harness.settle();
     const workspace_snapshot = try harness.nextClientMessage(&buffer);
@@ -272,7 +272,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
 
     try std.testing.expectEqualStrings(
         "/work/telar",
-        client.model.workspace.findPane(TestHarness.bootstrap_pane).?.cwdSlice(),
+        client.model.panes.find(TestHarness.bootstrap_pane).?.cwdSlice(),
     );
     try std.testing.expectEqual(version.pane_metadata + 1, client.model.version().pane_metadata);
     try std.testing.expectEqual(version.pane_foreground, client.model.version().pane_foreground);
@@ -296,7 +296,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
 
     try std.testing.expectEqualStrings(
         "/other/telar",
-        client.model.workspace.findPane(TestHarness.bootstrap_pane).?.cwdSlice(),
+        client.model.panes.find(TestHarness.bootstrap_pane).?.cwdSlice(),
     );
     try std.testing.expectEqualDeep(presented_version, client.model.version());
     try presentation_lifecycle.observe(client);
@@ -329,7 +329,7 @@ test "pane foreground and focus update automatic tab labels through presentation
 
     try std.testing.expectEqualStrings(
         "Claude Code",
-        client.model.workspace.findPane(TestHarness.bootstrap_pane).?.foregroundName(),
+        client.model.panes.find(TestHarness.bootstrap_pane).?.foregroundName(),
     );
     try std.testing.expectEqual(version.pane_metadata + 1, client.model.version().pane_metadata);
     try std.testing.expectEqual(version.pane_foreground + 1, client.model.version().pane_foreground);
@@ -440,7 +440,7 @@ test "close pane request waits for the authoritative exit before committing" {
 
     _ = try client.executeAction(.close_pane, .effect);
 
-    try std.testing.expect(client.model.workspace.findPane(closing_pane) != null);
+    try std.testing.expect(client.model.panes.find(closing_pane) != null);
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
     try std.testing.expectEqual(pending_updates_before_request, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 1), client.request_lifecycle.tracker.count);
@@ -461,7 +461,7 @@ test "close pane request waits for the authoritative exit before committing" {
     });
     _ = try client.handleServerMessage(try core.decodeServer(exited));
 
-    try std.testing.expect(client.model.workspace.findPane(closing_pane) == null);
+    try std.testing.expect(client.model.panes.find(closing_pane) == null);
     try std.testing.expectEqual(version_before_request.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_request, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
@@ -524,7 +524,7 @@ test "an unrequested pane exit removes the pane silently" {
     );
     try harness.settle();
 
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane) == null);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) == null);
     try std.testing.expectEqual(version_before_exit.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_exit, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expect(!client.model.copyModeActive());
@@ -578,7 +578,7 @@ test "an inactive pane exit retires only inactive state" {
     });
     _ = try client.handleServerMessage(try core.decodeServer(exited));
 
-    try std.testing.expect(client.model.workspace.findPane(inactive_pane) == null);
+    try std.testing.expect(client.model.panes.find(inactive_pane) == null);
     try std.testing.expectEqualDeep(version_before_exit, client.model.version());
     try std.testing.expectEqual(pending_updates_before_exit, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);

@@ -26,7 +26,7 @@ pub fn draw(list: WorkspaceList, canvas: *Canvas) !void {
     }
 
     if (snapshot.count == 0) {
-        const name = list.context.projection.tabs.displayedWorkspaceName();
+        const name = list.context.projection.model.workspaceName();
         _ = try canvas.textAt(list.bounds, .{ .text = if (name.len > 0) name else "No workspaces", .color = canvas.theme.palette.subtext0, .face = .sans, .size = .body });
         return;
     }

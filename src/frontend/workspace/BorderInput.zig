@@ -5,7 +5,9 @@ const BorderInput = @This();
 
 view: data.LayoutView,
 foreground_name: []const u8,
-fullscreen_model: ?*const data.MultiplexerModel = null,
+/// The client model when the pane is fullscreen, with its tab's slot.
+fullscreen_model: ?*const data.Model = null,
+tab: usize = 0,
 progress_state: core.PaneProgressState,
 progress_percent: ?u8,
 animation_frame: u8,

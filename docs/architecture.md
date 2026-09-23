@@ -31,12 +31,10 @@ Each process keeps its state in one struct: `RuntimeModel` in the runtime and
 // ClientModel.zig
 host: Host,           // facts the adapter writes: size, capabilities, time
 config: Config,       // the active configuration generation, one copy
-focus: Focus,         // active tab and focused pane
 input_mode: InputMode,
-tabs: Tabs,
-panes: Panes,
+tabs: Tabs,           // ordered tabs; the active one is `tabs.active`
+panes: Panes,         // every pane of every tab
 agents: Agents,
-layouts: Layouts,     // flat nodes; each node names its tab
 requests: Requests,   // in flight: id, kind, target, deadline
 to_runtime: Outbox,
 to_host: HostEffects,
@@ -44,16 +42,24 @@ revisions: Revisions,
 ```
 
 ```zig
-// Panes.zig
-id: [capacity]core.PaneId,
-tab: [capacity]TabSlot,
-attached: [capacity]bool,
-applied_frame: [capacity]core.FrameId,
-buffer: [capacity]core.Buffer,
-damage: [capacity]Damage,
-count: u16,
+// Tabs.zig: one row per tab, ordered by position
+location: [capacity]core.TabLocation,
+label: [capacity]Label,
+layout: [capacity]WorkspaceLayout,   // the tab's split tree, one bounded value
+snapshot_loaded: [capacity]bool,
+count: usize,
+active: usize,
+
+// Panes.zig: one row per pane
+record: [capacity]?*Pane,            // heap record; its location names its tab
 index: core.GenericSlotIndex(2 * capacity),
+count: usize,
 ```
+
+A tab's slot is its position, so it changes when tabs move; anything kept
+across calls or messages uses `core.TabId`. A pane's record stays on the heap
+because its cell buffers are large and its address must survive tab moves;
+lookups go through the index, never through the tab.
 
 ## Procedures
 

@@ -79,7 +79,7 @@ fn linkPointer(context: *anyopaque, event: data.Mouse) bool {
     const routing = &gui.pointer;
     if (event.button & 3 == 2) {
         const hit = hover_target.resolve(gui, event, hover_target.link_modifier | 1).link orelse return false;
-        const pane = gui.app.model.activeTabModelConst().?.findConst(hit.pane_id).?;
+        const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[gui.app.model.tabs.active].tab_id, hit.pane_id).?;
         if (pane.pending_frame_id == 0) {
             gui.copyLink(hit.match.target.uri()) catch {};
         }

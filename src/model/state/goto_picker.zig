@@ -5,6 +5,7 @@
 const core = @import("telar-core");
 const data = @import("../model.zig");
 const Sources = @import("Sources.zig");
+const tab_label = @import("../workspace/tab_label.zig");
 const Results = @import("Results.zig");
 const Scorer = @import("Scorer.zig");
 const std = @import("std");
@@ -37,10 +38,9 @@ pub fn collect(sources: Sources, query: []const u8, results: *Results) void {
         insert(results, item, scorer.scoreItem(item) orelse continue);
     }
 
-    if (sources.tabs) |tabs| {
-        for (tabs.items[0..tabs.count]) |slot| {
-            const tab = &(slot orelse continue);
-            const item: Item = .{ .tab = tab.location.tab_id };
+    if (sources.model) |model| {
+        for (model.tabs.location[0..model.tabs.count]) |location| {
+            const item: Item = .{ .tab = location.tab_id };
             insert(results, item, scorer.scoreItem(item) orelse continue);
         }
     }
@@ -69,16 +69,9 @@ pub fn describe(sources: Sources, item: Item, buffer: *[max_label_bytes]u8) []co
             }
         },
         .tab => |tab_id| {
-            const tabs = sources.tabs orelse return "";
-            for (tabs.items[0..tabs.count]) |*slot| {
-                const tab = if (slot.*) |*value| value else continue;
-                if (tab.location.tab_id != tab_id) {
-                    continue;
-                }
-
-                writer.print("tab {s}", .{tab.labelSlice()}) catch {};
-                break;
-            }
+            const model = sources.model orelse return "";
+            const slot = model.tabs.find(tab_id) orelse return "";
+            writer.print("tab {s}", .{tab_label.text(model, slot)}) catch {};
         },
         .agent => |key| {
             const agent = sources.agents.find(key) orelse return "";
@@ -125,7 +118,7 @@ test "collect keeps matches ordered by score with a stable bound" {
     const sources: Sources = .{
         .agents = &snapshot,
         .workspaces = &workspaces,
-        .tabs = null,
+        .model = null,
     };
 
     collect(sources, "", &results);

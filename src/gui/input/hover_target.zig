@@ -41,10 +41,10 @@ pub fn resolve(gui: *const GuiClient, mouse: data.Mouse, mods: u32) Target {
         .resize_sidebar => return .{ .shape = .col_resize },
         .intent => |intent| return .{ .shape = if (intent == .none) .default else .pointer },
         .pane_content => |id| {
-            const model = gui.app.model.activeTabModelConst() orelse return .{};
-            const pane = model.findConst(id) orelse return .{};
+            const tab = gui.app.model.tabs.activeSlot() orelse return .{};
+            const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, id) orelse return .{};
             var layout: data.LayoutSnapshot = .{};
-            model.layout.snapshot(gui.region.area, &layout);
+            gui.app.model.tabs.layout[tab].snapshot(gui.region.area, &layout);
             const view = layout.find(id) orelse return .{};
             if (view.surface != .terminal or !view.content.contains(mouse.x, mouse.y)) {
                 return .{};
@@ -71,7 +71,7 @@ pub fn resolve(gui: *const GuiClient, mouse: data.Mouse, mods: u32) Target {
             return .{ .shape = .pointer, .link = .{
                 .pane_id = pane.id,
                 .generation = pane.attachment_generation,
-                .location = model.location orelse return base,
+                .location = gui.app.model.tabs.location[tab],
                 .content = view.content,
                 .scroll_offset = pane.scroll.offset,
                 .area = .{ .x = view.content.x + start_x, .y = mouse.y, .w = end_x - start_x, .h = 1 },

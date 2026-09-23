@@ -269,16 +269,16 @@ pub fn handleWritten(client: *client_module.AttachedClient, result: anyerror!voi
 }
 
 fn capture(client: *client_module.AttachedClient, heap: core.SnapshotSnapshot) ?SnapshotType {
-    const active = client.model.workspace.active() orelse return null;
-    const focused = active.model.layout.focused() orelse .invalid;
+    const active = client.model.tabs.activeSlot() orelse return null;
+    const focused = client.model.tabs.layout[active].focused() orelse .invalid;
 
     return .{
         .theme_name = TerminalClient.of(client).view.theme.base.canonicalName(),
         .icon_theme_name = TerminalClient.of(client).view.icon_theme.canonicalName(),
-        .active_tab = active.location.tab_id,
-        .tab_count = client.model.workspace.count,
+        .active_tab = client.model.tabs.location[active].tab_id,
+        .tab_count = client.model.tabs.count,
         .focused_pane = focused,
-        .pane_count = active.model.pane_count,
+        .pane_count = client.model.panes.countIn(client.model.tabs.location[active].tab_id),
         .pending_updates = TerminalClient.of(client).presenter.pending_updates,
         .draw_pending = TerminalClient.of(client).presenter.draw_pending,
         .media_pending = TerminalClient.of(client).presenter.media_tick_pending,

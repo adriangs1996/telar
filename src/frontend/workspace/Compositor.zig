@@ -76,6 +76,7 @@ pub fn invalidate(compositor: *Compositor) void {
 pub fn render(compositor: *Compositor, composition: Composition) !CompositionResult {
     core.profiling.add(.tui_compose, 1);
     const model = composition.model;
+    const tab = composition.tab;
     const screen = composition.screen;
     const options = composition.input;
     const previous_copy = compositor.copy;
@@ -98,8 +99,8 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
         compositor.area = options.area;
         compositor.invalidated = true;
     }
-    if (!std.meta.eql(compositor.source, model.location)) {
-        compositor.source = model.location;
+    if (!std.meta.eql(compositor.source, model.tabs.location[tab])) {
+        compositor.source = model.tabs.location[tab];
         compositor.invalidated = true;
     }
     if (!std.meta.eql(compositor.bottom_reservation, options.bottom_reservation)) {
@@ -111,12 +112,12 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
         compositor.invalidated = true;
     }
 
-    if (compositor.layout_snapshot.revision != model.layout.currentRevision()) {
+    if (compositor.layout_snapshot.revision != model.tabs.layout[tab].currentRevision()) {
         compositor.invalidated = true;
     }
-    model.layout.snapshot(options.area, &compositor.layout_snapshot);
+    model.tabs.layout[tab].snapshot(options.area, &compositor.layout_snapshot);
     compositor.bottom_reservation_area = compositor.layout_snapshot.reserveBelowPane(options.bottom_reservation);
-    if (compositor.paneProjectionChanged(model)) {
+    if (compositor.paneProjectionChanged(model, tab)) {
         compositor.invalidated = true;
     }
     if (compositor.thread_surfaces and compositor.agents_revision != options.agents_revision) {
@@ -124,20 +125,21 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
     }
     compositor.agents_revision = options.agents_revision;
     const target = &compositor.composed.?;
-    const commit = model.presentationCommit();
+    const commit = data.presentation_delivery.capture(model, tab);
     const stats = if (compositor.invalidated) full: {
         target.clear(.{});
         screen.cursor = null;
         var full_stats: RenderStats = .{ .full = true };
         compositor.fullscreen_labels = .{};
         for (compositor.layout_snapshot.views()) |view| {
-            const pane = model.findConst(view.pane_id) orelse continue;
+            const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, view.pane_id) orelse continue;
             full_stats.panes += 1;
-            if (model.layout.hasBorders()) {
+            if (model.tabs.layout[tab].hasBorders()) {
                 compositor.fullscreen_labels = multiplexer.drawBorder(target, .{
                     .view = view,
                     .foreground_name = pane.foregroundName(),
-                    .fullscreen_model = if (model.layout.isFullscreen()) model else null,
+                    .fullscreen_model = if (model.tabs.layout[tab].isFullscreen()) model else null,
+                    .tab = tab,
                     .progress_state = pane.progress_state,
                     .progress_percent = pane.progress_percent,
                     .animation_frame = options.progress_animation_frame,
@@ -190,6 +192,7 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
     } else incremental: {
         var context: IncrementalComposition = .{
             .model = model,
+            .tab = tab,
             .screen = screen,
             .target = target,
             .previous_copy = previous_copy,
@@ -272,7 +275,7 @@ fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition)
     var stats: RenderStats = .{};
     context.screen.cursor = null;
     for (compositor.layout_snapshot.views()) |view| {
-        const pane = context.model.findConst(view.pane_id) orelse continue;
+        const pane = context.model.panes.findInConst(context.model.tabs.location[context.tab].tab_id, view.pane_id) orelse continue;
         stats.panes += 1;
         if (view.surface == .thread) {
             continue;
@@ -326,12 +329,12 @@ fn composeIncremental(compositor: *Compositor, context: *IncrementalComposition)
 }
 
 fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposition, options: CompositionInput) !void {
-    if (!context.model.layout.hasBorders()) {
+    if (!context.model.tabs.layout[context.tab].hasBorders()) {
         return;
     }
 
     for (compositor.layout_snapshot.views()) |view| {
-        const pane = context.model.findConst(view.pane_id) orelse continue;
+        const pane = context.model.panes.findInConst(context.model.tabs.location[context.tab].tab_id, view.pane_id) orelse continue;
         if (pane.progress_state == .remove) {
             continue;
         }
@@ -339,7 +342,8 @@ fn composeProgressBorders(compositor: *Compositor, context: *IncrementalComposit
         compositor.fullscreen_labels = multiplexer.drawBorder(context.target, .{
             .view = view,
             .foreground_name = pane.foregroundName(),
-            .fullscreen_model = if (context.model.layout.isFullscreen()) context.model else null,
+            .fullscreen_model = if (context.model.tabs.layout[context.tab].isFullscreen()) context.model else null,
+            .tab = context.tab,
             .progress_state = pane.progress_state,
             .progress_percent = pane.progress_percent,
             .animation_frame = options.progress_animation_frame,
@@ -392,11 +396,11 @@ fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, 
     }
 }
 
-fn paneProjectionChanged(compositor: *Compositor, model: *const data.MultiplexerModel) bool {
+fn paneProjectionChanged(compositor: *Compositor, model: *const data.Model, tab: usize) bool {
     var next: [core.max_panes_per_tab]PaneProjection = undefined;
     var next_count: u8 = 0;
     for (compositor.layout_snapshot.views()) |view| {
-        const pane = model.findConst(view.pane_id) orelse continue;
+        const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, view.pane_id) orelse continue;
         next[next_count] = .{
             .pane_id = pane.id,
             .surface = view.surface,

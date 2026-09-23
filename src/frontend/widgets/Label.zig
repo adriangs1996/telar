@@ -16,33 +16,20 @@ fullscreen: bool,
 icon: ?data.icons.Icon = null,
 icon_column: u16 = 0,
 
-pub fn init(tab: *const data.Tab, index: usize) Label {
+/// Labels tab `slot`; `slot` is also its shortcut position.
+/// Example: `const label = Label.init(model, slot);`
+pub fn init(model: *const data.Model, slot: usize) Label {
     var label: Label = .{
-        .fullscreen = tab.model.layout.isFullscreen(),
-        .icon = tab.labelIcon(),
+        .fullscreen = model.tabs.layout[slot].isFullscreen(),
+        .icon = data.tab_label.icon(model, slot),
     };
-    label.setText(tab.labelSlice(), index);
+    label.setText(data.tab_label.text(model, slot), slot);
 
     return label;
 }
 
-/// Uses the focused application before the tab collection arrives. Example: const label = Label.initModel(model);
-pub fn initModel(model: *const data.MultiplexerModel) Label {
-    const pane = model.focusedPaneConst();
-    var label: Label = .{
-        .fullscreen = model.layout.isFullscreen(),
-        .icon = if (pane) |value| value.applicationIcon() else .app_terminal,
-    };
-    label.setText(if (pane) |value| value.applicationLabel() else "shell", null);
-
-    return label;
-}
-
-fn setText(label: *Label, name: []const u8, index: ?usize) void {
-    const prefix = if (index) |value|
-        std.fmt.bufPrint(&label.buffer, " {d}:", .{value + 1}) catch unreachable
-    else
-        std.fmt.bufPrint(&label.buffer, " ", .{}) catch unreachable;
+fn setText(label: *Label, name: []const u8, index: usize) void {
+    const prefix = std.fmt.bufPrint(&label.buffer, " {d}:", .{index + 1}) catch unreachable;
     label.icon_column = @intCast(prefix.len);
     const suffix = std.fmt.bufPrint(label.buffer[prefix.len..], "{s}{s} ", .{
         if (label.icon != null) "  " else "",
@@ -81,21 +68,24 @@ pub fn draw(label: *const Label, context: *ContextType, placement: Placement) vo
     _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = marker_x + 1, .y = rect.y }, .text = " ", .max_width = 1, .style = placement.style });
 }
 
-test "automatic tab labels draw the application icon while manual labels retain their text" {
-    var tab = data.Tab.init(std.testing.allocator, .{
-        .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(45) },
-        .label = "",
-        .pane_gaps = true,
-    });
-    defer tab.deinit();
-    try tab.model.addRoot(.{
+fn testingModel(label: []const u8) !data.Model {
+    var model = data.Model.init(std.testing.allocator, true);
+    errdefer model.deinit();
+    try data.workspace_handoff.bootstrap(&model, .{
         .pane_id = @enumFromInt(1),
-        .location = tab.location,
+        .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(45) },
         .size = .{ .cols = 8, .rows = 2 },
     });
-    _ = tab.model.focusedPane().?.setForegroundName("nvim");
-    const automatic = Label.init(&tab, 1);
-    try std.testing.expectEqualStrings(" 2:  nvim ", automatic.text());
+    model.tabs.setLabel(0, label);
+    return model;
+}
+
+test "automatic tab labels draw the application icon while manual labels retain their text" {
+    var model = try testingModel("");
+    defer model.deinit();
+    _ = model.panes.find(@enumFromInt(1)).?.setForegroundName("nvim");
+    const automatic = Label.init(&model, 0);
+    try std.testing.expectEqualStrings(" 1:  nvim ", automatic.text());
     try std.testing.expectEqual(@as(u16, 10), automatic.width());
 
     var buffer = try core.Buffer.init(std.testing.allocator, 30, 1);
@@ -124,10 +114,10 @@ test "automatic tab labels draw the application icon while manual labels retain 
     try std.testing.expectEqual(data.icons.Icon.app_editor, plan.slice()[0].icon);
     try std.testing.expectEqual(@as(u16, 5), plan.slice()[0].area.x);
 
-    tab.setLabel("My editor");
-    _ = tab.model.focusedPane().?.setForegroundName("git");
-    const manual = Label.init(&tab, 1);
-    try std.testing.expectEqualStrings(" 2:My editor ", manual.text());
+    model.tabs.setLabel(0, "My editor");
+    _ = model.panes.find(@enumFromInt(1)).?.setForegroundName("git");
+    const manual = Label.init(&model, 0);
+    try std.testing.expectEqualStrings(" 1:My editor ", manual.text());
     plan.reset();
     buffer.clear(.{});
     manual.draw(&context, .{ .rect = .{ .x = 2, .y = 0, .w = manual.width(), .h = 1 }, .style = placement.style });
@@ -136,13 +126,9 @@ test "automatic tab labels draw the application icon while manual labels retain 
 }
 
 test "tab application icons remain within clipped labels" {
-    var tab = data.Tab.init(std.testing.allocator, .{
-        .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(45) },
-        .label = "",
-        .pane_gaps = true,
-    });
-    defer tab.deinit();
-    const label = Label.init(&tab, 0);
+    var model = try testingModel("");
+    defer model.deinit();
+    const label = Label.init(&model, 0);
     var buffer = try core.Buffer.init(std.testing.allocator, 30, 1);
     defer buffer.deinit();
     var hits: widget.Hits = .{};
@@ -167,27 +153,4 @@ test "tab application icons remain within clipped labels" {
         try std.testing.expectEqualStrings(".", buffer.at(2 + available, 0).?.text());
         try std.testing.expectEqual(@as(u8, if (available >= 5) 1 else 0), plan.len);
     }
-}
-
-test "tab label fallback uses the foreground application before collection metadata arrives" {
-    var model = data.MultiplexerModel.init(std.testing.allocator);
-    defer model.deinit();
-    const pending = Label.initModel(&model);
-    try std.testing.expectEqualStrings("   shell ", pending.text());
-    try std.testing.expectEqual(data.icons.Icon.app_terminal, pending.icon.?);
-
-    try model.addRoot(.{
-        .pane_id = @enumFromInt(1),
-        .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(45) },
-        .size = .{ .cols = 8, .rows = 2 },
-    });
-    _ = model.focusedPane().?.setForegroundName("git");
-    const label = Label.initModel(&model);
-    try std.testing.expectEqualStrings("   git ", label.text());
-    try std.testing.expectEqual(data.icons.Icon.app_git, label.icon.?);
-    try std.testing.expectEqual(label.width(), tab_bar.desiredWidth(.{
-        .tabs = null,
-        .model = &model,
-        .area = .{ .x = 0, .y = 0, .w = 30, .h = 1 },
-    }));
 }

@@ -56,10 +56,10 @@ test "update processes a horizontal split shortcut and its correlated runtime re
     try std.testing.expectEqual(@as(?u8, null), try gui.update());
     try session.settle();
     try std.testing.expect(!app.request_lifecycle.tracker.has(.pane_operation));
-    try std.testing.expect(app.model.workspace.findPane(created).?.attached);
-    try std.testing.expectEqual(created, app.model.workspace.active().?.model.layout.focused().?);
+    try std.testing.expect(app.model.panes.find(created).?.attached);
+    try std.testing.expectEqual(created, app.model.tabs.layout[app.model.tabs.active].focused().?);
     try std.testing.expectEqual(before.panes + 1, app.model.version().panes);
-    const geometry = app.model.workspace.active().?.model.layoutSnapshot(request_area);
+    const geometry = data.tab_layout.snapshot(&app.model, app.model.tabs.active, request_area);
     const first = geometry.find(Session.pane_id).?.outer;
     const second = geometry.find(created).?.outer;
     try std.testing.expectEqual(first.y, second.y);
@@ -121,18 +121,18 @@ test "native custom prefix navigates pane focus fullscreen and copy mode" {
             .sequence_timeout_ns = 1,
         },
     );
-    const model = session.gui.app.model.activeTabModel().?;
+    const tab = session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
     try input_support.acceptNative(session.gui, .{ .kind = 4, .code = ' ', .mods = 4 });
     try input_support.acceptNative(session.gui, .{ .kind = 3, .code = 7 });
     try input_support.pump(session.gui);
     try session.settle();
-    try std.testing.expectEqual(Session.pane_id, model.layout.focused().?);
+    try std.testing.expectEqual(Session.pane_id, session.gui.app.model.tabs.layout[tab].focused().?);
     try customChord(session, "z");
-    try std.testing.expect(model.layout.isFullscreen());
+    try std.testing.expect(session.gui.app.model.tabs.layout[tab].isFullscreen());
     try customChord(session, "z");
-    try std.testing.expect(!model.layout.isFullscreen());
+    try std.testing.expect(!session.gui.app.model.tabs.layout[tab].isFullscreen());
     try customChord(session, "[");
     try std.testing.expect(session.gui.app.model.copyModeActive());
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
@@ -160,19 +160,19 @@ test "native child drag keeps its pane across focus and ignores replacement atta
     try session.receiveFrame(1);
     try session.settle();
     const app = &session.gui.app;
-    const model = app.model.activeTabModel().?;
+    const tab = app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
-    _ = model.layout.focusPane(Session.pane_id);
-    const pane = model.find(Session.pane_id).?;
+    try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    _ = app.model.tabs.layout[tab].focusPane(Session.pane_id);
+    const pane = app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
-    const view = model.viewForPane(pane.id, session.gui.region.area).?;
+    const view = data.tab_layout.view(&app.model, tab, pane.id, session.gui.region.area).?;
     var capture = Capture.begin(app, .{ .x = view.content.x, .y = view.content.y, .kind = .press }).?;
-    _ = model.layout.focusPane(second);
+    _ = app.model.tabs.layout[tab].focusPane(second);
     try capture.deliver(app, .{ .x = session.gui.region.area.w - 1, .y = view.content.y, .raw_x = 999, .raw_y = 999, .kind = .drag, .button = 32 });
     const request = try core.decodeClient(session.pending.?);
     try std.testing.expectEqual(pane.id, request.pane_input.pane_id);
-    try std.testing.expectEqual(second, model.layout.focused().?);
+    try std.testing.expectEqual(second, app.model.tabs.layout[tab].focused().?);
     try session.settle();
     const before = session.input_len;
     pane.attachment_generation +%= 1;
@@ -236,10 +236,10 @@ test "native child release crosses a newly opened prompt only with its acquired 
     try session.receiveFrame(1);
     try session.settle();
     const app = &session.gui.app;
-    const model = app.model.activeTabModel().?;
-    const pane = model.find(Session.pane_id).?;
+    const tab = app.model.tabs.active;
+    const pane = app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
-    const view = model.viewForPane(pane.id, session.gui.region.area).?;
+    const view = data.tab_layout.view(&app.model, tab, pane.id, session.gui.region.area).?;
     const press: data.Mouse = .{
         .x = view.content.x,
         .y = view.content.y,
@@ -270,9 +270,9 @@ test "native pointer rejects a newer layout even before a GPU flight starts" {
     );
     try session.settle();
     const app = &session.gui.app;
-    const model = app.model.activeTabModel().?;
+    const tab = app.model.tabs.active;
     session.gui.pointer.configure(.{ 0, 0 }, app.model.hostSize());
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(11), .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(11), .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
     try std.testing.expect(!app.presentation.inFlight());
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = 10, .y = 10 });
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 2, .x = 10, .y = 10 });
@@ -288,8 +288,8 @@ test "native focus loss releases an acquired child mouse gesture" {
     try session.bootstrap();
     try session.receiveFrame(1);
     const app = &session.gui.app;
-    const model = app.model.activeTabModel().?;
-    const pane = model.find(Session.pane_id).?;
+    const tab = app.model.tabs.active;
+    const pane = app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .sgr = true, .tracking = .button };
     const token = try session.draw();
     try input_support.presented(
@@ -299,7 +299,7 @@ test "native focus loss releases an acquired child mouse gesture" {
     );
     try session.settle();
     session.gui.pointer.configure(session.gui.renderer.origin, app.model.hostSize());
-    const view = model.viewForPane(pane.id, session.gui.region.area).?;
+    const view = data.tab_layout.view(&app.model, tab, pane.id, session.gui.region.area).?;
     const x = @as(f64, @floatFromInt(view.content.x)) * app.model.hostSize().cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
     const y = @as(f64, @floatFromInt(view.content.y)) * app.model.hostSize().cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = x, .y = y });
@@ -322,7 +322,7 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     try input_support.acceptNative(gui, press);
     try drainInput(session);
     const second_tab: core.TabId = @enumFromInt(2);
-    _ = try app.model.workspace.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_tab }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, app.model.hostSize());
+    _ = try data.tab_creation.add(&app.model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_tab }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, app.model.hostSize());
     var release = press;
     release.code = 2;
     try input_support.acceptNative(gui, release);
@@ -333,12 +333,12 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     try session.settle();
     try std.testing.expectEqual(second_tab, app.model.activeTabLocation().?.tab_id);
 
-    _ = app.model.workspace.select(Session.location.tab_id);
-    const model = app.model.activeTabModel().?;
+    _ = data.tab_selection.select(&app.model, Session.location.tab_id);
+    const tab = app.model.tabs.active;
     const second_pane: core.PaneId = @enumFromInt(11);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second_pane, .location = Session.location, .axis = .horizontal, .area = app.geometry().area });
-    _ = model.layout.focusPane(Session.pane_id);
-    _ = model.layout.toggleFullscreen();
+    try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second_pane, .location = Session.location, .axis = .horizontal, .area = app.geometry().area });
+    _ = app.model.tabs.layout[tab].focusPane(Session.pane_id);
+    _ = app.model.tabs.layout[tab].toggleFullscreen();
     const token = try session.draw();
     try input_support.presented(
         session.gui,
@@ -348,15 +348,15 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     try session.settle();
     try input_support.acceptNative(gui, pointerPress(session));
     try drainInput(session);
-    _ = model.layout.focusPane(second_pane);
-    try std.testing.expect(model.viewForPane(Session.pane_id, app.geometry().area) == null);
+    _ = app.model.tabs.layout[tab].focusPane(second_pane);
+    try std.testing.expect(data.tab_layout.view(&app.model, tab, Session.pane_id, app.geometry().area) == null);
     try input_support.acceptNative(gui, release);
     try input_support.pump(session.gui);
     const hidden_request = try core.decodeClient(session.pending.?);
     try std.testing.expectEqual(Session.pane_id, hidden_request.pane_input.pane_id);
     try std.testing.expect(std.mem.endsWith(u8, hidden_request.pane_input.bytes, "m"));
     try session.settle();
-    try std.testing.expectEqual(second_pane, model.layout.focused().?);
+    try std.testing.expectEqual(second_pane, app.model.tabs.layout[tab].focused().?);
     try std.testing.expect(gui.pointer.owners[0] == .shared);
 }
 
@@ -412,7 +412,7 @@ test "native saturated key releases preserve order and finish before another pre
     defer session.deinit();
     try prepareMouse(session);
     const gui = session.gui;
-    session.gui.app.model.workspace.findPane(Session.pane_id).?.input_modes.kitty_keyboard_flags = 10;
+    session.gui.app.model.panes.find(Session.pane_id).?.input_modes.kitty_keyboard_flags = 10;
     try input_support.acceptNative(gui, .{ .kind = 4, .code = 'k', .physical = 9 });
     try input_support.acceptNative(gui, .{ .kind = 4, .code = 'j', .physical = 4 });
     try drainInput(session);
@@ -438,7 +438,7 @@ test "native saturated key releases preserve order and finish before another pre
 fn prepareMouse(session: *Session) !void {
     try session.bootstrap();
     try session.receiveFrame(1);
-    session.gui.app.model.workspace.findPane(Session.pane_id).?.mouse = .{ .sgr = true, .tracking = .button };
+    session.gui.app.model.panes.find(Session.pane_id).?.mouse = .{ .sgr = true, .tracking = .button };
     const token = try session.draw();
     try input_support.presented(
         session.gui,
@@ -450,8 +450,8 @@ fn prepareMouse(session: *Session) !void {
 }
 
 fn pointerPress(session: *Session) native.InputEvent {
-    const model = session.gui.app.model.activeTabModel().?;
-    const view = model.viewForPane(Session.pane_id, session.gui.region.area).?;
+    const tab = session.gui.app.model.tabs.active;
+    const view = data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, session.gui.region.area).?;
     const size = session.gui.app.model.hostSize();
     return .{
         .kind = 6,
@@ -491,7 +491,7 @@ test "native held keys repeat into legacy and Kitty children and stop after rele
         .{ native.InputEvent{ .kind = 4, .code = 'j', .mods = 4, .physical = 39 }, "\n\n\n", "\x1b[106;5u\x1b[106;5:2u\x1b[106;5:2u\x1b[106;5:3u" },
     };
     inline for (.{ @as(u8, 0), @as(u8, 10) }) |flags| {
-        session.gui.app.model.workspace.findPane(Session.pane_id).?.input_modes.kitty_keyboard_flags = flags;
+        session.gui.app.model.panes.find(Session.pane_id).?.input_modes.kitty_keyboard_flags = flags;
         inline for (fixtures) |fixture| {
             const before = session.input_len;
             var event = fixture[0];
@@ -516,13 +516,13 @@ test "native application repeat keeps its pane when focus changes" {
     try session.bootstrap();
     try session.receiveFrame(1);
     const app = &session.gui.app;
-    const model = app.model.activeTabModel().?;
+    const tab = app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
-    _ = model.layout.focusPane(Session.pane_id);
+    try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
+    _ = app.model.tabs.layout[tab].focusPane(Session.pane_id);
     try input_support.acceptNative(session.gui, .{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39 });
     try drainInput(session);
-    _ = model.layout.focusPane(second);
+    _ = app.model.tabs.layout[tab].focusPane(second);
     try input_support.acceptNative(session.gui, .{ .kind = 1, .text = "j".ptr, .len = 1, .physical = 39, .phase = 2 });
     try input_support.pump(session.gui);
     const request = try core.decodeClient(session.pending.?);
@@ -531,5 +531,5 @@ test "native application repeat keeps its pane when focus changes" {
     try session.settle();
     try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'j', .physical = 39, .phase = 3 });
     try drainInput(session);
-    try std.testing.expectEqual(second, model.layout.focused().?);
+    try std.testing.expectEqual(second, app.model.tabs.layout[tab].focused().?);
 }

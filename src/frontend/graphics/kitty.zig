@@ -115,9 +115,9 @@ test "unchanged graphics emit no work and resize does not retransmit pixels" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
@@ -149,7 +149,7 @@ test "unchanged graphics emit no work and resize does not retransmit pixels" {
     });
     var first_bytes: [4096]u8 = undefined;
     var first_writer = std.Io.Writer.fixed(&first_bytes);
-    const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
+    const layout_snapshot = data.tab_layout.snapshot(&model, 0, .{ .w = 10, .h = 5 });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
         .layout_snapshot = layout_snapshot,
@@ -192,9 +192,9 @@ test "image transmission is paced across frames by the byte budget" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
@@ -228,7 +228,7 @@ test "image transmission is paced across frames by the byte budget" {
         },
     });
 
-    const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
+    const layout_snapshot = data.tab_layout.snapshot(&model, 0, .{ .w = 10, .h = 5 });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
         .layout_snapshot = layout_snapshot,
@@ -562,9 +562,9 @@ test "continuous replacements complete and hand off without a blank frame" {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.addRoot(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 10, .rows = 5 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 10, .rows = 5 } });
 
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
@@ -595,7 +595,7 @@ test "continuous replacements complete and hand off without a blank frame" {
         },
     });
 
-    const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
+    const layout_snapshot = data.tab_layout.snapshot(&model, 0, .{ .w = 10, .h = 5 });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
         .layout_snapshot = layout_snapshot,
@@ -1116,15 +1116,15 @@ test "shared client pixels have a bounded POSIX lifetime" {
             .y = 0,
         },
     });
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.addRoot(.{ .pane_id = pane_id, .location = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     }, .size = .{ .cols = 10, .rows = 5 } });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
-        .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .layout_snapshot = data.tab_layout.snapshot(&model, 0, .{ .w = 10, .h = 5 }),
         .cell_width = 10,
         .cell_height = 20,
     };
@@ -1215,15 +1215,15 @@ test "a host acknowledgement retires a replaced shared image without probing" {
         .revision = 1,
         .placement = .{ .key = first.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.addRoot(.{ .pane_id = pane_id, .location = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     }, .size = .{ .cols = 10, .rows = 5 } });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
-        .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .layout_snapshot = data.tab_layout.snapshot(&model, 0, .{ .w = 10, .h = 5 }),
         .cell_width = 10,
         .cell_height = 20,
     };
@@ -1278,15 +1278,15 @@ test "a host error reply reclaims the shared name and retransmits inline" {
         .revision = 1,
         .placement = .{ .key = image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.addRoot(.{ .pane_id = pane_id, .location = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     }, .size = .{ .cols = 10, .rows = 5 } });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
-        .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .layout_snapshot = data.tab_layout.snapshot(&model, 0, .{ .w = 10, .h = 5 }),
         .cell_width = 10,
         .cell_height = 20,
     };
@@ -1435,15 +1435,15 @@ test "a runtime-named image maps without copying and hands the host its name" {
             .y = 0,
         },
     });
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.addRoot(.{ .pane_id = pane_id, .location = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     }, .size = .{ .cols = 10, .rows = 5 } });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
-        .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .layout_snapshot = data.tab_layout.snapshot(&model, 0, .{ .w = 10, .h = 5 }),
         .cell_width = 10,
         .cell_height = 20,
     };
@@ -1521,13 +1521,13 @@ test "a control pass hands the host shared names and placements without pixel st
     // A shared-memory client also names its own images; a host that lost
     // one is served inline, which is the bulk pass's job.
     store.images.getPtr(client.identity(pane_id, inline_image.key)).?.delivery.force_direct = true;
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.addRoot(.{ .pane_id = pane_id, .location = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     }, .size = .{ .cols = 10, .rows = 5 } });
-    const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
+    const layout_snapshot = data.tab_layout.snapshot(&model, 0, .{ .w = 10, .h = 5 });
 
     var control: KittyGraphicsWriter = .{
         .store = &store,
@@ -1566,13 +1566,13 @@ test "a control pass hands the host shared names and placements without pixel st
 
 test "a control pass emits nothing while a chunked transfer is open" {
     const pane_id: core.PaneId = @enumFromInt(1);
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.addRoot(.{ .pane_id = pane_id, .location = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     }, .size = .{ .cols = 10, .rows = 5 } });
-    const layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 });
+    const layout_snapshot = data.tab_layout.snapshot(&model, 0, .{ .w = 10, .h = 5 });
 
     var store = delivery.Store.init(std.testing.allocator);
     defer store.deinit();
@@ -1628,15 +1628,15 @@ test "a host that never consumes shared names loses them and gets pixels inline"
     var store = delivery.Store.initSharedMemory(std.testing.allocator);
     defer store.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.addRoot(.{ .pane_id = pane_id, .location = .{
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     }, .size = .{ .cols = 10, .rows = 5 } });
     var graphics_writer: KittyGraphicsWriter = .{
         .store = &store,
-        .layout_snapshot = model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .layout_snapshot = data.tab_layout.snapshot(&model, 0, .{ .w = 10, .h = 5 }),
         .cell_width = 10,
         .cell_height = 20,
     };

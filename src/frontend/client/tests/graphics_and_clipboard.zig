@@ -64,7 +64,7 @@ test "pane graphics commit their cell fallback before presenter observation" {
     var committed = version_before;
     committed.pane_graphics += 1;
     try std.testing.expectEqualDeep(committed, client.model.version());
-    try std.testing.expect(client.model.workspace.findPane(TestHarness.bootstrap_pane).?.graphics_placeholder);
+    try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.graphics_placeholder);
     try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);

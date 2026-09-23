@@ -96,12 +96,12 @@ pub fn advance(gui: *GuiClient, now_ns: u64) !void {
         return;
     }
 
-    const model = gui.app.model.activeTabModelConst() orelse {
+    const tab = gui.app.model.tabs.activeSlot() orelse {
         motions.clear();
         return;
     };
     for (motions.entries[0..motions.len]) |*entry| {
-        const pane = model.findConst(entry.key.pane_id) orelse continue;
+        const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, entry.key.pane_id) orelse continue;
         if (!pane.attached or pane.kind != .agent or pane.attachment_generation != entry.key.pane_generation) {
             continue;
         }
@@ -192,7 +192,11 @@ fn navigate(gui: *GuiClient, entry: *const Entry, delta: f64) void {
 
 fn reviewing(gui: *const GuiClient, pane_id: core.PaneId) bool {
     const review = gui.widgets.approval_review orelse return false;
-    const model = gui.app.model.activeTabModelConst() orelse return false;
-    const thread = client.ThreadView.capture(model, null, pane_id) orelse return false;
+    const tab = gui.app.model.tabs.activeSlot() orelse return false;
+    if (gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, pane_id) == null) {
+        return false;
+    }
+
+    const thread = client.ThreadView.capture(&gui.app.model, null, pane_id) orelse return false;
     return review.request(thread) != null;
 }

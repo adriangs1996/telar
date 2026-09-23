@@ -242,9 +242,9 @@ fn hover(chrome: *Chrome, action: ?action_module.Action) void {
 }
 
 fn registerPanes(hits: *HitMap, projection: client.Projection) !void {
-    const model = projection.model orelse return;
+    const tab = projection.tab orelse return;
     var layout: data.LayoutSnapshot = .{};
-    model.layout.snapshot(projection.geometry.area, &layout);
+    projection.model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
     for (layout.views()) |view| {
         try hits.add(.{ .area = view.content, .action = .{ .pane_content = view.pane_id } });
     }

@@ -289,11 +289,11 @@ pub fn presentDue(presenter: *Presenter, projection: client.Projection, resource
         active_tab_changed or panes_changed or pane_foreground_changed or pane_graphics_changed or
         viewport_changed;
     try presenter.syncWindowTitle(projection, resources.writer);
-    const presented = if (projection.model) |model|
+    const presented = if (projection.tab) |tab|
         try presenter.present(.{
             .projection = projection,
             .resources = resources,
-            .model = model,
+            .tab = tab,
             .force = force_composition,
         })
     else
@@ -304,7 +304,7 @@ pub fn presentDue(presenter: *Presenter, projection: client.Projection, resource
         .observation = presenter.presentation_state.observed,
         .commit = presented.commit,
         .geometry = geometry,
-        .media_pending = projection.model != null and mediaWorkPending(projection, resources),
+        .media_pending = projection.tab != null and mediaWorkPending(projection, resources),
     });
     presenter.observePresentation(presented.presented_ns);
     presenter.pacer.record(.{
@@ -334,7 +334,7 @@ pub fn presentMedia(presenter: *Presenter, projection: client.Projection, resour
         return;
     }
 
-    _ = projection.model orelse return;
+    _ = projection.tab orelse return;
     const media_idle = client.monotonic(presenter.io) -| presenter.last_input_ns >=
         toast_graphics.idle_after_ns;
     resources.view.kittyAttachments().reapRetired();
@@ -461,7 +461,8 @@ pub const Delivery = client.PresentationDelivery;
 fn present(presenter: *Presenter, input: CellPresentation) !Presented {
     const compose_started = core.now(presenter.io);
     const composed = try presenter.compositor.render(.{
-        .model = input.model,
+        .model = input.projection.model,
+        .tab = input.tab,
         .screen = &presenter.screen,
         .input = .{
             .area = input.resources.view.workbench(),
@@ -476,8 +477,8 @@ fn present(presenter: *Presenter, input: CellPresentation) !Presented {
     });
     var prompt = input.projection.prompt;
     const chrome = try input.resources.view.render(&presenter.screen, .{
-        .tabs = input.projection.tabs,
-        .model = input.model,
+        .model = input.projection.model,
+        .tab = input.tab,
         .compositor = &presenter.compositor,
         .agents = input.projection.agents,
         .sidebar_animation_frame = input.projection.sidebar_animation_frame,
@@ -564,23 +565,17 @@ fn presentEmpty(presenter: *Presenter, projection: client.Projection, resources:
 /// bytes join the frame already being flushed, so a title never costs an
 /// extra host write.
 fn syncWindowTitle(presenter: *Presenter, projection: client.Projection, writer: *std.Io.Writer) !void {
-    const tab_label = if (projection.tabs.activeConst()) |tab| tab.labelSlice() else "";
-    const pane_title = if (projection.model) |model| focusedPaneTitle(model) else "";
+    const tab_label = if (projection.tab) |tab| data.tab_label.text(projection.model, tab) else "";
+    const pane_title = projection.model.focusedPaneTitle();
 
     try presenter.window_title.sync(writer, .{
         .template = projection.window_title_template,
         .tokens = .{
-            .workspace = projection.tabs.workspaceName(),
+            .workspace = projection.model.workspaceName(),
             .tab = tab_label,
             .pane_title = pane_title,
         },
     });
-}
-
-fn focusedPaneTitle(model: *const data.MultiplexerModel) []const u8 {
-    const pane_id = model.layout.focused() orelse return "";
-    const pane = model.findConst(pane_id) orelse return "";
-    return pane.titleSlice();
 }
 
 fn flushScreen(presenter: *Presenter, writer: *std.Io.Writer) !void {

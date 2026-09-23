@@ -1,3 +1,4 @@
+const core = @import("telar-core");
 const event_module = @import("../../input/event.zig");
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
@@ -41,9 +42,9 @@ pub fn close(gui: *GuiClient) void {
 /// Example: `if (image_preview.route(gui, event)) return true;`
 pub fn route(gui: *GuiClient, event: event_module.Event) bool {
     const preview = gui.widgets.image_preview orelse return false;
-    const model = gui.app.model.activeTabModelConst();
+    const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
     const pane = gui.app.model.agentPane(preview.control.pane_id);
-    if (model == null or pane == null or model.?.layout.focused() != preview.control.pane_id or pane.?.attachment_generation != preview.generation or pane.?.composer_revision != preview.control.composer_revision or gui.app.model.name_prompt.currentConst() != null) {
+    if (pane == null or focused_pane != preview.control.pane_id or pane.?.attachment_generation != preview.generation or pane.?.composer_revision != preview.control.composer_revision or gui.app.model.name_prompt.currentConst() != null) {
         close(gui);
         return false;
     }

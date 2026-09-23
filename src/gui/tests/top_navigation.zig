@@ -65,12 +65,13 @@ test "workspace handoff retains only delivered identities still present in the l
         .{ .workspace = @enumFromInt(9), .name = "freya", .path = "/freya", .tab_count = 1 },
     } });
     try fixture.paint(fixture.projection());
-    const tabs = try createTabs();
-    defer std.testing.allocator.destroy(tabs);
-    defer tabs.deinit();
-    try tabs.replaceWithRoot(.{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = @enumFromInt(9) }, .tab_id = Session.location.tab_id }, .size = model.hostSize() });
+    const other = try createModel();
+    defer std.testing.allocator.destroy(other);
+    defer other.deinit();
+    try data.workspace_handoff.replaceWithRoot(other, .{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = @enumFromInt(9) }, .tab_id = Session.location.tab_id }, .size = model.hostSize() });
     var projection = fixture.projection();
-    projection.tabs = tabs;
+    projection.model = other;
+    projection.tab = other.tabs.activeSlot();
     try fixture.prepare(projection);
     fixture.chrome.present(false);
     _ = model.departWorkspace();
@@ -244,9 +245,9 @@ test "native navigation names unlisted workspaces and worktrees without selectin
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.showSidebar(false);
-    const tabs = try createTabs();
-    defer std.testing.allocator.destroy(tabs);
-    defer tabs.deinit();
+    const model = try createModel();
+    defer std.testing.allocator.destroy(model);
+    defer model.deinit();
     const workspaces = try std.testing.allocator.create(data.WorkspaceListSnapshot);
     defer std.testing.allocator.destroy(workspaces);
     workspaces.* = .{};
@@ -256,10 +257,11 @@ test "native navigation names unlisted workspaces and worktrees without selectin
     } });
     const renderer = &fixture.session.gui.renderer;
     for ([_]core.WorkspaceLocation{ .{ .worktree = @enumFromInt(1) }, .{ .workspace = @enumFromInt(99) } }) |location| {
-        try tabs.replaceWithRoot(.{ .pane_id = Session.pane_id, .location = .{ .workspace = location, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
-        try tabs.reconcileWorkspace(.{ .workspace = location, .name = "current context", .tabs = &.{.{ .tab_id = Session.location.tab_id, .label = "main", .pane_count = 1 }} });
+        try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = .{ .workspace = location, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
+        try data.workspace_reconciliation.reconcileTabs(model, .{ .workspace = location, .name = "current context", .tabs = &.{.{ .tab_id = Session.location.tab_id, .label = "main", .pane_count = 1 }} });
         var projection = fixture.projection();
-        projection.tabs = tabs;
+        projection.model = model;
+        projection.tab = model.tabs.activeSlot();
         try fixture.paint(projection);
         const top = fixture.chrome.presented().bands.top_bar;
         var empty_snapshot = try quadsIn(renderer.quads.items(), top);
@@ -295,15 +297,16 @@ test "native project indicators keep all seven projects in stable positions acro
         .{ .workspace = @enumFromInt(42), .name = "six", .path = "/six", .tab_count = 1 },
         .{ .workspace = @enumFromInt(99), .name = "seven", .path = "/seven", .tab_count = 1 },
     } });
-    const tabs = try createTabs();
-    defer std.testing.allocator.destroy(tabs);
-    defer tabs.deinit();
+    const model = try createModel();
+    defer std.testing.allocator.destroy(model);
+    defer model.deinit();
     var positions: [7]?Rect = @splat(null);
     for (1..workspaces.count - 1) |index| {
         const active_id = workspaces.workspaceAt(index);
-        try tabs.replaceWithRoot(.{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = active_id }, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
+        try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = active_id }, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
         var projection = fixture.projection();
-        projection.tabs = tabs;
+        projection.model = model;
+        projection.tab = model.tabs.activeSlot();
         projection.workspaces = workspaces;
         try fixture.paint(projection);
         const previous = fixture.bandTarget(.{ .select_workspace = workspaces.workspaceAt(index - 1) }).?;
@@ -349,7 +352,7 @@ test "moving workspaces to the sidebar preserves every tab bound across sidebar 
         .{ .workspace = @enumFromInt(9), .name = "server", .path = "/server", .tab_count = 1 },
         .{ .workspace = @enumFromInt(30), .name = "config", .path = "/config", .tab_count = 1 },
     } });
-    _ = try model.workspace.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(2) }, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, model.hostSize());
+    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(2) }, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, model.hostSize());
 
     for ([_]u32{ 900, 1600 }) |width| {
         try fixture.measure(.{ .width = width, .height = 700, .scale = 1 });
@@ -384,22 +387,21 @@ test "native active tab remains reachable after long preceding labels at narrow 
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
-    const tabs = &model.workspace;
     _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &.{
         .{ .workspace = Session.location.workspace.workspace, .name = "a workspace with a long name", .path = "/one", .tab_count = 8 },
         .{ .workspace = @enumFromInt(2), .name = "another workspace with a long name", .path = "/two", .tab_count = 1 },
         .{ .workspace = @enumFromInt(3), .name = "third workspace with a long name", .path = "/three", .tab_count = 1 },
     } });
-    _ = try tabs.applyLabel(Session.location.tab_id, "first tab with a deliberately long label");
+    _ = try data.tab_rename.rename(model, Session.location.tab_id, "first tab with a deliberately long label");
     for (1..8) |index| {
-        _ = try tabs.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(index + 1) }, .position = @intCast(index), .label = "another tab with a deliberately long label", .root_pane_id = @enumFromInt(index + 20) }, model.hostSize());
+        _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(index + 1) }, .position = @intCast(index), .label = "another tab with a deliberately long label", .root_pane_id = @enumFromInt(index + 20) }, model.hostSize());
     }
 
     try fixture.showSidebar(false);
     for ([_]u32{ 120, 240, 480, 900 }) |width| {
         try fixture.measure(.{ .width = width, .height = 500, .scale = 1 });
         for ([_]core.TabId{ @enumFromInt(8), @enumFromInt(4), Session.location.tab_id }) |active| {
-            _ = tabs.select(active);
+            _ = data.tab_selection.select(model, active);
             try fixture.paint(fixture.projection());
             const hit = fixture.bandTarget(.{ .select_tab = active }) orelse return error.ActiveTabHidden;
             try std.testing.expect(hit.width > 0 and hit.height > 0);
@@ -429,7 +431,7 @@ test "native selected tab preserves its rounded surface and hosts an explicit ch
     try std.testing.expect(progressRing(renderer.quads.items(), selected) == null);
     var before = try quadsIn(renderer.quads.items(), top);
     defer before.deinit(std.testing.allocator);
-    const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
     _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .set, .percent = 50 });
     try fixture.paint(fixture.projection());
     const progress = progressRing(renderer.quads.items(), selected) orelse return error.MissingProgress;
@@ -498,31 +500,31 @@ fn solid(quad: Quad) bool {
 test "native automatic tabs show the foreground application mark and preserve manual titles" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const tabs = &fixture.session.gui.app.model.workspace;
-    const tab = tabs.find(Session.location.tab_id).?;
-    tab.setLabel("");
-    const pane = tab.model.find(Session.pane_id).?;
+    const model = &fixture.session.gui.app.model;
+    const tab = model.tabs.find(Session.location.tab_id).?;
+    model.tabs.setLabel(tab, "");
+    const pane = model.panes.find(Session.pane_id).?;
     _ = pane.setForegroundName("codex");
     try fixture.paint(fixture.projection());
-    try std.testing.expectEqualStrings("codex", tab.labelSlice());
+    try std.testing.expectEqualStrings("codex", data.tab_label.text(model, tab));
     const bounds = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
     try std.testing.expect(hasApplicationMark(fixture.session.gui.renderer.quads.items(), bounds));
 
     // Choosing the same text explicitly still disables automatic naming.
-    _ = try tabs.applyLabel(Session.location.tab_id, "codex");
+    _ = try data.tab_rename.rename(model, Session.location.tab_id, "codex");
     _ = pane.setForegroundName("nvim");
     try fixture.paint(fixture.projection());
-    try std.testing.expectEqualStrings("codex", tab.labelSlice());
+    try std.testing.expectEqualStrings("codex", data.tab_label.text(model, tab));
     try std.testing.expect(!hasApplicationMark(fixture.session.gui.renderer.quads.items(), fixture.bandTarget(
         .{
             .select_tab = Session.location.tab_id,
         },
     ).?));
 
-    tab.setLabel("");
+    model.tabs.setLabel(tab, "");
     try fixture.paint(fixture.projection());
-    try std.testing.expectEqualStrings("nvim", tab.labelSlice());
-    try std.testing.expect(tab.labelIcon() != null);
+    try std.testing.expectEqualStrings("nvim", data.tab_label.text(model, tab));
+    try std.testing.expect(data.tab_label.icon(model, tab) != null);
     try std.testing.expect(fixture.bandTarget(.{ .select_tab = Session.location.tab_id }) != null);
 }
 
@@ -536,8 +538,8 @@ fn hasApplicationMark(quads: []const Quad, bounds: Rect) bool {
     return false;
 }
 
-fn createTabs() !*data.TabsModel {
-    const tabs = try std.testing.allocator.create(data.TabsModel);
-    tabs.* = data.TabsModel.init(std.testing.allocator);
-    return tabs;
+fn createModel() !*data.Model {
+    const model = try std.testing.allocator.create(data.Model);
+    model.* = data.Model.init(std.testing.allocator, true);
+    return model;
 }

@@ -82,10 +82,10 @@ pub fn draw(indicators: WorkspaceIndicators, canvas: *Canvas) !void {
 }
 
 fn activeWorkspace(indicators: WorkspaceIndicators, canvas: *Canvas) !void {
-    const tabs = indicators.context.projection.tabs;
+    const model = indicators.context.projection.model;
     var storage: [64]u8 = undefined;
-    const name_value = tabs.displayedWorkspaceName();
-    const text = if (name_value.len != 0) name_value else if (tabs.workspace) |location| switch (location) {
+    const name_value = model.workspaceName();
+    const text = if (name_value.len != 0) name_value else if (model.workspace) |location| switch (location) {
         .workspace => |id| std.fmt.bufPrint(&storage, "workspace {d}", .{@intFromEnum(id)}) catch unreachable,
         .worktree => |id| std.fmt.bufPrint(&storage, "worktree {d}", .{@intFromEnum(id)}) catch unreachable,
     } else "workspace";

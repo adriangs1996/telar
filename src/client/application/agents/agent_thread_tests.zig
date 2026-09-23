@@ -7,7 +7,7 @@ const pane_id: core.PaneId = @enumFromInt(1);
 const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
 
 fn bootstrap(model: *data.Model) !void {
-    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
+    try data.workspace_handoff.bootstrap(model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     const handler = model;
     try std.testing.expect(handler.identifyPane(.{
         .request_id = @enumFromInt(1),
@@ -55,7 +55,7 @@ fn fixtureOptions() !core.AgentOptions {
 test "created agent tabs immediately expose the attached composer and preserve workspace" {
     var model = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    try model.workspace.bootstrap(.{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     const agent_id: core.PaneId = @enumFromInt(2);
     const created = try model.createTab(.{
         .created = .{
@@ -69,9 +69,9 @@ test "created agent tabs immediately expose the attached composer and preserve w
         .size = .{ .cols = 40, .rows = 10 },
     });
     try std.testing.expectEqualDeep(location.workspace, created.created.workspace);
-    try std.testing.expectEqual(@as(usize, 2), model.workspace.count);
-    try std.testing.expectEqual(agent_id, model.activeTabModelConst().?.layout.focused().?);
-    try std.testing.expectEqual(core.PaneSurface.thread, model.activeTabModelConst().?.layout.surface(agent_id));
+    try std.testing.expectEqual(@as(usize, 2), model.tabs.count);
+    try std.testing.expectEqual(agent_id, model.tabs.layout[model.tabs.active].focused().?);
+    try std.testing.expectEqual(core.PaneSurface.thread, model.tabs.layout[model.tabs.active].surface(agent_id));
     try std.testing.expectEqual(@as(u64, 7), model.agentPane(agent_id).?.pane_generation);
     try std.testing.expect(model.agentPane(pane_id) == null);
     try std.testing.expect(model.editAgentComposer(agent_id, .{ .insert = "hello" }));
@@ -402,7 +402,7 @@ test "history navigation freezes the live seam and owns pages after receive reus
     const query = (try reading.begin(handler, pane_id)).?;
     try std.testing.expectEqualStrings("live", query.anchor);
     try std.testing.expectEqualStrings("Turn-1", query.anchor_turn);
-    const pane = model.workspace.findPane(pane_id).?;
+    const pane = model.panes.find(pane_id).?;
     const live = pane.agent_thread.?;
     @memcpy(live.text_storage[0..5], "Later");
     live.revision += 1;
@@ -432,7 +432,7 @@ test "a retained live tail follows snapshots at the bottom and pauses while read
     const model = try historyModel();
     defer std.testing.allocator.destroy(model);
     defer model.deinit();
-    const pane = model.workspace.findPane(pane_id).?;
+    const pane = model.panes.find(pane_id).?;
     const handler = model;
     try std.testing.expect(reading.navigate(handler, pane_id, .older));
     const query = (try reading.begin(handler, pane_id)).?;
@@ -518,7 +518,7 @@ test "history input does not allocate and failed admission keeps the live conver
     const model = try historyModel();
     defer std.testing.allocator.destroy(model);
     defer model.deinit();
-    const pane = model.workspace.findPane(pane_id).?;
+    const pane = model.panes.find(pane_id).?;
     var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 0 });
     pane.gpa = failing.allocator();
     defer pane.gpa = std.testing.allocator;
@@ -569,7 +569,7 @@ test "hidden history completions update their window without invalidating the vi
     var buffer: [4096]u8 = undefined;
     try std.testing.expect(try reading.apply(handler, operation, try historyResponse(&buffer, query.view_generation)));
     try std.testing.expectEqual(revision, model.panes_revision);
-    const hidden = model.workspace.findPane(pane_id).?;
+    const hidden = model.panes.find(pane_id).?;
     try std.testing.expectEqual(@as(u8, 2), hidden.agent_history.?.count);
     _ = reading.navigate(handler, pane_id, .older);
     const next = (try reading.begin(handler, pane_id)).?;
@@ -635,17 +635,14 @@ test "history ownership retains at most sixteen windows and evicts an inactive r
         var response = try readySnapshot(&bytes, 1);
         response.pane_id = id;
         _ = try model.applyAgentThread(response);
-        model.workspace.findPane(id).?.agent_thread.?.truncated = true;
+        model.panes.find(id).?.agent_thread.?.truncated = true;
         try std.testing.expect(reading.navigate(handler, id, .older));
         try std.testing.expect((try reading.begin(handler, id)) != null);
     }
     var count: usize = 0;
-    for (&model.workspace.items) |*entry| {
-        const tab = if (entry.*) |*value| value else continue;
-        var panes = tab.model.paneIterator();
-        while (panes.next()) |pane| {
-            count += @intFromBool(pane.agent_history != null);
-        }
+    var panes = model.panes.iterateConst(null);
+    while (panes.next()) |pane| {
+        count += @intFromBool(pane.agent_history != null);
     }
     try std.testing.expectEqual(@as(usize, 16), count);
     try std.testing.expect(model.agentPane(@enumFromInt(17)).?.agent_history != null);
@@ -731,7 +728,7 @@ test "resumed snapshot loads history once and preserves a later composer draft" 
     var storage: [96 * 1024]u8 = undefined;
     const view = (try core.decodeServer(try core.encodeAgentThreadSnapshot(&storage, &snapshot))).agent_thread_snapshot;
     try std.testing.expect(try handler.applyAgentThread(view));
-    const pane = model.workspace.findPane(pane_id).?;
+    const pane = model.panes.find(pane_id).?;
     try std.testing.expectEqualStrings("Continue the parser work", pane.composerSlice());
     try std.testing.expectEqual(.older, pane.history_intent.?);
     pane.history_intent = null;

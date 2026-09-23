@@ -16,3 +16,6 @@ state/
 /*.zcov
 /test/fuzz/afl-out/
 __pycache__/
+
+# Agent worktrees created by Claude Code.
+.claude/worktrees/

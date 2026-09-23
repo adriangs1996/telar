@@ -1,3 +1,4 @@
+const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const Fixture = @import("ChromeFixture.zig");
@@ -14,7 +15,7 @@ test "native progress capsules retain labels and stay inside narrow and high DPI
     defer fixture.deinit();
     for ([_]f32{ 1, 1.5, 2 }) |scale| {
         try fixture.measure(.{ .width = 1200, .height = 800, .scale = scale });
-        const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
+        const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
         var canvas = fixtureCanvas(&fixture);
         var clock: FrameClock = .{};
         canvas.animation = &clock;
@@ -48,7 +49,7 @@ test "native progress capsules retain labels and stay inside narrow and high DPI
 test "warm native indeterminate progress animates without allocations shaping or atlas changes" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
     _ = pane.setProgress(.{ .pane_id = pane.id, .state = .indeterminate });
     var canvas = fixtureCanvas(&fixture);
     var clock: FrameClock = .{};
@@ -95,12 +96,12 @@ test "native fullscreen progress leaves the focused pane selector reachable at o
     var fixture = try Fixture.init();
     defer fixture.deinit();
     try fixture.showSidebar(false);
-    const model = fixture.session.gui.app.model.activeTabModel().?;
+    const tab = fixture.session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
-    _ = model.find(Session.pane_id).?.setProgress(.{ .pane_id = Session.pane_id, .state = .indeterminate });
-    _ = model.layout.focusPane(Session.pane_id);
-    _ = model.layout.toggleFullscreen();
+    try data.pane_split.split(&fixture.session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
+    _ = fixture.session.gui.app.model.panes.find(Session.pane_id).?.setProgress(.{ .pane_id = Session.pane_id, .state = .indeterminate });
+    _ = fixture.session.gui.app.model.tabs.layout[tab].focusPane(Session.pane_id);
+    _ = fixture.session.gui.app.model.tabs.layout[tab].toggleFullscreen();
     for ([_]u16{ 1, 2, 3 }) |columns| {
         try fixture.resize(columns, 8);
         fixture.chrome.now_ns += std.time.ns_per_s;

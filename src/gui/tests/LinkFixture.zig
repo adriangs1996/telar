@@ -34,7 +34,7 @@ pub fn deinit(fixture: *Fixture) void {
 }
 
 pub fn text(fixture: *Fixture, value: []const u8) void {
-    const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
     pane.cursor.visible = false;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = value, .style = .{} });
@@ -55,7 +55,7 @@ pub fn present(fixture: *Fixture) !void {
 
 pub fn event(fixture: *Fixture, code: u32) Event {
     const gui = fixture.session.gui;
-    const view = gui.app.model.activeTabModel().?.viewForPane(Session.pane_id, gui.region.area).?;
+    const view = data.tab_layout.view(&gui.app.model, gui.app.model.tabs.active, Session.pane_id, gui.region.area).?;
     const size = gui.app.model.hostSize();
     return .{
         .kind = 6,

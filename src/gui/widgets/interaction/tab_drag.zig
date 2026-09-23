@@ -35,8 +35,8 @@ pub fn apply(gui: *GuiClient, event: event_module.Event, owner: ?Target) !bool {
         }
 
         const tab_id = target.action.intent.select_tab;
-        const workspace = gui.app.model.workspace.workspace orelse return false;
-        if (gui.app.model.workspace.indexOf(tab_id) != null) {
+        const workspace = gui.app.model.workspace orelse return false;
+        if (gui.app.model.tabs.find(tab_id) != null) {
             drag.begin(.{ .workspace = workspace, .tab_id = tab_id }, point);
             state.tab_drop_slots.capture(state.dispatcher.maps.presented());
             state.tab_pointer = .{ pointer.x, pointer.y };

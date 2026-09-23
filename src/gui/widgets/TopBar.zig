@@ -1,5 +1,6 @@
 //! Tabs keep their navigation geometry. Workspace controls are a fallback
 //! while the sidebar is hidden or the current context is not in its list.
+const data = @import("model");
 const SidebarRegions = @import("SidebarRegions.zig");
 const Bands = @import("Bands.zig");
 const Context = @import("Context.zig");
@@ -42,9 +43,10 @@ pub fn draw(widget: TopBar, canvas: *Canvas) !void {
     // The slot depends only on window geometry, so detach, split and focus do
     // not animate the tabs or move delivered workspace targets underneath input.
     if (content.width >= chrome.px(160)) {
-        if (widget.context.projection.model) |model| {
-            if (model.focusedPaneConst()) |pane| {
-                if (!model.layout.hasBorders()) {
+        const projection = widget.context.projection;
+        if (projection.tab) |tab| {
+            if (data.tab_layout.focusedPaneConst(projection.model, tab)) |pane| {
+                if (!projection.model.tabs.layout[tab].hasBorders()) {
                     _ = try (ChangeReviewButton{ .area = content, .pane = pane, .placement = .top_bar }).draw(canvas);
                 }
             }

@@ -14,23 +14,23 @@ const Rect = @import("../render/Rect.zig");
 test "native pane frames use the smaller pixel gutter on both axes" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const model = fixture.session.gui.app.model.activeTabModel().?;
+    const tab = fixture.session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
     const third: core.PaneId = @enumFromInt(21);
     const area = fixture.projection().geometry.area;
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = area });
-    try model.split(.{ .existing_pane = second, .new_pane = third, .location = Session.location, .axis = .vertical, .area = area });
+    try data.pane_split.split(&fixture.session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = area });
+    try data.pane_split.split(&fixture.session.gui.app.model, tab, .{ .existing_pane = second, .new_pane = third, .location = Session.location, .axis = .vertical, .area = area });
     const renderer = &fixture.session.gui.renderer;
     for ([_][2]u16{ .{ 9, 19 }, .{ 19, 9 }, .{ 12, 12 } }) |cell| {
         renderer.metrics.cell_width = cell[0];
         renderer.metrics.cell_height = cell[1];
         try fixture.resize(120, 40);
         for ([_]bool{ true, false }) |gaps| {
-            _ = model.layout.setPaneGaps(gaps);
+            _ = fixture.session.gui.app.model.tabs.layout[tab].setPaneGaps(gaps);
             const projection = fixture.projection();
             try fixture.paint(projection);
             var layout: data.LayoutSnapshot = .{};
-            model.layout.snapshot(projection.geometry.area, &layout);
+            fixture.session.gui.app.model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
             var frames: [3]Rect = undefined;
             for (layout.views(), &frames) |view, *frame| {
                 const original = renderer.metrics.rect(renderer.origin, view.outer);
@@ -158,10 +158,10 @@ test "native agent targets retain generation through scroll and snapshot replace
 test "native tabs always retain the active tab when their row overflows" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const tabs = &fixture.session.gui.app.model.workspace;
+    const model = &fixture.session.gui.app.model;
     const second_id: core.TabId = @enumFromInt(2);
-    _ = try tabs.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "long second tab name", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
-    _ = tabs.select(second_id);
+    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "long second tab name", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
+    _ = data.tab_selection.select(model, second_id);
     try fixture.showSidebar(false);
     try fixture.resize(12, 4);
     try fixture.paint(fixture.projection());
@@ -172,17 +172,17 @@ test "native tabs always retain the active tab when their row overflows" {
 test "native fullscreen labels keep hidden panes reachable without covering terminal content" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const model = fixture.session.gui.app.model.activeTabModel().?;
+    const tab = fixture.session.gui.app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(20);
-    try model.split(.{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
-    _ = model.layout.toggleFullscreen();
+    try data.pane_split.split(&fixture.session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
+    _ = fixture.session.gui.app.model.tabs.layout[tab].toggleFullscreen();
     const projection = fixture.projection();
     try fixture.paint(projection);
     const target = fixture.target(.{ .focus_pane = Session.pane_id }).?;
     try std.testing.expectEqualDeep(client.Intent{ .focus_pane = Session.pane_id }, fixture.click(target, 0).intent);
     try std.testing.expect(fixture.target(.{ .focus_pane = second }) != null);
     var layout: data.LayoutSnapshot = .{};
-    model.layout.snapshot(projection.geometry.area, &layout);
+    fixture.session.gui.app.model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
     const content = fixture.session.gui.renderer.metrics.rect(fixture.session.gui.renderer.origin, layout.views()[0].content);
     for (fixture.session.gui.renderer.quads.items()) |quad| {
         if (quad.a == 0 and quad.border > 0) {
@@ -342,7 +342,7 @@ test "native sidebar ignores configured footer slots" {
 test "native child progress remains visible with a single borderless pane" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const pane = fixture.session.gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = fixture.session.gui.app.model.panes.find(Session.pane_id).?;
     _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .set, .percent = 50 });
     try fixture.paint(fixture.projection());
     const pixels = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
@@ -382,16 +382,16 @@ test "native mode hints preserve navigation in the top bar" {
 test "native tab hit maps change only after their reordered frame is delivered" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
-    const tabs = &fixture.session.gui.app.model.workspace;
+    const model = &fixture.session.gui.app.model;
     const second_id: core.TabId = @enumFromInt(2);
-    _ = try tabs.addCreated(.{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
-    _ = tabs.select(Session.location.tab_id);
+    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
+    _ = data.tab_selection.select(model, Session.location.tab_id);
     try fixture.prepare(fixture.projection());
     try std.testing.expectEqual(@as(usize, 0), fixture.chrome.presented().hits.len);
     fixture.chrome.present(true);
     const first = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
     const geometry = client.Geometry.capture(fixture.projection());
-    _ = try tabs.applyPosition(second_id, 0);
+    _ = try data.tab_move.move(model, second_id, 0);
     const current_geometry = client.Geometry.capture(fixture.projection());
     try std.testing.expect(geometry.matches(&current_geometry));
 

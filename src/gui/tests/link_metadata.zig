@@ -8,7 +8,7 @@ test "native OSC 8 opens its destination and highlights separated runs of the sa
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     fixture.text("Docs");
     var storage = try core.TextMetadata.init(std.testing.allocator, pane.buffer.h);
     defer storage.deinit(std.testing.allocator);
@@ -40,7 +40,7 @@ test "native OSC 8 never treats an unsafe or omitted destination as the visible 
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     var storage = try core.TextMetadata.init(std.testing.allocator, pane.buffer.h);
     defer storage.deinit(std.testing.allocator);
     var builder = core.TextMetadataBuilder.init(storage.buffer, pane.buffer.h);
@@ -65,7 +65,7 @@ test "native wrapped URLs underline both physical rows and require a VT soft wra
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     fixture.text("");
     const start = pane.buffer.w - 10;
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = start, .y = 0 }, .text = "https://e/", .style = .{} });
@@ -103,7 +103,7 @@ test "native OSC 8 replacement under a held pointer cancels the original destina
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const gui = fixture.session.gui;
-    const pane = gui.app.model.workspace.findPane(Session.pane_id).?;
+    const pane = gui.app.model.panes.find(Session.pane_id).?;
     fixture.text("Docs");
     var storage = try core.TextMetadata.init(std.testing.allocator, pane.buffer.h);
     defer storage.deinit(std.testing.allocator);

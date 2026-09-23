@@ -75,13 +75,13 @@ pub fn detailText(card: AgentCard) []const u8 {
 /// Whether the focused pane of the active tab is this agent's pane.
 /// Example: `if (card.selected()) drawRing();`
 pub fn selected(card: AgentCard) bool {
-    const model = card.context.projection.model orelse return false;
-    if (model.layout.focused() != card.agent.key.pane_id) {
+    const projection = card.context.projection;
+    const tab = projection.tab orelse return false;
+    if (projection.model.tabs.layout[tab].focused() != card.agent.key.pane_id) {
         return false;
     }
 
-    const location = model.location orelse return false;
-    return std.meta.eql(location, card.agent.location);
+    return std.meta.eql(projection.model.tabs.location[tab], card.agent.location);
 }
 
 fn drawProject(card: AgentCard, canvas: *Canvas, row: Rect) !void {

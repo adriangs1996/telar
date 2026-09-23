@@ -16,7 +16,7 @@ pub const metadata: core.Image = .{
     .byte_len = 512 * 256 * 4,
 };
 
-model: data.MultiplexerModel,
+model: data.Model,
 store: kitty_delivery.Store,
 
 pub fn init(pixels: []const u8) !TransmissionFixture {
@@ -25,9 +25,9 @@ pub fn init(pixels: []const u8) !TransmissionFixture {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = data.MultiplexerModel.init(std.testing.allocator);
+    var model = data.Model.init(std.testing.allocator, true);
     errdefer model.deinit();
-    try model.addRoot(.{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
+    try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
     var store = kitty_delivery.Store.init(std.testing.allocator);
     errdefer store.deinit();
     try store.applyImage(.{ .pane_id = @enumFromInt(1), .revision = 1, .image = metadata });
@@ -60,7 +60,7 @@ pub fn deinit(fixture: *TransmissionFixture) void {
 pub fn writer(fixture: *TransmissionFixture, budget: usize) KittyGraphicsWriter {
     return .{
         .store = &fixture.store,
-        .layout_snapshot = fixture.model.layoutSnapshot(.{ .w = 10, .h = 5 }),
+        .layout_snapshot = data.tab_layout.snapshot(&fixture.model, 0, .{ .w = 10, .h = 5 }),
         .cell_width = 10,
         .cell_height = 20,
         .budget = budget,

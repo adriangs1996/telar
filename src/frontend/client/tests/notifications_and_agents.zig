@@ -414,10 +414,10 @@ test "toast activation commits by id before following its navigation target" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const active = &client.model.workspace.active().?.model;
+    const active = client.model.tabs.active;
     const second_pane: core.PaneId = @enumFromInt(11);
-    try active.split(.{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = second_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
-    try std.testing.expect(active.focusPane(TestHarness.bootstrap_pane));
+    try data.pane_split.split(&client.model, active, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = second_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    try std.testing.expect(client.model.tabs.layout[active].focusPane(TestHarness.bootstrap_pane));
 
     try client.publishNotificationNow(.{
         .title = "Ready",
@@ -430,16 +430,18 @@ test "toast activation commits by id before following its navigation target" {
     _ = client.model.advanceNotifications(visible_at_ns);
 
     const composed = try TerminalClient.of(client).presenter.compositor.render(.{
-        .model = active,
+        .model = &client.model,
+        .tab = active,
         .screen = &TerminalClient.of(client).presenter.screen,
         .input = .{
             .area = TerminalClient.of(client).view.workbench(),
             .palette = TerminalClient.of(client).view.palette(),
         },
     });
-    _ = active.commitPresentation(composed.commit);
+    _ = data.presentation_delivery.retire(&client.model, composed.commit);
     _ = try TerminalClient.of(client).view.render(&TerminalClient.of(client).presenter.screen, .{
-        .model = active,
+        .model = &client.model,
+        .tab = active,
         .compositor = &TerminalClient.of(client).presenter.compositor,
         .notifications = client.model.notificationSnapshot(),
         .force = true,
@@ -465,7 +467,7 @@ test "toast activation commits by id before following its navigation target" {
 
     try host_inputs.mouse(client, notification_click);
 
-    try std.testing.expectEqual(second_pane, active.layout.focused().?);
+    try std.testing.expectEqual(second_pane, client.model.tabs.layout[active].focused().?);
     try std.testing.expectEqual(
         version_before_activation.notifications + 1,
         client.model.version().notifications,
@@ -1033,7 +1035,7 @@ test "attachment rejection consumes correlation but does not notify when recover
     try harness.bootstrap();
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached = false;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.attached = false;
     const request_id = try client.request_lifecycle.nextId();
     try client.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -1065,7 +1067,7 @@ test "request failure retains canonical recovery when host notification delivery
     try harness.bootstrap();
     const client = harness.client;
     client.request_lifecycle.tracker = .{};
-    client.model.workspace.findPane(TestHarness.bootstrap_pane).?.attached = false;
+    client.model.panes.find(TestHarness.bootstrap_pane).?.attached = false;
     const request_id = try client.request_lifecycle.nextId();
     try client.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
         .pane_id = TestHarness.bootstrap_pane,

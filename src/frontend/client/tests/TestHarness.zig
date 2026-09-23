@@ -225,9 +225,9 @@ pub fn addTab(harness: *TestHarness, tab_id: core.TabId, pane_id: core.PaneId) !
         .tab_id = tab_id,
     };
 
-    _ = try harness.client.model.workspace.addCreated(.{
+    _ = try data.tab_creation.add(&harness.client.model, .{
         .location = location,
-        .position = @intCast(harness.client.model.workspace.count),
+        .position = @intCast(harness.client.model.tabs.count),
         .label = "second",
         .root_pane_id = pane_id,
     }, .{ .cols = 80, .rows = 24 });
@@ -237,10 +237,13 @@ pub fn addTab(harness: *TestHarness, tab_id: core.TabId, pane_id: core.PaneId) !
 
 pub fn addInactiveTab(harness: *TestHarness, tab_id: core.TabId, pane_id: core.PaneId) !core.TabLocation {
     const location = try harness.addTab(tab_id, pane_id);
-    const tab = harness.client.model.workspace.find(tab_id).?;
-    data.TabsModel.detachAll(tab);
+    var panes = harness.client.model.panes.iterate(tab_id);
+    while (panes.next()) |pane| {
+        pane.attached = false;
+        pane.pending_frame_id = 0;
+    }
     try TerminalClient.of(harness.client).graphics_store.setPaneVisible(pane_id, false);
-    try std.testing.expect(harness.client.model.workspace.select(bootstrap_location.tab_id));
+    try std.testing.expect(data.tab_selection.select(&harness.client.model, bootstrap_location.tab_id));
 
     return location;
 }

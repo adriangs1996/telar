@@ -1,8 +1,9 @@
 const SnapshotType = @import("../agents/AgentSnapshot.zig");
 const WorkspaceListSnapshot = @import("../workspace/WorkspaceListSnapshot.zig");
-const TabsModel = @import("../workspace/TabsModel.zig");
+const Model = @import("Model.zig");
 const Sources = @This();
 
 agents: *const SnapshotType,
 workspaces: *const WorkspaceListSnapshot,
-tabs: ?*const TabsModel,
+/// The client model whose active workspace tabs the picker lists.
+model: ?*const Model,

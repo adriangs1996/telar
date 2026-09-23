@@ -17,7 +17,7 @@ pub fn draw(widget: PickerModal, canvas: *Canvas) !void {
     const projection = widget.projection.*;
     const prompt = projection.prompt.?;
     const palette = canvas.theme.palette;
-    const sources: data.Sources = .{ .agents = projection.agents, .workspaces = projection.workspaces, .tabs = projection.tabs };
+    const sources: data.Sources = .{ .agents = projection.agents, .workspaces = projection.workspaces, .model = projection.model };
     var results: data.Results = .{};
     data.goto_picker.collect(sources, prompt.field.text(), &results);
     try modal.draw(canvas);

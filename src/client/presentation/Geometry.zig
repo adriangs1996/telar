@@ -16,10 +16,12 @@ len: u8 = 0,
 /// Example: `const geometry = Geometry.capture(projection);`.
 pub fn capture(projection: ProjectionType) Geometry {
     var geometry: Geometry = .{ .region = projection.geometry, .host_size = projection.host_size };
-    const model = projection.model orelse return geometry;
-    geometry.location = model.location;
-    geometry.layout_revision = model.layout.currentRevision();
-    var panes = model.paneConstIterator();
+    const slot = projection.tab orelse return geometry;
+    const model = projection.model;
+    const tab_id = model.tabs.location[slot].tab_id;
+    geometry.location = if (model.panes.countIn(tab_id) == 0) null else model.tabs.location[slot];
+    geometry.layout_revision = model.tabs.layout[slot].currentRevision();
+    var panes = model.panes.iterateConst(tab_id);
     while (panes.next()) |pane| {
         geometry.panes[geometry.len] = .{
             .id = pane.id,
