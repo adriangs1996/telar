@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const ScreenType = @import("../presentation/Screen.zig");
 const IncrementalComposition = @This();
 
-model: *const data.Model,
+model: *const data.ClientModel,
 /// The composed tab's slot in `model.tabs`.
 tab: usize,
 screen: *ScreenType,

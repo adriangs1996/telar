@@ -1,11 +1,11 @@
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
-const ModelType = @import("../Model.zig");
+const ClientModel = @import("../ClientModel.zig");
 const std = @import("std");
 const VersionType = @import("../Version.zig");
 
 test "pane focus resolves identity and direction through one visible revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -61,7 +61,7 @@ test "pane focus resolves identity and direction through one visible revision" {
 }
 
 test "fullscreen directional focus publishes geometry only for horizontal moves" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -104,7 +104,7 @@ test "fullscreen directional focus publishes geometry only for horizontal moves"
 }
 
 test "pane resize owns direction resolution geometry and visible revisions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -154,7 +154,7 @@ test "pane resize owns direction resolution geometry and visible revisions" {
 }
 
 test "pane fullscreen preserves tiled geometry through two visible revisions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -196,7 +196,7 @@ test "pane fullscreen preserves tiled geometry through two visible revisions" {
 }
 
 test "splitting a single fullscreen pane focuses the new pane without leaving fullscreen" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -228,7 +228,7 @@ test "splitting a single fullscreen pane focuses the new pane without leaving fu
 }
 
 test "pane closure planning requires the active attached pane without mutation" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -251,7 +251,7 @@ test "pane closure planning requires the active attached pane without mutation" 
 }
 
 test "active pane retirement advances the visible pane revision once" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -294,7 +294,7 @@ test "active pane retirement advances the visible pane revision once" {
 }
 
 test "inactive pane retirement changes membership without a visible revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -329,7 +329,7 @@ test "inactive pane retirement changes membership without a visible revision" {
 }
 
 test "split confirmation replaces a target retired during pane creation" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -366,7 +366,7 @@ test "split confirmation replaces a target retired during pane creation" {
 }
 
 test "inactive split confirmation retains membership without visible revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -410,7 +410,7 @@ test "inactive split confirmation retains membership without visible revision" {
 }
 
 test "split confirmation leaves a retired tab unrepresented" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -458,7 +458,7 @@ fn commitSplit(target: core.PaneId, location: core.TabLocation, axis: model_data
 }
 
 test "applying layouts rejects foreign membership before changing focus or geometry" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
     const first: core.PaneId = @enumFromInt(1);

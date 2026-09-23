@@ -1,11 +1,11 @@
 //! A tab takes a new position in its workspace (docs/flows/tab-move.md).
 const core = @import("telar-core");
-const Model = @import("../state/Model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const Change = @import("../types/Change.zig").Change;
 
 /// Applies a canonical runtime position while keeping the active tab.
 /// Example: `const change = try tab_move.move(model, tab_id, 1);`
-pub fn move(model: *Model, tab_id: core.TabId, position: u16) !Change {
+pub fn move(model: *ClientModel, tab_id: core.TabId, position: u16) !Change {
     const from = model.tabs.find(tab_id) orelse return error.TabNotFound;
     const target: usize = position;
     if (target >= model.tabs.count) {

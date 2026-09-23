@@ -32,7 +32,7 @@ fn oversizedDiagnostic() model_data.Diagnostic {
 }
 
 test "diagnostic commits valid text once" {
-    var model = model_data.Model.init(std.testing.allocator, true);
+    var model = model_data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const diagnostic = formatted("plugin failed: {s}", .{"denied"});
 
@@ -44,7 +44,7 @@ test "diagnostic commits valid text once" {
 }
 
 test "diagnostic replaces an oversized value with an explicit fallback" {
-    var model = model_data.Model.init(std.testing.allocator, true);
+    var model = model_data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expect(try replace(&model, .{
@@ -57,7 +57,7 @@ test "diagnostic replaces an oversized value with an explicit fallback" {
 }
 
 test "diagnostic preserves state when primary and fallback are malformed" {
-    var model = model_data.Model.init(std.testing.allocator, true);
+    var model = model_data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     _ = try replace(&model, .{ .diagnostic = formatted("preserved", .{}) });
     const version = model.version();
@@ -72,7 +72,7 @@ test "diagnostic preserves state when primary and fallback are malformed" {
 }
 
 test "diagnostic clears visible text once" {
-    var model = model_data.Model.init(std.testing.allocator, true);
+    var model = model_data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     _ = try replace(&model, .{ .diagnostic = formatted("resolved", .{}) });
 
@@ -84,7 +84,7 @@ test "diagnostic clears visible text once" {
 }
 
 /// Validates replacement text before committing. Example: `_ = try replace(model, .{ .diagnostic = value });`.
-pub fn replace(model: *model_data.Model, replacement: Replacement) !model_data.Change {
+pub fn replace(model: *model_data.ClientModel, replacement: Replacement) !model_data.Change {
     return model.replaceDiagnostic(replacement.diagnostic) catch |err| switch (err) {
         error.InvalidClientDiagnostic => if (replacement.invalid_fallback) |fallback|
             model.replaceDiagnostic(fallback)

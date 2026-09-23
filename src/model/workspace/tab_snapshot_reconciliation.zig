@@ -2,7 +2,7 @@
 //! (docs/flows/tab-snapshot-reconciliation.md).
 const core = @import("telar-core");
 const std = @import("std");
-const Model = @import("../state/Model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const PaneSnapshot = @import("PaneSnapshot.zig");
 const DiscoveredPane = @import("DiscoveredPane.zig");
 const multiplexer = @import("multiplexer.zig");
@@ -11,7 +11,7 @@ const tab_layout = @import("tab_layout.zig");
 /// Reconciles canonical pane membership while keeping matching pane
 /// buffers and the client's layout. Returns the tab's slot.
 /// Example: `const slot = try tab_snapshot_reconciliation.reconcile(model, snapshot, area);`
-pub fn reconcile(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !usize {
+pub fn reconcile(model: *ClientModel, snapshot: PaneSnapshot, area: core.Rect) !usize {
     const slot = model.tabs.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
     if (!std.meta.eql(model.tabs.location[slot], snapshot.location)) {
         return error.UnexpectedTab;
@@ -78,7 +78,7 @@ pub fn reconcile(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !usize 
 /// left to right. The runtime owns membership, so a pane the area cannot
 /// fit still joins, detached and empty until the geometry changes.
 /// Example: `try tab_snapshot_reconciliation.addDiscovered(model, slot, discovered);`
-pub fn addDiscovered(model: *Model, slot: usize, discovered: DiscoveredPane) !void {
+pub fn addDiscovered(model: *ClientModel, slot: usize, discovered: DiscoveredPane) !void {
     if (model.panes.find(discovered.pane_id) != null) {
         return;
     }
@@ -131,7 +131,7 @@ pub fn addDiscovered(model: *Model, slot: usize, discovered: DiscoveredPane) !vo
     });
 }
 
-fn restoreFocus(model: *Model, slot: usize, snapshot: PaneSnapshot, pane_id: core.PaneId) !void {
+fn restoreFocus(model: *ClientModel, slot: usize, snapshot: PaneSnapshot, pane_id: core.PaneId) !void {
     var restored = false;
     if (model.pending_layout_restore) |pending| {
         if (std.meta.eql(pending.location, snapshot.location)) {

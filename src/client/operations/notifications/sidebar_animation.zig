@@ -8,7 +8,7 @@ pub const Activity = enum {
     inactive,
 };
 
-fn reconcileAgent(model: *data.Model, revision: u64, status: core.AgentStatus) !void {
+fn reconcileAgent(model: *data.ClientModel, revision: u64, status: core.AgentStatus) !void {
     const agent: data.AgentInput = .{
         .key = .{ .pane_id = @enumFromInt(1), .pane_generation = 1 },
         .location = .{

@@ -44,7 +44,7 @@ pub fn classifyFailure(reason: anyerror) CompletionOutcome {
     };
 }
 
-fn installFocusedTarget(model: *model_data.Model) !model_data.AttachmentTarget {
+fn installFocusedTarget(model: *model_data.ClientModel) !model_data.AttachmentTarget {
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),

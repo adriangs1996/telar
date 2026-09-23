@@ -7,13 +7,13 @@ const Fixture = @import("Fixture.zig");
 const main = @import("main.zig");
 const IncrementalComposeContext = @This();
 
-model: data.Model,
+model: data.ClientModel,
 screen: frontend.Screen,
 compositor: frontend.Compositor,
 payloads: [2][]const u8,
 
 pub fn init(gpa: std.mem.Allocator, fixture: *const Fixture) !IncrementalComposeContext {
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     errdefer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },

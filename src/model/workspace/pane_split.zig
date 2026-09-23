@@ -1,13 +1,13 @@
 //! A new pane splits an existing one (docs/flows/pane-split.md).
 const std = @import("std");
-const Model = @import("../state/Model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const PaneSplit = @import("PaneSplit.zig");
 const multiplexer = @import("multiplexer.zig");
 const tab_layout = @import("tab_layout.zig");
 
 /// Adds `request.new_pane` beside `request.existing_pane` in tab `slot`.
 /// Example: `try pane_split.split(model, slot, request);`
-pub fn split(model: *Model, slot: usize, request: PaneSplit) !void {
+pub fn split(model: *ClientModel, slot: usize, request: PaneSplit) !void {
     const prospective = tab_layout.prospectiveSplit(
         model,
         slot,

@@ -8,7 +8,7 @@ const Canvas = @import("../widgets/Canvas.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
 const Fixture = @This();
 
-model: data.Model,
+model: data.ClientModel,
 renderer: Renderer,
 overlays: Overlays = .{},
 widgets: @import("../widgets/interaction/State.zig") = .{},

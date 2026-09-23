@@ -7,7 +7,7 @@ const CopyProjectionType = @import("../workspace/CopyProjection.zig");
 
 /// Borrows model data only until the synchronous preparation call returns.
 /// Example: `const projection = capture(&model, context);`.
-pub fn capture(model: *const data.Model, context: Context) Projection {
+pub fn capture(model: *const data.ClientModel, context: Context) Projection {
     const copy: ?CopyProjectionType = if (model.copyModeProjection()) |value|
         .{ .pane_id = value.pane_id, .view = value.view }
     else

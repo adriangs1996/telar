@@ -16,7 +16,7 @@ pub const metadata: core.Image = .{
     .byte_len = 512 * 256 * 4,
 };
 
-model: data.Model,
+model: data.ClientModel,
 store: kitty_delivery.Store,
 
 pub fn init(pixels: []const u8) !TransmissionFixture {
@@ -25,7 +25,7 @@ pub fn init(pixels: []const u8) !TransmissionFixture {
         .workspace = .{ .workspace = @enumFromInt(1) },
         .tab_id = @enumFromInt(1),
     };
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     errdefer model.deinit();
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 10, .rows = 5 } });
     var store = kitty_delivery.Store.init(std.testing.allocator);

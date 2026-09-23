@@ -8,7 +8,7 @@ const MetricsType = @import("Metrics.zig");
 const Input = @This();
 
 regions: LayoutRegions,
-model: *const data.Model,
+model: *const data.ClientModel,
 /// The active tab's slot in `model.tabs`.
 tab: usize,
 layout: *const data.LayoutSnapshot,

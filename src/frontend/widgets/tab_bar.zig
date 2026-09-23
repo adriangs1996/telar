@@ -140,7 +140,7 @@ fn bouncingPosition(width: u16, frame: u8) u16 {
 }
 
 /// The active tab is always visible; earlier tabs are added while they fit.
-fn firstVisibleIndex(model: *const data.Model, available: u16) usize {
+fn firstVisibleIndex(model: *const data.ClientModel, available: u16) usize {
     var first_visible = model.tabs.active;
     var used = tabWidth(model, first_visible, available);
     while (first_visible > 0) {
@@ -159,7 +159,7 @@ fn firstVisibleIndex(model: *const data.Model, available: u16) usize {
 
 /// The block anchors to its alignment edge: when the tabs do not fill the
 /// region the unused cells stay on the other side.
-fn visibleWidth(model: *const data.Model, first_visible: usize, available: u16) u16 {
+fn visibleWidth(model: *const data.ClientModel, first_visible: usize, available: u16) u16 {
     var total: u16 = 0;
     for (first_visible..model.tabs.count) |index| {
         const gap: u16 = if (index != first_visible) tab_gap else 0;
@@ -173,7 +173,7 @@ fn visibleWidth(model: *const data.Model, first_visible: usize, available: u16) 
     return total;
 }
 
-fn tabWidth(model: *const data.Model, slot: usize, available: u16) u16 {
+fn tabWidth(model: *const data.ClientModel, slot: usize, available: u16) u16 {
     return @min(Label.init(model, slot).width(), available);
 }
 

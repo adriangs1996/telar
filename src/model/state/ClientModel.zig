@@ -70,7 +70,7 @@ const RecoverPaneSplitType = @import("RecoverPaneSplit.zig");
 const RenameTabType = @import("RenameTab.zig");
 const NewTabType = @import("NewTab.zig");
 const RemoveTabType = @import("RemoveTab.zig");
-const Model = @This();
+const ClientModel = @This();
 
 gpa: std.mem.Allocator,
 /// Settings adopted from the active configuration generation.
@@ -163,18 +163,18 @@ viewport_revision: u64 = 0,
 /// Creates the client model with the configured pane appearance.
 ///
 /// ```zig
-/// var model = Model.init(gpa, true);
+/// var model = ClientModel.init(gpa, true);
 /// ```
-pub fn init(gpa: std.mem.Allocator, pane_gaps: bool) Model {
+pub fn init(gpa: std.mem.Allocator, pane_gaps: bool) ClientModel {
     return initWithState(gpa, .{ .pane_gaps = pane_gaps });
 }
 
 /// Creates the client model at one already active configuration generation.
 ///
 /// ```zig
-/// var model = Model.initWithConfiguration(gpa, true, 1);
+/// var model = ClientModel.initWithConfiguration(gpa, true, 1);
 /// ```
-pub fn initWithConfiguration(gpa: std.mem.Allocator, pane_gaps: bool, generation: u64) Model {
+pub fn initWithConfiguration(gpa: std.mem.Allocator, pane_gaps: bool, generation: u64) ClientModel {
     return initWithState(gpa, .{
         .pane_gaps = pane_gaps,
         .configuration_generation = generation,
@@ -184,17 +184,17 @@ pub fn initWithConfiguration(gpa: std.mem.Allocator, pane_gaps: bool, generation
 /// Creates the client model from its complete initial semantic state.
 ///
 /// ```zig
-/// var model = Model.initWithState(gpa, initial);
+/// var model = ClientModel.initWithState(gpa, initial);
 /// ```
-pub fn initWithState(gpa: std.mem.Allocator, initial: InitialClientStateType) Model {
-    var self: Model = undefined;
+pub fn initWithState(gpa: std.mem.Allocator, initial: InitialClientStateType) ClientModel {
+    var self: ClientModel = undefined;
     self.initInto(gpa, initial);
     return self;
 }
 
 /// Initializes the final destination without copying the reserved workspace slots.
 /// Example: `model.initInto(gpa, initial);`
-pub fn initInto(self: *Model, gpa: std.mem.Allocator, initial: InitialClientStateType) void {
+pub fn initInto(self: *ClientModel, gpa: std.mem.Allocator, initial: InitialClientStateType) void {
     initial.host_size.validate() catch unreachable;
     const cell_size = initial.host_capabilities.cellSize(
         initial.host_size.cols,
@@ -223,7 +223,7 @@ pub fn initInto(self: *Model, gpa: std.mem.Allocator, initial: InitialClientStat
 /// ```zig
 /// defer model.deinit();
 /// ```
-pub fn deinit(model: *Model) void {
+pub fn deinit(model: *ClientModel) void {
     model.history_palette.deinit();
     model.clipboard.deinit(model.gpa);
     workspace_handoff.clear(model);
@@ -232,7 +232,7 @@ pub fn deinit(model: *Model) void {
 
 /// Installs validated reconnect layouts before the initial pane arrives.
 /// Example: `model.restoreClientLayouts(layouts);`.
-pub fn restoreClientLayouts(model: *Model, layouts: LayoutsType) void {
+pub fn restoreClientLayouts(model: *ClientModel, layouts: LayoutsType) void {
     model.saved_layouts = layouts;
 }
 
@@ -243,7 +243,7 @@ pub fn restoreClientLayouts(model: *Model, layouts: LayoutsType) void {
 /// ```zig
 /// const surface = model.togglePaneSurface() orelse return;
 /// ```
-pub fn togglePaneSurface(model: *Model) ?core.PaneSurface {
+pub fn togglePaneSurface(model: *ClientModel) ?core.PaneSurface {
     const slot = model.tabs.activeSlot() orelse return null;
     const layout = &model.tabs.layout[slot];
     const focused = layout.focused() orelse return null;
@@ -267,14 +267,14 @@ pub fn togglePaneSurface(model: *Model) ?core.PaneSurface {
 
 /// Captures an attached agent pane without granting mutation authority.
 /// Example: `const pane = model.agentPane(pane_id) orelse return;`
-pub fn agentPane(model: *const Model, pane_id: core.PaneId) ?*const AgentPane {
+pub fn agentPane(model: *const ClientModel, pane_id: core.PaneId) ?*const AgentPane {
     const pane = model.panes.findConst(pane_id) orelse return null;
     return if (pane.attached and pane.kind == .agent) pane else null;
 }
 
 /// Installs runtime pane identity after a correlated attachment succeeds.
 /// Example: `_ = model.identifyPane(opened);`
-pub fn identifyPane(model: *Model, opened: core.PaneOpened) bool {
+pub fn identifyPane(model: *ClientModel, opened: core.PaneOpened) bool {
     const pane = model.panes.find(opened.pane_id) orelse return false;
     if (!pane.attached or !std.meta.eql(pane.location, opened.location)) {
         return false;
@@ -293,7 +293,7 @@ pub fn identifyPane(model: *Model, opened: core.PaneOpened) bool {
 
 /// Copies canonical conversation state only for the current runtime pane.
 /// Example: `_ = try model.applyAgentThread(snapshot);`
-pub fn applyAgentThread(model: *Model, snapshot: core.AgentThreadSnapshotView) !bool {
+pub fn applyAgentThread(model: *ClientModel, snapshot: core.AgentThreadSnapshotView) !bool {
     const pane = model.panes.find(snapshot.pane_id) orelse return false;
     if (!try pane.applyAgentThread(snapshot)) {
         return false;
@@ -304,7 +304,7 @@ pub fn applyAgentThread(model: *Model, snapshot: core.AgentThreadSnapshotView) !
 }
 
 /// Mutates the composer through its owning pane. Example: `_ = model.editAgentComposer(id, .backspace);`
-pub fn editAgentComposer(model: *Model, pane_id: core.PaneId, command: model_data.PromptCommand) bool {
+pub fn editAgentComposer(model: *ClientModel, pane_id: core.PaneId, command: model_data.PromptCommand) bool {
     const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.editComposer(command)) {
         return false;
@@ -315,7 +315,7 @@ pub fn editAgentComposer(model: *Model, pane_id: core.PaneId, command: model_dat
 }
 
 /// Adds an image through its attached draft owner. Example: `_ = try model.attachAgentImage(id, path);`
-pub fn attachAgentImage(model: *Model, pane_id: core.PaneId, path: []const u8) !bool {
+pub fn attachAgentImage(model: *ClientModel, pane_id: core.PaneId, path: []const u8) !bool {
     const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent) {
         return false;
@@ -327,7 +327,7 @@ pub fn attachAgentImage(model: *Model, pane_id: core.PaneId, path: []const u8) !
 }
 
 /// Example: `_ = model.removeAgentImage(id, removal);`
-pub fn removeAgentImage(model: *Model, pane_id: core.PaneId, removal: AgentPane.ImageRemoval) bool {
+pub fn removeAgentImage(model: *ClientModel, pane_id: core.PaneId, removal: AgentPane.ImageRemoval) bool {
     const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.removeComposerImage(removal)) {
         return false;
@@ -339,7 +339,7 @@ pub fn removeAgentImage(model: *Model, pane_id: core.PaneId, removal: AgentPane.
 
 /// Clears only the submitted draft revision; later typing stays intact.
 /// Example: `_ = model.acceptAgentPrompt(pane_id, composer_revision);`
-pub fn acceptAgentPrompt(model: *Model, pane_id: core.PaneId, revision: u64) bool {
+pub fn acceptAgentPrompt(model: *ClientModel, pane_id: core.PaneId, revision: u64) bool {
     const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.acceptComposer(revision)) {
         return false;
@@ -351,7 +351,7 @@ pub fn acceptAgentPrompt(model: *Model, pane_id: core.PaneId, revision: u64) boo
 
 /// Stores disposable transcript navigation independently of provider state.
 /// Example: `_ = model.scrollAgentThread(pane_id, 3);`
-pub fn scrollAgentThread(model: *Model, pane_id: core.PaneId, delta: f64) bool {
+pub fn scrollAgentThread(model: *ClientModel, pane_id: core.PaneId, delta: f64) bool {
     const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.scrollConversation(delta)) {
         return false;
@@ -362,7 +362,7 @@ pub fn scrollAgentThread(model: *Model, pane_id: core.PaneId, delta: f64) bool {
 }
 
 /// Commits one provider-backed composer selection. Example: `_ = model.changeAgentOption(id, .{ .access = .read_only });`
-pub fn changeAgentOption(model: *Model, pane_id: core.PaneId, change: agent_options.Change) bool {
+pub fn changeAgentOption(model: *ClientModel, pane_id: core.PaneId, change: agent_options.Change) bool {
     const pane = model.panes.find(pane_id) orelse return false;
     if (!pane.attached or pane.kind != .agent or !pane.changeAgentOption(change)) {
         return false;
@@ -377,7 +377,7 @@ pub fn changeAgentOption(model: *Model, pane_id: core.PaneId, change: agent_opti
 /// ```zig
 /// const before = model.version();
 /// ```
-pub fn version(model: *const Model) VersionType {
+pub fn version(model: *const ClientModel) VersionType {
     return .{
         .workspace = model.workspace_revision,
         .configuration = model.configuration_revision,
@@ -415,7 +415,7 @@ pub fn version(model: *const Model) VersionType {
 /// ```zig
 /// const accepted = model.commitPresentation(commit);
 /// ```
-pub fn commitPresentation(model: *Model, commit: PresentationCommitType) PresentationCommitType {
+pub fn commitPresentation(model: *ClientModel, commit: PresentationCommitType) PresentationCommitType {
     return presentation_delivery.retire(model, commit);
 }
 
@@ -424,7 +424,7 @@ pub fn commitPresentation(model: *Model, commit: PresentationCommitType) Present
 /// ```zig
 /// const message = model.diagnostic() orelse return;
 /// ```
-pub fn diagnostic(model: *const Model) ?[]const u8 {
+pub fn diagnostic(model: *const ClientModel) ?[]const u8 {
     if (model.client_diagnostic.len == 0) {
         return null;
     }
@@ -437,7 +437,7 @@ pub fn diagnostic(model: *const Model) ?[]const u8 {
 /// ```zig
 /// _ = try model.replaceDiagnostic(diagnostic);
 /// ```
-pub fn replaceDiagnostic(model: *Model, diagnostic_value: model_data.Diagnostic) !model_data.Change {
+pub fn replaceDiagnostic(model: *ClientModel, diagnostic_value: model_data.Diagnostic) !model_data.Change {
     if (diagnostic_value.len > diagnostic_value.buffer.len) {
         return error.InvalidClientDiagnostic;
     }
@@ -467,7 +467,7 @@ pub fn replaceDiagnostic(model: *Model, diagnostic_value: model_data.Diagnostic)
 /// ```zig
 /// _ = try model.setDiagnostic("callback failed: {s}", .{@errorName(err)});
 /// ```
-pub fn setDiagnostic(model: *Model, comptime format: []const u8, args: anytype) !model_data.Change {
+pub fn setDiagnostic(model: *ClientModel, comptime format: []const u8, args: anytype) !model_data.Change {
     var diagnostic_value: model_data.Diagnostic = .{};
     diagnostic_value.set(format, args);
 
@@ -479,7 +479,7 @@ pub fn setDiagnostic(model: *Model, comptime format: []const u8, args: anytype) 
 /// ```zig
 /// _ = model.clearDiagnostic();
 /// ```
-pub fn clearDiagnostic(model: *Model) model_data.Change {
+pub fn clearDiagnostic(model: *ClientModel) model_data.Change {
     if (model.client_diagnostic.len == 0) {
         return .unchanged;
     }
@@ -494,7 +494,7 @@ pub fn clearDiagnostic(model: *Model) model_data.Change {
 /// ```zig
 /// const context = model.callbackContext();
 /// ```
-pub fn callbackContext(model: *const Model) model_data.CallbackContext {
+pub fn callbackContext(model: *const ClientModel) model_data.CallbackContext {
     const slot = model.tabs.activeSlot() orelse return .{
         .sidebar_visible = model.sidebar_visible,
         .tab_count = 0,
@@ -518,7 +518,7 @@ pub fn callbackContext(model: *const Model) model_data.CallbackContext {
 /// ```zig
 /// const execution = try model.beginPluginExecution() orelse return;
 /// ```
-pub fn beginPluginExecution(model: *Model) !?PluginExecutionType {
+pub fn beginPluginExecution(model: *ClientModel) !?PluginExecutionType {
     return model.plugins.beginPluginExecution(model.configuration_generation);
 }
 
@@ -527,7 +527,7 @@ pub fn beginPluginExecution(model: *Model) !?PluginExecutionType {
 /// ```zig
 /// const commit = try model.reconcileHost(update) orelse return;
 /// ```
-pub fn reconcileHost(model: *Model, update: model_data.HostUpdate) !?model_data.HostCommit {
+pub fn reconcileHost(model: *ClientModel, update: model_data.HostUpdate) !?model_data.HostCommit {
     return model.host.reconcileHost(update);
 }
 
@@ -536,7 +536,7 @@ pub fn reconcileHost(model: *Model, update: model_data.HostUpdate) !?model_data.
 /// ```zig
 /// const commit = try model.observeHostCapability(observation) orelse return;
 /// ```
-pub fn observeHostCapability(model: *Model, observation: model_data.HostCapabilityObservation) !?model_data.HostCommit {
+pub fn observeHostCapability(model: *ClientModel, observation: model_data.HostCapabilityObservation) !?model_data.HostCommit {
     return model.host.observeHostCapability(observation);
 }
 
@@ -545,7 +545,7 @@ pub fn observeHostCapability(model: *Model, observation: model_data.HostCapabili
 /// ```zig
 /// const commit = try model.applyConfiguration(input);
 /// ```
-pub fn applyConfiguration(model: *Model, input: ConfigurationInputType) !model_data.ConfigurationCommit {
+pub fn applyConfiguration(model: *ClientModel, input: ConfigurationInputType) !model_data.ConfigurationCommit {
     if (input.generation <= model.configuration_generation) {
         return error.StaleConfiguration;
     }
@@ -586,7 +586,7 @@ pub fn applyConfiguration(model: *Model, input: ConfigurationInputType) !model_d
 /// ```zig
 /// const template = model.windowTitleTemplate();
 /// ```
-pub fn windowTitleTemplate(model: *const Model) []const u8 {
+pub fn windowTitleTemplate(model: *const ClientModel) []const u8 {
     return model.window_title_template[0..model.window_title_template_len];
 }
 
@@ -595,7 +595,7 @@ pub fn windowTitleTemplate(model: *const Model) []const u8 {
 /// ```zig
 /// _ = try model.updateBar(input);
 /// ```
-pub fn updateBar(model: *Model, input: BarUpdateInputType) !?BarUpdateCommitType {
+pub fn updateBar(model: *ClientModel, input: BarUpdateInputType) !?BarUpdateCommitType {
     if (input.generation != model.configuration_generation) {
         return error.StaleBarUpdate;
     }
@@ -621,7 +621,7 @@ pub fn updateBar(model: *Model, input: BarUpdateInputType) !?BarUpdateCommitType
 /// ```zig
 /// const change = model.setSidebarVisible(false) orelse return;
 /// ```
-pub fn setSidebarVisible(model: *Model, visible: bool) ?model_data.SidebarLayout {
+pub fn setSidebarVisible(model: *ClientModel, visible: bool) ?model_data.SidebarLayout {
     return model.commitSidebarLayout(visible, model.sidebar_width);
 }
 
@@ -630,7 +630,7 @@ pub fn setSidebarVisible(model: *Model, visible: bool) ?model_data.SidebarLayout
 /// ```zig
 /// const change = model.toggleSidebar();
 /// ```
-pub fn toggleSidebar(model: *Model) model_data.SidebarLayout {
+pub fn toggleSidebar(model: *ClientModel) model_data.SidebarLayout {
     return model.setSidebarVisible(!model.sidebar_visible).?;
 }
 
@@ -639,7 +639,7 @@ pub fn toggleSidebar(model: *Model) model_data.SidebarLayout {
 /// ```zig
 /// const change = model.setSidebarWidth(70) orelse return;
 /// ```
-pub fn setSidebarWidth(model: *Model, requested_width: u16) ?model_data.SidebarLayout {
+pub fn setSidebarWidth(model: *ClientModel, requested_width: u16) ?model_data.SidebarLayout {
     const width = model_data.sidebar.clampInteractive(model.host.host_size.cols, requested_width);
 
     return model.commitSidebarLayout(model.sidebar_visible, width);
@@ -650,7 +650,7 @@ pub fn setSidebarWidth(model: *Model, requested_width: u16) ?model_data.SidebarL
 /// ```zig
 /// const change = model.stepSidebarWidth(.wider) orelse return;
 /// ```
-pub fn stepSidebarWidth(model: *Model, direction: model_data.SidebarDirection) ?model_data.SidebarLayout {
+pub fn stepSidebarWidth(model: *ClientModel, direction: model_data.SidebarDirection) ?model_data.SidebarLayout {
     const width = model_data.sidebar.step(model.host.host_size.cols, model.sidebar_width, direction);
 
     return model.commitSidebarLayout(model.sidebar_visible, width);
@@ -662,13 +662,13 @@ pub fn stepSidebarWidth(model: *Model, direction: model_data.SidebarDirection) ?
 /// ```zig
 /// const change = model.restoreSidebarLayout(true, 73) orelse return;
 /// ```
-pub fn restoreSidebarLayout(model: *Model, visible: bool, preferred_width: u16) ?model_data.SidebarLayout {
+pub fn restoreSidebarLayout(model: *ClientModel, visible: bool, preferred_width: u16) ?model_data.SidebarLayout {
     const width = @max(model_data.sidebar.minimum_width, preferred_width);
 
     return model.commitSidebarLayout(visible, width);
 }
 
-fn commitSidebarLayout(model: *Model, visible: bool, width: u16) ?model_data.SidebarLayout {
+fn commitSidebarLayout(model: *ClientModel, visible: bool, width: u16) ?model_data.SidebarLayout {
     if (model.sidebar_visible == visible and model.sidebar_width == width) {
         return null;
     }
@@ -690,7 +690,7 @@ fn commitSidebarLayout(model: *Model, visible: bool, width: u16) ?model_data.Sid
 /// ```zig
 /// const change = model.setWorkspaceListCollapsed(true) orelse return;
 /// ```
-pub fn setWorkspaceListCollapsed(model: *Model, collapsed: bool) ?WorkspaceListCollapseType {
+pub fn setWorkspaceListCollapsed(model: *ClientModel, collapsed: bool) ?WorkspaceListCollapseType {
     if (model.workspace_list_collapsed == collapsed) {
         return null;
     }
@@ -709,13 +709,13 @@ pub fn setWorkspaceListCollapsed(model: *Model, collapsed: bool) ?WorkspaceListC
 /// ```zig
 /// const change = model.toggleWorkspaceList();
 /// ```
-pub fn toggleWorkspaceList(model: *Model) WorkspaceListCollapseType {
+pub fn toggleWorkspaceList(model: *ClientModel) WorkspaceListCollapseType {
     return model.setWorkspaceListCollapsed(!model.workspace_list_collapsed).?;
 }
 
 /// Decodes a bounded runtime list and preserves the previous replica on rejection.
 /// Example: `_ = try self.applyWorkspaceList(list);`
-pub fn applyWorkspaceList(self: *Model, list: core.WorkspaceListView) !workspace_list_rejection.Outcome {
+pub fn applyWorkspaceList(self: *ClientModel, list: core.WorkspaceListView) !workspace_list_rejection.Outcome {
     var entries: [core.max_workspace_list_entries]EntryInputType = undefined;
     var count: usize = 0;
     var iterator = list.entries();
@@ -754,7 +754,7 @@ pub fn applyWorkspaceList(self: *Model, list: core.WorkspaceListView) !workspace
 /// ```zig
 /// const commit = try model.reconcileWorkspaceList(input) orelse return;
 /// ```
-pub fn reconcileWorkspaceList(model: *Model, input: SnapshotInputType) !?WorkspaceListCommitType {
+pub fn reconcileWorkspaceList(model: *ClientModel, input: SnapshotInputType) !?WorkspaceListCommitType {
     if (!try model.workspace_list_snapshot.replace(input)) {
         return null;
     }
@@ -773,7 +773,7 @@ pub fn reconcileWorkspaceList(model: *Model, input: SnapshotInputType) !?Workspa
 /// ```zig
 /// if (!model.knowsWorkspace(workspace)) return;
 /// ```
-pub fn knowsWorkspace(model: *const Model, workspace: core.WorkspaceId) bool {
+pub fn knowsWorkspace(model: *const ClientModel, workspace: core.WorkspaceId) bool {
     return model.workspace_list_snapshot.indexOf(workspace) != null;
 }
 
@@ -783,7 +783,7 @@ pub fn knowsWorkspace(model: *const Model, workspace: core.WorkspaceId) bool {
 /// ```zig
 /// const commit = model.reconcileProxyStatus(.{ .active = true, .scope = .exact, .system_trusted = false }) orelse return;
 /// ```
-pub fn reconcileProxyStatus(model: *Model, status: core.ProxyStatus) ?model_data.ProxyStatusCommit {
+pub fn reconcileProxyStatus(model: *ClientModel, status: core.ProxyStatus) ?model_data.ProxyStatusCommit {
     if (model.proxy_tls_active == status.active and model.proxy_tls_scope == status.scope and model.proxy_system_trusted == status.system_trusted) {
         return null;
     }
@@ -815,7 +815,7 @@ pub fn reconcileProxyStatus(model: *Model, status: core.ProxyStatus) ?model_data
 /// ```zig
 /// const commit = try model.reconcileSystemMetrics(metrics) orelse return;
 /// ```
-pub fn reconcileSystemMetrics(model: *Model, metrics: SystemMetricsType) !?SystemMetricsCommitType {
+pub fn reconcileSystemMetrics(model: *ClientModel, metrics: SystemMetricsType) !?SystemMetricsCommitType {
     if (metrics.runtime_revision == 0) {
         return error.InvalidMetricsRevision;
     }
@@ -848,7 +848,7 @@ pub fn reconcileSystemMetrics(model: *Model, metrics: SystemMetricsType) !?Syste
 /// ```zig
 /// const publication = model.publishNotification(now_ns, input);
 /// ```
-pub fn publishNotification(model: *Model, now_ns: u64, input: model_data.NotificationInput) model_data.NotificationPublication {
+pub fn publishNotification(model: *ClientModel, now_ns: u64, input: model_data.NotificationInput) model_data.NotificationPublication {
     const id = model.notification_center.push(now_ns, input);
     model.notifications_revision +%= 1;
 
@@ -863,7 +863,7 @@ pub fn publishNotification(model: *Model, now_ns: u64, input: model_data.Notific
 /// ```zig
 /// const change = model.advanceNotifications(now_ns) orelse return;
 /// ```
-pub fn advanceNotifications(model: *Model, now_ns: u64) ?model_data.NotificationChange {
+pub fn advanceNotifications(model: *ClientModel, now_ns: u64) ?model_data.NotificationChange {
     if (!model.notification_center.advance(now_ns)) {
         return null;
     }
@@ -878,7 +878,7 @@ pub fn advanceNotifications(model: *Model, now_ns: u64) ?model_data.Notification
 /// ```zig
 /// const activation = model.activateNotification(id, now_ns) orelse return;
 /// ```
-pub fn activateNotification(model: *Model, id: model_data.NotificationId, now_ns: u64) ?model_data.NotificationActivation {
+pub fn activateNotification(model: *ClientModel, id: model_data.NotificationId, now_ns: u64) ?model_data.NotificationActivation {
     const target = model.notification_center.activate(id, now_ns) orelse return null;
     model.notifications_revision +%= 1;
 
@@ -893,7 +893,7 @@ pub fn activateNotification(model: *Model, id: model_data.NotificationId, now_ns
 /// ```zig
 /// const change = model.dismissNotification(id, now_ns) orelse return;
 /// ```
-pub fn dismissNotification(model: *Model, id: model_data.NotificationId, now_ns: u64) ?model_data.NotificationChange {
+pub fn dismissNotification(model: *ClientModel, id: model_data.NotificationId, now_ns: u64) ?model_data.NotificationChange {
     if (!model.notification_center.dismiss(id, now_ns)) {
         return null;
     }
@@ -908,7 +908,7 @@ pub fn dismissNotification(model: *Model, id: model_data.NotificationId, now_ns:
 /// ```zig
 /// const commit = try model.reconcileAgentSnapshot(input) orelse return;
 /// ```
-pub fn reconcileAgentSnapshot(model: *Model, input: AgentsSnapshotInput) !?model_data.AgentSnapshotCommit {
+pub fn reconcileAgentSnapshot(model: *ClientModel, input: AgentsSnapshotInput) !?model_data.AgentSnapshotCommit {
     if (input.revision <= model.agent_snapshot.revision) {
         return null;
     }
@@ -952,7 +952,7 @@ pub fn reconcileAgentSnapshot(model: *Model, input: AgentsSnapshotInput) !?model
 /// ```zig
 /// const title = model.focusedPaneTitle();
 /// ```
-pub fn focusedPaneTitle(model: *const Model) []const u8 {
+pub fn focusedPaneTitle(model: *const ClientModel) []const u8 {
     const slot = model.tabs.activeSlot() orelse return "";
     const pane = tab_layout.focusedPaneConst(model, slot) orelse return "";
     return pane.titleSlice();
@@ -965,7 +965,7 @@ pub fn focusedPaneTitle(model: *const Model) []const u8 {
 ///     routeToEditor();
 /// }
 /// ```
-pub fn focusedPaneForeground(model: *const Model) []const u8 {
+pub fn focusedPaneForeground(model: *const ClientModel) []const u8 {
     const slot = model.tabs.activeSlot() orelse return "";
     const pane = tab_layout.focusedPaneConst(model, slot) orelse return "";
     return pane.foregroundName();
@@ -978,7 +978,7 @@ pub fn focusedPaneForeground(model: *const Model) []const u8 {
 /// ```zig
 /// const key = model.takeAgentAcknowledgement() orelse return;
 /// ```
-pub fn takeAgentAcknowledgement(model: *Model) ?model_data.AgentKey {
+pub fn takeAgentAcknowledgement(model: *ClientModel) ?model_data.AgentKey {
     const slot = model.tabs.activeSlot() orelse return null;
     const pane_id = model.tabs.layout[slot].focused() orelse return null;
     const key = model.agent_snapshot.keyForPane(model.tabs.location[slot], pane_id) orelse return null;
@@ -1006,7 +1006,7 @@ pub fn takeAgentAcknowledgement(model: *Model) ?model_data.AgentKey {
 /// ```zig
 /// if (model.sidebarAnimationActive()) scheduleTick();
 /// ```
-pub fn sidebarAnimationActive(model: *const Model) bool {
+pub fn sidebarAnimationActive(model: *const ClientModel) bool {
     if (model.agent_snapshot.hasWorkingAgent()) {
         return true;
     }
@@ -1027,7 +1027,7 @@ pub fn sidebarAnimationActive(model: *const Model) bool {
 /// ```zig
 /// const change = model.advanceSidebarAnimation() orelse return;
 /// ```
-pub fn advanceSidebarAnimation(model: *Model) ?model_data.SidebarAnimationChange {
+pub fn advanceSidebarAnimation(model: *ClientModel) ?model_data.SidebarAnimationChange {
     if (!model.sidebarAnimationActive()) {
         return null;
     }
@@ -1047,7 +1047,7 @@ pub fn advanceSidebarAnimation(model: *Model) ?model_data.SidebarAnimationChange
 /// ```zig
 /// const plan = model.planAgentNavigation(key) orelse return;
 /// ```
-pub fn planAgentNavigation(model: *const Model, key: model_data.AgentKey) ?model_data.AgentNavigationPlan {
+pub fn planAgentNavigation(model: *const ClientModel, key: model_data.AgentKey) ?model_data.AgentNavigationPlan {
     const agent = model.agent_snapshot.find(key) orelse return null;
     if (model.panes.findConst(key.pane_id)) |pane| {
         const active = model.tabs.activeSlot() orelse return null;
@@ -1074,7 +1074,7 @@ pub fn planAgentNavigation(model: *const Model, key: model_data.AgentKey) ?model
 /// ```zig
 /// const key = model.focusedAttachmentAgent() orelse return;
 /// ```
-pub fn focusedAttachmentAgent(model: *const Model) ?model_data.AgentKey {
+pub fn focusedAttachmentAgent(model: *const ClientModel) ?model_data.AgentKey {
     const slot = model.tabs.activeSlot() orelse return null;
     const pane_id = model.tabs.layout[slot].focused() orelse return null;
     const key = model.agent_snapshot.keyForPane(model.tabs.location[slot], pane_id) orelse return null;
@@ -1091,7 +1091,7 @@ pub fn focusedAttachmentAgent(model: *const Model) ?model_data.AgentKey {
 /// ```zig
 /// const target = model.focusedAttachmentTarget() orelse return;
 /// ```
-pub fn focusedAttachmentTarget(model: *const Model) ?model_data.AttachmentTarget {
+pub fn focusedAttachmentTarget(model: *const ClientModel) ?model_data.AttachmentTarget {
     const key = model.focusedAttachmentAgent() orelse return null;
 
     return .{
@@ -1106,7 +1106,7 @@ pub fn focusedAttachmentTarget(model: *const Model) ?model_data.AttachmentTarget
 /// ```zig
 /// const markers = model.attachmentMarkers(target) orelse return;
 /// ```
-pub fn attachmentMarkers(model: *const Model, target: model_data.AttachmentTarget) ?core.AgentAttachmentMarkers {
+pub fn attachmentMarkers(model: *const ClientModel, target: model_data.AttachmentTarget) ?core.AgentAttachmentMarkers {
     const agent = model.agent_snapshot.find(.{
         .pane_id = target.pane_id,
         .pane_generation = target.pane_generation,
@@ -1121,7 +1121,7 @@ pub fn attachmentMarkers(model: *const Model, target: model_data.AttachmentTarge
 /// ```zig
 /// const transition = model.syncReportedPaneFocus() orelse return;
 /// ```
-pub fn syncReportedPaneFocus(model: *Model) ?PaneFocusReportTransitionType {
+pub fn syncReportedPaneFocus(model: *ClientModel) ?PaneFocusReportTransitionType {
     const current: ?ReportedPaneFocusType = current: {
         const slot = model.tabs.activeSlot() orelse break :current null;
         const pane = tab_layout.focusedPane(model, slot) orelse break :current null;
@@ -1141,7 +1141,7 @@ pub fn syncReportedPaneFocus(model: *Model) ?PaneFocusReportTransitionType {
 /// ```zig
 /// const transition = model.clearReportedPaneFocus() orelse return;
 /// ```
-pub fn clearReportedPaneFocus(model: *Model) ?PaneFocusReportTransitionType {
+pub fn clearReportedPaneFocus(model: *ClientModel) ?PaneFocusReportTransitionType {
     return model.commitReportedPaneFocus(null);
 }
 
@@ -1150,7 +1150,7 @@ pub fn clearReportedPaneFocus(model: *Model) ?PaneFocusReportTransitionType {
 /// ```zig
 /// _ = model.forgetReportedPaneFocus();
 /// ```
-pub fn forgetReportedPaneFocus(model: *Model) bool {
+pub fn forgetReportedPaneFocus(model: *ClientModel) bool {
     if (model.reported_pane_focus == null) {
         return false;
     }
@@ -1164,7 +1164,7 @@ pub fn forgetReportedPaneFocus(model: *Model) bool {
 /// ```zig
 /// _ = model.releaseReportedPaneFocus(pane_id);
 /// ```
-pub fn releaseReportedPaneFocus(model: *Model, pane_id: core.PaneId) bool {
+pub fn releaseReportedPaneFocus(model: *ClientModel, pane_id: core.PaneId) bool {
     const reported = model.reported_pane_focus orelse return false;
     if (reported.pane_id != pane_id) {
         return false;
@@ -1174,7 +1174,7 @@ pub fn releaseReportedPaneFocus(model: *Model, pane_id: core.PaneId) bool {
     return true;
 }
 
-fn commitReportedPaneFocus(model: *Model, current: ?ReportedPaneFocusType) ?PaneFocusReportTransitionType {
+fn commitReportedPaneFocus(model: *ClientModel, current: ?ReportedPaneFocusType) ?PaneFocusReportTransitionType {
     const previous = model.reported_pane_focus;
     if (std.meta.eql(previous, current)) {
         return null;
@@ -1217,7 +1217,7 @@ fn commitReportedPaneFocus(model: *Model, current: ?ReportedPaneFocusType) ?Pane
 /// ```zig
 /// if (model.panePasteActive()) return;
 /// ```
-pub fn panePasteActive(model: *const Model) bool {
+pub fn panePasteActive(model: *const ClientModel) bool {
     return model.pane_paste != null;
 }
 
@@ -1226,7 +1226,7 @@ pub fn panePasteActive(model: *const Model) bool {
 /// ```zig
 /// const session = model.beginPanePaste() orelse return;
 /// ```
-pub fn beginPanePaste(model: *Model) ?model_data.PanePasteSession {
+pub fn beginPanePaste(model: *ClientModel) ?model_data.PanePasteSession {
     if (model.pane_paste != null) {
         return null;
     }
@@ -1246,7 +1246,7 @@ pub fn beginPanePaste(model: *Model) ?model_data.PanePasteSession {
 /// ```zig
 /// std.debug.assert(model.finishPanePaste(session));
 /// ```
-pub fn finishPanePaste(model: *Model, session: model_data.PanePasteSession) bool {
+pub fn finishPanePaste(model: *ClientModel, session: model_data.PanePasteSession) bool {
     const active = model.pane_paste orelse return false;
     if (!std.meta.eql(active, session)) {
         return false;
@@ -1261,7 +1261,7 @@ pub fn finishPanePaste(model: *Model, session: model_data.PanePasteSession) bool
 /// ```zig
 /// _ = model.releasePanePaste(pane_id);
 /// ```
-pub fn releasePanePaste(model: *Model, pane_id: core.PaneId) bool {
+pub fn releasePanePaste(model: *ClientModel, pane_id: core.PaneId) bool {
     const session = model.pane_paste orelse return false;
     if (session.pane_id != pane_id) {
         return false;
@@ -1278,7 +1278,7 @@ pub fn releasePanePaste(model: *Model, pane_id: core.PaneId) bool {
 /// ```zig
 /// const plan = model.planPaneInput(.focused) orelse return;
 /// ```
-pub fn planPaneInput(model: *const Model, target: model_data.PaneInputTarget) ?model_data.PaneInputPlan {
+pub fn planPaneInput(model: *const ClientModel, target: model_data.PaneInputTarget) ?model_data.PaneInputPlan {
     switch (target) {
         .focused, .pane => {
             if (model.name_prompt.active() or model.copyModeActive()) {
@@ -1324,7 +1324,7 @@ pub fn planPaneInput(model: *const Model, target: model_data.PaneInputTarget) ?m
 /// ```zig
 /// const outcome = try model.applyPaneFrame(frame);
 /// ```
-pub fn applyPaneFrame(model: *Model, frame: core.FrameView) !model_data.PaneFrameOutcome {
+pub fn applyPaneFrame(model: *ClientModel, frame: core.FrameView) !model_data.PaneFrameOutcome {
     const pane = model.panes.find(frame.pane_id) orelse return .detached;
     if (!pane.attached) {
         return .detached;
@@ -1371,7 +1371,7 @@ pub fn applyPaneFrame(model: *Model, frame: core.FrameView) !model_data.PaneFram
 /// ```zig
 /// const commit = model.setPaneGraphicsFallback(pane_id, true) orelse return;
 /// ```
-pub fn setPaneGraphicsFallback(model: *Model, pane_id: core.PaneId, visible: bool) ?model_data.PaneGraphicsFallbackCommit {
+pub fn setPaneGraphicsFallback(model: *ClientModel, pane_id: core.PaneId, visible: bool) ?model_data.PaneGraphicsFallbackCommit {
     const pane = model.panes.find(pane_id) orelse return null;
     if (pane.graphics_placeholder == visible) {
         return null;
@@ -1395,7 +1395,7 @@ pub fn setPaneGraphicsFallback(model: *Model, pane_id: core.PaneId, visible: boo
 /// ```zig
 /// const commit = try model.updatePaneMetadata(command);
 /// ```
-pub fn updatePaneMetadata(model: *Model, command: model_data.PaneMetadataCommand) !?PaneMetadataCommitType {
+pub fn updatePaneMetadata(model: *ClientModel, command: model_data.PaneMetadataCommand) !?PaneMetadataCommitType {
     const pane_id = switch (command) {
         .cwd => |cwd| cwd.pane_id,
         .foreground => |foreground| foreground.pane_id,
@@ -1449,7 +1449,7 @@ pub fn updatePaneMetadata(model: *Model, command: model_data.PaneMetadataCommand
 /// ```zig
 /// const commit = model.updatePaneProgress(progress) orelse return;
 /// ```
-pub fn updatePaneProgress(model: *Model, progress: core.PaneProgress) ?model_data.PaneProgressCommit {
+pub fn updatePaneProgress(model: *ClientModel, progress: core.PaneProgress) ?model_data.PaneProgressCommit {
     const pane = model.panes.find(progress.pane_id) orelse return null;
     if (!pane.setProgress(progress)) {
         return null;
@@ -1469,7 +1469,7 @@ pub fn updatePaneProgress(model: *Model, progress: core.PaneProgress) ?model_dat
 /// ```zig
 /// const change = model.setPaneViewport(command) orelse return;
 /// ```
-pub fn setPaneViewport(model: *Model, command: model_data.PaneViewportCommand) ?model_data.PaneViewportChange {
+pub fn setPaneViewport(model: *ClientModel, command: model_data.PaneViewportCommand) ?model_data.PaneViewportChange {
     if (model.copyModeActive()) {
         return null;
     }
@@ -1488,7 +1488,7 @@ pub fn setPaneViewport(model: *Model, command: model_data.PaneViewportCommand) ?
 /// ```zig
 /// if (model.copyModeActive()) return;
 /// ```
-pub fn copyModeActive(model: *const Model) bool {
+pub fn copyModeActive(model: *const ClientModel) bool {
     const state = model.copy_state orelse return false;
 
     return state.pointer == null;
@@ -1496,7 +1496,7 @@ pub fn copyModeActive(model: *const Model) bool {
 
 /// Returns the pointer gesture's stable owner without lending its state.
 /// Example: `const target = model.pointerSelection() orelse return;`.
-pub fn pointerSelection(model: *const Model) ?struct { pane_id: core.PaneId, dragging: bool } {
+pub fn pointerSelection(model: *const ClientModel) ?struct { pane_id: core.PaneId, dragging: bool } {
     if (model.selection_gesture) |pane_id| {
         return .{ .pane_id = pane_id, .dragging = true };
     }
@@ -1511,13 +1511,13 @@ pub fn pointerSelection(model: *const Model) ?struct { pane_id: core.PaneId, dra
 
 /// Releases physical capture even when copying fails or the pane retired.
 /// Example: `model.finishPointerGesture();`.
-pub fn finishPointerGesture(model: *Model) void {
+pub fn finishPointerGesture(model: *ClientModel) void {
     model.selection_gesture = null;
 }
 
 /// Clears disposable mouse highlighting before typing or pasting.
 /// Example: `_ = model.clearPointerSelection();`.
-pub fn clearPointerSelection(model: *Model) bool {
+pub fn clearPointerSelection(model: *ClientModel) bool {
     const state = model.copy_state orelse return false;
     if (state.pointer == null) {
         return false;
@@ -1528,7 +1528,7 @@ pub fn clearPointerSelection(model: *Model) bool {
 
 /// Starts selection only after routing has focused an attached pane.
 /// Example: `_ = model.beginPointerSelection(press);`.
-pub fn beginPointerSelection(model: *Model, press: PointerPressType) bool {
+pub fn beginPointerSelection(model: *ClientModel, press: PointerPressType) bool {
     if (model.copyModeActive() or model.name_prompt.active() or model.pane_paste != null) {
         return false;
     }
@@ -1563,7 +1563,7 @@ pub fn beginPointerSelection(model: *Model, press: PointerPressType) bool {
 /// ```zig
 /// const pane_id = model.copyModeTarget() orelse return;
 /// ```
-pub fn copyModeTarget(model: *const Model) ?core.PaneId {
+pub fn copyModeTarget(model: *const ClientModel) ?core.PaneId {
     const state = model.copy_state orelse return null;
 
     return state.pane_id;
@@ -1574,7 +1574,7 @@ pub fn copyModeTarget(model: *const Model) ?core.PaneId {
 /// ```zig
 /// const projection = model.copyModeProjection() orelse return;
 /// ```
-pub fn copyModeProjection(model: *const Model) ?CopyModeProjectionType {
+pub fn copyModeProjection(model: *const ClientModel) ?CopyModeProjectionType {
     const state = model.copy_state orelse return null;
 
     return .{ .pane_id = state.pane_id, .view = state.view() };
@@ -1586,7 +1586,7 @@ pub fn copyModeProjection(model: *const Model) ?CopyModeProjectionType {
 /// ```zig
 /// if (model.enterCopyMode()) observe(model.version());
 /// ```
-pub fn enterCopyMode(model: *Model) bool {
+pub fn enterCopyMode(model: *ClientModel) bool {
     if (model.copyModeActive() or model.name_prompt.active() or model.pane_paste != null) {
         return false;
     }
@@ -1612,7 +1612,7 @@ pub fn enterCopyMode(model: *Model) bool {
 /// ```zig
 /// const plan = model.planCopyMode(.{ .key = key }) orelse return;
 /// ```
-pub fn planCopyMode(model: *const Model, command: model_data.CopyModeCommand) ?CopyModePlanType {
+pub fn planCopyMode(model: *const ClientModel, command: model_data.CopyModeCommand) ?CopyModePlanType {
     const previous = model.copy_state orelse return null;
     const pane = model.activePaneConst(previous.pane_id) orelse
         return model.planCopyModeExit(previous, null);
@@ -1719,7 +1719,7 @@ pub fn planCopyMode(model: *const Model, command: model_data.CopyModeCommand) ?C
 /// ```zig
 /// const commit = model.commitCopyMode(plan) orelse return;
 /// ```
-pub fn commitCopyMode(model: *Model, plan: CopyModePlanType) ?CopyModeCommitType {
+pub fn commitCopyMode(model: *ClientModel, plan: CopyModePlanType) ?CopyModeCommitType {
     if (model.copy_revision != plan.expected_revision) {
         return null;
     }
@@ -1761,7 +1761,7 @@ pub fn commitCopyMode(model: *Model, plan: CopyModePlanType) ?CopyModeCommitType
 /// ```zig
 /// _ = model.releaseCopyMode(pane_id);
 /// ```
-pub fn releaseCopyMode(model: *Model, pane_id: core.PaneId) bool {
+pub fn releaseCopyMode(model: *ClientModel, pane_id: core.PaneId) bool {
     const state = model.copy_state orelse return false;
     if (state.pane_id != pane_id) {
         return false;
@@ -1774,7 +1774,7 @@ pub fn releaseCopyMode(model: *Model, pane_id: core.PaneId) bool {
 
 // Reconcile copy state inside the frame transaction so callers cannot
 // publish screen state without the matching retained-history projection.
-pub fn reconcileCopyModeFrame(model: *Model, command: CopyModeFrameType) bool {
+pub fn reconcileCopyModeFrame(model: *ClientModel, command: CopyModeFrameType) bool {
     const state = model.copy_state orelse return false;
     if (state.pane_id != command.pane_id) {
         return false;
@@ -1798,7 +1798,7 @@ pub fn reconcileCopyModeFrame(model: *Model, command: CopyModeFrameType) bool {
     return true;
 }
 
-fn planCopyModeExit(model: *const Model, previous: model_data.State, selection: ?core.CopySelection) CopyModePlanType {
+fn planCopyModeExit(model: *const ClientModel, previous: model_data.State, selection: ?core.CopySelection) CopyModePlanType {
     const pane = model.activePaneConst(previous.pane_id);
     const viewport = if (pane != null and previous.pointer == null)
         model_namespace.copyModeViewport(pane.?, previous.entry_offset)
@@ -1819,7 +1819,7 @@ fn planCopyModeExit(model: *const Model, previous: model_data.State, selection: 
 /// ```zig
 /// const location = model.activeTabLocation() orelse return;
 /// ```
-pub fn activeTabLocation(model: *const Model) ?core.TabLocation {
+pub fn activeTabLocation(model: *const ClientModel) ?core.TabLocation {
     const slot = model.tabs.activeSlot() orelse return null;
     return model.tabs.location[slot];
 }
@@ -1829,7 +1829,7 @@ pub fn activeTabLocation(model: *const Model) ?core.TabLocation {
 /// ```zig
 /// const pane = model.activePaneConst(pane_id) orelse return;
 /// ```
-pub fn activePaneConst(model: *const Model, pane_id: core.PaneId) ?*const AgentPane {
+pub fn activePaneConst(model: *const ClientModel, pane_id: core.PaneId) ?*const AgentPane {
     const slot = model.tabs.activeSlot() orelse return null;
     return model.panes.findInConst(model.tabs.location[slot].tab_id, pane_id);
 }
@@ -1839,7 +1839,7 @@ pub fn activePaneConst(model: *const Model, pane_id: core.PaneId) ?*const AgentP
 /// ```zig
 /// const name = model.workspaceName();
 /// ```
-pub fn workspaceName(model: *const Model) []const u8 {
+pub fn workspaceName(model: *const ClientModel) []const u8 {
     return model.workspace_name[0..model.workspace_name_len];
 }
 
@@ -1848,7 +1848,7 @@ pub fn workspaceName(model: *const Model) []const u8 {
 /// ```zig
 /// const location = model.tabLocation(tab_id) orelse return;
 /// ```
-pub fn tabLocation(model: *const Model, tab_id: core.TabId) ?core.TabLocation {
+pub fn tabLocation(model: *const ClientModel, tab_id: core.TabId) ?core.TabLocation {
     const slot = model.tabs.find(tab_id) orelse return null;
     return model.tabs.location[slot];
 }
@@ -1859,7 +1859,7 @@ pub fn tabLocation(model: *const Model, tab_id: core.TabId) ?core.TabLocation {
 /// ```zig
 /// const pane_id = model.planWorkspaceCreation() orelse return;
 /// ```
-pub fn planWorkspaceCreation(model: *const Model) ?core.PaneId {
+pub fn planWorkspaceCreation(model: *const ClientModel) ?core.PaneId {
     return (model_namespace.focusedLaunchSource(model) orelse return null).pane_id;
 }
 
@@ -1869,7 +1869,7 @@ pub fn planWorkspaceCreation(model: *const Model) ?core.PaneId {
 /// ```zig
 /// const plan = model.planTabCreation() orelse return;
 /// ```
-pub fn planTabCreation(model: *const Model) ?TabCreationPlanType {
+pub fn planTabCreation(model: *const ClientModel) ?TabCreationPlanType {
     const source = model_namespace.focusedLaunchSource(model) orelse return null;
 
     return .{
@@ -1885,7 +1885,7 @@ pub fn planTabCreation(model: *const Model) ?TabCreationPlanType {
 /// ```zig
 /// const departure = model.departWorkspace();
 /// ```
-pub fn departWorkspace(model: *Model) model_data.WorkspaceDeparture {
+pub fn departWorkspace(model: *ClientModel) model_data.WorkspaceDeparture {
     const departure = model_namespace.captureWorkspace(model);
     if (departure.source == null) {
         model_namespace.releaseInvalidCopyMode(model);
@@ -1920,7 +1920,7 @@ pub fn departWorkspace(model: *Model) model_data.WorkspaceDeparture {
 /// ```zig
 /// const activation = try model.arriveWorkspace(arrival);
 /// ```
-pub fn arriveWorkspace(model: *Model, arrival: model_data.WorkspaceArrival) !model_data.WorkspaceActivation {
+pub fn arriveWorkspace(model: *ClientModel, arrival: model_data.WorkspaceArrival) !model_data.WorkspaceActivation {
     if (model.tabs.count != 0 or model.workspace != null) {
         return error.ModelNotEmpty;
     }
@@ -1956,7 +1956,7 @@ pub fn arriveWorkspace(model: *Model, arrival: model_data.WorkspaceArrival) !mod
 /// ```zig
 /// const replacement = try model.replaceWorkspace(arrival);
 /// ```
-pub fn replaceWorkspace(model: *Model, arrival: model_data.WorkspaceArrival) !WorkspaceReplacementType {
+pub fn replaceWorkspace(model: *ClientModel, arrival: model_data.WorkspaceArrival) !WorkspaceReplacementType {
     const departure = model_namespace.captureWorkspace(model);
     const version_before = model.version();
     if (departure.source) |source| {
@@ -1991,7 +1991,7 @@ pub fn replaceWorkspace(model: *Model, arrival: model_data.WorkspaceArrival) !Wo
     };
 }
 
-fn retainWorkspaceLayouts(model: *Model) void {
+fn retainWorkspaceLayouts(model: *ClientModel) void {
     const active = model.activeTabLocation() orelse return;
     for (0..model.tabs.count) |slot| {
         // A provisional root must not replace the complete retained tree
@@ -2011,7 +2011,7 @@ fn retainWorkspaceLayouts(model: *Model) void {
     }
 }
 
-fn stageArrivalLayout(model: *Model, arrival: model_data.WorkspaceArrival) void {
+fn stageArrivalLayout(model: *ClientModel, arrival: model_data.WorkspaceArrival) void {
     const saved_layout = if (model.saved_layouts.find(arrival.location)) |saved| saved.layout else arrival.saved_layout;
     if (saved_layout) |saved| {
         std.debug.assert(model.tabs.find(arrival.location.tab_id) != null);
@@ -2022,7 +2022,7 @@ fn stageArrivalLayout(model: *Model, arrival: model_data.WorkspaceArrival) void 
     }
 }
 
-fn workspaceActivation(model: *const Model, seed: WorkspaceActivationSeedType) model_data.WorkspaceActivation {
+fn workspaceActivation(model: *const ClientModel, seed: WorkspaceActivationSeedType) model_data.WorkspaceActivation {
     return .{
         .pane_id = seed.pane_id,
         .location = seed.location,
@@ -2047,7 +2047,7 @@ fn workspaceActivation(model: *const Model, seed: WorkspaceActivationSeedType) m
 /// ```zig
 /// const reconciliation = try model.reconcileWorkspace(snapshot);
 /// ```
-pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !WorkspaceReconciliationType {
+pub fn reconcileWorkspace(model: *ClientModel, snapshot: WorkspaceSnapshotInput) !WorkspaceReconciliationType {
     const current_workspace = model.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(current_workspace, snapshot.workspace)) {
         return error.UnexpectedWorkspace;
@@ -2146,7 +2146,7 @@ pub fn reconcileWorkspace(model: *Model, snapshot: WorkspaceSnapshotInput) !Work
 /// ```zig
 /// const reconciliation = try model.reconcileTab(snapshot, workbench);
 /// ```
-pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !TabReconciliationType {
+pub fn reconcileTab(model: *ClientModel, snapshot: PaneSnapshot, area: core.Rect) !TabReconciliationType {
     const tab = model.tabs.find(snapshot.location.tab_id) orelse return error.UnexpectedTab;
     if (!std.meta.eql(model.tabs.location[tab], snapshot.location)) {
         return error.UnexpectedTab;
@@ -2218,7 +2218,7 @@ pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !Tab
 /// ```zig
 /// const result = model.confirmPaneAttachment(attachment);
 /// ```
-pub fn confirmPaneAttachment(model: *Model, attachment: model_data.PaneAttachment) !model_data.AttachmentConfirmation {
+pub fn confirmPaneAttachment(model: *ClientModel, attachment: model_data.PaneAttachment) !model_data.AttachmentConfirmation {
     const active = model.activeTabLocation() orelse return .stale;
     if (!std.meta.eql(active, attachment.location)) {
         return .stale;
@@ -2233,7 +2233,7 @@ pub fn confirmPaneAttachment(model: *Model, attachment: model_data.PaneAttachmen
     return .confirmed;
 }
 
-fn allocateAttachmentGeneration(model: *Model) !u64 {
+fn allocateAttachmentGeneration(model: *ClientModel) !u64 {
     if (model.next_attachment_generation == std.math.maxInt(u64)) {
         return error.AttachmentGenerationExhausted;
     }
@@ -2249,7 +2249,7 @@ fn allocateAttachmentGeneration(model: *Model) !u64 {
 /// ```zig
 /// if (model.needsPaneAttachment(attachment)) requestSnapshot();
 /// ```
-pub fn needsPaneAttachment(model: *const Model, attachment: model_data.PaneAttachment) bool {
+pub fn needsPaneAttachment(model: *const ClientModel, attachment: model_data.PaneAttachment) bool {
     const active = model.activeTabLocation() orelse return false;
     if (!std.meta.eql(active, attachment.location)) {
         return false;
@@ -2265,7 +2265,7 @@ pub fn needsPaneAttachment(model: *const Model, attachment: model_data.PaneAttac
 /// ```zig
 /// const plan = try model.planTabDetachment(location);
 /// ```
-pub fn planTabDetachment(model: *const Model, location: core.TabLocation) !TabDetachmentPlanType {
+pub fn planTabDetachment(model: *const ClientModel, location: core.TabLocation) !TabDetachmentPlanType {
     _ = model_namespace.findTab(model, location) orelse return error.UnexpectedTab;
     var plan: TabDetachmentPlanType = .{ .location = location };
 
@@ -2301,7 +2301,7 @@ pub fn planTabDetachment(model: *const Model, location: core.TabLocation) !TabDe
 /// ```zig
 /// try model.commitTabDetachment(plan);
 /// ```
-pub fn commitTabDetachment(model: *Model, plan: TabDetachmentPlanType) !void {
+pub fn commitTabDetachment(model: *ClientModel, plan: TabDetachmentPlanType) !void {
     if (plan.len > core.max_panes_per_tab) {
         return error.InvalidTabDetachment;
     }
@@ -2337,7 +2337,7 @@ pub fn commitTabDetachment(model: *Model, plan: TabDetachmentPlanType) !void {
 /// ```zig
 /// const focus = model.focusPane(.{ .target = .{ .direction = .left }, .area = area }) orelse return;
 /// ```
-pub fn focusPane(model: *Model, request: model_data.PaneFocusRequest) ?model_data.PaneFocus {
+pub fn focusPane(model: *ClientModel, request: model_data.PaneFocusRequest) ?model_data.PaneFocus {
     const slot = model.tabs.activeSlot() orelse return null;
     const layout = &model.tabs.layout[slot];
     const previous = layout.focused() orelse return null;
@@ -2370,7 +2370,7 @@ pub fn focusPane(model: *Model, request: model_data.PaneFocusRequest) ?model_dat
 /// ```zig
 /// const resize = model.resizePane(.{ .direction = .right, .area = area }) orelse return;
 /// ```
-pub fn resizePane(model: *Model, request: model_data.ResizePaneRequest) ?model_data.PaneGeometryChange {
+pub fn resizePane(model: *ClientModel, request: model_data.ResizePaneRequest) ?model_data.PaneGeometryChange {
     const slot = model.tabs.activeSlot() orelse return null;
     const layout = &model.tabs.layout[slot];
     const focused = layout.focused() orelse return null;
@@ -2395,7 +2395,7 @@ pub fn resizePane(model: *Model, request: model_data.ResizePaneRequest) ?model_d
 /// ```zig
 /// const change = model.togglePaneFullscreen(.{ .area = area }) orelse return;
 /// ```
-pub fn togglePaneFullscreen(model: *Model, request: model_data.TogglePaneFullscreenRequest) ?model_data.PaneGeometryChange {
+pub fn togglePaneFullscreen(model: *ClientModel, request: model_data.TogglePaneFullscreenRequest) ?model_data.PaneGeometryChange {
     const slot = model.tabs.activeSlot() orelse return null;
     const layout = &model.tabs.layout[slot];
     const focused = layout.focused() orelse return null;
@@ -2420,7 +2420,7 @@ pub fn togglePaneFullscreen(model: *Model, request: model_data.TogglePaneFullscr
 /// ```zig
 /// const plan = model.planPaneSplit(.{ .axis = .horizontal, .area = area }) orelse return;
 /// ```
-pub fn planPaneSplit(model: *Model, request: model_data.RequestPaneSplit) ?model_data.PaneSplitPlan {
+pub fn planPaneSplit(model: *ClientModel, request: model_data.RequestPaneSplit) ?model_data.PaneSplitPlan {
     const slot = model.tabs.activeSlot() orelse return null;
     const location = model.tabs.location[slot];
     const target: *const AgentPane = (if (request.target_pane) |id| model.panes.findInConst(location.tab_id, id) else tab_layout.focusedPaneConst(model, slot)) orelse return null;
@@ -2457,7 +2457,7 @@ pub fn planPaneSplit(model: *Model, request: model_data.RequestPaneSplit) ?model
 /// ```zig
 /// const commit = try model.commitPaneSplit(command);
 /// ```
-pub fn commitPaneSplit(model: *Model, command: CommitPaneSplitType) !model_data.PaneSplitCommit {
+pub fn commitPaneSplit(model: *ClientModel, command: CommitPaneSplitType) !model_data.PaneSplitCommit {
     const stale = model.finishPaneSplit(command, .{
         .disposition = .stale,
         .change = .unchanged,
@@ -2514,7 +2514,7 @@ pub fn commitPaneSplit(model: *Model, command: CommitPaneSplitType) !model_data.
     });
 }
 
-fn finishPaneSplit(model: *const Model, command: CommitPaneSplitType, state: PaneSplitCommitStateType) model_data.PaneSplitCommit {
+fn finishPaneSplit(model: *const ClientModel, command: CommitPaneSplitType, state: PaneSplitCommitStateType) model_data.PaneSplitCommit {
     return .{
         .pane_id = command.new_pane,
         .location = command.split.location,
@@ -2535,7 +2535,7 @@ fn finishPaneSplit(model: *const Model, command: CommitPaneSplitType, state: Pan
 /// ```zig
 /// const recovery = model.recoverPaneSplit(.{ .split = split, .area = area });
 /// ```
-pub fn recoverPaneSplit(model: *Model, command: RecoverPaneSplitType) model_data.PaneSplitRecovery {
+pub fn recoverPaneSplit(model: *ClientModel, command: RecoverPaneSplitType) model_data.PaneSplitRecovery {
     const workspace = model.workspace orelse return .stale;
     if (!std.meta.eql(workspace, command.split.location.workspace)) {
         return .stale;
@@ -2563,7 +2563,7 @@ pub fn recoverPaneSplit(model: *Model, command: RecoverPaneSplitType) model_data
 /// ```zig
 /// const closure = model.planPaneClosure() orelse return;
 /// ```
-pub fn planPaneClosure(model: *const Model) ?model_data.PaneClosure {
+pub fn planPaneClosure(model: *const ClientModel) ?model_data.PaneClosure {
     const slot = model.tabs.activeSlot() orelse return null;
     const location = model.tabs.location[slot];
     const focused = tab_layout.focusedPaneConst(model, slot) orelse return null;
@@ -2580,7 +2580,7 @@ pub fn planPaneClosure(model: *const Model) ?model_data.PaneClosure {
 /// ```zig
 /// const transition = model.retirePane(pane_id);
 /// ```
-pub fn retirePane(model: *Model, pane_id: core.PaneId) model_data.PaneExit {
+pub fn retirePane(model: *ClientModel, pane_id: core.PaneId) model_data.PaneExit {
     const pane = model.panes.find(pane_id) orelse return model.stalePaneExit(pane_id);
     const tab = model.tabs.find(pane.location.tab_id) orelse return model.stalePaneExit(pane_id);
     const location = model.tabs.location[tab];
@@ -2610,7 +2610,7 @@ pub fn retirePane(model: *Model, pane_id: core.PaneId) model_data.PaneExit {
     } };
 }
 
-fn stalePaneExit(model: *const Model, pane_id: core.PaneId) model_data.PaneExit {
+fn stalePaneExit(model: *const ClientModel, pane_id: core.PaneId) model_data.PaneExit {
     return .{ .stale = .{
         .pane_id = pane_id,
         .workspace_revision = model.workspace_revision,
@@ -2625,7 +2625,7 @@ fn stalePaneExit(model: *const Model, pane_id: core.PaneId) model_data.PaneExit 
 /// ```zig
 /// const change = try model.applyTabPosition(location, position);
 /// ```
-pub fn applyTabPosition(model: *Model, location: core.TabLocation, position: u16) !model_data.Change {
+pub fn applyTabPosition(model: *ClientModel, location: core.TabLocation, position: u16) !model_data.Change {
     const current_workspace = model.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(current_workspace, location.workspace)) {
         return error.UnexpectedWorkspace;
@@ -2645,7 +2645,7 @@ pub fn applyTabPosition(model: *Model, location: core.TabLocation, position: u16
 /// ```zig
 /// const change = try model.renameTab(command);
 /// ```
-pub fn renameTab(model: *Model, command: RenameTabType) !model_data.Change {
+pub fn renameTab(model: *ClientModel, command: RenameTabType) !model_data.Change {
     const current_workspace = model.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(current_workspace, command.location.workspace)) {
         return error.UnexpectedWorkspace;
@@ -2665,7 +2665,7 @@ pub fn renameTab(model: *Model, command: RenameTabType) !model_data.Change {
 /// ```zig
 /// const creation = try model.createTab(command);
 /// ```
-pub fn createTab(model: *Model, command: NewTabType) !model_data.TabCreation {
+pub fn createTab(model: *ClientModel, command: NewTabType) !model_data.TabCreation {
     const previous = model.tabs.activeSlot() orelse return error.NoActiveTab;
     const previous_location = model.tabs.location[previous];
     const previous_layout_revision = model.tabs.layout[previous].currentRevision();
@@ -2703,7 +2703,7 @@ pub fn createTab(model: *Model, command: NewTabType) !model_data.TabCreation {
 /// ```zig
 /// const commit = try model.removeTab(command);
 /// ```
-pub fn removeTab(model: *Model, command: RemoveTabType) !model_data.TabRemovalCommit {
+pub fn removeTab(model: *ClientModel, command: RemoveTabType) !model_data.TabRemovalCommit {
     const workspace = model.workspace orelse
         return model.staleTabRemoval(command.location, .workspace);
     if (!std.meta.eql(workspace, command.location.workspace)) {
@@ -2756,7 +2756,7 @@ pub fn removeTab(model: *Model, command: RemoveTabType) !model_data.TabRemovalCo
     } };
 }
 
-fn staleTabRemoval(model: *const Model, location: core.TabLocation, absence: model_data.TabRemovalAbsence) model_data.TabRemovalCommit {
+fn staleTabRemoval(model: *const ClientModel, location: core.TabLocation, absence: model_data.TabRemovalAbsence) model_data.TabRemovalCommit {
     return .{ .stale = .{
         .location = location,
         .absence = absence,
@@ -2773,7 +2773,7 @@ fn staleTabRemoval(model: *const Model, location: core.TabLocation, absence: mod
 /// ```zig
 /// const selection = try model.selectTab(.{ .position = 1 }) orelse return;
 /// ```
-pub fn selectTab(model: *Model, target: model_data.TabSelectionTarget) !?model_data.TabSelection {
+pub fn selectTab(model: *ClientModel, target: model_data.TabSelectionTarget) !?model_data.TabSelection {
     const previous = model.tabs.activeSlot() orelse return error.NoActiveTab;
     const previous_location = model.tabs.location[previous];
     const previous_layout_revision = model.tabs.layout[previous].currentRevision();
@@ -2809,7 +2809,7 @@ pub fn selectTab(model: *Model, target: model_data.TabSelectionTarget) !?model_d
 }
 
 /// Replaces only a matching active tab layout after validating all members. Example: `const change = try model.applyPaneLayout(request);`
-pub fn applyPaneLayout(self: *Model, request: model_data.PaneLayoutRequest) !model_data.PaneFocus {
+pub fn applyPaneLayout(self: *ClientModel, request: model_data.PaneLayoutRequest) !model_data.PaneFocus {
     const slot = self.tabs.activeSlot() orelse return error.NoActiveTab;
     const location = self.tabs.location[slot];
     if (!std.meta.eql(location, request.location)) {
@@ -2833,7 +2833,7 @@ pub fn applyPaneLayout(self: *Model, request: model_data.PaneLayoutRequest) !mod
 }
 
 /// Example: `_ = model.planAgentPrompt(pane_id);`
-pub fn planAgentPrompt(self: *Model, pane_id: core.PaneId) ?AgentPromptIntent {
+pub fn planAgentPrompt(self: *ClientModel, pane_id: core.PaneId) ?AgentPromptIntent {
     const pane = self.agentPane(pane_id) orelse return null;
     const thread = pane.agent_thread orelse return null;
     if (thread.status != .ready or (std.mem.trim(u8, pane.composerSlice(), " \t\r\n").len == 0 and pane.composerImages().count == 0)) {
@@ -2857,7 +2857,7 @@ pub fn planAgentPrompt(self: *Model, pane_id: core.PaneId) ?AgentPromptIntent {
 }
 
 /// Example: `_ = model.completeAgentPrompt(operation);`
-pub fn completeAgentPrompt(self: *Model, operation: model_data.AgentOperation) bool {
+pub fn completeAgentPrompt(self: *ClientModel, operation: model_data.AgentOperation) bool {
     const pane = self.agentPane(operation.pane_id) orelse return false;
     if (pane.pane_generation != operation.pane_generation or pane.attachment_generation != operation.attachment_generation) {
         return false;

@@ -6,12 +6,12 @@ const std = @import("std");
 const main = @import("main.zig");
 const MultiplexerContext = @This();
 
-model: data.Model,
+model: data.ClientModel,
 screen: frontend.Screen,
 compositor: frontend.Compositor,
 
 pub fn init(gpa: std.mem.Allocator) !MultiplexerContext {
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     errdefer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },

@@ -1,12 +1,12 @@
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
-const ModelType = @import("../Model.zig");
+const ClientModel = @import("../ClientModel.zig");
 const std = @import("std");
 const VersionType = @import("../Version.zig");
 const EntryInputType = @import("../../workspace/EntryInput.zig");
 
 test "sidebar visibility advances only the chrome revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expect(model.sidebar_visible);
@@ -30,7 +30,7 @@ test "sidebar visibility advances only the chrome revision" {
 }
 
 test "configuration adoption commits generation sidebar and pane gaps once" {
-    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 1);
+    var model = ClientModel.initWithConfiguration(std.testing.allocator, true, 1);
     defer model.deinit();
 
     const changed = try model.applyConfiguration(.{
@@ -69,7 +69,7 @@ test "configuration adoption commits generation sidebar and pane gaps once" {
 }
 
 test "configuration adoption rejects an old generation without partial state" {
-    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 4);
+    var model = ClientModel.initWithConfiguration(std.testing.allocator, true, 4);
     defer model.deinit();
     const version = model.version();
 
@@ -86,7 +86,7 @@ test "configuration adoption rejects an old generation without partial state" {
 }
 
 test "client diagnostics publish only changed valid text" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expect(model.diagnostic() == null);
@@ -121,7 +121,7 @@ test "client diagnostics publish only changed valid text" {
 }
 
 test "callback context is a value projection of committed client state" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expectEqualDeep(model_data.CallbackContext{
@@ -150,7 +150,7 @@ test "callback context is a value projection of committed client state" {
 }
 
 test "plugin execution is single flight and completion matches its exact identity" {
-    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 7);
+    var model = ClientModel.initWithConfiguration(std.testing.allocator, true, 7);
     defer model.deinit();
 
     const first = (try model.beginPluginExecution()).?;
@@ -171,7 +171,7 @@ test "plugin execution is single flight and completion matches its exact identit
 }
 
 test "plugin execution retains its launch generation across configuration reload" {
-    var model = ModelType.initWithConfiguration(std.testing.allocator, true, 3);
+    var model = ClientModel.initWithConfiguration(std.testing.allocator, true, 3);
     defer model.deinit();
     const execution = (try model.beginPluginExecution()).?;
 
@@ -186,7 +186,7 @@ test "plugin execution retains its launch generation across configuration reload
 }
 
 test "plugin execution identity exhaustion cannot publish a partial reservation" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     model.plugins.next_plugin_execution_id = std.math.maxInt(u64);
 
@@ -199,7 +199,7 @@ test "plugin execution identity exhaustion cannot publish a partial reservation"
 }
 
 test "clipboard capture is single flight and completion matches its exact identity" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const target: model_data.AttachmentTarget = .{
         .pane_id = @enumFromInt(7),
@@ -230,7 +230,7 @@ test "clipboard capture is single flight and completion matches its exact identi
 }
 
 test "clipboard capture validation and identity exhaustion leave no reservation" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expectError(error.InvalidAttachmentTarget, model.clipboard.reserve(.{
@@ -261,7 +261,7 @@ test "host resize commits resolved geometry once" {
         .cell_width_px = 10,
         .cell_height_px = 20,
     };
-    var model = ModelType.initWithState(std.testing.allocator, .{
+    var model = ClientModel.initWithState(std.testing.allocator, .{
         .pane_gaps = true,
         .host_size = initial,
         .host_capabilities = .{
@@ -297,7 +297,7 @@ test "host resize commits resolved geometry once" {
 }
 
 test "host resize rejects invalid and oversized grids without partial state" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const size = model.host.host_size;
     const version = model.version();
@@ -319,7 +319,7 @@ test "host resize rejects invalid and oversized grids without partial state" {
 }
 
 test "presentation capabilities commit independently without probe policy" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const graphics_commit = (try model.observeHostCapability(.{ .images = .supported })).?;
@@ -334,7 +334,7 @@ test "presentation capabilities commit independently without probe policy" {
 }
 
 test "host pixel observations commit raw measurements and resolved geometry atomically" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const window = (try model.observeHostCapability(.{ .window_pixels = .{
@@ -377,7 +377,7 @@ test "host pixel observations commit raw measurements and resolved geometry atom
 }
 
 test "host reconciliation validates geometry before publishing capabilities" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     var capabilities = model.host.host_capabilities;
     capabilities.window_width_px = 1200;
@@ -402,7 +402,7 @@ test "host reconciliation validates geometry before publishing capabilities" {
 }
 
 test "workspace list collapse advances only the chrome revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expect(!model.workspace_list_collapsed);
@@ -426,7 +426,7 @@ test "workspace list collapse advances only the chrome revision" {
 }
 
 test "workspace list reconciliation owns navigation state and one isolated revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     var first_name = [_]u8{ 't', 'e', 'l', 'a', 'r' };
     var first_path = [_]u8{ '/', 'w', '/', 't', 'e', 'l', 'a', 'r' };

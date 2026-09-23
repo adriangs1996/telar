@@ -4,7 +4,7 @@ const core = @import("telar-core");
 
 /// Input records only bounded intent; preparation and allocation occur later.
 /// Example: `_ = navigate(model, id, .older);`
-pub fn navigate(model: *data.Model, id: core.PaneId, direction: core.agent_history.Direction) bool {
+pub fn navigate(model: *data.ClientModel, id: core.PaneId, direction: core.agent_history.Direction) bool {
     const pane = findPane(model, id) orelse return false;
     if (pane.agent_history == null and direction == .newer) {
         return false;
@@ -49,7 +49,7 @@ pub fn navigate(model: *data.Model, id: core.PaneId, direction: core.agent_histo
 
 /// Continues a delivered page containing only already folded work, without input.
 /// Example: `_ = skipFolded(model, id);`
-pub fn skipFolded(model: *data.Model, id: core.PaneId) bool {
+pub fn skipFolded(model: *data.ClientModel, id: core.PaneId) bool {
     const pane = findPane(model, id) orelse return false;
     const window = pane.agent_history orelse return false;
     if (window.retained or window.failed or window.pending != null or pane.history_intent != null or !window.has(window.direction)) {
@@ -69,7 +69,7 @@ pub fn skipFolded(model: *data.Model, id: core.PaneId) bool {
 
 /// Loads adjacent context without treating frame delivery as a new gesture.
 /// Example: `prefetch(model, id, .older);`
-pub fn prefetch(model: *data.Model, id: core.PaneId, direction: core.agent_history.Direction) void {
+pub fn prefetch(model: *data.ClientModel, id: core.PaneId, direction: core.agent_history.Direction) void {
     const pane = findPane(model, id) orelse return;
     const window = pane.agent_history orelse {
         _ = navigate(model, id, direction);
@@ -87,7 +87,7 @@ pub fn prefetch(model: *data.Model, id: core.PaneId, direction: core.agent_histo
 
 /// Restores omitted activity bytes through normal correlated history requests.
 /// Example: `revealWork(model, id, group_key);`
-pub fn revealWork(model: *data.Model, id: core.PaneId, key: u64) void {
+pub fn revealWork(model: *data.ClientModel, id: core.PaneId, key: u64) void {
     const pane = findPane(model, id) orelse return;
     const window = pane.agent_history orelse return;
     if (window.retained) {
@@ -110,7 +110,7 @@ pub fn revealWork(model: *data.Model, id: core.PaneId, key: u64) void {
 
 /// Freezes the seam and plans one page after input and presentation finish.
 /// Example: `const query = try begin(model, id) orelse return;`
-pub fn begin(model: *data.Model, id: core.PaneId) !?core.QueryAgentHistory {
+pub fn begin(model: *data.ClientModel, id: core.PaneId) !?core.QueryAgentHistory {
     const pane = findPane(model, id) orelse return null;
     const direction = pane.history_intent orelse return null;
     errdefer {
@@ -141,7 +141,7 @@ pub fn begin(model: *data.Model, id: core.PaneId) !?core.QueryAgentHistory {
 /// Owns selection bytes before presentation without starting provider work.
 /// Pending pages become stale so a response cannot evict selected content.
 /// Example: `if (try freeze(model, id, attachment)) prepareSelection();`
-pub fn freeze(model: *data.Model, id: core.PaneId, attachment: u64) !bool {
+pub fn freeze(model: *data.ClientModel, id: core.PaneId, attachment: u64) !bool {
     const pane = findPane(model, id) orelse return false;
     if (pane.attachment_generation != attachment) {
         return false;
@@ -165,7 +165,7 @@ pub fn freeze(model: *data.Model, id: core.PaneId, attachment: u64) !bool {
 
 /// Selection-only snapshots return to live output; existing history stays readable.
 /// Example: `unfreeze(model, id, attachment);`
-pub fn unfreeze(model: *data.Model, id: core.PaneId, attachment: u64) void {
+pub fn unfreeze(model: *data.ClientModel, id: core.PaneId, attachment: u64) void {
     const pane = findPane(model, id) orelse return;
     if (pane.attachment_generation != attachment) {
         return;
@@ -187,7 +187,7 @@ pub fn unfreeze(model: *data.Model, id: core.PaneId, attachment: u64) void {
 
 /// Owns the validated page only after exact request and attachment admission.
 /// Example: `_ = try apply(model, operation, response);`
-pub fn apply(model: *data.Model, operation: data.AgentHistoryOperation, response: core.AgentHistoryPageView) !bool {
+pub fn apply(model: *data.ClientModel, operation: data.AgentHistoryOperation, response: core.AgentHistoryPageView) !bool {
     const pane = resolve(model, operation) orelse return false;
     if (response.view_generation != operation.view_generation or response.snapshot.pane_id != pane.id or response.snapshot.pane_generation != pane.pane_generation) {
         return error.InvalidHistoryResponse;
@@ -205,7 +205,7 @@ pub fn apply(model: *data.Model, operation: data.AgentHistoryOperation, response
 
 /// Failed requests stay readable and retry only after another navigation gesture.
 /// Example: `_ = failed(model, operation, message);`
-pub fn failed(model: *data.Model, operation: data.AgentHistoryOperation, message: []const u8) bool {
+pub fn failed(model: *data.ClientModel, operation: data.AgentHistoryOperation, message: []const u8) bool {
     const pane = resolve(model, operation) orelse return false;
     pane.agent_history.?.fail(message);
     invalidate(model, pane.id);
@@ -214,7 +214,7 @@ pub fn failed(model: *data.Model, operation: data.AgentHistoryOperation, message
 
 /// Retiring a stale response wakes only visible navigation waiting for its slot.
 /// Example: `retired(model);`
-pub fn retired(model: *data.Model) void {
+pub fn retired(model: *data.ClientModel) void {
     const tab = model.tabs.activeSlot() orelse return;
     var panes = model.panes.iterateConst(model.tabs.location[tab].tab_id);
     while (panes.next()) |value| {
@@ -227,7 +227,7 @@ pub fn retired(model: *data.Model) void {
 
 /// Commits delivered geometry without confusing it with a new scroll gesture.
 /// Example: `anchor(model, id, resolved_scroll);`
-pub fn anchor(model: *data.Model, id: core.PaneId, scroll: f64) void {
+pub fn anchor(model: *data.ClientModel, id: core.PaneId, scroll: f64) void {
     const value = findPane(model, id) orelse return;
     value.transcript_scroll = scroll;
     value.transcript_anchor_revision +%= 1;
@@ -236,7 +236,7 @@ pub fn anchor(model: *data.Model, id: core.PaneId, scroll: f64) void {
 
 /// Fresh scroll input renews prefetch and invalidates an opposing request.
 /// Example: `reverse(model, id, .newer);`
-pub fn reverse(model: *data.Model, id: core.PaneId, direction: core.agent_history.Direction) void {
+pub fn reverse(model: *data.ClientModel, id: core.PaneId, direction: core.agent_history.Direction) void {
     const value = findPane(model, id) orelse return;
     const window = value.agent_history orelse return;
     if (window.retained) {
@@ -261,14 +261,14 @@ pub fn reverse(model: *data.Model, id: core.PaneId, direction: core.agent_histor
     invalidate(model, id);
 }
 
-fn invalidate(model: *data.Model, id: core.PaneId) void {
+fn invalidate(model: *data.ClientModel, id: core.PaneId) void {
     const tab = model.tabs.activeSlot() orelse return;
     if (model.panes.findInConst(model.tabs.location[tab].tab_id, id) != null) {
         model.panes_revision +%= 1;
     }
 }
 
-fn resolve(model: *data.Model, operation: data.AgentHistoryOperation) ?*data.Pane {
+fn resolve(model: *data.ClientModel, operation: data.AgentHistoryOperation) ?*data.Pane {
     const value = findPane(model, operation.owner.pane_id) orelse return null;
     if (value.attachment_generation != operation.owner.attachment_generation or value.pane_generation != operation.owner.pane_generation) {
         return null;
@@ -277,12 +277,12 @@ fn resolve(model: *data.Model, operation: data.AgentHistoryOperation) ?*data.Pan
     return if (window.generation == operation.view_generation and window.pending != null) value else null;
 }
 
-fn findPane(model: *data.Model, id: core.PaneId) ?*data.Pane {
+fn findPane(model: *data.ClientModel, id: core.PaneId) ?*data.Pane {
     const value = model.panes.find(id) orelse return null;
     return if (value.attached and value.kind == .agent) value else null;
 }
 
-fn ensureWindow(model: *data.Model, pane: *data.Pane) !?*data.AgentHistoryWindow {
+fn ensureWindow(model: *data.ClientModel, pane: *data.Pane) !?*data.AgentHistoryWindow {
     if (pane.agent_history) |existing| {
         return existing;
     }
@@ -295,7 +295,7 @@ fn ensureWindow(model: *data.Model, pane: *data.Pane) !?*data.AgentHistoryWindow
     return created;
 }
 
-fn reserveWindow(model: *data.Model) !void {
+fn reserveWindow(model: *data.ClientModel) !void {
     var count: usize = 0;
     var inactive: ?*data.Pane = null;
     const active = model.activeTabLocation();

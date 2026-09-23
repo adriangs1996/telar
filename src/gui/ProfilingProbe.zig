@@ -293,7 +293,7 @@ fn conversation(self: *Probe, transcript: Transcript) !void {
 
 fn workspace(self: *Probe, count: usize) !void {
     var accounting = std.testing.FailingAllocator.init(self.gpa, .{});
-    const model = try accounting.allocator().create(data.Model);
+    const model = try accounting.allocator().create(data.ClientModel);
     defer accounting.allocator().destroy(model);
     model.* = .init(accounting.allocator(), true);
     defer model.deinit();

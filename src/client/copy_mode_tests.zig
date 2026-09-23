@@ -8,7 +8,7 @@ pub fn agentReaders(comptime enter: fn (*Client) bool) !void {
     const app = try std.testing.allocator.create(Client);
     defer std.testing.allocator.destroy(app);
     app.* = undefined;
-    app.model = data.Model.init(std.testing.allocator, true);
+    app.model = data.ClientModel.init(std.testing.allocator, true);
     defer app.model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     try data.workspace_handoff.bootstrap(&app.model, 

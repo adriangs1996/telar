@@ -508,7 +508,7 @@ test "active layout projects pane indices without mutating runtime agent state" 
     };
     const first: core.PaneId = @enumFromInt(41);
     const second: core.PaneId = @enumFromInt(42);
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = first, .location = location, .size = .{ .cols = 80, .rows = 24 } });
     try data.pane_split.split(&model, 0, .{ .existing_pane = first, .new_pane = second, .location = location, .axis = .horizontal, .area = .{ .w = 80, .h = 24 } });

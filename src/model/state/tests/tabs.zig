@@ -1,13 +1,13 @@
 const icons = @import("../../layout/icons.zig");
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
-const ModelType = @import("../Model.zig");
+const ClientModel = @import("../ClientModel.zig");
 const std = @import("std");
 const VersionType = @import("../Version.zig");
 const WorkspaceSnapshotInput = @import("../../workspace/WorkspaceSnapshotInput.zig");
 
 test "fresh workspace snapshots name inactive automatic tabs before pane attachment" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
@@ -51,11 +51,11 @@ test "fresh workspace snapshots name inactive automatic tabs before pane attachm
 }
 
 test "workspace return names inactive tabs using each client's saved pane focus" {
-    const model = try std.testing.allocator.create(ModelType);
+    const model = try std.testing.allocator.create(ClientModel);
     defer std.testing.allocator.destroy(model);
-    model.* = ModelType.init(std.testing.allocator, true);
+    model.* = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
-    const fresh = try std.testing.allocator.create(ModelType);
+    const fresh = try std.testing.allocator.create(ClientModel);
     defer std.testing.allocator.destroy(fresh);
     fresh.* = .init(std.testing.allocator, true);
     defer fresh.deinit();
@@ -99,7 +99,7 @@ test "workspace return names inactive tabs using each client's saved pane focus"
 }
 
 test "inactive automatic tabs publish foreground changes without changing canonical snapshots" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };
@@ -139,7 +139,7 @@ test "inactive automatic tabs publish foreground changes without changing canoni
 }
 
 test "tab position commits version semantic changes only" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -170,7 +170,7 @@ test "tab position commits version semantic changes only" {
 }
 
 test "rejected tab positions do not advance the model" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -194,7 +194,7 @@ test "rejected tab positions do not advance the model" {
 }
 
 test "tab rename advances only the collection revision for a semantic change" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -232,7 +232,7 @@ test "tab rename advances only the collection revision for a semantic change" {
 }
 
 test "rejected tab renames preserve labels and revisions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -263,7 +263,7 @@ test "rejected tab renames preserve labels and revisions" {
 }
 
 test "tab creation advances collection and active identity revisions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -315,7 +315,7 @@ test "tab creation advances collection and active identity revisions" {
 }
 
 test "tab creation captures invalid copy-mode release" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -348,7 +348,7 @@ test "tab creation captures invalid copy-mode release" {
 }
 
 test "rejected tab creations preserve state and revisions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -405,7 +405,7 @@ test "rejected tab creations preserve state and revisions" {
 }
 
 test "active tab removal advances collection and active identity revisions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -454,7 +454,7 @@ test "active tab removal advances collection and active identity revisions" {
 }
 
 test "inactive tab removal preserves the active identity revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -497,7 +497,7 @@ test "inactive tab removal preserves the active identity revision" {
 }
 
 test "workspace closure is validated before the last tab is removed" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -534,7 +534,7 @@ test "workspace closure is validated before the last tab is removed" {
 }
 
 test "missing tab removal captures exact tab and workspace absence" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -577,7 +577,7 @@ test "missing tab removal captures exact tab and workspace absence" {
 }
 
 test "tab selection resolves identity position and wrapping offset" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };

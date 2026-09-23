@@ -2,14 +2,14 @@
 //! (docs/flows/workspace-reconciliation.md).
 const core = @import("telar-core");
 const std = @import("std");
-const Model = @import("../state/Model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const WorkspaceSnapshotInput = @import("WorkspaceSnapshotInput.zig");
 const label_validation = @import("label_validation.zig");
 
 /// Reconciles tab identity, order and labels without replacing retained
 /// layouts. Validation completes before the first mutation.
 /// Example: `try workspace_reconciliation.reconcileTabs(model, snapshot);`
-pub fn reconcileTabs(model: *Model, snapshot: WorkspaceSnapshotInput) !void {
+pub fn reconcileTabs(model: *ClientModel, snapshot: WorkspaceSnapshotInput) !void {
     try validate(model, snapshot);
 
     const active_id = model.tabs.location[model.tabs.activeSlot() orelse return error.WorkspaceHasNoTabs].tab_id;
@@ -58,7 +58,7 @@ pub fn reconcileTabs(model: *Model, snapshot: WorkspaceSnapshotInput) !void {
     model.tabs.active = model.tabs.find(active_id) orelse 0;
 }
 
-fn validate(model: *const Model, snapshot: WorkspaceSnapshotInput) !void {
+fn validate(model: *const ClientModel, snapshot: WorkspaceSnapshotInput) !void {
     if (model.workspace == null or !std.meta.eql(model.workspace.?, snapshot.workspace)) {
         return error.UnexpectedWorkspace;
     }

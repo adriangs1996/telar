@@ -252,7 +252,7 @@ test "mouse pointer distinguishes clickable chrome panes and sidebar resizing" {
     var state = try StateType.init(std.testing.allocator, 80, 24);
     defer state.deinit();
 
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const area: core.Rect = .{ .w = 1, .h = 1 };
     state.pointer_position = .{ .x = 0, .y = 0 };
@@ -299,7 +299,7 @@ test "sidebar separator drag reports exact preferred widths" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -335,7 +335,7 @@ test "sidebar separator drag reports exact preferred widths" {
 test "empty production sidebar has no task controls" {
     var state = try StateType.init(std.testing.allocator, 100, 30);
     defer state.deinit();
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -355,7 +355,7 @@ test "the inline new-context form shows both fields and the selected completion 
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
     state.toggleSidebar();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -411,7 +411,7 @@ test "workbench clicks return focus intent without mutating pane layout" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -514,7 +514,7 @@ test "sidebar agent snapshots version changed hover only once" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -567,7 +567,7 @@ test "focused agent image preview reserves space below its pane and opens a moda
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -705,14 +705,14 @@ test "sidebar highlight follows pane focus and the rendered workspace" {
     const shell_pane: core.PaneId = @enumFromInt(3);
     const workspace_pane: core.PaneId = @enumFromInt(4);
 
-    var first_model = data.Model.init(gpa, true);
+    var first_model = data.ClientModel.init(gpa, true);
     defer first_model.deinit();
     try data.workspace_handoff.bootstrap(&first_model, .{ .pane_id = first_pane, .location = first_location, .size = .{ .cols = 34, .rows = 27 } });
     try data.pane_split.split(&first_model, 0, .{ .existing_pane = first_pane, .new_pane = second_pane, .location = first_location, .axis = .horizontal, .area = state.workbench() });
     try data.pane_split.split(&first_model, 0, .{ .existing_pane = second_pane, .new_pane = shell_pane, .location = first_location, .axis = .vertical, .area = state.workbench() });
     try std.testing.expect(first_model.tabs.layout[0].focusPane(first_pane));
 
-    var second_model = data.Model.init(gpa, true);
+    var second_model = data.ClientModel.init(gpa, true);
     defer second_model.deinit();
     try data.workspace_handoff.bootstrap(&second_model, .{ .pane_id = workspace_pane, .location = second_location, .size = .{ .cols = 38, .rows = 27 } });
 
@@ -772,7 +772,7 @@ test "hybrid sidebar preserves agent hit testing and cell fallback navigation" {
     var state = try StateType.init(std.testing.allocator, 100, 30);
     defer state.deinit();
     try state.configureSidebar(.kitty_hybrid, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -813,7 +813,7 @@ test "Nerd Font theme publishes embedded icon marks over cell fallbacks" {
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .{ .support = .supported, .cell_width = 10, .cell_height = 20 });
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -848,7 +848,7 @@ test "Nerd Font theme falls back to Unicode without Kitty Graphics" {
     );
     defer state.deinit();
     try state.configureSidebar(.automatic, .{ .support = .unsupported, .cell_width = 10, .cell_height = 20 });
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -877,7 +877,7 @@ test "fullscreen labels keep small-font text across focus changes and fall back 
     var state = try StateType.init(gpa, 100, 24);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -961,7 +961,7 @@ test "cell rendering leaves toast rasterization to the media pass" {
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
     try state.configureSidebar(.cells, .{ .support = .supported, .cell_width = 22, .cell_height = 58 });
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1009,7 +1009,7 @@ test "client chrome uses Shade by default" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1044,7 +1044,7 @@ test "configuration diagnostics stay inside the bottom bar" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     var screen = try ScreenType.init(gpa, 80, 24);
     defer screen.deinit();
@@ -1079,7 +1079,7 @@ test "terminal theme leaves client chrome backgrounds to the host terminal" {
     const gpa = std.testing.allocator;
     var state = try StateType.initWithTheme(gpa, .{ .width = 80, .height = 24 }, data.theme_support.builtin(.terminal));
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1116,7 +1116,7 @@ test "clickable toast restores pane cells after its exit animation" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 120, 30);
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1201,7 +1201,7 @@ test "tab bar renders ordered labels and clicks carry runtime ids" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 80, 24);
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = .{
@@ -1263,7 +1263,7 @@ test "tab bar marks the tab whose pane is fullscreen" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const logs: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(9) };
@@ -1319,7 +1319,7 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     const gpa = std.testing.allocator;
     var state = try StateType.init(gpa, 100, 30);
     defer state.deinit();
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },

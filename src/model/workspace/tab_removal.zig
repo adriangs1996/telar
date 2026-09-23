@@ -1,12 +1,12 @@
 //! A tab disappears from the client's workspace with its panes
 //! (docs/flows/tab-removal.md).
 const core = @import("telar-core");
-const Model = @import("../state/Model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 
 /// Removes one tab and its panes, keeping the active tab when it survives.
 /// Removing the last tab leaves no workspace.
 /// Example: `_ = tab_removal.remove(model, tab_id);`
-pub fn remove(model: *Model, tab_id: core.TabId) bool {
+pub fn remove(model: *ClientModel, tab_id: core.TabId) bool {
     const slot = model.tabs.find(tab_id) orelse return false;
     const active_id = model.tabs.location[model.tabs.active].tab_id;
     model.panes.removeTab(tab_id);

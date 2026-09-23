@@ -1,7 +1,7 @@
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
 const TestingPaneFrame = @import("TestingPaneFrame.zig");
-const ModelType = @import("../Model.zig");
+const ClientModel = @import("../ClientModel.zig");
 const std = @import("std");
 const ReportedPaneFocusType = @import("../ReportedPaneFocus.zig");
 const VersionType = @import("../Version.zig");
@@ -29,7 +29,7 @@ fn testingPaneFrame(buffer: []u8, input: TestingPaneFrame) !core.FrameView {
 }
 
 test "pane surface toggling needs a focused pane and advances the pane version" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const version = model.version();
@@ -38,7 +38,7 @@ test "pane surface toggling needs a focused pane and advances the pane version" 
 }
 
 test "pane input planning resolves one attached active target without mutation" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -80,7 +80,7 @@ test "pane input planning resolves one attached active target without mutation" 
 }
 
 test "pane input planning yields ownership to prompts and copy mode" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -104,7 +104,7 @@ test "pane input planning yields ownership to prompts and copy mode" {
 }
 
 test "reported pane focus derives protocol edges outside presentation versions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -153,7 +153,7 @@ test "reported pane focus derives protocol edges outside presentation versions" 
 }
 
 test "reported pane focus distinguishes intentional clear from stale retirement" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -184,7 +184,7 @@ test "reported pane focus distinguishes intentional clear from stale retirement"
 }
 
 test "pane paste captures one exact target and framing mode outside presentation versions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -234,7 +234,7 @@ test "pane paste captures one exact target and framing mode outside presentation
 }
 
 test "pane paste release and copy mode keep one input owner" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -253,7 +253,7 @@ test "pane paste release and copy mode keep one input owner" {
 }
 
 test "pane frame application commits screen copy state and one frame revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -304,7 +304,7 @@ test "pane frame application commits screen copy state and one frame revision" {
 }
 
 test "pane frame application separates detached panes from patch recovery" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -350,7 +350,7 @@ test "pane frame application separates detached panes from patch recovery" {
 }
 
 test "pane frame apply failure does not publish a frame revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -375,7 +375,7 @@ test "pane frame apply failure does not publish a frame revision" {
 }
 
 test "pane graphics fallback versions only semantic changes" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -404,7 +404,7 @@ test "pane graphics fallback versions only semantic changes" {
 }
 
 test "pane cwd metadata stores exact paths and versions only display changes" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -451,7 +451,7 @@ test "pane cwd metadata stores exact paths and versions only display changes" {
 }
 
 test "pane foreground metadata versions display changes independently" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -494,7 +494,7 @@ test "pane foreground metadata versions display changes independently" {
 }
 
 test "pane cwd allocation failure preserves metadata and revisions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -522,7 +522,7 @@ test "pane cwd allocation failure preserves metadata and revisions" {
 }
 
 test "pane viewport intents are bounded versioned and reserved by copy mode" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -586,7 +586,7 @@ test "pane viewport intents are bounded versioned and reserved by copy mode" {
 }
 
 test "copy mode entry owns one independent model revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -625,7 +625,7 @@ test "copy mode entry owns one independent model revision" {
 }
 
 test "copy mode plans reject no-ops and stale commits" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -650,7 +650,7 @@ test "copy mode plans reject no-ops and stale commits" {
 }
 
 test "copy mode plans the textual link under its cursor without mutation" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -676,7 +676,7 @@ test "copy mode plans the textual link under its cursor without mutation" {
 }
 
 test "an active tab transition releases copy authority" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const first: core.TabLocation = .{ .workspace = workspace, .tab_id = @enumFromInt(1) };

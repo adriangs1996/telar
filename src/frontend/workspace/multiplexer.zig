@@ -365,7 +365,7 @@ fn testingRender(compositor: *Compositor, composition: TestingComposition) !Rend
     return rendered.stats;
 }
 
-fn testingRenderDefault(compositor: *Compositor, model: *data.Model, screen: *ScreenType) !RenderStats {
+fn testingRenderDefault(compositor: *Compositor, model: *data.ClientModel, screen: *ScreenType) !RenderStats {
     return testingRender(compositor, .{
         .model = model,
         .screen = screen,
@@ -375,7 +375,7 @@ fn testingRenderDefault(compositor: *Compositor, model: *data.Model, screen: *Sc
 
 test "two pane buffers compose into their layout rectangles" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -410,7 +410,7 @@ test "compositor places a bottom reservation below only its target pane" {
     const first: core.PaneId = @enumFromInt(1);
     const second: core.PaneId = @enumFromInt(2);
     const area: core.Rect = .{ .w = 40, .h = 12 };
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -459,7 +459,7 @@ test "compositor places a bottom reservation below only its target pane" {
 
 test "copy mode highlights an absolute scrollback selection" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -495,7 +495,7 @@ test "copy mode highlights an absolute scrollback selection" {
 
 test "copy mode projection stays outside the multiplexer model" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
@@ -571,7 +571,7 @@ test "copy mode projection stays outside the multiplexer model" {
 
 test "fullscreen composes only the focused pane across the whole tab" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -610,7 +610,7 @@ test "fullscreen composes only the focused pane across the whole tab" {
 
 test "single-pane fullscreen draws labels and progress and restores borderless content" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -656,7 +656,7 @@ test "single-pane fullscreen draws labels and progress and restores borderless c
 
 test "fullscreen border keeps the pane's tiled display index" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -690,7 +690,7 @@ test "fullscreen border keeps the pane's tiled display index" {
 
 test "fullscreen tabs follow focus and survive progress animation without idle redraws" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -758,7 +758,7 @@ test "fullscreen tabs follow focus and survive progress animation without idle r
 
 test "pane borders use the selected theme without coloring pane contents" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -805,7 +805,7 @@ test "pane borders use the selected theme without coloring pane contents" {
 
 test "one pane has no telar border" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -826,7 +826,7 @@ test "one pane has no telar border" {
 
 test "frame state and pending acknowledgements stay per pane" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -856,7 +856,7 @@ test "frame state and pending acknowledgements stay per pane" {
 
 test "composition damage retires only after its presentation commits" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
@@ -891,7 +891,7 @@ test "composition damage retires only after its presentation commits" {
 
 test "stale presentation commits preserve newer pane work" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
@@ -926,7 +926,7 @@ test "stale presentation commits preserve newer pane work" {
 
 test "fullscreen presentation commits include hidden panes" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -958,7 +958,7 @@ test "fullscreen presentation commits include hidden panes" {
 
 test "snapshot discovery does not imply a runtime attachment" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -975,7 +975,7 @@ test "snapshot discovery does not imply a runtime attachment" {
 
 test "snapshot discovery keeps a pane the area cannot fit" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -994,7 +994,7 @@ test "snapshot discovery keeps a pane the area cannot fit" {
 
 test "unchanged composition produces no terminal damage" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1066,7 +1066,7 @@ test "unchanged composition produces no terminal damage" {
 
 test "compositor detects focus changes while stable focus stays incremental" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1090,7 +1090,7 @@ test "compositor detects focus changes while stable focus stays incremental" {
 
 test "compositor detects pane projection changes without model cache flags" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
@@ -1148,7 +1148,7 @@ test "compositor detects pane projection changes without model cache flags" {
 
 test "pane index survives collisions removal and slot reuse" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1169,7 +1169,7 @@ test "pane index survives collisions removal and slot reuse" {
 
 test "layout snapshot cache invalidates on geometry and revision" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1193,7 +1193,7 @@ test "layout snapshot cache invalidates on geometry and revision" {
 
 test "pane mouse planning keeps buttons focused and wheels pointer-local" {
     const gpa = std.testing.allocator;
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -1249,7 +1249,7 @@ test "pane mouse planning keeps buttons focused and wheels pointer-local" {
 }
 
 test "focused pane mouse planning ignores missing and empty pane content" {
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const area: core.Rect = .{ .w = 80, .h = 24 };
     const pane_id: core.PaneId = @enumFromInt(1);

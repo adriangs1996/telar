@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const std = @import("std");
 const icons = @import("../layout/icons.zig");
-const Model = @import("../state/Model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const Change = @import("../types/Change.zig").Change;
 const WorkspaceSnapshotInput = @import("WorkspaceSnapshotInput.zig");
 const WorkspaceTabInput = @import("WorkspaceTabInput.zig");
@@ -22,7 +22,7 @@ const workspace_reconciliation = @import("workspace_reconciliation.zig");
 const pane_split = @import("pane_split.zig");
 
 test "selection wraps and moving tabs preserves the active identity" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = .{
@@ -52,7 +52,7 @@ test "selection wraps and moving tabs preserves the active identity" {
 }
 
 test "canonical tab labels distinguish changes and reject invalid values" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -73,7 +73,7 @@ test "canonical tab labels distinguish changes and reject invalid values" {
 }
 
 test "automatic tab labels follow foreground focus until explicitly renamed" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -112,7 +112,7 @@ test "automatic tab labels follow foreground focus until explicitly renamed" {
 }
 
 test "automatic and manual tab labels survive canonical workspace snapshots" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const first: core.TabId = @enumFromInt(1);
@@ -146,7 +146,7 @@ test "automatic and manual tab labels survive canonical workspace snapshots" {
 }
 
 test "failed tab construction does not publish a shifted slot" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     const first: core.TabLocation = .{
@@ -170,7 +170,7 @@ test "failed tab construction does not publish a shifted slot" {
 }
 
 test "root replacement constructs before retiring the current workspace" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const previous: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -210,7 +210,7 @@ test "root replacement constructs before retiring the current workspace" {
 }
 
 test "displayed workspace name stays canonical when pane cwd changes" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(1), .location = .{
@@ -238,7 +238,7 @@ test "displayed workspace name stays canonical when pane cwd changes" {
 }
 
 test "pane gap configuration reaches current and future tabs" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     tab_layout.setPaneGaps(&model, false);
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -263,7 +263,7 @@ test "pane gap configuration reaches current and future tabs" {
 }
 
 test "pane content size carries the host cell geometry" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     model.host.host_size.cell_width_px = 8;
     model.host.host_size.cell_height_px = 16;
@@ -279,7 +279,7 @@ test "pane content size carries the host cell geometry" {
 }
 
 test "workspace snapshots restore labels and order without losing pane layouts" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try workspace_handoff.bootstrap(&model, .{ .pane_id = @enumFromInt(7), .location = .{
@@ -311,7 +311,7 @@ test "workspace snapshots restore labels and order without losing pane layouts" 
 }
 
 test "workspace reconciliation rejects malformed snapshots before mutation" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -408,7 +408,7 @@ test "workspace reconciliation rejects malformed snapshots before mutation" {
 }
 
 test "workspace reconciliation replaces a tab at full capacity" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -452,7 +452,7 @@ test "workspace reconciliation replaces a tab at full capacity" {
 }
 
 test "tab reconciliation preserves the pane selected for workspace restoration" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -474,7 +474,7 @@ test "tab reconciliation preserves the pane selected for workspace restoration" 
 }
 
 test "initial tab reconciliation replaces a vanished focused pane" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -496,7 +496,7 @@ test "initial tab reconciliation replaces a vanished focused pane" {
 }
 
 test "tab reconciliation rejects duplicate pane membership atomically" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -519,7 +519,7 @@ test "tab reconciliation rejects duplicate pane membership atomically" {
 }
 
 test "tab reconciliation restores a bookmarked nested split tree" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -557,7 +557,7 @@ test "tab reconciliation restores a bookmarked nested split tree" {
 }
 
 test "client layout reconciliation restores its saved pane focus" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -583,7 +583,7 @@ test "client layout reconciliation restores its saved pane focus" {
 }
 
 test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -610,7 +610,7 @@ test "tab reconciliation rejects a bookmarked tree for a changed pane set" {
 }
 
 test "later tab reconciliation preserves the client layout order" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },

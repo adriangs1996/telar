@@ -10,7 +10,7 @@ version: data.Version,
 geometry: data.Region,
 presentation_ingress: PresentationIngress = .{},
 /// The client model, borrowed for one synchronous preparation.
-model: *const data.Model,
+model: *const data.ClientModel,
 /// The active tab's slot, null during bootstrap and workspace handoff.
 tab: ?usize,
 agents: *const data.AgentSnapshot,

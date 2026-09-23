@@ -4,7 +4,7 @@ const data = @import("model");
 const ScreenType = @import("../../presentation/Screen.zig");
 const TestingComposition = @This();
 
-model: *data.Model,
+model: *data.ClientModel,
 /// The composed tab; tests compose their only tab.
 tab: usize = 0,
 screen: *ScreenType,

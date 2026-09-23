@@ -11,7 +11,7 @@ const ChangeReviewButton = @import("ChangeReviewButton.zig");
 const FullscreenStrip = @This();
 
 context: *const Context,
-model: *const data.Model,
+model: *const data.ClientModel,
 tab: usize,
 area: core.Rect,
 

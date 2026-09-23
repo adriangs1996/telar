@@ -97,7 +97,7 @@ runtime_transport: RuntimeTransportState,
 options: Options,
 client_identity: core.ClientIdentity,
 telemetry: TelemetryState,
-model: data.Model,
+model: data.ClientModel,
 lua_generation: ?*Generation,
 plugin_registry: ?*Registry,
 trust_store: ?*core.TrustStore,
@@ -3772,7 +3772,7 @@ fn deliverHostCommit(self: *AttachedClient, commit: data.HostCommit) !void {
     }
 }
 
-fn validateHostCommit(model: *const data.Model, commit: data.HostCommit) !void {
+fn validateHostCommit(model: *const data.ClientModel, commit: data.HostCommit) !void {
     if (commit.capabilities == null and commit.resize == null) {
         return error.EmptyHostCommit;
     }
@@ -3911,17 +3911,17 @@ fn reportChangeReview(self: *AttachedClient, message: []const u8) void {
     self.model.chrome_revision +%= 1;
 }
 
-fn findReviewPane(model: *data.Model, pane_id: core.PaneId) ?*data.Pane {
+fn findReviewPane(model: *data.ClientModel, pane_id: core.PaneId) ?*data.Pane {
     const pane = model.panes.find(pane_id) orelse return null;
     return if (pane.attached and pane.pane_generation != 0) pane else null;
 }
 
-fn resolveReviewPane(model: *data.Model, owner: data.ChangeReviewOperation) ?*const data.Pane {
+fn resolveReviewPane(model: *data.ClientModel, owner: data.ChangeReviewOperation) ?*const data.Pane {
     const pane = findReviewPane(model, owner.pane_id) orelse return null;
     return if (pane.pane_generation == owner.pane_generation and pane.attachment_generation == owner.attachment_generation) pane else null;
 }
 
-fn linkTargetAt(model: *data.Model, tab: usize, event: data.Mouse, area: core.Rect) ?data.LinkTarget {
+fn linkTargetAt(model: *data.ClientModel, tab: usize, event: data.Mouse, area: core.Rect) ?data.LinkTarget {
     const plan = data.tab_layout.planPaneMouse(model, tab, event, area) orelse return null;
     const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, plan.pane_id) orelse return null;
 
@@ -4178,7 +4178,7 @@ fn identifyOpenedPane(self: *AttachedClient, opened_pane: core.PaneOpened) !void
     }
 }
 
-fn agentOperation(model: *const data.Model, pane_id: core.PaneId) ?data.AgentOperation {
+fn agentOperation(model: *const data.ClientModel, pane_id: core.PaneId) ?data.AgentOperation {
     const pane = model.agentPane(pane_id) orelse return null;
     return .{
         .pane_id = pane_id,
@@ -5015,7 +5015,7 @@ fn requestHistoryPage(self: *AttachedClient, query: []const u8) !void {
     };
 }
 
-fn resolveHistoryScope(model: *const data.Model, owned: *data.OwnedHistoryQuery) void {
+fn resolveHistoryScope(model: *const data.ClientModel, owned: *data.OwnedHistoryQuery) void {
     const prompt = model.name_prompt.currentConst() orelse return;
     if (prompt.target() != .history) {
         return;
@@ -5420,7 +5420,7 @@ fn beginSuggestion(self: *AttachedClient) !bool {
     return true;
 }
 
-fn suggestionPane(model: *const data.Model) ?core.PaneId {
+fn suggestionPane(model: *const data.ClientModel) ?core.PaneId {
     const active = model.tabs.activeSlot() orelse return null;
     const pane = data.tab_layout.focusedPaneConst(model, active) orelse return null;
     return pane.id;
@@ -6402,7 +6402,7 @@ fn pickerCount(self: *AttachedClient, query: []const u8) u16 {
     return results.len;
 }
 
-fn pickerSources(model: *const data.Model) data.Sources {
+fn pickerSources(model: *const data.ClientModel) data.Sources {
     return .{
         .agents = &model.agent_snapshot,
         .workspaces = &model.workspace_list_snapshot,
@@ -7372,7 +7372,7 @@ fn startPathCompletion(self: *AttachedClient) !void {
     };
 }
 
-fn focusedPaneCwd(model: *const data.Model) []const u8 {
+fn focusedPaneCwd(model: *const data.ClientModel) []const u8 {
     const active = model.tabs.activeSlot() orelse return "";
     const pane = data.tab_layout.focusedPaneConst(model, active) orelse return "";
     return pane.cwdSlice();

@@ -4,7 +4,7 @@ const client = @import("telar-client");
 const Input = @This();
 
 area: core.Rect,
-model: *const data.Model,
+model: *const data.ClientModel,
 /// The active tab's slot in `model.tabs`.
 tab: usize,
 alignment: data.bar_values.Alignment = .right,

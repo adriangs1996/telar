@@ -26,7 +26,7 @@ pub fn cancel(drag: *TabDrag) void {
 
 /// Source identity survives focus changes, but never workspace replacement.
 /// Example: `drag.validate(&client.model);`
-pub fn validate(drag: *TabDrag, model: *const data.Model) void {
+pub fn validate(drag: *TabDrag, model: *const data.ClientModel) void {
     const source = drag.source orelse return;
     if (model.name_prompt.active() or !std.meta.eql(model.workspace, @as(?core.WorkspaceLocation, source.workspace)) or model.tabs.find(source.tab_id) == null) {
         drag.cancel();

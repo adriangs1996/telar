@@ -1,12 +1,12 @@
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
-const ModelType = @import("../Model.zig");
+const ClientModel = @import("../ClientModel.zig");
 const std = @import("std");
 const VersionType = @import("../Version.zig");
 const SystemMetricsType = @import("../SystemMetrics.zig");
 
 test "proxy status reconciliation commits only changed runtime state" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expect(model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = false }) == null);
@@ -43,7 +43,7 @@ test "proxy status reconciliation commits only changed runtime state" {
 }
 
 test "system metrics reconciliation owns the latest replica and one isolated revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const first = (try model.reconcileSystemMetrics(.{
@@ -84,7 +84,7 @@ test "system metrics reconciliation owns the latest replica and one isolated rev
 }
 
 test "rejected system metrics preserve the latest replica and version" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const initial: SystemMetricsType = .{
         .runtime_revision = 1,
@@ -118,7 +118,7 @@ test "rejected system metrics preserve the latest replica and version" {
 }
 
 test "notification lifecycle is model-owned and versioned by semantic change" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     var title = [_]u8{ 'R', 'e', 'a', 'd', 'y' };
     const tab_id: core.TabId = @enumFromInt(7);
@@ -163,7 +163,7 @@ test "notification lifecycle is model-owned and versioned by semantic change" {
 }
 
 test "agent reconciliation owns labels versions and existing status transitions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const key: model_data.AgentKey = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 };
     const location: core.TabLocation = .{
@@ -221,7 +221,7 @@ test "agent reconciliation owns labels versions and existing status transitions"
 }
 
 test "sidebar animation advances its own revision only while active" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     var agent: model_data.AgentInput = .{
         .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
@@ -256,7 +256,7 @@ test "sidebar animation advances its own revision only while active" {
 }
 
 test "rejected agent reconciliation preserves replica and version" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const agent: model_data.AgentInput = .{
         .key = .{ .pane_id = @enumFromInt(7), .pane_generation = 2 },
@@ -286,7 +286,7 @@ test "rejected agent reconciliation preserves replica and version" {
 }
 
 test "agent navigation and focused attachments derive from committed client state" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const first: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -362,7 +362,7 @@ test "agent navigation and focused attachments derive from committed client stat
 }
 
 test "focused done agent is acknowledged once per completion without a version change" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -402,7 +402,7 @@ test "focused done agent is acknowledged once per completion without a version c
 }
 
 test "an unfocused done agent is never acknowledged" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -432,7 +432,7 @@ test "an unfocused done agent is never acknowledged" {
 }
 
 test "pane titles are stored per pane and exposed for the focused pane" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },

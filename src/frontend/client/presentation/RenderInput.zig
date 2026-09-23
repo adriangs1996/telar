@@ -5,7 +5,7 @@ const CompositorType = @import("../../workspace/Compositor.zig");
 const view = @import("view.zig");
 const RenderInput = @This();
 
-model: *const data.Model,
+model: *const data.ClientModel,
 /// The active tab's slot in `model.tabs`.
 tab: usize,
 compositor: ?*const CompositorType = null,

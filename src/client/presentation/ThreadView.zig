@@ -31,7 +31,7 @@ branch: []const u8 = "",
 /// ```zig
 /// const thread = ThreadView.capture(model, agents, pane_id) orelse return;
 /// ```
-pub fn capture(model: *const data.Model, agents: ?*const data.AgentSnapshot, pane_id: core.PaneId) ?ThreadView {
+pub fn capture(model: *const data.ClientModel, agents: ?*const data.AgentSnapshot, pane_id: core.PaneId) ?ThreadView {
     const pane = model.panes.findConst(pane_id) orelse return null;
     const tab = model.tabs.find(pane.location.tab_id) orelse return null;
     const agent = if (agents) |snapshot| found: {

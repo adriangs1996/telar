@@ -17,7 +17,7 @@ const GenericInbox = @import("../execution/GenericInbox.zig").Type;
 const Fixture = @This();
 
 app: Client,
-model: *model_data.Model,
+model: *model_data.ClientModel,
 connection: core.SocketChannel,
 peer: core.SocketChannel,
 pending: ?[]const u8 = null,

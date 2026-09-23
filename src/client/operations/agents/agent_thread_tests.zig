@@ -6,7 +6,7 @@ const reading = @import("agent_reading.zig");
 const pane_id: core.PaneId = @enumFromInt(1);
 const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
 
-fn bootstrap(model: *data.Model) !void {
+fn bootstrap(model: *data.ClientModel) !void {
     try data.workspace_handoff.bootstrap(model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     const handler = model;
     try std.testing.expect(handler.identifyPane(.{
@@ -53,7 +53,7 @@ fn fixtureOptions() !core.AgentOptions {
 }
 
 test "created agent tabs immediately expose the attached composer and preserve workspace" {
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     try data.workspace_handoff.bootstrap(&model, .{ .pane_id = pane_id, .location = location, .size = .{ .cols = 40, .rows = 10 } });
     const agent_id: core.PaneId = @enumFromInt(2);
@@ -78,7 +78,7 @@ test "created agent tabs immediately expose the attached composer and preserve w
 }
 
 test "agent conversation survives receive reuse and rejects stale generations and revisions" {
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -105,14 +105,14 @@ test "agent conversation survives receive reuse and rejects stale generations an
 }
 
 test "independent clients retain activity identities and child status across snapshot replacement" {
-    const first = try std.testing.allocator.create(data.Model);
+    const first = try std.testing.allocator.create(data.ClientModel);
     defer std.testing.allocator.destroy(first);
-    first.* = data.Model.init(std.testing.allocator, true);
+    first.* = data.ClientModel.init(std.testing.allocator, true);
     defer first.deinit();
     try bootstrap(first);
-    const second = try std.testing.allocator.create(data.Model);
+    const second = try std.testing.allocator.create(data.ClientModel);
     defer std.testing.allocator.destroy(second);
-    second.* = data.Model.init(std.testing.allocator, true);
+    second.* = data.ClientModel.init(std.testing.allocator, true);
     defer second.deinit();
     try bootstrap(second);
     const first_handler = first;
@@ -153,7 +153,7 @@ test "independent clients retain activity identities and child status across sna
 }
 
 test "agent prompt acknowledgements preserve later edits and replacement attachments" {
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -183,7 +183,7 @@ test "agent prompt acknowledgements preserve later edits and replacement attachm
 }
 
 test "composer editing is atomic at UTF-8 and capacity boundaries" {
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -202,7 +202,7 @@ test "composer editing is atomic at UTF-8 and capacity boundaries" {
 }
 
 test "prompt acknowledgement clears unchanged content after cursor or selection changes" {
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -259,7 +259,7 @@ test "queued prompts own their text and serialize agent identity" {
 }
 
 test "agent draft settings use the catalog and survive streaming without changing catalog identity" {
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -284,10 +284,10 @@ test "agent draft settings use the catalog and survive streaming without changin
     try std.testing.expectEqualStrings("high", prompt.options.effort.idSlice());
 }
 
-fn historyModel() !*data.Model {
-    const model = try std.testing.allocator.create(data.Model);
+fn historyModel() !*data.ClientModel {
+    const model = try std.testing.allocator.create(data.ClientModel);
     errdefer std.testing.allocator.destroy(model);
-    model.* = data.Model.init(std.testing.allocator, true);
+    model.* = data.ClientModel.init(std.testing.allocator, true);
     errdefer model.deinit();
     try bootstrap(model);
     var bytes: [4096]u8 = undefined;
@@ -302,7 +302,7 @@ fn historyModel() !*data.Model {
     return model;
 }
 
-fn historyOperation(model: *data.Model, generation: u64) data.AgentHistoryOperation {
+fn historyOperation(model: *data.ClientModel, generation: u64) data.AgentHistoryOperation {
     const pane = model.agentPane(pane_id).?;
     return .{ .owner = .{ .pane_id = pane_id, .pane_generation = pane.pane_generation, .attachment_generation = pane.attachment_generation, .location = pane.location }, .view_generation = generation };
 }
@@ -717,7 +717,7 @@ test "selection retains historical pages and retires late provider responses bef
 }
 
 test "resumed snapshot loads history once and preserves a later composer draft" {
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;
@@ -763,7 +763,7 @@ test "a new conversation retires old history requests while preserving the next 
 }
 
 test "image drafts survive failed admission later edits and stale acknowledgement" {
-    var model = data.Model.init(std.testing.allocator, true);
+    var model = data.ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     try bootstrap(&model);
     const handler = &model;

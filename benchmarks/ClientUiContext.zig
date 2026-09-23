@@ -6,13 +6,13 @@ const std = @import("std");
 const main = @import("main.zig");
 const ClientUiContext = @This();
 
-model: data.Model,
+model: data.ClientModel,
 screen: frontend.Screen,
 view: frontend.State,
 
 pub fn init(gpa: std.mem.Allocator, tab_count: usize) !ClientUiContext {
     std.debug.assert(tab_count >= 1 and tab_count <= core.max_tabs_per_workspace);
-    var model = data.Model.init(gpa, true);
+    var model = data.ClientModel.init(gpa, true);
     errdefer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
     try data.workspace_handoff.bootstrap(&model, .{

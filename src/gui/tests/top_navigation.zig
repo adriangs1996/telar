@@ -538,8 +538,8 @@ fn hasApplicationMark(quads: []const Quad, bounds: Rect) bool {
     return false;
 }
 
-fn createModel() !*data.Model {
-    const model = try std.testing.allocator.create(data.Model);
-    model.* = data.Model.init(std.testing.allocator, true);
+fn createModel() !*data.ClientModel {
+    const model = try std.testing.allocator.create(data.ClientModel);
+    model.* = data.ClientModel.init(std.testing.allocator, true);
     return model;
 }

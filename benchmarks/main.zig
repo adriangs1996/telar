@@ -422,7 +422,7 @@ fn runLayoutFocus(context: *LayoutContext, iterations: usize) !u64 {
 
 /// Composes one model over the whole host screen with the default palette,
 /// the way the presenter does for a client without chrome.
-pub fn composeFullScreen(compositor: *frontend.Compositor, model: *const data.Model, tab: usize, screen: *frontend.Screen) !frontend.CompositionResult {
+pub fn composeFullScreen(compositor: *frontend.Compositor, model: *const data.ClientModel, tab: usize, screen: *frontend.Screen) !frontend.CompositionResult {
     return compositor.render(.{
         .model = model,
         .tab = tab,

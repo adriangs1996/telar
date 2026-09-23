@@ -396,7 +396,7 @@ fn composeCopyChange(compositor: *Compositor, context: *IncrementalComposition, 
     }
 }
 
-fn paneProjectionChanged(compositor: *Compositor, model: *const data.Model, tab: usize) bool {
+fn paneProjectionChanged(compositor: *Compositor, model: *const data.ClientModel, tab: usize) bool {
     var next: [core.max_panes_per_tab]PaneProjection = undefined;
     var next_count: u8 = 0;
     for (compositor.layout_snapshot.views()) |view| {

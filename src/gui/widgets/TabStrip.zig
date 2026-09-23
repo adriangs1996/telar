@@ -217,7 +217,7 @@ fn drawIcon(canvas: *Canvas, icon: data.icons.Icon, bounds: Rect) !void {
     try canvas.iconAt(bounds, .{ .text = icon.nerdGlyph(), .color = canvas.theme.palette.subtext0, .face = .sans, .size = .body });
 }
 
-fn text(storage: []u8, model: *const data.Model, index: usize) []const u8 {
+fn text(storage: []u8, model: *const data.ClientModel, index: usize) []const u8 {
     return std.fmt.bufPrint(storage, "{d} {s}{s}", .{ index + 1, data.tab_label.text(model, index), if (model.tabs.layout[index].isFullscreen()) " \u{26f6}" else "" }) catch unreachable;
 }
 
@@ -242,7 +242,7 @@ pub fn firstVisible(active_index: usize, widths: []const f32, fit: StripFit) usi
 
 const inset: f32 = 12;
 
-fn previewOrder(order: []usize, model: *const data.Model, move: client.TabMoveIntent) void {
+fn previewOrder(order: []usize, model: *const data.ClientModel, move: client.TabMoveIntent) void {
     if (!std.meta.eql(model.workspace, @as(?core.WorkspaceLocation, move.location.workspace))) {
         return;
     }

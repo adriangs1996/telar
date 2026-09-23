@@ -1,6 +1,6 @@
 const core = @import("telar-core");
 const model_data = @import("../../model.zig");
-const ModelType = @import("../Model.zig");
+const ClientModel = @import("../ClientModel.zig");
 const std = @import("std");
 const VersionType = @import("../Version.zig");
 const TabCreationPlanType = @import("../TabCreationPlan.zig");
@@ -10,7 +10,7 @@ const WorkspaceSnapshotInput = @import("../../workspace/WorkspaceSnapshotInput.z
 const PaneType = @import("../PaneMembership.zig");
 
 test "workspace creation planning requires the attached focused pane" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expect(model.planWorkspaceCreation() == null);
@@ -28,7 +28,7 @@ test "workspace creation planning requires the attached focused pane" {
 }
 
 test "tab creation planning captures the workspace and attached focused pane" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     try std.testing.expect(model.planTabCreation() == null);
@@ -49,7 +49,7 @@ test "tab creation planning captures the workspace and attached focused pane" {
 }
 
 test "workspace departure commits one empty version and captures bounded client state" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -95,7 +95,7 @@ test "workspace departure commits one empty version and captures bounded client 
 }
 
 test "workspace arrival commits atomically and stages the saved layout" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -165,7 +165,7 @@ test "workspace creation also retains inactive tab layouts" {
 }
 
 fn expectInactiveFullscreenReturn(replace: bool) !void {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -215,9 +215,9 @@ fn expectInactiveFullscreenReturn(replace: bool) !void {
 }
 
 test "rejected workspace arrival preserves its previous model and version" {
-    const empty = try std.testing.allocator.create(ModelType);
+    const empty = try std.testing.allocator.create(ClientModel);
     defer std.testing.allocator.destroy(empty);
-    empty.* = ModelType.init(std.testing.allocator, true);
+    empty.* = ClientModel.init(std.testing.allocator, true);
     defer empty.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
@@ -234,9 +234,9 @@ test "rejected workspace arrival preserves its previous model and version" {
     try std.testing.expectEqual(@as(usize, 0), empty.tabs.count);
     try std.testing.expectEqualDeep(VersionType{}, empty.version());
 
-    const occupied = try std.testing.allocator.create(ModelType);
+    const occupied = try std.testing.allocator.create(ClientModel);
     defer std.testing.allocator.destroy(occupied);
-    occupied.* = ModelType.init(std.testing.allocator, true);
+    occupied.* = ClientModel.init(std.testing.allocator, true);
     defer occupied.deinit();
     try model_data.workspace_handoff.bootstrap(occupied, .{ .pane_id = @enumFromInt(1), .location = location, .size = .{ .cols = 30, .rows = 8 } });
 
@@ -252,7 +252,7 @@ test "rejected workspace arrival preserves its previous model and version" {
 }
 
 test "workspace replacement commits the confirmed root and captures retired state" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const previous_workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -320,7 +320,7 @@ test "workspace replacement commits the confirmed root and captures retired stat
 }
 
 test "workspace replacement captures invalid copy-mode release" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const previous: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -347,7 +347,7 @@ test "workspace replacement captures invalid copy-mode release" {
 }
 
 test "rejected workspace replacement preserves the occupied projection" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },
@@ -376,7 +376,7 @@ test "rejected workspace replacement preserves the occupied projection" {
 }
 
 test "failed workspace replacement rolls back retained layouts" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
     const pane_id: core.PaneId = @enumFromInt(10);
@@ -402,7 +402,7 @@ test "failed workspace replacement rolls back retained layouts" {
 }
 
 test "provisional arrivals cannot overwrite retained fullscreen layouts" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
     const first: core.PaneId = @enumFromInt(10);
@@ -434,7 +434,7 @@ test "provisional arrivals cannot overwrite retained fullscreen layouts" {
 }
 
 test "workspace replacement can recover from an already empty source" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(2) },
@@ -458,7 +458,7 @@ test "workspace replacement can recover from an already empty source" {
 }
 
 test "workspace reconciliation versions semantic dimensions independently" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -541,7 +541,7 @@ test "workspace reconciliation versions semantic dimensions independently" {
 }
 
 test "rejected workspace snapshots preserve state and revisions" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -591,7 +591,7 @@ test "rejected workspace snapshots preserve state and revisions" {
 }
 
 test "active tab reconciliation versions pane changes and reports retired panes" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -639,7 +639,7 @@ test "active tab reconciliation versions pane changes and reports retired panes"
 }
 
 test "tab reconciliation rejects excessive pane membership atomically" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -665,7 +665,7 @@ test "tab reconciliation rejects excessive pane membership atomically" {
 }
 
 test "inactive tab reconciliation does not advance the visible pane revision" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -702,7 +702,7 @@ test "inactive tab reconciliation does not advance the visible pane revision" {
 }
 
 test "tab reconciliation rejects pane identities owned by another tab" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -734,7 +734,7 @@ test "tab reconciliation rejects pane identities owned by another tab" {
 }
 
 test "pane attachment confirmation changes only active operational state" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const location: core.TabLocation = .{
@@ -757,7 +757,7 @@ test "pane attachment confirmation changes only active operational state" {
 }
 
 test "pane attachment confirmation ignores inactive missing and wrong-location panes" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
@@ -791,7 +791,7 @@ test "pane attachment confirmation ignores inactive missing and wrong-location p
 }
 
 test "tab detachment plans exact operational state before a silent commit" {
-    var model = ModelType.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };

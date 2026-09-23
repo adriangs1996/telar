@@ -8,7 +8,7 @@ area: core.Rect,
 snapshot: *const data.AgentSnapshot,
 state: *State,
 /// The client model and its active tab, for pane numbering.
-model: ?*const data.Model = null,
+model: ?*const data.ClientModel = null,
 tab: usize = 0,
 focused_agent: ?data.AgentKey = null,
 transparent: bool,

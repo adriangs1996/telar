@@ -185,7 +185,7 @@ test "native history inspection and scope controls keep query ownership" {
 }
 
 test "history application selection rejects unrelated prompts and out of range rows" {
-    const model = try std.testing.allocator.create(data.Model);
+    const model = try std.testing.allocator.create(data.ClientModel);
     defer std.testing.allocator.destroy(model);
     model.* = .init(std.testing.allocator, true);
     defer model.deinit();

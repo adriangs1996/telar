@@ -6,7 +6,7 @@ prompt: *data.Prompt,
 agents: *const data.AgentSnapshot,
 workspaces: *const data.WorkspaceListSnapshot,
 /// The client model whose tabs the picker lists.
-model: ?*const data.Model,
+model: ?*const data.ClientModel,
 history: *const data.HistoryPaletteState,
 suggestion: *const data.SuggestionState,
 graphical_frame: bool,

@@ -18,7 +18,7 @@ icon_column: u16 = 0,
 
 /// Labels tab `slot`; `slot` is also its shortcut position.
 /// Example: `const label = Label.init(model, slot);`
-pub fn init(model: *const data.Model, slot: usize) Label {
+pub fn init(model: *const data.ClientModel, slot: usize) Label {
     var label: Label = .{
         .fullscreen = model.tabs.layout[slot].isFullscreen(),
         .icon = data.tab_label.icon(model, slot),
@@ -68,8 +68,8 @@ pub fn draw(label: *const Label, context: *ContextType, placement: Placement) vo
     _ = context.buffer.writeTruncated(rect, .{ .point = .{ .x = marker_x + 1, .y = rect.y }, .text = " ", .max_width = 1, .style = placement.style });
 }
 
-fn testingModel(label: []const u8) !data.Model {
-    var model = data.Model.init(std.testing.allocator, true);
+fn testingModel(label: []const u8) !data.ClientModel {
+    var model = data.ClientModel.init(std.testing.allocator, true);
     errdefer model.deinit();
     try data.workspace_handoff.bootstrap(&model, .{
         .pane_id = @enumFromInt(1),

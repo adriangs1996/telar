@@ -1,14 +1,14 @@
 //! The client leaves one workspace and arrives at another
 //! (docs/flows/workspace-handoff.md).
 const std = @import("std");
-const Model = @import("../state/Model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const Panes = @import("../panes/Panes.zig");
 const WorkspaceLayout = @import("WorkspaceLayout.zig");
 const RootTab = @import("RootTab.zig");
 
 /// Retires every tab and pane of the current workspace.
 /// Example: `workspace_handoff.clear(model);`
-pub fn clear(model: *Model) void {
+pub fn clear(model: *ClientModel) void {
     model.panes.deinit();
     model.tabs.count = 0;
     model.tabs.active = 0;
@@ -20,7 +20,7 @@ pub fn clear(model: *Model) void {
 /// Builds the arriving workspace's root tab before retiring the current
 /// workspace, so failure preserves every tab and pane.
 /// Example: `try workspace_handoff.replaceWithRoot(model, root);`
-pub fn replaceWithRoot(model: *Model, root: RootTab) !void {
+pub fn replaceWithRoot(model: *ClientModel, root: RootTab) !void {
     var layout: WorkspaceLayout = .{};
     _ = layout.setPaneGaps(model.pane_gaps);
     try layout.addRoot(root.pane_id);
@@ -46,7 +46,7 @@ pub fn replaceWithRoot(model: *Model, root: RootTab) !void {
 
 /// Builds the first workspace of an empty client.
 /// Example: `try workspace_handoff.bootstrap(model, root);`
-pub fn bootstrap(model: *Model, root: RootTab) !void {
+pub fn bootstrap(model: *ClientModel, root: RootTab) !void {
     if (model.tabs.count != 0) {
         return error.ModelNotEmpty;
     }
@@ -55,7 +55,7 @@ pub fn bootstrap(model: *Model, root: RootTab) !void {
 }
 
 test "a failed root construction keeps the previous workspace" {
-    var model = Model.init(std.testing.allocator, true);
+    var model = ClientModel.init(std.testing.allocator, true);
     defer model.deinit();
 
     try bootstrap(&model, .{

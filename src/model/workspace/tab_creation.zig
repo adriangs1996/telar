@@ -2,7 +2,7 @@
 //! (docs/flows/tab-creation.md).
 const core = @import("telar-core");
 const std = @import("std");
-const Model = @import("../state/Model.zig");
+const ClientModel = @import("../state/ClientModel.zig");
 const Tabs = @import("Tabs.zig");
 const WorkspaceLayout = @import("WorkspaceLayout.zig");
 const CreatedTab = @import("CreatedTab.zig");
@@ -10,7 +10,7 @@ const CreatedTab = @import("CreatedTab.zig");
 /// Adds a runtime-confirmed tab with its root pane and makes it active.
 /// Failure leaves every tab and pane unchanged.
 /// Example: `const slot = try tab_creation.add(model, created, size);`
-pub fn add(model: *Model, created: CreatedTab, size: core.TerminalSize) !usize {
+pub fn add(model: *ClientModel, created: CreatedTab, size: core.TerminalSize) !usize {
     const workspace = model.workspace orelse return error.UnexpectedWorkspace;
     if (!std.meta.eql(workspace, created.location.workspace)) {
         return error.UnexpectedWorkspace;
