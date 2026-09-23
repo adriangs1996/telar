@@ -1,8 +1,8 @@
 # Sidebar animation
 
 The client animates the status icon of each working agent. The frame is visible
-client state, so `ClientModel` owns it. The scheduler owns only its pending
-timer. The view receives the current frame as render input and does not advance
+client state, so `ClientModel` owns it. `model.sidebar_animation_scheduler`
+owns only its pending timer. The view receives the current frame as render input and does not advance
 time.
 
 The scheduler arms each next tick 120 milliseconds after processing while at
@@ -12,19 +12,19 @@ remains the presenter's responsibility.
 ## End-to-end path
 
 ```text
-accepted agent snapshot
+accepted agent snapshot or pane progress
         |
-agent_snapshots adapter
+AttachedClient.applyAgentSnapshot / applyPaneProgress
         |
 AttachedClient.synchronizeSidebarAnimation
         |
-AttachedClient.sidebar_animation_scheduler, one pending timer
+model.sidebar_animation_scheduler, one pending timer
         |
-ClientEvent.sidebar_animation_tick
+client.workers.start(.timer, .sidebar_animation)
+        |
+Message.sidebar_animation_tick -> AttachedClient.update
         |
 AttachedClient.completeSidebarAnimationTick
-        |
-Model.advanceSidebarAnimation
         |
 ClientModel.advanceSidebarAnimation
         |
@@ -32,31 +32,35 @@ frame + Version.sidebar_animation
         |
 presentation_lifecycle.observe
         |
-Presenter -> View.render(frame)
+Presenter -> State.render(RenderInput.sidebar_animation_frame)
 ```
 
-`AttachedClient.synchronizeSidebarAnimation` checks model policy and asks the
-scheduler for a future tick without changing the frame. The scheduler's
-`pending` bit coalesces repeated agent snapshots and rearm attempts into one
-select task.
+`AttachedClient.synchronizeSidebarAnimation` checks
+`ClientModel.sidebarAnimationActive` and asks the scheduler for a future tick
+without changing the frame. The scheduler's `pending` bit coalesces repeated
+agent snapshots and rearm attempts into one timer job. A host that reports no
+`model.host.animation_frame_ns` gets no timer.
 
 When the timer completes, `AttachedClient.completeSidebarAnimationTick` first releases the
-pending token. `Model.advanceSidebarAnimation` then advances the frame if a
-working agent still exists and rearms the scheduler. If every agent has left
-`working`, the tick is a semantic no-op and the loop stops.
+pending token. `ClientModel.advanceSidebarAnimation` then advances the frame if
+a working agent or a pane with active progress still exists, and the client
+rearms the scheduler. If none is left, the tick is a semantic no-op and the
+loop stops.
 
 ## Model and presentation
 
 `ClientModel.sidebar_animation_frame` is the only stored render frame.
 `advanceSidebarAnimation` increments it with wrapping arithmetic and advances
-only `Version.sidebar_animation`. Agent snapshot revisions and transient
+only `model.sidebar_animation_revision`, reported as
+`Version.sidebar_animation`. Agent snapshot revisions and transient
 sidebar scroll remain independent; an animation tick cannot look like a new
 runtime snapshot or reset scroll position.
 
-The use case and adapter never request a draw. After dispatch,
+The client and adapter never request a draw. After dispatch,
 `presentation_lifecycle.observe` publishes the committed version. `Presenter`
 compares it with the last observed and painted versions, invalidates the view,
-and passes `sidebarAnimationFrame()` into `View.render`. The tick joins other committed
+and passes `Projection.sidebar_animation_frame` into the view's `render` through
+`RenderInput`. The tick joins other committed
 updates in the next paced frame.
 
 ## Failure and recovery
@@ -73,14 +77,16 @@ needed.
 
 ## Validation
 
-- `src/model/state/Model.zig` proves active-only frame advancement and
-  isolated versioning.
-- `src/client/application/notifications/sidebar_animation.zig` proves inactive
-  no-ops, synchronization without mutation, commit-before-rearm ordering and
-  retained commits after effect failure.
-- `src/client/AttachedClient.zig` owns the single pending timer
-  and releases it before handling completion.
+- `src/model/state/tests/observations.zig` proves active-only frame
+  advancement and isolated versioning.
+- `src/client/AttachedClient.zig` arms the single pending timer and releases
+  it before handling completion; `src/client/notifications/sidebar_animation.zig`
+  names its `Activity` result.
+- `src/model/state/ClientModel.zig` owns the frame, its revision and the
+  scheduler.
 - `src/frontend/client/presentation/Presenter.zig` observes the dedicated revision and
   supplies the model frame to the view.
-- `src/frontend/client/tests/` proves a real scheduled tick mutates
-  the model without requesting presentation before `presentation_lifecycle.observe`.
+- `sidebar animation commits model state before the presenter observes it` in
+  `src/frontend/client/tests/notifications_and_agents.zig` proves a real
+  scheduled tick mutates the model without requesting presentation before
+  `presentation_lifecycle.observe`.

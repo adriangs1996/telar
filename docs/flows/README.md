@@ -26,7 +26,7 @@ line numbers are intentionally omitted because symbols survive refactors.
 | [Clipboard image preview](clipboard-image.md) | An attachment-capable pane receives `Ctrl+V` | The child gets its paste first, then one current bounded preview enters paced client media | Identity, ownership, bounds, stale-result and presenter tests |
 | [Agent clipboard images](agent-clipboard-images.md) | Cmd+V in a native agent composer | A bounded image joins its draft and reaches the provider as a typed image input | Native capture, GUI input, draft lifetime, IPC and provider tests |
 | [Client diagnostic state](client-diagnostic.md) | Lua, configuration or plugin work succeeds or fails | One validated bounded banner is replaced or cleared before optional notification and paced presentation | Validation, fallback, no-op, producer and presenter tests |
-| [Client event dispatch](client-event-dispatch.md) | The client select completes one asynchronous event | One owning adapter runs, then one non-terminal observation reaches Presenter | Exhaustive path, continuation, termination and substituted-platform tests |
+| [Client event dispatch](client-event-dispatch.md) | The client inbox delivers one asynchronous event | One owning adapter runs, then one non-terminal observation reaches Presenter | Exhaustive path, continuation, termination and substituted-platform tests |
 | [Client layout persistence](client-layout-persistence.md) | A terminal client changes layout or reconnects | The runtime retains one bounded replica and the client restores it before its initial attach | Schema, ordering, coalescing, stale-topology and real-runtime reconnection tests |
 | [Client startup](client-startup.md) | The platform has constructed a client and its host resources | The initial runtime handshake completes before every asynchronous event source is armed | Validation, protocol order, correlation, token and failure tests |
 | [Client telemetry](client-telemetry.md) | The client diagnostics clock completes | One bounded latest-state JSON line reaches the fail-closed observation sink | Projection, token, lifecycle, failure and substituted-platform tests |
@@ -84,6 +84,25 @@ line numbers are intentionally omitted because symbols survive refactors.
 | [Workspace handoff](workspace-handoff.md) | User navigation or runtime lifecycle selects another workspace | The client presents one empty departure and one atomically confirmed arrival | Ordering, model, recovery, resource and presenter tests |
 | [Workspace list snapshot](workspace-list-snapshot.md) | Runtime workspace membership, order, name or tab count changes | The client commits one bounded navigation replica and the presenter projects the latest revision | Storage, model, protocol and presenter tests |
 | [Workspace list toggle](workspace-list-toggle.md) | User, Lua, plugin or top bar collapses the workspace list | The client commits chrome state and the presenter alone updates its view projection | Model, intent and presenter tests |
+| [Agent command history](agent-command-history.md) | A harness hook or a trusted proxy tap reports an agent command | The runtime history service records it beside shell commands | Hook, tap and history service tests |
+| [Agent navigation](agent-navigation.md) | The user picks an agent in the sidebar | Focus moves to that exact pane generation, across workspaces when needed | Model, navigation and handoff tests |
+| [Change review](change-review.md) | The user opens **Review changes** on a pane with recorded editions | The native review shows the patch and sends comments back to the agent | Session, runtime discovery, protocol and GUI widget tests |
+| [CLI control](cli-control.md) | A script runs a `telar` control command against a live runtime | One typed request is answered or routed to a client without starting a server | Parser, session and runtime request tests |
+| [Client detach](client-detach.md) | The user detaches a client | The client saves its layout and exits; panes and PTYs keep running | Model detachment and client lifecycle tests |
+| [Codex validation](codex-validation.md) | The Codex integration is compared with T3 Code and the app-server protocol | A recorded comparison of supported behavior | Protocol probe record |
+| [Editor file links](editor-file-links.md) | A click on a local file link in an agent message | The file opens in an existing editor pane, or in a new one | Link, runtime editor-discovery and GUI tests |
+| [GUI font fallback](gui-font-fallback.md) | A cell or label needs a glyph the configured font lacks | The first covering face renders it, keeping graphemes together | Font run and atlas tests |
+| [GUI multiplexer on Linux](gui-multiplexer-linux.md) | The Wayland validation script drives the native client | Keyboard input reaches the intended panes, checked by shell markers | VM-driven integration script |
+| [GUI multiplexer](gui-multiplexer.md) | Native input requests a workspace, tab or pane operation | The GUI renders the shared model after the same operations the TUI uses | GUI composition and navigation tests |
+| [GUI procedural glyphs](gui-procedural-glyphs.md) | A cell holds Braille, box-drawing or block characters | The atlas draws them procedurally to the cell grid | Procedural glyph and atlas tests |
+| [Markdown tables](markdown-tables.md) | An agent message contains a pipe table | The GUI lays it out as a table | Message block and layout tests |
+| [Metal 4 renderer](metal4-renderer.md) | The GUI starts on macOS | Frames render through Metal 4, or startup fails explicitly on unsupported systems | Native renderer and window tests |
+| [Native host services](native-host-services.md) | A GUI copy, runtime clipboard message or link open | The host clipboard or opener receives the request from the window thread | Host service and GUI tests |
+| [Native input](native-input.md) | AppKit or Wayland delivers keys, text, paste or pointer events | The window thread routes them through the shared client | Input ABI, queue and routing tests |
+| [Pane pointer shape](pane-pointer-shape.md) | A child requests a pointer shape with OSC 22 | The host pointer changes while the cursor is over that pane | VT, protocol and presenter tests |
+| [Terminal colors](terminal-colors.md) | The client learns its terminal's colors with OSC 10 and 11 | Panes use those colors as VT defaults | Negotiation, protocol and runtime tests |
+| [Terminal command history](terminal-command-history.md) | Shell input and output reach the history observer | Submitted commands and their completion enter history | Tracker and observer tests |
+| [Vulkan renderer](vulkan-renderer.md) | The GUI starts on Linux | Frames render through Vulkan 1.3, or startup fails explicitly | Native renderer tests |
 
 Add a flow when a behavior crosses an asynchronous boundary, a process
 boundary, or three capability owners. Do not duplicate local implementation

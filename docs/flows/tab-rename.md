@@ -4,15 +4,15 @@ The runtime owns the canonical label. The client prompt edits a candidate and
 closes only after a locally accepted request; it does not rename the replica.
 
 ```text
-AttachedClient.inputPrompt
+AttachedClient.inputPrompt -> AttachedClient.submitPrompt(.rename_tab)
   -> AttachedClient.requestTabRename
-     -> pending-operation gate, validate label, resolve exact target
+     -> pending-operation gate, label_validation.validate, resolve exact target
      -> AttachedClient.sendTabRenameRequest -> owned rename_tab
   -> runtime canonical rename -> tab_renamed
   -> AttachedClient.handleServerMessage
   -> AttachedClient.completeTabRename
      -> consume and verify exact rename continuation
-     -> Model.renameTab
+     -> ClientModel.renameTab -> tab_rename.rename
   -> adapter observes presentation revisions
 ```
 
@@ -25,8 +25,8 @@ correlation and changes no canonical tab state.
 
 An empty canonical label selects automatic naming. Manual rename supplies a
 nonempty label and disables it, even if that label equals the currently
-displayed automatic text. Reconciliation compares `canonicalLabel()`;
-presentation uses `labelSlice()`.
+displayed automatic text. Reconciliation compares `model.tabs.canonicalLabel(slot)`;
+presentation uses `tab_label.text(model, slot)`.
 
 The runtime commits its owned label before replying and marks other observing
 clients for resync. The requesting client accepts the reply's label, which can
@@ -39,8 +39,8 @@ cannot rename a tab. Known correlation is consumed before these checks, so
 replay cannot apply later. A correlated runtime failure preserves the old label
 and publishes the runtime notice. Reconnect rebuilds labels from snapshots.
 
-Source: `src/client/AttachedClient.zig` and
-`AttachedClient.inputPrompt`.
+Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`
+and `src/model/workspace/tab_rename.zig`.
 Tests: `src/frontend/client/tests/renaming_and_telemetry.zig`,
 `tab_lifecycle.zig`, `src/model/state/tests/tabs.zig`, and
 `src/model/connection/outbox_support.zig` cover prompt lifetime, owned bytes,

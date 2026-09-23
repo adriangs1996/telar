@@ -6,15 +6,15 @@ per-attachment projection so it can return the requested history rows.
 ```text
 AttachedClient.sendPaneInput, inputPaneMouse or applyCopyMode
   -> AttachedClient.applyPaneViewport
-     -> Model.setPaneViewport
+     -> ClientModel.setPaneViewport
      -> AttachedClient.deliverPaneViewport
         -> validate exact committed pane, viewport and revision
-        -> graphics visibility
-        -> runtime set_pane_viewport
+        -> graphics.setPaneVisible
+        -> sendRuntime(set_pane_viewport)
   -> adapter observes presentation revisions
 ```
 
-`Model.setPaneViewport` resolves absolute, relative or bottom intents only for
+`ClientModel.setPaneViewport` resolves absolute, relative or bottom intents only for
 an attached pane in the active tab. It clamps against retained history and
 advances only the viewport revision. Missing, inactive, detached and unchanged
 targets are no-ops. Copy mode owns its viewport transaction exclusively, so a
@@ -31,7 +31,7 @@ describe. Focused scroll bindings reuse mouse wheel/alternate-screen policy and
 do not immediately undo their scroll by treating the binding as child input.
 
 Graphics visibility changes before runtime delivery. A graphics error prevents
-the wire effect; an outbox error keeps committed scroll and completed graphics
+the wire effect; a `model.to_runtime` error keeps committed scroll and completed graphics
 changes. Neither failure rolls the viewport back.
 
 The runtime clamps and pins the attachment viewport; reaching the bottom clears

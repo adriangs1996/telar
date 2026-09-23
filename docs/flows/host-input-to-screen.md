@@ -11,7 +11,7 @@ then emits output, that output returns through VT state and the client renderer.
 host TTY bytes
       |
       v
-host_inputs.handleRead
+host_inputs.handleOwnedRead
       |
       v
 host_inputs.feed -> Router.next -> term.parse -> Router.routeEvent
@@ -21,21 +21,21 @@ host_inputs.feed -> Router.next -> term.parse -> Router.routeEvent
       v                                                      v
 host_inputs.key / mouse                         applyDecision(.action)
       |                                                      |
-key_routing / pointer_routing                   AttachedClient.executeAction
+routeKeyInput / pointer_routing.apply           AttachedClient.executeAction
       |                                                      |
 physical lease / owner selection             binding authority / copy-mode preflight
       |                                                      |
 AttachedClient.sendPaneInput                  native / Lua / plugin action
       |                                                      |
-AttachedClient.sendPaneInput                                      consumed by Telar
+ClientModel.planPaneInput                                consumed by Telar
       |
-ClientModel.planPaneInput -> input.encoding.encodeKey
+encoding_support.encodeKey
       |
 AttachedClient.applyPaneViewport(.bottom)
       |
-AttachedClient.sendRuntimeInput
+AttachedClient.sendRuntimeInput -> model.to_runtime
       |
-Outbox.encodeNext -> schema.pane_input -> socket
+Outbox.beginSend -> schema.pane_input -> runtime_send worker -> socket
       |
       v
 Runtime.run -> Runtime.update(.client_message) -> client_connection.receive
@@ -52,10 +52,12 @@ inline result or .pane_ingested -> pane_output.finishIngest
       |
 Runtime.update flush -> client_delivery.flush -> Delivery.prepare
       |
-Attachment.prepareNextCells -> cell.Sync.prepare -> schema.pane_frame -> socket
+Attachment.prepareNextCells -> CellSync.prepare -> schema.pane_frame -> socket
       |
       v
-AttachedClient.receiveRuntime -> handleServerMessage -> applyPaneFrame
+AttachedClient.receiveRuntime -> handleServerMessage -> receivePaneFrame
+      |
+pane_frame.receive -> model.to_runtime (.frame_ack)
       |
 presentation_lifecycle.observe -> Presenter.presentDue -> presentation.Screen.flush
       |
@@ -65,15 +67,16 @@ host TTY bytes
 
 ## 1. Host terminal entry
 
-`client.run` opens `platform.Tty` and gives its read handle to
-`host_inputs.State`. That state owns the handle, native router, one read token
-and the two replaceable deadline schedulers. Workspace activation and socket
-send completion call `host_inputs.scheduleRead`. The scheduler pauses when the
-bounded outbox has no capacity and never publishes a second read while one is
-pending.
+`run` in `src/frontend/client/run.zig` opens `platform.Tty` and gives its read
+handle to `HostInput` (`terminal.host_input`). That state owns the handle,
+native router, one read-pending flag and the two replaceable deadline
+schedulers. Workspace activation and socket send completion set
+`model.to_host.resume_input`; `host_effects.deliver` then calls
+`host_inputs.scheduleRead`. The scheduler pauses when `model.to_runtime` has
+no capacity and never publishes a second read while one is pending.
 
-The read completes as `.input`. The event loop delegates it to
-`host_inputs.handleRead`, which owns this ordering:
+The read completes as `.input`. `events.update` delegates it to
+`host_inputs.handleOwnedRead`, which owns this ordering:
 
 1. release the outstanding-read flag;
 2. stop on EOF;
@@ -84,8 +87,8 @@ The read completes as `.input`. The event loop delegates it to
 6. synchronize input and binding deadlines;
 7. schedule the next TTY read.
 
-After the entrypoint returns, `client_events` publishes `ClientModel.Version`
-and `PresentationIngress`. The latter contains the disposable view-interaction
+After the inbox turn, `events.update` calls `presentation_lifecycle.observe`,
+which publishes `ClientModel.Version` and `PresentationIngress`. The latter contains the disposable view-interaction
 and visible input-routing revisions. The presenter schedules a paced draw when
 any observed value changed.
 
@@ -104,11 +107,11 @@ key. Partial global sequences retain the configured binding timeout.
 worker token before asking the router to expire partial state. Both paths reuse
 the same input-routing revision and timer synchronization as a TTY read.
 
-Each deadline uses `deadline_timer.Scheduler`. It stores one atomic absolute
+Each deadline uses `core.DeadlineScheduler`. It stores one atomic absolute
 deadline, one wake event and one pending worker. Replacing or removing a
 deadline wakes that worker instead of queueing another. A configuration reload
-compiles a complete replacement router, swaps it through
-`State.replaceRouter`, inherits active physical leases and clears both old
+sets `model.to_host.rebind_input`; `host_effects.deliver` compiles a complete
+replacement router and swaps it through `HostInput.replaceRouter`, which inherits active physical leases and clears both old
 deadlines. A new partial sequence
 can then wake the retained workers with the replacement timeout; it never
 waits for the old configuration's deadline.
@@ -153,13 +156,14 @@ owned outbox delivery to `AttachedClient.requestNotificationDelivery`. See
 [Notifications](notifications.md) for request and report handling.
 
 `scroll-pane-up`, `scroll-pane-down` and the Lua `telar.action.scroll_pane`
-constructor enter the focused-pane wheel policy through `pane_mouse_inputs`.
+constructor enter the focused-pane wheel policy through
+`AttachedClient.inputPaneMouse`.
 The policy selects a three-row viewport change, alternate-screen cursor keys,
 or an SGR mouse report according to the child's modes. It never forwards the
 binding bytes. Worker plugin effects reject scrolling. See
 [Pane mouse input](pane-mouse-input.md) for selection and delivery rules.
-The native scroll integration test in `client/tests/host_interaction.zig`
-covers viewport bounds and message order; `client/tests/input.zig` covers
+The native scroll integration test in `frontend/client/tests/host_interaction.zig`
+covers viewport bounds and message order; `frontend/client/tests/input.zig` covers
 focus, child modes, default bindings and copy-mode retirement.
 
 Actions may mutate disposable client state or enqueue a typed runtime request.
@@ -178,7 +182,7 @@ application owner for the physical lifecycle; pane ownership stores the exact
 failure and `Ctrl+V` follow-up policy.
 
 `AttachedClient.sendPaneInput` resolves an attached target through
-`ClientModel.planPaneInput` and calls `input.encoding.encodeKey` from
+`ClientModel.planPaneInput` and calls `encoding_support.encodeKey` from
 `src/client/input/encoding_support.zig` for semantic keys. Encoding uses the pane's most
 recently applied cursor/application, modify-key and bracketed-paste modes, even
 while an older presentation is still in flight. Replayed
@@ -195,20 +199,22 @@ and telemetry policy.
 
 ## 2C. Pointer interaction branch
 
-`host_inputs.mouse` delegates to `pointer_routing`. The adapter records host
-telemetry, rejects prompt-owned input or an absent active model, and converts
-supported host pixels to cells. `pointer_routing.apply` gives copy mode, the
-view, textual links and pane input exclusive refusal in that order. It knows
-their outcomes, but it does not read any model or view representation.
+`host_inputs.mouse` lets `tab_drag.retained` keep an active tab drag, then
+delegates to `pointer_routing.apply`. That procedure records host telemetry,
+rejects prompt-owned input or an absent active tab, and converts supported
+host pixels to cells. It then gives copy mode, the view, textual links and
+pane input exclusive refusal in that order. It reaches the adapter's view only
+through `client.chrome.pointer` and `client.chrome.linkPointer`.
 
 `copy_mode_pointer` resolves a fixed copy and geometry snapshot;
 `copy_mode_pointer.apply` consumes every pointer event while copy mode is active
-and selects only bounded vertical movement or exit. Only an `unowned` result
-reaches `View.handleMouse`. See [Copy mode](copy-mode.md).
+and selects only bounded vertical movement or exit. Only an unowned event
+reaches `HostChrome.pointer`, which the TUI answers with `State.handleMouse`
+in `src/frontend/client/presentation/State.zig`. See [Copy mode](copy-mode.md).
 
-`View.handleMouse` returns one `view_interaction.Command`. The command contains
+`State.handleMouse` returns one `ViewInteractionCommand`. The command contains
 one exclusive semantic intent plus layout and pointer-capture facts. Hover,
-sidebar scroll and attachment-modal changes advance `View.interactionVersion`.
+sidebar scroll and attachment-modal changes advance `State.interactionVersion`.
 The view does not select tabs, focus panes, start prompts or navigate
 notifications.
 
@@ -230,10 +236,11 @@ in `pane_frame.pointer_shape`, including pointer-only updates and recovery
 snapshots. See [Pane pointer shape](pane-pointer-shape.md) for protocol bounds,
 stationary-pointer updates, UI priority and proofs.
 
-`operations/input/view_interactions.apply` applies the semantic intent by
-calling the concrete sidebar, workspace-list, agent-navigation, tab-selection,
-pane-focus, name-prompt, handoff or notification operation. If the interaction
-changed layout, that same function invalidates graphics placements and calls
+`view_interactions.apply` in `src/client/input/view_interactions.zig` applies
+the semantic intent by calling the concrete sidebar, workspace-list,
+agent-navigation, tab-selection, pane-focus, name-prompt, handoff or
+notification operation. If the interaction changed layout, that same function
+sets `model.to_host.invalidate_placements` and calls
 `AttachedClient.resizeAttachedPanes` with the original active model and current area.
 It then returns whether the triggering event was consumed.
 
@@ -242,14 +249,15 @@ Explicitly consumed view chrome does the same. Pane focus remains routable so
 the newly focused child receives the press after focus resources commit. If an
 effect fails, dispatch stops before later effects and the input entrypoint does not
 forward the event. Otherwise pointer routing forwards only events that remain
-inside the workbench. It delegates them to `pane_mouse_inputs` without reading
-pane geometry or child mouse modes. `multiplexer.Model.planPaneMouse` resolves
-the pane snapshot, `AttachedClient.inputPaneMouse` chooses one viewport, alternate-scroll
-or report effect, and the adapter applies it through the existing viewport and
-pane-input use cases. See [Pane mouse input](pane-mouse-input.md).
+inside the workbench. It delegates them to `AttachedClient.inputPaneMouse`
+without reading pane geometry or child mouse modes. `tab_layout.planPaneMouse`
+resolves the pane snapshot, `AttachedClient.inputPaneMouse` chooses one
+viewport, alternate-scroll or report effect (`pane_mouse_inputs.encodeReport`
+encodes reports) and applies it through the existing viewport and pane-input
+use cases. See [Pane mouse input](pane-mouse-input.md).
 
 The command and operation use fixed value types. The pure capture policy stays
-in `src/client/application/input/view_interaction.zig`. View tests cover
+in `src/client/input/view_interaction.zig`. View tests cover
 hit-to-intent translation; `src/frontend/client/tests/mouse_selection.zig` and
 `synchronization.zig` exercise actual sidebar-agent handoff, notification
 activation and focus-before-press forwarding through client input.
@@ -330,11 +338,13 @@ encodes input before applying the optional `.bottom` viewport intent. A changed
 viewport commits, updates graphics visibility and queues `set_pane_viewport`.
 The concrete input operation then calls `AttachedClient.sendRuntimeInput` directly.
 
-The outbox copies the bytes through `Outbox.pushInput`. `AttachedClient.startRuntimeSend` calls
-`RuntimeTransportState.prepareSend` and `Outbox.beginSend`, which encodes the
-head through `encodePaneInput`. The actual transport driver starts the owned
-send actor. Its `.sent` completion releases that claim before pumping the next
-entry; the operation never borrows model data into that actor.
+`model.to_runtime` copies the bytes through `Outbox.pushInput`.
+`AttachedClient.startRuntimeSend` calls `Outbox.beginSend`, which encodes the
+head into the transport's send buffer through `core.encodePaneInput`, then
+starts the `runtime_send` job with `client.workers.start`. Its `.sent`
+completion reaches `AttachedClient.update`, and `completeRuntimeSend` releases
+that claim through `Outbox.finishSend` before pumping the next entry; the
+operation never borrows model data into that worker.
 
 The outbox is bounded, owns copied input bytes and coalesces adjacent input for
 the same pane. Only one socket send is in flight. When the viewport changes,
@@ -445,14 +455,16 @@ schedules the next read only for a non-terminal outcome. See
 [Client runtime transport](runtime-transport.md) for buffer ownership, queue
 capacity and socket failure policy.
 
-The `.pane_frame` case calls `AttachedClient.applyPaneFrame`, which commits through
-`ClientModel.applyPaneFrame`. The model validates the base, applies spans,
-reconciles scroll, input modes and copy state, then advances the frame revision.
-In the same synchronous call, `AttachedClient.applyPaneFrame` queues `.frame_ack` before
-updating graphics visibility and active resources. A broken base requests a
-snapshot without changing state or acknowledging that frame.
+The `.pane_frame` case calls `AttachedClient.receivePaneFrame`, which commits
+through `pane_frame.receive` in `src/model/panes/pane_frame.zig`. That
+procedure validates the base, applies spans, reconciles scroll, input modes and
+copy state, advances the frame revision and queues `.frame_ack` in
+`model.to_runtime`. In the same synchronous call,
+`AttachedClient.receivePaneFrame` starts the runtime send before updating
+graphics visibility and active resources. A broken base queues
+`request_snapshot` without changing state or acknowledging that frame.
 
-After dispatch, `client_events` calls `presentation_lifecycle.observe`.
+After the inbox turn, `events.update` calls `presentation_lifecycle.observe`.
 `Presenter` detects the new frame revision and schedules the paced draw; the
 frame use case does not decide whether to paint. See
 [Client presentation lifecycle](presentation-lifecycle.md) for observation,
@@ -462,11 +474,11 @@ The `.draw` event calls `presentation_lifecycle.handleDraw`, then
 captures an immutable `presentation_projection` and calls
 `Presenter.presentDue`:
 
-1. the presenter-owned `workspace.multiplexer.Compositor` composes the
-   immutable active-tab model into the screen back buffer;
-2. `client.View.render` composes Telar chrome;
-3. `flushScreen` calls `presentation.Screen.flush` in
-   `src/frontend/presentation/screen_support.zig`;
+1. the presenter-owned `Compositor` from `src/frontend/workspace/Compositor.zig`
+   composes the immutable active-tab model into the screen back buffer;
+2. the TUI view's `State.render` composes Telar chrome;
+3. `flushScreen` calls `Screen.flush` in
+   `src/frontend/presentation/Screen.zig`;
 4. the screen emits the minimal terminal diff and flushes the host writer;
 5. successful host-write completion commits the exact presented pane damage
    and releases graphics credits independently of cell ACKs.
@@ -478,8 +490,9 @@ They update the same model; the next preparation captures its latest state.
 
 The GUI admits native events through `GuiClient.input`, then the window
 thread drains `InputQueue` into the shared router. After `AttachedClient.sendPaneInput`
-successfully admits nonempty child input, `AttachedClient.recordPaneInput` calls the
-optional `HostPresentation.notePaneInput` port. Local shortcuts, suppressed
+successfully admits nonempty child input, `AttachedClient.recordPaneInput` sets
+`model.to_host.pane_input`; `GuiClient.deliverHostEffects` hands it to
+`GuiClient.notePaneInput`, and the TUI's `host_effects.deliver` discards it. Local shortcuts, suppressed
 releases and rejected outbox writes grant no terminal drawing grace.
 
 `NativeLoop` owns one `FramePacer` per GUI connection. It records the target's
@@ -497,7 +510,7 @@ token charges the ordinary cadence and only the newer pane frames captured in
 its presentation commit. An early frame reanchors the next interval at its
 preparation time, so repeated input cannot accumulate future cadence debt.
 Ordinary output retains one frame per 60 Hz cadence slot. Linux retains its
-existing Wayland frame clock and does not query this optional native port.
+existing Wayland frame clock and does not query this optional native callback.
 
 The native renderer and presentation lifecycle still allow one frame in
 flight. GPU completion retires only its captured commit. It does not clear a
@@ -517,7 +530,7 @@ connection. Native hosts without the callback retain their local cadence.
 
 - `src/core/time/deadline_timer.zig` proves replacement, removal,
   parking, wakeup and token release for successful and failed workers.
-- `src/frontend/client/controllers/input/host_inputs.zig` proves owned timeout configuration,
+- `src/frontend/client/input/host_inputs.zig` proves owned timeout configuration,
   router replacement without duplicate workers and prefix-status projection.
 - `host input reads pause at outbox capacity and resume with one token` in
   `src/frontend/client/tests/transport.zig` proves bounded backpressure, one real
@@ -527,8 +540,11 @@ connection. Native hosts without the callback retain their local cadence.
 - `src/client/AttachedClient.zig` proves prompt
   suppression, source selection, Lua router control, input reinjection and
   selected-effect failure ordering.
-- `src/client/operations/input/pointer_routing.zig` proves copy, view and
-  pane owner ordering before any pointer effect reaches a child.
+- `src/client/input/pointer_routing.zig` owns copy, view, link and pane owner
+  ordering; the copy-mode pointer tests in
+  `src/frontend/client/tests/host_interaction.zig` and the name-prompt pointer
+  test in `src/frontend/client/tests/input.zig` prove it before any pointer
+  effect reaches a child.
 - `mouse pointer distinguishes clickable chrome panes and sidebar resizing` in
   `src/frontend/client/presentation/view.zig` proves the semantic hover mapping.
 - `mouse pointer changes fold until a shape or recovery changes` in
@@ -542,7 +558,7 @@ connection. Native hosts without the callback retain their local cadence.
   `src/frontend/client/tests/configuration.zig` prove the adapter against prompt,
   copy-mode and acknowledged pane-mode authority.
 - The persistent-prefix, invalid-suffix, Escape-cancellation, and global-timeout
-  tests in the same file prove that prefix mode has no timing window without
+  tests in `src/frontend/input/keybind.zig` prove that prefix mode has no timing window without
   changing global multi-key sequence recovery.
 - `unbound input is byte-for-byte transparent` and the terminal-sequence split
   tests in the same file prove parser and routing boundaries.
@@ -568,7 +584,7 @@ connection. Native hosts without the callback retain their local cadence.
   and retain exactly `a` on completion. `tools/test_verify_terminal_browser.py`
   checks rejection of those false positives, duplicate text and incomplete runs.
 - `releasing the physical prefix preserves its logical sequence through client routing`
-  in the same file proves the complete host-parser-to-action lease path.
+  in `src/frontend/client/tests/input.zig` proves the complete host-parser-to-action lease path.
 - `modified Enter follows the compatibility profile and child keyboard negotiation through the PTY` in
   `src/transport_integration_test.zig` proves that a real child can enable
   Kitty flags 7, switch to modifyOtherKeys and return to legacy mode while

@@ -14,8 +14,9 @@ connection with that identity before any layout update is accepted.
 
 The runtime preallocates eight records before entering its event loop. Each
 record holds at most 64 tab layouts and 127 tree nodes in total. Least-recently
-used identity replacement bounds disconnected state. There is no disk write;
-stopping the server discards every record.
+used identity replacement bounds disconnected state. Each accepted update marks
+the session checkpoint dirty; the checkpoint writes every record and a restart
+restores them. See [Session checkpoint](session-checkpoint.md).
 
 ## Update path
 
@@ -28,9 +29,9 @@ fixed-size version comparison
         |
 update_client_layout
         |
-runtime request dispatcher
+client_request.receive -> client_layout_persistence.retain
         |
-ClientLayoutStore.replace
+ClientLayouts.replace
         |
 validate pane sets against runtime authority
         |
@@ -38,7 +39,7 @@ merge current workspace into retained terminal record
 ```
 
 The client serializes only tabs whose canonical runtime snapshot has loaded.
-The outbox owns the encoded bytes and coalesces adjacent obsolete layouts. It
+The `model.to_runtime` outbox owns the encoded bytes and coalesces adjacent obsolete layouts. It
 never folds across an ordered request that can change pane membership. If its
 two layout slots are occupied, the latest semantic version remains unsent and
 the next completed send retries it. The steady-state path allocates nothing.

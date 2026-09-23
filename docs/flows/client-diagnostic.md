@@ -28,5 +28,5 @@ notification. Notification failure preserves it. Lua failures publish the banner
 without a second notification. The model owns no drawing or timer scheduling.
 
 Validation lives in the model's configuration tests,
-`src/client/application/configuration/client_diagnostic.zig`, and the real
+`src/client/config/client_diagnostic.zig`, and the real
 configuration/Lua/plugin flows in `src/frontend/client/tests/configuration.zig`.

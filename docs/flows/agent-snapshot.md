@@ -28,7 +28,7 @@ the model and delivers the dependent resources in one synchronous operation.
 ## Model transaction
 
 `ClientModel` is the only owner of the client replica. It rejects equal and
-older runtime revisions, and `agents.Snapshot` constructs a complete candidate
+older runtime revisions, and `AgentSnapshot` constructs a complete candidate
 before assignment. Duplicate identities, invalid labels or capacity errors
 leave the previous snapshot and `Version.agents` unchanged.
 
@@ -62,8 +62,8 @@ There is no public callback boundary between the commit and its delivery.
 The snapshot itself does not request a draw. At the event boundary,
 `presentation_lifecycle.observe` publishes the current version. `Presenter` compares
 `Version.agents` with the version it last painted, resets transient sidebar
-scroll, invalidates chrome and passes `ClientModel.agentSnapshot()` to the
-view on the paced frame.
+scroll, invalidates chrome and passes the projection's `agents`
+(`&model.agent_snapshot`) to the view on the paced frame.
 
 Sidebar composition derives focused highlighting and any active-layout pane
 index during rendering. The stored runtime entry remains unchanged. Several

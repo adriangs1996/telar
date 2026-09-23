@@ -1,15 +1,16 @@
 # Reusing terminal editors for agent file links
 
 A completed click on an agent message's local file link enters
-`link_openings.openMessageFile`. The client looks for the configured editor in
+`AttachedClient.openMessageFile`. The client looks for the configured editor in
 that source tab. If there is a candidate, `open_editor` asks the runtime to open
 the file in an existing instance. `editor_opened` reports the exact pane and
-runtime generation; the client's existing focus handler focuses that pane.
+runtime generation; `AttachedClient.completeEditorOpen` focuses that pane
+through the existing pane focus path.
 
-The runtime's `editors.routeOpenEditor` translates the request and delivers the
-reply. `editors.routeOpenEditor` checks the source generation and collects live
-terminal panes in the same tab. `editors.Job` discovers servers and opens the
-file on an observation worker. It never writes commands or simulated keys to a
+The runtime's `link_opening.start` admits the request: it checks the source
+generation and collects live terminal panes in the same tab.
+`editors/Job.zig` discovers servers and opens the file on an observation
+worker, and `link_opening.finish` delivers the reply. It never writes commands or simulated keys to a
 PTY. Names only select candidates; the remote editor's process identity, and
 for Emacs the frame's terminal device, identify the destination.
 
@@ -47,7 +48,7 @@ candidates and 128 helper invocations. Helpers share a three-second deadline,
 with 16 KiB stdout and stderr limits. Local discovery rejects symlinks,
 wrong-owner endpoints and group/world-writable directories or sockets.
 
-The wire request borrows bounded strings; only the outbox, client continuation
+The wire request borrows bounded strings; only `model.to_runtime`, client continuation
 state and worker retain copies. Ordinary input messages do not inherit the
 storage size of file paths. Discovery and subprocess work never run in the
 runtime's input or PTY loop. There is no editor polling while idle.
@@ -68,5 +69,5 @@ real Neovim identity and file opening when Neovim is installed, runtime tab
 selection, admission bounds and stale sources. When the GUI adapter is enabled,
 it also runs the relevant GUI tests. `zig build test-gui` runs the full GUI suite,
 which exercises
-actual message-link clicks through the shared outbox and reply dispatch,
+actual message-link clicks through `model.to_runtime` and reply dispatch,
 including fallback, duplicate replies, Nano and replaced pane identities.

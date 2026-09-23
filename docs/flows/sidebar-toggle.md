@@ -15,19 +15,22 @@ reply.
 native, Lua, plugin or pointer sidebar action
   -> AttachedClient.executeAction
   -> AttachedClient.toggleSidebar / resizeSidebar
-  -> Model commits visibility or width
+  -> ClientModel commits visibility or width
   -> private AttachedClient.deliverSidebarLayout
-       verify commit; project chrome; invalidate graphics; resize attached panes
+       verify commit; queue placement invalidation; resize attached panes
 
-next presentation observation
+after the event
+  -> adapter drains model.to_host (placement invalidation)
+  -> presentation_lifecycle.observe -> view_chrome.refresh
   -> Presenter compares model versions and schedules the paced frame
 ```
 
 `ClientModel` is the source of truth for requested visibility and preferred
 width. A toggle, exact pointer width or two-column keybinding step advances
-only `ClientModel.Version.chrome` and returns the complete committed layout.
-Explicit configuration updates use `setSidebarVisible`; applying an identical
-layout is a no-op.
+only `model.chrome_revision`, reported as `Version.chrome`, and returns the
+complete committed `SidebarLayout`. `ClientModel.toggleSidebar`,
+`setSidebarWidth` and `stepSidebarWidth` commit it. Explicit configuration
+updates use `setSidebarVisible`; applying an identical layout is a no-op.
 
 The shared action dispatcher calls the concrete sidebar operation. Lua
 callback context also reads the committed model value, never the disposable
@@ -36,19 +39,21 @@ view projection.
 ## Effects and presentation
 
 After the commit, `AttachedClient.deliverSidebarLayout` verifies visibility, width and
-chrome revision. It projects both values into `View`, invalidates graphics
-placements and publishes the resulting size for every attached pane in the
-active tab, in that order. With no active workspace it completes after the
-first two effects. Configuration reload calls the same
-`AttachedClient.deliverSidebarLayout` operation after its model transaction. That function
-calls the chrome and graphics service ports and `AttachedClient.resizeAttachedPanes`
-directly. This immediate projection gives
-geometry effects the same workbench that the next frame will show.
+chrome revision. It sets `model.to_host.invalidate_placements` and publishes
+the resulting size for every attached pane in the active tab through
+`AttachedClient.resizeAttachedPanes`, in that order. With no active tab it
+stops after the invalidation. Configuration reload calls the same
+`AttachedClient.deliverSidebarLayout` after its model transaction. Pane
+geometry comes from `data.workbench.region(model)`, which derives the
+workbench from the committed sidebar values, so geometry effects use the same
+workbench that the next frame will show.
 
-Neither the use case nor the adapter requests a frame. After the input event,
-`client_events` calls `presentation_lifecycle.observe`. `Presenter` detects the
-chrome revision, idempotently synchronizes the view projection, invalidates it and
-folds composition into the paced frame loop.
+Neither the procedure nor the adapter requests a frame. After the input event,
+the TUI's `events.zig` drains `model.to_host` through `host_effects.deliver`,
+then calls `presentation_lifecycle.observe`. `view_chrome.refresh` copies the
+sidebar values into the view when the chrome revision changed, and `Presenter`
+detects the revision, invalidates the view and folds composition into the
+paced frame loop.
 
 Hiding the sidebar expands the workbench and both bars. Showing or resizing it
 gives the sidebar the complete left column, so the workbench, top bar and
@@ -69,10 +74,10 @@ roll back the client preference.
 
 ## Validation
 
-- `src/model/state/Model.zig` owns visibility, width and chrome revisions.
-- `src/client/AttachedClient.zig` validates each commit and delivers chrome,
-  graphics invalidation and pane geometry in order.
+- `src/model/state/ClientModel.zig` owns visibility, width and chrome revisions.
+- `src/client/AttachedClient.zig` validates each commit and delivers graphics
+  invalidation and pane geometry in order.
 - `src/client/attached_client_tests.zig` rejects stale visibility, width and
-  revision before accessing a host port.
+  revision before touching any host effect.
 - `src/frontend/client/tests/pane_lifecycle.zig` checks expanded, contracted and
   resized pane geometry and presenter-owned frame scheduling.

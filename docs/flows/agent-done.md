@@ -21,9 +21,9 @@ AttachedClient.synchronizePaneAttachments
         |
 ClientModel.takeAgentAcknowledgement  (focused pane, status done, once)
         |
-outbox.acknowledge_agent -> schema.AcknowledgeAgent
+model.to_runtime.push(acknowledge_agent) -> schema.AcknowledgeAgent
         |
-Runtime.update -> client_request.receive -> agent_done.acknowledge
+Runtime.update -> client_connection.receive -> client_request.receive -> agent_done.acknowledge
         |
 Tracker.acknowledge -> Agent.acknowledge (seen = true) -> reproject -> ready
         |
@@ -61,11 +61,10 @@ revision; it resets when the same agent leaves `done`, so a later completion is
 acknowledged again.
 
 `AttachedClient.synchronizePaneAttachments` asks the model
-first and emits the `acknowledge_agent` effect before touching the attachment
-shelf. Every path that can change which pane the user is looking at already
+first and queues `acknowledge_agent` before touching the attachment shelf. Every path that can change which pane the user is looking at already
 enters this operation: pane focus, tab and workspace transitions, frames and
-agent snapshots. It enqueues `schema.AcknowledgeAgent` through the
-fixed outbox; the request has no response.
+agent snapshots. It enqueues `schema.AcknowledgeAgent` on the fixed
+`model.to_runtime` outbox; the request has no response.
 
 Alerts follow the semantic: `done` publishes the success notification that
 `ready` used to publish, and the flip back to `ready` after acknowledgement is

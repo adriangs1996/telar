@@ -1,7 +1,8 @@
 # Native clipboard and link services
 
-GUI copy-mode yank and runtime clipboard messages already reach the shared
-`HostClipboard` port. macOS writes UTF-8 text to `NSPasteboard`. Linux now publishes
+GUI copy-mode yank and runtime clipboard messages queue a clipboard write in
+`model.to_host`; `GuiClient.deliverHostEffects` hands it to `requestClipboardWrite`
+and the window-thread `host/Services.zig` queue. macOS writes UTF-8 text to `NSPasteboard`. Linux now publishes
 that text as a `wl_data_source` on its existing seat data device, using the most
 recent keyboard focus/input serial. Incoming paste continues through the same
 native input queue and shared paste owner.
@@ -22,13 +23,14 @@ descriptor whose publication raced with that cleanup. The window producer has
 stopped before this final pass. Storage and Wayland resources are released last.
 No transfer waits on the window thread or on a frame completion.
 
-Clicking an HTTP(S) link enters `operations/input/link_openings.apply`. Its
-bounded queue schedules `ports/services.zig` as an inbox producer; `.link_opened`
-reaches `link_openings.complete` through `GuiClient.update`. `telar-client.openHostLink`
-contains the worker formerly owned by the TUI: `/usr/bin/open` on macOS and
-`xdg-open` on Linux, with a five-second timeout and 4 KiB limits for each output
-stream. The TUI imports that same function through its previous namespace;
-commands and failure behavior are unchanged. File links continue to use the
+Clicking an HTTP(S) link enters `AttachedClient.openLink`. The bounded
+`model.link_opening` queue starts one `.link` job with `client.workers.start`;
+its `.link_opened` message reaches `AttachedClient.completeLinkOpening` through
+`GuiClient.update` and `AttachedClient.update`. `telar-client.openHostLink`
+(`src/client/links/host.zig`) runs on the client worker: `/usr/bin/open` on
+macOS and `xdg-open` on Linux, with a five-second timeout and 4 KiB limits for
+each output stream. The TUI starts the same job; commands and failure behavior
+are the same on both. File links continue to use the
 configured editor in a shared command tab; agent message files open beside their
 source pane.
 
@@ -37,7 +39,8 @@ native chrome port resolves the target only from delivered pane content and
 queues the existing bounded clipboard write. `GuiClient.dispatchPointer` consumes drag and
 release without forwarding them to the child. Agent message links use their
 snapshot-validated destination and the same clipboard service. The TUI dispatches
-right-button link gestures through `link_openings` to `HostClipboard`.
+right-button link gestures through `AttachedClient.inputLinkPointer`, which
+queues the URI in `model.to_host` for `host/host_effects.deliver`.
 `link_regressions.zig` verifies copying without opening or child mouse reports.
 
 Link copy requests retain only the latest host request ID in `CopyFeedback`.

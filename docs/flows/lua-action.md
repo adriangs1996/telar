@@ -11,7 +11,7 @@ configured binding
       |
 Router.routeEvent -> applyInputDecision / applyDecision
       |
-AttachedClient.executeAction
+AttachedClient.executeAction -> AttachedClient.executeLuaAction
       |
 AttachedClient.evaluateLuaAction
       |
@@ -19,26 +19,27 @@ ClientModel.callbackContext
       |
 client-owned Generation.invokeCallback / invokeExpression
       |
-      +-- callback --> EffectBatch --> validate complete batch
+      +-- callback --> EffectBatch --> lua_actions.validateBatch
       |                                  |
-      |                         AttachedClient.executeAction / startPluginAction
+      |                         AttachedClient.applyLuaEffect
+      |                         -> executeAction / startPluginAction
       |
       +-- expression --> InputDecision --> AttachedClient.routeKeyInput / pasteExpression
       |
-      +-- failure --> client_diagnostic.replace.replace
+      +-- failure --> AttachedClient.publishLuaFailure -> client_diagnostic.replace
                                |
                   ClientModel.replaceDiagnostic
                                |
-                  ClientModel.Version.diagnostic
+                  ClientModel.diagnostic_revision
                                |
                     presentation_lifecycle.observe -> Presenter
 ```
 
-The host consumes the router decision through `AttachedClient.executeAction`, which
-classifies its source and translates an expression decision into semantic keys
-or paste. It does not access the Lua generation, plugin registry or diagnostic
-buffer. Built-in effects reuse `AttachedClient.executeAction`. Plugin effects reuse
-the separate asynchronous [`pluginAction`](plugin-action.md) slice.
+The host consumes the router decision through `AttachedClient.executeAction`.
+`AttachedClient.executeLuaAction` translates an expression decision into
+semantic keys or paste. The host adapter does not access the Lua generation,
+plugin registry or diagnostic buffer. Built-in effects reuse `AttachedClient.executeAction`. Plugin effects reuse
+the separate asynchronous [`plugin_action`](plugin-action.md) slice.
 
 ## State and ownership
 
@@ -54,7 +55,7 @@ that value. It cannot retain a Zig pointer or observe a half-applied model
 transition.
 
 The diagnostic banner is semantic client state. `ClientModel` owns its bounded
-text and `Version.diagnostic`; configuration reloads, Lua actions and plugin
+text and `diagnostic_revision`; configuration reloads, Lua actions and plugin
 actions all enter through
 [`client_diagnostic.replace`](client-diagnostic.md). Replacing equal text is a
 no-op. Invalid UTF-8 or text beyond the fixed buffer is rejected before commit.
@@ -70,13 +71,13 @@ no-op. Invalid UTF-8 or text beyond the fixed buffer is rejected before commit.
 5. apply effects sequentially until completion or client exit.
 
 The config VM validates result shape, item count and action types while parsing
-the callback result. `lua_actions` then resolves every plugin reference against
+the callback result. `lua_actions.validateBatch` then resolves every plugin reference against
 the current registry before any native effect runs. A missing registry or bad
 plugin identity rejects the whole batch. This prevents an earlier sidebar,
 tab or pane effect from committing before a later plugin error is discovered.
 
-Effect application is ordered but not transactional. If a later outbox write
-fails, earlier committed effects remain committed. A plugin effect starts the
+Effect application is ordered but not transactional. If a later
+`model.to_runtime` write fails, earlier committed effects remain committed. A plugin effect starts the
 normal plugin lifecycle and captures the model context current at that point in
 the sequence.
 
@@ -84,7 +85,7 @@ the sequence.
 
 An expression returns `consume`, `forward_binding`, semantic keys or bounded
 paste. After a successful invocation, the operation clears any older
-diagnostic and returns the value to `AttachedClient.executeAction`. Keys pass through
+diagnostic and returns the value to `AttachedClient.executeLuaAction`. Keys pass through
 `AttachedClient.routeKeyInput`; paste passes through
 `AttachedClient.pasteExpression`. Both use the focused child's acknowledged
 terminal modes and the existing pane-input target checks.
@@ -101,7 +102,7 @@ A missing live generation leaves state unchanged. A stale reference, Lua
 error, instruction exhaustion, deadline or malformed result consumes the
 matched binding and commits the bounded diagnostic produced by the VM. A
 validation failure follows the same model path. Neither branch calls
-`Presenter.requestDraw`; `client_events` publishes `Version.diagnostic`.
+`Presenter.requestDraw`; `events.update` observes `Version.diagnostic`.
 Invalid diagnostic bytes are replaced by the operation with an explicit
 error-name-only fallback.
 
@@ -120,16 +121,14 @@ authority.
 
 ## Validation
 
-- `src/model/state/Model.zig` proves callback-context projection,
-  diagnostic validation, equality and revision behavior.
-- `src/client/application/configuration/client_diagnostic.zig` proves shared
+- `src/model/state/tests/configuration_and_host.zig` proves callback-context
+  projection, diagnostic validation, equality and revision behavior.
+- `src/client/config/client_diagnostic.zig` proves shared
   diagnostic validation, fallback and clear semantics.
-- `src/model/application/input/lua_action.zig` proves invocation,
-  validate-before-apply order, diagnostic order, sequential exit and failure
-  classification.
-- `src/client/application/input/action_routing.zig` proves source
-  classification, router control, semantic-key reinjection and copy-mode paste
-  suppression without VM knowledge.
+- `src/client/AttachedClient.zig` owns invocation, validate-before-apply order,
+  diagnostic order, sequential exit and failure classification
+  (`evaluateLuaAction`), and router control, semantic-key reinjection and
+  copy-mode paste suppression (`executeLuaAction`).
 - `src/client/config/` proves immutable context, callback quotas,
   bounded result parsing and semantic input construction.
 - `src/frontend/client/tests/` proves real VM evaluation, complete

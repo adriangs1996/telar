@@ -9,7 +9,7 @@ bootstrap / selection / recovery -> AttachedClient.requestTabSnapshot
   -> AttachedClient.handleServerMessage(.tab_snapshot)
   -> AttachedClient.applyTabSnapshot
      -> consume exact correlation and decode bounded pane identities
-     -> Model.reconcileTab
+     -> ClientModel.reconcileTab -> tab_snapshot_reconciliation.reconcile
      -> ignore removed-pane requests and AttachedClient.releasePaneResources
      -> AttachedClient.synchronizeActivePane
      -> AttachedClient.resizeAttachedPanes
@@ -51,8 +51,9 @@ Model rejection performs no resource cleanup. Post-commit resource failure
 keeps canonical membership and completed effects. A later snapshot or reconnect
 repairs disposable state. Decoding/retirement lists use fixed pane bounds.
 
-Source: `src/client/AttachedClient.zig` and
-`src/model/state/Model.zig`.
+Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`
+and `src/model/workspace/tab_snapshot_reconciliation.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`, `pane_lifecycle.zig`,
-`src/model/state/tests/tabs.zig`, workspace layout tests, and bounded request
+`src/model/state/tests/tabs.zig`, `src/model/workspace/tab_flow_tests.zig`,
+workspace layout tests, and bounded request
 tracker/outbox tests.

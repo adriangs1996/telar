@@ -6,9 +6,9 @@ size offers without changing runtime membership or destroying split geometry.
 ```text
 AttachedClient.executeAction
   -> AttachedClient.togglePaneFullscreen
-     -> Model.togglePaneFullscreen
-     -> validate exact geometry commit
-     -> invalidate graphics placements
+     -> ClientModel.togglePaneFullscreen
+     -> AttachedClient.deliverPaneGeometry: validate exact geometry commit
+     -> model.to_host.invalidate_placements
      -> AttachedClient.resizeAttachedPanes: visible attached panes only
      -> AttachedClient.attachVisiblePanes: newly visible detached panes
   -> adapter observes the pane revision
@@ -36,12 +36,12 @@ is invented for `pane_resize`.
 ## Fullscreen presentation
 
 The fullscreen pane keeps its border, including when it is the only pane.
-Exiting fullscreen with one pane restores borderless content. Its top edge lists pane indices and
-foreground names in the same order used by navigation. The active label uses
+Exiting fullscreen with one pane restores borderless content. Its top edge
+lists pane indices and foreground names in the same order used by navigation. The active label uses
 the theme's accent background; other labels use subdued text. The strip
 truncates names at grapheme boundaries before hiding labels, and always keeps
 the active label visible when space permits. It uses fixed storage bounded by
-`schema.max_panes_per_tab`, does O(panes + label bytes) work only when the border
+`core.max_panes_per_tab`, does O(panes + label bytes) work only when the border
 is drawn and adds no content row or persistent state. The focused pane's
 progress indicator uses the remaining border space.
 
@@ -52,9 +52,10 @@ cell width, so narrow terminal cells also get smaller text. The pill hugs the
 measured text rather than filling its entire cell rectangle. Workspace labels
 and pane contents are unchanged. The cell fallback uses regular-weight text.
 
-`Compositor` copies the already truncated label text into a fixed-size
-`pane_labels.Plan`. Each of at most 64 labels owns up to 80 UTF-8 bytes; media
-work never borrows pane names or cell storage. `View.prepareGraphics` rasterizes
+`Compositor.fullscreenLabels` copies the already truncated label text into a
+fixed-size `Plan` (`src/frontend/presentation/Plan.zig`). Each of at most 64
+labels owns up to 80 UTF-8 bytes; media work never borrows pane names or cell
+storage. The TUI view's `State.prepareGraphics` has its `PillRenderer` rasterize
 that snapshot into one RGBA image of at most 1 MiB on the media path. It reuses
 the sidebar's rounded fill and the existing text rasterizer. A position-only
 change reuses the image; focus, text, theme or cell-size changes replace it.
@@ -63,7 +64,7 @@ There is one pending snapshot, not a replay queue.
 Image data is chunked within the media pass's 256 KiB encoded budget. An open
 continuation owns the graphics stream until completion or explicit abort;
 replaced or hidden snapshots cancel it. Stale placement deletions may accompany
-the next cell frame only when that stream is available. `View` removes the cell
+the next cell frame only when that stream is available. The view removes the cell
 labels only after the exact snapshot, colors and placement have reached the
 host. Gaps retain their border glyphs. Overlapping modals or toasts retire the
 label image. Unsupported geometry, terminal-derived colors, missing font
@@ -83,8 +84,7 @@ Reconnect restores retained fullscreen/layout only when pane membership matches
 runtime authority; otherwise canonical display order supplies the layout.
 Graphics are rebuilt. No operation directly schedules a draw.
 
-Source: `src/client/AttachedClient.zig`,
-`src/client/AttachedClient.zig` and `src/model/state/Model.zig`.
-Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
-`src/frontend/client/tests/FullscreenReattachment.zig`,
+Source: `src/client/AttachedClient.zig` and `src/model/state/ClientModel.zig`.
+Tests: `src/frontend/client/tests/pane_lifecycle.zig` (including its
+`FullscreenReattachment` scenario), `src/frontend/client/tests/synchronization.zig`,
 `src/frontend/client/tests/pane_splits.zig`, and shared model/layout tests.

@@ -85,11 +85,12 @@ native snapshot. No platform callback mutates the model directly.
 `input/router.zig` instantiates the shared key router without an escape decoder.
 It resolves the same configured prefix, built-in actions and Lua/plugin bindings
 as the TUI. `GuiClient.routeKey` supplies current capture/repeat policy and
-receives a typed decision. Its `applyInputDecision` switch executes keys or actions
-through `src/client/operations/input/`; `executeAction` contains the native
-palette, sidebar and transcript cases. Prompt editing, copy mode, pane focus, workspace
-and tab requests, splits, pane fullscreen and detach call the same concrete
-operations and runtime messages. Prefix status is projected from this effective
+receives a typed decision. Its `applyInputDecision` switch forwards keys through
+`AttachedClient.routeKeyInput` and actions through `AttachedClient.executeAction`;
+the GUI's own `executeAction` keeps only the native palette, sidebar and
+transcript cases. Prompt editing, copy mode, pane focus, workspace and tab
+requests, splits, pane fullscreen and detach call the same concrete operations
+and runtime messages. Prefix status is projected from this effective
 router, and a replaceable `.binding` timer expires ordinary partial chords.
 
 macOS disables press-and-hold accents in the process's volatile argument defaults
@@ -131,7 +132,7 @@ when another tab is active. A pane hidden by fullscreen keeps its last visible
 geometry until release; visible panes update that geometry on each retained
 event. Focus changes never redirect those events. Detachment or an attachment replacement
 makes the capture stale, and its remaining events are consumed. The additive
-`AttachedClient.reportRetainedPaneMouse` port uses the existing encoder and input
+`AttachedClient.reportRetainedPaneMouse` method uses the existing encoder and input
 controller with a `pointer_lease` target. A newly opened prompt cannot intercept
 the release of a gesture already acquired by that pane. Focus loss reserves one
 ordered recovery message even under input saturation, releases live gestures

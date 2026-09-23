@@ -5,18 +5,20 @@ and PTYs. Start at `AttachedClient.executeAction`, mouse input, or agent navigat
 each source reaches the same concrete operation.
 
 ```text
-host input -> input/actions or agent navigation
+host input -> AttachedClient.executeAction, view_interactions.apply or agent navigation
   -> AttachedClient.applyPaneFocus
-     -> Model.focusPane
+     -> ClientModel.focusPane
      -> AttachedClient.deliverPaneFocus
-        -> attachment reservation and geometry
-        -> AttachedClient.synchronizeReportedFocus
-        -> fullscreen geometry and missing attachments
+        -> AttachedClient.synchronizeActivePane
+           -> synchronizePaneAttachments: shelf reservation and geometry
+           -> AttachedClient.synchronizeReportedFocus
+        -> fullscreen: model.to_host.invalidate_placements,
+           resizeAttachedPanes, attachVisiblePanes
   -> adapter observes presentation revisions
 ```
 
 `AttachedClient.applyPaneFocus` accepts a stable identity or direction and commits before
-resource delivery. `Model.focusPane` resolves only within the active tab. An
+resource delivery. `ClientModel.focusPane` resolves only within the active tab. An
 absent target, repeated identity or direction without a candidate is a no-op.
 Tiled navigation uses spatial geometry. Fullscreen left/right follows displayed
 leaf order without wrapping; up/down does nothing. The split tree is retained.
@@ -38,7 +40,7 @@ presentation revision and its bytes are not counted as user input.
 Intentional tab detachment clears only that tab's report owner, before its
 `detach_pane` messages. Canonical pane retirement calls `AttachedClient.releasePaneResources`
 and silently forgets that exact owner. Canonical tab/workspace replacement can
-forget the entire obsolete reporting context through `Model.forgetReportedPaneFocus`.
+forget the entire obsolete reporting context through `ClientModel.forgetReportedPaneFocus`.
 These paths do not send child input to a retired attachment.
 
 Tab, workspace, frame and snapshot operations call

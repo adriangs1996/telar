@@ -42,7 +42,7 @@ open_pane(restored pane or default launch)
 pane activation -> replay retained input
 ```
 
-`controllers/session/client_startup.zig` is the TUI startup adapter. It owns
+`src/frontend/client/session/client_startup.zig` is the TUI startup adapter. It owns
 the negotiation gate and bootstrap order. The common
 `AttachedClient.restoreClientLayout` restores runtime layout and requests
 the initial pane without knowing about terminal probes. `run` waits on the
@@ -55,14 +55,15 @@ Startup derives the initial pane size from the current workbench. An empty
 workbench returns `TerminalTooSmall` before request correlation or transport
 state changes.
 
-After color negotiation settles, `RuntimeTransportState.bootstrap` reserves
-space for three FIFO messages before changing its bounded outbox:
+After color negotiation settles, `client_startup.advance` calls
+`model.to_runtime.pushBootstrap`, which checks space for three FIFO messages
+before changing the bounded outbox:
 
 1. `configure_graphics` with this client's shared-memory support;
 2. `configure_terminal_colors` with the known foreground and background;
 3. `request_runtime_state` with the stable identity of the host terminal.
 
-The ordinary send actor delivers them in order. Runtime and TTY reads are
+The ordinary runtime send worker delivers them in order. Runtime and TTY reads are
 already armed; early user input is retained until the first pane is active.
 The runtime delivers `client_layout_snapshot` before its other level-triggered projections. The
 client restores sidebar visibility and width, workspace-list collapse, active

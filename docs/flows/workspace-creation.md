@@ -4,7 +4,7 @@ Creation is a runtime transaction followed by one atomic client replacement.
 The client owns its prompt, navigation history and disposable projection.
 
 ```text
-AttachedClient.inputPrompt
+AttachedClient.inputPrompt -> submitPrompt(.create_workspace) -> submitWorkspacePrompt
   -> AttachedClient.requestWorkspaceCreation
      -> idle gate, validate name, choose CWD source, retain request size
      -> AttachedClient.sendCreateWorkspaceRequest
@@ -13,7 +13,7 @@ AttachedClient.inputPrompt
   -> AttachedClient.handleServerMessage
   -> AttachedClient.completePaneOpen
      -> AttachedClient.createOpenedWorkspace
-        -> Model.replaceWorkspace
+        -> ClientModel.replaceWorkspace -> workspace_handoff.replaceWithRoot
         -> AttachedClient.releaseWorkspace(departure)
         -> AttachedClient.activateWorkspace(root)
   -> adapter observes presentation revisions
@@ -22,7 +22,7 @@ AttachedClient.inputPrompt
 Without an explicit directory, planning requires an attached focused pane and
 uses it as `cwd_source`. A typed directory travels expanded in `launch.cwd`,
 with no CWD source; `create_cwd` carries the user's confirmation to create it.
-The bounded outbox owns name/CWD/arguments before the prompt can close. Invalid
+The bounded outbox, `model.to_runtime`, owns name/CWD/arguments before the prompt can close. Invalid
 names, a busy lifecycle, missing source or local send failure leave canonical
 state unchanged.
 
@@ -34,7 +34,7 @@ the client must not send stale detach or focus-out messages afterward.
 
 The continuation retains the size originally sent, independent of later host
 resize. Confirmation consumes it once, checks `created=true`, and stages a
-saved layout only for the exact confirmed workspace/tab. `Model.replaceWorkspace`
+saved layout only for the exact confirmed workspace/tab. `ClientModel.replaceWorkspace`
 captures the old departure and constructs the new root before retiring the old
 store. Validation/allocation failure keeps the previous projection and all
 revisions. Success advances workspace, tabs, active-tab and panes once; there
@@ -53,8 +53,9 @@ and becomes an owned notice. Unknown, incompatible, malformed or replayed
 confirmation cannot replace the model. Empty-source confirmation remains valid
 for recovery. Presentation is driven by the committed revision.
 
-Source: `src/client/AttachedClient.zig`,
-`src/model/state/Model.zig`, and `src/model/workspace/NavigationHistory.zig`.
+Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`,
+`src/model/workspace/workspace_handoff.zig` and
+`src/model/workspace/NavigationHistory.zig`.
 Tests: `src/frontend/client/tests/workspace_lifecycle.zig`,
 `src/model/state/tests/workspaces.zig`, bounded outbox tests and runtime
 creation tests cover owned requests, atomic replacement, no stale detach/focus,

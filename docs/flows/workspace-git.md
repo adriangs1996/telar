@@ -13,35 +13,37 @@ agent maintenance tick (1 s)
 workspace_git.start: one stalest workspace, ≥ 5 s since its last probe,
                   at most one probe in flight runtime-wide
         |
-select.concurrent(.git_status, probe)   -- worker thread
+model.select.concurrent(.git_status, git_probe.probe)   -- worker thread
         |
 read <path>/.git/HEAD  (a linked worktree's gitfile is followed)
 git -C <path> status --porcelain --no-renames   (2 s timeout, 64 KiB cap)
         |
-Event.git_status -> Workspace.applyGitStatus (bounded branch copy, change
-                    detection) -> recordListChange on change
+Event.git_status -> workspace_git.finish (bounded branch copy, change
+                    detection) -> workspaces.advanceRevision on change
         |
 schema.workspace_list entries carry `branch` and `dirty`
         |
-client workspace_list.Snapshot -> navigation metadata; top bar renders " name "
+client ClientModel.applyWorkspaceList -> model.workspace_list_snapshot
+                    -> navigation metadata; top bar renders " name "
 ```
 
 ## Ownership and bounds
 
-The workspace aggregate owns the observed branch (64 bytes), the dirty flag
-and its probe bookkeeping. A missing repository stores an empty branch, so a
+The runtime `Workspaces` table owns the observed branch (`git_branch`, at most
+`core.max_git_branch_bytes`, 64 bytes), the dirty flag (`git_dirty`) and its
+probe bookkeeping (`git_checked_at_ms`, `git_probe`). A missing repository stores an empty branch, so a
 directory that stops being a repo clears its badge. Probe failures leave the
 previous projection and simply retry after the interval.
 
-`parseHead` resolves `refs/heads/*` to the branch name, any other ref to its
+`git_probe.parseHead` resolves `refs/heads/*` to the branch name, any other ref to its
 full name and a detached head to its short hash, without running git; the
 subprocess is only consulted for cleanliness.
 
 ## Validation
 
-- `src/backend/runtime/workspace_git.zig` proves probe reservation and stale results.
-- `src/backend/workspace/workspace_support.zig` proves bounded storage and change
-  detection.
+- `src/backend/runtime/workspace_git.zig` proves probe reservation, stale
+  results, bounded storage and change detection.
+- `src/backend/runtime/resources/git_probe.zig` proves `HEAD` resolution.
 - `src/core/schema_contract_test.zig` pins the extended workspace list bytes.
 
 ## Worktrees from the CLI

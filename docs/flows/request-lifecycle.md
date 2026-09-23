@@ -6,10 +6,11 @@ continuation, canonical lifecycle makes it stale, or the client dies.
 
 ## Boundary
 
-`connection/LifecycleState` owns two disposable client values:
+`model.request_lifecycle` (`src/model/connection/RequestLifecycle.zig`) owns
+two disposable client values:
 
 - the next nonzero request identity;
-- one fixed `connection/Tracker` of typed continuations.
+- one fixed `Tracker` (`src/model/connection/Tracker.zig`) of typed continuations.
 
 The tracker has `schema.max_panes_per_tab + 8` slots and allocates nothing.
 Generated identities start at 2 because bootstrap owns identity 1. Zero marks
@@ -22,15 +23,16 @@ registration with transport; the tracker only owns bounded correlation data.
 
 This state does not decide whether a tab move, pane split or snapshot is valid.
 Each operation constructs its protocol message and validates the matching
-response. It translates accepted wire values into model commands in the same
-function; the model does not own request IDs.
+response. It translates accepted wire values into model changes in the same
+function. Correlation lives in `model.request_lifecycle`, apart from the tab
+and pane tables it describes.
 
 ## Starting a request
 
 ```text
 concrete client operation
         |
-LifecycleState.nextId
+model.request_lifecycle.nextId
         |
 check one tracker slot and request-ID space
         |
@@ -38,7 +40,7 @@ operation constructs message and Continuation
         |
 AttachedClient.sendRuntimeRequest
         |
-Tracker.add -> outbox owned copy -> startRuntimeSend
+Tracker.add -> model.to_runtime.push -> startRuntimeSend
         |
 local rejection -> Tracker.take rollback
 ```
@@ -57,11 +59,13 @@ The request lifecycle never borrows text beyond the synchronous call.
 Tab close and workspace handoff preflight two consecutive identities. Their
 failure paths may request a canonical tab snapshot after provisional attachment
 delivery fails.
-`client.request_lifecycle.ensureCanStart(2)` proves both identities and one tracker slot exist
+`model.request_lifecycle.ensureCanStart(2)` proves both identities and one tracker slot exist
 before provisional attachment effects begin.
 
-`RuntimeTransportState.bootstrap` queues graphics/color configuration and the
-runtime-state subscription through the ordinary send actor. Reads are already
+After host negotiation settles, the adapter (`client_startup.advance` in the
+TUI, `GuiClient` in the GUI) calls `model.to_runtime.pushBootstrap`, which
+queues graphics and color configuration and the `request_runtime_state`
+subscription through the ordinary send path. Reads are already
 armed. The later `client_layout_snapshot` enters `AttachedClient.restoreClientLayout`, which
 restores geometry and registers the fixed `initial_open` continuation before
 enqueueing its corresponding open request. Registration and send admission use
@@ -118,7 +122,7 @@ snapshots.
 
 ## Validation
 
-- `src/client/connection/LifecycleState.zig` owns identity bounds and preflight;
+- `src/model/connection/RequestLifecycle.zig` owns identity bounds and preflight;
   frontend tab/handoff integration tests exercise refusal before provisional
   effects and reserve capacity for recovery.
 - `src/model/connection/requests.zig` proves single consumption, group and pane
@@ -127,7 +131,9 @@ snapshots.
   `src/frontend/client/tests/` crosses the public request and transport
   boundaries and proves transactional rollback.
 - `owned request deliveries roll back only their own correlation when the outbox is full`
-  checks all six variable-payload send paths and preserves an unrelated request.
+  in `src/client/AttachedClient.zig` checks the five variable-payload send paths
+  (tab rename, workspace rename, tab creation, agent prompt, notification) and
+  preserves an unrelated request.
 - Bootstrap and the request-specific client tests prove exact wire identity,
   owned payload delivery, incompatible continuation rejection and late-response
   handling.

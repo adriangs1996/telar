@@ -15,47 +15,45 @@ wheel events themselves remain unthrottled. See [Key routing](key-routing.md).
 
 This is an interactive-path flow. It allocates no memory, retains no pane
 pointer and adds no queue. The application decision uses fixed values. Mouse
-reports use a 64-byte stack buffer, while delivery reuses the bounded client
-outbox.
+reports use a 64-byte stack buffer, while delivery reuses the bounded
+`model.to_runtime` outbox.
 
 ## Boundary and ownership
 
 ```text
 host mouse event
         |
-InputHandler.mouse
-        |
-pointer_routing adapter
-        |
-prompt/model authority + raw pixels -> host cells
+host_inputs.mouse (TUI) / GuiClient pointer input
         |
 pointer_routing.apply
         |
-copy_mode_pointer
+resolve: prompt/model authority + raw pixels -> host cells
+        |
+copy_mode_pointer.apply
         |
 unowned only
         |
-View.handleMouse
+HostChrome.pointer -> State.handleMouse
         |
 view_interactions.apply
         |
 inside workbench and unconsumed
         |
-link_openings
+HostChrome.linkPointer or AttachedClient.inputLinkPointer
         |
 unowned only
         |
-pane_mouse_inputs adapter
+AttachedClient.inputPaneMouse(.pointer)
         |
-AttachedClient.inputPaneMouse
+tab_layout.planPaneMouse
         |
-multiplexer.Model.planPaneMouse
+AttachedClient.applyPaneMouseEffect
         |
         +-------------------+--------------------+
         |                   |                    |
  viewport effect    alternate-scroll effect   report effect
         |                   |                    |
-applyPaneViewport    three cursor keys       SGR encoding
+        |            three cursor keys    pane_mouse_inputs.encodeReport
         |                   |                    |
 AttachedClient.applyPaneViewport      +---------+----------+
                                       |
@@ -64,16 +62,18 @@ AttachedClient.applyPaneViewport      +---------+----------+
                               runtime attachment
 ```
 
-`InputHandler.mouse` only delegates the host event.
-`pointer_routing` counts the event, rejects input while a name prompt owns the
-client, except for a captured selection gesture, or no active model exists,
-and converts supported raw pixel coordinates
-to host cells. It captures one active model pointer for the synchronous call.
+`host_inputs.mouse` only delegates the host event after TUI tab dragging
+declines it; the GUI calls `pointer_routing.apply` from its own pointer
+ownership. `pointer_routing.apply` counts the event. Its `resolve` step
+rejects input while a name prompt owns the client, except for a captured
+selection gesture, or while no active tab exists, and converts supported raw
+pixel coordinates to host cells.
 
 `pointer_routing.apply` owns the order between the four policies.
-It gives `copy_mode_pointer` first refusal, then asks the view to resolve client
-chrome, then offers pane content to `link_openings`. It reaches
-`pane_mouse_inputs` only while the normalized pointer is inside the
+It gives `copy_mode_pointer` first refusal, then asks the adapter's
+`HostChrome.pointer` to resolve client chrome, then offers pane content to
+`HostChrome.linkPointer` or `AttachedClient.inputLinkPointer`. It reaches
+`AttachedClient.inputPaneMouse` only while the normalized pointer is inside the
 post-interaction workbench and neither the view nor a link consumed it.
 `copy_mode_pointer.apply` still owns copy-mode policy. See
 [Copy mode](copy-mode.md).
@@ -83,16 +83,16 @@ command commits first, then the same press may continue to the newly focused
 child. View-local hover, scroll and modal changes advance their own revision
 before later effects run.
 
-Neither `InputHandler` nor `pointer_routing.apply` inspects pane mouse modes,
+Neither the adapter nor `pointer_routing.apply` inspects pane mouse modes,
 chooses scroll policy, encodes SGR bytes or sends IPC.
 
 ## Pane plan
 
-`multiplexer.Model.planPaneMouse` resolves physical pointer events.
-`multiplexer.Model.planFocusedPaneMouse` resolves focused scroll without any
+`tab_layout.planPaneMouse` resolves physical pointer events.
+`tab_layout.planFocusedPaneMouse` resolves focused scroll without any
 pointer coordinates. Both queries read pane geometry, child mouse modes and
-scroll state and share construction of the immutable `PaneMousePlan`. Wheel events target the
-visible pane under the pointer. Other events target the focused pane and are
+scroll state and share construction of the immutable `PaneMousePlan`. Wheel
+events target the visible pane under the pointer. Other events target the focused pane and are
 dropped unless the pointer lies inside its content rectangle.
 
 The result copies the pane identity, content rectangle, mouse protocol,
@@ -105,22 +105,22 @@ revision.
 ```text
 host binding or client Lua action
         |
-applyInputDecision / applyDecision -> action_routing -> actions
+host_inputs.applyDecision / GuiClient.applyInputDecision
         |
 AttachedClient.executeAction, then scroll_pane dispatch
         |
+AttachedClient.scrollPane
+        |
 AttachedClient.inputPaneMouse(.focused_scroll)
         |
-AttachedClient.inputPaneMouse -> Plans.resolve(Command)
-        |
-planFocusedPaneMouse -> Resolved { plan, pointer }
+tab_layout.planFocusedPaneMouse -> Resolved { plan, pointer }
         |
 same wheel policy and effect delivery as physical input
 ```
 
-`Command` distinguishes `.pointer` from `.focused_scroll`. The pointer router
-continues to accept only `PointerCommand` and wraps it at pane delivery.
-The adapter's resolver preserves physical pointer commands unchanged. For
+`PaneMouseCommand` distinguishes `.pointer` from `.focused_scroll`. The
+pointer router continues to accept only `PointerCommand` and wraps it at pane
+delivery. `inputPaneMouse` preserves physical pointer commands unchanged. For
 focused scroll it resolves the focused pane first, then builds a synthetic
 wheel event at the first content cell with button 64 or 65 and no modifiers.
 Pixel reports use host cell dimensions and the existing cell-center fallback,
@@ -145,25 +145,28 @@ wheel events.
 - Every other untracked wheel moves the client viewport by three rows.
 - Other untracked non-wheel events are ignored.
 
-`AttachedClient.inputPaneMouse` selects the effect and delivers it through concrete
-viewport, copy-selection and pane-input operations. Mouse encoding remains in
-the bounded protocol helper; it does not mutate model state.
+`AttachedClient.inputPaneMouse` selects the effect and
+`AttachedClient.applyPaneMouseEffect` delivers it through concrete viewport,
+copy-selection and pane-input procedures. Mouse encoding remains in
+`pane_mouse_inputs.encodeReport` and `mouse_protocol`; it does not mutate model
+state.
 
 ## Effects and coordinates
 
-`pane_mouse_inputs` applies the selected effect through existing use cases.
-Viewport movement goes through `AttachedClient.applyPaneViewport`. Alternate-screen keys
-and reports go through `AttachedClient.sendPaneInput` with the mouse source, so neither
+`AttachedClient.applyPaneMouseEffect` applies the selected effect through
+existing procedures. Viewport movement goes through
+`AttachedClient.applyPaneViewport`. Alternate-screen keys and reports go
+through `AttachedClient.sendPaneInput` with the mouse source, so neither
 restores scrollback.
 
 Cell reports use coordinates relative to the pane content. If the child asks
-for pixel reports and the host supports raw pixels, the adapter preserves the
-exact pane-relative pixel. Otherwise it reports the center of the addressed
+for pixel reports and the host supports raw pixels, `encodeReport` preserves
+the exact pane-relative pixel. Otherwise it reports the center of the addressed
 cell. SGR coordinates remain one-based on the wire.
 
-The three alternate-scroll keys preserve order, but the outbox may split or
-coalesce their frames. If a later send fails, earlier accepted keys remain in
-the outbox. Every selected effect failure propagates to the event loop.
+The three alternate-scroll keys preserve order, but `model.to_runtime` may
+split or coalesce their frames. If a later send fails, earlier accepted keys
+remain queued. Every selected effect failure propagates to the event loop.
 
 ## Presentation
 
@@ -177,13 +180,12 @@ recomposes the affected projection. No use case requests a draw directly.
 - `src/frontend/workspace/multiplexer.zig` proves focused button ownership,
   pointer-local wheel targeting, focus-only scroll targeting, empty-target
   rejection and value-copy planning.
-- `src/client/application/input/pointer_routing.zig` proves exclusive owner
-  order, workbench gating and selected-effect failure boundaries.
-- `src/model/application/input/pane_mouse.zig` proves tracked-event,
-  viewport and alternate-scroll selection, the live-bottom gate, ignored
-  events and effect failure propagation.
-- `src/client/operations/input/pane_mouse_inputs.zig` proves exact
-  raw-pixel and cell-center SGR encoding.
+- `src/client/input/pane_mouse_inputs.zig` proves exact raw-pixel and
+  cell-center SGR encoding.
+- `src/frontend/client/client_tests.zig` proves SGR buttons and pane-relative
+  coordinates.
+- `src/frontend/client/tests/host_interaction.zig` proves link ownership of a
+  complete gesture and copy-mode pointer ownership.
 - `src/frontend/client/tests/input.zig` proves default scroll bindings through
   host byte routing, focus rather than hover, synthetic SGR cell/pixel reports,
   alternate-screen keys, viewport no-ops, return to live output and copy-mode
@@ -193,5 +195,6 @@ recomposes the affected projection. No use case requests a draw directly.
   telemetry, focus-before-press delivery, scrollback preservation, exact
   host-pixel delivery and pointer-local alternate-screen scrolling through the
   complete input entrypoint.
-- `src/client/input/mouse_protocol.zig`, `pane-input.md` and
-  `pane-viewport.md` cover protocol encoding and the two downstream effects.
+- `src/client/input/mouse_protocol.zig`, [Pane input](pane-input.md) and
+  [Pane viewport](pane-viewport.md) cover protocol encoding and the two
+  downstream effects.

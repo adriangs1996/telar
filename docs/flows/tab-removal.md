@@ -10,13 +10,14 @@ AttachedClient.executeAction
      -> pending-operation gate and active location
      -> reserve close/recovery IDs and outbox capacity
      -> AttachedClient.detachTab
-     -> AttachedClient.sendRuntimeRequest(close_tab)
+     -> AttachedClient.sendTabClose -> sendRuntimeRequest(close_tab)
 
 runtime tab_closed
   -> AttachedClient.handleServerMessage
   -> AttachedClient.completeTabClose
      -> correlate explicit reply or classify lifecycle event
-     -> Model.removeTab
+     -> tab_close.validateWorkspaceTransition
+     -> ClientModel.removeTab -> tab_removal.remove
      -> retire requests and exact pane resources
      -> synchronize successor / follow predecessor / exit
   -> adapter observes presentation revisions
@@ -48,7 +49,8 @@ obsolete focus, exposes its successor, synchronizes resources and requests its
 snapshot unless one is already pending.
 
 Workspace closure forgets the bookmark. A surviving predecessor is followed
-through `AttachedClient.requestWorkspaceSwitch`, whose bypass of stale pending
+through `AttachedClient.requestWorkspaceSwitch` with `.canonical_follow`
+authority, whose bypass of stale pending
 requests requires an already empty projection. With no predecessor, the
 operation returns `exit`; server dispatch maps it to process status zero.
 
@@ -60,7 +62,8 @@ Canonical state survives any later client resource error. Reconnect rebuilds
 the projection. The flow uses bounded tab/pane stores, request tracking and
 outbox capacity, and never schedules presentation directly.
 
-Source: `src/client/AttachedClient.zig` and `src/model/state/Model.zig`.
+Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig` and
+`src/model/workspace/tab_removal.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig` and `synchronization.zig`
 cover preflight, partial failures, correlation, late replies, exact cleanup,
 predecessor following and exit. Model and runtime transport tests cover

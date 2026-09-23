@@ -17,26 +17,27 @@ agent maintenance tick -> agent_maintenance.tick -> session_checkpoint.start
         |
 CheckpointWriter.due?  (dirty, settled ≥ 500 ms, no write in flight)
         |
-session_checkpoint.encode -> persistence.checkpoint.Encoder (owned 1 MiB buffer)
+session_checkpoint.encode -> persistence Encoder (owned 1 MiB buffer)
         |
-select.concurrent(.checkpoint_written, writeFile)   -- worker thread
+CheckpointWriter.startWrite -> model.select.concurrent(.checkpoint_written, writeFile)   -- worker thread
         |
 <path>.tmp (0600) -> fsync -> rename over <path>
         |
 Event.checkpoint_written -> session_checkpoint.finish -> CheckpointWriter.completeWrite (retry on failure)
 
-runtime start: Resources -> RuntimeModel -> session_checkpoint.restore -> listener
+Runtime.start: resources.init -> model.init -> session_checkpoint.restore -> scheduleInitialEvents
         |
 read file -> validate every record -> apply
         |
-Repository.restoreWorkspace / restoreTab   (original ids, counters advance)
-PaneStore.reserveRestoredKey + pane_launch.launch (original pane id)
-ClientLayoutStore.replace(decoded update_client_layout)   (validated)
+model.workspaces.restore / restoreTab   (original ids, counters advance)
+model.panes.reserveRestoredKey + pane_launch.launch (original pane id)
+model.client_layouts.replace(decoded update_client_layout)   (validated)
 ```
 
 ## Records
 
-`persistence.checkpoint` owns the durable record types, separate from the
+`src/backend/persistence` owns the durable record types (`WorkspaceRecord`,
+`TabRecord`, `PaneRecord`, `LayoutRecord`), separate from the
 live aggregates and from wire projections (`docs/invariants.md`, Ownership). A checkpoint is a
 header (`TELARCKP`, version, id counters) followed by a stream of tagged
 records: workspace (id, path, explicit name, first tab), tab (extra tabs in
@@ -91,7 +92,7 @@ children before joining their actors, then releases panes and workspaces.
 It leaves the source checkpoint untouched for a later startup attempt.
 
 After the last record, every tab left without a pane is retired through the
-same `workspace.removeTab` the final pane exit uses, and a workspace left
+same `model.workspaces.removeTab` the final pane exit uses, and a workspace left
 without tabs goes with it (`CheckpointWriter.dropped_tabs` counts them). A tab exists for
 clients only together with a running pane: the tab snapshot query answers
 `tab_not_found` for an empty one, and a client that selects such a tab treats
@@ -185,7 +186,7 @@ the session volatile.
   mismatches cannot transfer pending titles or authorize a different resume.
 - `src/backend/runtime/session_checkpoint.zig` proves the
   debounce, coalescing and retry state machine and the atomic private write.
-- `src/backend/workspace/repository_support.zig` and `src/backend/pane/pane_namespace.zig` prove
+- `src/backend/workspace/Workspaces.zig` and `src/backend/pane/pane_namespace.zig` prove
   identity-preserving restore and counter advancement.
 - `src/backend/runtime/instance.zig` proves a restart round trip through a
   real runtime: workspaces, tabs, panes, their identities and the resumed

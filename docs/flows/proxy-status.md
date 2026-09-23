@@ -3,8 +3,8 @@
 The runtime owns whether its TLS interception service exists, whether its host
 policy contains a wildcard, and whether Telar's short-lived CA is installed in
 system trust. Each disposable client stores that bounded replica so its top
-bar can keep both kinds of authority visible. `View` owns neither the replica
-nor its transition rules.
+bar can keep both kinds of authority visible. The TUI view (`State`) owns
+neither the replica nor its transition rules.
 
 ## End-to-end path
 
@@ -12,8 +12,8 @@ nor its transition rules.
 runtime proxy configuration → runtime delivery → proxy_status
   → AttachedClient.handleServerMessage
   → AttachedClient.applyProxyStatus
-      model.reconcileProxyStatus
-      notification for a changed transition
+      ClientModel.reconcileProxyStatus
+      AttachedClient.publishNotificationNow for a changed transition
   → presentation observation → top-bar projection
 ```
 
@@ -39,10 +39,11 @@ host callback decides the transition; the event loop observes its revisions.
 ## Presentation and recovery
 
 After event dispatch, `presentation_lifecycle.observe` publishes the complete model
-version. `Presenter` compares `Version.proxy_status` with the version it last
-painted, invalidates chrome and passes `ClientModel.proxyTlsActive()`,
-`proxyTlsScope()`, and `proxySystemTrusted()` into the next paced frame. `View`
-uses those immutable inputs while composing the top bar and stores no proxy
+version. `Presenter` compares `projection.version.proxy_status` with the
+version it last painted, invalidates chrome and passes the projection's
+`proxy_tls_active`, `proxy_tls_scope` and `proxy_system_trusted`, copied from
+the same `ClientModel` fields, into the next paced frame. The view uses those
+immutable inputs while composing the top bar and stores no proxy
 state. Exact-only interception uses the peach shield; a suffix or global
 wildcard uses red. Installed system trust keeps a yellow shield visible when
 the proxy is off.

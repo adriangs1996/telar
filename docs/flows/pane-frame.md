@@ -6,27 +6,31 @@ then consumes the latest model independently of runtime patch publication.
 
 ```text
 AttachedClient.handleServerMessage(.pane_frame)
-  -> AttachedClient.applyPaneFrame
-     -> Model.applyPaneFrame
-        -> multiplexer / Pane.applyFrame and copy-state reconciliation
-     -> detached: no effects
-     -> broken base: request_snapshot
-     -> applied: frame_ack, graphics visibility, active resources
+  -> AttachedClient.receivePaneFrame
+     -> pane_frame.receive(model, frame)
+        -> Pane.applyFrame and ClientModel.reconcileCopyModeFrame
+        -> detached: no effects
+        -> resync: model.to_runtime request_snapshot
+        -> applied: model.to_runtime frame_ack
+     -> AttachedClient.startRuntimeSend
+     -> applied: graphics visibility, synchronizeActivePane
         -> telemetry and attachment-prompt reconciliation
   -> adapter observes presentation revisions
   -> successful host completion retires exact captured damage
 ```
 
-The model resolves pane membership, ignores detached frames and compares patch
-bases with the last applied frame. A broken base returns the known frame ID
-without mutation. Valid frames commit owned cells, cursor, child modes, scroll
-and copy-state pruning, then advance the frame revision even when visible cells
-are unchanged. Failed application does not publish a revision.
+`pane_frame.receive` finds the pane in `model.panes`, ignores detached frames
+and compares patch bases with the pane's `applied_frame_id`. A broken base
+queues `request_snapshot` with the known frame ID and returns `.resync` without
+mutation. Valid frames commit owned cells, cursor, child modes, scroll and
+copy-state pruning, then advance `frame_revision` even when visible cells are
+unchanged. Failed application does not publish a revision.
 
-`AttachedClient.applyPaneFrame` enqueues the ACK before synchronizing graphics and active
-resources. A newly enabled child focus-report mode can therefore receive its
-focus-in after application acknowledgement. The operation keeps commit and
-ordered delivery in the same synchronous call; callers cannot substitute an
+`pane_frame.receive` queues the ACK in `model.to_runtime` before
+`AttachedClient.receivePaneFrame` synchronizes graphics and active resources.
+A newly enabled child focus-report mode can therefore receive its focus-in
+after application acknowledgement. `receivePaneFrame` keeps commit and ordered
+delivery in the same synchronous call; callers cannot substitute an
 older frame commit between them.
 
 ACK failure preserves owned cells and pending presentation damage. Later
@@ -38,8 +42,9 @@ presentation hostage.
 
 Presentation observes the model revision after the event and folds it into
 paced work. Preparing a frame seals one bounded commit; successful completion
-calls `operations/session/presentation_delivery.apply`. It filters retired
-attachment generations and retires only exact pending frame IDs. It sends no
+calls `presentation_delivery.apply` (`src/client/connection/`), which reaches
+`ClientModel.commitPresentation` and the model's `presentation_delivery.retire`.
+It filters retired attachment generations and retires only exact pending frame IDs. It sends no
 cell ACK. Frame N+1 can be applied and acknowledged while N is being presented,
 leaving N+1 damage pending for the next preparation.
 
@@ -47,9 +52,9 @@ A reconstructed pane may reuse a wire frame ID but has a new client attachment
 generation. An old host completion cannot clear that pane's damage. Failed or
 cancelled host delivery clears no model damage and never claims presentation.
 
-Source: `src/client/AttachedClient.zig`,
-`src/model/state/Model.zig`, `src/model/panes/Pane.zig`, and
-`src/client/operations/session/presentation_delivery.zig`.
+Source: `src/client/AttachedClient.zig`, `src/model/panes/pane_frame.zig`,
+`src/model/panes/Pane.zig`, `src/model/panes/presentation_delivery.zig` and
+`src/client/connection/presentation_delivery.zig`.
 Tests: `src/frontend/client/tests/pane_updates.zig`,
 `src/client/presentation/headless_tests.zig`,
 `src/frontend/client/tests/presentation.zig`, `src/gui/tests/terminal.zig`,

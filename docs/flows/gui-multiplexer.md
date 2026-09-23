@@ -43,9 +43,10 @@ the window height and the band plus its gap from the width before it counts
 cells, so the grid origin sits under navigation and after the band, every
 row is a complete terminal row and every column a complete terminal column.
 A window too short for one row gives the height bands back: navigation
-first, then the status bar. `widgets/Regions.zig` gives the
-whole grid to the workbench; the column preference the runtime retains in
-the shared layout is TUI-only and the GUI no longer reads it.
+first, then the status bar. The shared `workbench.region(model)` gives the
+whole grid to the workbench because the GUI leaves `model.host.grid_chrome`
+false; the column preference the runtime retains in the shared layout is
+TUI-only and the GUI no longer reads it.
 `widgets/Bands.zig` places the pixel bands from the same origin, the sidebar
 band running from under navigation to the status bar, so a band never
 overlaps a cell. Both horizontal bars span the full window independently
@@ -127,7 +128,7 @@ line, horizontal resize cursor) turns every drag and the release into a
 adopts into its `SidebarPreference` without touching the shared model; the
 next preparation measures the grid again and the PTY follows. The
 `resize_sidebar` action does the same in 16 logical px steps from
-`input/InputHandler.zig`. The gap between the band and the grid belongs to
+`GuiClient.executeAction` through `SidebarPreference.step`. The gap between the band and the grid belongs to
 no target.
 The palette keeps its own bounded hit map of at most 16 visible rows in the
 overlay state; a primary press on a row submits it through the `prompt_row`
@@ -145,11 +146,13 @@ terminal cells. Modal gestures cannot fall through to panes behind them.
 
 ## Execution and budgets
 
-`GuiClient.update` is the sole consumer of GUI completions. It dispatches
-socket input, native input, presentation, configuration, binding deadlines,
-notifications, bar jobs and plugin jobs to concrete shared operations. Host workers
-use the existing inbox/outbox execution model. Layout replication is observed
-once after a bounded turn.
+`GuiClient.update` is the sole consumer of GUI completions. It drains one
+bounded inbox turn. Runtime socket input and every shared worker or timer
+completion arrive as one `client.Message`, wrapped as `.client` and passed to
+`AttachedClient.update`; native input, presentation, configuration and binding
+deadlines dispatch to concrete GUI handlers. `GuiClient.deliverHostEffects`
+drains `model.to_host` after every event. Layout replication is observed once
+after a bounded turn.
 
 Cell meshes remain retained across chrome redraws. Selection recolors a borrowed
 cell value and never edits the canonical terminal buffer. A geometry-time quad

@@ -4,15 +4,16 @@ The runtime owns workspace name, tab membership, labels and order. The client
 retains layouts, focus, buffers and disposable resources for canonical identities.
 
 ```text
-AttachedClient.inputPrompt
+AttachedClient.inputPrompt -> submitPrompt(.rename_workspace)
   -> AttachedClient.requestWorkspaceRename
-  -> owned rename_workspace -> runtime rename
+  -> AttachedClient.sendWorkspaceRenameRequest -> owned rename_workspace -> runtime rename
 
 rename reply or requested workspace_snapshot
   -> AttachedClient.handleServerMessage
   -> AttachedClient.applyWorkspaceSnapshot
      -> consume rename/snapshot correlation and verify workspace
-     -> bounded descriptor decoding -> Model.reconcileWorkspace
+     -> bounded descriptor decoding -> ClientModel.reconcileWorkspace
+        -> workspace_reconciliation.reconcileTabs
      -> ignore removed-tab requests; release removed-pane resources
      -> synchronize active resources if active tab changed
      -> retain pending tab snapshot, request one, or offer attached sizes
@@ -20,7 +21,7 @@ rename reply or requested workspace_snapshot
 ```
 
 Rename accepts only the projected workspace and refuses overlapping operations.
-The bounded outbox owns the candidate before the prompt closes; request delivery
+The bounded outbox, `model.to_runtime`, owns the candidate before the prompt closes; request delivery
 changes no canonical state. Runtime queues stable workspace identity and encodes
 its latest snapshot at send time, so an older borrowed descriptor list cannot
 remain queued.
@@ -57,9 +58,9 @@ known continuation. Model rejection performs no resource effects. Post-commit
 failure preserves the canonical replica and completed cleanup. Reconnect or a
 later snapshot repairs disposable resources. No operation schedules a draw.
 
-Source: `src/client/AttachedClient.zig`,
-`AttachedClient.requestWorkspaceRename`, and `src/model/state/Model.zig`.
+Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`
+and `src/model/workspace/workspace_reconciliation.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`,
-`renaming_and_telemetry.zig`, `src/model/state/tests/workspaces.zig`, and
-`tabs.zig` cover correlation, atomic validation, retained layouts, foreground
+`renaming_and_telemetry.zig`, `src/model/state/tests/workspaces.zig`,
+`tabs.zig` and `src/model/workspace/tab_flow_tests.zig` cover correlation, atomic validation, retained layouts, foreground
 metadata, cleanup, coalescence and canonical no-ops.

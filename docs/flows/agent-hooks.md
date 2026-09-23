@@ -24,22 +24,23 @@ telar hook <agent>   (stdin JSON; TELAR_PANE_ID + TELAR_PANE_GENERATION from the
 parse the harness payload once
         |
         +-> lifecycle mapping -> schema.report_agent
-        |                         -> routeReportAgent -> agents.routeReportAgent
+        |                         -> client_request.receive -> agent_hooks.receive
         |                         -> Tracker.observeReport -> Agent.applyReport
         |
         +-> session name mapping -> schema.report_agent_title
-        |                         -> routeReportAgentTitle -> agents.routeReportAgentTitle
+        |                         -> client_request.receive -> agent_hooks.receiveTitle
         |                         -> Tracker.reportTitle -> Agent.reportTitle
         |
         +-> manifest command_tools mapping -> schema.report_agent_command
-                                          -> agents.routeReportAgentCommand
+                                          -> agent_hooks.receiveCommand
+                                          -> Pane.recordAgentCommand
                                           -> history.Service.recordAgentCommand
         |
 reproject lifecycle state; persist a running or completed agent command
 ```
 
 The hook attaches to a runtime that is already listening and never starts
-one (`control.Session.attach`). The pane environment outlives the runtime
+one (`Session.attach` in `src/cli/Session.zig`). The pane environment outlives the runtime
 that injected it, so an orphaned agent must not resurrect a stopped runtime
 from its hooks. Without a runtime the hook exits 0 and reports nothing.
 
@@ -274,8 +275,8 @@ for `SessionEnd` and `Interrupt`.
 
 - `src/backend/agent/tracker_support.zig` proves precedence over screen evidence,
   `exited` withdrawal and expiry.
-- `src/backend/runtime/agent_hooks.zig` and
-  `report_agent_title.zig` prove the reply contracts.
+- `src/backend/runtime/agent_hooks.zig` holds the reply contracts for
+  `report_agent`, `report_agent_command` and `report_agent_title`.
 - `src/backend/agent/tracker_support.zig` proves that an agent title outranks a
   generated one, never clears a manual one, clears on an empty report and is
   durable.

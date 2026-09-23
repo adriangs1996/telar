@@ -10,17 +10,18 @@ forwards the child's sequence directly to the host terminal.
 ```text
 child OSC 22 -> pane_output -> Pane.ingest -> VT mouse_shape
              -> Pane.pointer_shape -> Attachment.prepareNextCells
-             -> pane_frame.pointer_shape -> ClientModel.applyPaneFrame
-             -> multiplexer.Pane.pointer_shape
+             -> pane_frame.pointer_shape -> pane_frame.receive
+             -> Pane.applyFrame -> Pane.pointer_shape (model)
 
-host mouse -> pointer_routing -> View.handleMouse -> client pointer position
+host mouse -> pointer_routing.apply -> HostChrome.pointer -> State.handleMouse
+           -> client pointer position
 
-pane frame or view change -> paced presentation -> View.render
+pane frame or view change -> paced presentation -> State.render
                          -> pointer policy -> Screen.flush -> host OSC 22
 ```
 
 The runtime owns the canonical shape for each pane. `Pane.pointerShape` maps
-VT enum names to the shared `schema.frame.PointerShape`; it does not depend on
+VT enum names to the shared `core.PointerShape`; it does not depend on
 the VT enum's numeric ABI. The mapping is exhaustive, so adding a VT shape
 requires an explicit protocol decision. The VT also owns alias handling,
 malformed commands, reset behavior and parsing across PTY read boundaries.
@@ -91,22 +92,23 @@ the selected shape without affecting input or cell output.
 - `src/backend/pane/pane_namespace.zig`: every canonical shape, every OSC byte split, the VT default,
   an alias, an invalid name and explicit default reset, with further allocation
   and resizing disabled after VT creation.
-- `schema_contract_test.zig`: updated golden bytes and fingerprint, all 256
+- `src/core/schema_contract_test.zig`: updated golden bytes and fingerprint, all 256
   possible pointer bytes, accepted enum values and rejection of unknown values.
 - `src/backend/runtime/attachment/attachment_namespace.zig`: pointer-only frames, unchanged-state no-op,
   independent clients, slow acknowledgement, latest-wins updates, recovery
   snapshots and fresh attachments.
-- `transport_integration_test.zig`: a real PTY child emits OSC 22, both clients
+- `src/transport_integration_test.zig`: a real PTY child emits OSC 22, both clients
   receive its canonical shape alongside output, and one client survives the
   other's departure.
-- `client/presentation/view.zig`: unfocused panes, all wire shapes, stationary
+- `src/frontend/client/presentation/view.zig`: unfocused panes, all wire shapes, stationary
   metadata updates without chrome scans, borders, prompts, copy mode, resize
   ownership, attachment modals, detach and removal under a stationary pointer.
   Existing focus-intent assertions remain unchanged.
-- `client/tests/presentation.zig`: decoded snapshots and zero-span pointer
+- `src/frontend/client/tests/presentation.zig`: decoded snapshots and zero-span pointer
   patches reach host presentation without pointer movement; chrome takes over
   on hover, and leaving copy mode cannot restore stale hover.
-- `presentation/pointer.zig` and `presentation/screen.zig`: bounded static CSS
+- `src/frontend/presentation/pointer.zig` and
+  `src/frontend/presentation/screen_support.zig`: bounded static CSS
   sequences, unchanged-shape suppression, output invalidation and re-emission.
 
 Run `zig build test` for these contracts. Upgrading a running installation

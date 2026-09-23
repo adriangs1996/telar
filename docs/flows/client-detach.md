@@ -5,14 +5,16 @@ available for another attachment.
 
 ```text
 AttachedClient.executeAction(.detach)
+  -> AttachedClient.synchronizeClientLayout
   -> AttachedClient.detachAllTabs
      -> capture bounded stable TabLocation list
      -> AttachedClient.detachTab for each location
+        -> ClientModel.planTabDetachment
         -> finish tab-owned paste
         -> tab-owned focus-out
         -> detach, retire pending correlation, hide graphics per pane
-        -> Model.commitTabDetachment
-  -> return Control.stop to the event loop
+        -> ClientModel.commitTabDetachment
+  -> return KeybindControl.stop to the event loop
 ```
 
 `AttachedClient.detachAllTabs` captures tab locations before the first effect and
@@ -24,7 +26,7 @@ only after that tab's effects complete.
 
 Detachment advances no semantic presentation version and requests no frame.
 The stop directive is returned only after every requested detach enters the
-bounded runtime outbox. Disconnect itself also retires the connection's runtime
+bounded `model.to_runtime` outbox. Disconnect itself also retires the connection's runtime
 attachments; no PTY shutdown is requested.
 
 A delivery error propagates instead of returning stop. Earlier effects remain
@@ -33,7 +35,7 @@ normal error path terminates the client and destroys disposable resources while
 the runtime continues.
 
 Source: `src/client/AttachedClient.zig` and
-`src/client/AttachedClient.zig`.
+`src/model/state/ClientModel.zig`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig` covers stable multi-tab
 wire order, local attachment cleanup, exact paste/focus ownership, version
 silence and the final stop directive. Tab close/handoff tests exercise capacity

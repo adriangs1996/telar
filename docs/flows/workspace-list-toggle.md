@@ -15,36 +15,34 @@ native, Lua, plugin or top-bar action
         |
 AttachedClient.executeAction
         |
-actions.toggleWorkspaceList
-        |
 ClientModel.toggleWorkspaceList
         |
 presentation_lifecycle.observe
         |
-Presenter
+view_chrome.refresh -> view.setWorkspaceListCollapsed
         |
-View.setWorkspaceListCollapsed
+Presenter
 ```
 
 `ClientModel` is the source of truth for the collapse preference. A toggle
-advances only `ClientModel.Version.chrome` and returns the committed value and
-revision. Explicit assignment of the current value is a no-op.
+advances only `model.chrome_revision`, reported as `Version.chrome`, and
+returns the committed value and revision. Explicit assignment of the current value is a no-op.
 
-`View.handleMouse` reports `Interaction.toggle_workspace_list` without
-changing its projection. The input adapter and configured action sources route
+The TUI view's `State.handleMouse` reports a `ViewInteractionCommand` with
+intent `.toggle_workspace_list` without changing its projection. The input adapter and configured action sources route
 that intent through the shared dispatcher and the same concrete operation.
 
 ## Presentation
 
-The action calls `Model.toggleWorkspaceList` directly. No IPC, resource cleanup
-or immediate geometry synchronization is needed, and the operation has no
-reference to `View` or `Presenter`.
+The action calls `ClientModel.toggleWorkspaceList` directly. No IPC, resource
+cleanup or immediate geometry synchronization is needed, and the operation has
+no reference to the view or `Presenter`.
 
-After the input event, `client_events` calls `presentation_lifecycle.observe`.
-`Presenter` compares the observed and presented chrome revisions and schedules
-the paced frame. When that frame is due, it projects the committed value into
-`View` before composing. Repeated observations of the same version schedule
-nothing.
+After the input event, the TUI's `events.zig` calls
+`presentation_lifecycle.observe`. `view_chrome.refresh` sees the changed chrome
+revision and copies the committed value into the view. `Presenter` compares the
+observed and presented chrome revisions and schedules the paced frame.
+Repeated observations of the same version change and schedule nothing.
 
 ## Failure and recovery
 
@@ -54,12 +52,12 @@ with the default expanded list; no runtime process or PTY is affected.
 
 ## Proof
 
-- `src/model/state/Model.zig` proves collapse ownership, no-op assignment
-  and chrome-revision isolation.
-- `src/model/state/tests/configuration_and_host.zig` proves the use
-  case changes only committed client state.
+- `src/model/state/tests/configuration_and_host.zig` proves collapse
+  ownership, no-op assignment and chrome-revision isolation, and that the
+  toggle changes only committed client state.
 - `src/frontend/client/presentation/view.zig` proves top-bar clicks return intent without
   mutating the projection.
-- `src/frontend/client/tests/` proves the projection remains stale
-  until presenter observation, the dispatcher does not request a draw and no
+- `workspace list toggle is projected only by the presenter` in
+  `src/frontend/client/tests/pane_lifecycle.zig` proves the projection remains
+  stale until presentation observation, the dispatcher does not request a draw and no
   runtime message is emitted.

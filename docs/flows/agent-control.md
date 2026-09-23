@@ -25,13 +25,13 @@ status == until ? exit 0 : sleep 250 ms, repeat until --timeout (exit 3)
 ```text
 telar agent prompt 7 "run the tests"
         |
-schema.send_pane_text{mode = prompt} -> panes.routeSendPaneText
+schema.send_pane_text{mode = prompt} -> client_request.receive -> pane_input.sendText
         |
-panes.routeSendPaneText: PaneStore.resolve(exact generation)
+pane_input.sendText: PaneStore.resolveControl(exact generation)
         |            Tracker.projectedStatus == blocked -> request_failed agent_blocked
         |            bracketed paste framing if the child enabled mode 2004, then Enter
         |
-pane_input.sendText -> forward  (history observer first, then the PTY queue)
+pane_input.forward  (history observer first, then the PTY queue)
         |
 schema.request_completed
 ```

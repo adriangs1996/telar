@@ -13,7 +13,7 @@ AttachedClient.executeAction or GUI/TUI tab drag release
   -> AttachedClient.handleServerMessage
   -> AttachedClient.completeTabMove
      -> consume and verify exact move continuation
-     -> Model.applyTabPosition
+     -> ClientModel.applyTabPosition -> tab_move.move
   -> adapter observes presentation revisions
 ```
 
@@ -63,8 +63,9 @@ Unknown, incompatible, mismatched, replayed or invalid-position replies cannot
 change order. A correlated failure keeps the old order and publishes an owned
 notice. Reconnect reads canonical order instead of replaying the request.
 
-Source: `src/client/AttachedClient.zig`,
-`src/gui/widgets/interaction/tab_drag.zig`, and adapter tab-drag input.
+Source: `src/client/AttachedClient.zig`, `src/model/workspace/tab_move.zig`,
+`src/gui/widgets/interaction/tab_drag.zig`, and the TUI's
+`src/frontend/client/input/tab_drag.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`,
 `src/gui/tests/widget_interaction.zig`, `src/gui/widgets/TabMotions.zig`, shared
 model tests and runtime workspace-order tests. `tools/gui_tab_drag.py` exercises

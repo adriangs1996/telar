@@ -17,14 +17,15 @@ Attachment.prepareTitle (lane after cwd and foreground)
         |
 schema.pane_title
         |
-AttachedClient.handleServerMessage -> Model.updatePaneMetadata
+AttachedClient.handleServerMessage
         |
-ClientModel.updatePaneMetadata(.title) -> multiplexer.Model.setPaneTitle
+ClientModel.updatePaneMetadata(.title) -> Pane.setTitle
         |
-Version.pane_metadata
+pane_metadata_revision
         |
-Presenter.syncWindowTitle -> OSC 0 to the host (only when the rendered
-                             `client.window_title` template changes)
+Presenter.syncWindowTitle -> WindowTitleState.sync -> OSC 0 to the host
+                             (only when the rendered `client.window_title`
+                             template changes)
         +-> Lua bar context `pane_title`
         +-> agent snapshot `session_title` fallback (source `terminal`)
 ```
@@ -33,7 +34,7 @@ Presenter.syncWindowTitle -> OSC 0 to the host (only when the rendered
 
 `TitleState.observe` runs on the interactive path after each ingest: one
 bounded compare, no allocation. It drops C0/DEL bytes and invalid UTF-8
-sequences and cuts at `schema.max_pane_title_bytes` on a code point boundary,
+sequences and cuts at `core.max_pane_title_bytes` on a code point boundary,
 so the stored value is safe in a wire frame and in a host escape sequence.
 
 Attachments start at the empty-title revision. A fresh attachment therefore
@@ -46,14 +47,15 @@ session title while no generated, manual or agent title exists and marks the sou
 
 ## Client
 
-The client pane stores the title as an owned slice allocated on change, like
-the working directory, because pane storage is inline in every tab and a
-fixed buffer per pane would cost megabytes per client model.
+The client `Pane` stores the title as an owned slice allocated on change, like
+the working directory, because a fixed buffer per pane would cost megabytes
+per client model.
 
 `client.window_title` is a template with `{hostname}`, `{workspace}`, `{tab}`
 and `{pane_title}`. An empty template, the default, never touches the host
-title. The presenter renders it on every presentation and writes OSC 0 only
-when the rendered text differs from the last one sent; the bytes ride the
+title. The presenter renders it with `ClientModel.focusedPaneTitle`,
+`workspaceName` and `tab_label.text` on every presentation and writes OSC 0
+only when the rendered text differs from the last one sent; the bytes ride the
 frame flush already in progress.
 
 Bar callbacks receive `context.pane_title` for the focused pane of the active
@@ -66,5 +68,6 @@ tab.
 - `src/core/schema_contract_test.zig` pins the `pane_title` bytes.
 - `src/model/state/tests/observations.zig` proves per-pane storage,
   no-op repeats and the focused-pane accessor.
-- `src/frontend/presentation/window_title.zig` proves token rendering and
-  send-on-change.
+- `src/frontend/presentation/window_title.zig` and
+  `src/client/presentation/window_title.zig` prove token rendering,
+  send-on-change, retry after failure and bounded Unicode truncation.

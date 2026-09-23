@@ -4,11 +4,11 @@ This flow begins after ProxyTLS has copied, decoded and joined a complete
 exchange. It never runs on the relay task.
 
 ```text
-proxy capture joiner
+proxy capture joiner (ProxyRuntime.acceptCapture / expireCaptures)
         |
-        | owned CaptureExchange
+        | owned capture Exchange
         v
-plugins.Service.submit
+plugins Service.submit
         |
         | length-prefixed immutable exchange frame
         v
@@ -22,10 +22,10 @@ long-lived `telar tap-worker` child
 bounded typed effect frame
         |
         v
-RuntimeEvent.plugin_effects
+runtime Event.plugin_effects
         |
         v
-plugin_effects.Adapter
+proxy_tap.receive
         |
         +-- exact generation, plugin ID and digest check
         +-- declared and granted capability check

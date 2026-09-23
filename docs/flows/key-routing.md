@@ -46,10 +46,10 @@ GUI integration tests admit input and post completion messages to that same inbo
 they do not invoke those private steps directly.
 
 `AttachedClient.keyRoutingAuthority()` snapshots modal, prompt and copy-mode
-flags. The existing pure `captures(authority)` decides whether bindings are
+flags. The existing pure `key_routing.captures(authority)` decides whether bindings are
 bypassed. `AttachedClient.repeatPane()` returns only the eligible attached pane
 ID, or null when an exclusive owner, copy mode or an unavailable pane prevents
-repetition. The pure `repeatPolicy(action, eligible_pane)` receives these values,
+repetition. The pure `action_routing.repeatPolicy(action, eligible_pane)` receives these values,
 never an application pointer. GUI and TUI re-read eligibility after each action
 so a focus or mode change takes effect before the next repeat.
 
@@ -139,7 +139,7 @@ Legacy press-only input retains its old behavior. See
 ## Clipboard preview order
 
 Only an unmodified `Ctrl+V` is eligible for local image inspection. The operation
-first waits for `AttachedClient.sendPaneInput` to accept the input into the client outbox.
+first waits for `AttachedClient.sendPaneInput` to accept the input into `model.to_runtime`.
 It starts the preview only after that confirmed delivery. A missing pane never
 starts a preview.
 
@@ -157,11 +157,12 @@ replacement. Modal,
 prompt and copy effects resolve their current owner again through their
 capability adapter. No asynchronous task retains the snapshot or input slice.
 
-A successful modal close advances `View.interactionVersion`. Prompt and copy
-changes advance their own `ClientModel.Version` fields. `Presenter` observes
+A successful modal close advances the TUI view's `interactionVersion`
+(`presentation/State.zig`). Prompt and copy changes advance their own
+`Version` fields, read through `ClientModel.version()`. `Presenter` observes
 both through the paced loop. Pane input normally produces no presentation
 revision unless its viewport policy commits a scroll change. Removing a paired
-image marker also advances `View.interactionVersion`; removing the last marker
+image marker also advances `interactionVersion`; removing the last marker
 re-offers pane geometry. Claude and Pi marker identities are additionally
 reconciled after committed pane frames: Claude's attachment context can remove
 a chip without editing it as Codex text, and Pi's plain-text path yields to
@@ -175,10 +176,10 @@ delivery.
 
 ## Validation
 
-- `src/model/application/input/key_routing.zig` proves capture authority,
-  semantic and byte priority, exact-pane leases, prompt repeat ownership,
-  orphan and saturation policy, exclusive failures, confirmed delivery and
-  `Ctrl+V` ordering.
+- `src/model/input/key_routing.zig` proves capture authority.
+- `src/client/input/key_lease.zig` proves exact-owner leases, replacement and
+  saturation policy; `src/client/input/routing_tests.zig` proves binding
+  ownership through release and that repeats arm only after execution.
 - `src/frontend/input/keybind.zig` proves active editor capture before bindings,
   semantic replay, binding/application physical ownership, persistent prefix
   release, reload inheritance, repeat pacing, cancellation, clock bounds,
@@ -188,7 +189,7 @@ delivery.
   delivery through the complete input entrypoint. Held-scroll tests cover both
   viewport directions, burst suppression, endpoint no-ops, global bindings,
   changed focus and copy-mode capture through the router and real adapters.
-- `src/client/application/input/action_routing.zig` proves that only
+- `src/client/input/action_routing.zig` proves that only
   native scroll actions receive a repeat policy and exact-pane owner token.
 - `src/gui/tests/widget_interaction.zig` proves agent scroll bindings through
   the native input entrypoint, paced repetition, transcript bounds, stale

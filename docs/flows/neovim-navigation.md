@@ -17,8 +17,8 @@ The `navigate_pane` action handles a canonical directional key:
 3. If no Telar neighbor exists, the client consumes the binding without sending
    input to the pane. An unavailable navigation action must not edit shell input.
 
-This path uses the cached foreground projection and the existing bounded input
-outbox. It performs no filesystem access, process spawn, Lua evaluation, or
+This path uses the cached foreground projection and the existing bounded
+`model.to_runtime` queue. It performs no filesystem access, process spawn, Lua evaluation, or
 allocation.
 
 ## Neovim edge path

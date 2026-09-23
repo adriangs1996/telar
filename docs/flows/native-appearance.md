@@ -208,9 +208,9 @@ device-pixel rectangle, snapped to whole pixels, as one quad with zero shape.
 
 Workspace favicons never cross the wire. `widgets/Favicons` keeps one entry per
 workspace of the list; each preparation places the one landed image into the
-page and asks `operations/workspaces/favicons.request` to look up the next wanted
-workspace when the client's `favicon_runner` is bound (the TUI leaves it
-unset). The GUI job runs on an inbox task: the shared `favicon_lookup` reads
+page and asks `client/workspace/favicons.request` for a lookup job for the next
+wanted workspace (the TUI never asks). The GUI runs that job as
+`image/favicon_worker.execute` on an inbox task: the shared `favicon_lookup` reads
 `favicon.png`, `favicon.ico`, then `.telar/icon.png` under the workspace root (regular files,
 1 MiB at most). `image/ico` inspects at most 64 directory entries without
 allocation and selects the smallest supported image covering the sprite cell,
@@ -298,9 +298,10 @@ toplevel; a manager advertised after mapping cannot create a late decoration.
 ## Hot reload
 
 `GuiClient.start` calls `AttachedClient.scheduleConfigReload`, which selects the
-live configuration resources for `config_reload.schedule`. The native
-`host_ports.configWatcher` binds directly to `ConfigurationReload`, without
-recovering it through `AttachedClient`. `ConfigurationReload` owns one worker and one
+live configuration resources for `config_reload.schedule`. That procedure
+starts a `.config_watch` job through `client.workers`; the GUI's
+`ports/workers.zig` hands that job to `ConfigurationReload.schedule` instead of
+the shared runner, without recovering it through `AttachedClient`. `ConfigurationReload` owns one worker and one
 pending result. Its worker calls the shared `config_reload.wait`: the same
 one-second fingerprint watch, selected profile, local modules, plugin registry
 and trust-store loading as the TUI. It also prepares a replacement
@@ -350,8 +351,8 @@ active renderer and one staged or retired renderer. Rearm records a request;
 the driver launches it after adoption has finished, so it captures the new
 font settings. Window close cancels and joins this worker before destroying
 the client generations or closing the wake pipe. A pending unadopted generation
-remains in the shared orphan slots until client teardown. This component uses
-the existing host port and the shared inbox. Native font policy stays in
+remains in the shared orphan slots until client teardown. This component takes
+the `.config_watch` job and uses the shared inbox. Native font policy stays in
 `src/gui`.
 
 ## Colors

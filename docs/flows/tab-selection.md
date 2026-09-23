@@ -7,7 +7,7 @@ All sources resolve their intent through one concrete operation:
 AttachedClient.executeAction, delivered tab click or agent navigation
   -> AttachedClient.selectTab
      -> reject a pending tab snapshot
-     -> Model.selectTab
+     -> ClientModel.selectTab -> tab_selection.selectPosition / selectOffset
      -> AttachedClient.detachTab(previous)
      -> show selected graphics
      -> AttachedClient.synchronizeActivePane
@@ -37,8 +37,9 @@ then propagates to the client loop. Reconnect rebuilds disposable resources;
 runtime tabs and PTYs remain alive. Presentation follows the active-tab revision
 and is scheduled only by the host adapter.
 
-Source: `src/client/AttachedClient.zig` and
-`AttachedClient.zig` in the same directory.
+Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`
+and `src/model/workspace/tab_selection.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`, `pane_lifecycle.zig`,
-`src/model/state/tests/tabs.zig`, and `src/client/workspace/` tests cover target
-resolution, no-ops, wire order, exact ownership and canonical repair.
+`src/model/state/tests/tabs.zig` and `src/model/workspace/tab_flow_tests.zig`
+cover target resolution, no-ops, wire order, exact ownership and canonical
+repair.

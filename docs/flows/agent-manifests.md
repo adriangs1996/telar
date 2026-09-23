@@ -13,7 +13,7 @@ code and stay with the built-ins.
 The sidebar, the `telar agent` command, notifications and the image shelf read
 the data axis from the snapshot entry the runtime publishes. None of them
 switch on a provider index any more; the only remaining switches are the
-artwork registries (`ui.icons.Icon.forProvider`, `kitty.SidebarProvider`),
+artwork registries (`icons.Icon.forProvider`, `kitty_sidebar.SidebarProvider`),
 which map a built-in to its shipped image and fall back to the manifest glyph
 or a generic mark for everything else.
 
@@ -24,13 +24,13 @@ config.lua  runtime.agents = { { name = "gemini", display_name = "Gemini CLI", i
         |
 config.agents.parse -> RuntimeSnapshot.agent_manifests (Table)
         |
-telar server: Launch.agent_manifests -> runtime Options.agent_manifests
+telar server: ServerLaunch.agent_manifests -> runtime Options.agent_manifests
         |
 Resources.agent_manifests (immutable after startup)
         |
 model.resources.agent_manifests --> pane_launch --> Pane.manifests
         |                                            |
-        |                        history.Observer.detector.signal(table)
+        |                        history.Observer: sample.signal(manifests)
         |                        history.prompt_scan.scanReadyPrompt(terminal)
         |                        process.probe(.{ .manifests = table })
         |                                 (foreground name = table.displayName)
@@ -80,7 +80,7 @@ manifests. Each manifest names the agent and carries:
 
 `Table.detect` keeps the historical precedence: any blocked phrase, then any
 working phrase, then a ready prompt, then identity alone. The observation
-worker runs it on `history.agent_detection.Sample`, the plain text of the
+worker runs it through `history.Sample.signal`, on the plain text of the
 history emulator's active screen after each batch, never on the raw bytes: a
 client that repaints only changed cells can emit its idle prompt without the
 status line still drawn above it, and only the screen holds both. An agent that
@@ -113,7 +113,7 @@ installs them from `cli/integration.zig` and `telar hook` parses them in
 ## API dialect
 
 The proxy never names an agent. `provider/dialect.zig` identifies the dialect
-of a CONNECT host and `request.classify` decides inference routes per dialect.
+of a CONNECT host and `request_support.classify` decides inference routes per dialect.
 Observations carry the dialect to the runtime, where
 `ProxyObservation.impliedProvider` maps it to the native built-in agent
 (`anthropic_messages` to Claude Code, `openai_responses` to Codex). That

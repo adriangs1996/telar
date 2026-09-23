@@ -7,8 +7,9 @@ transparency.
 
 ## Ownership and flow
 
-`src/frontend/client/controllers/host/host_capabilities.zig` owns issuing host probes, translating
-replies and settling expiry. `resources/host_negotiation.zig` retains one
+`src/frontend/client/host/host_capabilities.zig` owns issuing host probes, translating
+replies and settling expiry. `host/host_negotiation.zig`, over the
+`HostNegotiation` state, retains one
 250 ms probe window, records each color once and rejects unsolicited or expired
 color reports. Resizes always refresh pixel geometry; overlapping color probes
 are coalesced. OSC replies have no request IDs, so a report is correlated only
@@ -33,14 +34,15 @@ host write with no bootstrap message sent and no consumed event.
 The three bootstrap messages use the ordinary FIFO outbox and its send actor.
 No synchronous socket write competes with that actor. Color readiness does not
 wait for graphics support. Before the first pane is activated,
-`resources/startup_input.zig` uses the presentation parser to deliver host
+`session/startup_input.zig` uses the presentation parser to deliver host
 responses and retains other input. It preserves bracketed paste as data and
 replays unfinished escape prefixes through the normal input router.
 
-The client model retains the RGB values in `HostCapabilities.terminal_colors`.
+The client model retains the RGB values in
+`model.host.host_capabilities.terminal_colors`.
 Its existing host transaction detects changes without color-specific revision
 logic. Later color changes publish the same `configure_terminal_colors` message
-through host-resource delivery. `appearance` remains a separate derived value
+from `AttachedClient.deliverHostCommit` once startup is opening or active. `appearance` remains a separate derived value
 used to select the client UI theme.
 
 ## Runtime authority
@@ -109,16 +111,18 @@ color query.
   OSC 10/11. Explicit user overrides remain unchanged. With no override,
   Codex 0.153.4 emits the RGB input background; `CLICOLOR_FORCE=1` reproduces
   its missing background with the same host color replies.
-- `resources/host_negotiation.zig`: deadline, duplicate replies and probe overlap.
-- `resources/startup_input.zig`: fragmented replies, preserved typing, paste,
-  partial escapes and explicit saturation failure.
-- `presentation/screen.zig`: OSC 10/11 parsing, terminators and malformed RGB.
-- `client/tests/transport.zig`: ordered bootstrap, timeout fallback and replay
-  only after pane activation.
+- `src/frontend/client/host/host_negotiation.zig`: deadline, duplicate replies
+  and probe overlap.
+- `src/frontend/client/session/startup_input.zig`: fragmented replies, preserved
+  typing, paste, partial escapes and explicit saturation failure.
+- `src/frontend/presentation/screen_support.zig`: OSC 10/11 parsing, terminators
+  and malformed RGB.
+- `src/frontend/client/tests/transport.zig`: ordered bootstrap, timeout fallback
+  and replay only after pane activation.
 - `src/backend/pane/pane_namespace.zig`: child query fragments, overrides, resets and deferred
   latest-value updates during ingestion.
-- `backend/pane/blit.zig`: semantic defaults and explicit RGB cell backgrounds.
+- `src/backend/pane/blit.zig`: semantic defaults and explicit RGB cell backgrounds.
 - `src/backend/runtime/terminal_colors.zig` and `src/backend/runtime/geometry_lease.zig`: ownership, spectators, lease transfer,
   disconnect retention and generation-safe lookup.
-- `core/schema_contract_test.zig`: wire fingerprint, truncation, optional colors
+- `src/core/schema_contract_test.zig`: wire fingerprint, truncation, optional colors
   and malformed presence flags.

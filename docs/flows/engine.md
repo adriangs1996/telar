@@ -13,24 +13,24 @@ runtime state.
 ```text
 config.lua  runtime.engine = { command = { "pi", "--mode", "rpc", ... }, ... }
         |
-config.root.parseEngine -> RuntimeSnapshot.engine (CommandSpec) + engine_idle_timeout_ms
+commands.parseEngine -> RuntimeSnapshot.engine (CommandSpec) + engine_idle_timeout_ms
         |
-telar server: Launch.engine_options -> runtime Options.engine
+telar server: ServerLaunch.engine_options -> runtime Options.engine
         |
-Resources.engine (resources/engine.zig) starts the engine.Service actor
+Resources.engine (resources/EngineRuntime.zig) starts the engine Service actor
         |
-prefix+? in a client -> suggest_command -> routeSuggestCommand
+prefix+? in a client -> suggest_command -> client_request -> suggest_command.start
         |
-suggestion.buildPrompt -> engine.Prompt (purpose = suggestion{client, request})
+suggestion.buildPrompt -> engine Prompt (purpose = suggestion{client, request})
         |
 Service.submit (bounded ring, never blocks the runtime)
         |
 actor: Session.open (spawn on first prompt, cwd "/") -> rpc.encodePrompt ->
        records until agent_settled -> get_last_assistant_text -> Response
         |
-Event.engine_response (observation path) -> AgentEvents.handleEngineResponse
+Event.engine_response (observation path) -> suggest_command.finish
         |
-deliverSuggestion -> command_suggestion queued for that client, clients pumped
+command_suggestion pushed to that client's delivery.responses
 ```
 
 ## Ownership and budgets
@@ -50,7 +50,8 @@ child so the next prompt starts a fresh process; an oversized or empty reply
 keeps the child and reports `invalid_output`.
 
 The child is killed after `idle_timeout_ms` without prompts. The engine runs
-no timer: the agent maintenance tick asks for an idle check, and the request
+no timer: the agent maintenance tick asks for an idle check
+(`suggest_command.stopIdleEngine`), and the request
 is queued only while a child is alive and no check is pending.
 
 Prompts never enter process arguments and the child starts from `/`, so
@@ -78,6 +79,6 @@ working, and a Pi that renames one of these four degrades to a timeout.
 - `src/backend/engine/service_support.zig` proves child reuse, idle kill, which
   failures discard the child, missing binary, ring capacity and actor
   shutdown.
-- `src/backend/runtime/resources/engine.zig` and `worker_lifecycle.zig` prove
-  ownership rollback and teardown order.
+- `src/backend/runtime/resources/EngineRuntime.zig` proves ownership rollback
+  and teardown order.
 - `src/client/config/` proves parsing and bounds.

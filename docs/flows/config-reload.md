@@ -8,7 +8,8 @@ loop. The active objects change only after validation succeeds.
 
 ```text
 changed config, module, plugin or trust fingerprint
-  -> config_reload.wait on the worker
+  -> config_reload.wait on the config_watch worker job
+  -> client.Message.config_reload -> AttachedClient.update
   -> AttachedClient.completeConfigReload
        config_reload.resolve validates and transfers or releases loaded resources
        unchanged: keep current state
@@ -26,7 +27,8 @@ next presentation observation -> Presenter compares model versions
 `client_startup` asks `AttachedClient.scheduleConfigReload` to start the watcher
 after initiating runtime reads; the GUI schedules it from `GuiClient.start`
 after bootstrap. The owner selects the current generation, plugin registry and
-paths, then calls `config_reload.schedule` with explicit arguments. No configured
+paths, then calls `config_reload.schedule` with explicit arguments; it starts
+the `config_watch` job through `client.workers`. No configured
 path means no watch; missing required resources return `ConfigurationNotLoaded`.
 `AttachedClient.completeConfigReload` asks the same owner to rearm after every successfully
 handled outcome. The worker loads a new Lua VM,
@@ -48,10 +50,11 @@ resource retirement and shutdown ownership.
 ## Model transaction
 
 `AttachedClient.synchronizeBars` selects bar sources only when Lua and the model
-agree on their generation. Bar state receives the generation, sources and time;
-its `rearm(io, timers)` method owns timer reservation and failure recovery.
-The native timer port binds directly to `NativeLoop`. No bar scheduler receives
-`AttachedClient`, and synchronization preserves any in-flight command identity.
+agree on their generation. `model.bar_updates.synchronize` receives the
+generation, sources and time; `bar_updates.rearm(workers, io, state)` starts
+the bar timer job through `client.workers` and owns failure recovery. No bar
+scheduler receives `AttachedClient`, and synchronization preserves any
+in-flight command identity.
 
 `ClientModel` stores the active configuration generation. It accepts only a
 newer generation and commits sidebar visibility, pane gaps and the typed bar
@@ -76,8 +79,9 @@ rearming. An adoption commits the new state, delivers dependent resources, publi
 success and then rearms. `AttachedClient.completeConfigReload` owns the synchronous adoption order: after the
 model commit and diagnostic clear, it adopts concrete resources, projects
 appearance, configures sidebar resources and chooses exactly one sidebar or
-pane-gap geometry branch. The pane-gap branch explicitly invalidates graphics
-placements before offering active pane geometry with direct operation calls.
+pane-gap geometry branch. The pane-gap branch sets
+`model.to_host.invalidate_placements` before offering active pane geometry
+with direct operation calls.
 A sidebar change takes precedence when the same generation also changes pane
 gaps because its shared projection already performs both operations. A stale
 generation clears no diagnostic, invokes no effect, and `AttachedClient.adoptConfiguration`
@@ -85,9 +89,12 @@ releases the unaccepted adoption instead of leaking its VM or plugin objects.
 
 ## Ownership and effects
 
-The operation swaps the generation, registry and trust store, then uses host
-ports to adopt the input router and resolved sidebar renderer. It replaces sound policy through `sound.Playback.configure`, marks
-the adoption consumed and destroys the previous owned objects. It is
+The operation swaps the generation, registry and trust store, then sets
+`model.to_host.rebind_input` so the adapter rebuilds its input router after
+the event, and stores the resolved sidebar renderer in
+`model.config.sidebar_rendering`, which the view follows after every event. It
+replaces sound policy through `SoundPlayback.configure`, marks the adoption
+consumed and destroys the previous owned objects. It is
 infallible, so any later failure cannot leave the new semantic generation
 without its concrete owners. The client event loop cannot interleave another
 event during this synchronous operation. When the bar layout changed, the next
@@ -126,7 +133,7 @@ trigger.
 
 - `src/client/resources/config_reload.zig` owns rejected-load cleanup and the
   asynchronous handoff of generation, registry and trust ownership.
-- `src/model/state/Model.zig` validates generation ordering and commits settings.
+- `src/model/state/ClientModel.zig` validates generation ordering and commits settings.
 - `src/client/AttachedClient.zig` performs the resource transfer and physical
   effects, preserving the adopted generation after a downstream failure.
 - `src/frontend/client/tests/configuration.zig` exercises reload outcomes,

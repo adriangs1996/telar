@@ -12,7 +12,7 @@ AttachedClient.applyTabSnapshot / host resize / pane geometry or focus change
   -> runtime attachment -> pane_opened
   -> AttachedClient.handleServerMessage
   -> AttachedClient.completePaneOpen
-  -> AttachedClient.confirmPaneAttachment -> Model.confirmPaneAttachment
+  -> AttachedClient.confirmPaneAttachment -> ClientModel.confirmPaneAttachment
 ```
 
 `AttachedClient.completePaneOpen` consumes correlation once and routes its typed
@@ -23,11 +23,11 @@ retired pane or repeated confirmation cannot revive the attachment.
 Tab retirement calls `AttachedClient.detachTab` with a stable `TabLocation`:
 
 ```text
-Model.planTabDetachment
+ClientModel.planTabDetachment
   -> finish tab-owned captured paste
   -> clear tab-owned reported focus
-  -> each pane: detach -> retire pending continuation -> hide graphics
-  -> Model.commitTabDetachment
+  -> each pane: detach_pane -> tracker.ignoreAttachment -> hide graphics
+  -> ClientModel.commitTabDetachment
 ```
 
 The bounded plan captures pane flags and paste/focus ownership. Pending opens

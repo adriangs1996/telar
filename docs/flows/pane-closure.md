@@ -7,17 +7,18 @@ Requesting closure does not predict when shutdown and output draining finish.
 AttachedClient.executeAction
   -> AttachedClient.requestPaneClose
      -> pending pane-operation gate
-     -> Model.planPaneClosure
+     -> ClientModel.planPaneClosure
      -> AttachedClient.sendRuntimeRequest(close_pane)
   -> runtime requests idempotent child shutdown
 
 runtime pane_exited
   -> AttachedClient.handleServerMessage
   -> AttachedClient.applyPaneExit
-     -> Model.retirePane
-     -> retire attachment and close continuations
+     -> ClientModel.retirePane
+     -> tracker.ignoreAttachment + tracker.completePaneClose
      -> AttachedClient.releasePaneResources
-     -> active resources and geometry when the active tab remains nonempty
+     -> active: model.to_host.invalidate_placements, synchronizeActivePane
+     -> resizeAttachedPanes when the active tab remains nonempty
   -> adapter observes presentation revisions
 ```
 
@@ -28,9 +29,11 @@ no immediate reply. Missing authority returns a correlated failure.
 
 The runtime reports exit after terminal ingestion and outstanding frame work
 finish. The client operation uses stable pane identity; process exit kind and
-value do not affect disposable cleanup. `Model.retirePane` finds the pane in
-its exact tab. Active retirement advances the pane revision; inactive retirement
-changes stored membership without a visible revision. Repeated exits are stale.
+value do not affect disposable cleanup. `ClientModel.retirePane` finds the pane
+in `model.panes`, requires its `location` to match its tab and removes it with
+`tab_layout.removePane`. Active retirement advances `panes_revision`; inactive
+retirement changes stored membership without a visible revision. Repeated exits
+are stale.
 
 The same synchronous operation completes a matching close continuation,
 retires pending attachment work and clears exact copy/paste/focus/graphics

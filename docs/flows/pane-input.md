@@ -21,9 +21,8 @@ host adapter drains semantic input
        encode key, paste marker, mouse report or supplied bytes
        applyPaneViewport(.bottom) when required by the source
   -> private deliverPaneInput
-  -> private sendRuntimeInput -> Outbox -> pane_input
+  -> AttachedClient.sendRuntimeInput -> model.to_runtime -> pane_input
 ```
-
 
 The host adapter dispatches semantic keys and replayed bytes to
 `AttachedClient.routeKeyInput`. Paste and pointer routing retain their current
@@ -100,9 +99,11 @@ bounds and presentation path.
 
 ## Effects and failure policy
 
-`AttachedClient.sendPaneInput` plans and encodes the input, calls `AttachedClient.applyPaneViewport`
-when needed, then calls `AttachedClient.sendRuntimeInput` directly. The outbox copies the borrowed bytes,
-coalesces adjacent input for the same pane and preserves protocol order. See
+`AttachedClient.sendPaneInput` plans and encodes the input, then
+`deliverPaneInput` calls `AttachedClient.applyPaneViewport` when needed and
+`AttachedClient.sendRuntimeInput` directly. `model.to_runtime` copies the
+borrowed bytes, coalesces adjacent input for the same pane and preserves
+protocol order. See
 [Client runtime transport](runtime-transport.md) for send-token and
 backpressure ownership.
 
@@ -122,8 +123,8 @@ its existing event counter and is not double-counted as user-input enqueue
 latency.
 
 Terminal focus reports are deliberately outside this use case. They pass
-through `AttachedClient.synchronizeReportedFocus` or `clear`. These operations
-use `AttachedClient.sendRuntimeInput`, so
+through `AttachedClient.synchronizeReportedFocus` or `clearReportedFocus`.
+These procedures use `AttachedClient.sendRuntimeInput`, so
 focus bytes remain outside user-input telemetry and can target the pane that
 just lost focus.
 
@@ -143,21 +144,19 @@ different pane or the runtime event loop.
 
 ## Validation
 
-- `src/model/state/Model.zig` proves active-target resolution, paste
-  identity and framing capture, exact release, attachment checks and exclusive
-  modes.
-- `src/model/application/input/pane_paste.zig` proves start rollback,
-  ordered delivery, unframed behavior, content retention and unconditional
-  finish cleanup.
-- `src/client/application/input/paste_routing.zig` proves start authority,
-  established-owner priority, ignored phases and failure isolation.
-- `src/client/application/input/pane_input.zig` proves child-mode encoding,
-  exact key-lease targets, legacy and Kitty releases, explicit marker delivery,
-  bounds, source-specific viewport policy, effect order and failure behavior.
-- `src/model/application/input/pane_mouse.zig` proves exclusive pointer
-  policy before any report reaches pane input.
-- `src/frontend/client/tests/` proves captured target and framing,
-  prompt and copy-mode routing, viewport and protocol order, owner exclusion,
+- `src/model/state/tests/input_and_frames.zig` proves active-target
+  resolution, paste identity and framing capture, exact release, attachment
+  checks and exclusive modes.
+- `src/frontend/client/tests/input_operations.zig` proves opening-marker
+  rollback, closing-marker cleanup, retired paste targets and exact key-lease
+  targets under saturation and delivery failure.
+- `src/client/input/encoding_tests.zig` proves child-mode encoding, legacy and
+  Kitty releases and paste framing.
+- `src/client/input/routing_tests.zig` proves paste replay and pointer
+  admission.
+- `src/frontend/client/tests/` (`input.zig`, `pane_lifecycle.zig`,
+  `tab_lifecycle.zig`) proves captured target and framing, prompt and
+  copy-mode routing, viewport and protocol order, owner exclusion,
   close-before-detach, pane-retirement cleanup, mouse scrollback preservation,
   telemetry separation and outbox backpressure.
 - `src/frontend/input/host_tests.zig` proves terminal-mode-specific key and paste

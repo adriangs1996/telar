@@ -29,8 +29,8 @@ Messages own values or carry an explicit borrow from a producer resource:
 | Source | Storage and end of borrow |
 | --- | --- |
 | Runtime RX | `RuntimeTransportState` owns both its 4 MiB `receive_buffer` and one validated `RuntimeMessage`. Inbox entries borrow the decoded value; handlers finish before the next read is armed. |
-| Runtime TX | Existing outbox plus the 4 MiB send buffer. One writer; completion releases the send claim. |
-| TUI input | One reserved 4 KiB `host_input.chunk`. Decode and routing finish before rearming its reader. |
+| Runtime TX | The `model.to_runtime` outbox plus the 4 MiB send buffer. One writer; completion releases the send claim. |
+| TUI input | One reserved 4 KiB `HostInput.chunk`. Decode and routing finish before rearming its reader. |
 | Native input | `InputQueue` copies keys/paste before returning to AppKit/Wayland. One coalesced readiness message dispatches bounded chunks. |
 | TUI host output | Sealed bytes owned by `Output`; no model pointer reaches its writer. |
 | GUI presentation | A token and outcome. GPU consumers have finished before posting the completion. |
@@ -72,6 +72,11 @@ observes layout and presentation once; unchanged versions schedule no frame.
 Draw deadlines and host-write completions retain the presenter's existing
 pacing and sealed-output contract. `events.handle` supplies the same dispatch
 and observation for tests that deliberately execute one transition.
+
+Shared client work starts with `client.workers.start(job)`. Both adapters run
+it as `inbox.start(.client, .{ job_runner.run, ... })`; the GUI hands only the
+config watch to `ConfigurationReload`. The finished `client.Message` arrives as
+the `.client` event and goes to `AttachedClient.update`.
 
 `gui/NativeLoop` uses the same inbox and a nonblocking wake pipe. Socket actors
 use its task group. `ConfigurationReload` reserves a slot for its font/watch

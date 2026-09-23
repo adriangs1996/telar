@@ -7,13 +7,14 @@ labels and navigation.
 ```text
 runtime metadata cursors -> pane_cwd / pane_foreground
   -> AttachedClient.handleServerMessage
-  -> Model.updatePaneMetadata / applyForeground
-  -> Model.updatePaneMetadata
-  -> multiplexer metadata storage
+  -> ClientModel.updatePaneMetadata
+     -> attached pane: Pane.setCwd / Pane.setForegroundName
+     -> unattached foreground: tab_label.applyForegroundReport
   -> adapter observes pane_metadata / pane_foreground revisions
 ```
 
-The operation translates both wire variants to the same model transaction.
+`handleServerMessage` translates both wire variants to the same model
+transaction.
 Retired panes and exact repeats are no-ops. CWD replacement allocates its bounded
 owned copy before releasing the old path, so failure preserves the previous
 value and revisions. A different exact path with the same display basename
@@ -30,15 +31,15 @@ and fallback name until terminal models exist. Global runtime metadata cursors
 coalesce updates keyed by slot, identity, generation and revision. The model
 accepts an unattached foreground update only for a matching retained identity
 in the current workspace. Manual tab labels remain authoritative over automatic
-names. Both adapters use `Tab.labelSlice()` and `Tab.labelIcon()`.
+names. Both adapters use `tab_label.text` and `tab_label.icon`.
 
 Each new runtime attachment also has its own metadata cursor. It receives
 bootstrap metadata even if a global update arrived before the local pane was
 constructed. Retirement frees owned CWD storage; reconnect receives current
 runtime facts through fresh cursors.
 
-Source: `src/client/AttachedClient.zig`,
-`src/model/state/Model.zig`, and `src/client/workspace/`.
+Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`,
+`src/model/panes/Pane.zig` and `src/model/workspace/tab_label.zig`.
 Tests: `src/model/state/tests/panes.zig`, `tabs.zig`,
 `src/frontend/client/tests/pane_updates.zig`, and runtime workspace-snapshot /
 runtime-state tests.

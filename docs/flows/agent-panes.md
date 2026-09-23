@@ -195,7 +195,7 @@ response.
 The configurable `enter_copy_mode` action delegates agent panes to the native
 conversation reader. Terminal panes keep their existing copy mode. Reader
 focus consumes editing input instead of changing the composer. Native copy-mode
-entry, active state and exit cross the existing host input port; common action
+entry, active state and exit cross the adapter's `HostInputSource`; common action
 policy retires the mode before another action runs.
 
 | Reader input | Effect |
@@ -309,8 +309,8 @@ retryable, without polling the provider on every rendered frame.
 | Trigger | Client entrypoint | Wire request | Runtime owner |
 | --- | --- | --- | --- |
 | `prefix + a` | `AttachedClient.createAgentTab` → `AttachedClient.requestTabCreation` | `create_tab` with kind `agent` | `tab_creation.create`, `pane_launch.launch` |
-| Composer edit | GUI widget routing, `Model.editAgentComposer` | none | client pane composer |
-| Model, effort or access choice | `Model.changeAgentOption` | included in the next `agent_prompt` | client draft, then runtime/provider validation |
+| Composer edit | GUI widget routing, `ClientModel.editAgentComposer` | none | client pane composer |
+| Model, effort or access choice | `ClientModel.changeAgentOption` | included in the next `agent_prompt` | client draft, then runtime/provider validation |
 | Enter or Send | `AttachedClient.submitAgentPrompt` | `agent_prompt` | `client_request.receive`, `agent_control.send`, `agent_panes`, provider worker |
 | `/` or `$` completion | `completions`, `CompletionState`, `CompletionMenu` | none | client draft and delivered widget identities |
 | `/clear` or `/rename` | `completions.submit`, `AttachedClient.submitAgentPrompt` | `agent_prompt` | `Codex.runCommand`, provider response, retained snapshot |

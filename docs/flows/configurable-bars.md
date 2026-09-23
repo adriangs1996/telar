@@ -11,19 +11,21 @@ config.lua client.bars
           |
 Generation.parseBars
           |
-bars.Configuration + callback registry
+BarConfiguration + callback registry
           |
 AttachedClient.completeConfigReload / client_startup
           |
-bars.Layout -> ClientModel.bars
+BarLayout -> ClientModel.bars
           |                 |
-          |          bar_updates scheduler
+          |   AttachedClient.synchronizeBars -> model.bar_updates
           |                 |
-          |       dynamic tick or command worker
+          |   bar_updates.rearm -> workers.start(bar timer or bar_command)
+          |                 |
+          |   bar_updates.handleTick / completeCommand
           |                 |
           |          Generation.invokeBar
           |                 |
-          |       bar_updates
+          |       ClientModel.updateBar
           |                 |
           +------ Version.bars
                          |
@@ -42,9 +44,9 @@ value does not wait for a full interval.
 ## Ownership, budget and authority
 
 `Generation` owns live Lua closures. `ClientModel` owns only typed layout and
-content values; neither the renderer nor the runtime can invoke Lua. The
-controller owns deadlines, pending command bits and one command execution
-identity. A command worker receives a complete argv copy and publishes a
+content values; neither the renderer nor the runtime can invoke Lua.
+`BarUpdatesState` (`model.bar_updates`) owns deadlines, pending command bits
+and one command execution identity. A command worker receives a complete argv copy and publishes a
 bounded output value. It retains no generation pointer.
 
 Ticks and command completions are observation events. Command execution never
@@ -87,7 +89,7 @@ Hiding it expands them to the full client width.
 - Lua callback limits inherited from the client configuration VM: bounded
   allocator, 100,000 instructions, 10 ms wall time and validated output.
 
-When several intervals expire before the client handles them, the controller
+When several intervals expire before the client handles them, `BarUpdatesState`
 advances each deadline to its first future occurrence and evaluates once.
 It handles at most one Lua render callback per observation event, so another
 ready event can run between configured blocks. While a command runs, later
@@ -117,11 +119,12 @@ is replaced.
   state, generation checks and equal-value folding.
 - `src/client/bars/command.zig` proves direct argv execution and bounded
   single-line output.
-- `src/client/operations/configuration/bar_updates.zig` proves
-  immediate deadlines, missed-tick coalescence, single-worker identity and
-  queue reset on synchronization.
-- `src/client/application/configuration/bar_update.zig` proves
-  current-generation commit, stale-result rejection and failure diagnostics.
+- `src/model/operations/configuration/bar_timing.zig` proves immediate
+  deadlines, missed-tick coalescence, single-worker identity and queue reset
+  on synchronization; `src/client/config/bar_updates.zig` proves timer
+  scheduling retry.
+- `src/client/config/bar_update.zig` holds the result and outcome types of
+  one bar-source commit (`updated`, `unchanged`, `stale`, `failed`).
 - `src/frontend/widgets/bar_layout.zig`, `bar_content.zig` and `top_bar.zig`
   prove collision-free geometry, typed style rendering and permanent safety
   chrome.

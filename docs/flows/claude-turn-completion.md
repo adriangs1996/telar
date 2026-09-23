@@ -27,13 +27,13 @@ sse.Decoder -> provider.claude.completesTurn
         |
 middleware.provider_turn_completed
         |
-observation_queue.Channel -> Proxy.receive
+Exchange.publishStatus -> Pipeline -> observation Channel -> Proxy.receive
         |
-RuntimeEvent.proxy_event
+runtime event proxy_event
         |
-observation_adapter.Adapter.handle
+proxy_observation.receive
         |
-Agent Tracker -> ProxyState
+Tracker.observeProxy -> ProxyState
         |
 no other model exchange remains
         |
@@ -55,8 +55,9 @@ heads, and trailers are preserved. A server that ignores the negotiation and
 returns a content coding remains unobservable rather than feeding compressed
 bytes to the SSE decoder.
 
-`service.HttpResponseObserver.observe` handles HTTP/1.1 response fragments.
-`service.H2EventObserver.emit` handles HTTP/2 DATA events. Both feed borrowed
+`ResponseBodyObserver.observe` in `proxy/tunnel/http1.zig` handles HTTP/1.1
+response fragments. `EventObserver.emit` in `proxy/tunnel/EventObserver.zig`
+handles HTTP/2 DATA events. Both feed borrowed
 payload bytes from successful, identity-encoded SSE responses to
 `provider.ResponseObserver`.
 HTTP/1.1 restricts this to inference-candidate routes. HTTP/2 keeps decoder
@@ -72,11 +73,11 @@ when its JSON `type` is also `message_delta` and `delta.stop_reason` is
 `end_turn`. It rejects malformed JSON, contradictory event types, and
 continuation reasons such as `tool_use`.
 
-`TunnelContext.publishStatus` copies the resulting observation into the
+`Exchange.publishStatus` copies the resulting observation into the
 bounded proxy queue. `Proxy.receive` removes the credential and exposes the
-pane generation. The runtime receives it as `RuntimeEvent.proxy_event` and
-delegates to `observation_adapter.Adapter.handle`, which validates the live
-pane generation before calling `Agent Tracker.observeProxy`.
+pane generation. The runtime receives it as the `proxy_event` event and
+delegates to `proxy_observation.receive`, which validates the live pane
+generation before calling `Tracker.observeProxy`.
 
 `ProxyState` closes only the matching protocol, connection, and stream. It
 projects `ready` when no model exchange remains. A later
@@ -95,15 +96,15 @@ recording headers or payloads. Their interpretation is documented in
 
 ## Validation
 
-- `HTTP1 Claude request bodies refine route candidates before publication`
+- `Claude request bodies refine route candidates before publication` (`tunnel/http1.zig`)
   covers startup, bodyless, and primary request classification at the service
   boundary.
-- `HTTP2 Claude request bodies refine interleaved route candidates per stream`
+- `Claude request bodies refine interleaved route candidates per stream` (`tunnel/h2.zig`)
   covers concurrent body classification and stream identity.
 - `Claude inference requests negotiate identity encoding` and
   `service negotiates identity encoding for Claude message requests` cover the
   provider rule and its installation in the live transform pipeline.
-- `HTTP1 Claude SSE publishes provider turn completion after forwarding`
+- `Claude SSE completion is published after forwarded response activity`
   covers HTTP framing, byte forwarding, SSE parsing, provider interpretation,
   publication, and queue delivery.
 - `HTTP2 observer exposes request DATA across every two-chunk split` and
@@ -111,10 +112,10 @@ recording headers or payloads. Their interpretation is documented in
   prove request-body and end-of-request delivery at arbitrary boundaries.
 - `HTTP2 observer exposes DATA payload across every two-chunk split` proves
   response payload delivery before transport completion.
-- `HTTP2 final DATA publishes Claude completion before transport completion`
+- `final DATA publishes Claude completion before transport completion` (`tunnel/h2.zig`)
   covers provider interpretation, exact stream identity, publication, and
   stream cleanup.
-- `Claude provider completion projects ready for each HTTP protocol` covers
+- `runtime provider turn completion updates Claude across HTTP protocols` covers
   runtime translation, aggregate mutation, downstream ordering, and the rule
   that transport completion cannot regress `ready`.
 - `all concurrent model exchanges must complete before ready` covers the

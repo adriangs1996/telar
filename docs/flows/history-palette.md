@@ -13,7 +13,7 @@ history. No database work runs in the input handler.
 
 `src/client/AttachedClient.zig` owns UI requests,
 correlation, wire delivery and response application. It calls concrete bounded
-algorithms in `src/client/application/input/history_browser.zig` against the
+algorithms in `src/client/input/history_browser.zig` against the
 history and prompt model APIs. `widgets/history_browser.zig` renders cells with
 the existing theme, grapheme handling and screen diff. It does not emit terminal
 sequences or resize the child PTY.
@@ -22,8 +22,9 @@ The external flow is:
 
 ```text
 history_palette action -> AttachedClient.beginHistoryPalette
-  -> query_history -> runtime history_query -> observation worker -> SQLite
-  -> history_results -> AttachedClient.handleServerMessage -> AttachedClient.applyHistoryResults
+  -> query_history -> runtime command_history.query -> observation worker -> SQLite
+  -> history_results -> AttachedClient.receiveRuntime -> AttachedClient.handleServerMessage
+  -> AttachedClient.applyHistoryResults
   -> bounded model commit -> Version.history -> presenter -> history widget
 ```
 
@@ -91,7 +92,7 @@ error rather than a partial input batch.
 
 Enter pastes the complete selected command. `client.history.enter = "run"`
 inverts that default; Shift+Enter always performs the other action. Admission
-checks complete command ownership and outbox capacity before closing the
+checks complete command ownership and `model.to_runtime` capacity before closing the
 prompt. Delivery then uses the ordinary pane-input operation because
 focused input is unavailable while a prompt owns it.
 

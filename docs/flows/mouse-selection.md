@@ -15,26 +15,25 @@ the existing opening behavior.
 ## Entry and ownership
 
 ```text
-InputHandler.mouse
-    -> pointer_routing: normalize host pixels to cells
+host_inputs.mouse (TUI) or GuiClient.dispatchPointer (GUI)
+    -> pointer_routing.apply: normalize host pixels to cells
     -> copy_mode_pointer.apply: captured gesture first
-    -> view_interactions: focus the clicked pane
-    -> link_openings: ordinary links retain priority
+    -> view_interactions.apply: focus the clicked pane
+    -> chrome.linkPointer / AttachedClient.inputLinkPointer: ordinary links retain priority
     -> AttachedClient.inputPaneMouse: choose selection or child report
-    -> Model.beginPointerSelection -> Model.beginPointerSelection
     -> ClientModel.beginPointerSelection
 
 captured drag / release
     -> copy_mode_pointer.apply
-    -> AttachedClient.applyCopyMode -> AttachedClient.applyCopyMode
+    -> AttachedClient.applyCopyMode
     -> ClientModel.planCopyMode
-    -> copy_selection before commit, on release only
+    -> copy_selection into model.to_runtime before commit, on release only
     -> ClientModel.commitCopyMode
-    -> Version.copy -> Presenter -> Compositor
+    -> copy_revision -> Presenter -> Compositor
 
 runtime copy_selection
     -> existing runtime selection extraction from the VT
-    -> pane_clipboard -> host OSC 52 writer
+    -> pane_clipboard -> model.to_host -> host OSC 52 writer
 ```
 
 The client owns the range, click tracker and physical gesture. Mouse selection
@@ -43,13 +42,14 @@ copy mode, move the child cursor or restore the entry viewport. Typing and
 pasting clear highlighting through `AttachedClient.sendPaneInput` and still reach the child.
 A new press or mouse wheel clears a completed selection before normal routing.
 
-`selection_gesture` retains only the pane ID from the press. It survives clearing
+`ClientModel.selection_gesture` retains only the pane ID from the press. It survives clearing
 highlighting, pane retirement and tab changes so subsequent drag and release
 cannot reach another pane or client chrome. Coordinates clamp to the captured
 pane's content, even over a border, sidebar or another pane. Other buttons do
 not release capture. A new left press replaces an abandoned gesture.
 
-Release relinquishes physical capture even if the outbox rejects the copy.
+Release relinquishes physical capture even if `model.to_runtime` rejects the
+copy.
 The failed transaction retains the previous range and copy revision. It does
 not trap subsequent input. Unavailable geometry cancels rather than copying
 coordinates from another pane. No borrowed pane pointer survives an event.
@@ -83,10 +83,8 @@ soft-wrapped rows. Clipboard delivery still depends on host OSC 52 permission.
   and saturated click counts.
 - `src/model/input/copy_mode.zig`: reverse word drags, clipping, wide glyph
   endpoints, bare clicks and retained-history reconciliation.
-- `src/model/application/input/copy_mode.zig`: double/triple click
-  copying, single delivery, unchanged viewport and failed-copy capture release.
-- `src/client/application/input/copy_mode_pointer.zig`: matching-button
-  ownership and cancellation when geometry disappears.
+- `src/client/input/copy_mode_pointer.zig` (through the tests below):
+  matching-button ownership and cancellation when geometry disappears.
 - `src/frontend/client/tests/mouse_selection.zig`: real input, focus-before-press,
   cross-border capture, mid-gesture child mode changes, Shift over links,
   retired-pane capture, outbox coordinates, paced highlighting and typing.

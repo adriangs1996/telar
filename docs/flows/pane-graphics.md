@@ -29,15 +29,15 @@ existing reset policy rather than blocking PTY input.
 ```text
 AttachedClient.handleServerMessage(.graphics_*)
   -> AttachedClient.applyPaneGraphics
-     -> graphics.apply (physical resource store)
-     -> changed: Model.setPaneGraphicsFallback
+     -> pane_graphics.applyResources -> graphics.apply (GraphicsRetention)
+     -> changed: ClientModel.setPaneGraphicsFallback
      -> revision break: request_graphics_snapshot
      -> shared-map failure: configure_graphics(shared=false), then snapshot
   -> adapter observes model and graphics ingress revisions
 
-committed host capability
-  -> pane_graphics.syncFallbacks
-  -> bounded pane traversal -> Model.setPaneGraphicsFallback
+committed host capability (images support changed)
+  -> pane_graphics.syncFallbacks + model.to_host.invalidate_placements
+  -> bounded pane traversal -> ClientModel.setPaneGraphicsFallback
 ```
 
 `AttachedClient.applyPaneGraphics` translates physical ingress results into semantic fallback
@@ -47,11 +47,12 @@ advances its physical revision; stale deltas and rejected operations do not.
 The presenter observes this revision independently of the model, including when
 supported graphics cause no fallback change.
 
-Only `Model.setPaneGraphicsFallback` commits cell fallback. A changed value
+Only `ClientModel.setPaneGraphicsFallback` commits cell fallback. A changed value
 advances the pane-graphics revision; unknown panes and repeats do nothing.
 `syncFallbacks` uses the committed host capability. Supported hosts clear
 fallback without querying physical presence; other capability states query
-once per pane. The traversal uses fixed workspace/pane bounds.
+once per pane. The traversal walks `model.panes`, bounded by fixed
+workspace/pane capacity.
 
 A graphics revision break requests a canonical snapshot without changing
 fallback. Snapshot begin clears the physical replica; resource/placement
@@ -62,12 +63,13 @@ enqueue preserves the already requested downgrade.
 
 ## Host replies
 
-The shared transmission asks the host for a reply. `InputHandler.terminalResponse`
-hands every Kitty reply first to the host-capability operation, which consumes
-the probe identities, then to `kitty.Store.noteHostReply` for exterior pane
-image ids: `OK` marks the object consumed, an error reclaims the name and
-retransmits inline, and either bumps the graphics ingress so the next paced
-frame retires or resends. Unknown ids change nothing.
+The shared transmission asks the host for a reply. `host_inputs.terminalResponse`
+hands every Kitty reply first to `host_capabilities.observe`, which consumes
+the probe identities, then to `kitty_delivery.noteHostReply` on the TUI's
+`graphics_store` for exterior pane image ids: `OK` marks the object consumed,
+an error reclaims the name and retransmits inline, and either bumps the
+graphics ingress so the next paced frame retires or resends. Unknown ids
+change nothing.
 
 ## Budget and bounds
 
@@ -88,7 +90,7 @@ generations in the store rather than forming an unbounded replay queue.
 Fallback synchronization allocates nothing and visits at most 64 tabs with 64
 panes each. A supported host performs no store queries. Every other capability
 state performs at most 4096 bounded presence lookups and transition attempts;
-repeated semantic values preserve `Version.pane_graphics`.
+repeated semantic values preserve `pane_graphics_revision`.
 
 The socket dispatcher is still the decoded message entrypoint. This slice
 separates ownership and scheduling policy; moving bulk ingestion behind a
@@ -96,8 +98,8 @@ dedicated media queue is a separate scheduling change.
 
 ## Verification
 
-Source: `src/client/operations/panes/pane_graphics.zig` and its concrete
-`graphics` service port on `AttachedClient`.
+Source: `src/client/panes/pane_graphics.zig` and the `graphics:
+GraphicsRetention` store each adapter binds on `AttachedClient`.
 `src/frontend/client/tests/graphics_and_clipboard.zig` checks recovery IPC,
 physical-only presentation observation and downgrade-before-resync ordering.
 Resource-store and model tests cover quotas, stale revisions, fallback ownership

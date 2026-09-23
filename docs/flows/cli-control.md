@@ -329,10 +329,10 @@ An already active copy mode is a successful no-op; unsupported or blocked panes 
 `notification dismiss 5`: Dismisses one current notification and rearms its expiration timer. Missing identities fail.
 
 `client open-link https://example.com`: Validates and routes a link through existing file/tab and host-opener policy.
-Success means the bounded opener worker or tab request was admitted.
+Success means the bounded link-opening worker job or tab request was admitted.
 
-`client clipboard copy copied ü`: Passes bounded UTF-8 text to the selected host’s clipboard port. The host may
-complete the clipboard write asynchronously, so the CLI reports admission.
+`client clipboard copy copied ü`: Queues bounded UTF-8 text as a clipboard write on the selected client's
+`model.to_host`. The host may complete the clipboard write asynchronously, so the CLI reports admission.
 
 `agent draft get`: Reads the entire bounded composer text and attachment count from an attached
 native agent pane. This is client draft state, independent of runtime conversation history.

@@ -18,12 +18,14 @@ and request directly. Its four results are `coalesced`, `snapshot_requested`,
 
 A surviving-workspace notice must match the current projection. Missing or
 mismatched identity returns `UnexpectedResync` without effects. A pending
-workspace snapshot coalesces the notice. Otherwise `request_lifecycle` registers
-and queues one request; failed enqueue removes its correlation so a later
+workspace snapshot coalesces the notice. Otherwise
+`AttachedClient.requestWorkspaceSnapshot` registers one continuation in
+`model.request_lifecycle` and queues one request; failed enqueue removes its correlation so a later
 notice can retry. Requesting repair changes no model revision and schedules
 no draw. The correlated reply enters `AttachedClient.applyWorkspaceSnapshot`.
 
-Closure first forgets the invalid bookmark. With a predecessor it calls
+Closure first forgets the invalid bookmark through
+`model.navigation_history.forget`. With a predecessor it calls
 `AttachedClient.requestWorkspace`, whose admission, capacity, ordered
 retirement, repair and departure rules still apply. Failure leaves the closed
 bookmark forgotten. Without a predecessor it returns exit without mutating the
@@ -33,9 +35,8 @@ The wire, tracker, outbox and history use their existing fixed bounds. Resync
 adds no queue or timer. Client death drops outstanding conversations; runtime
 membership survives and a fresh client can reconstruct its projection.
 
-Source: `src/client/AttachedClient.zig`,
-`src/client/connection/LifecycleState.zig`, and
-`src/client/AttachedClient.zig`.
+Source: `src/client/AttachedClient.zig` and
+`src/model/connection/RequestLifecycle.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig` and `tab_lifecycle.zig`
 cover matching identity, coalescence, full-outbox retry, closed-bookmark retention
 on failure, predecessor handoff and exit. Runtime response-queue and schema

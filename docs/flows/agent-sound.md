@@ -10,23 +10,23 @@ a playback command.
 ```text
 runtime agent transition
         |
-runtime Delivery.prepare
+agent_sound.publish -> Delivery responses.pushAgentSound
         |
 schema.agent_sound
         |
-server_messages dispatcher
+AttachedClient.handleServerMessage
         |
 AttachedClient.applyAgentSound
         |
-ClientModel.knowsAgent
+model.agent_snapshot.find (exact key)
         |
-sound.Playback.request
+SoundPlayback.request -> workers.start(.{ .sound = kind })
         |
-ClientEvent.sound_played <- sound.play host worker
+client.Message.sound_played <- job_runner: sound_playback.play
         |
-AttachedClient.completeAgentSound
+AttachedClient.update -> AttachedClient.completeAgentSound
         |
-sound.Playback.complete
+SoundPlayback.complete
 ```
 
 The runtime message carries a pane ID, pane generation and semantic sound
@@ -35,24 +35,26 @@ kind. `AttachedClient.applyAgentSound` translates that identity into an `AgentKe
 replica contains the exact key. A delayed message for an earlier process
 cannot make noise after the numeric pane ID has been reused.
 
-The operation reads `ClientModel` but does not mutate it. Accepted, stale and
+The operation mutates only `model.sound_playback`. Accepted, stale and
 configuration-filtered sounds leave every model version unchanged. The
 dispatcher still calls `presentation_lifecycle.observe` after dispatch. The
 presenter sees no revision and schedules no frame.
 
 ## Playback ownership and bounds
 
-`sound.Playback` owns the effective `SoundConfig`, one active worker token and
-one optional queued `AgentSound`. `Client` holds that object but knows none of
-its queue transitions. The adapter starts workers through the client select
-and delegates every completion back to `AttachedClient.completeAgentSound`.
+`SoundPlayback` (`model.sound_playback`) owns the effective `SoundPolicy`, one
+active worker token and one optional queued `AgentSound`. `AttachedClient`
+knows none of its queue transitions. It starts the worker with
+`workers.start`; the adapter runs it through its inbox and returns the
+completion as `client.Message.sound_played`, which `AttachedClient.update`
+hands to `AttachedClient.completeAgentSound`.
 
 The queue has fixed depth. A request starts immediately when no worker is
 active. Further requests fold into the one queued value. `needs_input` wins
 over `ready`, since an unanswered prompt should not be hidden by a later
 completion sound. Repetition cannot increase memory use or process count.
 
-A validated configuration adoption calls `Playback.configure`. New requests
+A validated configuration adoption calls `SoundPlayback.configure`. New requests
 use the replacement policy immediately, and queued work forbidden by that
 policy is discarded. The player does not cancel a host command that already
 started. Its completion still releases the worker token, but no forbidden
@@ -67,26 +69,26 @@ from each output stream. At most one command belongs to a client at a time.
 
 A worker error drops that sound. The completion handler releases its token and
 continues with the coalesced successor, so one missing player cannot wedge the
-queue. Failure to add a worker to the client select releases the reserved
-token and propagates the scheduling error.
+queue. Failure to start the worker calls `SoundPlayback.schedulingFailed`,
+which releases the reserved token, and propagates the scheduling error.
 
-Client teardown cancels its select tasks. A reconnect constructs a fresh
-`Playback`; it neither restores nor replays old audio work. Runtime agent state
+Client teardown cancels the adapter inbox's tasks. A reconnect constructs a
+fresh `SoundPlayback`; it neither restores nor replays old audio work. Runtime agent state
 continues independently and later exact sound events may start a new queue.
 
 ## Validation
 
-- `src/frontend/sound/types.zig` proves per-kind policy filtering.
-- `src/frontend/sound/sound_tests.zig` proves one active token, one coalesced
+- `src/model/config/SoundPolicy.zig` proves per-kind policy filtering.
+- `src/model/agents/sound_playback.zig` proves one active token, one coalesced
   successor, priority, configuration replacement and scheduling failure
   recovery.
-- `src/frontend/sound/worker.zig` owns the bounded host adapters; the cross
-  build compiles the Linux and Windows paths.
+- `src/client/agents/sound_playback.zig` owns the bounded host adapters; the
+  cross build compiles the Linux and Windows paths.
 - `src/client/AttachedClient.zig` proves exact-identity
   gating, stale suppression and effect-error propagation.
 - `src/client/AttachedClient.zig` owns protocol translation, worker
   scheduling and the completion entrypoint.
 - `src/frontend/client/tests/` proves wire identity, bounded queuing,
   unchanged model and presentation versions, and configuration adoption.
-- `src/backend/runtime/Runtime.zig` proves the exact transition policy and adds
-  the pane generation used by the client gate.
+- `src/backend/runtime/tests/observation_events_test.zig` proves the exact
+  transition policy and the pane generation used by the client gate.

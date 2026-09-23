@@ -9,9 +9,11 @@ or asks the runtime for another workspace.
 ```text
 sidebar hit region
        |
-View.handleMouse -> AgentKey
+pointer_routing.apply -> HostChrome.pointer
        |
-InputHandler.mouse
+TUI presentation State.handleMouse -> focus_agent AgentKey
+       |
+view_interactions.apply
        |
 AttachedClient.navigateAgent
        |
@@ -54,7 +56,7 @@ selection. See [Client layout persistence](client-layout-persistence.md).
 
 ## Validation
 
-- `src/model/state/Model.zig` resolves exact generations and local or
+- `src/model/state/ClientModel.zig` resolves exact generations and local or
   remote plans without exposing the agent replica.
 - `src/client/AttachedClient.zig` applies selection before
   focus and calls the concrete tab, focus and handoff operations.

@@ -1,45 +1,50 @@
 # Notifications
 
 Notifications are bounded, disposable client state. `ClientModel` owns their
-content, identity and lifecycle. `View` and both toast renderers receive an
-immutable snapshot and never decide whether a notification exists, expires or
-starts exiting.
+content, identity and lifecycle. The TUI view (`presentation/State.zig`) and
+both toast renderers borrow the immutable center and never decide whether a
+notification exists, expires or starts exiting.
 
 ## Publication path
 
 ```text
 runtime notification                         local semantic event
         |                                              |
-AttachedClient.applyRuntimeNotification                    operation
+AttachedClient.applyRuntimeNotification               AttachedClient procedure
         |                                              |
-wire-to-client translation              construct notifications.Input
+wire-to-client translation              construct NotificationInput
         |                                              |
-AttachedClient.publishNotification <--------- adapter publishNow
-                               |
-                   AttachedClient.publishNotificationNow
+        |                        AttachedClient.publishNotificationNow
+        |                                              |
+AttachedClient.publishNotification <-------------------+
                                |
                     ClientModel.publishNotification
                                |
-             notifications.Center + Version.notifications
+            model.notification_center + notifications_revision
                                |
                    AttachedClient.scheduleNotificationTimer
                                |
-                       presentation_lifecycle.observe
+                AttachedClient.deliverHostNotification
                                |
-                Presenter -> View.render(snapshot)
+                  presentation_lifecycle.observe
+                               |
+         Presenter -> State.render(projection.notifications)
 ```
 
-The dispatcher delegates a runtime event to `AttachedClient.applyRuntimeNotification`. The
-adapter translates protocol level, target and millisecond duration into client
-notification values and calls `AttachedClient.publishNotificationNow`, which samples time
-and applies the publication operation. Request failures, agent and proxy transitions,
-configuration or plugin diagnostics, and clipboard image failures enter
-as complete `notifications.Input` values. Those concrete operations call
-`AttachedClient.publishNotificationNow`, which samples monotonic time and delegates to
-`AttachedClient.publishNotification` in the same module.
-Diagnostic-producing operations commit their banner before constructing
-the input. The notification operation commits its owned model state before it
-touches timer infrastructure.
+`AttachedClient.handleServerMessage` delegates a runtime event to
+`AttachedClient.applyRuntimeNotification`. It translates protocol level, target
+and millisecond duration into client notification values, samples monotonic
+time and calls `AttachedClient.publishNotification`. Request failures, agent
+and proxy transitions, configuration or plugin diagnostics, and clipboard image
+failures enter as complete `NotificationInput` values. Those procedures call
+`AttachedClient.publishNotificationNow`, which samples monotonic time and
+delegates to `AttachedClient.publishNotification`.
+Diagnostic-producing procedures commit their banner before constructing
+the input. Publication commits its owned model state before it touches the
+timer. `deliverHostNotification` then follows the configured
+`notification_delivery`: `telar` shows only the in-app center, `terminal`
+pushes `.terminal_notification` into `model.to_host`, and `system` starts a
+best-effort `.system_notification` job through `client.workers.start`.
 
 `notifications.Center` copies title and message bytes into fixed buffers. It
 keeps at most four items, refreshes an equivalent active item and replaces the
@@ -56,20 +61,21 @@ semantic notification action
              |
 AttachedClient.requestNotificationDelivery
              |
-LifecycleState.nextId + AttachedClient.sendNotificationRequest
+request_lifecycle.nextId + AttachedClient.sendNotificationRequest
              |
-      show_notification
+      model.to_runtime.pushNotification -> show_notification
 ```
 
-The action dispatcher delegates the complete bounded value. The notification
-adapter allocates its request identity, translates the semantic action to the
-wire value and registers a `notification` continuation before delivery. The
-outbox copies title and message bytes, so a configuration reload or plugin
+The action dispatcher delegates the complete bounded value.
+`requestNotificationDelivery` allocates the request identity from
+`model.request_lifecycle`, translates the semantic action to the wire value and
+registers a `notification` continuation before delivery. `model.to_runtime`
+copies title and message bytes, so a configuration reload or plugin
 completion cannot invalidate queued text.
 
 Accepted delivery changes no `ClientModel.Version` and schedules no frame. If
-the bounded outbox rejects the request, request lifecycle removes the
-continuation and propagates the error. It does not reuse the allocated identity.
+`model.to_runtime` rejects the request, the tracker removes the continuation
+and the error propagates. The allocated identity is not reused.
 
 ## Runtime delivery report
 
@@ -85,11 +91,12 @@ show_notification request + notification continuation
          delivered or local failure publication
 ```
 
-The client adapter removes the request identity by consuming its continuation,
-then requires the exact `notification` type. The operation owns
-delivery policy. A positive client count returns `delivered` without changing
-the model or timer. A zero count publishes one local failure through the normal
-owned notification flow and returns `undelivered`.
+`AttachedClient.handleServerMessage` passes the report to
+`completeNotificationDelivery`. It removes the request identity by consuming
+its continuation, then requires the exact `notification` type. The same
+procedure owns delivery policy. A positive client count returns `delivered`
+without changing the model or timer. A zero count publishes one local failure
+through the normal owned notification flow and returns `undelivered`.
 
 An unknown request or a continuation from another operation becomes
 `UnexpectedNotificationReply`. Once found, the continuation is consumed before
@@ -99,24 +106,28 @@ another request later.
 ## Time and presentation
 
 `AttachedClient.scheduleNotificationTimer` asks
-`ClientModel.nextNotificationDeadline` for the next useful wakeup. Moving
-items wake at the presenter's frame interval, while stable items sleep until
-expiry. It uses the same `deadline_timer.Scheduler` as host input. The
-scheduler owns one atomic deadline, one wake event and one pending client
-select task. Replacing or removing a deadline sets the wake event rather than
-adding another task. Its fixed two-way select discards whichever wait loses
-the race.
+`model.notification_center.nextDeadline` for the next useful wakeup. Moving
+items wake at `model.host.animation_frame_ns`, while stable items sleep until
+expiry. The deadline lives in `model.notification_scheduler`, a
+`core.DeadlineScheduler` like the bar and sidebar animation timers. The
+scheduler owns one atomic deadline, one wake event and one pending flag. When
+it reports `.schedule`, the client starts one `.timer` job through
+`client.workers.start`; `job_runner` waits in `deadline_timer.wait`. Replacing
+or removing a deadline sets the wake event rather than adding another job. Its
+fixed two-way select discards whichever wait loses the race.
 
-`AttachedClient.completeNotificationTick` releases the completed task before checking its
-result. It then executes `AttachedClient.completeNotificationTick`, which advances the
-center from elapsed monotonic time, commits `Version.notifications` only when
+The timer completes as one `.notification_tick` message.
+`AttachedClient.update` passes it to `AttachedClient.completeNotificationTick`,
+which releases the scheduler before checking the result. It then advances the
+center from elapsed monotonic time, bumps `notifications_revision` only when
 state changed and rearms the next deadline.
 
-`client_events` calls `presentation_lifecycle.observe` after the event.
-`Presenter` compares the notification version with the last version it painted,
-invalidates the view and passes `ClientModel.notificationSnapshot()` into the
-next paced frame. Several lifecycle ticks inside one frame budget therefore
-fold into one projection of the latest state.
+`events.update` calls `presentation_lifecycle.observe` after the event.
+`Presenter` compares `projection.version.notifications` with the last version
+it painted, invalidates the view and passes `projection.notifications`, a
+borrow of `model.notification_center`, into the next paced frame. Several
+lifecycle ticks inside one frame budget therefore fold into one projection of
+the latest state.
 
 Cell toasts and the Kitty Graphics renderer consume the same immutable center.
 The view stores only physical presentation state such as hit regions, overlay
@@ -143,22 +154,23 @@ controls while later preparation samples current time.
 ```text
 toast hit region
       |
-View.handleMouse
+pointer_routing.apply -> HostChrome.pointer -> State.handleMouse
       |
-activate(id) or dismiss(id) intent
+.notification_activate(id) or .notification_dismiss(id)
       |
-InputHandler
+view_interactions.apply
       |
-AttachedClient.activateNotification or AttachedClient.dismissNotification
+AttachedClient.activateNotificationNow or AttachedClient.dismissNotificationNow
       |
-ClientModel commit + timer reschedule
+ClientModel commit + AttachedClient.scheduleNotificationTimer
       |
-notification adapter -> optional tab, workspace or pane navigation
+AttachedClient.navigateNotification -> optional tab, workspace or pane navigation
 ```
 
 The view returns only the notification ID and consumes the click. Activation
-starts the exit transition and rearms its timer before the notification adapter
-follows the semantic target through the tab, workspace or pane use case.
+starts the exit transition and rearms its timer before `navigateNotification`
+follows the semantic target through tab selection, workspace handoff or pane
+focus.
 Dismissal starts the same transition without navigation. Missing IDs and IDs
 already exiting are stale no-ops, so a repeated hit cannot repeat its action or
 click through into a pane. Timer failure prevents navigation; navigation
@@ -173,7 +185,7 @@ The timer stores one replaceable deadline, so obsolete animation work does not
 build a queue. Scheduling failure clears the pending token. Timer-task failure
 also clears it before the event error reaches the client loop. Application
 tests prove that scheduling failure leaves an earlier notification commit
-intact. Scheduler tests prove that every task completion releases its token.
+intact. Scheduler tests prove that every job completion releases its token.
 
 Notifications do not survive client death or reconnect. A new disposable
 client starts with an empty center. Runtime-owned facts that must survive, such
@@ -188,24 +200,21 @@ new notifications after reconciliation.
 - `src/gui/tests/overlays.zig` covers notification replacement, close precedence,
   captured release and modal input isolation through the native dispatcher.
 
-- `src/frontend/notifications/` proves bounds, owned text, duplicate
-  refresh, replacement, elapsed-time transitions, stale interaction and UTF-8
-  handling.
-- `src/model/state/Model.zig` proves isolated notification versioning and
-  immutable snapshot access.
-- `src/model/application/notifications/notifications.zig` proves commit-before-
-  timer-before-navigation ordering, delivery policy, stale interaction
-  behavior and retained commits after effect failures.
+- `src/model/notifications/notifications.zig` proves bounds, owned text,
+  duplicate refresh, replacement, elapsed-time transitions, stale interaction
+  and UTF-8 handling.
+- `src/model/state/tests/observations.zig` proves isolated notification
+  versioning.
 - `src/client/AttachedClient.zig` owns local timestamp acquisition,
-  diagnostic publication, outbound action translation, delivery correlation
-  and timer event ordering.
-- `src/client/AttachedClient.zig` maps model deadlines to the
-  shared scheduler and notification events.
+  diagnostic publication, host delivery, outbound action translation,
+  delivery correlation, timer event ordering and the mapping from model
+  deadlines to `model.notification_scheduler`.
 - `src/core/time/deadline_timer.zig` proves deadline replacement,
   removal, parking and pending-token release after successful and failed
   completions.
 - `src/frontend/client/presentation/view.zig` proves immutable rendering, ID-only intents
   and cell restoration after an exit.
-- `src/frontend/client/tests/` proves outbound delivery and rollback,
-  wire and local producers, diagnostic ownership and duration, a real lifecycle
-  tick, presenter-owned projection and bounded agent alerts.
+- `src/frontend/client/tests/notifications_and_agents.zig` proves outbound
+  delivery and rollback, wire and local producers, commit-before-navigation
+  ordering, a real lifecycle tick, presenter-owned projection, retained
+  commits after host failures and bounded agent alerts.

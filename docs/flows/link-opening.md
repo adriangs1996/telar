@@ -25,13 +25,13 @@ a substitute URL.
 VT RenderState -> TextMetadataCapture -> pane_frame -> owned client Pane
                                                            |
 native event -> GuiClient.acceptInput -> InputQueue
-GuiClient.drainInput -> dispatchPointer -> hover_target / resolveLink
+GuiClient.drainInput -> dispatchPointer -> hover_target.resolve
                                       |                    |
                                 LinkGesture           LinkRegions
                                       |              underline + preview
                           HostChrome.link_pointer_fn
                                       |
-                    link_openings -> file tab or host worker
+             AttachedClient.openLink -> file tab or links/host.zig worker
 ```
 
 ## Ownership and budgets
@@ -41,7 +41,7 @@ bounded wire representation and the pure URI classifier. Each client pane owns
 its received metadata, independent of the socket buffer. See
 [pane frames](pane-frame.md#terminal-text-metadata) for application and ACK rules.
 
-`client.links.cells.resolve` gives OSC 8 priority and otherwise traverses the
+`model.cells.resolve` (`src/model/links/cells.zig`) gives OSC 8 priority and otherwise traverses the
 visible logical line. It copies a bounded text window to stack storage, with
 independent byte and cell-visit limits, then returns an owned URI and cell range.
 No row cache, regex engine, URL opener or allocation runs for movement within the
@@ -62,13 +62,15 @@ worker and never blocks input or presentation.
 
 ## Shared opening policy and the TUI
 
-The optional `HostChrome.link_pointer_fn` is an adapter port. GUI implements its
-modifier/release policy there. An absent callback retains TUI behavior: ordinary
+The optional `HostChrome.link_pointer_fn` is an adapter hit test. GUI implements its
+modifier/release policy there (`src/gui/ports/chrome.zig`). An absent callback retains TUI behavior: ordinary
 left press opens a row-local textual link, Shift declines opening for selection,
 and copy mode uses `o`. The common client contains no GUI gesture policy.
 
-`link_openings` sends supported non-file schemes through `Opening`: at most one
-worker and one replaceable pending target per client. The worker uses
+`AttachedClient.openLink` sends supported non-file schemes through
+`model.link_opening` (`Opening`): at most one worker and one replaceable
+pending target per client. It starts the worker with
+`client.workers.start(.{ .link = target })`; `src/client/links/host.zig` uses
 `/usr/bin/open` on macOS, `xdg-open` on Linux, or
 `rundll32.exe url.dll,FileProtocolHandler` on Windows. It passes the URI as one
 argument, captures bounded output, and expires after five seconds. Failure emits

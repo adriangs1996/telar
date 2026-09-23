@@ -7,19 +7,23 @@ terminal state.
 
 ## Boundary
 
-`connection/RuntimeTransportState` owns the client side of runtime I/O:
+`connection/RuntimeTransportState`, held in `AttachedClient.runtime_transport`,
+owns the client side of runtime I/O:
 
 - one borrowed `SocketChannel` for the client's lifetime;
 - one receive buffer and one send buffer, each exactly
-  `core.transport.max_frame_size` bytes;
-- one `core.transport.read_buffer_size` read-ahead buffer bound to the
+  `core.max_frame_size` bytes;
+- one `core.read_buffer_size` read-ahead buffer bound to the
   channel, so a burst of small runtime messages costs one `read` instead of
   two per message and the length prefix never costs its own syscall. The
   runtime binds the same kind of buffer to each client session;
-- one allocation-free `Outbox` with fixed message and copied-byte storage;
-- one receive token, while `Outbox` owns the single send token.
+- one receive token (`receive_pending`) and the decoded message it lends.
 
-The state does not own request correlation. `connection/LifecycleState` decides
+The outbound queue is not transport state. It is the model's allocation-free
+`Outbox`, `model.to_runtime`, with fixed message and copied-byte storage, and it
+owns the single send token.
+
+The state does not own request correlation. `model.request_lifecycle` decides
 which typed continuation may consume a reply. Transport only preserves framed
 delivery, bounded storage and I/O ordering. See
 [Client request lifecycle](request-lifecycle.md).
@@ -30,19 +34,21 @@ completion with graphics credits, host input and server-message dispatch.
 latency. Consumers read outbound counters directly from `Outbox.snapshot`.
 
 `connection/RuntimeTransportState.zig` owns connection buffers, framing and
-transfer reservations. It knows neither `AttachedClient` nor `TransportDriver`.
-`Outbox` owns copied messages, capacity and folding rules.
+transfer reservations. It knows neither `AttachedClient` nor the client
+`Message` protocol. `Outbox` owns copied messages, capacity and folding rules.
 
-`AttachedClient.sendRuntime` and its typed variants copy messages into the
-outbox and call the private `startRuntimeSend`. Callers supply only the message.
+`AttachedClient.sendRuntime` and its typed variants copy messages into
+`model.to_runtime` and call the private `startRuntimeSend`. Callers supply only the message.
 Pane input uses the existing `core.PaneInput` value, including bounded batches
 when it exceeds one slot. `startRuntimeRead` and `startRuntimeSend` reserve
-transport storage and activate the client's driver, releasing the reservation
-if scheduling fails. Native transport ports bind directly to `NativeLoop`.
+transport storage and start a worker with `client.workers.start`
+(`.runtime_read` or `.runtime_send`), releasing the reservation if the adapter
+refuses the job. `job_runner.run` performs the read or write on the worker and
+returns `Message.server` or `Message.sent`.
 
 ## Bootstrap
 
-After host negotiation, `RuntimeTransportState.bootstrap` admits these frames
+After host negotiation, `model.to_runtime.pushBootstrap` admits these frames
 atomically to the ordinary outbox, in order:
 
 1. `configure_graphics`, so the runtime knows whether it may offer shared
@@ -51,8 +57,9 @@ atomically to the ordinary outbox, in order:
 3. `request_runtime_state`, so reconnectable replicas can be rebuilt.
 
 Bootstrap only queues messages. The GUI calls `AttachedClient.startRuntimeIo`
-to activate the receive loop before starting the queued send. The TUI finishes its color probes before queuing the
-same bootstrap. The send actor writes independently of reception. The initial
+to activate the receive loop before starting the queued send. The TUI
+(`client_startup.advance`) finishes its color probes before queuing the same
+bootstrap. The send actor writes independently of reception. The initial
 runtime layout determines the subsequent `open_pane` transaction.
 
 ## Outbound path
@@ -67,13 +74,13 @@ Outbox copies and folds bounded data
        |
 AttachedClient.startRuntimeSend()
        |
-Outbox.beginSend -> schema encoder -> inbox producer reservation -> SocketChannel.send
+Outbox.beginSend -> schema encoder -> workers.start(.runtime_send) -> SocketChannel.send
        |
-ClientEvent.sent
+Message.sent -> AttachedClient.update
        |
 AttachedClient.completeRuntimeSend
        |
-Outbox.finishSend -> queueGraphicsCredits -> startRuntimeSend -> resume host input
+Outbox.finishSend -> queueGraphicsCredits -> startRuntimeSend -> model.to_host.resume_input
 ```
 
 `Outbox.beginSend` lends the shared send buffer to one write actor. No producer
@@ -82,8 +89,9 @@ Queue insertion may fold pane input, resize and frame acknowledgements only
 where their ordering rules permit it.
 
 A full outbox stops new host TTY reads. A successful send removes one message,
-pumps its successor and asks `host_inputs` to resume only if capacity still
-exists. Request correlation rolls back when an enqueue fails; transport does
+pumps its successor and sets `model.to_host.resume_input`; the adapter drains
+it after the event (`host_effects.deliver` calls `host_inputs.scheduleRead` in
+the TUI), which reads again only if capacity still exists. Request correlation rolls back when an enqueue fails; transport does
 not invent or consume continuations.
 
 Graphics memory credit follows the same queue. The graphics store retains a
@@ -98,9 +106,9 @@ Saturation delays credit without losing it.
 ```text
 SocketChannel.receive
        |
-RuntimeMessage.decode on the receiving worker
+RuntimeTransportState.read -> RuntimeMessage.decode on the receiving worker
        |
-reserved inbox slot -> ClientEvent.server -> consumer dispatch
+reserved inbox slot -> Message.server -> AttachedClient.update
        |
 AttachedClient.receiveRuntime
        |
@@ -118,8 +126,8 @@ outcome or an error leaves no new read behind.
 
 Transport does not inspect a decoded message after dispatch. Message-specific
 recovery, user notification and last-resort error reporting belong to the
-selected operation; in particular, `request_failures` owns reporting the
-runtime's bounded rejection text.
+selected operation; in particular, `AttachedClient.failRuntimeRequest` owns
+reporting the runtime's bounded rejection text.
 
 Decoded slices borrow the receive buffer only for this entrypoint. Operations
 must copy any bytes that outlive dispatch. A new read starts only
@@ -144,11 +152,14 @@ propagate without transport classifying their original message.
   input batches surviving rejected sends, queue saturation, retry without
   duplicate reservations, and preservation of queued frame order.
 - `src/client/connection/runtime_transport.zig` checks partial-allocation cleanup
-  and the exact three-frame bootstrap order over a real socketpair.
+  and that a non-reading peer over a real socketpair cannot block receive
+  admission or local input.
+- `runtime bootstrap queues colors before subscribing to the initial layout` in
+  `src/model/connection/Outbox.zig` checks the exact three-frame bootstrap order.
 - `src/model/connection/outbox_support.zig` proves one send claim, completion on success
   and failure, copied payload ownership, folding rules and saturation bounds.
 - `runtime reads own one token and do not rearm after shutdown` in
-  `src/frontend/client/tests/` crosses the real framed socket and
+  `src/frontend/client/tests/transport.zig` crosses the real framed socket and
   proves rearming, terminal shutdown and error cleanup.
 - `host input reads pause at outbox capacity and resume with one token` proves
   that a real send completion recovers TTY capacity without duplicate reads.

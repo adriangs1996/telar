@@ -17,10 +17,11 @@ Cmd+V / Paste
   -> shared host/macos/clipboard_image.h -> private PNG cache
   -> native clipboard completion { image path or text }
   -> routing.finishPaste validates owner, focus and draft revision
-  -> agent_threads.attachImage -> agent_threads -> Model -> Pane
+  -> AttachedClient.attachAgentImage -> ClientModel.attachAgentImage
+  -> Pane.attachComposerImage
   -> composer image controls / Send
-  -> AgentPrompt -> owned client outbox -> client_request.receive
-  -> runtime agent_threads -> Session observation queue
+  -> AgentPrompt -> model.to_runtime -> client_request.receive
+  -> agent_control.send -> Session observation queue
   -> Codex turn/start with localImage inputs
   -> request_completed clears only the acknowledged draft revision
 ```

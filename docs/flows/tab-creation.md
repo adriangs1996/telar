@@ -6,13 +6,13 @@ current projection and adopts only a canonical reply.
 ```text
 AttachedClient.executeAction
   -> AttachedClient.requestTabCreation
-     -> pending-operation gate, label validation, Model.planTabCreation
-     -> AttachedClient.sendCreateTabRequest -> owned create_tab outbox entry
+     -> pending-operation gate, label_validation.validate, ClientModel.planTabCreation
+     -> AttachedClient.sendCreateTabRequest -> owned create_tab entry in model.to_runtime
   -> runtime creates tab/root and returns tab_created
   -> AttachedClient.handleServerMessage
   -> AttachedClient.completeTabCreation
      -> consume exact create_tab correlation
-     -> Model.createTab
+     -> ClientModel.createTab -> tab_creation.add
      -> AttachedClient.detachTab(previous)
      -> AttachedClient.synchronizeActivePane
      -> request agent conversation when applicable
@@ -51,10 +51,11 @@ Runtime rejection becomes an owned failure notice. Unknown, incompatible,
 wrong-workspace or replayed replies cannot mutate tabs. Presentation observes
 model revisions; this operation does not draw.
 
-Source: `src/client/AttachedClient.zig` and
-`src/client/AttachedClient.zig`.
+Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`
+and `src/model/workspace/tab_creation.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`,
-`src/model/state/tests/tabs.zig`, `src/model/connection/outbox_support.zig`,
+`src/model/state/tests/tabs.zig`, `src/model/workspace/tab_flow_tests.zig`,
+`src/model/connection/outbox_support.zig`,
 and runtime/transport tab-lifecycle tests. The frontend suite includes invalid
 labels, full-outbox correlation rollback and a confirmed creation whose later
 attachment retirement fails.

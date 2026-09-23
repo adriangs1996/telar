@@ -8,7 +8,8 @@ runtime decides whether the pane exists; the client decides where it is shown.
 ## Request
 
 Start at the dispatch described in [architecture](../architecture.md#dispatch). In the GUI,
-`GuiClient.update` dispatches `.input_ready` to `GuiClient.drainInput`.
+`GuiClient.update` dispatches `.input_ready` to `GuiClient.inputReady`, which
+calls `GuiClient.drainInput`.
 `dispatchKey` (or the text branch) reaches `routeKey`, which calls
 `router.routeEvent(event, context)`. The router returns `.action` with
 `.split_pane = .horizontal`. `GuiClient.applyInputDecision` executes that request
@@ -81,8 +82,9 @@ caller-constructed commits.
   Reject an identity already represented in the current model before detaching.
 
 No explicit draw is issued here. Presentation observes the committed model.
-Pane geometry and active resource synchronization are concrete operations in
-`operations/panes`, called immediately after committing the layout.
+Pane geometry and active resource synchronization are
+`AttachedClient.resizeAttachedPanes` and `AttachedClient.synchronizeActivePane`,
+called immediately after committing the layout.
 
 ## Failure and races
 
@@ -98,7 +100,7 @@ If only the original target disappeared, the surviving tab adopts the new pane.
 If its tab disappeared, the stale cleanup above applies.
 
 The operation adds no queue. It uses the existing bounded request tracker and
-coalescing outbox. Request-time geometry remains attached to the continuation
+the coalescing `model.to_runtime` outbox. Request-time geometry remains attached to the continuation
 when the host is resized during launch.
 
 ## Behavioral checks

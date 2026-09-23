@@ -20,8 +20,10 @@ recover, ignore, publish a notification, or report fatal/error
 presentation_lifecycle.observe -> Presenter
 ```
 
-`AttachedClient.failRuntimeRequest` consumes correlation once and switches directly on the
-retained operation. Unknown identities report the bounded runtime message and
+`AttachedClient.handleServerMessage` first lets `history_palette.fail` claim a
+failed history search. Otherwise `AttachedClient.failRuntimeRequest` takes the
+continuation from `model.request_lifecycle.tracker` once and switches directly
+on the retained operation. Unknown identities report the bounded runtime message and
 return `UnexpectedRequestFailure`. Known requests call their concrete recovery
 before publishing a notification; an error reports the runtime message once
 and propagates.
@@ -52,9 +54,11 @@ notified outcomes do not report an error.
 The pure `request_failure.notification` function maps each request kind to a stable title and semantic
 notification target. `notifications.Center` copies the borrowed failure text
 into its fixed `schema.max_notification_message_bytes` buffer. Publication
-advances only `ClientModel.Version.notifications`; `client_events` passes that
-version to `Presenter`, which decides whether a paced frame is needed. No
-failure use case requests a draw.
+advances only `model.notifications_revision`, which `ClientModel.version`
+reports as `notifications`. After the event, the TUI's `events.zig` calls
+`presentation_lifecycle.observe`, which hands that version to `Presenter`; the
+presenter decides whether a paced frame is needed. No
+failure path requests a draw.
 
 ## Bounds and lifetime
 
@@ -70,13 +74,13 @@ new client to rebuild its projection.
 
 ## Validation
 
-- `src/model/application/session/request_failure.zig` checks notification
+- `src/model/connection/request_failure.zig` checks notification
   title, target, message and duration mapping.
 - `src/client/AttachedClient.zig` owns correlation,
   concrete recovery dispatch and error reporting.
 - `src/frontend/client/tests/pane_splits.zig` checks that failed recovery
   consumes correlation without publishing a notification.
-- `src/client/connection/LifecycleState.zig` proves bounded identity and
+- `src/model/connection/RequestLifecycle.zig` proves bounded identity and
   exactly-once correlation entrypoints.
 - `src/frontend/client/tests/` proves wire correlation, continuation
   consumption, recovery paths, targeted notices and fatal snapshot rejection.

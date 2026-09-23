@@ -13,11 +13,11 @@ APC or CSI reply
        |
 presentation input parser
        |
-InputHandler.terminalResponse
+host_inputs.terminalResponse
        |
 host_capabilities.observe
        |
-protocol reply translation
+host_capabilities.translate
        |
 AttachedClient.observeHostCapability
        |
@@ -25,7 +25,7 @@ ClientModel.observeHostCapability
        |
 AttachedClient.deliverHostCommit
        |
-physical host effects
+view_chrome.refresh and host_effects.deliver
        |
 presentation_lifecycle.observe
        |
@@ -39,11 +39,13 @@ host_capabilities.handleExpiry
        |
 AttachedClient.reconcileHostCapabilities
        |
+AttachedClient.applyHostUpdate
+       |
 ClientModel.reconcileHost
        |
 AttachedClient.deliverHostCommit
        |
-fallback host effects
+view_chrome.refresh and host_effects.deliver
        |
 presentation_lifecycle.observe
        |
@@ -54,9 +56,10 @@ The protocol adapter recognizes the two reserved Kitty image IDs, window and
 cell pixel reports, mode 1016 support, and OSC 10/11 color reports. RGB values
 remain in the model; the background also resolves light or dark appearance by
 luminance. When the
-appearance changes and `client.appearance` configures a theme for it, the
-host-resource operation swaps the view theme unless `--theme` locked it; the same
-preference applies when a configuration generation is adopted. The
+appearance changes and `client.appearance` configures a theme for it,
+`AttachedClient.deliverHostCommit` writes `model.theme` unless `--theme` locked
+it, and `view_chrome.refresh` hands it to the view; the same preference applies
+when a configuration generation is adopted. The
 colors are queried at startup and refreshed with pixel probes on host resize,
 without overlapping color-query windows. The adapter converts replies into
 `HostCapabilityObservation`, which contains no parser or terminal-protocol
@@ -64,79 +67,96 @@ types. An unrelated Kitty image ID and primary device attributes are no-ops.
 
 ## Model transaction
 
-`ClientModel` owns `HostCapabilities`. It stores independent support states for
-Kitty graphics, Kitty zlib and pixel mouse coordinates, plus the latest raw
-window and cell pixel measurements. Each support state starts as `unknown`.
-The deadline changes only values that are still unknown to `unsupported`.
+`ClientModel` owns `HostCapabilities` in `model.host`. It stores independent
+support states for Kitty graphics and pixel mouse coordinates, plus the latest
+raw window and cell pixel measurements. Each support state starts as `unknown`.
+The deadline, through `host_negotiation.settledCapabilities`, changes only
+values that are still unknown to `unsupported`. Kitty zlib support is TUI
+state: `host_capabilities.observe` records it in `terminal.host_negotiation`
+and the graphics store and never revises the model.
 
 A recognized response computes the complete next capability value before it
 mutates the model. Pixel observations also resolve the next
-`schema.TerminalSize`. Explicit cell pixels take precedence over dimensions
+`core.TerminalSize`. Explicit cell pixels take precedence over dimensions
 derived from window pixels and the current grid.
 
 `ClientModel.reconcileHost` validates the resolved geometry first, then commits
 capabilities and geometry as one `HostCommit`. An invalid or oversized grid
 or a geometry inconsistent with its raw measurements changes neither value.
 Capability changes advance `Version.host_capabilities`; geometry changes
-independently advance `Version.host`. Exact repeats advance neither version and
+independently advance `Version.host` (`model.host.host_capabilities_revision`
+and `model.host.host_revision`). Exact repeats advance neither version and
 run no effects.
 
-Platform resize measurements use the same `HostUpdate`. This keeps raw window
+Platform resize measurements use the same `HostUpdate` through
+`AttachedClient.applyHostUpdate`. This keeps raw window
 pixels and the geometry derived from them in one model transaction.
 
 ## Effects and consumers
 
 `AttachedClient.observeHostCapability` and `reconcileHostCapabilities` deliver a `HostCommit` only after the
 complete model transition. The private `AttachedClient.deliverHostCommit` validates that the commit is still
-current and owns every branch shared with host resizing. A Kitty graphics
-transition calls `pane_graphics.syncFallbacks`, which reads the committed
-capability from the supplied model and queries the supplied graphics service while reconciling each bounded pane
-cell fallback. The host-resource operation then configures
-sidebar and overlay resources and invalidates physical placements. A geometry
-transition executes the same ordered screen, view and pane-size effects without
-depending on the host-resize adapter.
+current and owns every branch shared with host resizing. Changed terminal
+colors are queued to the runtime as `configure_terminal_colors` once startup
+is opening. A Kitty graphics transition calls `pane_graphics.syncFallbacks`,
+which reads the committed capability from the model and queries the client's
+graphics retention while reconciling each bounded pane cell fallback, then sets
+`model.to_host.invalidate_placements`. A geometry transition runs the same
+pane-size branch as a host resize.
+
+After the event, `view_chrome.refresh` compares the host, capability,
+configuration and chrome revisions with the ones it last followed, resizes the
+presenter and view, and configures sidebar resources for the committed image
+support and cell size. `host_effects.deliver` drains `model.to_host` and
+invalidates physical placements.
 
 Kitty zlib needs no immediate resource mutation. The media presenter reads the
-committed value before transmission. Pixel mouse support is also effect-free;
-the input adapter reads it when encoding the next mouse event. Configuration
+adapter's value before transmission. Pixel mouse support is also effect-free;
+`pointer_routing` and `tab_drag` read it when they convert the next mouse
+event. Configuration
 validation, telemetry and pane-graphics policy all read immutable capability
 values from `ClientModel`.
 
 A failed sidebar configuration or geometry effect does not restore older
-capabilities. The client session terminates with the committed disposable
-state, while runtime panes continue and a reconnect negotiates a fresh model.
+capabilities. `view_chrome.refresh` leaves its revisions unobserved and the
+error leaves the event with the committed disposable state; runtime panes
+continue and a reconnect negotiates a fresh model.
 
 ## Presentation
 
 Neither the response adapter nor the timeout requests a draw or advances
-disposable presentation ingress. `client_events` publishes the resulting model
-version. The presenter folds a changed version into its paced frame and records
+disposable presentation ingress. `events.update` calls
+`presentation_lifecycle.observe` once per inbox turn to publish the resulting
+model version. The presenter folds a changed version into its paced frame and records
 the version it painted. A repeated reply or deadline on an already settled
 model schedules no frame.
 
-`client_startup` begins negotiation through `host_capabilities.begin` before
-subscribing to runtime state. The same adapter refreshes queries on resize and
+`client_startup.start` begins negotiation through `host_capabilities.begin`
+before it starts the runtime read; `client_startup.advance` sends the bootstrap
+once the initial probes settle. The same adapter refreshes queries on resize and
 owns a single replaceable deadline through `host_capabilities.scheduleExpiry`.
 `host_capabilities.handleExpiry` validates its completion before applying the
 fallback, so a failed timer changes no capability state.
 
 ## Validation
 
-- `src/model/state/Model.zig` proves independent probes, selective expiry,
+- `src/model/state/tests/configuration_and_host.zig` proves independent probes, selective expiry,
   pixel precedence, atomic geometry and validation before mutation.
 - `src/frontend/client/tests/host_resources.zig` proves commit-before-delivery,
-  no-op suppression and graphics/grid/cell-size ordering through the existing
-  host ports, including partial failures.
+  no-op suppression and that the view and presenter follow committed grid,
+  cell-size and image-support changes, including a failed sidebar refresh.
 - The owner test in `src/client/AttachedClient.zig` checks empty and stale commits
-  before any host port can be accessed.
-- `src/client/operations/panes/pane_graphics.zig` owns bounded fallback
+  (`attached_client_tests.rejectStaleHostCommits`) before any effect runs.
+- `src/client/panes/pane_graphics.zig` owns bounded fallback
   traversal; `src/model/state/tests/input_and_frames.zig` and
   `src/frontend/client/tests/graphics_and_clipboard.zig` cover fallback ownership,
   repeated values and graphics recovery.
-- `src/frontend/client/controllers/host/host_capabilities.zig` owns terminal reply translation
-  and probe expiry.
-- `src/client/AttachedClient.zig` owns resource delivery shared
-  with resize, directly calling the GUI/TUI host ports.
+- `src/frontend/client/host/host_capabilities.zig` owns terminal reply translation
+  and probe expiry; `src/frontend/client/host/host_negotiation.zig` owns the
+  color-probe window and fallback values.
+- `src/client/AttachedClient.zig` owns commit delivery shared with resize;
+  `src/frontend/client/presentation/view_chrome.zig` and
+  `src/frontend/client/host/host_effects.zig` carry it to the TUI view and host.
 - `src/frontend/client/tests/` proves fallback reconciliation,
   presenter-owned scheduling, timeout idempotence and retained state after a
   real resource failure.

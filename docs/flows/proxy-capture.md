@@ -7,24 +7,29 @@ while `runtime.proxy.capture.enabled` is true.
 
 ## Ownership path
 
-1. `tunnel/http1.zig` copies original head bytes and de-framed body fragments
-   into one request half and one response half. `tunnel/h2.zig` does the same
+1. `src/backend/proxy/tunnel/http1.zig` copies original head bytes and
+   de-framed body fragments into one request half and one response half.
+   `tunnel/h2.zig` does the same
    per stream using separate 128-slot direction tables. Relay writes complete
    before body fragments are observed.
 2. `capture.Producer.publish` checks the pane credential and attempts a
    zero-deadline pointer transfer into the 256-entry capture queue. Failure
    erases and frees the half; it never waits for capacity.
-3. `event_sources.Sources.receiveProxyCapture` completes
-   `RuntimeEvent.proxy_capture`. The dispatcher delegates to
-   `proxy_capture.receive`, which rearms receive first.
-4. The entrypoint rejects stale pane generations, then asks the proxy resource
-   to decode a content-coded body on the observation path.
-5. `capture.Joiner` owns the half until its peer arrives. Matching
-   `(connection_id, stream_id)` halves form one exchange. The agent maintenance
-   tick releases entries whose `join_timeout_ms` deadline elapsed as partial
-   exchanges.
-6. The phase-1 sink records no payload: it erases and releases complete and
-   partial exchanges. A later runtime plugin service replaces this sink.
+3. `Sources.receiveProxyCapture` completes the runtime `Event.proxy_capture`.
+   The dispatcher delegates to `proxy_capture.receive`, which rearms receive
+   first.
+4. The procedure rejects stale pane generations through `model.panes.resolve`,
+   then asks `ProxyRuntime.decodeCapture` to decode a content-coded body on the
+   observation path.
+5. `ProxyRuntime.acceptCapture` pushes the half into `capture.Joiner`, which
+   owns it until its peer arrives. Matching `(connection_id, stream_id)`
+   halves form one exchange. `ProxyRuntime.expireCaptures`, run on each accept
+   and on the agent maintenance tick, removes entries whose `join_timeout_ms`
+   deadline elapsed as partial exchanges.
+6. Complete and timed-out exchanges go to the runtime plugin service through
+   `tap.submit` (see [Proxy tap](proxy-tap.md)). A half the joiner cannot
+   hold, because the table is full or its side is a duplicate, returns as a
+   partial exchange that is erased and released.
 
 ## Bounds and failure policy
 

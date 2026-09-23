@@ -10,19 +10,19 @@ still presses Enter in the shell: the engine suggests, it never executes.
 ```text
 suggest_command action
         |
-AttachedClient.beginSuggestion -> name prompt (target .suggest) + model.suggestion.begin
+AttachedClient.beginSuggestion -> openNamePrompt(.suggest_palette) + model.suggestion.begin
         |
-Enter with text -> AttachedClient.submitPrompt(.suggest) -> AttachedClient.requestSuggestion
+Enter with text -> AttachedClient.submitPrompt(.suggest) -> submitSuggestion -> requestSuggestion
         |
 model.suggestion.expect(request id)  (phase waiting, prompt stays open)
         |
-outbox suggest_command { request_id, focused pane, text ≤ 512 bytes }
+model.to_runtime suggest_command { request_id, focused pane, text ≤ 512 bytes }
         |
-runtime routeSuggestCommand (ui request class)
+runtime client_request -> suggest_command.start (ui request class)
         |
 Pane.dumpText(24 visible rows) + pane cwd + text -> suggestion.buildPrompt
         |
-engine.Service.submit (purpose = suggestion { client key, request id })
+engine service submit (purpose = suggestion { client key, request id })
 ```
 
 Enter is inert while a reply is pending and while the field is empty with no
@@ -40,13 +40,13 @@ reason and consumes no request continuation.
 ```text
 Event.engine_response (observation path)
         |
-AgentEvents.handleEngineResponse -> deliverSuggestion
+suggest_command.finish -> deliver
         |
 suggestion.extractCommand: first non-empty line, fences stripped, ≤ 1024 bytes
         |
 ResponseQueue command_suggestion { request_id, status, text }  (client gone: dropped)
         |
-client Suggestion.apply -> model.suggestion.apply(request id, status, text)
+AttachedClient.handleServerMessage -> model.suggestion.apply(request id, status, text)
         |
 Version.suggestion -> presenter invalidate -> list modal frame
 ```
@@ -64,7 +64,8 @@ uses the existing prompt submission path and stays disabled during generation.
 
 ## Paste
 
-Enter over a ready suggestion first closes the prompt, then pastes the text
+Enter over a ready suggestion first closes the prompt, then
+`AttachedClient.finishPromptList` calls `pasteSuggestion`, which pastes the text
 through the ordinary pane-paste path (`AttachedClient.pasteExpression`),
 without a trailing Enter. The order matters for the same reason as the
 history palette: `planPaneInput(.focused)` refuses input while a prompt
@@ -82,7 +83,7 @@ suggestion at 1024; the engine's own prompt and reply caps bound the rest.
 
 - `src/backend/runtime/suggestion.zig` proves prompt bounds and
   reply reduction.
-- `src/model/state/suggestion.zig` proves stale-reply rejection,
+- `src/model/state/suggestion.zig` (over `SuggestionState`) proves stale-reply rejection,
   edit invalidation and failure phases.
 - `src/model/state/name_prompt.zig` proves the palette's submit
   and selection commands.

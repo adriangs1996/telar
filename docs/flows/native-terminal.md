@@ -43,13 +43,15 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
 
 ## Three verification cuts
 
-1. Session and display: `bootstrap` queues `configure_graphics`,
-   `configure_terminal_colors` and `request_runtime_state`. The shared
+1. Session and display: `GuiClient.start` queues `configure_graphics`,
+   `configure_terminal_colors` and `request_runtime_state` through
+   `model.to_runtime.pushBootstrap`. The shared
    `AttachedClient.restoreClientLayout` issues `open_pane`; shared operations consume
    `pane_opened`, membership snapshots and `pane_frame`. `TerminalRenderer`
    borrows the projection, resolves the shared layout and draws each terminal
    leaf's cells and cursor. A presentation token captures only rendered panes.
-   `AttachedClient.applyPaneFrame` acknowledges validated, owned cells immediately.
+   `pane_frame.receive` applies validated, owned cells and queues their ACK in
+   `model.to_runtime`; `AttachedClient.receivePaneFrame` sends it immediately.
    Additional patches update that model while the GPU owns an older submission.
    GPU completion consumes the presentation token through
    `presentation_delivery.apply`, which retires captured damage and flushes
@@ -58,8 +60,9 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
    flight, and the next draw captures the latest accumulated state.
 2. Input: AppKit text input or Wayland/XKB produces owned semantic keys and
    committed UTF-8 text. `GuiClient` admits bounded input into `InputQueue` and forwards keys via
-   `AttachedClient.sendPaneInput`. Paste uses `AttachedClient.startPanePaste/content/finish`, whose
-   delivery uses the same pane-input operation and a captured pane identity.
+   `AttachedClient.sendPaneInput`. Paste uses `AttachedClient.startPanePaste`,
+   `appendPanePaste` and `finishPanePaste`, whose delivery uses the same
+   pane-input operation and a captured pane identity.
    Cmd+V on macOS and Ctrl+Shift+V on Linux read the native clipboard. Application
    multiplexer bindings are not activated without corresponding native UI.
 3. Geometry and detach: window size and font scale determine complete columns,
@@ -85,7 +88,7 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
   A full page uses replacement glyphs reserved at setup.
 - Native input holds at most 1,024 items. Clipboard transfers are limited to
   64 KiB and a whole paste is admitted or rejected before its first marker.
-  Outbox capacity gates input consumption; send completion resumes it.
+  `model.to_runtime` capacity gates input consumption; send completion resumes it.
 - Linux bounds clipboard offers to 16 and keymaps to 4 MiB. Clipboard reads are
   nonblocking. Repeat uses native-loop deadlines; drawing uses Wayland frame
   callbacks and a 60 Hz budget. A visible blinking cursor adds one deadline
@@ -102,9 +105,10 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
 - Shared graphics storage retains runtime image messages under existing quotas
   and credit accounting, but this increment does not display images. Native
   chrome, attachment UI, bars, plugins and external notification
-  delivery are not implemented here. Their ports are explicitly bound; absent
-  visual surfaces do no work, and unsupported requested external operations
-  report unavailability. An unavailable clipboard write leaves the terminal live.
+  delivery are not implemented here. Absent visual surfaces do no work;
+  `GuiClient.deliverHostEffects` drops terminal notifications from
+  `model.to_host` and answers media capture as unavailable. An unavailable
+  clipboard write leaves the terminal live.
 - Transport or unrecoverable GPU errors end this client. The runtime remains
   authoritative and the next attachment requests snapshots. Cursor appearance
   and the host's ANSI defaults extend the IPC schema; runtime and client must

@@ -7,17 +7,15 @@ sources. The view owns no second semantic copy.
 ## End-to-end path
 
 ```text
-runtime system_metrics.Sampler
+runtime system_metrics.tick -> observability Sampler (worker)
+             |
+system_metrics.finish -> model.system_metrics
              |
 runtime Delivery.prepare
              |
 schema.system_metrics
              |
-server_messages dispatcher
-             |
-system_metrics adapter
-             |
-Model.reconcileSystemMetrics
+AttachedClient.handleServerMessage
              |
 ClientModel.reconcileSystemMetrics
              |
@@ -25,12 +23,13 @@ SystemMetrics + Version.system_metrics
              |
 presentation_lifecycle.observe
              |
-Presenter -> View.render(system_metrics, bars)
+Presenter -> view render(Projection.system_metrics, bars)
              |
 configured metrics source or dynamic callback context
 ```
 
-The sampler runs on the runtime metrics tick, outside the interactive path. It
+The sampler runs as a job started by the runtime metrics tick, outside the
+interactive path. It
 keeps only the latest CPU percentage, used memory in tenths of a GiB and an
 optional battery percentage. Its revision advances only when those visible
 values change.
@@ -42,14 +41,15 @@ which the metrics source omits.
 
 ## Client transaction
 
-`Model.reconcileSystemMetrics` translates the validated protocol message into the
-client domain value. `Model.reconcileSystemMetrics` delegates the transition
-to `ClientModel`; it has no view or presenter dependency.
+`AttachedClient.handleServerMessage` translates the validated protocol message
+into the client domain value and calls `ClientModel.reconcileSystemMetrics`,
+which has no view or presenter dependency.
 
 `ClientModel` is the sole owner of the client replica. Revision zero and newer
 out-of-range percentages are rejected. Equal or older revisions are no-ops.
-An accepted newer value replaces the replica and advances
-`Version.system_metrics` exactly once. Rejection preserves the last usable
+An accepted newer value replaces `model.system_metrics` and advances
+`model.system_metrics_revision`, reported as `Version.system_metrics`, exactly
+once. Rejection preserves the last usable
 metrics and every model version.
 
 ## Presentation and recovery
@@ -57,13 +57,13 @@ metrics and every model version.
 The protocol dispatcher never requests a draw. After event dispatch,
 `presentation_lifecycle.observe` publishes the complete model version. `Presenter`
 compares `Version.system_metrics` with the version it last painted, invalidates
-the view when it changed and passes `ClientModel.systemMetrics()` into the next
+the view when it changed and passes `Projection.system_metrics` into the next
 paced frame. `telar.bar.metrics()` renders that value in any permitted slot;
 dynamic and command render callbacks receive the same snapshot under
 `ctx.metrics`. Several samples observed within one frame interval fold into one
 render of the latest values.
 
-`View` converts that immutable render input into the status-bar presentation
+The view converts that immutable render input into the status-bar presentation
 shape without storing it. Formatting uses fixed buffers and allocates nothing
 on the frame path. A reconnect starts with an empty disposable model and the
 runtime's fresh delivery cursor supplies the current sample.
@@ -75,9 +75,9 @@ runtime's fresh delivery cursor supplies the current sample.
 - `src/backend/runtime/delivery/` proves per-client latest-state delivery.
 - `src/core/schema/schema.zig` proves wire validation and optional-battery
   encoding rules.
-- `src/model/state/Model.zig` proves ownership, stale handling, validation
-  and isolated versioning.
-- `src/client/AttachedClient.zig` proves the use-case
-  boundary and retained state after rejection.
-- `src/frontend/client/tests/` proves protocol adaptation, absence of
-  direct draw requests and presenter-owned status-bar projection.
+- `src/model/state/tests/observations.zig` proves ownership, stale handling,
+  validation, isolated versioning and retained state after rejection.
+- `system metrics commit before presenter-owned projection` in
+  `src/frontend/client/tests/notifications_and_agents.zig` proves protocol
+  adaptation, absence of direct draw requests and presenter-owned status-bar
+  projection.

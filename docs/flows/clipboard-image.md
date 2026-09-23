@@ -15,38 +15,39 @@ accepting or rejecting the paste.
 ```text
 Ctrl+V
   |
-InputHandler.key
+host_inputs.key
   |
 AttachedClient.routeKeyInput -> AttachedClient.routeCurrentKey
   |
-AttachedClient.sendPaneInput -> client outbox
+AttachedClient.routePaneKey -> AttachedClient.sendPaneInput -> model.to_runtime
   |
-AttachedClient.startClipboardCapture
+key_routing.requestsClipboardPreview -> AttachedClient.startClipboardCapture
   |
-ClientModel.beginClipboardCapture { id, target }
+model.clipboard.reserve { id, target } -> model.to_host .capture
   |
-ClientEvent.clipboard_image media worker
+host_effects.deliver -> ClientEvent.clipboard_image media worker
   |
 AttachedClient.completeClipboardCapture
   |
 finish exact id -> validate returned target -> validate current target
   |
-attachments.Store.adopt -> Store.ingressVersion
+AttachmentShelf.adopt -> attachments.Store -> Store.ingressVersion
   |
 optional pane resize
   |
-AttachedClient.completeClipboardCapture
+AttachedClient.reportClipboardCapture
   |
 quiet result or bounded failure notification
   |
 presentation_lifecycle.observe -> Presenter -> paced cell and media passes
 ```
 
-`InputHandler.key` delegates the semantic key without recognizing `Ctrl+V`.
-`AttachedClient.routeKeyInput` completes its pane effect before it asks for a preview, and
-the adapter maps those effects to `AttachedClient.sendPaneInput` followed by
-`AttachedClient.startClipboardCapture`. The runtime drains the outbox to the PTY
-independently. A missing target, unsupported platform, busy worker or
+`host_inputs.key` delegates the semantic key without recognizing `Ctrl+V`.
+`AttachedClient.routeCurrentKey` sends the pane input through
+`AttachedClient.routePaneKey` first. Only when that input was delivered and
+`key_routing.requestsClipboardPreview` matches does it call
+`AttachedClient.startClipboardCapture`. The runtime send worker drains
+`model.to_runtime` to the PTY independently. A missing target, unsupported platform, busy worker or
 scheduling failure can drop the preview, but none can retract or delay an
 already accepted pane input transaction. See [Key routing](key-routing.md).
 
@@ -80,7 +81,7 @@ Closing a preview produces a bounded synthetic key sequence for its pane. The
 sequence moves to the corresponding marker, deletes it and restores the prior
 cursor position. An atomic placeholder costs one deletion key; a Pi path costs
 one per grapheme, and the cursor must share a row with the path's end or
-start. The whole sequence is bounded by `attachments.max_removal_keys`, which
+start. The whole sequence is bounded by `attachment_types.max_removal_keys`, which
 the pane-input boundary can encode as one transaction.
 `AttachedClient.sendPaneKeys` encodes the sequence against the pane's current
 keyboard modes and enqueues it as one input transaction. Telar retires the
@@ -99,30 +100,34 @@ capture still in flight, so a late worker completion cannot recreate previews
 for a prompt that was already sent. Claude and Pi turn an `Enter` typed after
 a trailing backslash into a newline instead of a submission;
 `attachment_prompt.backslashContinuesPrompt` names those policies and
-`attachments.promptContinuesAtCursor` reads the backslash before the editor
+`markers.promptContinuesAtCursor` reads the backslash before the editor
 cursor from the committed frame, so that `Enter` leaves previews and the
 capture alone. Codex submits regardless, so the rule never applies to it.
 Retiring image buffers remains deferred to the media path.
 
 ## State and worker ownership
 
-`ClientModel` owns one optional `ClipboardCapture`. It contains a monotonically
+`ClientModel` owns one optional `ClipboardCapture` in `model.clipboard`
+(`ClipboardCaptureState`). It contains a monotonically
 increasing identity and the exact pane generation selected at start. This is
 lifecycle state, not render state, so reserving or finishing it does not
 advance `ClientModel.Version`.
 
-`AttachedClient.startClipboardCapture` queries the capture service for platform support,
-resolves the focused target, commits the model reservation and schedules the
-media worker in the same function. It returns `unsupported`, `no_target`,
-`busy` or the started reservation directly. A
-scheduling error removes only the matching reservation. A second `Ctrl+V`
+`AttachedClient.startClipboardCapture` reads platform support from
+`model.host.clipboard_capture`, which the adapter sets at startup, resolves the
+focused target, commits the model reservation and queues a `.capture` request
+on `model.to_host` in the same function. It returns `unsupported`, `no_target`,
+`busy` or the started reservation directly. A failed push removes only the
+matching reservation. The TUI's `host_effects.deliver` starts the media worker
+after the event; if that start fails it completes the capture with the error,
+which finishes only that exact identity. A second `Ctrl+V`
 still reaches the child, but its preview is skipped while the first capture
 remains active.
 
 The platform worker receives copied IDs and values. It owns clipboard access,
-PNG allocation and format checks. `CaptureResources` retains only the result
-pointer needed to close the cancellation race. Client shutdown cancels select
-tasks before it frees that pointer. No worker retains `ClientModel` or `View`.
+PNG allocation and format checks. `model.clipboard.orphan` retains only the
+result pointer needed to close the cancellation race. Client shutdown cancels
+inbox tasks before it frees that pointer. No worker retains `ClientModel` or `View`.
 Its only borrowed client memory is the heap-stable orphan result slot.
 
 ## Completion policy
@@ -173,18 +178,18 @@ event does not wipe megabytes synchronously.
 
 ## Validation
 
-- `src/model/state/Model.zig` proves single-flight capture identity, exact
-  completion, target ownership, validation and identifier exhaustion.
-- `src/client/application/input/clipboard_image.zig` proves commit before
-  scheduling, complete start classification, exact consumption, stale
-  suppression, adoption before resize and failure classification before exact
-  delivery.
+- `src/model/state/tests/configuration_and_host.zig` and
+  `src/model/state/ClipboardCaptureState.zig` prove single-flight capture
+  identity, exact completion, target ownership, validation, identifier
+  exhaustion and orphan cleanup.
+- `src/client/input/clipboard_image.zig` holds the start and completion
+  outcome types and failure classification.
 - `src/frontend/client/tests/input_operations.zig` proves quiet
   outcomes, notification mapping and publication failure propagation.
-- `src/client/application/input/attachment_prompt.zig` proves child
-  marker deletion precedes local retirement, prompt submission cancels an
-  in-flight capture, a continued prompt keeps both, and which keys arm a
-  deletion watch per policy.
+- `src/client/input/attachment_prompt.zig` proves marker policies per
+  provider and which keys arm a deletion watch per policy.
+- `src/frontend/client/tests/input.zig` proves child marker deletion precedes
+  local retirement and prompt submission retires paired previews.
 - `src/frontend/attachments/attachments.zig` proves cancellation ownership, image
   bounds, retained-byte limits, target scoping, marker planning across a
   wrapped placeholder, backslash continuation, the bounded deletion watch and
