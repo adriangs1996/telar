@@ -11,7 +11,6 @@ test {
     _ = @import("gui_config_test.zig");
     _ = @import("theme_test.zig");
 }
-const Limits = @import("Limits.zig");
 const lua_api = @import("lua-api");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const bar_values = @import("bar_values.zig");
@@ -1482,4 +1481,10 @@ const FileInput = struct {
     path: []const u8,
     number: u64,
     profile: ?[]const u8 = null,
+};
+
+const Limits = struct {
+    memory: usize = data.config_values.default_memory_limit,
+    instructions: u64 = data.config_values.default_load_instruction_limit,
+    deadline_after_ns: u64 = 100 * std.time.ns_per_ms,
 };
