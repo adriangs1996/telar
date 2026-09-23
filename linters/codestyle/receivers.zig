@@ -7,13 +7,7 @@ const Ast = std.zig.Ast;
 
 const process_models = [_][]const u8{ "ClientModel", "RuntimeModel" };
 
-/// One receiver whose name differs from the rule.
-pub const Receiver = struct {
-    /// The `fn_decl` node that owns the receiver.
-    function: Ast.Node.Index,
-    name_token: Ast.TokenIndex,
-    expected: []const u8,
-};
+const Receiver = @import("Receiver.zig");
 
 /// Lists every misnamed receiver in the tree. The caller owns the slice.
 ///
@@ -163,9 +157,53 @@ pub fn usesName(tree: *const Ast, function: Ast.Node.Index, name: []const u8) bo
     return false;
 }
 
-/// Whether an identifier token names a field (`.name`) rather than a binding.
+/// Whether an identifier token names a field (`.name`, or a field declared
+/// in a container) rather than a binding.
 pub fn isField(tree: *const Ast, token: Ast.TokenIndex) bool {
-    return token > 0 and tree.tokenTag(token - 1) == .period;
+    if (token > 0 and tree.tokenTag(token - 1) == .period) {
+        return true;
+    }
+
+    // A container field is `name: Type` whose name no `const`, `var`, `(`
+    // or `|` introduces; a parameter follows `(` or `,` inside a prototype.
+    if (tree.tokenTag(token + 1) != .colon or token == 0) {
+        return false;
+    }
+
+    return switch (tree.tokenTag(token - 1)) {
+        .l_brace, .semicolon, .doc_comment, .keyword_pub => true,
+        .comma => !insideParentheses(tree, token),
+        else => false,
+    };
+}
+
+/// Whether the nearest unclosed bracket before `token` is a parenthesis.
+fn insideParentheses(tree: *const Ast, token: Ast.TokenIndex) bool {
+    var depth: usize = 0;
+    var index = token;
+    while (index > 0) {
+        index -= 1;
+        switch (tree.tokenTag(index)) {
+            .r_paren, .r_brace, .r_bracket => depth += 1,
+            .l_paren => {
+                if (depth == 0) {
+                    return true;
+                }
+
+                depth -= 1;
+            },
+            .l_brace, .l_bracket => {
+                if (depth == 0) {
+                    return false;
+                }
+
+                depth -= 1;
+            },
+            else => {},
+        }
+    }
+
+    return false;
 }
 
 fn expectReceivers(expected: []const []const u8, source: [:0]const u8) !void {
@@ -200,6 +238,30 @@ test "procedures over a process model name it model" {
         \\pub fn receive(client_model: *data.ClientModel) void { _ = client_model; }
         \\pub fn refresh(model: *const data.ClientModel) void { _ = model; }
     );
+}
+
+test "container fields that share the receiver name are not bindings" {
+    var tree = try Ast.parse(std.testing.allocator,
+        \\const Tracker = @This();
+        \\fn feed(tracker: *Tracker) void {
+        \\    const Relay = struct {
+        \\        tracker: *Tracker,
+        \\        count: u8,
+        \\    };
+        \\    _ = Relay{ .tracker = tracker, .count = 0 };
+        \\}
+    , .zig);
+    defer tree.deinit(std.testing.allocator);
+
+    var fields: usize = 0;
+    var token: Ast.TokenIndex = 0;
+    while (token < tree.tokens.len) : (token += 1) {
+        if (tree.tokenTag(token) == .identifier and std.mem.eql(u8, tree.tokenSlice(token), "tracker") and isField(&tree, token)) {
+            fields += 1;
+        }
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), fields);
 }
 
 test "functions whose first parameter is another type are not methods" {

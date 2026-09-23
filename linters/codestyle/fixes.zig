@@ -3,6 +3,7 @@ const Edit = @import("Edit.zig");
 const Fixer = @import("Fixer.zig");
 const syntax = @import("syntax.zig");
 const receivers = @import("receivers.zig");
+const Receiver = @import("Receiver.zig");
 
 /// Applies only deterministic fixes and returns null when the source is unchanged.
 ///
@@ -97,7 +98,7 @@ fn fixOnce(allocator: std.mem.Allocator, source: [:0]const u8) !?[:0]u8 {
 /// Renames a receiver and every binding use of it inside its function.
 /// A function that already uses the expected name keeps its receiver, so
 /// the rename can never shadow; the check still reports it.
-fn renameReceiver(allocator: std.mem.Allocator, tree: *const std.zig.Ast, receiver: receivers.Receiver, edits: *std.ArrayList(Edit)) !void {
+fn renameReceiver(allocator: std.mem.Allocator, tree: *const std.zig.Ast, receiver: Receiver, edits: *std.ArrayList(Edit)) !void {
     if (receivers.usesName(tree, receiver.function, receiver.expected)) {
         return;
     }
