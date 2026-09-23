@@ -19,9 +19,9 @@ Measured on `4988caf5`. Record them at the end of every slice.
 | `context: *anyopaque` ports | 192 fields in 82 files | 108 fields in 51 files |
 | `TerminalClient.of` / `GuiClient.of` uses (production) | 157 / 24 | 0 / 0 |
 | Fields in the client `Version` | 27 | 27 |
-| Key press to pane input, TUI / GUI | ~26 hops in 10 files / ~36 in 14 |
-| PTY bytes to client frame, runtime | ~20 hops in ~24 files |
-| `LayoutSnapshot` rebuilds per GUI frame | 5 fixed, plus one per notification and one per pump |
+| Key press to pane input, TUI / GUI | ~26 hops in 10 files / ~36 in 14 | not remeasured |
+| PTY bytes to client frame, runtime | ~20 hops in ~24 files | ~12 calls in ~8 files |
+| `LayoutSnapshot` rebuilds per GUI frame | 5 fixed, plus one per notification and one per pump | at most 1, only when its tab, revision or area changed |
 
 Performance slices also run the `perf-pass` probe and benchmarks against the
 previous slice.
@@ -96,6 +96,20 @@ that touches it.
    behavior. The layout snapshot and accessibility tree are cached by
    revision; `captureVersion`, the TUI compositor rebuild and the chrome clear
    stop recomputing unchanged input.
+
+   Done: `Projection.layout` carries the model's cached snapshot to every GUI
+   renderer; the TUI compositor rebuilds only when invalidated; GUI focus is
+   reconciled once per `update`, so native text and accessibility queries no
+   longer mutate state; change review keeps its own session revision instead
+   of bumping `chrome` (which also resent the client layout on every review
+   event); `captureVersion` reads the chrome counter directly. Frontend
+   benchmark medians match or beat the branch base. Kept on purpose: the
+   `Version` fields, because 124 test assertions and the commit validations
+   (sidebar, host, activation) depend on the individual counters and merging
+   them buys no measured time; the accessibility tree, which is built only
+   when the platform asks and whose widget registry is re-presented every
+   frame anyway; and the TUI chrome repaint while toasts show, which must
+   redraw the overlay over freshly composed pane cells.
 6. **The runtime.** `RuntimeModel` tables for clients, workspaces, panes,
    attachments and agents. One flush after `update` (bug 3). Change-review
    discovery keyed by revision, `HOME` read once, an observer mask per pane
