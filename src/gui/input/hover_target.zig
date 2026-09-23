@@ -1,8 +1,6 @@
 //! Resolves native affordances through the delivered controls before pane text.
 const data = @import("model");
 const builtin = @import("builtin");
-const core = @import("telar-core");
-const client = @import("telar-client");
 const GuiAdapter = @import("../GuiAdapter.zig");
 const Target = @import("HoverTarget.zig");
 

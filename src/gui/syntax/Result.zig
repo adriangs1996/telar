@@ -1,5 +1,4 @@
 const data = @import("model");
-const client = @import("telar-client");
 const limits = @import("limits.zig");
 
 roles: [limits.source_bytes]data.role.Role = undefined,

@@ -1,7 +1,6 @@
 const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
-const client = @import("telar-client");
 const Session = @import("Session.zig");
 const review = @import("change_review.zig");
 const native = @import("../native/native.zig");

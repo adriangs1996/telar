@@ -1,4 +1,3 @@
-const client = @import("telar-client");
 const Coord = @import("Coord.zig");
 const SmallRect = @import("SmallRect.zig");
 const ConsoleScreenBufferInfo = @import("ConsoleScreenBufferInfo.zig");
@@ -29,7 +28,6 @@ pub const ENABLE_PROCESSED_INPUT: std.os.windows.DWORD = 0x0001;
 pub const ENABLE_LINE_INPUT: std.os.windows.DWORD = 0x0002;
 pub const ENABLE_ECHO_INPUT: std.os.windows.DWORD = 0x0004;
 pub const ENABLE_WINDOW_INPUT: std.os.windows.DWORD = 0x0008;
-const ENABLE_MOUSE_INPUT: std.os.windows.DWORD = 0x0010;
 pub const ENABLE_VIRTUAL_TERMINAL_INPUT: std.os.windows.DWORD = 0x0200;
 
 pub const CONSOLE_SCREEN_BUFFER_INFO = ConsoleScreenBufferInfo.CONSOLE_SCREEN_BUFFER_INFO;

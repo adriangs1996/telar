@@ -2,7 +2,6 @@ const data = @import("model");
 const event_module = @import("../input/event.zig");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Widget = @import("Widget.zig");
 const Editor = @import("editor.zig");
 const Route = @import("../widgets/interaction/Route.zig");

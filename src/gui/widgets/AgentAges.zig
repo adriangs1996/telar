@@ -1,7 +1,6 @@
 //! Client-local status clocks shared by native cards and pane headers.
 const data = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 const core = @import("telar-core");
 const SnapshotMark = @import("SnapshotMark.zig");
 const StatusAge = @import("StatusAge.zig");

@@ -4,7 +4,6 @@ const std = @import("std");
 const Copy = @This();
 const GuiAdapter = @import("../../GuiAdapter.zig");
 const Position = @import("ThreadTextPosition.zig");
-const Row = @import("ThreadTextRow.zig");
 gui: *GuiAdapter,
 range: [2]Position,
 writer: *std.Io.Writer,

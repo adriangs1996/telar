@@ -6,7 +6,6 @@ const name_prompts = @import("name_prompts.zig");
 const name_prompt_opening = @import("name_prompt_opening.zig");
 const agent_navigation = @import("../agents/agent_navigation.zig");
 const prompt_paths = @import("../completion/prompt_paths.zig");
-const runtime_io = @import("../connection/runtime_io.zig");
 const actions = @import("actions.zig");
 const history_palette = @import("history_palette.zig");
 const suggest_command = @import("suggest_command.zig");

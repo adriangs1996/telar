@@ -1,7 +1,6 @@
 //! Tokens supply color, while the existing grapheme iterator owns cell geometry.
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Fragment = @import("SyntaxFragment.zig");
 const Self = @This();

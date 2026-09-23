@@ -8,7 +8,6 @@
 //! terminal background at 0.15 over their content.
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");
 const PaneHeader = @import("PaneHeader.zig");

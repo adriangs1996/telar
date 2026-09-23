@@ -15,14 +15,12 @@ const PresentationState = @import("presentation/State.zig");
 const Screen = @import("../presentation/Screen.zig");
 const kitty_delivery = @import("../graphics/kitty_delivery.zig");
 const HostInput = @import("input/HostInput.zig");
-const host_inputs = @import("input/host_inputs.zig");
 const host_ports = @import("host/host_ports.zig");
 const view_chrome = @import("presentation/view_chrome.zig");
 const ChromeRevisions = @import("presentation/ChromeRevisions.zig");
 const capture_module = @import("../attachments/capture.zig");
 const presentation_lifecycle = @import("presentation/presentation_lifecycle.zig");
 
-pub const InputRouter = host_inputs.Router;
 pub const Options = client_module.Options;
 pub const AppearanceThemes = data.AppearanceThemes;
 

@@ -1,6 +1,5 @@
 const data = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 const core = @import("telar-core");
 const labels = @import("history_labels.zig");
 const HistoryDetails = @This();

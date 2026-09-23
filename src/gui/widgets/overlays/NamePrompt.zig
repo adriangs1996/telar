@@ -1,6 +1,5 @@
 //! A concrete single-field prompt selected during scene composition.
 const shared_model = @import("model");
-const client = @import("telar-client");
 const core = @import("telar-core");
 const Canvas = @import("../Canvas.zig");
 const Modal = @import("Modal.zig");

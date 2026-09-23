@@ -13,18 +13,6 @@ pub const max_removal_keys: usize = 256;
 /// key. The child may publish an unrelated frame before it redraws its editor.
 pub const deletion_watch_frames: u8 = 3;
 
-/// How the child's prompt identifies one pasted image.
-///
-/// - `ordered`: Codex renumbers `[Image #N]` after deletion, so the preview's
-///   shelf position is its marker.
-/// - `stable_number`: Claude keeps increasing `[Image #N]`, so the number
-///   rendered for each preview is learned and retained.
-/// - `pasted_path`: Pi inserts `<tmpdir>/pi-clipboard-<uuid>.<ext>` as plain
-///   text, so the file UUID is learned and the whole path is the marker.
-pub const MarkerPolicy = @import("../types/AttachmentMarkerPolicy.zig").AttachmentMarkerPolicy;
-
-pub const MarkerIdentity = @import("../types/AttachmentMarkerIdentity.zig").AttachmentMarkerIdentity;
-
 pub const Id = @import("../types/AttachmentId.zig").AttachmentId;
 
 pub const MarkerDeletion = @import("../types/AttachmentMarkerDeletion.zig").AttachmentMarkerDeletion;

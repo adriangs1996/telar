@@ -6,7 +6,6 @@
 const core = @import("telar-core");
 const middleware = @import("middleware.zig");
 const types = @import("../agent/types.zig");
-const buffer_support = @import("capture/buffer_support.zig");
 const GenericLifecyclePort = @import("GenericLifecyclePort.zig").Type;
 const Service = @import("service/Service.zig");
 const service_support = @import("service/service_support.zig");
@@ -29,20 +28,11 @@ const tls_tunnel = @import("tls_tunnel.zig");
 pub const ca = @import("ca.zig");
 
 pub const PaneKey = @import("../pane/PaneKey.zig");
-pub const ObservationPhase = middleware.Phase;
-pub const ObservationProtocol = middleware.Protocol;
 pub const ApiDialect = types.ApiDialect;
-pub const CaptureConfig = @import("capture/Config.zig");
-pub const CaptureExchange = @import("capture/Exchange.zig");
-pub const CaptureHalf = @import("capture/Half.zig");
-pub const CaptureJoiner = @import("capture/Joiner.zig");
-pub const CaptureOutcome = buffer_support.Outcome;
 
 pub const Config = @import("Config.zig");
 
 pub const Observation = @import("Observation.zig");
-
-pub const MetricsSnapshot = @import("Snapshot.zig");
 
 pub const PaneEnvironment = @import("PaneEnvironment.zig");
 

@@ -3,7 +3,6 @@ const Quad_module = @import("../render/Quad.zig");
 const CellMesh = @import("../render/CellMesh.zig");
 const data = @import("model");
 const input_support = @import("input_support.zig");
-const host_ports = @import("../host_ports.zig");
 const std = @import("std");
 const Session = @import("Session.zig");
 const core = @import("telar-core");

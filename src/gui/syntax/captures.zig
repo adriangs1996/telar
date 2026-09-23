@@ -1,5 +1,4 @@
 const data = @import("model");
-const client = @import("telar-client");
 const std = @import("std");
 
 pub fn role(name: []const u8) data.role.Role {

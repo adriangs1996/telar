@@ -2,7 +2,6 @@ const data = @import("model");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
 const assets = @import("assets");
 const QuadList = @import("../render/QuadList.zig");
-const client = @import("telar-client");
 const std = @import("std");
 const Fixture = @This();
 const SyntaxStore = @import("../syntax/Store.zig");

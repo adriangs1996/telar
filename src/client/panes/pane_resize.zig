@@ -3,7 +3,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const runtime_io = @import("../connection/runtime_io.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_focus = @import("pane_focus.zig");
 const Client = @import("../execution/Client.zig");

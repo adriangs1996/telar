@@ -2,12 +2,10 @@
 //! and selection; provisional IME text belongs to the interaction state.
 const label_face = @import("label_face.zig");
 const shared_model = @import("model");
-const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
 const Rect = @import("../render/Rect.zig");
 const TextField = @This();
-const GenericField = shared_model.GenericField;
 const EditorDisplay = @import("interaction/EditorDisplay.zig");
 const EditorFont = @import("interaction/EditorFont.zig");
 const Preedit = @import("interaction/Preedit.zig");

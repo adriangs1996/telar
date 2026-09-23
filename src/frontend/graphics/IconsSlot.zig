@@ -1,5 +1,4 @@
 const data = @import("model");
-const client = @import("telar-client");
 const Slot = @This();
 
 icon: data.icons.Icon,

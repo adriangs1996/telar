@@ -2,7 +2,6 @@
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Hit = @This();
 
 pane_id: core.PaneId,

@@ -1,6 +1,5 @@
 const data = @import("model");
 const SidebarRendererInput = @import("SidebarRendererInput.zig");
-const client = @import("telar-client");
 const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
 const Rasterizer = @import("Rasterizer.zig");

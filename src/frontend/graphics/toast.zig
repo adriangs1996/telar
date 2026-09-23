@@ -6,7 +6,6 @@
 //! animating. Any media failure removes every placement and leaves the cell
 //! renderer fully functional.
 
-const client = @import("telar-client");
 const core = @import("telar-core");
 const kitty_protocol = @import("kitty_protocol");
 const data = @import("model");

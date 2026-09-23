@@ -2,7 +2,6 @@
 
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Context = @import("Context.zig");
 
 pub fn render(context: *Context, area: core.Rect, input: BarContentInput) void {

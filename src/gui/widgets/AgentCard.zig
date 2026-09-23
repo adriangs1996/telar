@@ -5,7 +5,6 @@ const data = @import("model");
 const action_module = @import("action.zig");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");

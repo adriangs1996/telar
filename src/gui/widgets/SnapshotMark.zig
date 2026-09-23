@@ -1,7 +1,6 @@
 //! Identity of the agent snapshot a sidebar last ordered: its revision, the
 //! replica it came from and its length. Equal marks mean the same list.
 const data = @import("model");
-const client = @import("telar-client");
 const std = @import("std");
 const SnapshotMark = @This();
 

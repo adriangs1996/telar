@@ -2,7 +2,6 @@
 //! Callers supply visible pane identities and only record sealed preparations.
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const PaneInputGrace = @import("PaneInputGrace.zig");
 const FramePacer = @This();
 

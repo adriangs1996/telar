@@ -1,4 +1,3 @@
-const client = @import("telar-client");
 const data = @import("model");
 pane: *const data.Pane,
 view: data.LayoutView,

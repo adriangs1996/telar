@@ -5,7 +5,6 @@ const std = @import("std");
 const client_tests = @import("../execution/client_tests.zig");
 const agent_control = @import("../agents/agent_control.zig");
 const tab_creation = @import("tab_creation.zig");
-const Client = @import("../execution/Client.zig");
 
 /// Example: `_ = try tab_rename.requestTabRename(app, command);`
 pub fn requestTabRename(model: *data.ClientModel, command: data.RequestRenameTab) !bool {

@@ -1,6 +1,5 @@
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Context = @import("Context.zig");
 const std = @import("std");
 const Strip = @import("Strip.zig");

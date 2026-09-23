@@ -1,5 +1,4 @@
 //! Canonical editions and comments. Every method doing work runs on observation workers.
-const operation_module = @import("operation.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Context = @import("Context.zig");

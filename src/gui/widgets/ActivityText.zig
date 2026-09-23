@@ -4,7 +4,6 @@ const data = @import("model");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
 const assets = @import("assets");
 const QuadList = @import("../render/QuadList.zig");
-const client = @import("telar-client");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");

@@ -6,7 +6,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
 const PointerEvent = @import("../input/PointerEvent.zig");
-const host_ports = @import("../host_ports.zig");
 
 const patch = "diff --git a/file.zig b/file.zig\n--- a/file.zig\n+++ b/file.zig\n@@ -1,3 +1,3 @@\n-old\n+new\n context\n tail\n";
 

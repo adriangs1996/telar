@@ -1,15 +1,11 @@
 //! Synchronous semantic snapshots. Native adapters copy borrowed bytes before
 //! returning; only their platform caches persist beyond this call. Focus is
 //! already reconciled: `GuiAdapter.update` does it after every turn.
-const routing = @import("routing.zig");
 const EditorDisplay = @import("EditorDisplay.zig");
-const data = @import("model");
-const client = @import("telar-client");
 const GuiAdapter = @import("../../GuiAdapter.zig");
 const native = @import("../../native/native.zig");
 const FieldView = @import("FieldView.zig");
 const MultilineLayout = @import("MultilineLayout.zig");
-const GenericField = data.GenericField;
 
 /// Uses current committed text and the delivered editor's geometry. Preedit
 /// is intentionally excluded from surrounding text sent to the native IME.

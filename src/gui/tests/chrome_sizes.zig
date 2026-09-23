@@ -5,14 +5,11 @@ const data = @import("model");
 const QuadList = @import("../render/QuadList.zig");
 const label_size = @import("../widgets/label_size.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client = @import("telar-client");
 const Fixture = @import("CanvasFixture.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const ChromeMetrics = @import("../widgets/ChromeMetrics.zig");
 const CardGeometry = @import("../widgets/CardGeometry.zig");
 const Canvas = @import("../widgets/Canvas.zig");
-const Label = @import("../widgets/Label.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 const Rect = @import("../render/Rect.zig");
 

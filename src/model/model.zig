@@ -242,7 +242,6 @@ pub const PaneViewportCommand = @import("state/PaneViewportCommand.zig");
 pub const PaneViewportTarget = @import("types/PaneViewportTarget.zig").PaneViewportTarget;
 pub const PasteMarkerCommand = @import("input/PasteMarkerCommand.zig");
 pub const PathCompletionCompletion = @import("completion/PathCompletionCompletion.zig");
-pub const PathCompletionEntry = @import("state/PathCompletionEntry.zig");
 pub const PathCompletionResult = @import("state/PathCompletionResult.zig");
 pub const PathCompletionState = @import("state/PathCompletionState.zig");
 pub const Physical = @import("input/Physical.zig");
@@ -450,13 +449,7 @@ test {
     _ = @import("agents/sound_playback.zig");
     std.testing.refAllDecls(@This());
 
-    _ = @import("config/config_reload_delivery.zig");
     _ = @import("input/ScrollEffect.zig");
-    _ = @import("input/lua_action.zig");
-    _ = @import("input/name_prompt.zig");
-    _ = @import("input/pane_mouse.zig");
-    _ = @import("input/pane_paste.zig");
-    _ = @import("notifications/toggle_sidebar.zig");
     _ = @import("types/PaneGraphicsApplied.zig");
     _ = @import("panes/ResourceState.zig");
     _ = @import("connection/Command.zig");
@@ -493,9 +486,6 @@ test {
     _ = @import("state/StaleTabRemoval.zig");
     _ = @import("state/TabRemoval.zig");
     _ = @import("state/WorkspaceBookmark.zig");
-    _ = @import("types/ConfigReloadEvent.zig");
-    _ = @import("types/ConfigReloadFailure.zig");
-    _ = @import("types/ConfigReloadResolution.zig");
     _ = @import("types/KeyRoutingEvent.zig");
     _ = @import("types/KeyRoutingFailure.zig");
     _ = @import("types/KeyRoutingOwner.zig");
@@ -503,14 +493,11 @@ test {
     _ = @import("types/LayoutNode.zig");
     _ = @import("types/NotificationPhase.zig");
     _ = @import("types/PaneFocusTarget.zig");
-    _ = @import("types/PaneGraphicsEffectEvent.zig");
     _ = @import("types/PointerSupportKind.zig");
     _ = @import("types/PromptHistoryScope.zig");
     _ = @import("types/PromptTarget.zig");
     _ = @import("types/PromptTransition.zig");
     _ = @import("types/RequestsGroup.zig");
-    _ = @import("types/TabCloseRequestStep.zig");
-    _ = @import("types/TabCloseTabRemovalDirective.zig");
     _ = @import("workspace/ClientLayoutBuilder.zig");
     _ = @import("workspace/RatioCandidate.zig");
     _ = @import("workspace/Slot.zig");

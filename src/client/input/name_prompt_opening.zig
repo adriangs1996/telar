@@ -24,9 +24,3 @@ pub fn renameTab(tab_id: core.TabId, label: []const u8) model_data.PromptBegin {
         .label = label,
     } };
 }
-
-fn cancelPrompt(model: *model_data.ClientModel) !void {
-    if (model.name_prompt.apply(.cancel) != .cancelled) {
-        return error.PromptNotCancelled;
-    }
-}

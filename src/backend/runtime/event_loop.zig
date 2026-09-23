@@ -1,7 +1,6 @@
 //! Bounded space for every admitted actor to publish while cancellation joins.
 
 const client_store = @import("client/store_support.zig");
-const core = @import("telar-core");
 const PaneStore = @import("../pane/PaneStore.zig");
 const event = @import("event.zig");
 const ReviewJobs = @import("../change_review/Jobs.zig");

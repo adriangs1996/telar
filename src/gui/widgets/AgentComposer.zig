@@ -3,7 +3,6 @@ const ComposerLayout = @import("ComposerLayout.zig");
 const AgentCard = @import("AgentCard.zig");
 const TextFit = @import("TextFit.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");

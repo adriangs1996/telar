@@ -4,7 +4,6 @@ const std = @import("std");
 const Fixture = @import("ConversationFixture.zig");
 const Text = @import("../widgets/MessageText.zig");
 const Paint = @import("../widgets/DiffPaint.zig");
-const client = @import("telar-client");
 const Canvas = @import("../widgets/Canvas.zig");
 const Color = @import("../render/Color.zig");
 const colors = @import("../render/cell_colors.zig");

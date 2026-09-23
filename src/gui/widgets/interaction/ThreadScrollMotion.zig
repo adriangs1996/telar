@@ -1,7 +1,6 @@
 //! One attachment's pixel trajectory and its last committed model coordinate.
 const std_module = @import("std");
 const data = @import("model");
-const client = @import("telar-client");
 const ScrollMotion = @import("../ScrollMotion.zig");
 const Target = @import("Target.zig");
 const ScrollEvent = @import("../../input/ScrollEvent.zig");

@@ -1,6 +1,5 @@
 //! Bounded, disposable scrolling for a native list in device pixels.
 const data = @import("model");
-const client = @import("telar-client");
 const PixelScroll = @This();
 
 scroll: u16 = 0,

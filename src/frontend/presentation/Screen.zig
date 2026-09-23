@@ -1,6 +1,5 @@
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const std = @import("std");
 const pointer = @import("pointer.zig");
 const screen_support = @import("screen_support.zig");

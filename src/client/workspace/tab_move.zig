@@ -3,7 +3,6 @@ const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
 const runtime_io = @import("../connection/runtime_io.zig");
-const Client = @import("../execution/Client.zig");
 
 /// Validates one request and retains its correlation before delivery.
 /// Example: `_ = try tab_move.requestTabMove(client, command);`

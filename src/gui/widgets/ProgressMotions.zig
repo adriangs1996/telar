@@ -2,7 +2,6 @@
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Transition = @import("../animation/Transition.zig");
 const FrameClock = @import("../animation/FrameClock.zig");
 const ProgressMotions = @This();

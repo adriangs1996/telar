@@ -2,7 +2,6 @@
 const AccessibilityAction = @import("../input/AccessibilityAction.zig");
 const data = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 const NativeEvent = @import("InputEvent.zig").InputEvent;
 const events = @import("../input/event.zig");
 const PointerEvent = @import("../input/PointerEvent.zig");

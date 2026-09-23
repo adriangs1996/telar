@@ -2,7 +2,6 @@
 const data = @import("model");
 const Canvas = @import("Canvas.zig");
 const Hit = @import("../input/LinkHit.zig");
-const client = @import("telar-client");
 const LinkRegions = @import("../render/LinkRegions.zig");
 
 const HoveredLink = @This();

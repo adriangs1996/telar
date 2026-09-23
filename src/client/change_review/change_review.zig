@@ -3,7 +3,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const client_tests = @import("../execution/client_tests.zig");
-const Client = @import("../execution/Client.zig");
 
 /// Opens the latest review for any attached pane, preserving an already open edition.
 /// Example: `try change_review.openChangeReview(app, pane_id);`

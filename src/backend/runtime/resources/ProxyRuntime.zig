@@ -5,7 +5,6 @@ const InitOptions = @import("InitOptions.zig");
 const Proxy = @import("../../proxy/Proxy.zig");
 const Config = @import("../../proxy/capture/Config.zig");
 const Half = @import("../../proxy/capture/Half.zig");
-const Exchange = @import("../../proxy/capture/Exchange.zig");
 const Snapshot = @import("../../proxy/Snapshot.zig");
 const PluginsService = @import("../../plugins/Service.zig");
 const ProxyTestFiles = @import("ProxyTestFiles.zig");

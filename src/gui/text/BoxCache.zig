@@ -1,6 +1,5 @@
 //! Fixed curve cache. Entries and atlas texels are never overwritten while a
 //! retained cell mesh can reference them. Full caches use seven reserved masks.
-const std = @import("std");
 const Grid = @import("BoxGrid.zig");
 const Slot = @import("GlyphSlot.zig");
 const Entry = @import("BoxCacheEntry.zig");

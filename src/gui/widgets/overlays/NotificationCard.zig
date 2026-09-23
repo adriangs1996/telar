@@ -1,7 +1,6 @@
 //! One native card. Text and semantic state are borrowed only while drawing.
 const shared_model = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 const core = @import("telar-core");
 const Canvas = @import("../Canvas.zig");
 const Rect = @import("../../render/Rect.zig");

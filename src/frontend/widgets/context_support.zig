@@ -2,7 +2,6 @@
 
 const core = @import("telar-core");
 const data = @import("model");
-const client = @import("telar-client");
 const GenericHits = @import("../ui/GenericHits.zig").Type;
 const std = @import("std");
 const Plan = @import("../ui/Plan.zig");

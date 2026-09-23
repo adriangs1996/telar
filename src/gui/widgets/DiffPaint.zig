@@ -2,7 +2,6 @@
 const data = @import("model");
 const TextFit = @import("TextFit.zig");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");

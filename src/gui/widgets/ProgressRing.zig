@@ -1,7 +1,6 @@
 //! A circular progress stroke composed from bounded, antialiased round quads.
 const data = @import("model");
 const QuadList = @import("../render/QuadList.zig");
-const client = @import("telar-client");
 const std = @import("std");
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");

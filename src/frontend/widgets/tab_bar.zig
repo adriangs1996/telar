@@ -2,7 +2,6 @@
 
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Context = @import("Context.zig");
 const Label = @import("Label.zig");
 const widget = @import("context_support.zig");

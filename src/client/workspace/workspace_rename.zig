@@ -2,7 +2,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const Client = @import("../execution/Client.zig");
 
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try workspace_rename.sendWorkspaceRenameRequest(client, rename);`

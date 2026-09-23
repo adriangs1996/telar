@@ -14,10 +14,3 @@ pub const Outcome = union(enum) {
     stale,
     failed: anyerror,
 };
-
-fn contentWith(text: []const u8) data.Content {
-    var content: data.Content = .{};
-    content.append(.{ .text = text }) catch unreachable;
-
-    return content;
-}

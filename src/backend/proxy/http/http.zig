@@ -22,12 +22,10 @@ const middleware = @import("../middleware.zig");
 const TransformPipeline = @import("../TransformPipeline.zig");
 const ConnectionIntegration = @import("ConnectionIntegration.zig");
 
-pub const max_head_bytes = head.max_bytes;
 pub const max_chunk_line_bytes = body.max_chunk_line_bytes;
 pub const Message = @import("Message.zig");
 pub const Framing = types.BodyPlan;
 pub const Head = @import("Head.zig");
-pub const BodyFragment = @import("Fragment.zig");
 pub const BodyRoute = @import("Route.zig");
 pub const BodyPlan = types.BodyPlan;
 pub const RequestClass = provider.RequestClass;

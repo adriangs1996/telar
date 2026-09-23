@@ -5,7 +5,6 @@ const native = @import("../native/native.zig");
 const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
-const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("ChromeFixture.zig");
 const ConfigFixture = @import("ConfigurationFixture.zig");

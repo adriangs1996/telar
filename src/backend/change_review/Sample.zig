@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const std = @import("std");
 identity: [32]u8,
 path: [core.change_review.max_path_bytes]u8 = undefined,
 path_len: u16,

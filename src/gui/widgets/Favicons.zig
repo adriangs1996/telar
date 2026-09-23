@@ -8,7 +8,6 @@
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const SpritePage = @import("../image/SpritePage.zig");
 const Sprite = @import("../image/Sprite.zig");
 const Entry = @import("FaviconEntry.zig");

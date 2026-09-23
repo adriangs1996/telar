@@ -1,7 +1,6 @@
 //! Lays three Lua-configured bar slots left, centre and right in one cell
 //! row lent to the status bar's pixel band.
 const data = @import("model");
-const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const LentRow = @import("LentRow.zig");

@@ -25,7 +25,6 @@ pub const c = @cImport({
     @cInclude("nghttp2/nghttp2.h");
 });
 
-pub const frame_header_len = framing.header_bytes;
 pub const client_preface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 pub const max_header_block_bytes = 128 * 1024;
 pub const max_tracked_streams = stream_state.max_tracked_streams;

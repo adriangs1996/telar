@@ -1,6 +1,5 @@
 //! Bounded presentation rows. Work is folded without changing the transcript.
 const data = @import("model");
-const client = @import("telar-client");
 const std = @import("std");
 const View = @import("ThreadItemView.zig");
 const State = @import("interaction/State.zig");

@@ -41,13 +41,3 @@ pub const CompletionDirective = enum {
     continue_client,
     exit_client,
 };
-
-fn successfulCommand(execution_id: model_data.PluginExecutionId, batch: *const model_data.EffectBatch) CompletionCommand {
-    return .{ .succeeded = .{
-        .execution_id = execution_id,
-        .package_index = 0,
-        .plugin_id = 9,
-        .digest = @splat(7),
-        .batch = batch,
-    } };
-}

@@ -5,7 +5,6 @@ const event_module = @import("../../input/event.zig");
 const key_owner = @import("key_owner.zig");
 const data = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 const Key = @import("../../input/KeyInput.zig");
 const Pointer = @import("../../input/PointerEvent.zig");
 const Id = @import("Id.zig");

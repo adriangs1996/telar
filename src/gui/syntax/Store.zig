@@ -1,6 +1,5 @@
 //! Bounded content cache. Source bytes, not theme or addresses, identify a job.
 const data = @import("model");
-const client = @import("telar-client");
 const std = @import("std");
 const Entry = @import("Entry.zig");
 const Job = @import("Job.zig");

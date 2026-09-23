@@ -2,16 +2,12 @@
 //! binds one heap-stable client so workers complete through its event loop.
 
 const tab_drag = @import("../input/tab_drag.zig");
-const SidebarRendererInput = @import("../../graphics/SidebarRendererInput.zig");
 const client_module = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
 const TerminalAdapter = @import("../TerminalAdapter.zig");
-const platform = @import("../../platform/platform.zig");
-const host_inputs = @import("../input/host_inputs.zig");
 const history_inspection = @import("../presentation/history_inspection.zig");
 const term = @import("../../presentation/screen_support.zig");
-const std = @import("std");
 
 /// Example: `client.graphics = host_ports.graphicsRetention(terminal);`.
 pub fn graphicsRetention(terminal: *TerminalAdapter) client_module.GraphicsRetention {

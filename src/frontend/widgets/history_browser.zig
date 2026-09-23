@@ -3,7 +3,6 @@
 
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Context = @import("Context.zig");
 const HistoryBrowserInput = @import("HistoryBrowserInput.zig");
 const GotoPickerOutput = @import("GotoPickerOutput.zig");

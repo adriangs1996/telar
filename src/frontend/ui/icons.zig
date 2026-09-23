@@ -6,7 +6,6 @@
 //! selected icon face independent of the host terminal font.
 
 const data = @import("model");
-const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
 

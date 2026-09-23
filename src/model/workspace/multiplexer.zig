@@ -2,8 +2,6 @@
 
 const core = @import("telar-core");
 
-pub const PaneIndex = core.GenericSlotIndex(core.max_panes_per_tab * 2);
-
 pub const MetadataChange = enum {
     unchanged,
     stored,

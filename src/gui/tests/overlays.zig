@@ -7,7 +7,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Fixture = @import("OverlayFixture.zig");
 const Modal = @import("../widgets/overlays/Modal.zig");
-const Overlays = @import("../widgets/overlays/Overlays.zig");
 const WrappedLines = @import("../widgets/overlays/WrappedLines.zig");
 const ThreadPane = @import("../widgets/ThreadPane.zig");
 const PointerEvent = @import("../input/PointerEvent.zig");

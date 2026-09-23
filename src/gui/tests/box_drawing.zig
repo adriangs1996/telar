@@ -2,7 +2,6 @@ const data = @import("model");
 const Quad_module = @import("../render/Quad.zig");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Canvas = @import("../widgets/Canvas.zig");

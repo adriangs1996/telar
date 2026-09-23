@@ -1,6 +1,5 @@
 const data = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 const core = @import("telar-core");
 const MetricsLabel = @This();
 

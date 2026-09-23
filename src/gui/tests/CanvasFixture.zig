@@ -3,7 +3,6 @@ const data = @import("model");
 const assets = @import("assets");
 const ChromeMetrics = @import("../widgets/ChromeMetrics.zig");
 const std = @import("std");
-const client = @import("telar-client");
 const GlyphAtlas = @import("../text/GlyphAtlas.zig");
 const QuadList = @import("../render/QuadList.zig");
 const Canvas = @import("../widgets/Canvas.zig");

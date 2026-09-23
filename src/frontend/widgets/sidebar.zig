@@ -5,7 +5,6 @@
 //! navigation action that focuses its pane when that pane is attached.
 
 const core = @import("telar-core");
-const client = @import("telar-client");
 const data = @import("model");
 const Context = @import("Context.zig");
 const Semantic = @import("Semantic.zig");

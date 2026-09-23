@@ -1,6 +1,5 @@
 //! Resolved colors passed as data to the isolated diagram renderer.
 const data = @import("model");
-const client = @import("telar-client");
 const colors = @import("../render/cell_colors.zig");
 const Color = @import("../render/Color.zig");
 const Theme = @This();

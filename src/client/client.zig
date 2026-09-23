@@ -1,10 +1,6 @@
 //! Public entrypoint for telar-client.
 
 const data = @import("model");
-const bar_update = @import("config/bar_update.zig");
-const clipboard_image = @import("input/clipboard_image.zig");
-const host = @import("links/host.zig");
-const path_completion = @import("completion/path_completion.zig");
 const local = @import("transport/local.zig");
 const loader = @import("config/loader.zig");
 const plugins = @import("plugins/plugins.zig");
@@ -22,7 +18,6 @@ const window_title = @import("presentation/window_title.zig");
 const markers = @import("attachments/markers.zig");
 const handshake = @import("transport/handshake.zig");
 const action_routing = @import("input/action_routing.zig");
-const command = @import("bars/command.zig");
 const worker = @import("plugins/worker.zig");
 const core = @import("telar-core");
 
@@ -46,13 +41,11 @@ pub const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
 pub const HostChrome = @import("presentation/HostChrome.zig");
 pub const ThreadExpansion = @import("input/ThreadExpansion.zig");
 pub const HostInputSource = @import("input/HostInputSource.zig");
-pub const openHostLink = host.open;
 pub const LocalTime = @import("resources/LocalTime.zig");
 pub const Options = @import("Options.zig");
 pub const Package = @import("plugins/Package.zig");
 pub const AttachmentSnapshot = @import("attachments/AttachmentSnapshot.zig");
 pub const PathCompletionJob = @import("completion/PathCompletionJob.zig");
-pub const runPathCompletion = path_completion.run;
 pub const FaviconCompletion = @import("completion/FaviconCompletion.zig");
 pub const FaviconImage = @import("completion/FaviconImage.zig");
 pub const FaviconJob = @import("completion/FaviconJob.zig");
@@ -149,7 +142,6 @@ pub const performSchema = handshake.performSchema;
 pub const promptContinuesAtCursor = markers.promptContinuesAtCursor;
 pub const render = window_title.render;
 pub const repeatPolicy = action_routing.repeatPolicy;
-pub const runBarCommand = command.run;
 pub const runPluginWorker = worker.run;
 pub const supportsSharedMemory = store.supportsSharedMemory;
 pub const tracked = mouse_protocol.tracked;

@@ -1,6 +1,4 @@
-const data = @import("../model.zig");
 const agent_options_module = @import("agent_options.zig");
-const icons = @import("../layout/icons.zig");
 const std = @import("std");
 const builtin = @import("builtin");
 const DamageRow = @import("DamageRow.zig");
@@ -233,15 +231,6 @@ pub fn setForegroundName(self: *Pane, name: []const u8) bool {
 
 pub fn foregroundName(self: *const Pane) []const u8 {
     return self.foreground_name[0..self.foreground_name_len];
-}
-
-pub fn applicationLabel(self: *const Pane) []const u8 {
-    const name = self.foregroundName();
-    return if (name.len != 0) name else "shell";
-}
-
-pub fn applicationIcon(self: *const Pane) icons.Icon {
-    return icons.Icon.forApplication(self.foregroundName());
 }
 
 /// Replaces a semantic progress report without allocation. Example: _ = pane.setProgress(progress);

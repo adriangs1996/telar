@@ -2,7 +2,6 @@
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const RingFade = @import("RingFade.zig");
 const FrameClock = @import("../animation/FrameClock.zig");
 const RingFades = @This();

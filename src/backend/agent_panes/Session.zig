@@ -185,12 +185,6 @@ pub fn waitForChange(self: *Session, io: std.Io) !void {
     _ = try self.changes.getOne(io);
 }
 
-/// Retains immutable configuration without allocating in the request path.
-/// Example: `const options = session.retainHistoryOptions(); defer options.release();`.
-pub fn retainHistoryOptions(self: *const Session) *HistoryOptions {
-    return self.history_options.retain();
-}
-
 /// Copies conversation and owned metadata from the same publication. A busy
 /// publisher wakes the reader again without blocking the runtime loop.
 /// Example: `if (session.snapshot(io, &value)) |metadata| project(value, metadata);`

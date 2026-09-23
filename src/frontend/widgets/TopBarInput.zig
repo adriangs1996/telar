@@ -1,6 +1,5 @@
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const top_bar = @import("top_bar.zig");
 const Metrics = @import("Metrics.zig");
 const Input = @This();

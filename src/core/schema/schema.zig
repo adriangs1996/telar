@@ -338,7 +338,6 @@ pub const encodeClientLayoutUpdate = layout_module.encodeClientLayoutUpdate;
 pub const encodeClientLayoutSnapshot = layout_module.encodeClientLayoutSnapshot;
 
 pub const RequestCompleted = @import("messages/RequestCompleted.zig");
-pub const ConfigureTerminalColors = TerminalColors;
 pub const encodeConfigureTerminalColors = runtime_module.encodeConfigureTerminalColors;
 pub const RequestRuntimeState = @import("messages/RequestRuntimeState.zig");
 pub const RequestFailed = @import("messages/RequestFailed.zig");

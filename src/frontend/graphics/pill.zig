@@ -5,7 +5,6 @@
 
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Plan = @import("../presentation/Plan.zig");
 const Label = @import("../presentation/Label.zig");
 const std = @import("std");

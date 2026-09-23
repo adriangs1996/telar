@@ -1,7 +1,6 @@
 //! Borrows one pane while enumerating the visible spans of its hovered link.
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Hit = @import("../input/LinkHit.zig");
 const Regions = @This();
 

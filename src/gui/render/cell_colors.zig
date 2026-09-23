@@ -2,7 +2,6 @@
 //! to the host; the window is its own host, so `default` resolves to the
 //! fallback the caller names.
 const data = @import("model");
-const client = @import("telar-client");
 const core = @import("telar-core");
 const Color = @import("Color.zig");
 

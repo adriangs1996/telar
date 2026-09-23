@@ -1,7 +1,6 @@
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Fixture = @import("ConversationFixture.zig");
 const Flow = @import("../widgets/ThreadFlow.zig");
 

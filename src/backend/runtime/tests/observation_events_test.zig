@@ -8,7 +8,6 @@ const Pane = @import("../../pane/Pane.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const agent_identity = @import("../agent_identity.zig");
 const Stats = @import("../../history/Stats.zig");
-const Tracker = @import("../../agent/Tracker.zig");
 const sound_module = @import("../../agent/sound.zig");
 const ResumeSession = @import("../../agent/ResumeSession.zig");
 const SessionReference = @import("../../agent/SessionReference.zig");

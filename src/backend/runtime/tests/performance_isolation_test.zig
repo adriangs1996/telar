@@ -7,7 +7,6 @@ const pane_mod = @import("../../pane/pane_namespace.zig");
 const Cursor = @import("../../pane/Cursor.zig");
 const attachment_mod = @import("../attachment/attachment_namespace.zig");
 const Stats = @import("../../media/Stats.zig");
-const system_metrics = @import("../observability/system_metrics.zig");
 const RequestFixture = @import("RequestFixture.zig");
 const FakeSession = @import("../../proxy/http/FakeSession.zig");
 const Session = @import("../../proxy/Session.zig");

@@ -3,7 +3,6 @@
 const core = @import("telar-core");
 const data = @import("model");
 const client_module = @import("telar-client");
-const TerminalAdapter = @import("../TerminalAdapter.zig");
 const TestHarness = @import("TestHarness.zig");
 const Size = @import("../../platform/Size.zig");
 const host_resizes = @import("../host/host_resizes.zig");

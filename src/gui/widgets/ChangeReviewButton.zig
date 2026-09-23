@@ -1,5 +1,4 @@
 const data = @import("model");
-const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const FormButton = @import("FormButton.zig");

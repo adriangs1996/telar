@@ -2,7 +2,6 @@
 //! Tabs have their own widget and leave this slot empty.
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const BarContent = @import("BarContent.zig");
 const MetricsLabel = @import("MetricsLabel.zig");

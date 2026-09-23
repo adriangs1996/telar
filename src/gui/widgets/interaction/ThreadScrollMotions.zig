@@ -2,7 +2,6 @@
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Entry = @import("ThreadScrollMotion.zig");
 const Clock = @import("../../animation/FrameClock.zig");
 const Target = @import("Target.zig");

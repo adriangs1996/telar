@@ -7,7 +7,6 @@
 const types = @import("../../agent/types.zig");
 const request = @import("request_support.zig");
 const dialect_mod = @import("dialect.zig");
-const claude_transport = @import("claude_transport.zig");
 const std = @import("std");
 const sse = @import("../sse.zig");
 const claude = @import("claude.zig");
@@ -18,10 +17,6 @@ pub const Request = @import("Request.zig");
 pub const RequestClass = request.RequestClass;
 pub const identify = dialect_mod.identify;
 pub const classify = request.classify;
-pub const RequestObserver = @import("Observer.zig");
-pub const RequestFragment = @import("Fragment.zig");
-pub const RequestStreams = @import("Streams.zig");
-pub const claudeRequestTransformer = claude_transport.requestTransformer;
 
 pub const max_concurrent_responses = 128;
 

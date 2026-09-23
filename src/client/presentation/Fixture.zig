@@ -3,7 +3,6 @@ const model_data = @import("model");
 const Client = @import("../execution/Client.zig");
 const core = @import("telar-core");
 const presentation_delivery = @import("../connection/presentation_delivery.zig");
-const TransportState = @import("../connection/RuntimeTransportState.zig");
 const Credit = @import("../graphics/Credit.zig");
 const HeadlessAdapter = @import("HeadlessAdapter.zig");
 const retained_module = @import("../graphics/retained.zig");

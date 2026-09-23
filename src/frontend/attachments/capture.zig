@@ -1,6 +1,5 @@
 //! Clipboard platform adapter; no preview store or terminal rendering.
 
-const client = @import("telar-client");
 const data = @import("model");
 const builtin = @import("builtin");
 const std = @import("std");

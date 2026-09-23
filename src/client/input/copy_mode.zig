@@ -3,7 +3,6 @@
 const data = @import("model");
 const copy_mode_tests = @import("../copy_mode_tests.zig");
 const core = @import("telar-core");
-const runtime_io = @import("../connection/runtime_io.zig");
 const name_prompt = @import("name_prompt.zig");
 const link_opening = @import("../links/link_opening.zig");
 const pane_viewport = @import("../panes/pane_viewport.zig");

@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const client_tests = @import("../execution/client_tests.zig");
 const config_adoption = @import("../config/config_adoption.zig");
-const runtime_io = @import("runtime_io.zig");
 const copy_mode = @import("../input/copy_mode.zig");
 const history_palette = @import("../input/history_palette.zig");
 const name_prompt = @import("../input/name_prompt.zig");

@@ -8,7 +8,6 @@ const Target = @import("Target.zig");
 const Position = @import("ThreadTextPosition.zig");
 const Geometry = @import("ThreadTextGeometry.zig");
 const message_links = @import("message_links.zig");
-const Selection = @import("ThreadSelection.zig");
 const Route = @import("Route.zig");
 const PointerEvent = @import("../../input/PointerEvent.zig");
 const KeyInput = @import("../../input/KeyInput.zig");

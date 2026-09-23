@@ -7,8 +7,6 @@ const Attachment = @import("../attachment/Attachment.zig");
 
 const frame_buffer_size = 16 * 1024;
 const TestInterval = enum(u64) { elapsed = 1, deferred = std.time.ns_per_hour };
-const TestPane = enum(u16) { background = 8 };
-const GraceBudget = enum(u32) { limited = 2 };
 const PreparationBudget = enum(u32) { single = 1 };
 
 fn nextFrame(fixture: *PaneFixture, attachment: *Attachment, buffer: []u8) !?core.FrameView {

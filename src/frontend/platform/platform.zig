@@ -13,7 +13,6 @@
 //! them once the console is asked to, which is step 2's job, so the same bytes
 //! drive every platform and the emitter never branches.
 
-const client = @import("telar-client");
 const builtin = @import("builtin");
 const windows_module = @import("windows.zig");
 const posix = @import("posix.zig");

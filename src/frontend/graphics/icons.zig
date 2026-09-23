@@ -9,7 +9,6 @@
 
 const data = @import("model");
 const assets = @import("assets");
-const client = @import("telar-client");
 const std = @import("std");
 const Mark = @import("../ui/Mark.zig");
 const IconsSlot = @import("IconsSlot.zig");

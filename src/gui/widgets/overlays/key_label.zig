@@ -2,7 +2,6 @@
 //! bar prints prefix hints. Nothing here allocates; callers pass a buffer.
 const data = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 
 pub const max_bytes = 64;
 

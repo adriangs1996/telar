@@ -1,5 +1,3 @@
-const client = @import("telar-client");
-
 const std = @import("std");
 const sequences = @import("sequences.zig");
 

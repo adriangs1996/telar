@@ -7,7 +7,6 @@ const QuadList = @import("../render/QuadList.zig");
 const TerminalRenderer = @import("../render/TerminalRenderer.zig");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Color = @import("../render/Color.zig");
 const Rect = @import("../render/Rect.zig");
 const colors = @import("../render/cell_colors.zig");

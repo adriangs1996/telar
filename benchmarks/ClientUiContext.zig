@@ -1,4 +1,3 @@
-const client = @import("telar-client");
 const frontend = @import("telar-frontend");
 const core = @import("telar-core");
 const data = @import("model");

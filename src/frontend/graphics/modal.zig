@@ -7,7 +7,6 @@
 
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Asset = @import("Asset.zig");
 const ModalRenderKey = @import("ModalRenderKey.zig");
 const std = @import("std");

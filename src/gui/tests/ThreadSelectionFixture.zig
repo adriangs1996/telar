@@ -5,7 +5,6 @@ const ClipboardResult = @import("../input/ClipboardResult.zig");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Session = @import("Session.zig");
 const Target = @import("../widgets/interaction/Target.zig");
 const Fixture = @This();

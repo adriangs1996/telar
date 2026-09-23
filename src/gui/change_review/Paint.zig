@@ -1,7 +1,6 @@
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Widget = @import("Widget.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const Rect = @import("../render/Rect.zig");

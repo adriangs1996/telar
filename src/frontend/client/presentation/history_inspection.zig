@@ -1,7 +1,6 @@
 //! Projects the history inspector's geometry without mutating semantic state.
 
 const data = @import("model");
-const client = @import("telar-client");
 const widget = @import("../../widgets/history_browser.zig");
 
 /// Returns the current inspector's scroll bound, when clamping is needed.

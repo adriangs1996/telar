@@ -6,7 +6,6 @@
 //! fit it; the TLS badge remains while interception or system trust is on.
 
 const data = @import("model");
-const client = @import("telar-client");
 const core = @import("telar-core");
 const Context = @import("Context.zig");
 const TopBarInput = @import("TopBarInput.zig");

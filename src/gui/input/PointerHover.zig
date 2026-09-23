@@ -2,7 +2,6 @@
 const hover_target = @import("hover_target.zig");
 const data = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 const core = @import("telar-core");
 const GuiAdapter = @import("../GuiAdapter.zig");
 const Event = @import("PointerEvent.zig");

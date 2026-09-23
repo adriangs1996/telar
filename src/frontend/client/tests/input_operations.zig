@@ -5,7 +5,6 @@ const std = @import("std");
 const api = @import("telar-client");
 const core = @import("telar-core");
 const TestHarness = @import("TestHarness.zig");
-const TerminalAdapter = @import("../TerminalAdapter.zig");
 const support = @import("support.zig");
 
 fn fillOutbox(client: *api.Client) !void {

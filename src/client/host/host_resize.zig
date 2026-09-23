@@ -4,7 +4,6 @@ const data = @import("model");
 const std = @import("std");
 const pane_graphics = @import("../panes/pane_graphics.zig");
 const client_tests = @import("../execution/client_tests.zig");
-const runtime_io = @import("../connection/runtime_io.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
 const Client = @import("../execution/Client.zig");

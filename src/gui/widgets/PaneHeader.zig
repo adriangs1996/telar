@@ -5,7 +5,6 @@
 //! inside it. The cwd no longer appears here; the top bar shows location.
 const data = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 const Context = @import("Context.zig");
 const Rect = @import("../render/Rect.zig");
 const attention = @import("attention.zig");

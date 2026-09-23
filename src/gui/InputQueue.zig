@@ -3,7 +3,6 @@ const native = @import("native/native.zig");
 const input_item = @import("input_item.zig");
 const data = @import("model");
 const std = @import("std");
-const client = @import("telar-client");
 const event_types = @import("input/event.zig");
 const decode_input = @import("native/decode_input.zig");
 const ReleaseRecovery = @import("input/ReleaseRecovery.zig");

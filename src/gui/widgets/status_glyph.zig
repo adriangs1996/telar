@@ -1,7 +1,6 @@
 //! One glyph and one palette role per agent status, shared by every chrome
 //! surface that shows attention (decisions 6 and P2 of the visual language).
 const data = @import("model");
-const client = @import("telar-client");
 const std = @import("std");
 const core = @import("telar-core");
 

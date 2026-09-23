@@ -3,7 +3,6 @@
 //! involved, so its capacity does not change.
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const PaletteHits = @This();
 
 pub const capacity = 16;

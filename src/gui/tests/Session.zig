@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
 const GuiAdapter = @import("../GuiAdapter.zig");
-const host_ports = @import("../host_ports.zig");
 const workers = @import("../workers.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Session = @This();

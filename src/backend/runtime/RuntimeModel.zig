@@ -21,7 +21,6 @@ const Sampler = @import("observability/Sampler.zig");
 const RuntimeMetrics = @import("observability/RuntimeMetrics.zig");
 const CheckpointWriter = @import("CheckpointWriter.zig");
 const AgentHistoryJobs = @import("AgentHistoryJobs.zig");
-const ClientKey = @import("../history/ClientKey.zig");
 const AgentDisplayStorage = @import("delivery/AgentDisplayStorage.zig");
 /// The authoritative state of one running runtime: singletons as fields and
 /// repeating entities as tables. Physical resources stay in `Resources`.

@@ -5,7 +5,6 @@
 //! into that owner as `PaneKey` values, never as mutable pane pointers.
 
 const core = @import("telar-core");
-const text_search = @import("text_search.zig");
 const std = @import("std");
 const Clock = @import("../history/Clock.zig");
 const vt = @import("ghostty-vt");
@@ -115,8 +114,6 @@ pub fn sanitizeTitle(storage: *[core.max_pane_title_bytes]u8, raw: []const u8) u
 pub const LaunchRecord = @import("LaunchRecord.zig");
 
 pub const TextSearch = @import("Cursor.zig");
-pub const max_search_rows = text_search.max_rows;
-pub const max_search_cols = text_search.max_cols;
 
 pub const SearchResult = @import("SearchResult.zig");
 

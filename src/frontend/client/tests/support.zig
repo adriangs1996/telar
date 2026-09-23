@@ -228,14 +228,6 @@ pub fn installTestingLuaBinding(terminal: *TerminalAdapter, source: []const u8) 
     return configured;
 }
 
-pub const testing_plugin_context: data.CallbackContext = .{
-    .sidebar_visible = true,
-    .tab_count = 1,
-    .active_tab_index = 0,
-    .pane_count = 1,
-    .focused_pane_id = @intFromEnum(TestHarness.bootstrap_pane),
-};
-
 pub fn installTestingPlugin(client: *client_module.Client) !TestingPlugin {
     std.debug.assert(client.plugin_registry == null);
     const manifest = try core.parseManifest(

@@ -1,7 +1,6 @@
 //! One admitted input's bounded opportunity to present newer pane cells.
 const data = @import("model");
 const core = @import("telar-core");
-const client = @import("telar-client");
 const Grace = @This();
 
 pane: data.PresentationCommit.PaneCommit,
