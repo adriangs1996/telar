@@ -14,7 +14,7 @@ pub fn press(app: *client.AttachedClient, mouse: data.Mouse) ?client.ViewInterac
     const view = &TerminalClient.of(app).view;
     const tabs = &view.tab_drag;
     const tab_id = tabs.hits.at(mouse.x, mouse.y) orelse return null;
-    const delivered = app.presentation.deliveredGeometry() orelse return .{ .consumed = true };
+    const delivered = app.presentation.delivered_geometry orelse return .{ .consumed = true };
     const current = client.Geometry.capture(client.capture(&app.model, .{ .geometry = app.geometry() }));
     if (!delivered.matches(&current)) {
         return .{ .consumed = true };

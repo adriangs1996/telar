@@ -52,11 +52,10 @@ const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
 const HostChrome = @import("presentation/HostChrome.zig");
 const AttachmentCatalogPort = @import("attachments/AttachmentCatalogPort.zig");
 const AttachmentShelf = @import("attachments/AttachmentShelf.zig");
-const HostPresentation = @import("presentation/HostPresentation.zig");
+const PresentationLifecycle = @import("presentation/LifecycleState.zig");
 const FaviconRunner = @import("completion/FaviconRunner.zig");
 const Workers = @import("execution/Workers.zig");
 const Message = @import("execution/Message.zig").Message;
-const timers = @import("resources/timers.zig");
 const HostInputSource = @import("input/HostInputSource.zig");
 const ConfigReloadWatcher = @import("resources/ConfigReloadWatcher.zig");
 const Adoption = @import("resources/Adoption.zig");
@@ -99,14 +98,13 @@ list_submission_alternate: bool = false,
 /// Host ports, bound by the adapter before the first event.
 /// Runs client jobs on the adapter's event loop.
 workers: Workers = undefined,
-/// Hosts with a presentation clock schedule their visible animations
-/// themselves; the TUI lets the model tick them.
-animation_clock: timers.AnimationClock = .model,
 graphics: GraphicsRetention = undefined,
 chrome: HostChrome = undefined,
 attachment_catalog: AttachmentCatalogPort = undefined,
 attachment_shelf: AttachmentShelf = undefined,
-presentation: HostPresentation = undefined,
+/// The one presentation in flight and what the host last delivered, shared
+/// by every adapter.
+presentation: PresentationLifecycle = .{},
 /// Bound only by adapters that draw sprites; unset means no favicon lookups.
 favicon_runner: ?FaviconRunner = null,
 host_input_source: HostInputSource = undefined,
@@ -5613,7 +5611,7 @@ fn synchronizeSidebarAnimation(self: *AttachedClient) !sidebar_animation.Activit
 }
 
 fn scheduleSidebarAnimation(self: *AttachedClient) !void {
-    if (self.animation_clock == .host) {
+    if (self.model.host.animation_frame_ns == null) {
         return;
     }
 
@@ -5639,7 +5637,7 @@ fn scheduleNotificationTimer(self: *AttachedClient) !void {
     const now_ns = core.monotonic(self.io);
     const deadline_ns = self.model.notification_center.nextDeadline(
         now_ns,
-        if (self.animation_clock == .host) std.math.maxInt(u64) else self.presentation.frameIntervalNs(),
+        self.model.host.animation_frame_ns orelse std.math.maxInt(u64),
     );
     switch (scheduler.update(self.io, deadline_ns)) {
         .idle, .retained => {},
@@ -5867,8 +5865,11 @@ fn sendPasteMarker(self: *AttachedClient, session: data.PanePasteSession, bounda
 fn recordPaneInput(self: *AttachedClient, started: u64, delivery: ?data.PaneInputDelivery) ?data.PaneInputDelivery {
     const completed = delivery orelse return null;
 
-    if (completed.byte_count != 0 and self.presentation.note_pane_input_fn != null) {
-        self.presentation.notePaneInput(completed.pane_id, core.monotonic(self.io));
+    if (completed.byte_count != 0) {
+        self.model.to_host.pane_input = .{
+            .pane_id = completed.pane_id,
+            .at_ns = core.monotonic(self.io),
+        };
     }
 
     if (comptime core.enabled) {

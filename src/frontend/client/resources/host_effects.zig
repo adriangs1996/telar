@@ -18,6 +18,9 @@ pub fn deliver(client: *client_module.AttachedClient) !void {
         kitty_delivery.invalidatePlacements(&terminal.graphics_store);
     }
 
+    // Terminal frames are paced as a whole, not per pane.
+    effects.pane_input = null;
+
     while (effects.pop()) |effect| {
         switch (effect) {
             .clipboard => {

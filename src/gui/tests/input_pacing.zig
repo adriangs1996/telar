@@ -1,11 +1,8 @@
 const data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
-const core = @import("telar-core");
-const client = @import("telar-client");
 const Session = @import("Session.zig");
 const FramePacer = @import("../FramePacer.zig");
-const host_ports = @import("../host_ports.zig");
 
 const Time = enum(u64) {
     before_input = 99 * std.time.ns_per_ms,
@@ -25,18 +22,13 @@ fn currentPane(session: *const Session) FramePacer.Pane {
     };
 }
 
-// Keep input admission and pane resolution on the production path while
-// replacing its timestamp, so scheduler delays cannot expire a test's grace.
-fn noteInputAtTestTime(context: *anyopaque, pane_id: core.PaneId, _: u64) void {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    host_ports.presentation(app).notePaneInput(pane_id, @intFromEnum(Time.input));
-}
-
 fn begin(session: *Session) !void {
     try session.bootstrap();
     try session.receiveFrame(@intFromEnum(Frame.initial));
     try session.settle();
-    session.gui.app.presentation.note_pane_input_fn = noteInputAtTestTime;
+    // Keep input admission and pane resolution on the production path while
+    // pinning its timestamp, so scheduler delays cannot expire the grace.
+    session.gui.pane_input_time = @intFromEnum(Time.input);
     session.gui.driver.frame_pacer.record(&.{
         currentPane(session),
     }, @intFromEnum(Time.before_input));

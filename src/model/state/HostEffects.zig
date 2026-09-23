@@ -2,6 +2,7 @@
 //! show a notice on the outer terminal, capture clipboard media, drop stale
 //! image placements. The adapter drains it after every event with an
 //! exhaustive switch; a host without a feature writes an empty arm.
+const core = @import("telar-core");
 const std = @import("std");
 const NotificationPayload = @import("../notifications/NotificationPayload.zig");
 const CaptureRequest = @import("../attachments/CaptureRequest.zig");
@@ -26,6 +27,12 @@ clipboard: std.ArrayList(u8) = .empty,
 clipboard_pending: bool = false,
 /// Image placements the host drew are stale and must be redrawn.
 invalidate_placements: bool = false,
+/// The latest input delivered to a pane, so the host can pace the frame
+/// that echoes it.
+pane_input: ?struct {
+    pane_id: core.PaneId,
+    at_ns: u64,
+} = null,
 
 /// Queues one request.
 /// Example: `try model.to_host.push(.{ .capture = request });`

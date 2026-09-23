@@ -39,7 +39,9 @@ metrics: *client.TelemetryMetrics,
 screen: ScreenType,
 compositor: CompositorType,
 pacer: core.Pacer = .{},
-presentation_state: client.PresentationLifecycleState = .{},
+/// The client's one presentation lifecycle, borrowed for the presenter's
+/// life.
+presentation_state: *client.PresentationLifecycleState,
 window_title: StateType = .{},
 draw_pending: bool = false,
 draw_due_ns: u64 = 0,

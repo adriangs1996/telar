@@ -53,18 +53,6 @@ pub fn attachmentShelf(client: *client_module.AttachedClient) client_module.Atta
     };
 }
 
-/// Example: `const port = presentation(app);`.
-pub fn presentation(client: *client_module.AttachedClient) client_module.HostPresentation {
-    return .{
-        .context = client,
-        .note_input_fn = noteInput,
-        .note_pane_input_fn = notePaneInput,
-        .frame_interval_ns_fn = frameIntervalNs,
-        .in_flight_fn = presentationInFlight,
-        .delivered_geometry_fn = deliveredGeometry,
-    };
-}
-
 /// Binds configuration work to its owned worker and completion handoff.
 /// Example: `const port = configWatcher(&loop.configuration);`
 pub fn configWatcher(configuration: *ConfigurationReload) client_module.ConfigReloadWatcher {
@@ -105,17 +93,7 @@ fn consumeGraphicsCredit(context: *anyopaque, credit: client_module.GraphicsCred
     GuiClient.of(client).graphics_store.consumeCredit(credit);
 }
 
-fn deliveredGeometry(context: *anyopaque) ?client_module.Geometry {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    return GuiClient.of(client).lifecycle.delivered_geometry;
-}
-
 fn expectMarkerDeletion(_: *anyopaque, _: data.AttachmentTarget) void {}
-
-fn frameIntervalNs(context: *anyopaque) u64 {
-    _ = context;
-    return std.time.ns_per_s / 60;
-}
 
 fn graphicsIngressVersion(context: *anyopaque) u64 {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
@@ -129,21 +107,6 @@ fn hasPaneGraphics(context: *anyopaque, pane_id: core.PaneId) bool {
 
 fn idAtMarkerDeletion(_: *anyopaque, _: client_module.MarkerScreen, _: data.AttachmentMarkerDeletion) ?data.AttachmentId {
     return null;
-}
-
-fn noteInput(_: *anyopaque, _: u64) void {}
-
-fn notePaneInput(context: *anyopaque, pane_id: core.PaneId, now_ns: u64) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    const gui = GuiClient.of(client);
-    const tab = client.model.tabs.activeSlot() orelse return;
-    const pane = client.model.panes.findInConst(client.model.tabs.location[tab].tab_id, pane_id) orelse return;
-    gui.driver.frame_pacer.noteInput(.{
-        .pane_id = pane.id,
-        .attachment_generation = pane.attachment_generation,
-        .frame_id = pane.applied_frame_id,
-        .attached = pane.attached,
-    }, now_ns);
 }
 
 fn paneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId) bool {
@@ -162,11 +125,6 @@ fn pendingMarkerAtDeletion(_: *anyopaque, _: client_module.MarkerScreen, _: clie
 
 fn planMarkerRemoval(_: *anyopaque, _: data.AttachmentId, _: client_module.MarkerScreen) ?data.MarkerRemoval {
     return null;
-}
-
-fn presentationInFlight(context: *anyopaque) bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    return GuiClient.of(client).lifecycle.active != null;
 }
 
 fn reconcileAttachmentMarkers(_: *anyopaque, _: data.AttachmentTarget, _: client_module.MarkerScreen) ?bool {

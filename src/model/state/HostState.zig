@@ -12,6 +12,9 @@ clipboard_capture: bool = false,
 /// The host draws its sidebar and bars in grid cells, so the workbench is
 /// what they leave. A window draws them in pixels outside the grid.
 grid_chrome: bool = false,
+/// The cadence at which the model ticks visible animations. Null when the
+/// host paces them with its own presentation clock.
+animation_frame_ns: ?u64 = null,
 
 /// Example: `const result = state.hostSize(...);`.
 

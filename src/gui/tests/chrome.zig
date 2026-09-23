@@ -433,7 +433,7 @@ test "native GUI discards failed and stale completions before publishing control
     );
     try std.testing.expectEqual(initial, gui.chrome.presented());
     try std.testing.expect(gui.overlays.presented().modal == null);
-    try std.testing.expect(gui.lifecycle.active != null);
+    try std.testing.expect(gui.app.presentation.active != null);
     try input_support.presented(
         gui,
         first,
@@ -441,7 +441,7 @@ test "native GUI discards failed and stale completions before publishing control
     );
     try std.testing.expectEqual(initial, gui.chrome.presented());
     try std.testing.expect(gui.overlays.presented().modal == null);
-    try std.testing.expect(gui.lifecycle.active == null);
+    try std.testing.expect(gui.app.presentation.active == null);
 
     const next = try session.draw();
     const prepared = gui.chrome.prepared();

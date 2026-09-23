@@ -83,6 +83,9 @@ hostname_len: usize = 0,
 input_queue: InputQueue = .{},
 router: input_routing.Type,
 binding_timeout: client.Scheduler = .{},
+/// Replaces the time of noted pane input; pacing tests pin it so scheduler
+/// delays cannot expire their grace.
+pane_input_time: ?u64 = null,
 binding_target: ?WidgetId = null,
 binding_revision: u64 = 0,
 pointer: PointerState = .{},
@@ -99,7 +102,6 @@ chrome: Chrome = .{},
 /// The sidebar band width preference; the shared model keeps only visibility.
 sidebar: SidebarPreference = .{},
 overlays: Overlays = .{},
-lifecycle: client.PresentationLifecycleState = .{},
 graphics_store: graphics_delivery.Store,
 diagrams: DiagramService,
 syntax: SyntaxService,
@@ -170,7 +172,6 @@ pub fn init(params: client.ClientInit) !*GuiClient {
         .router = &gui.router,
     };
 
-    gui.lifecycle = .{};
     gui.graphics_store = .init(params.gpa);
     gui.diagrams = .init(params.gpa);
 
@@ -190,9 +191,7 @@ pub fn init(params: client.ClientInit) !*GuiClient {
     gui.app.chrome = host_ports.chrome(&gui.app);
     gui.app.attachment_catalog = host_ports.attachmentCatalog(&gui.app);
     gui.app.attachment_shelf = host_ports.attachmentShelf(&gui.app);
-    gui.app.presentation = host_ports.presentation(&gui.app);
     gui.app.workers = host_ports.workers(&gui.app);
-    gui.app.animation_clock = .host;
     gui.app.favicon_runner = host_ports.favicons(&gui.app);
     gui.app.host_input_source = host_ports.hostInput(&gui.app);
     gui.app.config_watcher = host_ports.configWatcher(&gui.driver.configuration);
@@ -206,8 +205,8 @@ pub fn deinit(self: *GuiClient) void {
     self.driver.deinit();
     self.renderer.deinit();
 
-    if (self.lifecycle.active) |flight| {
-        _ = self.lifecycle.complete(flight.token, .cancelled);
+    if (self.app.presentation.active) |flight| {
+        _ = self.app.presentation.complete(flight.token, .cancelled);
     }
 
     self.graphics_store.deinit();
@@ -277,7 +276,7 @@ pub fn windowReady(self: *GuiClient, viewport: native.Viewport) !void {
 /// Negotiates the current viewport against the owned renderer and shared model.
 /// Example: `const size = try gui.resizeViewport(viewport);`
 pub fn resizeViewport(self: *GuiClient, viewport: native.Viewport) !core.TerminalSize {
-    if (self.lifecycle.active != null) {
+    if (self.app.presentation.active != null) {
         return error.PresentationBusy;
     }
 
@@ -297,7 +296,7 @@ pub fn draw(self: *GuiClient, viewport: native.Viewport) !u64 {
         return 0;
     }
 
-    if (self.lifecycle.active != null) {
+    if (self.app.presentation.active != null) {
         return error.PresentationBusy;
     }
 
@@ -320,7 +319,7 @@ pub fn draw(self: *GuiClient, viewport: native.Viewport) !u64 {
     const token = try self.prepare(&self.renderer);
 
     if (token != 0) {
-        self.driver.frame_pacer.record(self.lifecycle.active.?.delivery.commit.slice(), now_ns);
+        self.driver.frame_pacer.record(self.app.presentation.active.?.delivery.commit.slice(), now_ns);
     }
 
     return token;
@@ -370,7 +369,7 @@ fn now(self: *const GuiClient) u64 {
 /// Example: `const delay = gui.wakeupAfter();`
 pub fn wakeupAfter(self: *const GuiClient) u32 {
     const now_ns = self.now();
-    const widgets = if (self.lifecycle.active == null) self.chrome.animation.wakeupAfter(now_ns) else 0;
+    const widgets = if (self.app.presentation.active == null) self.chrome.animation.wakeupAfter(now_ns) else 0;
     return FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets);
 }
 
@@ -543,11 +542,11 @@ pub fn update(self: *GuiClient) !?u8 {
     }
 
     self.cursor_clock.observe(self.cursorTarget(), now_ns);
-    _ = self.lifecycle.observe(self.observation());
+    _ = self.app.presentation.observe(self.observation());
     self.needs_draw = false;
-    if (self.lifecycle.active == null) {
+    if (self.app.presentation.active == null) {
         const animation_due = self.chrome.animation.requestPreparation(now_ns);
-        self.needs_draw = self.lifecycle.needsPreparation() or animation_due or
+        self.needs_draw = self.app.presentation.needsPreparation() or animation_due or
             self.driver.configuration.pending or
             self.renderer.cursor_on != self.cursor_clock.shown(now_ns) or
             self.renderer.focused != self.cursor_clock.focused;
@@ -695,7 +694,6 @@ fn drainInput(self: *GuiClient) !void {
     const pending = self.router.prefixPending();
 
     while (!self.stopped and pending_input.len != 0 and app.runtime_transport.outbox.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots) and budget.take(app.io)) {
-        app.presentation.noteInput(client.monotonic(app.io));
         const overflows = self.router.leaseOverflowCount();
 
         switch (pending_input.front().?.*) {
@@ -1275,7 +1273,7 @@ fn releasePointer(self: *GuiClient) !void {
 /// Example: `const current = gui.pointerGeometryMatches();`
 pub fn pointerGeometryMatches(self: *const GuiClient) bool {
     const app = &self.app;
-    const delivered = app.presentation.deliveredGeometry() orelse return false;
+    const delivered = app.presentation.delivered_geometry orelse return false;
     const snapshot = client.capture(
         &app.model,
         .{
@@ -1404,12 +1402,29 @@ pub fn requestClipboardRead(self: *GuiClient, target_id: u64, generation: u64) !
 
 /// Copies selected UTF-8 before the native host drains the request.
 /// Example: `try gui.requestClipboardWrite(selection);`
+/// Lets the frame pacer hurry the frame that echoes input to a visible pane.
+fn notePaneInput(self: *GuiClient, pane_id: core.PaneId, at_ns: u64) void {
+    const model = &self.app.model;
+    const tab = model.tabs.activeSlot() orelse return;
+    const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, pane_id) orelse return;
+    self.driver.frame_pacer.noteInput(.{
+        .pane_id = pane.id,
+        .attachment_generation = pane.attachment_generation,
+        .frame_id = pane.applied_frame_id,
+        .attached = pane.attached,
+    }, at_ns);
+}
+
 /// Delivers the host requests the shared client left in `model.to_host`.
 /// The window has no outer terminal and no media capture, and it redraws
 /// every image placement each frame.
 fn deliverHostEffects(self: *GuiClient) !void {
     const effects = &self.app.model.to_host;
     _ = effects.takePlacementInvalidation();
+    if (effects.pane_input) |pane_input| {
+        effects.pane_input = null;
+        self.notePaneInput(pane_input.pane_id, self.pane_input_time orelse pane_input.at_ns);
+    }
 
     while (effects.pop()) |effect| {
         switch (effect) {
@@ -1579,7 +1594,7 @@ pub fn resize(self: *GuiClient, size: core.TerminalSize, theme: shared_model.Ter
 /// Retires captured damage after GPU delivery, preserving newer received state.
 fn complete(self: *GuiClient, token: u64, delivered: bool) !void {
     core.profiling.add(.gui_complete, 1);
-    const active = self.lifecycle.active orelse return;
+    const active = self.app.presentation.active orelse return;
 
     if (token == 0 or token != @intFromEnum(active.token)) {
         return;
@@ -1596,7 +1611,7 @@ fn complete(self: *GuiClient, token: u64, delivered: bool) !void {
 
     widget_routing.reconcileFocus(self);
     self.pointer.hover.present(delivered);
-    const delivery = self.lifecycle.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
+    const delivery = self.app.presentation.complete(@enumFromInt(token), if (delivered) .delivered else .failed) orelse return;
     try client.presentation_delivery.apply(&self.app, delivery.commit);
 
     if (delivered) {
@@ -1630,7 +1645,7 @@ fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
         self.widgets.tab_drop_pending = null;
     }
 
-    if (self.lifecycle.active != null) {
+    if (self.app.presentation.active != null) {
         return error.PresentationBusy;
     }
 
@@ -1646,7 +1661,7 @@ fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
     try self.resolveFavicons(renderer);
     const projected = self.projection();
     const observed = self.observation();
-    _ = self.lifecycle.observe(observed);
+    _ = self.app.presentation.observe(observed);
     var scene: Scene = .{
         .terminal = renderer,
         .chrome = &self.chrome,
@@ -1675,7 +1690,7 @@ fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
         self.chrome.invalidate();
     }
 
-    const token = try self.lifecycle.begin(
+    const token = try self.app.presentation.begin(
         .{
             .observation = observed,
             .commit = commit,
@@ -1777,7 +1792,7 @@ pub fn projection(self: *const GuiClient) client.Projection {
 }
 
 /// Captures the revisions used to decide whether another presentation is needed.
-/// Example: `_ = gui.lifecycle.observe(gui.observation());`
+/// Example: `_ = gui.app.presentation.observe(gui.observation());`
 pub fn observation(self: *const GuiClient) client.Observation {
     return .{
         .model = self.app.model.version(),
@@ -1901,7 +1916,7 @@ test "widget draw failure preserves delivered targets and pending pane damage be
     // Inject failure after measurement reserves the production frame budget.
     try std.testing.expectError(error.NativeQuadBudgetExceeded, gui.prepare(&gui.renderer));
     try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.quads.items().len);
-    try std.testing.expect(gui.lifecycle.active == null);
+    try std.testing.expect(gui.app.presentation.active == null);
     try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
     try std.testing.expectEqual(chrome, gui.chrome.presented());
     try std.testing.expectEqual(overlays, gui.overlays.presented());

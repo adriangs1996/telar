@@ -73,7 +73,7 @@ pub fn poll(reload: *Reload, _: *client.AttachedClient) !void {
 /// Applies one complete generation at the native consumer boundary.
 /// Example: `const changed = try reload.apply(gui, &renderer);`
 pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
-    if (!reload.pending or gui.lifecycle.active != null) {
+    if (!reload.pending or gui.app.presentation.active != null) {
         return false;
     }
 

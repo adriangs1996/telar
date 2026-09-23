@@ -3,6 +3,7 @@
 //! state in place, then binds every host port to this heap-stable value.
 
 const client_module = @import("telar-client");
+const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
 const Params = @import("Params.zig");
@@ -136,11 +137,11 @@ pub fn init(params: Params) !*TerminalClient {
     const client = &terminal.app;
     client.model.host.clipboard_capture = capture_module.platformSupported();
     client.model.host.grid_chrome = true;
+    client.model.host.animation_frame_ns = core.pace.default_interval;
     client.graphics = host_ports.graphicsRetention(client);
     client.chrome = host_ports.chrome(client);
     client.attachment_catalog = host_ports.attachmentCatalog(client);
     client.attachment_shelf = host_ports.attachmentShelf(client);
-    client.presentation = host_ports.presentation(client);
     client.workers = host_ports.workers(client);
     client.host_input_source = host_ports.hostInput(client);
     client.config_watcher = host_ports.configWatcher(client);
@@ -155,6 +156,7 @@ pub fn init(params: Params) !*TerminalClient {
             .media = scheduleMedia,
         },
         .metrics = &terminal.app.telemetry.metrics,
+        .presentation_state = &terminal.app.presentation,
         .screen = screen,
         .compositor = .init(gpa),
     };

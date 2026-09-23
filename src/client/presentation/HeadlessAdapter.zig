@@ -9,7 +9,8 @@ const GeometryType = @import("Geometry.zig");
 const DeliveryType = @import("PresentationDelivery.zig");
 const Adapter = @This();
 
-state: LifecycleState = .{},
+/// The client's presentation lifecycle, borrowed.
+state: *LifecycleState,
 frame: Frame = .{},
 busy: bool = false,
 fail_preparation: bool = false,

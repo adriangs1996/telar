@@ -221,41 +221,6 @@ fn attachmentReservation(context: *anyopaque) ?data.PaneBottomReservation {
     return TerminalClient.of(client).view.attachmentReservation();
 }
 
-/// Example: `client.presentation = host_ports.presentation(client);`.
-pub fn presentation(client: *client_module.AttachedClient) client_module.HostPresentation {
-    return .{
-        .context = client,
-        .note_input_fn = noteInput,
-        .frame_interval_ns_fn = frameIntervalNs,
-        .in_flight_fn = presentationInFlight,
-        .delivered_geometry_fn = deliveredGeometry,
-    };
-}
-
-fn noteInput(context: *anyopaque, now_ns: u64) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    TerminalClient.of(client).presenter.noteInput(now_ns);
-}
-
-fn frameIntervalNs(context: *anyopaque) u64 {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    return TerminalClient.of(client).presenter.pacer.interval;
-}
-
-fn presentationInFlight(context: *anyopaque) bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    return TerminalClient.of(client).presenter.presentation_state.active != null;
-}
-
-fn deliveredGeometry(context: *anyopaque) ?client_module.Geometry {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    return TerminalClient.of(client).presenter.presentation_state.delivered_geometry;
-}
-
 /// Example: `client.host_input_source = host_ports.hostInput(client);`.
 pub fn hostInput(client: *client_module.AttachedClient) client_module.HostInputSource {
     return .{

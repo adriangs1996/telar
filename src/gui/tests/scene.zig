@@ -126,7 +126,7 @@ test "native scene captures terminal and thread damage in the same presentation"
     const layout = &session.gui.app.model.tabs.layout[session.gui.app.model.tabs.active];
     try std.testing.expect(layout.setSurface(pane.id, .thread));
     const token = try session.draw();
-    const commit = session.gui.lifecycle.active.?.delivery.commit;
+    const commit = session.gui.app.presentation.active.?.delivery.commit;
     try std.testing.expectEqual(@as(u8, 1), commit.len);
     try std.testing.expectEqual(pane.id, commit.panes[0].pane_id);
     try std.testing.expect(session.gui.renderer.quads.items().len > 0);
@@ -180,8 +180,8 @@ test "native prefix and chrome hover invalidate presentation without changing mo
     try input_support.acceptNative(session.gui, .{ .kind = 4, .code = 'b', .mods = 4 });
     try input_support.pump(session.gui);
     try std.testing.expectEqualDeep(version, session.gui.app.model.version());
-    _ = session.gui.lifecycle.observe(session.gui.observation());
-    try std.testing.expect(session.gui.lifecycle.needsPreparation());
+    _ = session.gui.app.presentation.observe(session.gui.observation());
+    try std.testing.expect(session.gui.app.presentation.needsPreparation());
     try std.testing.expect(session.gui.projection().status_mode == .prefix);
     const prefix = try session.draw();
     try input_support.presented(
@@ -191,7 +191,7 @@ test "native prefix and chrome hover invalidate presentation without changing mo
     );
     try session.settle();
     _ = session.gui.chrome.pointer(.{ .x = 0, .y = 0, .kind = .move });
-    _ = session.gui.lifecycle.observe(session.gui.observation());
-    try std.testing.expect(session.gui.lifecycle.needsPreparation());
+    _ = session.gui.app.presentation.observe(session.gui.observation());
+    try std.testing.expect(session.gui.app.presentation.needsPreparation());
     try std.testing.expectEqualDeep(version, session.gui.app.model.version());
 }

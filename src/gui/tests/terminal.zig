@@ -333,7 +333,7 @@ test "native terminal acknowledges received patches while presentation is busy o
         first,
         true,
     );
-    try std.testing.expectEqual(retry, @intFromEnum(session.gui.lifecycle.active.?.token));
+    try std.testing.expectEqual(retry, @intFromEnum(session.gui.app.presentation.active.?.token));
     try input_support.presented(
         session.gui,
         retry,
@@ -393,7 +393,7 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
     const second: core.PaneId = @enumFromInt(11);
     try data.pane_split.split(&session.gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = second, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
     const token = try session.draw();
-    const commit = session.gui.lifecycle.active.?.delivery.commit;
+    const commit = session.gui.app.presentation.active.?.delivery.commit;
     try std.testing.expectEqual(@as(u8, 2), commit.len);
     try std.testing.expectEqual(Session.pane_id, commit.panes[0].pane_id);
     try std.testing.expectEqual(second, commit.panes[1].pane_id);
@@ -446,7 +446,7 @@ test "native inbox holds input and GPU completion until the consumer runs" {
     @memset(&text, 'z');
     try inbox.post(.{ .presented = .{ .token = token, .delivered = true } });
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
-    try std.testing.expect(session.gui.lifecycle.active != null);
+    try std.testing.expect(session.gui.app.presentation.active != null);
     _ = try session.gui.update();
     try std.testing.expect(session.gui.input_queue.len >= 48);
     try session.settle();
@@ -455,7 +455,7 @@ test "native inbox holds input and GPU completion until the consumer runs" {
         try std.testing.expectEqual(@as(u8, 'x'), byte);
     }
 
-    try std.testing.expect(session.gui.lifecycle.active == null);
+    try std.testing.expect(session.gui.app.presentation.active == null);
     try std.testing.expectEqual(@as(usize, 1), session.ack_count);
     const consumed = inbox.snapshot().consumed;
     _ = try session.gui.update();

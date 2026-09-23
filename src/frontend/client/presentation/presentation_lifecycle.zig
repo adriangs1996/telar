@@ -67,7 +67,7 @@ pub fn presentNow(client: *common.AttachedClient) !void {
 
 fn deliver(client: *common.AttachedClient, token: common.Token) !void {
     const delivery = TerminalClient.of(client).presenter.presentation_state.complete(token, .delivered) orelse return;
-    const geometry = client.presentation.deliveredGeometry();
+    const geometry = client.presentation.delivered_geometry;
     TerminalClient.of(client).view.tab_drag.present(&TerminalClient.of(client).view.hits, if (geometry) |value| if (value.location) |location| location.workspace else null else null);
     try common.presentation_delivery.apply(client, delivery.commit);
     if (delivery.media_pending) {

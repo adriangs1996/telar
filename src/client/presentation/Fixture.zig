@@ -25,7 +25,7 @@ inbox: GenericInbox(headless_event.Message),
 receive_buffer: [64 * 1024]u8 = undefined,
 received: model_data.RuntimeMessage = undefined,
 receive_pending: bool = false,
-adapter: AdapterType = .{},
+adapter: AdapterType = undefined,
 outbox: *model_data.Outbox,
 graphics: retained_module.Store,
 activations: usize = 0,
@@ -63,7 +63,8 @@ pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
     fixture.app.attachment_catalog.visible_target_fn = noTarget;
     fixture.app.host_input_source.context = fixture;
     fixture.app.host_input_source.resume_read_fn = resumeRead;
-    fixture.app.presentation.note_pane_input_fn = null;
+    fixture.adapter = .{ .state = &fixture.app.presentation };
+    fixture.app.model.host.animation_frame_ns = core.pace.default_interval;
     try fixture.arrive();
     return fixture;
 }

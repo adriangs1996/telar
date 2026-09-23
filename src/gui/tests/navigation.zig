@@ -275,7 +275,7 @@ test "native pointer rejects a newer layout even before a GPU flight starts" {
     const tab = app.model.tabs.active;
     session.gui.pointer.configure(.{ 0, 0 }, app.model.host.host_size);
     try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(11), .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&session.gui.app.model).area });
-    try std.testing.expect(!app.presentation.inFlight());
+    try std.testing.expect(app.presentation.active == null);
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = 10, .y = 10 });
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 2, .x = 10, .y = 10 });
     try input_support.pump(session.gui);

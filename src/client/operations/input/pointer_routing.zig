@@ -55,8 +55,8 @@ fn resolve(client: *Client, event: data.Mouse) Authority {
     }
 
     const begins_gesture = event.kind == .press or event.kind == .scroll_up or event.kind == .scroll_down;
-    if (begins_gesture and !captured and client.presentation.inFlight()) {
-        const delivered = client.presentation.deliveredGeometry() orelse return .unavailable;
+    if (begins_gesture and !captured and client.presentation.active != null) {
+        const delivered = client.presentation.delivered_geometry orelse return .unavailable;
         const projection = projection_support.capture(&client.model, .{ .geometry = client.geometry() });
         const current = GeometryType.capture(projection);
         if (!delivered.matches(&current)) {

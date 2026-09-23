@@ -138,7 +138,7 @@ pub fn replayStartup(client: *client_module.AttachedClient) !bool {
 
 fn routeBytes(client: *client_module.AttachedClient, bytes: []const u8) !bool {
     const state = &TerminalClient.of(client).host_input;
-    client.presentation.noteInput(client_module.monotonic(client.io));
+    TerminalClient.of(client).presenter.noteInput(client_module.monotonic(client.io));
     const prefix_was_pending = state.router.prefixPending();
     const lease_overflows_before = state.router.leaseOverflowCount();
     const control = try feed(client, .{
