@@ -13,10 +13,11 @@ get worse.
 
 Measured on `4988caf5`. Record them at the end of every slice.
 
-| Metric | Baseline | After slice 4 |
+| Metric | Baseline | After slice 7 |
 | --- | --- | --- |
-| First-party Zig files under 20 lines | 1,618 of 3,000 | 1,528 of 3,009 |
-| `context: *anyopaque` ports | 192 fields in 82 files | 108 fields in 51 files |
+| First-party Zig files under 20 lines | 1,618 of 3,000 | 1,202 of 2,635 |
+| `context: *anyopaque` ports | 192 fields in 82 files | 108 fields in 50 files |
+| `*Type` import aliases | 1,180 | 18 (each shares its file's name with another declaration) |
 | `TerminalClient.of` / `GuiClient.of` uses (production) | 157 / 24 | 0 / 0 |
 | Fields in the client `Version` | 27 | 27 |
 | Key press to pane input, TUI / GUI | ~26 hops in 10 files / ~36 in 14 | not remeasured |
@@ -51,12 +52,12 @@ that touches it.
 
 ## Slices
 
-1. **Rules and tooling.** Done in this change: the architecture, naming,
-   invariants and source-layout documents; five-parameter limit; private
-   helper types in their owner file; capability lists removed from the client
-   boundary checker. Pending: a codestyle rule that method receivers are
-   named `self`, with an automatic fix. It runs after slices 2 and 3 turn most
-   of today's methods into procedures that take `model`.
+1. **Rules and tooling.** Done: the architecture, naming, invariants and
+   source-layout documents; five-parameter limit; private helper types in
+   their owner file; capability lists removed from the client boundary
+   checker; and `codestyle/receiver-name`, which requires a method's receiver
+   to be `self` and a `ClientModel` or `RuntimeModel` parameter to be `model`,
+   and renames both with `-- --fix`.
 2. **Tabs, panes and layouts in the client.** Done. `Tabs` (ordered rows,
    each with its layout tree) and `Panes` (every pane behind one id index)
    replace `TabsModel`, `Tab` and `MultiplexerModel`; the nested lookups in
@@ -130,5 +131,17 @@ that touches it.
    services because their actors run on worker threads.
 7. **Sweep.** Remaining one-use types fold into their owners, `*Type` aliases
    disappear, and flow documents get their new call chains.
+
+   Done: 386 type files that only one file imported are private types in
+   that file; 1,162 `*Type` aliases are named after their type;
+   `state/types.zig` is gone; the `application/` trees in the model and the
+   client and the client's `operations/` tree are folded into their domain
+   directories; the TUI adapter is arranged by flow (`host/`, `input/`,
+   `session/`, `telemetry/`) instead of `controllers/`, `entrypoints/` and
+   `resources/`; every receiver follows the receiver rule; flow documents
+   name the current files and calls. Left as they are: one-use type files
+   that carry tests, share a name with a declaration of their owner, or are
+   imported inline; historical plans, performance notes and validation
+   records keep the paths of the code they measured.
 
 Slice 6 does not depend on the client slices and can run in parallel.
