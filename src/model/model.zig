@@ -184,6 +184,7 @@ pub const PageResult = @import("state/PageResult.zig");
 pub const Palette = @import("appearance/Palette.zig");
 pub const Pane = @import("panes/Pane.zig");
 pub const Composer = @import("panes/Composer.zig");
+pub const Config = @import("state/Config.zig");
 pub const Panes = @import("panes/Panes.zig");
 pub const PaneAttachment = @import("state/PaneAttachment.zig");
 pub const PaneAttachmentConfirmation = @import("application/panes/PaneAttachmentConfirmation.zig");

@@ -19,6 +19,13 @@ pub fn init(harness: *TestHarness) !void {
 
 /// Example: `try harness.initWithAsyncOutput(true);`.
 pub fn initWithAsyncOutput(harness: *TestHarness, async_output: bool) !void {
+    try harness.initWithOptions(async_output, .{ .arguments = &.{}, .cwd = "/", .endpoint = "" });
+}
+
+/// Starts the client with explicit options, such as a loaded configuration
+/// generation the client adopts.
+/// Example: `try harness.initWithOptions(false, options);`.
+pub fn initWithOptions(harness: *TestHarness, async_output: bool, options: client_module.Options) !void {
     var sockets: [2]std.c.fd_t = undefined;
     if (std.c.socketpair(std.c.AF.UNIX, std.c.SOCK.STREAM, 0, &sockets) != 0) {
         return error.SocketPairFailed;
@@ -46,7 +53,7 @@ pub fn initWithAsyncOutput(harness: *TestHarness, async_output: bool) !void {
         .writer = &harness.sink.writer,
         .async_output = async_output,
         .host_size = .{ .cols = 80, .rows = 24, .cell_width_px = 0, .cell_height_px = 0 },
-        .options = .{ .arguments = &.{}, .cwd = "/", .endpoint = "" },
+        .options = options,
     });
     harness.client = &terminal.app;
     // Every frame goes through the scheduled draw task, so tests observe

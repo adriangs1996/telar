@@ -1012,7 +1012,7 @@ test "agent alert host failure preserves the canonical snapshot and owned notifi
     const initial = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
     _ = try client.handleServerMessage(try core.decodeServer(initial));
     var calls: usize = 0;
-    client.notification_delivery = .system;
+    client.model.config.notification_delivery = .system;
     client.notifier = .{ .context = &calls, .deliver = failHostNotification };
     const changed = try support.encodeTestingAgentSnapshot(&payload, 2, .blocked);
 
@@ -1074,7 +1074,7 @@ test "request failure retains canonical recovery when host notification delivery
         .location = TestHarness.bootstrap_location,
     } });
     var calls: usize = 0;
-    client.notification_delivery = .system;
+    client.model.config.notification_delivery = .system;
     client.notifier = .{ .context = &calls, .deliver = failHostNotification };
     var payload: [256]u8 = undefined;
     const failed = try core.encodeRequestFailed(&payload, .{

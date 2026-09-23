@@ -7,6 +7,7 @@ const AgentPromptIntent = @import("../application/agents/AgentPromptIntent.zig")
 const AgentPane = @import("../panes/Pane.zig");
 const model_namespace = @import("model_namespace.zig");
 const Tabs = @import("../workspace/Tabs.zig");
+const Config = @import("Config.zig");
 const Panes = @import("../panes/Panes.zig");
 const LayoutSnapshot = @import("../workspace/LayoutSnapshot.zig");
 const PendingLayoutRestore = @import("../workspace/PendingLayoutRestore.zig");
@@ -72,6 +73,8 @@ const RemoveTabType = @import("RemoveTab.zig");
 const Model = @This();
 
 gpa: std.mem.Allocator,
+/// Settings adopted from the active configuration generation.
+config: Config = .{},
 tabs: Tabs = .{},
 panes: Panes = .{},
 /// The runtime workspace this client shows; null before arrival and after
@@ -186,12 +189,17 @@ pub fn initInto(self: *Model, gpa: std.mem.Allocator, initial: InitialClientStat
 
     self.* = .{
         .gpa = gpa,
+        .config = initial.config,
         .pane_gaps = initial.pane_gaps,
         .configuration_generation = initial.configuration_generation,
         .bars = .init(initial.bars),
         .host = .{ .host_size = initial.host_size, .host_capabilities = initial.host_capabilities },
         .sidebar_width = @max(model_data.sidebar.minimum_width, initial.sidebar_width),
     };
+
+    std.debug.assert(initial.window_title.len <= self.window_title_template.len);
+    @memcpy(self.window_title_template[0..initial.window_title.len], initial.window_title);
+    self.window_title_template_len = @intCast(initial.window_title.len);
 }
 
 /// Releases all semantic workspace state owned by the model.
@@ -635,6 +643,7 @@ pub fn applyConfiguration(model: *Model, input: ConfigurationInputType) !model_d
     @memcpy(model.window_title_template[0..input.window_title.len], input.window_title);
     model.window_title_template_len = @intCast(input.window_title.len);
 
+    model.config = input.config;
     model.configuration_generation = input.generation;
     model.configuration_revision +%= 1;
 

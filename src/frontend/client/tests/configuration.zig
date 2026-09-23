@@ -984,3 +984,33 @@ test "bar configuration excludes Lua sources from a different model generation" 
     try std.testing.expect(client.bar_updates.nextDeadline() == null);
     try std.testing.expect(!client.bar_updates.scheduler.pending);
 }
+
+test "the configuration a client starts with governs history and notifications before any reload" {
+    var diagnostic: data.Diagnostic = .{};
+    const generation = try client_module.Generation.loadSource(
+        .{
+            .gpa = std.testing.allocator,
+            .io = std.testing.io,
+            .diagnostic = &diagnostic,
+        },
+        .{
+            .source = "return { api_version = 2, client = { history = { match = 'fts', enter = 'run', show_agent_commands = true }, notifications = { delivery = 'system' } } }",
+            .source_name = "@config.lua",
+            .number = 1,
+        },
+    );
+    var harness: TestHarness = undefined;
+    try harness.initWithOptions(false, .{
+        .arguments = &.{},
+        .cwd = "/",
+        .endpoint = "",
+        .lua_generation = generation,
+    });
+    defer harness.deinit();
+
+    const config = harness.client.model.config;
+    try std.testing.expect(config.history_match_fts);
+    try std.testing.expect(config.history_enter_runs);
+    try std.testing.expect(config.history_show_agent_commands);
+    try std.testing.expectEqual(data.NotificationDelivery.system, config.notification_delivery);
+}

@@ -153,7 +153,7 @@ test "history submission sends a complete command longer than its preview" {
     long_entry.command = command;
     const results = try core.encodeHistoryResults(&buffer, .{ .request_id = query.request_id, .entries = &.{long_entry} });
     _ = try client.handleServerMessage(try core.decodeServer(results));
-    client.history_enter_runs = false;
+    client.model.config.history_enter_runs = false;
     _ = try client.inputPrompt(
         .{
             .key = .{

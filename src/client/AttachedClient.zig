@@ -44,6 +44,7 @@ const ClientInit = @import("ClientInit.zig");
 const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
 const TelemetryState = @import("resources/TelemetryState.zig");
 const Generation = @import("config/Generation.zig");
+const Snapshot = @import("config/Snapshot.zig");
 const Registry = @import("plugins/Registry.zig");
 const ConfigReloadState = @import("resources/ConfigReloadState.zig");
 const SoundPort = @import("agents/SoundPort.zig");
@@ -105,18 +106,8 @@ plugin_registry: ?*Registry,
 trust_store: ?*core.TrustStore,
 reload: ConfigReloadState,
 sound_playback: data.SoundPlayback,
-notification_delivery: data.NotificationDelivery = .telar,
-/// Whether the history palette lists automation-submitted commands too.
-history_show_agent_commands: bool = false,
-/// Whether Enter in the history palette runs the command instead of only
-/// pasting it; shift+enter always does the opposite.
-history_enter_runs: bool = false,
-/// Whether the palette uses trigram substring matching instead of the
-/// default fuzzy subsequence matching.
-history_match_fts: bool = false,
 /// Transient: the alternate flag of the list submission being finished.
 list_submission_alternate: bool = false,
-appearance_themes: data.AppearanceThemes = .{},
 clipboard_capture_resources: data.CaptureResources = .{},
 link_opening: data.Opening = .{},
 link_pointer: data.Pointer = .{},
@@ -175,6 +166,13 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
         generation.number
     else
         0;
+    const snapshot: ?*const Snapshot = if (params.options.lua_generation) |generation| &generation.snapshot else null;
+    // The client owns these from here on; `options` keeps no second pointer
+    // that a reload could leave dangling.
+    var options = params.options;
+    options.lua_generation = null;
+    options.plugin_registry = null;
+    options.trust_store = null;
     var runtime_transport_state = try RuntimeTransportState.init(gpa, params.connection);
     errdefer runtime_transport_state.deinit(gpa);
 
@@ -182,7 +180,7 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
         .io = params.io,
         .gpa = gpa,
         .runtime_transport = runtime_transport_state,
-        .options = params.options,
+        .options = options,
         .client_identity = params.client_identity,
         .telemetry = .init(params.io, params.options.endpoint),
         .model = undefined,
@@ -200,6 +198,8 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
         .host_size = host_size,
         .host_capabilities = capabilities,
         .sidebar_width = data.sidebar.default_width,
+        .config = if (snapshot) |value| configFrom(value) else .{},
+        .window_title = if (snapshot) |value| value.windowTitle() else "",
     });
     errdefer client.model.deinit();
     try client.model.history_palette.prepare(gpa);
@@ -3740,8 +3740,8 @@ fn deliverHostCommit(self: *AttachedClient, commit: data.HostCommit) !void {
         if (change.previous.appearance != change.current.appearance and !self.options.theme_locked) {
             const theme = switch (change.current.appearance) {
                 .unknown => null,
-                .light => self.appearance_themes.light,
-                .dark => self.appearance_themes.dark,
+                .light => self.model.config.themes.light,
+                .dark => self.model.config.themes.dark,
             };
 
             if (theme) |value| {
@@ -4991,8 +4991,8 @@ fn beginHistoryPalette(self: *AttachedClient) !bool {
     history_browser.begin(
         &self.model,
         .{
-            .enter_runs = self.history_enter_runs,
-            .match_fuzzy = !self.history_match_fts,
+            .enter_runs = self.model.config.history_enter_runs,
+            .match_fuzzy = !self.model.config.history_match_fts,
         },
     );
     try self.queryHistory("");
@@ -5005,8 +5005,8 @@ fn requestHistoryPage(self: *AttachedClient, query: []const u8) !void {
     var owned: data.OwnedHistoryQuery = .{
         .request_id = request_id,
         .query_len = @intCast(@min(query.len, data.OwnedHistoryQuery.max_query_bytes)),
-        .author = if (self.history_show_agent_commands) .all else .human,
-        .match = if (self.history_match_fts) .fts else .fuzzy,
+        .author = if (self.model.config.history_show_agent_commands) .all else .human,
+        .match = if (self.model.config.history_match_fts) .fts else .fuzzy,
         .limit = core.max_history_results,
         .offset = self.model.history_palette.pending_offset,
         .snapshot_id = self.model.history_palette.snapshot_id,
@@ -5214,11 +5214,11 @@ fn applyRuntimeNotification(self: *AttachedClient, notification: core.Notificati
 /// Surfaces one published notice through the configured host channel. The
 /// in-app center always shows it; the host port owns `terminal` and `system`.
 fn deliverHostNotification(self: *AttachedClient, input: data.NotificationInput) !void {
-    if (self.notification_delivery == .telar) {
+    if (self.model.config.notification_delivery == .telar) {
         return;
     }
 
-    try self.notifier.notify(self.notification_delivery, input);
+    try self.notifier.notify(self.model.config.notification_delivery, input);
 }
 
 /// Advances every notification lifecycle to one monotonic timestamp.
@@ -6312,7 +6312,7 @@ fn finishPromptList(self: *AttachedClient, before: data.PromptListSnapshot) !voi
         .history => try self.pasteHistorySelection(
             .{
                 .selection = before.selection,
-                .run = self.history_enter_runs != before.alternate,
+                .run = self.model.config.history_enter_runs != before.alternate,
             },
         ),
         .suggest => try self.pasteSuggestion(),
@@ -6778,6 +6778,20 @@ fn attachmentPromptContinues(self: *AttachedClient, target: data.AttachmentTarge
 }
 
 /// Adopts one validated generation through the client application boundary.
+/// The client settings one configuration snapshot selects.
+fn configFrom(snapshot: *const Snapshot) data.Config {
+    return .{
+        .notification_delivery = snapshot.notification_delivery,
+        .history_show_agent_commands = snapshot.history_show_agent_commands,
+        .history_enter_runs = snapshot.history_enter_runs,
+        .history_match_fts = snapshot.history_match_fts,
+        .themes = .{
+            .light = snapshot.theme_light,
+            .dark = snapshot.theme_dark,
+        },
+    };
+}
+
 fn adoptConfiguration(self: *AttachedClient, adoption: Adoption) !data.ConfigurationCommit {
     var consumed = false;
     errdefer if (!consumed) adoption.deinit(self.gpa);
@@ -6789,6 +6803,7 @@ fn adoptConfiguration(self: *AttachedClient, adoption: Adoption) !data.Configura
             .pane_gaps = snapshot.pane_gaps,
             .window_title = snapshot.windowTitle(),
             .bars = snapshot.bars.presentation(),
+            .config = configFrom(snapshot),
         },
     );
     _ = self.model.clearDiagnostic();
@@ -6803,14 +6818,6 @@ fn adoptConfiguration(self: *AttachedClient, adoption: Adoption) !data.Configura
     self.host_input_source.adoptBindings(adoption.input);
     self.chrome.adoptSidebarRenderer(adoption.sidebar_rendering);
     self.sound_playback.configure(snapshot.sound);
-    self.notification_delivery = snapshot.notification_delivery;
-    self.history_show_agent_commands = snapshot.history_show_agent_commands;
-    self.history_enter_runs = snapshot.history_enter_runs;
-    self.history_match_fts = snapshot.history_match_fts;
-    self.appearance_themes = .{
-        .light = snapshot.theme_light,
-        .dark = snapshot.theme_dark,
-    };
     consumed = true;
 
     if (previous_generation) |generation| {
