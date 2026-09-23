@@ -3,7 +3,7 @@ const PaneStoreType = @import("../../pane/PaneStore.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
 const TrackerType = @import("../../agent/Tracker.zig");
 const SamplerType = @import("../observability/Sampler.zig");
-const StoreType = @import("../application/Store.zig");
+const ClientLayouts = @import("../ClientLayouts.zig");
 const Sources = @This();
 
 panes: *const PaneStoreType,
@@ -15,7 +15,7 @@ proxy_active: bool,
 proxy_scope: core.ProxyScope = .exact,
 proxy_system_trusted: bool = false,
 home: ?[]const u8,
-client_layouts: ?*StoreType = null,
+client_layouts: ?*ClientLayouts = null,
 /// Wall clock at preparation time; dates agent status ages.
 now_ms: i64 = 0,
 /// The agent snapshot revision clients compare against what they received.

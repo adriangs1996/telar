@@ -17,13 +17,6 @@ pub fn retain(model: *RuntimeModel, session: *Session, update: core.ClientLayout
         return error.ClientLayoutNotSubscribed;
     }
 
-    try model.client_layouts.replace(.{
-        .identity = identity,
-        .layout = update,
-        .sources = .{
-            .panes = &model.panes,
-            .workspaces = &model.workspaces,
-        },
-    });
+    try model.client_layouts.replace(identity, update, &model.panes, &model.workspaces);
     session_checkpoint.noteChange(model);
 }

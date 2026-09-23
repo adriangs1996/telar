@@ -6,7 +6,7 @@ const ServiceSpec = @import("../plugins/ServiceSpec.zig");
 const AgentDescriptionOptions = @import("AgentDescriptionOptions.zig");
 const OptionsType = @import("../engine/Options.zig");
 const IngestTestGate = @import("IngestTestGate.zig");
-const LaunchTestFaultType = @import("application/LaunchTestFault.zig");
+const LaunchTestFaultType = @import("LaunchTestFault.zig");
 const Options = @This();
 
 endpoint: []const u8,

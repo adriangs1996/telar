@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const PaneStore = @import("../pane/PaneStore.zig");
 const event = @import("event.zig");
 const ReviewJobs = @import("../change_review/Jobs.zig");
-const AgentHistoryJobs = @import("application/AgentHistoryJobs.zig");
+const AgentHistoryJobs = @import("AgentHistoryJobs.zig");
 const std = @import("std");
 
 const Tag = std.meta.Tag(event.Event);

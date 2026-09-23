@@ -7,11 +7,11 @@ const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const Pane = @import("../pane/Pane.zig");
 const AttachmentStore = @import("attachment/AttachmentStore.zig");
-const MediaCompletion = @import("entrypoints/events/pane/MediaCompletion.zig");
+const MediaCompletion = @import("events/MediaCompletion.zig");
 const MediaStats = @import("../media/Stats.zig");
-const MediaWork = @import("entrypoints/events/pane/MediaWork.zig");
+const MediaWork = @import("events/MediaWork.zig");
 const attachment_namespace = @import("attachment/attachment_namespace.zig");
-const media_projection = @import("entrypoints/events/pane/media_projection.zig");
+const media_projection = @import("attachment/media_projection.zig");
 const pane_input = @import("pane_input.zig");
 const store_support = @import("client/store_support.zig");
 

@@ -4,9 +4,9 @@
 const change_review = @import("change_review.zig");
 const std = @import("std");
 const Pane = @import("../pane/Pane.zig");
-const Changed = @import("application/AgentThreadChanged.zig");
+const Changed = @import("events/AgentThreadChanged.zig");
 const RuntimeModel = @import("RuntimeModel.zig");
-const identity = @import("application/coordinators/agent_identity.zig");
+const identity = @import("agent_identity.zig");
 const ManagedState = @import("../agent/ManagedState.zig");
 
 const agent_hooks = @import("agent_hooks.zig");

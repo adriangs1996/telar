@@ -7,7 +7,7 @@ const std = @import("std");
 const Options = @import("Options.zig");
 const Runtime = @import("Runtime.zig");
 const Initialization = @import("Initialization.zig");
-const agent_identity = @import("application/coordinators/agent_identity.zig");
+const agent_identity = @import("agent_identity.zig");
 const SessionReferenceType = @import("../agent/SessionReference.zig");
 const PersistenceEncoder = @import("../persistence/Encoder.zig");
 

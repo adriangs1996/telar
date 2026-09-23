@@ -9,7 +9,7 @@ const EngineResponse = @import("../engine/Response.zig");
 const Prompt = @import("../engine/Prompt.zig");
 const Sources = @import("Sources.zig");
 const engine_types = @import("../engine/types.zig");
-const suggestion = @import("application/suggestion.zig");
+const suggestion = @import("suggestion.zig");
 
 /// Submits one bounded prompt to the engine, or replies at once when the
 /// engine is absent or saturated.
@@ -28,11 +28,7 @@ pub fn start(model: *RuntimeModel, session: *Session, request: core.SuggestComma
     var screen_storage: [core.max_pane_text_bytes]u8 = undefined;
     const dump = pane.dumpText(.{ .rows = suggestion.context_rows, .source = .screen }, &screen_storage);
     var prompt_buffer: [engine_types.max_prompt_bytes]u8 = undefined;
-    const prompt = suggestion.buildPrompt(.{
-        .cwd = pane.cwd.slice(),
-        .screen = screen_storage[0..dump.len],
-        .request = request.text,
-    }, &prompt_buffer);
+    const prompt = suggestion.buildPrompt(pane.cwd.slice(), screen_storage[0..dump.len], request.text, &prompt_buffer);
     const purpose: engine_types.Purpose = .{ .suggestion = .{
         .client_id = session.key.id,
         .client_generation = session.key.generation,

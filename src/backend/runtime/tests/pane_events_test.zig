@@ -7,7 +7,7 @@ const core = @import("telar-core");
 const EventFixture = @import("EventFixture.zig");
 const event = @import("../event.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
-const agent_identity = @import("../application/coordinators/agent_identity.zig");
+const agent_identity = @import("../agent_identity.zig");
 
 const WriteKind = enum { input, response };
 

@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const core = @import("telar-core");
-const LaunchTestFault = @import("../application/LaunchTestFault.zig");
+const LaunchTestFault = @import("../LaunchTestFault.zig");
 const RequestFixture = @import("RequestFixture.zig");
 
 const missing_pane: core.PaneId = @enumFromInt(99);

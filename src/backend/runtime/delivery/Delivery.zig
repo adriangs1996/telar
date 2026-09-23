@@ -11,7 +11,7 @@ const QueryResultType = @import("../../history/QueryResult.zig");
 const OutputResultType = @import("../../history/OutputResult.zig");
 const StatsResultType = @import("../../history/StatsResult.zig");
 const runtime_encoder = @import("encoder.zig");
-const SnapshotStorageType = @import("../application/SnapshotStorage.zig");
+const LayoutSnapshotStorage = @import("../LayoutSnapshotStorage.zig");
 const Commit = @import("Commit.zig");
 const Completion = @import("Completion.zig");
 const PreparedType = @import("../attachment/Prepared.zig");
@@ -209,12 +209,9 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     }
 
     if (delivery.runtime_state_requested and !delivery.client_layout_sent) {
-        var storage: SnapshotStorageType = .{};
-        const snapshot: core.ClientLayoutSnapshot = if (sources.client_layouts) |store|
-            store.snapshot(.{
-                .identity = delivery.client_identity,
-                .sources = .{ .panes = sources.panes, .workspaces = workspaces },
-            }, &storage)
+        var storage: LayoutSnapshotStorage = .{};
+        const snapshot: core.ClientLayoutSnapshot = if (sources.client_layouts) |layouts|
+            layouts.snapshot(delivery.client_identity, sources.panes, workspaces, &storage)
         else
             .{ .restored = false };
         return delivery.stage(

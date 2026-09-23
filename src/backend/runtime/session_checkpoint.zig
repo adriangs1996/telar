@@ -10,9 +10,9 @@ const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const CheckpointWriter = @import("CheckpointWriter.zig");
-const WriteJob = @import("application/WriteJob.zig");
-const TestingScheduler = @import("application/TestingScheduler.zig");
-const OwnedWrite = @import("application/OwnedWrite.zig");
+const WriteJob = @import("WriteJob.zig");
+const TestingScheduler = @import("TestingScheduler.zig");
+const OwnedWrite = @import("OwnedWrite.zig");
 const Pane = @import("../pane/Pane.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
 const checkpoint = @import("../persistence/checkpoint.zig");
@@ -475,14 +475,7 @@ fn restoreLayout(model: *RuntimeModel, record: LayoutRecord) !void {
         .update_client_layout => |view| view,
         else => return error.InvalidCheckpoint,
     };
-    try model.client_layouts.replace(.{
-        .identity = @enumFromInt(record.identity),
-        .layout = update,
-        .sources = .{
-            .panes = &model.panes,
-            .workspaces = &model.workspaces,
-        },
-    });
+    try model.client_layouts.replace(@enumFromInt(record.identity), update, &model.panes, &model.workspaces);
 }
 
 fn quarantine(io: std.Io, path: []const u8) void {

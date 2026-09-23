@@ -11,10 +11,10 @@ const Pane = @import("../pane/Pane.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const pane_namespace = @import("../pane/pane_namespace.zig");
 const client_request = @import("client_request.zig");
-const InputCompletion = @import("entrypoints/events/pane/InputCompletion.zig");
-const ResponseCompletion = @import("entrypoints/events/pane/ResponseCompletion.zig");
-const InputWrite = @import("entrypoints/events/pane/InputWrite.zig");
-const ResponseWrite = @import("entrypoints/events/pane/ResponseWrite.zig");
+const InputCompletion = @import("events/InputCompletion.zig");
+const ResponseCompletion = @import("events/ResponseCompletion.zig");
+const InputWrite = @import("events/InputWrite.zig");
+const ResponseWrite = @import("events/ResponseWrite.zig");
 
 const paste_start = "\x1b[200~";
 const paste_end = "\x1b[201~";

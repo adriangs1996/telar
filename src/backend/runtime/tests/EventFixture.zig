@@ -8,7 +8,7 @@ const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const Command = @import("../../pty/Command.zig");
 const event = @import("../event.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
-const ObservationCompletion = @import("../entrypoints/events/pane/ObservationCompletion.zig");
+const ObservationCompletion = @import("../events/ObservationCompletion.zig");
 const EventFixture = @This();
 
 request: RequestFixture,

@@ -4,7 +4,7 @@ const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
 const DeliveryType = @import("../delivery/Delivery.zig");
 const session_support = @import("session_support.zig");
 const PendingPaneFocus = @import("PendingPaneFocus.zig");
-const PendingType = @import("../application/Pending.zig");
+const PendingSearch = @import("PendingSearch.zig");
 const std = @import("std");
 const PendingClientCommand = @import("PendingClientCommand.zig");
 const Session = @This();
@@ -24,7 +24,7 @@ last_input_sequence: u64 = 0,
 pending_client_command: ?PendingClientCommand = null,
 pending_pane_focus: ?PendingPaneFocus = null,
 terminal_colors: core.TerminalColors = .{},
-pending_search: ?PendingType = null,
+pending_search: ?PendingSearch = null,
 search_scheduled: bool = false,
 cell_deadline_ns: ?u64 = null,
 

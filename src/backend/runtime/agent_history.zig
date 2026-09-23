@@ -3,7 +3,7 @@ const client_connection = @import("client_connection.zig");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
-const Job = @import("application/AgentHistoryJob.zig");
+const Job = @import("AgentHistoryJob.zig");
 const PendingFailure = @import("delivery/PendingFailure.zig");
 
 /// Admits a read without retaining the client's wire buffer or a pane pointer.

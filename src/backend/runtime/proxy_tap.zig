@@ -9,7 +9,7 @@ const AgentEvidence = @import("../plugins/AgentEvidence.zig");
 const PluginNotification = @import("../plugins/Notification.zig");
 const PluginResult = @import("../plugins/Result.zig");
 const RecordCommand = @import("../plugins/RecordCommand.zig");
-const agent_identity = @import("application/coordinators/agent_identity.zig");
+const agent_identity = @import("agent_identity.zig");
 const notifications = @import("notifications.zig");
 
 /// Confidence that plugin evidence carries, by the plugin's own grade.

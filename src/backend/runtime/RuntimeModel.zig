@@ -8,7 +8,7 @@ const event = @import("event.zig");
 const Resources = @import("resources/Resources.zig");
 const Options = @import("Options.zig");
 const AgentDescriptionOptions = @import("AgentDescriptionOptions.zig");
-const LaunchTestFault = @import("application/LaunchTestFault.zig");
+const LaunchTestFault = @import("LaunchTestFault.zig");
 const IngestTestGate = @import("IngestTestGate.zig");
 const Store = @import("client/Store.zig");
 const GenericState = @import("client/GenericState.zig").Type;
@@ -16,11 +16,11 @@ const LifecycleState = @import("lifecycle/State.zig");
 const Workspaces = @import("../workspace/Workspaces.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
 const Tracker = @import("../agent/Tracker.zig");
-const ClientLayoutStore = @import("application/Store.zig");
+const ClientLayouts = @import("ClientLayouts.zig");
 const Sampler = @import("observability/Sampler.zig");
 const RuntimeMetrics = @import("observability/RuntimeMetrics.zig");
 const CheckpointWriter = @import("CheckpointWriter.zig");
-const AgentHistoryJobs = @import("application/AgentHistoryJobs.zig");
+const AgentHistoryJobs = @import("AgentHistoryJobs.zig");
 const ClientKey = @import("../history/ClientKey.zig");
 const AgentDisplayStorage = @import("delivery/AgentDisplayStorage.zig");
 /// The authoritative state of one running runtime: singletons as fields and
@@ -52,7 +52,7 @@ shutdown: LifecycleState = .{},
 workspaces: Workspaces = .{},
 panes: PaneStore,
 agents: Tracker = .{},
-client_layouts: ClientLayoutStore = .{},
+client_layouts: ClientLayouts = .{},
 system_metrics: Sampler = .{},
 system_metrics_pending: bool = false,
 metrics: RuntimeMetrics,

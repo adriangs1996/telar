@@ -2,17 +2,17 @@
 const core = @import("telar-core");
 const EditorJob = @import("../editors/Job.zig");
 
-const ClientMessage = @import("ClientMessage.zig");
-const ClientSent = @import("ClientSent.zig");
+const ClientMessage = @import("events/ClientMessage.zig");
+const ClientSent = @import("events/ClientSent.zig");
 const model = @import("../history/model.zig");
-const InputCompletion = @import("entrypoints/events/pane/InputCompletion.zig");
-const ResponseCompletion = @import("entrypoints/events/pane/ResponseCompletion.zig");
-const OutputCompletion = @import("entrypoints/events/pane/OutputCompletion.zig");
-const IngestCompletion = @import("entrypoints/events/pane/IngestCompletion.zig");
-const ObservationCompletion = @import("entrypoints/events/pane/ObservationCompletion.zig");
-const MediaCompletion = @import("entrypoints/events/pane/MediaCompletion.zig");
-const ExitCompletion = @import("entrypoints/events/pane/ExitCompletion.zig");
-const WakeType = @import("application/Wake.zig");
+const InputCompletion = @import("events/InputCompletion.zig");
+const ResponseCompletion = @import("events/ResponseCompletion.zig");
+const OutputCompletion = @import("events/OutputCompletion.zig");
+const IngestCompletion = @import("events/IngestCompletion.zig");
+const ObservationCompletion = @import("events/ObservationCompletion.zig");
+const MediaCompletion = @import("events/MediaCompletion.zig");
+const ExitCompletion = @import("events/ExitCompletion.zig");
+const WakeType = @import("events/Wake.zig");
 const ObservationType = @import("../proxy/Observation.zig");
 const Half = @import("../proxy/capture/Half.zig");
 const ResultType = @import("../plugins/Result.zig");
@@ -46,9 +46,9 @@ pub const Event = union(enum) {
     agent_tick: anyerror!void,
     agent_description: AgentResult,
     engine_response: anyerror!ResponseType,
-    agent_thread_changed: @import("application/AgentThreadChanged.zig"),
+    agent_thread_changed: @import("events/AgentThreadChanged.zig"),
     change_review_completed: *@import("../change_review/Job.zig"),
-    agent_history_completed: *@import("application/AgentHistoryJob.zig"),
+    agent_history_completed: *@import("AgentHistoryJob.zig"),
     metrics_tick: anyerror!void,
     metrics_sampled: SystemMetricsSample,
     checkpoint_written: anyerror!void,

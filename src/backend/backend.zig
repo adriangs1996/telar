@@ -22,7 +22,7 @@ pub const IngestTestGate = @import("runtime/IngestTestGate.zig");
 pub const Initialization = @import("runtime/Initialization.zig");
 pub const InputScanner = @import("history/InputScanner.zig");
 pub const LaunchPhase = model.LaunchPhase;
-pub const LaunchTestFault = @import("runtime/application/LaunchTestFault.zig");
+pub const LaunchTestFault = @import("runtime/LaunchTestFault.zig");
 pub const LocalListener = @import("transport/LocalListener.zig");
 pub const Options = @import("engine/Options.zig");
 pub const Pipeline = @import("media/Pipeline.zig");
@@ -47,7 +47,7 @@ pub const serve = instance.serve;
 test {
     _ = @import("change_review/Service.zig");
     _ = @import("agent_panes/HistoryOptions.zig");
-    _ = @import("runtime/application/AgentHistoryJobs.zig");
+    _ = @import("runtime/AgentHistoryJobs.zig");
     _ = @import("agent/Agent.zig");
     _ = @import("agent/description.zig");
     _ = @import("agent/EventLine.zig");
@@ -170,7 +170,7 @@ test {
     _ = @import("runtime/suggest_command.zig");
     _ = @import("runtime/session_checkpoint.zig");
     _ = @import("runtime/pane_closure.zig");
-    _ = @import("runtime/application/suggestion.zig");
+    _ = @import("runtime/suggestion.zig");
     _ = @import("runtime/attachment/attachment_namespace.zig");
     _ = @import("runtime/attachment/AttachmentStore.zig");
     _ = @import("runtime/change_review.zig");
@@ -190,7 +190,7 @@ test {
     _ = @import("runtime/delivery/delivery_namespace.zig");
     _ = @import("runtime/delivery/encoder.zig");
     _ = @import("runtime/delivery/response_queue.zig");
-    _ = @import("runtime/entrypoints/events/pane/media_projection.zig");
+    _ = @import("runtime/attachment/media_projection.zig");
     _ = @import("runtime/proxy_observation.zig");
     _ = @import("runtime/event.zig");
     _ = @import("runtime/event_loop.zig");

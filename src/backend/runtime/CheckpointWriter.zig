@@ -1,4 +1,4 @@
-const OwnedWrite = @import("application/OwnedWrite.zig");
+const OwnedWrite = @import("OwnedWrite.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
 const std = @import("std");
 /// The session checkpoint's write-behind state: where it goes, whether the

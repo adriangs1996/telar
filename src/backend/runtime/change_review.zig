@@ -271,7 +271,7 @@ fn owner(model: *RuntimeModel, key: PaneKey) !Context {
 }
 
 const RequestFixture = @import("tests/RequestFixture.zig");
-const agent_identity = @import("application/coordinators/agent_identity.zig");
+const agent_identity = @import("agent_identity.zig");
 const SessionReference = @import("../agent/SessionReference.zig");
 
 test "discovery binds a review owner when only its session reference changes" {

@@ -9,7 +9,7 @@ const StatsType = @import("../../media/Stats.zig");
 const shared_transfer_module = @import("../../media/shared_transfer.zig");
 const Frame = @import("Frame.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
-const media_projection = @import("../entrypoints/events/pane/media_projection.zig");
+const media_projection = @import("../attachment/media_projection.zig");
 
 pub fn createChildObject(name: [:0]const u8, pixels: []const u8) !void {
     const fd = std.c.shm_open(

@@ -6,8 +6,7 @@ const pane_mod = @import("../../pane/pane_namespace.zig");
 const CacheType = @import("../../process/Cache.zig");
 const Pane = @import("../../pane/Pane.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
-const ObservationExpectedMetrics = @import("../entrypoints/events/pane/ObservationExpectedMetrics.zig");
-const agent_identity = @import("../application/coordinators/agent_identity.zig");
+const agent_identity = @import("../agent_identity.zig");
 const StatsType = @import("../../history/Stats.zig");
 const TrackerType = @import("../../agent/Tracker.zig");
 const sound_module = @import("../../agent/sound.zig");
@@ -31,6 +30,16 @@ fn nonShellProcessId(pane: *const Pane) u32 {
     const shell = std.math.cast(u32, pane.session.processId()) orelse 1;
     return if (shell == std.math.maxInt(u32)) shell - 1 else shell + 1;
 }
+
+const ObservationExpectedMetrics = struct {
+    inspections: u64 = 0,
+    misses: u64 = 0,
+    input_bytes: u64 = 0,
+    captured: u64 = 0,
+    dropped: u64 = 0,
+    failures: u64 = 0,
+    resets: u64 = 0,
+};
 
 fn expectMetrics(metrics: *const RuntimeMetrics, expected: ObservationExpectedMetrics) !void {
     const actual = if (comptime core.enabled) expected else ObservationExpectedMetrics{};

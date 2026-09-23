@@ -9,7 +9,7 @@ const RuntimeModel = @import("RuntimeModel.zig");
 const Sources = @import("Sources.zig");
 const types = @import("../agent/types.zig");
 const agent_description = @import("agent_description.zig");
-const agent_identity = @import("application/coordinators/agent_identity.zig");
+const agent_identity = @import("agent_identity.zig");
 const middleware = @import("../proxy/middleware.zig");
 const std = @import("std");
 

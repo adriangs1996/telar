@@ -12,14 +12,14 @@ const agent_panes = @import("agent_panes.zig");
 const command_support = @import("../pty/command_support.zig");
 const proxy_mod = @import("../proxy/proxy_namespace.zig");
 const history_model = @import("../history/model.zig");
-const LaunchRequest = @import("application/LaunchRequest.zig");
-const PaneOverrides = @import("application/PaneOverrides.zig");
-const OwnedCommand = @import("application/OwnedCommand.zig");
+const LaunchRequest = @import("LaunchRequest.zig");
+const PaneOverrides = @import("PaneOverrides.zig");
+const OwnedCommand = @import("OwnedCommand.zig");
 const Pane = @import("../pane/Pane.zig");
 const PaneEnvironment = @import("../proxy/PaneEnvironment.zig");
 const ChildEnvironment = @import("../pty/ChildEnvironment.zig");
-const OutputCompletion = @import("entrypoints/events/pane/OutputCompletion.zig");
-const ExitCompletion = @import("entrypoints/events/pane/ExitCompletion.zig");
+const OutputCompletion = @import("events/OutputCompletion.zig");
+const ExitCompletion = @import("events/ExitCompletion.zig");
 const terminal_colors = @import("terminal_colors.zig");
 
 /// Managed agent panes each own a provider process; the bound keeps a
@@ -85,12 +85,7 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
     const proxy = model.resources.proxy.capability();
     const pane_key = try model.panes.allocateKey();
     var pane_overrides: PaneOverrides = .{};
-    const identity_overrides = pane_overrides.build(.{
-        .key = pane_key,
-        .location = request.location,
-        .socket_path = model.socket_path,
-        .executable_path = model.executable_path[0..model.executable_path_len],
-    });
+    const identity_overrides = pane_overrides.build(pane_key, request.location, model.socket_path, model.executable_path[0..model.executable_path_len]);
     var proxy_environment: ?PaneEnvironment = null;
     defer if (proxy_environment) |*owned| owned.deinit();
     var owned_environment: ?ChildEnvironment = null;
@@ -118,12 +113,7 @@ fn launchTerminal(model: *RuntimeModel, request: LaunchRequest) !*Pane {
         break :block &owned_environment.?;
     };
 
-    var command = try OwnedCommand.init(.{
-        .gpa = model.gpa,
-        .launch = request.launch,
-        .cwd_path = request.launch_cwd,
-        .environment = child_environment,
-    });
+    var command = try OwnedCommand.init(model.gpa, request.launch, request.launch_cwd, child_environment);
     defer command.deinit();
 
     const shell = std.mem.span(command.command.file);
@@ -269,15 +259,12 @@ fn abort(model: *RuntimeModel, pane: *Pane, failure: Failure) void {
 test "pane overrides name the runtime socket and the pane's own identity" {
     var overrides: PaneOverrides = .{};
 
-    const entries = overrides.build(.{
-        .key = .{ .id = try core.pane(12), .generation = 3 },
-        .location = .{
-            .workspace = .{ .workspace = @enumFromInt(4) },
-            .tab_id = @enumFromInt(9),
-        },
-        .socket_path = "/tmp/telar.sock",
-        .executable_path = "/opt/telar/bin/telar",
-    });
+    const entries = overrides.build(
+        .{ .id = try core.pane(12), .generation = 3 },
+        .{ .workspace = .{ .workspace = @enumFromInt(4) }, .tab_id = @enumFromInt(9) },
+        "/tmp/telar.sock",
+        "/opt/telar/bin/telar",
+    );
 
     try std.testing.expectEqual(@as(usize, 6), entries.len);
     try std.testing.expectEqualStrings("TELAR_SOCKET_PATH", entries[0].name);

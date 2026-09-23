@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
-const agent_identity = @import("application/coordinators/agent_identity.zig");
+const agent_identity = @import("agent_identity.zig");
 const client_request = @import("client_request.zig");
 
 const Action = union(enum) {
