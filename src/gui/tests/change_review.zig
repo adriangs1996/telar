@@ -405,7 +405,7 @@ test "runtime review loads through its real worker and inbox after the previous 
     const session = try base();
     defer session.deinit();
     const gui = session.gui;
-    gui.app.transport_driver = host_ports.transport(&gui.driver);
+    gui.app.workers = host_ports.workers(&gui.app);
     try gui.app.startRuntimeRead();
     try gui.openChangeReview(Session.pane_id);
     var buffer: [128 * 1024]u8 = undefined;

@@ -260,7 +260,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
 
     try std.testing.expect(client.model.notification_scheduler.pending);
-    switch (try TerminalClient.of(client).inbox.receive()) {
+    switch (try support.receiveClient(client)) {
         .notification_tick => |result| {
             const change = (try client.completeNotificationTick(result)).?;
 
@@ -791,7 +791,7 @@ test "sidebar animation commits model state before the presenter observes it" {
 
     try std.testing.expect(client.model.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(@as(u8, 0), client.model.sidebar_animation_frame);
-    switch (try TerminalClient.of(client).inbox.receive()) {
+    switch (try support.receiveClient(client)) {
         .sidebar_animation_tick => |result| {
             const change = (try client.completeSidebarAnimationTick(result)).?;
 

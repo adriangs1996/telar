@@ -2,7 +2,9 @@
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
+const data = @import("model");
 const GuiClient = @import("../GuiClient.zig");
+const host_ports = @import("../host_ports.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Session = @This();
 
@@ -10,6 +12,8 @@ connection: core.SocketChannel,
 peer: core.SocketChannel,
 gui: *GuiClient,
 pending: ?[]const u8 = null,
+opened_link: ?data.LinkTarget = null,
+link_open_count: usize = 0,
 acknowledgements: [128]core.FrameAck = undefined,
 ack_count: usize = 0,
 input: [4096]u8 = undefined,
@@ -85,7 +89,10 @@ pub fn init() !*Session {
             .scale = 1,
         },
     );
-    session.gui.app.transport_driver = .{ .context = session, .start_read_fn = noRead, .start_send_fn = captureSend };
+    session.gui.app.workers = .{
+        .context = session,
+        .start_fn = startJob,
+    };
     return session;
 }
 
@@ -96,12 +103,23 @@ pub fn deinit(session: *Session) void {
     std.testing.allocator.destroy(session);
 }
 
-fn noRead(_: *anyopaque, _: *client.RuntimeTransportState) !void {}
-
-fn captureSend(context: *anyopaque, _: *client.RuntimeTransportState, bytes: []const u8) !void {
+/// Captures runtime sends and link opens; every other job runs on the real inbox.
+/// Example: `session.gui.app.workers = .{ .context = session, .start_fn = Session.startJob };`
+pub fn startJob(context: *anyopaque, job: client.Job) !void {
     const session: *Session = @ptrCast(@alignCast(context));
-    std.debug.assert(session.pending == null);
-    session.pending = bytes;
+
+    switch (job) {
+        .runtime_read => {},
+        .runtime_send => |send| {
+            std.debug.assert(session.pending == null);
+            session.pending = send.bytes;
+        },
+        .link => |target| {
+            session.opened_link = target;
+            session.link_open_count += 1;
+        },
+        else => try host_ports.workers(&session.gui.app).start(job),
+    }
 }
 
 pub fn settle(session: *Session) !void {

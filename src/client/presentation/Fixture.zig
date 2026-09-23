@@ -9,6 +9,7 @@ const AdapterType = @import("HeadlessAdapter.zig");
 const retained_module = @import("../graphics/retained.zig");
 const StateType = @import("../workspace/State.zig");
 const std = @import("std");
+const Job = @import("../execution/Job.zig").Job;
 const headless_tests = @import("headless_tests.zig");
 const ProjectionType = @import("Projection.zig");
 const projection_support = @import("projection_support.zig");
@@ -56,7 +57,7 @@ pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
     fixture.outbox = &fixture.app.runtime_transport.outbox;
     // Only host boundaries are substituted; server dispatch, input and delivery
     // execute the production operations. Unused host capabilities stay unbound.
-    fixture.app.transport_driver = .{ .context = fixture, .start_read_fn = startRead, .start_send_fn = startSend };
+    fixture.app.workers = .{ .context = fixture, .start_fn = startJob };
     fixture.app.graphics = .{ .context = fixture, .apply_fn = unsupportedGraphics, .clear_pane_fn = clearPane, .set_pane_visible_fn = setVisible, .pane_visible_fn = visible, .has_pane_graphics_fn = hasGraphics, .ingress_version_fn = ingress, .peek_credit_fn = peekCredit, .consume_credit_fn = consumeCredit };
     fixture.app.attachment_shelf.context = fixture;
     fixture.app.attachment_shelf.sync_target_fn = syncTarget;
@@ -172,14 +173,16 @@ fn noTarget(_: *anyopaque) ?model_data.AttachmentTarget {
     return null;
 }
 
-fn startRead(_: *anyopaque, _: *TransportState) !void {
-    return error.HeadlessReadUnsupported;
-}
-
-fn startSend(context: *anyopaque, _: *TransportState, bytes: []const u8) !void {
+fn startJob(context: *anyopaque, job: Job) !void {
     const fixture: *Fixture = @ptrCast(@alignCast(context));
-    std.debug.assert(fixture.pending == null);
-    fixture.pending = bytes;
+    switch (job) {
+        .runtime_send => |send| {
+            std.debug.assert(fixture.pending == null);
+            fixture.pending = send.bytes;
+        },
+        .runtime_read => return error.HeadlessReadUnsupported,
+        else => return error.HeadlessJobUnsupported,
+    }
 }
 
 fn resumeRead(_: *anyopaque) !void {}

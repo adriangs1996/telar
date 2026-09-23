@@ -20,6 +20,7 @@ const pane_mouse_input = @import("operations/input/pane_mouse_inputs.zig");
 const agent_reading = @import("operations/agents/agent_reading.zig");
 const builtin = @import("builtin");
 const config_queries = @import("operations/configuration/config_queries.zig");
+const bar_updates = @import("operations/configuration/bar_updates.zig");
 const attached_client_tests = @import("attached_client_tests.zig");
 const history_browser = @import("operations/input/history_browser.zig");
 const pane_input_module = @import("operations/input/pane_input.zig");
@@ -49,7 +50,6 @@ const Registry = @import("plugins/Registry.zig");
 const ConfigReloadState = @import("resources/ConfigReloadState.zig");
 const SoundPort = @import("agents/SoundPort.zig");
 const HostNotifier = @import("notifications/HostNotifier.zig");
-const LinkOpener = @import("links/LinkOpener.zig");
 const CapturePort = @import("attachments/CapturePort.zig");
 const HostClipboard = @import("operations/panes/Clipboard.zig");
 const HostGraphics = @import("graphics/HostGraphics.zig");
@@ -58,14 +58,12 @@ const HostChrome = @import("presentation/HostChrome.zig");
 const AttachmentCatalogPort = @import("attachments/AttachmentCatalogPort.zig");
 const AttachmentShelf = @import("attachments/AttachmentShelf.zig");
 const HostPresentation = @import("presentation/HostPresentation.zig");
-const HostTimers = @import("resources/HostTimers.zig");
-const BarCommandRunner = @import("bars/BarCommandRunner.zig");
-const PluginWorkerRunner = @import("plugins/PluginWorkerRunner.zig");
-const PathCompletionRunner = @import("completion/PathCompletionRunner.zig");
 const FaviconRunner = @import("completion/FaviconRunner.zig");
 const HostClock = @import("resources/HostClock.zig");
+const Workers = @import("execution/Workers.zig");
+const Message = @import("execution/Message.zig").Message;
+const timers = @import("resources/timers.zig");
 const HostInputSource = @import("input/HostInputSource.zig");
-const TransportDriver = @import("connection/TransportDriver.zig");
 const ConfigReloadWatcher = @import("resources/ConfigReloadWatcher.zig");
 const Adoption = @import("resources/Adoption.zig");
 const ConfiguredPlugins = @import("plugins/ConfiguredPlugins.zig");
@@ -105,9 +103,13 @@ reload: ConfigReloadState,
 /// Transient: the alternate flag of the list submission being finished.
 list_submission_alternate: bool = false,
 /// Host ports, bound by the adapter before the first event.
+/// Runs client jobs on the adapter's event loop.
+workers: Workers = undefined,
+/// Hosts with a presentation clock schedule their visible animations
+/// themselves; the TUI lets the model tick them.
+animation_clock: timers.AnimationClock = .model,
 sound_port: SoundPort = undefined,
 notifier: HostNotifier = undefined,
-link_opener: LinkOpener = undefined,
 capture_port: CapturePort = undefined,
 host_clipboard: HostClipboard = undefined,
 host_graphics: HostGraphics = undefined,
@@ -116,15 +118,10 @@ chrome: HostChrome = undefined,
 attachment_catalog: AttachmentCatalogPort = undefined,
 attachment_shelf: AttachmentShelf = undefined,
 presentation: HostPresentation = undefined,
-timers: HostTimers = undefined,
-bar_runner: BarCommandRunner = undefined,
-plugin_runner: PluginWorkerRunner = undefined,
-path_completion_runner: PathCompletionRunner = undefined,
 /// Bound only by adapters that draw sprites; unset means no favicon lookups.
 favicon_runner: ?FaviconRunner = null,
 clock: HostClock = undefined,
 host_input_source: HostInputSource = undefined,
-transport_driver: TransportDriver = undefined,
 config_watcher: ConfigReloadWatcher = undefined,
 
 /// Builds the shared state in its final address. The model is megabytes, so
@@ -260,6 +257,35 @@ pub fn startRuntimeIo(self: *AttachedClient) !void {
     try self.startRuntimeSend();
 }
 
+/// Handles one client event an adapter delivered and returns an exit
+/// status when the client must stop.
+///
+/// ```zig
+/// if (try app.update(message)) |status| return status;
+/// ```
+pub fn update(self: *AttachedClient, message: Message) !?u8 {
+    const path = core.enter(message.path());
+    defer path.restore();
+
+    switch (message) {
+        .server => |result| return self.receiveRuntime(result),
+        .sent => |result| try self.completeRuntimeSend(result),
+        .sidebar_animation_tick => |result| _ = try self.completeSidebarAnimationTick(result),
+        .notification_tick => |result| _ = try self.completeNotificationTick(result),
+        .bar_tick => |result| try bar_updates.handleTick(self, result),
+        .bar_command => |completion| try bar_updates.completeCommand(self, completion),
+        .plugin_result => |completion| {
+            if (try self.completePluginAction(completion)) {
+                return 0;
+            }
+        },
+        .path_completion => |completion| try self.completePathCompletion(completion),
+        .link_opened => |result| try self.completeLinkOpening(result),
+    }
+
+    return null;
+}
+
 /// Reserves a receive buffer and releases it if the driver rejects the read.
 /// Example: `try client.startRuntimeRead();`
 pub fn startRuntimeRead(self: *AttachedClient) !void {
@@ -268,7 +294,7 @@ pub fn startRuntimeRead(self: *AttachedClient) !void {
         return;
     }
 
-    self.transport_driver.startRead(transport) catch |err| {
+    self.workers.start(.{ .runtime_read = transport }) catch |err| {
         transport.cancelRead();
 
         return err;
@@ -702,9 +728,9 @@ pub fn flushGraphicsCredits(self: *AttachedClient) !void {
 
 /// Commits validated geometry before touching resources. Delivery failure keeps
 /// the committed state; the caller ends the client session.
-/// Example: `_ = try self.applyHostUpdate(update);`
-pub fn applyHostUpdate(self: *AttachedClient, update: data.HostUpdate) !?data.HostCommit {
-    const commit = try self.model.reconcileHost(update) orelse return null;
+/// Example: `_ = try self.applyHostUpdate(host_update);`
+pub fn applyHostUpdate(self: *AttachedClient, host_update: data.HostUpdate) !?data.HostCommit {
+    const commit = try self.model.reconcileHost(host_update) orelse return null;
 
     try self.deliverHostCommit(commit);
 
@@ -811,7 +837,7 @@ pub fn synchronizeBars(self: *AttachedClient) !void {
         },
     );
 
-    try self.timers.rearmBars(self.io, &self.model.bar_updates);
+    try bar_updates.rearm(self.workers, self.io, &self.model.bar_updates);
 }
 
 /// Snapshot the current exclusive keyboard owners without exposing client state.
@@ -1003,7 +1029,7 @@ pub fn completeLinkOpening(self: *AttachedClient, result: anyerror!void) !void {
     }
 
     const next = self.model.link_opening.complete() orelse return;
-    self.link_opener.start(next) catch |err| {
+    self.workers.start(.{ .link = next }) catch |err| {
         self.model.link_opening.schedulingFailed();
         try self.reportLinkFailure(err);
     };
@@ -1612,12 +1638,12 @@ pub fn synchronizeClientLayout(self: *AttachedClient) !void {
 
     var nodes: [core.max_client_layout_nodes]core.ClientLayoutNode = undefined;
     var tabs: [core.max_client_layout_tabs]core.ClientTabLayout = undefined;
-    const update = layout_updates.buildUpdate(
+    const layout_update = layout_updates.buildUpdate(
         &self.model,
         &nodes,
         &tabs,
     ) orelse return;
-    self.sendRuntimeClientLayout(update) catch |err| switch (err) {
+    self.sendRuntimeClientLayout(layout_update) catch |err| switch (err) {
         error.ClientOutboxFull, error.TooManyPendingClientLayouts => return,
         else => return err,
     };
@@ -2280,8 +2306,8 @@ pub fn navigateAgent(self: *AttachedClient, key: data.AgentKey) !AgentNavigation
 /// ```zig
 /// try self.sendRuntimeClientLayout(update);
 /// ```
-fn sendRuntimeClientLayout(self: *AttachedClient, update: core.ClientLayoutUpdate) !void {
-    try self.runtime_transport.outbox.pushClientLayout(update);
+fn sendRuntimeClientLayout(self: *AttachedClient, layout_update: core.ClientLayoutUpdate) !void {
+    try self.runtime_transport.outbox.pushClientLayout(layout_update);
     try self.startRuntimeSend();
 }
 
@@ -2686,7 +2712,7 @@ fn startRuntimeSend(self: *AttachedClient) !void {
     const transport = &self.runtime_transport;
     const payload = try transport.prepareSend() orelse return;
 
-    self.transport_driver.startSend(transport, payload) catch |err| {
+    self.workers.start(.{ .runtime_send = .{ .state = transport, .bytes = payload } }) catch |err| {
         transport.cancelSend();
 
         return err;
@@ -3954,7 +3980,7 @@ fn openLinkFile(self: *AttachedClient, path: data.FilePath) !void {
 fn openExternalLink(self: *AttachedClient, target: data.LinkTarget) !void {
     switch (self.model.link_opening.request(target)) {
         .queued => {},
-        .start => |selected| self.link_opener.start(selected) catch |err| {
+        .start => |selected| self.workers.start(.{ .link = selected }) catch |err| {
             self.model.link_opening.schedulingFailed();
 
             return err;
@@ -5615,7 +5641,7 @@ fn synchronizeSidebarAnimation(self: *AttachedClient) !sidebar_animation.Activit
 }
 
 fn scheduleSidebarAnimation(self: *AttachedClient) !void {
-    if (self.timers.animation_clock == .host) {
+    if (self.animation_clock == .host) {
         return;
     }
 
@@ -5627,7 +5653,7 @@ fn scheduleSidebarAnimation(self: *AttachedClient) !void {
     const deadline_ns = core.monotonic(self.io) +| sidebar_animation_interval_ns;
     switch (scheduler.update(self.io, deadline_ns)) {
         .idle, .retained => {},
-        .schedule => self.timers.arm(.sidebar_animation, scheduler) catch |err| {
+        .schedule => self.workers.start(.{ .timer = .{ .kind = .sidebar_animation, .scheduler = scheduler } }) catch |err| {
             scheduler.schedulingFailed();
             return err;
         },
@@ -5641,11 +5667,11 @@ fn scheduleNotificationTimer(self: *AttachedClient) !void {
     const now_ns = core.monotonic(self.io);
     const deadline_ns = self.model.notification_center.nextDeadline(
         now_ns,
-        if (self.timers.animation_clock == .host) std.math.maxInt(u64) else self.presentation.frameIntervalNs(),
+        if (self.animation_clock == .host) std.math.maxInt(u64) else self.presentation.frameIntervalNs(),
     );
     switch (scheduler.update(self.io, deadline_ns)) {
         .idle, .retained => {},
-        .schedule => self.timers.arm(.notification, scheduler) catch |err| {
+        .schedule => self.workers.start(.{ .timer = .{ .kind = .notification, .scheduler = scheduler } }) catch |err| {
             scheduler.schedulingFailed();
 
             return err;
@@ -7101,12 +7127,10 @@ fn startPluginAction(self: *AttachedClient, requested: data.PluginAction, callba
             std.debug.assert(rolled_back != null);
         }
 
-        try self.plugin_runner.start(
-            .{
-                .execution_id = execution.id,
-                .request = request,
-            },
-        );
+        try self.workers.start(.{ .plugin = .{
+            .execution_id = execution.id,
+            .request = request,
+        } });
     }
 
     return self.reportPluginStart(
@@ -7366,7 +7390,7 @@ fn startPathCompletion(self: *AttachedClient) !void {
     }
 
     const id = completion_state.reserve();
-    self.path_completion_runner.start(.init(id, completion_state.inflightSlice())) catch |err| {
+    self.workers.start(.{ .path_completion = .init(id, completion_state.inflightSlice()) }) catch |err| {
         completion_state.pending = .none;
         return err;
     };

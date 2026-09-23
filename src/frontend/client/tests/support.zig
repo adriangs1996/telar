@@ -6,6 +6,7 @@ const data = @import("model");
 const ResourcesType = @import("../entrypoints/Resources.zig");
 const std = @import("std");
 const TestHarness = @import("TestHarness.zig");
+const TerminalClient = @import("../TerminalClient.zig");
 const TestingPlugin = @import("TestingPlugin.zig");
 
 pub fn clientEventResourcesForTest(heap: *const core.Heap) ResourcesType {
@@ -317,4 +318,14 @@ pub fn reloadConfiguration(client: *client_module.AttachedClient, adoption: clie
         },
     );
     return outcome.adopted;
+}
+
+/// Receives the next inbox event and returns it when it belongs to the
+/// shared client.
+/// Example: `switch (try support.receiveClient(client)) { .sent => |result| try client.completeRuntimeSend(result), else => return error.UnexpectedEvent }`
+pub fn receiveClient(client: *client_module.AttachedClient) !client_module.Message {
+    return switch (try TerminalClient.of(client).inbox.receive()) {
+        .client => |message| message,
+        else => error.UnexpectedEvent,
+    };
 }

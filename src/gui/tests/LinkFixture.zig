@@ -10,8 +10,6 @@ const Event = @import("../native/InputEvent.zig").InputEvent;
 const Fixture = @This();
 
 session: *Session,
-opened: ?data.LinkTarget = null,
-open_count: usize = 0,
 
 pub fn init() !*Fixture {
     const fixture = try std.testing.allocator.create(Fixture);
@@ -22,7 +20,6 @@ pub fn init() !*Fixture {
     try session.bootstrap();
     try session.receiveFrame(1);
     fixture.text("https://a.b");
-    session.gui.app.link_opener = .{ .context = fixture, .open = open };
     try fixture.present();
     session.gui.pointer.configure(session.gui.renderer.origin, session.gui.app.model.host.host_size);
     return fixture;
@@ -72,8 +69,3 @@ pub fn send(fixture: *Fixture, value: Event) !void {
     try fixture.session.settle();
 }
 
-fn open(context: *anyopaque, target: data.LinkTarget) !void {
-    const fixture: *Fixture = @ptrCast(@alignCast(context));
-    fixture.opened = target;
-    fixture.open_count += 1;
-}

@@ -47,7 +47,7 @@ test "host input reads pause at outbox capacity and resume with one token" {
     try host_inputs.scheduleRead(client);
     try std.testing.expect(!TerminalClient.of(client).host_input.read_pending);
 
-    switch (try TerminalClient.of(client).inbox.receive()) {
+    switch (try support.receiveClient(client)) {
         .sent => |result| try client.completeRuntimeSend(result),
         else => return error.UnexpectedEvent,
     }
@@ -79,7 +79,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
         .battery_percent = 0,
     });
     try harness.peer.send(io, metrics);
-    switch (try TerminalClient.of(client).inbox.receive()) {
+    switch (try support.receiveClient(client)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
             try client.receiveRuntime(result),
@@ -90,7 +90,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
     try std.testing.expectEqual(@as(u64, 1), client.model.system_metrics.?.runtime_revision);
 
     try harness.peer.send(io, try core.encodeRuntimeStopping(&payload));
-    switch (try TerminalClient.of(client).inbox.receive()) {
+    switch (try support.receiveClient(client)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, 0),
             try client.receiveRuntime(result),
@@ -137,7 +137,7 @@ test "graphics credits remain owned until the outbox accepts them" {
     try std.testing.expectEqual(@as(usize, 4), TerminalClient.of(client).graphics_store.peekCredit().?.bytes);
     try std.testing.expect(client.runtime_transport.outbox.inFlight());
 
-    switch (try TerminalClient.of(client).inbox.receive()) {
+    switch (try support.receiveClient(client)) {
         .sent => |result| try client.completeRuntimeSend(result),
         else => return error.UnexpectedEvent,
     }

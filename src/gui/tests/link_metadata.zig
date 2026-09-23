@@ -32,8 +32,8 @@ test "native OSC 8 opens its destination and highlights separated runs of the sa
     try std.testing.expect(regions.next() == null);
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 1), fixture.open_count);
-    try std.testing.expectEqualStrings("https://actual.example/docs", fixture.opened.?.uri());
+    try std.testing.expectEqual(@as(usize, 1), fixture.session.link_open_count);
+    try std.testing.expectEqualStrings("https://actual.example/docs", fixture.session.opened_link.?.uri());
 }
 
 test "native OSC 8 never treats an unsafe or omitted destination as the visible URL" {
@@ -58,7 +58,7 @@ test "native OSC 8 never treats an unsafe or omitted destination as the visible 
     gui.pointer.hover.dirty = true;
     try fixture.send(fixture.event(6));
     try std.testing.expect(gui.pointer.hover.link == null);
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
 }
 
 test "native wrapped URLs underline both physical rows and require a VT soft wrap" {
@@ -90,7 +90,7 @@ test "native wrapped URLs underline both physical rows and require a VT soft wra
     try fixture.send(event);
     event.code = 2;
     try fixture.send(event);
-    try std.testing.expectEqualStrings("https://e/path", fixture.opened.?.uri());
+    try std.testing.expectEqualStrings("https://e/path", fixture.session.opened_link.?.uri());
     builder = core.TextMetadataBuilder.init(storage.buffer, pane.buffer.h);
     pane.text_metadata.replace(builder.finish(.complete));
     gui.pointer.hover.dirty = true;
@@ -119,6 +119,6 @@ test "native OSC 8 replacement under a held pointer cancels the original destina
     pane.text_metadata.replace(builder.finish(.complete));
     gui.pointer.hover.dirty = true;
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try std.testing.expectEqualStrings("https://second.example", gui.pointer.hover.link.?.match.target.uri());
 }

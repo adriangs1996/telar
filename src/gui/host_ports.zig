@@ -4,8 +4,7 @@ const data = @import("model");
 const core = @import("telar-core");
 const chrome_module = @import("ports/chrome.zig");
 const host_input = @import("ports/host_input.zig");
-const workers = @import("ports/workers.zig");
-const services = @import("ports/services.zig");
+const worker_ports = @import("ports/workers.zig");
 const std = @import("std");
 const GuiClient = @import("GuiClient.zig");
 const NativeLoop = @import("NativeLoop.zig");
@@ -95,16 +94,6 @@ pub fn presentation(client: *client_module.AttachedClient) client_module.HostPre
 /// Example: `const port = clock(app);`.
 pub fn clock(client: *client_module.AttachedClient) client_module.HostClock {
     return .{ .context = client, .local_time_fn = localTime };
-}
-
-/// Binds runtime I/O directly to the loop that owns its completion tasks.
-/// Example: `const port = transport(loop);`
-pub fn transport(loop: *NativeLoop) client_module.TransportDriver {
-    return .{
-        .context = loop,
-        .start_read_fn = startRuntimeRead,
-        .start_send_fn = startRuntimeSend,
-    };
 }
 
 /// Binds configuration work to its owned worker and completion handoff.
@@ -264,23 +253,6 @@ fn startConfigWatch(context: *anyopaque, args: client_module.ConfigWaitArgs) !vo
     try configuration.schedule(args);
 }
 
-fn startRuntimeRead(context: *anyopaque, state: *client_module.RuntimeTransportState) !void {
-    const loop: *NativeLoop = @ptrCast(@alignCast(context));
-
-    try loop.startRead(state);
-}
-
-fn startRuntimeSend(context: *anyopaque, state: *client_module.RuntimeTransportState, payload: []const u8) !void {
-    const loop: *NativeLoop = @ptrCast(@alignCast(context));
-
-    try loop.startSend(
-        .{
-            .state = state,
-            .bytes = payload,
-        },
-    );
-}
-
 fn syncAttachmentTarget(_: *anyopaque, _: ?data.AttachmentTarget) bool {
     return false;
 }
@@ -291,9 +263,5 @@ fn visibleAttachmentTarget(_: *anyopaque) ?data.AttachmentTarget {
 
 pub const chrome = chrome_module.port;
 pub const hostInput = host_input.port;
-pub const timers = workers.timers;
-pub const barCommands = workers.bars;
-pub const pluginWorkers = workers.plugins;
-pub const pathCompletions = workers.pathCompletions;
-pub const favicons = workers.favicons;
-pub const links = services.links;
+pub const workers = worker_ports.jobs;
+pub const favicons = worker_ports.favicons;

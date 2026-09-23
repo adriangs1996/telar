@@ -1,0 +1,43 @@
+//! Executes one client job on a worker thread and turns its result into the
+//! client message the adapter delivers.
+const std = @import("std");
+const core = @import("telar-core");
+const Job = @import("Job.zig").Job;
+const Message = @import("Message.zig").Message;
+const command = @import("../bars/command.zig");
+const plugins = @import("../plugins/plugins.zig");
+const path_completion = @import("../completion/path_completion.zig");
+const host = @import("../links/host.zig");
+
+/// Runs `job` to completion. The adapter starts it as an inbox producer:
+/// `try inbox.start(.client, .{ job_runner.run, .{ io, gpa, job } });`
+pub fn run(io: std.Io, gpa: std.mem.Allocator, job: Job) Message {
+    return switch (job) {
+        .runtime_read => |state| .{ .server = state.read(io) },
+        .runtime_send => |send| .{ .sent = sendRuntime(io, send) },
+        .timer => |timer| switch (timer.kind) {
+            .bar => .{ .bar_tick = core.deadline_timer.wait(io, timer.scheduler) },
+            .notification => .{ .notification_tick = core.deadline_timer.wait(io, timer.scheduler) },
+            .sidebar_animation => .{ .sidebar_animation_tick = core.deadline_timer.wait(io, timer.scheduler) },
+        },
+        .bar_command => |bar| .{ .bar_command = .{
+            .execution_id = bar.execution_id,
+            .result = command.run(io, bar.command),
+        } },
+        .plugin => |plugin| .{ .plugin_result = .{
+            .execution_id = plugin.execution_id,
+            .result = plugins.executeWorker(io, gpa, plugin.request),
+        } },
+        .path_completion => |completion| .{ .path_completion = .{
+            .execution_id = completion.execution_id,
+            .result = path_completion.run(io, gpa, completion),
+        } },
+        .link => |target| .{ .link_opened = host.open(io, target) },
+    };
+}
+
+fn sendRuntime(io: std.Io, send: Job.RuntimeSend) anyerror!void {
+    core.mark(io, .client_send_start);
+    defer core.mark(io, .client_send_done);
+    return send.state.send(io, send.bytes);
+}

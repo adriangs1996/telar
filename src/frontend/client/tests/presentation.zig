@@ -230,7 +230,10 @@ test "a media tick that yields to a pending draw runs at that draw's completion"
                 try presentation_lifecycle.handleMediaTick(client, result);
                 break;
             },
-            .sent => |result| try client.completeRuntimeSend(result),
+            .client => |message| switch (message) {
+                .sent => |result| try client.completeRuntimeSend(result),
+                else => return error.UnexpectedEvent,
+            },
             else => return error.UnexpectedEvent,
         }
     }

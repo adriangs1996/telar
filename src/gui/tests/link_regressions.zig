@@ -28,7 +28,7 @@ test "captured native link consumes stationary modifier motion before release" {
     event.code = 2;
     try fixture.send(event);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
 }
 
 test "native link click cannot open a replacement URL before its frame is presented" {
@@ -39,13 +39,13 @@ test "native link click cannot open a replacement URL before its frame is presen
     try std.testing.expectEqual(@as(u64, 2), fixture.session.gui.app.model.panes.find(Session.pane_id).?.pending_frame_id);
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
 
     try fixture.present();
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 1), fixture.open_count);
-    try std.testing.expectEqualStrings("https://b.c", fixture.opened.?.uri());
+    try std.testing.expectEqual(@as(usize, 1), fixture.session.link_open_count);
+    try std.testing.expectEqualStrings("https://b.c", fixture.session.opened_link.?.uri());
 }
 
 test "native link gesture remains cancelled after URL state changes from A to B to A" {
@@ -59,7 +59,7 @@ test "native link gesture remains cancelled after URL state changes from A to B 
     try fixture.session.settle();
     try fixture.present();
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
 }
 
@@ -77,7 +77,7 @@ test "native link gesture remains cancelled after switching tabs away and back" 
     _ = try model.selectTab(.{ .tab_id = Session.location.tab_id });
     try fixture.present();
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
 }
 
@@ -97,7 +97,7 @@ test "native link hover clears on focus loss while transport defers gesture reco
     try std.testing.expect(gui.input_queue.recovery.queued);
     try std.testing.expect(gui.pointer.hover.link == null);
     try std.testing.expectEqual(.default, gui.pointer.hover.shape);
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
 }
 
 test "native pointer refreshes after resize ownership ends without a model or GPU update" {
@@ -221,7 +221,7 @@ test "native displayed link previews consume hidden URL clicks until replacement
     try std.testing.expectEqual(@as(?u8, 0), gui.overlays.gesture);
     pointer.code = 2;
     try fixture.send(pointer);
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
 
     try fixture.present();
@@ -233,8 +233,8 @@ test "native displayed link previews consume hidden URL clicks until replacement
     try fixture.send(pointer);
     pointer.code = 2;
     try fixture.send(pointer);
-    try std.testing.expectEqual(@as(usize, 1), fixture.open_count);
-    try std.testing.expectEqualStrings("https://b.c", fixture.opened.?.uri());
+    try std.testing.expectEqual(@as(usize, 1), fixture.session.link_open_count);
+    try std.testing.expectEqualStrings("https://b.c", fixture.session.opened_link.?.uri());
 }
 
 test "native preview coverage survives pointer leave failed presentation and late completions" {
@@ -280,7 +280,7 @@ test "native preview coverage survives pointer leave failed presentation and lat
     pointer.code = 2;
     try fixture.send(pointer);
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try std.testing.expect(gui.overlays.gesture == null);
     try fixture.present();
     try std.testing.expect(gui.pointer.hover.shown_preview == null);
@@ -361,7 +361,7 @@ test "native right click copies a link without modifiers or child mouse reports"
     try fixture.send(.{ .kind = 9, .code = 0, .request_id = request.request_id, .target_id = request.target_id, .generation = request.generation });
     try std.testing.expect(session.gui.widgets.copy_feedback.until_ns > 0);
     try std.testing.expect(session.gui.widgets.copy_feedback.pending == null);
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
     try std.testing.expect(!session.gui.host.next(&request));
 }

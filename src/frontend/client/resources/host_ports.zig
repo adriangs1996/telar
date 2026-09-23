@@ -28,11 +28,6 @@ pub fn notifier(client: *client_module.AttachedClient) client_module.HostNotifie
     return .{ .context = client, .deliver = deliverNotification };
 }
 
-/// Example: `client.link_opener = host_ports.links(client);`.
-pub fn links(client: *client_module.AttachedClient) client_module.LinkOpener {
-    return .{ .context = client, .open = openLink };
-}
-
 /// Example: `client.capture_port = host_ports.capture(client);`.
 pub fn capture(client: *client_module.AttachedClient) client_module.CapturePort {
     return .{ .context = client, .supported = captureSupported, .start = startCapture };
@@ -149,12 +144,6 @@ fn deliverNotification(context: *anyopaque, channel: data.NotificationDelivery, 
             TerminalClient.of(client).inbox.start(.notified, .{ notification_host.notify, .{ client.io, payload } }) catch {};
         },
     }
-}
-
-fn openLink(context: *anyopaque, target: data.LinkTarget) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).inbox.start(.link_opened, .{ link_host.open, .{ client.io, target } });
 }
 
 fn captureSupported(_: *anyopaque) bool {
@@ -427,78 +416,6 @@ fn deliveredGeometry(context: *anyopaque) ?client_module.Geometry {
     return TerminalClient.of(client).presenter.presentation_state.delivered_geometry;
 }
 
-/// Example: `client.timers = host_ports.timers(client);`.
-pub fn timers(client: *client_module.AttachedClient) client_module.HostTimers {
-    return .{ .context = client, .arm_fn = armTimer };
-}
-
-/// One inbox producer per scheduler; the kind names its completion.
-fn armTimer(context: *anyopaque, kind: client_module.TimerKind, scheduler: *client_module.Scheduler) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    switch (kind) {
-        .input => try TerminalClient.of(client).inbox.start(.input_timeout, .{ client_module.wait, .{ client.io, scheduler } }),
-        .binding => try TerminalClient.of(client).inbox.start(.binding_timeout, .{ client_module.wait, .{ client.io, scheduler } }),
-        .bar => try TerminalClient.of(client).inbox.start(.bar_tick, .{ client_module.wait, .{ client.io, scheduler } }),
-        .notification => try TerminalClient.of(client).inbox.start(.notification_tick, .{ client_module.wait, .{ client.io, scheduler } }),
-        .sidebar_animation => try TerminalClient.of(client).inbox.start(.sidebar_animation_tick, .{ client_module.wait, .{ client.io, scheduler } }),
-    }
-}
-
-/// Example: `client.bar_runner = host_ports.barCommands(client);`.
-pub fn barCommands(client: *client_module.AttachedClient) client_module.BarCommandRunner {
-    return .{ .context = client, .start_fn = startBarCommand };
-}
-
-fn startBarCommand(context: *anyopaque, job: client_module.BarUpdatesJob) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).inbox.start(.bar_command, .{ executeBarCommand, .{ client.io, job } });
-}
-
-fn executeBarCommand(io: std.Io, job: client_module.BarUpdatesJob) client_module.BarUpdatesCompletion {
-    return .{
-        .execution_id = job.execution_id,
-        .result = client_module.runBarCommand(io, job.command),
-    };
-}
-
-/// Example: `client.path_completion_runner = host_ports.pathCompletions(client);`.
-pub fn pathCompletions(client: *client_module.AttachedClient) client_module.PathCompletionRunner {
-    return .{ .context = client, .start_fn = startPathCompletion };
-}
-
-fn startPathCompletion(context: *anyopaque, job: client_module.PathCompletionJob) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).inbox.start(.path_completion, .{ executePathCompletion, .{ client.io, client.gpa, job } });
-}
-
-fn executePathCompletion(io: std.Io, gpa: std.mem.Allocator, job: client_module.PathCompletionJob) data.PathCompletionCompletion {
-    return .{
-        .execution_id = job.execution_id,
-        .result = client_module.runPathCompletion(io, gpa, job),
-    };
-}
-
-/// Example: `client.plugin_runner = host_ports.pluginWorkers(client);`.
-pub fn pluginWorkers(client: *client_module.AttachedClient) client_module.PluginWorkerRunner {
-    return .{ .context = client, .start_fn = startPluginWorker };
-}
-
-fn startPluginWorker(context: *anyopaque, job: client_module.PluginActionsJob) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).inbox.start(.plugin_result, .{ executePluginWorker, .{ client.io, client.gpa, job } });
-}
-
-fn executePluginWorker(io: std.Io, gpa: std.mem.Allocator, job: client_module.PluginActionsJob) data.PluginActionsCompletion {
-    return .{
-        .execution_id = job.execution_id,
-        .result = client_module.executeWorker(io, gpa, job.request),
-    };
-}
-
 /// Example: `client.clock = host_ports.clock(client);`.
 pub fn clock(client: *client_module.AttachedClient) client_module.HostClock {
     return .{ .context = client, .local_time_fn = localTime };
@@ -569,33 +486,6 @@ fn adoptBindings(context: *anyopaque, config: client_module.RouterConfig) void {
     TerminalClient.of(client).host_input.replaceRouter(client.io, router);
 }
 
-/// Example: `client.transport_driver = host_ports.transport(client);`.
-pub fn transport(client: *client_module.AttachedClient) client_module.TransportDriver {
-    return .{ .context = client, .start_read_fn = startRuntimeRead, .start_send_fn = startRuntimeSend };
-}
-
-fn startRuntimeRead(context: *anyopaque, state: *client_module.RuntimeTransportState) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).inbox.start(.server, .{ receiveRuntime, .{ client.io, state } });
-}
-
-fn startRuntimeSend(context: *anyopaque, state: *client_module.RuntimeTransportState, payload: []const u8) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).inbox.start(.sent, .{ sendRuntime, .{ client.io, state, payload } });
-}
-
-fn receiveRuntime(io: std.Io, state: *client_module.RuntimeTransportState) anyerror!*const data.RuntimeMessage {
-    return state.read(io);
-}
-
-fn sendRuntime(io: std.Io, state: *client_module.RuntimeTransportState, payload: []const u8) anyerror!void {
-    core.mark(io, .client_send_start);
-    defer core.mark(io, .client_send_done);
-    return state.send(io, payload);
-}
-
 /// Example: `client.config_watcher = host_ports.configWatcher(client);`.
 pub fn configWatcher(client: *client_module.AttachedClient) client_module.ConfigReloadWatcher {
     return .{ .context = client, .start_fn = startConfigWatch };
@@ -605,4 +495,15 @@ fn startConfigWatch(context: *anyopaque, args: client_module.ConfigWaitArgs) !vo
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
 
     try TerminalClient.of(client).inbox.start(.config_reload, .{ client_module.config_reload.wait, .{args} });
+}
+
+/// Example: `client.workers = host_ports.workers(client);`.
+pub fn workers(client: *client_module.AttachedClient) client_module.Workers {
+    return .{ .context = client, .start_fn = startJob };
+}
+
+fn startJob(context: *anyopaque, job: client_module.Job) !void {
+    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+
+    try TerminalClient.of(client).inbox.start(.client, .{ client_module.job_runner.run, .{ client.io, client.gpa, job } });
 }

@@ -22,14 +22,14 @@ test "native links highlight with the platform modifier and open only on release
     try fixture.send(within_cell);
     try std.testing.expectEqual(revision, gui.pointer.hover.revision);
     try fixture.send(fixture.event(1));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try std.testing.expect(gui.pointer.owners[0] == .link);
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 1), fixture.open_count);
-    try std.testing.expectEqualStrings("https://a.b", fixture.opened.?.uri());
+    try std.testing.expectEqual(@as(usize, 1), fixture.session.link_open_count);
+    try std.testing.expectEqualStrings("https://a.b", fixture.session.opened_link.?.uri());
     try std.testing.expectEqual(@as(usize, 0), fixture.session.input_len);
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 1), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 1), fixture.session.link_open_count);
 }
 
 test "native link drags changed targets pointer leave and focus loss cancel opening" {
@@ -38,21 +38,21 @@ test "native link drags changed targets pointer leave and focus loss cancel open
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(3));
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try fixture.send(fixture.event(1));
     fixture.text("https://b.c");
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(7));
     try std.testing.expectEqual(.default, fixture.session.gui.pointer.hover.shape);
     try std.testing.expect(fixture.session.gui.pointer.hover.link == null);
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try fixture.send(fixture.event(1));
     try input_support.focus(fixture.session.gui, false);
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try std.testing.expectEqual(.default, fixture.session.gui.pointer.hover.shape);
 }
 
@@ -63,7 +63,7 @@ test "native links require Shift to override child reporting and never leak a ca
     pane.mouse = .{ .tracking = .button, .sgr = true };
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
     try std.testing.expect(fixture.session.input_len != 0);
     const before = fixture.session.input_len;
     var press = fixture.event(1);
@@ -71,7 +71,7 @@ test "native links require Shift to override child reporting and never leak a ca
     try fixture.send(press);
     press.code = 2;
     try fixture.send(press);
-    try std.testing.expectEqual(@as(usize, 1), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 1), fixture.session.link_open_count);
     try std.testing.expectEqual(before, fixture.session.input_len);
 }
 
@@ -97,7 +97,7 @@ test "native pane pointer shapes refresh under a stationary pointer and modal bl
     try std.testing.expect(gui.pointer.hover.link == null);
     try fixture.send(fixture.event(1));
     try fixture.send(fixture.event(2));
-    try std.testing.expectEqual(@as(usize, 0), fixture.open_count);
+    try std.testing.expectEqual(@as(usize, 0), fixture.session.link_open_count);
 }
 
 test "native link highlight reuses retained cells and disappears without changing atlas pixels" {

@@ -81,7 +81,7 @@ test "hiding the only animated widget removes its frame deadline" {
     }} });
     _ = try app.handleServerMessage(try core.decodeServer(snapshot));
     const version = app.model.version();
-    try std.testing.expectEqual(.host, app.timers.animation_clock);
+    try std.testing.expectEqual(.host, app.animation_clock);
     try std.testing.expect(app.model.sidebarAnimationActive());
     try std.testing.expect(!app.model.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(version, app.model.version());

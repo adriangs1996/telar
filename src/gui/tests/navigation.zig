@@ -49,7 +49,9 @@ test "update processes a horizontal split shortcut and its correlated runtime re
     try app.startRuntimeRead();
     try session.gui.driver.inbox.post(
         .{
-            .server = &response,
+            .client = .{
+                .server = &response,
+            },
         },
     );
 

@@ -520,7 +520,10 @@ test "context folder clicks complete without submitting and reject stale listing
     const session = try initSession();
     defer session.deinit();
     const gui = session.gui;
-    gui.app.path_completion_runner = .{ .context = session, .start_fn = ignorePathCompletion };
+    gui.app.workers = .{
+        .context = session,
+        .start_fn = ignorePathCompletion,
+    };
     gui.app.model.name_prompt.begin(.create_workspace);
     _ = gui.app.model.name_prompt.apply(.tab);
     _ = gui.app.model.name_prompt.apply(.{ .insert = "/work/te" });
@@ -543,7 +546,13 @@ test "context folder clicks complete without submitting and reject stale listing
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 }
 
-fn ignorePathCompletion(_: *anyopaque, _: client.PathCompletionJob) !void {}
+fn ignorePathCompletion(context: *anyopaque, job: client.Job) !void {
+    if (job == .path_completion) {
+        return;
+    }
+
+    try Session.startJob(context, job);
+}
 
 test "context controls reject retired generations and expose native press actions" {
     const session = try initSession();
@@ -2891,20 +2900,13 @@ test "managed review has exactly one action across single split and fullscreen l
     try std.testing.expectEqual(@as(usize, 2), reviewControlCount(session));
 }
 
-fn captureMessageLink(context: *anyopaque, target: data.LinkTarget) !void {
-    const captured: *?data.LinkTarget = @ptrCast(@alignCast(context));
-    captured.* = target;
-}
-
 test "agent web links use the host opener with decoded Markdown destinations" {
     const session = try agentSession();
     defer session.deinit();
-    var opened: ?data.LinkTarget = null;
-    session.gui.app.link_opener = .{ .context = &opened, .open = captureMessageLink };
     try linkSnapshot(session, "[site](https://example.com/?a=1&amp;b=2)");
     try publish(session);
     try pressControl(session, try messageLinkTarget(session));
-    try std.testing.expectEqualStrings("https://example.com/?a=1&b=2", opened.?.uri());
+    try std.testing.expectEqualStrings("https://example.com/?a=1&b=2", session.opened_link.?.uri());
     try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
 }
 
@@ -2912,8 +2914,6 @@ test "right clicking agent links copies destinations without opening them" {
     for ([_][]const u8{ "/tmp/a b.md", "https://example.com/?a=1&b=2", "custom:destination" }) |destination| {
         const session = try agentSession();
         defer session.deinit();
-        var opened: ?data.LinkTarget = null;
-        session.gui.app.link_opener = .{ .context = &opened, .open = captureMessageLink };
         var source: [256]u8 = undefined;
         try linkSnapshot(session, try std.fmt.bufPrint(&source, "[label](<{s}>)", .{destination}));
         try publish(session);
@@ -2924,7 +2924,7 @@ test "right clicking agent links copies destinations without opening them" {
         var request: native.HostRequest = .{};
         try std.testing.expect(session.gui.host.next(&request));
         try std.testing.expectEqualStrings(destination, request.text.?[0..request.len]);
-        try std.testing.expect(opened == null);
+        try std.testing.expect(session.opened_link == null);
         try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
         try std.testing.expect(!session.gui.host.next(&request));
     }
@@ -3082,8 +3082,6 @@ test "editor reuse replies cannot act on a replaced source pane" {
 test "review hides underlying message links before delivery and restores them after closing" {
     const session = try agentSession();
     defer session.deinit();
-    var opened: ?data.LinkTarget = null;
-    session.gui.app.link_opener = .{ .context = &opened, .open = captureMessageLink };
     try linkSnapshot(session, "[site](https://example.com)");
     try publish(session);
     const link = try messageLinkTarget(session);
@@ -3106,7 +3104,7 @@ test "review hides underlying message links before delivery and restores them af
         try send(session, .{ .pointer = .{ .kind = .release, .button = .right, .x = link.bounds.x + 1, .y = link.bounds.y + 1 } });
         var request: native.HostRequest = .{};
         try std.testing.expect(!session.gui.host.next(&request));
-        try std.testing.expect(opened == null);
+        try std.testing.expect(session.opened_link == null);
     }
 
     _ = try session.gui.app.handleServerMessage(.{ .change_review_snapshot = .{

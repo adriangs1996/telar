@@ -198,7 +198,6 @@ pub fn init(params: client.ClientInit) !*GuiClient {
 
     gui.app.sound_port = host_ports.sound(&gui.app);
     gui.app.notifier = host_ports.notifier(&gui.app);
-    gui.app.link_opener = host_ports.links(&gui.app);
     gui.app.capture_port = host_ports.capture(&gui.app);
     gui.app.host_clipboard = host_ports.clipboard(&gui.app);
     gui.app.host_graphics = host_ports.graphics(&gui.app);
@@ -207,14 +206,11 @@ pub fn init(params: client.ClientInit) !*GuiClient {
     gui.app.attachment_catalog = host_ports.attachmentCatalog(&gui.app);
     gui.app.attachment_shelf = host_ports.attachmentShelf(&gui.app);
     gui.app.presentation = host_ports.presentation(&gui.app);
-    gui.app.timers = host_ports.timers(&gui.driver);
-    gui.app.bar_runner = host_ports.barCommands(&gui.app);
-    gui.app.plugin_runner = host_ports.pluginWorkers(&gui.app);
-    gui.app.path_completion_runner = host_ports.pathCompletions(&gui.app);
+    gui.app.workers = host_ports.workers(&gui.app);
+    gui.app.animation_clock = .host;
     gui.app.favicon_runner = host_ports.favicons(&gui.app);
     gui.app.clock = host_ports.clock(&gui.app);
     gui.app.host_input_source = host_ports.hostInput(&gui.app);
-    gui.app.transport_driver = host_ports.transport(&gui.driver);
     gui.app.config_watcher = host_ports.configWatcher(&gui.driver.configuration);
 
     return gui;
@@ -576,29 +572,24 @@ pub fn update(self: *GuiClient) !?u8 {
 fn dispatch(self: *GuiClient, event: gui_event.Message) !?u8 {
     core.profiling.add(.gui_dispatch, 1);
     switch (event) {
-        .server => |result| return self.receive(result),
-        .sent => |result| try self.app.completeRuntimeSend(result),
+        .client => |message| {
+            if (try self.app.update(message)) |status| {
+                return status;
+            }
+
+            if (message == .server) {
+                try self.resumeAfterRuntime();
+            }
+        },
         .input_ready => try self.inputReady(),
         .focus => |focused| try self.focus(focused),
         .presented => |result| try self.complete(result.token, result.delivered),
         .configuration_ready => try self.driver.configuration.accept(&self.app),
-        .input_timeout => |result| try result,
         .binding_timeout => |result| try self.expireBinding(result),
-        .sidebar_animation_tick => |result| _ = try self.app.completeSidebarAnimationTick(result),
-        .notification_tick => |result| _ = try self.app.completeNotificationTick(result),
-        .bar_tick => |result| try client.operations.bar_updates.handleTick(&self.app, result),
-        .bar_command => |result| try client.operations.bar_updates.completeCommand(&self.app, result),
-        .link_opened => |result| try self.app.completeLinkOpening(result),
-        .path_completion => |result| try self.app.completePathCompletion(result),
         .favicon => |result| self.landFavicon(result),
         .diagram_ready => self.landDiagram(),
         .syntax_ready => self.landSyntax(),
         .change_review_ready => self.landChangeReview(),
-        .plugin_result => |result| {
-            if (try self.app.completePluginAction(result)) {
-                return 0;
-            }
-        },
     }
 
     return if (self.stopped) @as(u8, 0) else null;
@@ -606,13 +597,8 @@ fn dispatch(self: *GuiClient, event: gui_event.Message) !?u8 {
 
 fn pathFor(event: gui_event.Message) core.Path {
     return switch (event) {
+        .client => |message| message.path(),
         .configuration_ready,
-        .notification_tick,
-        .bar_tick,
-        .bar_command,
-        .plugin_result,
-        .link_opened,
-        .path_completion,
         .favicon,
         .diagram_ready,
         .syntax_ready,
@@ -622,20 +608,14 @@ fn pathFor(event: gui_event.Message) core.Path {
     };
 }
 
-/// Applies one validated runtime message before releasing its receive borrow.
-fn receive(self: *GuiClient, result: anyerror!*const shared_model.RuntimeMessage) !?u8 {
-    if (try self.app.receiveRuntime(result)) |status| {
-        return status;
-    }
-
+/// Finishes startup and resumes input once a runtime message lands.
+fn resumeAfterRuntime(self: *GuiClient) !void {
     if (self.app.model.startup.phase == .opening and self.app.model.activeTabLocation() != null) {
         self.app.model.startup.phase = .active;
     }
 
     try self.resumeInput();
     self.refreshPointer();
-
-    return null;
 }
 
 /// Consumes bounded native input and schedules another turn if it can advance.
@@ -1395,7 +1375,7 @@ fn finishInput(self: *GuiClient, pending: bool) !void {
     }
 
     if (self.binding_timeout.update(app.io, self.router.bindingDeadline()) == .schedule) {
-        app.timers.arm(.binding, &self.binding_timeout) catch |err| {
+        self.driver.inbox.start(.binding_timeout, .{ client.wait, .{ app.io, &self.binding_timeout } }) catch |err| {
             self.binding_timeout.schedulingFailed();
 
             return err;

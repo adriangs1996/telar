@@ -430,7 +430,7 @@ test "native rendering visits every terminal leaf and clips to shared layout geo
 test "native driver joins a blocked socket read before freeing the shared client" {
     const session = try Session.init();
     defer session.deinit();
-    session.gui.app.transport_driver = host_ports.transport(&session.gui.driver);
+    session.gui.app.workers = host_ports.workers(&session.gui.app);
     try session.gui.app.startRuntimeRead();
     try std.testing.expect(session.gui.app.runtime_transport.receive_pending);
 }

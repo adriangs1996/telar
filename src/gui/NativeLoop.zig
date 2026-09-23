@@ -48,25 +48,3 @@ pub fn deinit(loop: *Loop) void {
     native.telar_gui_close_pipe(&loop.fds);
 }
 
-pub fn startRead(loop: *Loop, state: *client.RuntimeTransportState) !void {
-    try loop.inbox.start(.server, .{ client.RuntimeTransportState.read, .{ state, loop.io } });
-}
-
-pub fn startSend(loop: *Loop, request: @import("RuntimeSend.zig")) !void {
-    try loop.inbox.start(
-        .sent,
-        .{
-            send,
-            .{
-                loop.io,
-                request,
-            },
-        },
-    );
-}
-
-fn send(io: std.Io, request: @import("RuntimeSend.zig")) anyerror!void {
-    core.mark(io, .client_send_start);
-    defer core.mark(io, .client_send_done);
-    try request.state.send(io, request.bytes);
-}

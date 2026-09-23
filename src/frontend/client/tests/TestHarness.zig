@@ -77,27 +77,16 @@ pub fn deinit(harness: *TestHarness) void {
 pub fn settle(harness: *TestHarness) !void {
     while (harness.client.runtime_transport.outbox.inFlight() or harness.client.runtime_transport.outbox.len != 0) {
         switch (try TerminalClient.of(harness.client).inbox.receive()) {
-            .sent => |result| try harness.client.completeRuntimeSend(result),
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
-            .sidebar_animation_tick => |result| {
-                _ = try harness.client.completeSidebarAnimationTick(result);
-                try presentation_lifecycle.observe(harness.client);
-            },
-            .notification_tick => |result| {
-                _ = try harness.client.completeNotificationTick(result);
-                try presentation_lifecycle.observe(harness.client);
-            },
-            .bar_tick => |result| {
-                try client_module.operations.bar_updates.handleTick(harness.client, result);
-                try presentation_lifecycle.observe(harness.client);
-            },
-            .bar_command => |completion| {
-                try client_module.operations.bar_updates.completeCommand(harness.client, completion);
-                try presentation_lifecycle.observe(harness.client);
-            },
-            .path_completion => |completion| {
-                try harness.client.completePathCompletion(completion);
-                try presentation_lifecycle.observe(harness.client);
+            .client => |message| switch (message) {
+                .sent, .sidebar_animation_tick, .notification_tick, .bar_tick, .bar_command, .path_completion => {
+                    const observes = message != .sent;
+                    _ = try harness.client.update(message);
+                    if (observes) {
+                        try presentation_lifecycle.observe(harness.client);
+                    }
+                },
+                else => return error.UnexpectedEvent,
             },
             else => return error.UnexpectedEvent,
         }
@@ -120,32 +109,15 @@ pub fn settleModelPresentation(harness: *TestHarness) !void {
     {
         switch (try TerminalClient.of(harness.client).inbox.receive()) {
             .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
-            .sent => |result| try harness.client.completeRuntimeSend(result),
             .media_tick => |result| try presentation_lifecycle.handleMediaTick(harness.client, result),
-            .sidebar_animation_tick => |result| {
-                _ = try harness.client.completeSidebarAnimationTick(result);
-                try presentation_lifecycle.observe(harness.client);
-                target = harness.client.model.version();
-            },
-            .notification_tick => |result| {
-                _ = try harness.client.completeNotificationTick(result);
-                try presentation_lifecycle.observe(harness.client);
-                target = harness.client.model.version();
-            },
-            .bar_tick => |result| {
-                try client_module.operations.bar_updates.handleTick(harness.client, result);
-                try presentation_lifecycle.observe(harness.client);
-                target = harness.client.model.version();
-            },
-            .bar_command => |completion| {
-                try client_module.operations.bar_updates.completeCommand(harness.client, completion);
-                try presentation_lifecycle.observe(harness.client);
-                target = harness.client.model.version();
-            },
-            .path_completion => |completion| {
-                try harness.client.completePathCompletion(completion);
-                try presentation_lifecycle.observe(harness.client);
-                target = harness.client.model.version();
+            .client => |message| switch (message) {
+                .sent => |result| try harness.client.completeRuntimeSend(result),
+                .sidebar_animation_tick, .notification_tick, .bar_tick, .bar_command, .path_completion => {
+                    _ = try harness.client.update(message);
+                    try presentation_lifecycle.observe(harness.client);
+                    target = harness.client.model.version();
+                },
+                else => return error.UnexpectedEvent,
             },
             else => return error.UnexpectedEvent,
         }

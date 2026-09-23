@@ -158,7 +158,7 @@ test "GUI notification lifecycle wakes at semantic boundaries while the host own
             .message = "Done",
         },
     );
-    try std.testing.expectEqual(.host, app.timers.animation_clock);
+    try std.testing.expectEqual(.host, app.animation_clock);
     try std.testing.expectEqual(now + data.notifications.transition_duration_ns, app.model.notification_scheduler.deadline_ns.load(.acquire));
     try std.testing.expect(Clock.frame_interval_ns < data.notifications.transition_duration_ns);
 }

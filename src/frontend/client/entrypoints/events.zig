@@ -90,12 +90,11 @@ fn dispatch(client: *client_module.AttachedClient, event: TerminalClient.ClientE
             .tty = resources.tty,
             .watcher = resources.resize_watcher,
         }),
-        .server => |result| {
-            if (try client.receiveRuntime(result)) |status| {
+        .client => |message| {
+            if (try client.update(message)) |status| {
                 return .{ .exit = status };
             }
         },
-        .sent => |result| try client.completeRuntimeSend(result),
         .draw => |result| try presentation_lifecycle.handleDraw(client, result),
         .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
         .host_written => |result| try presentation_lifecycle.handleWritten(client, result),
@@ -103,23 +102,12 @@ fn dispatch(client: *client_module.AttachedClient, event: TerminalClient.ClientE
             kitty_delivery.completeCompression(&TerminalClient.of(client).graphics_store, job);
             try TerminalClient.of(client).presenter.requestMedia();
         },
-        .sidebar_animation_tick => |result| _ = try client.completeSidebarAnimationTick(result),
-        .notification_tick => |result| _ = try client.completeNotificationTick(result),
-        .bar_tick => |result| try client_module.operations.bar_updates.handleTick(client, result),
-        .bar_command => |completion| try client_module.operations.bar_updates.completeCommand(client, completion),
         .sound_played => |result| try client.completeAgentSound(result),
         .notified => |result| _ = result catch {},
         .telemetry_tick => |result| client_telemetry.handleTick(client, result, resources.heap.snapshot()),
         .telemetry_written => |result| client_telemetry.handleWritten(client, result),
         .config_reload => |result| _ = try client.completeConfigReload(result),
-        .plugin_result => |result| {
-            if (try client.completePluginAction(result)) {
-                return .{ .exit = 0 };
-            }
-        },
         .clipboard_image => |result| try client.completeClipboardCapture(result),
-        .link_opened => |result| try client.completeLinkOpening(result),
-        .path_completion => |completion| try client.completePathCompletion(completion),
     }
 
     if (try client_startup.advance(client)) {
@@ -136,24 +124,16 @@ fn pathFor(tag: EventTag) core.Path {
         .binding_timeout,
         .capability_timeout,
         .resized,
-        .server,
-        .sent,
+        .client,
         .draw,
-        .sidebar_animation_tick,
         => .interactive,
         .host_written => .interactive,
         .media_tick, .clipboard_image, .compression_done => .media,
-        .notification_tick,
-        .bar_tick,
-        .bar_command,
         .sound_played,
         .notified,
         .telemetry_tick,
         .telemetry_written,
         .config_reload,
-        .plugin_result,
-        .link_opened,
-        .path_completion,
         => .observation,
     };
 }
@@ -166,24 +146,16 @@ test "client event paths preserve interactive media and observation budgets" {
         .binding_timeout,
         .capability_timeout,
         .resized,
-        .server,
-        .sent,
+        .client,
         .draw,
-        .sidebar_animation_tick,
     };
     const media = [_]EventTag{ .media_tick, .clipboard_image, .compression_done };
     const observation = [_]EventTag{
-        .notification_tick,
-        .bar_tick,
-        .bar_command,
         .sound_played,
         .notified,
         .telemetry_tick,
         .telemetry_written,
         .config_reload,
-        .plugin_result,
-        .link_opened,
-        .path_completion,
     };
 
     for (interactive) |tag| {

@@ -29,25 +29,18 @@ pub const ClientEvent = union(enum) {
     binding_timeout: anyerror!void,
     capability_timeout: anyerror!void,
     resized: anyerror!void,
-    server: anyerror!*const data.RuntimeMessage,
-    sent: anyerror!void,
+    /// An event the shared client handles itself.
+    client: client_module.Message,
     draw: anyerror!void,
     media_tick: anyerror!void,
     host_written: anyerror!void,
     compression_done: *CompressionType,
-    sidebar_animation_tick: anyerror!void,
-    notification_tick: anyerror!void,
-    bar_tick: anyerror!void,
-    bar_command: client_module.BarUpdatesCompletion,
     sound_played: anyerror!void,
     notified: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     config_reload: anyerror!client_module.ConfigReload,
-    plugin_result: data.PluginActionsCompletion,
-    path_completion: data.PathCompletionCompletion,
     clipboard_image: client_module.operations.ClipboardImageCompletion,
-    link_opened: anyerror!void,
 };
 
 const TerminalClient = @This();
@@ -152,7 +145,6 @@ pub fn init(params: Params) !*TerminalClient {
     const client = &terminal.app;
     client.sound_port = host_ports.sound(client);
     client.notifier = host_ports.notifier(client);
-    client.link_opener = host_ports.links(client);
     client.capture_port = host_ports.capture(client);
     client.host_clipboard = host_ports.clipboard(client);
     client.host_graphics = host_ports.graphics(client);
@@ -161,13 +153,9 @@ pub fn init(params: Params) !*TerminalClient {
     client.attachment_catalog = host_ports.attachmentCatalog(client);
     client.attachment_shelf = host_ports.attachmentShelf(client);
     client.presentation = host_ports.presentation(client);
-    client.timers = host_ports.timers(client);
-    client.bar_runner = host_ports.barCommands(client);
-    client.plugin_runner = host_ports.pluginWorkers(client);
-    client.path_completion_runner = host_ports.pathCompletions(client);
+    client.workers = host_ports.workers(client);
     client.clock = host_ports.clock(client);
     client.host_input_source = host_ports.hostInput(client);
-    client.transport_driver = host_ports.transport(client);
     client.config_watcher = host_ports.configWatcher(client);
     // The presenter borrows the inbox and metrics, whose heap addresses
     // only exist once the client does.

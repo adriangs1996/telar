@@ -168,7 +168,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     const frames = client.telemetry.metrics.frames;
 
     try client.startRuntimeRead();
-    switch (try TerminalClient.of(client).inbox.receive()) {
+    switch (try support.receiveClient(client)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
             try client.receiveRuntime(result),
@@ -198,7 +198,7 @@ test "a frame already sent before workspace departure is harmless during handoff
         .created = false,
     });
     try harness.peer.send(std.testing.io, arrived);
-    switch (try TerminalClient.of(client).inbox.receive()) {
+    switch (try support.receiveClient(client)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
             try client.receiveRuntime(result),
@@ -230,7 +230,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     });
     const arrival_version = client.model.version();
     try harness.peer.send(std.testing.io, destination_snapshot);
-    switch (try TerminalClient.of(client).inbox.receive()) {
+    switch (try support.receiveClient(client)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
             try client.receiveRuntime(result),

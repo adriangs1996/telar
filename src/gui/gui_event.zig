@@ -1,26 +1,17 @@
-const shared_model = @import("model");
 const client = @import("telar-client");
+const PresentationResult = @import("PresentationResult.zig");
 
 pub const Message = union(enum) {
-    server: anyerror!*const shared_model.RuntimeMessage,
-    sent: anyerror!void,
+    client: client.Message,
     input_ready,
     focus: bool,
-    presented: @import("PresentationResult.zig"),
+    presented: PresentationResult,
     configuration_ready,
-    input_timeout: anyerror!void,
     binding_timeout: anyerror!void,
-    sidebar_animation_tick: anyerror!void,
-    notification_tick: anyerror!void,
-    bar_tick: anyerror!void,
-    bar_command: client.BarUpdatesCompletion,
-    plugin_result: shared_model.PluginActionsCompletion,
-    path_completion: shared_model.PathCompletionCompletion,
     favicon: client.FaviconCompletion,
     diagram_ready,
     syntax_ready,
     change_review_ready,
-    link_opened: anyerror!void,
 };
 
 pub const Inbox = client.GenericInbox(Message);

@@ -5,7 +5,8 @@ const std = @import("std");
 const core = @import("telar-core");
 const AttachedClient = @import("AttachedClient.zig");
 const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
-const TransportDriverType = @import("connection/TransportDriver.zig");
+const Workers = @import("execution/Workers.zig");
+const Job = @import("execution/Job.zig").Job;
 
 /// Layout export decodes to the same active pane and split tree.
 /// Example: `try attached_client_tests.layoutRoundTrip(writeCommandLayout);`
@@ -116,6 +117,14 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
         sends: usize = 0,
         payload: []const u8 = &.{},
 
+        fn start(raw: *anyopaque, job: Job) !void {
+            return switch (job) {
+                .runtime_read => |state| read(raw, state),
+                .runtime_send => |send_job| send(raw, send_job.state, send_job.bytes),
+                else => error.UnexpectedJob,
+            };
+        }
+
         fn read(raw: *anyopaque, state: *RuntimeTransportState) !void {
             const self: *@This() = @ptrCast(@alignCast(raw));
             self.reads += 1;
@@ -139,16 +148,15 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
     };
 
     var capture: Driver = .{};
-    const driver: TransportDriverType = .{
+    const driver: Workers = .{
         .context = &capture,
-        .start_read_fn = Driver.read,
-        .start_send_fn = Driver.send,
+        .start_fn = Driver.start,
     };
 
     var send_buffer: [64]u8 = undefined;
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
-    app.transport_driver = driver;
+    app.workers = driver;
     const state = &app.runtime_transport;
     state.* = .{
         .connection = undefined,
@@ -220,6 +228,14 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
         sends: usize = 0,
         payload: []const u8 = &.{},
 
+        fn start(raw: *anyopaque, job: Job) !void {
+            return switch (job) {
+                .runtime_read => |state| read(raw, state),
+                .runtime_send => |send_job| send(raw, send_job.state, send_job.bytes),
+                else => error.UnexpectedJob,
+            };
+        }
+
         fn read(_: *anyopaque, _: *RuntimeTransportState) !void {
             return error.UnexpectedRead;
         }
@@ -237,16 +253,15 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
     };
 
     var capture: Driver = .{};
-    const driver: TransportDriverType = .{
+    const driver: Workers = .{
         .context = &capture,
-        .start_read_fn = Driver.read,
-        .start_send_fn = Driver.send,
+        .start_fn = Driver.start,
     };
 
     var send_buffer: [data.input_limits.max_encoded_bytes + 64]u8 = undefined;
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
-    app.transport_driver = driver;
+    app.workers = driver;
     const state = &app.runtime_transport;
     state.* = .{
         .connection = undefined,

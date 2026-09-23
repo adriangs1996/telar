@@ -388,7 +388,7 @@ fn synchronizeInputTimeout(client: *client_module.AttachedClient) !void {
     const scheduler = &TerminalClient.of(client).host_input.input_timeout;
     switch (scheduler.update(client.io, TerminalClient.of(client).host_input.router.inputDeadline())) {
         .idle, .retained => {},
-        .schedule => client.timers.arm(.input, scheduler) catch |err| {
+        .schedule => TerminalClient.of(client).inbox.start(.input_timeout, .{ client_module.wait, .{ client.io, scheduler } }) catch |err| {
             scheduler.schedulingFailed();
 
             return err;
@@ -400,7 +400,7 @@ fn synchronizeBindingTimeout(client: *client_module.AttachedClient) !void {
     const scheduler = &TerminalClient.of(client).host_input.binding_timeout;
     switch (scheduler.update(client.io, TerminalClient.of(client).host_input.router.bindingDeadline())) {
         .idle, .retained => {},
-        .schedule => client.timers.arm(.binding, scheduler) catch |err| {
+        .schedule => TerminalClient.of(client).inbox.start(.binding_timeout, .{ client_module.wait, .{ client.io, scheduler } }) catch |err| {
             scheduler.schedulingFailed();
 
             return err;
