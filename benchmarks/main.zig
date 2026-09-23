@@ -22,7 +22,6 @@ const GraphicsContext = @import("GraphicsContext.zig");
 const TransmitContext = @import("TransmitContext.zig");
 const KgpIngestContext = @import("KgpIngestContext.zig");
 const SharedFrameContext = @import("SharedFrameContext.zig");
-const TextRasterContext = @import("TextRasterContext.zig");
 const Fixture = @import("Fixture.zig");
 const Config = @import("Config.zig");
 const client_storage = @import("client_storage.zig");
@@ -1016,5 +1015,28 @@ const OutboxContext = struct {
     pub fn deinit(self: *OutboxContext, gpa: std.mem.Allocator) void {
         self.outbox.deinit(gpa);
         gpa.destroy(self.outbox);
+    }
+};
+
+const TextRasterContext = struct {
+    pub const width = 480;
+    pub const height = 80;
+
+    gpa: std.mem.Allocator,
+    rasterizer: frontend.Rasterizer,
+    pixels: []u8,
+
+    pub fn init(gpa: std.mem.Allocator) !TextRasterContext {
+        var rasterizer = try frontend.Rasterizer.init();
+        errdefer rasterizer.deinit();
+        try rasterizer.setPixelHeight(15);
+        const pixels = try gpa.alloc(u8, width * height * 4);
+        @memset(pixels, 32);
+        return .{ .gpa = gpa, .rasterizer = rasterizer, .pixels = pixels };
+    }
+
+    pub fn deinit(self: *TextRasterContext) void {
+        self.gpa.free(self.pixels);
+        self.rasterizer.deinit();
     }
 };

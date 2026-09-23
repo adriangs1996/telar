@@ -13,7 +13,6 @@ test {
 }
 const Limits = @import("Limits.zig");
 const lua_api = @import("lua-api");
-const FileInput = @import("FileInput.zig");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const bar_values = @import("bar_values.zig");
 const lua_value = @import("lua_value.zig");
@@ -1477,4 +1476,10 @@ const ParsedBinding = struct {
 const ActionInput = struct {
     index: c_int,
     expression: bool,
+};
+
+const FileInput = struct {
+    path: []const u8,
+    number: u64,
+    profile: ?[]const u8 = null,
 };
