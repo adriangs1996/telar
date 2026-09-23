@@ -34,7 +34,8 @@ test "host input reads pause at outbox capacity and resume with one token" {
     defer harness.deinit();
     const client = harness.client;
     const terminal = harness.terminal;
-    try client.sendRuntime(
+    try client_module.runtime_io.sendRuntime(
+        client,
         .{
             .detach_pane = .{
                 .pane_id = TestHarness.bootstrap_pane,
@@ -50,7 +51,7 @@ test "host input reads pause at outbox capacity and resume with one token" {
     try std.testing.expect(!terminal.host_input.read_pending);
 
     switch (try support.receiveClient(terminal)) {
-        .sent => |result| try client.completeRuntimeSend(result),
+        .sent => |result| try client_module.runtime_io.completeRuntimeSend(client, result),
         else => return error.UnexpectedEvent,
     }
     try harness.deliverHostEffects();
@@ -70,8 +71,8 @@ test "runtime reads own one token and do not rearm after shutdown" {
     const client = harness.client;
     const terminal = harness.terminal;
 
-    try client.startRuntimeRead();
-    try client.startRuntimeRead();
+    try client_module.runtime_io.startRuntimeRead(client);
+    try client_module.runtime_io.startRuntimeRead(client);
     try std.testing.expect(client.runtime_transport.receive_pending);
 
     var payload: [64]u8 = undefined;
@@ -86,7 +87,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
     switch (try support.receiveClient(terminal)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
-            try client.receiveRuntime(result),
+            try client_module.runtime_io.receiveRuntime(client, result),
         ),
         else => return error.UnexpectedEvent,
     }
@@ -97,7 +98,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
     switch (try support.receiveClient(terminal)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, 0),
-            try client.receiveRuntime(result),
+            try client_module.runtime_io.receiveRuntime(client, result),
         ),
         else => return error.UnexpectedEvent,
     }
@@ -106,7 +107,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
     client.runtime_transport.receive_pending = true;
     try std.testing.expectError(
         error.RuntimeReadFailed,
-        client.receiveRuntime(error.RuntimeReadFailed),
+        client_module.runtime_io.receiveRuntime(client, error.RuntimeReadFailed),
     );
     try std.testing.expect(!client.runtime_transport.receive_pending);
 }
@@ -143,7 +144,7 @@ test "graphics credits remain owned until the outbox accepts them" {
     try std.testing.expect(client.model.to_runtime.inFlight());
 
     switch (try support.receiveClient(terminal)) {
-        .sent => |result| try client.completeRuntimeSend(result),
+        .sent => |result| try client_module.runtime_io.completeRuntimeSend(client, result),
         else => return error.UnexpectedEvent,
     }
     try harness.deliverHostEffects();
@@ -164,7 +165,7 @@ test "runtime write errors release the outbound token" {
 
     try std.testing.expectError(
         error.RuntimeWriteFailed,
-        client.completeRuntimeSend(error.RuntimeWriteFailed),
+        client_module.runtime_io.completeRuntimeSend(client, error.RuntimeWriteFailed),
     );
     try std.testing.expect(!client.model.to_runtime.inFlight());
     try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);
@@ -182,7 +183,7 @@ test "request delivery rolls correlation back when transport is full" {
     }
     const request_id = try client.model.request_lifecycle.nextId();
 
-    try std.testing.expectError(error.ClientOutboxFull, client.sendRuntimeRequest(.{
+    try std.testing.expectError(error.ClientOutboxFull, client_module.runtime_io.sendRuntimeRequest(client, .{
         .registration = .{
             .request_id = request_id,
             .continuation = .{ .tab_snapshot = TestHarness.bootstrap_location },
@@ -278,7 +279,7 @@ test "client startup waits for runtime layout before its initial open" {
     try std.testing.expectEqual(client.client_identity, runtime_state.request_runtime_state.client_identity);
 
     const empty_layout = try core.encodeClientLayoutSnapshot(&buffer, .{ .restored = false });
-    _ = try client.handleServerMessage(try core.decodeServer(empty_layout));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(empty_layout));
     try harness.settle();
 
     try std.testing.expect(client.model.request_lifecycle.tracker.has(.initial_open));
@@ -379,7 +380,7 @@ test "restored client layout controls the initial attach geometry" {
     var buffer: [core.max_client_layout_wire_bytes]u8 = undefined;
     const payload = try core.encodeClientLayoutSnapshot(&buffer, restored);
 
-    _ = try client.handleServerMessage(try core.decodeServer(payload));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(payload));
     try harness.settle();
 
     try std.testing.expect(client.model.sidebar_visible);
@@ -403,7 +404,7 @@ test "restored client layout controls the initial attach geometry" {
     const duplicate_payload = try core.encodeClientLayoutSnapshot(&buffer, restored);
     try std.testing.expectError(
         error.DuplicateClientLayoutSnapshot,
-        client.handleServerMessage(try core.decodeServer(duplicate_payload)),
+        client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(duplicate_payload)),
     );
 }
 
@@ -421,7 +422,7 @@ test "sidebar preferences survive when retained pane layouts become stale" {
         .workspace_list_collapsed = true,
     });
 
-    _ = try client.handleServerMessage(try core.decodeServer(payload));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(payload));
     try harness.settle();
 
     try std.testing.expectEqual(@as(u16, 51), client.model.sidebar_width);
@@ -463,9 +464,9 @@ test "client layout observation sends one canonical workspace update" {
     try std.testing.expect(client.model.restoreSidebarLayout(true, 53) != null);
     try std.testing.expect(client.model.setWorkspaceListCollapsed(true) != null);
 
-    try client.synchronizeClientLayout();
+    try client_module.client_layout.synchronizeClientLayout(client);
     try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);
-    try client.synchronizeClientLayout();
+    try client_module.client_layout.synchronizeClientLayout(client);
     try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);
     try harness.settle();
 

@@ -3,6 +3,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const Client = @import("../AttachedClient.zig");
+const copy_mode = @import("copy_mode.zig");
 
 /// Gives copy mode first refusal for one cell-based pointer event on tab
 /// `tab`, and reports whether copy mode took it.
@@ -45,18 +46,18 @@ fn route(client: *Client, command: CopyModePointerCommand, authority: Authority)
     const pointer_inside = switch (authority) {
         .unowned => return .unowned,
         .target_missing => {
-            _ = try client.leaveCopyMode();
+            _ = try copy_mode.leaveCopyMode(client);
             return .exited;
         },
         .selection => |selection| {
             if (selection.dragging and command.kind == .press and command.left_button) {
-                _ = try client.applyCopyMode(.cancel_pointer);
+                _ = try copy_mode.applyCopyMode(client, .cancel_pointer);
                 return .unowned;
             }
 
             if (!selection.dragging) {
                 if (command.kind == .press or command.kind == .scroll_up or command.kind == .scroll_down) {
-                    _ = try client.applyCopyMode(.cancel_pointer);
+                    _ = try copy_mode.applyCopyMode(client, .cancel_pointer);
                 }
 
                 return .unowned;
@@ -68,12 +69,12 @@ fn route(client: *Client, command: CopyModePointerCommand, authority: Authority)
 
             const position = selection.position orelse {
                 if (command.kind == .release) {
-                    _ = try client.applyCopyMode(.cancel_pointer);
+                    _ = try copy_mode.applyCopyMode(client, .cancel_pointer);
                 }
 
                 return .consumed;
             };
-            _ = try client.applyCopyMode(.{
+            _ = try copy_mode.applyCopyMode(client, .{
                 .pointer = .{
                     .position = position,
                     .release = command.kind == .release,
@@ -94,7 +95,7 @@ fn route(client: *Client, command: CopyModePointerCommand, authority: Authority)
         return .consumed;
     }
 
-    _ = try client.applyCopyMode(.{
+    _ = try copy_mode.applyCopyMode(client, .{
         .vertical = delta,
     });
     return .moved;

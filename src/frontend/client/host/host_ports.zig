@@ -232,7 +232,8 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
         const parsed = term.parse(bytes[offset..]) orelse {
             const prompt = client.model.name_prompt.currentConst() orelse return;
             if (prompt.pasting) {
-                _ = try client.inputPrompt(
+                _ = try client_module.name_prompt.inputPrompt(
+                    client,
                     .{
                         .paste_text = bytes[offset..],
                     },
@@ -252,7 +253,7 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
             .paste_end => .paste_end,
             .mouse, .terminal_response, .incomplete => continue,
         };
-        switch (try client.inputPrompt(input)) {
+        switch (try client_module.name_prompt.inputPrompt(client, input)) {
             .cancelled, .blocked, .finished, .removed => return,
             .unchanged, .routing_changed, .changed, .completion_requested => {},
         }

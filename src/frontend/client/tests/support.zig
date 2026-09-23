@@ -285,7 +285,7 @@ pub fn installTestingAttachmentProvider(client: *client_module.AttachedClient, g
             .status = .working,
         }},
     });
-    _ = try client.synchronizePaneAttachments();
+    _ = try client_module.pane_attachment.synchronizePaneAttachments(client);
 
     return target;
 }
@@ -309,7 +309,8 @@ pub fn testingClipboardCapture(client: *client_module.AttachedClient, execution:
 
 pub fn reloadConfiguration(terminal: *TerminalClient, adoption: client_module.ConfigAdoption) !data.ConfigurationCommit {
     const client = &terminal.app;
-    const outcome = try client.completeConfigReload(
+    const outcome = try client_module.config_adoption.completeConfigReload(
+        client,
         .{
             .loaded = .{
                 .generation = adoption.generation,
@@ -328,7 +329,7 @@ pub fn reloadConfiguration(terminal: *TerminalClient, adoption: client_module.Co
 /// Starts what a direct client call queued, as the event loop would, then
 /// receives the next inbox event and returns it when it belongs to the
 /// shared client.
-/// Example: `switch (try support.receiveClient(terminal)) { .sent => |result| try client.completeRuntimeSend(result), else => return error.UnexpectedEvent }`
+/// Example: `switch (try support.receiveClient(terminal)) { .sent => |result| try runtime_io.completeRuntimeSend(client, result), else => return error.UnexpectedEvent }`
 pub fn receiveClient(terminal: *TerminalClient) !client_module.Message {
     try host_effects.deliver(terminal);
     return switch (try terminal.inbox.receive()) {

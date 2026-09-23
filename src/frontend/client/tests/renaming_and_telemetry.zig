@@ -21,7 +21,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
     const version_before_prompt = client.model.version();
     const pending_updates_before_prompt = terminal.presenter.pending_updates;
 
-    try std.testing.expect(client.openNamePrompt(.rename_workspace));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_workspace));
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqualStrings("", client.model.name_prompt.currentConst().?.field.text());
     try support.expectNonPromptVersionEqual(version_before_prompt, client.model.version());
@@ -61,7 +61,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
             .{ .tab_id = TestHarness.bootstrap_location.tab_id, .position = 0, .pane_count = 1, .label = "" },
         },
     });
-    _ = try client.handleServerMessage(try core.decodeServer(renamed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(renamed));
 
     try std.testing.expectEqualStrings("mainx", client.model.workspaceName());
     try std.testing.expectEqual(version_before_request.workspace + 1, client.model.version().workspace);
@@ -89,7 +89,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
             .{ .tab_id = TestHarness.bootstrap_location.tab_id, .position = 0, .pane_count = 1, .label = "" },
         },
     });
-    _ = try client.handleServerMessage(try core.decodeServer(unchanged));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(unchanged));
     try presentation_lifecycle.observe(terminal);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
@@ -109,7 +109,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     const next_request_id = client.model.request_lifecycle.next_request_id;
     const version_before_request = client.model.version();
 
-    try std.testing.expect(client.openNamePrompt(.rename_workspace));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_workspace));
     try host_inputs.forward(terminal, "x\r");
 
     try std.testing.expect(!client.model.copyModeActive());
@@ -140,7 +140,8 @@ test "an unexpected tab rename is rejected without effects" {
         .label = "canonical",
     };
 
-    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabRenamed, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_renamed = renamed,
         },
@@ -169,13 +170,15 @@ test "tab rename consumes an incompatible continuation before rejection" {
         .label = "canonical",
     };
 
-    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabRenamed, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_renamed = renamed,
         },
     ));
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabRenamed, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_renamed = renamed,
         },
@@ -203,7 +206,8 @@ test "tab rename consumes a mismatched location before rejection" {
         .label = "canonical",
     };
 
-    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabRenamed, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_renamed = renamed,
         },
@@ -233,13 +237,15 @@ test "tab rename consumes a canonical response rejected by the model" {
         .label = "canonical",
     };
 
-    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabRenamed, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_renamed = renamed,
         },
     ));
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabRenamed, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_renamed = renamed,
         },
@@ -259,12 +265,13 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     const version_before_request = client.model.version();
     const pending_updates_before_request = terminal.presenter.pending_updates;
 
-    try std.testing.expect(client.openNamePrompt(
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(
+        client,
         .{
             .rename_tab = TestHarness.bootstrap_location.tab_id,
         },
     ));
-    try std.testing.expect(data.key_routing.captures(client.keyRoutingAuthority()));
+    try std.testing.expect(data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)));
 
     try host_inputs.forward(terminal, "x");
     try host_inputs.forward(terminal, "\r");
@@ -293,7 +300,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
         .location = message.rename_tab.location,
         .label = "canonical",
     });
-    _ = try client.handleServerMessage(try core.decodeServer(renamed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(renamed));
     @memset(&payload, 'x');
 
     try std.testing.expectEqualStrings("canonical", data.tab_label.text(&client.model, client.model.tabs.active));
@@ -316,7 +323,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
         .location = TestHarness.bootstrap_location,
         .label = "canonical",
     });
-    _ = try client.handleServerMessage(try core.decodeServer(unchanged));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(unchanged));
     try presentation_lifecycle.observe(terminal);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
@@ -332,7 +339,8 @@ test "tab rename response must match the requested identity" {
     const terminal = harness.terminal;
     client.model.request_lifecycle.tracker = .{};
 
-    try std.testing.expect(client.openNamePrompt(
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(
+        client,
         .{
             .rename_tab = TestHarness.bootstrap_location.tab_id,
         },
@@ -354,7 +362,7 @@ test "tab rename response must match the requested identity" {
 
     try std.testing.expectError(
         error.UnexpectedTabRenamed,
-        client.handleServerMessage(try core.decodeServer(response)),
+        client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(response)),
     );
 
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
@@ -371,7 +379,8 @@ test "a failed tab rename preserves the label and notifies" {
     const terminal = harness.terminal;
     client.model.request_lifecycle.tracker = .{};
 
-    try std.testing.expect(client.openNamePrompt(
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(
+        client,
         .{
             .rename_tab = TestHarness.bootstrap_location.tab_id,
         },
@@ -388,7 +397,7 @@ test "a failed tab rename preserves the label and notifies" {
         .message = "tab not found",
     });
 
-    _ = try client.handleServerMessage(try core.decodeServer(response));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(response));
 
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
@@ -408,7 +417,8 @@ test "pending tab operation keeps the rename prompt without sending" {
     const next_request_id = client.model.request_lifecycle.next_request_id;
     const version_before_request = client.model.version();
 
-    try std.testing.expect(client.openNamePrompt(
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(
+        client,
         .{
             .rename_tab = TestHarness.bootstrap_location.tab_id,
         },
@@ -440,7 +450,8 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
         try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
-    try std.testing.expect(client.openNamePrompt(
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(
+        client,
         .{
             .rename_tab = TestHarness.bootstrap_location.tab_id,
         },
@@ -466,7 +477,7 @@ test "escaping the prompt editor closes model state without changing mode" {
     const terminal = harness.terminal;
     client.model.request_lifecycle.tracker = .{};
 
-    _ = try client.executeAction(.new_workspace, .binding);
+    _ = try client_module.actions.executeAction(client, .new_workspace, .binding);
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expect(!client.model.copyModeActive());
     try host_inputs.forward(terminal, "\x1b");

@@ -3,6 +3,7 @@ const input_support = @import("input_support.zig");
 const std = @import("std");
 const Session = @import("Session.zig");
 const FramePacer = @import("../FramePacer.zig");
+const client = @import("telar-client");
 
 const Time = enum(u64) {
     before_input = 99 * std.time.ns_per_ms,
@@ -68,7 +69,7 @@ test "native terminal key release without encoded bytes grants no input grace" {
     const session = try Session.init();
     defer session.deinit();
     try begin(session);
-    const delivery = try session.gui.app.sendPaneInput(.{
+    const delivery = try client.pane_input.sendPaneInput(&session.gui.app, .{
         .target = .focused,
         .source = .host,
         .payload = .{ .key = .{ .code = .{ .char = .init("x") }, .phase = .release } },
@@ -92,7 +93,7 @@ test "native rejected outbox input grants no frame grace" {
         try session.gui.app.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = Session.pane_id } });
     }
 
-    try std.testing.expectError(error.ClientOutboxFull, session.gui.app.sendPaneInput(.{
+    try std.testing.expectError(error.ClientOutboxFull, client.pane_input.sendPaneInput(&session.gui.app, .{
         .target = .focused,
         .source = .host,
         .payload = .{ .key = .{ .code = .{ .char = .init("x") } } },

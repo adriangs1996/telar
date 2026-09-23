@@ -53,7 +53,7 @@ pub fn accept(self: *Reload, app: *client.AttachedClient) !void {
         if (try self.result == .unchanged) {
             self.pending = false;
             self.request = null;
-            _ = try app.completeConfigReload(self.result);
+            _ = try client.config_adoption.completeConfigReload(app, self.result);
         }
     }
 }
@@ -108,7 +108,7 @@ pub fn apply(self: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
     // Physical downstream effects can fail after the common model commits.
     // Keep native resources on that same generation even on this failure path.
     var delivery_error: ?anyerror = null;
-    const outcome = gui.app.completeConfigReload(result) catch |err| blk: {
+    const outcome = client.config_adoption.completeConfigReload(&gui.app, result) catch |err| blk: {
         delivery_error = err;
         break :blk null;
     };

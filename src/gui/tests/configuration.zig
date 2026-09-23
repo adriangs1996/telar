@@ -5,6 +5,7 @@ const input_support = @import("input_support.zig");
 const std = @import("std");
 const Fixture = @import("ConfigurationFixture.zig");
 const Session = @import("Session.zig");
+const client = @import("telar-client");
 const Quad = @import("../render/Quad.zig").Quad;
 
 test "named theme reload changes chrome terminal colors and cursor without replacing the atlas" {
@@ -417,20 +418,20 @@ test "editor reload overrides EDITOR and removal restores the startup fallback" 
     const app = &session.gui.app;
     const reload = &session.gui.driver.configuration;
     app.options.editor = "vi";
-    try std.testing.expectEqualStrings("/opt/nvim", app.editorExecutable());
+    try std.testing.expectEqualStrings("/opt/nvim", client.editor_file_links.editorExecutable(app));
 
     try fixture.write("config.lua", "return { api_version = 2, client = { editor = '/opt/other editor' } }");
     try fixture.wait();
     try std.testing.expect(try reload.apply(session.gui, &session.gui.renderer));
-    try std.testing.expectEqualStrings("/opt/other editor", app.editorExecutable());
+    try std.testing.expectEqualStrings("/opt/other editor", client.editor_file_links.editorExecutable(app));
 
     try fixture.write("config.lua", "return { api_version = 2, client = { editor = false } }");
     try fixture.wait();
     _ = try reload.apply(session.gui, &session.gui.renderer);
-    try std.testing.expectEqualStrings("/opt/other editor", app.editorExecutable());
+    try std.testing.expectEqualStrings("/opt/other editor", client.editor_file_links.editorExecutable(app));
 
     try fixture.write("config.lua", "return { api_version = 2 }");
     try fixture.wait();
     try std.testing.expect(try reload.apply(session.gui, &session.gui.renderer));
-    try std.testing.expectEqualStrings("vi", app.editorExecutable());
+    try std.testing.expectEqualStrings("vi", client.editor_file_links.editorExecutable(app));
 }

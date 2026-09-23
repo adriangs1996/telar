@@ -57,7 +57,7 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
     }
 
     switch (selector.kind) {
-        .recent => try gui.app.resumeAgentConversation(selector.pane_id, choice.index),
+        .recent => try client.agent_control.resumeAgentConversation(&gui.app, selector.pane_id, choice.index),
         .model => _ = gui.app.model.changeAgentOption(
             selector.pane_id,
             .{

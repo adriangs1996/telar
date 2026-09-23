@@ -95,7 +95,7 @@ pub fn observe(terminal: *TerminalClient, response: term.Event.TerminalResponse)
     }
 
     const observation = translate(response) orelse return null;
-    return client.observeHostCapability(observation);
+    return client_module.host_capabilities.observeHostCapability(client, observation);
 }
 
 /// Settles unanswered probes and projects their fallback resources.
@@ -112,7 +112,7 @@ pub fn expire(terminal: *TerminalClient) !?data.HostCommit {
         terminal.host_negotiation.zlib_support = .unsupported;
     }
 
-    return client.reconcileHostCapabilities(capabilities);
+    return client_module.host_capabilities.reconcileHostCapabilities(client, capabilities);
 }
 
 /// Translates one parser reply into a protocol-free host observation.

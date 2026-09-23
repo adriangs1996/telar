@@ -347,7 +347,7 @@ test "a Kitty capability response commits before fallback projection and present
             .byte_len = 3,
         },
     });
-    _ = try client.handleServerMessage(try core.decodeServer(encoded));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(encoded));
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.graphics_placeholder);
     const version = client.model.version();
     const pending_updates = terminal.presenter.pending_updates;
@@ -590,11 +590,12 @@ test "native scroll actions reuse bounded viewport delivery without forwarding i
     const pending_updates = terminal.presenter.pending_updates;
 
     for (0..4) |_| {
-        _ = try client.executeAction(try data.Action.parse("scroll-pane-up"), .effect);
+        _ = try client_module.actions.executeAction(client, try data.Action.parse("scroll-pane-up"), .effect);
     }
 
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .scroll_pane = .up,
         },
@@ -602,10 +603,11 @@ test "native scroll actions reuse bounded viewport delivery without forwarding i
     );
 
     for (0..4) |_| {
-        _ = try client.executeAction(try data.Action.parse("scroll-pane-down"), .effect);
+        _ = try client_module.actions.executeAction(client, try data.Action.parse("scroll-pane-down"), .effect);
     }
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .scroll_pane = .down,
         },
@@ -672,11 +674,11 @@ test "copy mode round trip: enter, select, copy, leave" {
 
     try std.testing.expectEqual(
         data.KeybindControl.continue_routing,
-        try client.executeAction(.enter_copy_mode, .effect),
+        try client_module.actions.executeAction(client, .enter_copy_mode, .effect),
     );
     try std.testing.expect(client.model.copyModeActive());
-    try std.testing.expect(!data.key_routing.captures(client.keyRoutingAuthority()));
-    try std.testing.expect(!client.openNamePrompt(.rename_active_tab));
+    try std.testing.expect(!data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)));
+    try std.testing.expect(!client_module.name_prompt.openNamePrompt(client, .rename_active_tab));
     try std.testing.expect(!client.model.name_prompt.active());
     try support.expectNonCopyVersionEqual(version_before, client.model.version());
     try std.testing.expectEqual(version_before.copy + 1, client.model.version().copy);
@@ -768,7 +770,7 @@ test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "file:///tmp/a%20b.txt", .style = .{} });
     pane.cursor = .{ .visible = true, .x = 12, .y = 0 };
 
-    _ = try client.executeAction(.enter_copy_mode, .effect);
+    _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     const version = client.model.version();
     try host_inputs.key(terminal, try data.chord.parseKey("o"));
 
@@ -834,14 +836,14 @@ test "native action preflight retires copy mode before concrete delivery" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    _ = try client.executeAction(.enter_copy_mode, .effect);
+    _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     const version = client.model.version();
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(client.model.sidebar_visible);
     try std.testing.expectEqual(
         data.KeybindControl.continue_routing,
-        try client.executeAction(.toggle_sidebar, .effect),
+        try client_module.actions.executeAction(client, .toggle_sidebar, .effect),
     );
 
     var expected = version;
@@ -859,7 +861,7 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
     try harness.bootstrap();
     const client = harness.client;
     const terminal = harness.terminal;
-    _ = try client.executeAction(.enter_copy_mode, .effect);
+    _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     const active_version = client.model.version();
 
     try host_inputs.mouse(terminal, .{
@@ -892,7 +894,7 @@ test "a full outbox keeps copy mode and its selection active" {
         try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
-    _ = try client.executeAction(.enter_copy_mode, .effect);
+    _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     try host_inputs.key(terminal, try data.chord.parseKey("v"));
     const version = client.model.version();
 

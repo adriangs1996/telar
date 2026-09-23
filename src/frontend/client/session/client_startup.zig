@@ -30,10 +30,10 @@ pub fn start(terminal: *TerminalClient, request: StartupRequest) !void {
     try host_inputs.scheduleRead(terminal);
 
     try host_resizes.schedule(terminal, request.resize_watcher);
-    try client.startRuntimeRead();
+    try client_module.runtime_io.startRuntimeRead(client);
     try client_telemetry.start(terminal);
-    try client.synchronizeBars();
-    try client.scheduleConfigReload();
+    try client_module.bar_updates.synchronizeBars(client);
+    try client_module.config_adoption.scheduleConfigReload(client);
     try host_effects.deliver(terminal);
 }
 

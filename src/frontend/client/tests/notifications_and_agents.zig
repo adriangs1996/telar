@@ -29,7 +29,7 @@ test "a failed request surfaces as a notification" {
         .code = .pane_not_found,
         .message = "no such pane",
     });
-    _ = try client.handleServerMessage(try core.decodeServer(failed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed));
     try harness.settle();
     const notification = client.model.notification_center.itemAt(0).?;
 
@@ -48,7 +48,7 @@ test "a failed request surfaces as a notification" {
     });
     try std.testing.expectError(
         error.UnexpectedRequestFailure,
-        client.handleServerMessage(try core.decodeServer(unknown)),
+        client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(unknown)),
     );
 }
 
@@ -71,7 +71,7 @@ test "a failed snapshot request is fatal after consuming its continuation" {
 
     try std.testing.expectError(
         error.RuntimeRequestFailed,
-        client.handleServerMessage(try core.decodeServer(failed)),
+        client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed)),
     );
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(u8, 0), client.model.notification_center.count);
@@ -92,7 +92,7 @@ test "a vanished remembered pane retries its workspace once before failing fatal
         .message = "remembered pane disappeared",
     });
 
-    _ = try client.handleServerMessage(try core.decodeServer(failed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed));
     try std.testing.expectEqual(@as(u8, 0), client.model.notification_center.count);
     try harness.settle();
     var outbound: [512]u8 = undefined;
@@ -105,7 +105,7 @@ test "a vanished remembered pane retries its workspace once before failing fatal
         .message = "workspace no longer has a pane",
     });
 
-    try std.testing.expectError(error.RuntimeRequestFailed, client.handleServerMessage(try core.decodeServer(retry_failed)));
+    try std.testing.expectError(error.RuntimeRequestFailed, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(retry_failed)));
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try std.testing.expectEqual(@as(u8, 0), client.model.notification_center.count);
@@ -128,7 +128,8 @@ test "a runtime notification translates and owns its wire payload" {
         .message = "Review its question",
     });
 
-    _ = try client.handleServerMessage(
+    _ = try client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .notification = (try core.decodeServer(encoded)).notification,
         },
@@ -162,7 +163,8 @@ test "notification action delivers one correlated runtime request without model 
     const request_id: core.RequestId = @enumFromInt(client.model.request_lifecycle.next_request_id);
     const version_before = client.model.version();
     const pending_updates_before = terminal.presenter.pending_updates;
-    try client.sendRuntime(
+    try client_module.runtime_io.sendRuntime(
+        client,
         .{
             .detach_pane = .{
                 .pane_id = TestHarness.bootstrap_pane,
@@ -179,7 +181,8 @@ test "notification action delivers one correlated runtime request without model 
 
     try std.testing.expectEqual(
         data.KeybindControl.continue_routing,
-        try client.executeAction(
+        try client_module.actions.executeAction(
+            client,
             .{
                 .notification = notification,
             },
@@ -236,7 +239,8 @@ test "notification request rolls correlation back when transport is full" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client.executeAction(
+        client_module.actions.executeAction(
+            client,
             .{
                 .notification = notification,
             },
@@ -257,7 +261,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     const client = harness.client;
     const terminal = harness.terminal;
     const now_ns = client_module.monotonic(client.io);
-    _ = try client.publishNotification(now_ns, .{
+    _ = try client_module.notifications.publishNotification(client, now_ns, .{
         .title = "Building",
         .message = "Lifecycle tick",
     });
@@ -266,7 +270,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     try std.testing.expect(client.model.notification_scheduler.pending);
     switch (try support.receiveClient(terminal)) {
         .notification_tick => |result| {
-            const change = (try client.completeNotificationTick(result)).?;
+            const change = (try client_module.notifications.completeNotificationTick(client, result)).?;
 
             try std.testing.expectEqual(
                 client.model.version().notifications,
@@ -299,7 +303,8 @@ test "an unexpected notification delivery report is rejected without effects" {
 
     try std.testing.expectError(
         error.UnexpectedNotificationReply,
-        client.handleServerMessage(
+        client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .notification_shown = shown,
             },
@@ -326,7 +331,8 @@ test "notification delivery consumes an incompatible continuation before rejecti
 
     try std.testing.expectError(
         error.UnexpectedNotificationReply,
-        client.handleServerMessage(
+        client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .notification_shown = shown,
             },
@@ -335,7 +341,8 @@ test "notification delivery consumes an incompatible continuation before rejecti
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(
         error.UnexpectedNotificationReply,
-        client.handleServerMessage(
+        client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .notification_shown = shown,
             },
@@ -356,7 +363,8 @@ test "a delivered notification report consumes correlation without model effects
 
     try std.testing.expectEqual(
         @as(?u8, null),
-        try client.handleServerMessage(
+        try client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .notification_shown = .{
                     .request_id = request_id,
@@ -380,7 +388,7 @@ test "runtime notifications and delivery failures reach the toasts" {
 
     var payload: [256]u8 = undefined;
     const notification = try core.encodeNotification(&payload, .{ .title = "hello" });
-    _ = try client.handleServerMessage(try core.decodeServer(notification));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(notification));
     try std.testing.expect(client.model.notification_scheduler.pending);
     const version_after_runtime = client.model.version();
 
@@ -389,7 +397,7 @@ test "runtime notifications and delivery failures reach the toasts" {
         .request_id = @enumFromInt(2),
         .delivered_clients = 0,
     });
-    _ = try client.handleServerMessage(try core.decodeServer(shown));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(shown));
     const snapshot = &client.model.notification_center;
 
     try std.testing.expectEqual(version_after_runtime.notifications + 1, client.model.version().notifications);
@@ -407,7 +415,7 @@ test "runtime notifications and delivery failures reach the toasts" {
     });
     try std.testing.expectError(
         error.UnexpectedNotificationReply,
-        client.handleServerMessage(try core.decodeServer(unexpected)),
+        client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(unexpected)),
     );
     try harness.settle();
 }
@@ -424,7 +432,7 @@ test "toast activation commits by id before following its navigation target" {
     try data.pane_split.split(&client.model, active, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = second_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = terminal.view.workbench() });
     try std.testing.expect(client.model.tabs.layout[active].focusPane(TestHarness.bootstrap_pane));
 
-    try client.publishNotificationNow(.{
+    try client_module.notifications.publishNotificationNow(client, .{
         .title = "Ready",
         .message = "Open pane",
         .target = .{ .focus_pane = second_pane },
@@ -496,7 +504,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
 
     var payload: [64]u8 = undefined;
     const enabled = try core.encodeProxyStatus(&payload, .{ .active = true, .scope = .wildcard, .system_trusted = false });
-    _ = try client.handleServerMessage(try core.decodeServer(enabled));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(enabled));
 
     try std.testing.expect(client.model.proxy_tls_active);
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
@@ -509,7 +517,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
         client.model.notification_center.itemAt(0).?.title(),
     );
 
-    _ = try client.handleServerMessage(try core.decodeServer(enabled));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(enabled));
 
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
@@ -536,7 +544,7 @@ test "proxy status commits before announcement and presenter-owned projection" {
     const pending_updates_after_enabled = terminal.presenter.pending_updates;
     const version_before_disabled = client.model.version();
     const disabled = try core.encodeProxyStatus(&payload, .{ .active = false, .scope = .exact, .system_trusted = false });
-    _ = try client.handleServerMessage(try core.decodeServer(disabled));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(disabled));
 
     try std.testing.expect(!client.model.proxy_tls_active);
     try std.testing.expectEqual(version_before_disabled.proxy_status + 1, client.model.version().proxy_status);
@@ -578,7 +586,7 @@ test "system metrics commit before presenter-owned projection" {
         .has_battery = true,
         .battery_percent = 80,
     });
-    _ = try client.handleServerMessage(try core.decodeServer(metrics));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(metrics));
 
     try std.testing.expectEqualDeep(data.SystemMetrics{
         .runtime_revision = 7,
@@ -590,7 +598,7 @@ test "system metrics commit before presenter-owned projection" {
     try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try std.testing.expect(!terminal.view.dirty);
 
-    _ = try client.handleServerMessage(try core.decodeServer(metrics));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(metrics));
     try std.testing.expectEqual(version_before.system_metrics + 1, client.model.version().system_metrics);
     try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 
@@ -608,7 +616,7 @@ test "system metrics commit before presenter-owned projection" {
     try std.testing.expectEqual(sidebar.x + sidebar.w, contracted_bottom.x);
     try std.testing.expect(std.mem.indexOf(u8, contracted_text, " 50%") != null);
 
-    _ = try client.executeAction(.toggle_sidebar, .effect);
+    _ = try client_module.actions.executeAction(client, .toggle_sidebar, .effect);
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
 
@@ -656,7 +664,7 @@ test "workspace list snapshots commit before presenter-owned projection" {
             .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 2 },
         },
     });
-    _ = try client.handleServerMessage(try core.decodeServer(list));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(list));
 
     try std.testing.expect(client.model.knowsWorkspace(@enumFromInt(1)));
     try std.testing.expect(client.model.knowsWorkspace(@enumFromInt(2)));
@@ -665,7 +673,7 @@ test "workspace list snapshots commit before presenter-owned projection" {
     try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try std.testing.expect(!terminal.view.dirty);
 
-    _ = try client.handleServerMessage(try core.decodeServer(list));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(list));
     try std.testing.expectEqual(version_before.workspace_list + 1, client.model.version().workspace_list);
     try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 
@@ -702,10 +710,11 @@ test "workspace position navigation resolves the committed client model" {
             .{ .workspace = @enumFromInt(2), .name = "api", .path = "/work/api", .tab_count = 1 },
         },
     });
-    _ = try client.handleServerMessage(try core.decodeServer(list));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(list));
     const pending_updates_before = terminal.presenter.pending_updates;
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .select_workspace = 1,
         },
@@ -766,7 +775,7 @@ test "an agent snapshot replaces the sidebar replica" {
     });
     const pending_updates = harness.terminal.presenter.pending_updates;
     harness.terminal.view.sidebar.scroll = 7;
-    _ = try harness.client.handleServerMessage(try core.decodeServer(snapshot));
+    _ = try client_module.runtime_messages.handleServerMessage(harness.client, try core.decodeServer(snapshot));
     const agent = harness.client.model.agent_snapshot.find(.{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = 1,
@@ -796,14 +805,14 @@ test "sidebar animation commits model state before the presenter observes it" {
     const terminal = harness.terminal;
     var payload: [512]u8 = undefined;
     const snapshot = try support.encodeTestingAgentSnapshot(&payload, 1, .working);
-    _ = try client.handleServerMessage(try core.decodeServer(snapshot));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(snapshot));
     const pending_updates = terminal.presenter.pending_updates;
 
     try std.testing.expect(client.model.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(@as(u8, 0), client.model.sidebar_animation_frame);
     switch (try support.receiveClient(terminal)) {
         .sidebar_animation_tick => |result| {
-            const change = (try client.completeSidebarAnimationTick(result)).?;
+            const change = (try client_module.sidebar_animation.completeSidebarAnimationTick(client, result)).?;
 
             try std.testing.expectEqual(@as(u8, 1), change.frame);
             try std.testing.expectEqual(@as(u64, 1), change.sidebar_animation_revision);
@@ -833,13 +842,13 @@ test "agent snapshot transitions raise bounded presentation alerts only once" {
     var payload: [512]u8 = undefined;
 
     const initial = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
-    _ = try client.handleServerMessage(try core.decodeServer(initial));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(initial));
 
     try std.testing.expectEqual(@as(u8, 0), client.model.notification_center.count);
     try std.testing.expectEqual(data.Version{ .agents = 1 }, client.model.version());
 
     const changed = try support.encodeTestingAgentSnapshot(&payload, 2, .blocked);
-    _ = try client.handleServerMessage(try core.decodeServer(changed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(changed));
     const notification = client.model.notification_center.itemAt(0).?;
 
     try std.testing.expectEqual(data.Version{ .agents = 2, .notifications = 1 }, client.model.version());
@@ -853,7 +862,7 @@ test "agent snapshot transitions raise bounded presentation alerts only once" {
     );
 
     const stale = try support.encodeTestingAgentSnapshot(&payload, 1, .failed);
-    _ = try client.handleServerMessage(try core.decodeServer(stale));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(stale));
 
     try std.testing.expectEqual(data.Version{ .agents = 2, .notifications = 1 }, client.model.version());
     try std.testing.expectEqual(@as(u8, 1), client.model.notification_center.count);
@@ -867,7 +876,7 @@ test "agent sounds validate exact identity against the client model" {
     const terminal = harness.terminal;
     var payload: [512]u8 = undefined;
     const snapshot = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
-    _ = try client.handleServerMessage(try core.decodeServer(snapshot));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(snapshot));
     const version_before_sound = client.model.version();
     const pending_updates = terminal.presenter.pending_updates;
 
@@ -876,7 +885,8 @@ test "agent sounds validate exact identity against the client model" {
         .pane_generation = 2,
         .sound = .ready,
     });
-    _ = try client.handleServerMessage(
+    _ = try client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .agent_sound = (try core.decodeServer(unknown)).agent_sound,
         },
@@ -889,7 +899,8 @@ test "agent sounds validate exact identity against the client model" {
         .pane_generation = 1,
         .sound = .ready,
     });
-    _ = try client.handleServerMessage(
+    _ = try client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .agent_sound = (try core.decodeServer(known)).agent_sound,
         },
@@ -902,7 +913,8 @@ test "agent sounds validate exact identity against the client model" {
         .pane_generation = 1,
         .sound = .needs_input,
     });
-    _ = try client.handleServerMessage(
+    _ = try client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .agent_sound = (try core.decodeServer(urgent)).agent_sound,
         },
@@ -928,7 +940,7 @@ test "agent sound completion releases a failed worker before scheduling its succ
     );
     try std.testing.expect(client.model.sound_playback.request(.needs_input) == .queued);
 
-    try client.completeAgentSound(error.SoundUnavailable);
+    try client_module.agent_sound.completeAgentSound(client, error.SoundUnavailable);
 
     try std.testing.expectEqual(data.SoundSnapshot{
         .configuration = .{},
@@ -946,7 +958,7 @@ test "a sound the host cannot start releases its token and does not poison a lat
     const client = harness.client;
     var payload: [512]u8 = undefined;
     const initial = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
-    _ = try client.handleServerMessage(try core.decodeServer(initial));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(initial));
     try harness.deliverHostEffects();
     const message = try core.encodeAgentSound(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -954,14 +966,14 @@ test "a sound the host cannot start releases its token and does not poison a lat
         .sound = .ready,
     });
 
-    _ = try client.handleServerMessage(try core.decodeServer(message));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(message));
     const job = client.to_workers.pop().?;
     try std.testing.expect(job == .sound);
     try client.failJob(job, error.SoundSchedulingFailed);
 
     try std.testing.expect(!client.model.sound_playback.snapshot().active);
     try std.testing.expect(client.model.sound_playback.snapshot().queued == null);
-    _ = try client.handleServerMessage(try core.decodeServer(message));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(message));
     try std.testing.expect(client.model.sound_playback.snapshot().active);
 }
 
@@ -992,14 +1004,14 @@ test "agent snapshot limits alert publication while retaining every canonical st
     }
     var payload: [8192]u8 = undefined;
     const initial = try core.encodeAgentSnapshot(&payload, .{ .revision = 1, .entries = &entries });
-    _ = try client.handleServerMessage(try core.decodeServer(initial));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(initial));
     for (&entries) |*entry| {
         entry.status = .blocked;
         entry.sequence = 2;
     }
     const changed = try core.encodeAgentSnapshot(&payload, .{ .revision = 2, .entries = &entries });
 
-    _ = try client.handleServerMessage(try core.decodeServer(changed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(changed));
 
     try std.testing.expectEqual(@as(u64, data.notifications.max_items), client.model.version().notifications);
     try std.testing.expectEqual(data.notifications.max_items, client.model.notification_center.count);
@@ -1008,7 +1020,7 @@ test "agent snapshot limits alert publication while retaining every canonical st
         try std.testing.expectEqual(entry.status, client.model.agent_snapshot.find(.{ .pane_id = entry.pane_id, .pane_generation = entry.pane_generation }).?.status);
     }
     const version = client.model.version();
-    _ = try client.handleServerMessage(try core.decodeServer(changed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(changed));
     try std.testing.expectEqualDeep(version, client.model.version());
 }
 
@@ -1019,19 +1031,19 @@ test "agent alert host failure preserves the canonical snapshot and owned notifi
     const client = harness.client;
     var payload: [512]u8 = undefined;
     const initial = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
-    _ = try client.handleServerMessage(try core.decodeServer(initial));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(initial));
     client.model.config.notification_delivery = .terminal;
     try fillHostEffects(client);
     const changed = try support.encodeTestingAgentSnapshot(&payload, 2, .blocked);
 
-    try std.testing.expectError(error.HostEffectsFull, client.handleServerMessage(try core.decodeServer(changed)));
+    try std.testing.expectError(error.HostEffectsFull, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(changed)));
 
     try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
     try std.testing.expectEqual(@as(u64, 2), client.model.agent_snapshot.revision);
     try std.testing.expectEqual(data.NotificationLevel.warning, client.model.notification_center.itemAt(0).?.level);
     try std.testing.expect(client.model.notification_scheduler.pending);
     const version = client.model.version();
-    _ = try client.handleServerMessage(try core.decodeServer(changed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(changed));
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
 }
@@ -1060,12 +1072,12 @@ test "attachment rejection consumes correlation but does not notify when recover
         .message = "pane disappeared",
     });
 
-    try std.testing.expectError(error.ClientOutboxFull, client.handleServerMessage(try core.decodeServer(failed)));
+    try std.testing.expectError(error.ClientOutboxFull, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed)));
 
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(u8, 0), client.model.notification_center.count);
-    try std.testing.expectError(error.UnexpectedRequestFailure, client.handleServerMessage(try core.decodeServer(failed)));
+    try std.testing.expectError(error.UnexpectedRequestFailure, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed)));
 }
 
 test "request failure retains canonical recovery when host notification delivery fails" {
@@ -1090,13 +1102,13 @@ test "request failure retains canonical recovery when host notification delivery
         .message = "pane disappeared",
     });
 
-    try std.testing.expectError(error.HostEffectsFull, client.handleServerMessage(try core.decodeServer(failed)));
+    try std.testing.expectError(error.HostEffectsFull, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed)));
 
     try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
     try std.testing.expect(client.model.request_lifecycle.tracker.has(.tab_snapshot));
     try std.testing.expectEqual(@as(u8, 1), client.model.notification_center.count);
     try std.testing.expectEqualStrings("pane disappeared", client.model.notification_center.itemAt(0).?.message());
-    try std.testing.expectError(error.UnexpectedRequestFailure, client.handleServerMessage(try core.decodeServer(failed)));
+    try std.testing.expectError(error.UnexpectedRequestFailure, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed)));
     try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
     try harness.settle();
     var outgoing: [256]u8 = undefined;

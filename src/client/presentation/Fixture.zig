@@ -13,6 +13,9 @@ const Projection = @import("Projection.zig");
 const projection_support = @import("projection_support.zig");
 const lifecycle_module = @import("lifecycle.zig");
 const GenericInbox = @import("../execution/GenericInbox.zig").Type;
+const pane_input = @import("../panes/pane_input.zig");
+const runtime_io = @import("../connection/runtime_io.zig");
+const runtime_messages = @import("../connection/runtime_messages.zig");
 const Fixture = @This();
 
 app: Client,
@@ -132,7 +135,7 @@ pub fn drain(self: *Fixture) !void {
         switch (message) {
             .server => |received| {
                 defer self.receive_pending = false;
-                _ = try self.app.handleServerMessage(received.message);
+                _ = try runtime_messages.handleServerMessage(&self.app, received.message);
             },
             .key => |value| try self.applyKey(value),
             .completed => |value| try self.deliver(value.token, value.outcome),
@@ -203,7 +206,8 @@ pub fn key(self: *Fixture, value: model_data.Key) !void {
 }
 
 fn applyKey(self: *Fixture, value: model_data.Key) !void {
-    _ = try self.app.sendPaneInput(
+    _ = try pane_input.sendPaneInput(
+        &self.app,
         .{
             .target = .focused,
             .source = .host,
@@ -222,6 +226,6 @@ pub fn expectAck(self: *Fixture, frame_id: u64) !void {
 pub fn sendOne(self: *Fixture) !void {
     try std.testing.expect(self.pending != null);
     self.pending = null;
-    try self.app.completeRuntimeSend({});
+    try runtime_io.completeRuntimeSend(&self.app, {});
     try self.startJobs();
 }

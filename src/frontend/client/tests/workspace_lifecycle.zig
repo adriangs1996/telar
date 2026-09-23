@@ -7,6 +7,7 @@ const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const support = @import("support.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
+const client_module = @import("telar-client");
 
 test "a created workspace bookmarks and replaces the prior layout" {
     var harness: TestHarness = undefined;
@@ -45,7 +46,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
         .location = new_location,
         .created = true,
     });
-    _ = try client.handleServerMessage(try core.decodeServer(opened));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(opened));
 
     try std.testing.expect(!client.model.notification_scheduler.pending);
     try std.testing.expectEqualDeep(
@@ -90,7 +91,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
 
     // Return through the same runtime handoff used by workspace selection.
     client.model.request_lifecycle.tracker = .{};
-    _ = try client.requestWorkspace(prior_location.workspace.workspace);
+    _ = try client_module.workspace_handoff.requestWorkspace(client, prior_location.workspace.workspace);
     try harness.settle();
     const detached = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(detached == .detach_pane);
@@ -106,7 +107,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
         .location = prior_location,
         .created = false,
     });
-    _ = try client.handleServerMessage(try core.decodeServer(reopened));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(reopened));
     try harness.settle();
     var snapshot_request: core.RequestId = .none;
     while (snapshot_request == .none) switch (try harness.nextClientMessage(&message_buffer)) {
@@ -127,7 +128,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
             .{ .pane_id = bottom_right, .lifecycle = .running },
         },
     });
-    _ = try client.handleServerMessage(try core.decodeServer(snapshot));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(snapshot));
 
     var restored_geometry: data.LayoutSnapshot = .{};
     client.model.tabs.layout[client.model.tabs.active].snapshot(workbench, &restored_geometry);
@@ -155,7 +156,7 @@ test "a failed workspace creation preserves the current projection" {
         .code = .spawn_failed,
         .message = "shell launch failed",
     });
-    _ = try client.handleServerMessage(try core.decodeServer(failed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed));
 
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
@@ -173,17 +174,20 @@ test "workspace creation validates names before request ownership or projection 
     const version = client.model.version();
     const next_request = client.model.request_lifecycle.next_request_id;
 
-    try std.testing.expectError(error.InvalidWorkspaceName, client.requestWorkspaceCreation(
+    try std.testing.expectError(error.InvalidWorkspaceName, client_module.workspace_creation.requestWorkspaceCreation(
+        client,
         .{
             .name = "",
         },
     ));
-    try std.testing.expectError(error.InvalidWorkspaceName, client.requestWorkspaceCreation(
+    try std.testing.expectError(error.InvalidWorkspaceName, client_module.workspace_creation.requestWorkspaceCreation(
+        client,
         .{
             .name = "bad\nname",
         },
     ));
-    try std.testing.expectError(error.InvalidUtf8, client.requestWorkspaceCreation(
+    try std.testing.expectError(error.InvalidUtf8, client_module.workspace_creation.requestWorkspaceCreation(
+        client,
         .{
             .name = "\xff",
         },
@@ -207,7 +211,8 @@ test "workspace creation outbox failure releases correlation and retains the cur
     }
     const version = client.model.version();
 
-    try std.testing.expectError(error.ClientOutboxFull, client.requestWorkspaceCreation(
+    try std.testing.expectError(error.ClientOutboxFull, client_module.workspace_creation.requestWorkspaceCreation(
+        client,
         .{
             .name = "agents",
         },
@@ -239,12 +244,12 @@ test "canonical workspace replacement survives failure to deliver activation sna
         .created = true,
     });
 
-    try std.testing.expectError(error.ClientOutboxFull, client.handleServerMessage(try core.decodeServer(opened)));
+    try std.testing.expectError(error.ClientOutboxFull, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(opened)));
 
     try std.testing.expectEqualDeep(location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.panes.find(@enumFromInt(30)).?.attached);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) == null);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.navigation_history.find(TestHarness.bootstrap_location.workspace).?.location);
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedRequest, client.handleServerMessage(try core.decodeServer(opened)));
+    try std.testing.expectError(error.UnexpectedRequest, client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(opened)));
 }

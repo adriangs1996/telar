@@ -24,7 +24,8 @@ test "key press rolls back its physical lease when runtime delivery fails" {
     var key = try data.chord.parseKey("x");
     key.physical = .{ .value = 41 };
 
-    try std.testing.expectError(error.ClientOutboxFull, client.routeKeyInput(
+    try std.testing.expectError(error.ClientOutboxFull, api.key_routing.routeKeyInput(
+        client,
         .{
             .key = key,
         },
@@ -46,7 +47,8 @@ test "physical key repeat and release keep their pane after focus and prompt cha
     try std.testing.expect(client.model.tabs.layout[tab].focusPane(TestHarness.bootstrap_pane));
     var key = try data.chord.parseKey("x");
     key.physical = .{ .value = 41 };
-    try std.testing.expect((try client.routeKeyInput(
+    try std.testing.expect((try api.key_routing.routeKeyInput(
+        client,
         .{
             .key = key,
         },
@@ -59,7 +61,8 @@ test "physical key repeat and release keep their pane after focus and prompt cha
     try std.testing.expect(client.model.tabs.layout[tab].focusPane(other));
     client.model.name_prompt.begin(.goto_picker);
     key.phase = .repeat;
-    try std.testing.expect((try client.routeKeyInput(
+    try std.testing.expect((try api.key_routing.routeKeyInput(
+        client,
         .{
             .key = key,
         },
@@ -71,14 +74,16 @@ test "physical key repeat and release keep their pane after focus and prompt cha
     try std.testing.expectEqualStrings("", client.model.name_prompt.currentConst().?.field.text());
 
     key.phase = .release;
-    const released = try client.routeKeyInput(
+    const released = try api.key_routing.routeKeyInput(
+        client,
         .{
             .key = key,
         },
     );
     try std.testing.expectEqual(.pane, released.owner);
     try std.testing.expectEqual(@as(usize, 0), client.model.input_leases.count());
-    const duplicate = try client.routeKeyInput(
+    const duplicate = try api.key_routing.routeKeyInput(
+        client,
         .{
             .key = key,
         },
@@ -101,7 +106,8 @@ test "physical lease saturation rejects input before mutation or transport" {
     var key = try data.chord.parseKey("x");
     key.physical = .{ .value = identity + 1 };
 
-    const outcome = try client.routeKeyInput(
+    const outcome = try api.key_routing.routeKeyInput(
+        client,
         .{
             .key = key,
         },
@@ -124,7 +130,7 @@ test "failed opening paste marker rolls back the captured session" {
     client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
     try fillOutbox(client);
 
-    try std.testing.expectError(error.ClientOutboxFull, client.startPanePaste());
+    try std.testing.expectError(error.ClientOutboxFull, api.pane_input.startPanePaste(client));
     try std.testing.expect(!client.model.panePasteActive());
 }
 
@@ -135,16 +141,16 @@ test "failed closing paste marker releases the session without repeating it" {
     try harness.bootstrap();
     const client = harness.client;
     client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
-    try std.testing.expectEqual(.applied, try client.startPanePaste());
+    try std.testing.expectEqual(.applied, try api.pane_input.startPanePaste(client));
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const opening = try harness.nextClientMessage(&buffer);
     try std.testing.expectEqualStrings("\x1b[200~", opening.pane_input.bytes);
     try fillOutbox(client);
 
-    try std.testing.expectError(error.ClientOutboxFull, client.finishPanePaste());
+    try std.testing.expectError(error.ClientOutboxFull, api.pane_input.finishPanePaste(client));
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expectEqual(.ignored, try client.finishPanePaste());
+    try std.testing.expectEqual(.ignored, try api.pane_input.finishPanePaste(client));
 }
 
 test "retired paste target cannot redirect its remaining content" {
@@ -153,11 +159,11 @@ test "retired paste target cannot redirect its remaining content" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expectEqual(.applied, try client.startPanePaste());
+    try std.testing.expectEqual(.applied, try api.pane_input.startPanePaste(client));
     client.model.panes.find(TestHarness.bootstrap_pane).?.attached = false;
 
-    try std.testing.expectEqual(.unavailable, try client.appendPanePaste("private text"));
-    _ = try client.finishPanePaste();
+    try std.testing.expectEqual(.unavailable, try api.pane_input.appendPanePaste(client, "private text"));
+    _ = try api.pane_input.finishPanePaste(client);
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try std.testing.expect(!client.model.to_runtime.inFlight());
@@ -176,7 +182,8 @@ test "obsolete clipboard completion frees its image without consuming a newer ca
     const current = (try client.model.clipboard.reserve(target)).?;
     const image = try support.testingClipboardCapture(client, old, "private image");
 
-    try client.completeClipboardCapture(
+    try api.clipboard_capture.completeClipboardCapture(
+        client,
         .{
             .execution_id = old.id,
             .result = image,
@@ -194,8 +201,9 @@ test "blocked name submission keeps the exact prompt open until cancellation" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expect(client.openNamePrompt(.rename_active_tab));
-    _ = try client.inputPrompt(
+    try std.testing.expect(api.name_prompt.openNamePrompt(client, .rename_active_tab));
+    _ = try api.name_prompt.inputPrompt(
+        client,
         .{
             .command = .{
                 .insert = "renamed",
@@ -204,14 +212,16 @@ test "blocked name submission keeps the exact prompt open until cancellation" {
     );
     try fillOutbox(client);
 
-    try std.testing.expectError(error.ClientOutboxFull, client.inputPrompt(
+    try std.testing.expectError(error.ClientOutboxFull, api.name_prompt.inputPrompt(
+        client,
         .{
             .command = .submit,
         },
     ));
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqualStrings("shellrenamed", client.model.name_prompt.currentConst().?.field.text());
-    try std.testing.expectEqual(.cancelled, try client.inputPrompt(
+    try std.testing.expectEqual(.cancelled, try api.name_prompt.inputPrompt(
+        client,
         .{
             .command = .cancel,
         },

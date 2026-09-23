@@ -8,6 +8,8 @@ const Geometry = @import("../presentation/Geometry.zig");
 const std = @import("std");
 const copy_mode_pointer = @import("copy_mode_pointer.zig");
 const view_interactions = @import("view_interactions.zig");
+const link_opening = @import("../links/link_opening.zig");
+const pane_mouse_input = @import("pane_mouse_inputs.zig");
 
 /// Routes one host pointer event through the current exclusive owner.
 ///
@@ -36,12 +38,12 @@ pub fn apply(client: *Client, event: data.Mouse) !Outcome {
         return .view;
     }
 
-    const link_consumed = client.chrome.linkPointer(command.event) orelse try client.inputLinkPointer(tab, command.event);
+    const link_consumed = client.chrome.linkPointer(command.event) orelse try link_opening.inputLinkPointer(client, tab, command.event);
     if (link_consumed) {
         return .link;
     }
 
-    _ = try client.inputPaneMouse(tab, .{
+    _ = try pane_mouse_input.inputPaneMouse(client, tab, .{
         .pointer = command,
     });
     return .pane;

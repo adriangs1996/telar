@@ -40,5 +40,5 @@ pub fn delivered(gui: *GuiClient) !void {
             );
         }
     }
-    try gui.app.flushAgentHistory();
+    try client.agent_history.flushAgentHistory(&gui.app);
 }

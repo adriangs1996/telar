@@ -223,7 +223,8 @@ pub fn forward(terminal: *TerminalClient, bytes: []const u8) !void {
         return;
     }
 
-    _ = try client.routeKeyInput(
+    _ = try client_module.key_routing.routeKeyInput(
+        client,
         .{
             .bytes = bytes,
         },
@@ -259,7 +260,8 @@ pub fn key(terminal: *TerminalClient, value: data.Key) !void {
         return;
     }
 
-    _ = try client.routeKeyInput(
+    _ = try client_module.key_routing.routeKeyInput(
+        client,
         .{
             .key = value,
         },
@@ -330,8 +332,8 @@ fn decoded(terminal: *TerminalClient, event: Router.Decoded, now_ns: u64) !data.
                         .now_ns = now_ns,
                     },
                     .{
-                        .captures_keys = data.key_routing.captures(client.keyRoutingAuthority()),
-                        .repeat_policy = if (router.repeatAction()) |held| client_module.repeatPolicy(held, client.repeatPane()) else null,
+                        .captures_keys = data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)),
+                        .repeat_policy = if (router.repeatAction()) |held| client_module.repeatPolicy(held, client_module.actions.repeatPane(client)) else null,
                     },
                 ),
             );
@@ -374,9 +376,9 @@ fn applyDecision(terminal: *TerminalClient, decision: Router.Decision) !data.Key
             }
         },
         .action => |request| {
-            const control = try client.executeAction(request.value, .binding);
+            const control = try client_module.actions.executeAction(client, request.value, .binding);
             if (control == .continue_routing) {
-                router.actionCompleted(request, client_module.repeatPolicy(request.value, client.repeatPane()));
+                router.actionCompleted(request, client_module.repeatPolicy(request.value, client_module.actions.repeatPane(client)));
             }
             return control;
         },

@@ -30,7 +30,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
         .scroll = .{ .total_rows = 10, .offset = 0 },
         .spans = &.{},
     });
-    _ = try client.handleServerMessage(try core.decodeServer(patch));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(patch));
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
     try presentation_lifecycle.observe(terminal);
@@ -58,7 +58,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
         .scroll = .{ .total_rows = 2, .offset = 0 },
         .spans = &.{.{ .start = 0, .cells = &cells }},
     });
-    _ = try client.handleServerMessage(try core.decodeServer(snapshot));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(snapshot));
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
 
     try std.testing.expectEqual(
@@ -114,7 +114,7 @@ test "a frame made stale by detach has no state resources or presentation effect
         .spans = &.{.{ .start = 0, .cells = &cells }},
     });
 
-    _ = try client.handleServerMessage(try core.decodeServer(snapshot));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(snapshot));
 
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(u64, 0), pane.applied_frame_id);
@@ -152,7 +152,7 @@ test "a frame already sent before workspace departure is harmless during handoff
 
     // The runtime writes this frame before it can observe the client's detach.
     try harness.peer.send(std.testing.io, snapshot);
-    _ = try client.requestWorkspace(@enumFromInt(2));
+    _ = try client_module.workspace_handoff.requestWorkspace(client, @enumFromInt(2));
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -170,11 +170,11 @@ test "a frame already sent before workspace departure is harmless during handoff
     const graphics_visible = terminal.graphics_store.paneVisible(TestHarness.bootstrap_pane);
     const frames = client.telemetry.metrics.frames;
 
-    try client.startRuntimeRead();
+    try client_module.runtime_io.startRuntimeRead(client);
     switch (try support.receiveClient(terminal)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
-            try client.receiveRuntime(result),
+            try client_module.runtime_io.receiveRuntime(client, result),
         ),
         else => return error.UnexpectedEvent,
     }
@@ -204,7 +204,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     switch (try support.receiveClient(terminal)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
-            try client.receiveRuntime(result),
+            try client_module.runtime_io.receiveRuntime(client, result),
         ),
         else => return error.UnexpectedEvent,
     }
@@ -236,7 +236,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     switch (try support.receiveClient(terminal)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
-            try client.receiveRuntime(result),
+            try client_module.runtime_io.receiveRuntime(client, result),
         ),
         else => return error.UnexpectedEvent,
     }
@@ -272,7 +272,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
         .pane_id = TestHarness.bootstrap_pane,
         .cwd = "/work/telar",
     });
-    _ = try client.handleServerMessage(try core.decodeServer(cwd));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(cwd));
 
     try std.testing.expectEqualStrings(
         "/work/telar",
@@ -296,7 +296,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
         .pane_id = TestHarness.bootstrap_pane,
         .cwd = "/other/telar",
     });
-    _ = try client.handleServerMessage(try core.decodeServer(same_name));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(same_name));
 
     try std.testing.expectEqualStrings(
         "/other/telar",
@@ -310,7 +310,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
         .pane_id = @enumFromInt(99),
         .cwd = "/missing",
     });
-    _ = try client.handleServerMessage(try core.decodeServer(stale));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(stale));
     try std.testing.expectEqualDeep(presented_version, client.model.version());
 }
 
@@ -330,7 +330,7 @@ test "pane foreground and focus update automatic tab labels through presentation
         .pane_id = TestHarness.bootstrap_pane,
         .name = "Claude Code",
     });
-    _ = try client.handleServerMessage(try core.decodeServer(foreground));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(foreground));
 
     try std.testing.expectEqualStrings(
         "Claude Code",
@@ -352,7 +352,7 @@ test "pane foreground and focus update automatic tab labels through presentation
 
     const presented_version = client.model.version();
     const presented_updates = terminal.presenter.pending_updates;
-    _ = try client.handleServerMessage(try core.decodeServer(foreground));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(foreground));
     try presentation_lifecycle.observe(terminal);
 
     try std.testing.expectEqualDeep(presented_version, client.model.version());
@@ -369,7 +369,7 @@ test "pane foreground and focus update automatic tab labels through presentation
         .new_pane = second_pane,
     });
     const next_foreground = try core.encodePaneForeground(&payload, .{ .pane_id = second_pane, .name = "git" });
-    _ = try client.handleServerMessage(try core.decodeServer(next_foreground));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(next_foreground));
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
     try expectBootstrapTab(&harness, "git", .app_git);
@@ -444,7 +444,7 @@ test "close pane request waits for the authoritative exit before committing" {
     const version_before_request = client.model.version();
     const pending_updates_before_request = terminal.presenter.pending_updates;
 
-    _ = try client.executeAction(.close_pane, .effect);
+    _ = try client_module.actions.executeAction(client, .close_pane, .effect);
 
     try std.testing.expect(client.model.panes.find(closing_pane) != null);
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
@@ -465,7 +465,7 @@ test "close pane request waits for the authoritative exit before committing" {
         .kind = .exited,
         .value = 0,
     });
-    _ = try client.handleServerMessage(try core.decodeServer(exited));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(exited));
 
     try std.testing.expect(client.model.panes.find(closing_pane) == null);
     try std.testing.expectEqual(version_before_request.panes + 1, client.model.version().panes);
@@ -485,7 +485,8 @@ test "close pane request waits for the authoritative exit before committing" {
     const committed_version = client.model.version();
     const pending_updates_after_commit = terminal.presenter.pending_updates;
 
-    _ = try client.handleServerMessage(
+    _ = try client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .pane_exited = (try core.decodeServer(exited)).pane_exited,
         },
@@ -524,7 +525,8 @@ test "an unrequested pane exit removes the pane silently" {
         .kind = .exited,
         .value = 0,
     });
-    _ = try client.handleServerMessage(
+    _ = try client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .pane_exited = (try core.decodeServer(exited)).pane_exited,
         },
@@ -584,7 +586,7 @@ test "an inactive pane exit retires only inactive state" {
         .kind = .signaled,
         .value = 15,
     });
-    _ = try client.handleServerMessage(try core.decodeServer(exited));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(exited));
 
     try std.testing.expect(client.model.panes.find(inactive_pane) == null);
     try std.testing.expectEqualDeep(version_before_exit, client.model.version());

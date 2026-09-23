@@ -98,7 +98,8 @@ pub fn prepare(gui: *GuiClient) !void {
             owner.attachment_generation,
         ) catch |err| {
             _ = leave(gui);
-            try gui.app.publishNotificationNow(
+            try client.notifications.publishNotificationNow(
+                &gui.app,
                 .{
                     .level = .failure,
                     .title = "Could not select messages",

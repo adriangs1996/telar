@@ -91,7 +91,8 @@ test "child marker deletion and prompt submission retire paired previews" {
     try std.testing.expect(client.model.clipboard.capture == null);
     const completed = try support.testingClipboardCapture(client, pending, "private png");
 
-    try client.completeClipboardCapture(
+    try client_module.clipboard_capture.completeClipboardCapture(
+        client,
         .{
             .execution_id = pending.id,
             .result = completed,
@@ -133,7 +134,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
         .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
     });
 
-    _ = try client.handleServerMessage(try core.decodeServer(marker_frame));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(marker_frame));
     try std.testing.expectEqual(@as(u8, 1), terminal.view.kittyAttachments().snapshot().len);
     try host_inputs.key(terminal, try data.chord.parseKey("backspace"));
     try std.testing.expectEqual(@as(u8, 1), terminal.view.kittyAttachments().snapshot().len);
@@ -151,7 +152,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
         .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
     });
 
-    _ = try client.handleServerMessage(try core.decodeServer(empty_frame));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(empty_frame));
     try std.testing.expectEqual(@as(u8, 0), terminal.view.kittyAttachments().snapshot().len);
 }
 
@@ -188,7 +189,7 @@ fn commitPiFrame(client: *client_module.AttachedClient, input: PiFrame) !void {
         .spans = &.{.{ .start = 0, .cells = pane_buffer.cells }},
     });
 
-    _ = try client.handleServerMessage(try core.decodeServer(frame));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(frame));
 }
 
 test "closing a Pi preview deletes its whole pasted path from the editor" {
@@ -284,7 +285,7 @@ test "host keys use the keyboard modes received in a pane frame" {
             .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = &.{.{ .start = 0, .cells = &cells }},
         });
-        _ = try harness.client.handleServerMessage(try core.decodeServer(snapshot));
+        _ = try client_module.runtime_messages.handleServerMessage(harness.client, try core.decodeServer(snapshot));
         try presentation_lifecycle.observe(harness.terminal);
         try harness.settleModelPresentation();
         const host_bytes = case.host;
@@ -404,7 +405,7 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
 
     try std.testing.expect(client.model.panePasteActive());
     try std.testing.expect(!client.model.enterCopyMode());
-    try std.testing.expect(!client.openNamePrompt(.rename_workspace));
+    try std.testing.expect(!client_module.name_prompt.openNamePrompt(client, .rename_workspace));
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -412,7 +413,7 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
     _ = try client_module.paste_routing.finish(client);
 
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expect(client.openNamePrompt(.rename_workspace));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_workspace));
 }
 
 test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
@@ -422,7 +423,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     try harness.bootstrap();
     const client = harness.client;
     const terminal = harness.terminal;
-    try std.testing.expect(client.openNamePrompt(.rename_active_tab));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_active_tab));
 
     _ = try client_module.paste_routing.start(client);
     try std.testing.expect(client.model.name_prompt.currentConst().?.pasting);
@@ -463,7 +464,7 @@ test "name prompt rejects pointer routing after host telemetry" {
         pane.id,
         terminal.view.workbench(),
     ).?;
-    try std.testing.expect(client.openNamePrompt(.rename_active_tab));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_active_tab));
     const version = client.model.version();
     const outbox_len = client.model.to_runtime.len;
     const mouse_events = client.telemetry.metrics.mouse_events;
@@ -767,7 +768,7 @@ test "copy mode takes authority away from a held scroll binding" {
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 100, .offset = 100 };
 
     _ = try host_inputs.feed(terminal, .{ .bytes = "\x02\x1b[45::45;1:1u", .now_ns = 0 });
-    _ = try client.executeAction(.enter_copy_mode, .effect);
+    _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     const version = client.model.version();
     _ = try host_inputs.feed(terminal, .{ .bytes = "\x1b[45::45;1:2u", .now_ns = 100 * std.time.ns_per_ms });
     try std.testing.expect(client.model.copyModeActive());
@@ -870,7 +871,8 @@ test "focused scroll sends alternate-screen cursor keys only to the focused pane
     const version = client.model.version();
 
     for ([_]data.ScrollDirection{ .up, .down }) |direction| {
-        _ = try client.executeAction(
+        _ = try client_module.actions.executeAction(
+            client,
             .{
                 .scroll_pane = direction,
             },
@@ -904,13 +906,15 @@ test "focused scroll without an active pane has no effects" {
     const client = harness.client;
     const version = client.model.version();
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .scroll_pane = .up,
         },
         .effect,
     );
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .scroll_pane = .down,
         },
@@ -930,7 +934,7 @@ test "focused scroll retires copy mode before moving the restored viewport" {
     const terminal = harness.terminal;
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
-    _ = try client.executeAction(.enter_copy_mode, .effect);
+    _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     try host_inputs.key(terminal, try data.chord.parseKey("g"));
     try std.testing.expectEqual(@as(u32, 0), pane.scroll.offset);
     try harness.settle();
@@ -967,7 +971,7 @@ test "focus reporting emits focus-in only after the pane opts in" {
     const model = client.model.tabs.active;
     client.model.panes.findIn(client.model.tabs.location[model].tab_id, TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     const input_events = client.telemetry.metrics.input_events;
-    try client.synchronizeActivePane();
+    try client_module.pane_focus.synchronizeActivePane(client);
     try harness.settle();
 
     try std.testing.expect(client.model.reported_pane_focus.?.focus_events);
@@ -1012,7 +1016,7 @@ test "native thread view action flips the focused pane surface" {
     try std.testing.expectEqual(core.PaneSurface.terminal, client.model.tabs.layout[active].surface(focused));
 
     for ([_]core.PaneSurface{ .thread, .terminal }) |expected_surface| {
-        const control = try client.executeAction(.toggle_thread_view, .effect);
+        const control = try client_module.actions.executeAction(client, .toggle_thread_view, .effect);
 
         expected_version.panes +%= 1;
         try std.testing.expectEqual(data.KeybindControl.continue_routing, control);

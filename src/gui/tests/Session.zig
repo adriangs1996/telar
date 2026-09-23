@@ -209,7 +209,7 @@ pub fn settle(self: *Session) !void {
         }
 
         self.pending = null;
-        try self.gui.app.completeRuntimeSend({});
+        try client.runtime_io.completeRuntimeSend(&self.gui.app, {});
         try self.startJobs();
     }
 }
@@ -224,7 +224,7 @@ pub fn bootstrap(self: *Session) !void {
     );
     var buffer: [128]u8 = undefined;
     const opened = try core.encodePaneOpened(&buffer, .{ .request_id = client.initial_request_id, .pane_id = pane_id, .location = location, .created = true });
-    _ = try app.handleServerMessage(try core.decodeServer(opened));
+    _ = try client.runtime_messages.handleServerMessage(app, try core.decodeServer(opened));
     app.model.startup.phase = .active;
     try self.settle();
 }
@@ -250,7 +250,7 @@ pub fn receiveFrame(self: *Session, frame_id: u64) !void {
         .input_modes = .{ .bracketed_paste = true },
         .spans = &.{.{ .start = 0, .cells = if (frame_id == 1) cells[0..count] else cells[0..1] }},
     });
-    _ = try self.gui.app.handleServerMessage(try core.decodeServer(encoded));
+    _ = try client.runtime_messages.handleServerMessage(&self.gui.app, try core.decodeServer(encoded));
     @memset(&wire, 0xff);
 }
 

@@ -5,6 +5,8 @@ const GraphicsRetention = @import("../graphics/GraphicsRetention.zig");
 
 const std = @import("std");
 const core = @import("telar-core");
+const runtime_io = @import("../connection/runtime_io.zig");
+const Client = @import("../AttachedClient.zig");
 
 /// Reconciles all fallbacks when host support changes. Example: `syncFallbacks(model, graphics);`
 pub fn syncFallbacks(model: *data.ClientModel, graphics: GraphicsRetention) void {
@@ -40,4 +42,79 @@ pub fn applyResources(graphics: GraphicsRetention, command: data.PaneGraphicsCom
         .pane_id = pane_id,
         .has_graphics = graphics.hasPaneGraphics(pane_id),
     } };
+}
+
+/// Reconciles physical graphics and semantic fallback, recovering bounded ingress failures.
+pub fn applyPaneGraphics(client: *Client, command: data.PaneGraphicsCommand) !data.PaneGraphicsOutcome {
+    if (comptime core.enabled) {
+        switch (command) {
+            .image, .shared_image => client.telemetry.metrics.graphics_images += 1,
+            else => {},
+        }
+    }
+
+    const pane_id = command.paneId();
+    const resource = try applyResources(client.graphics, command);
+
+    return switch (resource) {
+        .unchanged => .unchanged,
+        .changed => |state| block: {
+            if (state.pane_id != pane_id) {
+                return error.InvalidPaneGraphicsResult;
+            }
+
+            break :block .{
+                .applied = .{
+                    .pane_id = pane_id,
+                    .fallback = client.model.setPaneGraphicsFallback(
+                        pane_id,
+                        client.model.host.host_capabilities.images != .supported and
+                            state.has_graphics,
+                    ),
+                },
+            };
+        },
+        .resync_required => |recovery_pane| block: {
+            if (recovery_pane != pane_id) {
+                return error.InvalidPaneGraphicsResult;
+            }
+
+            try runtime_io.sendRuntime(
+                client,
+                .{
+                    .request_graphics_snapshot = .{
+                        .pane_id = pane_id,
+                    },
+                },
+            );
+            break :block .{
+                .resync_requested = pane_id,
+            };
+        },
+        .shared_mapping_failed => |recovery_pane| block: {
+            if (recovery_pane != pane_id) {
+                return error.InvalidPaneGraphicsResult;
+            }
+
+            try runtime_io.sendRuntime(
+                client,
+                .{
+                    .configure_graphics = .{
+                        .shared = false,
+                    },
+                },
+            );
+            try runtime_io.sendRuntime(
+                client,
+                .{
+                    .request_graphics_snapshot = .{
+                        .pane_id = pane_id,
+                    },
+                },
+            );
+            break :block .{
+                .shared_disabled = pane_id,
+            };
+        },
+    };
 }

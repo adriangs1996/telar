@@ -48,7 +48,7 @@ pub fn apply(terminal: *TerminalClient, measurement: Size) !?data.HostCommit {
 
     const update = resolve(client.model.host.host_capabilities, measurement);
 
-    return client.applyHostUpdate(update);
+    return client_module.host_resize.applyHostUpdate(client, update);
 }
 
 /// Resolves the first platform measurement before a client model exists.

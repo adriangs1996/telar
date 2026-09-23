@@ -72,7 +72,7 @@ pub fn deliver(self: *Capture, app: *client.AttachedClient, event: data.Mouse) !
         return;
     }
 
-    try app.reportRetainedPaneMouse(.{
+    try client.pane_mouse_input.reportRetainedPaneMouse(app, .{
         .plan = plan,
         .command = .{ .event = projected, .exterior_pixels = true, .cell_width_px = self.cell_width, .cell_height_px = self.cell_height },
     });

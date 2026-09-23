@@ -314,11 +314,11 @@ test "history request admission failure is retryable and stale failure only wake
         pane.id,
         .older,
     );
-    try app.flushAgentHistory();
+    try client.agent_history.flushAgentHistory(app);
     try std.testing.expect(pane.agent_history.?.pending == null);
     try std.testing.expectEqualStrings("RequestIdExhausted", pane.agent_history.?.failureMessage());
     try std.testing.expect(!app.model.request_lifecycle.tracker.has(.agent_history));
-    try app.flushAgentHistory();
+    try client.agent_history.flushAgentHistory(app);
     try std.testing.expect(pane.agent_history.?.pending == null);
     app.model.request_lifecycle.next_request_id = 200;
     _ = client.agent_reading.navigate(
@@ -326,7 +326,7 @@ test "history request admission failure is retryable and stale failure only wake
         pane.id,
         .older,
     );
-    try app.flushAgentHistory();
+    try client.agent_history.flushAgentHistory(app);
     try std.testing.expect(app.model.request_lifecycle.tracker.has(.agent_history));
     _ = client.agent_reading.navigate(
         &app.model,
@@ -337,12 +337,12 @@ test "history request admission failure is retryable and stale failure only wake
     const notification_revision = app.model.notifications_revision;
     var buffer: [1024]u8 = undefined;
     const bytes = try core.encodeRequestFailed(&buffer, .{ .request_id = @enumFromInt(200), .code = .internal, .message = "Obsolete timeout" });
-    _ = try app.handleServerMessage(try core.decodeServer(bytes));
+    _ = try client.runtime_messages.handleServerMessage(app, try core.decodeServer(bytes));
     try std.testing.expect(!app.model.request_lifecycle.tracker.has(.agent_history));
     try std.testing.expect(app.model.panes_revision > revision);
     try std.testing.expectEqual(notification_revision, app.model.notifications_revision);
     try std.testing.expect(!pane.agent_history.?.failed);
-    try app.flushAgentHistory();
+    try client.agent_history.flushAgentHistory(app);
     try std.testing.expect(pane.agent_history != null);
     try std.testing.expect(pane.agent_history.?.pending == null);
 }
@@ -427,7 +427,7 @@ test "history outbound pressure clears pending state and keeps a visible retry r
         Session.pane_id,
         .older,
     );
-    try app.flushAgentHistory();
+    try client.agent_history.flushAgentHistory(app);
     const window = app.model.agentPane(Session.pane_id).?.agent_history.?;
     try std.testing.expect(window.pending == null);
     try std.testing.expectEqualStrings("ClientOutboxFull", window.failureMessage());
@@ -445,7 +445,8 @@ test "retired history replies wake visible navigation waiting for the connection
     );
     try app.model.request_lifecycle.tracker.add(@enumFromInt(500), .ignored);
     var before = app.model.panes_revision;
-    try std.testing.expectEqual(@as(?u8, null), try app.handleServerMessage(
+    try std.testing.expectEqual(@as(?u8, null), try client.runtime_messages.handleServerMessage(
+        app,
         .{
             .agent_history_page = .{
                 .request_id = @enumFromInt(500),
@@ -469,7 +470,7 @@ test "retired history replies wake visible navigation waiting for the connection
     const notifications = app.model.notifications_revision;
     var bytes: [1024]u8 = undefined;
     const encoded = try core.encodeRequestFailed(&bytes, .{ .request_id = @enumFromInt(501), .code = .internal, .message = "Retired provider" });
-    _ = try app.handleServerMessage(try core.decodeServer(encoded));
+    _ = try client.runtime_messages.handleServerMessage(app, try core.decodeServer(encoded));
     try std.testing.expect(app.model.panes_revision > before);
     try std.testing.expectEqual(notifications, app.model.notifications_revision);
 }
@@ -584,7 +585,8 @@ fn deliverHistory(session: *Session, page: *core.AgentHistoryPage) !void {
     page.view_generation = app.model.agentPane(Session.pane_id).?.history_generation;
     var buffer: [8192]u8 = undefined;
     const response = (try core.decodeServer(try core.encodeAgentHistoryPage(&buffer, page))).agent_history_page;
-    try std.testing.expectEqual(@as(?u8, null), try app.handleServerMessage(
+    try std.testing.expectEqual(@as(?u8, null), try client.runtime_messages.handleServerMessage(
+        app,
         .{
             .agent_history_page = response,
         },

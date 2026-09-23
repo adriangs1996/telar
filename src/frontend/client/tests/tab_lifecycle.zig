@@ -31,7 +31,8 @@ test "an unexpected tab creation is rejected without effects" {
         .root_pane_id = @enumFromInt(20),
     };
 
-    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabCreated, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_created = created,
         },
@@ -62,13 +63,15 @@ test "tab creation consumes an incompatible continuation before rejection" {
         .root_pane_id = @enumFromInt(20),
     };
 
-    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabCreated, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_created = created,
         },
     ));
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabCreated, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_created = created,
         },
@@ -98,7 +101,8 @@ test "tab creation consumes a mismatched workspace before rejection" {
         .root_pane_id = @enumFromInt(20),
     };
 
-    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabCreated, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_created = created,
         },
@@ -141,7 +145,8 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .label = "second",
         .root_pane_id = @enumFromInt(20),
     });
-    _ = try client.handleServerMessage(
+    _ = try client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_created = (try core.decodeServer(created)).tab_created,
         },
@@ -182,7 +187,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .location = second_location,
         .label = "renamed",
     });
-    _ = try client.handleServerMessage(try core.decodeServer(renamed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(renamed));
     try std.testing.expectEqualStrings(
         "renamed",
         data.tab_label.text(&client.model, client.model.tabs.find(second_location.tab_id).?),
@@ -205,7 +210,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
         .location = second_location,
         .position = 0,
     });
-    _ = try client.handleServerMessage(try core.decodeServer(moved));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(moved));
     try std.testing.expectEqual(@as(?usize, 0), client.model.tabs.find(second_location.tab_id));
 
     // Requested close of the active tab: the semantic commit precedes
@@ -229,7 +234,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try client.handleServerMessage(try core.decodeServer(closed)),
+        try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(closed)),
     );
 
     try std.testing.expectEqual(@as(usize, 1), client.model.tabs.count);
@@ -264,7 +269,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     });
     try std.testing.expectError(
         error.UnexpectedTabClosed,
-        client.handleServerMessage(try core.decodeServer(unexpected)),
+        client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(unexpected)),
     );
 }
 
@@ -296,7 +301,8 @@ test "rejected tab creation leaves the active tab attached" {
 
     try std.testing.expectError(
         error.TabAlreadyExists,
-        client.handleServerMessage(
+        client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .tab_created = response,
             },
@@ -304,7 +310,8 @@ test "rejected tab creation leaves the active tab attached" {
     );
 
     try std.testing.expectEqual(request_count_before_creation, client.model.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabCreated, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_created = response,
         },
@@ -336,7 +343,7 @@ test "a failed tab creation preserves the current projection and notifies" {
         .message = "shell launch failed",
     });
 
-    _ = try client.handleServerMessage(try core.decodeServer(failed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed));
 
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
@@ -360,7 +367,8 @@ test "an unexpected tab move is rejected without effects" {
         .position = 0,
     };
 
-    try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabMoved, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_moved = moved,
         },
@@ -389,13 +397,15 @@ test "tab move consumes an incompatible continuation before rejection" {
         .position = 0,
     };
 
-    try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabMoved, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_moved = moved,
         },
     ));
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabMoved, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_moved = moved,
         },
@@ -420,13 +430,15 @@ test "tab move consumes a canonical response rejected by the model" {
         .position = 1,
     };
 
-    try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabMoved, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_moved = moved,
         },
     ));
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabMoved, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_moved = moved,
         },
@@ -446,7 +458,8 @@ test "move tab waits for the canonical response and preserves active identity" {
     const version_before_request = client.model.version();
     const pending_updates_before_request = terminal.presenter.pending_updates;
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .move_tab = .previous,
         },
@@ -477,7 +490,7 @@ test "move tab waits for the canonical response and preserves active identity" {
         .location = second,
         .position = 0,
     });
-    _ = try client.handleServerMessage(try core.decodeServer(response));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(response));
 
     try std.testing.expectEqual(@as(?usize, 0), client.model.tabs.find(second.tab_id));
     try std.testing.expectEqual(TestHarness.bootstrap_location.tab_id, client.model.tabs.location[client.model.tabs.active].tab_id);
@@ -504,7 +517,8 @@ test "pending tab operation suppresses a move request" {
     const request_count = client.model.request_lifecycle.tracker.count;
     const next_request_id = client.model.request_lifecycle.next_request_id;
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .move_tab = .previous,
         },
@@ -525,7 +539,8 @@ test "canonical tab move at an edge does not advance or schedule the model" {
     const client = harness.client;
     const terminal = harness.terminal;
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .move_tab = .previous,
         },
@@ -547,7 +562,8 @@ test "canonical tab move at an edge does not advance or schedule the model" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try client.handleServerMessage(
+        try client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .tab_moved = (try core.decodeServer(response)).tab_moved,
             },
@@ -569,7 +585,8 @@ test "tab move response must match the requested identity" {
     const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
     const version_before_response = client.model.version();
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .move_tab = .previous,
         },
@@ -587,7 +604,7 @@ test "tab move response must match the requested identity" {
 
     try std.testing.expectError(
         error.UnexpectedTabMoved,
-        client.handleServerMessage(try core.decodeServer(response)),
+        client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(response)),
     );
 
     try std.testing.expectEqual(@as(?usize, 1), client.model.tabs.find(second.tab_id));
@@ -605,7 +622,8 @@ test "a failed tab move preserves order and notifies" {
     const version_before_failure = client.model.version();
     const active_before_failure = client.model.activeTabLocation().?;
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .move_tab = .previous,
         },
@@ -621,7 +639,7 @@ test "a failed tab move preserves order and notifies" {
         .message = "tab not found",
     });
 
-    _ = try client.handleServerMessage(try core.decodeServer(response));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(response));
 
     try std.testing.expectEqual(@as(?usize, 1), client.model.tabs.find(second.tab_id));
     try std.testing.expectEqualDeep(active_before_failure, client.model.activeTabLocation().?);
@@ -650,7 +668,8 @@ test "select tab closes captured paste before detaching and requesting the targe
     const version_before_selection = client.model.version();
     const pending_updates_before_selection = terminal.presenter.pending_updates;
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .select_tab = 1,
         },
@@ -699,7 +718,8 @@ test "tab selection offset wraps while full turns remain no-ops" {
     const request_id_before_selection = client.model.request_lifecycle.next_request_id;
     const pending_updates_before_selection = terminal.presenter.pending_updates;
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .select_tab_offset = 2,
         },
@@ -711,7 +731,8 @@ test "tab selection offset wraps while full turns remain no-ops" {
     try std.testing.expectEqual(request_id_before_selection, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .select_tab_offset = -1,
         },
@@ -740,7 +761,8 @@ test "pending tab snapshot suppresses tab selection without effects" {
     const version_before_selection = client.model.version();
     const next_request_id = client.model.request_lifecycle.next_request_id;
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .select_tab = 1,
         },
@@ -766,7 +788,7 @@ test "close tab request detaches before delivery and rejection requests restorat
     const version_before_request = client.model.version();
     const pending_updates_before_request = terminal.presenter.pending_updates;
 
-    _ = try client.executeAction(.close_tab, .effect);
+    _ = try client_module.actions.executeAction(client, .close_tab, .effect);
 
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
     try std.testing.expectEqual(pending_updates_before_request, terminal.presenter.pending_updates);
@@ -787,7 +809,7 @@ test "close tab request detaches before delivery and rejection requests restorat
         .code = .internal,
         .message = "close rejected",
     });
-    _ = try client.handleServerMessage(try core.decodeServer(failed));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(failed));
     try harness.settle();
 
     const recovery = try harness.nextClientMessage(&message_buffer);
@@ -816,7 +838,7 @@ test "close tab capacity failure preserves attachment and request state" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client.executeAction(.close_tab, .effect),
+        client_module.actions.executeAction(client, .close_tab, .effect),
     );
 
     try std.testing.expectEqual(data.outbox_support.capacity - 1, @as(usize, client.model.to_runtime.len));
@@ -835,7 +857,7 @@ test "close tab reserves its focus-out message" {
     const client = harness.client;
     client.model.request_lifecycle.tracker = .{};
     client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
-    try client.synchronizeActivePane();
+    try client_module.pane_focus.synchronizeActivePane(client);
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const focus_in = try harness.nextClientMessage(&buffer);
@@ -850,7 +872,7 @@ test "close tab reserves its focus-out message" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client.executeAction(.close_tab, .effect),
+        client_module.actions.executeAction(client, .close_tab, .effect),
     );
 
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -882,7 +904,7 @@ test "close tab reserves its captured paste closing marker" {
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        client.executeAction(.close_tab, .effect),
+        client_module.actions.executeAction(client, .close_tab, .effect),
     );
 
     try std.testing.expect(client.model.panePasteActive());
@@ -908,7 +930,8 @@ test "an unexpected tab closure is rejected without effects" {
         .workspace_closed = true,
     };
 
-    try std.testing.expectError(error.UnexpectedTabClosed, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabClosed, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_closed = closed,
         },
@@ -937,13 +960,15 @@ test "tab closure consumes an incompatible continuation before rejection" {
         .workspace_closed = true,
     };
 
-    try std.testing.expectError(error.UnexpectedTabClosed, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabClosed, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_closed = closed,
         },
     ));
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabClosed, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabClosed, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_closed = closed,
         },
@@ -973,7 +998,8 @@ test "tab close response must match the requested identity" {
 
     try std.testing.expectError(
         error.UnexpectedTabClosed,
-        client.handleServerMessage(
+        client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .tab_closed = (try core.decodeServer(closed)).tab_closed,
             },
@@ -1002,7 +1028,7 @@ test "late correlated close after lifecycle removal is ignored" {
         .location = second,
         .workspace_closed = false,
     });
-    _ = try client.handleServerMessage(try core.decodeServer(lifecycle));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(lifecycle));
     const version_after_lifecycle = client.model.version();
 
     const response = try core.encodeTabClosed(&payload, .{
@@ -1012,7 +1038,8 @@ test "late correlated close after lifecycle removal is ignored" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try client.handleServerMessage(
+        try client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .tab_closed = (try core.decodeServer(response)).tab_closed,
             },
@@ -1052,7 +1079,8 @@ test "inactive tab lifecycle closure changes only the tab collection" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try client.handleServerMessage(
+        try client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .tab_closed = (try core.decodeServer(closed)).tab_closed,
             },
@@ -1103,7 +1131,8 @@ test "invalid last tab closure has no semantic or cleanup effects" {
     });
     try std.testing.expectError(
         error.UnexpectedWorkspaceRemoval,
-        client.handleServerMessage(
+        client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .tab_closed = (try core.decodeServer(closed)).tab_closed,
             },
@@ -1113,7 +1142,8 @@ test "invalid last tab closure has no semantic or cleanup effects" {
     try std.testing.expectEqual(@as(usize, 1), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(
         error.UnexpectedTabClosed,
-        client.handleServerMessage(
+        client_module.runtime_messages.handleServerMessage(
+            client,
             .{
                 .tab_closed = (try core.decodeServer(closed)).tab_closed,
             },
@@ -1154,7 +1184,7 @@ test "closing the last workspace exits the client" {
     });
     try std.testing.expectEqual(
         @as(?u8, 0),
-        try client.handleServerMessage(try core.decodeServer(closed)),
+        try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(closed)),
     );
     try std.testing.expectEqual(@as(usize, 0), client.model.tabs.count);
     try std.testing.expect(client.model.activeTabLocation() == null);
@@ -1187,7 +1217,7 @@ test "tab removal follows the runtime predecessor after its workspace disappears
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try client.handleServerMessage(try core.decodeServer(closed)),
+        try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(closed)),
     );
 
     try std.testing.expect(client.model.workspace == null);
@@ -1224,7 +1254,7 @@ test "resync follows the runtime predecessor after a workspace disappears" {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try harness.client.handleServerMessage(try core.decodeServer(resync)),
+        try client_module.runtime_messages.handleServerMessage(harness.client, try core.decodeServer(resync)),
     );
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -1260,7 +1290,7 @@ test "resync forgets the final workspace before exiting" {
 
     try std.testing.expectEqual(
         @as(?u8, 0),
-        try client.handleServerMessage(try core.decodeServer(resync)),
+        try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(resync)),
     );
     try std.testing.expect(
         client.model.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
@@ -1302,7 +1332,8 @@ test "TUI tab drag emits one anchored move on release and never forwards the ges
     try std.testing.expectEqual(TestHarness.bootstrap_location.tab_id, request.relative_to.?);
     try std.testing.expectEqual(core.TabMoveDirection.previous, request.direction);
     try std.testing.expectEqual(@as(?usize, 2), app.model.tabs.find(third.tab_id));
-    _ = try app.handleServerMessage(
+    _ = try client_module.runtime_messages.handleServerMessage(
+        app,
         .{
             .tab_moved = .{
                 .request_id = request.request_id,
@@ -1343,12 +1374,14 @@ test "tab creation validates labels before retaining a request" {
     const version = client.model.version();
     const next_request = client.model.request_lifecycle.next_request_id;
 
-    try std.testing.expectError(error.InvalidTabLabel, client.requestTabCreation(
+    try std.testing.expectError(error.InvalidTabLabel, client_module.tab_creation.requestTabCreation(
+        client,
         .{
             .label = "bad\nlabel",
         },
     ));
-    try std.testing.expectError(error.InvalidUtf8, client.requestTabCreation(
+    try std.testing.expectError(error.InvalidUtf8, client_module.tab_creation.requestTabCreation(
+        client,
         .{
             .label = "\xff",
         },
@@ -1372,7 +1405,8 @@ test "tab creation outbox failure releases correlation without mutating the proj
     }
     const version = client.model.version();
 
-    try std.testing.expectError(error.ClientOutboxFull, client.requestTabCreation(
+    try std.testing.expectError(error.ClientOutboxFull, client_module.tab_creation.requestTabCreation(
+        client,
         .{},
     ));
 
@@ -1406,7 +1440,8 @@ test "canonical tab creation remains committed when previous attachment retireme
         .root_pane_id = @enumFromInt(20),
     };
 
-    try std.testing.expectError(error.ClientOutboxFull, client.handleServerMessage(
+    try std.testing.expectError(error.ClientOutboxFull, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_created = created,
         },
@@ -1417,7 +1452,8 @@ test "canonical tab creation remains committed when previous attachment retireme
     try std.testing.expect(client.model.panes.find(@enumFromInt(20)).?.attached);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
+    try std.testing.expectError(error.UnexpectedTabCreated, client_module.runtime_messages.handleServerMessage(
+        client,
         .{
             .tab_created = created,
         },

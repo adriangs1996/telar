@@ -3,6 +3,8 @@
 const Client = @import("../AttachedClient.zig");
 const PasteRoutingAuthority = @import("PasteRoutingAuthority.zig");
 const Route = @import("Route.zig");
+const name_prompt = @import("name_prompt.zig");
+const pane_input = @import("../panes/pane_input.zig");
 
 /// Routes one opening boundary using the current client authority.
 ///
@@ -55,18 +57,19 @@ fn snapshot(client: *const Client) PasteRoutingAuthority {
 fn route(client: *Client, value: Route) !void {
     switch (value.owner) {
         .prompt => switch (value.command) {
-            .start => _ = try client.inputPrompt(.paste_start),
-            .content => |text| _ = try client.inputPrompt(
+            .start => _ = try name_prompt.inputPrompt(client, .paste_start),
+            .content => |text| _ = try name_prompt.inputPrompt(
+                client,
                 .{
                     .paste_text = text,
                 },
             ),
-            .finish => _ = try client.inputPrompt(.paste_end),
+            .finish => _ = try name_prompt.inputPrompt(client, .paste_end),
         },
         .pane => switch (value.command) {
-            .start => _ = try client.startPanePaste(),
-            .content => |text| _ = try client.appendPanePaste(text),
-            .finish => _ = try client.finishPanePaste(),
+            .start => _ = try pane_input.startPanePaste(client),
+            .content => |text| _ = try pane_input.appendPanePaste(client, text),
+            .finish => _ = try pane_input.finishPanePaste(client),
         },
     }
 }

@@ -5,6 +5,7 @@ const std = @import("std");
 const Geometry = @import("Geometry.zig");
 const retained = @import("../graphics/retained.zig");
 const store = @import("../graphics/store.zig");
+const runtime_messages = @import("../connection/runtime_messages.zig");
 
 pub const pane_id: core.PaneId = @enumFromInt(1);
 pub const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
@@ -237,7 +238,8 @@ test "reattachment prevents old presentation completion from retiring replacemen
             },
         },
     );
-    _ = try fixture.app.handleServerMessage(
+    _ = try runtime_messages.handleServerMessage(
+        &fixture.app,
         .{
             .pane_opened = .{
                 .request_id = request_id,
@@ -316,7 +318,7 @@ test "runtime stop exits production dispatch without changing client state" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     const version = fixture.model.version();
-    try std.testing.expectEqual(@as(?u8, 0), try fixture.app.handleServerMessage(.runtime_stopping));
+    try std.testing.expectEqual(@as(?u8, 0), try runtime_messages.handleServerMessage(&fixture.app, .runtime_stopping));
     try std.testing.expectEqualDeep(version, fixture.model.version());
     try std.testing.expect(fixture.outbox.peek() == null);
 }
@@ -325,7 +327,8 @@ test "production dispatch owns borrowed pane metadata before receive reuse" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     var title = "review title".*;
-    try std.testing.expectEqual(@as(?u8, null), try fixture.app.handleServerMessage(
+    try std.testing.expectEqual(@as(?u8, null), try runtime_messages.handleServerMessage(
+        &fixture.app,
         .{
             .pane_title = .{
                 .pane_id = pane_id,

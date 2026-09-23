@@ -2,6 +2,7 @@
 const event_module = @import("../../input/event.zig");
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
+const client = @import("telar-client");
 
 /// Runs after physical ownership has been recorded by the dispatcher.
 /// Example: `if (try tab_drag.apply(gui, event, result.target)) return true;`
@@ -66,7 +67,8 @@ pub fn apply(gui: *GuiClient, event: event_module.Event, owner: ?Target) !bool {
     state.dispatcher.revision +%= 1;
     if (pointer.kind == .release) {
         if (drag.finish()) |move| {
-            if (try gui.app.requestTabMove(
+            if (try client.tab_move.requestTabMove(
+                &gui.app,
                 .{
                     .location = move.location,
                     .direction = move.direction,

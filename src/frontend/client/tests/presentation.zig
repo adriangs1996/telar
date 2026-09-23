@@ -163,7 +163,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
             .scroll = .{ .total_rows = 1, .offset = 0 },
             .spans = if (index == 0) &.{.{ .start = 0, .cells = &cells }} else &.{},
         });
-        _ = try client.handleServerMessage(try core.decodeServer(encoded));
+        _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(encoded));
         try presentation_lifecycle.observe(terminal);
         try harness.settleModelPresentation();
         try std.testing.expectEqual(shape, terminal.presenter.screen.presented_mouse_pointer.?);
@@ -174,7 +174,7 @@ test "host pointer shape follows semantic hover through paced presentation" {
     try harness.settleModelPresentation();
     try std.testing.expectEqual(core.PointerShape.pointer, terminal.presenter.screen.presented_mouse_pointer.?);
 
-    _ = try client.executeAction(.enter_copy_mode, .effect);
+    _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
     try host_inputs.mouse(terminal, .{ .x = terminal.view.regions.workbench.x, .y = terminal.view.regions.workbench.y, .kind = .move });
@@ -238,7 +238,7 @@ test "a media tick that yields to a pending draw runs at that draw's completion"
             },
             .client => |message| switch (message) {
                 .sent => |result| {
-                    try client.completeRuntimeSend(result);
+                    try client_module.runtime_io.completeRuntimeSend(client, result);
                     try harness.deliverHostEffects();
                 },
                 else => return error.UnexpectedEvent,
@@ -315,13 +315,13 @@ test "shared pane graphics reach the host inside the cell frame" {
         .image = image,
         .name = name,
     });
-    _ = try client.handleServerMessage(try core.decodeServer(shared));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(shared));
     const placement = try core.encodeGraphicsPlacement(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .placement = .{ .key = image.key, .virtual_id = 1, .placement_id = 1, .x = 0, .y = 0 },
     });
-    _ = try client.handleServerMessage(try core.decodeServer(placement));
+    _ = try client_module.runtime_messages.handleServerMessage(client, try core.decodeServer(placement));
     try presentation_lifecycle.observe(terminal);
     try std.testing.expect(terminal.presenter.draw_pending);
     try harness.settleModelPresentation();
@@ -433,6 +433,6 @@ fn receiveCellFrame(harness: *TestHarness, frame_id: u64) !void {
         .scroll = .{ .total_rows = 2, .offset = 0 },
         .spans = &.{.{ .start = 0, .cells = if (frame_id == 1) &cells else cells[0..1] }},
     });
-    _ = try harness.client.handleServerMessage(try core.decodeServer(payload));
+    _ = try client_module.runtime_messages.handleServerMessage(harness.client, try core.decodeServer(payload));
     @memset(&wire, 0xff);
 }

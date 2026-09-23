@@ -246,7 +246,8 @@ test "whole widget paste preserves selection when its bounded field cannot hold 
     const gui = session.gui;
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "keep" } });
     try publish(session);
-    _ = try gui.app.inputPrompt(
+    _ = try client.name_prompt.inputPrompt(
+        &gui.app,
         .{
             .command = .select_all,
         },
@@ -335,7 +336,8 @@ test "cut waits for matching host success and preserves text on failure or inter
     try publish(session);
     const target = try editorTarget(session, .name);
     for ([_]ClipboardResult.Status{ .unavailable, .cancelled, .success }) |status| {
-        _ = try gui.app.inputPrompt(
+        _ = try client.name_prompt.inputPrompt(
+            &gui.app,
             .{
                 .command = .select_all,
             },
@@ -351,7 +353,8 @@ test "cut waits for matching host success and preserves text on failure or inter
     }
 
     try send(session, .{ .text = .{ .bytes = "original" } });
-    _ = try gui.app.inputPrompt(
+    _ = try client.name_prompt.inputPrompt(
+        &gui.app,
         .{
             .command = .select_all,
         },
@@ -378,7 +381,8 @@ test "clipboard capacity leaves cut selection intact and composition follows out
         try gui.requestClipboardRead(target.id.target_id, target.id.generation);
     }
 
-    _ = try gui.app.inputPrompt(
+    _ = try client.name_prompt.inputPrompt(
+        &gui.app,
         .{
             .command = .select_all,
         },
@@ -473,7 +477,8 @@ test "accessibility widget focus cancels terminal prefix without transferring it
     try std.testing.expectEqual(@as(usize, 0), gui.router.leases.len);
     try input_support.focus(gui, false);
     try input_support.focus(gui, true);
-    _ = try gui.app.inputPrompt(
+    _ = try client.name_prompt.inputPrompt(
+        &gui.app,
         .{
             .command = .cancel,
         },
@@ -698,7 +703,8 @@ test "native tab drag sends one anchored move after release and waits for runtim
     try std.testing.expectEqual(core.TabMoveDirection.previous, request.direction);
     try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.tabs.find(third));
     try session.settle();
-    _ = try session.gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &session.gui.app,
         .{
             .tab_moved = .{
                 .request_id = request.request_id,
@@ -772,7 +778,7 @@ fn agentSnapshot(session: *Session, status: core.agent_thread.Status, approval: 
     snapshot.item_storage[1] = .{ .identity = 2, .role = .assistant, .status = .completed, .text_offset = 24, .text_len = text.len - 24, .complete = true };
     var buffer: [65536]u8 = undefined;
     const bytes = try core.encodeAgentThreadSnapshot(&buffer, &snapshot);
-    _ = try session.gui.app.handleServerMessage(try core.decodeServer(bytes));
+    _ = try client.runtime_messages.handleServerMessage(&session.gui.app, try core.decodeServer(bytes));
 }
 
 fn linkSnapshot(session: *Session, text: []const u8) !void {
@@ -1003,7 +1009,7 @@ test "opening a selector focuses its agent split and closing restores that exact
     snapshot.pane_generation = 78;
     var buffer: [65536]u8 = undefined;
     const bytes = try core.encodeAgentThreadSnapshot(&buffer, snapshot);
-    _ = try session.gui.app.handleServerMessage(try core.decodeServer(bytes));
+    _ = try client.runtime_messages.handleServerMessage(&session.gui.app, try core.decodeServer(bytes));
     try publish(session);
     var trigger: ?Target = null;
     const registry = session.gui.widgets.dispatcher.maps.presented();
@@ -1289,7 +1295,7 @@ test "agent thread warm drawing allocates no glyph or quad storage and clips sma
 fn receiveThread(session: *Session, snapshot: *const core.AgentThreadSnapshot) !void {
     var buffer: [128 * 1024]u8 = undefined;
     const bytes = try core.encodeAgentThreadSnapshot(&buffer, snapshot);
-    _ = try session.gui.app.handleServerMessage(try core.decodeServer(bytes));
+    _ = try client.runtime_messages.handleServerMessage(&session.gui.app, try core.decodeServer(bytes));
 }
 
 fn activitySnapshot(session: *Session) !void {
@@ -1801,7 +1807,7 @@ test "agent scroll bindings respect transcript bounds and attachment identity" {
     try std.testing.expectEqual(transcript.scroll_limit, pane.transcript_scroll);
 
     pane.attached = false;
-    try std.testing.expect(client.repeatPolicy(.{ .scroll_pane = .down }, session.gui.app.repeatPane()) == null);
+    try std.testing.expect(client.repeatPolicy(.{ .scroll_pane = .down }, client.actions.repeatPane(&session.gui.app)) == null);
     _ = try input_support.action(
         session.gui,
         .{
@@ -2552,7 +2558,8 @@ test "Command V attaches images and image-only send owns them through acknowledg
     try std.testing.expectEqual(@as(usize, 1), session.agent_prompt_count);
     try std.testing.expectEqualStrings("/tmp/clipboard.png", session.agent_images.path(0));
     try std.testing.expectEqual(@as(u8, 1), pane.composerImages().count);
-    _ = try gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &gui.app,
         .{
             .request_completed = .{
                 .request_id = session.agent_request_id,
@@ -2593,8 +2600,8 @@ test "image removal revalidates the delivered draft and preserves remaining orde
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    try gui.app.attachAgentImage(Session.pane_id, "/tmp/first.png");
-    try gui.app.attachAgentImage(Session.pane_id, "/tmp/second.png");
+    try client.agent_control.attachAgentImage(&gui.app, Session.pane_id, "/tmp/first.png");
+    try client.agent_control.attachAgentImage(&gui.app, Session.pane_id, "/tmp/second.png");
     try publish(session);
     const first = try promptControl(session, "Remove image 1");
     _ = gui.app.model.editAgentComposer(
@@ -2616,7 +2623,7 @@ test "image preview opens separately from removal and blocks draft input until E
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    try gui.app.attachAgentImage(Session.pane_id, "/tmp/preview.png");
+    try client.agent_control.attachAgentImage(&gui.app, Session.pane_id, "/tmp/preview.png");
     try publish(session);
     try pressControl(session, try promptControl(session, "Preview image 1"));
     try std.testing.expect(gui.widgets.image_preview != null);
@@ -2643,7 +2650,7 @@ test "image preview closes with its button and backdrop and rejects obsolete ima
     const session = try agentSession();
     defer session.deinit();
     const gui = session.gui;
-    try gui.app.attachAgentImage(Session.pane_id, "/tmp/preview.png");
+    try client.agent_control.attachAgentImage(&gui.app, Session.pane_id, "/tmp/preview.png");
     try publish(session);
     const stale = try promptControl(session, "Preview image 1");
     _ = gui.app.model.editAgentComposer(
@@ -2721,7 +2728,7 @@ test "clicking an agent file link creates an editor pane in its source tab" {
     var response: [128]u8 = undefined;
     const editor_id: core.PaneId = @enumFromInt(99);
     const opened = try core.encodePaneOpened(&response, .{ .request_id = request.request_id, .pane_id = editor_id, .location = request.location, .created = true });
-    _ = try session.gui.app.handleServerMessage(try core.decodeServer(opened));
+    _ = try client.runtime_messages.handleServerMessage(&session.gui.app, try core.decodeServer(opened));
     try session.settle();
     const tab = session.gui.app.model.tabs.active;
     try std.testing.expectEqualDeep(Session.location, session.gui.app.model.tabs.location[tab]);
@@ -2807,7 +2814,8 @@ test "hook editions show one terminal review action and retired availability rej
     const pane = gui.app.model.panes.find(Session.pane_id).?;
     _ = pane.identify(.terminal, 77);
     const notice: core.ChangeReviewChanged = .{ .pane_id = Session.pane_id, .pane_generation = 77, .session = "hook-thread", .latest_edition_id = 1 };
-    _ = try gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &gui.app,
         .{
             .change_review_changed = notice,
         },
@@ -2820,7 +2828,8 @@ test "hook editions show one terminal review action and retired availability rej
     try std.testing.expect(target.activatable());
     try std.testing.expect(routing.eligible(gui, target));
     try std.testing.expectEqual(target.id, registry.at(.{ target.bounds.x + target.bounds.width / 2, target.bounds.y + target.bounds.height / 2 }).?.id);
-    _ = try gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &gui.app,
         .{
             .change_review_changed = .{
                 .pane_id = Session.pane_id,
@@ -2834,7 +2843,8 @@ test "hook editions show one terminal review action and retired availability rej
     try publish(session);
     try std.testing.expectEqual(@as(usize, 0), reviewControlCount(session));
 
-    _ = try gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &gui.app,
         .{
             .change_review_changed = notice,
         },
@@ -2856,7 +2866,8 @@ test "managed review has exactly one action across single split and fullscreen l
     snapshot.thread_id_len = thread.len;
     snapshot.revision += 1;
     try receiveThread(session, &snapshot);
-    _ = try gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &gui.app,
         .{
             .change_review_changed = .{
                 .pane_id = Session.pane_id,
@@ -2894,7 +2905,8 @@ test "managed review has exactly one action across single split and fullscreen l
     try std.testing.expectEqual(@as(usize, 0), reviewControlCount(session));
     try std.testing.expect(gui.app.model.togglePaneFullscreen(.{ .area = data.workbench.region(&gui.app.model).area }) != null);
 
-    _ = try gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &gui.app,
         .{
             .change_review_changed = .{
                 .pane_id = terminal,
@@ -3003,7 +3015,7 @@ fn existingEditor(session: *Session, name: []const u8) !core.PaneId {
 fn editorReply(session: *Session, outcome: core.EditorOpened.Outcome) !void {
     const reply: core.EditorOpened = .{ .request_id = session.last_editor_open.?.request_id, .outcome = outcome, .pane_id = @enumFromInt(99), .pane_generation = 88 };
     var buffer: [128]u8 = undefined;
-    _ = try session.gui.app.handleServerMessage(try core.decodeServer(try core.encodeEditorOpened(&buffer, reply)));
+    _ = try client.runtime_messages.handleServerMessage(&session.gui.app, try core.decodeServer(try core.encodeEditorOpened(&buffer, reply)));
     try session.settle();
 }
 
@@ -3115,7 +3127,7 @@ test "review hides underlying message links before delivery and restores them af
         try std.testing.expect(session.opened_link == null);
     }
 
-    _ = try session.gui.app.handleServerMessage(.{ .change_review_snapshot = .{
+    _ = try client.runtime_messages.handleServerMessage(&session.gui.app, .{ .change_review_snapshot = .{
         .request_id = session.gui.app.model.change_review.pending.?,
         .pane_id = Session.pane_id,
         .pane_generation = 77,

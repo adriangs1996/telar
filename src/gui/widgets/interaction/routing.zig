@@ -367,7 +367,7 @@ fn routeAgentBinding(gui: *GuiClient, event: event_module.Event) !bool {
         return true;
     }
 
-    if (!gui.widgets.dispatcher.window_focused or gui.widgets.dispatcher.maps.presented().modal_layer != 0 or gui.widgets.composer_menu.selector != null or gui.widgets.completions.open or data.key_routing.captures(gui.app.keyRoutingAuthority())) {
+    if (!gui.widgets.dispatcher.window_focused or gui.widgets.dispatcher.maps.presented().modal_layer != 0 or gui.widgets.composer_menu.selector != null or gui.widgets.completions.open or data.key_routing.captures(client.key_routing.keyRoutingAuthority(&gui.app))) {
         return false;
     }
 
@@ -549,7 +549,8 @@ fn command(gui: *GuiClient, value: data.name_prompt.Command) !void {
         }
     }
 
-    _ = try gui.app.inputPrompt(
+    _ = try client.name_prompt.inputPrompt(
+        &gui.app,
         .{
             .command = value,
         },
@@ -600,7 +601,8 @@ fn editor(gui: *GuiClient, target: Target, event: event_module.Event) !void {
             if (target.action == .composer) {
                 try composerKey(gui, target, key);
             } else {
-                _ = try gui.app.inputPrompt(
+                _ = try client.name_prompt.inputPrompt(
+                    &gui.app,
                     .{
                         .key = key.terminalKey(),
                     },
@@ -808,8 +810,9 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
                 gui.widgets.thread_anchor.cancel(control.pane_id);
                 try completions.submit(gui, control.pane_id);
             },
-            .interrupt => try gui.app.interruptAgent(control.pane_id),
-            .approve, .decline => try gui.app.approveAgent(
+            .interrupt => try client.agent_control.interruptAgent(&gui.app, control.pane_id),
+            .approve, .decline => try client.agent_control.approveAgent(
+                &gui.app,
                 .{
                     .pane_id = control.pane_id,
                     .approval_id = control.approval_id,
@@ -833,7 +836,7 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
             },
         },
         .prompt => |action| try command(gui, if (action == .submit) .submit else .cancel),
-        .complete_path => |choice| try gui.app.chooseDirectory(choice.index, choice.revision),
+        .complete_path => |choice| try client.name_prompt.chooseDirectory(&gui.app, choice.index, choice.revision),
         .history => |action| {
             const prompt = gui.app.model.name_prompt.currentConst() orelse return;
             if (prompt.target() != .history) {
@@ -841,7 +844,7 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
             }
 
             switch (action) {
-                .select => |choice| try gui.app.selectHistoryRow(choice.index, choice.revision),
+                .select => |choice| try client.history_palette.selectHistoryRow(&gui.app, choice.index, choice.revision),
                 .submit => |choice| {
                     const history = &gui.app.model.history_palette;
                     if (history.phase == .ready and history.version() == choice.revision and prompt.selection() == choice.index) {
@@ -1013,7 +1016,7 @@ fn scrollHistory(gui: *GuiClient, event: event_module.Event) !bool {
     }
 
     if (prompt.inspecting()) {
-        try gui.app.scrollHistoryInspection(lines);
+        try client.history_palette.scrollHistoryInspection(&gui.app, lines);
     } else {
         for (0..@abs(lines)) |_| {
             if (history.phase != .ready) {
@@ -1152,7 +1155,8 @@ fn finishPaste(gui: *GuiClient, result: ClipboardResult) !void {
 
         if (result.status != .success) {
             if (result.status == .too_large or result.status == .cancelled) {
-                try gui.app.publishNotificationNow(
+                try client.notifications.publishNotificationNow(
+                    &gui.app,
                     .{
                         .level = .warning,
                         .title = "Clipboard could not be pasted",
@@ -1166,7 +1170,7 @@ fn finishPaste(gui: *GuiClient, result: ClipboardResult) !void {
 
         if (result.image) {
             if (target.action == .composer) {
-                try gui.app.attachAgentImage(target.action.composer, result.text);
+                try client.agent_control.attachAgentImage(&gui.app, target.action.composer, result.text);
             }
 
             return;

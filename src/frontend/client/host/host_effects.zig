@@ -61,7 +61,7 @@ fn deliverRequests(terminal: *TerminalClient) !void {
                 try terminal.writer.flush();
             },
             .capture => |request| startCapture(terminal, request) catch |err| {
-                try client.completeClipboardCapture(.{
+                try client_module.clipboard_capture.completeClipboardCapture(client, .{
                     .execution_id = @enumFromInt(request.sequence),
                     .result = err,
                 });

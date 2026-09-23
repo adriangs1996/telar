@@ -120,11 +120,11 @@ test "shared routing queries distinguish key capture from eligible repetition" {
     const session = try Session.init();
     defer session.deinit();
     const app = &session.gui.app;
-    try std.testing.expect(!data.key_routing.captures(app.keyRoutingAuthority()));
-    try std.testing.expect(app.repeatPane() == null);
+    try std.testing.expect(!data.key_routing.captures(client.key_routing.keyRoutingAuthority(app)));
+    try std.testing.expect(client.actions.repeatPane(app) == null);
     try session.bootstrap();
     try session.receiveFrame(1);
-    try std.testing.expectEqual(Session.pane_id, app.repeatPane().?);
+    try std.testing.expectEqual(Session.pane_id, client.actions.repeatPane(app).?);
 
     const tab = app.model.tabs.active;
     const second: core.PaneId = @enumFromInt(11);
@@ -137,19 +137,19 @@ test "shared routing queries distinguish key capture from eligible repetition" {
     });
     const pane = app.model.panes.find(second).?;
     pane.attached = true;
-    try std.testing.expectEqual(second, app.repeatPane().?);
+    try std.testing.expectEqual(second, client.actions.repeatPane(app).?);
     pane.attached = false;
-    try std.testing.expect(app.repeatPane() == null);
-    try std.testing.expect(!data.key_routing.captures(app.keyRoutingAuthority()));
+    try std.testing.expect(client.actions.repeatPane(app) == null);
+    try std.testing.expect(!data.key_routing.captures(client.key_routing.keyRoutingAuthority(app)));
     pane.attached = true;
 
     app.model.name_prompt.begin(.create_workspace);
-    try std.testing.expect(data.key_routing.captures(app.keyRoutingAuthority()));
-    try std.testing.expect(app.repeatPane() == null);
+    try std.testing.expect(data.key_routing.captures(client.key_routing.keyRoutingAuthority(app)));
+    try std.testing.expect(client.actions.repeatPane(app) == null);
     _ = app.model.name_prompt.apply(.cancel);
-    try std.testing.expectEqual(second, app.repeatPane().?);
+    try std.testing.expectEqual(second, client.actions.repeatPane(app).?);
 
     try std.testing.expect(app.model.enterCopyMode());
-    try std.testing.expect(!data.key_routing.captures(app.keyRoutingAuthority()));
-    try std.testing.expect(app.repeatPane() == null);
+    try std.testing.expect(!data.key_routing.captures(client.key_routing.keyRoutingAuthority(app)));
+    try std.testing.expect(client.actions.repeatPane(app) == null);
 }

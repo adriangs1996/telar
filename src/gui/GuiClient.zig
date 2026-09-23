@@ -456,7 +456,8 @@ fn start(self: *GuiClient, colors: core.TerminalColors) !void {
     capabilities.pointer_pixels = .supported;
     capabilities.agent_panes = true;
 
-    _ = try self.app.applyHostUpdate(
+    _ = try client.host_resize.applyHostUpdate(
+        &self.app,
         .{
             .size = self.app.model.host.host_size,
             .capabilities = capabilities,
@@ -473,9 +474,9 @@ fn start(self: *GuiClient, colors: core.TerminalColors) !void {
         },
     );
 
-    try self.app.startRuntimeIo();
-    try self.app.scheduleConfigReload();
-    try self.app.synchronizeBars();
+    try client.runtime_io.startRuntimeIo(&self.app);
+    try client.config_adoption.scheduleConfigReload(&self.app);
+    try client.bar_updates.synchronizeBars(&self.app);
     self.started = true;
 }
 
@@ -532,7 +533,7 @@ pub fn update(self: *GuiClient) !?u8 {
         }
 
         if (batch.processed != 0) {
-            try self.app.synchronizeClientLayout();
+            try client.client_layout.synchronizeClientLayout(&self.app);
         }
 
         try loop.configuration.poll(&self.app);
@@ -646,7 +647,7 @@ pub fn cancelBinding(self: *GuiClient) void {
 
 fn statusMode(self: *const GuiClient) client.Mode {
     if (!self.router.prefixPending()) {
-        return if (self.app.copyModeActive()) .copy else .normal;
+        return if (client.copy_mode.copyModeActive(&self.app)) .copy else .normal;
     }
 
     var hints: client.Hints = .{};
@@ -841,8 +842,8 @@ pub fn routeKey(self: *GuiClient, event: input_routing.Type.KeyInput) !shared_mo
     const decision = self.router.routeEvent(
         event,
         .{
-            .captures_keys = shared_model.key_routing.captures(self.app.keyRoutingAuthority()),
-            .repeat_policy = if (self.router.repeatAction()) |held| client.repeatPolicy(held, self.app.repeatPane()) else null,
+            .captures_keys = shared_model.key_routing.captures(client.key_routing.keyRoutingAuthority(&self.app)),
+            .repeat_policy = if (self.router.repeatAction()) |held| client.repeatPolicy(held, client.actions.repeatPane(&self.app)) else null,
         },
     );
 
@@ -855,7 +856,8 @@ pub fn routeKey(self: *GuiClient, event: input_routing.Type.KeyInput) !shared_mo
 fn applyInputDecision(self: *GuiClient, decision: input_routing.Type.Decision) !shared_model.keybind.Control {
     switch (decision) {
         .forward => |value| {
-            _ = try self.app.routeKeyInput(
+            _ = try client.key_routing.routeKeyInput(
+                &self.app,
                 .{
                     .key = value.key,
                 },
@@ -867,8 +869,9 @@ fn applyInputDecision(self: *GuiClient, decision: input_routing.Type.Decision) !
             }
 
             if (value.current_key) |current| {
-                if (shared_model.key_routing.captures(self.app.keyRoutingAuthority())) {
-                    _ = try self.app.routeKeyInput(
+                if (shared_model.key_routing.captures(client.key_routing.keyRoutingAuthority(&self.app))) {
+                    _ = try client.key_routing.routeKeyInput(
+                        &self.app,
                         .{
                             .key = current,
                         },
@@ -882,7 +885,7 @@ fn applyInputDecision(self: *GuiClient, decision: input_routing.Type.Decision) !
             const control = try self.executeAction(request.value);
 
             if (control == .continue_routing) {
-                self.router.actionCompleted(request, client.repeatPolicy(request.value, self.app.repeatPane()));
+                self.router.actionCompleted(request, client.repeatPolicy(request.value, client.actions.repeatPane(&self.app)));
             }
 
             return control;
@@ -906,7 +909,8 @@ fn deliverKey(self: *GuiClient, value: shared_model.Key) !void {
         }
     }
 
-    _ = try self.app.routeKeyInput(
+    _ = try client.key_routing.routeKeyInput(
+        &self.app,
         .{
             .key = value,
         },
@@ -928,7 +932,7 @@ fn executeAction(self: *GuiClient, value: shared_model.actions.Action) !shared_m
         .goto_picker => .goto,
         .suggest_command => .suggest,
         .resize_sidebar => |direction| {
-            _ = try self.app.leaveCopyMode();
+            _ = try client.copy_mode.leaveCopyMode(&self.app);
 
             if (self.sidebar.step(direction)) {
                 self.chrome.invalidate();
@@ -936,14 +940,14 @@ fn executeAction(self: *GuiClient, value: shared_model.actions.Action) !shared_m
 
             return .continue_routing;
         },
-        else => return self.app.executeAction(value, .binding),
+        else => return client.actions.executeAction(&self.app, value, .binding),
     };
 
-    if (self.app.copyModeActive()) {
-        _ = try self.app.leaveCopyMode();
+    if (client.copy_mode.copyModeActive(&self.app)) {
+        _ = try client.copy_mode.leaveCopyMode(&self.app);
     }
 
-    _ = self.app.beginCommandPalette(prefix);
+    _ = client.name_prompt.beginCommandPalette(&self.app, prefix);
 
     return .continue_routing;
 }
@@ -1059,7 +1063,7 @@ fn dispatchClipboard(self: *GuiClient, result: ClipboardResult) !bool {
         }
 
         _ = try self.applyInputDecision(self.router.interrupt());
-        _ = try self.app.startPanePaste();
+        _ = try client.pane_input.startPanePaste(&self.app);
         self.terminal_clipboard.offset = 0;
 
         return false;
@@ -1069,13 +1073,13 @@ fn dispatchClipboard(self: *GuiClient, result: ClipboardResult) !bool {
 
     if (offset < result.text.len) {
         const count = PasteChunk.nextSize(result.text[offset..]);
-        _ = try self.app.appendPanePaste(result.text[offset..][0..count]);
+        _ = try client.pane_input.appendPanePaste(&self.app, result.text[offset..][0..count]);
         self.terminal_clipboard.offset = offset + count;
 
         return false;
     }
 
-    _ = try self.app.finishPanePaste();
+    _ = try client.pane_input.finishPanePaste(&self.app);
     self.terminal_clipboard.offset = null;
 
     return true;
@@ -1166,7 +1170,7 @@ fn dispatchPointer(self: *GuiClient, value: PointerSample) !void {
                     pointer.link_gesture.cancel();
 
                     if (target) |selected| {
-                        _ = try app.openLink(selected);
+                        _ = try client.link_opening.openLink(app, selected);
                     }
                 }
 
@@ -1467,7 +1471,7 @@ fn deliverRequests(self: *GuiClient) !void {
                 else => return err,
             },
             .terminal_notification => {},
-            .capture => |request| try self.app.completeClipboardCapture(.{
+            .capture => |request| try client.clipboard_capture.completeClipboardCapture(&self.app, .{
                 .execution_id = @enumFromInt(request.sequence),
                 .result = error.NativeServiceUnavailable,
             }),
@@ -1627,7 +1631,8 @@ pub fn resize(self: *GuiClient, size: core.TerminalSize, theme: shared_model.Ter
         .palette = theme.palette,
     };
 
-    _ = try self.app.applyHostUpdate(
+    _ = try client.host_resize.applyHostUpdate(
+        &self.app,
         .{
             .size = size,
             .capabilities = capabilities,

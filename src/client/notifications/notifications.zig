@@ -1,0 +1,222 @@
+//! Notifications: publishes, times, activates and dismisses notifications and
+//! delivers them to the host.
+const data = @import("model");
+const core = @import("telar-core");
+const std = @import("std");
+const pane_focus = @import("../panes/pane_focus.zig");
+const tab_selection = @import("../workspace/tab_selection.zig");
+const workspace_handoff = @import("../workspace/workspace_handoff.zig");
+const Client = @import("../AttachedClient.zig");
+
+/// Publishes one owned notice through the application boundary.
+/// Example: `_ = try notifications.publishNotification(client, now_ns, input);`
+pub fn publishNotification(client: *Client, now_ns: u64, input: data.NotificationInput) !data.NotificationPublication {
+    const publication = client.model.publishNotification(now_ns, input);
+    try scheduleNotificationTimer(client);
+    try deliverHostNotification(client, input);
+    return publication;
+}
+
+/// Publishes one local notice at the current client monotonic timestamp.
+/// Example: `try notifications.publishNotificationNow(client, input);`
+pub fn publishNotificationNow(client: *Client, input: data.NotificationInput) !void {
+    _ = try publishNotification(client, core.monotonic(client.io), input);
+}
+
+/// Completes one physical timer before advancing and rearming notification
+/// state in the client model.
+/// Example: `_ = try notifications.completeNotificationTick(client, result);`
+pub fn completeNotificationTick(client: *Client, result: anyerror!void) !?data.NotificationChange {
+    try client.model.notification_scheduler.complete(result);
+
+    return advanceNotifications(client, core.monotonic(client.io));
+}
+
+/// Activates one current notification and follows its target at the client
+/// monotonic timestamp.
+/// Example: `_ = try notifications.activateNotificationNow(client, id);`
+pub fn activateNotificationNow(client: *Client, id: data.NotificationId) !?data.NotificationActivation {
+    return activateNotification(client, id, core.monotonic(client.io));
+}
+
+/// Dismisses one current notification at the client monotonic timestamp.
+/// Example: `_ = try notifications.dismissNotificationNow(client, id);`
+pub fn dismissNotificationNow(client: *Client, id: data.NotificationId) !?data.NotificationChange {
+    return dismissNotification(client, id, core.monotonic(client.io));
+}
+
+/// Registers correlation before copying the request; failed delivery removes only that registration.
+/// Example: `try notifications.sendNotificationRequest(client, request);`
+fn sendNotificationRequest(client: *Client, request: core.ShowNotification) !void {
+    try client.model.request_lifecycle.tracker.add(request.request_id, .notification);
+    errdefer _ = client.model.request_lifecycle.tracker.take(request.request_id);
+    try client.model.to_runtime.pushNotification(request);
+}
+
+/// Delivers one bounded semantic notification through the runtime and records
+/// the continuation consumed by its delivery report.
+pub fn requestNotificationDelivery(client: *Client, notification: *const data.Notification) !core.RequestId {
+    const request_id = try client.model.request_lifecycle.nextId();
+    try sendNotificationRequest(
+        client,
+        .{
+            .request_id = request_id,
+            .notification = .{
+                .level = notification.level,
+                .duration_ms = notification.duration_ms,
+                .target = notification.target,
+                .title = notification.title(),
+                .message = notification.message(),
+            },
+        },
+    );
+
+    return request_id;
+}
+
+/// Consumes one correlated runtime delivery report and applies its policy.
+pub fn completeNotificationDelivery(client: *Client, shown: core.NotificationShown) !data.NotificationDeliveryOutcome {
+    const continuation = client.model.request_lifecycle.tracker.take(shown.request_id) orelse
+        return error.UnexpectedNotificationReply;
+    if (continuation != .notification) {
+        return error.UnexpectedNotificationReply;
+    }
+
+    if (shown.delivered_clients != 0) {
+        return .delivered;
+    }
+
+    try publishNotificationNow(
+        client,
+        .{
+            .level = .failure,
+            .title = "Notification not delivered",
+            .message = "No connected client could accept the notification",
+        },
+    );
+    return .undelivered;
+}
+
+/// Translates and publishes one notification pushed by the runtime.
+pub fn applyRuntimeNotification(client: *Client, notification: core.Notification) !data.NotificationPublication {
+    return publishNotification(
+        client,
+        core.monotonic(client.io),
+        .{
+            .level = switch (notification.level) {
+                .info => .info,
+                .success => .success,
+                .warning => .warning,
+                .failure => .failure,
+            },
+            .title = notification.title,
+            .message = notification.message,
+            .target = switch (notification.target) {
+                .none => .none,
+                .pane => |pane_id| .{
+                    .focus_pane = pane_id,
+                },
+                .tab => |tab_id| .{
+                    .select_tab = tab_id,
+                },
+                .workspace => |workspace_id| .{
+                    .select_workspace = workspace_id,
+                },
+            },
+            .duration_ns = @as(u64, notification.duration_ms) * std.time.ns_per_ms,
+        },
+    );
+}
+
+/// Surfaces one published notice through the configured host channel. The
+/// in-app center always shows it; the host port owns `terminal` and `system`.
+fn deliverHostNotification(client: *Client, input: data.NotificationInput) !void {
+    if (client.model.config.notification_delivery == .telar) {
+        return;
+    }
+
+    const payload: data.NotificationPayload = .init(input.title, input.message);
+    switch (client.model.config.notification_delivery) {
+        .telar => unreachable,
+        .terminal => try client.model.to_host.push(.{ .terminal_notification = payload }),
+        // A system notice is best effort; a saturated inbox drops it.
+        .system => client.to_workers.push(.{ .system_notification = payload }) catch {},
+    }
+}
+
+/// Advances every notification lifecycle to one monotonic timestamp.
+fn advanceNotifications(client: *Client, now_ns: u64) !?data.NotificationChange {
+    const change = client.model.advanceNotifications(now_ns);
+    try scheduleNotificationTimer(client);
+    return change;
+}
+
+/// Activates one current notification identity and follows its target at most
+/// once.
+fn activateNotification(client: *Client, id: data.NotificationId, now_ns: u64) !?data.NotificationActivation {
+    const activation = client.model.activateNotification(id, now_ns) orelse return null;
+    try scheduleNotificationTimer(client);
+    try navigateNotification(client, activation.target);
+    return activation;
+}
+
+/// Dismisses one current notification identity without navigation.
+fn dismissNotification(client: *Client, id: data.NotificationId, now_ns: u64) !?data.NotificationChange {
+    const change = client.model.dismissNotification(id, now_ns) orelse return null;
+    try scheduleNotificationTimer(client);
+    return change;
+}
+
+fn navigateNotification(client: *Client, target: data.NotificationTarget) !void {
+    switch (target) {
+        .none => {},
+        .select_tab => |tab_id| {
+            _ = try tab_selection.selectTab(
+                client,
+                .{
+                    .target = .{
+                        .tab_id = tab_id,
+                    },
+                },
+            );
+        },
+        .select_workspace => |workspace| {
+            _ = try workspace_handoff.selectWorkspace(
+                client,
+                .{
+                    .workspace = workspace,
+                },
+            );
+        },
+        .focus_pane => |pane_id| {
+            _ = try pane_focus.applyPaneFocus(
+                client,
+                .{
+                    .target = .{
+                        .pane_id = pane_id,
+                    },
+                    .area = client.geometry().area,
+                },
+            );
+        },
+    }
+}
+
+/// Replaces the pending deadline from current model state and starts at most
+/// one inbox producer through the timer port.
+fn scheduleNotificationTimer(client: *Client) !void {
+    const scheduler = &client.model.notification_scheduler;
+    const now_ns = core.monotonic(client.io);
+    const deadline_ns = client.model.notification_center.nextDeadline(
+        now_ns,
+        client.model.host.animation_frame_ns orelse std.math.maxInt(u64),
+    );
+    switch (scheduler.update(client.io, deadline_ns)) {
+        .idle, .retained => {},
+        .schedule => client.to_workers.push(.{ .timer = .{ .kind = .notification, .scheduler = scheduler } }) catch |err| {
+            scheduler.schedulingFailed();
+
+            return err;
+        },
+    }
+}

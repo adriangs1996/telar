@@ -223,7 +223,7 @@ pub fn submit(gui: *GuiClient, pane_id: core.PaneId) !void {
         }
     }
 
-    try gui.app.submitAgentPrompt(pane_id);
+    try client.agent_control.submitAgentPrompt(&gui.app, pane_id);
 }
 
 fn restoreEditor(gui: *GuiClient) void {

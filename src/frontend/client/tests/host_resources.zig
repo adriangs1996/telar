@@ -5,6 +5,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
 const TestHarness = @import("TestHarness.zig");
+const client_module = @import("telar-client");
 
 test "host resources ignore repeated and invalid geometry" {
     var harness: TestHarness = undefined;
@@ -13,13 +14,14 @@ test "host resources ignore repeated and invalid geometry" {
     const app = harness.client;
     const version = app.model.version();
 
-    try std.testing.expect(try app.applyHostUpdate(
+    try std.testing.expect(try client_module.host_resize.applyHostUpdate(
+        app,
         .{
             .size = app.model.host.host_size,
             .capabilities = app.model.host.host_capabilities,
         },
     ) == null);
-    try std.testing.expectError(error.InvalidTerminalSize, app.applyHostUpdate(.{
+    try std.testing.expectError(error.InvalidTerminalSize, client_module.host_resize.applyHostUpdate(app, .{
         .size = .{ .cols = 80, .rows = 0 },
         .capabilities = app.model.host.host_capabilities,
     }));
@@ -43,7 +45,8 @@ test "the view and the presenter follow committed grid and cell changes" {
         capabilities.cell_width_px = size.cell_width_px;
         capabilities.cell_height_px = size.cell_height_px;
 
-        _ = try app.applyHostUpdate(
+        _ = try client_module.host_resize.applyHostUpdate(
+            app,
             .{
                 .size = size,
                 .capabilities = capabilities,
@@ -68,7 +71,8 @@ test "the view follows image support once and ignores repeated observations" {
     defer harness.deinit();
     const app = harness.client;
 
-    _ = try app.observeHostCapability(
+    _ = try client_module.host_capabilities.observeHostCapability(
+        app,
         .{
             .images = .supported,
         },
@@ -76,19 +80,20 @@ test "the view follows image support once and ignores repeated observations" {
     try std.testing.expect(app.model.to_host.invalidate_placements);
     try harness.deliverHostEffects();
     try std.testing.expectEqual(data.ResolvedSidebarRendering.kitty_hybrid, harness.terminal.view.sidebar_rendering);
-    _ = try app.reconcileHostCapabilities(app.model.host.host_capabilities.withObservation(
+    _ = try client_module.host_capabilities.reconcileHostCapabilities(app, app.model.host.host_capabilities.withObservation(
         .{
             .pointer_pixels = .unsupported,
         },
     ));
     const version = app.model.version();
 
-    try std.testing.expect(try app.observeHostCapability(
+    try std.testing.expect(try client_module.host_capabilities.observeHostCapability(
+        app,
         .{
             .images = .supported,
         },
     ) == null);
-    try std.testing.expect(try app.reconcileHostCapabilities(app.model.host.host_capabilities) == null);
+    try std.testing.expect(try client_module.host_capabilities.reconcileHostCapabilities(app, app.model.host.host_capabilities) == null);
     try std.testing.expectEqualDeep(version, app.model.version());
 }
 
@@ -99,7 +104,8 @@ test "a sidebar renderer the host cannot draw fails the refresh and keeps the co
     const app = harness.client;
     app.model.config.sidebar_rendering = .kitty_full;
 
-    _ = try app.observeHostCapability(
+    _ = try client_module.host_capabilities.observeHostCapability(
+        app,
         .{
             .images = .unsupported,
         },

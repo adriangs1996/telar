@@ -12,7 +12,8 @@ pub fn port(gui: *GuiClient) client.HostInputSource {
 fn promptBytes(context: *anyopaque, bytes: []const u8) !void {
     const gui: *GuiClient = @ptrCast(@alignCast(context));
     const app = &gui.app;
-    _ = try app.inputPrompt(
+    _ = try client.name_prompt.inputPrompt(
+        app,
         .{
             .paste_text = bytes,
         },

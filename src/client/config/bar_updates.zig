@@ -28,11 +28,11 @@ pub const CommandExecutionId = data.command_execution.Id;
 pub fn handleTick(client: *Client, result: anyerror!void) !void {
     try client.model.bar_updates.scheduler.complete(result);
     const generation = client.lua_generation orelse {
-        try client.synchronizeBars();
+        try synchronizeBars(client);
         return;
     };
-    const configuration = client.barConfiguration() orelse {
-        try client.synchronizeBars();
+    const configuration = barConfiguration(client) orelse {
+        try synchronizeBars(client);
         return;
     };
     const due = client.model.bar_updates.takeDue(.{
@@ -56,7 +56,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
 pub fn completeCommand(client: *Client, completion: BarUpdatesCompletion) !void {
     const execution = client.model.bar_updates.finishCommand(completion.execution_id) orelse return;
     const generation = client.lua_generation;
-    const configuration = client.barConfiguration();
+    const configuration = barConfiguration(client);
     if (generation != null and configuration != null and generation.?.number == execution.generation) {
         const source = configuration.?.source(execution.position);
         if (source.* == .command and source.command.generation == execution.generation) {
@@ -201,7 +201,7 @@ fn startNextCommand(client: *Client) !void {
         return;
     }
     const generation = client.lua_generation orelse return;
-    const configuration = client.barConfiguration() orelse return;
+    const configuration = barConfiguration(client) orelse return;
 
     for (std.enums.values(data.bar_values.Position)) |position| {
         if (client.model.bar_updates.pending_commands & position.bit() == 0) {
@@ -330,3 +330,29 @@ const CommandOutput = struct {
     command: data.BarCommand,
     output: Output,
 };
+
+/// Borrows bar sources only when Lua and the model agree on their generation.
+/// Example: `const configuration = bar_updates.barConfiguration(client) orelse return;`
+pub fn barConfiguration(client: *const Client) ?*const data.BarConfiguration {
+    const generation = client.lua_generation orelse return null;
+
+    if (generation.number != client.model.configuration_generation) {
+        return null;
+    }
+
+    return &generation.snapshot.bars;
+}
+
+/// Replaces bar deadlines from the active configuration and rearms their timer.
+/// Example: `try bar_updates.synchronizeBars(client);`
+pub fn synchronizeBars(client: *Client) !void {
+    client.model.bar_updates.synchronize(
+        .{
+            .generation = if (client.lua_generation) |generation| generation.number else client.model.configuration_generation,
+            .configuration = barConfiguration(client),
+            .now_ns = core.monotonic(client.io),
+        },
+    );
+
+    try rearm(client);
+}

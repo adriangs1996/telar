@@ -13,7 +13,8 @@ test "pending pane creation suppresses another split without changing state" {
     const app = harness.client;
     app.options.arguments = &.{"/bin/sh"};
     const before = app.model.version();
-    const plan = (try app.requestPaneSplit(
+    const plan = (try client.pane_split.requestPaneSplit(
+        app,
         .{
             .axis = .horizontal,
             .area = app.geometry().area,
@@ -23,7 +24,8 @@ test "pending pane creation suppresses another split without changing state" {
     const queued = app.model.to_runtime.len;
     const next_id = app.model.request_lifecycle.next_request_id;
 
-    try std.testing.expect(try app.requestPaneSplit(
+    try std.testing.expect(try client.pane_split.requestPaneSplit(
+        app,
         .{
             .axis = .vertical,
             .area = app.geometry().area,
@@ -45,7 +47,8 @@ test "split restores the original size when request identity allocation fails" {
     const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
     app.model.request_lifecycle.next_request_id = std.math.maxInt(u64);
 
-    try std.testing.expectError(error.RequestIdExhausted, app.requestPaneSplit(
+    try std.testing.expectError(error.RequestIdExhausted, client.pane_split.requestPaneSplit(
+        app,
         .{
             .axis = .horizontal,
             .area = app.geometry().area,
@@ -83,7 +86,8 @@ test "split rejects mismatched runtime confirmations without mutation or deliver
             .area = plan.split.area,
         } });
 
-        try std.testing.expectError(error.UnexpectedPane, app.handleServerMessage(
+        try std.testing.expectError(error.UnexpectedPane, client.runtime_messages.handleServerMessage(
+            app,
             .{
                 .pane_opened = opened,
             },
@@ -120,7 +124,8 @@ test "split retains the runtime creation when confirmation delivery fails" {
         },
     );
 
-    try std.testing.expectError(error.ClientOutboxFull, app.handleServerMessage(
+    try std.testing.expectError(error.ClientOutboxFull, client.runtime_messages.handleServerMessage(
+        app,
         .{
             .pane_opened = .{
                 .request_id = request_id,
@@ -160,7 +165,8 @@ test "late split confirmation never detaches a currently represented pane" {
         },
     );
 
-    try std.testing.expectError(error.StalePaneSplitConfirmation, app.handleServerMessage(
+    try std.testing.expectError(error.StalePaneSplitConfirmation, client.runtime_messages.handleServerMessage(
+        app,
         .{
             .pane_opened = .{
                 .request_id = request_id,
@@ -194,7 +200,8 @@ test "split recovery preserves model state when its resize cannot be queued" {
         .area = plan.split.area,
     } });
 
-    try std.testing.expectError(error.ClientOutboxFull, app.handleServerMessage(
+    try std.testing.expectError(error.ClientOutboxFull, client.runtime_messages.handleServerMessage(
+        app,
         .{
             .request_failed = .{
                 .request_id = request_id,
@@ -224,7 +231,7 @@ test "editor split retains its explicit target and arguments despite another foc
         .area = app.geometry().area,
     });
     const before = app.model.version();
-    const plan = (try app.requestPaneSplit(.{
+    const plan = (try client.pane_split.requestPaneSplit(app, .{
         .axis = .vertical,
         .area = app.geometry().area,
         .target_pane = TestHarness.bootstrap_pane,
@@ -266,7 +273,8 @@ test "routed pane focus reports applied or failed with the original correlation"
     };
     var buffer: [core.ClientCommand.capacity]u8 = undefined;
 
-    _ = try app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        app,
         .{
             .client_command = command,
         },
@@ -280,7 +288,8 @@ test "routed pane focus reports applied or failed with the original correlation"
     try std.testing.expectEqual(.applied, applied.complete_client_command.status);
 
     command.target_id = 0;
-    _ = try app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        app,
         .{
             .client_command = command,
         },
@@ -317,7 +326,8 @@ test "routed pane split acknowledges admission before runtime creation" {
         .target_id = @intFromEnum(TestHarness.bootstrap_pane),
     };
     try command.setText("vertical");
-    _ = try app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        app,
         .{
             .client_command = command,
         },

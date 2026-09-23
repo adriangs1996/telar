@@ -129,7 +129,7 @@ pub fn settleModelPresentation(self: *TestHarness) !void {
             .media_tick => |result| try presentation_lifecycle.handleMediaTick(self.terminal, result),
             .client => |message| switch (message) {
                 .sent => |result| {
-                    try self.client.completeRuntimeSend(result);
+                    try client_module.runtime_io.completeRuntimeSend(self.client, result);
                     try host_effects.deliver(self.terminal);
                 },
                 .sidebar_animation_tick, .notification_tick, .bar_tick, .bar_command, .path_completion => {
@@ -178,7 +178,7 @@ pub fn discoverAndRequestAttachment(self: *TestHarness, pane_id: core.PaneId, bu
             .{ .pane_id = pane_id, .lifecycle = .running },
         },
     });
-    _ = try self.client.handleServerMessage(try core.decodeServer(snapshot));
+    _ = try client_module.runtime_messages.handleServerMessage(self.client, try core.decodeServer(snapshot));
     try self.settle();
 
     return self.nextAttachmentRequest(pane_id, buffer);
@@ -209,7 +209,7 @@ pub fn bootstrap(self: *TestHarness) !void {
     });
     try std.testing.expectEqual(
         @as(?u8, null),
-        try self.client.handleServerMessage(try core.decodeServer(opened)),
+        try client_module.runtime_messages.handleServerMessage(self.client, try core.decodeServer(opened)),
     );
     try self.settle();
     var buffer: [256]u8 = undefined;

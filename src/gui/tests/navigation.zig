@@ -44,7 +44,7 @@ test "update processes a horizontal split shortcut and its correlated runtime re
         .created = true,
     });
     const response = try data.RuntimeMessage.decode(std.testing.io, payload);
-    try app.startRuntimeRead();
+    try client.runtime_io.startRuntimeRead(app);
     try session.gui.driver.inbox.post(
         .{
             .client = .{
@@ -246,7 +246,7 @@ test "native child release crosses a newly opened prompt only with its acquired 
         .kind = .press,
     };
     var capture = Capture.begin(app, press).?;
-    try std.testing.expect(app.openNamePrompt(.rename_active_tab));
+    try std.testing.expect(client.name_prompt.openNamePrompt(app, .rename_active_tab));
     try std.testing.expect(app.model.planPaneInput(.{ .pane = pane.id }) == null);
     var release = press;
     release.kind = .release;

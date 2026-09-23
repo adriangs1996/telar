@@ -151,7 +151,8 @@ test "GUI notification lifecycle wakes at semantic boundaries while the host own
     defer fixture.deinit();
     const app = &fixture.session.gui.app;
     const now = client.monotonic(app.io);
-    _ = try app.publishNotification(
+    _ = try client.notifications.publishNotification(
+        app,
         now,
         .{
             .title = "Ready",

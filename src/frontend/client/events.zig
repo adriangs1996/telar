@@ -64,7 +64,7 @@ fn observe(terminal: *TerminalClient) !void {
 
     const path = core.enter(.interactive);
     defer path.restore();
-    try client.synchronizeClientLayout();
+    try client_module.client_layout.synchronizeClientLayout(client);
     try presentation_lifecycle.observe(terminal);
     try presentation_lifecycle.pumpOutput(terminal);
     try host_effects.deliver(terminal);
@@ -121,7 +121,7 @@ fn route(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources
         },
         .telemetry_tick => |result| client_telemetry.handleTick(terminal, result, resources.heap.snapshot()),
         .telemetry_written => |result| client_telemetry.handleWritten(terminal, result),
-        .clipboard_image => |result| try client.completeClipboardCapture(result),
+        .clipboard_image => |result| try client_module.clipboard_capture.completeClipboardCapture(client, result),
     }
 
     if (try client_startup.advance(terminal)) {

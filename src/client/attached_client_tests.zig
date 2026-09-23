@@ -7,6 +7,10 @@ const AttachedClient = @import("AttachedClient.zig");
 const Job = @import("execution/Job.zig").Job;
 const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
 const Credit = @import("graphics/Credit.zig");
+const actions = @import("input/actions.zig");
+const change_review = @import("change_review/change_review.zig");
+const runtime_io = @import("connection/runtime_io.zig");
+const workspace_rename = @import("workspace/workspace_rename.zig");
 
 /// Layout export decodes to the same active pane and split tree.
 /// Example: `try attached_client_tests.layoutRoundTrip(writeCommandLayout);`
@@ -177,18 +181,18 @@ pub fn retryTransportScheduling(comptime flush: fn (*AttachedClient) anyerror!vo
     defer destroyTransportClient(app);
     const state = &app.runtime_transport;
 
-    try app.startRuntimeRead();
+    try runtime_io.startRuntimeRead(app);
     try std.testing.expectError(error.DriverBusy, capture.drain(app));
     try std.testing.expect(!state.receive_pending);
     capture.reject = false;
-    try app.startRuntimeRead();
+    try runtime_io.startRuntimeRead(app);
     try capture.drain(app);
-    try app.startRuntimeRead();
+    try runtime_io.startRuntimeRead(app);
     try capture.drain(app);
     try std.testing.expectEqual(@as(usize, 2), capture.reads);
     try std.testing.expectError(error.ReadFailed, state.completeRead(error.ReadFailed));
     try std.testing.expect(!state.receive_pending);
-    try app.startRuntimeRead();
+    try runtime_io.startRuntimeRead(app);
     try capture.drain(app);
     try std.testing.expectEqual(@as(usize, 3), capture.reads);
     state.cancelRead();
@@ -254,7 +258,8 @@ pub fn retainQueuedInput(comptime flush: fn (*AttachedClient) anyerror!void) !vo
         'x',
     } ** (data.input_limits.max_encoded_bytes + 1);
 
-    try app.sendRuntimeInput(
+    try runtime_io.sendRuntimeInput(
+        app,
         .{
             .pane_id = pane,
             .bytes = &source,
@@ -267,7 +272,8 @@ pub fn retainQueuedInput(comptime flush: fn (*AttachedClient) anyerror!void) !vo
     @memset(&source, 'y');
     capture.reject = false;
 
-    try app.sendRuntime(
+    try runtime_io.sendRuntime(
+        app,
         .{
             .detach_pane = .{
                 .pane_id = pane,
@@ -306,7 +312,8 @@ pub fn retainQueuedInput(comptime flush: fn (*AttachedClient) anyerror!void) !vo
     }
 
     const sends = capture.sends;
-    try std.testing.expectError(error.ClientOutboxFull, app.sendRuntime(
+    try std.testing.expectError(error.ClientOutboxFull, runtime_io.sendRuntime(
+        app,
         .{
             .detach_pane = .{
                 .pane_id = pane,
@@ -349,7 +356,7 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient
     const pane = model.panes.find(pane_id).?;
     _ = pane.identify(.terminal, 3);
     try open_session(app, pane_id);
-    try std.testing.expect(app.isChangeReviewAttached());
+    try std.testing.expect(change_review.isChangeReviewAttached(app));
     const pending_owner = try operation(app, 0);
     session.begin(@enumFromInt(21));
     try std.testing.expectError(error.ChangeReviewRequestPending, operation(app, 0));
@@ -362,7 +369,7 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient
     };
 
     pane.attachment_generation += 1;
-    try std.testing.expect(!app.isChangeReviewAttached());
+    try std.testing.expect(!change_review.isChangeReviewAttached(app));
     try std.testing.expect(!try apply_response(
         app,
         pending_owner,
@@ -422,7 +429,7 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
     notification.latest_edition_id = 2;
     try std.testing.expect(changed(app, notification));
     try std.testing.expect(session.needsRefresh());
-    app.closeChangeReview();
+    change_review.closeChangeReview(app);
     try std.testing.expect(pane.hasChangeReview());
     notification.session = "next-hook-session";
     notification.latest_edition_id = 0;
@@ -494,7 +501,8 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
                     .rename_tab = location,
                 },
             ),
-            .workspace_rename => app.sendWorkspaceRenameRequest(
+            .workspace_rename => workspace_rename.sendWorkspaceRenameRequest(
+                app,
                 .{
                     .request_id = request_id,
                     .workspace = location.workspace,
@@ -533,7 +541,8 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
                 },
             ),
             .notification => block: {
-                _ = app.executeAction(
+                _ = actions.executeAction(
+                    app,
                     .{
                         .notification = try data.Notification.init(
                             .{

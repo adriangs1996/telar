@@ -5,6 +5,17 @@ const Client = @import("../AttachedClient.zig");
 const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
 const ViewInteractionOutcome = @import("ViewInteractionOutcome.zig");
 const IntentOutcome = @import("IntentOutcome.zig");
+const agent_attachments = @import("../attachments/agent_attachments.zig");
+const agent_navigation = @import("../agents/agent_navigation.zig");
+const name_prompt = @import("name_prompt.zig");
+const notifications = @import("../notifications/notifications.zig");
+const pane_focus = @import("../panes/pane_focus.zig");
+const pane_resize = @import("../panes/pane_resize.zig");
+const sidebar_toggle = @import("../workspace/sidebar_toggle.zig");
+const tab_creation = @import("../workspace/tab_creation.zig");
+const tab_move = @import("../workspace/tab_move.zig");
+const tab_selection = @import("../workspace/tab_selection.zig");
+const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 
 /// Applies one interaction emitted by the view and returns its pane-input
 /// routing decision.
@@ -24,7 +35,7 @@ pub fn apply(client: *Client, tab: usize, interaction: ViewInteractionCommand) !
 
     if (layout_changed) {
         client.model.to_host.invalidate_placements = true;
-        try client.resizeAttachedPanes(tab, client.geometry().area);
+        try pane_resize.resizeAttachedPanes(client, tab, client.geometry().area);
     }
 
     return .{
@@ -38,10 +49,11 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
     switch (intent) {
         .none => {},
         .toggle_sidebar => {
-            _ = try client.toggleSidebar();
+            _ = try sidebar_toggle.toggleSidebar(client);
         },
         .resize_sidebar => |width| {
-            _ = try client.resizeSidebar(
+            _ = try sidebar_toggle.resizeSidebar(
+                client,
                 .{
                     .exact = width,
                 },
@@ -50,9 +62,10 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
         .toggle_workspace_list => {
             _ = client.model.toggleWorkspaceList();
         },
-        .focus_agent => |key| _ = try client.navigateAgent(key),
+        .focus_agent => |key| _ = try agent_navigation.navigateAgent(client, key),
         .select_tab => |tab_id| {
-            _ = try client.selectTab(
+            _ = try tab_selection.selectTab(
+                client,
                 .{
                     .target = .{
                         .tab_id = tab_id,
@@ -61,13 +74,14 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
             );
         },
         .focus_pane => |pane_id| {
-            _ = try client.applyPaneFocus(.{
+            _ = try pane_focus.applyPaneFocus(client, .{
                 .target = .{ .pane_id = pane_id },
                 .area = client.geometry().area,
             });
         },
         .move_tab => |move| {
-            _ = try client.requestTabMove(
+            _ = try tab_move.requestTabMove(
+                client,
                 .{
                     .location = move.location,
                     .direction = move.direction,
@@ -75,25 +89,28 @@ fn applyIntent(client: *Client, intent: view_interaction.Intent) !IntentOutcome 
                 },
             );
         },
-        .rename_tab => |tab_id| _ = client.openNamePrompt(
+        .rename_tab => |tab_id| _ = name_prompt.openNamePrompt(
+            client,
             .{
                 .rename_tab = tab_id,
             },
         ),
         .create_tab => {
-            _ = try client.requestTabCreation(
+            _ = try tab_creation.requestTabCreation(
+                client,
                 .{},
             );
         },
-        .select_workspace => |workspace| _ = try client.selectWorkspace(
+        .select_workspace => |workspace| _ = try workspace_handoff.selectWorkspace(
+            client,
             .{
                 .workspace = workspace,
             },
         ),
-        .notification_activate => |id| _ = try client.activateNotificationNow(id),
-        .notification_dismiss => |id| _ = try client.dismissNotificationNow(id),
-        .attachment_dismiss => |id| outcome.layout_changed = try client.dismissAttachment(id),
-        .prompt_row => |index| try client.choosePromptRow(index),
+        .notification_activate => |id| _ = try notifications.activateNotificationNow(client, id),
+        .notification_dismiss => |id| _ = try notifications.dismissNotificationNow(client, id),
+        .attachment_dismiss => |id| outcome.layout_changed = try agent_attachments.dismissAttachment(client, id),
+        .prompt_row => |index| try name_prompt.choosePromptRow(client, index),
     }
 
     return outcome;

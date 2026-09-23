@@ -46,7 +46,7 @@ pub fn reply(session: *Session, snapshot: core.ChangeReviewSnapshotView) !void {
     try session.settle();
     var bytes: [128 * 1024]u8 = undefined;
     const encoded = try core.encodeChangeReviewSnapshot(&bytes, snapshot);
-    _ = try session.gui.app.handleServerMessage(try core.decodeServer(encoded));
+    _ = try client.runtime_messages.handleServerMessage(&session.gui.app, try core.decodeServer(encoded));
     @memset(&bytes, 0);
     try session.gui.review.synchronize(&session.gui.app);
 }
@@ -134,7 +134,8 @@ test "runtime review rejection preserves unsaved range draft and late success ca
     try panel.synchronize(&session.gui.app);
     const stale = response(session, 2);
     try session.settle();
-    _ = try session.gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &session.gui.app,
         .{
             .request_failed = .{
                 .request_id = stale.request_id,
@@ -147,7 +148,8 @@ test "runtime review rejection preserves unsaved range draft and late success ca
     try std.testing.expect(panel.blocked);
     try std.testing.expect(panel.widget.changed_comments != 0);
     try std.testing.expectEqualStrings("keep my feedback", panel.widget.model.comments[index].body.text());
-    _ = try session.gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &session.gui.app,
         .{
             .change_review_snapshot = withComment(stale, "server reply"),
         },
@@ -179,7 +181,7 @@ test "runtime review newer editions remain explicit while its immutable patch st
     const session = try ready();
     defer session.deinit();
     const panel = session.gui.review;
-    try session.gui.app.queryChangeReview(1);
+    try client.change_review.queryChangeReview(&session.gui.app, 1);
     var snapshot = response(session, 2);
     snapshot.latest_edition_id = 2;
     snapshot.next_edition_id = 2;
@@ -205,7 +207,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     defer session.deinit();
     const gui = session.gui;
     const panel = gui.review;
-    try gui.app.queryChangeReview(1);
+    try client.change_review.queryChangeReview(&gui.app, 1);
     var snapshot = response(session, 2);
     snapshot.latest_edition_id = 2;
     snapshot.next_edition_id = 2;
@@ -318,7 +320,8 @@ test "runtime review coalesces new edition notices behind pending saves without 
     const index = draft(session, "feedback");
     try panel.synchronize(&session.gui.app);
     const save_id = session.gui.app.model.change_review.pending.?;
-    _ = try session.gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &session.gui.app,
         .{
             .change_review_changed = .{
                 .pane_id = Session.pane_id,
@@ -351,7 +354,8 @@ test "runtime review retains a retired conversation draft and explicitly reopens
     try gui.review.synchronize(&gui.app);
     const stale = response(session, 2);
     try session.settle();
-    _ = try gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &gui.app,
         .{
             .change_review_changed = .{
                 .pane_id = Session.pane_id,
@@ -371,7 +375,8 @@ test "runtime review retains a retired conversation draft and explicitly reopens
     const request = (try core.decodeClient(try session.sent())).query_change_review;
     try std.testing.expectEqual(@as(u64, 0), request.edition_id);
     try std.testing.expectEqualStrings("", request.session);
-    _ = try gui.app.handleServerMessage(
+    _ = try client.runtime_messages.handleServerMessage(
+        &gui.app,
         .{
             .change_review_snapshot = stale,
         },
@@ -406,7 +411,7 @@ test "runtime review loads through its real worker and inbox after the previous 
     defer session.deinit();
     const gui = session.gui;
     gui.job_hook = null;
-    try gui.app.startRuntimeRead();
+    try client.runtime_io.startRuntimeRead(&gui.app);
     try gui.openChangeReview(Session.pane_id);
     _ = try gui.update();
     var buffer: [128 * 1024]u8 = undefined;

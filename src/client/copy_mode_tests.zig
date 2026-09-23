@@ -2,6 +2,7 @@ const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
 const Client = @import("AttachedClient.zig");
+const copy_mode = @import("input/copy_mode.zig");
 /// Preserves native reader admission and terminal copy-mode behavior.
 /// Example: `try agentReaders(enterCopyMode);`
 pub fn agentReaders(comptime enter: fn (*Client) bool) !void {
@@ -36,7 +37,7 @@ pub fn agentReaders(comptime enter: fn (*Client) bool) !void {
     };
     const revision = app.model.copy_revision;
     try std.testing.expect(!enter(app));
-    try std.testing.expect(!app.copyModeActive());
+    try std.testing.expect(!copy_mode.copyModeActive(app));
     try std.testing.expect(app.model.copy_state == null);
     app.host_input_source.enter_thread_copy_mode_fn = captureThreadCopyMode;
     app.host_input_source.thread_copy_mode_active_fn = threadCopyModeActive;
@@ -45,9 +46,9 @@ pub fn agentReaders(comptime enter: fn (*Client) bool) !void {
     try std.testing.expectEqual(pane_id, received.?);
     try std.testing.expect(app.model.copy_state == null);
     try std.testing.expectEqual(revision, app.model.copy_revision);
-    try std.testing.expect(app.copyModeActive());
-    try std.testing.expectEqual(.exited, try app.leaveCopyMode());
-    try std.testing.expect(!app.copyModeActive());
+    try std.testing.expect(copy_mode.copyModeActive(app));
+    try std.testing.expectEqual(.exited, try copy_mode.leaveCopyMode(app));
+    try std.testing.expect(!copy_mode.copyModeActive(app));
     try std.testing.expect(received == null);
     pane.attached = false;
     try std.testing.expect(!enter(app));

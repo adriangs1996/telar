@@ -18,7 +18,8 @@ test "config reload outcomes that carry no new generation" {
 
     try std.testing.expectEqual(
         data.ConfigReloadOutcome.unchanged,
-        try client.completeConfigReload(
+        try client_module.config_adoption.completeConfigReload(
+            client,
             .{
                 .unchanged = 42,
             },
@@ -30,7 +31,7 @@ test "config reload outcomes that carry no new generation" {
     diagnostic.set("bad config: {s}", .{"boom"});
     try std.testing.expectEqual(
         data.ConfigReloadOutcome.rejected,
-        try client.completeConfigReload(.{ .failed = .{
+        try client_module.config_adoption.completeConfigReload(client, .{ .failed = .{
             .diagnostic = diagnostic,
             .mtime_ns = 7,
         } }),
@@ -49,7 +50,7 @@ test "resolved configuration adoption crosses delivery before watcher rearm" {
     const candidate = try support.testingConfigAdoption(1, false);
     const generation = candidate.generation;
 
-    const outcome = try client.completeConfigReload(.{ .loaded = .{
+    const outcome = try client_module.config_adoption.completeConfigReload(client, .{ .loaded = .{
         .generation = candidate.generation,
         .registry = candidate.registry,
         .trust_store = candidate.trust_store,
@@ -302,7 +303,7 @@ test "command completion from a replaced bar generation is discarded" {
     const completed = while (true) {
         switch (try support.receiveClient(terminal)) {
             .bar_command => |value| break value,
-            .notification_tick => |result| _ = try client.completeNotificationTick(result),
+            .notification_tick => |result| _ = try client_module.notifications.completeNotificationTick(client, result),
             else => return error.UnexpectedEvent,
         }
     };
@@ -331,7 +332,7 @@ test "plugin completion applies one authorized batch through model observation" 
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const exit = try client.completePluginAction(.{
+    const exit = try client_module.plugin_actions.completePluginAction(client, .{
         .execution_id = execution.id,
         .result = data.WorkerResult{
             .package_index = 0,
@@ -375,7 +376,7 @@ test "plugin completion from an old configuration is consumed without effects" {
     const version_after_reload = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const exit = try client.completePluginAction(.{
+    const exit = try client_module.plugin_actions.completePluginAction(client, .{
         .execution_id = execution.id,
         .result = data.WorkerResult{
             .package_index = 0,
@@ -408,7 +409,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const exit = try client.completePluginAction(.{
+    const exit = try client_module.plugin_actions.completePluginAction(client, .{
         .execution_id = execution.id,
         .result = data.WorkerResult{
             .package_index = 0,
@@ -442,14 +443,14 @@ test "plugin worker failure and unmatched completion preserve lifecycle identity
     const client = harness.client;
     const execution = (try client.model.beginPluginExecution()).?;
 
-    try std.testing.expect(!try client.completePluginAction(.{
+    try std.testing.expect(!try client_module.plugin_actions.completePluginAction(client, .{
         .execution_id = @enumFromInt(@intFromEnum(execution.id) + 1),
         .result = error.TestPluginWorkerFailure,
     }));
     try std.testing.expectEqualDeep(execution, client.model.plugins.pluginExecution().?);
     try std.testing.expect(client.model.diagnostic() == null);
 
-    try std.testing.expect(!try client.completePluginAction(.{
+    try std.testing.expect(!try client_module.plugin_actions.completePluginAction(client, .{
         .execution_id = execution.id,
         .result = error.TestPluginWorkerFailure,
     }));
@@ -470,7 +471,8 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
     const installed = try support.installTestingPlugin(client);
     const execution = (try client.model.beginPluginExecution()).?;
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .plugin = installed.action,
         },
@@ -480,7 +482,8 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
     try std.testing.expectEqualDeep(execution, client.model.plugins.pluginExecution().?);
     _ = client.model.plugins.finishPluginExecution(execution.id);
 
-    _ = try client.executeAction(
+    _ = try client_module.actions.executeAction(
+        client,
         .{
             .plugin = .{
                 .plugin = installed.action.plugin,
@@ -505,7 +508,7 @@ test "name prompt suppresses a configured action before source dispatch" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expect(client.openNamePrompt(.rename_active_tab));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_active_tab));
     const version = client.model.version();
     const outbox_len = client.model.to_runtime.len;
 
@@ -516,7 +519,7 @@ test "name prompt suppresses a configured action before source dispatch" {
         .{ .plugin = .{ .plugin = 1, .action = 1 } },
     };
     for (suppressed) |action| {
-        const control = try client.executeAction(action, .binding);
+        const control = try client_module.actions.executeAction(client, action, .binding);
         try std.testing.expect(control == .continue_routing);
         try std.testing.expect(client.model.name_prompt.active());
         try std.testing.expect(client.model.sidebar_visible);
@@ -531,12 +534,12 @@ test "validated native effects preserve their authority while a name prompt is o
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try std.testing.expect(client.openNamePrompt(.rename_active_tab));
+    try std.testing.expect(client_module.name_prompt.openNamePrompt(client, .rename_active_tab));
     try std.testing.expect(client.model.sidebar_visible);
 
-    _ = try client.executeAction(.toggle_sidebar, .binding);
+    _ = try client_module.actions.executeAction(client, .toggle_sidebar, .binding);
     try std.testing.expect(client.model.sidebar_visible);
-    _ = try client.executeAction(.toggle_sidebar, .effect);
+    _ = try client_module.actions.executeAction(client, .toggle_sidebar, .effect);
     try std.testing.expect(!client.model.sidebar_visible);
     try std.testing.expect(client.model.name_prompt.active());
 }
@@ -570,7 +573,7 @@ test "Lua callback applies a validated batch through model observation" {
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const control = try client.executeAction(configured, .binding);
+    const control = try client_module.actions.executeAction(client, configured, .binding);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(client.model.workspace_list_collapsed);
@@ -614,7 +617,7 @@ test "Lua callback validates every plugin reference before native effects" {
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const control = try client.executeAction(configured, .binding);
+    const control = try client_module.actions.executeAction(client, configured, .binding);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(client.model.sidebar_visible);
@@ -657,7 +660,7 @@ test "Lua expression emits semantic keys through pane input" {
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const control = try client.executeAction(configured, .binding);
+    const control = try client_module.actions.executeAction(client, configured, .binding);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -692,7 +695,7 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
     );
     const version = client.model.version();
 
-    try std.testing.expectEqual(data.KeybindControl.continue_routing, try client.executeAction(configured, .binding));
+    try std.testing.expectEqual(data.KeybindControl.continue_routing, try client_module.actions.executeAction(client, configured, .binding));
     try std.testing.expectEqualDeep(version, client.model.version());
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -701,10 +704,10 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
     try std.testing.expectEqual(TestHarness.bootstrap_pane, message.pane_input.pane_id);
     try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~", message.pane_input.bytes);
 
-    _ = try client.executeAction(.enter_copy_mode, .effect);
+    _ = try client_module.actions.executeAction(client, .enter_copy_mode, .effect);
     const copy_version = client.model.version();
     const outbox_len = client.model.to_runtime.len;
-    try std.testing.expectEqual(data.KeybindControl.continue_routing, try client.executeAction(configured, .binding));
+    try std.testing.expectEqual(data.KeybindControl.continue_routing, try client_module.actions.executeAction(client, configured, .binding));
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(copy_version, client.model.version());
@@ -734,7 +737,7 @@ test "Lua callback failure commits one diagnostic without direct presentation" {
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    const control = try client.executeAction(configured, .binding);
+    const control = try client_module.actions.executeAction(client, configured, .binding);
 
     try std.testing.expect(control == .continue_routing);
     try std.testing.expect(std.mem.indexOf(
@@ -781,7 +784,7 @@ test "attachment modal captures semantic keys until escape closes it" {
     const interaction_revision = terminal.view.interactionVersion();
     const pending_updates = terminal.presenter.pending_updates;
 
-    try std.testing.expect(data.key_routing.captures(client.keyRoutingAuthority()));
+    try std.testing.expect(data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)));
     try host_inputs.key(terminal, try data.chord.parseKey("x"));
 
     try std.testing.expect(terminal.view.hasAttachmentModal());
@@ -793,7 +796,7 @@ test "attachment modal captures semantic keys until escape closes it" {
     try host_inputs.key(terminal, try data.chord.parseKey("escape"));
 
     try std.testing.expect(!terminal.view.hasAttachmentModal());
-    try std.testing.expect(!data.key_routing.captures(client.keyRoutingAuthority()));
+    try std.testing.expect(!data.key_routing.captures(client_module.key_routing.keyRoutingAuthority(client)));
     try std.testing.expectEqual(interaction_revision + 1, terminal.view.interactionVersion());
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -842,7 +845,7 @@ test "clipboard image completion publishes resource ingress before presentation"
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    try client.completeClipboardCapture(.{
+    try client_module.clipboard_capture.completeClipboardCapture(client, .{
         .execution_id = execution.id,
         .result = completed,
     });
@@ -877,13 +880,13 @@ test "clipboard image from a retired agent target is consumed and freed" {
     const completed = try support.testingClipboardCapture(client, execution, "private png");
 
     _ = try client.model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{} });
-    _ = try client.synchronizePaneAttachments();
+    _ = try client_module.pane_attachment.synchronizePaneAttachments(client);
     try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
     const version_before = client.model.version();
     const pending_before = terminal.presenter.pending_updates;
 
-    try client.completeClipboardCapture(.{
+    try client_module.clipboard_capture.completeClipboardCapture(client, .{
         .execution_id = execution.id,
         .result = completed,
     });
@@ -910,7 +913,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     const no_image = (try client.model.clipboard.reserve(target)).?;
     const version_before_empty = client.model.version();
 
-    try client.completeClipboardCapture(.{
+    try client_module.clipboard_capture.completeClipboardCapture(client, .{
         .execution_id = no_image.id,
         .result = error.NoImageOnClipboard,
     });
@@ -921,7 +924,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
 
     const too_large = (try client.model.clipboard.reserve(target)).?;
     const version_before_large = client.model.version();
-    try client.completeClipboardCapture(.{
+    try client_module.clipboard_capture.completeClipboardCapture(client, .{
         .execution_id = too_large.id,
         .result = error.ClipboardImageTooLarge,
     });
@@ -935,7 +938,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     const completed = try support.testingClipboardCapture(client, invalid, "invalid");
     completed.width = 0;
     const version_before_invalid = client.model.version();
-    try client.completeClipboardCapture(.{
+    try client_module.clipboard_capture.completeClipboardCapture(client, .{
         .execution_id = invalid.id,
         .result = completed,
     });
@@ -954,20 +957,20 @@ test "configuration watch rejects incomplete ownership before starting a worker"
     const client = harness.client;
     const terminal = harness.terminal;
     client.reload.force_next = true;
-    try client.scheduleConfigReload();
+    try client_module.config_adoption.scheduleConfigReload(client);
     try std.testing.expect(client.reload.force_next);
 
     client.options.config_path = "/unused/config.lua";
-    try std.testing.expectError(error.ConfigurationNotLoaded, client.scheduleConfigReload());
+    try std.testing.expectError(error.ConfigurationNotLoaded, client_module.config_adoption.scheduleConfigReload(client));
     client.options.trust_path = "/unused/trust.json";
-    try std.testing.expectError(error.ConfigurationNotLoaded, client.scheduleConfigReload());
+    try std.testing.expectError(error.ConfigurationNotLoaded, client_module.config_adoption.scheduleConfigReload(client));
     client.options.config_path = null;
     _ = try support.reloadConfiguration(terminal, try support.testingConfigAdoption(1, false));
     client.options.config_path = "/unused/config.lua";
     const registry = client.plugin_registry;
     client.plugin_registry = null;
     defer client.plugin_registry = registry;
-    try std.testing.expectError(error.ConfigurationNotLoaded, client.scheduleConfigReload());
+    try std.testing.expectError(error.ConfigurationNotLoaded, client_module.config_adoption.scheduleConfigReload(client));
     try std.testing.expect(client.reload.force_next);
 }
 
@@ -977,14 +980,14 @@ test "bar configuration excludes Lua sources from a different model generation" 
     defer harness.deinit();
     const client = harness.client;
     const terminal = harness.terminal;
-    try std.testing.expect(client.barConfiguration() == null);
-    try client.synchronizeBars();
+    try std.testing.expect(client_module.bar_updates.barConfiguration(client) == null);
+    try client_module.bar_updates.synchronizeBars(client);
     try std.testing.expect(client.model.bar_updates.nextDeadline() == null);
     try std.testing.expect(!client.model.bar_updates.scheduler.pending);
 
     _ = try support.reloadConfiguration(terminal, try support.testingConfigAdoption(1, false));
     const generation = client.lua_generation.?;
-    try std.testing.expect(client.barConfiguration() == &generation.snapshot.bars);
+    try std.testing.expect(client_module.bar_updates.barConfiguration(client) == &generation.snapshot.bars);
     const snapshot = &generation.snapshot;
     _ = try client.model.applyConfiguration(
         .{
@@ -995,9 +998,9 @@ test "bar configuration excludes Lua sources from a different model generation" 
             .bars = snapshot.bars.presentation(),
         },
     );
-    try std.testing.expect(client.barConfiguration() == null);
+    try std.testing.expect(client_module.bar_updates.barConfiguration(client) == null);
     client.model.bar_updates.pending_callbacks = data.bar_values.Position.bottom_left.bit();
-    try client.synchronizeBars();
+    try client_module.bar_updates.synchronizeBars(client);
     try std.testing.expectEqual(@as(u8, 0), client.model.bar_updates.pending_callbacks);
     try std.testing.expect(client.model.bar_updates.nextDeadline() == null);
     try std.testing.expect(!client.model.bar_updates.scheduler.pending);
