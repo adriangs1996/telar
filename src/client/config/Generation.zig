@@ -26,7 +26,6 @@ const proxy_config = @import("proxy.zig");
 const client_history_config = @import("client_history.zig");
 const ThemeParser = @import("ThemeParser.zig");
 const notifications_config = @import("notifications.zig");
-const ParsedBinding = @import("ParsedBinding.zig");
 const ActionInput = @import("ActionInput.zig");
 const Generation = @This();
 
@@ -1469,4 +1468,9 @@ const LoadContext = struct {
 const BindingInput = struct {
     index: c_int,
     position: usize,
+};
+
+const ParsedBinding = struct {
+    binding: data.config_values.ConfiguredBinding,
+    prefixed: bool,
 };

@@ -24,7 +24,6 @@ const TransmitContext = @import("TransmitContext.zig");
 const KgpIngestContext = @import("KgpIngestContext.zig");
 const SharedFrameContext = @import("SharedFrameContext.zig");
 const TextRasterContext = @import("TextRasterContext.zig");
-const ExecutionResources = @import("ExecutionResources.zig");
 const Fixture = @import("Fixture.zig");
 const Config = @import("Config.zig");
 const client_storage = @import("client_storage.zig");
@@ -997,4 +996,9 @@ const Measurement = struct {
     minimum_ns: u64,
     p95_ns: u64,
     p99_ns: u64,
+};
+
+const ExecutionResources = struct {
+    io: std.Io,
+    gpa: std.mem.Allocator,
 };
