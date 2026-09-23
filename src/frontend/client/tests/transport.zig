@@ -24,7 +24,7 @@ test "host input arriving while no tab exists is dropped, not a crash" {
     var chunk: ChunkType = .{};
     chunk.bytes[0] = 'x';
     chunk.len = 1;
-    try std.testing.expect(!try host_inputs.handleRead(harness.client, chunk));
+    try std.testing.expect(!try host_inputs.handleRead(harness.terminal, chunk));
     try std.testing.expectEqual(@as(usize, 0), harness.client.runtime_transport.outbox.len);
 }
 
@@ -33,6 +33,7 @@ test "host input reads pause at outbox capacity and resume with one token" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     try client.sendRuntime(
         .{
             .detach_pane = .{
@@ -44,20 +45,20 @@ test "host input reads pause at outbox capacity and resume with one token" {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
-    try host_inputs.scheduleRead(client);
-    try std.testing.expect(!TerminalClient.of(client).host_input.read_pending);
+    try host_inputs.scheduleRead(terminal);
+    try std.testing.expect(!terminal.host_input.read_pending);
 
-    switch (try support.receiveClient(client)) {
+    switch (try support.receiveClient(terminal)) {
         .sent => |result| try client.completeRuntimeSend(result),
         else => return error.UnexpectedEvent,
     }
     try harness.deliverHostEffects();
     try std.testing.expectEqual(data.outbox_support.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(client.runtime_transport.outbox.inFlight());
-    try std.testing.expect(TerminalClient.of(client).host_input.read_pending);
+    try std.testing.expect(terminal.host_input.read_pending);
 
-    try host_inputs.scheduleRead(client);
-    try std.testing.expect(TerminalClient.of(client).host_input.read_pending);
+    try host_inputs.scheduleRead(terminal);
+    try std.testing.expect(terminal.host_input.read_pending);
 }
 
 test "runtime reads own one token and do not rearm after shutdown" {
@@ -66,6 +67,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
 
     try client.startRuntimeRead();
     try client.startRuntimeRead();
@@ -80,7 +82,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
         .battery_percent = 0,
     });
     try harness.peer.send(io, metrics);
-    switch (try support.receiveClient(client)) {
+    switch (try support.receiveClient(terminal)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, null),
             try client.receiveRuntime(result),
@@ -91,7 +93,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
     try std.testing.expectEqual(@as(u64, 1), client.model.system_metrics.?.runtime_revision);
 
     try harness.peer.send(io, try core.encodeRuntimeStopping(&payload));
-    switch (try support.receiveClient(client)) {
+    switch (try support.receiveClient(terminal)) {
         .server => |result| try std.testing.expectEqual(
             @as(?u8, 0),
             try client.receiveRuntime(result),
@@ -113,8 +115,9 @@ test "graphics credits remain owned until the outbox accepts them" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const pane_id: core.PaneId = @enumFromInt(7);
-    try TerminalClient.of(client).graphics_store.applyImage(.{
+    try terminal.graphics_store.applyImage(.{
         .pane_id = pane_id,
         .revision = 1,
         .image = .{
@@ -125,7 +128,7 @@ test "graphics credits remain owned until the outbox accepts them" {
             .byte_len = 4,
         },
     });
-    try TerminalClient.of(client).graphics_store.applySnapshot(.{
+    try terminal.graphics_store.applySnapshot(.{
         .pane_id = pane_id,
         .revision = 2,
         .phase = .begin,
@@ -135,14 +138,14 @@ test "graphics credits remain owned until the outbox accepts them" {
     }
 
     try client.flushGraphicsCredits();
-    try std.testing.expectEqual(@as(usize, 4), TerminalClient.of(client).graphics_store.peekCredit().?.bytes);
+    try std.testing.expectEqual(@as(usize, 4), terminal.graphics_store.peekCredit().?.bytes);
     try std.testing.expect(client.runtime_transport.outbox.inFlight());
 
-    switch (try support.receiveClient(client)) {
+    switch (try support.receiveClient(terminal)) {
         .sent => |result| try client.completeRuntimeSend(result),
         else => return error.UnexpectedEvent,
     }
-    try std.testing.expect(TerminalClient.of(client).graphics_store.peekCredit() == null);
+    try std.testing.expect(terminal.graphics_store.peekCredit() == null);
     try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(client.runtime_transport.outbox.inFlight());
 }
@@ -196,10 +199,11 @@ test "client startup validates geometry before request registration" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.model.host.host_size.cols = 1;
     client.model.host.host_size.rows = 1;
 
-    try std.testing.expectError(error.TerminalTooSmall, client_startup.start(client, .{
+    try std.testing.expectError(error.TerminalTooSmall, client_startup.start(terminal, .{
         .resize_watcher = undefined,
     }));
 
@@ -215,13 +219,14 @@ test "client startup dispatches buffered host probes before awaiting its first e
     try harness.initWithAsyncOutput(true);
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
 
-    try client_startup.start(client, .{ .resize_watcher = &watcher });
+    try client_startup.start(terminal, .{ .resize_watcher = &watcher });
 
-    try std.testing.expect(TerminalClient.of(client).output.?.pending);
-    try std.testing.expectEqual(@as(usize, 0), TerminalClient.of(client).writer.end);
+    try std.testing.expect(terminal.output.?.pending);
+    try std.testing.expectEqual(@as(usize, 0), terminal.writer.end);
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
-    try std.testing.expect(!TerminalClient.of(client).host_negotiation.initial_settled);
+    try std.testing.expect(!terminal.host_negotiation.initial_settled);
 }
 
 test "client startup waits for runtime layout before its initial open" {
@@ -232,25 +237,25 @@ test "client startup waits for runtime layout before its initial open" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.options.arguments = &.{"/bin/sh"};
-    const expected_size = data.multiplexer.rectSize(TerminalClient.of(client).view.workbench()).?;
+    const expected_size = data.multiplexer.rectSize(terminal.view.workbench()).?;
 
-    try client_startup.start(client, .{
+    try client_startup.start(terminal, .{
         .resize_watcher = &watcher,
     });
 
     try std.testing.expect(client.model.request_lifecycle.tracker.isEmpty());
     try std.testing.expect(client.runtime_transport.receive_pending);
-    try std.testing.expect(TerminalClient.of(client).host_input.read_pending);
+    try std.testing.expect(terminal.host_input.read_pending);
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
-    try std.testing.expect(!try client_startup.advance(client));
+    try std.testing.expect(!try client_startup.advance(terminal));
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
-    const input = client;
-    try host_inputs.terminalResponse(input, .{ .foreground_color = .{ .r = 255, .g = 255, .b = 255 } });
-    try std.testing.expect(!try client_startup.advance(client));
+    try host_inputs.terminalResponse(terminal, .{ .foreground_color = .{ .r = 255, .g = 255, .b = 255 } });
+    try std.testing.expect(!try client_startup.advance(terminal));
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
-    try host_inputs.terminalResponse(input, .{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
-    try std.testing.expect(!try client_startup.advance(client));
+    try host_inputs.terminalResponse(terminal, .{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
+    try std.testing.expect(!try client_startup.advance(terminal));
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -290,10 +295,11 @@ test "startup timeout publishes unknown colors once and consumes late replies" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.model.startup.phase = .probing;
-    _ = TerminalClient.of(client).host_negotiation.begin(0);
-    _ = try host_capabilities.handleExpiry(client, {});
-    try std.testing.expect(!try client_startup.advance(client));
+    _ = terminal.host_negotiation.begin(0);
+    _ = try host_capabilities.handleExpiry(terminal, {});
+    try std.testing.expect(!try client_startup.advance(terminal));
     try harness.settle();
     var buffer: [128]u8 = undefined;
     _ = try harness.nextClientMessage(&buffer);
@@ -301,11 +307,10 @@ test "startup timeout publishes unknown colors once and consumes late replies" {
     try std.testing.expectEqualDeep(core.TerminalColors{}, colors.configure_terminal_colors);
     try std.testing.expect((try harness.nextClientMessage(&buffer)) == .request_runtime_state);
 
-    const input = client;
     const revision = client.model.version();
-    try host_inputs.terminalResponse(input, .{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
+    try host_inputs.terminalResponse(terminal, .{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
     try std.testing.expectEqualDeep(revision, client.model.version());
-    try std.testing.expect(!try client_startup.advance(client));
+    try std.testing.expect(!try client_startup.advance(terminal));
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
 }
 
@@ -314,14 +319,15 @@ test "startup replays early typing exactly once after pane activation" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.model.startup.phase = .opening;
     const bytes = "abc\x1b]11;rgb:10/10/10\x07";
     var chunk: ChunkType = .{ .len = bytes.len };
     @memcpy(chunk.bytes[0..bytes.len], bytes);
-    try std.testing.expect(!try host_inputs.handleRead(client, chunk));
+    try std.testing.expect(!try host_inputs.handleRead(terminal, chunk));
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
     try harness.bootstrap();
-    try std.testing.expect(!try client_startup.advance(client));
+    try std.testing.expect(!try client_startup.advance(terminal));
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -337,7 +343,7 @@ test "startup replays early typing exactly once after pane activation" {
     }
 
     try std.testing.expectEqualStrings("abc", &received);
-    try std.testing.expect(!try client_startup.advance(client));
+    try std.testing.expect(!try client_startup.advance(terminal));
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
 }
 
@@ -346,6 +352,7 @@ test "restored client layout controls the initial attach geometry" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(7) },
         .tab_id = @enumFromInt(9),
@@ -376,8 +383,8 @@ test "restored client layout controls the initial attach geometry" {
     try std.testing.expect(client.model.sidebar_visible);
     try std.testing.expectEqual(@as(u16, 50), client.model.sidebar_width);
     try std.testing.expect(client.model.workspace_list_collapsed);
-    try std.testing.expectEqual(@as(u16, 50), TerminalClient.of(client).view.regions.sidebar.w);
-    try std.testing.expectEqual(@as(u16, 50), TerminalClient.of(client).view.regions.top.x);
+    try std.testing.expectEqual(@as(u16, 50), terminal.view.regions.sidebar.w);
+    try std.testing.expectEqual(@as(u16, 50), terminal.view.regions.top.x);
     try std.testing.expectEqual(pane_id, client.model.saved_layouts.find(location).?.pane_id);
     try std.testing.expectEqual(pane_id, client.model.navigation_history.find(location.workspace).?.pane_id);
 
@@ -387,7 +394,7 @@ test "restored client layout controls the initial attach geometry" {
     try std.testing.expectEqual(pane_id, open.open_pane.target.pane);
     try std.testing.expect(open.open_pane.launch == null);
     try std.testing.expectEqualDeep(
-        data.multiplexer.rectSize(TerminalClient.of(client).view.workbench()).?,
+        data.multiplexer.rectSize(terminal.view.workbench()).?,
         open.open_pane.size,
     );
 
@@ -439,7 +446,7 @@ test "bootstrap answers the initial open with both snapshot requests" {
     try std.testing.expectEqual(@as(u64, 1), harness.client.model.version().panes);
     try std.testing.expectEqualDeep(
         harness.client.model.version(),
-        TerminalClient.of(harness.client).presenter.presentation_state.prepared.model,
+        harness.terminal.presenter.presentation_state.prepared.model,
     );
 }
 

@@ -38,7 +38,7 @@ test "the view and the presenter follow committed grid and cell changes" {
         try harness.init();
         defer harness.deinit();
         const app = harness.client;
-        const terminal = TerminalClient.of(app);
+        const terminal = harness.terminal;
         var capabilities = app.model.host.host_capabilities;
         capabilities.cell_width_px = size.cell_width_px;
         capabilities.cell_height_px = size.cell_height_px;
@@ -75,7 +75,7 @@ test "the view follows image support once and ignores repeated observations" {
     );
     try std.testing.expect(app.model.to_host.invalidate_placements);
     try harness.deliverHostEffects();
-    try std.testing.expectEqual(data.ResolvedSidebarRendering.kitty_hybrid, TerminalClient.of(app).view.sidebar_rendering);
+    try std.testing.expectEqual(data.ResolvedSidebarRendering.kitty_hybrid, harness.terminal.view.sidebar_rendering);
     _ = try app.reconcileHostCapabilities(app.model.host.host_capabilities.withObservation(
         .{
             .pointer_pixels = .unsupported,

@@ -5,13 +5,15 @@ const std = @import("std");
 const client = @import("telar-client");
 
 /// Called by chrome after existing pane-selection and modal owners.
-/// Example: `const command = tab_drag.press(app, mouse) orelse view.handleMouse(mouse);`
-pub fn press(app: *client.AttachedClient, mouse: data.Mouse) ?client.ViewInteractionCommand {
+/// Example: `const command = tab_drag.press(terminal, mouse) orelse view.handleMouse(mouse);`
+pub fn press(terminal: *TerminalClient, mouse: data.Mouse) ?client.ViewInteractionCommand {
+    const app = &terminal.app;
+
     if (mouse.kind != .press) {
         return null;
     }
 
-    const view = &TerminalClient.of(app).view;
+    const view = &terminal.view;
     const tabs = &view.tab_drag;
     const tab_id = tabs.hits.at(mouse.x, mouse.y) orelse return null;
     const delivered = app.presentation.delivered_geometry orelse return .{ .consumed = true };
@@ -40,9 +42,11 @@ pub fn press(app: *client.AttachedClient, mouse: data.Mouse) ?client.ViewInterac
 }
 
 /// Retained events bypass other owners, including prompts opened mid-drag.
-/// Example: `if (try tab_drag.retained(app, mouse)) return;`
-pub fn retained(app: *client.AttachedClient, event: data.Mouse) !bool {
-    const view = &TerminalClient.of(app).view;
+/// Example: `if (try tab_drag.retained(terminal, mouse)) return;`
+pub fn retained(terminal: *TerminalClient, event: data.Mouse) !bool {
+    const app = &terminal.app;
+
+    const view = &terminal.view;
     const tabs = &view.tab_drag;
     if (!tabs.gesture.captured or (event.kind != .drag and event.kind != .release) or (event.button & 3 != 0 and !(event.kind == .release and event.button & 3 == 3))) {
         return false;
@@ -73,9 +77,9 @@ pub fn retained(app: *client.AttachedClient, event: data.Mouse) !bool {
     return true;
 }
 
-/// Example: `if (tab_drag.cancel(app)) return;`
-pub fn cancel(app: *client.AttachedClient) bool {
-    const view = &TerminalClient.of(app).view;
+/// Example: `if (tab_drag.cancel(terminal)) return;`
+pub fn cancel(terminal: *TerminalClient) bool {
+    const view = &terminal.view;
     if (!view.tab_drag.gesture.captured) {
         return false;
     }

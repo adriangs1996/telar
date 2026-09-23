@@ -220,11 +220,11 @@ pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !client_modu
     };
 }
 
-pub fn installTestingLuaBinding(client: *client_module.AttachedClient, source: []const u8) !data.Action {
+pub fn installTestingLuaBinding(terminal: *TerminalClient, source: []const u8) !data.Action {
     const adoption = try testingConfigAdoptionSource(1, source);
     std.debug.assert(adoption.generation.snapshot.binding_count == 1);
     const configured = adoption.generation.snapshot.bindings[0].action;
-    _ = try reloadConfiguration(client, adoption);
+    _ = try reloadConfiguration(terminal, adoption);
 
     return configured;
 }
@@ -308,7 +308,8 @@ pub fn testingClipboardCapture(client: *client_module.AttachedClient, execution:
     return capture;
 }
 
-pub fn reloadConfiguration(client: *client_module.AttachedClient, adoption: client_module.ConfigAdoption) !data.ConfigurationCommit {
+pub fn reloadConfiguration(terminal: *TerminalClient, adoption: client_module.ConfigAdoption) !data.ConfigurationCommit {
+    const client = &terminal.app;
     const outcome = try client.completeConfigReload(
         .{
             .loaded = .{
@@ -319,17 +320,17 @@ pub fn reloadConfiguration(client: *client_module.AttachedClient, adoption: clie
             },
         },
     );
-    try view_chrome.refreshClient(client);
-    try host_effects.deliver(client);
+    try view_chrome.refresh(terminal);
+    try host_effects.deliver(terminal);
 
     return outcome.adopted;
 }
 
 /// Receives the next inbox event and returns it when it belongs to the
 /// shared client.
-/// Example: `switch (try support.receiveClient(client)) { .sent => |result| try client.completeRuntimeSend(result), else => return error.UnexpectedEvent }`
-pub fn receiveClient(client: *client_module.AttachedClient) !client_module.Message {
-    return switch (try TerminalClient.of(client).inbox.receive()) {
+/// Example: `switch (try support.receiveClient(terminal)) { .sent => |result| try client.completeRuntimeSend(result), else => return error.UnexpectedEvent }`
+pub fn receiveClient(terminal: *TerminalClient) !client_module.Message {
+    return switch (try terminal.inbox.receive()) {
         .client => |message| message,
         else => error.UnexpectedEvent,
     };

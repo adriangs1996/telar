@@ -108,12 +108,6 @@ diagrams: DiagramService,
 syntax: SyntaxService,
 review: *ReviewPanel,
 
-/// Recovers the native owner; `app` must be embedded in a live GuiClient.
-/// Example: `const gui = GuiClient.of(app);`
-pub fn of(app: *client.AttachedClient) *GuiClient {
-    return @fieldParentPtr("app", app);
-}
-
 /// Adopts options on success and binds all ports before receiving messages.
 /// Example: `const gui = try GuiClient.init(params);`
 pub fn init(params: client.ClientInit) !*GuiClient {
@@ -188,10 +182,10 @@ pub fn init(params: client.ClientInit) !*GuiClient {
     gui.review.widget.host_port = &gui.host;
     gui.review.widget.widgets = &gui.widgets;
 
-    gui.app.graphics = host_ports.graphicsRetention(&gui.app);
-    gui.app.chrome = host_ports.chrome(&gui.app);
-    gui.app.workers = host_ports.workers(&gui.app);
-    gui.app.host_input_source = host_ports.hostInput(&gui.app);
+    gui.app.graphics = host_ports.graphicsRetention(gui);
+    gui.app.chrome = host_ports.chrome(gui);
+    gui.app.workers = host_ports.workers(gui);
+    gui.app.host_input_source = host_ports.hostInput(gui);
 
     return gui;
 }

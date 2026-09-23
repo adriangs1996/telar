@@ -9,15 +9,17 @@ const ResourcesType = @import("Resources.zig");
 /// event without exposing the client aggregate.
 ///
 /// ```zig
-/// try host(client).presenter.observe(observation(client));
+/// try host(client).presenter.observe(observation(terminal));
 /// ```
-pub fn observation(client: *client_module.AttachedClient) client_module.Observation {
+pub fn observation(terminal: *TerminalClient) client_module.Observation {
+    const client = &terminal.app;
+
     return .{
         .model = client.model.version(),
         .geometry_revision = client.geometry().revision,
-        .graphics_ingress = TerminalClient.of(client).graphics_store.ingressVersion(),
-        .attachment_ingress = TerminalClient.of(client).view.kittyAttachments().ingressVersion(),
-        .presentation_ingress = presentationIngress(client),
+        .graphics_ingress = terminal.graphics_store.ingressVersion(),
+        .attachment_ingress = terminal.view.kittyAttachments().ingressVersion(),
+        .presentation_ingress = presentationIngress(terminal),
     };
 }
 
@@ -25,20 +27,22 @@ pub fn observation(client: *client_module.AttachedClient) client_module.Observat
 /// presentation. The event loop cannot mutate it until the call returns.
 ///
 /// ```zig
-/// const current = projection(client);
+/// const current = projection(terminal);
 /// ```
-pub fn projection(client: *const client_module.AttachedClient) client_module.Projection {
+pub fn projection(terminal: *const TerminalClient) client_module.Projection {
+    const client = &terminal.app;
+
     return client_module.capture(&client.model, .{
-        .presentation_ingress = presentationIngress(client),
-        .status_mode = TerminalClient.ofConst(client).host_input.statusMode(client.model.copyModeActive()),
+        .presentation_ingress = presentationIngress(terminal),
+        .status_mode = terminal.host_input.statusMode(client.model.copyModeActive()),
         .geometry = client.geometry(),
     });
 }
 
-fn presentationIngress(client: *const client_module.AttachedClient) client_module.PresentationIngress {
+fn presentationIngress(terminal: *const TerminalClient) client_module.PresentationIngress {
     return .{
-        .view_interaction = TerminalClient.ofConst(client).view.interactionVersion(),
-        .input_routing = TerminalClient.ofConst(client).host_input.presentationVersion(),
+        .view_interaction = terminal.view.interactionVersion(),
+        .input_routing = terminal.host_input.presentationVersion(),
     };
 }
 
@@ -46,12 +50,12 @@ fn presentationIngress(client: *const client_module.AttachedClient) client_modul
 /// writer that receives its output.
 ///
 /// ```zig
-/// const target = resources(client);
+/// const target = resources(terminal);
 /// ```
-pub fn resources(client: *client_module.AttachedClient) ResourcesType {
+pub fn resources(terminal: *TerminalClient) ResourcesType {
     return .{
-        .view = &TerminalClient.of(client).view,
-        .graphics_store = &TerminalClient.of(client).graphics_store,
-        .writer = TerminalClient.of(client).writer,
+        .view = &terminal.view,
+        .graphics_store = &terminal.graphics_store,
+        .writer = terminal.writer,
     };
 }

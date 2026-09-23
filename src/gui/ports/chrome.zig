@@ -4,10 +4,10 @@ const client = @import("telar-client");
 const hover_target = @import("../input/hover_target.zig");
 const GuiClient = @import("../GuiClient.zig");
 
-/// Example: `app.chrome = chrome.port(app);`
-pub fn port(app: *client.AttachedClient) client.HostChrome {
+/// Example: `gui.app.chrome = chrome.port(gui);`
+pub fn port(gui: *GuiClient) client.HostChrome {
     return .{
-        .context = app,
+        .context = gui,
         .pointer_fn = pointer,
         .link_pointer_fn = linkPointer,
         .inspection_scroll_limit_fn = inspectionScrollLimit,
@@ -15,8 +15,7 @@ pub fn port(app: *client.AttachedClient) client.HostChrome {
 }
 
 fn host(context: *anyopaque) *GuiClient {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    return GuiClient.of(app);
+    return @ptrCast(@alignCast(context));
 }
 
 fn pointer(context: *anyopaque, event: data.Mouse) client.ViewInteractionCommand {

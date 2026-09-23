@@ -4,13 +4,14 @@ const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
 const thread_items = @import("../widgets/interaction/thread_items.zig");
 
-/// Example: `app.host_input_source = host_input.port(app);`
-pub fn port(app: *client.AttachedClient) client.HostInputSource {
-    return .{ .context = app, .route_prompt_bytes_fn = promptBytes, .enter_thread_copy_mode_fn = enterCopy, .thread_copy_mode_active_fn = copyActive, .leave_thread_copy_mode_fn = leaveCopy, .set_thread_expansion_fn = setExpansion };
+/// Example: `gui.app.host_input_source = host_input.port(gui);`
+pub fn port(gui: *GuiClient) client.HostInputSource {
+    return .{ .context = gui, .route_prompt_bytes_fn = promptBytes, .enter_thread_copy_mode_fn = enterCopy, .thread_copy_mode_active_fn = copyActive, .leave_thread_copy_mode_fn = leaveCopy, .set_thread_expansion_fn = setExpansion };
 }
 
 fn promptBytes(context: *anyopaque, bytes: []const u8) !void {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    const app = &gui.app;
     _ = try app.inputPrompt(
         .{
             .paste_text = bytes,
@@ -19,21 +20,21 @@ fn promptBytes(context: *anyopaque, bytes: []const u8) !void {
 }
 
 fn enterCopy(context: *anyopaque, pane_id: core.PaneId) bool {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    return thread_selection.enter(GuiClient.of(app), pane_id);
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    return thread_selection.enter(gui, pane_id);
 }
 
 fn copyActive(context: *anyopaque) bool {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    return thread_selection.active(GuiClient.of(app));
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    return thread_selection.active(gui);
 }
 
 fn leaveCopy(context: *anyopaque) bool {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    return thread_selection.leave(GuiClient.of(app));
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    return thread_selection.leave(gui);
 }
 
 fn setExpansion(context: *anyopaque, request: client.ThreadExpansion) !void {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    try thread_items.setExpansion(GuiClient.of(app), request);
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    try thread_items.setExpansion(gui, request);
 }

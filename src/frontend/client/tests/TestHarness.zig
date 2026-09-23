@@ -14,6 +14,7 @@ input_read: std.Io.File,
 input_write: std.Io.File,
 sink: std.Io.Writer.Discarding,
 client: *client_module.AttachedClient,
+terminal: *TerminalClient,
 
 pub fn init(harness: *TestHarness) !void {
     try harness.initWithAsyncOutput(false);
@@ -58,6 +59,7 @@ pub fn initWithOptions(harness: *TestHarness, async_output: bool, options: clien
         .options = options,
     });
     harness.client = &terminal.app;
+    harness.terminal = terminal;
     // Every frame goes through the scheduled draw task, so tests observe
     // pending state deterministically. The inline path has its own test.
     terminal.presenter.pacer = .{ .burst = 0, .credits = 0, .input_grace = 0 };
@@ -68,7 +70,7 @@ pub fn deinit(harness: *TestHarness) void {
     // EOF unblocks a pending input read so task cancellation never has
     // to wait on the pipe.
     harness.input_write.close(io);
-    TerminalClient.of(harness.client).deinit();
+    harness.terminal.deinit();
     harness.peer.deinit(io);
     harness.connection.deinit(io);
     harness.input_read.close(io);
@@ -78,15 +80,15 @@ pub fn deinit(harness: *TestHarness) void {
 /// observes exactly what the runtime peer would receive.
 pub fn settle(harness: *TestHarness) !void {
     while (harness.client.runtime_transport.outbox.inFlight() or harness.client.runtime_transport.outbox.len != 0) {
-        switch (try TerminalClient.of(harness.client).inbox.receive()) {
-            .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
+        switch (try harness.terminal.inbox.receive()) {
+            .draw => |result| try presentation_lifecycle.handleDraw(harness.terminal, result),
             .client => |message| switch (message) {
                 .sent, .sidebar_animation_tick, .notification_tick, .bar_tick, .bar_command, .path_completion => {
                     const observes = message != .sent;
                     _ = try harness.client.update(message);
                     try harness.deliverHostEffects();
                     if (observes) {
-                        try presentation_lifecycle.observe(harness.client);
+                        try presentation_lifecycle.observe(harness.terminal);
                     }
                 },
                 else => return error.UnexpectedEvent,
@@ -100,32 +102,32 @@ pub fn settle(harness: *TestHarness) !void {
 /// call left, as the event loop does after every event.
 /// Example: `try harness.deliverHostEffects();`
 pub fn deliverHostEffects(harness: *TestHarness) !void {
-    try view_chrome.refreshClient(harness.client);
-    try host_effects.deliver(harness.client);
+    try view_chrome.refresh(harness.terminal);
+    try host_effects.deliver(harness.terminal);
 }
 
 pub fn settleModelPresentation(harness: *TestHarness) !void {
     var target = harness.client.model.version();
-    const graphics_target = TerminalClient.of(harness.client).graphics_store.ingressVersion();
-    const attachment_target = TerminalClient.of(harness.client).view.kittyAttachments().ingressVersion();
-    const view_interaction_target = TerminalClient.of(harness.client).view.interactionVersion();
-    const input_routing_target = TerminalClient.of(harness.client).host_input.presentationVersion();
-    while (!std.meta.eql(TerminalClient.of(harness.client).presenter.presentation_state.prepared.model, target) or
-        TerminalClient.of(harness.client).presenter.presentation_state.prepared.graphics_ingress != graphics_target or
-        TerminalClient.of(harness.client).presenter.presentation_state.prepared.attachment_ingress != attachment_target or
-        TerminalClient.of(harness.client).presenter.presentation_state.prepared.presentation_ingress.view_interaction !=
+    const graphics_target = harness.terminal.graphics_store.ingressVersion();
+    const attachment_target = harness.terminal.view.kittyAttachments().ingressVersion();
+    const view_interaction_target = harness.terminal.view.interactionVersion();
+    const input_routing_target = harness.terminal.host_input.presentationVersion();
+    while (!std.meta.eql(harness.terminal.presenter.presentation_state.prepared.model, target) or
+        harness.terminal.presenter.presentation_state.prepared.graphics_ingress != graphics_target or
+        harness.terminal.presenter.presentation_state.prepared.attachment_ingress != attachment_target or
+        harness.terminal.presenter.presentation_state.prepared.presentation_ingress.view_interaction !=
             view_interaction_target or
-        TerminalClient.of(harness.client).presenter.presentation_state.prepared.presentation_ingress.input_routing !=
+        harness.terminal.presenter.presentation_state.prepared.presentation_ingress.input_routing !=
             input_routing_target)
     {
-        switch (try TerminalClient.of(harness.client).inbox.receive()) {
-            .draw => |result| try presentation_lifecycle.handleDraw(harness.client, result),
-            .media_tick => |result| try presentation_lifecycle.handleMediaTick(harness.client, result),
+        switch (try harness.terminal.inbox.receive()) {
+            .draw => |result| try presentation_lifecycle.handleDraw(harness.terminal, result),
+            .media_tick => |result| try presentation_lifecycle.handleMediaTick(harness.terminal, result),
             .client => |message| switch (message) {
                 .sent => |result| try harness.client.completeRuntimeSend(result),
                 .sidebar_animation_tick, .notification_tick, .bar_tick, .bar_command, .path_completion => {
                     _ = try harness.client.update(message);
-                    try presentation_lifecycle.observe(harness.client);
+                    try presentation_lifecycle.observe(harness.terminal);
                     target = harness.client.model.version();
                 },
                 else => return error.UnexpectedEvent,
@@ -205,7 +207,7 @@ pub fn bootstrap(harness: *TestHarness) !void {
     try std.testing.expect(first == .request_workspace_snapshot);
     const second = try harness.nextClientMessage(&buffer);
     try std.testing.expect(second == .request_tab_snapshot);
-    try presentation_lifecycle.observe(harness.client);
+    try presentation_lifecycle.observe(harness.terminal);
     try harness.settleModelPresentation();
 }
 
@@ -232,7 +234,7 @@ pub fn addInactiveTab(harness: *TestHarness, tab_id: core.TabId, pane_id: core.P
         pane.attached = false;
         pane.pending_frame_id = 0;
     }
-    try TerminalClient.of(harness.client).graphics_store.setPaneVisible(pane_id, false);
+    try harness.terminal.graphics_store.setPaneVisible(pane_id, false);
     try std.testing.expect(data.tab_selection.select(&harness.client.model, bootstrap_location.tab_id));
 
     return location;

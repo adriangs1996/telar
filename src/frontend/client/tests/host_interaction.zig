@@ -21,7 +21,8 @@ test "host resize commits before resources and presents by model version" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const terminal = harness.terminal;
+    const pending_updates = terminal.presenter.pending_updates;
     const measurement: SizeType = .{
         .cols = 100,
         .rows = 30,
@@ -29,7 +30,7 @@ test "host resize commits before resources and presents by model version" {
         .height_px = 600,
     };
 
-    const commit = (try host_resizes.apply(client, measurement)).?.resize.?;
+    const commit = (try host_resizes.apply(terminal, measurement)).?.resize.?;
     try harness.deliverHostEffects();
 
     const expected: core.TerminalSize = .{
@@ -48,17 +49,17 @@ test "host resize commits before resources and presents by model version" {
         .active_tab = 1,
         .panes = 1,
     }, client.model.version());
-    try std.testing.expect(TerminalClient.of(client).presenter.screen.sizeMatches(100, 30));
-    try std.testing.expectEqual(@as(u16, 100), TerminalClient.of(client).view.scratch.w);
-    try std.testing.expectEqual(@as(u16, 30), TerminalClient.of(client).view.scratch.h);
+    try std.testing.expect(terminal.presenter.screen.sizeMatches(100, 30));
+    try std.testing.expectEqual(@as(u16, 100), terminal.view.scratch.w);
+    try std.testing.expectEqual(@as(u16, 30), terminal.view.scratch.h);
     const active = client.model.tabs.active;
     try std.testing.expectEqual(@as(u16, 10), client.model.host.host_size.cell_width_px);
     try std.testing.expectEqual(@as(u16, 20), client.model.host.host_size.cell_height_px);
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
     const expected_pane_size = data.tab_layout.contentSize(&client.model, active, 
         TestHarness.bootstrap_pane,
-        TerminalClient.of(client).view.workbench(),
+        terminal.view.workbench(),
     ).?;
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -67,17 +68,17 @@ test "host resize commits before resources and presents by model version" {
     try std.testing.expectEqual(TestHarness.bootstrap_pane, message.pane_resize.pane_id);
     try std.testing.expectEqualDeep(expected_pane_size, message.pane_resize.size);
 
-    try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, TerminalClient.of(client).presenter.pending_updates);
+    try presentation_lifecycle.observe(terminal);
+    try std.testing.expectEqual(pending_updates + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
 
     const version = client.model.version();
-    const pending_after = TerminalClient.of(client).presenter.pending_updates;
-    try std.testing.expect((try host_resizes.apply(client, measurement)) == null);
+    const pending_after = terminal.presenter.pending_updates;
+    try std.testing.expect((try host_resizes.apply(terminal, measurement)) == null);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
-    try std.testing.expectEqual(pending_after, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_after, terminal.presenter.pending_updates);
 }
 
 test "host resize retains committed geometry after outbox backpressure" {
@@ -86,10 +87,11 @@ test "host resize retains committed geometry after outbox backpressure" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates = terminal.presenter.pending_updates;
     const measurement: SizeType = .{
         .cols = 90,
         .rows = 28,
@@ -97,7 +99,7 @@ test "host resize retains committed geometry after outbox backpressure" {
         .height_px = 560,
     };
 
-    try std.testing.expectError(error.ClientOutboxFull, host_resizes.apply(client, measurement));
+    try std.testing.expectError(error.ClientOutboxFull, host_resizes.apply(terminal, measurement));
     try harness.deliverHostEffects();
 
     try std.testing.expectEqual(core.TerminalSize{
@@ -108,11 +110,11 @@ test "host resize retains committed geometry after outbox backpressure" {
     }, client.model.host.host_size);
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host);
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host_capabilities);
-    try std.testing.expect(TerminalClient.of(client).presenter.screen.sizeMatches(90, 28));
-    try std.testing.expectEqual(@as(u16, 90), TerminalClient.of(client).view.scratch.w);
-    try std.testing.expectEqual(@as(u16, 28), TerminalClient.of(client).view.scratch.h);
+    try std.testing.expect(terminal.presenter.screen.sizeMatches(90, 28));
+    try std.testing.expectEqual(@as(u16, 90), terminal.view.scratch.w);
+    try std.testing.expectEqual(@as(u16, 28), terminal.view.scratch.h);
     try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 }
 
 test "host resize waits for canonical membership then resizes before attaching without duplicate opens" {
@@ -121,6 +123,7 @@ test "host resize waits for canonical membership then resizes before attaching w
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const tab = client.model.tabs.active;
     const sibling: core.PaneId = @enumFromInt(20);
     try data.tab_snapshot_reconciliation.addDiscovered(&client.model, tab, 
@@ -135,7 +138,7 @@ test "host resize waits for canonical membership then resizes before attaching w
     var buffer: [256]u8 = undefined;
 
     _ = try host_resizes.apply(
-        client,
+        terminal,
         .{
             .cols = 90,
             .rows = 28,
@@ -161,7 +164,7 @@ test "host resize waits for canonical membership then resizes before attaching w
         client.geometry().area,
     );
     _ = try host_resizes.apply(
-        client,
+        terminal,
         .{
             .cols = 100,
             .rows = 30,
@@ -181,7 +184,7 @@ test "host resize waits for canonical membership then resizes before attaching w
     const pending_request_id = client.model.request_lifecycle.next_request_id;
 
     _ = try host_resizes.apply(
-        client,
+        terminal,
         .{
             .cols = 110,
             .rows = 32,
@@ -202,6 +205,7 @@ test "host resize rolls back rejected attachment correlation after offering conn
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const sibling: core.PaneId = @enumFromInt(20);
     _ = try client.model.reconcileTab(
         .{
@@ -226,7 +230,7 @@ test "host resize rolls back rejected attachment correlation after offering conn
 
     const initial_request_id = client.model.request_lifecycle.next_request_id;
     try std.testing.expectError(error.ClientOutboxFull, host_resizes.apply(
-        client,
+        terminal,
         .{
             .cols = 100,
             .rows = 30,
@@ -247,10 +251,11 @@ test "oversized host measurement changes neither model nor capabilities" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const host_size = client.model.host.host_size;
     const capabilities = client.model.host.host_capabilities;
 
-    try std.testing.expectError(error.ScreenTooLarge, host_resizes.apply(client, .{
+    try std.testing.expectError(error.ScreenTooLarge, host_resizes.apply(terminal, .{
         .cols = std.math.maxInt(u16),
         .rows = std.math.maxInt(u16),
         .width_px = 1200,
@@ -269,9 +274,10 @@ test "terminal pixel response keeps model host geometry authoritative" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const terminal = harness.terminal;
+    const pending_updates = terminal.presenter.pending_updates;
 
-    try host_inputs.terminalResponse(client, .{ .cell_pixels = .{
+    try host_inputs.terminalResponse(terminal, .{ .cell_pixels = .{
         .width = 12,
         .height = 24,
     } });
@@ -286,10 +292,10 @@ test "terminal pixel response keeps model host geometry authoritative" {
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host_capabilities);
     try std.testing.expectEqual(@as(u16, 12), client.model.host.host_size.cell_width_px);
     try std.testing.expectEqual(@as(u16, 24), client.model.host.host_size.cell_height_px);
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, TerminalClient.of(client).presenter.pending_updates);
+    try presentation_lifecycle.observe(terminal);
+    try std.testing.expectEqual(pending_updates + 1, terminal.presenter.pending_updates);
 }
 
 test "input timer expiries with nothing pending are a no-op" {
@@ -297,24 +303,24 @@ test "input timer expiries with nothing pending are a no-op" {
     try harness.init();
     defer harness.deinit();
 
-    try std.testing.expect(!try host_inputs.handleInputTimeout(harness.client, {}));
-    try std.testing.expect(!try host_inputs.handleBindingTimeout(harness.client, {}));
-    try std.testing.expect(!TerminalClient.of(harness.client).host_input.input_timeout.pending);
-    try std.testing.expect(!TerminalClient.of(harness.client).host_input.binding_timeout.pending);
+    try std.testing.expect(!try host_inputs.handleInputTimeout(harness.terminal, {}));
+    try std.testing.expect(!try host_inputs.handleBindingTimeout(harness.terminal, {}));
+    try std.testing.expect(!harness.terminal.host_input.input_timeout.pending);
+    try std.testing.expect(!harness.terminal.host_input.binding_timeout.pending);
 
-    TerminalClient.of(harness.client).host_input.input_timeout.pending = true;
+    harness.terminal.host_input.input_timeout.pending = true;
     try std.testing.expectError(
         error.InputTimerFailed,
-        host_inputs.handleInputTimeout(harness.client, error.InputTimerFailed),
+        host_inputs.handleInputTimeout(harness.terminal, error.InputTimerFailed),
     );
-    try std.testing.expect(!TerminalClient.of(harness.client).host_input.input_timeout.pending);
+    try std.testing.expect(!harness.terminal.host_input.input_timeout.pending);
 
-    TerminalClient.of(harness.client).host_input.binding_timeout.pending = true;
+    harness.terminal.host_input.binding_timeout.pending = true;
     try std.testing.expectError(
         error.BindingTimerFailed,
-        host_inputs.handleBindingTimeout(harness.client, error.BindingTimerFailed),
+        host_inputs.handleBindingTimeout(harness.terminal, error.BindingTimerFailed),
     );
-    try std.testing.expect(!TerminalClient.of(harness.client).host_input.binding_timeout.pending);
+    try std.testing.expect(!harness.terminal.host_input.binding_timeout.pending);
 }
 
 test "a Kitty capability response commits before fallback projection and presentation" {
@@ -323,6 +329,7 @@ test "a Kitty capability response commits before fallback projection and present
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
 
     var payload: [256]u8 = undefined;
     const encoded = try core.encodeGraphicsImage(&payload, .{
@@ -339,9 +346,9 @@ test "a Kitty capability response commits before fallback projection and present
     _ = try client.handleServerMessage(try core.decodeServer(encoded));
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.graphics_placeholder);
     const version = client.model.version();
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates = terminal.presenter.pending_updates;
 
-    try host_inputs.terminalResponse(client, .{ .kitty_graphics = .{
+    try host_inputs.terminalResponse(terminal, .{ .kitty_graphics = .{
         .image_id = capabilities_module.query_image_id,
         .supported = true,
     } });
@@ -350,11 +357,11 @@ test "a Kitty capability response commits before fallback projection and present
     try std.testing.expect(!client.model.panes.find(TestHarness.bootstrap_pane).?.graphics_placeholder);
     try std.testing.expectEqual(version.host_capabilities + 1, client.model.version().host_capabilities);
     try std.testing.expectEqual(version.pane_graphics + 1, client.model.version().pane_graphics);
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_updates + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, terminal.presenter.pending_updates);
 }
 
 test "compression negotiation belongs to the TUI and does not revise the semantic model" {
@@ -362,21 +369,22 @@ test "compression negotiation belongs to the TUI and does not revise the semanti
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version = client.model.version();
 
-    try host_inputs.terminalResponse(client, .{ .kitty_graphics = .{
+    try host_inputs.terminalResponse(terminal, .{ .kitty_graphics = .{
         .image_id = capabilities_module.zlib_query_image_id,
         .supported = true,
     } });
-    try std.testing.expectEqual(data.EnvironmentSupport.supported, TerminalClient.of(client).host_negotiation.zlib_support);
-    try std.testing.expect(TerminalClient.of(client).graphics_store.delivery.host_zlib);
+    try std.testing.expectEqual(data.EnvironmentSupport.supported, terminal.host_negotiation.zlib_support);
+    try std.testing.expect(terminal.graphics_store.delivery.host_zlib);
     try std.testing.expectEqualDeep(version, client.model.version());
 
-    try host_inputs.terminalResponse(client, .{ .kitty_graphics = .{
+    try host_inputs.terminalResponse(terminal, .{ .kitty_graphics = .{
         .image_id = capabilities_module.zlib_query_image_id,
         .supported = false,
     } });
-    try std.testing.expect(!TerminalClient.of(client).graphics_store.delivery.host_zlib);
+    try std.testing.expect(!terminal.graphics_store.delivery.host_zlib);
     try std.testing.expectEqualDeep(version, client.model.version());
 }
 
@@ -385,12 +393,13 @@ test "client event dispatch observes a completed capability expiry" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const terminal = harness.terminal;
+    const pending_updates = terminal.presenter.pending_updates;
     var heap = core.Heap.init(std.testing.allocator);
-    TerminalClient.of(client).host_negotiation.deadline_ns = 0;
+    terminal.host_negotiation.deadline_ns = 0;
 
     const first = try client_events.handle(
-        client,
+        terminal,
         .{ .capability_timeout = {} },
         support.clientEventResourcesForTest(&heap),
     );
@@ -398,25 +407,25 @@ test "client event dispatch observes a completed capability expiry" {
     try std.testing.expect(first == .keep_running);
     const capabilities = client.model.host.host_capabilities;
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, capabilities.images);
-    try std.testing.expectEqual(data.EnvironmentSupport.unsupported, TerminalClient.of(client).host_negotiation.zlib_support);
+    try std.testing.expectEqual(data.EnvironmentSupport.unsupported, terminal.host_negotiation.zlib_support);
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, capabilities.pointer_pixels);
     try std.testing.expectEqual(data.Version{
         .host_capabilities = 1,
     }, client.model.version());
-    try std.testing.expectEqual(pending_updates + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
 
     const version = client.model.version();
-    const pending_after = TerminalClient.of(client).presenter.pending_updates;
+    const pending_after = terminal.presenter.pending_updates;
     const repeated = try client_events.handle(
-        client,
+        terminal,
         .{ .capability_timeout = {} },
         support.clientEventResourcesForTest(&heap),
     );
 
     try std.testing.expect(repeated == .keep_running);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(pending_after, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_after, terminal.presenter.pending_updates);
 }
 
 test "TUI inbox drains a finite FIFO batch and observes presentation once" {
@@ -425,14 +434,14 @@ test "TUI inbox drains a finite FIFO batch and observes presentation once" {
     defer harness.deinit();
     const client = harness.client;
     var heap = core.Heap.init(std.testing.allocator);
-    const terminal = TerminalClient.of(client);
+    const terminal = harness.terminal;
     const pending = terminal.presenter.pending_updates;
     _ = try client.model.setDiagnostic("inbox batch", .{});
     for (0..40) |_| {
         try terminal.inbox.post(.{ .client = .{ .notified = {} } });
     }
 
-    try std.testing.expect(try client_events.update(client, support.clientEventResourcesForTest(&heap)) == .keep_running);
+    try std.testing.expect(try client_events.update(terminal, support.clientEventResourcesForTest(&heap)) == .keep_running);
     const stats = terminal.inbox.snapshot();
     try std.testing.expect(stats.consumed >= 1 and stats.consumed <= 32);
     try std.testing.expect(stats.depth >= 8);
@@ -445,21 +454,22 @@ test "client event dispatch skips observation after terminal input" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     var heap = core.Heap.init(std.testing.allocator);
-    const observed = TerminalClient.of(client).presenter.presentation_state.observed.model;
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const observed = terminal.presenter.presentation_state.observed.model;
+    const pending_updates = terminal.presenter.pending_updates;
     _ = try client.model.setDiagnostic("client is stopping", .{});
 
     const outcome = try client_events.handle(
-        client,
+        terminal,
         .{ .input = 0 },
         support.clientEventResourcesForTest(&heap),
     );
 
     try std.testing.expect(outcome == .exit);
     try std.testing.expectEqual(@as(u8, 0), outcome.exit);
-    try std.testing.expectEqualDeep(observed, TerminalClient.of(client).presenter.presentation_state.observed.model);
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqualDeep(observed, terminal.presenter.presentation_state.observed.model);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
     try std.testing.expect(!std.meta.eql(client.model.version(), observed));
 }
 
@@ -468,12 +478,13 @@ test "failed capability deadline changes no host state" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const capabilities = client.model.host.host_capabilities;
     const version = client.model.version();
 
     try std.testing.expectError(
         error.CapabilityDeadlineFailed,
-        host_capabilities.handleExpiry(client, error.CapabilityDeadlineFailed),
+        host_capabilities.handleExpiry(terminal, error.CapabilityDeadlineFailed),
     );
 
     try std.testing.expectEqualDeep(capabilities, client.model.host.host_capabilities);
@@ -485,18 +496,19 @@ test "capability effect failure retains the committed fallback" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.model.config.sidebar_rendering = .kitty_hybrid;
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
-    TerminalClient.of(client).host_negotiation.deadline_ns = 0;
+    const pending_updates = terminal.presenter.pending_updates;
+    terminal.host_negotiation.deadline_ns = 0;
 
-    _ = try host_capabilities.handleExpiry(client, {});
+    _ = try host_capabilities.handleExpiry(terminal, {});
     try std.testing.expectError(error.KittyGraphicsUnsupported, harness.deliverHostEffects());
 
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, client.model.host.host_capabilities.images);
     try std.testing.expectEqual(data.Version{
         .host_capabilities = 1,
     }, client.model.version());
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 }
 
 test "pane viewport intent commits before IPC and presenter-owned recomposition" {
@@ -505,6 +517,7 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     _ = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     const active = client.model.tabs.active;
@@ -513,31 +526,31 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
         .offset = 10,
     };
     const version = client.model.version();
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
-    const pane_view = data.tab_layout.view(&client.model, active, pane.id, TerminalClient.of(client).view.workbench()).?;
-    try host_inputs.mouse(client, .{
+    const pending_updates = terminal.presenter.pending_updates;
+    const pane_view = data.tab_layout.view(&client.model, active, pane.id, terminal.view.workbench()).?;
+    try host_inputs.mouse(terminal, .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .move,
     });
 
-    try host_inputs.mouse(client, .{
+    try host_inputs.mouse(terminal, .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .scroll_up,
     });
 
     try std.testing.expectEqual(@as(u32, 7), pane.scroll.offset);
-    try std.testing.expect(!TerminalClient.of(client).graphics_store.paneVisible(pane.id));
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expect(!terminal.graphics_store.paneVisible(pane.id));
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
-    try host_inputs.key(client, try data.chord.parseKey("x"));
+    try host_inputs.key(terminal, try data.chord.parseKey("x"));
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
-    try std.testing.expect(TerminalClient.of(client).graphics_store.paneVisible(pane.id));
+    try std.testing.expect(terminal.graphics_store.paneVisible(pane.id));
     try std.testing.expectEqual(version.viewport + 2, client.model.version().viewport);
     try support.expectNonViewportVersionEqual(version, client.model.version());
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -554,10 +567,10 @@ test "pane viewport intent commits before IPC and presenter-owned recomposition"
     try std.testing.expectEqual(pane.id, input.pane_input.pane_id);
     try std.testing.expectEqualStrings("x", input.pane_input.bytes);
 
-    try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates + 1, TerminalClient.of(client).presenter.pending_updates);
+    try presentation_lifecycle.observe(terminal);
+    try std.testing.expectEqual(pending_updates + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
 }
 
 test "native scroll actions reuse bounded viewport delivery without forwarding input" {
@@ -566,10 +579,11 @@ test "native scroll actions reuse bounded viewport delivery without forwarding i
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = @as(u32, pane.buffer.h) + 10, .offset = 10 };
     const version = client.model.version();
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates = terminal.presenter.pending_updates;
 
     for (0..4) |_| {
         _ = try client.executeAction(try data.Action.parse("scroll-pane-up"), .effect);
@@ -596,7 +610,7 @@ test "native scroll actions reuse bounded viewport delivery without forwarding i
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
     try std.testing.expectEqual(version.viewport + 8, client.model.version().viewport);
     try support.expectNonViewportVersionEqual(version, client.model.version());
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
     try harness.settle();
     var buffer: [256]u8 = undefined;
@@ -614,28 +628,29 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.scroll = .{
         .total_rows = @as(u32, pane.buffer.h) + 10,
         .offset = 0,
     };
-    try TerminalClient.of(client).graphics_store.setPaneVisible(pane.id, false);
+    try terminal.graphics_store.setPaneVisible(pane.id, false);
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = pane.id } });
     }
     const version = client.model.version();
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates = terminal.presenter.pending_updates;
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        host_inputs.key(client, try data.chord.parseKey("x")),
+        host_inputs.key(terminal, try data.chord.parseKey("x")),
     );
 
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
-    try std.testing.expect(TerminalClient.of(client).graphics_store.paneVisible(pane.id));
+    try std.testing.expect(terminal.graphics_store.paneVisible(pane.id));
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
     try support.expectNonViewportVersionEqual(version, client.model.version());
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 }
 
 test "copy mode round trip: enter, select, copy, leave" {
@@ -644,11 +659,12 @@ test "copy mode round trip: enter, select, copy, leave" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.scroll = .{ .total_rows = 30, .offset = 6 };
     pane.cursor = .{ .visible = true, .x = 0, .y = 0 };
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
 
     try std.testing.expectEqual(
         data.KeybindControl.continue_routing,
@@ -660,31 +676,31 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expect(!client.model.name_prompt.active());
     try support.expectNonCopyVersionEqual(version_before, client.model.version());
     try std.testing.expectEqual(version_before.copy + 1, client.model.version().copy);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expect(TerminalClient.of(client).presenter.compositor.copy == null);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
+    try std.testing.expect(terminal.presenter.compositor.copy == null);
 
-    try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(pending_updates_before + 1, TerminalClient.of(client).presenter.pending_updates);
+    try presentation_lifecycle.observe(terminal);
+    try std.testing.expectEqual(pending_updates_before + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expect(TerminalClient.of(client).presenter.compositor.copy != null);
+    try std.testing.expect(terminal.presenter.compositor.copy != null);
     try std.testing.expectEqualDeep(
         client.model.copyModeProjection().?.view,
-        TerminalClient.of(client).presenter.compositor.copy.?.view,
+        terminal.presenter.compositor.copy.?.view,
     );
-    const painted_cursor_y = TerminalClient.of(client).presenter.compositor.copy.?.view.cursor.y;
+    const painted_cursor_y = terminal.presenter.compositor.copy.?.view.cursor.y;
 
     const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
         pane.id,
-        TerminalClient.of(client).view.workbench(),
+        terminal.view.workbench(),
     ).?;
     const mouse_version = client.model.version();
-    try host_inputs.mouse(client, .{
+    try host_inputs.mouse(terminal, .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .press,
     });
     try std.testing.expectEqualDeep(mouse_version, client.model.version());
-    try host_inputs.mouse(client, .{
+    try host_inputs.mouse(terminal, .{
         .x = pane_view.content.x,
         .y = pane_view.content.y,
         .kind = .scroll_up,
@@ -693,29 +709,29 @@ test "copy mode round trip: enter, select, copy, leave" {
     try std.testing.expectEqual(mouse_version.viewport + 1, client.model.version().viewport);
     try support.expectNonCopyOrViewportVersionEqual(mouse_version, client.model.version());
     try std.testing.expectEqual(painted_cursor_y - 3, client.model.copyModeProjection().?.view.cursor.y);
-    try std.testing.expectEqual(painted_cursor_y, TerminalClient.of(client).presenter.compositor.copy.?.view.cursor.y);
+    try std.testing.expectEqual(painted_cursor_y, terminal.presenter.compositor.copy.?.view.cursor.y);
 
     // While in copy mode, keys route to the selection, not the pane.
-    try host_inputs.key(client, try data.chord.parseKey("v"));
-    try host_inputs.key(client, try data.chord.parseKey("l"));
-    try std.testing.expectEqual(@as(u16, 0), TerminalClient.of(client).presenter.compositor.copy.?.view.cursor.x);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
-    try presentation_lifecycle.observe(client);
+    try host_inputs.key(terminal, try data.chord.parseKey("v"));
+    try host_inputs.key(terminal, try data.chord.parseKey("l"));
+    try std.testing.expectEqual(@as(u16, 0), terminal.presenter.compositor.copy.?.view.cursor.x);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
+    try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(@as(u16, 1), TerminalClient.of(client).presenter.compositor.copy.?.view.cursor.x);
-    try std.testing.expect(TerminalClient.of(client).presenter.compositor.copy.?.view.anchor != null);
+    try std.testing.expectEqual(@as(u16, 1), terminal.presenter.compositor.copy.?.view.cursor.x);
+    try std.testing.expect(terminal.presenter.compositor.copy.?.view.anchor != null);
 
     const version_before_copy = client.model.version();
-    try host_inputs.key(client, try data.chord.parseKey("enter"));
+    try host_inputs.key(terminal, try data.chord.parseKey("enter"));
     try std.testing.expect(!client.model.copyModeActive());
     try support.expectNonCopyOrViewportVersionEqual(version_before_copy, client.model.version());
     try std.testing.expectEqual(version_before_copy.copy + 1, client.model.version().copy);
     try std.testing.expectEqual(version_before_copy.viewport + 1, client.model.version().viewport);
-    try std.testing.expect(TerminalClient.of(client).presenter.compositor.copy != null);
-    try presentation_lifecycle.observe(client);
+    try std.testing.expect(terminal.presenter.compositor.copy != null);
+    try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
-    try std.testing.expect(TerminalClient.of(client).presenter.compositor.copy == null);
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expect(terminal.presenter.compositor.copy == null);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -739,6 +755,7 @@ test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.options.editor = "nvim";
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
@@ -747,7 +764,7 @@ test "copy-mode o opens a file URI in an editor tab without leaving the mode" {
 
     _ = try client.executeAction(.enter_copy_mode, .effect);
     const version = client.model.version();
-    try host_inputs.key(client, try data.chord.parseKey("o"));
+    try host_inputs.key(terminal, try data.chord.parseKey("o"));
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -768,23 +785,24 @@ test "a left click opens a file URI and owns the complete mouse gesture" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.options.editor = "nvim";
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.buffer.fill(pane.buffer.area(), .{ .glyph = " ", .style = .{} });
     _ = pane.buffer.writeText(pane.buffer.area(), .{ .point = .{ .x = 0, .y = 0 }, .text = "file:///tmp/click.txt", .style = .{} });
     const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
         pane.id,
-        TerminalClient.of(client).view.workbench(),
+        terminal.view.workbench(),
     ).?;
 
-    try host_inputs.mouse(client, .{
+    try host_inputs.mouse(terminal, .{
         .x = pane_view.content.x + 10,
         .y = pane_view.content.y,
         .kind = .press,
         .button = 0,
     });
     try std.testing.expect(client.model.link_pointer.owned);
-    try host_inputs.mouse(client, .{
+    try host_inputs.mouse(terminal, .{
         .x = pane_view.content.x + 10,
         .y = pane_view.content.y,
         .kind = .release,
@@ -832,10 +850,11 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     _ = try client.executeAction(.enter_copy_mode, .effect);
     const active_version = client.model.version();
 
-    try host_inputs.mouse(client, .{
+    try host_inputs.mouse(terminal, .{
         .x = std.math.maxInt(u16),
         .y = std.math.maxInt(u16),
         .kind = .scroll_up,
@@ -846,7 +865,7 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try std.testing.expect(data.tab_layout.removePane(&client.model, TestHarness.bootstrap_pane));
-    try host_inputs.mouse(client, .{ .x = 0, .y = 0, .kind = .move });
+    try host_inputs.mouse(terminal, .{ .x = 0, .y = 0, .kind = .move });
 
     try std.testing.expect(!client.model.copyModeActive());
     try support.expectNonCopyVersionEqual(active_version, client.model.version());
@@ -860,17 +879,18 @@ test "a full outbox keeps copy mode and its selection active" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
     _ = try client.executeAction(.enter_copy_mode, .effect);
-    try host_inputs.key(client, try data.chord.parseKey("v"));
+    try host_inputs.key(terminal, try data.chord.parseKey("v"));
     const version = client.model.version();
 
     try std.testing.expectError(
         error.ClientOutboxFull,
-        host_inputs.key(client, try data.chord.parseKey("enter")),
+        host_inputs.key(terminal, try data.chord.parseKey("enter")),
     );
 
     try std.testing.expect(client.model.copyModeActive());

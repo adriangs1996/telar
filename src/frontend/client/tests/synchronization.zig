@@ -15,8 +15,9 @@ test "pane opening rejects an unknown request without client effects" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
 
     try std.testing.expectError(error.UnexpectedRequest, client.handleServerMessage(
         .{
@@ -32,7 +33,7 @@ test "pane opening rejects an unknown request without client effects" {
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 }
 
 test "pane opening consumes an incompatible continuation before rejection" {
@@ -40,6 +41,7 @@ test "pane opening consumes an incompatible continuation before rejection" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const request_id: core.RequestId = @enumFromInt(4);
     const opened: core.PaneOpened = .{
         .request_id = request_id,
@@ -48,7 +50,7 @@ test "pane opening consumes an incompatible continuation before rejection" {
         .created = true,
     };
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
     try client.model.request_lifecycle.tracker.add(request_id, .notification);
 
     try std.testing.expectError(error.UnexpectedRequest, client.handleServerMessage(
@@ -64,7 +66,7 @@ test "pane opening consumes an incompatible continuation before rejection" {
     ));
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 }
 
 test "pane opening consumes an ignored continuation without client effects" {
@@ -72,9 +74,10 @@ test "pane opening consumes an ignored continuation without client effects" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const request_id: core.RequestId = @enumFromInt(4);
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
     try client.model.request_lifecycle.tracker.add(request_id, .ignored);
 
     try std.testing.expectEqual(@as(?u8, null), try client.handleServerMessage(
@@ -91,7 +94,7 @@ test "pane opening consumes an ignored continuation without client effects" {
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 }
 
 test "new tab request captures launch source geometry and continuation without mutation" {
@@ -101,7 +104,7 @@ test "new tab request captures launch source geometry and continuation without m
     try harness.bootstrap();
     harness.client.options.arguments = &.{"/bin/sh"};
     const version_before_request = harness.client.model.version();
-    const pending_updates_before_request = TerminalClient.of(harness.client).presenter.pending_updates;
+    const pending_updates_before_request = harness.terminal.presenter.pending_updates;
 
     _ = try harness.client.executeAction(.new_tab, .effect);
     try harness.settle();
@@ -114,11 +117,11 @@ test "new tab request captures launch source geometry and continuation without m
     try std.testing.expectEqualStrings("", created.label);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, created.launch.cwd_source.?);
     try std.testing.expectEqual(core.TerminalSize{
-        .cols = TerminalClient.of(harness.client).view.workbench().w,
-        .rows = TerminalClient.of(harness.client).view.workbench().h,
+        .cols = harness.terminal.view.workbench().w,
+        .rows = harness.terminal.view.workbench().h,
     }, created.size);
     try std.testing.expectEqualDeep(version_before_request, harness.client.model.version());
-    try std.testing.expectEqual(pending_updates_before_request, TerminalClient.of(harness.client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_request, harness.terminal.presenter.pending_updates);
 
     const continuation = harness.client.model.request_lifecycle.tracker.take(created.request_id).?;
     try std.testing.expect(continuation == .create_tab);
@@ -158,7 +161,7 @@ test "new workspace inherits cwd from the focused runtime pane" {
     harness.client.model.request_lifecycle.tracker = .{};
 
     _ = try harness.client.executeAction(.new_workspace, .effect);
-    try host_inputs.forward(harness.client, "agents\r");
+    try host_inputs.forward(harness.terminal, "agents\r");
     try harness.settle();
 
     var buffer: [512]u8 = undefined;
@@ -175,6 +178,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.model.request_lifecycle.tracker = .{};
 
     const destination: core.WorkspaceLocation = .{ .workspace = @enumFromInt(2) };
@@ -184,7 +188,7 @@ test "workspace handoff opens the pane remembered for that workspace" {
         .pane_id = restored_pane,
     });
     const version_before_departure = client.model.version();
-    const pending_updates_before_departure = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before_departure = terminal.presenter.pending_updates;
     _ = try client.requestWorkspace(@enumFromInt(2));
 
     try std.testing.expect(client.model.workspace == null);
@@ -193,22 +197,22 @@ test "workspace handoff opens the pane remembered for that workspace" {
     try std.testing.expectEqual(version_before_departure.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_departure.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version_before_departure.panes + 1, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates_before_departure, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_departure, terminal.presenter.pending_updates);
     try std.testing.expect(client.model.reported_pane_focus == null);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_updates_before_departure + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_departure + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
     try harness.settle();
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
-    try std.testing.expectEqual(@as(usize, 0), TerminalClient.of(client).presenter.pending_updates);
-    for (TerminalClient.of(client).presenter.screen.front.cells) |cell| {
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
+    try std.testing.expectEqual(@as(usize, 0), terminal.presenter.pending_updates);
+    for (terminal.presenter.screen.front.cells) |cell| {
         try std.testing.expectEqualStrings(" ", cell.text());
         try std.testing.expectEqual(@as(u8, 1), cell.width);
     }
-    try presentation_lifecycle.observe(client);
-    try std.testing.expectEqual(@as(usize, 0), TerminalClient.of(client).presenter.pending_updates);
+    try presentation_lifecycle.observe(terminal);
+    try std.testing.expectEqual(@as(usize, 0), terminal.presenter.pending_updates);
 
     var buffer: [256]u8 = undefined;
     var target: ?core.PaneTarget = null;
@@ -233,11 +237,11 @@ test "workspace handoff opens the pane remembered for that workspace" {
         .message = "remembered pane closed",
     });
     const version_before_recovery = client.model.version();
-    const pending_updates_before_recovery = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before_recovery = terminal.presenter.pending_updates;
     _ = try client.handleServerMessage(try core.decodeServer(failed));
 
     try std.testing.expectEqualDeep(version_before_recovery, client.model.version());
-    try std.testing.expectEqual(pending_updates_before_recovery, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_recovery, terminal.presenter.pending_updates);
     try harness.settle();
     const fallback = (try harness.nextClientMessage(&buffer)).open_pane;
     try std.testing.expectEqualDeep(
@@ -372,6 +376,7 @@ test "clicking a sidebar agent hands off directly to its pane" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.model.request_lifecycle.tracker = .{};
 
     const agent_pane: core.PaneId = @enumFromInt(91);
@@ -402,13 +407,13 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .agents = &.{agent},
     });
     const model = client.model.tabs.active;
-    _ = try TerminalClient.of(client).view.render(&TerminalClient.of(client).presenter.screen, .{
+    _ = try terminal.view.render(&terminal.presenter.screen, .{
         .model = &client.model,
         .tab = model,
         .agents = &client.model.agent_snapshot,
         .force = true,
     });
-    try host_inputs.mouse(client, .{ .x = 4, .y = 4, .kind = .press });
+    try host_inputs.mouse(terminal, .{ .x = 4, .y = 4, .kind = .press });
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -432,21 +437,21 @@ test "clicking a sidebar agent hands off directly to its pane" {
         .created = false,
     });
     const version_before_arrival = client.model.version();
-    const pending_updates_before_arrival = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before_arrival = terminal.presenter.pending_updates;
     _ = try client.handleServerMessage(try core.decodeServer(opened));
 
     try std.testing.expectEqual(version_before_arrival.workspace + 1, client.model.version().workspace);
     try std.testing.expectEqual(version_before_arrival.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_arrival.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version_before_arrival.panes + 1, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates_before_arrival, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_arrival, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_updates_before_arrival + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_arrival + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
     try harness.settle();
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
     try std.testing.expectEqualDeep(
         @as(?core.WorkspaceLocation, agent.location.workspace),
         client.model.workspace,
@@ -484,8 +489,8 @@ test "clicking a sidebar agent hands off directly to its pane" {
     var actual_tiled = client.model.tabs.layout[restored];
     try std.testing.expect(saved_layout.toggleFullscreen());
     try std.testing.expect(actual_tiled.toggleFullscreen());
-    saved_layout.snapshot(TerminalClient.of(client).view.workbench(), &expected_geometry);
-    actual_tiled.snapshot(TerminalClient.of(client).view.workbench(), &actual_geometry);
+    saved_layout.snapshot(terminal.view.workbench(), &expected_geometry);
+    actual_tiled.snapshot(terminal.view.workbench(), &actual_geometry);
     for ([_]core.PaneId{ left_pane, agent_pane, bottom_right_pane }) |pane_id|
         try std.testing.expectEqual(
             expected_geometry.find(pane_id).?.outer,
@@ -499,10 +504,11 @@ test "sidebar workspace round trip restores fullscreen in a previously inactive 
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.model.request_lifecycle.tracker = .{};
     const first = TestHarness.bootstrap_pane;
     const clicked: core.PaneId = @enumFromInt(21);
-    const area = TerminalClient.of(client).view.workbench();
+    const area = terminal.view.workbench();
     _ = try client.model.reconcileTab(.{ .location = TestHarness.bootstrap_location, .panes = &.{first} }, area);
     const fullscreen_tab = client.model.tabs.active;
     try data.pane_split.split(&client.model, fullscreen_tab, .{ .existing_pane = first, .new_pane = clicked, .location = TestHarness.bootstrap_location, .axis = .vertical, .area = area });
@@ -605,6 +611,7 @@ test "local agent navigation selects its tab before focusing its pane" {
     try harness.bootstrap();
     try harness.allowTabSelection();
     const client = harness.client;
+    const terminal = harness.terminal;
     const agent_pane: core.PaneId = @enumFromInt(20);
     const location = try harness.addInactiveTab(@enumFromInt(2), agent_pane);
     const key: data.AgentKey = .{
@@ -622,7 +629,7 @@ test "local agent navigation selects its tab before focusing its pane" {
         }},
     });
     const version = client.model.version();
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates = terminal.presenter.pending_updates;
 
     try std.testing.expectEqual(
         .focused,
@@ -633,7 +640,7 @@ test "local agent navigation selects its tab before focusing its pane" {
     try std.testing.expectEqual(agent_pane, client.model.tabs.layout[client.model.tabs.active].focused().?);
     try std.testing.expectEqual(version.active_tab + 1, client.model.version().active_tab);
     try std.testing.expectEqual(version.panes, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -652,11 +659,12 @@ test "local sidebar agent navigation keeps fullscreen when targeting a different
     try harness.bootstrap();
     try harness.allowTabSelection();
     const client = harness.client;
+    const terminal = harness.terminal;
     const first: core.PaneId = @enumFromInt(20);
     const clicked: core.PaneId = @enumFromInt(21);
     const location = try harness.addInactiveTab(@enumFromInt(2), first);
     const tab = client.model.tabs.find(location.tab_id).?;
-    const area = TerminalClient.of(client).view.workbench();
+    const area = terminal.view.workbench();
     try data.pane_split.split(&client.model, tab, .{ .existing_pane = first, .new_pane = clicked, .location = location, .axis = .vertical, .area = area });
     try std.testing.expect(client.model.tabs.layout[tab].focusPane(first));
     try std.testing.expect(client.model.tabs.layout[tab].toggleFullscreen());
@@ -698,8 +706,9 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
 
     const discovered: core.PaneId = @enumFromInt(11);
     var payload: [256]u8 = undefined;
@@ -724,7 +733,7 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
     try std.testing.expectEqual(version_before.workspace, client.model.version().workspace);
     try std.testing.expectEqual(version_before.tabs, client.model.version().tabs);
     try std.testing.expectEqual(version_before.active_tab, client.model.version().active_tab);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     const committed_version = client.model.version();
     try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
     const repeated = try core.encodeTabSnapshot(&payload, .{
@@ -741,9 +750,9 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
     try std.testing.expect(client.model.request_lifecycle.tracker.hasPane(.attachment, discovered));
     try std.testing.expectEqual(@as(usize, 2), client.model.request_lifecycle.tracker.count);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_updates_before + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, terminal.presenter.pending_updates);
     try harness.settle();
 
     const pane = client.model.panes.find(discovered).?;
@@ -765,7 +774,7 @@ test "tab snapshots commit pane revisions before attaching and presenting" {
     }
 
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
 }
 
 test "an identical tab snapshot repairs resources without scheduling a frame" {
@@ -774,6 +783,7 @@ test "an identical tab snapshot repairs resources without scheduling a frame" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
 
     var payload: [256]u8 = undefined;
     const initial = try core.encodeTabSnapshot(&payload, .{
@@ -782,11 +792,11 @@ test "an identical tab snapshot repairs resources without scheduling a frame" {
         .panes = &.{.{ .pane_id = TestHarness.bootstrap_pane, .lifecycle = .running }},
     });
     _ = try client.handleServerMessage(try core.decodeServer(initial));
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
     try harness.settle();
     try harness.settleModelPresentation();
     const committed_version = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
     try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
     const unchanged = try core.encodeTabSnapshot(&payload, .{
         .request_id = @enumFromInt(90),
@@ -795,10 +805,10 @@ test "an identical tab snapshot repairs resources without scheduling a frame" {
     });
 
     _ = try client.handleServerMessage(try core.decodeServer(unchanged));
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
     try std.testing.expectEqualDeep(committed_version, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 }
 
 test "tab reconciliation retires removed pane resources and continuations" {
@@ -807,6 +817,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     var payload: [256]u8 = undefined;
     const initial = try core.encodeTabSnapshot(&payload, .{
         .request_id = @enumFromInt(3),
@@ -818,10 +829,10 @@ test "tab reconciliation retires removed pane resources and continuations" {
 
     const retired: core.PaneId = @enumFromInt(11);
     const model = client.model.tabs.active;
-    try data.pane_split.split(&client.model, model, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = retired, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    try data.pane_split.split(&client.model, model, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = retired, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = terminal.view.workbench() });
     try client.synchronizeActivePane();
     try std.testing.expect(client.model.enterCopyMode());
-    try TerminalClient.of(client).graphics_store.applyImage(.{
+    try terminal.graphics_store.applyImage(.{
         .pane_id = retired,
         .revision = 1,
         .image = .{
@@ -838,7 +849,7 @@ test "tab reconciliation retires removed pane resources and continuations" {
     } });
     try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
     const reconciled = try core.encodeTabSnapshot(&payload, .{
         .request_id = @enumFromInt(90),
         .location = TestHarness.bootstrap_location,
@@ -848,16 +859,16 @@ test "tab reconciliation retires removed pane resources and continuations" {
     _ = try client.handleServerMessage(try core.decodeServer(reconciled));
 
     try std.testing.expect(client.model.panes.find(retired) == null);
-    try std.testing.expect(!TerminalClient.of(client).graphics_store.hasPaneGraphics(retired));
+    try std.testing.expect(!terminal.graphics_store.hasPaneGraphics(retired));
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expectEqual(@as(?core.PaneId, TestHarness.bootstrap_pane), support.reportedPaneId(client));
     try std.testing.expect(client.model.request_lifecycle.tracker.take(@enumFromInt(91)).? == .ignored);
     try std.testing.expectEqual(version_before.panes + 1, client.model.version().panes);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_updates_before + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, terminal.presenter.pending_updates);
 }
 
 test "an unexpected tab snapshot is rejected instead of adopted" {
@@ -867,9 +878,10 @@ test "an unexpected tab snapshot is rejected instead of adopted" {
     try harness.bootstrap();
 
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
     const request_count_before = client.model.request_lifecycle.tracker.count;
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
     var payload: [256]u8 = undefined;
     const snapshot = try core.encodeTabSnapshot(&payload, .{
         .request_id = @enumFromInt(99),
@@ -883,7 +895,7 @@ test "an unexpected tab snapshot is rejected instead of adopted" {
 
     try std.testing.expectEqual(request_count_before, client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -980,9 +992,10 @@ test "an unexpected workspace snapshot is rejected without effects" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
     const request_count_before = client.model.request_lifecycle.tracker.count;
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
     var payload: [512]u8 = undefined;
     const encoded = try core.encodeWorkspaceSnapshot(&payload, .{
         .request_id = @enumFromInt(99),
@@ -1007,7 +1020,7 @@ test "an unexpected workspace snapshot is rejected without effects" {
 
     try std.testing.expectEqual(request_count_before, client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -1123,8 +1136,9 @@ test "workspace snapshots commit semantic revisions before presentation" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
 
     var payload: [512]u8 = undefined;
     const snapshot = try core.encodeWorkspaceSnapshot(&payload, .{
@@ -1148,16 +1162,16 @@ test "workspace snapshots commit semantic revisions before presentation" {
     try std.testing.expectEqual(version_before.workspace + 1, client.model.version().workspace);
     try std.testing.expectEqual(version_before.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before.active_tab, client.model.version().active_tab);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_updates_before + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
 
     const version_before_noop = client.model.version();
-    const pending_updates_before_noop = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before_noop = terminal.presenter.pending_updates;
     try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{
         .workspace_snapshot = TestHarness.bootstrap_location.workspace,
     });
@@ -1171,10 +1185,10 @@ test "workspace snapshots commit semantic revisions before presentation" {
         },
     });
     _ = try client.handleServerMessage(try core.decodeServer(unchanged));
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
-    try std.testing.expectEqual(pending_updates_before_noop, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_noop, terminal.presenter.pending_updates);
 }
 
 test "workspace reconciliation retires removed state and restores the new active tab" {
@@ -1183,9 +1197,10 @@ test "workspace reconciliation retires removed state and restores the new active
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const second = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{ .rename_tab = TestHarness.bootstrap_location });
-    try TerminalClient.of(client).graphics_store.applyImage(.{
+    try terminal.graphics_store.applyImage(.{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 1,
         .image = .{
@@ -1196,8 +1211,8 @@ test "workspace reconciliation retires removed state and restores the new active
             .byte_len = 3,
         },
     });
-    try std.testing.expect(TerminalClient.of(client).graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    try std.testing.expect(terminal.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
+    const pending_updates_before = terminal.presenter.pending_updates;
 
     var payload: [512]u8 = undefined;
     const snapshot = try core.encodeWorkspaceSnapshot(&payload, .{
@@ -1211,11 +1226,11 @@ test "workspace reconciliation retires removed state and restores the new active
     _ = try client.handleServerMessage(try core.decodeServer(snapshot));
 
     try std.testing.expectEqualDeep(second, client.model.activeTabLocation().?);
-    try std.testing.expect(!TerminalClient.of(client).graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
-    try std.testing.expect(TerminalClient.of(client).graphics_store.paneVisible(@enumFromInt(20)));
+    try std.testing.expect(!terminal.graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
+    try std.testing.expect(terminal.graphics_store.paneVisible(@enumFromInt(20)));
     try std.testing.expectEqual(@as(?core.PaneId, @enumFromInt(20)), support.reportedPaneId(client));
     const version_before_late_snapshot = client.model.version();
-    const pending_updates_before_late_snapshot = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before_late_snapshot = terminal.presenter.pending_updates;
     const outbox_len_before_late_snapshot = client.runtime_transport.outbox.len;
     const request_count_before_late_snapshot = client.model.request_lifecycle.tracker.count;
     const late_snapshot = try core.encodeTabSnapshot(&payload, .{
@@ -1234,10 +1249,10 @@ test "workspace reconciliation retires removed state and restores the new active
 
     try std.testing.expectEqual(request_count_before_late_snapshot - 1, client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before_late_snapshot, client.model.version());
-    try std.testing.expectEqual(pending_updates_before_late_snapshot, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before_late_snapshot, terminal.presenter.pending_updates);
     try std.testing.expectEqual(outbox_len_before_late_snapshot, client.runtime_transport.outbox.len);
     try std.testing.expect(client.model.request_lifecycle.tracker.take(@enumFromInt(90)).? == .ignored);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -1251,9 +1266,10 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.model.workspace = TestHarness.bootstrap_location.workspace;
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
     const required: core.ResyncRequired = .{
         .workspace = TestHarness.bootstrap_location.workspace,
         .workspace_closed = false,
@@ -1283,7 +1299,7 @@ test "resync required requests one workspace snapshot and coalesces repeats" {
     try std.testing.expect(client.model.request_lifecycle.tracker.has(.workspace_snapshot));
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 }
 
 test "resync rejects a workspace other than the current projection" {

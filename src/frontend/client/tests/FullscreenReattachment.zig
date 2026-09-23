@@ -36,6 +36,7 @@ pub fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const cor
 
 pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: core.PaneId) !void {
     const client = scenario.harness.client;
+    const terminal = scenario.harness.terminal;
     try std.testing.expect(client.model.request_lifecycle.tracker.hasPane(.attachment, pane_id));
     try scenario.harness.settle();
     var buffer: [256]u8 = undefined;
@@ -43,7 +44,7 @@ pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: core.PaneId)
     try std.testing.expect(message == .open_pane);
     try std.testing.expectEqualDeep(core.PaneTarget{ .pane = pane_id }, message.open_pane.target);
     try std.testing.expectEqualDeep(
-        data.tab_layout.contentSize(&client.model, client.model.tabs.active, pane_id, TerminalClient.of(client).view.workbench()).?,
+        data.tab_layout.contentSize(&client.model, client.model.tabs.active, pane_id, terminal.view.workbench()).?,
         message.open_pane.size,
     );
     const opened = try core.encodePaneOpened(&buffer, .{
@@ -58,7 +59,7 @@ pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: core.PaneId)
 
 pub fn expectInput(scenario: FullscreenReattachment, pane_id: core.PaneId) !void {
     try std.testing.expectEqual(pane_id, scenario.harness.client.model.planPaneInput(.focused).?.pane_id);
-    try host_inputs.key(scenario.harness.client, try data.chord.parseKey("x"));
+    try host_inputs.key(scenario.harness.terminal, try data.chord.parseKey("x"));
     try scenario.harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try scenario.harness.nextClientMessage(&buffer);

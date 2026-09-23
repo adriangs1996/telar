@@ -57,22 +57,6 @@ graphics_store: kitty_delivery.Store,
 host_input: InputState,
 chrome_observed: ChromeRevisions = .{},
 
-/// Recovers the terminal client that embeds one shared client. Every host
-/// port and every terminal-side handler receives the shared client and
-/// climbs back here for terminal resources.
-///
-/// ```zig
-/// const terminal = TerminalClient.of(client);
-/// ```
-pub fn of(client: *client_module.AttachedClient) *TerminalClient {
-    return @fieldParentPtr("app", client);
-}
-
-/// Read-only variant of `of`. Example: `const terminal = TerminalClient.ofConst(client);`.
-pub fn ofConst(client: *const client_module.AttachedClient) *const TerminalClient {
-    return @fieldParentPtr("app", client);
-}
-
 /// Creates a heap-owned client (the tab models alone are megabytes) and
 /// takes ownership of the configuration generation, plugin registry and
 /// trust store carried inside `params.options`; `deinit` releases them.
@@ -137,11 +121,11 @@ pub fn init(params: Params) !*TerminalClient {
     client.model.host.clipboard_capture = capture_module.platformSupported();
     client.model.host.grid_chrome = true;
     client.model.host.animation_frame_ns = core.pace.default_interval;
-    client.graphics = host_ports.graphicsRetention(client);
-    client.chrome = host_ports.chrome(client);
-    client.attachments = host_ports.attachmentShelf(client);
-    client.workers = host_ports.workers(client);
-    client.host_input_source = host_ports.hostInput(client);
+    client.graphics = host_ports.graphicsRetention(terminal);
+    client.chrome = host_ports.chrome(terminal);
+    client.attachments = host_ports.attachmentShelf(terminal);
+    client.workers = host_ports.workers(terminal);
+    client.host_input_source = host_ports.hostInput(terminal);
     // The presenter borrows the inbox and metrics, whose heap addresses
     // only exist once the client does.
     terminal.presenter = .{
@@ -174,7 +158,7 @@ fn scheduleDraw(context: *anyopaque, deadline_ns: u64) !void {
 
 fn drawNow(context: *anyopaque) !void {
     const terminal: *TerminalClient = @ptrCast(@alignCast(context));
-    try presentation_lifecycle.presentNow(&terminal.app);
+    try presentation_lifecycle.presentNow(terminal);
 }
 
 fn scheduleMedia(context: *anyopaque, deadline_ns: u64) !void {

@@ -8,9 +8,9 @@ const worker_ports = @import("ports/workers.zig");
 const GuiClient = @import("GuiClient.zig");
 
 /// Example: `const port = graphicsRetention(app);`.
-pub fn graphicsRetention(client: *client_module.AttachedClient) client_module.GraphicsRetention {
+pub fn graphicsRetention(gui: *GuiClient) client_module.GraphicsRetention {
     return .{
-        .context = client,
+        .context = gui,
         .apply_fn = applyGraphics,
         .clear_pane_fn = clearPaneGraphics,
         .set_pane_visible_fn = setPaneGraphicsVisible,
@@ -23,43 +23,43 @@ pub fn graphicsRetention(client: *client_module.AttachedClient) client_module.Gr
 }
 
 fn applyGraphics(context: *anyopaque, command: data.PaneGraphicsCommand) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    return GuiClient.of(client).applyGraphics(command);
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    return gui.applyGraphics(command);
 }
 
 fn clearPaneGraphics(context: *anyopaque, pane_id: core.PaneId) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    GuiClient.of(client).graphics_store.clearPane(pane_id);
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    gui.graphics_store.clearPane(pane_id);
 }
 
 fn consumeGraphicsCredit(context: *anyopaque, credit: client_module.GraphicsCredit) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    GuiClient.of(client).graphics_store.consumeCredit(credit);
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    gui.graphics_store.consumeCredit(credit);
 }
 
 fn graphicsIngressVersion(context: *anyopaque) u64 {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    return GuiClient.of(client).graphics_store.ingressVersion();
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    return gui.graphics_store.ingressVersion();
 }
 
 fn hasPaneGraphics(context: *anyopaque, pane_id: core.PaneId) bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    return GuiClient.of(client).graphics_store.hasPaneGraphics(pane_id);
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    return gui.graphics_store.hasPaneGraphics(pane_id);
 }
 
 fn paneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId) bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    return GuiClient.of(client).graphics_store.paneVisible(pane_id);
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    return gui.graphics_store.paneVisible(pane_id);
 }
 
 fn peekGraphicsCredit(context: *anyopaque) ?client_module.GraphicsCredit {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    return GuiClient.of(client).graphics_store.peekCredit();
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    return gui.graphics_store.peekCredit();
 }
 
 fn setPaneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId, visible: bool) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    try GuiClient.of(client).graphics_store.setPaneVisible(pane_id, visible);
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    try gui.graphics_store.setPaneVisible(pane_id, visible);
 }
 
 pub const chrome = chrome_module.port;

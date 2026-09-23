@@ -3,16 +3,17 @@ const client = @import("telar-client");
 const GuiClient = @import("../GuiClient.zig");
 
 /// Starts every shared client job as a producer of the native inbox.
-/// Example: `app.workers = workers.jobs(app);`
-pub fn jobs(app: *client.AttachedClient) client.Workers {
-    return .{ .context = app, .start_fn = startJob };
+/// Example: `gui.app.workers = workers.jobs(gui);`
+pub fn jobs(gui: *GuiClient) client.Workers {
+    return .{ .context = gui, .start_fn = startJob };
 }
 
 /// A configuration watch also prepares the window's fonts, so its own
 /// worker runs it; every other job completes through the shared runner.
 fn startJob(context: *anyopaque, job: client.Job) !void {
-    const app: *client.AttachedClient = @ptrCast(@alignCast(context));
-    const driver = &GuiClient.of(app).driver;
+    const gui: *GuiClient = @ptrCast(@alignCast(context));
+    const app = &gui.app;
+    const driver = &gui.driver;
 
     switch (job) {
         .config_watch => |args| try driver.configuration.schedule(args),

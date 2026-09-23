@@ -10,9 +10,10 @@ const term = @import("../../presentation/screen_support.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 
 /// Drains every pending request after one event.
-/// Example: `try host_effects.deliver(client);`
-pub fn deliver(client: *client_module.AttachedClient) !void {
-    const terminal = TerminalClient.of(client);
+/// Example: `try host_effects.deliver(terminal);`
+pub fn deliver(terminal: *TerminalClient) !void {
+    const client = &terminal.app;
+
     const effects = &client.model.to_host;
 
     if (effects.takePlacementInvalidation()) {
@@ -32,7 +33,7 @@ pub fn deliver(client: *client_module.AttachedClient) !void {
 
     if (effects.resume_input) {
         effects.resume_input = false;
-        try host_inputs.scheduleRead(client);
+        try host_inputs.scheduleRead(terminal);
     }
 
     while (effects.pop()) |effect| {
@@ -45,7 +46,7 @@ pub fn deliver(client: *client_module.AttachedClient) !void {
                 try term.writeHostNotification(terminal.writer, payload.titleSlice(), payload.messageSlice());
                 try terminal.writer.flush();
             },
-            .capture => |request| startCapture(client, request) catch |err| {
+            .capture => |request| startCapture(terminal, request) catch |err| {
                 try client.completeClipboardCapture(.{
                     .execution_id = @enumFromInt(request.sequence),
                     .result = err,
@@ -55,8 +56,10 @@ pub fn deliver(client: *client_module.AttachedClient) !void {
     }
 }
 
-fn startCapture(client: *client_module.AttachedClient, request: data.CaptureRequest) !void {
-    try TerminalClient.of(client).inbox.start(.clipboard_image, .{ capture, .{
+fn startCapture(terminal: *TerminalClient, request: data.CaptureRequest) !void {
+    const client = &terminal.app;
+
+    try terminal.inbox.start(.clipboard_image, .{ capture, .{
         client.gpa,
         request,
         &client.model.clipboard.orphan,

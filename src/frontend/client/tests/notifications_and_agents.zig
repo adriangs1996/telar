@@ -116,8 +116,9 @@ test "a runtime notification translates and owns its wire payload" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
     var payload: [512]u8 = undefined;
     const encoded = try core.encodeNotification(&payload, .{
         .level = .warning,
@@ -148,7 +149,7 @@ test "a runtime notification translates and owns its wire payload" {
         item.expires_at_ns - item.transition_updated_ns,
     );
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try std.testing.expect(client.model.notification_scheduler.pending);
 }
 
@@ -157,9 +158,10 @@ test "notification action delivers one correlated runtime request without model 
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const request_id: core.RequestId = @enumFromInt(client.model.request_lifecycle.next_request_id);
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
     try client.sendRuntime(
         .{
             .detach_pane = .{
@@ -187,7 +189,7 @@ test "notification action delivers one correlated runtime request without model 
 
     try std.testing.expect(client.model.request_lifecycle.tracker.has(.notification));
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     @memset(&notification.title_bytes, 'x');
     @memset(&notification.message_bytes, 'y');
 
@@ -207,7 +209,7 @@ test "notification action delivers one correlated runtime request without model 
     try std.testing.expectEqualStrings("Agent waiting", message.show_notification.notification.title);
     try std.testing.expectEqualStrings("Review its question", message.show_notification.notification.message);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 }
 
 test "notification request rolls correlation back when transport is full" {
@@ -215,6 +217,7 @@ test "notification request rolls correlation back when transport is full" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{
             .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
@@ -222,7 +225,7 @@ test "notification request rolls correlation back when transport is full" {
     }
     const next_request_id = client.model.request_lifecycle.next_request_id;
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
     const notification = try data.Notification.init(.{
         .level = .info,
         .duration_ms = core.default_notification_duration_ms,
@@ -244,7 +247,7 @@ test "notification request rolls correlation back when transport is full" {
     try std.testing.expectEqual(next_request_id + 1, client.model.request_lifecycle.next_request_id);
     try std.testing.expect(client.model.request_lifecycle.tracker.isEmpty());
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 }
 
 test "notification timer commits lifecycle state before presenter observation" {
@@ -252,15 +255,16 @@ test "notification timer commits lifecycle state before presenter observation" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const now_ns = client_module.monotonic(client.io);
     _ = try client.publishNotification(now_ns, .{
         .title = "Building",
         .message = "Lifecycle tick",
     });
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates = terminal.presenter.pending_updates;
 
     try std.testing.expect(client.model.notification_scheduler.pending);
-    switch (try support.receiveClient(client)) {
+    switch (try support.receiveClient(terminal)) {
         .notification_tick => |result| {
             const change = (try client.completeNotificationTick(result)).?;
 
@@ -274,12 +278,12 @@ test "notification timer commits lifecycle state before presenter observation" {
 
     try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expectEqual(@as(u64, 2), client.model.version().notifications);
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_updates + 1, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.observed.model);
+    try std.testing.expectEqual(pending_updates + 1, terminal.presenter.pending_updates);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.observed.model);
 }
 
 test "an unexpected notification delivery report is rejected without effects" {
@@ -414,9 +418,10 @@ test "toast activation commits by id before following its navigation target" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const active = client.model.tabs.active;
     const second_pane: core.PaneId = @enumFromInt(11);
-    try data.pane_split.split(&client.model, active, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = second_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    try data.pane_split.split(&client.model, active, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = second_pane, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = terminal.view.workbench() });
     try std.testing.expect(client.model.tabs.layout[active].focusPane(TestHarness.bootstrap_pane));
 
     try client.publishNotificationNow(.{
@@ -429,25 +434,25 @@ test "toast activation commits by id before following its navigation target" {
     const visible_at_ns = item.transition_updated_ns + data.notifications.transition_duration_ns;
     _ = client.model.advanceNotifications(visible_at_ns);
 
-    const composed = try TerminalClient.of(client).presenter.compositor.render(.{
+    const composed = try terminal.presenter.compositor.render(.{
         .model = &client.model,
         .tab = active,
-        .screen = &TerminalClient.of(client).presenter.screen,
+        .screen = &terminal.presenter.screen,
         .input = .{
-            .area = TerminalClient.of(client).view.workbench(),
-            .palette = TerminalClient.of(client).view.palette(),
+            .area = terminal.view.workbench(),
+            .palette = terminal.view.palette(),
         },
     });
     _ = data.presentation_delivery.retire(&client.model, composed.commit);
-    _ = try TerminalClient.of(client).view.render(&TerminalClient.of(client).presenter.screen, .{
+    _ = try terminal.view.render(&terminal.presenter.screen, .{
         .model = &client.model,
         .tab = active,
-        .compositor = &TerminalClient.of(client).presenter.compositor,
+        .compositor = &terminal.presenter.compositor,
         .notifications = &client.model.notification_center,
         .force = true,
     });
     var click: ?term.Event.Mouse = null;
-    for (TerminalClient.of(client).view.hits.registered()) |entry| switch (entry.action) {
+    for (terminal.view.hits.registered()) |entry| switch (entry.action) {
         .notification_activate => |id| {
             if (id != notification_id) {
                 continue;
@@ -465,7 +470,7 @@ test "toast activation commits by id before following its navigation target" {
     const notification_click = click orelse return error.MissingNotificationHit;
     const version_before_activation = client.model.version();
 
-    try host_inputs.mouse(client, notification_click);
+    try host_inputs.mouse(terminal, notification_click);
 
     try std.testing.expectEqual(second_pane, client.model.tabs.layout[active].focused().?);
     try std.testing.expectEqual(
@@ -474,7 +479,7 @@ test "toast activation commits by id before following its navigation target" {
     );
     const version_after_activation = client.model.version();
 
-    try host_inputs.mouse(client, notification_click);
+    try host_inputs.mouse(terminal, notification_click);
 
     try std.testing.expectEqualDeep(version_after_activation, client.model.version());
 }
@@ -485,8 +490,9 @@ test "proxy status commits before announcement and presenter-owned projection" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
 
     var payload: [64]u8 = undefined;
     const enabled = try core.encodeProxyStatus(&payload, .{ .active = true, .scope = .wildcard, .system_trusted = false });
@@ -495,8 +501,8 @@ test "proxy status commits before announcement and presenter-owned projection" {
     try std.testing.expect(client.model.proxy_tls_active);
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
-    try std.testing.expectEqual(version_before.proxy_status, TerminalClient.of(client).presenter.presentation_state.observed.model.proxy_status);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(version_before.proxy_status, terminal.presenter.presentation_state.observed.model.proxy_status);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try std.testing.expectEqual(@as(u8, 1), client.model.notification_center.count);
     try std.testing.expectEqualStrings(
         "TLS interception active",
@@ -507,27 +513,27 @@ test "proxy status commits before announcement and presenter-owned projection" {
 
     try std.testing.expectEqual(version_before.proxy_status + 1, client.model.version().proxy_status);
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try std.testing.expectEqual(@as(u8, 1), client.model.notification_center.count);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
     const enabled_version = client.model.version();
 
-    try std.testing.expectEqual(pending_updates_before + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
     try std.testing.expectEqual(
         enabled_version.proxy_status,
-        TerminalClient.of(client).presenter.presentation_state.prepared.model.proxy_status,
+        terminal.presenter.presentation_state.prepared.model.proxy_status,
     );
-    const badge_index = @as(usize, TerminalClient.of(client).presenter.screen.front.w) - 2;
-    try std.testing.expectEqualStrings("\u{26e8}", TerminalClient.of(client).presenter.screen.front.cells[badge_index].text());
+    const badge_index = @as(usize, terminal.presenter.screen.front.w) - 2;
+    try std.testing.expectEqualStrings("\u{26e8}", terminal.presenter.screen.front.cells[badge_index].text());
     try std.testing.expectEqualDeep(
-        TerminalClient.of(client).view.palette().red,
-        TerminalClient.of(client).presenter.screen.front.cells[badge_index].style.fg,
+        terminal.view.palette().red,
+        terminal.presenter.screen.front.cells[badge_index].style.fg,
     );
 
-    const pending_updates_after_enabled = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_after_enabled = terminal.presenter.pending_updates;
     const version_before_disabled = client.model.version();
     const disabled = try core.encodeProxyStatus(&payload, .{ .active = false, .scope = .exact, .system_trusted = false });
     _ = try client.handleServerMessage(try core.decodeServer(disabled));
@@ -535,23 +541,23 @@ test "proxy status commits before announcement and presenter-owned projection" {
     try std.testing.expect(!client.model.proxy_tls_active);
     try std.testing.expectEqual(version_before_disabled.proxy_status + 1, client.model.version().proxy_status);
     try std.testing.expectEqual(version_before_disabled.notifications + 1, client.model.version().notifications);
-    try std.testing.expectEqual(pending_updates_after_enabled, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_after_enabled, terminal.presenter.pending_updates);
     try std.testing.expectEqual(@as(u8, 2), client.model.notification_center.count);
     try std.testing.expectEqualStrings(
         "TLS interception stopped",
         client.model.notification_center.itemAt(0).?.title(),
     );
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
     const disabled_version = client.model.version();
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
     try std.testing.expectEqual(
         disabled_version.proxy_status,
-        TerminalClient.of(client).presenter.presentation_state.prepared.model.proxy_status,
+        terminal.presenter.presentation_state.prepared.model.proxy_status,
     );
-    try std.testing.expect(!std.mem.eql(u8, "\u{26e8}", TerminalClient.of(client).presenter.screen.front.cells[badge_index].text()));
+    try std.testing.expect(!std.mem.eql(u8, "\u{26e8}", terminal.presenter.screen.front.cells[badge_index].text()));
 }
 
 test "system metrics commit before presenter-owned projection" {
@@ -560,8 +566,9 @@ test "system metrics commit before presenter-owned projection" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
 
     var payload: [64]u8 = undefined;
     const metrics = try core.encodeSystemMetrics(&payload, .{
@@ -580,36 +587,36 @@ test "system metrics commit before presenter-owned projection" {
         .battery_percent = 80,
     }, client.model.system_metrics.?);
     try std.testing.expectEqual(version_before.system_metrics + 1, client.model.version().system_metrics);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expect(!TerminalClient.of(client).view.dirty);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
+    try std.testing.expect(!terminal.view.dirty);
 
     _ = try client.handleServerMessage(try core.decodeServer(metrics));
     try std.testing.expectEqual(version_before.system_metrics + 1, client.model.version().system_metrics);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_updates_before + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
 
     var bottom_text_buffer: [512]u8 = undefined;
-    const sidebar = TerminalClient.of(client).view.regions.sidebar;
-    const contracted_bottom = TerminalClient.of(client).view.regions.bottom;
-    const contracted_text = try screenText(&TerminalClient.of(client).presenter.screen, contracted_bottom, &bottom_text_buffer);
+    const sidebar = terminal.view.regions.sidebar;
+    const contracted_bottom = terminal.view.regions.bottom;
+    const contracted_text = try screenText(&terminal.presenter.screen, contracted_bottom, &bottom_text_buffer);
 
     try std.testing.expectEqual(sidebar.x + sidebar.w, contracted_bottom.x);
     try std.testing.expect(std.mem.indexOf(u8, contracted_text, " 50%") != null);
 
     _ = try client.executeAction(.toggle_sidebar, .effect);
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
     try harness.settleModelPresentation();
 
-    const expanded_bottom = TerminalClient.of(client).view.regions.bottom;
-    const expanded_text = try screenText(&TerminalClient.of(client).presenter.screen, expanded_bottom, &bottom_text_buffer);
+    const expanded_bottom = terminal.view.regions.bottom;
+    const expanded_text = try screenText(&terminal.presenter.screen, expanded_bottom, &bottom_text_buffer);
 
     try std.testing.expectEqual(@as(u16, 0), expanded_bottom.x);
-    try std.testing.expectEqual(TerminalClient.of(client).presenter.screen.front.w, expanded_bottom.w);
+    try std.testing.expectEqual(terminal.presenter.screen.front.w, expanded_bottom.w);
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, " 50%") != null);
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, " 1.0G") != null);
     try std.testing.expect(std.mem.indexOf(u8, expanded_text, "80%") != null);
@@ -637,8 +644,9 @@ test "workspace list snapshots commit before presenter-owned projection" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
 
     var payload: [512]u8 = undefined;
     const list = try core.encodeWorkspaceList(&payload, .{
@@ -654,21 +662,21 @@ test "workspace list snapshots commit before presenter-owned projection" {
     try std.testing.expect(client.model.knowsWorkspace(@enumFromInt(2)));
     try std.testing.expectEqualStrings("/work/api", client.model.workspace_list_snapshot.pathAt(1));
     try std.testing.expectEqual(version_before.workspace_list + 1, client.model.version().workspace_list);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expect(!TerminalClient.of(client).view.dirty);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
+    try std.testing.expect(!terminal.view.dirty);
 
     _ = try client.handleServerMessage(try core.decodeServer(list));
     try std.testing.expectEqual(version_before.workspace_list + 1, client.model.version().workspace_list);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_updates_before + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.prepared.model);
     var found_second = false;
-    for (0..TerminalClient.of(client).presenter.screen.front.w) |x| {
-        const action = TerminalClient.of(client).view.hits.at(@intCast(x), 0) orelse continue;
+    for (0..terminal.presenter.screen.front.w) |x| {
+        const action = terminal.view.hits.at(@intCast(x), 0) orelse continue;
         if (action == .select_workspace and action.select_workspace == @as(core.WorkspaceId, @enumFromInt(2))) {
             found_second = true;
             break;
@@ -683,6 +691,7 @@ test "workspace position navigation resolves the committed client model" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     client.model.request_lifecycle.tracker = .{};
 
     var payload: [512]u8 = undefined;
@@ -694,7 +703,7 @@ test "workspace position navigation resolves the committed client model" {
         },
     });
     _ = try client.handleServerMessage(try core.decodeServer(list));
-    const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates_before = terminal.presenter.pending_updates;
 
     _ = try client.executeAction(
         .{
@@ -704,7 +713,7 @@ test "workspace position navigation resolves the committed client model" {
     );
 
     try std.testing.expect(client.model.workspace == null);
-    try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
@@ -755,8 +764,8 @@ test "an agent snapshot replaces the sidebar replica" {
             .expires_at_ms = 2,
         }},
     });
-    const pending_updates = TerminalClient.of(harness.client).presenter.pending_updates;
-    TerminalClient.of(harness.client).view.sidebar.scroll = 7;
+    const pending_updates = harness.terminal.presenter.pending_updates;
+    harness.terminal.view.sidebar.scroll = 7;
     _ = try harness.client.handleServerMessage(try core.decodeServer(snapshot));
     const agent = harness.client.model.agent_snapshot.find(.{
         .pane_id = TestHarness.bootstrap_pane,
@@ -767,15 +776,15 @@ test "an agent snapshot replaces the sidebar replica" {
     try std.testing.expectEqualStrings("Improve agent sidebar", agent.sessionTitle());
     try std.testing.expectEqualStrings("~/sandbox/telar", agent.cwdLabel());
     try std.testing.expectEqual(data.Version{ .agents = 1 }, harness.client.model.version());
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(harness.client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, harness.terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(harness.client);
+    try presentation_lifecycle.observe(harness.terminal);
     try harness.settleModelPresentation();
 
-    try std.testing.expectEqual(@as(u16, 0), TerminalClient.of(harness.client).view.sidebar.scroll);
+    try std.testing.expectEqual(@as(u16, 0), harness.terminal.view.sidebar.scroll);
     try std.testing.expectEqual(
         harness.client.model.version(),
-        TerminalClient.of(harness.client).presenter.presentation_state.prepared.model,
+        harness.terminal.presenter.presentation_state.prepared.model,
     );
 }
 
@@ -784,14 +793,15 @@ test "sidebar animation commits model state before the presenter observes it" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     var payload: [512]u8 = undefined;
     const snapshot = try support.encodeTestingAgentSnapshot(&payload, 1, .working);
     _ = try client.handleServerMessage(try core.decodeServer(snapshot));
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates = terminal.presenter.pending_updates;
 
     try std.testing.expect(client.model.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(@as(u8, 0), client.model.sidebar_animation_frame);
-    switch (try support.receiveClient(client)) {
+    switch (try support.receiveClient(terminal)) {
         .sidebar_animation_tick => |result| {
             const change = (try client.completeSidebarAnimationTick(result)).?;
 
@@ -807,12 +817,12 @@ test "sidebar animation commits model state before the presenter observes it" {
         .sidebar_animation = 1,
     }, client.model.version());
     try std.testing.expectEqual(@as(u8, 1), client.model.sidebar_animation_frame);
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_updates + 1, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.observed.model);
+    try std.testing.expectEqual(pending_updates + 1, terminal.presenter.pending_updates);
+    try std.testing.expectEqualDeep(client.model.version(), terminal.presenter.presentation_state.observed.model);
 }
 
 test "agent snapshot transitions raise bounded presentation alerts only once" {
@@ -854,11 +864,12 @@ test "agent sounds validate exact identity against the client model" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     var payload: [512]u8 = undefined;
     const snapshot = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
     _ = try client.handleServerMessage(try core.decodeServer(snapshot));
     const version_before_sound = client.model.version();
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates = terminal.presenter.pending_updates;
 
     const unknown = try core.encodeAgentSound(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -899,7 +910,7 @@ test "agent sounds validate exact identity against the client model" {
 
     try std.testing.expectEqual(core.AgentSound.needs_input, client.model.sound_playback.snapshot().queued.?);
     try std.testing.expectEqualDeep(version_before_sound, client.model.version());
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 }
 
 test "agent sound completion releases a failed worker before scheduling its successor" {
@@ -907,8 +918,9 @@ test "agent sound completion releases a failed worker before scheduling its succ
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
-    const pending_updates = TerminalClient.of(client).presenter.pending_updates;
+    const pending_updates = terminal.presenter.pending_updates;
 
     try std.testing.expectEqualDeep(
         data.SoundRequestOutcome{ .start = .ready },
@@ -924,7 +936,7 @@ test "agent sound completion releases a failed worker before scheduling its succ
         .queued = null,
     }, client.model.sound_playback.snapshot());
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 }
 
 test "sound scheduling failure releases its token and does not poison a later request" {

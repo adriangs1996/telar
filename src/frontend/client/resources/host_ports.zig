@@ -13,10 +13,10 @@ const history_inspection = @import("../presentation/history_inspection.zig");
 const term = @import("../../presentation/screen_support.zig");
 const std = @import("std");
 
-/// Example: `client.graphics = host_ports.graphicsRetention(client);`.
-pub fn graphicsRetention(client: *client_module.AttachedClient) client_module.GraphicsRetention {
+/// Example: `client.graphics = host_ports.graphicsRetention(terminal);`.
+pub fn graphicsRetention(terminal: *TerminalClient) client_module.GraphicsRetention {
     return .{
-        .context = client,
+        .context = terminal,
         .apply_fn = applyGraphics,
         .clear_pane_fn = clearPaneGraphics,
         .set_pane_visible_fn = setPaneGraphicsVisible,
@@ -29,86 +29,86 @@ pub fn graphicsRetention(client: *client_module.AttachedClient) client_module.Gr
 }
 
 fn applyGraphics(context: *anyopaque, command: data.PaneGraphicsCommand) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
     return switch (command) {
-        .snapshot => |message| TerminalClient.of(client).graphics_store.applySnapshot(message),
-        .image => |message| TerminalClient.of(client).graphics_store.applyImage(message),
-        .shared_image => |message| TerminalClient.of(client).graphics_store.applySharedImage(message),
-        .image_chunk => |message| TerminalClient.of(client).graphics_store.applyChunk(message),
-        .placement => |message| TerminalClient.of(client).graphics_store.applyPlacement(message),
-        .delete_image => |message| TerminalClient.of(client).graphics_store.deleteImage(message),
-        .delete_placement => |message| TerminalClient.of(client).graphics_store.deletePlacement(message),
+        .snapshot => |message| terminal.graphics_store.applySnapshot(message),
+        .image => |message| terminal.graphics_store.applyImage(message),
+        .shared_image => |message| terminal.graphics_store.applySharedImage(message),
+        .image_chunk => |message| terminal.graphics_store.applyChunk(message),
+        .placement => |message| terminal.graphics_store.applyPlacement(message),
+        .delete_image => |message| terminal.graphics_store.deleteImage(message),
+        .delete_placement => |message| terminal.graphics_store.deletePlacement(message),
     };
 }
 
 fn clearPaneGraphics(context: *anyopaque, pane_id: core.PaneId) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    TerminalClient.of(client).graphics_store.clearPane(pane_id);
+    terminal.graphics_store.clearPane(pane_id);
 }
 
 fn setPaneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId, visible: bool) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    try TerminalClient.of(client).graphics_store.setPaneVisible(pane_id, visible);
+    try terminal.graphics_store.setPaneVisible(pane_id, visible);
 }
 
 fn paneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId) bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).graphics_store.paneVisible(pane_id);
+    return terminal.graphics_store.paneVisible(pane_id);
 }
 
 fn hasPaneGraphics(context: *anyopaque, pane_id: core.PaneId) bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).graphics_store.hasPaneGraphics(pane_id);
+    return terminal.graphics_store.hasPaneGraphics(pane_id);
 }
 
 fn graphicsIngressVersion(context: *anyopaque) u64 {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).graphics_store.ingressVersion();
+    return terminal.graphics_store.ingressVersion();
 }
 
 fn peekGraphicsCredit(context: *anyopaque) ?client_module.GraphicsCredit {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).graphics_store.peekCredit();
+    return terminal.graphics_store.peekCredit();
 }
 
 fn consumeGraphicsCredit(context: *anyopaque, credit: client_module.GraphicsCredit) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    TerminalClient.of(client).graphics_store.consumeCredit(credit);
+    terminal.graphics_store.consumeCredit(credit);
 }
 
 /// Queues deletes for every emitted Kitty placement and marks them dirty.
 /// Writes one borrowed payload as OSC 52 and flushes it.
-/// Example: `client.chrome = host_ports.chrome(client);`.
-pub fn chrome(client: *client_module.AttachedClient) client_module.HostChrome {
+/// Example: `client.chrome = host_ports.chrome(terminal);`.
+pub fn chrome(terminal: *TerminalClient) client_module.HostChrome {
     return .{
-        .context = client,
+        .context = terminal,
         .pointer_fn = pointer,
         .inspection_scroll_limit_fn = inspectionScrollLimit,
     };
 }
 
 fn inspectionScrollLimit(context: *anyopaque) ?u32 {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
+    const client = &terminal.app;
 
     return history_inspection.scrollLimit(&client.model);
 }
 
 fn pointer(context: *anyopaque, event: data.Mouse) client_module.ViewInteractionCommand {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    if (tab_drag.press(client, event)) |interaction| {
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
+    if (tab_drag.press(terminal, event)) |interaction| {
         return interaction;
     }
 
-    const interaction = TerminalClient.of(client).view.handleMouse(event);
+    const interaction = terminal.view.handleMouse(event);
     if (interaction.intent == .select_tab or interaction.intent == .rename_tab) {
         return .{ .consumed = true };
     }
@@ -117,39 +117,39 @@ fn pointer(context: *anyopaque, event: data.Mouse) client_module.ViewInteraction
 }
 
 fn visibleAttachmentTarget(context: *anyopaque) ?data.AttachmentTarget {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.kittyAttachments().visibleTarget();
+    return terminal.view.kittyAttachments().visibleTarget();
 }
 
 fn planMarkerRemoval(context: *anyopaque, id: data.AttachmentId, screen: client_module.MarkerScreen) ?data.MarkerRemoval {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.kittyAttachments().planMarkerRemoval(id, screen);
+    return terminal.view.kittyAttachments().planMarkerRemoval(id, screen);
 }
 
 fn idAtMarkerDeletion(context: *anyopaque, screen: client_module.MarkerScreen, deletion: data.AttachmentMarkerDeletion) ?data.AttachmentId {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.kittyAttachments().idAtMarkerDeletion(screen, deletion);
+    return terminal.view.kittyAttachments().idAtMarkerDeletion(screen, deletion);
 }
 
 fn pendingMarkerAtDeletion(context: *anyopaque, screen: client_module.MarkerScreen, probe: client_module.DeletionProbe) bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.kittyAttachments().pendingMarkerAtDeletion(screen, probe);
+    return terminal.view.kittyAttachments().pendingMarkerAtDeletion(screen, probe);
 }
 
 fn expectMarkerDeletion(context: *anyopaque, target: data.AttachmentTarget) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    TerminalClient.of(client).view.kittyAttachments().expectMarkerDeletion(target);
+    terminal.view.kittyAttachments().expectMarkerDeletion(target);
 }
 
-/// Example: `client.attachments = host_ports.attachmentShelf(client);`.
-pub fn attachmentShelf(client: *client_module.AttachedClient) client_module.AttachmentShelf {
+/// Example: `client.attachments = host_ports.attachmentShelf(terminal);`.
+pub fn attachmentShelf(terminal: *TerminalClient) client_module.AttachmentShelf {
     return .{
-        .context = client,
+        .context = terminal,
         .adopt_fn = adoptAttachment,
         .reconcile_markers_fn = reconcileAttachmentMarkers,
         .sync_target_fn = syncAttachmentTarget,
@@ -167,57 +167,57 @@ pub fn attachmentShelf(client: *client_module.AttachedClient) client_module.Atta
 }
 
 fn adoptAttachment(context: *anyopaque, value: *data.Capture) !bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.adoptAttachment(value);
+    return terminal.view.adoptAttachment(value);
 }
 
 fn reconcileAttachmentMarkers(context: *anyopaque, target: data.AttachmentTarget, screen: client_module.MarkerScreen) ?bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.reconcileAttachmentMarkers(target, screen);
+    return terminal.view.reconcileAttachmentMarkers(target, screen);
 }
 
 fn syncAttachmentTarget(context: *anyopaque, target: ?data.AttachmentTarget) bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.syncAttachmentTarget(target);
+    return terminal.view.syncAttachmentTarget(target);
 }
 
 fn removeAttachment(context: *anyopaque, id: data.AttachmentId) ?bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.removeAttachment(id);
+    return terminal.view.removeAttachment(id);
 }
 
 fn removePromptAttachments(context: *anyopaque, target: data.AttachmentTarget) ?bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.removePromptAttachments(target);
+    return terminal.view.removePromptAttachments(target);
 }
 
 fn attachmentModalActive(context: *anyopaque) bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.hasAttachmentModal();
+    return terminal.view.hasAttachmentModal();
 }
 
 fn closeAttachmentModal(context: *anyopaque) bool {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.closeAttachmentModal();
+    return terminal.view.closeAttachmentModal();
 }
 
 fn attachmentReservation(context: *anyopaque) ?data.PaneBottomReservation {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
 
-    return TerminalClient.of(client).view.attachmentReservation();
+    return terminal.view.attachmentReservation();
 }
 
-/// Example: `client.host_input_source = host_ports.hostInput(client);`.
-pub fn hostInput(client: *client_module.AttachedClient) client_module.HostInputSource {
+/// Example: `client.host_input_source = host_ports.hostInput(terminal);`.
+pub fn hostInput(terminal: *TerminalClient) client_module.HostInputSource {
     return .{
-        .context = client,
+        .context = terminal,
         .route_prompt_bytes_fn = routePromptBytes,
     };
 }
@@ -225,7 +225,8 @@ pub fn hostInput(client: *client_module.AttachedClient) client_module.HostInputS
 /// Decodes replayed terminal bytes into prompt events. Bytes that do not
 /// parse while a paste is open are text; a terminal outcome drops the rest.
 fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
+    const client = &terminal.app;
     var offset: usize = 0;
     while (offset < bytes.len) {
         const parsed = term.parse(bytes[offset..]) orelse {
@@ -258,13 +259,14 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
     }
 }
 
-/// Example: `client.workers = host_ports.workers(client);`.
-pub fn workers(client: *client_module.AttachedClient) client_module.Workers {
-    return .{ .context = client, .start_fn = startJob };
+/// Example: `client.workers = host_ports.workers(terminal);`.
+pub fn workers(terminal: *TerminalClient) client_module.Workers {
+    return .{ .context = terminal, .start_fn = startJob };
 }
 
 fn startJob(context: *anyopaque, job: client_module.Job) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
+    const client = &terminal.app;
 
-    try TerminalClient.of(client).inbox.start(.client, .{ client_module.job_runner.run, .{ client.io, client.gpa, job } });
+    try terminal.inbox.start(.client, .{ client_module.job_runner.run, .{ client.io, client.gpa, job } });
 }

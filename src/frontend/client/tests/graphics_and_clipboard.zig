@@ -43,9 +43,10 @@ test "pane graphics commit their cell fallback before presenter observation" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     _ = try client.model.observeHostCapability(.{ .images = .unsupported });
     const version_before = client.model.version();
-    const pending_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_before = terminal.presenter.pending_updates;
 
     var payload: [256]u8 = undefined;
     const encoded = try core.encodeGraphicsImage(&payload, .{
@@ -65,13 +66,13 @@ test "pane graphics commit their cell fallback before presenter observation" {
     committed.pane_graphics += 1;
     try std.testing.expectEqualDeep(committed, client.model.version());
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.graphics_placeholder);
-    try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_before, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_before + 1, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(pending_before + 1, terminal.presenter.pending_updates);
     try harness.settleModelPresentation();
-    try std.testing.expectEqualDeep(committed, TerminalClient.of(client).presenter.presentation_state.prepared.model);
+    try std.testing.expectEqualDeep(committed, terminal.presenter.presentation_state.prepared.model);
 }
 
 test "presenter observes physical graphics without a semantic fallback" {
@@ -80,9 +81,10 @@ test "presenter observes physical graphics without a semantic fallback" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     _ = try client.model.observeHostCapability(.{ .images = .supported });
     const version_before = client.model.version();
-    const pending_before = TerminalClient.of(client).presenter.pending_updates;
+    const pending_before = terminal.presenter.pending_updates;
 
     var payload: [256]u8 = undefined;
     const encoded = try core.encodeGraphicsImage(&payload, .{
@@ -99,27 +101,27 @@ test "presenter observes physical graphics without a semantic fallback" {
     _ = try client.handleServerMessage(try core.decodeServer(encoded));
 
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(@as(u64, 1), TerminalClient.of(client).graphics_store.ingressVersion());
-    try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 1), terminal.graphics_store.ingressVersion());
+    try std.testing.expectEqual(pending_before, terminal.presenter.pending_updates);
 
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(pending_before + 1, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expectEqual(@as(u64, 1), TerminalClient.of(client).presenter.presentation_state.observed.graphics_ingress);
+    try std.testing.expectEqual(pending_before + 1, terminal.presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 1), terminal.presenter.presentation_state.observed.graphics_ingress);
     try harness.settleModelPresentation();
-    try std.testing.expectEqual(@as(u64, 1), TerminalClient.of(client).presenter.presentation_state.prepared.graphics_ingress);
+    try std.testing.expectEqual(@as(u64, 1), terminal.presenter.presentation_state.prepared.graphics_ingress);
 
-    const pending_after = TerminalClient.of(client).presenter.pending_updates;
+    const pending_after = terminal.presenter.pending_updates;
     const stale = try core.encodeGraphicsDeleteImage(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
         .revision = 4,
         .key = .{ .image_id = 1, .generation = 1 },
     });
     _ = try client.handleServerMessage(try core.decodeServer(stale));
-    try presentation_lifecycle.observe(client);
+    try presentation_lifecycle.observe(terminal);
 
-    try std.testing.expectEqual(@as(u64, 1), TerminalClient.of(client).graphics_store.ingressVersion());
-    try std.testing.expectEqual(pending_after, TerminalClient.of(client).presenter.pending_updates);
+    try std.testing.expectEqual(@as(u64, 1), terminal.graphics_store.ingressVersion());
+    try std.testing.expectEqual(pending_after, terminal.presenter.pending_updates);
 }
 
 test "shared graphics mapping failure downgrades before resynchronizing" {
@@ -128,6 +130,7 @@ test "shared graphics mapping failure downgrades before resynchronizing" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const version_before = client.model.version();
 
     var payload: [256]u8 = undefined;
@@ -153,7 +156,7 @@ test "shared graphics mapping failure downgrades before resynchronizing" {
     try std.testing.expect(!downgrade.configure_graphics.shared);
     try std.testing.expect(recovery == .request_graphics_snapshot);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, recovery.request_graphics_snapshot.pane_id);
-    try std.testing.expectEqual(@as(u64, 0), TerminalClient.of(client).graphics_store.ingressVersion());
+    try std.testing.expectEqual(@as(u64, 0), terminal.graphics_store.ingressVersion());
     try std.testing.expectEqualDeep(version_before, client.model.version());
 }
 

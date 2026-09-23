@@ -12,22 +12,22 @@ const OutputType = @import("../resources/Output.zig");
 /// Publishes every revision the presenter uses after one client event commits.
 ///
 /// ```zig
-/// try presentation_lifecycle.observe(client);
+/// try presentation_lifecycle.observe(terminal);
 /// ```
-pub fn observe(client: *common.AttachedClient) !void {
-    try view_chrome.refreshClient(client);
-    try TerminalClient.of(client).presenter.observe(presentation_projection.observation(client));
+pub fn observe(terminal: *TerminalClient) !void {
+    try view_chrome.refresh(terminal);
+    try terminal.presenter.observe(presentation_projection.observation(terminal));
 }
 
 /// Completes one paced draw. Damage is retired only after the host terminal
 /// flush succeeds; cell acknowledgements already followed frame application.
 ///
 /// ```zig
-/// try presentation_lifecycle.handleDraw(client, result);
+/// try presentation_lifecycle.handleDraw(terminal, result);
 /// ```
-pub fn handleDraw(client: *common.AttachedClient, result: anyerror!void) !void {
-    try TerminalClient.of(client).presenter.completeDraw(result);
-    try presentNow(client);
+pub fn handleDraw(terminal: *TerminalClient, result: anyerror!void) !void {
+    try terminal.presenter.completeDraw(result);
+    try presentNow(terminal);
 }
 
 /// Presents whatever is pending on the caller's thread without touching the
@@ -35,107 +35,115 @@ pub fn handleDraw(client: *common.AttachedClient, result: anyerror!void) !void {
 /// presentation share one delivery path.
 ///
 /// ```zig
-/// try presentation_lifecycle.presentNow(client);
+/// try presentation_lifecycle.presentNow(terminal);
 /// ```
-pub fn presentNow(client: *common.AttachedClient) !void {
+pub fn presentNow(terminal: *TerminalClient) !void {
+    const client = &terminal.app;
+
     core.mark(client.io, .compose_start);
-    if (TerminalClient.of(client).output) |*output| {
+    if (terminal.output) |*output| {
         if (output.pending) {
             output.draw_deferred = true;
             return;
         }
 
-        try output.prepareFrame(@as(usize, TerminalClient.of(client).presenter.screen.back.w) * TerminalClient.of(client).presenter.screen.back.h);
+        try output.prepareFrame(@as(usize, terminal.presenter.screen.back.w) * terminal.presenter.screen.back.h);
     }
 
-    const delivery = try TerminalClient.of(client).presenter.presentDue(
-        presentation_projection.projection(client),
-        presentation_projection.resources(client),
+    const delivery = try terminal.presenter.presentDue(
+        presentation_projection.projection(terminal),
+        presentation_projection.resources(terminal),
     ) orelse return;
-    errdefer _ = TerminalClient.of(client).presenter.presentation_state.complete(delivery, .failed);
+    errdefer _ = terminal.presenter.presentation_state.complete(delivery, .failed);
 
-    if (TerminalClient.of(client).output) |*output| {
+    if (terminal.output) |*output| {
         if (output.writer.end != 0) {
             output.delivery = delivery;
-            try pumpOutput(client);
+            try pumpOutput(terminal);
             return;
         }
     }
 
-    try deliver(client, delivery);
+    try deliver(terminal, delivery);
 }
 
-fn deliver(client: *common.AttachedClient, token: common.Token) !void {
-    const delivery = TerminalClient.of(client).presenter.presentation_state.complete(token, .delivered) orelse return;
+fn deliver(terminal: *TerminalClient, token: common.Token) !void {
+    const client = &terminal.app;
+
+    const delivery = terminal.presenter.presentation_state.complete(token, .delivered) orelse return;
     const geometry = client.presentation.delivered_geometry;
-    TerminalClient.of(client).view.tab_drag.present(&TerminalClient.of(client).view.hits, if (geometry) |value| if (value.location) |location| location.workspace else null else null);
+    terminal.view.tab_drag.present(&terminal.view.hits, if (geometry) |value| if (value.location) |location| location.workspace else null else null);
     try common.presentation_delivery.apply(client, delivery.commit);
     if (delivery.media_pending) {
-        try TerminalClient.of(client).presenter.requestMedia();
+        try terminal.presenter.requestMedia();
     }
 }
 
 /// Completes one lower-priority, byte-bounded host graphics pass.
 ///
 /// ```zig
-/// try presentation_lifecycle.handleMediaTick(client, result);
+/// try presentation_lifecycle.handleMediaTick(terminal, result);
 /// ```
-pub fn handleMediaTick(client: *common.AttachedClient, result: anyerror!void) !void {
-    try TerminalClient.of(client).presenter.completeMediaTick(result);
-    if (TerminalClient.of(client).output) |*output| {
+pub fn handleMediaTick(terminal: *TerminalClient, result: anyerror!void) !void {
+    try terminal.presenter.completeMediaTick(result);
+    if (terminal.output) |*output| {
         if (output.pending) {
             output.media_deferred = true;
             return;
         }
 
-        try output.prepareFrame(@as(usize, TerminalClient.of(client).presenter.screen.back.w) * TerminalClient.of(client).presenter.screen.back.h);
+        try output.prepareFrame(@as(usize, terminal.presenter.screen.back.w) * terminal.presenter.screen.back.h);
     }
 
-    try TerminalClient.of(client).presenter.presentMedia(
-        presentation_projection.projection(client),
-        presentation_projection.resources(client),
+    try terminal.presenter.presentMedia(
+        presentation_projection.projection(terminal),
+        presentation_projection.resources(terminal),
     );
 }
 
 /// Starts one host write without lending model or presentation state.
-/// Example: `try pumpOutput(client);`.
-pub fn pumpOutput(client: *common.AttachedClient) anyerror!void {
-    const output = if (TerminalClient.of(client).output) |*output| output else return;
+/// Example: `try pumpOutput(terminal);`.
+pub fn pumpOutput(terminal: *TerminalClient) anyerror!void {
+    const client = &terminal.app;
+
+    const output = if (terminal.output) |*output| output else return;
     const pending = output.begin() orelse return;
     core.mark(client.io, .host_flush_start);
     const work = try output.tryWrite(pending);
     if (work.bytes.len == 0) {
-        try handleWritten(client, {});
+        try handleWritten(terminal, {});
         return;
     }
 
-    try TerminalClient.of(client).inbox.start(.host_written, .{ OutputType.write, .{work} });
+    try terminal.inbox.start(.host_written, .{ OutputType.write, .{work} });
 }
 
 /// Commits only the presentation whose bytes reached the host, then folds work.
-/// Example: `try handleWritten(client, result);`.
-pub fn handleWritten(client: *common.AttachedClient, result: anyerror!void) !void {
+/// Example: `try handleWritten(terminal, result);`.
+pub fn handleWritten(terminal: *TerminalClient, result: anyerror!void) !void {
+    const client = &terminal.app;
+
     core.mark(client.io, .host_flush_done);
-    const output = if (TerminalClient.of(client).output) |*output| output else unreachable;
+    const output = if (terminal.output) |*output| output else unreachable;
     const token = output.delivery;
     const completed = output.complete(result) catch |err| {
         if (token) |value| {
-            _ = TerminalClient.of(client).presenter.presentation_state.complete(value, .failed);
+            _ = terminal.presenter.presentation_state.complete(value, .failed);
         }
         return err;
     };
     if (completed) |delivery| {
-        try deliver(client, delivery);
+        try deliver(terminal, delivery);
     }
 
     if (output.draw_deferred) {
         output.draw_deferred = false;
-        try TerminalClient.of(client).presenter.requestDraw();
+        try terminal.presenter.requestDraw();
     }
     if (output.media_deferred) {
         output.media_deferred = false;
-        try TerminalClient.of(client).presenter.requestMedia();
+        try terminal.presenter.requestMedia();
     }
 
-    try pumpOutput(client);
+    try pumpOutput(terminal);
 }

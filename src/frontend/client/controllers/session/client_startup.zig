@@ -15,29 +15,33 @@ const client_telemetry = @import("../../resources/telemetry.zig");
 /// terminal defaults are available or the bounded probe expires.
 ///
 /// ```zig
-/// try start(client, .{ .resize_watcher = &watcher });
+/// try start(terminal, .{ .resize_watcher = &watcher });
 /// ```
-pub fn start(client: *client_module.AttachedClient, request: Request) !void {
+pub fn start(terminal: *TerminalClient, request: Request) !void {
+    const client = &terminal.app;
+
     _ = data.multiplexer.rectSize(client.geometry().area) orelse
         return error.TerminalTooSmall;
     client.model.startup.phase = .probing;
-    try host_capabilities.begin(client);
+    try host_capabilities.begin(terminal);
     // No socket completion can drive output while startup waits for colors.
-    try presentation_lifecycle.pumpOutput(client);
-    try host_inputs.scheduleRead(client);
+    try presentation_lifecycle.pumpOutput(terminal);
+    try host_inputs.scheduleRead(terminal);
 
-    try host_resizes.schedule(client, request.resize_watcher);
+    try host_resizes.schedule(terminal, request.resize_watcher);
     try client.startRuntimeRead();
-    try client_telemetry.start(client);
+    try client_telemetry.start(terminal);
     try client.synchronizeBars();
     try client.scheduleConfigReload();
 }
 
 /// Advances startup after an event. FIFO configuration precedes the state
 /// request, so the existing layout/open flow needs no color-probe knowledge.
-/// Example: `if (try advance(client)) return .{ .exit = 0 };`.
-pub fn advance(client: *client_module.AttachedClient) !bool {
-    if (client.model.startup.phase == .probing and TerminalClient.of(client).host_negotiation.initial_settled) {
+/// Example: `if (try advance(terminal)) return .{ .exit = 0 };`.
+pub fn advance(terminal: *TerminalClient) !bool {
+    const client = &terminal.app;
+
+    if (client.model.startup.phase == .probing and terminal.host_negotiation.initial_settled) {
         try client.runtime_transport.bootstrap(.{
             .graphics_shared = client_module.supportsSharedMemory(),
             .client_identity = client.client_identity,
@@ -49,7 +53,7 @@ pub fn advance(client: *client_module.AttachedClient) !bool {
 
     if (client.model.startup.phase == .opening and client.model.activeTabLocation() != null) {
         client.model.startup.phase = .active;
-        return host_inputs.replayStartup(client);
+        return host_inputs.replayStartup(terminal);
     }
 
     return false;

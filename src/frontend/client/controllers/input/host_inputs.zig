@@ -53,16 +53,18 @@ const Expiry = enum {
 /// Starts one TTY read when transport backpressure permits it.
 ///
 /// ```zig
-/// try host_inputs.scheduleRead(client);
+/// try host_inputs.scheduleRead(terminal);
 /// ```
-pub fn scheduleRead(client: *client_module.AttachedClient) !void {
-    const state = &TerminalClient.of(client).host_input;
+pub fn scheduleRead(terminal: *TerminalClient) !void {
+    const client = &terminal.app;
+
+    const state = &terminal.host_input;
     if (state.read_pending or client.runtime_transport.outbox.availableCapacity() == 0) {
         return;
     }
 
     state.read_pending = true;
-    TerminalClient.of(client).inbox.start(.input, .{ read, .{ client.io, state.file, &state.chunk } }) catch |err| {
+    terminal.inbox.start(.input, .{ read, .{ client.io, state.file, &state.chunk } }) catch |err| {
         state.read_pending = false;
 
         return err;
@@ -73,30 +75,34 @@ pub fn scheduleRead(client: *client_module.AttachedClient) !void {
 /// its bytes and rearms input work.
 ///
 /// ```zig
-/// if (try host_inputs.handleOwnedRead(client, result)) return 0;
+/// if (try host_inputs.handleOwnedRead(terminal, result)) return 0;
 /// ```
-pub fn handleOwnedRead(client: *client_module.AttachedClient, result: anyerror!u16) !bool {
+pub fn handleOwnedRead(terminal: *TerminalClient, result: anyerror!u16) !bool {
+    const client = &terminal.app;
+
     core.mark(client.io, .client_input);
-    const state = &TerminalClient.of(client).host_input;
+    const state = &terminal.host_input;
     state.read_pending = false;
     state.chunk.len = try result;
-    return routeChunk(client);
+    return routeChunk(terminal);
 }
 
 /// Routes one caller-provided chunk as if the TTY read had produced it.
 ///
 /// ```zig
-/// if (try host_inputs.handleRead(client, chunk)) return 0;
+/// if (try host_inputs.handleRead(terminal, chunk)) return 0;
 /// ```
-pub fn handleRead(client: *client_module.AttachedClient, result: anyerror!Chunk) !bool {
-    const state = &TerminalClient.of(client).host_input;
+pub fn handleRead(terminal: *TerminalClient, result: anyerror!Chunk) !bool {
+    const state = &terminal.host_input;
     state.read_pending = false;
     state.chunk = try result;
-    return routeChunk(client);
+    return routeChunk(terminal);
 }
 
-fn routeChunk(client: *client_module.AttachedClient) !bool {
-    const state = &TerminalClient.of(client).host_input;
+fn routeChunk(terminal: *TerminalClient) !bool {
+    const client = &terminal.app;
+
+    const state = &terminal.host_input;
     const chunk = &state.chunk;
     if (chunk.len == 0) {
         return true;
@@ -105,28 +111,28 @@ fn routeChunk(client: *client_module.AttachedClient) !bool {
     if (client.model.startup.holdsInput()) {
         var early = chunk.slice();
         while (try state.startup_input.next(&early)) |response| {
-            try terminalResponse(client, response);
+            try terminalResponse(terminal, response);
         }
-        try scheduleRead(client);
+        try scheduleRead(terminal);
         return false;
     }
 
-    const stop = try routeBytes(client, chunk.slice());
+    const stop = try routeBytes(terminal, chunk.slice());
     if (!stop) {
-        try scheduleRead(client);
+        try scheduleRead(terminal);
     }
 
     return stop;
 }
 
 /// Replays early input only after the runtime has supplied the active pane.
-/// Example: `if (try replayStartup(client)) detachClient();`.
-pub fn replayStartup(client: *client_module.AttachedClient) !bool {
-    const bytes = try TerminalClient.of(client).host_input.startup_input.finish();
+/// Example: `if (try replayStartup(terminal)) detachClient();`.
+pub fn replayStartup(terminal: *TerminalClient) !bool {
+    const bytes = try terminal.host_input.startup_input.finish();
     var offset: usize = 0;
     while (offset < bytes.len) {
         const end = @min(offset + chunk_size, bytes.len);
-        if (try routeBytes(client, bytes[offset..end])) {
+        if (try routeBytes(terminal, bytes[offset..end])) {
             return true;
         }
 
@@ -136,12 +142,14 @@ pub fn replayStartup(client: *client_module.AttachedClient) !bool {
     return false;
 }
 
-fn routeBytes(client: *client_module.AttachedClient, bytes: []const u8) !bool {
-    const state = &TerminalClient.of(client).host_input;
-    TerminalClient.of(client).presenter.noteInput(client_module.monotonic(client.io));
+fn routeBytes(terminal: *TerminalClient, bytes: []const u8) !bool {
+    const client = &terminal.app;
+
+    const state = &terminal.host_input;
+    terminal.presenter.noteInput(client_module.monotonic(client.io));
     const prefix_was_pending = state.router.prefixPending();
     const lease_overflows_before = state.router.leaseOverflowCount();
-    const control = try feed(client, .{
+    const control = try feed(terminal, .{
         .bytes = bytes,
         .now_ns = client_module.monotonic(client.io),
     });
@@ -150,7 +158,7 @@ fn routeBytes(client: *client_module.AttachedClient, bytes: []const u8) !bool {
         return true;
     }
 
-    try finishRouting(client, prefix_was_pending);
+    try finishRouting(terminal, prefix_was_pending);
 
     return false;
 }
@@ -158,41 +166,43 @@ fn routeBytes(client: *client_module.AttachedClient, bytes: []const u8) !bool {
 /// Releases and applies one escape-sequence deadline.
 ///
 /// ```zig
-/// if (try host_inputs.handleInputTimeout(client, result)) return 0;
+/// if (try host_inputs.handleInputTimeout(terminal, result)) return 0;
 /// ```
-pub fn handleInputTimeout(client: *client_module.AttachedClient, result: anyerror!void) !bool {
-    try TerminalClient.of(client).host_input.input_timeout.complete(result);
+pub fn handleInputTimeout(terminal: *TerminalClient, result: anyerror!void) !bool {
+    try terminal.host_input.input_timeout.complete(result);
 
-    return expire(client, .input);
+    return expire(terminal, .input);
 }
 
 /// Releases and applies one partial-binding deadline.
 ///
 /// ```zig
-/// if (try host_inputs.handleBindingTimeout(client, result)) return 0;
+/// if (try host_inputs.handleBindingTimeout(terminal, result)) return 0;
 /// ```
-pub fn handleBindingTimeout(client: *client_module.AttachedClient, result: anyerror!void) !bool {
-    try TerminalClient.of(client).host_input.binding_timeout.complete(result);
+pub fn handleBindingTimeout(terminal: *TerminalClient, result: anyerror!void) !bool {
+    try terminal.host_input.binding_timeout.complete(result);
 
-    return expire(client, .binding);
+    return expire(terminal, .binding);
 }
 
-fn expire(client: *client_module.AttachedClient, expiry: Expiry) !bool {
-    const state = &TerminalClient.of(client).host_input;
+fn expire(terminal: *TerminalClient, expiry: Expiry) !bool {
+    const client = &terminal.app;
+
+    const state = &terminal.host_input;
     const prefix_was_pending = state.router.prefixPending();
     const control = switch (expiry) {
         .input => if (state.router.expireInput(client_module.monotonic(client.io))) |event|
-            try decoded(client, event, client_module.monotonic(client.io))
+            try decoded(terminal, event, client_module.monotonic(client.io))
         else
             .continue_routing,
-        .binding => try applyDecision(client, state.router.expireBinding(client_module.monotonic(client.io))),
+        .binding => try applyDecision(terminal, state.router.expireBinding(client_module.monotonic(client.io))),
     };
     if (control == .stop) {
         state.router.clear();
         return true;
     }
 
-    try finishRouting(client, prefix_was_pending);
+    try finishRouting(terminal, prefix_was_pending);
 
     return false;
 }
@@ -200,14 +210,16 @@ fn expire(client: *client_module.AttachedClient, expiry: Expiry) !bool {
 /// Routes one borrowed byte slice after the native router has replayed it.
 ///
 /// ```zig
-/// try host_inputs.forward(client, bytes);
+/// try host_inputs.forward(terminal, bytes);
 /// ```
-pub fn forward(client: *client_module.AttachedClient, bytes: []const u8) !void {
+pub fn forward(terminal: *TerminalClient, bytes: []const u8) !void {
+    const client = &terminal.app;
+
     if (std.mem.eql(u8, bytes, "\x1b[O")) {
-        _ = tab_drag.cancel(client);
+        _ = tab_drag.cancel(terminal);
     }
 
-    if (std.mem.eql(u8, bytes, "\x1b") and tab_drag.cancel(client)) {
+    if (std.mem.eql(u8, bytes, "\x1b") and tab_drag.cancel(terminal)) {
         return;
     }
 
@@ -221,10 +233,12 @@ pub fn forward(client: *client_module.AttachedClient, bytes: []const u8) !void {
 /// Routes one semantic host key after native binding resolution.
 ///
 /// ```zig
-/// try host_inputs.key(client, pressed);
+/// try host_inputs.key(terminal, pressed);
 /// ```
-pub fn key(client: *client_module.AttachedClient, value: data.Key) !void {
-    const escape_key = &TerminalClient.of(client).view.tab_drag.escape_key;
+pub fn key(terminal: *TerminalClient, value: data.Key) !void {
+    const client = &terminal.app;
+
+    const escape_key = &terminal.view.tab_drag.escape_key;
     if (value.physical) |physical| {
         if (escape_key.*) |owner| {
             if (owner.eql(physical)) {
@@ -237,7 +251,7 @@ pub fn key(client: *client_module.AttachedClient, value: data.Key) !void {
         }
     }
 
-    if (value.code == .escape and tab_drag.cancel(client)) {
+    if (value.code == .escape and tab_drag.cancel(terminal)) {
         if (value.phase == .press) {
             escape_key.* = value.physical;
         }
@@ -252,8 +266,10 @@ pub fn key(client: *client_module.AttachedClient, value: data.Key) !void {
     );
 }
 
-pub fn mouse(client: *client_module.AttachedClient, event: data.Mouse) !void {
-    if (try tab_drag.retained(client, event)) {
+pub fn mouse(terminal: *TerminalClient, event: data.Mouse) !void {
+    const client = &terminal.app;
+
+    if (try tab_drag.retained(terminal, event)) {
         return;
     }
 
@@ -265,29 +281,31 @@ pub fn mouse(client: *client_module.AttachedClient, event: data.Mouse) !void {
 /// tell the graphics store whether the host took a shared object.
 ///
 /// ```zig
-/// try host_inputs.terminalResponse(client, response);
+/// try host_inputs.terminalResponse(terminal, response);
 /// ```
-pub fn terminalResponse(client: *client_module.AttachedClient, response: term.Event.TerminalResponse) !void {
-    _ = try host_capabilities.observe(client, response);
+pub fn terminalResponse(terminal: *TerminalClient, response: term.Event.TerminalResponse) !void {
+    const client = &terminal.app;
+
+    _ = try host_capabilities.observe(terminal, response);
     switch (response) {
         .kitty_graphics => |reply| {
-            if (!kitty_delivery.noteHostReply(&TerminalClient.of(client).graphics_store, reply.image_id, reply.supported)) {
+            if (!kitty_delivery.noteHostReply(&terminal.graphics_store, reply.image_id, reply.supported)) {
                 return;
             }
             try client.flushGraphicsCredits();
-            try presentation_lifecycle.observe(client);
+            try presentation_lifecycle.observe(terminal);
         },
         else => {},
     }
 }
 
 /// Execute each decision before decoding the next event, so later keys observe
-/// changes to focus and modal state. Example: `_ = try host_inputs.feed(client, input);`
-pub fn feed(client: *client_module.AttachedClient, input: Router.Feed) !data.KeybindControl {
-    const router = &TerminalClient.of(client).host_input.router;
+/// changes to focus and modal state. Example: `_ = try host_inputs.feed(terminal, input);`
+pub fn feed(terminal: *TerminalClient, input: Router.Feed) !data.KeybindControl {
+    const router = &terminal.host_input.router;
     var remaining = input;
     while (router.next(&remaining)) |event| {
-        if (try decoded(client, event, input.now_ns) == .stop) {
+        if (try decoded(terminal, event, input.now_ns) == .stop) {
             router.clear();
             return .stop;
         }
@@ -295,8 +313,10 @@ pub fn feed(client: *client_module.AttachedClient, input: Router.Feed) !data.Key
     return .continue_routing;
 }
 
-fn decoded(client: *client_module.AttachedClient, event: Router.Decoded, now_ns: u64) !data.KeybindControl {
-    const router = &TerminalClient.of(client).host_input.router;
+fn decoded(terminal: *TerminalClient, event: Router.Decoded, now_ns: u64) !data.KeybindControl {
+    const client = &terminal.app;
+
+    const router = &terminal.host_input.router;
     if (event.paste_content) {
         _ = try client_module.operations.paste_routing.content(client, event.raw);
         return .continue_routing;
@@ -305,7 +325,7 @@ fn decoded(client: *client_module.AttachedClient, event: Router.Decoded, now_ns:
         .key => |value| {
             errdefer router.eventFailed(value);
             return applyDecision(
-                client,
+                terminal,
                 router.routeEvent(
                     .{
                         .key = value,
@@ -321,37 +341,39 @@ fn decoded(client: *client_module.AttachedClient, event: Router.Decoded, now_ns:
         },
         .mouse => |value| {
             router.cancelSequence();
-            try mouse(client, value);
+            try mouse(terminal, value);
         },
         .terminal_response => |value| {
             router.observeHostResponse();
-            try terminalResponse(client, value);
+            try terminalResponse(terminal, value);
         },
         .paste_start => {
-            _ = try applyDecision(client, router.interrupt());
+            _ = try applyDecision(terminal, router.interrupt());
             _ = try client_module.operations.paste_routing.start(client);
         },
         .paste_end => {
-            _ = try applyDecision(client, router.interrupt());
+            _ = try applyDecision(terminal, router.interrupt());
             _ = try client_module.operations.paste_routing.finish(client);
         },
         .incomplete => {
-            _ = try applyDecision(client, router.interrupt());
+            _ = try applyDecision(terminal, router.interrupt());
         },
     }
     return .continue_routing;
 }
 
-fn applyDecision(client: *client_module.AttachedClient, decision: Router.Decision) !data.KeybindControl {
-    const router = &TerminalClient.of(client).host_input.router;
+fn applyDecision(terminal: *TerminalClient, decision: Router.Decision) !data.KeybindControl {
+    const client = &terminal.app;
+
+    const router = &terminal.host_input.router;
     switch (decision) {
-        .forward => |value| try key(client, value.key),
+        .forward => |value| try key(terminal, value.key),
         .replay => |value| {
             for (value.held_keys[0..value.held_key_len]) |held| {
-                try key(client, held);
+                try key(terminal, held);
             }
             if (value.current_key) |current| {
-                try key(client, current);
+                try key(terminal, current);
             }
         },
         .action => |request| {
@@ -366,29 +388,31 @@ fn applyDecision(client: *client_module.AttachedClient, decision: Router.Decisio
     return .continue_routing;
 }
 
-fn finishRouting(client: *client_module.AttachedClient, prefix_was_pending: bool) !void {
-    syncPrefixStatus(client, prefix_was_pending);
-    try synchronizeTimers(client);
+fn finishRouting(terminal: *TerminalClient, prefix_was_pending: bool) !void {
+    syncPrefixStatus(terminal, prefix_was_pending);
+    try synchronizeTimers(terminal);
 }
 
-fn syncPrefixStatus(client: *client_module.AttachedClient, prefix_was_pending: bool) void {
-    if (prefix_was_pending == TerminalClient.of(client).host_input.router.prefixPending()) {
+fn syncPrefixStatus(terminal: *TerminalClient, prefix_was_pending: bool) void {
+    if (prefix_was_pending == terminal.host_input.router.prefixPending()) {
         return;
     }
 
-    TerminalClient.of(client).host_input.presentation_revision +%= 1;
+    terminal.host_input.presentation_revision +%= 1;
 }
 
-fn synchronizeTimers(client: *client_module.AttachedClient) !void {
-    try synchronizeInputTimeout(client);
-    try synchronizeBindingTimeout(client);
+fn synchronizeTimers(terminal: *TerminalClient) !void {
+    try synchronizeInputTimeout(terminal);
+    try synchronizeBindingTimeout(terminal);
 }
 
-fn synchronizeInputTimeout(client: *client_module.AttachedClient) !void {
-    const scheduler = &TerminalClient.of(client).host_input.input_timeout;
-    switch (scheduler.update(client.io, TerminalClient.of(client).host_input.router.inputDeadline())) {
+fn synchronizeInputTimeout(terminal: *TerminalClient) !void {
+    const client = &terminal.app;
+
+    const scheduler = &terminal.host_input.input_timeout;
+    switch (scheduler.update(client.io, terminal.host_input.router.inputDeadline())) {
         .idle, .retained => {},
-        .schedule => TerminalClient.of(client).inbox.start(.input_timeout, .{ client_module.wait, .{ client.io, scheduler } }) catch |err| {
+        .schedule => terminal.inbox.start(.input_timeout, .{ client_module.wait, .{ client.io, scheduler } }) catch |err| {
             scheduler.schedulingFailed();
 
             return err;
@@ -396,11 +420,13 @@ fn synchronizeInputTimeout(client: *client_module.AttachedClient) !void {
     }
 }
 
-fn synchronizeBindingTimeout(client: *client_module.AttachedClient) !void {
-    const scheduler = &TerminalClient.of(client).host_input.binding_timeout;
-    switch (scheduler.update(client.io, TerminalClient.of(client).host_input.router.bindingDeadline())) {
+fn synchronizeBindingTimeout(terminal: *TerminalClient) !void {
+    const client = &terminal.app;
+
+    const scheduler = &terminal.host_input.binding_timeout;
+    switch (scheduler.update(client.io, terminal.host_input.router.bindingDeadline())) {
         .idle, .retained => {},
-        .schedule => TerminalClient.of(client).inbox.start(.binding_timeout, .{ client_module.wait, .{ client.io, scheduler } }) catch |err| {
+        .schedule => terminal.inbox.start(.binding_timeout, .{ client_module.wait, .{ client.io, scheduler } }) catch |err| {
             scheduler.schedulingFailed();
 
             return err;

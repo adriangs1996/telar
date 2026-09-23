@@ -203,22 +203,26 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
 /// Schedules the first diagnostics tick when the fail-closed sink exists.
 ///
 /// ```zig
-/// try telemetry.start(client);
+/// try telemetry.start(terminal);
 /// ```
-pub fn start(client: *client_module.AttachedClient) !void {
+pub fn start(terminal: *TerminalClient) !void {
+    const client = &terminal.app;
+
     if (!client.telemetry.available()) {
         return;
     }
 
-    try scheduleTick(client);
+    try scheduleTick(terminal);
 }
 
 /// Rearms diagnostics and offers one latest-state write to the observation path.
 ///
 /// ```zig
-/// telemetry.handleTick(client, result, heap.snapshot());
+/// telemetry.handleTick(terminal, result, heap.snapshot());
 /// ```
-pub fn handleTick(client: *client_module.AttachedClient, result: anyerror!void, heap: core.SnapshotSnapshot) void {
+pub fn handleTick(terminal: *TerminalClient, result: anyerror!void, heap: core.SnapshotSnapshot) void {
+    const client = &terminal.app;
+
     result catch {
         client.telemetry.disable(client.io);
         return;
@@ -228,7 +232,7 @@ pub fn handleTick(client: *client_module.AttachedClient, result: anyerror!void, 
         return;
     }
 
-    scheduleTick(client) catch {
+    scheduleTick(terminal) catch {
         client.telemetry.disable(client.io);
         return;
     };
@@ -237,11 +241,11 @@ pub fn handleTick(client: *client_module.AttachedClient, result: anyerror!void, 
         return;
     }
 
-    const state = capture(client, heap) orelse return;
+    const state = capture(terminal, heap) orelse return;
     const line = format(&client.telemetry.buffer, .{
         .io = client.io,
         .metrics = &client.telemetry.metrics,
-        .pacer = &TerminalClient.of(client).presenter.pacer,
+        .pacer = &terminal.presenter.pacer,
         .snapshot = state,
     }) catch return;
 
@@ -249,7 +253,7 @@ pub fn handleTick(client: *client_module.AttachedClient, result: anyerror!void, 
         return;
     }
 
-    TerminalClient.of(client).inbox.start(.telemetry_written, .{ writeDiagnostics, .{
+    terminal.inbox.start(.telemetry_written, .{ writeDiagnostics, .{
         client.io,
         &client.telemetry.sink,
         line,
@@ -262,51 +266,57 @@ pub fn handleTick(client: *client_module.AttachedClient, result: anyerror!void, 
 /// Releases one diagnostics write and finalizes a deferred sink shutdown.
 ///
 /// ```zig
-/// telemetry.handleWritten(client, result);
+/// telemetry.handleWritten(terminal, result);
 /// ```
-pub fn handleWritten(client: *client_module.AttachedClient, result: anyerror!void) void {
+pub fn handleWritten(terminal: *TerminalClient, result: anyerror!void) void {
+    const client = &terminal.app;
+
     finishWrite(&client.telemetry, client.io, result);
 }
 
-fn capture(client: *client_module.AttachedClient, heap: core.SnapshotSnapshot) ?SnapshotType {
+fn capture(terminal: *TerminalClient, heap: core.SnapshotSnapshot) ?SnapshotType {
+    const client = &terminal.app;
+
     const active = client.model.tabs.activeSlot() orelse return null;
     const focused = client.model.tabs.layout[active].focused() orelse .invalid;
 
     return .{
-        .theme_name = TerminalClient.of(client).view.theme.base.canonicalName(),
-        .icon_theme_name = TerminalClient.of(client).view.icon_theme.canonicalName(),
+        .theme_name = terminal.view.theme.base.canonicalName(),
+        .icon_theme_name = terminal.view.icon_theme.canonicalName(),
         .active_tab = client.model.tabs.location[active].tab_id,
         .tab_count = client.model.tabs.count,
         .focused_pane = focused,
         .pane_count = client.model.panes.countIn(client.model.tabs.location[active].tab_id),
-        .pending_updates = TerminalClient.of(client).presenter.pending_updates,
-        .draw_pending = TerminalClient.of(client).presenter.draw_pending,
-        .media_pending = TerminalClient.of(client).presenter.media_tick_pending,
+        .pending_updates = terminal.presenter.pending_updates,
+        .draw_pending = terminal.presenter.draw_pending,
+        .media_pending = terminal.presenter.media_tick_pending,
         .outbox = client.runtime_transport.outbox.snapshot(),
-        .inbox = TerminalClient.of(client).inbox.snapshot(),
+        .inbox = terminal.inbox.snapshot(),
         .capabilities = client.model.host.host_capabilities,
-        .zlib_support = TerminalClient.of(client).host_negotiation.zlib_support,
-        .sidebar_rendering = TerminalClient.of(client).view.sidebar_rendering,
+        .zlib_support = terminal.host_negotiation.zlib_support,
+        .sidebar_rendering = terminal.view.sidebar_rendering,
         .lua_used = if (client.lua_generation) |generation| generation.vm.meter.used else 0,
         .lua_limit = if (client.lua_generation) |generation| generation.vm.meter.limit else 0,
-        .kitty_store_bytes = TerminalClient.of(client).graphics_store.total_bytes,
-        .toast_cache_bytes = TerminalClient.of(client).view.kittyToasts().retainedBytes(),
-        .sidebar_cache_bytes = TerminalClient.of(client).view.kittySidebar().retainedBytes(),
-        .icon_cache_bytes = TerminalClient.of(client).view.kittyIcons().retainedBytes(),
-        .modal_cache_bytes = TerminalClient.of(client).view.kittyModal().retainedBytes(),
-        .pill_cache_bytes = TerminalClient.of(client).view.kittyPill().retainedBytes(),
-        .attachment_cache_bytes = TerminalClient.of(client).view.kittyAttachments().retainedBytes(),
-        .screen_bytes = (TerminalClient.of(client).presenter.screen.front.cells.len +
-            TerminalClient.of(client).presenter.screen.back.cells.len) *
+        .kitty_store_bytes = terminal.graphics_store.total_bytes,
+        .toast_cache_bytes = terminal.view.kittyToasts().retainedBytes(),
+        .sidebar_cache_bytes = terminal.view.kittySidebar().retainedBytes(),
+        .icon_cache_bytes = terminal.view.kittyIcons().retainedBytes(),
+        .modal_cache_bytes = terminal.view.kittyModal().retainedBytes(),
+        .pill_cache_bytes = terminal.view.kittyPill().retainedBytes(),
+        .attachment_cache_bytes = terminal.view.kittyAttachments().retainedBytes(),
+        .screen_bytes = (terminal.presenter.screen.front.cells.len +
+            terminal.presenter.screen.back.cells.len) *
             @sizeOf(core.Cell),
-        .shared_expiries = TerminalClient.of(client).graphics_store.delivery.shared_expiries,
-        .shared_retire_latency = TerminalClient.of(client).graphics_store.delivery.retire_latency,
+        .shared_expiries = terminal.graphics_store.delivery.shared_expiries,
+        .shared_retire_latency = terminal.graphics_store.delivery.retire_latency,
         .heap = heap,
     };
 }
 
-fn scheduleTick(client: *client_module.AttachedClient) !void {
-    try TerminalClient.of(client).inbox.start(.telemetry_tick, .{ core.waitForTick, .{client.io} });
+fn scheduleTick(terminal: *TerminalClient) !void {
+    const client = &terminal.app;
+
+    try terminal.inbox.start(.telemetry_tick, .{ core.waitForTick, .{client.io} });
 }
 
 fn finishWrite(state: *client_module.TelemetryState, io: std.Io, result: anyerror!void) void {

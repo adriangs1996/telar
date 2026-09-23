@@ -13,22 +13,24 @@ const SizeType = @import("../../../platform/Size.zig");
 /// Registers the next platform resize observation for this client.
 ///
 /// ```zig
-/// try schedule(client, watcher);
+/// try schedule(terminal, watcher);
 /// ```
-pub fn schedule(client: *client_module.AttachedClient, watcher: *platform.ResizeWatcher) !void {
-    try TerminalClient.of(client).inbox.start(.resized, .{ wait, .{ client.io, watcher } });
+pub fn schedule(terminal: *TerminalClient, watcher: *platform.ResizeWatcher) !void {
+    const client = &terminal.app;
+
+    try terminal.inbox.start(.resized, .{ wait, .{ client.io, watcher } });
 }
 
 /// Handles one completed platform resize event and rearms its watcher.
 ///
 /// ```zig
-/// _ = try handle(client, result, source);
+/// _ = try handle(terminal, result, source);
 /// ```
-pub fn handle(client: *client_module.AttachedClient, result: anyerror!void, source: Source) !?data.HostCommit {
+pub fn handle(terminal: *TerminalClient, result: anyerror!void, source: Source) !?data.HostCommit {
     try result;
-    const commit = try apply(client, source.tty.size());
-    try host_capabilities.refresh(client);
-    try schedule(client, source.watcher);
+    const commit = try apply(terminal, source.tty.size());
+    try host_capabilities.refresh(terminal);
+    try schedule(terminal, source.watcher);
 
     return commit;
 }
@@ -40,9 +42,11 @@ fn wait(io: std.Io, watcher: *platform.ResizeWatcher) anyerror!void {
 /// Resolves and applies one already measured host size.
 ///
 /// ```zig
-/// const commit = try apply(client, measurement);
+/// const commit = try apply(terminal, measurement);
 /// ```
-pub fn apply(client: *client_module.AttachedClient, measurement: SizeType) !?data.HostCommit {
+pub fn apply(terminal: *TerminalClient, measurement: SizeType) !?data.HostCommit {
+    const client = &terminal.app;
+
     const update = resolve(client.model.host.host_capabilities, measurement);
 
     return client.applyHostUpdate(update);

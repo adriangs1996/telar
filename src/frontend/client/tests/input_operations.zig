@@ -39,9 +39,10 @@ test "physical key repeat and release keep their pane after focus and prompt cha
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const tab = client.model.tabs.active;
     const other: core.PaneId = @enumFromInt(11);
-    try data.pane_split.split(&client.model, tab, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = TerminalClient.of(client).view.workbench() });
+    try data.pane_split.split(&client.model, tab, .{ .existing_pane = TestHarness.bootstrap_pane, .new_pane = other, .location = TestHarness.bootstrap_location, .axis = .horizontal, .area = terminal.view.workbench() });
     try std.testing.expect(client.model.tabs.layout[tab].focusPane(TestHarness.bootstrap_pane));
     var key = try data.chord.parseKey("x");
     key.physical = .{ .value = 41 };
@@ -168,6 +169,7 @@ test "obsolete clipboard completion frees its image without consuming a newer ca
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
+    const terminal = harness.terminal;
     const target = try support.installTestingAttachmentTarget(client, 1);
     const old = (try client.model.clipboard.reserve(target)).?;
     _ = client.model.clipboard.finish(old.id);
@@ -183,7 +185,7 @@ test "obsolete clipboard completion frees its image without consuming a newer ca
 
     try std.testing.expectEqual(current.id, client.model.clipboard.capture.?.id);
     try std.testing.expect(client.model.clipboard.orphan == null);
-    try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
+    try std.testing.expectEqual(@as(u8, 0), terminal.view.kittyAttachments().snapshot().len);
 }
 
 test "blocked name submission keeps the exact prompt open until cancellation" {

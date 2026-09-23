@@ -2,7 +2,6 @@
 //! size, sidebar layout, themes and the sidebar renderer. The view is a
 //! render cache; the model stays the one copy.
 
-const client_module = @import("telar-client");
 const std = @import("std");
 const TerminalClient = @import("../TerminalClient.zig");
 const ChromeRevisions = @import("ChromeRevisions.zig");
@@ -46,9 +45,4 @@ pub fn refresh(terminal: *TerminalClient) !void {
         },
     );
     terminal.chrome_observed = observed;
-}
-
-/// Example: `try view_chrome.refreshClient(client);`
-pub fn refreshClient(client: *client_module.AttachedClient) !void {
-    try refresh(TerminalClient.of(client));
 }

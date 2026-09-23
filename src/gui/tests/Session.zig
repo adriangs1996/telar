@@ -118,7 +118,7 @@ pub fn startJob(context: *anyopaque, job: client.Job) !void {
             session.opened_link = target;
             session.link_open_count += 1;
         },
-        else => try host_ports.workers(&session.gui.app).start(job),
+        else => try host_ports.workers(session.gui).start(job),
     }
 }
 

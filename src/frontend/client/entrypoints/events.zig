@@ -28,77 +28,81 @@ pub const Outcome = union(enum) {
 /// be delivered by this client.
 ///
 /// ```zig
-/// const outcome = try handle(client, event, resources);
+/// const outcome = try handle(terminal, event, resources);
 /// ```
-pub fn handle(client: *client_module.AttachedClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
-    const outcome = try dispatch(client, event, resources);
+pub fn handle(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
+    const outcome = try dispatch(terminal, event, resources);
     if (outcome == .keep_running) {
-        try observe(client);
+        try observe(terminal);
     }
 
     return outcome;
 }
 
 /// Consumes only this turn's admitted work, then derives one presentation.
-/// Example: `const outcome = try events.update(client, resources);`
-pub fn update(client: *client_module.AttachedClient, resources: Resources) !Outcome {
-    const inbox = &TerminalClient.of(client).inbox;
+/// Example: `const outcome = try events.update(terminal, resources);`
+pub fn update(terminal: *TerminalClient, resources: Resources) !Outcome {
+    const inbox = &terminal.inbox;
     var turn = try inbox.begin();
     defer inbox.end();
     while (try inbox.next(&turn)) |event| {
-        const outcome = try dispatch(client, event, resources);
+        const outcome = try dispatch(terminal, event, resources);
         if (outcome == .exit) {
             return outcome;
         }
     }
 
     if (turn.processed != 0) {
-        try observe(client);
+        try observe(terminal);
     }
 
     return .keep_running;
 }
 
-fn observe(client: *client_module.AttachedClient) !void {
+fn observe(terminal: *TerminalClient) !void {
+    const client = &terminal.app;
+
     const path = core.enter(.interactive);
     defer path.restore();
     try client.synchronizeClientLayout();
-    try presentation_lifecycle.observe(client);
-    try presentation_lifecycle.pumpOutput(client);
+    try presentation_lifecycle.observe(terminal);
+    try presentation_lifecycle.pumpOutput(terminal);
 }
 
 /// Routes one event, then draws the chrome facts it changed and delivers the
 /// host requests it left, even when the event ends the client.
-fn dispatch(client: *client_module.AttachedClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
-    const outcome = try route(client, event, resources);
-    try view_chrome.refreshClient(client);
-    try host_effects.deliver(client);
+fn dispatch(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
+    const outcome = try route(terminal, event, resources);
+    try view_chrome.refresh(terminal);
+    try host_effects.deliver(terminal);
 
     return outcome;
 }
 
-fn route(client: *client_module.AttachedClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
+fn route(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
+    const client = &terminal.app;
+
     const path = core.enter(pathFor(@as(EventTag, event)));
     defer path.restore();
 
     switch (event) {
         .input => |result| {
-            if (try host_inputs.handleOwnedRead(client, result)) {
+            if (try host_inputs.handleOwnedRead(terminal, result)) {
                 return .{ .exit = 0 };
             }
         },
         .input_timeout => |result| {
-            if (try host_inputs.handleInputTimeout(client, result)) {
+            if (try host_inputs.handleInputTimeout(terminal, result)) {
                 return .{ .exit = 0 };
             }
         },
         .binding_timeout => |result| {
-            if (try host_inputs.handleBindingTimeout(client, result)) {
+            if (try host_inputs.handleBindingTimeout(terminal, result)) {
                 return .{ .exit = 0 };
             }
         },
-        .capability_timeout => |result| _ = try host_capabilities.handleExpiry(client, result),
-        .resized => |result| _ = try host_resizes.handle(client, result, .{
+        .capability_timeout => |result| _ = try host_capabilities.handleExpiry(terminal, result),
+        .resized => |result| _ = try host_resizes.handle(terminal, result, .{
             .tty = resources.tty,
             .watcher = resources.resize_watcher,
         }),
@@ -107,19 +111,19 @@ fn route(client: *client_module.AttachedClient, event: TerminalClient.ClientEven
                 return .{ .exit = status };
             }
         },
-        .draw => |result| try presentation_lifecycle.handleDraw(client, result),
-        .media_tick => |result| try presentation_lifecycle.handleMediaTick(client, result),
-        .host_written => |result| try presentation_lifecycle.handleWritten(client, result),
+        .draw => |result| try presentation_lifecycle.handleDraw(terminal, result),
+        .media_tick => |result| try presentation_lifecycle.handleMediaTick(terminal, result),
+        .host_written => |result| try presentation_lifecycle.handleWritten(terminal, result),
         .compression_done => |job| {
-            kitty_delivery.completeCompression(&TerminalClient.of(client).graphics_store, job);
-            try TerminalClient.of(client).presenter.requestMedia();
+            kitty_delivery.completeCompression(&terminal.graphics_store, job);
+            try terminal.presenter.requestMedia();
         },
-        .telemetry_tick => |result| client_telemetry.handleTick(client, result, resources.heap.snapshot()),
-        .telemetry_written => |result| client_telemetry.handleWritten(client, result),
+        .telemetry_tick => |result| client_telemetry.handleTick(terminal, result, resources.heap.snapshot()),
+        .telemetry_written => |result| client_telemetry.handleWritten(terminal, result),
         .clipboard_image => |result| try client.completeClipboardCapture(result),
     }
 
-    if (try client_startup.advance(client)) {
+    if (try client_startup.advance(terminal)) {
         return .{ .exit = 0 };
     }
 

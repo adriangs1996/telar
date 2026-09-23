@@ -82,13 +82,11 @@ pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: cli
     // inbox producers — one of them waits on the watcher — before the watcher
     // itself is torn down.
     defer terminal.deinit();
-    const client = &terminal.app;
-
-    try client_startup.start(client, .{ .resize_watcher = &watcher });
+    try client_startup.start(terminal, .{ .resize_watcher = &watcher });
 
     while (true) {
         try terminal.inbox.wait();
-        switch (try client_events.update(client, .{
+        switch (try client_events.update(terminal, .{
             .tty = &tty,
             .resize_watcher = &watcher,
             .heap = &heap,
