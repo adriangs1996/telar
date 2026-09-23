@@ -81,7 +81,19 @@ that touches it.
    discovery keyed by revision, `HOME` read once, an observer mask per pane
    instead of client scans. `application/commands`, the identical `*Failure`
    types, the proxy scheduling contexts and the empty event-dispatcher stubs
-   go.
+   go. Done: `Application` merged into `RuntimeModel`; `Runtime.update`
+   routes every event and client request straight to flow procedures and
+   ends with one `client_delivery.flush` (bug 3, with a regression test);
+   `commands/`, `queries/`, `entrypoints/`, `event_dispatcher/` and the
+   request contexts are gone; workspaces are one `Workspaces` table with the
+   geometry lease as a column; the agent repository is indexed by pane id and
+   the agent snapshot is projected once per flush from table revisions;
+   `HOME` is read once; `Pane.observers` masks which clients a pane visits;
+   change-review discovery is keyed by an owner stamp. Pending: attachments
+   are still one store per client session rather than a runtime table; the
+   proxy service keeps its lifecycle port, whose fakes prove its
+   cancel-close-destroy order; panes still borrow `io`, `gpa` and history
+   services because their actors run on worker threads.
 7. **Sweep.** Remaining one-use types fold into their owners, `*Type` aliases
    disappear, and flow documents get their new call chains.
 

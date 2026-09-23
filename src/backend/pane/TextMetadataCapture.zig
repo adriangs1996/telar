@@ -1,4 +1,5 @@
 //! Captures links before blit consumes dirty flags or the VT can move its pages.
+const revisions = @import("../revisions.zig");
 const blit = @import("blit.zig");
 const std = @import("std");
 const vt = @import("ghostty-vt");
@@ -63,10 +64,7 @@ pub fn update(capture: *TextMetadataCapture, allocator: std.mem.Allocator, state
     }
 
     capture.current.replace(next);
-    capture.revision +%= 1;
-    if (capture.revision == 0) {
-        capture.revision = 1;
-    }
+    revisions.advance(&capture.revision);
 }
 
 fn collect(capture: *TextMetadataCapture, state: *const vt.RenderState) core.TextMetadataView {

@@ -53,8 +53,8 @@ controller modules or callback table.
 
 ## Completion
 
-The runtime dispatches `.create_pane` from `requests.dispatch` directly to
-`operations/panes.routeCreatePane`. It commits creation before attachment and
+The runtime dispatches `.create_pane` from `client_request.receive` directly to
+`pane_split.split`. It commits creation before attachment and
 answers with `pane_opened` or `request_failed`.
 
 ```text

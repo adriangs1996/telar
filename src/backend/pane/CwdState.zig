@@ -1,3 +1,4 @@
+const revisions = @import("../revisions.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const CwdState = @This();
@@ -32,10 +33,7 @@ pub fn update(state: *CwdState, path: []const u8) bool {
     }
     @memcpy(state.bytes[0..path.len], path);
     state.len = @intCast(path.len);
-    state.revision +%= 1;
-    if (state.revision == 0) {
-        state.revision = 1;
-    }
+    revisions.advance(&state.revision);
     return true;
 }
 

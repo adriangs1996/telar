@@ -45,12 +45,12 @@ used to select the client UI theme.
 
 ## Runtime authority
 
-`requests.dispatch` calls `operations/graphics.routeConfigureTerminalColors`
+`client_request.receive` calls `terminal_colors.configure`
 in the runtime. That concrete operation commits the session's colors before
 updating any workspace. The runtime
 checks existing geometry ownership without acquiring a lease on behalf of a
 spectator. A new lease applies the new owner's defaults to existing panes.
-`Application.launchPane` selects that owner's colors for every launch path,
+`pane_launch.launch` selects that owner's colors for every launch path,
 before `Pane.create` spawns the process.
 
 Each pane retains its applied defaults after client disconnection. A transfer
@@ -118,7 +118,7 @@ color query.
 - `src/backend/pane/pane_namespace.zig`: child query fragments, overrides, resets and deferred
   latest-value updates during ingestion.
 - `backend/pane/blit.zig`: semantic defaults and explicit RGB cell backgrounds.
-- `src/backend/runtime/application/application_namespace.zig`: ownership, spectators, lease transfer,
+- `src/backend/runtime/terminal_colors.zig` and `src/backend/runtime/geometry_lease.zig`: ownership, spectators, lease transfer,
   disconnect retention and generation-safe lookup.
 - `core/schema_contract_test.zig`: wire fingerprint, truncation, optional colors
   and malformed presence flags.

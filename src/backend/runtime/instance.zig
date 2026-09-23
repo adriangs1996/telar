@@ -1,12 +1,13 @@
 //! Composition root for one long-lived backend runtime.
 
+const session_checkpoint = @import("session_checkpoint.zig");
+const pane_launch = @import("pane_launch.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const Options = @import("Options.zig");
 const Runtime = @import("Runtime.zig");
 const Initialization = @import("Initialization.zig");
-const commands = @import("../workspace/commands.zig");
-const agent_identity = @import("application/coordinators/agent_identity.zig");
+const agent_identity = @import("agent_identity.zig");
 const SessionReferenceType = @import("../agent/SessionReference.zig");
 const PersistenceEncoder = @import("../persistence/Encoder.zig");
 
@@ -89,12 +90,8 @@ test "runtime composition keeps every borrowed capability at a stable address" {
         .options = .{ .endpoint = endpoint, .environment = std.testing.environ },
     });
 
-    try std.testing.expect(runtime.application.heap == &runtime.resources.heap);
-    try std.testing.expect(runtime.application.select == runtime.loop.selector());
-    try std.testing.expect(runtime.application.history_service == runtime.resources.history.service());
-    try std.testing.expect(runtime.application.child_environment == &runtime.resources.child_environment);
-    try std.testing.expect(runtime.application.proxy_runtime == &runtime.resources.proxy);
-    try std.testing.expect(runtime.application.clients == runtime.resources.clients);
+    try std.testing.expect(runtime.model.resources == &runtime.resources);
+    try std.testing.expect(runtime.model.select == runtime.loop.selector());
 
     runtime.deinit();
     try std.testing.expectEqual(.stopped, runtime.teardown_state);
@@ -144,32 +141,33 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
 
     var first: Runtime = undefined;
     try first.init(initialization);
-    var repository = first.application.workspaceRepository();
-    const kept = try repository.ensure(directory);
+    const workspaces = &first.model.workspaces;
+    const gpa = first.model.gpa;
+    const kept = try workspaces.insert(gpa, directory, null);
     var kept_buffer: [64]u8 = undefined;
-    _ = try first.application.launchPane(.{
-        .location = kept.location,
+    _ = try pane_launch.launch(&first.model, .{
+        .location = kept,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunch(&kept_buffer),
         .launch_cwd = directory,
         .workspace_path = directory,
     });
-    const logs_tab = try repository.nextTabId();
-    _ = try repository.find(kept.location.workspace).?.createTab(logs_tab, "logs");
-    repository.recordTabCreated(logs_tab);
-    const logs_location: core.TabLocation = .{ .workspace = kept.location.workspace, .tab_id = logs_tab };
+    const logs_tab = try workspaces.nextTabId();
+    _ = try workspaces.addTab(workspaces.slotOf(kept.workspace).?, logs_tab, "logs");
+    workspaces.recordTabCreated(logs_tab);
+    const logs_location: core.TabLocation = .{ .workspace = kept.workspace, .tab_id = logs_tab };
     var logs_buffer: [64]u8 = undefined;
-    _ = try first.application.launchPane(.{
+    _ = try pane_launch.launch(&first.model, .{
         .location = logs_location,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunchIn(&logs_buffer, gone),
         .launch_cwd = gone,
         .workspace_path = directory,
     });
-    const dropped = try repository.ensure(other_directory);
+    const dropped = try workspaces.insert(gpa, other_directory, null);
     var dropped_buffer: [64]u8 = undefined;
-    _ = try first.application.launchPane(.{
-        .location = dropped.location,
+    _ = try pane_launch.launch(&first.model, .{
+        .location = dropped,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunchIn(&dropped_buffer, gone),
         .launch_cwd = gone,
@@ -181,15 +179,15 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
     var second: Runtime = undefined;
     try second.init(initialization);
     defer second.deinit();
-    const reader = second.application.workspaceReader();
+    const reader = &second.model.workspaces;
 
-    try std.testing.expect(!second.application.session.restore_failed);
-    try std.testing.expectEqual(@as(u16, 1), second.application.session.restored_panes);
-    try std.testing.expectEqual(@as(u16, 2), second.application.session.dropped_tabs);
-    try std.testing.expect(reader.contains(kept.location));
+    try std.testing.expect(!second.model.checkpoint.restore_failed);
+    try std.testing.expectEqual(@as(u16, 1), second.model.checkpoint.restored_panes);
+    try std.testing.expectEqual(@as(u16, 2), second.model.checkpoint.dropped_tabs);
+    try std.testing.expect(reader.contains(kept));
     try std.testing.expect(!reader.contains(logs_location));
-    try std.testing.expect(!reader.containsWorkspace(dropped.location.workspace));
-    try std.testing.expectEqual(@as(usize, 1), reader.count());
+    try std.testing.expect(!reader.containsWorkspace(dropped.workspace));
+    try std.testing.expectEqual(@as(usize, 1), reader.count);
 }
 
 test "a restart restores workspaces, tabs and panes from the session checkpoint" {
@@ -209,23 +207,24 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
 
     var first: Runtime = undefined;
     try first.init(initialization);
-    var repository = first.application.workspaceRepository();
-    const ensured = try repository.ensure(directory);
+    const workspaces = &first.model.workspaces;
+    const gpa = first.model.gpa;
+    const ensured = try workspaces.insert(gpa, directory, null);
     var main_buffer: [64]u8 = undefined;
-    _ = try first.application.launchPane(.{
-        .location = ensured.location,
+    _ = try pane_launch.launch(&first.model, .{
+        .location = ensured,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunch(&main_buffer),
         .launch_cwd = directory,
         .workspace_path = directory,
     });
-    _ = try commands.renameWorkspace(&repository, ensured.location.workspace, "core");
-    const logs_tab = try repository.nextTabId();
-    _ = try repository.find(ensured.location.workspace).?.createTab(logs_tab, "logs");
-    repository.recordTabCreated(logs_tab);
+    try workspaces.rename(ensured.workspace, "core");
+    const logs_tab = try workspaces.nextTabId();
+    _ = try workspaces.addTab(workspaces.slotOf(ensured.workspace).?, logs_tab, "logs");
+    workspaces.recordTabCreated(logs_tab);
     var launch_buffer: [64]u8 = undefined;
-    const pane = try first.application.launchPane(.{
-        .location = .{ .workspace = ensured.location.workspace, .tab_id = logs_tab },
+    const pane = try pane_launch.launch(&first.model, .{
+        .location = .{ .workspace = ensured.workspace, .tab_id = logs_tab },
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunch(&launch_buffer),
         .launch_cwd = directory,
@@ -233,54 +232,54 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     });
     const pane_id = pane.id;
     const pane_generation = pane.generation;
-    try std.testing.expect(first.application.model.agents.observeSessionReference(
+    try std.testing.expect(first.model.agents.observeSessionReference(
         agent_identity.fromPane(pane),
         try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 1_000),
     ));
-    try std.testing.expect(first.application.model.agents.observeProcess(.{
+    try std.testing.expect(first.model.agents.observeProcess(.{
         .identity = agent_identity.fromPane(pane),
         .provider = .claude,
         .process_id = 99,
         .observed_at_ms = 1_000,
     }));
-    try std.testing.expect(try first.application.model.agents.setManualTitle(pane.key(), "Investigate proxy lifecycle"));
-    try std.testing.expect(first.application.session.dirty);
+    try std.testing.expect(try first.model.agents.setManualTitle(pane.key(), "Investigate proxy lifecycle"));
+    try std.testing.expect(first.model.checkpoint.dirty);
     first.deinit();
-    try std.testing.expectEqual(@as(u64, 1), first.application.session.writes);
+    try std.testing.expectEqual(@as(u64, 1), first.model.checkpoint.writes);
 
     var second: Runtime = undefined;
     try second.init(initialization);
     defer second.deinit();
-    const reader = second.application.workspaceReader();
+    const reader = &second.model.workspaces;
 
-    try std.testing.expect(!second.application.session.restore_failed);
-    try std.testing.expectEqual(@as(u16, 1), second.application.session.restored_workspaces);
-    try std.testing.expectEqual(@as(u16, 2), second.application.session.restored_panes);
-    try std.testing.expectEqual(@as(u16, 0), second.application.session.dropped_tabs);
-    try std.testing.expectEqualStrings("core", reader.workspaceName(ensured.location.workspace).?);
-    try std.testing.expectEqualStrings("", reader.tabLabel(ensured.location).?);
-    try std.testing.expectEqualStrings("logs", reader.tabLabel(.{ .workspace = ensured.location.workspace, .tab_id = logs_tab }).?);
-    const restored = second.application.model.panes.find(pane_id).?;
+    try std.testing.expect(!second.model.checkpoint.restore_failed);
+    try std.testing.expectEqual(@as(u16, 1), second.model.checkpoint.restored_workspaces);
+    try std.testing.expectEqual(@as(u16, 2), second.model.checkpoint.restored_panes);
+    try std.testing.expectEqual(@as(u16, 0), second.model.checkpoint.dropped_tabs);
+    try std.testing.expectEqualStrings("core", reader.workspaceName(ensured.workspace).?);
+    try std.testing.expectEqualStrings("", reader.tabLabel(ensured).?);
+    try std.testing.expectEqualStrings("logs", reader.tabLabel(.{ .workspace = ensured.workspace, .tab_id = logs_tab }).?);
+    const restored = second.model.panes.find(pane_id).?;
     try std.testing.expect(restored.generation > pane_generation);
     try std.testing.expectEqualStrings("/bin/sleep\x00600\x00", restored.launch_record.slice());
-    try std.testing.expectEqual(@as(u16, 1), second.application.session.resumed_agents);
+    try std.testing.expectEqual(@as(u16, 1), second.model.checkpoint.resumed_agents);
     try std.testing.expectEqualStrings(
         "claude --resume 0192aaaa-bbbb-cccc-dddd-eeeeffff0000\r",
         restored.input_queue.nextChunk().?,
     );
-    try std.testing.expect(second.application.model.agents.observeProcess(.{
+    try std.testing.expect(second.model.agents.observeProcess(.{
         .identity = agent_identity.fromPane(restored),
         .provider = .claude,
         .process_id = 100,
         .observed_at_ms = 2_000,
     }));
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    const agents = second.application.model.agents.snapshot(&entries, 0);
+    const agents = second.model.agents.snapshot(&entries, 0);
     try std.testing.expectEqual(@as(usize, 1), agents.len);
     try std.testing.expectEqualStrings("Investigate proxy lifecycle", agents[0].session_title);
     try std.testing.expectEqual(core.AgentTitleSource.manual, agents[0].title_source);
     try std.testing.expectEqual(core.AgentTitleState.ready, agents[0].title_state);
-    try std.testing.expect(second.application.model.workspaces.next_tab_id > core.raw(logs_tab));
+    try std.testing.expect(second.model.workspaces.next_tab_id > core.raw(logs_tab));
 }
 
 test "a restart restores every workspace and tab from unordered pane records" {
@@ -345,20 +344,20 @@ test "a restart restores every workspace and tab from unordered pane records" {
         .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = session_path },
     });
     defer runtime.deinit();
-    const reader = runtime.application.workspaceReader();
+    const reader = &runtime.model.workspaces;
 
-    try std.testing.expect(!runtime.application.session.restore_failed);
-    try std.testing.expectEqual(@as(u16, 3), runtime.application.session.restored_panes);
-    try std.testing.expectEqual(@as(u16, 0), runtime.application.session.dropped_tabs);
-    try std.testing.expectEqual(@as(usize, 2), reader.count());
+    try std.testing.expect(!runtime.model.checkpoint.restore_failed);
+    try std.testing.expectEqual(@as(u16, 3), runtime.model.checkpoint.restored_panes);
+    try std.testing.expectEqual(@as(u16, 0), runtime.model.checkpoint.dropped_tabs);
+    try std.testing.expectEqual(@as(usize, 2), reader.count);
     for ([_]u64{ 4, 2, 3 }, 0..) |pane_id, index| {
-        const pane = runtime.application.model.panes.find(@enumFromInt(pane_id)).?;
+        const pane = runtime.model.panes.find(@enumFromInt(pane_id)).?;
         try std.testing.expectEqual(@as(u64, index + 1), core.raw(pane.location.tab_id));
         try std.testing.expect(pane.generation >= 9);
         try std.testing.expect(reader.contains(pane.location));
     }
 
-    const exported = (try runtime.application.model.client_layouts.exportRecord(0, &layout_buffer)).?;
+    const exported = (try runtime.model.client_layouts.exportRecord(0, &layout_buffer)).?;
     const restored_layout = (try core.decodeClient(exported.payload)).update_client_layout;
     try std.testing.expectEqual(@as(u16, 27), restored_layout.sidebar_width);
     try std.testing.expectEqual(tabs[1].location, restored_layout.active_tab);
@@ -410,15 +409,15 @@ test "repeated restarts preserve pending agent resumes and reject duplicate sess
             .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = session_path },
         });
         defer runtime.deinit();
-        try std.testing.expectEqual(@as(u16, 2), runtime.application.session.restored_panes);
-        try std.testing.expectEqual(@as(u16, 1), runtime.application.session.resumed_agents);
-        const pane = runtime.application.model.panes.find(@enumFromInt(1)).?;
+        try std.testing.expectEqual(@as(u16, 2), runtime.model.checkpoint.restored_panes);
+        try std.testing.expectEqual(@as(u16, 1), runtime.model.checkpoint.resumed_agents);
+        const pane = runtime.model.panes.find(@enumFromInt(1)).?;
         try std.testing.expectEqualStrings("claude --resume " ++ reference ++ "\r", pane.input_queue.nextChunk().?);
-        try std.testing.expectEqualStrings(reference, runtime.application.model.agents.resumeSession(pane.key()).?.reference.slice());
-        try std.testing.expectEqualStrings("Preserve pending resume", runtime.application.model.agents.checkpointTitle(pane.key()).?.slice());
-        try std.testing.expect(runtime.application.model.panes.find(@enumFromInt(2)).?.input_queue.nextChunk() == null);
+        try std.testing.expectEqualStrings(reference, runtime.model.agents.resumeSession(pane.key()).?.reference.slice());
+        try std.testing.expectEqualStrings("Preserve pending resume", runtime.model.agents.checkpointTitle(pane.key()).?.slice());
+        try std.testing.expect(runtime.model.panes.find(@enumFromInt(2)).?.input_queue.nextChunk() == null);
         var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-        try std.testing.expectEqual(@as(usize, 0), runtime.application.model.agents.snapshot(&entries, 0).len);
+        try std.testing.expectEqual(@as(usize, 0), runtime.model.agents.snapshot(&entries, 0).len);
     }
 }
 
@@ -465,10 +464,10 @@ test "direct agent restore launches resume argv and preserves the original comma
             .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = session_path, .resume_agents = resume_agents },
         });
         defer runtime.deinit();
-        const pane = runtime.application.model.panes.find(@enumFromInt(1)).?;
+        const pane = runtime.model.panes.find(@enumFromInt(1)).?;
         try std.testing.expectEqualStrings(arguments, pane.launch_record.slice());
         try std.testing.expect(pane.input_queue.nextChunk() == null);
-        try std.testing.expectEqual(@as(u16, if (resume_agents) 1 else 0), runtime.application.session.resumed_agents);
+        try std.testing.expectEqual(@as(u16, if (resume_agents) 1 else 0), runtime.model.checkpoint.resumed_agents);
         const actual = try awaitArguments(temp.dir);
         defer std.testing.allocator.free(actual);
         try std.testing.expectEqualStrings(if (resume_agents) "--resume\n" ++ reference ++ "\n" else "original-option\n", actual);
@@ -492,7 +491,6 @@ fn awaitArguments(directory: std.Io.Dir) ![]u8 {
 }
 
 test "process observation checkpoints a session reported before provider detection and its later exit" {
-    const application_namespace = @import("application/application_namespace.zig");
     const pane_namespace = @import("../pane/pane_namespace.zig");
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
@@ -509,22 +507,23 @@ test "process observation checkpoints a session reported before provider detecti
         .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = session_path },
     });
     defer runtime.deinit();
-    var repository = runtime.application.workspaceRepository();
-    const workspace = try repository.ensure(directory);
+    const workspaces = &runtime.model.workspaces;
+    const gpa = runtime.model.gpa;
+    const workspace = try workspaces.insert(gpa, directory, null);
     var argument_buffer: [64]u8 = undefined;
-    const pane = try runtime.application.launchPane(.{
-        .location = workspace.location,
+    const pane = try pane_launch.launch(&runtime.model, .{
+        .location = workspace,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunchIn(&argument_buffer, directory),
         .launch_cwd = directory,
         .workspace_path = directory,
     });
-    try std.testing.expect(runtime.application.model.agents.observeSessionReference(agent_identity.fromPane(pane), try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100)));
-    try std.testing.expect(runtime.application.model.agents.resumeSession(pane.key()) == null);
+    try std.testing.expect(runtime.model.agents.observeSessionReference(agent_identity.fromPane(pane), try SessionReferenceType.init("0192aaaa-bbbb-cccc-dddd-eeeeffff0000", 100)));
+    try std.testing.expect(runtime.model.agents.resumeSession(pane.key()) == null);
 
     for ([_]bool{ true, false }) |agent_foreground| {
-        application_namespace.SessionCheckpoint.writeNow(&runtime.application);
-        try std.testing.expect(!runtime.application.session.dirty);
+        session_checkpoint.writeNow(&runtime.model);
+        try std.testing.expect(!runtime.model.checkpoint.dirty);
         pane.queueHistoryOutput(.{ .bytes = "observed", .shell_foreground = false, .clock = pane_namespace.historyClock(io) });
         try std.testing.expect(pane.beginHistoryObservation() != null);
         const shell_id: u32 = @intCast(pane.session.processId());
@@ -537,7 +536,7 @@ test "process observation checkpoints a session reported before provider detecti
                 .inspected = true,
             },
         } });
-        try std.testing.expect(runtime.application.session.dirty);
-        try std.testing.expectEqual(agent_foreground, runtime.application.model.agents.resumeSession(pane.key()) != null);
+        try std.testing.expect(runtime.model.checkpoint.dirty);
+        try std.testing.expectEqual(agent_foreground, runtime.model.agents.resumeSession(pane.key()) != null);
     }
 }

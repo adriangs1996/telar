@@ -5,7 +5,6 @@ const ChildEnvironmentType = @import("../../pty/ChildEnvironment.zig");
 const ProxyRuntime = @import("ProxyRuntime.zig");
 const LocalListenerType = @import("../../transport/LocalListener.zig");
 const StateType = @import("../observability/State.zig");
-const StoreType = @import("../client/Store.zig");
 const HistoryRuntime = @import("HistoryRuntime.zig");
 const PluginsRuntime = @import("PluginsRuntime.zig");
 const EngineRuntime = @import("EngineRuntime.zig");
@@ -26,7 +25,6 @@ agent_manifests: core.Table,
 proxy: ProxyRuntime,
 listener: LocalListenerType,
 telemetry: StateType,
-clients: *StoreType,
 history: HistoryRuntime,
 plugins: PluginsRuntime,
 /// Present only when `runtime.engine` is configured.
@@ -75,10 +73,6 @@ pub fn acquire(resources: *Resources, initialization: InitializationType, compti
     errdefer resources.telemetry.deinit(resources.io());
     try resources_namespace.checkpoint(fail_after, .telemetry);
 
-    resources.clients = try resources_namespace.createClientStore(resources.gpa);
-    errdefer resources.gpa.destroy(resources.clients);
-    try resources_namespace.checkpoint(fail_after, .clients);
-
     resources.history = try HistoryRuntime.init(resources.io(), resources.gpa, .{
         .database_path = initialization.options.history_path,
         .filters = initialization.options.history_filters,
@@ -93,10 +87,6 @@ pub fn acquire(resources: *Resources, initialization: InitializationType, compti
         .specs = initialization.options.plugins,
     });
     errdefer resources.plugins.deinit();
-    resources.proxy.setCaptureSink(.{
-        .context = resources.plugins.service(),
-        .submit_fn = resources_namespace.submitCapture,
-    });
     try resources_namespace.checkpoint(fail_after, .plugins);
 
     resources.engine = if (initialization.options.engine) |options|
@@ -145,7 +135,6 @@ pub fn deinitUnstarted(resources: *Resources) void {
     resources.proxy.deinit();
     resources.plugins.deinit();
     resources.history.deinit();
-    resources.gpa.destroy(resources.clients);
     resources.telemetry.deinit(resources.io());
     resources.listener.deinit(resources.io());
     resources.child_environment.deinit();

@@ -1,3 +1,4 @@
+const revisions = @import("../revisions.zig");
 const core = @import("telar-core");
 const pane_namespace = @import("pane_namespace.zig");
 const std = @import("std");
@@ -28,10 +29,7 @@ pub fn observe(state: *TitleState, raw: []const u8) bool {
 
     @memcpy(state.bytes[0..len], candidate[0..len]);
     state.len = @intCast(len);
-    state.revision +%= 1;
-    if (state.revision == 0) {
-        state.revision = 1;
-    }
+    revisions.advance(&state.revision);
 
     return true;
 }

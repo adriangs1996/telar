@@ -28,7 +28,7 @@ telar server: Launch.agent_manifests -> runtime Options.agent_manifests
         |
 Resources.agent_manifests (immutable after startup)
         |
-Application.agent_manifests --> PaneLauncher --> Pane.manifests
+model.resources.agent_manifests --> pane_launch --> Pane.manifests
         |                                            |
         |                        history.Observer.detector.signal(table)
         |                        history.prompt_scan.scanReadyPrompt(terminal)
@@ -61,7 +61,7 @@ identity change. All native inspection stays in the observation worker.
 
 `process/process.zig` tests direct Claude Code, Codex and Pi roots, bounded
 acquisition and an interpreter becoming an agent in the same process group.
-`runtime/entrypoints/events/pane/observation.zig` verifies that root-agent
+`runtime/tests/observation_events_test.zig` verifies that root-agent
 evidence retains its typed resume session and allows screen status updates.
 
 ## Table

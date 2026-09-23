@@ -1,27 +1,41 @@
 const core = @import("telar-core");
-const ResourcesType = @import("resources/Resources.zig");
+const Resources = @import("resources/Resources.zig");
 const Loop = @import("Loop.zig");
-const ApplicationType = @import("application/Application.zig");
-const IngestTestGateType = @import("IngestTestGate.zig");
-const InitializationType = @import("Initialization.zig");
-const InitialSourcesType = @import("InitialSources.zig");
-const SourcesType = @import("Sources.zig");
-const OptionsType = @import("Options.zig");
+const RuntimeModel = @import("RuntimeModel.zig");
+const Initialization = @import("Initialization.zig");
+const Sources = @import("Sources.zig");
 const runtime_event = @import("event.zig");
-const events = @import("application/events.zig");
-const change_review = @import("application/change_review.zig");
-const agent_history = @import("application/agent_history.zig");
-const agent_threads = @import("application/agent_threads.zig");
-const pane_search_module = @import("application/pane_search.zig");
-const editors = @import("application/operations/editors.zig");
-/// Owns and composes the resources, event loop and application for one
+const agent_description = @import("agent_description.zig");
+const agent_history = @import("agent_history.zig");
+const agent_maintenance = @import("agent_maintenance.zig");
+const agent_panes = @import("agent_panes.zig");
+const agent_rename = @import("agent_rename.zig");
+const change_review = @import("change_review.zig");
+const client_connection = @import("client_connection.zig");
+const client_delivery = @import("client_delivery.zig");
+const command_history = @import("command_history.zig");
+const link_opening = @import("link_opening.zig");
+const pane_closure = @import("pane_closure.zig");
+const pane_graphics = @import("pane_graphics.zig");
+const pane_input = @import("pane_input.zig");
+const pane_observation = @import("pane_observation.zig");
+const pane_output = @import("pane_output.zig");
+const pane_search = @import("pane_search.zig");
+const proxy_capture = @import("proxy_capture.zig");
+const proxy_observation = @import("proxy_observation.zig");
+const proxy_tap = @import("proxy_tap.zig");
+const runtime_telemetry = @import("runtime_telemetry.zig");
+const session_checkpoint = @import("session_checkpoint.zig");
+const suggest_command = @import("suggest_command.zig");
+const system_metrics = @import("system_metrics.zig");
+const workspace_git = @import("workspace_git.zig");
+/// Owns and composes the resources, event loop and model for one
 /// long-lived backend lifetime.
 const Runtime = @This();
 
-resources: ResourcesType,
+resources: Resources,
 loop: Loop,
-application: ApplicationType,
-ingest_gate: ?*IngestTestGateType,
+model: RuntimeModel,
 teardown_state: enum { running, shutting_down, stopped },
 
 /// Acquires all runtime-owned resources. The caller must keep `runtime` at
@@ -32,12 +46,11 @@ teardown_state: enum { running, shutting_down, stopped },
 /// try runtime.init(.{ .dependencies = dependencies, .options = options });
 /// defer runtime.deinit();
 /// ```
-pub fn init(runtime: *Runtime, initialization: InitializationType) !void {
+pub fn init(runtime: *Runtime, initialization: Initialization) !void {
     try runtime.start(initialization, false);
 }
 
-pub fn start(runtime: *Runtime, initialization: InitializationType, comptime fail_after_actors: bool) !void {
-    runtime.ingest_gate = initialization.options.ingest_gate;
+pub fn start(runtime: *Runtime, initialization: Initialization, comptime fail_after_actors: bool) !void {
     runtime.teardown_state = .running;
 
     try runtime.resources.init(initialization);
@@ -46,14 +59,14 @@ pub fn start(runtime: *Runtime, initialization: InitializationType, comptime fai
     runtime.loop.init(runtime.resources.io(), initialization.options.stop);
     errdefer runtime.loop.cancel();
 
-    try runtime.composeApplication(initialization.options);
+    try runtime.model.init(&runtime.resources, runtime.loop.selector(), initialization.options);
     errdefer {
-        runtime.application.model.panes.shutdown();
+        runtime.model.panes.shutdown();
         runtime.loop.cancel();
-        runtime.application.deinitModel();
+        runtime.model.deinit();
     }
 
-    runtime.application.restoreSession();
+    session_checkpoint.restore(&runtime.model);
     try runtime.scheduleInitialEvents();
 
     if (comptime fail_after_actors) {
@@ -62,41 +75,26 @@ pub fn start(runtime: *Runtime, initialization: InitializationType, comptime fai
 }
 
 fn scheduleInitialEvents(runtime: *Runtime) !void {
-    var initial_sources: InitialSourcesType = .{
-        .sources = SourcesType.init(runtime.resources.io(), runtime.loop.selector()),
-        .listener = &runtime.resources.listener,
-        .stop_signal = runtime.loop.stopCoordinator(),
-        .history_service = runtime.resources.history.service(),
-        .engine_service = runtime.resources.engineService(),
-        .proxy_runtime = &runtime.resources.proxy,
-        .plugin_service = runtime.resources.pluginService(),
-        .telemetry_available = runtime.resources.telemetry.available(),
-    };
+    const resources = &runtime.resources;
+    var sources = Sources.init(resources.io(), runtime.loop.selector());
 
-    try initial_sources.schedule();
-}
+    try sources.acceptClient(&resources.listener);
+    try sources.waitForStop(runtime.loop.stop);
+    try sources.receiveHistory(resources.history.service());
+    if (resources.engineService()) |engine_service| {
+        try sources.receiveEngine(engine_service);
+    }
+    try sources.receiveProxyObservation(&resources.proxy);
+    try sources.receiveProxyCapture(&resources.proxy);
+    try sources.receivePluginEffects(resources.pluginService());
+    try sources.waitForAgentMaintenance();
+    try sources.waitForSystemMetrics();
 
-fn composeApplication(runtime: *Runtime, options: OptionsType) !void {
-    try runtime.application.init(.{
-        .io = runtime.resources.io(),
-        .gpa = runtime.resources.gpa,
-        .heap = &runtime.resources.heap,
-        .select = runtime.loop.selector(),
-        .history_service = runtime.resources.history.service(),
-        .child_environment = &runtime.resources.child_environment,
-        .inherited_environment = options.environment,
-        .socket_path = options.endpoint,
-        .agent_manifests = &runtime.resources.agent_manifests,
-        .session_path = options.session_path,
-        .resume_agents = options.resume_agents,
-        .proxy_runtime = &runtime.resources.proxy,
-        .plugin_service = runtime.resources.pluginService(),
-        .agent_description_options = options.agent_descriptions,
-        .engine_service = runtime.resources.engineService(),
-        .launch_fault = options.launch_fault,
-        .clients = runtime.resources.clients,
-        .graphics = options.graphics,
-    });
+    if (comptime core.enabled) {
+        if (resources.telemetry.available()) {
+            try sources.waitForTelemetry();
+        }
+    }
 }
 
 /// Runs the event loop until the runtime receives a stop event or an
@@ -130,118 +128,72 @@ pub fn deinit(self: *Runtime) void {
 
     self.teardown_state = .shutting_down;
     self.resources.listener.shutdown();
-    self.application.stopClientConnections();
-    self.application.model.panes.shutdown();
+    client_connection.shutdownAll(&self.model);
+    self.model.panes.shutdown();
     // Actors must release their borrows before any backing storage is destroyed.
     self.loop.cancel();
-    self.application.persistSession();
+    self.model.checkpoint.discardJoinedWrite();
+    session_checkpoint.writeNow(&self.model);
 
     self.resources.proxy.deinit();
     self.resources.plugins.deinit();
     self.resources.listener.deinit(self.resources.io());
-    self.application.deinitClients();
-    self.application.deinitModel();
+    client_connection.releaseAll(&self.model);
+    self.model.deinit();
 
     if (self.resources.engine) |*engine| {
         engine.deinit();
     }
 
     self.resources.history.deinit();
-    self.resources.gpa.destroy(self.resources.clients);
     self.resources.telemetry.deinit(self.resources.io());
     self.resources.child_environment.deinit();
     self.teardown_state = .stopped;
 }
 
-/// Dispatches one runtime event to its owning operation.
+/// Calls the procedure that owns one runtime event, then flushes client
+/// delivery once. Returns whether shutdown delivery has completed.
 /// Example: `const stopped = try runtime.update(event);`.
 pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
+    const model = &self.model;
     switch (event) {
         .stopped => |result| return self.loop.completeStop(result),
-        .accepted => |result| {
-            try events.clients.handleAccepted(&self.application, result, &self.resources.listener);
-        },
-        .handshaken => |result| {
-            events.clients.handleHandshaken(&self.application, result);
-        },
-        .client_message => |value| return events.clients.handleMessage(&self.application, value),
-        .client_sent => |value| return events.clients.handleSent(&self.application, value),
-        .cell_publication_due => |result| {
-            try self.application.cellPublicationDue(result);
-        },
-        .history_response => |result| {
-            try events.history.handle(&self.application, result);
-        },
-        .proxy_event => |result| {
-            try events.agents.handleProxyObservation(&self.application, result);
-        },
-        .proxy_capture => |result| {
-            try events.agents.handleProxyCapture(&self.application, result);
-        },
-        .plugin_effects => |result| {
-            try events.agents.handlePluginEffects(&self.application, result);
-        },
-        .agent_tick => |result| {
-            try events.agents.handleMaintenance(&self.application, result);
-        },
-        .agent_description => |result| {
-            events.agents.handleDescription(&self.application, result);
-        },
-        .change_review_completed => |job| change_review.complete(&self.application, job),
-        .agent_history_completed => |job| agent_history.complete(&self.application, job),
-        .agent_thread_changed => |result| {
-            if (try agent_threads.handle(&self.application, result)) {
-                try events.panes.Pipeline.handleExit(&self.application, .{ .pane = result.pane, .result = .{ .exited = 0 } });
-            }
-        },
-        .engine_response => |result| {
-            try events.agents.handleEngineResponse(&self.application, result);
-        },
-        .metrics_tick => |result| {
-            try events.observability.handleMetricsTick(&self.application, result);
-        },
-        .metrics_sampled => |sample| events.observability.handleMetricsSample(&self.application, sample),
-        .pane_input_written => |value| {
-            try events.panes.Io.handleInputWritten(&self.application, value);
-        },
-        .pane_response_written => |value| {
-            try events.panes.Io.handleResponseWritten(&self.application, value);
-        },
-        .pane_output => |value| {
-            try events.panes.Pipeline.handleOutput(&self.application, value, self.ingest_gate);
-        },
-        .pane_ingested => |value| {
-            try events.panes.Pipeline.handleIngested(&self.application, value);
-        },
-        .pane_observed => |value| {
-            try events.panes.Projection.handleObserved(&self.application, value);
-        },
-        .pane_media => |value| {
-            try events.panes.Projection.handleMedia(&self.application, value);
-        },
-        .pane_search => |value| {
-            try pane_search_module.advance(&self.application, value);
-        },
-        .pane_exit => |value| {
-            try events.panes.Pipeline.handleExit(&self.application, value);
-        },
-        .telemetry_tick => |result| {
-            events.observability.handleTelemetryTick(&self.application, &self.resources.telemetry, result);
-        },
-        .telemetry_written => |result| {
-            events.observability.handleTelemetryWritten(&self.application, &self.resources.telemetry, result);
-        },
-        .checkpoint_written => |result| {
-            self.application.sessionCheckpointWritten(result);
-        },
-        .editor_opened => |job| editors.complete(&self.application, job),
-        .git_status => |completion| {
-            self.application.gitStatusCompleted(completion);
-        },
-        .session_name => |completion| {
-            self.application.sessionNameCompleted(completion);
-        },
+        .accepted => |result| try client_connection.accept(model, result, &self.resources.listener),
+        .handshaken => |result| client_connection.finishHandshake(model, result),
+        .client_message => |message| client_connection.receive(model, message),
+        .client_sent => |sent| client_connection.finishSend(model, sent),
+        .cell_publication_due => |result| try model.cell_timer.complete(result),
+        .pane_output => |completion| try pane_output.receive(model, completion),
+        .pane_ingested => |completion| try pane_output.finishIngest(model, completion),
+        .pane_input_written => |completion| try pane_input.finishInputWrite(model, completion),
+        .pane_response_written => |completion| try pane_input.finishResponseWrite(model, completion),
+        .pane_observed => |completion| try pane_observation.finish(model, completion),
+        .pane_media => |completion| try pane_graphics.finishMedia(model, completion),
+        .pane_search => |wake| try pane_search.advance(model, wake),
+        .pane_exit => |completion| try pane_closure.finishExit(model, completion),
+        .agent_thread_changed => |completion| try agent_panes.receive(model, completion),
+        .agent_history_completed => |job| agent_history.finish(model, job),
+        .agent_description => |result| agent_description.finish(model, result),
+        .agent_tick => |result| try agent_maintenance.tick(model, result),
+        .session_name => |completion| agent_rename.finish(model, completion),
+        .proxy_event => |result| try proxy_observation.receive(model, result),
+        .proxy_capture => |result| try proxy_capture.receive(model, result),
+        .plugin_effects => |result| try proxy_tap.receive(model, result),
+        .engine_response => |result| try suggest_command.finish(model, result),
+        .change_review_completed => |job| change_review.finish(model, job),
+        .editor_opened => |job| link_opening.finish(model, job),
+        .history_response => |result| try command_history.receive(model, result),
+        .git_status => |completion| workspace_git.finish(model, completion),
+        .checkpoint_written => |result| session_checkpoint.finish(model, result),
+        .metrics_tick => |result| try system_metrics.tick(model, result),
+        .metrics_sampled => |sample| system_metrics.finish(model, sample),
+        .telemetry_tick => |result| runtime_telemetry.tick(model, &self.resources.telemetry, result),
+        .telemetry_written => |result| runtime_telemetry.finish(model, &self.resources.telemetry, result),
     }
 
-    return false;
+    try client_delivery.flush(model);
+    return switch (event) {
+        .client_message, .client_sent => client_delivery.shutdownDelivered(model),
+        else => false,
+    };
 }

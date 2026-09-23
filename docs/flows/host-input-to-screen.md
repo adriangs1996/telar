@@ -38,17 +38,19 @@ AttachedClient.sendRuntimeInput
 Outbox.encodeNext -> schema.pane_input -> socket
       |
       v
-Runtime.run -> Runtime.update(.client_message) -> ClientEvents.handleMessage
+Runtime.run -> Runtime.update(.client_message) -> client_connection.receive
       |
-requests.dispatch -> operations/panes.routePaneInput
+client_request.receive -> pane_input.send
       |
-Pane input queue -> writePaneInput -> child PTY
+Pane input queue -> pane_input.startInputWrite -> writeInput -> child PTY
       |
       | child emits output
       v
-Runtime.update(.pane_output) -> PaneEvents.Pipeline -> Pane.ingest
+Runtime.update(.pane_output) -> pane_output.receive -> Pane.ingest
       |
-inline result or .pane_ingested -> Pipeline.handleIngested -> Application.pump
+inline result or .pane_ingested -> pane_output.finishIngest
+      |
+Runtime.update flush -> client_delivery.flush -> Delivery.prepare
       |
 Attachment.prepareNextCells -> cell.Sync.prepare -> schema.pane_frame -> socket
       |
@@ -344,22 +346,23 @@ and never enters the outbox.
 
 ## 3. Runtime input entry
 
-`receiveSession` completes as `.client_message`. `Runtime.update` calls
-`client_events.handleMessage` in
-`src/backend/runtime/application/event_dispatcher/client_events.zig`. This
-concrete adapter validates the client generation, decodes the message,
-establishes the connection role and calls `requests.dispatch`. It then pumps
-responses and rearms the socket read.
+The client read actor completes as `.client_message`. `Runtime.update` calls
+`client_connection.receive` in `src/backend/runtime/client_connection.zig`,
+which validates the client generation, decodes the message, establishes the
+connection role, calls `client_request.receive` and rearms the socket read.
+After the event, `Runtime.update` runs `client_delivery.flush` once for every
+client.
 
-`requests.dispatch` in `src/backend/runtime/application/requests.zig` routes
-`.pane_input` to `operations/panes.routePaneInput`. The same module validates
-the attachment and live pane, then `forwardInput` records bounded agent/history
-observation before queueing PTY input and scheduling its writer.
+`client_request.receive` in `src/backend/runtime/client_request.zig` routes
+`.pane_input` to `pane_input.send`, which validates the attachment and live
+pane, then records bounded agent/history observation before queueing PTY
+input and starting its writer.
 
-`PaneEvents.Io.scheduleInput` permits one in-flight write per pane.
-`writePaneInput` serializes PTY writes with terminal-query responses and writes
-the bytes to the child PTY. Its `.pane_input_written` completion consumes the
-queue prefix and schedules the next chunk. A blocked pane write does not block
+`pane_input.startInputWrite` permits one in-flight write per pane.
+`writeInput` serializes PTY writes with terminal-query responses and writes
+the bytes to the child PTY. Its `.pane_input_written` completion
+(`pane_input.finishInputWrite`) consumes the queue prefix and starts the next
+chunk. A blocked pane write does not block
 the event loop or another pane.
 
 ## 4. Child output and VT ingestion
@@ -367,10 +370,9 @@ the event loop or another pane.
 The child may echo the input, repaint, emit unrelated output, or emit nothing.
 There is no assumption that one key produces one frame.
 
-`readPane` completes as `.pane_output`. `Runtime.update` calls
-`Pipeline.handleOutput` in
-`src/backend/runtime/application/event_dispatcher/pane/pane_pipeline.zig`.
-That operation:
+`pane_launch.readPane` completes as `.pane_output`. `Runtime.update` calls
+`pane_output.receive` in `src/backend/runtime/pane_output.zig`. That
+procedure:
 
 1. marks EOF or failure as completed output;
 2. feeds copies to the observation and media queues;
@@ -391,20 +393,21 @@ the bytes to its `vt.Terminal`, snapshots child input modes and marks its cell
 projection dirty. VT is the only component that interprets child escape
 sequences.
 
-The inline result enters `Pipeline.handleIngested` after the output operation
-returns, without queueing an event or exposing the VT mid-ingest. The actor
-still reports `.pane_ingested`, which `Runtime.update` sends to that same
-function. It applies deferred resize state, schedules terminal responses and
-the next PTY read, then calls `Application.pumpAll`.
+The inline result enters `pane_output.finishIngest` after the output procedure
+has queued its work, without queueing an event or exposing the VT mid-ingest.
+The actor still reports `.pane_ingested`, which `Runtime.update` sends to that
+same procedure. It applies deferred resize state, schedules terminal responses
+and the next PTY read; the update's flush then publishes.
 
 ## 5. Runtime frame publication
 
-`Application.pump` publishes a pane only after ingestion is complete and only when
-that client's prior frame has been acknowledged. `Delivery.prepare` selects
+`client_delivery.flush` pumps each client once per update and publishes a pane
+only after ingestion is complete and only when that client's prior frame has
+been acknowledged. `Delivery.prepare` selects
 the attachment cell lane and calls `Attachment.prepareNextCells`. The internal
 `CellSync.prepare` in `src/backend/runtime/attachment/CellSync.zig` renders the
 pending VT state, computes a bounded cell diff against that attachment's
-acknowledged buffer and calls `schema.encodePaneFrame`. `startSessionSend`
+acknowledged buffer and calls `schema.encodePaneFrame`. `client_connection.startSend`
 writes the `.pane_frame` message to that client. Intermediate visual states may
 be folded; they are not queued as a replay.
 
@@ -415,14 +418,15 @@ too. Admitted PTY input opens a bounded grace window for that pane's
 attachments; snapshots and final output bypass the cadence. Outstanding ACKs
 and active ingestion retain their existing ownership rules.
 
-One runtime-owned `core.DeadlineScheduler` wakes `Application.pumpAll` when a
-deferred publication is due. Its `updateEarlier` policy preserves an armed
+One runtime-owned `core.DeadlineScheduler` wakes the runtime when a deferred
+publication is due; the update's flush arms it once from every client's
+earliest deadline. Its `updateEarlier` policy preserves an armed
 deadline through temporary ingest/ACK waits; only an earlier deadline replaces
 it. A completion rechecks current owners and may find no work left. It retains
 no pane or attachment pointer and does not poll idle panes. Ingest completion,
 socket completion and ACKs resume
 work blocked on those operations. Runtime shutdown joins the timer before
-destroying the application. An exit message waits for the final projection
+destroying the model. An exit message waits for the final projection
 and its acknowledgement.
 
 The timer reuses the existing cancellable `std.Io` task scheduler. Its one

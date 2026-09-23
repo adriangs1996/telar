@@ -1,11 +1,13 @@
 //! Actor ownership and recovery through production event dispatch.
+const pane_graphics = @import("../pane_graphics.zig");
+const pane_observation = @import("../pane_observation.zig");
 const std = @import("std");
+const pane_input = @import("../pane_input.zig");
 const core = @import("telar-core");
 const EventFixture = @import("EventFixture.zig");
-const events = @import("../application/events.zig");
 const event = @import("../event.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
-const agent_identity = @import("../application/coordinators/agent_identity.zig");
+const agent_identity = @import("../agent_identity.zig");
 
 const WriteKind = enum { input, response };
 
@@ -18,17 +20,17 @@ test "runtime PTY scheduling preserves queued bytes when actor admission fails" 
         const pane = fixture.pane;
         switch (kind) {
             .input => {
-                try events.panes.Io.scheduleInput(fixture.application, pane);
+                try pane_input.startInputWrite(fixture.model, pane);
                 try std.testing.expect(pane.queuePtyInput("queued"));
-                try std.testing.expectError(error.ConcurrencyUnavailable, events.panes.Io.scheduleInput(fixture.application, pane));
+                try std.testing.expectError(error.ConcurrencyUnavailable, pane_input.startInputWrite(fixture.model, pane));
                 try std.testing.expectEqualStrings("queued", pane.input_queue.nextChunk().?);
                 try std.testing.expect(!pane.input_write_pending);
                 try std.testing.expectEqual(@as(usize, 0), pane.input_write_len);
             },
             .response => {
-                try events.panes.Io.scheduleResponse(fixture.application, pane);
+                try pane_input.startResponseWrite(fixture.model, pane);
                 try std.testing.expect(pane.pty_responses.push("queued"));
-                try std.testing.expectError(error.ConcurrencyUnavailable, events.panes.Io.scheduleResponse(fixture.application, pane));
+                try std.testing.expectError(error.ConcurrencyUnavailable, pane_input.startResponseWrite(fixture.model, pane));
                 try std.testing.expectEqualStrings("queued", pane.pty_responses.peek().?);
                 try std.testing.expect(!pane.response_pending);
             },
@@ -90,11 +92,11 @@ test "runtime observation and media admission roll back sealed actor borrows" {
     fixture.failScheduling();
     const pane = fixture.pane;
     pane.queueHistoryOutput(.{ .bytes = "history", .shell_foreground = false, .clock = pane_mod.historyClock(std.testing.io) });
-    try std.testing.expectError(error.ConcurrencyUnavailable, events.panes.Projection.scheduleObservation(fixture.application, pane));
+    try std.testing.expectError(error.ConcurrencyUnavailable, pane_observation.start(fixture.model, pane));
     try std.testing.expect(pane.history_observer.worker == null);
     try std.testing.expect(!pane.history_observer.hasPending());
     pane.queueMediaOutput("media");
-    try std.testing.expectError(error.ConcurrencyUnavailable, events.panes.Projection.scheduleMedia(fixture.application, pane));
+    try std.testing.expectError(error.ConcurrencyUnavailable, pane_graphics.startMedia(fixture.model, pane));
     try std.testing.expect(pane.media.worker == null);
     try std.testing.expectEqual(@as(u8, 0), pane.actor_count);
 }
@@ -200,7 +202,7 @@ test "runtime child exit retires agent evidence and releases its wait borrow" {
         }
         try std.testing.expect(!pane.wait_pending);
         try std.testing.expectEqual(@as(u8, 0), pane.actor_count);
-        try std.testing.expectEqual(@as(usize, 1), fixture.application.model.panes.exited_count);
+        try std.testing.expectEqual(@as(usize, 1), fixture.model.panes.exited_count);
         try std.testing.expect(fixture.agents.projectedStatus(pane.key()) == null);
     }
 }

@@ -19,7 +19,7 @@ Cmd+V / Paste
   -> routing.finishPaste validates owner, focus and draft revision
   -> agent_threads.attachImage -> agent_threads -> Model -> Pane
   -> composer image controls / Send
-  -> AgentPrompt -> owned client outbox -> requests.dispatch
+  -> AgentPrompt -> owned client outbox -> client_request.receive
   -> runtime agent_threads -> Session observation queue
   -> Codex turn/start with localImage inputs
   -> request_completed clears only the acknowledged draft revision

@@ -2,9 +2,10 @@
 
 const client_store = @import("client/store_support.zig");
 const core = @import("telar-core");
+const PaneStore = @import("../pane/PaneStore.zig");
 const event = @import("event.zig");
 const ReviewJobs = @import("../change_review/Jobs.zig");
-const AgentHistoryJobs = @import("application/AgentHistoryJobs.zig");
+const AgentHistoryJobs = @import("AgentHistoryJobs.zig");
 const std = @import("std");
 
 const Tag = std.meta.Tag(event.Event);
@@ -31,7 +32,7 @@ fn producerSlots(tag: Tag) usize {
         .pane_media,
         .pane_exit,
         .agent_thread_changed,
-        => core.max_panes_per_tab,
+        => PaneStore.capacity,
         .change_review_completed => @as(ReviewJobs, .{}).items.len,
         .agent_history_completed => @as(AgentHistoryJobs, .{}).items.len,
         // Each source retains one global pending flag, admission slot or waiter.

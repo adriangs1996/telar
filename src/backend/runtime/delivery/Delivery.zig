@@ -1,3 +1,4 @@
+const Workspaces = @import("../../workspace/Workspaces.zig");
 const core = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
 const ResponseQueueType = @import("ResponseQueue.zig");
@@ -10,13 +11,14 @@ const QueryResultType = @import("../../history/QueryResult.zig");
 const OutputResultType = @import("../../history/OutputResult.zig");
 const StatsResultType = @import("../../history/StatsResult.zig");
 const runtime_encoder = @import("encoder.zig");
-const SnapshotStorageType = @import("../application/SnapshotStorage.zig");
-const AgentDisplayStorage = @import("AgentDisplayStorage.zig");
-const state_support = @import("../../workspace/state_support.zig");
+const LayoutSnapshotStorage = @import("../LayoutSnapshotStorage.zig");
 const Commit = @import("Commit.zig");
 const Completion = @import("Completion.zig");
 const PreparedType = @import("../attachment/Prepared.zig");
 const ForegroundProjection = @import("ForegroundProjection.zig");
+const PaneStore = @import("../../pane/PaneStore.zig");
+const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
 const Delivery = @This();
 
 send_buffer: []u8,
@@ -32,11 +34,11 @@ client_layout_sent: bool = false,
 proxy_status_sent: bool = false,
 agent_revision_sent: u64 = 0,
 agent_snapshot_requested: bool = false,
-agent_threads_sent: [core.max_panes_per_tab]?@import("AgentThreadProjection.zig") = @splat(null),
-requested_agent_thread: ?@import("../../pane/PaneKey.zig") = null,
+agent_threads_sent: [PaneStore.capacity]?@import("AgentThreadProjection.zig") = @splat(null),
+requested_agent_thread: ?PaneKey = null,
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
-foregrounds_sent: [core.max_panes_per_tab]?ForegroundProjection = @splat(null),
+foregrounds_sent: [PaneStore.capacity]?ForegroundProjection = @splat(null),
 clipboard_storage: [core.max_clipboard_bytes]u8 = undefined,
 clipboard_len: u32 = 0,
 clipboard_pane: core.PaneId = .invalid,
@@ -65,6 +67,15 @@ pub fn requestWorkspaceResync(delivery: *Delivery, workspace: core.WorkspaceLoca
     delivery.responses.resync_previous_workspace = previous_workspace;
 }
 
+/// Forces a current thread snapshot after a generation-checked query.
+///
+/// ```zig
+/// delivery.requestAgentThread(pane.key());
+/// ```
+pub fn requestAgentThread(delivery: *Delivery, key: PaneKey) void {
+    delivery.requested_agent_thread = key;
+}
+
 /// Schedules one agent snapshot for a client that holds no runtime-state
 /// subscription. The snapshot is the same enriched projection UI clients
 /// receive; the next delivery sends it regardless of revision baselines.
@@ -72,12 +83,6 @@ pub fn requestWorkspaceResync(delivery: *Delivery, workspace: core.WorkspaceLoca
 /// ```zig
 /// delivery.requestAgentSnapshot();
 /// ```
-/// Forces a current snapshot after a generation-checked query.
-/// Example: `delivery.requestAgentThread(pane.key());`.
-pub fn requestAgentThread(delivery: *Delivery, key: @import("../../pane/PaneKey.zig")) void {
-    delivery.requested_agent_thread = key;
-}
-
 pub fn requestAgentSnapshot(delivery: *Delivery) void {
     delivery.agent_snapshot_requested = true;
 }
@@ -208,12 +213,9 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     }
 
     if (delivery.runtime_state_requested and !delivery.client_layout_sent) {
-        var storage: SnapshotStorageType = .{};
-        const snapshot: core.ClientLayoutSnapshot = if (sources.client_layouts) |store|
-            store.snapshot(.{
-                .identity = delivery.client_identity,
-                .sources = .{ .panes = sources.panes, .workspaces = workspaces },
-            }, &storage)
+        var storage: LayoutSnapshotStorage = .{};
+        const snapshot: core.ClientLayoutSnapshot = if (sources.client_layouts) |layouts|
+            layouts.snapshot(delivery.client_identity, sources.panes, workspaces, &storage)
         else
             .{ .restored = false };
         return delivery.stage(
@@ -241,60 +243,13 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     }
 
     if (delivery.agent_snapshot_requested or (delivery.runtime_state_requested and
-        delivery.agent_revision_sent < sources.agents.revision))
+        delivery.agent_revision_sent < sources.agent_revision))
     {
-        var entry_storage: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-        var display_storage: [core.max_agent_snapshot_entries]AgentDisplayStorage = undefined;
-        const entries = sources.agents.snapshot(&entry_storage, sources.now_ms);
-        var enriched_count: usize = 0;
-        for (entries) |entry| {
-            const pane = sources.panes.resolveConst(.{
-                .id = entry.pane_id,
-                .generation = entry.pane_generation,
-            }) orelse continue;
-            const pane_index = sources.panes.positionAt(pane) orelse continue;
-            entry_storage[enriched_count] = entry;
-            entry_storage[enriched_count].location = pane.location;
-            if (entry.provider != .unknown) {
-                entry_storage[enriched_count].provider_name = sources.manifests.providerName(entry.provider);
-                entry_storage[enriched_count].display_name = sources.manifests.displayName(entry.provider);
-                entry_storage[enriched_count].icon = sources.manifests.icon(entry.provider);
-                entry_storage[enriched_count].attachments = sources.manifests.attachments(entry.provider);
-            }
-            entry_storage[enriched_count].pane_index = pane_index;
-            if (workspaces.workspaceName(pane.location.workspace)) |workspace_name| {
-                entry_storage[enriched_count].workspace_label = delivery_namespace.copyDisplayPrefix(
-                    &display_storage[enriched_count].workspace,
-                    workspace_name,
-                );
-            }
-            if (workspaces.tabLabel(pane.location)) |tab_label| {
-                entry_storage[enriched_count].tab_label = tab_label;
-            }
-            if (entry.title_source == .telar and pane.title.len != 0) {
-                entry_storage[enriched_count].session_title = delivery_namespace.truncateUtf8(
-                    pane.title.slice(),
-                    core.max_agent_session_title_bytes,
-                );
-                entry_storage[enriched_count].title_source = .terminal;
-            } else if (entry.title_source == .telar) {
-                entry_storage[enriched_count].session_title = sources.manifests.placeholderTitle(
-                    entry.provider,
-                    &display_storage[enriched_count].placeholder,
-                );
-            }
-            entry_storage[enriched_count].cwd_label = delivery_namespace.shortenCwd(
-                &display_storage[enriched_count].cwd,
-                pane.cwd.slice(),
-                sources.home,
-            );
-            enriched_count += 1;
-        }
-        const revision = sources.agents.revision;
+        const revision = sources.agent_revision;
         return delivery.stage(
             try core.encodeAgentSnapshot(buffer, .{
                 .revision = revision,
-                .entries = entry_storage[0..enriched_count],
+                .entries = sources.agent_entries,
             }),
             .{ .agent_revision = revision },
         );
@@ -352,10 +307,10 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     }
 
     if (delivery.runtime_state_requested and
-        delivery.workspace_list_revision_sent < workspaces.revision())
+        delivery.workspace_list_revision_sent < workspaces.revision)
     {
-        var entries: [state_support.max_workspaces]core.WorkspaceListEntry = undefined;
-        const revision = workspaces.revision();
+        var entries: [Workspaces.capacity]core.WorkspaceListEntry = undefined;
+        const revision = workspaces.revision;
         return delivery.stage(
             try core.encodeWorkspaceList(buffer, .{
                 .revision = revision,
@@ -502,7 +457,7 @@ pub fn commit(delivery: *Delivery, operation: Commit) void {
                     metrics.graphics_freeze.merge(effect.graphics.freeze);
                 }
             }
-            delivery.next_attachment = (work.index + 1) % core.max_panes_per_tab;
+            delivery.next_attachment = (work.index + 1) % AttachmentStore.capacity;
         },
     }
     delivery.phase = .{ .in_flight = completion };
@@ -567,8 +522,8 @@ fn prepareAttachment(delivery: *Delivery, preparation: Preparation, lane: Lane) 
     const buffer = delivery.send_buffer;
 
     var checked: usize = 0;
-    while (checked < core.max_panes_per_tab) : (checked += 1) {
-        const index = (delivery.next_attachment + checked) % core.max_panes_per_tab;
+    while (checked < AttachmentStore.capacity) : (checked += 1) {
+        const index = (delivery.next_attachment + checked) % AttachmentStore.capacity;
         const attachment = attachments.at(index) orelse continue;
         const candidate: ?PreparedType = switch (lane) {
             .cwd => try attachment.prepareCwd(buffer),

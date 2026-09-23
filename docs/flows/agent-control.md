@@ -11,7 +11,7 @@ telar agent wait 7 --until done
         |
 cli.control.Session.open  (--socket, TELAR_SOCKET, TELAR_SOCKET_PATH, default)
         |
-schema.query_agents ----> requests.dispatch (control) -> agents.routeQueryAgents
+schema.query_agents ----> client_request.receive (control) -> Delivery.requestAgentSnapshot
         |                          |
         |                 Delivery.requestAgentSnapshot
         |                          |
@@ -31,7 +31,7 @@ panes.routeSendPaneText: PaneStore.resolve(exact generation)
         |            Tracker.projectedStatus == blocked -> request_failed agent_blocked
         |            bracketed paste framing if the child enabled mode 2004, then Enter
         |
-operations/panes.forwardInput  (history observer first, then the PTY queue)
+pane_input.sendText -> forward  (history observer first, then the PTY queue)
         |
 schema.request_completed
 ```
@@ -39,7 +39,7 @@ schema.request_completed
 ```text
 telar pane read 7 --lines 40 --source recent
         |
-schema.read_pane -> operations/panes.routeReadPane queues PendingPaneText
+schema.read_pane -> client_request.receive queues PendingPaneText
         |
 encoder.encodeResponse resolves the pane at send time
         |
@@ -57,7 +57,7 @@ cost of a wait is one enriched snapshot every 250 ms on one control session.
 `send_pane_text` resolves the pane by exact generation from the store rather
 than from an attachment, because control clients attach nothing. The
 attachment-independent half of pane input lives in the concrete
-`forwardInput` function in `src/backend/runtime/application/operations/panes.zig` and
+`forward` procedure in `src/backend/runtime/pane_input.zig` and
 is shared with attached-client input, so history observation still precedes
 the PTY queue for both.
 
@@ -96,7 +96,7 @@ endpoint. The CLI resolves `--socket`, then `TELAR_SOCKET`, then
   concrete request operation and the real PTY queue.
 - `src/backend/runtime/tests/read_pane_test.zig` proves row selection,
   truncation and late binding through the encoder.
-- `src/backend/runtime/application/pane_launcher.zig` proves the identity
+- `src/backend/runtime/pane_launch.zig` proves the identity
   variables; `src/backend/proxy/proxy_namespace.zig` proves they survive proxy
   registration.
 - `src/cli/parser.zig` and `src/cli/control.zig` prove the grammar, target

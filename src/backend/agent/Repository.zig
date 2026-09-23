@@ -8,34 +8,39 @@ pub const capacity = core.max_agent_snapshot_entries;
 const Occupancy = std.bit_set.IntegerBitSet(capacity);
 
 /// Aggregates are several KiB each. Lookups run on every PTY ingest, so they
-/// scan the dense `keys` copy and the `occupied` mask instead of touching one
-/// aggregate per slot. An aggregate's key never changes after insertion, and
-/// every insertion and removal updates all three fields together.
+/// probe `index` by pane id and check the generation in the dense `keys`
+/// copy instead of touching an aggregate. A pane id belongs to one pane
+/// generation at a time, so at most one aggregate exists per pane id. An
+/// aggregate's key never changes after insertion, and every insertion and
+/// removal updates all four fields together.
 slots: [capacity]?Agent = @splat(null),
 keys: [capacity]PaneKeyType = undefined,
 occupied: Occupancy = .initEmpty(),
+index: core.GenericSlotIndex(2 * capacity) = .{},
 
 pub const Iterator = @import("Iterator.zig");
 
 pub const ConstIterator = @import("ConstIterator.zig");
 
-/// Inserts one aggregate unless its pane generation already exists or the
+/// Inserts one aggregate unless its pane id already has one or the
 /// repository has reached its fixed capacity.
 ///
 /// ```zig
 /// const stored = repository.insert(Agent.init(identity)) orelse return;
 /// ```
 pub fn insert(repository: *Repository, candidate: Agent) ?*Agent {
-    if (repository.find(candidate.paneKey()) != null) {
+    const key = candidate.paneKey();
+    if (repository.index.get(core.raw(key.id)) != null) {
         return null;
     }
 
     var free = repository.occupied.complement().iterator(.{});
-    if (free.next()) |index| {
-        repository.slots[index] = candidate;
-        repository.keys[index] = candidate.paneKey();
-        repository.occupied.set(index);
-        return &repository.slots[index].?;
+    if (free.next()) |slot| {
+        repository.slots[slot] = candidate;
+        repository.keys[slot] = key;
+        repository.occupied.set(slot);
+        repository.index.put(core.raw(key.id), slot);
+        return &repository.slots[slot].?;
     }
 
     return null;
@@ -80,21 +85,19 @@ pub fn occupiedAt(repository: *const Repository, index: usize) bool {
 /// Empties one occupied slot. Iterators remove their current aggregate here.
 pub fn release(repository: *Repository, index: usize) void {
     std.debug.assert(repository.occupied.isSet(index));
+    repository.index.remove(core.raw(repository.keys[index].id));
     repository.slots[index] = null;
     repository.occupied.unset(index);
 }
 
 fn indexOf(repository: *const Repository, key: PaneKeyType) ?usize {
-    var occupied = repository.occupied.iterator(.{});
-    while (occupied.next()) |index| {
-        const candidate = repository.keys[index];
-        if (candidate.id == key.id and candidate.generation == key.generation) {
-            std.debug.assert(repository.slots[index].?.matches(key));
-            return index;
-        }
+    const slot = repository.index.get(core.raw(key.id)) orelse return null;
+    if (repository.keys[slot].generation != key.generation) {
+        return null;
     }
 
-    return null;
+    std.debug.assert(repository.slots[slot].?.matches(key));
+    return slot;
 }
 
 /// Creates a mutable iterator over the current repository contents.

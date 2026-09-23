@@ -18,7 +18,6 @@ pub const damage = @import("damage.zig");
 
 pub const shared_transfer = @import("../media/shared_transfer.zig");
 
-pub const max_panes = core.max_panes_per_tab;
 
 pub const output_chunk_size = 16 * 1024;
 

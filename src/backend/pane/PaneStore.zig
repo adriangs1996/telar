@@ -1,3 +1,4 @@
+const revisions = @import("../revisions.zig");
 const core = @import("telar-core");
 const Pane = @import("Pane.zig");
 const GraphicsLimitsType = @import("../media/GraphicsLimits.zig");
@@ -8,15 +9,22 @@ const exit_module = @import("../pty/exit.zig");
 const PaneExitTransition = @import("PaneExitTransition.zig");
 const PaneStore = @This();
 
-items: [core.max_panes_per_tab]?*Pane = [_]?*Pane{null} ** core.max_panes_per_tab,
+/// Panes the whole runtime holds. It equals the wire's per-tab bound, so a
+/// tab can hold every pane; it bounds all tabs and workspaces together.
+pub const capacity = core.max_panes_per_tab;
+
+items: [capacity]?*Pane = [_]?*Pane{null} ** capacity,
 count: usize = 0,
 /// Panes whose child has exited but which have not been collected yet.
 /// `collectFinished` runs on every event; this makes the common case -
 /// nothing exited - one branch instead of a store scan.
 exited_count: usize = 0,
-index: core.GenericSlotIndex(2 * core.max_panes_per_tab) = .{},
+index: core.GenericSlotIndex(2 * capacity) = .{},
 next_id: u64 = 1,
 next_generation: u64 = 1,
+/// Advances when a pane joins, leaves or exits and when a flow changes pane
+/// metadata other projections read (cwd). Zero stays unseen.
+revision: u64 = 1,
 graphics_limits: GraphicsLimitsType = .{},
 graphics_budget: GraphicsBudgetType = .init(core.max_image_bytes_global),
 
@@ -91,6 +99,7 @@ pub fn completeExit(store: *PaneStore, key: PaneKey, exit: exit_module.Exit) ?Pa
     const pane = store.resolve(key) orelse return null;
     pane.completeExitWait(exit);
     store.exited_count += 1;
+    revisions.advance(&store.revision);
     return .{
         .pane = pane,
         .exit = exit,
@@ -224,7 +233,7 @@ pub fn advanceCounters(store: *PaneStore, next_pane_id: u64, next_generation: u6
 }
 
 pub fn allocateKey(store: *PaneStore) !PaneKey {
-    if (store.count == core.max_panes_per_tab) {
+    if (store.count == capacity) {
         return error.PaneLimitReached;
     }
     const pane_id = try core.pane(store.next_id);
@@ -243,6 +252,7 @@ pub fn insert(store: *PaneStore, pane: *Pane) !void {
             slot.* = pane;
             store.index.put(core.raw(pane.id), position);
             store.count += 1;
+            revisions.advance(&store.revision);
             return;
         }
     }
@@ -258,11 +268,30 @@ pub fn removeAndDestroy(store: *PaneStore, pane: *Pane) void {
             }
             slot.* = null;
             store.count -= 1;
+            revisions.advance(&store.revision);
             pane.destroy();
             return;
         }
     }
     unreachable;
+}
+
+/// Removes a collected exited pane from the table and returns it for
+/// destruction by the caller.
+///
+/// ```zig
+/// const pane = store.removeExitedAt(slot);
+/// pane.destroy();
+/// ```
+pub fn removeExitedAt(store: *PaneStore, slot: usize) *Pane {
+    const pane = store.items[slot].?;
+    std.debug.assert(pane.exit != null);
+    store.index.remove(core.raw(pane.id));
+    store.exited_count -= 1;
+    store.items[slot] = null;
+    store.count -= 1;
+    revisions.advance(&store.revision);
+    return pane;
 }
 
 pub fn shutdown(store: *PaneStore) void {

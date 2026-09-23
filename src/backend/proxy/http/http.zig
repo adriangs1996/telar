@@ -40,7 +40,6 @@ pub const ExchangeOutcome = connection.ExchangeOutcome;
 
 pub const MessageRoute = @import("MessageRoute.zig");
 
-pub const HeadSink = @import("HeadSink.zig");
 
 pub const HeadTransform = @import("HeadTransform.zig");
 
@@ -75,7 +74,7 @@ pub fn relayHead(session: anytype, route: MessageRoute) ?Head {
     var buffer: [head.max_bytes]u8 = undefined;
     const len = head.read(session, route.from, &buffer) orelse return null;
     if (route.capture) |capture| {
-        capture.append(buffer[0..len]);
+        capture.appendHead(buffer[0..len]);
     }
 
     if (!session.writeAll(route.to, buffer[0..len])) {
@@ -108,7 +107,7 @@ pub fn relayHeadTransformed(session: anytype, transformation: HeadTransform) ?He
     var original: [head.max_bytes]u8 = undefined;
     const original_len = head.read(session, transformation.route.from, &original) orelse return null;
     if (transformation.capture) |capture| {
-        capture.append(original[0..original_len]);
+        capture.appendHead(original[0..original_len]);
     }
     const original_head = head.analyze(original[0..original_len], .{
         .is_response = transformation.route.is_response,

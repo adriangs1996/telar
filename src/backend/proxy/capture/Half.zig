@@ -164,3 +164,43 @@ pub fn deinit(half: *Half) void {
     std.crypto.secureZero(u8, std.mem.asBytes(half));
     gpa.destroy(half);
 }
+
+/// Records one relayed HTTP head: its bytes, the request line's method and
+/// target, and the content encoding the body will need for decoding.
+///
+/// ```zig
+/// half.appendHead(head_bytes);
+/// ```
+pub fn appendHead(self: *Half, bytes: []const u8) void {
+    const part: buffer_support.Part = if (self.side == .request) .request_head else .response_head;
+    _ = self.append(part, bytes);
+
+    if (self.side == .request) {
+        const line_end = std.mem.indexOf(u8, bytes, "\r\n") orelse return;
+        var fields = std.mem.splitScalar(u8, bytes[0..line_end], ' ');
+        const request_method = fields.next() orelse return;
+        const request_target = fields.next() orelse return;
+        self.setRoute(request_method, request_target);
+    }
+
+    if (headerValue(bytes, "content-encoding")) |content_encoding| {
+        self.setEncoding(content_encoding);
+    }
+}
+
+fn headerValue(bytes: []const u8, wanted: []const u8) ?[]const u8 {
+    var lines = std.mem.splitSequence(u8, bytes, "\r\n");
+    _ = lines.next();
+
+    while (lines.next()) |line| {
+        const colon = std.mem.indexOfScalar(u8, line, ':') orelse continue;
+        const name = std.mem.trim(u8, line[0..colon], " \t");
+        if (!std.ascii.eqlIgnoreCase(name, wanted)) {
+            continue;
+        }
+
+        return std.mem.trim(u8, line[colon + 1 ..], " \t");
+    }
+
+    return null;
+}

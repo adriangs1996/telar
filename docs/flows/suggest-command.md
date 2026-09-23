@@ -80,7 +80,7 @@ suggestion at 1024; the engine's own prompt and reply caps bound the rest.
 
 ## Validation
 
-- `src/backend/runtime/application/suggestion.zig` proves prompt bounds and
+- `src/backend/runtime/suggestion.zig` proves prompt bounds and
   reply reduction.
 - `src/model/state/suggestion.zig` proves stale-reply rejection,
   edit invalidation and failure phases.

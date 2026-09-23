@@ -3,7 +3,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const Runtime = @import("../Runtime.zig");
 const Session = @import("../client/Session.zig");
-const requests = @import("../application/requests.zig");
+const client_request = @import("../client_request.zig");
 const Pane = @import("../../pane/Pane.zig");
 const RequestFixture = @This();
 
@@ -51,7 +51,7 @@ pub fn addClient(self: *RequestFixture) !*Session {
     errdefer connection.deinit(std.testing.io);
     var peer: core.SocketChannel = .init(.{ .socket = .{ .handle = sockets[1], .address = .{ .ip4 = .loopback(0) } } });
     errdefer peer.deinit(std.testing.io);
-    const session = try self.runtime.application.clients.add(std.testing.allocator, connection);
+    const session = try self.runtime.model.clients.add(std.testing.allocator, connection);
     self.peers[self.peer_count] = peer;
     self.peer_count += 1;
     session.role = .ui;
@@ -74,7 +74,7 @@ pub fn send(self: *RequestFixture, message: core.ClientMessage) !void {
 }
 
 pub fn sendTo(self: *RequestFixture, session: *Session, message: core.ClientMessage) !void {
-    try requests.dispatch(&self.runtime.application, session, message);
+    try client_request.receive(&self.runtime.model, session, message);
 }
 
 pub fn response(self: *RequestFixture) ?*response_queue.PendingResponse {
@@ -106,7 +106,7 @@ pub fn openPane(self: *RequestFixture) !*Pane {
     if (opened.* != .pane_opened) {
         return error.PaneLaunchFailed;
     }
-    const pane = self.runtime.application.model.panes.find(opened.pane_opened.pane_id).?;
+    const pane = self.runtime.model.panes.find(opened.pane_opened.pane_id).?;
     self.clearResponses();
     return pane;
 }

@@ -3,9 +3,9 @@ const std = @import("std");
 const core = @import("telar-core");
 const EventFixture = @import("EventFixture.zig");
 const RequestFixture = @import("RequestFixture.zig");
-const agent_events = @import("../application/event_dispatcher/agent_events.zig");
-const proxy_observation = @import("../entrypoints/events/proxy_observation.zig");
-const agent_identity = @import("../application/coordinators/agent_identity.zig");
+const agent_description = @import("../agent_description.zig");
+const proxy_observation = @import("../proxy_observation.zig");
+const agent_identity = @import("../agent_identity.zig");
 const description = @import("../../agent/description.zig");
 const AgentResult = @import("../../agent/Result.zig");
 const Tracker = @import("../../agent/Tracker.zig");
@@ -43,11 +43,11 @@ test "runtime disabled descriptions leave queued work and its global actor slot 
     var fixture: RequestFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
-    const application = &fixture.runtime.application;
-    _ = try seedDescription(&application.model.agents, 1);
-    agent_events.scheduleDescription(application);
-    try std.testing.expect(!application.agent_description_state.isPending());
-    var job = application.model.agents.nextDescriptionJob().?;
+    const model = &fixture.runtime.model;
+    _ = try seedDescription(&model.agents, 1);
+    agent_description.start(model);
+    try std.testing.expect(!model.agent_description_pending);
+    var job = model.agents.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &job.query);
     try std.testing.expectEqualStrings("refactor proxy", job.querySlice());
 }
@@ -57,15 +57,15 @@ test "runtime description completion commits valid output and classifies every g
         var fixture: RequestFixture = undefined;
         try fixture.init();
         defer fixture.deinit();
-        const application = &fixture.runtime.application;
-        _ = try seedDescription(&application.model.agents, 1);
-        var job = application.model.agents.nextDescriptionJob().?;
+        const model = &fixture.runtime.model;
+        _ = try seedDescription(&model.agents, 1);
+        var job = model.agents.nextDescriptionJob().?;
         defer std.crypto.secureZero(u8, &job.query);
-        application.agent_description_state.begin();
+        model.agent_description_pending = true;
         _ = try fixture.runtime.update(.{ .agent_description = resultFor(job, status, "Refactor proxy") });
-        try std.testing.expect(!application.agent_description_state.isPending());
+        try std.testing.expect(!model.agent_description_pending);
         var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-        const entry = application.model.agents.snapshot(&entries, 0)[0];
+        const entry = model.agents.snapshot(&entries, 0)[0];
         try std.testing.expectEqual(if (status == .success) core.AgentTitleState.ready else .failed, entry.title_state);
         try std.testing.expectEqualStrings(if (status == .success) "Refactor proxy" else "New agent session", entry.session_title);
         try std.testing.expectEqual(if (status == .success) core.AgentTitleSource.generated else .telar, entry.title_source);
@@ -77,18 +77,18 @@ test "runtime invalid generated titles and late manual-title completions retain 
         var fixture: RequestFixture = undefined;
         try fixture.init();
         defer fixture.deinit();
-        const application = &fixture.runtime.application;
-        const identity = try seedDescription(&application.model.agents, 1);
-        var job = application.model.agents.nextDescriptionJob().?;
+        const model = &fixture.runtime.model;
+        const identity = try seedDescription(&model.agents, 1);
+        var job = model.agents.nextDescriptionJob().?;
         defer std.crypto.secureZero(u8, &job.query);
-        application.agent_description_state.begin();
+        model.agent_description_pending = true;
         if (manual) {
-            _ = try application.model.agents.setManualTitle(identity.key, "Manual title");
+            _ = try model.agents.setManualTitle(identity.key, "Manual title");
         }
         _ = try fixture.runtime.update(.{ .agent_description = resultFor(job, .success, "invalid\ntitle") });
-        try std.testing.expect(!application.agent_description_state.isPending());
+        try std.testing.expect(!model.agent_description_pending);
         var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-        const entry = application.model.agents.snapshot(&entries, 0)[0];
+        const entry = model.agents.snapshot(&entries, 0)[0];
         try std.testing.expectEqualStrings(if (manual) "Manual title" else "New agent session", entry.session_title);
         try std.testing.expectEqual(if (manual) core.AgentTitleState.ready else .failed, entry.title_state);
     }
@@ -99,11 +99,11 @@ test "runtime description admission failure commits failure without retaining th
     try fixture.init();
     defer fixture.deinit();
     fixture.failScheduling();
-    const application = fixture.application;
+    const model = fixture.model;
     _ = try seedDescription(fixture.agents, 1);
-    application.agent_description_options = .{ .arguments = &.{"generator"}, .timeout_ms = 1000 };
-    agent_events.scheduleDescription(application);
-    try std.testing.expect(!application.agent_description_state.isPending());
+    model.agent_description_options = .{ .arguments = &.{"generator"}, .timeout_ms = 1000 };
+    agent_description.start(model);
+    try std.testing.expect(!model.agent_description_pending);
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
     try std.testing.expectEqual(core.AgentTitleState.failed, fixture.agents.snapshot(&entries, 0)[0].title_state);
 }
@@ -112,16 +112,16 @@ test "runtime retired description completion releases the actor slot and cannot 
     var fixture: RequestFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
-    const application = &fixture.runtime.application;
-    const identity = try seedDescription(&application.model.agents, 1);
-    var job = application.model.agents.nextDescriptionJob().?;
+    const model = &fixture.runtime.model;
+    const identity = try seedDescription(&model.agents, 1);
+    var job = model.agents.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &job.query);
-    application.agent_description_state.begin();
-    try std.testing.expect(application.model.agents.remove(identity.key));
-    const replacement = try seedDescription(&application.model.agents, 2);
+    model.agent_description_pending = true;
+    try std.testing.expect(model.agents.remove(identity.key));
+    const replacement = try seedDescription(&model.agents, 2);
     _ = try fixture.runtime.update(.{ .agent_description = resultFor(job, .success, "Retired title") });
-    try std.testing.expect(!application.agent_description_state.isPending());
-    var next = application.model.agents.nextDescriptionJob().?;
+    try std.testing.expect(!model.agent_description_pending);
+    var next = model.agents.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &next.query);
     try std.testing.expectEqualDeep(replacement.key, next.pane);
 }
@@ -136,9 +136,8 @@ test "runtime proxy receive and rearm failures preserve agent authority" {
     defer files.deinit();
     var proxy = try ProxyRuntime.init(std.testing.io, std.testing.allocator, .{ .config = files.config(), .system_trusted = false });
     defer proxy.deinit();
-    const original = fixture.application.proxy_runtime;
-    fixture.application.proxy_runtime = &proxy;
-    defer fixture.application.proxy_runtime = original;
+    std.mem.swap(ProxyRuntime, &fixture.model.resources.proxy, &proxy);
+    defer std.mem.swap(ProxyRuntime, &fixture.model.resources.proxy, &proxy);
     fixture.failScheduling();
     try std.testing.expectError(error.ConcurrencyUnavailable, fixture.request.runtime.update(.{
         .proxy_event = proxy_observation.eventFor(fixture.pane, .request_started, .h2),
@@ -188,7 +187,7 @@ test "runtime maintenance failure preserves evidence and a successful tick expir
     fixture.failScheduling();
     try std.testing.expectError(error.ConcurrencyUnavailable, fixture.request.runtime.update(.{ .agent_tick = {} }));
     try std.testing.expectEqual(core.AgentStatus.done, fixture.agents.projectedStatus(identity.key).?);
-    fixture.application.select = fixture.request.runtime.loop.selector();
+    fixture.model.select = fixture.request.runtime.loop.selector();
     _ = try fixture.request.runtime.update(.{ .agent_tick = {} });
     try std.testing.expect(fixture.agents.projectedStatus(identity.key) != .done);
 }
