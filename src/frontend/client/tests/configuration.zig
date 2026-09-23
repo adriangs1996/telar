@@ -161,8 +161,8 @@ test "configuration adoption keeps new ownership after geometry failure" {
     try harness.bootstrap();
     const client = harness.client;
     const terminal = harness.terminal;
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const adoption = try support.testingConfigAdoption(1, true);
     const generation = adoption.generation;
@@ -176,7 +176,7 @@ test "configuration adoption keeps new ownership after geometry failure" {
     try std.testing.expect(!client.model.pane_gaps);
     try harness.deliverHostEffects();
     try std.testing.expect(!terminal.view.sidebar_requested);
-    try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.model.to_runtime.len);
 }
 
 test "a configuration version alone schedules presenter observation" {
@@ -421,7 +421,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
     try std.testing.expect(!exit);
     try std.testing.expect(client.model.plugins.pluginExecution() == null);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) != null);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try std.testing.expect(client.model.version().notifications > version_before.notifications);
     try std.testing.expect(std.mem.indexOf(
         u8,
@@ -507,7 +507,7 @@ test "name prompt suppresses a configured action before source dispatch" {
     const client = harness.client;
     try std.testing.expect(client.openNamePrompt(.rename_active_tab));
     const version = client.model.version();
-    const outbox_len = client.runtime_transport.outbox.len;
+    const outbox_len = client.model.to_runtime.len;
 
     const suppressed = [_]data.Action{
         .toggle_sidebar,
@@ -521,7 +521,7 @@ test "name prompt suppresses a configured action before source dispatch" {
         try std.testing.expect(client.model.name_prompt.active());
         try std.testing.expect(client.model.sidebar_visible);
         try std.testing.expectEqualDeep(version, client.model.version());
-        try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
+        try std.testing.expectEqual(outbox_len, client.model.to_runtime.len);
     }
 }
 
@@ -706,12 +706,12 @@ test "Lua expression paste uses pane modes and copy-mode authority" {
 
     _ = try client.executeAction(.enter_copy_mode, .effect);
     const copy_version = client.model.version();
-    const outbox_len = client.runtime_transport.outbox.len;
+    const outbox_len = client.model.to_runtime.len;
     try std.testing.expectEqual(data.KeybindControl.continue_routing, try client.executeAction(configured, .binding));
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(copy_version, client.model.version());
-    try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(outbox_len, client.model.to_runtime.len);
 }
 
 test "Lua callback failure commits one diagnostic without direct presentation" {
@@ -791,7 +791,7 @@ test "attachment modal captures semantic keys until escape closes it" {
     try std.testing.expectEqual(interaction_revision, terminal.view.interactionVersion());
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
     try host_inputs.key(terminal, try data.chord.parseKey("escape"));
 
@@ -800,7 +800,7 @@ test "attachment modal captures semantic keys until escape closes it" {
     try std.testing.expectEqual(interaction_revision + 1, terminal.view.interactionVersion());
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
     try presentation_lifecycle.observe(terminal);
     try std.testing.expectEqual(pending_updates + 1, terminal.presenter.pending_updates);

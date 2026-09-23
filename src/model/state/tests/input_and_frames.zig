@@ -273,7 +273,7 @@ test "pane frame application commits screen copy state and one frame revision" {
     };
     var encoded: [512]u8 = undefined;
 
-    const outcome = try model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+    const outcome = try model_data.pane_frame.receive(&model, try testingPaneFrame(&encoded, .{
         .pane_id = pane_id,
         .frame_id = 7,
         .cursor = .{ .visible = true, .x = 1, .y = 1 },
@@ -316,7 +316,7 @@ test "pane frame application separates detached panes from patch recovery" {
     pane.applied_frame_id = 3;
     var encoded: [512]u8 = undefined;
 
-    const recovery = try model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+    const recovery = try model_data.pane_frame.receive(&model, try testingPaneFrame(&encoded, .{
         .pane_id = pane_id,
         .frame_id = 4,
         .base_frame_id = 2,
@@ -330,7 +330,7 @@ test "pane frame application separates detached panes from patch recovery" {
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
 
     pane.attached = false;
-    const detached = try model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+    const detached = try model_data.pane_frame.receive(&model, try testingPaneFrame(&encoded, .{
         .pane_id = pane_id,
         .frame_id = 5,
         .cells = &[_]core.Cell{ .{}, .{}, .{}, .{} },
@@ -339,7 +339,7 @@ test "pane frame application separates detached panes from patch recovery" {
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 
     pane.attached = true;
-    const absent = try model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+    const absent = try model_data.pane_frame.receive(&model, try testingPaneFrame(&encoded, .{
         .pane_id = @enumFromInt(9),
         .cells = &[_]core.Cell{ .{}, .{}, .{}, .{} },
     }));
@@ -362,7 +362,7 @@ test "pane frame apply failure does not publish a frame revision" {
     pane.applied_frame_id = 3;
     var encoded: [256]u8 = undefined;
 
-    try std.testing.expectError(error.PatchSizeMismatch, model.applyPaneFrame(try testingPaneFrame(&encoded, .{
+    try std.testing.expectError(error.PatchSizeMismatch, model_data.pane_frame.receive(&model, try testingPaneFrame(&encoded, .{
         .pane_id = pane_id,
         .frame_id = 4,
         .base_frame_id = 3,

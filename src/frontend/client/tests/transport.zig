@@ -25,7 +25,7 @@ test "host input arriving while no tab exists is dropped, not a crash" {
     chunk.bytes[0] = 'x';
     chunk.len = 1;
     try std.testing.expect(!try host_inputs.handleRead(harness.terminal, chunk));
-    try std.testing.expectEqual(@as(usize, 0), harness.client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), harness.client.model.to_runtime.len);
 }
 
 test "host input reads pause at outbox capacity and resume with one token" {
@@ -41,8 +41,8 @@ test "host input reads pause at outbox capacity and resume with one token" {
             },
         },
     );
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
     try host_inputs.scheduleRead(terminal);
@@ -53,8 +53,8 @@ test "host input reads pause at outbox capacity and resume with one token" {
         else => return error.UnexpectedEvent,
     }
     try harness.deliverHostEffects();
-    try std.testing.expectEqual(data.outbox_support.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
-    try std.testing.expect(client.runtime_transport.outbox.inFlight());
+    try std.testing.expectEqual(data.outbox_support.capacity - 1, @as(usize, client.model.to_runtime.len));
+    try std.testing.expect(client.model.to_runtime.inFlight());
     try std.testing.expect(terminal.host_input.read_pending);
 
     try host_inputs.scheduleRead(terminal);
@@ -133,21 +133,21 @@ test "graphics credits remain owned until the outbox accepts them" {
         .revision = 2,
         .phase = .begin,
     });
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = pane_id } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = pane_id } });
     }
 
     try client.flushGraphicsCredits();
     try std.testing.expectEqual(@as(usize, 4), terminal.graphics_store.peekCredit().?.bytes);
-    try std.testing.expect(client.runtime_transport.outbox.inFlight());
+    try std.testing.expect(client.model.to_runtime.inFlight());
 
     switch (try support.receiveClient(terminal)) {
         .sent => |result| try client.completeRuntimeSend(result),
         else => return error.UnexpectedEvent,
     }
     try std.testing.expect(terminal.graphics_store.peekCredit() == null);
-    try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.runtime_transport.outbox.len));
-    try std.testing.expect(client.runtime_transport.outbox.inFlight());
+    try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.model.to_runtime.len));
+    try std.testing.expect(client.model.to_runtime.inFlight());
 }
 
 test "runtime write errors release the outbound token" {
@@ -155,17 +155,17 @@ test "runtime write errors release the outbound token" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    try client.runtime_transport.outbox.push(.{
+    try client.model.to_runtime.push(.{
         .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
     });
-    _ = (try client.runtime_transport.outbox.beginSend(client.runtime_transport.send_buffer)).?;
+    _ = (try client.model.to_runtime.beginSend(client.runtime_transport.send_buffer)).?;
 
     try std.testing.expectError(
         error.RuntimeWriteFailed,
         client.completeRuntimeSend(error.RuntimeWriteFailed),
     );
-    try std.testing.expect(!client.runtime_transport.outbox.inFlight());
-    try std.testing.expectEqual(@as(u8, 1), client.runtime_transport.outbox.len);
+    try std.testing.expect(!client.model.to_runtime.inFlight());
+    try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);
 }
 
 test "request delivery rolls correlation back when transport is full" {
@@ -173,8 +173,8 @@ test "request delivery rolls correlation back when transport is full" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{
             .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
         });
     }
@@ -225,7 +225,7 @@ test "client startup dispatches buffered host probes before awaiting its first e
 
     try std.testing.expect(terminal.output.?.pending);
     try std.testing.expectEqual(@as(usize, 0), terminal.writer.end);
-    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.model.to_runtime.len);
     try std.testing.expect(!terminal.host_negotiation.initial_settled);
 }
 
@@ -248,12 +248,12 @@ test "client startup waits for runtime layout before its initial open" {
     try std.testing.expect(client.model.request_lifecycle.tracker.isEmpty());
     try std.testing.expect(client.runtime_transport.receive_pending);
     try std.testing.expect(terminal.host_input.read_pending);
-    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.model.to_runtime.len);
     try std.testing.expect(!try client_startup.advance(terminal));
-    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.model.to_runtime.len);
     try host_inputs.terminalResponse(terminal, .{ .foreground_color = .{ .r = 255, .g = 255, .b = 255 } });
     try std.testing.expect(!try client_startup.advance(terminal));
-    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.model.to_runtime.len);
     try host_inputs.terminalResponse(terminal, .{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
     try std.testing.expect(!try client_startup.advance(terminal));
     try harness.settle();
@@ -311,7 +311,7 @@ test "startup timeout publishes unknown colors once and consumes late replies" {
     try host_inputs.terminalResponse(terminal, .{ .background_color = .{ .r = 16, .g = 16, .b = 16 } });
     try std.testing.expectEqualDeep(revision, client.model.version());
     try std.testing.expect(!try client_startup.advance(terminal));
-    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.model.to_runtime.len);
 }
 
 test "startup replays early typing exactly once after pane activation" {
@@ -325,7 +325,7 @@ test "startup replays early typing exactly once after pane activation" {
     var chunk: ChunkType = .{ .len = bytes.len };
     @memcpy(chunk.bytes[0..bytes.len], bytes);
     try std.testing.expect(!try host_inputs.handleRead(terminal, chunk));
-    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.model.to_runtime.len);
     try harness.bootstrap();
     try std.testing.expect(!try client_startup.advance(terminal));
     try harness.settle();
@@ -344,7 +344,7 @@ test "startup replays early typing exactly once after pane activation" {
 
     try std.testing.expectEqualStrings("abc", &received);
     try std.testing.expect(!try client_startup.advance(terminal));
-    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.model.to_runtime.len);
 }
 
 test "restored client layout controls the initial attach geometry" {
@@ -462,9 +462,9 @@ test "client layout observation sends one canonical workspace update" {
     try std.testing.expect(client.model.setWorkspaceListCollapsed(true) != null);
 
     try client.synchronizeClientLayout();
-    try std.testing.expectEqual(@as(u8, 1), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);
     try client.synchronizeClientLayout();
-    try std.testing.expectEqual(@as(u8, 1), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 1), client.model.to_runtime.len);
     try harness.settle();
 
     var buffer: [core.max_client_layout_wire_bytes]u8 = undefined;

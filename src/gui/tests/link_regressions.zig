@@ -87,13 +87,13 @@ test "native link hover clears on focus loss while transport defers gesture reco
     const gui = fixture.session.gui;
     try fixture.send(fixture.event(1));
     try std.testing.expect(gui.pointer.hover.link != null);
-    while (gui.app.runtime_transport.outbox.hasCapacity()) {
-        try gui.app.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = Session.pane_id } });
+    while (gui.app.model.to_runtime.hasCapacity()) {
+        try gui.app.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = Session.pane_id } });
     }
 
     try input_support.focus(gui, false);
     _ = try gui.update();
-    try std.testing.expectEqual(@as(usize, 0), gui.app.runtime_transport.outbox.availableCapacity());
+    try std.testing.expectEqual(@as(usize, 0), gui.app.model.to_runtime.availableCapacity());
     try std.testing.expect(gui.input_queue.recovery.queued);
     try std.testing.expect(gui.pointer.hover.link == null);
     try std.testing.expectEqual(.default, gui.pointer.hover.shape);

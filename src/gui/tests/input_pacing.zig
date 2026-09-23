@@ -88,8 +88,8 @@ test "native rejected outbox input grants no frame grace" {
     const session = try Session.init();
     defer session.deinit();
     try begin(session);
-    while (session.gui.app.runtime_transport.outbox.hasCapacity()) {
-        try session.gui.app.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = Session.pane_id } });
+    while (session.gui.app.model.to_runtime.hasCapacity()) {
+        try session.gui.app.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = Session.pane_id } });
     }
 
     try std.testing.expectError(error.ClientOutboxFull, session.gui.app.sendPaneInput(.{

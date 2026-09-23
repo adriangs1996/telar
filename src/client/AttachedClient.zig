@@ -170,6 +170,7 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
     errdefer client.model.deinit();
     client.model.sound_playback = .init(params.options.sound);
     try client.model.history_palette.prepare(gpa);
+    try client.model.to_runtime.reservePayloads(gpa);
     _ = client.model.setSidebarVisible(params.options.sidebar_visible);
 }
 
@@ -240,7 +241,7 @@ pub fn editorExecutable(self: *const AttachedClient) []const u8 {
 /// Copies one fixed-size message and starts its write when idle.
 /// Example: `try self.sendRuntime(.{ .detach_pane = detach });`
 pub fn sendRuntime(self: *AttachedClient, message: data.outbox_support.Message) !void {
-    try self.runtime_transport.outbox.push(message);
+    try self.model.to_runtime.push(message);
     try self.startRuntimeSend();
 }
 
@@ -251,9 +252,9 @@ pub fn sendRuntime(self: *AttachedClient, message: data.outbox_support.Message) 
 /// ```
 pub fn sendRuntimeInput(self: *AttachedClient, input: core.PaneInput) !void {
     if (input.bytes.len > data.input_limits.max_encoded_bytes) {
-        try self.runtime_transport.outbox.pushInputBatch(input.pane_id, input.bytes);
+        try self.model.to_runtime.pushInputBatch(input.pane_id, input.bytes);
     } else {
-        try self.runtime_transport.outbox.pushInput(input.pane_id, input.bytes);
+        try self.model.to_runtime.pushInput(input.pane_id, input.bytes);
     }
 
     try self.startRuntimeSend();
@@ -369,7 +370,7 @@ pub fn handleServerMessage(self: *AttachedClient, message: core.ServerMessage) !
             .exit => return 0,
         },
         .tab_moved => |moved| _ = try self.completeTabMove(moved),
-        .pane_frame => |frame| _ = try self.applyPaneFrame(frame),
+        .pane_frame => |frame| _ = try self.receivePaneFrame(frame),
         .pane_cwd => |cwd| _ = try self.model.updatePaneMetadata(
             .{
                 .cwd = .{
@@ -621,7 +622,7 @@ pub fn executeAction(self: *AttachedClient, value: data.Action, origin: ActionOr
 pub fn sendRuntimeRequest(self: *AttachedClient, delivery: data.ConnectionDelivery) !void {
     try self.model.request_lifecycle.tracker.add(delivery.registration.request_id, delivery.registration.continuation);
     errdefer _ = self.model.request_lifecycle.tracker.take(delivery.registration.request_id);
-    try self.runtime_transport.outbox.push(delivery.message);
+    try self.model.to_runtime.push(delivery.message);
     try self.startRuntimeSend();
 }
 
@@ -635,7 +636,7 @@ pub fn sendWorkspaceRenameRequest(self: *AttachedClient, rename: core.RenameWork
         },
     );
     errdefer _ = self.model.request_lifecycle.tracker.take(rename.request_id);
-    try self.runtime_transport.outbox.pushWorkspaceRename(rename);
+    try self.model.to_runtime.pushWorkspaceRename(rename);
     try self.startRuntimeSend();
 }
 
@@ -726,7 +727,7 @@ pub fn requestPaneSplit(self: *AttachedClient, command: data.RequestPaneSplit) !
 /// try self.completeRuntimeSend(result);
 /// ```
 pub fn completeRuntimeSend(self: *AttachedClient, result: anyerror!void) !void {
-    try self.runtime_transport.outbox.finishSend(result);
+    try self.model.to_runtime.finishSend(result);
     self.queueGraphicsCredits();
     try self.startRuntimeSend();
     self.model.to_host.resume_input = true;
@@ -1518,7 +1519,7 @@ pub fn canSubmitHistory(self: *AttachedClient, selection: u16) bool {
     };
 
     const slots = (command.len + 13 + data.input_limits.max_encoded_bytes - 1) / data.input_limits.max_encoded_bytes;
-    if (self.runtime_transport.outbox.availableCapacity() < slots + 1) {
+    if (self.model.to_runtime.availableCapacity() < slots + 1) {
         self.model.history_palette.setError("Input is busy; retry the command");
         return false;
     }
@@ -2322,7 +2323,7 @@ pub fn navigateAgent(self: *AttachedClient, key: data.AgentKey) !AgentNavigation
 /// try self.sendRuntimeClientLayout(update);
 /// ```
 fn sendRuntimeClientLayout(self: *AttachedClient, layout_update: core.ClientLayoutUpdate) !void {
-    try self.runtime_transport.outbox.pushClientLayout(layout_update);
+    try self.model.to_runtime.pushClientLayout(layout_update);
     try self.startRuntimeSend();
 }
 
@@ -2601,7 +2602,7 @@ fn pasteSuggestion(self: *AttachedClient) !void {
 fn sendNotificationRequest(self: *AttachedClient, request: core.ShowNotification) !void {
     try self.model.request_lifecycle.tracker.add(request.request_id, .notification);
     errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
-    try self.runtime_transport.outbox.pushNotification(request);
+    try self.model.to_runtime.pushNotification(request);
     try self.startRuntimeSend();
 }
 
@@ -2638,7 +2639,7 @@ fn sendCreateWorkspaceRequest(self: *AttachedClient, request: core.CreateWorkspa
         },
     );
     errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
-    try self.runtime_transport.outbox.pushCreateWorkspace(request);
+    try self.model.to_runtime.pushCreateWorkspace(request);
     try self.startRuntimeSend();
 }
 
@@ -2658,21 +2659,21 @@ fn tabDetachmentCapacity(self: *const AttachedClient, location: core.TabLocation
 /// Copies a page cursor before its reading window can change.
 /// Example: `try self.sendRuntimeAgentHistory(request);`
 fn sendRuntimeAgentHistory(self: *AttachedClient, request: core.QueryAgentHistory) !void {
-    try self.runtime_transport.outbox.pushAgentHistory(request);
+    try self.model.to_runtime.pushAgentHistory(request);
     try self.startRuntimeSend();
 }
 
 /// Pins a query to copied provider session bytes before the view can change.
 /// Example: `try self.sendRuntimeChangeReviewQuery(query);`
 fn sendRuntimeChangeReviewQuery(self: *AttachedClient, query: core.QueryChangeReview) !void {
-    try self.runtime_transport.outbox.pushChangeReviewQuery(query);
+    try self.model.to_runtime.pushChangeReviewQuery(query);
     try self.startRuntimeSend();
 }
 
 /// Copies comment and path bytes before the originating editor can mutate them.
 /// Example: `try self.sendRuntimeChangeReviewCommand(request);`
 fn sendRuntimeChangeReviewCommand(self: *AttachedClient, request: core.ChangeReviewCommand) !void {
-    try self.runtime_transport.outbox.pushChangeReviewCommand(request);
+    try self.model.to_runtime.pushChangeReviewCommand(request);
     try self.startRuntimeSend();
 }
 
@@ -2681,7 +2682,7 @@ fn sendRuntimeChangeReviewCommand(self: *AttachedClient, request: core.ChangeRev
 fn sendTabRenameRequest(self: *AttachedClient, rename: core.RenameTab, continuation: data.RequestsContinuation) !void {
     try self.model.request_lifecycle.tracker.add(rename.request_id, continuation);
     errdefer _ = self.model.request_lifecycle.tracker.take(rename.request_id);
-    try self.runtime_transport.outbox.pushRename(rename);
+    try self.model.to_runtime.pushRename(rename);
     try self.startRuntimeSend();
 }
 
@@ -2698,7 +2699,7 @@ fn sendCreateTabRequest(self: *AttachedClient, request: core.CreateTab) !void {
         },
     );
     errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
-    try self.runtime_transport.outbox.pushCreateTab(request);
+    try self.model.to_runtime.pushCreateTab(request);
     try self.startRuntimeSend();
 }
 
@@ -2712,23 +2713,23 @@ fn sendAgentPromptRequest(self: *AttachedClient, request: core.AgentPrompt, oper
         },
     );
     errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
-    try self.runtime_transport.outbox.pushAgentPrompt(request);
+    try self.model.to_runtime.pushAgentPrompt(request);
     try self.startRuntimeSend();
 }
 
 /// Owns a routed response until its asynchronous send completes. Example: `try self.sendRuntimeClientCompletion(reply);`
 fn sendRuntimeClientCompletion(self: *AttachedClient, reply: core.ClientCommand) !void {
-    try self.runtime_transport.outbox.pushClientCompletion(reply);
+    try self.model.to_runtime.pushClientCompletion(reply);
     try self.startRuntimeSend();
 }
 
 /// Keeps queued data owned by the transport if scheduling fails.
 fn startRuntimeSend(self: *AttachedClient) !void {
     const transport = &self.runtime_transport;
-    const payload = try transport.prepareSend() orelse return;
+    const payload = try self.model.to_runtime.beginSend(transport.send_buffer) orelse return;
 
     self.workers.start(.{ .runtime_send = .{ .state = transport, .bytes = payload } }) catch |err| {
-        transport.cancelSend();
+        self.model.to_runtime.sendFailed();
 
         return err;
     };
@@ -3727,7 +3728,7 @@ fn reportRuntimeFailure(message: []const u8) void {
 /// Transfers only credits admitted by the outbox; saturation preserves the rest.
 fn queueGraphicsCredits(self: *AttachedClient) void {
     while (self.graphics.peekCredit()) |credit| {
-        self.runtime_transport.outbox.push(
+        self.model.to_runtime.push(
             .{
                 .graphics_credit = .{
                     .pane_id = credit.pane_id,
@@ -4393,7 +4394,7 @@ fn requestTabClose(self: *AttachedClient) !bool {
     const location = self.model.activeTabLocation() orelse return false;
     const required = try self.tabDetachmentCapacity(location);
     try self.model.request_lifecycle.ensureCanStart(2);
-    if (1 + required > self.runtime_transport.outbox.availableCapacity()) {
+    if (1 + required > self.model.to_runtime.availableCapacity()) {
         return error.ClientOutboxFull;
     }
 
@@ -4575,7 +4576,7 @@ fn requestWorkspaceSwitch(self: *AttachedClient, target: WorkspaceSwitchTarget, 
         required += try self.tabDetachmentCapacity(location);
     }
 
-    if (required > self.runtime_transport.outbox.availableCapacity()) {
+    if (required > self.model.to_runtime.availableCapacity()) {
         return error.ClientOutboxFull;
     }
 
@@ -4738,22 +4739,22 @@ fn completeTabMove(self: *AttachedClient, moved: core.TabMoved) !data.Change {
 }
 
 /// Applies validated cells and acknowledges ownership before host resources.
-fn applyPaneFrame(self: *AttachedClient, frame: core.FrameView) !data.PaneFrameOutcome {
+fn receivePaneFrame(self: *AttachedClient, frame: core.FrameView) !data.PaneFrameOutcome {
     core.profiling.add(.client_apply_frame, 1);
     const profile_started = core.profiling.start(self.io);
     defer core.profiling.finish(self.io, .client_frame, profile_started);
     const started = core.now(self.io);
-    const outcome = try self.model.applyPaneFrame(frame);
+    const outcome = try data.pane_frame.receive(&self.model, frame);
     switch (outcome) {
         .detached => {},
-        .resync => |recovery| try self.requestPaneFrameSnapshot(recovery),
+        .resync => try self.startRuntimeSend(),
         .applied => |commit| {
-            try self.acknowledgePaneFrame(
-                .{
-                    .pane_id = commit.pane_id,
-                    .frame_id = commit.frame_id,
-                },
-            );
+            const enqueued = core.now(self.io);
+            try self.startRuntimeSend();
+            if (comptime core.enabled) {
+                self.telemetry.metrics.ack_enqueue.observe(core.elapsed(enqueued, core.now(self.io)));
+            }
+
             if (self.graphics.paneVisible(commit.pane_id) != commit.graphics_visible) {
                 try self.graphics.setPaneVisible(commit.pane_id, commit.graphics_visible);
             }
@@ -4783,30 +4784,6 @@ fn applyPaneFrame(self: *AttachedClient, frame: core.FrameView) !data.PaneFrameO
     }
 
     return outcome;
-}
-
-fn acknowledgePaneFrame(self: *AttachedClient, ack: core.FrameAck) !void {
-    const started = core.now(self.io);
-    try self.sendRuntime(
-        .{
-            .frame_ack = ack,
-        },
-    );
-
-    if (comptime core.enabled) {
-        self.telemetry.metrics.ack_enqueue.observe(core.elapsed(started, core.now(self.io)));
-    }
-}
-
-fn requestPaneFrameSnapshot(self: *AttachedClient, recovery: data.PaneFrameRecovery) !void {
-    try self.sendRuntime(
-        .{
-            .request_snapshot = .{
-                .pane_id = recovery.pane_id,
-                .known_frame_id = recovery.known_frame_id,
-            },
-        },
-    );
 }
 
 /// Stores one decoded terminal progress report and maintains animation liveness.

@@ -79,7 +79,7 @@ pub fn deinit(harness: *TestHarness) void {
 /// Drives the real dispatch until the outbox is drained, so a test
 /// observes exactly what the runtime peer would receive.
 pub fn settle(harness: *TestHarness) !void {
-    while (harness.client.runtime_transport.outbox.inFlight() or harness.client.runtime_transport.outbox.len != 0) {
+    while (harness.client.model.to_runtime.inFlight() or harness.client.model.to_runtime.len != 0) {
         switch (try harness.terminal.inbox.receive()) {
             .draw => |result| try presentation_lifecycle.handleDraw(harness.terminal, result),
             .client => |message| switch (message) {

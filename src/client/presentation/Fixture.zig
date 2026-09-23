@@ -51,7 +51,7 @@ pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
     try fixture.app.init(.{ .gpa = allocator, .io = std.testing.io, .connection = &fixture.connection, .host_size = .{ .cols = 40, .rows = 10, .cell_width_px = 0, .cell_height_px = 0 }, .options = .{ .arguments = &.{}, .cwd = "/", .endpoint = "" } });
     errdefer fixture.app.deinit();
     fixture.model = &fixture.app.model;
-    fixture.outbox = &fixture.app.runtime_transport.outbox;
+    fixture.outbox = &fixture.app.model.to_runtime;
     // Only host boundaries are substituted; server dispatch, input and delivery
     // execute the production operations. Unused host capabilities stay unbound.
     fixture.app.workers = .{ .context = fixture, .start_fn = startJob };

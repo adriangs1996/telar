@@ -229,7 +229,8 @@ test "prompt acknowledgement clears unchanged content after cursor or selection 
 }
 
 test "queued prompts own their text and serialize agent identity" {
-    var outbox: data.Outbox = .{};
+    var outbox: data.Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     try std.testing.expectError(error.InvalidAgentPrompt, outbox.pushAgentPrompt(.{
         .request_id = @enumFromInt(6),
         .pane_id = pane_id,
@@ -532,7 +533,8 @@ test "history input does not allocate and failed admission keeps the live conver
 }
 
 test "queued agent history cursors own reused input without inflating message metadata" {
-    var outbox: data.Outbox = .{};
+    var outbox: data.Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     var cursor = "provider-cursor".*;
     var anchor = "provider-item".*;
     var anchor_turn = "provider-turn".*;

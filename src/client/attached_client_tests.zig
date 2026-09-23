@@ -116,6 +116,7 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
         reads: usize = 0,
         sends: usize = 0,
         payload: []const u8 = &.{},
+        outbox: *const data.Outbox = undefined,
 
         fn start(raw: *anyopaque, job: Job) !void {
             return switch (job) {
@@ -135,11 +136,11 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
             }
         }
 
-        fn send(raw: *anyopaque, state: *RuntimeTransportState, payload: []const u8) !void {
+        fn send(raw: *anyopaque, _: *RuntimeTransportState, payload: []const u8) !void {
             const self: *@This() = @ptrCast(@alignCast(raw));
             self.sends += 1;
             self.payload = payload;
-            try std.testing.expect(state.outbox.inFlight());
+            try std.testing.expect(self.outbox.inFlight());
 
             if (self.reject) {
                 return error.DriverBusy;
@@ -157,6 +158,9 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
     app.workers = driver;
+    app.model.to_runtime = try .init(std.testing.allocator);
+    defer app.model.to_runtime.deinit(std.testing.allocator);
+    capture.outbox = &app.model.to_runtime;
     const state = &app.runtime_transport;
     state.* = .{
         .connection = undefined,
@@ -179,14 +183,14 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
 
     try start_send(app);
     try std.testing.expectEqual(@as(usize, 0), capture.sends);
-    try state.outbox.push(
+    try app.model.to_runtime.push(
         .{
             .detach_pane = .{
                 .pane_id = @enumFromInt(1),
             },
         },
     );
-    try state.outbox.push(
+    try app.model.to_runtime.push(
         .{
             .detach_pane = .{
                 .pane_id = @enumFromInt(2),
@@ -195,8 +199,8 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
     );
     capture.reject = true;
     try std.testing.expectError(error.DriverBusy, start_send(app));
-    try std.testing.expect(!state.outbox.inFlight());
-    try std.testing.expectEqual(@as(u8, 2), state.outbox.len);
+    try std.testing.expect(!app.model.to_runtime.inFlight());
+    try std.testing.expectEqual(@as(u8, 2), app.model.to_runtime.len);
     const first = send_buffer;
     const first_len = capture.payload.len;
     capture.reject = false;
@@ -208,7 +212,7 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
     );
     try start_send(app);
     try std.testing.expectEqual(@as(usize, 2), capture.sends);
-    try state.outbox.finishSend({});
+    try app.model.to_runtime.finishSend({});
     try start_send(app);
     try std.testing.expectEqual(@as(usize, 3), capture.sends);
     try std.testing.expect(!std.mem.eql(
@@ -216,8 +220,8 @@ pub fn retryTransportScheduling(comptime start_send: fn (*AttachedClient) anyerr
         first[0..first_len],
         capture.payload,
     ));
-    try state.outbox.finishSend({});
-    try std.testing.expectEqual(@as(u8, 0), state.outbox.len);
+    try app.model.to_runtime.finishSend({});
+    try std.testing.expectEqual(@as(u8, 0), app.model.to_runtime.len);
 }
 
 /// Enqueue retains copied input after rejected scheduling and preserves order on retry.
@@ -262,6 +266,8 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
     const app = try std.testing.allocator.create(AttachedClient);
     defer std.testing.allocator.destroy(app);
     app.workers = driver;
+    app.model.to_runtime = try .init(std.testing.allocator);
+    defer app.model.to_runtime.deinit(std.testing.allocator);
     const state = &app.runtime_transport;
     state.* = .{
         .connection = undefined,
@@ -281,8 +287,8 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
             .bytes = &source,
         },
     ));
-    try std.testing.expectEqual(@as(u8, 2), state.outbox.len);
-    try std.testing.expect(!state.outbox.inFlight());
+    try std.testing.expectEqual(@as(u8, 2), app.model.to_runtime.len);
+    try std.testing.expect(!app.model.to_runtime.inFlight());
     @memset(&source, 'y');
     capture.reject = false;
 
@@ -297,21 +303,21 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
     try std.testing.expect(first == .pane_input);
     try std.testing.expectEqual(pane, first.pane_input.pane_id);
     try std.testing.expectEqualStrings("x" ** data.input_limits.max_encoded_bytes, first.pane_input.bytes);
-    try state.outbox.finishSend({});
+    try app.model.to_runtime.finishSend({});
     try start_send(app);
     const second = try core.decodeClient(capture.payload);
     try std.testing.expect(second == .pane_input);
     try std.testing.expectEqualStrings("x", second.pane_input.bytes);
-    try state.outbox.finishSend({});
+    try app.model.to_runtime.finishSend({});
     try start_send(app);
     const third = try core.decodeClient(capture.payload);
     try std.testing.expect(third == .detach_pane);
     try std.testing.expectEqual(pane, third.detach_pane.pane_id);
-    try state.outbox.finishSend({});
-    try std.testing.expectEqual(@as(u8, 0), state.outbox.len);
+    try app.model.to_runtime.finishSend({});
+    try std.testing.expectEqual(@as(u8, 0), app.model.to_runtime.len);
 
-    while (state.outbox.hasCapacity()) {
-        try state.outbox.push(
+    while (app.model.to_runtime.hasCapacity()) {
+        try app.model.to_runtime.push(
             .{
                 .detach_pane = .{
                     .pane_id = pane,
@@ -329,7 +335,7 @@ pub fn retainQueuedInput(comptime start_send: fn (*AttachedClient) anyerror!void
         },
     ));
     try std.testing.expectEqual(sends, capture.sends);
-    try std.testing.expect(!state.outbox.inFlight());
+    try std.testing.expect(!app.model.to_runtime.inFlight());
 }
 
 /// Change review operation accepts terminal panes and rejects replaced attachments.
@@ -461,7 +467,8 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
     };
 
     app.model.request_lifecycle = .{};
-    app.runtime_transport.outbox = .{};
+    app.model.to_runtime = try .init(std.testing.allocator);
+    defer app.model.to_runtime.deinit(std.testing.allocator);
     const pane_id: core.PaneId = @enumFromInt(1);
     const tab_location: core.TabLocation = .{
         .workspace = .{
@@ -472,8 +479,8 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
 
     const retained = try app.model.request_lifecycle.nextId();
     try app.model.request_lifecycle.tracker.add(retained, .notification);
-    while (app.runtime_transport.outbox.hasCapacity()) {
-        try app.runtime_transport.outbox.push(
+    while (app.model.to_runtime.hasCapacity()) {
+        try app.model.to_runtime.push(
             .{
                 .detach_pane = .{
                     .pane_id = pane_id,
@@ -482,7 +489,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
         );
     }
 
-    const queued = app.runtime_transport.outbox.len;
+    const queued = app.model.to_runtime.len;
 
     var options: core.AgentOptions = .{
         .effort = try core.AgentEffort.init("test-effort"),
@@ -563,7 +570,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
         try std.testing.expectError(error.ClientOutboxFull, result);
         try std.testing.expect(app.model.request_lifecycle.tracker.take(request_id) == null);
         try std.testing.expectEqual(@as(usize, 1), app.model.request_lifecycle.tracker.count);
-        try std.testing.expectEqual(queued, app.runtime_transport.outbox.len);
+        try std.testing.expectEqual(queued, app.model.to_runtime.len);
     }
 
     try std.testing.expect(app.model.request_lifecycle.tracker.take(retained).? == .notification);

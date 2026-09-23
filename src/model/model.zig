@@ -45,6 +45,7 @@ pub const role = @import("syntax/role.zig");
 pub const sidebar = @import("layout/sidebar.zig");
 pub const GridRegions = @import("layout/GridRegions.zig");
 pub const workbench = @import("workspace/workbench.zig");
+pub const pane_frame = @import("panes/pane_frame.zig");
 const sidebar_rendering = @import("config/sidebar_rendering.zig");
 pub const SidebarRendering = sidebar_rendering.SidebarRendering;
 pub const ResolvedSidebarRendering = sidebar_rendering.ResolvedSidebarRendering;

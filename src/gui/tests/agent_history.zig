@@ -416,7 +416,7 @@ test "history outbound pressure clears pending state and keeps a visible retry r
     const session = try historySession();
     defer session.deinit();
     const app = &session.gui.app;
-    const outbox = &app.runtime_transport.outbox;
+    const outbox = &app.model.to_runtime;
     while (outbox.hasCapacity()) {
         try outbox.push(.{ .query_agent_thread = .{ .request_id = @enumFromInt(900), .pane_id = Session.pane_id, .pane_generation = 7 } });
     }

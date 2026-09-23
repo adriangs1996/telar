@@ -135,11 +135,11 @@ test "retiring a selected pane consumes its remaining gesture instead of reporti
     try std.testing.expect(client.model.releaseCopyMode(first));
     try std.testing.expect(data.tab_layout.removePane(&client.model, first));
     client.model.panes.findIn(client.model.tabs.location[model].tab_id, second).?.mouse = .{ .tracking = .any, .sgr = true };
-    const queued = client.runtime_transport.outbox.len;
+    const queued = client.model.to_runtime.len;
     const remaining = data.tab_layout.view(&client.model, model, second, terminal.view.workbench()).?.content;
 
     try host_inputs.mouse(terminal, .{ .x = remaining.x, .y = remaining.y, .kind = .drag });
     try host_inputs.mouse(terminal, .{ .x = remaining.x, .y = remaining.y, .kind = .release });
     try std.testing.expect(client.model.pointerSelection() == null);
-    try std.testing.expectEqual(queued, client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(queued, client.model.to_runtime.len);
 }

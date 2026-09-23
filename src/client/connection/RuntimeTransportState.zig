@@ -1,7 +1,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const Bootstrap = @import("Bootstrap.zig");
 const State = @This();
 
 connection: *core.SocketChannel,
@@ -9,7 +8,6 @@ send_buffer: []u8,
 receive_buffer: []u8,
 read_buffer: []u8,
 received: data.RuntimeMessage = undefined,
-outbox: data.Outbox = .{},
 receive_pending: bool = false,
 
 /// Reserves the single receive buffer before a read actor starts.
@@ -46,18 +44,6 @@ pub fn read(state: *State, io: std.Io) !*const data.RuntimeMessage {
     core.mark(io, .client_read);
     state.received = try data.RuntimeMessage.decode(io, bytes);
     return &state.received;
-}
-
-/// Reserves and encodes the next outbound frame for its send actor.
-/// Example: `const bytes = try state.prepareSend() orelse return;`.
-pub fn prepareSend(state: *State) !?[]const u8 {
-    return state.outbox.beginSend(state.send_buffer);
-}
-
-/// Releases a send that could not be scheduled.
-/// Example: `state.cancelSend();`.
-pub fn cancelSend(state: *State) void {
-    state.outbox.sendFailed();
 }
 
 /// Sends the reserved frame without knowing the client event protocol.
@@ -98,20 +84,4 @@ pub fn deinit(state: *State, gpa: std.mem.Allocator) void {
     gpa.free(state.send_buffer);
     gpa.free(state.receive_buffer);
     gpa.free(state.read_buffer);
-}
-
-/// Queues one ordered bootstrap after host negotiation. Capacity is checked
-/// before any frame is queued; the ordinary send actor owns all writes.
-///
-/// ```zig
-/// try state.bootstrap(bootstrap);
-/// ```
-pub fn bootstrap(state: *State, request: Bootstrap) !void {
-    if (state.outbox.availableCapacity() < 3) {
-        return error.ClientOutboxFull;
-    }
-
-    try state.outbox.push(.{ .configure_graphics = .{ .shared = request.graphics_shared } });
-    try state.outbox.push(.{ .configure_terminal_colors = request.terminal_colors });
-    try state.outbox.push(.{ .request_runtime_state = .{ .client_identity = request.client_identity } });
 }

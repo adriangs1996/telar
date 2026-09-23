@@ -59,7 +59,7 @@ pub fn scheduleRead(terminal: *TerminalClient) !void {
     const client = &terminal.app;
 
     const state = &terminal.host_input;
-    if (state.read_pending or client.runtime_transport.outbox.availableCapacity() == 0) {
+    if (state.read_pending or client.model.to_runtime.availableCapacity() == 0) {
         return;
     }
 

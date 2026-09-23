@@ -86,7 +86,7 @@ test "a patch against an unknown base requests a fresh snapshot" {
     try harness.settleModelPresentation();
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try harness.settle();
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "a frame made stale by detach has no state resources or presentation effects" {
@@ -120,7 +120,7 @@ test "a frame made stale by detach has no state resources or presentation effect
     try std.testing.expectEqual(@as(u64, 0), pane.applied_frame_id);
     try std.testing.expectEqual(@as(u64, 0), pane.pending_frame_id);
     try std.testing.expectEqual(graphics_visible, terminal.graphics_store.paneVisible(pane.id));
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     if (comptime core.enabled) {
         try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
@@ -184,7 +184,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
     try std.testing.expectEqual(graphics_version, terminal.graphics_store.ingressVersion());
     try std.testing.expectEqual(graphics_visible, terminal.graphics_store.paneVisible(TestHarness.bootstrap_pane));
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     if (comptime core.enabled) {
         try std.testing.expectEqual(frames, client.telemetry.metrics.frames);
     }
@@ -254,7 +254,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     try std.testing.expect(ack == .frame_ack);
     try std.testing.expectEqual(destination_pane, ack.frame_ack.pane_id);
     try std.testing.expectEqual(@as(u64, 9), ack.frame_ack.frame_id);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "pane cwd commits before presenter-owned metadata projection" {
@@ -282,7 +282,7 @@ test "pane cwd commits before presenter-owned metadata projection" {
     try std.testing.expectEqual(version.pane_foreground, client.model.version().pane_foreground);
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
     try std.testing.expect(!terminal.view.dirty);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
     try presentation_lifecycle.observe(terminal);
     try std.testing.expectEqual(pending_updates + 1, terminal.presenter.pending_updates);
@@ -340,7 +340,7 @@ test "pane foreground and focus update automatic tab labels through presentation
     try std.testing.expectEqual(version.pane_foreground + 1, client.model.version().pane_foreground);
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
     try std.testing.expect(!terminal.view.dirty);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try expectBootstrapTab(&harness, "shell", .app_terminal);
 
     try presentation_lifecycle.observe(terminal);
@@ -595,7 +595,7 @@ test "an inactive pane exit retires only inactive state" {
     try std.testing.expect(client.model.request_lifecycle.tracker.take(@enumFromInt(4)) == null);
     try std.testing.expect(client.model.request_lifecycle.tracker.take(@enumFromInt(5)).? == .ignored);
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
     try presentation_lifecycle.observe(terminal);
 

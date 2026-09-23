@@ -42,7 +42,7 @@ pub fn advance(terminal: *TerminalClient) !bool {
     const client = &terminal.app;
 
     if (client.model.startup.phase == .probing and terminal.host_negotiation.initial_settled) {
-        try client.runtime_transport.bootstrap(.{
+        try client.model.to_runtime.pushBootstrap(.{
             .graphics_shared = client_module.supportsSharedMemory(),
             .client_identity = client.client_identity,
             .terminal_colors = client.model.host.host_capabilities.terminal_colors,

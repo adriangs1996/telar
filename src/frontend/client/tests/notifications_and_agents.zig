@@ -107,7 +107,7 @@ test "a vanished remembered pane retries its workspace once before failing fatal
 
     try std.testing.expectError(error.RuntimeRequestFailed, client.handleServerMessage(try core.decodeServer(retry_failed)));
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try std.testing.expectEqual(@as(u8, 0), client.model.notification_center.count);
 }
 
@@ -218,8 +218,8 @@ test "notification request rolls correlation back when transport is full" {
     defer harness.deinit();
     const client = harness.client;
     const terminal = harness.terminal;
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{
             .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
         });
     }
@@ -1054,8 +1054,8 @@ test "attachment rejection consumes correlation but does not notify when recover
         .pane_id = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
     } });
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
     var payload: [256]u8 = undefined;

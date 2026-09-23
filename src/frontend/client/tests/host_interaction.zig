@@ -77,7 +77,7 @@ test "host resize commits before resources and presents by model version" {
     const pending_after = terminal.presenter.pending_updates;
     try std.testing.expect((try host_resizes.apply(terminal, measurement)) == null);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try std.testing.expectEqual(pending_after, terminal.presenter.pending_updates);
 }
 
@@ -88,8 +88,8 @@ test "host resize retains committed geometry after outbox backpressure" {
     try harness.bootstrap();
     const client = harness.client;
     const terminal = harness.terminal;
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const pending_updates = terminal.presenter.pending_updates;
     const measurement: SizeType = .{
@@ -113,7 +113,7 @@ test "host resize retains committed geometry after outbox backpressure" {
     try std.testing.expect(terminal.presenter.screen.sizeMatches(90, 28));
     try std.testing.expectEqual(@as(u16, 90), terminal.view.scratch.w);
     try std.testing.expectEqual(@as(u16, 28), terminal.view.scratch.h);
-    try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.model.to_runtime.len);
     try std.testing.expectEqual(pending_updates, terminal.presenter.pending_updates);
 }
 
@@ -218,8 +218,8 @@ test "host resize rolls back rejected attachment correlation after offering conn
         client.geometry().area,
     );
 
-    while (client.runtime_transport.outbox.len < data.outbox_support.capacity - 1) {
-        try client.runtime_transport.outbox.push(
+    while (client.model.to_runtime.len < data.outbox_support.capacity - 1) {
+        try client.model.to_runtime.push(
             .{
                 .detach_pane = .{
                     .pane_id = TestHarness.bootstrap_pane,
@@ -241,7 +241,7 @@ test "host resize rolls back rejected attachment correlation after offering conn
 
     try std.testing.expectEqual(initial_request_id + 1, client.model.request_lifecycle.next_request_id);
     try std.testing.expect(!client.model.request_lifecycle.tracker.hasPane(.attachment, sibling));
-    try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.model.to_runtime.len);
     try std.testing.expectEqual(@as(u16, 100), client.model.host.host_size.cols);
     try std.testing.expect(!client.model.panes.find(sibling).?.attached);
 }
@@ -265,7 +265,7 @@ test "oversized host measurement changes neither model nor capabilities" {
     try std.testing.expectEqualDeep(host_size, client.model.host.host_size);
     try std.testing.expectEqualDeep(capabilities, client.model.host.host_capabilities);
     try std.testing.expectEqualDeep(data.Version{}, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "terminal pixel response keeps model host geometry authoritative" {
@@ -635,8 +635,8 @@ test "a full outbox preserves the committed pane viewport and rejects input" {
         .offset = 0,
     };
     try terminal.graphics_store.setPaneVisible(pane.id, false);
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = pane.id } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = pane.id } });
     }
     const version = client.model.version();
     const pending_updates = terminal.presenter.pending_updates;
@@ -862,7 +862,7 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expectEqualDeep(active_version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
     try std.testing.expect(data.tab_layout.removePane(&client.model, TestHarness.bootstrap_pane));
     try host_inputs.mouse(terminal, .{ .x = 0, .y = 0, .kind = .move });
@@ -870,7 +870,7 @@ test "copy-mode pointer consumes outside wheels and exits a missing target" {
     try std.testing.expect(!client.model.copyModeActive());
     try support.expectNonCopyVersionEqual(active_version, client.model.version());
     try std.testing.expectEqual(active_version.copy + 1, client.model.version().copy);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "a full outbox keeps copy mode and its selection active" {
@@ -880,8 +880,8 @@ test "a full outbox keeps copy mode and its selection active" {
     try harness.bootstrap();
     const client = harness.client;
     const terminal = harness.terminal;
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
     _ = try client.executeAction(.enter_copy_mode, .effect);
@@ -896,5 +896,5 @@ test "a full outbox keeps copy mode and its selection active" {
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(client.model.copyModeProjection().?.view.anchor != null);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.runtime_transport.outbox.len));
+    try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.model.to_runtime.len));
 }

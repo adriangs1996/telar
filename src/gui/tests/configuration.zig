@@ -203,8 +203,8 @@ test "GUI native resources follow an adopted generation when downstream delivery
     const reload = &session.gui.driver.configuration;
     try fixture.write("config.lua", "return { api_version = 2, client = { pane_gaps = false }, gui = { font = { size = 21 } } }");
     try fixture.wait();
-    while (session.gui.app.runtime_transport.outbox.hasCapacity()) {
-        try session.gui.app.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = Session.pane_id } });
+    while (session.gui.app.model.to_runtime.hasCapacity()) {
+        try session.gui.app.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = Session.pane_id } });
     }
 
     try std.testing.expectError(error.ClientOutboxFull, reload.apply(session.gui, &session.gui.renderer));

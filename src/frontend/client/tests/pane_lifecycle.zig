@@ -91,7 +91,7 @@ test "pane focus commits before reports resize and presentation" {
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(pending_updates_before_noop, terminal.presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "fullscreen tab round trip reconnects panes revealed by focus or tiled layout" {
@@ -189,7 +189,7 @@ test "fullscreen tab round trip reconnects panes revealed by focus or tiled layo
         }
 
         try scenario.expectInput(sibling);
-        try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+        try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     }
 }
 
@@ -217,7 +217,7 @@ test "navigation forwards the canonical key only to Neovim at a Telar edge" {
                     .effect,
                 );
                 try std.testing.expectEqualDeep(version, harness.client.model.version());
-                try std.testing.expectEqual(@as(usize, 0), harness.client.runtime_transport.outbox.len);
+                try std.testing.expectEqual(@as(usize, 0), harness.client.model.to_runtime.len);
             }
 
             continue;
@@ -389,8 +389,8 @@ test "pane geometry delivery offers only attached visible panes" {
     const detached = client.model.tabs.find(detached_location.tab_id).?;
     try client.resizeAttachedPanes(detached, area);
 
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
-    try std.testing.expect(!client.runtime_transport.outbox.inFlight());
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
+    try std.testing.expect(!client.model.to_runtime.inFlight());
 }
 
 test "pane resize publishes committed geometry before presentation" {
@@ -469,7 +469,7 @@ test "pane resize publishes committed geometry before presentation" {
 
     try std.testing.expectEqualDeep(version_before_noop, client.model.version());
     try std.testing.expectEqual(pending_updates_before_noop, terminal.presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try std.testing.expect(!terminal.view.dirty);
 }
 
@@ -705,7 +705,7 @@ test "sidebar toggle delivers the committed geometry to host resources" {
     try std.testing.expect(terminal.view.workbench().w > shown_area.w);
     try std.testing.expect(terminal.view.dirty);
     try std.testing.expect(terminal.graphics_store.damage);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "workspace list toggle is projected only by the presenter" {
@@ -729,7 +729,7 @@ test "workspace list toggle is projected only by the presenter" {
     try std.testing.expectEqual(version_before_collapse.panes, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_collapse, terminal.presenter.pending_updates);
     try std.testing.expect(!terminal.view.dirty);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
     try presentation_lifecycle.observe(terminal);
 
@@ -746,7 +746,7 @@ test "workspace list toggle is projected only by the presenter" {
     try std.testing.expect(terminal.view.workspace_list_collapsed);
     try std.testing.expectEqual(version_before_expand.chrome + 1, client.model.version().chrome);
     try std.testing.expectEqual(pending_updates_before_expand, terminal.presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
     try presentation_lifecycle.observe(terminal);
 
@@ -947,7 +947,7 @@ test "a failed split never resizes the tab selected afterwards" {
 
     _ = try client.handleServerMessage(try core.decodeServer(failed));
 
-    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.model.to_runtime.len);
     try support.expectOnlyNotificationVersionChanged(version_before, client.model.version());
 }
 
@@ -977,7 +977,7 @@ test "a failed split for a retired target is silent" {
 
     _ = try client.handleServerMessage(try core.decodeServer(failed));
 
-    try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), client.model.to_runtime.len);
     try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
 }
 
@@ -1138,7 +1138,7 @@ test "tab detachment preserves focus reported by another tab" {
     const detached = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(detached == .detach_pane);
     try std.testing.expectEqual(inactive_pane, detached.detach_pane.pane_id);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "detach action releases every tab before stopping the client" {
@@ -1260,7 +1260,7 @@ test "an internal pane attachment failure waits for a later resync" {
     try std.testing.expect(!pane.attached);
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expect(!client.model.request_lifecycle.tracker.has(.tab_snapshot));
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try std.testing.expect(client.model.notification_scheduler.pending);
 }
 
@@ -1322,5 +1322,5 @@ test "a late failed pane attachment does not notify or draw" {
 
     try std.testing.expectEqual(pending_updates_before_failure, terminal.presenter.pending_updates);
     try std.testing.expect(!client.model.notification_scheduler.pending);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }

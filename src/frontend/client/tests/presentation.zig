@@ -411,7 +411,7 @@ test "TUI frame ACKs advance while a sealed host write retains its presentation 
         }
 
         try std.testing.expectEqual(@as(u64, 2), pane.pending_frame_id);
-        try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+        try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
         try std.testing.expect(terminal.presenter.presentation_state.active == null);
         try std.testing.expect(!output.pending);
     }

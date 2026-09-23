@@ -1,3 +1,4 @@
+const RuntimeBootstrap = @import("RuntimeBootstrap.zig");
 const data = @import("../model.zig");
 const outbox_support = @import("outbox_support.zig");
 const OwnedLaunchCwd = @import("OwnedLaunchCwd.zig");
@@ -13,8 +14,12 @@ const std = @import("std");
 const core = @import("telar-core");
 const Outbox = @This();
 
+const Payloads = [outbox_support.capacity][data.input_limits.max_encoded_bytes]u8;
+
 items: [outbox_support.capacity]outbox_support.Message = undefined,
-input_bytes: [outbox_support.capacity][data.input_limits.max_encoded_bytes]u8 = undefined,
+/// Owned payload bytes, one slot per queued message. Reserved once on the
+/// heap so the model stays small enough to live on a test stack.
+input_bytes: ?*Payloads = null,
 launch_cwds: [outbox_support.max_pending_launches]OwnedLaunchCwd =
     [_]OwnedLaunchCwd{.{}} ** outbox_support.max_pending_launches,
 client_layouts: [2]OwnedClientLayout = [_]OwnedClientLayout{.{}} ** 2,
@@ -23,6 +28,34 @@ head: u8 = 0,
 len: u8 = 0,
 send_pending: bool = false,
 stats: Stats = .{},
+
+/// Reserves payload storage before the first message is queued. The
+/// interactive path then never allocates.
+/// Example: `try model.to_runtime.reservePayloads(gpa);`
+pub fn reservePayloads(outbox: *Outbox, gpa: std.mem.Allocator) !void {
+    if (outbox.input_bytes == null) {
+        outbox.input_bytes = try gpa.create(Payloads);
+    }
+}
+
+pub fn deinit(outbox: *Outbox, gpa: std.mem.Allocator) void {
+    if (outbox.input_bytes) |payloads| {
+        gpa.destroy(payloads);
+    }
+
+    outbox.input_bytes = null;
+}
+
+/// Example: `const init: Outbox = try .init(gpa);`
+pub fn init(gpa: std.mem.Allocator) !Outbox {
+    var outbox: Outbox = .{};
+    try outbox.reservePayloads(gpa);
+    return outbox;
+}
+
+fn payloadAt(outbox: anytype, index: usize) *[data.input_limits.max_encoded_bytes]u8 {
+    return &outbox.input_bytes.?[index];
+}
 
 pub fn hasCapacity(outbox: *const Outbox) bool {
     return outbox.len < outbox_support.capacity;
@@ -55,10 +88,26 @@ pub fn snapshot(outbox: *const Outbox) Snapshot {
 }
 
 /// Retains a completion outside the small per-message metadata. Example: `try outbox.pushClientCompletion(reply);`
+/// Queues the ordered bootstrap after host negotiation. Capacity is checked
+/// before any frame is queued.
+///
+/// ```zig
+/// try model.to_runtime.pushBootstrap(.{ .graphics_shared = true, .client_identity = identity });
+/// ```
+pub fn pushBootstrap(outbox: *Outbox, request: RuntimeBootstrap) !void {
+    if (outbox.availableCapacity() < 3) {
+        return error.ClientOutboxFull;
+    }
+
+    try outbox.push(.{ .configure_graphics = .{ .shared = request.graphics_shared } });
+    try outbox.push(.{ .configure_terminal_colors = request.terminal_colors });
+    try outbox.push(.{ .request_runtime_state = .{ .client_identity = request.client_identity } });
+}
+
 pub fn pushClientCompletion(self: *Outbox, reply: core.ClientCommand) !void {
     try reply.validateWire();
     const index = try self.reserve();
-    const encoded = core.encodeCompleteClientCommand(&self.input_bytes[index], reply) catch unreachable;
+    const encoded = core.encodeCompleteClientCommand(self.payloadAt(index), reply) catch unreachable;
     self.item_launch_cwd[index] = null;
     self.items[index] = .{ .complete_client_command = @intCast(encoded.len) };
 }
@@ -96,9 +145,9 @@ pub fn pushInput(outbox: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void
         switch (outbox.items[index]) {
             .pane_input => |*input| {
                 if (input.pane_id == pane_id and
-                    bytes.len <= outbox.input_bytes[index].len - input.len)
+                    bytes.len <= outbox.payloadAt(index).len - input.len)
                 {
-                    @memcpy(outbox.input_bytes[index][input.len..][0..bytes.len], bytes);
+                    @memcpy(outbox.payloadAt(index)[input.len..][0..bytes.len], bytes);
                     input.len += @intCast(bytes.len);
                     outbox.stats.coalesced_input +|= 1;
                     return;
@@ -113,7 +162,7 @@ pub fn pushInput(outbox: *Outbox, pane_id: core.PaneId, bytes: []const u8) !void
         .pane_id = pane_id,
         .len = @intCast(bytes.len),
     } };
-    @memcpy(outbox.input_bytes[index][0..bytes.len], bytes);
+    @memcpy(outbox.payloadAt(index)[0..bytes.len], bytes);
 }
 
 /// Owns one prompt in the existing slot byte storage without coalescing turns.
@@ -146,11 +195,11 @@ pub fn pushAgentPrompt(outbox: *Outbox, prompt: core.AgentPrompt) !void {
         .options = prompt.options,
         .image_count = prompt.images.count,
     } };
-    @memcpy(outbox.input_bytes[index][0..prompt.text.len], prompt.text);
+    @memcpy(outbox.payloadAt(index)[0..prompt.text.len], prompt.text);
     var offset = prompt.text.len;
     for (prompt.images.storage[0..prompt.images.count], 0..) |path, image_index| {
         outbox.items[index].agent_prompt.image_lengths[image_index] = @intCast(path.len);
-        @memcpy(outbox.input_bytes[index][offset..][0..path.len], path);
+        @memcpy(outbox.payloadAt(index)[offset..][0..path.len], path);
         offset += path.len;
     }
 }
@@ -167,9 +216,9 @@ pub fn pushAgentHistory(outbox: *Outbox, query: core.QueryAgentHistory) !void {
     const index = try outbox.reserve();
     outbox.item_launch_cwd[index] = null;
     outbox.items[index] = .{ .query_agent_history = .{ .request_id = query.request_id, .pane_id = query.pane_id, .pane_generation = query.pane_generation, .view_generation = query.view_generation, .cursor_len = @intCast(query.cursor.len), .anchor_len = @intCast(query.anchor.len), .anchor_turn_len = @intCast(query.anchor_turn.len), .direction = query.direction } };
-    @memcpy(outbox.input_bytes[index][0..query.cursor.len], query.cursor);
-    @memcpy(outbox.input_bytes[index][query.cursor.len..][0..query.anchor.len], query.anchor);
-    @memcpy(outbox.input_bytes[index][query.cursor.len + query.anchor.len ..][0..query.anchor_turn.len], query.anchor_turn);
+    @memcpy(outbox.payloadAt(index)[0..query.cursor.len], query.cursor);
+    @memcpy(outbox.payloadAt(index)[query.cursor.len..][0..query.anchor.len], query.anchor);
+    @memcpy(outbox.payloadAt(index)[query.cursor.len + query.anchor.len ..][0..query.anchor_turn.len], query.anchor_turn);
 }
 
 /// Owns the complete encoded command in an existing byte slot before input returns.
@@ -191,7 +240,7 @@ fn pushReview(self: *Outbox, value: anytype) !void {
     const index = try self.reserve();
     self.item_launch_cwd[index] = null;
     self.items[index] = if (query) .{ .query_change_review = @intCast(encoded.len) } else .{ .change_review_command = @intCast(encoded.len) };
-    @memcpy(self.input_bytes[index][0..encoded.len], encoded);
+    @memcpy(self.payloadAt(index)[0..encoded.len], encoded);
 }
 
 /// Reserves a whole bounded paste before copying any chunk into the queue.
@@ -392,7 +441,7 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         },
         .pane_input => |value| core.encodePaneInput(buffer, .{
             .pane_id = value.pane_id,
-            .bytes = outbox.input_bytes[outbox.head][0..value.len],
+            .bytes = outbox.payloadAt(outbox.head)[0..value.len],
         }),
         .pane_resize => |value| core.encodePaneResize(buffer, value),
         .frame_ack => |value| core.encodeFrameAck(buffer, value),
@@ -401,7 +450,7 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .request_tab_snapshot => |value| core.encodeRequestTabSnapshot(buffer, value),
         .create_pane => |value| {
             var scratch: [core.max_argument_count][]const u8 = undefined;
-            var owned = value.view(&outbox.input_bytes[outbox.head], &scratch);
+            var owned = value.view(outbox.payloadAt(outbox.head), &scratch);
             owned.launch.cwd = outbox.launchCwd(outbox.head);
             return core.encodeCreatePane(buffer, owned);
         },
@@ -409,7 +458,7 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .request_workspace_snapshot => |value| core.encodeRequestWorkspaceSnapshot(buffer, value),
         .create_tab => |*value| encode: {
             var scratch: [core.max_argument_count][]const u8 = undefined;
-            var owned = value.view(&outbox.input_bytes[outbox.head], &scratch);
+            var owned = value.view(outbox.payloadAt(outbox.head), &scratch);
             owned.launch.cwd = outbox.launchCwd(outbox.head);
             break :encode core.encodeCreateTab(buffer, owned);
         },
@@ -444,22 +493,22 @@ fn encodeNext(outbox: *const Outbox, buffer: []u8) ![]const u8 {
         .delete_history => |value| core.encodeDeleteHistory(buffer, value),
         .read_history_output => |value| core.encodeReadHistoryOutput(buffer, value),
         .suggest_command => |*value| core.encodeSuggestCommand(buffer, value.view()),
-        .complete_client_command => |length| outbox.input_bytes[outbox.head][0..length],
+        .complete_client_command => |length| outbox.payloadAt(outbox.head)[0..length],
         .open_editor => |value| encode: {
             var request = value;
-            const bytes = &outbox.input_bytes[outbox.head];
+            const bytes = outbox.payloadAt(outbox.head);
             request.editor = bytes[0..value.editor.len];
             request.path = bytes[value.editor.len..][0..value.path.len];
             break :encode core.encodeOpenEditor(buffer, request);
         },
         .complete_pane_focus => |value| core.encodeCompletePaneFocus(buffer, value),
-        .agent_prompt => |*value| core.encodeAgentPrompt(buffer, value.view(&outbox.input_bytes[outbox.head])),
+        .agent_prompt => |*value| core.encodeAgentPrompt(buffer, value.view(outbox.payloadAt(outbox.head))),
         .agent_interrupt => |value| core.encodeAgentInterrupt(buffer, value),
         .agent_resume => |value| core.encodeAgentResume(buffer, value),
         .agent_approval => |value| core.encodeAgentApproval(buffer, value),
-        .query_change_review, .change_review_command => |len| outbox.input_bytes[outbox.head][0..len],
+        .query_change_review, .change_review_command => |len| outbox.payloadAt(outbox.head)[0..len],
         .query_agent_thread => |value| core.encodeQueryAgentThread(buffer, value),
-        .query_agent_history => |*value| core.encodeQueryAgentHistory(buffer, value.view(&outbox.input_bytes[outbox.head])),
+        .query_agent_history => |*value| core.encodeQueryAgentHistory(buffer, value.view(outbox.payloadAt(outbox.head))),
     };
 }
 
@@ -479,14 +528,14 @@ fn append(outbox: *Outbox, message: outbox_support.Message) !void {
             return error.InvalidEditorTarget;
         }
 
-        @memcpy(outbox.input_bytes[index][0..request.editor.len], request.editor);
-        @memcpy(outbox.input_bytes[index][request.editor.len..][0..request.path.len], request.path);
-        owned.open_editor.editor = outbox.input_bytes[index][0..request.editor.len];
-        owned.open_editor.path = outbox.input_bytes[index][request.editor.len..][0..request.path.len];
+        @memcpy(outbox.payloadAt(index)[0..request.editor.len], request.editor);
+        @memcpy(outbox.payloadAt(index)[request.editor.len..][0..request.path.len], request.path);
+        owned.open_editor.editor = outbox.payloadAt(index)[0..request.editor.len];
+        owned.open_editor.path = outbox.payloadAt(index)[request.editor.len..][0..request.path.len];
     } else if (owned == .create_pane) {
-        try owned.create_pane.ownArguments(&outbox.input_bytes[index]);
+        try owned.create_pane.ownArguments(outbox.payloadAt(index));
     } else if (owned == .create_tab) {
-        try owned.create_tab.ownArguments(&outbox.input_bytes[index]);
+        try owned.create_tab.ownArguments(outbox.payloadAt(index));
     }
 
     outbox.item_launch_cwd[index] = launch_slot;
@@ -620,4 +669,28 @@ fn pushAck(outbox: *Outbox, ack: core.FrameAck) !void {
         }
     }
     try outbox.append(.{ .frame_ack = ack });
+}
+
+test "runtime bootstrap queues colors before subscribing to the initial layout" {
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
+    var buffer: [core.max_frame_size]u8 = undefined;
+
+    try outbox.pushBootstrap(.{
+        .graphics_shared = true,
+        .client_identity = @enumFromInt(9),
+    });
+
+    const configure = try core.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expect(configure == .configure_graphics);
+    try std.testing.expect(configure.configure_graphics.shared);
+
+    try outbox.finishSend({});
+    const colors = try core.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expect(colors == .configure_terminal_colors);
+    try outbox.finishSend({});
+
+    const runtime_state = try core.decodeClient((try outbox.beginSend(&buffer)).?);
+    try std.testing.expect(runtime_state == .request_runtime_state);
+    try std.testing.expectEqual(@as(core.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
 }

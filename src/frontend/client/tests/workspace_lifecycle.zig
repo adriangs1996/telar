@@ -192,7 +192,7 @@ test "workspace creation validates names before request ownership or projection 
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(next_request, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "workspace creation outbox failure releases correlation and retains the current workspace" {
@@ -202,8 +202,8 @@ test "workspace creation outbox failure releases correlation and retains the cur
     try harness.bootstrap();
     const client = harness.client;
     client.model.request_lifecycle.tracker = .{};
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
 
@@ -227,8 +227,8 @@ test "canonical workspace replacement survives failure to deliver activation sna
     const client = harness.client;
     client.model.request_lifecycle.tracker = .{};
     try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(5) };
     var payload: [128]u8 = undefined;

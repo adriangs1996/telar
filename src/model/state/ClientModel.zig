@@ -113,6 +113,7 @@ clipboard: ClipboardCaptureState = .{},
 plugins: PluginExecutionState = .{},
 host: HostState,
 to_host: model_data.HostEffects = .{},
+to_runtime: model_data.Outbox = .{},
 name_prompt: model_data.NamePromptState = .{},
 history_palette: HistoryPaletteState = .{},
 suggestion: SuggestionState = .{},
@@ -234,6 +235,7 @@ pub fn deinit(model: *ClientModel) void {
     model.history_palette.deinit();
     model.clipboard.deinit(model.gpa);
     model.to_host.deinit(model.gpa);
+    model.to_runtime.deinit(model.gpa);
     workspace_handoff.clear(model);
     model.saved_layouts = .{};
 }
@@ -1324,55 +1326,6 @@ pub fn planPaneInput(model: *const ClientModel, target: model_data.PaneInputTarg
     };
 }
 
-/// Applies one attached runtime frame and copy-mode reconciliation as one
-/// client-model commit. Broken patch bases request recovery without
-/// changing state. Detached or absent panes ignore frames still in flight
-/// when a workspace departure removes their local model.
-///
-/// ```zig
-/// const outcome = try model.applyPaneFrame(frame);
-/// ```
-pub fn applyPaneFrame(model: *ClientModel, frame: core.FrameView) !model_data.PaneFrameOutcome {
-    const pane = model.panes.find(frame.pane_id) orelse return .detached;
-    if (!pane.attached) {
-        return .detached;
-    }
-    if (frame.base_frame_id != 0 and frame.base_frame_id != pane.applied_frame_id) {
-        return .{ .resync = .{
-            .pane_id = frame.pane_id,
-            .known_frame_id = pane.applied_frame_id,
-        } };
-    }
-
-    const generation = if (pane.attachment_generation == 0) try model.allocateAttachmentGeneration() else pane.attachment_generation;
-    const previous_scroll_offset = pane.scroll.offset;
-    const applied = try pane.applyFrame(frame);
-    pane.attach(generation);
-    _ = model.reconcileCopyModeFrame(.{
-        .pane_id = frame.pane_id,
-        .previous_offset = previous_scroll_offset,
-        .scroll = frame.scroll,
-    });
-    model.frame_revision +%= 1;
-    const active = model.activeTabLocation();
-
-    return .{ .applied = .{
-        .pane_id = frame.pane_id,
-        .location = pane.location,
-        .frame_id = frame.frame_id,
-        .graphics_visible = frame.scroll.atBottom(frame.rows) and
-            active != null and std.meta.eql(active.?, pane.location),
-        .snapshot = frame.base_frame_id == 0,
-        .spans = applied.spans,
-        .cells = applied.cells,
-        .workspace_revision = model.workspace_revision,
-        .tabs_revision = model.tabs_revision,
-        .active_tab_revision = model.active_tab_revision,
-        .panes_revision = model.panes_revision,
-        .frame_revision = model.frame_revision,
-    } };
-}
-
 /// Commits whether one pane needs a cell fallback for host graphics.
 /// Unknown panes and repeated values preserve the semantic revision.
 ///
@@ -2241,7 +2194,7 @@ pub fn confirmPaneAttachment(model: *ClientModel, attachment: model_data.PaneAtt
     return .confirmed;
 }
 
-fn allocateAttachmentGeneration(model: *ClientModel) !u64 {
+pub fn allocateAttachmentGeneration(model: *ClientModel) !u64 {
     if (model.next_attachment_generation == std.math.maxInt(u64)) {
         return error.AttachmentGenerationExhausted;
     }

@@ -115,7 +115,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
@@ -150,7 +150,7 @@ test "an unexpected tab rename is rejected without effects" {
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, terminal.presenter.pending_updates);
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "tab rename consumes an incompatible continuation before rejection" {
@@ -418,7 +418,7 @@ test "pending tab operation keeps the rename prompt without sending" {
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
 
@@ -436,8 +436,8 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
     const terminal = harness.terminal;
     client.model.request_lifecycle.tracker = .{};
     const version_before_request = client.model.version();
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 
     try std.testing.expect(client.openNamePrompt(
@@ -451,7 +451,7 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expect(!client.model.request_lifecycle.tracker.has(.tab_operation));
-    try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.runtime_transport.outbox.len));
+    try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.model.to_runtime.len));
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);

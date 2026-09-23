@@ -163,7 +163,7 @@ pub fn source(metric: Metric) []const u8 {
         .gui_draw => "GuiClient.draw",
         .gui_complete => "GuiClient.complete",
         .client_receive => "AttachedClient.receiveRuntime",
-        .client_apply_frame => "AttachedClient.applyPaneFrame",
+        .client_apply_frame => "AttachedClient.receivePaneFrame",
         .pane_apply_frame => "Pane.applyFrame",
         .pane_find => "MultiplexerModel.find/findConst",
         .pane_find_found => "MultiplexerModel.find/findConst",

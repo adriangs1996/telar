@@ -447,7 +447,7 @@ fn start(self: *GuiClient, colors: core.TerminalColors) !void {
 
     self.app.model.startup.phase = .opening;
 
-    try self.app.runtime_transport.bootstrap(
+    try self.app.model.to_runtime.pushBootstrap(
         .{
             .graphics_shared = false,
             .client_identity = self.app.client_identity,
@@ -684,7 +684,7 @@ fn drainInput(self: *GuiClient) !void {
     var budget = client.DrainBudget.begin(app.io, pending_input.len + pending_input.recovery.len);
     const pending = self.router.prefixPending();
 
-    while (!self.stopped and pending_input.len != 0 and app.runtime_transport.outbox.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots) and budget.take(app.io)) {
+    while (!self.stopped and pending_input.len != 0 and app.model.to_runtime.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots) and budget.take(app.io)) {
         const overflows = self.router.leaseOverflowCount();
 
         switch (pending_input.front().?.*) {
@@ -1498,7 +1498,7 @@ fn focus(self: *GuiClient, focused: bool) !void {
 /// Queue one readiness notification only when input can make progress.
 /// Example: `try gui.resumeInput();`
 pub fn resumeInput(self: *GuiClient) !void {
-    if (self.input_queue.len != 0 and !self.app.model.startup.holdsInput() and self.app.runtime_transport.outbox.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots)) {
+    if (self.input_queue.len != 0 and !self.app.model.startup.holdsInput() and self.app.model.to_runtime.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots)) {
         try self.driver.inbox.notify(.input_ready);
     }
 }

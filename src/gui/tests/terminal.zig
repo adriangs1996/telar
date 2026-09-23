@@ -48,7 +48,7 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
         },
     );
 
-    const pending_count = app.runtime_transport.outbox.len;
+    const pending_count = app.model.to_runtime.len;
     const pending_bytes = session.pending.?;
     try session.gui.windowReady(
         .{
@@ -57,7 +57,7 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
             .scale = 1,
         },
     );
-    try std.testing.expectEqual(pending_count, app.runtime_transport.outbox.len);
+    try std.testing.expectEqual(pending_count, app.model.to_runtime.len);
     try std.testing.expectEqual(pending_bytes.ptr, session.pending.?.ptr);
     try std.testing.expect(session.gui.started);
     try std.testing.expect(app.model.startup.phase == .opening);
@@ -84,7 +84,7 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     session.pending = null;
     try app.completeRuntimeSend({});
     try std.testing.expect(session.pending == null);
-    try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), app.model.to_runtime.len);
     try std.testing.expect(app.model.startup.phase == .opening);
 }
 
@@ -98,7 +98,7 @@ test "drawing does not activate the runtime before native readiness" {
     try std.testing.expect(!session.gui.started);
     try std.testing.expect(!session.gui.app.runtime_transport.receive_pending);
     try std.testing.expect(session.pending == null);
-    try std.testing.expectEqual(@as(u8, 0), session.gui.app.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(u8, 0), session.gui.app.model.to_runtime.len);
 }
 
 test "GUI font metrics apply size spacing and display scale once" {

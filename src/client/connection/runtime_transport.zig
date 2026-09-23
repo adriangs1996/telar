@@ -51,33 +51,6 @@ test "runtime transport releases every partial frame allocation" {
     );
 }
 
-test "runtime bootstrap queues colors before subscribing to the initial layout" {
-    const io = std.testing.io;
-    var channels = try testingSocketPair();
-    defer channels[0].deinit(io);
-    defer channels[1].deinit(io);
-    var state = try RuntimeTransportState.init(std.testing.allocator, &channels[0]);
-    defer state.deinit(std.testing.allocator);
-
-    try state.bootstrap(.{
-        .graphics_shared = true,
-        .client_identity = @enumFromInt(9),
-    });
-
-    const configure = try core_module.decodeClient((try state.prepareSend()).?);
-    try std.testing.expect(configure == .configure_graphics);
-    try std.testing.expect(configure.configure_graphics.shared);
-
-    try state.outbox.finishSend({});
-    const colors = try core_module.decodeClient((try state.prepareSend()).?);
-    try std.testing.expect(colors == .configure_terminal_colors);
-    try state.outbox.finishSend({});
-
-    const runtime_state = try core_module.decodeClient((try state.prepareSend()).?);
-    try std.testing.expect(runtime_state == .request_runtime_state);
-    try std.testing.expectEqual(@as(core_module.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
-}
-
 test "a non-reading peer cannot block receive admission or local input and shutdown joins both actors" {
     const core = @import("telar-core");
     const Event = union(enum) {

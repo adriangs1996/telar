@@ -79,7 +79,8 @@ pub fn messageLaunchCwd(message: Message) ?[]const u8 {
 }
 
 test "adjacent input for one pane is folded without allocation" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     try outbox.pushInput(@enumFromInt(1), "abc");
     try outbox.pushInput(@enumFromInt(1), "def");
     try std.testing.expectEqual(@as(u8, 1), outbox.len);
@@ -91,7 +92,8 @@ test "adjacent input for one pane is folded without allocation" {
 }
 
 test "a long paste reserves all chunks before mutating the outbox" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const command = "x" ** (data.input_limits.max_encoded_bytes + 128);
     const pane_id: core.PaneId = @enumFromInt(1);
     while (outbox.availableCapacity() > 1) {
@@ -127,7 +129,8 @@ test "queue metadata stays small when input storage grows" {
 }
 
 test "queued launches own cwd and transient editor arguments until encoding" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const pane_id: core.PaneId = @enumFromInt(1);
     try outbox.push(.{ .pane_resize = .{
         .pane_id = pane_id,
@@ -166,7 +169,8 @@ test "queued launches own cwd and transient editor arguments until encoding" {
 }
 
 test "queued tab rename owns bounded label bytes until encoding" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(3) },
         .tab_id = @enumFromInt(4),
@@ -205,7 +209,8 @@ test "queued tab rename owns bounded label bytes until encoding" {
 }
 
 test "queued workspace creation owns name and cwd bytes until encoding" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const pane_id: core.PaneId = @enumFromInt(1);
     try outbox.push(.{ .pane_resize = .{
         .pane_id = pane_id,
@@ -238,7 +243,8 @@ test "queued workspace creation owns name and cwd bytes until encoding" {
 
 test "workspace directory creation consent survives the queued wire request" {
     for ([_]bool{ false, true }) |confirmed| {
-        var outbox: Outbox = .{};
+        var outbox: Outbox = try .init(std.testing.allocator);
+        defer outbox.deinit(std.testing.allocator);
         try outbox.pushCreateWorkspace(.{ .request_id = @enumFromInt(2), .size = .{ .cols = 80, .rows = 24 }, .name = "agents", .launch = .{ .cwd = "/work/new-project", .arguments = &.{"/bin/sh"} }, .create_cwd = confirmed });
         var buffer: [512]u8 = undefined;
         const decoded = try core.decodeClient((try outbox.beginSend(&buffer)).?);
@@ -249,7 +255,8 @@ test "workspace directory creation consent survives the queued wire request" {
 }
 
 test "queued tab creation owns label and cwd bytes until encoding" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const pane_id: core.PaneId = @enumFromInt(1);
     try outbox.push(.{ .pane_resize = .{
         .pane_id = pane_id,
@@ -282,7 +289,8 @@ test "queued tab creation owns label and cwd bytes until encoding" {
 }
 
 test "pending launch cwd storage has an explicit bound" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     for (0..max_pending_launches) |index| try outbox.push(.{ .create_pane = .{
         .request_id = @enumFromInt(index + 1),
         .location = .{
@@ -304,7 +312,8 @@ test "pending launch cwd storage has an explicit bound" {
 }
 
 test "history replaces only unsent first-page queries" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     var query: data.OwnedHistoryQuery = .{ .request_id = @enumFromInt(1), .limit = 20 };
     try outbox.push(.{ .query_history = query });
     query.request_id = @enumFromInt(2);
@@ -327,7 +336,8 @@ test "history replaces only unsent first-page queries" {
 }
 
 test "input never coalesces into a message already in flight" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const pane_id: core.PaneId = @enumFromInt(1);
     try outbox.pushInput(pane_id, "first");
     var buffer: [64]u8 = undefined;
@@ -344,7 +354,8 @@ test "input never coalesces into a message already in flight" {
 }
 
 test "client layouts coalesce without mutating an in-flight snapshot" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(3) },
         .tab_id = @enumFromInt(4),
@@ -396,7 +407,8 @@ test "client layouts coalesce without mutating an in-flight snapshot" {
 }
 
 test "client layout folding never crosses an ordered request" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(3) },
         .tab_id = @enumFromInt(4),
@@ -430,7 +442,8 @@ test "client layout folding never crosses an ordered request" {
 }
 
 test "resize folding never crosses an ordered input message" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const pane_id: core.PaneId = @enumFromInt(1);
     try outbox.push(.{ .pane_resize = .{
         .pane_id = pane_id,
@@ -446,7 +459,8 @@ test "resize folding never crosses an ordered input message" {
 }
 
 test "send completion releases its claim on success and failure" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     var buffer: [64]u8 = undefined;
     try outbox.push(.{ .detach_pane = .{ .pane_id = @enumFromInt(1) } });
 
@@ -462,7 +476,8 @@ test "send completion releases its claim on success and failure" {
 }
 
 test "a full outbox reports saturation" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     for (0..capacity) |index| try outbox.push(.{ .request_snapshot = .{
         .pane_id = @enumFromInt(index + 1),
         .known_frame_id = 0,
@@ -474,7 +489,8 @@ test "a full outbox reports saturation" {
 }
 
 test "queued tab creation owns argument bytes until encoding" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const pane_id: core.PaneId = @enumFromInt(1);
     try outbox.push(.{ .pane_resize = .{
         .pane_id = pane_id,
@@ -508,7 +524,8 @@ test "queued tab creation owns argument bytes until encoding" {
 }
 
 test "agent prompt outbox owns borrowed image paths and refuses aggregate overflow atomically" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     var image = "/tmp/borrowed.png".*;
     var request: core.AgentPrompt = .{ .request_id = @enumFromInt(1), .pane_id = @enumFromInt(2), .pane_generation = 3, .text = "inspect" };
     try request.options.setModel("test-model");
@@ -516,7 +533,7 @@ test "agent prompt outbox owns borrowed image paths and refuses aggregate overfl
     try request.images.append(&image);
     try outbox.pushAgentPrompt(request);
     @memset(&image, 'x');
-    const stored = outbox.items[0].agent_prompt.view(&outbox.input_bytes[0]);
+    const stored = outbox.items[0].agent_prompt.view(&outbox.input_bytes.?[0]);
     try std.testing.expectEqualStrings("/tmp/borrowed.png", stored.images.path(0));
     try std.testing.expectEqualStrings("inspect", stored.text);
     var long: [core.agent_thread.max_prompt_bytes]u8 = @splat('a');
@@ -528,7 +545,8 @@ test "agent prompt outbox owns borrowed image paths and refuses aggregate overfl
 }
 
 test "routed completions retain their text through send and recycle bounded slots" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     var reply: core.ClientCommand = .{ .request_id = @enumFromInt(5), .route = .{ .id = 7, .generation = 9 }, .action = .workspace_select, .status = .admitted, .target_id = 42 };
     try reply.setText("retained");
     for (0..capacity) |_| {
@@ -546,7 +564,8 @@ test "routed completions retain their text through send and recycle bounded slot
 }
 
 test "rejected editor argv releases its queue and launch slots" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     const oversized = [_]u8{'x'} ** (data.input_limits.max_encoded_bytes + 1);
     for (0..max_pending_launches + 1) |_| {
         try std.testing.expectError(error.InvalidArguments, outbox.push(.{ .create_pane = .{
@@ -571,7 +590,8 @@ test "rejected editor argv releases its queue and launch slots" {
 }
 
 test "queued editor tabs retain long arguments after configuration source storage is reused" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     var executable = ("/opt/" ++ "editor" ** 50).*;
     var path = "/tmp/design.md".*;
     var arguments = [_][]const u8{ &executable, &path };
@@ -595,7 +615,8 @@ test "queued editor tabs retain long arguments after configuration source storag
 }
 
 test "change review outbox owns range comment bytes and rejects overflow atomically" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     var path = "src/main.zig".*;
     var body = "Preserve café on these lines".*;
     const request: core.ChangeReviewCommand = .{ .request_id = @enumFromInt(21), .pane_id = @enumFromInt(2), .pane_generation = 3, .edition_id = 7, .expected_revision = 4, .action = .save_comment, .path = &path, .first_line = 3, .last_line = 6, .body = &body, .draft = true };
@@ -621,7 +642,8 @@ test "change review outbox owns range comment bytes and rejects overflow atomica
 }
 
 test "change review query owns its provider conversation identity" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     var conversation = "thread-A".*;
     try outbox.pushChangeReviewQuery(.{ .request_id = @enumFromInt(21), .pane_id = @enumFromInt(2), .pane_generation = 3, .edition_id = 7, .session = &conversation });
     @memset(&conversation, 'x');
@@ -631,7 +653,8 @@ test "change review query owns its provider conversation identity" {
 }
 
 test "queued editor requests own paths without enlarging queue metadata" {
-    var outbox: Outbox = .{};
+    var outbox: Outbox = try .init(std.testing.allocator);
+    defer outbox.deinit(std.testing.allocator);
     var editor = "nvim".*;
     var path = "/tmp/original file".*;
     try outbox.push(.{ .open_editor = .{

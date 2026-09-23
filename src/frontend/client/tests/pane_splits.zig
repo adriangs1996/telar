@@ -20,7 +20,7 @@ test "pending pane creation suppresses another split without changing state" {
         },
     )).?;
     try std.testing.expectEqual(TestHarness.bootstrap_pane, plan.split.target_pane);
-    const queued = app.runtime_transport.outbox.len;
+    const queued = app.model.to_runtime.len;
     const next_id = app.model.request_lifecycle.next_request_id;
 
     try std.testing.expect(try app.requestPaneSplit(
@@ -29,7 +29,7 @@ test "pending pane creation suppresses another split without changing state" {
             .area = app.geometry().area,
         },
     ) == null);
-    try std.testing.expectEqual(queued, app.runtime_transport.outbox.len);
+    try std.testing.expectEqual(queued, app.model.to_runtime.len);
     try std.testing.expectEqual(next_id, app.model.request_lifecycle.next_request_id);
     try std.testing.expectEqualDeep(before, app.model.version());
     try harness.settle();
@@ -91,7 +91,7 @@ test "split rejects mismatched runtime confirmations without mutation or deliver
         ));
         try std.testing.expect(!app.model.request_lifecycle.tracker.has(.pane_operation));
         try std.testing.expectEqualDeep(before, app.model.version());
-        try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
+        try std.testing.expectEqual(@as(usize, 0), app.model.to_runtime.len);
     }
 }
 
@@ -102,8 +102,8 @@ test "split retains the runtime creation when confirmation delivery fails" {
     try harness.bootstrap();
     const app = harness.client;
     const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
-    while (app.runtime_transport.outbox.hasCapacity()) {
-        try app.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (app.model.to_runtime.hasCapacity()) {
+        try app.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const before = app.model.version();
     const pane: core.PaneId = @enumFromInt(21);
@@ -173,7 +173,7 @@ test "late split confirmation never detaches a currently represented pane" {
     ));
     try std.testing.expect(app.model.panes.find(current).?.attached);
     try std.testing.expectEqualDeep(before, app.model.version());
-    try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), app.model.to_runtime.len);
 }
 
 test "split recovery preserves model state when its resize cannot be queued" {
@@ -183,8 +183,8 @@ test "split recovery preserves model state when its resize cannot be queued" {
     try harness.bootstrap();
     const app = harness.client;
     const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
-    while (app.runtime_transport.outbox.hasCapacity()) {
-        try app.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (app.model.to_runtime.hasCapacity()) {
+        try app.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const before = app.model.version();
     const request_id: core.RequestId = @enumFromInt(4);

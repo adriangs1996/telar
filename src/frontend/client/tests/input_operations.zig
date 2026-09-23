@@ -9,8 +9,8 @@ const TerminalClient = @import("../TerminalClient.zig");
 const support = @import("support.zig");
 
 fn fillOutbox(client: *api.AttachedClient) !void {
-    while (client.runtime_transport.outbox.hasCapacity()) {
-        try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
+    while (client.model.to_runtime.hasCapacity()) {
+        try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
 }
 
@@ -111,8 +111,8 @@ test "physical lease saturation rejects input before mutation or transport" {
     try std.testing.expect(outcome.lease_overflow);
     try std.testing.expectEqual(overflows + 1, client.telemetry.metrics.key_lease_overflows);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
-    try std.testing.expect(!client.runtime_transport.outbox.inFlight());
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
+    try std.testing.expect(!client.model.to_runtime.inFlight());
 }
 
 test "failed opening paste marker rolls back the captured session" {
@@ -159,8 +159,8 @@ test "retired paste target cannot redirect its remaining content" {
     try std.testing.expectEqual(.unavailable, try client.appendPanePaste("private text"));
     _ = try client.finishPanePaste();
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
-    try std.testing.expect(!client.runtime_transport.outbox.inFlight());
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
+    try std.testing.expect(!client.model.to_runtime.inFlight());
 }
 
 test "obsolete clipboard completion frees its image without consuming a newer capture" {

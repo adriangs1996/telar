@@ -434,7 +434,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     try std.testing.expect(!prompt.pasting);
     try std.testing.expectEqualStrings("shell one ", prompt.field.text());
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 
     try host_inputs.key(terminal, try data.chord.parseKey("escape"));
     try std.testing.expect(!client.model.name_prompt.active());
@@ -446,7 +446,7 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(!client.model.panePasteActive());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "name prompt rejects pointer routing after host telemetry" {
@@ -464,7 +464,7 @@ test "name prompt rejects pointer routing after host telemetry" {
     ).?;
     try std.testing.expect(client.openNamePrompt(.rename_active_tab));
     const version = client.model.version();
-    const outbox_len = client.runtime_transport.outbox.len;
+    const outbox_len = client.model.to_runtime.len;
     const mouse_events = client.telemetry.metrics.mouse_events;
 
     try host_inputs.mouse(terminal, .{
@@ -475,7 +475,7 @@ test "name prompt rejects pointer routing after host telemetry" {
 
     try std.testing.expect(client.model.name_prompt.active());
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(outbox_len, client.model.to_runtime.len);
     if (comptime core.enabled) {
         try std.testing.expectEqual(mouse_events + 1, client.telemetry.metrics.mouse_events);
     }
@@ -647,7 +647,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!terminal.graphics_store.paneVisible(focused));
     try std.testing.expectEqual(version.viewport + 1, client.model.version().viewport);
-    try std.testing.expectEqual(@as(usize, 1), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 1), client.model.to_runtime.len);
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const scrolled = try harness.nextClientMessage(&buffer);
@@ -671,7 +671,7 @@ test "focused scroll bindings target focus rather than hover and normal input re
     const bottom_version = client.model.version();
     try testingHostInput(terminal, "\x02=");
     try std.testing.expectEqualDeep(bottom_version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "held scroll suffixes pace both viewport directions without queued steps" {
@@ -702,11 +702,11 @@ test "held scroll suffixes pace both viewport directions without queued steps" {
 
         try std.testing.expectEqual(@as(u32, if (up) 41 else 59), pane.scroll.offset);
         const version = client.model.version();
-        const pending = client.runtime_transport.outbox.len;
+        const pending = client.model.to_runtime.len;
         _ = try host_inputs.feed(terminal, .{ .bytes = release, .now_ns = 1001 * ms });
         _ = try host_inputs.feed(terminal, .{ .bytes = repeated, .now_ns = 2000 * ms });
         try std.testing.expectEqualDeep(version, client.model.version());
-        try std.testing.expectEqual(pending, client.runtime_transport.outbox.len);
+        try std.testing.expectEqual(pending, client.model.to_runtime.len);
         try std.testing.expect(terminal.host_input.router.inputDeadline() == null);
         try std.testing.expect(terminal.host_input.router.bindingDeadline() == null);
 
@@ -913,7 +913,7 @@ test "focused scroll without an active pane has no effects" {
     );
 
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "focused scroll retires copy mode before moving the restored viewport" {
@@ -984,14 +984,14 @@ test "canonical reported focus retirement is silent and idempotent" {
     client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     _ = client.model.syncReportedPaneFocus().?;
     const version = client.model.version();
-    const outbox_len = client.runtime_transport.outbox.len;
+    const outbox_len = client.model.to_runtime.len;
 
     try std.testing.expect(client.model.forgetReportedPaneFocus());
     try std.testing.expect(!client.model.forgetReportedPaneFocus());
 
     try std.testing.expect(client.model.reported_pane_focus == null);
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(outbox_len, client.model.to_runtime.len);
 }
 
 test "native thread view action flips the focused pane surface" {
@@ -1027,7 +1027,7 @@ test "one host batch observes a prompt opened by its preceding binding" {
     _ = try host_inputs.feed(terminal, .{ .bytes = "\x02Txyz", .now_ns = 1 });
 
     try std.testing.expectEqualStrings("shellxyz", client.model.name_prompt.currentConst().?.field.text());
-    try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
+    try std.testing.expectEqual(@as(usize, 0), client.model.to_runtime.len);
 }
 
 test "detach stops a host batch before its remaining text reaches the pane" {

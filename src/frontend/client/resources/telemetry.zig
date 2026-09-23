@@ -290,7 +290,7 @@ fn capture(terminal: *TerminalClient, heap: core.SnapshotSnapshot) ?SnapshotType
         .pending_updates = terminal.presenter.pending_updates,
         .draw_pending = terminal.presenter.draw_pending,
         .media_pending = terminal.presenter.media_tick_pending,
-        .outbox = client.runtime_transport.outbox.snapshot(),
+        .outbox = client.model.to_runtime.snapshot(),
         .inbox = terminal.inbox.snapshot(),
         .capabilities = client.model.host.host_capabilities,
         .zlib_support = terminal.host_negotiation.zlib_support,
