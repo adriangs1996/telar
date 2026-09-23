@@ -300,7 +300,7 @@ pub fn testingClipboardCapture(client: *client_module.AttachedClient, execution:
         .width = 2,
         .height = 2,
     };
-    client.model.clipboard_capture_resources.orphan = capture;
+    client.model.clipboard.orphan = capture;
 
     return capture;
 }

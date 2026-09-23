@@ -81,7 +81,6 @@ pub const CallbackContext = @import("config/CallbackContext.zig");
 pub const CallbackRef = @import("bars/CallbackRef.zig");
 pub const Capture = @import("attachments/Capture.zig");
 pub const CaptureRequest = @import("attachments/CaptureRequest.zig");
-pub const CaptureResources = @import("attachments/CaptureResources.zig");
 pub const Center = @import("notifications/Center.zig");
 pub const Change = @import("types/Change.zig").Change;
 pub const ChangeReviewOperation = @import("connection/ChangeReviewOperation.zig");
@@ -422,6 +421,7 @@ test {
     _ = @import("state/tests/workspaces.zig");
     _ = @import("workspace/Bookmark.zig");
     _ = @import("workspace/tab_flow_tests.zig");
+    _ = @import("state/ClipboardCaptureState.zig");
     _ = @import("workspace/CreatedTab.zig");
     _ = @import("workspace/DiscoveredPane.zig");
     _ = @import("workspace/Entry.zig");

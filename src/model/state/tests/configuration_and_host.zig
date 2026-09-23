@@ -206,26 +206,26 @@ test "clipboard capture is single flight and completion matches its exact identi
         .pane_generation = 3,
     };
 
-    const first = (try model.beginClipboardCapture(target)).?;
+    const first = (try model.clipboard.reserve(target)).?;
 
     try std.testing.expectEqual(@as(u64, 1), @intFromEnum(first.id));
     try std.testing.expectEqualDeep(target, first.target);
-    try std.testing.expectEqualDeep(first, model.clipboardCapture().?);
-    try std.testing.expect((try model.beginClipboardCapture(target)) == null);
-    try std.testing.expect(model.finishClipboardCapture(@enumFromInt(99)) == null);
-    try std.testing.expectEqualDeep(first, model.clipboardCapture().?);
-    try std.testing.expectEqualDeep(first, model.finishClipboardCapture(first.id).?);
-    try std.testing.expect(model.clipboardCapture() == null);
+    try std.testing.expectEqualDeep(first, model.clipboard.capture.?);
+    try std.testing.expect((try model.clipboard.reserve(target)) == null);
+    try std.testing.expect(model.clipboard.finish(@enumFromInt(99)) == null);
+    try std.testing.expectEqualDeep(first, model.clipboard.capture.?);
+    try std.testing.expectEqualDeep(first, model.clipboard.finish(first.id).?);
+    try std.testing.expect(model.clipboard.capture == null);
 
-    const second = (try model.beginClipboardCapture(target)).?;
+    const second = (try model.clipboard.reserve(target)).?;
 
     try std.testing.expectEqual(@as(u64, 2), @intFromEnum(second.id));
-    try std.testing.expect(!model.cancelClipboardCapture(.{
+    try std.testing.expect(!model.clipboard.cancel(.{
         .pane_id = target.pane_id,
         .pane_generation = target.pane_generation + 1,
     }));
-    try std.testing.expect(model.cancelClipboardCapture(target));
-    try std.testing.expect(model.clipboardCapture() == null);
+    try std.testing.expect(model.clipboard.cancel(target));
+    try std.testing.expect(model.clipboard.capture == null);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
@@ -233,25 +233,25 @@ test "clipboard capture validation and identity exhaustion leave no reservation"
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expectError(error.InvalidAttachmentTarget, model.beginClipboardCapture(.{
+    try std.testing.expectError(error.InvalidAttachmentTarget, model.clipboard.reserve(.{
         .pane_id = .invalid,
         .pane_generation = 1,
     }));
-    try std.testing.expect(model.clipboardCapture() == null);
+    try std.testing.expect(model.clipboard.capture == null);
 
-    model.clipboard.next_clipboard_capture_id = std.math.maxInt(u64);
-    const last = (try model.beginClipboardCapture(.{
+    model.clipboard.next_id = std.math.maxInt(u64);
+    const last = (try model.clipboard.reserve(.{
         .pane_id = @enumFromInt(4),
         .pane_generation = 2,
     })).?;
 
     try std.testing.expectEqual(std.math.maxInt(u64), @intFromEnum(last.id));
-    _ = model.finishClipboardCapture(last.id);
+    _ = model.clipboard.finish(last.id);
     try std.testing.expectError(
         error.ClipboardCaptureIdExhausted,
-        model.beginClipboardCapture(last.target),
+        model.clipboard.reserve(last.target),
     );
-    try std.testing.expect(model.clipboardCapture() == null);
+    try std.testing.expect(model.clipboard.capture == null);
 }
 
 test "host resize commits resolved geometry once" {

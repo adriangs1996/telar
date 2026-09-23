@@ -81,7 +81,6 @@ request_lifecycle: model_data.RequestLifecycle = .{},
 client_layouts: model_data.ClientLayoutsState = .{},
 navigation_history: model_data.NavigationHistory = .{},
 sound_playback: model_data.SoundPlayback = .{ .configuration = .{} },
-clipboard_capture_resources: model_data.CaptureResources = .{},
 link_opening: model_data.Opening = .{},
 link_pointer: model_data.Pointer = .{},
 change_review: model_data.ChangeReviewSession = .{},
@@ -226,7 +225,7 @@ pub fn initInto(self: *Model, gpa: std.mem.Allocator, initial: InitialClientStat
 /// ```
 pub fn deinit(model: *Model) void {
     model.history_palette.deinit();
-    model.clipboard_capture_resources.deinit(model.gpa);
+    model.clipboard.deinit(model.gpa);
     workspace_handoff.clear(model);
     model.saved_layouts = .{};
 }
@@ -550,44 +549,6 @@ pub fn beginPluginExecution(model: *Model) !?PluginExecutionType {
 /// ```
 pub fn finishPluginExecution(model: *Model, id: model_data.PluginExecutionId) ?PluginExecutionType {
     return model.plugins.finishPluginExecution(id);
-}
-
-/// Returns the single clipboard capture currently owned by the client.
-///
-/// ```zig
-/// const capture = model.clipboardCapture() orelse return;
-/// ```
-pub fn clipboardCapture(model: *const Model) ?model_data.ClipboardCapture {
-    return model.clipboard.clipboardCapture();
-}
-
-/// Reserves one capture identity for the focused attachment target.
-///
-/// ```zig
-/// const capture = try model.beginClipboardCapture(target) orelse return;
-/// ```
-pub fn beginClipboardCapture(model: *Model, target: model_data.AttachmentTarget) !?model_data.ClipboardCapture {
-    return model.clipboard.beginClipboardCapture(target);
-}
-
-/// Finishes only the matching capture and preserves a newer reservation.
-///
-/// ```zig
-/// const capture = model.finishClipboardCapture(id) orelse return;
-/// ```
-pub fn finishClipboardCapture(model: *Model, id: model_data.ClipboardCaptureId) ?model_data.ClipboardCapture {
-    return model.clipboard.finishClipboardCapture(id);
-}
-
-/// Cancels only a capture owned by the prompt that has just been sent.
-/// Its worker may still complete, but exact completion matching will
-/// classify that result as obsolete and release its private buffer.
-///
-/// ```zig
-/// _ = model.cancelClipboardCapture(target);
-/// ```
-pub fn cancelClipboardCapture(model: *Model, target: model_data.AttachmentTarget) bool {
-    return model.clipboard.cancelClipboardCapture(target);
 }
 
 /// Returns the pane-gap preference used by current and future tabs.

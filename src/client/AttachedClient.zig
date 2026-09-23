@@ -2188,7 +2188,7 @@ pub fn completeClipboardCapture(self: *AttachedClient, completion: data.Completi
     };
 
     const command: clipboard_image.CompletionCommand = if (completion.result) |completed| completed: {
-        const capture = self.model.clipboard_capture_resources.take(completed);
+        const capture = self.model.clipboard.take(completed);
         owned_capture = capture;
         break :completed .{
             .succeeded = .{
@@ -2204,7 +2204,7 @@ pub fn completeClipboardCapture(self: *AttachedClient, completion: data.Completi
         },
     };
 
-    const capture = self.model.finishClipboardCapture(command.executionId()) orelse
+    const capture = self.model.clipboard.finish(command.executionId()) orelse
         return;
 
     const outcome: clipboard_image.CompletionOutcome = switch (command) {
@@ -6593,7 +6593,7 @@ fn observeAttachmentInput(self: *AttachedClient, pane_id: core.PaneId, command: 
                 return false;
             }
 
-            _ = self.model.cancelClipboardCapture(target);
+            _ = self.model.clipboard.cancel(target);
 
             return self.attachment_shelf.removePrompt(target) orelse false;
         },
@@ -6602,7 +6602,7 @@ fn observeAttachmentInput(self: *AttachedClient, pane_id: core.PaneId, command: 
             const id = self.attachmentMarkerAtCursor(deletion);
             if (id == null) {
                 if (self.pendingAttachmentMarkerAtCursor(deletion)) {
-                    _ = self.model.cancelClipboardCapture(target);
+                    _ = self.model.clipboard.cancel(target);
                 }
 
                 return false;
@@ -7385,9 +7385,9 @@ fn startClipboardCapture(self: *AttachedClient) !clipboard_image.StartOutcome {
     }
 
     const target = self.model.focusedAttachmentTarget() orelse return .no_target;
-    const capture = (try self.model.beginClipboardCapture(target)) orelse return .busy;
+    const capture = (try self.model.clipboard.reserve(target)) orelse return .busy;
     errdefer {
-        const rolled_back = self.model.finishClipboardCapture(capture.id);
+        const rolled_back = self.model.clipboard.finish(capture.id);
         std.debug.assert(rolled_back != null);
     }
 

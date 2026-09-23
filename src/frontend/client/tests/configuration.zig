@@ -805,7 +805,7 @@ test "control-v reaches the pane when no clipboard preview target exists" {
 
     try host_inputs.key(client, try data.chord.parseKey("ctrl+v"));
 
-    try std.testing.expect(client.model.clipboardCapture() == null);
+    try std.testing.expect(client.model.clipboard.capture == null);
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try harness.nextClientMessage(&buffer);
@@ -823,7 +823,7 @@ test "clipboard image completion publishes resource ingress before presentation"
     const target = try support.installTestingAttachmentTarget(client, 1);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    const execution = (try client.model.beginClipboardCapture(target)).?;
+    const execution = (try client.model.clipboard.reserve(target)).?;
     const completed = try support.testingClipboardCapture(client, execution, "png");
     const version_before = client.model.version();
     const pending_before = TerminalClient.of(client).presenter.pending_updates;
@@ -833,8 +833,8 @@ test "clipboard image completion publishes resource ingress before presentation"
         .result = completed,
     });
 
-    try std.testing.expect(client.model.clipboardCapture() == null);
-    try std.testing.expect(client.model.clipboard_capture_resources.orphan == null);
+    try std.testing.expect(client.model.clipboard.capture == null);
+    try std.testing.expect(client.model.clipboard.orphan == null);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(@as(u64, 1), TerminalClient.of(client).view.kittyAttachments().ingressVersion());
     try std.testing.expectEqual(@as(u8, 1), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
@@ -858,7 +858,7 @@ test "clipboard image from a retired agent target is consumed and freed" {
     const target = try support.installTestingAttachmentTarget(client, 1);
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
-    const execution = (try client.model.beginClipboardCapture(target)).?;
+    const execution = (try client.model.clipboard.reserve(target)).?;
     const completed = try support.testingClipboardCapture(client, execution, "private png");
 
     _ = try client.model.reconcileAgentSnapshot(.{ .revision = 2, .agents = &.{} });
@@ -873,8 +873,8 @@ test "clipboard image from a retired agent target is consumed and freed" {
         .result = completed,
     });
 
-    try std.testing.expect(client.model.clipboardCapture() == null);
-    try std.testing.expect(client.model.clipboard_capture_resources.orphan == null);
+    try std.testing.expect(client.model.clipboard.capture == null);
+    try std.testing.expect(client.model.clipboard.orphan == null);
     try std.testing.expectEqual(@as(u64, 0), TerminalClient.of(client).view.kittyAttachments().ingressVersion());
     try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -891,7 +891,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     try presentation_lifecycle.observe(client);
     try harness.settleModelPresentation();
     const pending_before = TerminalClient.of(client).presenter.pending_updates;
-    const no_image = (try client.model.beginClipboardCapture(target)).?;
+    const no_image = (try client.model.clipboard.reserve(target)).?;
     const version_before_empty = client.model.version();
 
     try client.completeClipboardCapture(.{
@@ -899,23 +899,23 @@ test "clipboard image failures settle lifecycle without direct presentation" {
         .result = error.NoImageOnClipboard,
     });
 
-    try std.testing.expect(client.model.clipboardCapture() == null);
+    try std.testing.expect(client.model.clipboard.capture == null);
     try std.testing.expectEqualDeep(version_before_empty, client.model.version());
     try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);
 
-    const too_large = (try client.model.beginClipboardCapture(target)).?;
+    const too_large = (try client.model.clipboard.reserve(target)).?;
     const version_before_large = client.model.version();
     try client.completeClipboardCapture(.{
         .execution_id = too_large.id,
         .result = error.ClipboardImageTooLarge,
     });
 
-    try std.testing.expect(client.model.clipboardCapture() == null);
+    try std.testing.expect(client.model.clipboard.capture == null);
     try std.testing.expect(client.model.version().notifications > version_before_large.notifications);
     try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);
 
-    const invalid = (try client.model.beginClipboardCapture(target)).?;
+    const invalid = (try client.model.clipboard.reserve(target)).?;
     const completed = try support.testingClipboardCapture(client, invalid, "invalid");
     completed.width = 0;
     const version_before_invalid = client.model.version();
@@ -924,8 +924,8 @@ test "clipboard image failures settle lifecycle without direct presentation" {
         .result = completed,
     });
 
-    try std.testing.expect(client.model.clipboardCapture() == null);
-    try std.testing.expect(client.model.clipboard_capture_resources.orphan == null);
+    try std.testing.expect(client.model.clipboard.capture == null);
+    try std.testing.expect(client.model.clipboard.orphan == null);
     try std.testing.expect(client.model.version().notifications > version_before_invalid.notifications);
     try std.testing.expectEqual(@as(u64, 0), TerminalClient.of(client).view.kittyAttachments().ingressVersion());
     try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);

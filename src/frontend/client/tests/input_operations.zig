@@ -169,9 +169,9 @@ test "obsolete clipboard completion frees its image without consuming a newer ca
     try harness.bootstrap();
     const client = harness.client;
     const target = try support.installTestingAttachmentTarget(client, 1);
-    const old = (try client.model.beginClipboardCapture(target)).?;
-    _ = client.model.finishClipboardCapture(old.id);
-    const current = (try client.model.beginClipboardCapture(target)).?;
+    const old = (try client.model.clipboard.reserve(target)).?;
+    _ = client.model.clipboard.finish(old.id);
+    const current = (try client.model.clipboard.reserve(target)).?;
     const image = try support.testingClipboardCapture(client, old, "private image");
 
     try client.completeClipboardCapture(
@@ -181,8 +181,8 @@ test "obsolete clipboard completion frees its image without consuming a newer ca
         },
     );
 
-    try std.testing.expectEqual(current.id, client.model.clipboardCapture().?.id);
-    try std.testing.expect(client.model.clipboard_capture_resources.orphan == null);
+    try std.testing.expectEqual(current.id, client.model.clipboard.capture.?.id);
+    try std.testing.expect(client.model.clipboard.orphan == null);
     try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
 }
 

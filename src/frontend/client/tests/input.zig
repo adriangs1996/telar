@@ -85,9 +85,9 @@ test "child marker deletion and prompt submission retire paired previews" {
     try host_inputs.key(client, try data.chord.parseKey("backspace"));
 
     try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
-    const pending = (try client.model.beginClipboardCapture(target)).?;
+    const pending = (try client.model.clipboard.reserve(target)).?;
     try host_inputs.key(client, try data.chord.parseKey("enter"));
-    try std.testing.expect(client.model.clipboardCapture() == null);
+    try std.testing.expect(client.model.clipboard.capture == null);
     const completed = try support.testingClipboardCapture(client, pending, "private png");
 
     try client.completeClipboardCapture(
@@ -98,7 +98,7 @@ test "child marker deletion and prompt submission retire paired previews" {
     );
 
     try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
-    try std.testing.expect(client.model.clipboard_capture_resources.orphan == null);
+    try std.testing.expect(client.model.clipboard.orphan == null);
 }
 
 test "Claude marker disappearance in a committed frame retires its paired preview" {
