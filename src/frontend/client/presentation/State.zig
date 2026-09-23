@@ -10,7 +10,9 @@ const ToastRenderer = @import("../../graphics/ToastRenderer.zig");
 const ModalRenderer = @import("../../graphics/ModalRenderer.zig");
 const PillRenderer = @import("../../graphics/PillRenderer.zig");
 const delivery_module = @import("../../attachments/delivery.zig");
-const GraphicsPlan = @import("GraphicsPlan.zig");
+const SidebarFocus = @import("../../graphics/SidebarFocus.zig");
+const Plan = @import("../../ui/Plan.zig");
+const PresentationPlan = @import("../../presentation/Plan.zig");
 const std = @import("std");
 const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
 const screen_support = @import("../../presentation/screen_support.zig");
@@ -901,4 +903,16 @@ const Dimensions = struct {
 const Appearance = struct {
     theme: data.ColorTheme,
     icons: data.icons.Theme = .unicode,
+};
+
+const GraphicsPlan = struct {
+    toast_area: core.Rect = .{},
+    sidebar_area: core.Rect = .{},
+    focused_card: ?SidebarFocus = null,
+    provider_marks: [core.max_agent_snapshot_entries]SidebarProviderPlacement = undefined,
+    provider_mark_count: u8 = 0,
+    icons: Plan = .{},
+    attachments: client.Plan = .{},
+    modal_area: core.Rect = .{},
+    pill_labels: PresentationPlan = .{},
 };

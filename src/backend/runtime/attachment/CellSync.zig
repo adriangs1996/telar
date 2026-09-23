@@ -4,7 +4,6 @@ const vt = @import("ghostty-vt");
 const std = @import("std");
 const Pane = @import("../../pane/Pane.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
-const Projection = @import("Projection.zig");
 const blit_module = @import("../../pane/blit.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const Diff = @import("../../pane/Diff.zig");
@@ -355,4 +354,14 @@ const Preparation = struct {
 const Outstanding = struct {
     frame_id: u64,
     sent_ns: u64,
+};
+
+const Projection = struct {
+    buffer: *const core.Buffer,
+    damaged_rows: []const bool,
+    cursor: core.Cursor,
+    scroll: core.Scroll,
+
+    text_metadata: core.TextMetadataView,
+    text_revision: u64,
 };

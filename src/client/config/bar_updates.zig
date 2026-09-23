@@ -11,7 +11,7 @@ const Client = @import("../AttachedClient.zig");
 const Workers = @import("../execution/Workers.zig");
 const Job = @import("../execution/Job.zig").Job;
 const BarUpdatesCompletion = @import("../bars/BarUpdatesCompletion.zig");
-const CommandOutput = @import("CommandOutput.zig");
+const Output = @import("../bars/Output.zig");
 const BarUpdateCommand = @import("BarUpdateCommand.zig");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const BarMetrics = @import("BarMetrics.zig");
@@ -341,4 +341,10 @@ const CallbackRequest = struct {
     position: data.bar_values.Position,
     reference: data.CallbackRef,
     output: ?[]const u8 = null,
+};
+
+const CommandOutput = struct {
+    execution: data.CommandExecution,
+    command: data.BarCommand,
+    output: Output,
 };

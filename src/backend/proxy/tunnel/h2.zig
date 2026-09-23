@@ -21,7 +21,6 @@ const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const Pipeline = @import("../Pipeline.zig");
 const Counters = @import("../Counters.zig");
 const identity = @import("../identity.zig");
-const ExpectedObservation = @import("ExpectedObservation.zig");
 const Snapshot = @import("../Snapshot.zig");
 const Streams = @import("../provider/Streams.zig");
 const TransformPipeline = @import("../TransformPipeline.zig");
@@ -435,4 +434,9 @@ const H2TestHarness = struct {
             observed.len += 1;
         }
     };
+};
+
+const ExpectedObservation = struct {
+    phase: middleware.Phase,
+    stream_id: u32,
 };

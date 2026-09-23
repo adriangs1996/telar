@@ -11,7 +11,6 @@ const png_test = @import("png_test.zig");
 const vt = @import("ghostty-vt");
 const std = @import("std");
 const FileQueryControl = @import("FileQueryControl.zig");
-const FilterInput = @import("FilterInput.zig");
 const SharedFrame = @import("SharedFrame.zig");
 const SharedFrameKey = @import("SharedFrameKey.zig");
 const FrameResource = @import("FrameResource.zig");
@@ -926,4 +925,9 @@ const FilterStats = struct {
     direct: u64 = 0,
     /// The subset of `direct` whose pixels came from a child file.
     file: u64 = 0,
+};
+
+const FilterInput = struct {
+    bytes: []const u8,
+    storage_limit: usize,
 };

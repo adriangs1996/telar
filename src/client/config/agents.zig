@@ -13,7 +13,6 @@ const lua_api = @import("lua-api");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
 const std = @import("std");
-const TextValue = @import("TextValue.zig");
 
 const phrase_fields = .{ "process_names", "process_paths", "brand", "identity", "working", "blocked", "ready_prompt" };
 const text_fields = .{ "display_name", "placeholder", "icon" };
@@ -237,4 +236,9 @@ const FieldLookup = struct {
     entry: c_int,
     position: usize,
     field: [:0]const u8,
+};
+
+const TextValue = struct {
+    field: []const u8,
+    text: []const u8,
 };

@@ -16,7 +16,6 @@ const std = @import("std");
 const AgentLocationInput = @import("AgentLocationInput.zig");
 const AgentMetaInput = @import("AgentMetaInput.zig");
 const icons_module = @import("../ui/icons.zig");
-const RuleInput = @import("RuleInput.zig");
 const State = @import("State.zig");
 
 const agent_card_rows = 3;
@@ -830,5 +829,11 @@ const AgentStatusInput = struct {
     area: core.Rect,
     status: core.AgentStatus,
     animation_frame: u8,
+    background: core.Color,
+};
+
+const RuleInput = struct {
+    area: core.Rect,
+    y: u16,
     background: core.Color,
 };

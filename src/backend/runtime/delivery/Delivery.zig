@@ -6,7 +6,6 @@ const delivery_namespace = @import("delivery_namespace.zig");
 const std = @import("std");
 const response_queue = @import("response_queue.zig");
 const Sources = @import("Sources.zig");
-const Prepared = @import("Prepared.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
@@ -588,4 +587,9 @@ const Preparation = struct {
     attachments: *AttachmentStore,
     sources: Sources,
     metrics: *RuntimeMetrics,
+};
+
+const Prepared = struct {
+    payload: []const u8,
+    ticket: u64,
 };

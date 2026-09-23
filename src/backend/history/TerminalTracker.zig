@@ -6,7 +6,6 @@ const terminal_ops = @import("terminal.zig");
 const TerminalInputObservation = @import("TerminalInputObservation.zig");
 const builtin = @import("builtin");
 const osc = @import("osc.zig");
-const TerminalOutputObservation = @import("TerminalOutputObservation.zig");
 const Clock = @import("Clock.zig");
 const Command = @import("Command.zig");
 const Tracker = @This();
@@ -522,4 +521,12 @@ const TerminalCompletion = struct {
     clock: Clock,
     exit_code: ?i32,
     status: osc.Status,
+};
+
+const TerminalOutputObservation = struct {
+    /// The emulator that has already replayed `bytes`.
+    terminal: *vt.Terminal,
+    bytes: []const u8,
+    clock: Clock,
+    shell_foreground: ?bool,
 };

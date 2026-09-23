@@ -13,7 +13,6 @@ const DamageContext = @import("DamageContext.zig");
 const FrameContext = @import("FrameContext.zig");
 const HistoryInputContext = @import("HistoryInputContext.zig");
 const EncodeContext = @import("EncodeContext.zig");
-const DecodeContext = @import("DecodeContext.zig");
 const PipelineContext = @import("PipelineContext.zig");
 const OutboxContext = @import("OutboxContext.zig");
 const KeybindContext = @import("KeybindContext.zig");
@@ -973,4 +972,8 @@ const LuaCallbackContext = struct {
     pub fn deinit(self: *LuaCallbackContext) void {
         self.generation.deinit();
     }
+};
+
+const DecodeContext = struct {
+    payloads: [2][]const u8,
 };

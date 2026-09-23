@@ -5,7 +5,7 @@ const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
 const Rasterizer = @import("Rasterizer.zig");
 const icon_graphics = @import("icons.zig");
-const Preparation = @import("Preparation.zig");
+const core = @import("telar-core");
 const toast = @import("toast.zig");
 const toast_module = @import("../widgets/toast.zig");
 const ToastRenderKey = @import("ToastRenderKey.zig");
@@ -552,4 +552,11 @@ const ToastSlot = struct {
     image_emitted: bool = false,
     transfer_offset: usize = 0,
     transfer_key: ?ToastRenderKey = null,
+};
+
+const Preparation = struct {
+    area: core.Rect,
+    center: *const data.Center,
+    palette: *const data.Palette,
+    icon_theme: data.icons.Theme = .unicode,
 };

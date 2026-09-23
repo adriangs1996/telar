@@ -4,7 +4,6 @@ const Command = @import("Command.zig");
 const std = @import("std");
 const native = @import("native.zig");
 const ChildDescriptor = @import("ChildDescriptor.zig");
-const ExecRequest = @import("ExecRequest.zig");
 const command_mod = @import("command_support.zig");
 
 const default_path = "/usr/local/bin:/bin:/usr/bin";
@@ -304,6 +303,13 @@ const ChildExec = struct {
     cwd_fd: ?std.c.fd_t,
     error_fd: std.c.fd_t,
     command: *const Command,
+    environment: [*:null]const ?[*:0]const u8,
+    path: []const u8,
+};
+
+const ExecRequest = struct {
+    file: [*:0]const u8,
+    argv: [*:null]const ?[*:0]const u8,
     environment: [*:null]const ?[*:0]const u8,
     path: []const u8,
 };

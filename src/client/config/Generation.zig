@@ -12,7 +12,6 @@ test {
     _ = @import("theme_test.zig");
 }
 const LoadContext = @import("LoadContext.zig");
-const SourceInput = @import("SourceInput.zig");
 const Limits = @import("Limits.zig");
 const lua_api = @import("lua-api");
 const FileInput = @import("FileInput.zig");
@@ -1445,4 +1444,12 @@ const BarCallback = struct {
 const BarInvocation = struct {
     reference: data.CallbackRef,
     context: BarCallbackContext,
+};
+
+const SourceInput = struct {
+    source: []const u8,
+    source_name: [*:0]const u8,
+    config_dir: []const u8 = ".",
+    number: u64,
+    profile: ?[]const u8 = null,
 };

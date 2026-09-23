@@ -9,7 +9,6 @@
 
 const core = @import("telar-core");
 
-const Output = @import("Output.zig");
 const Clock = @import("Clock.zig");
 const vt = @import("ghostty-vt");
 const std = @import("std");
@@ -316,5 +315,12 @@ const Input = struct {
     offset: u32,
     len: u32,
     shell_foreground: bool,
+    clock: Clock,
+};
+
+const Output = struct {
+    offset: u32,
+    len: u32,
+    shell_foreground: ?bool,
     clock: Clock,
 };

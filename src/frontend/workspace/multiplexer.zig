@@ -9,7 +9,6 @@ const std = @import("std");
 const ComposeSink = @import("ComposeSink.zig");
 const diff = @import("../presentation/diff.zig");
 const Screen = @import("../presentation/Screen.zig");
-const PaneCursor = @import("PaneCursor.zig");
 const PatchSink = @import("../presentation/PatchSink.zig");
 const Plan = @import("../presentation/Plan.zig");
 const Result = @import("Result.zig");
@@ -1288,4 +1287,9 @@ const BorderInput = struct {
     progress_percent: ?u8,
     animation_frame: u8,
     palette: *const data.Palette,
+};
+
+const PaneCursor = struct {
+    content: core.Rect,
+    copy: ?data.CopyModeView,
 };

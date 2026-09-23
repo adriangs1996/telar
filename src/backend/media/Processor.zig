@@ -4,7 +4,6 @@ const Pipeline = @import("Pipeline.zig");
 const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 const GraphicsLimits = @import("GraphicsLimits.zig");
 const std = @import("std");
-const Responses = @import("Responses.zig");
 const Stats = @import("Stats.zig");
 const SharedFrameView = @import("SharedFrameView.zig");
 const FileQueryView = @import("FileQueryView.zig");
@@ -309,5 +308,14 @@ const LiveImages = struct {
 
     pub fn holdsImage(self: LiveImages, image_id: u32) bool {
         return self.storage.imageById(image_id) != null;
+    }
+};
+
+const Responses = struct {
+    context: *anyopaque,
+    write_fn: *const fn (*anyopaque, []const u8) void,
+
+    pub fn write(self: Responses, bytes: []const u8) void {
+        self.write_fn(self.context, bytes);
     }
 };

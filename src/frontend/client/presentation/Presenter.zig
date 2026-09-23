@@ -18,7 +18,6 @@ const ModalRenderer = @import("../../graphics/ModalRenderer.zig");
 const kitty_codec = @import("../../graphics/kitty_codec.zig");
 const Stats = @import("../../graphics/Stats.zig");
 const delivery_module = @import("../../attachments/delivery.zig");
-const CellPresentation = @import("CellPresentation.zig");
 const Presented = @import("Presented.zig");
 const KittyGraphicsWriter = @import("../../graphics/KittyGraphicsWriter.zig");
 const PillRenderer = @import("../../graphics/PillRenderer.zig");
@@ -686,4 +685,12 @@ const CombinedGraphicsWriter = struct {
         }
         return pane_bytes + toast_bytes + sidebar_bytes + icon_bytes + modal_bytes + pill_bytes + attachment_bytes;
     }
+};
+
+const CellPresentation = struct {
+    projection: client.Projection,
+    resources: Resources,
+    /// The active tab's slot in `projection.model.tabs`.
+    tab: usize,
+    force: bool,
 };

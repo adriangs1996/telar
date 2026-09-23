@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const Options = @import("Options.zig");
-const CollectOptions = @import("CollectOptions.zig");
 
 const c = @cImport({
     @cInclude("brotli/decode.h");
@@ -313,5 +312,9 @@ const Result = struct {
 const DecodeInput = struct {
     input: []const u8,
     coding: []const u8,
+    max_bytes: usize,
+};
+
+const CollectOptions = struct {
     max_bytes: usize,
 };

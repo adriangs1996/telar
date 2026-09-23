@@ -3,7 +3,6 @@ const vt = @import("ghostty-vt");
 const std = @import("std");
 const Batch = @import("Batch.zig");
 const media = @import("media.zig");
-const Initialization = @import("Initialization.zig");
 const png = @import("png.zig");
 const Stats = @import("Stats.zig");
 const FrameResource = @import("FrameResource.zig");
@@ -228,4 +227,13 @@ const SharedMemoryAvailability = struct {
 const Processing = struct {
     current_size: core.TerminalSize,
     stats: *Stats,
+};
+
+const Initialization = struct {
+    io: std.Io,
+    allocator: std.mem.Allocator,
+    size: core.TerminalSize,
+    storage_limit: usize,
+    payload_limit: usize,
+    write_pty: ?*const fn (*vt.TerminalStream.Handler, [:0]const u8) void,
 };

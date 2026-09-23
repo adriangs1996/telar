@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const Size = @import("Size.zig");
-const RoundedRectanglePoint = @import("RoundedRectanglePoint.zig");
 
 /// Fills a quota-validated surface. Transparent corners retain the fill RGB
 /// so hosts can interpolate the alpha edge without dark fringes.
@@ -112,4 +111,9 @@ const Input = struct {
 const Shape = struct {
     size: Size,
     radius: u32,
+};
+
+const RoundedRectanglePoint = struct {
+    x: u32,
+    y: u32,
 };

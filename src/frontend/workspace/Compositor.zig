@@ -9,7 +9,6 @@ const RenderStats = @import("RenderStats.zig");
 const multiplexer = @import("multiplexer.zig");
 const IncrementalComposition = @import("IncrementalComposition.zig");
 const CompositionInput = @import("CompositionInput.zig");
-const CopyChangeComposition = @import("CopyChangeComposition.zig");
 const thread_surface = @import("thread_surface.zig");
 /// Presentation-owned cache for one active tab. It borrows an immutable
 /// multiplexer model during composition and returns the exact model work that
@@ -453,4 +452,12 @@ const BorderTheme = struct {
     unfocused: core.Color,
     tab_text: core.Color,
     selected_tab_text: core.Color,
+};
+
+const CopyChangeComposition = struct {
+    pane: *const data.Pane,
+    view: data.LayoutView,
+    rows: u16,
+    cols: u16,
+    stats: *RenderStats,
 };

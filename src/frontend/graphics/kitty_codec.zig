@@ -3,7 +3,6 @@
 const kitty_protocol = @import("kitty_protocol");
 const core = @import("telar-core");
 const std = @import("std");
-const TransmissionChunks = @import("TransmissionChunks.zig");
 const PngTransmissionChunks = @import("PngTransmissionChunks.zig");
 const PlacementCommand = @import("PlacementCommand.zig");
 
@@ -98,4 +97,13 @@ const Transmission = struct {
     external_id: u32,
     image: core.Image,
     pixels: []const u8,
+};
+
+const TransmissionChunks = struct {
+    external_id: u32,
+    image: core.Image,
+    pixels: []const u8,
+    start_offset: usize,
+    budget: usize,
+    compressed: bool,
 };

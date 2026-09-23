@@ -3,7 +3,6 @@ const std = @import("std");
 const CredentialGate = @import("../CredentialGate.zig");
 const Credential = @import("../Credential.zig");
 const Half = @import("Half.zig");
-const QueueMetrics = @import("QueueMetrics.zig");
 const Channel = @This();
 
 storage: [queue.capacity]Envelope = undefined,
@@ -136,4 +135,10 @@ const QueuePublication = struct {
 const Envelope = struct {
     credential: Credential,
     half: *Half,
+};
+
+const QueueMetrics = struct {
+    queued: u64,
+    high_water: u64,
+    dropped: u64,
 };

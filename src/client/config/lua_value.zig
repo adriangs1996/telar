@@ -4,7 +4,6 @@ const data = @import("model");
 const lua_api = @import("lua-api");
 const RequiredField = @import("RequiredField.zig");
 const std = @import("std");
-const OptionalString = @import("OptionalString.zig");
 const OptionalInteger = @import("OptionalInteger.zig");
 const Fields = @import("Fields.zig");
 const Array = @import("Array.zig");
@@ -210,4 +209,10 @@ const OptionalMilliseconds = struct {
     default_ns: u64,
     minimum_ms: u64,
     maximum_ms: u64,
+};
+
+const OptionalString = struct {
+    index: c_int,
+    name: [*:0]const u8,
+    default: []const u8,
 };

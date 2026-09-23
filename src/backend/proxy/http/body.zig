@@ -5,7 +5,6 @@
 
 const std = @import("std");
 const FakeSessionType = @import("FakeSession.zig");
-const Activity = @import("Activity.zig");
 const Session = @import("../Session.zig");
 const types = @import("types.zig");
 
@@ -310,4 +309,19 @@ const Exact = struct {
 const Direction = struct {
     from: Session.Side,
     to: Session.Side,
+};
+
+const Activity = struct {
+    bytes: usize = 0,
+    calls: usize = 0,
+    payload: [64]u8 = undefined,
+    payload_len: usize = 0,
+
+    pub fn observe(self: *Activity, fragment: Fragment) void {
+        self.bytes += fragment.forwarded_bytes;
+        self.calls += 1;
+
+        @memcpy(self.payload[self.payload_len..][0..fragment.payload.len], fragment.payload);
+        self.payload_len += fragment.payload.len;
+    }
 };

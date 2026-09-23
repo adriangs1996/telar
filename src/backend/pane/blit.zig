@@ -1,7 +1,6 @@
 const core = @import("telar-core");
 const Options = @import("Options.zig");
 const Stats = @import("Stats.zig");
-const ColorSource = @import("ColorSource.zig");
 const std = @import("std");
 const RowTarget = @import("RowTarget.zig");
 const vt = @import("ghostty-vt");
@@ -916,4 +915,9 @@ const RowProjection = struct {
     target: RowTarget,
     cells: std.MultiArrayList(vt.RenderState.Cell).Slice,
     colors: ColorSource,
+};
+
+const ColorSource = struct {
+    terminal: *const vt.Terminal,
+    colors: vt.RenderState.Colors,
 };

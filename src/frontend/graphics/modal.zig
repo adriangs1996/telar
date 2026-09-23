@@ -10,7 +10,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Asset = @import("Asset.zig");
 const ModalRenderKey = @import("ModalRenderKey.zig");
-const RoundedRectangle = @import("RoundedRectangle.zig");
 const std = @import("std");
 const ModalRenderer = @import("ModalRenderer.zig");
 
@@ -244,4 +243,10 @@ const CornerPixel = struct {
 const PixelPoint = struct {
     x: u32,
     y: u32,
+};
+
+const RoundedRectangle = struct {
+    width: u32,
+    height: u32,
+    radius: u32,
 };

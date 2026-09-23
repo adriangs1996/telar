@@ -13,7 +13,6 @@ const TopBarInput = @import("TopBarInput.zig");
 const status_bar = @import("status_bar.zig");
 const bar_content = @import("bar_content.zig");
 const std = @import("std");
-const WorkspaceDraw = @import("WorkspaceDraw.zig");
 const widget = @import("context_support.zig");
 const Plan = @import("../ui/Plan.zig");
 
@@ -628,4 +627,12 @@ const WorkspaceNames = struct {
     snapshot: *const data.WorkspaceListSnapshot,
     active_index: ?usize,
     active_name: []const u8,
+};
+
+const WorkspaceDraw = struct {
+    snapshot: *const data.WorkspaceListSnapshot,
+    index: usize,
+    active_index: ?usize,
+    active_name: []const u8,
+    area: core.Rect,
 };

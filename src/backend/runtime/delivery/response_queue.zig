@@ -8,7 +8,7 @@ const PendingTabCreated = @import("PendingTabCreated.zig");
 const PendingTabRenamed = @import("PendingTabRenamed.zig");
 const PendingNotification = @import("PendingNotification.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
-const PendingPaneText = @import("PendingPaneText.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
 const Matches = @import("Matches.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
@@ -184,4 +184,13 @@ const PendingPaneMatches = struct {
 const PendingTabSnapshot = struct {
     request_id: core.RequestId,
     location: core.TabLocation,
+};
+
+const PendingPaneText = struct {
+    /// Late-bound text read. The pane resolves at encode time so a queued read
+    /// cannot borrow storage from a pane that exits before its send slot frees.
+    request_id: core.RequestId,
+    pane: PaneKey,
+    rows: u16,
+    source: core.PaneTextSource,
 };
