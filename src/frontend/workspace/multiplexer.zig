@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
 const std = @import("std");
-const ComposeSink = @import("ComposeSink.zig");
 const diff = @import("../presentation/diff.zig");
 const Screen = @import("../presentation/Screen.zig");
 const PatchSink = @import("../presentation/PatchSink.zig");
@@ -1307,4 +1306,19 @@ const PaneRange = struct {
 const CopySelectionRange = struct {
     start: u16,
     end: u16,
+};
+
+const ComposeSink = struct {
+    /// Copies each changed run into the composed buffer and the screen at once,
+    /// so the composed cache and the terminal patch can never disagree.
+    patch: PatchSink,
+    composed_row: []core.Cell,
+
+    pub fn copyRun(self: *ComposeSink, run_start: u16, count: u16) !void {
+        @memcpy(
+            self.composed_row[run_start..][0..count],
+            self.patch.source_row[run_start..][0..count],
+        );
+        try self.patch.copyRun(run_start, count);
+    }
 };

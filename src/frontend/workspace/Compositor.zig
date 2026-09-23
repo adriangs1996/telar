@@ -7,7 +7,6 @@ const CompositionResult = @import("CompositionResult.zig");
 const RenderStats = @import("RenderStats.zig");
 const multiplexer = @import("multiplexer.zig");
 const Screen = @import("../presentation/Screen.zig");
-const CompositionInput = @import("CompositionInput.zig");
 const thread_surface = @import("thread_surface.zig");
 /// Presentation-owned cache for one active tab. It borrows an immutable
 /// multiplexer model during composition and returns the exact model work that
@@ -477,4 +476,16 @@ const Composition = struct {
     tab: usize,
     screen: *Screen,
     input: CompositionInput,
+};
+
+const CompositionInput = struct {
+    area: core.Rect,
+    palette: *const data.Palette,
+    copy: ?client.CopyProjection = null,
+    bottom_reservation: ?data.PaneBottomReservation = null,
+    progress_animation_frame: u8 = 0,
+    force: bool = false,
+    /// Agents shown by thread surfaces and the revision that invalidates them.
+    agents: ?*const data.AgentSnapshot = null,
+    agents_revision: u64 = 0,
 };

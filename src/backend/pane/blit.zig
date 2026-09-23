@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const Stats = @import("Stats.zig");
 const std = @import("std");
 const vt = @import("ghostty-vt");
 const BlitPane = @import("BlitPane.zig");
@@ -953,4 +952,11 @@ const Options = struct {
     /// and must cover the destination buffer's height. Marks accumulate so
     /// several blits can be folded without losing earlier damage.
     damaged_rows: ?[]bool = null,
+};
+
+const Stats = struct {
+    /// Rows whose cells were translated.
+    copied: u16 = 0,
+    /// Rows skipped because neither the emulator nor the caller marked them.
+    skipped: u16 = 0,
 };

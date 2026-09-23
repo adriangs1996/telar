@@ -20,7 +20,7 @@ const Fragment = @import("../http/Fragment.zig");
 const Head = @import("../http/Head.zig");
 const request_support = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
-const UpgradeRoute = @import("UpgradeRoute.zig");
+const Session = @import("../Session.zig");
 const core = @import("telar-core");
 const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const Pipeline = @import("../Pipeline.zig");
@@ -733,4 +733,9 @@ const RequestBodyObserver = struct {
 const ResponseObserverOptions = struct {
     inspect_payload: bool,
     capture_half: ?*Half,
+};
+
+const UpgradeRoute = struct {
+    from: Session.Side,
+    to: Session.Side,
 };

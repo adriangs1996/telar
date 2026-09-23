@@ -17,7 +17,6 @@ const KeybindContext = @import("KeybindContext.zig");
 const ClientUiContext = @import("ClientUiContext.zig");
 const BlitContext = @import("BlitContext.zig");
 const CursorContext = @import("CursorContext.zig");
-const PacerContext = @import("PacerContext.zig");
 const LayoutContext = @import("LayoutContext.zig");
 const MultiplexerContext = @import("MultiplexerContext.zig");
 const IncrementalComposeContext = @import("IncrementalComposeContext.zig");
@@ -986,4 +985,9 @@ const Case = struct {
     work_unit: []const u8,
     payload_bytes_per_op: u64 = 0,
     p99_budget_ns: u64 = std.time.ns_per_ms,
+};
+
+const PacerContext = struct {
+    pacer: frontend.Pacer = .{},
+    now_ns: u64 = 0,
 };

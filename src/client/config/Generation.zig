@@ -11,7 +11,6 @@ test {
     _ = @import("gui_config_test.zig");
     _ = @import("theme_test.zig");
 }
-const LoadContext = @import("LoadContext.zig");
 const Limits = @import("Limits.zig");
 const lua_api = @import("lua-api");
 const FileInput = @import("FileInput.zig");
@@ -1460,4 +1459,10 @@ const CallbackPreparation = struct {
 const CallbackInvocation = struct {
     reference: data.InputCallbackRef,
     context: data.CallbackContext,
+};
+
+const LoadContext = struct {
+    gpa: std.mem.Allocator,
+    io: std.Io,
+    diagnostic: *data.Diagnostic,
 };
