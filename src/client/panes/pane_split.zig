@@ -6,7 +6,7 @@ const runtime_io = @import("../connection/runtime_io.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_resize = @import("pane_resize.zig");
 const workspace_list_snapshot = @import("../workspace/workspace_list_snapshot.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 const SplitRecovery = enum { restored, not_required, stale };
 

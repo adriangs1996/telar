@@ -2,37 +2,37 @@
 //! request lifecycle, configuration, plugins and the ports through which a
 //! presentation adapter supplies its host. Adapters embed it, build it in
 //! place and bind the ports before the first event.
-const sidebar_animation = @import("notifications/sidebar_animation.zig");
+const sidebar_animation = @import("../notifications/sidebar_animation.zig");
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const bar_updates = @import("config/bar_updates.zig");
-const attached_client_tests = @import("attached_client_tests.zig");
+const bar_updates = @import("../config/bar_updates.zig");
+const client_tests = @import("client_tests.zig");
 
-const Options = @import("Options.zig");
-const ClientInit = @import("ClientInit.zig");
-const RuntimeTransportState = @import("connection/RuntimeTransportState.zig");
-const TelemetryState = @import("resources/TelemetryState.zig");
-const Generation = @import("config/Generation.zig");
-const Snapshot = @import("config/Snapshot.zig");
-const Registry = @import("plugins/Registry.zig");
-const ConfigReloadState = @import("resources/ConfigReloadState.zig");
-const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
-const HostChrome = @import("presentation/HostChrome.zig");
-const AttachmentShelf = @import("attachments/AttachmentShelf.zig");
-const PresentationLifecycle = @import("presentation/LifecycleState.zig");
-const Job = @import("execution/Job.zig").Job;
-const job_runner = @import("execution/job_runner.zig");
-const Message = @import("execution/Message.zig").Message;
-const HostInputSource = @import("input/HostInputSource.zig");
-const RouterConfig = @import("input/RouterConfig.zig");
-const agent_sound = @import("agents/agent_sound.zig");
-const prompt_paths = @import("completion/prompt_paths.zig");
-const config_adoption = @import("config/config_adoption.zig");
-const runtime_io = @import("connection/runtime_io.zig");
-const link_opening = @import("links/link_opening.zig");
-const notifications = @import("notifications/notifications.zig");
-const plugin_actions = @import("plugins/plugin_actions.zig");
+const Options = @import("../Options.zig");
+const ClientInit = @import("../ClientInit.zig");
+const RuntimeTransportState = @import("../connection/RuntimeTransportState.zig");
+const TelemetryState = @import("../resources/TelemetryState.zig");
+const Generation = @import("../config/Generation.zig");
+const Snapshot = @import("../config/Snapshot.zig");
+const Registry = @import("../plugins/Registry.zig");
+const ConfigReloadState = @import("../resources/ConfigReloadState.zig");
+const GraphicsRetention = @import("../graphics/GraphicsRetention.zig");
+const HostChrome = @import("../presentation/HostChrome.zig");
+const AttachmentShelf = @import("../attachments/AttachmentShelf.zig");
+const PresentationLifecycle = @import("../presentation/LifecycleState.zig");
+const Job = @import("Job.zig").Job;
+const job_runner = @import("job_runner.zig");
+const Message = @import("Message.zig").Message;
+const HostInputSource = @import("../input/HostInputSource.zig");
+const RouterConfig = @import("../input/RouterConfig.zig");
+const agent_sound = @import("../agents/agent_sound.zig");
+const prompt_paths = @import("../completion/prompt_paths.zig");
+const config_adoption = @import("../config/config_adoption.zig");
+const runtime_io = @import("../connection/runtime_io.zig");
+const link_opening = @import("../links/link_opening.zig");
+const notifications = @import("../notifications/notifications.zig");
+const plugin_actions = @import("../plugins/plugin_actions.zig");
 
 /// Jobs one event can start: most kinds keep at most one in flight, and
 /// system notices arrive in short bursts.
@@ -42,7 +42,7 @@ comptime {
     std.debug.assert(data.effects.max_expression_paste_bytes + 16 <= data.input_limits.max_encoded_bytes);
 }
 
-const AttachedClient = @This();
+const Client = @This();
 
 io: std.Io,
 gpa: std.mem.Allocator,
@@ -75,9 +75,9 @@ host_input_source: HostInputSource = undefined,
 /// nothing here passes it by value. Ports remain unbound.
 ///
 /// ```zig
-/// try AttachedClient.init(&terminal.app, .{ .gpa = gpa, .io = io, .connection = connection, .host_size = size, .options = options });
+/// try Client.init(&terminal.app, .{ .gpa = gpa, .io = io, .connection = connection, .host_size = size, .options = options });
 /// ```
-pub fn init(self: *AttachedClient, params: ClientInit) !void {
+pub fn init(self: *Client, params: ClientInit) !void {
     const gpa = params.gpa;
     var capabilities: data.HostCapabilities = .{
         .window_width_px = params.window_width_px,
@@ -143,7 +143,7 @@ pub fn init(self: *AttachedClient, params: ClientInit) !void {
 /// The key bindings of the live configuration, borrowed from its
 /// generation until the next adoption.
 /// Example: `const router = try buildRouter(client.routerConfig());`
-pub fn routerConfig(self: *const AttachedClient) RouterConfig {
+pub fn routerConfig(self: *const Client) RouterConfig {
     if (self.lua_generation) |generation| {
         const snapshot = &generation.snapshot;
         return .{
@@ -164,7 +164,7 @@ pub fn routerConfig(self: *const AttachedClient) RouterConfig {
 
 /// Returns the grid the active tab's panes share.
 /// Example: `const region = client.geometry();`.
-pub fn geometry(self: *const AttachedClient) data.Region {
+pub fn geometry(self: *const Client) data.Region {
     return data.workbench.region(&self.model);
 }
 
@@ -174,7 +174,7 @@ pub fn geometry(self: *const AttachedClient) data.Region {
 /// ```zig
 /// terminal.app.deinit();
 /// ```
-pub fn deinit(self: *AttachedClient) void {
+pub fn deinit(self: *Client) void {
     const gpa = self.gpa;
     self.telemetry.deinit(self.io);
     self.reload.deinit(gpa);
@@ -200,7 +200,7 @@ pub fn deinit(self: *AttachedClient) void {
 /// ```zig
 /// if (try app.update(message)) |status| return status;
 /// ```
-pub fn update(self: *AttachedClient, message: Message) !?u8 {
+pub fn update(self: *Client, message: Message) !?u8 {
     const path = core.enter(message.path());
     defer path.restore();
 
@@ -232,7 +232,7 @@ pub fn update(self: *AttachedClient, message: Message) !?u8 {
 /// ```zig
 /// inbox.start(.client, .{ job_runner.run, .{ io, gpa, job } }) catch |err| try client.failJob(job, err);
 /// ```
-pub fn failJob(self: *AttachedClient, job: Job, err: anyerror) !void {
+pub fn failJob(self: *Client, job: Job, err: anyerror) !void {
     const status = try self.update(job_runner.failed(job, err));
     std.debug.assert(status == null);
 }
@@ -246,7 +246,7 @@ pub fn failJob(self: *AttachedClient, job: Job, err: anyerror) !void {
 /// ```zig
 /// try client.flush();
 /// ```
-pub fn flush(self: *AttachedClient) !void {
+pub fn flush(self: *Client) !void {
     self.queueGraphicsCredits();
     const transport = &self.runtime_transport;
     const payload = try self.model.to_runtime.beginSend(transport.send_buffer) orelse return;
@@ -259,7 +259,7 @@ pub fn flush(self: *AttachedClient) !void {
 }
 
 /// Transfers only credits admitted by the outbox; saturation preserves the rest.
-fn queueGraphicsCredits(self: *AttachedClient) void {
+fn queueGraphicsCredits(self: *Client) void {
     while (self.graphics.peekCredit()) |credit| {
         self.model.to_runtime.push(
             .{
@@ -274,9 +274,9 @@ fn queueGraphicsCredits(self: *AttachedClient) void {
 }
 
 test "transport scheduling releases rejected reservations and retries queued frames in order" {
-    try attached_client_tests.retryTransportScheduling(flush);
+    try client_tests.retryTransportScheduling(flush);
 }
 
 test "enqueue retains copied input after rejected scheduling and preserves order on retry" {
-    try attached_client_tests.retainQueuedInput(flush);
+    try client_tests.retainQueuedInput(flush);
 }

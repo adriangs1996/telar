@@ -11,7 +11,7 @@ const pane_attachment = @import("../panes/pane_attachment.zig");
 const pane_split = @import("../panes/pane_split.zig");
 const tab_removal = @import("../workspace/tab_removal.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Recovers the correlated operation before publishing its failure notification.
 pub fn failRuntimeRequest(client: *Client, failure: core.RequestFailed) !data.RequestFailureOutcome {

@@ -5,13 +5,13 @@ sends captured source/anchor identities and before/after placement. Neither
 predicts the canonical absolute position.
 
 ```text
-AttachedClient.executeAction or GUI/TUI tab drag release
-  -> AttachedClient.requestTabMove
+actions.executeAction or GUI/TUI tab drag release
+  -> tab_move.requestTabMove
      -> pending-operation gate, resolve source and optional anchor
-     -> AttachedClient.sendRuntimeRequest(move_tab)
+     -> runtime_io.sendRuntimeRequest(move_tab)
   -> runtime canonical reorder -> tab_moved
-  -> AttachedClient.handleServerMessage
-  -> AttachedClient.completeTabMove
+  -> runtime_messages.handleServerMessage
+  -> tab_move.completeTabMove
      -> consume and verify exact move continuation
      -> ClientModel.applyTabPosition -> tab_move.move
   -> adapter observes presentation revisions
@@ -56,14 +56,14 @@ entries while preserving their relative order, and publishes a canonical
 absolute position. Missing identities fail without mutation. Edge/self moves
 return the current position successfully. Other observing clients get resync.
 
-`AttachedClient.completeTabMove` consumes correlation once and checks its type and exact
+`tab_move.completeTabMove` consumes correlation once and checks its type and exact
 location before committing the runtime position. Active identity remains fixed.
 Changed order advances only the tab revision; repeated positions are no-ops.
 Unknown, incompatible, mismatched, replayed or invalid-position replies cannot
 change order. A correlated failure keeps the old order and publishes an owned
 notice. Reconnect reads canonical order instead of replaying the request.
 
-Source: `src/client/AttachedClient.zig`, `src/model/workspace/tab_move.zig`,
+Source: `src/client/workspace/tab_move.zig`, `src/model/workspace/tab_move.zig`,
 `src/gui/widgets/interaction/tab_drag.zig`, and the TUI's
 `src/frontend/client/input/tab_drag.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`,

@@ -5,7 +5,7 @@ const markers_module = @import("markers.zig");
 const data = @import("model");
 const core = @import("telar-core");
 const pane_input = @import("../panes/pane_input.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Deletes the paired child marker and then retires one local preview.
 /// Example: `_ = try agent_attachments.dismissAttachment(app, id);`

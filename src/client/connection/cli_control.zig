@@ -3,7 +3,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const attached_client_tests = @import("../attached_client_tests.zig");
+const client_tests = @import("../execution/client_tests.zig");
 const config_adoption = @import("../config/config_adoption.zig");
 const runtime_io = @import("runtime_io.zig");
 const copy_mode = @import("../input/copy_mode.zig");
@@ -21,7 +21,7 @@ const sidebar_toggle = @import("../workspace/sidebar_toggle.zig");
 const tab_creation = @import("../workspace/tab_creation.zig");
 const tab_selection = @import("../workspace/tab_selection.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Owns a routed response until its asynchronous send completes. Example: `try cli_control.sendRuntimeClientCompletion(client, reply);`
 fn sendRuntimeClientCompletion(model: *data.ClientModel, reply: core.ClientCommand) !void {
@@ -596,5 +596,5 @@ pub fn createCommandTab(client: *Client, command: *const data.CommandTab) !void 
 }
 
 test "layout export decodes to the same active pane and split tree" {
-    try attached_client_tests.layoutRoundTrip(writeCommandLayout);
+    try client_tests.layoutRoundTrip(writeCommandLayout);
 }

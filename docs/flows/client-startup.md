@@ -1,7 +1,7 @@
 # Client startup
 
 This flow starts after `run` has opened the host terminal and constructed one
-heap-stable `TerminalClient` embedding `AttachedClient`. It negotiates host colors before subscribing to the runtime
+heap-stable `TerminalAdapter` embedding `Client`. It negotiates host colors before subscribing to the runtime
 state that triggers the first pane opening. See [terminal colors](terminal-colors.md)
 for probe ownership and early-input bounds.
 
@@ -13,7 +13,7 @@ launch values remain owned by the heap-stable client until the runtime answers
 with its retained layout.
 
 ```text
-run -> TerminalClient.init
+run -> TerminalAdapter.init
         |
 client_startup.start
         |
@@ -44,7 +44,7 @@ pane activation -> replay retained input
 
 `src/frontend/client/session/client_startup.zig` is the TUI startup adapter. It owns
 the negotiation gate and bootstrap order. The common
-`AttachedClient.restoreClientLayout` restores runtime layout and requests
+`client_layout.restoreClientLayout` restores runtime layout and requests
 the initial pane without knowing about terminal probes. `run` waits on the
 inbox and calls `events.update`; each resource owner keeps its own token and
 rearming policy.
@@ -80,7 +80,7 @@ read, one TTY read, the host-capability deadline, telemetry, configured bar
 deadlines and configuration reload. Adapters with disabled configuration
 schedule no worker. Each active adapter owns its bounded pending token.
 
-Any startup error aborts the disposable client. `TerminalClient.deinit` closes
+Any startup error aborts the disposable client. `TerminalAdapter.deinit` closes
 and joins inbox producers before freeing client buffers; its defer runs before
 `run` destroys the watcher. Telar does not retry an uncertain partial handshake inside the same
 client; the runtime remains the authority and a later client reconnects from

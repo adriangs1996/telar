@@ -6,7 +6,7 @@ const GraphicsRetention = @import("../graphics/GraphicsRetention.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const runtime_io = @import("../connection/runtime_io.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Reconciles all fallbacks when host support changes. Example: `syncFallbacks(model, graphics);`
 pub fn syncFallbacks(model: *data.ClientModel, graphics: GraphicsRetention) void {

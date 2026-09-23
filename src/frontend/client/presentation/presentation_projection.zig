@@ -2,7 +2,7 @@
 //! one synchronous client frame.
 
 const client_module = @import("telar-client");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const Resources = @import("Resources.zig");
 
 /// Captures the bounded revisions observed by the presenter after one client
@@ -11,7 +11,7 @@ const Resources = @import("Resources.zig");
 /// ```zig
 /// try host(client).presenter.observe(observation(terminal));
 /// ```
-pub fn observation(terminal: *TerminalClient) client_module.Observation {
+pub fn observation(terminal: *TerminalAdapter) client_module.Observation {
     const client = &terminal.app;
 
     return .{
@@ -29,7 +29,7 @@ pub fn observation(terminal: *TerminalClient) client_module.Observation {
 /// ```zig
 /// const current = projection(terminal);
 /// ```
-pub fn projection(terminal: *TerminalClient) client_module.Projection {
+pub fn projection(terminal: *TerminalAdapter) client_module.Projection {
     const client = &terminal.app;
 
     return client_module.capture(&client.model, .{
@@ -39,7 +39,7 @@ pub fn projection(terminal: *TerminalClient) client_module.Projection {
     });
 }
 
-fn presentationIngress(terminal: *const TerminalClient) client_module.PresentationIngress {
+fn presentationIngress(terminal: *const TerminalAdapter) client_module.PresentationIngress {
     return .{
         .view_interaction = terminal.view.interactionVersion(),
         .input_routing = terminal.host_input.presentationVersion(),
@@ -52,7 +52,7 @@ fn presentationIngress(terminal: *const TerminalClient) client_module.Presentati
 /// ```zig
 /// const target = resources(terminal);
 /// ```
-pub fn resources(terminal: *TerminalClient) Resources {
+pub fn resources(terminal: *TerminalAdapter) Resources {
     return .{
         .view = &terminal.view,
         .graphics_store = &terminal.graphics_store,

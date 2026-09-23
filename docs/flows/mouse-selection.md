@@ -15,17 +15,17 @@ the existing opening behavior.
 ## Entry and ownership
 
 ```text
-host_inputs.mouse (TUI) or GuiClient.dispatchPointer (GUI)
+host_inputs.mouse (TUI) or GuiAdapter.dispatchPointer (GUI)
     -> pointer_routing.apply: normalize host pixels to cells
     -> copy_mode_pointer.apply: captured gesture first
     -> view_interactions.apply: focus the clicked pane
-    -> chrome.linkPointer / AttachedClient.inputLinkPointer: ordinary links retain priority
-    -> AttachedClient.inputPaneMouse: choose selection or child report
+    -> chrome.linkPointer / link_opening.inputLinkPointer: ordinary links retain priority
+    -> pane_mouse_input.inputPaneMouse: choose selection or child report
     -> ClientModel.beginPointerSelection
 
 captured drag / release
     -> copy_mode_pointer.apply
-    -> AttachedClient.applyCopyMode
+    -> copy_mode.applyCopyMode
     -> ClientModel.planCopyMode
     -> copy_selection into model.to_runtime before commit, on release only
     -> ClientModel.commitCopyMode
@@ -39,7 +39,7 @@ runtime copy_selection
 The client owns the range, click tracker and physical gesture. Mouse selection
 reuses `copy_state` and its immutable projection but does not enter keyboard
 copy mode, move the child cursor or restore the entry viewport. Typing and
-pasting clear highlighting through `AttachedClient.sendPaneInput` and still reach the child.
+pasting clear highlighting through `pane_input.sendPaneInput` and still reach the child.
 A new press or mouse wheel clears a completed selection before normal routing.
 
 `ClientModel.selection_gesture` retains only the pane ID from the press. It survives clearing

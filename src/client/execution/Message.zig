@@ -1,6 +1,6 @@
 //! Events the shared client handles itself, whichever adapter delivers them.
 //! An adapter wraps it as one variant of its own event union and passes it
-//! to `AttachedClient.update`.
+//! to `Client.update`.
 const core = @import("telar-core");
 const data = @import("model");
 const BarUpdatesCompletion = @import("../bars/BarUpdatesCompletion.zig");

@@ -30,7 +30,7 @@ invalidate_placements: bool = false,
 /// Host input may be read again: an outbox slot or a workspace opened.
 resume_input: bool = false,
 /// The key bindings changed; the host rebuilds its input router from
-/// `AttachedClient.routerConfig`.
+/// `Client.routerConfig`.
 rebind_input: bool = false,
 /// The latest input delivered to a pane, so the host can pace the frame
 /// that echoes it.

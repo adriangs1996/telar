@@ -64,7 +64,7 @@ const Probe = struct {
 
     /// Reports sizes and runs validated fixed workloads. Example: `try probe.run();`
     pub fn run(self: *Probe) !void {
-        inline for (.{ core.Cell, data.Pane, data.Tabs, data.Panes, client.AttachedClient, Renderer, CellMesh, Quad.Quad, ThreadFlow, Widget, core.ProfileStore }) |T| {
+        inline for (.{ core.Cell, data.Pane, data.Tabs, data.Panes, client.Client, Renderer, CellMesh, Quad.Quad, ThreadFlow, Widget, core.ProfileStore }) |T| {
             try self.writer.print("{{\"type\":\"layout\",\"name\":\"{s}\",\"size\":{d},\"alignment\":{d},\"fields\":[", .{ @typeName(T), @sizeOf(T), @alignOf(T) });
             inline for (std.meta.fields(T), 0..) |field, index| {
                 try self.writer.print("{s}{{\"name\":\"{s}\",\"offset\":{d},\"size\":{d}}}", .{ if (index == 0) "" else ",", field.name, @offsetOf(T, field.name), @sizeOf(field.type) });

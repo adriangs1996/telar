@@ -13,11 +13,11 @@ Generation.parseBars
           |
 BarConfiguration + callback registry
           |
-AttachedClient.completeConfigReload / client_startup
+config_adoption.completeConfigReload / client_startup
           |
 BarLayout -> ClientModel.bars
           |                 |
-          |   AttachedClient.synchronizeBars -> model.bar_updates
+          |   bar_updates.synchronizeBars -> model.bar_updates
           |                 |
           |   bar_updates.rearm -> workers.start(bar timer or bar_command)
           |                 |

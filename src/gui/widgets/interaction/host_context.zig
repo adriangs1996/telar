@@ -1,11 +1,11 @@
 //! Synchronous semantic snapshots. Native adapters copy borrowed bytes before
 //! returning; only their platform caches persist beyond this call. Focus is
-//! already reconciled: `GuiClient.update` does it after every turn.
+//! already reconciled: `GuiAdapter.update` does it after every turn.
 const routing = @import("routing.zig");
 const EditorDisplay = @import("EditorDisplay.zig");
 const data = @import("model");
 const client = @import("telar-client");
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const native = @import("../../native/native.zig");
 const FieldView = @import("FieldView.zig");
 const MultilineLayout = @import("MultilineLayout.zig");
@@ -14,7 +14,7 @@ const GenericField = data.GenericField;
 /// Uses current committed text and the delivered editor's geometry. Preedit
 /// is intentionally excluded from surrounding text sent to the native IME.
 /// Example: `if (host_context.text(gui, output)) publish(output);`
-pub fn text(gui: *GuiClient, output: *native.TextContext) bool {
+pub fn text(gui: *GuiAdapter, output: *native.TextContext) bool {
     output.* = .{};
     if (!gui.focused) {
         return false;
@@ -49,7 +49,7 @@ pub fn text(gui: *GuiClient, output: *native.TextContext) bool {
 /// Every node uses delivered bounds and copied labels. Editable values borrow
 /// the current matching prompt only until the host copies this snapshot.
 /// Example: `if (host_context.accessibility(gui, output)) publish(output);`
-pub fn accessibility(gui: *GuiClient, output: *native.AccessibilityTree) bool {
+pub fn accessibility(gui: *GuiAdapter, output: *native.AccessibilityTree) bool {
     const state = &gui.widgets;
     const registry = state.dispatcher.maps.presented();
     const modal = gui.app.model.name_prompt.active();

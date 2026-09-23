@@ -32,7 +32,7 @@ paste_failed: bool = false,
 
 /// Keeps one pane's unacknowledged edits alive until its runtime reply arrives.
 /// Example: `try panel.open(app, pane_id);`
-pub fn open(self: *Self, app: *client.AttachedClient, pane_id: core.PaneId) !void {
+pub fn open(self: *Self, app: *client.Client, pane_id: core.PaneId) !void {
     const state = &app.model.change_review;
     if (state.owner) |owner| {
         if (owner.pane_id == pane_id and client.change_review.isChangeReviewAttached(&app.model) and !state.session_changed) {
@@ -74,7 +74,7 @@ pub fn open(self: *Self, app: *client.AttachedClient, pane_id: core.PaneId) !voi
 
 /// Called before preparing a frame, after the preceding GPU borrow has ended.
 /// Example: `try panel.synchronize(app);`
-pub fn synchronize(self: *Self, app: *client.AttachedClient) !void {
+pub fn synchronize(self: *Self, app: *client.Client) !void {
     const state = &app.model.change_review;
     if (state.owner == null) {
         self.active = false;
@@ -198,7 +198,7 @@ pub fn synchronize(self: *Self, app: *client.AttachedClient) !void {
 
 /// Copies one bounded patch and starts its index/highlight work off the UI path.
 /// Example: `panel.start(.{ .app = app, .inbox = inbox });`
-pub fn start(self: *Self, context: struct { app: *client.AttachedClient, inbox: *gui_event.Inbox }) void {
+pub fn start(self: *Self, context: struct { app: *client.Client, inbox: *gui_event.Inbox }) void {
     const state = &context.app.model.change_review;
     if (self.job != null or !state.loaded or state.snapshot.edition_id == 0 or state.snapshot.edition_id == self.edition or !self.widget.loading) {
         return;
@@ -328,7 +328,7 @@ fn merge(self: *Self, snapshot: *const core.ChangeReviewSnapshotView) void {
     }
 }
 
-fn flush(self: *Self, app: *client.AttachedClient) !bool {
+fn flush(self: *Self, app: *client.Client) !bool {
     for (&self.widget.model.comments, 0..) |*comment, index| {
         const bit = mask(index);
         if (self.widget.deleted_comments & bit != 0) {
@@ -396,7 +396,7 @@ fn makeRequest(self: *const Self, action: core.change_review.Action) core.Change
     return .{ .request_id = @enumFromInt(0), .pane_id = @enumFromInt(0), .pane_generation = 0, .edition_id = self.edition, .expected_revision = self.revision, .action = action };
 }
 
-fn send(self: *Self, app: *client.AttachedClient, value: struct { request: core.ChangeReviewCommand, pending: Pending }) bool {
+fn send(self: *Self, app: *client.Client, value: struct { request: core.ChangeReviewCommand, pending: Pending }) bool {
     client.change_review.commandChangeReview(&app.model, value.request) catch |err| {
         self.blocked = true;
         self.status(@errorName(err));

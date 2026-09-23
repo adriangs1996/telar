@@ -9,8 +9,8 @@ loop. The active objects change only after validation succeeds.
 ```text
 changed config, module, plugin or trust fingerprint
   -> config_reload.wait on the config_watch worker job
-  -> client.Message.config_reload -> AttachedClient.update
-  -> AttachedClient.completeConfigReload
+  -> client.Message.config_reload -> Client.update
+  -> config_adoption.completeConfigReload
        config_reload.resolve validates and transfers or releases loaded resources
        unchanged: keep current state
        rejected: replace diagnostic and publish failure notification
@@ -24,23 +24,23 @@ changed config, module, plugin or trust fingerprint
 next presentation observation -> Presenter compares model versions
 ```
 
-`client_startup` asks `AttachedClient.scheduleConfigReload` to start the watcher
-after initiating runtime reads; the GUI schedules it from `GuiClient.start`
+`client_startup` asks `config_adoption.scheduleConfigReload` to start the watcher
+after initiating runtime reads; the GUI schedules it from `GuiAdapter.start`
 after bootstrap. The owner selects the current generation, plugin registry and
 paths, then calls `config_reload.schedule` with explicit arguments; it starts
 the `config_watch` job through `client.workers`. No configured
 path means no watch; missing required resources return `ConfigurationNotLoaded`.
-`AttachedClient.completeConfigReload` asks the same owner to rearm after every successfully
+`config_adoption.completeConfigReload` asks the same owner to rearm after every successfully
 handled outcome. The worker loads a new Lua VM,
 typed snapshot, plugin registry and trust store without touching the active
 client. `config_reload.resolve` checks the sidebar
 renderer against host capabilities, compiles the input router, clears the
-worker's orphan slots and transfers one `Adoption` to `AttachedClient`. Rejection
+worker's orphan slots and transfers one `Adoption` to `Client`. Rejection
 frees all three owned objects in one place. The client applies the corresponding
 model changes, resource transfer, notification and watcher scheduling.
 
 The native adapter adds font preparation before delivering the result to
-`AttachedClient.completeConfigReload`. `gui/ConfigurationReload` stages resources off-thread,
+`config_adoption.completeConfigReload`. `gui/ConfigurationReload` stages resources off-thread,
 waits for native consumers to release the old frame, then adopts the generation
 and prepared font together. Missing fonts reject the candidate through the
 existing diagnostic flow. An unchanged watch does not request a frame. See
@@ -49,11 +49,11 @@ resource retirement and shutdown ownership.
 
 ## Model transaction
 
-`AttachedClient.synchronizeBars` selects bar sources only when Lua and the model
+`bar_updates.synchronizeBars` selects bar sources only when Lua and the model
 agree on their generation. `model.bar_updates.synchronize` receives the
 generation, sources and time; `bar_updates.rearm(workers, io, state)` starts
 the bar timer job through `client.workers` and owns failure recovery. No bar
-scheduler receives `AttachedClient`, and synchronization preserves any
+scheduler receives `Client`, and synchronization preserves any
 in-flight command identity.
 
 `ClientModel` stores the active configuration generation. It accepts only a
@@ -66,17 +66,17 @@ changed pane-gap preference updates every current tab and advances
 versions.
 
 The model also owns the diagnostic banner and `Version.diagnostic`.
-`AttachedClient.completeConfigReload` sends a rejected generation through
+`config_adoption.completeConfigReload` sends a rejected generation through
 `client_diagnostic.replace`, which validates that bounded text and applies an
 explicit safe fallback for malformed worker output without changing the active
 generation. It then constructs the failure notification from the committed
 banner. An accepted generation clears an older diagnostic with `model.clearDiagnostic` immediately after its semantic commit and before concrete resources
 are adopted.
 
-`AttachedClient.completeConfigReload` owns the top-level outcome order. An unchanged
+`config_adoption.completeConfigReload` owns the top-level outcome order. An unchanged
 attempt only rearms. A rejection commits and publishes its diagnostic before
 rearming. An adoption commits the new state, delivers dependent resources, publishes
-success and then rearms. `AttachedClient.completeConfigReload` owns the synchronous adoption order: after the
+success and then rearms. `config_adoption.completeConfigReload` owns the synchronous adoption order: after the
 model commit and diagnostic clear, it adopts concrete resources, projects
 appearance, configures sidebar resources and chooses exactly one sidebar or
 pane-gap geometry branch. The pane-gap branch sets
@@ -84,7 +84,7 @@ pane-gap geometry branch. The pane-gap branch sets
 with direct operation calls.
 A sidebar change takes precedence when the same generation also changes pane
 gaps because its shared projection already performs both operations. A stale
-generation clears no diagnostic, invokes no effect, and `AttachedClient.adoptConfiguration`
+generation clears no diagnostic, invokes no effect, and `config_adoption.adoptConfiguration`
 releases the unaccepted adoption instead of leaking its VM or plugin objects.
 
 ## Ownership and effects
@@ -106,10 +106,10 @@ Theme, icon and sidebar resources are updated after the ownership swap. CLI
 theme and sidebar-renderer locks still override reloaded values. A sidebar or
 pane-gap change invalidates host graphics placements and re-offers the current
 pane geometry to the runtime. Sidebar changes pass through
-`AttachedClient.deliverSidebarLayout`, the same
-commit validation used by explicit toggles. `AttachedClient.adoptConfiguration`
+`sidebar_toggle.deliverSidebarLayout`, the same
+commit validation used by explicit toggles. `config_adoption.adoptConfiguration`
 owns resource transfer and the ordering of physical effects. The pane-gap branch selects the active tab, when present, and calls
-`AttachedClient.resizeAttachedPanes` with its model and the current area.
+`pane_resize.resizeAttachedPanes` with its model and the current area.
 
 Fallible sidebar configuration, projection, geometry, notification or watcher
 work does not roll back any earlier stage. If pane geometry cannot enter the
@@ -134,7 +134,7 @@ trigger.
 - `src/client/resources/config_reload.zig` owns rejected-load cleanup and the
   asynchronous handoff of generation, registry and trust ownership.
 - `src/model/state/ClientModel.zig` validates generation ordering and commits settings.
-- `src/client/AttachedClient.zig` performs the resource transfer and physical
+- `src/client/config/config_adoption.zig` performs the resource transfer and physical
   effects, preserving the adopted generation after a downstream failure.
 - `src/frontend/client/tests/configuration.zig` exercises reload outcomes,
   ownership replacement, stale cleanup, geometry failure and presentation.

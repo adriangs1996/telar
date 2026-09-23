@@ -3,14 +3,14 @@ const data = @import("model");
 const builtin = @import("builtin");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const GuiClient = @import("../GuiClient.zig");
+const GuiAdapter = @import("../GuiAdapter.zig");
 const Target = @import("HoverTarget.zig");
 
 pub const link_modifier: u32 = if (builtin.os.tag == .macos) 8 else 4;
 
 /// Native link modifiers are never encoded into child mouse coordinates.
 /// Example: `const target = resolve(gui, mouse, event.mods);`
-pub fn resolve(gui: *GuiClient, mouse: data.Mouse, mods: u32) Target {
+pub fn resolve(gui: *GuiAdapter, mouse: data.Mouse, mods: u32) Target {
     if (!gui.focused) {
         return .{};
     }

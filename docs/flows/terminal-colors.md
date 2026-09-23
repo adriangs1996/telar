@@ -42,7 +42,7 @@ The client model retains the RGB values in
 `model.host.host_capabilities.terminal_colors`.
 Its existing host transaction detects changes without color-specific revision
 logic. Later color changes publish the same `configure_terminal_colors` message
-from `AttachedClient.deliverHostCommit` once startup is opening or active. `appearance` remains a separate derived value
+from `host_resize.deliverHostCommit` once startup is opening or active. `appearance` remains a separate derived value
 used to select the client UI theme.
 
 ## Runtime authority

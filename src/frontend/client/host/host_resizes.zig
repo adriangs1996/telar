@@ -3,7 +3,7 @@
 const client_module = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const platform = @import("../../platform/platform.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const std = @import("std");
@@ -14,7 +14,7 @@ const Size = @import("../../platform/Size.zig");
 /// ```zig
 /// try schedule(terminal, watcher);
 /// ```
-pub fn schedule(terminal: *TerminalClient, watcher: *platform.ResizeWatcher) !void {
+pub fn schedule(terminal: *TerminalAdapter, watcher: *platform.ResizeWatcher) !void {
     const client = &terminal.app;
 
     try terminal.inbox.start(.resized, .{ wait, .{ client.io, watcher } });
@@ -25,7 +25,7 @@ pub fn schedule(terminal: *TerminalClient, watcher: *platform.ResizeWatcher) !vo
 /// ```zig
 /// _ = try handle(terminal, result, source);
 /// ```
-pub fn handle(terminal: *TerminalClient, result: anyerror!void, source: Source) !?data.HostCommit {
+pub fn handle(terminal: *TerminalAdapter, result: anyerror!void, source: Source) !?data.HostCommit {
     try result;
     const commit = try apply(terminal, source.tty.size());
     try host_capabilities.refresh(terminal);
@@ -43,7 +43,7 @@ fn wait(io: std.Io, watcher: *platform.ResizeWatcher) anyerror!void {
 /// ```zig
 /// const commit = try apply(terminal, measurement);
 /// ```
-pub fn apply(terminal: *TerminalClient, measurement: Size) !?data.HostCommit {
+pub fn apply(terminal: *TerminalAdapter, measurement: Size) !?data.HostCommit {
     const client = &terminal.app;
 
     const update = resolve(client.model.host.host_capabilities, measurement);

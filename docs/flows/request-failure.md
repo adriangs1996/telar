@@ -11,7 +11,7 @@ conversation and how to expose the rejection.
 ```text
 schema.request_failed
         |
-AttachedClient.failRuntimeRequest
+request_failure.failRuntimeRequest
         |
 consume request ID -> typed Continuation
         |
@@ -20,8 +20,8 @@ recover, ignore, publish a notification, or report fatal/error
 presentation_lifecycle.observe -> Presenter
 ```
 
-`AttachedClient.handleServerMessage` first lets `history_palette.fail` claim a
-failed history search. Otherwise `AttachedClient.failRuntimeRequest` takes the
+`runtime_messages.handleServerMessage` first lets `history_palette.fail` claim a
+failed history search. Otherwise `request_failure.failRuntimeRequest` takes the
 continuation from `model.request_lifecycle.tracker` once and switches directly
 on the retained operation. Unknown identities report the bounded runtime message and
 return `UnexpectedRequestFailure`. Known requests call their concrete recovery
@@ -76,7 +76,7 @@ new client to rebuild its projection.
 
 - `src/model/connection/request_failure.zig` checks notification
   title, target, message and duration mapping.
-- `src/client/AttachedClient.zig` owns correlation,
+- `src/client/connection/request_failure.zig` owns correlation,
   concrete recovery dispatch and error reporting.
 - `src/frontend/client/tests/pane_splits.zig` checks that failed recovery
   consumes correlation without publishing a notification.

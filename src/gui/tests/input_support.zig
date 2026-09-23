@@ -4,16 +4,16 @@ const event_module = @import("../input/event.zig");
 const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
-const GuiClient = @import("../GuiClient.zig");
+const GuiAdapter = @import("../GuiAdapter.zig");
 const decode_input = @import("../native/decode_input.zig");
 
 /// Example: `try input_support.acceptNative(gui, native_event);`
-pub fn acceptNative(gui: *GuiClient, event: native.InputEvent) !void {
+pub fn acceptNative(gui: *GuiAdapter, event: native.InputEvent) !void {
     try accept(gui, try decode_input.decode(event));
 }
 
 /// Example: `try input_support.accept(gui, .{ .paste = "text" });`
-pub fn accept(gui: *GuiClient, event: event_module.Event) !void {
+pub fn accept(gui: *GuiAdapter, event: event_module.Event) !void {
     if (!try gui.acceptInput(event)) {
         return error.InputRejected;
     }
@@ -21,13 +21,13 @@ pub fn accept(gui: *GuiClient, event: event_module.Event) !void {
 
 /// Process queued input using the same readiness message and update as the host.
 /// Example: `try input_support.pump(gui);`
-pub fn pump(gui: *GuiClient) !void {
+pub fn pump(gui: *GuiAdapter) !void {
     try gui.resumeInput();
     _ = try gui.update();
 }
 
 /// Example: `try input_support.presented(gui, token, true,);`
-pub fn presented(gui: *GuiClient, token: u64, delivered: bool) !void {
+pub fn presented(gui: *GuiAdapter, token: u64, delivered: bool) !void {
     try gui.driver.inbox.post(.{
         .presented = .{
             .token = token,
@@ -38,7 +38,7 @@ pub fn presented(gui: *GuiClient, token: u64, delivered: bool) !void {
 }
 
 /// Example: `try input_support.focus(gui, false);`
-pub fn focus(gui: *GuiClient, focused: bool) !void {
+pub fn focus(gui: *GuiAdapter, focused: bool) !void {
     try accept(gui, .{
         .focus = focused,
     });
@@ -46,7 +46,7 @@ pub fn focus(gui: *GuiClient, focused: bool) !void {
 }
 
 /// Example: `try input_support.bindingExpired(gui);`
-pub fn bindingExpired(gui: *GuiClient) !void {
+pub fn bindingExpired(gui: *GuiAdapter) !void {
     try gui.driver.inbox.post(.{
         .binding_timeout = {},
     });
@@ -55,7 +55,7 @@ pub fn bindingExpired(gui: *GuiClient) !void {
 
 /// Trigger a configured binding through host admission instead of invoking an
 /// internal action directly. Example: `_ = try input_support.action(gui, .toggle_sidebar);`
-pub fn action(gui: *GuiClient, value: data.actions.Action) !data.keybind.Control {
+pub fn action(gui: *GuiAdapter, value: data.actions.Action) !data.keybind.Control {
     const binding = try data.config_values.ConfiguredBinding.parse(&.{"alt+z"}, value);
     gui.adoptBindings(.{
         .prefix = data.keybind.default_prefix,

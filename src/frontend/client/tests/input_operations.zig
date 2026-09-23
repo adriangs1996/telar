@@ -5,10 +5,10 @@ const std = @import("std");
 const api = @import("telar-client");
 const core = @import("telar-core");
 const TestHarness = @import("TestHarness.zig");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const support = @import("support.zig");
 
-fn fillOutbox(client: *api.AttachedClient) !void {
+fn fillOutbox(client: *api.Client) !void {
     while (client.model.to_runtime.hasCapacity()) {
         try client.model.to_runtime.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }

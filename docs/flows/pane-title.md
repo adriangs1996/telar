@@ -17,7 +17,7 @@ Attachment.prepareTitle (lane after cwd and foreground)
         |
 schema.pane_title
         |
-AttachedClient.handleServerMessage
+runtime_messages.handleServerMessage
         |
 ClientModel.updatePaneMetadata(.title) -> Pane.setTitle
         |

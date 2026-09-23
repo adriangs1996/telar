@@ -15,23 +15,23 @@ queue.
 
 ```text
 host adapter drains semantic input
-  -> AttachedClient.routeKeyInput / paste_routing / pointer_routing
-  -> AttachedClient.sendPaneInput / startPanePaste / inputPaneMouse
+  -> key_routing.routeKeyInput / paste_routing / pointer_routing
+  -> pane_input.sendPaneInput / startPanePaste / inputPaneMouse
        capture the target and its current input modes
        encode key, paste marker, mouse report or supplied bytes
        applyPaneViewport(.bottom) when required by the source
   -> private deliverPaneInput
-  -> AttachedClient.sendRuntimeInput -> model.to_runtime -> pane_input
+  -> runtime_io.sendRuntimeInput -> model.to_runtime -> pane_input
 ```
 
 The host adapter dispatches semantic keys and replayed bytes to
-`AttachedClient.routeKeyInput`. Paste and pointer routing retain their current
+`key_routing.routeKeyInput`. Paste and pointer routing retain their current
 entrypoints and call the corresponding owner operations. Child input policy,
 leases, viewport restoration, telemetry and transport delivery are visible in
-`AttachedClient`. See [Key routing](key-routing.md) for keyboard ownership.
+`Client`. See [Key routing](key-routing.md) for keyboard ownership.
 
-`AttachedClient.inputPaneMouse` selects viewport, alternate-scroll or child-report policy.
-Only the latter two enter `AttachedClient.sendPaneInput`. See
+`pane_mouse_input.inputPaneMouse` selects viewport, alternate-scroll or child-report policy.
+Only the latter two enter `pane_input.sendPaneInput`. See
 [Pane mouse input](pane-mouse-input.md) for target and coordinate rules.
 
 `ClientModel.planPaneInput` is a read-only query. Normal input resolves the
@@ -43,11 +43,11 @@ prompt or copy mode rejects normal input because each owns it exclusively.
 Planning returns a value copy of `input_modes` and never advances
 `ClientModel.Version`.
 
-`AttachedClient.sendPaneInput` accepts either already-routed bytes or a semantic key. It
+`pane_input.sendPaneInput` accepts either already-routed bytes or a semantic key. It
 encodes keys against the planned child modes before committing anything, then
 rejects empty or oversized external payloads. A release that the child's
 protocol cannot represent becomes a zero-byte no-op. Press, repeat and paste
-compose `AttachedClient.applyPaneViewport` with a `.bottom` intent before delivery.
+compose `pane_viewport.applyPaneViewport` with a `.bottom` intent before delivery.
 Release and mouse reports preserve the current viewport. The final effect
 carries only `pane_id` and a slice borrowed for the synchronous call.
 
@@ -66,7 +66,7 @@ The routing snapshot and borrowed command are fixed values. The operation adds n
 allocation, queue or retained pointer. A selected owner failure propagates and
 never falls through to the other owner.
 
-`AttachedClient.startPanePaste` asks `ClientModel` to capture the focused pane and its
+`pane_input.startPanePaste` asks `ClientModel` to capture the focused pane and its
 current `bracketed_paste` mode as one `PanePasteSession`. The state has no
 presentation revision because the UI does not render it.
 
@@ -79,7 +79,7 @@ with that prompt through its own `Prompt.pasting` state.
 
 The session also freezes whether framing is required. If the child changes its
 terminal mode during the stream, Telar still emits a closing marker exactly
-when it emitted an opening marker. `AttachedClient.finishPanePaste` keeps the session
+when it emitted an opening marker. `pane_input.finishPanePaste` keeps the session
 valid during that final delivery and clears it afterward even when delivery
 fails.
 
@@ -92,16 +92,16 @@ not create a streamed session; they read the focused child's current mode and
 frame one bounded value in one delivery.
 
 An unmodified `Ctrl+V` follows the normal pane-input transaction first.
-`AttachedClient.routeKeyInput` requests its best-effort local image preview only after a
+`key_routing.routeKeyInput` requests its best-effort local image preview only after a
 confirmed delivery. See [Key routing](key-routing.md) for that ordering and
 [Clipboard image preview](clipboard-image.md) for its media worker, identity,
 bounds and presentation path.
 
 ## Effects and failure policy
 
-`AttachedClient.sendPaneInput` plans and encodes the input, then
-`deliverPaneInput` calls `AttachedClient.applyPaneViewport` when needed and
-`AttachedClient.sendRuntimeInput` directly. `model.to_runtime` copies the
+`pane_input.sendPaneInput` plans and encodes the input, then
+`deliverPaneInput` calls `pane_viewport.applyPaneViewport` when needed and
+`runtime_io.sendRuntimeInput` directly. `model.to_runtime` copies the
 borrowed bytes, coalesces adjacent input for the same pane and preserves
 protocol order. See
 [Client runtime transport](runtime-transport.md) for send-token and
@@ -123,8 +123,8 @@ its existing event counter and is not double-counted as user-input enqueue
 latency.
 
 Terminal focus reports are deliberately outside this use case. They pass
-through `AttachedClient.synchronizeReportedFocus` or `clearReportedFocus`.
-These procedures use `AttachedClient.sendRuntimeInput`, so
+through `pane_focus.synchronizeReportedFocus` or `clearReportedFocus`.
+These procedures use `runtime_io.sendRuntimeInput`, so
 focus bytes remain outside user-input telemetry and can target the pane that
 just lost focus.
 

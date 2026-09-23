@@ -12,7 +12,7 @@ const host_inputs = @import("input/host_inputs.zig");
 
 test {
     // The client capability's own files, collected for the suite.
-    _ = client.AttachedClient;
+    _ = client.Client;
     _ = @import("host/host_capabilities.zig");
     _ = @import("host/host_resizes.zig");
     _ = @import("input/host_inputs.zig");

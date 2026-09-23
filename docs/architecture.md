@@ -101,19 +101,20 @@ pub fn receive(model: *ClientModel, frame: core.FrameView) !PaneFrameOutcome {
 
 Each process has one `update`. Runtime messages, worker completions and
 timers are all messages; the switch calls one procedure per branch, and a
-reader follows any flow from there. The client's `update` lives on
-`AttachedClient` (`src/client/AttachedClient.zig`) because some branches also
-touch the Lua VM and the transport, which are not model state; each adapter
-wraps `client.Message` as one variant of its own event union and handles only
-its host events itself.
+reader follows any flow from there. The client's `update` lives on `Client`
+(`src/client/execution/Client.zig`), the one struct that holds the model
+beside what is not model state: the runtime transport, the Lua VM and plugin
+registry, and the jobs an event starts. Each adapter wraps `client.Message`
+as one variant of its own event union and handles only its host events
+itself.
 
 ```zig
-pub fn update(self: *AttachedClient, message: Message) !?u8 {
+pub fn update(self: *Client, message: Message) !?u8 {
     switch (message) {
-        .server => |result| return self.receiveRuntime(result),
-        .sent => |result| try self.completeRuntimeSend(result),
+        .server => |result| return runtime_io.receiveRuntime(self, result),
+        .sent => |result| try runtime_io.completeRuntimeSend(self, result),
         .bar_tick => |result| try bar_updates.handleTick(self, result),
-        .config_reload => |result| _ = try self.completeConfigReload(result),
+        .config_reload => |result| _ = try config_adoption.completeConfigReload(self, result),
         // ...
     }
 
@@ -121,24 +122,41 @@ pub fn update(self: *AttachedClient, message: Message) !?u8 {
 }
 ```
 
+`Client` has no other behavior than `init`, `deinit`, `update`, `flush` and
+`failJob`. Client procedures live in flow files under `src/client`: one that
+touches only the model takes `model: *ClientModel`; one that also reaches the
+transport, Lua, the clock or the job queue takes `client: *Client`.
+
 After the switch, the process flushes once. The runtime delivers pending
-output to every affected client in a single pass; the client compares
-revisions once and schedules presentation.
+output to every affected client in a single pass. The client's adapter calls
+`Client.flush`, which writes what the event left in `model.to_runtime`, then
+starts the jobs the event queued; the presenter compares revisions once and
+schedules presentation.
 
 ## The host boundary is data
 
-The TUI, the native GUI and the headless test adapter are presentation
-adapters. Each owns its host resources: terminal or window, renderer, output
-buffers, pacing.
+The TUI (`TerminalAdapter`), the native GUI (`GuiAdapter`) and the headless
+test adapter are presentation adapters. Each owns its host resources:
+terminal or window, renderer, output buffers, pacing. Each embeds one
+`Client` and drains it after every event.
 
 - The adapter writes host facts into `model.host` before calling `update`.
-- Procedures push host requests (play a sound, notify, open a link, write
-  the clipboard) into `model.to_host`. The adapter drains it with an
-  exhaustive switch. A host without a feature writes that branch as an empty
-  arm, visible in one line.
-- Procedures push runtime messages into `model.to_runtime`.
-- Workers start from a procedure and report through a completion message.
-  They carry ids and generations, never pointers.
+- Procedures push host requests (write the clipboard, show a notice on the
+  outer terminal, capture clipboard media) into `model.to_host`. The adapter
+  drains it with an exhaustive switch. A host without a feature writes that
+  branch as an empty arm, visible in one line.
+- Procedures push runtime messages into `model.to_runtime`; `flush` writes
+  them once per event.
+- Procedures start workers by pushing a `client.Job` into
+  `client.to_workers`. The adapter starts each job off the event loop and
+  the job reports through its completion message. A job the adapter cannot
+  start finishes through `Client.failJob` as that same completion carrying
+  the error, so one handler releases what starting it reserved. The queue
+  lives in `Client`, not the model, because jobs carry transport and Lua
+  handles. A job names the row it completes by id and generation; the
+  pointers it carries (the transport, a timer's scheduler, the loaded
+  configuration) belong to the client, whose adapter cancels every job before
+  freeing it.
 - A synchronous call into the adapter remains only where the answer cannot be
   a fact written beforehand, such as hit testing the adapter's own chrome.
 
@@ -164,7 +182,7 @@ is one index probe, not a walk through nested structs.
 | `telar-core` | cells, buffers, geometry and wire values shared by both processes |
 | `telar-backend` | the runtime: children, PTYs, emulation, agents, history, proxy |
 | `model` | client state and its procedures, with no I/O, Lua or host access |
-| `telar-client` | the client shell: runtime socket, Lua VM, workers, inbox |
+| `telar-client` | `Client` and the client flows: runtime socket, Lua VM, job queue, inbox |
 | `telar-frontend` | the TUI adapter: host terminal, decoder, compositor, diff, pacing |
 | `telar-gui` | the native adapter: glyph atlas and quads drawn by Metal or Vulkan |
 

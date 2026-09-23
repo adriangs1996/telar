@@ -2,7 +2,7 @@
 const data = @import("model");
 const client = @import("telar-client");
 const std = @import("std");
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const Target = @import("Target.zig");
 const Control = @import("MessageLinkControl.zig");
 const Preview = @import("../MessageLinkPreview.zig");
@@ -10,7 +10,7 @@ const Destination = @import("../MessageLinkDestination.zig");
 
 /// Borrows only the destination range of the recorded immutable message item.
 /// Example: `const text = message_links.destination(gui, control) orelse return;`
-pub fn destination(gui: *const GuiClient, control: Control) ?[]const u8 {
+pub fn destination(gui: *const GuiAdapter, control: Control) ?[]const u8 {
     const owner = control.owner;
     const tab = gui.app.model.tabs.activeSlot() orelse return null;
     const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, owner.pane_id) orelse return null;
@@ -46,7 +46,7 @@ pub fn destination(gui: *const GuiClient, control: Control) ?[]const u8 {
 
 /// Reuses delivered geometry; motion and invalidation require no text layout.
 /// Example: `message_links.refresh(gui);`
-pub fn refresh(gui: *GuiClient) void {
+pub fn refresh(gui: *GuiAdapter) void {
     const state = &gui.widgets;
     const event = gui.pointer.hover.event;
     const target: ?Target = if (event) |pointer| state.dispatcher.maps.presented().at(.{ pointer.x, pointer.y }) else null;
@@ -76,7 +76,7 @@ pub fn refresh(gui: *GuiClient) void {
 }
 
 /// Example: `message_links.clear(gui);`
-pub fn clear(gui: *GuiClient) void {
+pub fn clear(gui: *GuiAdapter) void {
     if (gui.widgets.message_link_preview != null) {
         gui.widgets.message_link_preview = null;
         gui.widgets.dispatcher.revision +%= 1;
@@ -85,7 +85,7 @@ pub fn clear(gui: *GuiClient) void {
 
 /// Opens a still-current destination after a completed click.
 /// Example: `try message_links.open(gui, control);`
-pub fn open(gui: *GuiClient, control: Control) !void {
+pub fn open(gui: *GuiAdapter, control: Control) !void {
     if (!gui.pointerGeometryMatches() or gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null) {
         return;
     }
@@ -117,7 +117,7 @@ pub fn open(gui: *GuiClient, control: Control) !void {
 
 /// Copies a current destination, including schemes the opener does not support.
 /// Example: `try message_links.copy(gui, control);`
-pub fn copy(gui: *GuiClient, control: Control) !void {
+pub fn copy(gui: *GuiAdapter, control: Control) !void {
     if (!gui.pointerGeometryMatches() or gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null) {
         return;
     }

@@ -4,7 +4,7 @@ const DeletionProbe = @import("DeletionProbe.zig");
 /// The attachment shelf a host that draws image previews owns: the catalog
 /// it instantiates from `GenericCatalog` with its own preview state, marker
 /// plans over that catalog, and the preview modal's input ownership. A host
-/// without previews leaves `AttachedClient.attachments` null.
+/// without previews leaves `Client.attachments` null.
 const AttachmentShelf = @This();
 
 context: *anyopaque,

@@ -6,19 +6,19 @@ const std = @import("std");
 
 const core = @import("telar-core");
 
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const Target = @import("Target.zig");
 const ClipboardResult = @import("../../input/ClipboardResult.zig");
 const Id = @import("Id.zig");
 
 /// Example: `if (!thread_items.eligible(gui, target)) return;`
-pub fn eligible(gui: *const GuiClient, target: Target) bool {
+pub fn eligible(gui: *const GuiAdapter, target: Target) bool {
     const thread = snapshot(gui, target) orelse return false;
     return thread.findItem(target.action.thread_item.identity) != null;
 }
 
 /// Example: `try thread_items.activate(gui, target);`
-pub fn activate(gui: *GuiClient, target: Target) !void {
+pub fn activate(gui: *GuiAdapter, target: Target) !void {
     const thread = snapshot(gui, target) orelse return;
     const control = target.action.thread_item;
     const item = thread.findItem(control.identity) orelse return;
@@ -53,7 +53,7 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
 
 /// Commits only the navigation used by a successfully delivered frame.
 /// Example: `try thread_items.delivered(gui);`
-pub fn delivered(gui: *GuiClient) !void {
+pub fn delivered(gui: *GuiAdapter) !void {
     const anchor = &gui.widgets.thread_anchor;
     const resolution = anchor.prepared orelse return;
     anchor.prepared = null;
@@ -77,7 +77,7 @@ pub fn delivered(gui: *GuiClient) !void {
 }
 
 /// Native failure never displays a successful copy. Example: `thread_items.copied(gui, result);`
-pub fn copied(gui: *GuiClient, result: ClipboardResult) void {
+pub fn copied(gui: *GuiAdapter, result: ClipboardResult) void {
     const id: Id = .{ .target_id = result.target_id, .generation = result.generation };
     for (&gui.widgets.pending_thread_copies) |*slot| {
         const pending = slot.* orelse continue;
@@ -98,7 +98,7 @@ pub fn copied(gui: *GuiClient, result: ClipboardResult) void {
     }
 }
 
-fn snapshot(gui: *const GuiClient, target: Target) ?*const core.AgentThreadSnapshot {
+fn snapshot(gui: *const GuiAdapter, target: Target) ?*const core.AgentThreadSnapshot {
     if (target.action != .thread_item or target.layer != 0 or gui.app.model.name_prompt.active()) {
         return null;
     }
@@ -114,7 +114,7 @@ fn snapshot(gui: *const GuiClient, target: Target) ?*const core.AgentThreadSnaps
 }
 
 /// Uses delivered targets and the existing disclosure transaction. Example: `try thread_items.setExpansion(gui, request);`
-pub fn setExpansion(gui: *GuiClient, request: client.ThreadExpansion) !void {
+pub fn setExpansion(gui: *GuiAdapter, request: client.ThreadExpansion) !void {
     const registry = gui.widgets.dispatcher.maps.presented();
     for (registry.targets[0..registry.len]) |target| {
         if (target.action != .thread_item) {

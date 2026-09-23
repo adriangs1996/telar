@@ -3,7 +3,7 @@
 const client_module = @import("telar-client");
 const data = @import("model");
 const std = @import("std");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
 const capture_module = @import("../../attachments/capture.zig");
 const term = @import("../../presentation/screen_support.zig");
@@ -13,7 +13,7 @@ const host_inputs = @import("../input/host_inputs.zig");
 /// runtime write and every job the event left. A job that fails to start can
 /// leave new host requests, so both drain until the host queue is empty.
 /// Example: `try host_effects.deliver(terminal);`
-pub fn deliver(terminal: *TerminalClient) !void {
+pub fn deliver(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     while (true) {
@@ -25,7 +25,7 @@ pub fn deliver(terminal: *TerminalClient) !void {
     }
 }
 
-fn deliverRequests(terminal: *TerminalClient) !void {
+fn deliverRequests(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     const effects = &client.model.to_host;
@@ -72,7 +72,7 @@ fn deliverRequests(terminal: *TerminalClient) !void {
 
 /// Starts each queued job as an inbox producer; one the inbox rejects
 /// finishes as a failure, which may queue its successor.
-fn startJobs(terminal: *TerminalClient) !void {
+fn startJobs(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     try client.flush();
@@ -84,7 +84,7 @@ fn startJobs(terminal: *TerminalClient) !void {
     }
 }
 
-fn startCapture(terminal: *TerminalClient, request: data.CaptureRequest) !void {
+fn startCapture(terminal: *TerminalAdapter, request: data.CaptureRequest) !void {
     const client = &terminal.app;
 
     try terminal.inbox.start(.clipboard_image, .{ capture, .{

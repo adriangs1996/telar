@@ -23,7 +23,7 @@ restores them. See [Session checkpoint](session-checkpoint.md).
 ```text
 completed client event
         |
-AttachedClient.synchronizeClientLayout
+client_layout.synchronizeClientLayout
         |
 fixed-size version comparison
         |

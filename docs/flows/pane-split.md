@@ -2,25 +2,25 @@
 
 A split is a runtime pane launch with a client-owned layout intention. The
 runtime decides whether the pane exists; the client decides where it is shown.
-[AttachedClient.zig](../../src/client/AttachedClient.zig) owns
+[pane_split.zig](../../src/client/panes/pane_split.zig) owns
 `requestPaneSplit`, private `confirmPaneSplit` and private `recoverPaneSplit`.
 
 ## Request
 
 Start at the dispatch described in [architecture](../architecture.md#dispatch). In the GUI,
-`GuiClient.update` dispatches `.input_ready` to `GuiClient.inputReady`, which
-calls `GuiClient.drainInput`.
+`GuiAdapter.update` dispatches `.input_ready` to `GuiAdapter.inputReady`, which
+calls `GuiAdapter.drainInput`.
 `dispatchKey` (or the text branch) reaches `routeKey`, which calls
 `router.routeEvent(event, context)`. The router returns `.action` with
-`.split_pane = .horizontal`. `GuiClient.applyInputDecision` executes that request
-through `executeAction` → `AttachedClient.executeAction`.
+`.split_pane = .horizontal`. `GuiAdapter.applyInputDecision` executes that request
+through `executeAction` → `actions.executeAction`.
 Its `.split_pane` case directly calls
-`AttachedClient.requestPaneSplit`. The default `<prefix> %` maps to `.horizontal`: the new
+`pane_split.requestPaneSplit`. The default `<prefix> %` maps to `.horizontal`: the new
 pane is to the right of the original.
 
 ```text
-AttachedClient.executeAction(.split_pane)
-  → AttachedClient.requestPaneSplit
+actions.executeAction(.split_pane)
+  → pane_split.requestPaneSplit
       → model.planPaneSplit
       → enqueue provisional pane_resize
       → sendPaneSplitRequest: retain correlation and enqueue create_pane
@@ -37,7 +37,7 @@ command arguments; they do not substitute the current keyboard focus.
 
 ## Routed API command
 
-A routed `.pane_split` command enters `AttachedClient.handleServerMessage` as
+A routed `.pane_split` command enters `runtime_messages.handleServerMessage` as
 `.client_command`. Private `completeClientCommand` owns the response, and
 `executeClientCommand` validates request status, parses the axis, resolves and
 focuses the explicit target, then calls `requestPaneSplit` directly.
@@ -49,7 +49,7 @@ operation failures return `.failed` with the error name. Local commands such
 as focusing an existing pane return `.applied`.
 
 The command dispatcher and its pane, navigation, presentation, agent and layout
-helpers are private methods on `AttachedClient`. They expose no separate
+helpers are private methods on `Client`. They expose no separate
 controller modules or callback table.
 
 ## Completion
@@ -59,10 +59,10 @@ The runtime dispatches `.create_pane` from `client_request.receive` directly to
 answers with `pane_opened` or `request_failed`.
 
 ```text
-AttachedClient.receiveRuntime
-  → AttachedClient.handleServerMessage
-      → AttachedClient.completePaneOpen: consume request identity once
-          → AttachedClient.confirmPaneSplit
+runtime_io.receiveRuntime
+  → runtime_messages.handleServerMessage
+      → pane_attachment.completePaneOpen: consume request identity once
+          → pane_split.confirmPaneSplit
               → model.commitPaneSplit
               → active geometry / inactive detach / stale cleanup
 ```
@@ -83,13 +83,13 @@ caller-constructed commits.
 
 No explicit draw is issued here. Presentation observes the committed model.
 Pane geometry and active resource synchronization are
-`AttachedClient.resizeAttachedPanes` and `AttachedClient.synchronizeActivePane`,
+`pane_resize.resizeAttachedPanes` and `pane_focus.synchronizeActivePane`,
 called immediately after committing the layout.
 
 ## Failure and races
 
-`AttachedClient.failRuntimeRequest` consumes a failed request. Its concrete switch
-calls `AttachedClient.recoverPaneSplit` directly before publishing a failure notice.
+`request_failure.failRuntimeRequest` consumes a failed request. Its concrete switch
+calls `pane_split.recoverPaneSplit` directly before publishing a failure notice.
 Recovery resolves the retained target against current state: resize an attached
 active target, leave an inactive target alone, and suppress obsolete failure
 notifications for a retired target or tab.

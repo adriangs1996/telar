@@ -3,7 +3,7 @@
 
 const client_module = @import("telar-client");
 const core = @import("telar-core");
-const TerminalClient = @import("TerminalClient.zig");
+const TerminalAdapter = @import("TerminalAdapter.zig");
 const std = @import("std");
 const EventResources = @import("EventResources.zig");
 const client_startup = @import("session/client_startup.zig");
@@ -16,7 +16,7 @@ const client_telemetry = @import("telemetry/telemetry.zig");
 const host_effects = @import("host/host_effects.zig");
 const view_chrome = @import("presentation/view_chrome.zig");
 
-const EventTag = std.meta.Tag(TerminalClient.ClientEvent);
+const EventTag = std.meta.Tag(TerminalAdapter.ClientEvent);
 
 pub const Outcome = union(enum) {
     keep_running,
@@ -30,7 +30,7 @@ pub const Outcome = union(enum) {
 /// ```zig
 /// const outcome = try handle(terminal, event, resources);
 /// ```
-pub fn handle(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: EventResources) !Outcome {
+pub fn handle(terminal: *TerminalAdapter, event: TerminalAdapter.ClientEvent, resources: EventResources) !Outcome {
     const outcome = try dispatch(terminal, event, resources);
     if (outcome == .keep_running) {
         try observe(terminal);
@@ -41,7 +41,7 @@ pub fn handle(terminal: *TerminalClient, event: TerminalClient.ClientEvent, reso
 
 /// Consumes only this turn's admitted work, then derives one presentation.
 /// Example: `const outcome = try events.update(terminal, resources);`
-pub fn update(terminal: *TerminalClient, resources: EventResources) !Outcome {
+pub fn update(terminal: *TerminalAdapter, resources: EventResources) !Outcome {
     const inbox = &terminal.inbox;
     var turn = try inbox.begin();
     defer inbox.end();
@@ -59,7 +59,7 @@ pub fn update(terminal: *TerminalClient, resources: EventResources) !Outcome {
     return .keep_running;
 }
 
-fn observe(terminal: *TerminalClient) !void {
+fn observe(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     const path = core.enter(.interactive);
@@ -72,7 +72,7 @@ fn observe(terminal: *TerminalClient) !void {
 
 /// Routes one event, then draws the chrome facts it changed and delivers the
 /// host requests it left, even when the event ends the client.
-fn dispatch(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: EventResources) !Outcome {
+fn dispatch(terminal: *TerminalAdapter, event: TerminalAdapter.ClientEvent, resources: EventResources) !Outcome {
     const outcome = try route(terminal, event, resources);
     try view_chrome.refresh(terminal);
     try host_effects.deliver(terminal);
@@ -80,7 +80,7 @@ fn dispatch(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resour
     return outcome;
 }
 
-fn route(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: EventResources) !Outcome {
+fn route(terminal: *TerminalAdapter, event: TerminalAdapter.ClientEvent, resources: EventResources) !Outcome {
     const client = &terminal.app;
 
     const path = core.enter(pathFor(@as(EventTag, event)));

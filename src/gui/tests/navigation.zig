@@ -5,7 +5,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Session = @import("Session.zig");
-const GuiClient = @import("../GuiClient.zig");
+const GuiAdapter = @import("../GuiAdapter.zig");
 const routing = @import("../input/router.zig");
 
 test "update processes a horizontal split shortcut and its correlated runtime reply" {
@@ -461,7 +461,7 @@ fn pointerPress(session: *Session) native.InputEvent {
     };
 }
 
-fn saturate(gui: *GuiClient) !void {
+fn saturate(gui: *GuiAdapter) !void {
     for (0..1023) |_| {
         try input_support.acceptNative(gui, .{ .kind = 6, .code = 6 });
     }

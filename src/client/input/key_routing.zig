@@ -9,7 +9,7 @@ const copy_mode = @import("copy_mode.zig");
 const name_prompt = @import("name_prompt.zig");
 const pane_input = @import("../panes/pane_input.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Snapshot the current exclusive keyboard owners without exposing client state.
 /// Example: `const captures_keys = key_policy.captures(key_routing.keyRoutingAuthority(client));`

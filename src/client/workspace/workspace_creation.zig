@@ -7,7 +7,7 @@ const path_expansion = @import("../completion/path_expansion.zig");
 const prompt_paths = @import("../completion/prompt_paths.zig");
 const name_prompt = @import("../input/name_prompt.zig");
 const workspace_handoff = @import("workspace_handoff.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Validates a workspace creation and retains its launch parameters until confirmation.
 /// Example: `_ = try workspace_creation.requestWorkspaceCreation(app, .{ .name = "agents" });`

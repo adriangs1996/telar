@@ -28,7 +28,7 @@ pub fn capture(prompt: *const shared_model.Prompt, target: Target) ?FieldView {
 
 /// Resolves a delivered editor against its current prompt or pane attachment.
 /// Example: `const field = FieldView.captureClient(app, target) orelse return;`
-pub fn captureClient(app: *const client.AttachedClient, target: Target) ?FieldView {
+pub fn captureClient(app: *const client.Client, target: Target) ?FieldView {
     if (target.action == .composer) {
         if (app.model.name_prompt.active()) {
             return null;
@@ -51,7 +51,7 @@ pub fn captureClient(app: *const client.AttachedClient, target: Target) ?FieldVi
 
 /// Reads the edit revision in the same owner scope used to capture text.
 /// Example: `const revision = FieldView.revision(app, target);`
-pub fn revision(app: *const client.AttachedClient, target: Target) u64 {
+pub fn revision(app: *const client.Client, target: Target) u64 {
     if (target.action == .composer) {
         const tab = app.model.tabs.activeSlot() orelse return 0;
         const pane = app.model.panes.findInConst(app.model.tabs.location[tab].tab_id, target.action.composer) orelse return 0;

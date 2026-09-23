@@ -5,7 +5,7 @@ const std = @import("std");
 const agent_control = @import("../agents/agent_control.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 const tab_removal = @import("tab_removal.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Example: `_ = try tab_creation.requestTabCreation(app, command);`
 pub fn requestTabCreation(client: *Client, command: data.RequestTabCreation) !bool {

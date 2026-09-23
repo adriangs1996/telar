@@ -1,10 +1,10 @@
 //! Reading offsets are committed only after their exact window reaches the host.
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const client = @import("telar-client");
 
 /// Commits page-anchor geometry before scheduling any new history request.
 /// Example: `try thread_history.delivered(gui);`
-pub fn delivered(gui: *GuiClient) !void {
+pub fn delivered(gui: *GuiAdapter) !void {
     const registry = gui.widgets.dispatcher.maps.presented();
     for (registry.targets[0..registry.len]) |target| {
         if (target.action != .transcript or (!target.thread_reanchor and !target.thread_skip_folded and target.thread_prefetch == null)) {

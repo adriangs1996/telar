@@ -14,7 +14,7 @@ keys; malformed host escape sequences never reach the child verbatim.
 ## End-to-end path
 
 ```text
-GUI: GuiClient.drainInput → dispatchKey → routeKey
+GUI: GuiAdapter.drainInput → dispatchKey → routeKey
 TUI: host_inputs.handleRead → feed → router.next → decoded
                                         |
                               router.routeEvent(event, context)
@@ -25,29 +25,29 @@ TUI: host_inputs.handleRead → feed → router.next → decoded
                           /                         \
                     action request             key / replay
                           |                         |
-             AttachedClient.executeAction          AttachedClient.routeKeyInput
+             actions.executeAction          key_routing.routeKeyInput
                           |                         |
                 concrete operation         retained application owner
                           |                         |
-           actionCompleted(post-action policy)   AttachedClient.sendPaneInput
+           actionCompleted(post-action policy)   pane_input.sendPaneInput
 ```
 
-`GuiClient.executeAction` also applies native palette, sidebar and transcript behavior.
+`GuiAdapter.executeAction` also applies native palette, sidebar and transcript behavior.
 `InputQueue` owns bounded event storage, payload pools and retained releases.
-`GuiClient` owns the router, binding target, timer and binding presentation revision.
-The queue has no application argument or owner pointer. `GuiClient.drainInput` borrows
+`GuiAdapter` owns the router, binding target, timer and binding presentation revision.
+The queue has no application argument or owner pointer. `GuiAdapter.drainInput` borrows
 its front event and calls `consume` only after processing completes. Partial
 scroll and clipboard delivery retain the front event. Binding expiry,
-configuration adoption and cancellation also enter `GuiClient` directly.
+configuration adoption and cancellation also enter `GuiAdapter` directly.
 
 GUI input draining, action execution, focus handling, GPU completion and worker
 completion are private operations reached through `update` and its event dispatch.
 GUI integration tests admit input and post completion messages to that same inbox;
 they do not invoke those private steps directly.
 
-`AttachedClient.keyRoutingAuthority()` snapshots modal, prompt and copy-mode
+`key_routing.keyRoutingAuthority()` snapshots modal, prompt and copy-mode
 flags. The existing pure `key_routing.captures(authority)` decides whether bindings are
-bypassed. `AttachedClient.repeatPane()` returns only the eligible attached pane
+bypassed. `actions.repeatPane()` returns only the eligible attached pane
 ID, or null when an exclusive owner, copy mode or an unavailable pane prevents
 repetition. The pure `action_routing.repeatPolicy(action, eligible_pane)` receives these values,
 never an application pointer. GUI and TUI re-read eligibility after each action
@@ -58,7 +58,7 @@ into a newly focused composer. TUI mouse, paste and terminal responses are
 handled explicitly in `host_inputs.decoded`. Startup input similarly yields
 host responses while retaining early user input, without a callback object.
 
-`AttachedClient.routeKeyInput` reads current authority and retained physical leases, then
+`key_routing.routeKeyInput` reads current authority and retained physical leases, then
 calls the selected concrete operation. Priority, exclusivity and follow-up order
 are visible in the same module.
 
@@ -98,7 +98,7 @@ The modal does not claim these prior buffered bytes. Its active capture applies
 to new semantic keys.
 
 A selected owner failure propagates and never falls through to another owner.
-If the pane target disappeared or is exclusively owned, `AttachedClient.sendPaneInput`
+If the pane target disappeared or is exclusively owned, `pane_input.sendPaneInput`
 returns no delivery and the route ends without another effect.
 
 ## Held scroll bindings
@@ -139,7 +139,7 @@ Legacy press-only input retains its old behavior. See
 ## Clipboard preview order
 
 Only an unmodified `Ctrl+V` is eligible for local image inspection. The operation
-first waits for `AttachedClient.sendPaneInput` to accept the input into `model.to_runtime`.
+first waits for `pane_input.sendPaneInput` to accept the input into `model.to_runtime`.
 It starts the preview only after that confirmed delivery. A missing pane never
 starts a preview.
 

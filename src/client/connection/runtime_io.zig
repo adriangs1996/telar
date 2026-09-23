@@ -3,7 +3,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const runtime_messages = @import("runtime_messages.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Copies bounded pane input into the outbox; `flush` writes it.
 ///

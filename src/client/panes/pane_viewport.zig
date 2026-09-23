@@ -2,7 +2,7 @@
 const data = @import("model");
 const pane_mouse_input = @import("../input/pane_mouse_inputs.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 pub fn scrollPane(client: *Client, direction: data.ScrollDirection) !void {
     const model = client.model.tabs.activeSlot() orelse return;

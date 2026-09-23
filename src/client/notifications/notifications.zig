@@ -6,7 +6,7 @@ const std = @import("std");
 const pane_focus = @import("../panes/pane_focus.zig");
 const tab_selection = @import("../workspace/tab_selection.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Publishes one owned notice through the application boundary.
 /// Example: `_ = try notifications.publishNotification(client, now_ns, input);`

@@ -5,22 +5,22 @@ records whether this connection can accept frames and send pane input; changing
 that flag alone does not advance a presentation revision.
 
 ```text
-AttachedClient.applyTabSnapshot / host resize / pane geometry or focus change
+tab_snapshot.applyTabSnapshot / host resize / pane geometry or focus change
   -> resolve tab and area; require canonical membership
-  -> AttachedClient.attachVisiblePanes: detached, visible, no pending attachment
-  -> AttachedClient.sendRuntimeRequest(open_pane, exact pane and tab continuation)
+  -> pane_attachment.attachVisiblePanes: detached, visible, no pending attachment
+  -> runtime_io.sendRuntimeRequest(open_pane, exact pane and tab continuation)
   -> runtime attachment -> pane_opened
-  -> AttachedClient.handleServerMessage
-  -> AttachedClient.completePaneOpen
-  -> AttachedClient.confirmPaneAttachment -> ClientModel.confirmPaneAttachment
+  -> runtime_messages.handleServerMessage
+  -> pane_attachment.completePaneOpen
+  -> pane_attachment.confirmPaneAttachment -> ClientModel.confirmPaneAttachment
 ```
 
-`AttachedClient.completePaneOpen` consumes correlation once and routes its typed
+`pane_attachment.completePaneOpen` consumes correlation once and routes its typed
 continuation. Confirmation requires the same pane and tab, and `created=false`.
 The model accepts only a still-detached pane in the active tab. A switched tab,
 retired pane or repeated confirmation cannot revive the attachment.
 
-Tab retirement calls `AttachedClient.detachTab` with a stable `TabLocation`:
+Tab retirement calls `tab_removal.detachTab` with a stable `TabLocation`:
 
 ```text
 ClientModel.planTabDetachment
@@ -40,9 +40,9 @@ A partial failure retains already delivered paste, focus, detach and graphics
 effects without claiming the whole tab detached. The client error path drops
 this disposable replica; runtime pane processes remain alive.
 
-`AttachedClient.failRuntimeRequest` sends a missing-pane rejection to
-`AttachedClient.recoverPaneAttachment`. Recovery requests a coalesced tab snapshot only
-when the same pane is still detached in the active tab. `AttachedClient.recoverTabSnapshot`
+`request_failure.failRuntimeRequest` sends a missing-pane rejection to
+`pane_attachment.recoverPaneAttachment`. Recovery requests a coalesced tab snapshot only
+when the same pane is still detached in the active tab. `tab_snapshot.recoverTabSnapshot`
 owns singleton snapshot coalescence. Canonical membership decides whether to
 remove the pane. An internal attachment failure reports the error without an
 immediate retry: an identical snapshot could otherwise repeat the same failure

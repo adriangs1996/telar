@@ -27,7 +27,7 @@ const worker = @import("plugins/worker.zig");
 const core = @import("telar-core");
 
 pub const Activity = sidebar_animation.Activity;
-pub const AttachedClient = @import("AttachedClient.zig");
+pub const Client = @import("execution/Client.zig");
 pub const AttachmentShelf = @import("attachments/AttachmentShelf.zig");
 pub const BarCallbackContext = @import("config/BarCallbackContext.zig");
 pub const BarMetrics = @import("config/BarMetrics.zig");

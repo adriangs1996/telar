@@ -5,20 +5,20 @@ owns membership; the client owns bookmarks, retained layout and a visible empty
 state while the existing target opens.
 
 ```text
-AttachedClient.executeAction, agent navigation, resync or canonical tab closure
-  -> AttachedClient.selectWorkspace / requestWorkspace / requestWorkspacePane
+actions.executeAction, agent navigation, resync or canonical tab closure
+  -> workspace_handoff.selectWorkspace / requestWorkspace / requestWorkspacePane
   -> private requestWorkspaceSwitch: target, authority and bounded preflight
-        -> AttachedClient.detachTab for each captured tab
+        -> tab_removal.detachTab for each captured tab
         -> correlated open_pane
         -> ClientModel.departWorkspace -> workspace_handoff.clear
-        -> AttachedClient.releaseWorkspace
+        -> workspace_handoff.releaseWorkspace
   -> adapter observes the empty projection
 
 pane_opened(initial_open continuation)
-  -> AttachedClient.completePaneOpen
-  -> AttachedClient.arriveOpenedWorkspace
+  -> pane_attachment.completePaneOpen
+  -> workspace_creation.arriveOpenedWorkspace
      -> ClientModel.arriveWorkspace -> workspace_handoff.bootstrap
-     -> AttachedClient.activateWorkspace
+     -> workspace_handoff.activateWorkspace
         -> active resources, host input, workspace snapshot, tab snapshot
   -> adapter observes the arrived projection
 ```
@@ -37,7 +37,7 @@ cannot restore a runtime identity that disappeared.
 
 Preflight checks two available request IDs (open and synchronous repair) before
 checking outbox capacity for paste-end, valid focus-out, every attached or
-pending-open detach, and the open. It shares `AttachedClient.tabDetachmentCapacity`
+pending-open detach, and the open. It shares `tab_removal.tabDetachmentCapacity`
 with tab close. Failure occurs before any provisional effect and requests no
 repair because nothing changed.
 
@@ -65,7 +65,7 @@ Activation validates root identity, attachment and revision deltas, then
 synchronizes resources, resumes input, and requests workspace then tab snapshots.
 Post-commit delivery errors preserve the arrived model.
 
-A remembered-pane `pane_not_found` failure reaches `AttachedClient.recoverWorkspaceSwitch`.
+A remembered-pane `pane_not_found` failure reaches `workspace_handoff.recoverWorkspaceSwitch`.
 It forgets the bookmark and retries once against the workspace. The retry has
 no fallback, so another failure is fatal rather than an unbounded loop. Other
 codes or missing fallback also propagate `RuntimeRequestFailed`.
@@ -74,7 +74,7 @@ Departure and preflight use bounded stores and add no queue. Arrival makes the
 normal pane buffer/bootstrap allocations before committing. Runtime panes
 survive client failure and reconnect.
 
-Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`,
+Source: `src/client/workspace/workspace_handoff.zig`, `src/model/state/ClientModel.zig`,
 `src/model/workspace/workspace_handoff.zig` and
 `src/model/workspace/NavigationHistory.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`,

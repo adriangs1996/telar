@@ -10,9 +10,9 @@ still presses Enter in the shell: the engine suggests, it never executes.
 ```text
 suggest_command action
         |
-AttachedClient.beginSuggestion -> openNamePrompt(.suggest_palette) + model.suggestion.begin
+suggest_command.beginSuggestion -> openNamePrompt(.suggest_palette) + model.suggestion.begin
         |
-Enter with text -> AttachedClient.submitPrompt(.suggest) -> submitSuggestion -> requestSuggestion
+Enter with text -> name_prompt.submitPrompt(.suggest) -> submitSuggestion -> requestSuggestion
         |
 model.suggestion.expect(request id)  (phase waiting, prompt stays open)
         |
@@ -46,7 +46,7 @@ suggestion.extractCommand: first non-empty line, fences stripped, ≤ 1024 bytes
         |
 ResponseQueue command_suggestion { request_id, status, text }  (client gone: dropped)
         |
-AttachedClient.handleServerMessage -> model.suggestion.apply(request id, status, text)
+runtime_messages.handleServerMessage -> model.suggestion.apply(request id, status, text)
         |
 Version.suggestion -> presenter invalidate -> list modal frame
 ```
@@ -65,8 +65,8 @@ uses the existing prompt submission path and stays disabled during generation.
 ## Paste
 
 Enter over a ready suggestion first closes the prompt, then
-`AttachedClient.finishPromptList` calls `pasteSuggestion`, which pastes the text
-through the ordinary pane-paste path (`AttachedClient.pasteExpression`),
+`name_prompt.finishPromptList` calls `pasteSuggestion`, which pastes the text
+through the ordinary pane-paste path (`pane_input.pasteExpression`),
 without a trailing Enter. The order matters for the same reason as the
 history palette: `planPaneInput(.focused)` refuses input while a prompt
 owns it.

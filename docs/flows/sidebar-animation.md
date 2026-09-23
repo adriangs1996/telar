@@ -14,17 +14,17 @@ remains the presenter's responsibility.
 ```text
 accepted agent snapshot or pane progress
         |
-AttachedClient.applyAgentSnapshot / applyPaneProgress
+agent_snapshot.applyAgentSnapshot / applyPaneProgress
         |
-AttachedClient.synchronizeSidebarAnimation
+sidebar_animation.synchronizeSidebarAnimation
         |
 model.sidebar_animation_scheduler, one pending timer
         |
 client.workers.start(.timer, .sidebar_animation)
         |
-Message.sidebar_animation_tick -> AttachedClient.update
+Message.sidebar_animation_tick -> Client.update
         |
-AttachedClient.completeSidebarAnimationTick
+sidebar_animation.completeSidebarAnimationTick
         |
 ClientModel.advanceSidebarAnimation
         |
@@ -35,13 +35,13 @@ presentation_lifecycle.observe
 Presenter -> State.render(RenderInput.sidebar_animation_frame)
 ```
 
-`AttachedClient.synchronizeSidebarAnimation` checks
+`sidebar_animation.synchronizeSidebarAnimation` checks
 `ClientModel.sidebarAnimationActive` and asks the scheduler for a future tick
 without changing the frame. The scheduler's `pending` bit coalesces repeated
 agent snapshots and rearm attempts into one timer job. A host that reports no
 `model.host.animation_frame_ns` gets no timer.
 
-When the timer completes, `AttachedClient.completeSidebarAnimationTick` first releases the
+When the timer completes, `sidebar_animation.completeSidebarAnimationTick` first releases the
 pending token. `ClientModel.advanceSidebarAnimation` then advances the frame if
 a working agent or a pane with active progress still exists, and the client
 rearms the scheduler. If none is left, the tick is a semantic no-op and the
@@ -79,7 +79,7 @@ needed.
 
 - `src/model/state/tests/observations.zig` proves active-only frame
   advancement and isolated versioning.
-- `src/client/AttachedClient.zig` arms the single pending timer and releases
+- `src/client/notifications/sidebar_animation.zig` arms the single pending timer and releases
   it before handling completion; `src/client/notifications/sidebar_animation.zig`
   names its `Activity` result.
 - `src/model/state/ClientModel.zig` owns the frame, its revision and the

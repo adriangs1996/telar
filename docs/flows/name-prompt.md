@@ -21,15 +21,15 @@ from `completion/path_expansion.zig`).
 ### Directory completion
 
 ```text
-directory edit -> AttachedClient.inputPrompt
+directory edit -> name_prompt.inputPrompt
         |
-AttachedClient.refreshPathCompletion (expand, compare with the wanted query)
+prompt_paths.refreshPathCompletion (expand, compare with the wanted query)
         |
 client.workers.start(.path_completion) (observation path)
         |
 completion/path_completion.run: one listing, <= 64 directories, <= 4096 B per path
         |
-client.Message.path_completion -> AttachedClient.update -> completePathCompletion
+client.Message.path_completion -> Client.update -> completePathCompletion
         |
 ClientModel.path_completion (PathCompletionState, Version.path_completion)
 ```
@@ -56,7 +56,7 @@ the completion names); the GUI paints a modal with the list.
 ```text
 native action or tab-bar intent
         |
-AttachedClient.openNamePrompt
+name_prompt.openNamePrompt
         |
 NamePromptState.begin
         |
@@ -64,7 +64,7 @@ ClientModel.name_prompt.version() (Version.prompt)
 
 host key input                     streamed paste phase
         |                                  |
-AttachedClient.routeKeyInput   paste_routing.start / content / finish
+key_routing.routeKeyInput   paste_routing.start / content / finish
         |                                  |
 key routing selects the prompt      paste_routing -> prompt owner
         |                                  |
@@ -72,14 +72,14 @@ key or replayed bytes -> term.parse       paste_start / paste_text / paste_end
         |                                  |
         +----------------+-----------------+
                          |
-             AttachedClient.inputPrompt(Input)
+             name_prompt.inputPrompt(Input)
                          |
                   semantic Command
         |
-AttachedClient.inputPrompt -> NamePromptState.apply
+name_prompt.inputPrompt -> NamePromptState.apply
 ```
 
-`AttachedClient.openNamePrompt` owns opening eligibility and canonical initialization.
+`name_prompt.openNamePrompt` owns opening eligibility and canonical initialization.
 It rejects every intent while copy mode or a pane paste owns input, resolves
 the current workspace or requested tab and copies its canonical name into the
 bounded field. Workspace creation also requires no pending request and an
@@ -91,11 +91,11 @@ and mutate the prompt through the model.
 paste, `paste_routing` snapshots those modes plus the attachment modal and
 `paste_routing` selects one owner. A paste that starts in the prompt
 records `Prompt.pasting`; its later chunks and closing boundary stay with that
-editor. For normal host keys, `AttachedClient.routeKeyInput` selects prompt authority
+editor. For normal host keys, `key_routing.routeKeyInput` selects prompt authority
 before copy mode or pane input. `key_routing.captures` bypasses configured bindings
 while the prompt is active. Mouse input and configured actions are suppressed
 in that interval. `pointer_routing.apply` receives no pointer authority, while
-`AttachedClient.executeAction` returns before selecting a native, Lua or plugin effect.
+`actions.executeAction` returns before selecting a native, Lua or plugin effect.
 See [Key routing](key-routing.md).
 
 The terminal adapter translates bytes into semantic editor commands. The state
@@ -111,9 +111,9 @@ NamePromptState.apply(.submit)
         |
 borrowed Submission(target, name)
         |
-AttachedClient.inputPrompt
+name_prompt.inputPrompt
         |
-AttachedClient.submitPrompt
+name_prompt.submitPrompt
         |
 create_workspace, rename_workspace or rename_tab request use case
         |
@@ -148,7 +148,7 @@ latest model state.
 
 - `src/model/state/name_prompt.zig` proves bounded editing, revisions,
   cancellation and exact-target completion.
-- `src/client/AttachedClient.zig` owns effect ordering (`inputPrompt`,
+- `src/client/input/name_prompt.zig` owns effect ordering (`inputPrompt`,
   `submitPrompt`); `src/frontend/client/tests/renaming_and_telemetry.zig` and
   `workspace_lifecycle.zig` prove prompt retention after blocked or failed
   submissions.

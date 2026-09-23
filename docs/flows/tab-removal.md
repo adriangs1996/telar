@@ -5,16 +5,16 @@ fact. The same path handles the lifecycle event after a tab loses its final
 pane.
 
 ```text
-AttachedClient.executeAction
-  -> AttachedClient.requestTabClose
+actions.executeAction
+  -> tab_removal.requestTabClose
      -> pending-operation gate and active location
      -> reserve close/recovery IDs and outbox capacity
-     -> AttachedClient.detachTab
-     -> AttachedClient.sendTabClose -> sendRuntimeRequest(close_tab)
+     -> tab_removal.detachTab
+     -> tab_removal.sendTabClose -> sendRuntimeRequest(close_tab)
 
 runtime tab_closed
-  -> AttachedClient.handleServerMessage
-  -> AttachedClient.completeTabClose
+  -> runtime_messages.handleServerMessage
+  -> tab_removal.completeTabClose
      -> correlate explicit reply or classify lifecycle event
      -> tab_close.validateWorkspaceTransition
      -> ClientModel.removeTab -> tab_removal.remove
@@ -26,12 +26,12 @@ runtime tab_closed
 Before provisional detachment the request checks capacity for paste-end,
 focus-out, every attached or pending-open pane detach, and the close message.
 It also reserves enough request identities for closure and synchronous repair.
-`AttachedClient.tabDetachmentCapacity` is shared with workspace handoff. Failure at
+`tab_removal.tabDetachmentCapacity` is shared with workspace handoff. Failure at
 this stage changes neither focus nor attachment state.
 
 The operation then detaches and queues `close_tab` without changing semantic
 membership. A partial local failure requests a coalesced canonical tab snapshot.
-A runtime rejection reaches `AttachedClient.recoverTabClose` before its notification;
+A runtime rejection reaches `tab_removal.recoverTabClose` before its notification;
 repair is needed only while that tab is still active. Selecting an inactive
 rejected tab later requests the normal snapshot.
 
@@ -49,7 +49,7 @@ obsolete focus, exposes its successor, synchronizes resources and requests its
 snapshot unless one is already pending.
 
 Workspace closure forgets the bookmark. A surviving predecessor is followed
-through `AttachedClient.requestWorkspaceSwitch` with `.canonical_follow`
+through `workspace_handoff.requestWorkspaceSwitch` with `.canonical_follow`
 authority, whose bypass of stale pending
 requests requires an already empty projection. With no predecessor, the
 operation returns `exit`; server dispatch maps it to process status zero.
@@ -62,7 +62,7 @@ Canonical state survives any later client resource error. Reconnect rebuilds
 the projection. The flow uses bounded tab/pane stores, request tracking and
 outbox capacity, and never schedules presentation directly.
 
-Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig` and
+Source: `src/client/workspace/tab_removal.zig`, `src/model/state/ClientModel.zig` and
 `src/model/workspace/tab_removal.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig` and `synchronization.zig`
 cover preflight, partial failures, correlation, late replies, exact cleanup,

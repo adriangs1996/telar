@@ -36,7 +36,7 @@ that touches it.
    enter-runs, match mode, notification delivery and light/dark themes are
    copied only in `AttachedClient.adoptConfiguration`, and the first reload
    returns `.unchanged` until the file changes. Present on `main`.
-2. After a reload, `AttachedClient.options.lua_generation`, `plugin_registry`
+2. After a reload, `Client.options.lua_generation`, `plugin_registry`
    and `trust_store` point to freed memory. Nothing reads them after startup
    today.
 3. A client request pumps only its own session (`client_events.handleMessage`).
@@ -86,7 +86,7 @@ that touches it.
    input resume and rebind. The model holds the themes and the requested
    sidebar renderer and derives the workbench (`workbench.region`); the TUI
    view follows it after every event. One presentation lifecycle lives in
-   `AttachedClient.presentation`. Adapter handlers take their adapter, so
+   `Client.presentation`. Adapter handlers take their adapter, so
    `of()` is gone. The outbox is `model.to_runtime` and `pane_frame.receive`
    queues its own answer. Kept as synchronous ports on purpose: chrome hit
    testing, the graphics store and the attachment shelf (both generic over
@@ -143,5 +143,26 @@ that touches it.
    that carry tests, share a name with a declaration of their owner, or are
    imported inline; historical plans, performance notes and validation
    records keep the paths of the code they measured.
+
+8. **The client shell.** `AttachedClient` held the model plus 290
+   procedures, and each adapter was a second shell around it. Done:
+   procedures only push into `model.to_runtime`, and `Client.flush` writes
+   the queue once per event, so input and resizes for one pane coalesce
+   before they leave. The `Workers` port is gone: procedures push
+   `client.Job`s into `Client.to_workers`, a bounded `core.GenericRing`, and
+   each adapter starts them where it drains `model.to_host`; a job the
+   adapter cannot start finishes through `failJob` as its own failed
+   completion. The procedures live in 50 flow files under `src/client`; 91 of
+   them take `model` because they touch nothing else. `AttachedClient` is
+   `Client` (`src/client/execution/Client.zig`, 282 lines, beside `Message`
+   and `Job`, since `Client.zig` would collide with the package root
+   `client.zig` on case-insensitive file systems); `TerminalClient` and
+   `GuiClient` are `TerminalAdapter` and `GuiAdapter`. Measured against the
+   branch point with one method (first-party Zig files in `src`,
+   `benchmarks`, `linters` and `build`): `context: *anyopaque` fields went
+   from 94 in 52 files to 90 in 49; files under 20 lines stay at 1,218 while
+   the total grows from 2,703 to 2,752. Kept: the GUI's typed `job_hook`,
+   which its session fixture uses to capture runtime writes and link opens;
+   and the client procedures that read the clock through `client.io`.
 
 Slice 6 does not depend on the client slices and can run in parallel.

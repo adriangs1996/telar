@@ -8,7 +8,7 @@ const PixelProjection = @import("PixelProjection.zig");
 const mouse_protocol_module = @import("mouse_protocol.zig");
 const pane_input = @import("../panes/pane_input.zig");
 const pane_viewport = @import("../panes/pane_viewport.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Projects host pixels into pane coordinates before encoding the report.
 /// Example: `const bytes = try pane_mouse_inputs.encodeReport(&buffer, report);`

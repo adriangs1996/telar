@@ -23,7 +23,7 @@ reports use a 64-byte stack buffer, while delivery reuses the bounded
 ```text
 host mouse event
         |
-host_inputs.mouse (TUI) / GuiClient pointer input
+host_inputs.mouse (TUI) / GuiAdapter pointer input
         |
 pointer_routing.apply
         |
@@ -39,15 +39,15 @@ view_interactions.apply
         |
 inside workbench and unconsumed
         |
-HostChrome.linkPointer or AttachedClient.inputLinkPointer
+HostChrome.linkPointer or link_opening.inputLinkPointer
         |
 unowned only
         |
-AttachedClient.inputPaneMouse(.pointer)
+pane_mouse_input.inputPaneMouse(.pointer)
         |
 tab_layout.planPaneMouse
         |
-AttachedClient.applyPaneMouseEffect
+pane_mouse_input.applyPaneMouseEffect
         |
         +-------------------+--------------------+
         |                   |                    |
@@ -55,9 +55,9 @@ AttachedClient.applyPaneMouseEffect
         |                   |                    |
         |            three cursor keys    pane_mouse_inputs.encodeReport
         |                   |                    |
-AttachedClient.applyPaneViewport      +---------+----------+
+pane_viewport.applyPaneViewport      +---------+----------+
                                       |
-                              AttachedClient.sendPaneInput
+                              pane_input.sendPaneInput
                                       |
                               runtime attachment
 ```
@@ -72,8 +72,8 @@ pixel coordinates to host cells.
 `pointer_routing.apply` owns the order between the four policies.
 It gives `copy_mode_pointer` first refusal, then asks the adapter's
 `HostChrome.pointer` to resolve client chrome, then offers pane content to
-`HostChrome.linkPointer` or `AttachedClient.inputLinkPointer`. It reaches
-`AttachedClient.inputPaneMouse` only while the normalized pointer is inside the
+`HostChrome.linkPointer` or `link_opening.inputLinkPointer`. It reaches
+`pane_mouse_input.inputPaneMouse` only while the normalized pointer is inside the
 post-interaction workbench and neither the view nor a link consumed it.
 `copy_mode_pointer.apply` still owns copy-mode policy. See
 [Copy mode](copy-mode.md).
@@ -105,13 +105,13 @@ revision.
 ```text
 host binding or client Lua action
         |
-host_inputs.applyDecision / GuiClient.applyInputDecision
+host_inputs.applyDecision / GuiAdapter.applyInputDecision
         |
-AttachedClient.executeAction, then scroll_pane dispatch
+actions.executeAction, then scroll_pane dispatch
         |
-AttachedClient.scrollPane
+pane_viewport.scrollPane
         |
-AttachedClient.inputPaneMouse(.focused_scroll)
+pane_mouse_input.inputPaneMouse(.focused_scroll)
         |
 tab_layout.planFocusedPaneMouse -> Resolved { plan, pointer }
         |
@@ -126,13 +126,13 @@ wheel event at the first content cell with button 64 or 65 and no modifiers.
 Pixel reports use host cell dimensions and the existing cell-center fallback,
 not raw pointer pixels. Empty pane content produces no resolution.
 
-`AttachedClient.executeAction` exits any active copy mode before dispatching this action,
+`actions.executeAction` exits any active copy mode before dispatching this action,
 restoring its entry viewport before the step. Plugin worker effects explicitly
 reject `scroll_pane`; client Lua bindings and callbacks use native dispatch.
 
 ## Application policy
 
-`AttachedClient.inputPaneMouse` resolves a plan and normalized pointer command, then chooses
+`pane_mouse_input.inputPaneMouse` resolves a plan and normalized pointer command, then chooses
 at most one effect. Its policy does not distinguish physical and synthetic
 wheel events.
 
@@ -145,18 +145,18 @@ wheel events.
 - Every other untracked wheel moves the client viewport by three rows.
 - Other untracked non-wheel events are ignored.
 
-`AttachedClient.inputPaneMouse` selects the effect and
-`AttachedClient.applyPaneMouseEffect` delivers it through concrete viewport,
+`pane_mouse_input.inputPaneMouse` selects the effect and
+`pane_mouse_input.applyPaneMouseEffect` delivers it through concrete viewport,
 copy-selection and pane-input procedures. Mouse encoding remains in
 `pane_mouse_inputs.encodeReport` and `mouse_protocol`; it does not mutate model
 state.
 
 ## Effects and coordinates
 
-`AttachedClient.applyPaneMouseEffect` applies the selected effect through
+`pane_mouse_input.applyPaneMouseEffect` applies the selected effect through
 existing procedures. Viewport movement goes through
-`AttachedClient.applyPaneViewport`. Alternate-screen keys and reports go
-through `AttachedClient.sendPaneInput` with the mouse source, so neither
+`pane_viewport.applyPaneViewport`. Alternate-screen keys and reports go
+through `pane_input.sendPaneInput` with the mouse source, so neither
 restores scrollback.
 
 Cell reports use coordinates relative to the pane content. If the child asks

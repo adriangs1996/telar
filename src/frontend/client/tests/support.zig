@@ -8,7 +8,7 @@ const data = @import("model");
 const EventResources = @import("../EventResources.zig");
 const std = @import("std");
 const TestHarness = @import("TestHarness.zig");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 
 pub fn clientEventResourcesForTest(heap: *const core.Heap) EventResources {
     return .{
@@ -18,7 +18,7 @@ pub fn clientEventResourcesForTest(heap: *const core.Heap) EventResources {
     };
 }
 
-pub fn reportedPaneId(client: *const client_module.AttachedClient) ?core.PaneId {
+pub fn reportedPaneId(client: *const client_module.Client) ?core.PaneId {
     const reported = client.model.reported_pane_focus orelse return null;
 
     return reported.pane_id;
@@ -219,7 +219,7 @@ pub fn testingConfigAdoptionSource(number: u64, source: []const u8) !client_modu
     };
 }
 
-pub fn installTestingLuaBinding(terminal: *TerminalClient, source: []const u8) !data.Action {
+pub fn installTestingLuaBinding(terminal: *TerminalAdapter, source: []const u8) !data.Action {
     const adoption = try testingConfigAdoptionSource(1, source);
     std.debug.assert(adoption.generation.snapshot.binding_count == 1);
     const configured = adoption.generation.snapshot.bindings[0].action;
@@ -236,7 +236,7 @@ pub const testing_plugin_context: data.CallbackContext = .{
     .focused_pane_id = @intFromEnum(TestHarness.bootstrap_pane),
 };
 
-pub fn installTestingPlugin(client: *client_module.AttachedClient) !TestingPlugin {
+pub fn installTestingPlugin(client: *client_module.Client) !TestingPlugin {
     std.debug.assert(client.plugin_registry == null);
     const manifest = try core.parseManifest(
         client.gpa,
@@ -262,11 +262,11 @@ pub fn installTestingPlugin(client: *client_module.AttachedClient) !TestingPlugi
     };
 }
 
-pub fn installTestingAttachmentTarget(client: *client_module.AttachedClient, generation: u64) !data.AttachmentTarget {
+pub fn installTestingAttachmentTarget(client: *client_module.Client, generation: u64) !data.AttachmentTarget {
     return installTestingAttachmentProvider(client, generation, .codex);
 }
 
-pub fn installTestingAttachmentProvider(client: *client_module.AttachedClient, generation: u64, provider: core.AgentProvider) !data.AttachmentTarget {
+pub fn installTestingAttachmentProvider(client: *client_module.Client, generation: u64, provider: core.AgentProvider) !data.AttachmentTarget {
     const target: data.AttachmentTarget = .{
         .pane_id = TestHarness.bootstrap_pane,
         .pane_generation = generation,
@@ -290,7 +290,7 @@ pub fn installTestingAttachmentProvider(client: *client_module.AttachedClient, g
     return target;
 }
 
-pub fn testingClipboardCapture(client: *client_module.AttachedClient, execution: data.ClipboardCapture, bytes: []const u8) !*data.Capture {
+pub fn testingClipboardCapture(client: *client_module.Client, execution: data.ClipboardCapture, bytes: []const u8) !*data.Capture {
     const capture = try client.gpa.create(data.Capture);
     errdefer client.gpa.destroy(capture);
     capture.* = .{
@@ -307,7 +307,7 @@ pub fn testingClipboardCapture(client: *client_module.AttachedClient, execution:
     return capture;
 }
 
-pub fn reloadConfiguration(terminal: *TerminalClient, adoption: client_module.ConfigAdoption) !data.ConfigurationCommit {
+pub fn reloadConfiguration(terminal: *TerminalAdapter, adoption: client_module.ConfigAdoption) !data.ConfigurationCommit {
     const client = &terminal.app;
     const outcome = try client_module.config_adoption.completeConfigReload(
         client,
@@ -330,7 +330,7 @@ pub fn reloadConfiguration(terminal: *TerminalClient, adoption: client_module.Co
 /// receives the next inbox event and returns it when it belongs to the
 /// shared client.
 /// Example: `switch (try support.receiveClient(terminal)) { .sent => |result| try runtime_io.completeRuntimeSend(client, result), else => return error.UnexpectedEvent }`
-pub fn receiveClient(terminal: *TerminalClient) !client_module.Message {
+pub fn receiveClient(terminal: *TerminalAdapter) !client_module.Message {
     try host_effects.deliver(terminal);
     return switch (try terminal.inbox.receive()) {
         .client => |message| message,

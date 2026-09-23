@@ -10,7 +10,7 @@ const Registry = @import("Registry.zig");
 const ConfiguredPlugins = @import("ConfiguredPlugins.zig");
 const actions = @import("../input/actions.zig");
 const notifications = @import("../notifications/notifications.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Consumes one worker completion and applies its authorized action batch.
 /// Example: `_ = try plugin_actions.completePluginAction(app, completion);`

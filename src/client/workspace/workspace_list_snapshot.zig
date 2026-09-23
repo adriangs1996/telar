@@ -8,7 +8,7 @@ const pane_closure = @import("../panes/pane_closure.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
 const tab_snapshot = @import("tab_snapshot.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Requests a canonical snapshot with its exact target retained until the reply.
 /// Example: `try workspace_list_snapshot.requestWorkspaceSnapshot(client, workspace);`

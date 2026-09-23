@@ -3,7 +3,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
@@ -1117,7 +1117,7 @@ test "request failure retains canonical recovery when host notification delivery
 }
 
 /// Leaves no room for another host request.
-fn fillHostEffects(client: *client_module.AttachedClient) !void {
+fn fillHostEffects(client: *client_module.Client) !void {
     while (client.model.to_host.count < data.HostEffects.capacity) {
         try client.model.to_host.push(.{ .terminal_notification = .{} });
     }

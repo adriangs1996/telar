@@ -5,7 +5,7 @@ operation. Callers pass a stable pane identity after committing canonical state.
 
 ```text
 owning pane/tab/workspace operation
-  -> AttachedClient.releasePaneResources
+  -> pane_closure.releasePaneResources
      -> ClientModel.releaseCopyMode
      -> ClientModel.releasePanePaste
      -> ClientModel.releaseReportedPaneFocus
@@ -26,7 +26,7 @@ This operation is synchronous and has no generic effect callback. Model cleanup
 allocates nothing; graphics cleanup uses the existing bounded resource stores.
 Its caller's canonical revision determines presentation work.
 
-Source: `src/client/AttachedClient.zig`.
+Source: `src/client/panes/pane_closure.zig`.
 Tests: exact model-owner tests in `src/model/state/tests/input_and_frames.zig`,
 plus concrete pane
 exit, tab removal and snapshot cleanup in

@@ -3,7 +3,7 @@
 
 const core = @import("telar-core");
 const client_module = @import("telar-client");
-const TerminalClient = @import("TerminalClient.zig");
+const TerminalAdapter = @import("TerminalAdapter.zig");
 const std = @import("std");
 const platform = @import("../platform/platform.zig");
 const sequences = @import("../platform/sequences.zig");
@@ -16,7 +16,7 @@ pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: cli
     var heap = core.Heap.init(init.gpa);
     const gpa = heap.allocator();
 
-    // `TerminalClient.init` adopts the configuration generation, plugin registry and
+    // `TerminalAdapter.init` adopts the configuration generation, plugin registry and
     // trust store carried by `options`; until it succeeds they are still this
     // function's to free.
     var options_owned = true;
@@ -63,7 +63,7 @@ pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: cli
     };
 
     const host_platform_size = tty.size();
-    const terminal = try TerminalClient.init(.{
+    const terminal = try TerminalAdapter.init(.{
         .gpa = gpa,
         .io = io,
         .connection = connection,

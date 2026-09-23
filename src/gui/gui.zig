@@ -4,7 +4,7 @@
 
 const run_module = @import("run.zig");
 const event = @import("input/event.zig");
-pub const GuiClient = @import("GuiClient.zig");
+pub const GuiAdapter = @import("GuiAdapter.zig");
 pub const Color = @import("render/Color.zig");
 pub const GlyphAtlas = @import("text/GlyphAtlas.zig");
 pub const QuadList = @import("render/QuadList.zig");
@@ -60,7 +60,7 @@ test {
     _ = @import("tests/thread_text_geometry.zig");
     _ = @import("tests/thread_selection.zig");
     _ = @import("tests/thread_scroll_motion.zig");
-    _ = GuiClient;
+    _ = GuiAdapter;
     _ = @import("WindowIdentity.zig");
     _ = @import("tests/terminal.zig");
     _ = @import("tests/configuration.zig");

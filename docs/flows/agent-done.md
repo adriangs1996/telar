@@ -15,9 +15,9 @@ Agent.visibleStatus  (seen = false)  -> AgentStatus.done
 Tracker revision -> Delivery.prepare -> schema.agent_sound (working -> done)
                                      -> schema.agent_snapshot
         |
-AttachedClient.applyAgentSnapshot -> ClientModel.reconcileAgentSnapshot
+agent_snapshot.applyAgentSnapshot -> ClientModel.reconcileAgentSnapshot
         |
-AttachedClient.synchronizePaneAttachments
+pane_attachment.synchronizePaneAttachments
         |
 ClientModel.takeAgentAcknowledgement  (focused pane, status done, once)
         |
@@ -60,7 +60,7 @@ completion. `acknowledged_agent` is operational state with no presentation
 revision; it resets when the same agent leaves `done`, so a later completion is
 acknowledged again.
 
-`AttachedClient.synchronizePaneAttachments` asks the model
+`pane_attachment.synchronizePaneAttachments` asks the model
 first and queues `acknowledge_agent` before touching the attachment shelf. Every path that can change which pane the user is looking at already
 enters this operation: pane focus, tab and workspace transitions, frames and
 agent snapshots. It enqueues `schema.AcknowledgeAgent` on the fixed
@@ -97,6 +97,6 @@ silent.
 - `src/core/schema_contract_test.zig` pins the `acknowledge_agent` bytes.
 - `src/model/state/tests/observations.zig` proves once-per-completion
   acknowledgement and its reset.
-- `src/client/AttachedClient.zig` enqueues acknowledgement
+- `src/client/panes/pane_attachment.zig` enqueues acknowledgement
   before attachment synchronization; client notification/agent integration
   tests exercise the operation against the real model and outbox.

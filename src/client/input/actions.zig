@@ -26,7 +26,7 @@ const tab_removal = @import("../workspace/tab_removal.zig");
 const tab_selection = @import("../workspace/tab_selection.zig");
 const workspace_creation = @import("../workspace/workspace_creation.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 const ctrl_h = data.chord.parseKey("ctrl+h") catch unreachable;
 

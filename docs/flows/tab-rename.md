@@ -4,13 +4,13 @@ The runtime owns the canonical label. The client prompt edits a candidate and
 closes only after a locally accepted request; it does not rename the replica.
 
 ```text
-AttachedClient.inputPrompt -> AttachedClient.submitPrompt(.rename_tab)
-  -> AttachedClient.requestTabRename
+name_prompt.inputPrompt -> name_prompt.submitPrompt(.rename_tab)
+  -> tab_rename.requestTabRename
      -> pending-operation gate, label_validation.validate, resolve exact target
-     -> AttachedClient.sendTabRenameRequest -> owned rename_tab
+     -> tab_rename.sendTabRenameRequest -> owned rename_tab
   -> runtime canonical rename -> tab_renamed
-  -> AttachedClient.handleServerMessage
-  -> AttachedClient.completeTabRename
+  -> runtime_messages.handleServerMessage
+  -> tab_rename.completeTabRename
      -> consume and verify exact rename continuation
      -> ClientModel.renameTab -> tab_rename.rename
   -> adapter observes presentation revisions
@@ -39,7 +39,7 @@ cannot rename a tab. Known correlation is consumed before these checks, so
 replay cannot apply later. A correlated runtime failure preserves the old label
 and publishes the runtime notice. Reconnect rebuilds labels from snapshots.
 
-Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`
+Source: `src/client/workspace/tab_rename.zig`, `src/model/state/ClientModel.zig`
 and `src/model/workspace/tab_rename.zig`.
 Tests: `src/frontend/client/tests/renaming_and_telemetry.zig`,
 `tab_lifecycle.zig`, `src/model/state/tests/tabs.zig`, and

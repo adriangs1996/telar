@@ -9,7 +9,7 @@ const pane_focus = @import("../panes/pane_focus.zig");
 const tab_removal = @import("tab_removal.zig");
 const tab_snapshot = @import("tab_snapshot.zig");
 const workspace_list_snapshot = @import("workspace_list_snapshot.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 const WorkspaceSwitchTarget = union(enum) { workspace: core.WorkspaceId, pane: data.PaneRequest };
 

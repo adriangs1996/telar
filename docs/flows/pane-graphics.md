@@ -27,8 +27,8 @@ existing reset policy rather than blocking PTY input.
 ## Client boundary
 
 ```text
-AttachedClient.handleServerMessage(.graphics_*)
-  -> AttachedClient.applyPaneGraphics
+runtime_messages.handleServerMessage(.graphics_*)
+  -> pane_graphics.applyPaneGraphics
      -> pane_graphics.applyResources -> graphics.apply (GraphicsRetention)
      -> changed: ClientModel.setPaneGraphicsFallback
      -> revision break: request_graphics_snapshot
@@ -40,7 +40,7 @@ committed host capability (images support changed)
   -> bounded pane traversal -> ClientModel.setPaneGraphicsFallback
 ```
 
-`AttachedClient.applyPaneGraphics` translates physical ingress results into semantic fallback
+`pane_graphics.applyPaneGraphics` translates physical ingress results into semantic fallback
 or runtime recovery directly. The resource store owns allocations, shared
 mappings, quotas, image identities and transmission damage. Accepted ingress
 advances its physical revision; stale deltas and rejected operations do not.
@@ -99,7 +99,7 @@ dedicated media queue is a separate scheduling change.
 ## Verification
 
 Source: `src/client/panes/pane_graphics.zig` and the `graphics:
-GraphicsRetention` store each adapter binds on `AttachedClient`.
+GraphicsRetention` store each adapter binds on `Client`.
 `src/frontend/client/tests/graphics_and_clipboard.zig` checks recovery IPC,
 physical-only presentation observation and downgrade-before-resync ordering.
 Resource-store and model tests cover quotas, stale revisions, fallback ownership

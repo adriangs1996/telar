@@ -14,9 +14,9 @@ agent_sound.publish -> Delivery responses.pushAgentSound
         |
 schema.agent_sound
         |
-AttachedClient.handleServerMessage
+runtime_messages.handleServerMessage
         |
-AttachedClient.applyAgentSound
+agent_sound.applyAgentSound
         |
 model.agent_snapshot.find (exact key)
         |
@@ -24,14 +24,14 @@ SoundPlayback.request -> workers.start(.{ .sound = kind })
         |
 client.Message.sound_played <- job_runner: sound_playback.play
         |
-AttachedClient.update -> AttachedClient.completeAgentSound
+Client.update -> agent_sound.completeAgentSound
         |
 SoundPlayback.complete
 ```
 
 The runtime message carries a pane ID, pane generation and semantic sound
-kind. `AttachedClient.applyAgentSound` translates that identity into an `AgentKey`.
-`AttachedClient.applyAgentSound` schedules playback only when the current client
+kind. `agent_sound.applyAgentSound` translates that identity into an `AgentKey`.
+`agent_sound.applyAgentSound` schedules playback only when the current client
 replica contains the exact key. A delayed message for an earlier process
 cannot make noise after the numeric pane ID has been reused.
 
@@ -43,11 +43,11 @@ presenter sees no revision and schedules no frame.
 ## Playback ownership and bounds
 
 `SoundPlayback` (`model.sound_playback`) owns the effective `SoundPolicy`, one
-active worker token and one optional queued `AgentSound`. `AttachedClient`
+active worker token and one optional queued `AgentSound`. `Client`
 knows none of its queue transitions. It starts the worker with
 `workers.start`; the adapter runs it through its inbox and returns the
-completion as `client.Message.sound_played`, which `AttachedClient.update`
-hands to `AttachedClient.completeAgentSound`.
+completion as `client.Message.sound_played`, which `Client.update`
+hands to `agent_sound.completeAgentSound`.
 
 The queue has fixed depth. A request starts immediately when no worker is
 active. Further requests fold into the one queued value. `needs_input` wins
@@ -84,9 +84,9 @@ continues independently and later exact sound events may start a new queue.
   recovery.
 - `src/client/agents/sound_playback.zig` owns the bounded host adapters; the
   cross build compiles the Linux and Windows paths.
-- `src/client/AttachedClient.zig` proves exact-identity
+- `src/client/agents/agent_sound.zig` proves exact-identity
   gating, stale suppression and effect-error propagation.
-- `src/client/AttachedClient.zig` owns protocol translation, worker
+- `src/client/agents/agent_sound.zig` owns protocol translation, worker
   scheduling and the completion entrypoint.
 - `src/frontend/client/tests/` proves wire identity, bounded queuing,
   unchanged model and presentation versions, and configuration adoption.

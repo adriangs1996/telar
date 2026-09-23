@@ -4,14 +4,14 @@ The active tab belongs to the client. Runtime membership remains canonical.
 All sources resolve their intent through one concrete operation:
 
 ```text
-AttachedClient.executeAction, delivered tab click or agent navigation
-  -> AttachedClient.selectTab
+actions.executeAction, delivered tab click or agent navigation
+  -> tab_selection.selectTab
      -> reject a pending tab snapshot
      -> ClientModel.selectTab -> tab_selection.selectPosition / selectOffset
-     -> AttachedClient.detachTab(previous)
+     -> tab_removal.detachTab(previous)
      -> show selected graphics
-     -> AttachedClient.synchronizeActivePane
-     -> AttachedClient.requestTabSnapshot(selected location)
+     -> pane_focus.synchronizeActivePane
+     -> tab_snapshot.requestTabSnapshot(selected location)
   -> adapter observes presentation revisions
 ```
 
@@ -37,7 +37,7 @@ then propagates to the client loop. Reconnect rebuilds disposable resources;
 runtime tabs and PTYs remain alive. Presentation follows the active-tab revision
 and is scheduled only by the host adapter.
 
-Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`
+Source: `src/client/workspace/tab_selection.zig`, `src/model/state/ClientModel.zig`
 and `src/model/workspace/tab_selection.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`, `pane_lifecycle.zig`,
 `src/model/state/tests/tabs.zig` and `src/model/workspace/tab_flow_tests.zig`

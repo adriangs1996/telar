@@ -3,7 +3,7 @@ const event_module = @import("../../input/event.zig");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const Target = @import("Target.zig");
 const Position = @import("ThreadTextPosition.zig");
 const Geometry = @import("ThreadTextGeometry.zig");
@@ -19,7 +19,7 @@ const Rect = @import("../../render/Rect.zig");
 
 /// Enters through the semantic action port, preserving configured bindings.
 /// Example: `_ = thread_selection.enter(gui, pane_id);`
-pub fn enter(gui: *GuiClient, pane_id: core.PaneId) bool {
+pub fn enter(gui: *GuiAdapter, pane_id: core.PaneId) bool {
     const target = transcript(gui, pane_id) orelse return false;
     const store = gui.widgets.thread_text orelse return false;
     if (!gui.pointerGeometryMatches() or gui.app.model.name_prompt.active() or gui.widgets.composer_menu.selector != null) {
@@ -41,13 +41,13 @@ pub fn enter(gui: *GuiClient, pane_id: core.PaneId) bool {
 }
 
 /// Example: `if (thread_selection.active(gui)) showCopyMode();`
-pub fn active(gui: *const GuiClient) bool {
+pub fn active(gui: *const GuiAdapter) bool {
     return gui.widgets.thread_selection.keyboard;
 }
 
 /// Restores this reader's composer and defers releasing its pinned window.
 /// Example: `_ = thread_selection.leave(gui);`
-pub fn leave(gui: *GuiClient) bool {
+pub fn leave(gui: *GuiAdapter) bool {
     const selection = &gui.widgets.thread_selection;
     const owner = selection.owner orelse return false;
     selection.clear();
@@ -63,7 +63,7 @@ pub fn leave(gui: *GuiClient) bool {
 
 /// Validates ownership before freezing pages; no allocation occurs in input.
 /// Example: `try thread_selection.prepare(gui);`
-pub fn prepare(gui: *GuiClient) !void {
+pub fn prepare(gui: *GuiAdapter) !void {
     const selection = &gui.widgets.thread_selection;
     if (selection.release) |owner| {
         client.agent_reading.unfreeze(
@@ -131,7 +131,7 @@ pub fn prepare(gui: *GuiClient) !void {
 
 /// Updates a retained drag after its newly scrolled geometry reaches the host.
 /// Example: `thread_selection.delivered(gui);`
-pub fn delivered(gui: *GuiClient) void {
+pub fn delivered(gui: *GuiAdapter) void {
     const selection = &gui.widgets.thread_selection;
     const owner = selection.owner orelse return;
     const store = gui.widgets.thread_text orelse return;
@@ -148,7 +148,7 @@ pub fn delivered(gui: *GuiClient) void {
 
 /// Routes only gestures and keys owned by the delivered conversation target.
 /// Example: `if (try thread_selection.route(gui, event, decision)) return true;`
-pub fn route(gui: *GuiClient, event: event_module.Event, decision: Route) !bool {
+pub fn route(gui: *GuiAdapter, event: event_module.Event, decision: Route) !bool {
     const selection = &gui.widgets.thread_selection;
     if (event == .focus and !event.focus) {
         cancel(gui);
@@ -177,7 +177,7 @@ pub fn route(gui: *GuiClient, event: event_module.Event, decision: Route) !bool 
     return event == .composition or event == .paste or event == .delete_surrounding;
 }
 
-fn pointer(gui: *GuiClient, event: PointerEvent, target: ?Target) !bool {
+fn pointer(gui: *GuiAdapter, event: PointerEvent, target: ?Target) !bool {
     const selection = &gui.widgets.thread_selection;
     if (event.button != .left) {
         return false;
@@ -257,7 +257,7 @@ fn pointer(gui: *GuiClient, event: PointerEvent, target: ?Target) !bool {
     return false;
 }
 
-fn key(gui: *GuiClient, target: Target, value: KeyInput) !void {
+fn key(gui: *GuiAdapter, target: Target, value: KeyInput) !void {
     const selection = &gui.widgets.thread_selection;
     if (value.code == .escape) {
         _ = leave(gui);
@@ -366,7 +366,7 @@ fn key(gui: *GuiClient, target: Target, value: KeyInput) !void {
     gui.widgets.dispatcher.revision +%= 1;
 }
 
-fn selectAll(gui: *GuiClient, target: Target) void {
+fn selectAll(gui: *GuiAdapter, target: Target) void {
     const store = gui.widgets.thread_text orelse return;
     const selection = &gui.widgets.thread_selection;
     selection.owner = .{ .pane_id = target.action.transcript, .attachment_generation = target.id.generation };
@@ -396,7 +396,7 @@ fn selectAll(gui: *GuiClient, target: Target) void {
     gui.widgets.dispatcher.revision +%= 1;
 }
 
-fn copy(gui: *GuiClient, exit_after: bool) void {
+fn copy(gui: *GuiAdapter, exit_after: bool) void {
     const selection = &gui.widgets.thread_selection;
     if (!selection.selected() or selection.clipboard != null) {
         return;
@@ -422,7 +422,7 @@ fn copy(gui: *GuiClient, exit_after: bool) void {
 
 /// Failure preserves the selection; exiting copy mode waits for host success.
 /// Example: `thread_selection.copied(gui, result);`
-pub fn copied(gui: *GuiClient, result: ClipboardResult) void {
+pub fn copied(gui: *GuiAdapter, result: ClipboardResult) void {
     const selection = &gui.widgets.thread_selection;
     const pending = selection.clipboard orelse return;
     if (pending.request_id != result.request_id or pending.owner.target_id != result.target_id or pending.owner.generation != result.generation) {
@@ -442,7 +442,7 @@ pub fn copied(gui: *GuiClient, result: ClipboardResult) void {
     gui.widgets.dispatcher.revision +%= 1;
 }
 
-fn scroll(gui: *GuiClient, delta: i32) !void {
+fn scroll(gui: *GuiAdapter, delta: i32) !void {
     const selection = &gui.widgets.thread_selection;
     const owner = selection.owner orelse return;
     const target = transcript(gui, owner.pane_id) orelse return;
@@ -452,7 +452,7 @@ fn scroll(gui: *GuiClient, delta: i32) !void {
     _ = gui.app.model.scrollAgentThread(owner.pane_id, next - pane.transcript_scroll);
 }
 
-fn valid(gui: *const GuiClient, at: Position) bool {
+fn valid(gui: *const GuiAdapter, at: Position) bool {
     const pane = gui.app.model.agentPane(at.owner.pane_id) orelse return false;
     if (pane.attachment_generation != at.owner.attachment_generation) {
         return false;
@@ -461,7 +461,7 @@ fn valid(gui: *const GuiClient, at: Position) bool {
     return snapshot.pane_generation == at.owner.pane_generation and snapshot.revision == at.owner.snapshot_revision;
 }
 
-fn transcript(gui: *const GuiClient, pane_id: core.PaneId) ?Target {
+fn transcript(gui: *const GuiAdapter, pane_id: core.PaneId) ?Target {
     const pane = gui.app.model.agentPane(pane_id) orelse return null;
     for (gui.widgets.dispatcher.maps.presented().targets[0..gui.widgets.dispatcher.maps.presented().len]) |target| {
         if (target.action == .transcript and target.action.transcript == pane_id and target.id.generation == pane.attachment_generation and target.focusable) {
@@ -500,7 +500,7 @@ fn locate(geometry: *const Geometry, current: Position) ?Rect {
 
 /// External focus changes cancel ownership without stealing the new focus.
 /// Example: `thread_selection.cancel(gui);`
-pub fn cancel(gui: *GuiClient) void {
+pub fn cancel(gui: *GuiAdapter) void {
     if (gui.widgets.thread_selection.owner != null) {
         gui.widgets.thread_selection.clear();
         gui.widgets.dispatcher.revision +%= 1;

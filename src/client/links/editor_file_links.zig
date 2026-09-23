@@ -7,7 +7,7 @@ const runtime_io = @import("../connection/runtime_io.zig");
 const link_opening = @import("link_opening.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 const pane_split = @import("../panes/pane_split.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Uses the current generation so editor changes take effect after reload.
 /// Example: `const executable = editor_file_links.editorExecutable(client);`

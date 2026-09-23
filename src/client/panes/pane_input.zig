@@ -5,7 +5,7 @@ const std = @import("std");
 const encoding_support = @import("../input/encoding_support.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const pane_viewport = @import("pane_viewport.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Delivers one user-input command through the application boundary.
 /// Example: `_ = try pane_input.sendPaneInput(app, command);`

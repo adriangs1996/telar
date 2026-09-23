@@ -3,7 +3,7 @@
 
 const data = @import("model");
 const client_module = @import("telar-client");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const platform = @import("../../platform/platform.zig");
 const host_capabilities = @import("../host/host_capabilities.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
@@ -18,7 +18,7 @@ const host_effects = @import("../host/host_effects.zig");
 /// ```zig
 /// try start(terminal, .{ .resize_watcher = &watcher });
 /// ```
-pub fn start(terminal: *TerminalClient, request: StartupRequest) !void {
+pub fn start(terminal: *TerminalAdapter, request: StartupRequest) !void {
     const client = &terminal.app;
 
     _ = data.multiplexer.rectSize(client.geometry().area) orelse
@@ -40,7 +40,7 @@ pub fn start(terminal: *TerminalClient, request: StartupRequest) !void {
 /// Advances startup after an event. FIFO configuration precedes the state
 /// request, so the existing layout/open flow needs no color-probe knowledge.
 /// Example: `if (try advance(terminal)) return .{ .exit = 0 };`.
-pub fn advance(terminal: *TerminalClient) !bool {
+pub fn advance(terminal: *TerminalAdapter) !bool {
     const client = &terminal.app;
 
     if (client.model.startup.phase == .probing and terminal.host_negotiation.initial_settled) {

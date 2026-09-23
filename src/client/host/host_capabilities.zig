@@ -2,7 +2,7 @@
 //! the features that depend on it.
 const data = @import("model");
 const host_resize = @import("host_resize.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Applies a semantic terminal response through the same resource policy.
 /// Example: `_ = try host_capabilities.observeHostCapability(client, observation);`

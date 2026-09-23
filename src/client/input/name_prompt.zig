@@ -15,7 +15,7 @@ const tab_selection = @import("../workspace/tab_selection.zig");
 const workspace_creation = @import("../workspace/workspace_creation.zig");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const workspace_rename = @import("../workspace/workspace_rename.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Opens the command palette with `prefix` already typed. A `?` palette
 /// starts with a cleared suggestion, like `suggestions.begin`.

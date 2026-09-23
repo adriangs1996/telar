@@ -1,12 +1,12 @@
 //! Adapts the native C ABI to the one GUI owner; holds no application state.
 const std = @import("std");
 const core = @import("telar-core");
-const GuiClient = @import("../GuiClient.zig");
+const GuiAdapter = @import("../GuiAdapter.zig");
 const native = @import("native.zig");
 const decode_input = @import("decode_input.zig");
 
 /// Binds native callbacks to the stable GUI owner. Example: `const table = bind(gui);`
-pub fn bind(gui: *GuiClient) native.Callbacks {
+pub fn bind(gui: *GuiAdapter) native.Callbacks {
     return .{
         .render = render,
         .pump = pump,
@@ -24,7 +24,7 @@ pub fn bind(gui: *GuiClient) native.Callbacks {
     };
 }
 
-fn from(context: ?*anyopaque) *GuiClient {
+fn from(context: ?*anyopaque) *GuiAdapter {
     return @ptrCast(@alignCast(context.?));
 }
 

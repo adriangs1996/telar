@@ -5,7 +5,7 @@ configuration reloads and plugin execution. Producers decide the message and
 whether it also needs a notification.
 
 ```text
-AttachedClient.evaluateLuaAction / AttachedClient.completeConfigReload / completePluginAction
+lua_action.evaluateLuaAction / config_adoption.completeConfigReload / completePluginAction
   → client_diagnostic.replace(model, replacement)
       validate primary text; optionally validate the explicit fallback
       model.replaceDiagnostic

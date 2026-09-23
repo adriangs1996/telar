@@ -9,7 +9,7 @@ application independently of presentation.
 
 The common `telar-client.presentation` capability owns the borrowed projection,
 observations, pane-coordinate geometry and single-flight completion identity.
-Each client has one lifecycle, `AttachedClient.presentation`
+Each client has one lifecycle, `Client.presentation`
 (`LifecycleState`). The TUI `Presenter` borrows it as `presentation_state`, and
 the GUI reads it through its `app`. The `Presenter` owns `Screen`, compositor,
 pacing, draw/media deadlines and physical caches. Common procedures do not
@@ -40,7 +40,7 @@ graphics credits -> adapter schedules optional media work
 ```
 
 The headless adapter uses the same projection, lifecycle and concrete delivery
-procedure on `AttachedClient`.
+procedure on `Client`.
 It copies cells into bounded storage instead of encoding a terminal diff. Its
 caller controls when preparation and delivery fail or finish.
 
@@ -105,7 +105,7 @@ Window-title formatting and change suppression use the shared
 passes a `Sink` that copies the title into native storage. Clipboard writes,
 terminal notifications and media capture go through `model.to_host`, which the
 adapter drains after every event (`host_effects.deliver` in the TUI,
-`GuiClient.deliverHostEffects` in the GUI). Links, sound and system
+`GuiAdapter.deliverHostEffects` in the GUI). Links, sound and system
 notifications run as client jobs through `client.workers.start`. Common
 procedures do not receive a terminal writer or a GPU device.
 

@@ -7,7 +7,7 @@ const copy_mode = @import("copy_mode.zig");
 const key_routing = @import("key_routing.zig");
 const pane_input = @import("../panes/pane_input.zig");
 const plugin_actions = @import("../plugins/plugin_actions.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 pub fn executeLuaAction(client: *Client, command: data.LuaActionCommand) !data.KeybindControl {
     const copy_mode_active = copy_mode.copyModeActive(client);

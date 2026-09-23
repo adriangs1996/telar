@@ -3,7 +3,7 @@ const data = @import("model");
 const core = @import("telar-core");
 const agent_reading = @import("agent_reading.zig");
 const notifications = @import("../notifications/notifications.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Starts at most one history request for this connection after frame delivery.
 /// Example: `try agent_history.flushAgentHistory(app);`

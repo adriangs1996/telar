@@ -3,7 +3,7 @@
 const lifecycle = @import("lifecycle.zig");
 const data = @import("model");
 const core = @import("telar-core");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 pub fn initialPaneRequest(client: *Client, restored: ?data.SavedLayout, size: core.TerminalSize) data.ConnectionDelivery {
     const fallback_workspace: ?core.WorkspaceId = if (restored) |saved| switch (saved.location.workspace) {

@@ -22,9 +22,9 @@ request containing only coordinates.
 ```text
 host key, mouse wheel or native action
         |
-key_routing / copy_mode_pointer / AttachedClient.executeAction
+key_routing / copy_mode_pointer / actions.executeAction
         |
-AttachedClient.applyCopyMode
+copy_mode.applyCopyMode
         |
 ClientModel.planCopyMode
         |
@@ -39,7 +39,7 @@ ClientModel.copy_revision and optional viewport_revision
 
 Entry resolves the attached focused pane and captures its current viewport.
 An active name prompt, missing pane or repeated entry is a no-op. While copy
-mode is active, `AttachedClient.routeKeyInput` sends semantic keys to copy mode and
+mode is active, `key_routing.routeKeyInput` sends semantic keys to copy mode and
 consumes replayed bytes. Neither reaches the child. Copy mode does not make
 `key_routing.captures` true, so configured prefix bindings remain available. See
 [Key routing](key-routing.md).
@@ -53,12 +53,12 @@ event without surrendering ownership. Only an inactive copy mode returns the
 event to view and pane routing.
 
 `copy_mode_pointer.apply` reads that snapshot from `client.model`, then
-applies the selected movement or exit through `AttachedClient.applyCopyMode`
-or `AttachedClient.leaveCopyMode`. It allocates nothing, retains no pane
+applies the selected movement or exit through `copy_mode.applyCopyMode`
+or `copy_mode.leaveCopyMode`. It allocates nothing, retains no pane
 pointer and adds no queue. A selected effect failure propagates and cannot fall through
 to view or pane mouse handling.
 
-`AttachedClient.executeAction` owns the exit rule for actions from host bindings, Lua
+`actions.executeAction` owns the exit rule for actions from host bindings, Lua
 batches and plugin batches. It receives a synchronous copy-mode authority
 snapshot, leaves copy mode before any action other than entry, then delegates
 the concrete action. A leave failure prevents that action; a later action
@@ -74,13 +74,13 @@ The application dispatches that target without committing copy state, moving
 the viewport or leaving the mode. See [Link opening](link-opening.md).
 
 Copy delivery is intentionally ordered before the exit commit:
-`AttachedClient.applyCopyMode` pushes `copy_selection` into `model.to_runtime`
+`copy_mode.applyCopyMode` pushes `copy_selection` into `model.to_runtime`
 before `commitCopyMode`. If that queue is full, the selection and copy-mode revision remain intact and the user can
 retry. Viewport synchronization follows the commit. If that effect fails, the
 client retains the committed disposable state; reconnection or a later runtime
 frame repairs the operational projection. Copy mode uses the same
 `PaneViewportChange` as normal scrolling, so graphics and
-`set_pane_viewport` policy stay in `AttachedClient.deliverPaneViewport`.
+`set_pane_viewport` policy stay in `pane_viewport.deliverPaneViewport`.
 
 ## Search
 
@@ -99,23 +99,23 @@ another pane or after copy mode ended changes nothing.
 ```text
 runtime-selected bytes -> schema.pane_clipboard
                               |
-                    AttachedClient.receiveRuntime
+                    runtime_io.receiveRuntime
                               |
-                    AttachedClient.handleServerMessage(.pane_clipboard)
+                    runtime_messages.handleServerMessage(.pane_clipboard)
                               |
                  model.to_host.writeClipboard
                               |
      host_effects.deliver -> term.writeClipboard (OSC 52) -> writer flush
 ```
 
-`AttachedClient.handleServerMessage(.pane_clipboard)` validates pane identity
+`runtime_messages.handleServerMessage(.pane_clipboard)` validates pane identity
 and copies the bytes into `model.to_host`; a later write in the same event
 replaces an earlier one. The event changes no other `ClientModel` state; the
 runtime already selected the requested text. The schema decoder rejects an
 invalid pane identity, and the client keeps the same check for direct callers.
 After the event the TUI drains the request in `host/host_effects.deliver`,
 which encodes OSC 52 and flushes it; the GUI drains it in
-`GuiClient.deliverHostEffects`.
+`GuiAdapter.deliverHostEffects`.
 A pane may exit after the copy request without cancelling the user's completed
 copy.
 
@@ -127,7 +127,7 @@ schedule presentation. The schema and terminal writer share the 64 KiB bound.
 ```text
 schema.pane_frame
         |
-AttachedClient.receiveRuntime -> handleServerMessage -> receivePaneFrame
+runtime_io.receiveRuntime -> handleServerMessage -> receivePaneFrame
         |
 pane_frame.receive
         |
@@ -142,7 +142,7 @@ across pruned history, clamps them to the new row count and adopts the runtime
 viewport. Unrelated or identical copy projections do not advance the copy
 revision.
 
-Pane and tab cleanup enter `AttachedClient.releasePaneResources`. Only retirement of
+Pane and tab cleanup enter `pane_closure.releasePaneResources`. Only retirement of
 the target pane closes the mode. The same operation releases paste and reported
 focus before clearing physical graphics. A model
 transition that makes another tab active also releases copy authority, so
@@ -174,7 +174,7 @@ presentation state, never semantic authority inside the model's `Pane`.
 - `src/model/state/tests/input_and_frames.zig` proves entry authority,
   independent revisions, no-ops, stale-plan rejection, frame reconciliation,
   exact pane release and release on an active tab transition.
-- `src/client/AttachedClient.zig` owns copy-before-exit and
+- `src/client/input/copy_mode.zig` owns copy-before-exit and
   viewport-after-commit ordering (`applyCopyMode`), the selection push into
   `model.to_runtime`, and graphics visibility and runtime viewport
   synchronization for both normal input and copy mode

@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const agent_attachments = @import("../attachments/agent_attachments.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_resize = @import("pane_resize.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Applies validated cells and acknowledges ownership before host resources.
 pub fn receivePaneFrame(client: *Client, frame: core.FrameView) !data.PaneFrameOutcome {

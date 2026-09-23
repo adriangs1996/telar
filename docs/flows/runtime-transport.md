@@ -7,7 +7,7 @@ terminal state.
 
 ## Boundary
 
-`connection/RuntimeTransportState`, held in `AttachedClient.runtime_transport`,
+`connection/RuntimeTransportState`, held in `Client.runtime_transport`,
 owns the client side of runtime I/O:
 
 - one borrowed `SocketChannel` for the client's lifetime;
@@ -28,16 +28,16 @@ which typed continuation may consume a reply. Transport only preserves framed
 delivery, bounded storage and I/O ordering. See
 [Client request lifecycle](request-lifecycle.md).
 
-`AttachedClient.receiveRuntime` and `completeRuntimeSend` coordinate I/O
+`runtime_io.receiveRuntime` and `completeRuntimeSend` coordinate I/O
 completion with graphics credits, host input and server-message dispatch.
 `TelemetryState.recordMessage` owns the received-message counters and decode
 latency. Consumers read outbound counters directly from `Outbox.snapshot`.
 
 `connection/RuntimeTransportState.zig` owns connection buffers, framing and
-transfer reservations. It knows neither `AttachedClient` nor the client
+transfer reservations. It knows neither `Client` nor the client
 `Message` protocol. `Outbox` owns copied messages, capacity and folding rules.
 
-`AttachedClient.sendRuntime` and its typed variants copy messages into
+`runtime_io.sendRuntime` and its typed variants copy messages into
 `model.to_runtime` and call the private `startRuntimeSend`. Callers supply only the message.
 Pane input uses the existing `core.PaneInput` value, including bounded batches
 when it exceeds one slot. `startRuntimeRead` and `startRuntimeSend` reserve
@@ -56,7 +56,7 @@ atomically to the ordinary outbox, in order:
 2. `configure_terminal_colors`, so terminal queries use the host defaults;
 3. `request_runtime_state`, so reconnectable replicas can be rebuilt.
 
-Bootstrap only queues messages. The GUI calls `AttachedClient.startRuntimeIo`
+Bootstrap only queues messages. The GUI calls `runtime_io.startRuntimeIo`
 to activate the receive loop before starting the queued send. The TUI
 (`client_startup.advance`) finishes its color probes before queuing the same
 bootstrap. The send actor writes independently of reception. The initial
@@ -67,18 +67,18 @@ runtime layout determines the subsequent `open_pane` transaction.
 ```text
 concrete client operation
        |
-AttachedClient.sendRuntimeRequest -> AttachedClient.sendRuntime
-       or AttachedClient.sendRuntimeInput
+runtime_io.sendRuntimeRequest -> runtime_io.sendRuntime
+       or runtime_io.sendRuntimeInput
        |
 Outbox copies and folds bounded data
        |
-AttachedClient.startRuntimeSend()
+Client.startRuntimeSend()
        |
 Outbox.beginSend -> schema encoder -> workers.start(.runtime_send) -> SocketChannel.send
        |
-Message.sent -> AttachedClient.update
+Message.sent -> Client.update
        |
-AttachedClient.completeRuntimeSend
+runtime_io.completeRuntimeSend
        |
 Outbox.finishSend -> queueGraphicsCredits -> startRuntimeSend -> model.to_host.resume_input
 ```
@@ -108,25 +108,25 @@ SocketChannel.receive
        |
 RuntimeTransportState.read -> RuntimeMessage.decode on the receiving worker
        |
-reserved inbox slot -> Message.server -> AttachedClient.update
+reserved inbox slot -> Message.server -> Client.update
        |
-AttachedClient.receiveRuntime
+runtime_io.receiveRuntime
        |
-AttachedClient.handleServerMessage
+runtime_messages.handleServerMessage
        |
 concrete client operation -> ClientModel or disposable resources
        |
 graphics credit flush -> next runtime read
 ```
 
-`AttachedClient.receiveRuntime` releases the receive token before inspecting
+`runtime_io.receiveRuntime` releases the receive token before inspecting
 the result. It records bounded decode telemetry, dispatches the message and rearms
 the read after every non-terminal result. `runtime_stopping`, a client exit
 outcome or an error leaves no new read behind.
 
 Transport does not inspect a decoded message after dispatch. Message-specific
 recovery, user notification and last-resort error reporting belong to the
-selected operation; in particular, `AttachedClient.failRuntimeRequest` owns
+selected operation; in particular, `request_failure.failRuntimeRequest` owns
 reporting the runtime's bounded rejection text.
 
 Decoded slices borrow the receive buffer only for this entrypoint. Operations
@@ -148,7 +148,7 @@ propagate without transport classifying their original message.
 
 ## Validation
 
-- Tests in `AttachedClient.zig` exercise rejected read/write scheduling, copied
+- Tests in `Client.zig` exercise rejected read/write scheduling, copied
   input batches surviving rejected sends, queue saturation, retry without
   duplicate reservations, and preservation of queued frame order.
 - `src/client/connection/runtime_transport.zig` checks partial-allocation cleanup

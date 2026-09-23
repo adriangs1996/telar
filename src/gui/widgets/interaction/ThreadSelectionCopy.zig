@@ -2,10 +2,10 @@
 const ThreadDetails = @import("../ThreadDetails.zig");
 const std = @import("std");
 const Copy = @This();
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const Position = @import("ThreadTextPosition.zig");
 const Row = @import("ThreadTextRow.zig");
-gui: *GuiClient,
+gui: *GuiAdapter,
 range: [2]Position,
 writer: *std.Io.Writer,
 

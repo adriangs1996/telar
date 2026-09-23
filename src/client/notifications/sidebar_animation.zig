@@ -3,7 +3,7 @@
 const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 pub const Activity = enum {
     active,

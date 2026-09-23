@@ -6,7 +6,7 @@ labels and navigation.
 
 ```text
 runtime metadata cursors -> pane_cwd / pane_foreground
-  -> AttachedClient.handleServerMessage
+  -> runtime_messages.handleServerMessage
   -> ClientModel.updatePaneMetadata
      -> attached pane: Pane.setCwd / Pane.setForegroundName
      -> unattached foreground: tab_label.applyForegroundReport
@@ -38,7 +38,7 @@ bootstrap metadata even if a global update arrived before the local pane was
 constructed. Retirement frees owned CWD storage; reconnect receives current
 runtime facts through fresh cursors.
 
-Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`,
+Source: `src/client/connection/runtime_messages.zig`, `src/model/state/ClientModel.zig`,
 `src/model/panes/Pane.zig` and `src/model/workspace/tab_label.zig`.
 Tests: `src/model/state/tests/panes.zig`, `tabs.zig`,
 `src/frontend/client/tests/pane_updates.zig`, and runtime workspace-snapshot /

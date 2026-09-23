@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const data = @import("model");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const support = @import("support.zig");

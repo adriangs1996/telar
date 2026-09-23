@@ -7,7 +7,7 @@ const runtime_io = @import("../connection/runtime_io.zig");
 const name_prompt = @import("name_prompt.zig");
 const link_opening = @import("../links/link_opening.zig");
 const pane_viewport = @import("../panes/pane_viewport.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Semantic actions include native conversation readers in copy-mode policy.
 /// Example: `_ = copy_mode.copyModeActive(client);`

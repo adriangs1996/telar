@@ -1,7 +1,7 @@
 # Native clipboard and link services
 
 GUI copy-mode yank and runtime clipboard messages queue a clipboard write in
-`model.to_host`; `GuiClient.deliverHostEffects` hands it to `requestClipboardWrite`
+`model.to_host`; `GuiAdapter.deliverHostEffects` hands it to `requestClipboardWrite`
 and the window-thread `host/Services.zig` queue. macOS writes UTF-8 text to `NSPasteboard`. Linux now publishes
 that text as a `wl_data_source` on its existing seat data device, using the most
 recent keyboard focus/input serial. Incoming paste continues through the same
@@ -23,10 +23,10 @@ descriptor whose publication raced with that cleanup. The window producer has
 stopped before this final pass. Storage and Wayland resources are released last.
 No transfer waits on the window thread or on a frame completion.
 
-Clicking an HTTP(S) link enters `AttachedClient.openLink`. The bounded
+Clicking an HTTP(S) link enters `link_opening.openLink`. The bounded
 `model.link_opening` queue starts one `.link` job with `client.workers.start`;
-its `.link_opened` message reaches `AttachedClient.completeLinkOpening` through
-`GuiClient.update` and `AttachedClient.update`. `telar-client.openHostLink`
+its `.link_opened` message reaches `link_opening.completeLinkOpening` through
+`GuiAdapter.update` and `Client.update`. `telar-client.openHostLink`
 (`src/client/links/host.zig`) runs on the client worker: `/usr/bin/open` on
 macOS and `xdg-open` on Linux, with a five-second timeout and 4 KiB limits for
 each output stream. The TUI starts the same job; commands and failure behavior
@@ -36,15 +36,15 @@ source pane.
 
 Right-clicking a terminal link copies its URI without keyboard modifiers. The
 native chrome port resolves the target only from delivered pane content and
-queues the existing bounded clipboard write. `GuiClient.dispatchPointer` consumes drag and
+queues the existing bounded clipboard write. `GuiAdapter.dispatchPointer` consumes drag and
 release without forwarding them to the child. Agent message links use their
 snapshot-validated destination and the same clipboard service. The TUI dispatches
-right-button link gestures through `AttachedClient.inputLinkPointer`, which
+right-button link gestures through `link_opening.inputLinkPointer`, which
 queues the URI in `model.to_host` for `host/host_effects.deliver`.
 `link_regressions.zig` verifies copying without opening or child mouse reports.
 
 Link copy requests retain only the latest host request ID in `CopyFeedback`.
-`GuiClient.dispatchClipboard` first validates completion through the host
+`GuiAdapter.dispatchClipboard` first validates completion through the host
 service; only a successful matching write displays "Copy to clipboard". The
 passive label sits above the bottom status bar for two seconds, using the frame
 clock's expiration deadline rather than a polling timer. It never enters the

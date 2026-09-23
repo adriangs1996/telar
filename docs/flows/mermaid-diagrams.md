@@ -20,7 +20,7 @@ preserve the source. Rendering is disposable client state.
    before allocating the payload, reads its exact length and requires EOF.
 5. The service owns the result before publishing a void `diagram_ready` inbox
    notification. It also owns cleanup if shutdown drops that notification.
-6. `GuiClient.prepare` adopts a notified result only after the previous native
+6. `GuiAdapter.prepare` adopts a notified result only after the previous native
    flight completes. `MermaidBlock` draws it through `Canvas.diagramAt`; the frame
    carries borrowed image descriptors to Metal or Vulkan. Visible slots are pinned
    until delivery completes. A new texture version triggers an upload.

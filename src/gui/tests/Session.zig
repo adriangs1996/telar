@@ -3,7 +3,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const data = @import("model");
-const GuiClient = @import("../GuiClient.zig");
+const GuiAdapter = @import("../GuiAdapter.zig");
 const host_ports = @import("../host_ports.zig");
 const workers = @import("../workers.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
@@ -11,7 +11,7 @@ const Session = @This();
 
 connection: core.SocketChannel,
 peer: core.SocketChannel,
-gui: *GuiClient,
+gui: *GuiAdapter,
 pending: ?[]const u8 = null,
 opened_link: ?data.LinkTarget = null,
 link_open_count: usize = 0,
@@ -65,7 +65,7 @@ pub fn init() !*Session {
             .scale = 1,
         },
     );
-    session.gui = try GuiClient.init(
+    session.gui = try GuiAdapter.init(
         .{
             .gpa = std.testing.allocator,
             .io = std.testing.io,

@@ -5,7 +5,7 @@ const view_chrome = @import("view_chrome.zig");
 const core = @import("telar-core");
 const common = @import("telar-client");
 
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const presentation_projection = @import("presentation_projection.zig");
 const Output = @import("../host/Output.zig");
 
@@ -14,7 +14,7 @@ const Output = @import("../host/Output.zig");
 /// ```zig
 /// try presentation_lifecycle.observe(terminal);
 /// ```
-pub fn observe(terminal: *TerminalClient) !void {
+pub fn observe(terminal: *TerminalAdapter) !void {
     try view_chrome.refresh(terminal);
     try terminal.presenter.observe(presentation_projection.observation(terminal));
 }
@@ -25,7 +25,7 @@ pub fn observe(terminal: *TerminalClient) !void {
 /// ```zig
 /// try presentation_lifecycle.handleDraw(terminal, result);
 /// ```
-pub fn handleDraw(terminal: *TerminalClient, result: anyerror!void) !void {
+pub fn handleDraw(terminal: *TerminalAdapter, result: anyerror!void) !void {
     try terminal.presenter.completeDraw(result);
     try presentNow(terminal);
 }
@@ -37,7 +37,7 @@ pub fn handleDraw(terminal: *TerminalClient, result: anyerror!void) !void {
 /// ```zig
 /// try presentation_lifecycle.presentNow(terminal);
 /// ```
-pub fn presentNow(terminal: *TerminalClient) !void {
+pub fn presentNow(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     core.mark(client.io, .compose_start);
@@ -67,7 +67,7 @@ pub fn presentNow(terminal: *TerminalClient) !void {
     try deliver(terminal, delivery);
 }
 
-fn deliver(terminal: *TerminalClient, token: common.Token) !void {
+fn deliver(terminal: *TerminalAdapter, token: common.Token) !void {
     const client = &terminal.app;
 
     const delivery = terminal.presenter.presentation_state.complete(token, .delivered) orelse return;
@@ -84,7 +84,7 @@ fn deliver(terminal: *TerminalClient, token: common.Token) !void {
 /// ```zig
 /// try presentation_lifecycle.handleMediaTick(terminal, result);
 /// ```
-pub fn handleMediaTick(terminal: *TerminalClient, result: anyerror!void) !void {
+pub fn handleMediaTick(terminal: *TerminalAdapter, result: anyerror!void) !void {
     try terminal.presenter.completeMediaTick(result);
     if (terminal.output) |*output| {
         if (output.pending) {
@@ -103,7 +103,7 @@ pub fn handleMediaTick(terminal: *TerminalClient, result: anyerror!void) !void {
 
 /// Starts one host write without lending model or presentation state.
 /// Example: `try pumpOutput(terminal);`.
-pub fn pumpOutput(terminal: *TerminalClient) anyerror!void {
+pub fn pumpOutput(terminal: *TerminalAdapter) anyerror!void {
     const client = &terminal.app;
 
     const output = if (terminal.output) |*output| output else return;
@@ -120,7 +120,7 @@ pub fn pumpOutput(terminal: *TerminalClient) anyerror!void {
 
 /// Commits only the presentation whose bytes reached the host, then folds work.
 /// Example: `try handleWritten(terminal, result);`.
-pub fn handleWritten(terminal: *TerminalClient, result: anyerror!void) !void {
+pub fn handleWritten(terminal: *TerminalAdapter, result: anyerror!void) !void {
     const client = &terminal.app;
 
     core.mark(client.io, .host_flush_done);

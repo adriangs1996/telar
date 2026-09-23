@@ -26,7 +26,7 @@ const tab_removal = @import("../workspace/tab_removal.zig");
 const tab_rename = @import("../workspace/tab_rename.zig");
 const tab_snapshot = @import("../workspace/tab_snapshot.zig");
 const workspace_list_snapshot = @import("../workspace/workspace_list_snapshot.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Applies one decoded reply while its borrowed payload remains valid.
 /// Example: `_ = try runtime_messages.handleServerMessage(client, message);`

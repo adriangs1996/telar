@@ -3,7 +3,7 @@
 const data = @import("model");
 const client_module = @import("telar-client");
 const core = @import("telar-core");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const GenericRouter = @import("../../input/GenericRouter.zig").Type;
 const std = @import("std");
 const Chunk = @import("Chunk.zig");
@@ -55,7 +55,7 @@ const Expiry = enum {
 /// ```zig
 /// try host_inputs.scheduleRead(terminal);
 /// ```
-pub fn scheduleRead(terminal: *TerminalClient) !void {
+pub fn scheduleRead(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     const state = &terminal.host_input;
@@ -77,7 +77,7 @@ pub fn scheduleRead(terminal: *TerminalClient) !void {
 /// ```zig
 /// if (try host_inputs.handleOwnedRead(terminal, result)) return 0;
 /// ```
-pub fn handleOwnedRead(terminal: *TerminalClient, result: anyerror!u16) !bool {
+pub fn handleOwnedRead(terminal: *TerminalAdapter, result: anyerror!u16) !bool {
     const client = &terminal.app;
 
     core.mark(client.io, .client_input);
@@ -92,14 +92,14 @@ pub fn handleOwnedRead(terminal: *TerminalClient, result: anyerror!u16) !bool {
 /// ```zig
 /// if (try host_inputs.handleRead(terminal, chunk)) return 0;
 /// ```
-pub fn handleRead(terminal: *TerminalClient, result: anyerror!Chunk) !bool {
+pub fn handleRead(terminal: *TerminalAdapter, result: anyerror!Chunk) !bool {
     const state = &terminal.host_input;
     state.read_pending = false;
     state.chunk = try result;
     return routeChunk(terminal);
 }
 
-fn routeChunk(terminal: *TerminalClient) !bool {
+fn routeChunk(terminal: *TerminalAdapter) !bool {
     const client = &terminal.app;
 
     const state = &terminal.host_input;
@@ -127,7 +127,7 @@ fn routeChunk(terminal: *TerminalClient) !bool {
 
 /// Replays early input only after the runtime has supplied the active pane.
 /// Example: `if (try replayStartup(terminal)) detachClient();`.
-pub fn replayStartup(terminal: *TerminalClient) !bool {
+pub fn replayStartup(terminal: *TerminalAdapter) !bool {
     const bytes = try terminal.host_input.startup_input.finish();
     var offset: usize = 0;
     while (offset < bytes.len) {
@@ -142,7 +142,7 @@ pub fn replayStartup(terminal: *TerminalClient) !bool {
     return false;
 }
 
-fn routeBytes(terminal: *TerminalClient, bytes: []const u8) !bool {
+fn routeBytes(terminal: *TerminalAdapter, bytes: []const u8) !bool {
     const client = &terminal.app;
 
     const state = &terminal.host_input;
@@ -168,7 +168,7 @@ fn routeBytes(terminal: *TerminalClient, bytes: []const u8) !bool {
 /// ```zig
 /// if (try host_inputs.handleInputTimeout(terminal, result)) return 0;
 /// ```
-pub fn handleInputTimeout(terminal: *TerminalClient, result: anyerror!void) !bool {
+pub fn handleInputTimeout(terminal: *TerminalAdapter, result: anyerror!void) !bool {
     try terminal.host_input.input_timeout.complete(result);
 
     return expire(terminal, .input);
@@ -179,13 +179,13 @@ pub fn handleInputTimeout(terminal: *TerminalClient, result: anyerror!void) !boo
 /// ```zig
 /// if (try host_inputs.handleBindingTimeout(terminal, result)) return 0;
 /// ```
-pub fn handleBindingTimeout(terminal: *TerminalClient, result: anyerror!void) !bool {
+pub fn handleBindingTimeout(terminal: *TerminalAdapter, result: anyerror!void) !bool {
     try terminal.host_input.binding_timeout.complete(result);
 
     return expire(terminal, .binding);
 }
 
-fn expire(terminal: *TerminalClient, expiry: Expiry) !bool {
+fn expire(terminal: *TerminalAdapter, expiry: Expiry) !bool {
     const client = &terminal.app;
 
     const state = &terminal.host_input;
@@ -212,7 +212,7 @@ fn expire(terminal: *TerminalClient, expiry: Expiry) !bool {
 /// ```zig
 /// try host_inputs.forward(terminal, bytes);
 /// ```
-pub fn forward(terminal: *TerminalClient, bytes: []const u8) !void {
+pub fn forward(terminal: *TerminalAdapter, bytes: []const u8) !void {
     const client = &terminal.app;
 
     if (std.mem.eql(u8, bytes, "\x1b[O")) {
@@ -236,7 +236,7 @@ pub fn forward(terminal: *TerminalClient, bytes: []const u8) !void {
 /// ```zig
 /// try host_inputs.key(terminal, pressed);
 /// ```
-pub fn key(terminal: *TerminalClient, value: data.Key) !void {
+pub fn key(terminal: *TerminalAdapter, value: data.Key) !void {
     const client = &terminal.app;
 
     const escape_key = &terminal.view.tab_drag.escape_key;
@@ -268,7 +268,7 @@ pub fn key(terminal: *TerminalClient, value: data.Key) !void {
     );
 }
 
-pub fn mouse(terminal: *TerminalClient, event: data.Mouse) !void {
+pub fn mouse(terminal: *TerminalAdapter, event: data.Mouse) !void {
     const client = &terminal.app;
 
     if (try tab_drag.retained(terminal, event)) {
@@ -285,7 +285,7 @@ pub fn mouse(terminal: *TerminalClient, event: data.Mouse) !void {
 /// ```zig
 /// try host_inputs.terminalResponse(terminal, response);
 /// ```
-pub fn terminalResponse(terminal: *TerminalClient, response: term.Event.TerminalResponse) !void {
+pub fn terminalResponse(terminal: *TerminalAdapter, response: term.Event.TerminalResponse) !void {
     _ = try host_capabilities.observe(terminal, response);
     switch (response) {
         .kitty_graphics => |reply| {
@@ -300,7 +300,7 @@ pub fn terminalResponse(terminal: *TerminalClient, response: term.Event.Terminal
 
 /// Execute each decision before decoding the next event, so later keys observe
 /// changes to focus and modal state. Example: `_ = try host_inputs.feed(terminal, input);`
-pub fn feed(terminal: *TerminalClient, input: Router.Feed) !data.KeybindControl {
+pub fn feed(terminal: *TerminalAdapter, input: Router.Feed) !data.KeybindControl {
     const router = &terminal.host_input.router;
     var remaining = input;
     while (router.next(&remaining)) |event| {
@@ -312,7 +312,7 @@ pub fn feed(terminal: *TerminalClient, input: Router.Feed) !data.KeybindControl 
     return .continue_routing;
 }
 
-fn decoded(terminal: *TerminalClient, event: Router.Decoded, now_ns: u64) !data.KeybindControl {
+fn decoded(terminal: *TerminalAdapter, event: Router.Decoded, now_ns: u64) !data.KeybindControl {
     const client = &terminal.app;
 
     const router = &terminal.host_input.router;
@@ -361,7 +361,7 @@ fn decoded(terminal: *TerminalClient, event: Router.Decoded, now_ns: u64) !data.
     return .continue_routing;
 }
 
-fn applyDecision(terminal: *TerminalClient, decision: Router.Decision) !data.KeybindControl {
+fn applyDecision(terminal: *TerminalAdapter, decision: Router.Decision) !data.KeybindControl {
     const client = &terminal.app;
 
     const router = &terminal.host_input.router;
@@ -387,12 +387,12 @@ fn applyDecision(terminal: *TerminalClient, decision: Router.Decision) !data.Key
     return .continue_routing;
 }
 
-fn finishRouting(terminal: *TerminalClient, prefix_was_pending: bool) !void {
+fn finishRouting(terminal: *TerminalAdapter, prefix_was_pending: bool) !void {
     syncPrefixStatus(terminal, prefix_was_pending);
     try synchronizeTimers(terminal);
 }
 
-fn syncPrefixStatus(terminal: *TerminalClient, prefix_was_pending: bool) void {
+fn syncPrefixStatus(terminal: *TerminalAdapter, prefix_was_pending: bool) void {
     if (prefix_was_pending == terminal.host_input.router.prefixPending()) {
         return;
     }
@@ -400,12 +400,12 @@ fn syncPrefixStatus(terminal: *TerminalClient, prefix_was_pending: bool) void {
     terminal.host_input.presentation_revision +%= 1;
 }
 
-fn synchronizeTimers(terminal: *TerminalClient) !void {
+fn synchronizeTimers(terminal: *TerminalAdapter) !void {
     try synchronizeInputTimeout(terminal);
     try synchronizeBindingTimeout(terminal);
 }
 
-fn synchronizeInputTimeout(terminal: *TerminalClient) !void {
+fn synchronizeInputTimeout(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     const scheduler = &terminal.host_input.input_timeout;
@@ -419,7 +419,7 @@ fn synchronizeInputTimeout(terminal: *TerminalClient) !void {
     }
 }
 
-fn synchronizeBindingTimeout(terminal: *TerminalClient) !void {
+fn synchronizeBindingTimeout(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     const scheduler = &terminal.host_input.binding_timeout;

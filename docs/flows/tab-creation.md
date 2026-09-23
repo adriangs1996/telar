@@ -4,17 +4,17 @@ The runtime creates tabs and root panes. The client requests a tab from its
 current projection and adopts only a canonical reply.
 
 ```text
-AttachedClient.executeAction
-  -> AttachedClient.requestTabCreation
+actions.executeAction
+  -> tab_creation.requestTabCreation
      -> pending-operation gate, label_validation.validate, ClientModel.planTabCreation
-     -> AttachedClient.sendCreateTabRequest -> owned create_tab entry in model.to_runtime
+     -> tab_creation.sendCreateTabRequest -> owned create_tab entry in model.to_runtime
   -> runtime creates tab/root and returns tab_created
-  -> AttachedClient.handleServerMessage
-  -> AttachedClient.completeTabCreation
+  -> runtime_messages.handleServerMessage
+  -> tab_creation.completeTabCreation
      -> consume exact create_tab correlation
      -> ClientModel.createTab -> tab_creation.add
-     -> AttachedClient.detachTab(previous)
-     -> AttachedClient.synchronizeActivePane
+     -> tab_removal.detachTab(previous)
+     -> pane_focus.synchronizeActivePane
      -> request agent conversation when applicable
   -> adapter observes presentation revisions
 ```
@@ -35,7 +35,7 @@ launch the runtime commits/publishes it before attachment; a later attachment
 failure cannot undo canonical state. The successful reply contains runtime
 location, position, label and root identity.
 
-`AttachedClient.completeTabCreation` consumes correlation once and requires the expected
+`tab_creation.completeTabCreation` consumes correlation once and requires the expected
 workspace. It constructs the root with the nonzero size retained from the
 request, even if host geometry changed meanwhile. Model construction is atomic:
 invalid or duplicate state preserves the previous tab and revisions. Valid
@@ -51,7 +51,7 @@ Runtime rejection becomes an owned failure notice. Unknown, incompatible,
 wrong-workspace or replayed replies cannot mutate tabs. Presentation observes
 model revisions; this operation does not draw.
 
-Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`
+Source: `src/client/workspace/tab_creation.zig`, `src/model/state/ClientModel.zig`
 and `src/model/workspace/tab_creation.zig`.
 Tests: `src/frontend/client/tests/tab_lifecycle.zig`,
 `src/model/state/tests/tabs.zig`, `src/model/workspace/tab_flow_tests.zig`,

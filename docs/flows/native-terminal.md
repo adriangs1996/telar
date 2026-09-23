@@ -12,7 +12,7 @@ rejected. Nonterminal surfaces are not implemented by this renderer yet.
 ## Ownership and entrypoints
 
 `src/cli/client.zig` connects to the runtime and prepares options. `src/gui/run.zig`
-constructs one heap-owned `GuiClient` and calls its `run`. It owns `AttachedClient`,
+constructs one heap-owned `GuiAdapter` and calls its `run`. It owns `Client`,
 `NativeLoop`, `TerminalRenderer`, input, widgets, cursor and window state.
 Every host port is bound to its final address before events arrive.
 
@@ -22,7 +22,7 @@ sizing its drawable, Wayland after acknowledging surface configuration. The
 first usable measurement starts the runtime; repeated notifications do not
 repeat bootstrap. `draw` never initializes the connection.
 
-`GuiClient.update` drains events and computes cursor and redraw decisions.
+`GuiAdapter.update` drains events and computes cursor and redraw decisions.
 `draw` applies pending configuration and measures geometry only after the prior
 frame retires, then seals the next presentation. Native callbacks return token
 zero while a prior frame is busy. Native GPU consumers stop before `deinit`,
@@ -31,7 +31,7 @@ which joins loop workers before releasing renderer and client resources.
 `NativeLoop` connects the shared bounded inbox to an owner-held nonblocking
 wake pipe. Socket workers publish validated `RuntimeMessage` values or send
 completions into reserved slots. The window thread drains a finite FIFO batch
-and delegates to `AttachedClient.receiveRuntime` or `AttachedClient.completeRuntimeSend`. A receive
+and delegates to `runtime_io.receiveRuntime` or `runtime_io.completeRuntimeSend`. A receive
 buffer remains borrowed until synchronous dispatch finishes. No worker accesses
 the model. Input readiness, focus and GPU completion use that same inbox.
 
@@ -43,15 +43,15 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
 
 ## Three verification cuts
 
-1. Session and display: `GuiClient.start` queues `configure_graphics`,
+1. Session and display: `GuiAdapter.start` queues `configure_graphics`,
    `configure_terminal_colors` and `request_runtime_state` through
    `model.to_runtime.pushBootstrap`. The shared
-   `AttachedClient.restoreClientLayout` issues `open_pane`; shared operations consume
+   `client_layout.restoreClientLayout` issues `open_pane`; shared operations consume
    `pane_opened`, membership snapshots and `pane_frame`. `TerminalRenderer`
    borrows the projection, resolves the shared layout and draws each terminal
    leaf's cells and cursor. A presentation token captures only rendered panes.
    `pane_frame.receive` applies validated, owned cells and queues their ACK in
-   `model.to_runtime`; `AttachedClient.receivePaneFrame` sends it immediately.
+   `model.to_runtime`; `pane_frames.receivePaneFrame` sends it immediately.
    Additional patches update that model while the GPU owns an older submission.
    GPU completion consumes the presentation token through
    `presentation_delivery.apply`, which retires captured damage and flushes
@@ -59,16 +59,16 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
    it does not undo application ACKs. A stale completion cannot retire a newer
    flight, and the next draw captures the latest accumulated state.
 2. Input: AppKit text input or Wayland/XKB produces owned semantic keys and
-   committed UTF-8 text. `GuiClient` admits bounded input into `InputQueue` and forwards keys via
-   `AttachedClient.sendPaneInput`. Paste uses `AttachedClient.startPanePaste`,
+   committed UTF-8 text. `GuiAdapter` admits bounded input into `InputQueue` and forwards keys via
+   `pane_input.sendPaneInput`. Paste uses `pane_input.startPanePaste`,
    `appendPanePaste` and `finishPanePaste`, whose delivery uses the same
    pane-input operation and a captured pane identity.
    Cmd+V on macOS and Ctrl+Shift+V on Linux read the native clipboard. Application
    multiplexer bindings are not activated without corresponding native UI.
 3. Geometry and detach: window size and font scale determine complete columns,
    rows and exact cell pixels, after the chrome bands (`ChromeMetrics`) are
-   taken off the window height. `AttachedClient.applyHostUpdate` calls
-   `AttachedClient.resizeAttachedPanes` to deliver `pane_resize` through the existing geometry authority.
+   taken off the window height. `host_resize.applyHostUpdate` calls
+   `pane_resize.resizeAttachedPanes` to deliver `pane_resize` through the existing geometry authority.
    Trailing pixels belong to chrome. Closing a window stops GPU consumers, then
    cancels and joins socket tasks before releasing the shared model. It does not
    send a pane-close or runtime-stop command. A new GUI can reattach to the same
@@ -106,7 +106,7 @@ budgets, wakeups and shutdown shared with the TUI and headless driver.
   and credit accounting, but this increment does not display images. Native
   chrome, attachment UI, bars, plugins and external notification
   delivery are not implemented here. Absent visual surfaces do no work;
-  `GuiClient.deliverHostEffects` drops terminal notifications from
+  `GuiAdapter.deliverHostEffects` drops terminal notifications from
   `model.to_host` and answers media capture as unavailable. An unavailable
   clipboard write leaves the terminal live.
 - Transport or unrecoverable GPU errors end this client. The runtime remains

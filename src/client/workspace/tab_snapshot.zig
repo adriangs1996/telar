@@ -7,7 +7,7 @@ const pane_attachment = @import("../panes/pane_attachment.zig");
 const pane_closure = @import("../panes/pane_closure.zig");
 const pane_focus = @import("../panes/pane_focus.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 const data = @import("model");
 
 const TabSnapshotOutcome = enum { applied, ignored };

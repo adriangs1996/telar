@@ -1,12 +1,12 @@
 //! Terminal gesture capture around the shared semantic tab move.
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 
 /// Called by chrome after existing pane-selection and modal owners.
 /// Example: `const command = tab_drag.press(terminal, mouse) orelse view.handleMouse(mouse);`
-pub fn press(terminal: *TerminalClient, mouse: data.Mouse) ?client.ViewInteractionCommand {
+pub fn press(terminal: *TerminalAdapter, mouse: data.Mouse) ?client.ViewInteractionCommand {
     const app = &terminal.app;
 
     if (mouse.kind != .press) {
@@ -43,7 +43,7 @@ pub fn press(terminal: *TerminalClient, mouse: data.Mouse) ?client.ViewInteracti
 
 /// Retained events bypass other owners, including prompts opened mid-drag.
 /// Example: `if (try tab_drag.retained(terminal, mouse)) return;`
-pub fn retained(terminal: *TerminalClient, event: data.Mouse) !bool {
+pub fn retained(terminal: *TerminalAdapter, event: data.Mouse) !bool {
     const app = &terminal.app;
 
     const view = &terminal.view;
@@ -78,7 +78,7 @@ pub fn retained(terminal: *TerminalClient, event: data.Mouse) !bool {
 }
 
 /// Example: `if (tab_drag.cancel(terminal)) return;`
-pub fn cancel(terminal: *TerminalClient) bool {
+pub fn cancel(terminal: *TerminalAdapter) bool {
     const view = &terminal.view;
     if (!view.tab_drag.gesture.captured) {
         return false;

@@ -13,7 +13,7 @@ wait for.
 ```text
 native, Lua, plugin or top-bar action
         |
-AttachedClient.executeAction
+actions.executeAction
         |
 ClientModel.toggleWorkspaceList
         |

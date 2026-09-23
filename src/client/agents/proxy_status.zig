@@ -3,7 +3,7 @@ const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
 const notifications = @import("../notifications/notifications.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Commits one decoded proxy state and announces only semantic transitions.
 pub fn applyProxyStatus(client: *Client, message: core.ProxyStatus) !?data.ProxyStatusCommit {

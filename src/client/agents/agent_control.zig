@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const runtime_io = @import("../connection/runtime_io.zig");
 const notifications = @import("../notifications/notifications.zig");
 const tab_creation = @import("../workspace/tab_creation.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Maps attachment limits to a visible failure without changing the existing draft.
 /// Example: `try agent_control.attachAgentImage(app, pane_id, path);`

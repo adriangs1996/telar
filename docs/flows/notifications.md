@@ -10,35 +10,35 @@ notification exists, expires or starts exiting.
 ```text
 runtime notification                         local semantic event
         |                                              |
-AttachedClient.applyRuntimeNotification               AttachedClient procedure
+notifications.applyRuntimeNotification               Client procedure
         |                                              |
 wire-to-client translation              construct NotificationInput
         |                                              |
-        |                        AttachedClient.publishNotificationNow
+        |                        notifications.publishNotificationNow
         |                                              |
-AttachedClient.publishNotification <-------------------+
+notifications.publishNotification <-------------------+
                                |
                     ClientModel.publishNotification
                                |
             model.notification_center + notifications_revision
                                |
-                   AttachedClient.scheduleNotificationTimer
+                   notifications.scheduleNotificationTimer
                                |
-                AttachedClient.deliverHostNotification
+                notifications.deliverHostNotification
                                |
                   presentation_lifecycle.observe
                                |
          Presenter -> State.render(projection.notifications)
 ```
 
-`AttachedClient.handleServerMessage` delegates a runtime event to
-`AttachedClient.applyRuntimeNotification`. It translates protocol level, target
+`runtime_messages.handleServerMessage` delegates a runtime event to
+`notifications.applyRuntimeNotification`. It translates protocol level, target
 and millisecond duration into client notification values, samples monotonic
-time and calls `AttachedClient.publishNotification`. Request failures, agent
+time and calls `notifications.publishNotification`. Request failures, agent
 and proxy transitions, configuration or plugin diagnostics, and clipboard image
 failures enter as complete `NotificationInput` values. Those procedures call
-`AttachedClient.publishNotificationNow`, which samples monotonic time and
-delegates to `AttachedClient.publishNotification`.
+`notifications.publishNotificationNow`, which samples monotonic time and
+delegates to `notifications.publishNotification`.
 Diagnostic-producing procedures commit their banner before constructing
 the input. Publication commits its owned model state before it touches the
 timer. `deliverHostNotification` then follows the configured
@@ -57,11 +57,11 @@ from a decoded runtime buffer survives the synchronous adapter call.
 ```text
 semantic notification action
              |
-     AttachedClient.executeAction
+     actions.executeAction
              |
-AttachedClient.requestNotificationDelivery
+notifications.requestNotificationDelivery
              |
-request_lifecycle.nextId + AttachedClient.sendNotificationRequest
+request_lifecycle.nextId + notifications.sendNotificationRequest
              |
       model.to_runtime.pushNotification -> show_notification
 ```
@@ -86,12 +86,12 @@ show_notification request + notification continuation
                          |
                  notification_shown
                          |
-       AttachedClient.completeNotificationDelivery
+       notifications.completeNotificationDelivery
                          |
          delivered or local failure publication
 ```
 
-`AttachedClient.handleServerMessage` passes the report to
+`runtime_messages.handleServerMessage` passes the report to
 `completeNotificationDelivery`. It removes the request identity by consuming
 its continuation, then requires the exact `notification` type. The same
 procedure owns delivery policy. A positive client count returns `delivered`
@@ -105,7 +105,7 @@ another request later.
 
 ## Time and presentation
 
-`AttachedClient.scheduleNotificationTimer` asks
+`notifications.scheduleNotificationTimer` asks
 `model.notification_center.nextDeadline` for the next useful wakeup. Moving
 items wake at `model.host.animation_frame_ns`, while stable items sleep until
 expiry. The deadline lives in `model.notification_scheduler`, a
@@ -117,7 +117,7 @@ or removing a deadline sets the wake event rather than adding another job. Its
 fixed two-way select discards whichever wait loses the race.
 
 The timer completes as one `.notification_tick` message.
-`AttachedClient.update` passes it to `AttachedClient.completeNotificationTick`,
+`Client.update` passes it to `notifications.completeNotificationTick`,
 which releases the scheduler before checking the result. It then advances the
 center from elapsed monotonic time, bumps `notifications_revision` only when
 state changed and rearms the next deadline.
@@ -160,11 +160,11 @@ pointer_routing.apply -> HostChrome.pointer -> State.handleMouse
       |
 view_interactions.apply
       |
-AttachedClient.activateNotificationNow or AttachedClient.dismissNotificationNow
+notifications.activateNotificationNow or notifications.dismissNotificationNow
       |
-ClientModel commit + AttachedClient.scheduleNotificationTimer
+ClientModel commit + notifications.scheduleNotificationTimer
       |
-AttachedClient.navigateNotification -> optional tab, workspace or pane navigation
+notifications.navigateNotification -> optional tab, workspace or pane navigation
 ```
 
 The view returns only the notification ID and consumes the click. Activation
@@ -205,7 +205,7 @@ new notifications after reconciliation.
   and UTF-8 handling.
 - `src/model/state/tests/observations.zig` proves isolated notification
   versioning.
-- `src/client/AttachedClient.zig` owns local timestamp acquisition,
+- `src/client/notifications/notifications.zig` owns local timestamp acquisition,
   diagnostic publication, host delivery, outbound action translation,
   delivery correlation, timer event ordering and the mapping from model
   deadlines to `model.notification_scheduler`.

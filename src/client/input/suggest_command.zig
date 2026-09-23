@@ -6,7 +6,7 @@ const std = @import("std");
 const runtime_io = @import("../connection/runtime_io.zig");
 const name_prompt = @import("name_prompt.zig");
 const pane_input = @import("../panes/pane_input.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Sends one bounded request for the focused pane and awaits only its
 /// reply. Without a focused pane there is nothing to give context, so the

@@ -4,7 +4,7 @@ const data = @import("model");
 const std = @import("std");
 const path_queries = @import("../input/path_completions.zig");
 const path_expansion = @import("path_expansion.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Lands one worker result. A result for another execution, or for a query
 /// the form already moved past, is released without touching the model.

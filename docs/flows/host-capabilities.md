@@ -19,11 +19,11 @@ host_capabilities.observe
        |
 host_capabilities.translate
        |
-AttachedClient.observeHostCapability
+host_capabilities.observeHostCapability
        |
 ClientModel.observeHostCapability
        |
-AttachedClient.deliverHostCommit
+host_resize.deliverHostCommit
        |
 view_chrome.refresh and host_effects.deliver
        |
@@ -37,13 +37,13 @@ Presenter
        |
 host_capabilities.handleExpiry
        |
-AttachedClient.reconcileHostCapabilities
+host_capabilities.reconcileHostCapabilities
        |
-AttachedClient.applyHostUpdate
+host_resize.applyHostUpdate
        |
 ClientModel.reconcileHost
        |
-AttachedClient.deliverHostCommit
+host_resize.deliverHostCommit
        |
 view_chrome.refresh and host_effects.deliver
        |
@@ -57,7 +57,7 @@ cell pixel reports, mode 1016 support, and OSC 10/11 color reports. RGB values
 remain in the model; the background also resolves light or dark appearance by
 luminance. When the
 appearance changes and `client.appearance` configures a theme for it,
-`AttachedClient.deliverHostCommit` writes `model.theme` unless `--theme` locked
+`host_resize.deliverHostCommit` writes `model.theme` unless `--theme` locked
 it, and `view_chrome.refresh` hands it to the view; the same preference applies
 when a configuration generation is adopted. The
 colors are queried at startup and refreshed with pixel probes on host resize,
@@ -89,13 +89,13 @@ and `model.host.host_revision`). Exact repeats advance neither version and
 run no effects.
 
 Platform resize measurements use the same `HostUpdate` through
-`AttachedClient.applyHostUpdate`. This keeps raw window
+`host_resize.applyHostUpdate`. This keeps raw window
 pixels and the geometry derived from them in one model transaction.
 
 ## Effects and consumers
 
-`AttachedClient.observeHostCapability` and `reconcileHostCapabilities` deliver a `HostCommit` only after the
-complete model transition. The private `AttachedClient.deliverHostCommit` validates that the commit is still
+`host_capabilities.observeHostCapability` and `reconcileHostCapabilities` deliver a `HostCommit` only after the
+complete model transition. The private `host_resize.deliverHostCommit` validates that the commit is still
 current and owns every branch shared with host resizing. Changed terminal
 colors are queued to the runtime as `configure_terminal_colors` once startup
 is opening. A Kitty graphics transition calls `pane_graphics.syncFallbacks`,
@@ -145,8 +145,8 @@ fallback, so a failed timer changes no capability state.
 - `src/frontend/client/tests/host_resources.zig` proves commit-before-delivery,
   no-op suppression and that the view and presenter follow committed grid,
   cell-size and image-support changes, including a failed sidebar refresh.
-- The owner test in `src/client/AttachedClient.zig` checks empty and stale commits
-  (`attached_client_tests.rejectStaleHostCommits`) before any effect runs.
+- The owner test in `src/client/host/host_capabilities.zig` checks empty and stale commits
+  (`client_tests.rejectStaleHostCommits`) before any effect runs.
 - `src/client/panes/pane_graphics.zig` owns bounded fallback
   traversal; `src/model/state/tests/input_and_frames.zig` and
   `src/frontend/client/tests/graphics_and_clipboard.zig` cover fallback ownership,
@@ -154,7 +154,7 @@ fallback, so a failed timer changes no capability state.
 - `src/frontend/client/host/host_capabilities.zig` owns terminal reply translation
   and probe expiry; `src/frontend/client/host/host_negotiation.zig` owns the
   color-probe window and fallback values.
-- `src/client/AttachedClient.zig` owns commit delivery shared with resize;
+- `src/client/host/host_capabilities.zig` owns commit delivery shared with resize;
   `src/frontend/client/presentation/view_chrome.zig` and
   `src/frontend/client/host/host_effects.zig` carry it to the TUI view and host.
 - `src/frontend/client/tests/` proves fallback reconciliation,

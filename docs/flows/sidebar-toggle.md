@@ -13,10 +13,10 @@ reply.
 
 ```text
 native, Lua, plugin or pointer sidebar action
-  -> AttachedClient.executeAction
-  -> AttachedClient.toggleSidebar / resizeSidebar
+  -> actions.executeAction
+  -> sidebar_toggle.toggleSidebar / resizeSidebar
   -> ClientModel commits visibility or width
-  -> private AttachedClient.deliverSidebarLayout
+  -> private sidebar_toggle.deliverSidebarLayout
        verify commit; queue placement invalidation; resize attached panes
 
 after the event
@@ -38,12 +38,12 @@ view projection.
 
 ## Effects and presentation
 
-After the commit, `AttachedClient.deliverSidebarLayout` verifies visibility, width and
+After the commit, `sidebar_toggle.deliverSidebarLayout` verifies visibility, width and
 chrome revision. It sets `model.to_host.invalidate_placements` and publishes
 the resulting size for every attached pane in the active tab through
-`AttachedClient.resizeAttachedPanes`, in that order. With no active tab it
+`pane_resize.resizeAttachedPanes`, in that order. With no active tab it
 stops after the invalidation. Configuration reload calls the same
-`AttachedClient.deliverSidebarLayout` after its model transaction. Pane
+`sidebar_toggle.deliverSidebarLayout` after its model transaction. Pane
 geometry comes from `data.workbench.region(model)`, which derives the
 workbench from the committed sidebar values, so geometry effects use the same
 workbench that the next frame will show.
@@ -75,9 +75,9 @@ roll back the client preference.
 ## Validation
 
 - `src/model/state/ClientModel.zig` owns visibility, width and chrome revisions.
-- `src/client/AttachedClient.zig` validates each commit and delivers graphics
+- `src/client/workspace/sidebar_toggle.zig` validates each commit and delivers graphics
   invalidation and pane geometry in order.
-- `src/client/attached_client_tests.zig` rejects stale visibility, width and
+- `src/client/execution/client_tests.zig` rejects stale visibility, width and
   revision before touching any host effect.
 - `src/frontend/client/tests/pane_lifecycle.zig` checks expanded, contracted and
   resized pane geometry and presenter-owned frame scheduling.

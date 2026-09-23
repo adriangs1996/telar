@@ -6,7 +6,7 @@ const std = @import("std");
 const clipboard_image = @import("../input/clipboard_image.zig");
 const notifications = @import("../notifications/notifications.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Consumes one worker event and adopts only its current exact result.
 /// Example: `try clipboard_capture.completeClipboardCapture(app, completion);`

@@ -24,14 +24,14 @@ a substitute URL.
 ```text
 VT RenderState -> TextMetadataCapture -> pane_frame -> owned client Pane
                                                            |
-native event -> GuiClient.acceptInput -> InputQueue
-GuiClient.drainInput -> dispatchPointer -> hover_target.resolve
+native event -> GuiAdapter.acceptInput -> InputQueue
+GuiAdapter.drainInput -> dispatchPointer -> hover_target.resolve
                                       |                    |
                                 LinkGesture           LinkRegions
                                       |              underline + preview
                           HostChrome.link_pointer_fn
                                       |
-             AttachedClient.openLink -> file tab or links/host.zig worker
+             link_opening.openLink -> file tab or links/host.zig worker
 ```
 
 ## Ownership and budgets
@@ -67,7 +67,7 @@ modifier/release policy there (`src/gui/ports/chrome.zig`). An absent callback r
 left press opens a row-local textual link, Shift declines opening for selection,
 and copy mode uses `o`. The common client contains no GUI gesture policy.
 
-`AttachedClient.openLink` sends supported non-file schemes through
+`link_opening.openLink` sends supported non-file schemes through
 `model.link_opening` (`Opening`): at most one worker and one replaceable
 pending target per client. It starts the worker with
 `client.workers.start(.{ .link = target })`; `src/client/links/host.zig` uses

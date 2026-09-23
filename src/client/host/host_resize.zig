@@ -3,11 +3,11 @@
 const data = @import("model");
 const std = @import("std");
 const pane_graphics = @import("../panes/pane_graphics.zig");
-const attached_client_tests = @import("../attached_client_tests.zig");
+const client_tests = @import("../execution/client_tests.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Commits validated geometry before touching resources. Delivery failure keeps
 /// the committed state; the caller ends the client session.
@@ -89,5 +89,5 @@ fn validateHostCommit(model: *const data.ClientModel, commit: data.HostCommit) !
 }
 
 test "host resources reject empty and stale commits before calling ports" {
-    try attached_client_tests.rejectStaleHostCommits(deliverHostCommit);
+    try client_tests.rejectStaleHostCommits(deliverHostCommit);
 }

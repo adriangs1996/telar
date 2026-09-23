@@ -15,7 +15,7 @@ cursor behavior preferences, plus `GuiWindow` and its logical `GuiPadding`.
 No native handles or Lua string pointers enter
 shared client state. Invalid numbers, colors, fields and incomplete palettes reject the generation.
 `cli/ClientLaunch.frontendOptions` transfers the selected snapshot to
-`GuiClient.run`.
+`GuiAdapter.run`.
 
 `render/TerminalRenderer.configured` stages the native resources before the
 window starts. `text/FontSource` resolves an installed family through the small
@@ -132,7 +132,7 @@ cell width; natural line height times `line_height` determines cell height.
 Metrics round to physical pixels and are validated before use. The existing
 `TerminalMetrics` computes complete grid cells. Initial client pixel dimensions
 are exactly `columns * cell_width` and `rows * cell_height`; resize follows
-`AttachedClient.applyHostUpdate`. The runtime receives these dimensions through `pane_resize`
+`host_resize.applyHostUpdate`. The runtime receives these dimensions through `pane_resize`
 and propagates them to the PTY.
 
 ## Window effects and padding
@@ -148,7 +148,7 @@ the same atomic configuration reload as fonts and colors.
 `TerminalRenderer.measure` scales and rounds the insets, keeps space for one
 complete cell when the window shrinks, then measures the remaining viewport.
 It retains the physical origin used by both cell meshes and cursor quads.
-Padding changes follow `AttachedClient.applyHostUpdate`; neither initial attach nor resize
+Padding changes follow `host_resize.applyHostUpdate`; neither initial attach nor resize
 counts border pixels as PTY pixels. Retained mesh keys already include the
 resolved rectangle, so moving the origin invalidates exactly that geometry.
 Opacity and blur changes do not invalidate cell meshes or the glyph atlas.
@@ -267,7 +267,7 @@ fullscreen. A hidden titlebar keeps the window's titled style and adds
 outer window frame and keyboard focus. When that change alters the viewport,
 `TelarView` discards the prepared presentation token with `delivered = 0` and
 prepares a frame using the new size. Layout notifications cannot reenter that
-preparation. The ordinary `AttachedClient.applyHostUpdate` updates the terminal grid; no
+preparation. The ordinary `host_resize.applyHostUpdate` updates the terminal grid; no
 old-size frame is submitted to Metal.
 
 On Wayland, `background_effect` owns at most one effect manager and one effect
@@ -297,11 +297,11 @@ toplevel; a manager advertised after mapping cannot create a late decoration.
 
 ## Hot reload
 
-`GuiClient.start` calls `AttachedClient.scheduleConfigReload`, which selects the
+`GuiAdapter.start` calls `config_adoption.scheduleConfigReload`, which selects the
 live configuration resources for `config_reload.schedule`. That procedure
 starts a `.config_watch` job through `client.workers`; the GUI's
 `ports/workers.zig` hands that job to `ConfigurationReload.schedule` instead of
-the shared runner, without recovering it through `AttachedClient`. `ConfigurationReload` owns one worker and one
+the shared runner, without recovering it through `Client`. `ConfigurationReload` owns one worker and one
 pending result. Its worker calls the shared `config_reload.wait`: the same
 one-second fingerprint watch, selected profile, local modules, plugin registry
 and trust-store loading as the TUI. It also prepares a replacement
@@ -315,10 +315,10 @@ not alter the terminal geometry.
 
 The worker receives copied appearance/viewport values and borrowed current Lua
 owners for fingerprinting. It never reads a live renderer or mutates the model.
-Completion publishes into a reserved inbox slot. `GuiClient.update` dispatches
+Completion publishes into a reserved inbox slot. `GuiAdapter.update` dispatches
 `.configuration_ready` to `ConfigurationReload.accept`, which joins only that finished worker.
 Unchanged fingerprints rearm without requesting a draw. A changed result waits
-for `GuiClient.draw`, after the previous presentation token has ended.
+for `GuiAdapter.draw`, after the previous presentation token has ended.
 Input, socket reads and receipt ACKs continue while a candidate waits.
 
 `ConfigurationReload.apply` checks the current viewport before adoption. A
@@ -330,10 +330,10 @@ also discards the staged renderer. Diagnostics use the model's existing
 diagnostic state and the `gui_config` stderr log scope; the GUI does not yet
 paint the TUI diagnostic banner.
 
-Successful adoption uses `AttachedClient.completeConfigReload` to commit the shared model and
+Successful adoption uses `config_adoption.completeConfigReload` to commit the shared model and
 swap its Lua owners. The GUI then installs the prepared renderer, applies the
 typed colors/cursor settings, resets `CursorClock` and publishes metrics and
-terminal defaults through `AttachedClient.applyHostUpdate`. A replacement renderer inherits
+terminal defaults through `host_resize.applyHostUpdate`. A replacement renderer inherits
 the previous atlas version so its next preparation forces a GPU texture upload.
 Fallible shared effects after the model commit retain that new generation; the
 native resources follow it even if a downstream error ends the client.
@@ -364,7 +364,7 @@ truecolor cells directly. Changed foreground, background or ANSI entries
 invalidate retained cell geometry. Cursor colors reuse that ink. Positions and
 text remain owned by the shared client model.
 
-`GuiClient.windowReady` supplies `TerminalColors` through the existing
+`GuiAdapter.windowReady` supplies `TerminalColors` through the existing
 `configure_terminal_colors` bootstrap. The runtime's existing geometry authority
 chooses which attached host supplies VT defaults. `Pane.setTerminalColors`
 defers updates during ingestion; `applyTerminalColors` changes the defaults
@@ -383,14 +383,14 @@ preserving the six-byte cursor footprint in bounded client models. The schema
 version and golden-corpus fingerprint change with this protocol; runtime and
 client must use matching builds.
 
-`GuiClient.cursorTarget` returns the visible focused terminal's ID, attachment
+`GuiAdapter.cursorTarget` returns the visible focused terminal's ID, attachment
 generation and cursor. `CursorClock` retains only this owned value, GUI cursor
 defaults, focus and the beginning of the current phase. It resets when the
 target changes or input/focus arrives. Its next deadline is computed directly;
 late callbacks fold missed phases rather than replaying animations. Hidden,
 steady and unfocused cursors have no deadline. There is no timer per pane.
 
-`GuiClient.update` requests a draw only when the model, cursor phase or focus
+`GuiAdapter.update` requests a draw only when the model, cursor phase or focus
 differs from the prepared scene. The optional `Callbacks.wakeup_after` port
 returns relative milliseconds, with zero meaning no deadline. macOS uses one
 reusable dispatch timer on the main queue, paused while the window is occluded.

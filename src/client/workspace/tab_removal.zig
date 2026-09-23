@@ -8,7 +8,7 @@ const pane_focus = @import("../panes/pane_focus.zig");
 const pane_input = @import("../panes/pane_input.zig");
 const tab_snapshot = @import("tab_snapshot.zig");
 const workspace_handoff = @import("workspace_handoff.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 const TabCloseOutcome = enum { applied, ignored, exit };
 

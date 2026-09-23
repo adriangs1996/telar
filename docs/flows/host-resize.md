@@ -16,11 +16,11 @@ SIGWINCH or Windows size poll
               |
       one TTY measurement
               |
-      AttachedClient.applyHostUpdate
+      host_resize.applyHostUpdate
               |
      ClientModel.reconcileHost
               |
-     AttachedClient.deliverHostCommit
+     host_resize.deliverHostCommit
               |
    pane_resize for each attached active pane
               |
@@ -58,16 +58,16 @@ value outside the model.
 
 ## Effects and failure
 
-`AttachedClient.applyHostUpdate` commits before delivering its `HostCommit`.
-The private `AttachedClient.deliverHostCommit` rejects empty or stale commits before effects.
+`host_resize.applyHostUpdate` commits before delivering its `HostCommit`.
+The private `host_resize.deliverHostCommit` rejects empty or stale commits before effects.
 Every accepted geometry sets `model.to_host.invalidate_placements` before pane
 geometry is queued in `model.to_runtime`. Shared policy lives in
-`src/client/AttachedClient.zig`. After the event the TUI follows the commit:
+`src/client/host/host_resize.zig`. After the event the TUI follows the commit:
 `view_chrome.refresh` resizes the presenter's front and back buffers and then
 the client view on a grid change, and configures pixel-aware sidebar resources
 for the committed cell size; `host_effects.deliver` invalidates physical
-graphics placements. The GUI calls `AttachedClient.applyHostUpdate` from
-`GuiClient` and drains the same queue in `GuiClient.deliverHostEffects`.
+graphics placements. The GUI calls `host_resize.applyHostUpdate` from
+`GuiAdapter` and drains the same queue in `GuiAdapter.deliverHostEffects`.
 
 The model commit remains active if buffer allocation, sidebar configuration or
 the bounded `model.to_runtime` outbox fails. The error terminates that client session;
@@ -105,17 +105,17 @@ but schedules no frame.
 - `src/frontend/client/tests/host_resources.zig` proves that the view and
   presenter follow committed grid and cell changes, no-op policy and a failed
   sidebar refresh that keeps the commit.
-- The owner test in `src/client/AttachedClient.zig` proves that empty and stale
+- The owner test in `src/client/host/host_resize.zig` proves that empty and stale
   commits are rejected before any effect runs.
 - `src/frontend/client/tests/host_interaction.zig` proves real resource changes,
   pane-size delivery and retained commits after outbox saturation.
 - `src/frontend/client/host/host_resizes.zig` owns platform measurement, pixel
   refresh requests and watcher rearming.
-- `src/client/AttachedClient.zig` owns commit delivery
+- `src/client/host/host_resize.zig` owns commit delivery
   shared by resize and capability observations.
-- `src/client/AttachedClient.zig` owns translation and bounded delivery
+- `src/client/host/host_resize.zig` owns translation and bounded delivery
   of visible attached pane sizes.
-- `src/client/AttachedClient.zig` proves
+- `src/client/host/host_resize.zig` proves
   that a resize attaches only detached panes with content, once each, after a
   crowded layout left them detached.
 - `src/frontend/client/tests/` proves exact pane geometry,

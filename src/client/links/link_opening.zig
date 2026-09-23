@@ -5,7 +5,7 @@ const core = @import("telar-core");
 const editor_file_links = @import("editor_file_links.zig");
 const notifications = @import("../notifications/notifications.zig");
 const tab_creation = @import("../workspace/tab_creation.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Dispatches one owned target without letting opener failures leave input.
 /// Example: `_ = try link_opening.openLink(app, target);`

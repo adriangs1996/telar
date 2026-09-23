@@ -2,14 +2,14 @@
 
 AppKit and Wayland translate platform events to the bounded `telar_gui_input`
 ABI. The native callback copies committed text, paste chunks, semantic keys and
-pointer samples through `GuiClient.acceptInput` into `InputQueue`; its readiness
+pointer samples through `GuiAdapter.acceptInput` into `InputQueue`; its readiness
 notification enters the shared inbox. Only the window-thread consumer changes the client model.
 
-`GuiClient` owns the router, binding deadline and original widget target,
+`GuiAdapter` owns the router, binding deadline and original widget target,
 `PointerState`, terminal clipboard transfer, paste route and exit state directly.
 `drainInput` dispatches keys, pointer samples, scroll and clipboard completions;
 `dispatchPointer` and `releasePointer` coordinate chrome, links and retained
-child gestures without recovering a parent from `AttachedClient`.
+child gestures without recovering a parent from `Client`.
 `PointerState` keeps geometry and gesture invariants; `InputQueue` only owns
 ordered storage, payload lifetimes and release recovery.
 
@@ -84,9 +84,9 @@ native snapshot. No platform callback mutates the model directly.
 
 `input/router.zig` instantiates the shared key router without an escape decoder.
 It resolves the same configured prefix, built-in actions and Lua/plugin bindings
-as the TUI. `GuiClient.routeKey` supplies current capture/repeat policy and
+as the TUI. `GuiAdapter.routeKey` supplies current capture/repeat policy and
 receives a typed decision. Its `applyInputDecision` switch forwards keys through
-`AttachedClient.routeKeyInput` and actions through `AttachedClient.executeAction`;
+`key_routing.routeKeyInput` and actions through `actions.executeAction`;
 the GUI's own `executeAction` keeps only the native palette, sidebar and
 transcript cases. Prompt editing, copy mode, pane focus, workspace and tab
 requests, splits, pane fullscreen and detach call the same concrete operations
@@ -132,7 +132,7 @@ when another tab is active. A pane hidden by fullscreen keeps its last visible
 geometry until release; visible panes update that geometry on each retained
 event. Focus changes never redirect those events. Detachment or an attachment replacement
 makes the capture stale, and its remaining events are consumed. The additive
-`AttachedClient.reportRetainedPaneMouse` method uses the existing encoder and input
+`pane_mouse_input.reportRetainedPaneMouse` method uses the existing encoder and input
 controller with a `pointer_lease` target. A newly opened prompt cannot intercept
 the release of a gesture already acquired by that pane. Focus loss reserves one
 ordered recovery message even under input saturation, releases live gestures

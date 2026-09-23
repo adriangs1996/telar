@@ -10,11 +10,11 @@ configuration is still current.
 ```text
 configured plugin action
         |
-host_inputs.applyDecision / GuiClient.applyInputDecision
+host_inputs.applyDecision / GuiAdapter.applyInputDecision
         |
-AttachedClient.executeAction
+actions.executeAction
         |
-AttachedClient.startPluginAction
+plugin_actions.startPluginAction
         |
 Registry.resolve + Registry.workerRequest
         |
@@ -24,15 +24,15 @@ client.workers.start(.plugin) -> job_runner -> isolated one-shot worker
         |
 client Message .plugin_result { execution_id, result }
         |
-AttachedClient.update -> AttachedClient.completePluginAction
+Client.update -> plugin_actions.completePluginAction
         |
 finish exact id -> reject stale generation -> authorize whole batch
         |
-AttachedClient.applyPluginBatch -> AttachedClient.executeAction
+plugin_actions.applyPluginBatch -> actions.executeAction
         |
 ClientModel / model.to_runtime
         |
-AttachedClient.reportPluginCompletion
+plugin_actions.reportPluginCompletion
         |
 loop directive or publishPluginFailure (diagnostic + notification)
         |
@@ -41,11 +41,11 @@ presentation_lifecycle.observe -> Presenter
 
 ## Start ownership and order
 
-`AttachedClient.executeAction` calls `AttachedClient.startPluginAction` after
+`actions.executeAction` calls `plugin_actions.startPluginAction` after
 prompt authority has accepted the configured action. It does not resolve a
 package, reserve model state or schedule work.
 
-`AttachedClient.startPluginAction` takes the configured stable plugin and action
+`plugin_actions.startPluginAction` takes the configured stable plugin and action
 IDs and owns this order:
 
 1. suppress a second invocation while one execution is active;
@@ -62,7 +62,7 @@ commit, `errdefer` removes only that exact reservation through
 of `ClientModel`; the worker receives copied request data and returns as one
 `.plugin_result` client `Message`.
 
-`AttachedClient.startPluginAction` passes every outcome to `reportPluginStart`.
+`plugin_actions.startPluginAction` passes every outcome to `reportPluginStart`.
 Active, busy and unavailable outcomes stay quiet. An invalid configured action
 goes through `publishPluginFailure`, which commits a bounded diagnostic and
 publishes its failure notification. Registry resolution and actual worker scheduling are called
@@ -75,7 +75,7 @@ empty frame.
 ## Completion ownership and order
 
 The completion event retains the execution identity even when the worker
-failed. `AttachedClient.completePluginAction` first consumes only a matching active
+failed. `plugin_actions.completePluginAction` first consumes only a matching active
 identity. An unknown completion cannot clear newer work. It then compares the
 captured configuration generation with the current model generation.
 
@@ -89,14 +89,14 @@ stable plugin ID, exact digest, declared capabilities and digest-bound grants
 for every effect before any effect runs. After authorization, the completion
 operation clears an obsolete diagnostic before applying the batch.
 
-`AttachedClient.reportPluginCompletion` handles the resulting outcome. It maps
+`plugin_actions.reportPluginCompletion` handles the resulting outcome. It maps
 `exit` to the client-loop exit directive, keeps applied and obsolete outcomes
 quiet, and passes worker or authorization failures to `publishPluginFailure`.
 That procedure commits the banner through `client_diagnostic.replace`, builds a
-bounded notification from it and calls `AttachedClient.publishNotificationNow`
+bounded notification from it and calls `notifications.publishNotificationNow`
 after the execution was consumed.
 
-`applyPluginBatch` sends authorized effects to `AttachedClient.executeAction`,
+`applyPluginBatch` sends authorized effects to `actions.executeAction`,
 the shared dispatcher for native semantic actions regardless of whether they
 came from host input, Lua or a plugin. It delegates to the existing focused
 procedures. Those procedures commit `ClientModel` or push bounded messages into

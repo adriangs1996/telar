@@ -9,7 +9,7 @@ const pane_resize = @import("pane_resize.zig");
 const pane_split = @import("pane_split.zig");
 const tab_snapshot = @import("../workspace/tab_snapshot.zig");
 const workspace_creation = @import("../workspace/workspace_creation.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 const PaneOpenOutcome = enum { workspace_arrived, workspace_created, pane_split, pane_attached, ignored };
 

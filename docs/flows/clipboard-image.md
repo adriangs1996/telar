@@ -17,17 +17,17 @@ Ctrl+V
   |
 host_inputs.key
   |
-AttachedClient.routeKeyInput -> AttachedClient.routeCurrentKey
+key_routing.routeKeyInput -> key_routing.routeCurrentKey
   |
-AttachedClient.routePaneKey -> AttachedClient.sendPaneInput -> model.to_runtime
+key_routing.routePaneKey -> pane_input.sendPaneInput -> model.to_runtime
   |
-key_routing.requestsClipboardPreview -> AttachedClient.startClipboardCapture
+key_routing.requestsClipboardPreview -> clipboard_capture.startClipboardCapture
   |
 model.clipboard.reserve { id, target } -> model.to_host .capture
   |
 host_effects.deliver -> ClientEvent.clipboard_image media worker
   |
-AttachedClient.completeClipboardCapture
+clipboard_capture.completeClipboardCapture
   |
 finish exact id -> validate returned target -> validate current target
   |
@@ -35,7 +35,7 @@ AttachmentShelf.adopt -> attachments.Store -> Store.ingressVersion
   |
 optional pane resize
   |
-AttachedClient.reportClipboardCapture
+clipboard_capture.reportClipboardCapture
   |
 quiet result or bounded failure notification
   |
@@ -43,10 +43,10 @@ presentation_lifecycle.observe -> Presenter -> paced cell and media passes
 ```
 
 `host_inputs.key` delegates the semantic key without recognizing `Ctrl+V`.
-`AttachedClient.routeCurrentKey` sends the pane input through
-`AttachedClient.routePaneKey` first. Only when that input was delivered and
+`key_routing.routeCurrentKey` sends the pane input through
+`key_routing.routePaneKey` first. Only when that input was delivered and
 `key_routing.requestsClipboardPreview` matches does it call
-`AttachedClient.startClipboardCapture`. The runtime send worker drains
+`clipboard_capture.startClipboardCapture`. The runtime send worker drains
 `model.to_runtime` to the PTY independently. A missing target, unsupported platform, busy worker or
 scheduling failure can drop the preview, but none can retract or delay an
 already accepted pane input transaction. See [Key routing](key-routing.md).
@@ -83,7 +83,7 @@ cursor position. An atomic placeholder costs one deletion key; a Pi path costs
 one per grapheme, and the cursor must share a row with the path's end or
 start. The whole sequence is bounded by `attachment_types.max_removal_keys`, which
 the pane-input boundary can encode as one transaction.
-`AttachedClient.sendPaneKeys` encodes the sequence against the pane's current
+`pane_input.sendPaneKeys` encodes the sequence against the pane's current
 keyboard modes and enqueues it as one input transaction. Telar retires the
 local image only after that transaction is accepted.
 
@@ -113,7 +113,7 @@ increasing identity and the exact pane generation selected at start. This is
 lifecycle state, not render state, so reserving or finishing it does not
 advance `ClientModel.Version`.
 
-`AttachedClient.startClipboardCapture` reads platform support from
+`clipboard_capture.startClipboardCapture` reads platform support from
 `model.host.clipboard_capture`, which the adapter sets at startup, resolves the
 focused target, commits the model reservation and queues a `.capture` request
 on `model.to_host` in the same function. It returns `unsupported`, `no_target`,
@@ -133,7 +133,7 @@ Its only borrowed client memory is the heap-stable orphan result slot.
 ## Completion policy
 
 `ClientEvent.clipboard_image` carries the capture identity even when clipboard
-access failed. `AttachedClient.completeClipboardCapture` first finishes only that exact
+access failed. `clipboard_capture.completeClipboardCapture` first finishes only that exact
 identity. An unrelated completion cannot clear newer work.
 
 A successful worker result must repeat the same identity and target. The model
@@ -144,10 +144,10 @@ adapter securely frees its PNG without changing the shelf.
 For a current result, the operation orders resource adoption before
 geometry effects. `attachments.Store` validates the image again, owns the PNG
 and reports whether the shelf changed pane geometry. The operation resolves
-the active tab and calls `AttachedClient.resizeAttachedPanes` to offer new pane
+the active tab and calls `pane_resize.resizeAttachedPanes` to offer new pane
 sizes to the runtime only for that layout transition. The same operation then handles the classified outcome.
 
-`AttachedClient.completeClipboardCapture` keeps applied, stale, ignored and
+`clipboard_capture.completeClipboardCapture` keeps applied, stale, ignored and
 clipboard-empty results quiet. It maps oversized, worker and adoption failures
 to bounded notifications published by that operation. An adoption
 failure consumes the capture and frees its buffer. A resize delivery failure

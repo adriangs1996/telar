@@ -5,7 +5,7 @@
 
 const favicon_outcome = @import("favicon_outcome.zig");
 const std = @import("std");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 const FaviconCompletion = @import("../completion/FaviconCompletion.zig");
 const FaviconImage = @import("../completion/FaviconImage.zig");
 const FaviconRequest = @import("FaviconRequest.zig");

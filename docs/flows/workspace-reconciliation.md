@@ -4,13 +4,13 @@ The runtime owns workspace name, tab membership, labels and order. The client
 retains layouts, focus, buffers and disposable resources for canonical identities.
 
 ```text
-AttachedClient.inputPrompt -> submitPrompt(.rename_workspace)
-  -> AttachedClient.requestWorkspaceRename
-  -> AttachedClient.sendWorkspaceRenameRequest -> owned rename_workspace -> runtime rename
+name_prompt.inputPrompt -> submitPrompt(.rename_workspace)
+  -> workspace_rename.requestWorkspaceRename
+  -> workspace_rename.sendWorkspaceRenameRequest -> owned rename_workspace -> runtime rename
 
 rename reply or requested workspace_snapshot
-  -> AttachedClient.handleServerMessage
-  -> AttachedClient.applyWorkspaceSnapshot
+  -> runtime_messages.handleServerMessage
+  -> workspace_list_snapshot.applyWorkspaceSnapshot
      -> consume rename/snapshot correlation and verify workspace
      -> bounded descriptor decoding -> ClientModel.reconcileWorkspace
         -> workspace_reconciliation.reconcileTabs
@@ -49,7 +49,7 @@ An existing tab snapshot is retained. Otherwise an active change or stale
 membership requests one; an already loaded active tab receives geometry offers.
 Repeated canonical snapshots can repair resources without forcing a frame.
 
-`AttachedClient.applyResyncRequirement` coalesces a workspace snapshot request; the reply
+`resync_required.applyResyncRequirement` coalesces a workspace snapshot request; the reply
 returns here. A workspace that disappears before runtime encoding returns a
 correlated failure rather than stale state.
 
@@ -58,7 +58,7 @@ known continuation. Model rejection performs no resource effects. Post-commit
 failure preserves the canonical replica and completed cleanup. Reconnect or a
 later snapshot repairs disposable resources. No operation schedules a draw.
 
-Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`
+Source: `src/client/workspace/workspace_list_snapshot.zig`, `src/model/state/ClientModel.zig`
 and `src/model/workspace/workspace_reconciliation.zig`.
 Tests: `src/frontend/client/tests/synchronization.zig`,
 `renaming_and_telemetry.zig`, `src/model/state/tests/workspaces.zig`,

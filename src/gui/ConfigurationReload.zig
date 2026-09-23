@@ -6,7 +6,7 @@ const std = @import("std");
 const client = @import("telar-client");
 const native = @import("native/native.zig");
 const Renderer = @import("render/TerminalRenderer.zig");
-const GuiClient = @import("GuiClient.zig");
+const GuiAdapter = @import("GuiAdapter.zig");
 const Request = @import("ConfigurationRequest.zig");
 const font_rendering = @import("text/font_rendering.zig");
 const Reload = @This();
@@ -45,7 +45,7 @@ pub fn schedule(self: *Reload, args: client.ConfigWaitArgs) !void {
 
 /// Joins only completed work. Unchanged fingerprints never request a frame.
 /// Example: `try reload.accept(app);`
-pub fn accept(self: *Reload, app: *client.AttachedClient) !void {
+pub fn accept(self: *Reload, app: *client.Client) !void {
     if (self.ready.swap(false, .acquire)) {
         self.worker.?.await(self.io);
         self.worker = null;
@@ -60,7 +60,7 @@ pub fn accept(self: *Reload, app: *client.AttachedClient) !void {
 
 /// Starts a scheduled watcher after adoption captured the current generation.
 /// Example: `try reload.poll(app);`
-pub fn poll(self: *Reload, _: *client.AttachedClient) !void {
+pub fn poll(self: *Reload, _: *client.Client) !void {
     if (self.scheduled) |args| {
         std.debug.assert(!self.pending and self.worker == null);
         const request: Request = .{ .wait = args, .current = self.current, .viewport = self.viewport };
@@ -72,7 +72,7 @@ pub fn poll(self: *Reload, _: *client.AttachedClient) !void {
 
 /// Applies one complete generation at the native consumer boundary.
 /// Example: `const changed = try reload.apply(gui, &renderer);`
-pub fn apply(self: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
+pub fn apply(self: *Reload, gui: *GuiAdapter, renderer: *Renderer) !bool {
     if (!self.pending or gui.app.presentation.active != null) {
         return false;
     }

@@ -7,7 +7,7 @@ delivery; it does not reproduce those state transitions.
 
 ## Composition
 
-`GuiClient.projection()` captures the current model, input mode and workbench
+`GuiAdapter.projection()` captures the current model, input mode and workbench
 rectangle. `render/Scene.zig` borrows that projection for one preparation:
 
 1. `TerminalRenderer.begin()` resets the quad list and prepares retained resources.
@@ -124,11 +124,11 @@ A pointer sample the grid does not resolve goes to the delivered band targets,
 and a band press keeps its gesture through drag and release even over cells.
 A press on the sidebar's resize handle (a 6 px strip centred on the edge
 line, horizontal resize cursor) turns every drag and the release into a
-`BandCommand` carrying the width under the pointer, which `GuiClient`
+`BandCommand` carrying the width under the pointer, which `GuiAdapter`
 adopts into its `SidebarPreference` without touching the shared model; the
 next preparation measures the grid again and the PTY follows. The
 `resize_sidebar` action does the same in 16 logical px steps from
-`GuiClient.executeAction` through `SidebarPreference.step`. The gap between the band and the grid belongs to
+`GuiAdapter.executeAction` through `SidebarPreference.step`. The gap between the band and the grid belongs to
 no target.
 The palette keeps its own bounded hit map of at most 16 visible rows in the
 overlay state; a primary press on a row submits it through the `prompt_row`
@@ -138,7 +138,7 @@ Sidebar scrolling moves one card pitch; scrolling and hover advance
 `chrome.revision`; prefix changes advance the input revision. The sidebar
 lays its header, cards, footer slot row and edge line out in device pixels
 inside its band and publishes one pixel `focus_agent` target per visible
-card ([sidebar contract](../sidebar.md)). `GuiClient.prepare` stamps monotonic
+card ([sidebar contract](../sidebar.md)). `GuiAdapter.prepare` stamps monotonic
 seconds on the chrome so card ages add the time since the agent snapshot
 arrived.
 Both enter `PresentationIngress`, so they can request a frame without changing
@@ -146,11 +146,11 @@ terminal cells. Modal gestures cannot fall through to panes behind them.
 
 ## Execution and budgets
 
-`GuiClient.update` is the sole consumer of GUI completions. It drains one
+`GuiAdapter.update` is the sole consumer of GUI completions. It drains one
 bounded inbox turn. Runtime socket input and every shared worker or timer
 completion arrive as one `client.Message`, wrapped as `.client` and passed to
-`AttachedClient.update`; native input, presentation, configuration and binding
-deadlines dispatch to concrete GUI handlers. `GuiClient.deliverHostEffects`
+`Client.update`; native input, presentation, configuration and binding
+deadlines dispatch to concrete GUI handlers. `GuiAdapter.deliverHostEffects`
 drains `model.to_host` after every event. Layout replication is observed once
 after a bounded turn.
 

@@ -5,14 +5,14 @@ The client owns validated cells before acknowledging application. Presentation
 then consumes the latest model independently of runtime patch publication.
 
 ```text
-AttachedClient.handleServerMessage(.pane_frame)
-  -> AttachedClient.receivePaneFrame
+runtime_messages.handleServerMessage(.pane_frame)
+  -> pane_frames.receivePaneFrame
      -> pane_frame.receive(model, frame)
         -> Pane.applyFrame and ClientModel.reconcileCopyModeFrame
         -> detached: no effects
         -> resync: model.to_runtime request_snapshot
         -> applied: model.to_runtime frame_ack
-     -> AttachedClient.startRuntimeSend
+     -> Client.startRuntimeSend
      -> applied: graphics visibility, synchronizeActivePane
         -> telemetry and attachment-prompt reconciliation
   -> adapter observes presentation revisions
@@ -27,7 +27,7 @@ copy-state pruning, then advance `frame_revision` even when visible cells are
 unchanged. Failed application does not publish a revision.
 
 `pane_frame.receive` queues the ACK in `model.to_runtime` before
-`AttachedClient.receivePaneFrame` synchronizes graphics and active resources.
+`pane_frames.receivePaneFrame` synchronizes graphics and active resources.
 A newly enabled child focus-report mode can therefore receive its focus-in
 after application acknowledgement. `receivePaneFrame` keeps commit and ordered
 delivery in the same synchronous call; callers cannot substitute an
@@ -52,7 +52,7 @@ A reconstructed pane may reuse a wire frame ID but has a new client attachment
 generation. An old host completion cannot clear that pane's damage. Failed or
 cancelled host delivery clears no model damage and never claims presentation.
 
-Source: `src/client/AttachedClient.zig`, `src/model/panes/pane_frame.zig`,
+Source: `src/client/panes/pane_frames.zig`, `src/model/panes/pane_frame.zig`,
 `src/model/panes/Pane.zig`, `src/model/panes/presentation_delivery.zig` and
 `src/client/connection/presentation_delivery.zig`.
 Tests: `src/frontend/client/tests/pane_updates.zig`,

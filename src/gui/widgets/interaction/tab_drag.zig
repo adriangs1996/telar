@@ -1,12 +1,12 @@
 //! Native tab gestures use only the dispatcher's delivered control geometry.
 const event_module = @import("../../input/event.zig");
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const Target = @import("Target.zig");
 const client = @import("telar-client");
 
 /// Runs after physical ownership has been recorded by the dispatcher.
 /// Example: `if (try tab_drag.apply(gui, event, result.target)) return true;`
-pub fn apply(gui: *GuiClient, event: event_module.Event, owner: ?Target) !bool {
+pub fn apply(gui: *GuiAdapter, event: event_module.Event, owner: ?Target) !bool {
     const state = &gui.widgets;
     const drag = &state.tab_drag;
     drag.validate(&gui.app.model);

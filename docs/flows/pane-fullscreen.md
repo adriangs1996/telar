@@ -4,13 +4,13 @@ Fullscreen belongs to the disposable client layout. It changes visibility and
 size offers without changing runtime membership or destroying split geometry.
 
 ```text
-AttachedClient.executeAction
-  -> AttachedClient.togglePaneFullscreen
+actions.executeAction
+  -> pane_resize.togglePaneFullscreen
      -> ClientModel.togglePaneFullscreen
-     -> AttachedClient.deliverPaneGeometry: validate exact geometry commit
+     -> pane_resize.deliverPaneGeometry: validate exact geometry commit
      -> model.to_host.invalidate_placements
-     -> AttachedClient.resizeAttachedPanes: visible attached panes only
-     -> AttachedClient.attachVisiblePanes: newly visible detached panes
+     -> pane_resize.resizeAttachedPanes: visible attached panes only
+     -> pane_attachment.attachVisiblePanes: newly visible detached panes
   -> adapter observes the pane revision
 ```
 
@@ -84,7 +84,7 @@ Reconnect restores retained fullscreen/layout only when pane membership matches
 runtime authority; otherwise canonical display order supplies the layout.
 Graphics are rebuilt. No operation directly schedules a draw.
 
-Source: `src/client/AttachedClient.zig` and `src/model/state/ClientModel.zig`.
+Source: `src/client/panes/pane_resize.zig` and `src/model/state/ClientModel.zig`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig` (including its
 `FullscreenReattachment` scenario), `src/frontend/client/tests/synchronization.zig`,
 `src/frontend/client/tests/pane_splits.zig`, and shared model/layout tests.

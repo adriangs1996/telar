@@ -15,7 +15,7 @@ runtime Delivery.prepare
              |
 schema.system_metrics
              |
-AttachedClient.handleServerMessage
+runtime_messages.handleServerMessage
              |
 ClientModel.reconcileSystemMetrics
              |
@@ -41,7 +41,7 @@ which the metrics source omits.
 
 ## Client transaction
 
-`AttachedClient.handleServerMessage` translates the validated protocol message
+`runtime_messages.handleServerMessage` translates the validated protocol message
 into the client domain value and calls `ClientModel.reconcileSystemMetrics`,
 which has no view or presenter dependency.
 

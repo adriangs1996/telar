@@ -1,10 +1,10 @@
 # Reusing terminal editors for agent file links
 
 A completed click on an agent message's local file link enters
-`AttachedClient.openMessageFile`. The client looks for the configured editor in
+`editor_file_links.openMessageFile`. The client looks for the configured editor in
 that source tab. If there is a candidate, `open_editor` asks the runtime to open
 the file in an existing instance. `editor_opened` reports the exact pane and
-runtime generation; `AttachedClient.completeEditorOpen` focuses that pane
+runtime generation; `editor_file_links.completeEditorOpen` focuses that pane
 through the existing pane focus path.
 
 The runtime's `link_opening.start` admits the request: it checks the source

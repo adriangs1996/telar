@@ -12,7 +12,7 @@ The `navigate_pane` action handles a canonical directional key:
 
 1. When the focused foreground process is `nvim`, the client forwards the key
    to the pane. Neovim and `smart-splits.nvim` get the first chance to move.
-2. For any other process, the client asks its existing `AttachedClient.applyPaneFocus` for a
+2. For any other process, the client asks its existing `pane_focus.applyPaneFocus` for a
    neighbor in that direction.
 3. If no Telar neighbor exists, the client consumes the binding without sending
    input to the pane. An unavailable navigation action must not edit shell input.

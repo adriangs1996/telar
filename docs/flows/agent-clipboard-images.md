@@ -17,7 +17,7 @@ Cmd+V / Paste
   -> shared host/macos/clipboard_image.h -> private PNG cache
   -> native clipboard completion { image path or text }
   -> routing.finishPaste validates owner, focus and draft revision
-  -> AttachedClient.attachAgentImage -> ClientModel.attachAgentImage
+  -> agent_control.attachAgentImage -> ClientModel.attachAgentImage
   -> Pane.attachComposerImage
   -> composer image controls / Send
   -> AgentPrompt -> model.to_runtime -> client_request.receive

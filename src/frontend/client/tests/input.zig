@@ -3,7 +3,7 @@
 const client_module = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const TestHarness = @import("TestHarness.zig");
 const support = @import("support.zig");
 const std = @import("std");
@@ -158,7 +158,7 @@ test "Claude marker disappearance in a committed frame retires its paired previe
 
 const pi_test_path = "/var/folders/8x/abc/T/pi-clipboard-3f2a9c1e-7b4d-4e8f-9a0b-1c2d3e4f5a6b.png";
 
-fn adoptPiPreview(terminal: *TerminalClient, target: data.AttachmentTarget) !void {
+fn adoptPiPreview(terminal: *TerminalAdapter, target: data.AttachmentTarget) !void {
     const client = &terminal.app;
     const capture = try client.gpa.create(data.Capture);
     capture.* = .{
@@ -172,7 +172,7 @@ fn adoptPiPreview(terminal: *TerminalClient, target: data.AttachmentTarget) !voi
 
 /// Commits one Pi editor frame: hidden hardware cursor, an inverse-video
 /// cell right after `prompt` as Pi's own cursor.
-fn commitPiFrame(client: *client_module.AttachedClient, input: PiFrame) !void {
+fn commitPiFrame(client: *client_module.Client, input: PiFrame) !void {
     var pane_buffer = try core.Buffer.init(std.testing.allocator, 120, 3);
     defer pane_buffer.deinit();
     const cursor_x = pane_buffer.writeText(pane_buffer.area(), .{ .point = .{ .x = 0, .y = 1 }, .text = input.prompt, .style = .{} });
@@ -616,7 +616,7 @@ test "alternate-screen wheel sends cursor keys to the pane under the pointer" {
     try std.testing.expectEqualStrings("\x1b[A\x1b[A\x1b[A", &received);
 }
 
-fn testingHostInput(terminal: *TerminalClient, bytes: []const u8) !void {
+fn testingHostInput(terminal: *TerminalAdapter, bytes: []const u8) !void {
     var chunk: Chunk = .{};
     try std.testing.expect(bytes.len <= chunk.bytes.len);
     @memcpy(chunk.bytes[0..bytes.len], bytes);

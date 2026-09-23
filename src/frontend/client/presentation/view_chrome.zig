@@ -3,13 +3,13 @@
 //! render cache; the model stays the one copy.
 
 const std = @import("std");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const ChromeRevisions = @import("ChromeRevisions.zig");
 
 /// Follows every chrome fact that changed since the last call. A failed step
 /// leaves the revisions unobserved, so the next event retries it.
 /// Example: `try view_chrome.refresh(terminal);`
-pub fn refresh(terminal: *TerminalClient) !void {
+pub fn refresh(terminal: *TerminalAdapter) !void {
     const model = &terminal.app.model;
     const observed: ChromeRevisions = .{
         .host = model.host.host_revision,

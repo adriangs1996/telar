@@ -59,7 +59,7 @@ const FrameClock = @import("animation/FrameClock.zig");
 const native_callbacks = @import("native/window_callbacks.zig");
 const TestSession = @import("tests/Session.zig");
 const input_test_support = @import("tests/input_support.zig");
-const GuiClient = @This();
+const GuiAdapter = @This();
 
 const JobHook = struct {
     context: *anyopaque,
@@ -81,7 +81,7 @@ const TabDragStep = enum(u8) {
     logical_pixels = 4,
 };
 
-app: client.AttachedClient,
+app: client.Client,
 driver: NativeLoop,
 renderer: Renderer,
 failure: ?anyerror = null,
@@ -124,8 +124,8 @@ syntax: SyntaxService,
 review: *ReviewPanel,
 
 /// Adopts options on success and binds all ports before receiving messages.
-/// Example: `const gui = try GuiClient.init(params);`
-pub fn init(params: client.ClientInit) !*GuiClient {
+/// Example: `const gui = try GuiAdapter.init(params);`
+pub fn init(params: client.ClientInit) !*GuiAdapter {
     const router = try input_routing.build(
         .{
             .prefix = params.options.prefix,
@@ -135,7 +135,7 @@ pub fn init(params: client.ClientInit) !*GuiClient {
         },
     );
 
-    const gui = try params.gpa.create(GuiClient);
+    const gui = try params.gpa.create(GuiAdapter);
     errdefer params.gpa.destroy(gui);
 
     const review = try params.gpa.create(ReviewPanel);
@@ -156,7 +156,7 @@ pub fn init(params: client.ClientInit) !*GuiClient {
     gui.observed_input_revision = 0;
     gui.window_title = .{};
     gui.hostname_len = 0;
-    try client.AttachedClient.init(&gui.app, params);
+    try client.Client.init(&gui.app, params);
 
     // Native chrome uses the shared semantic projection, never TUI Kitty output.
     gui.app.options.sidebar_renderer_locked = true;
@@ -205,7 +205,7 @@ pub fn init(params: client.ClientInit) !*GuiClient {
 }
 
 /// Call after native GPU consumers stop; joins workers before releasing resources. Example: `gui.deinit();`
-pub fn deinit(self: *GuiClient) void {
+pub fn deinit(self: *GuiAdapter) void {
     const gpa = self.app.gpa;
     self.driver.deinit();
     self.renderer.deinit();
@@ -225,7 +225,7 @@ pub fn deinit(self: *GuiClient) void {
 
 /// Opens the native window after configuring its renderer; returns after GPU consumers stop.
 /// Example: `const status = try gui.run("Telar");`
-pub fn run(self: *GuiClient, title: [*:0]const u8) !u8 {
+pub fn run(self: *GuiAdapter, title: [*:0]const u8) !u8 {
     const renderer = try Renderer.configured(
         self.app.gpa,
         self.app.io,
@@ -260,7 +260,7 @@ pub fn run(self: *GuiClient, title: [*:0]const u8) !u8 {
 /// Starts the runtime only after the native surface supplies usable geometry.
 /// Repeated notifications do not repeat bootstrap or mutate an in-flight frame.
 /// Example: `try gui.windowReady(viewport);`
-pub fn windowReady(self: *GuiClient, viewport: native.Viewport) !void {
+pub fn windowReady(self: *GuiAdapter, viewport: native.Viewport) !void {
     if (self.started or self.failure != null or self.exit_status != null) {
         return;
     }
@@ -281,7 +281,7 @@ pub fn windowReady(self: *GuiClient, viewport: native.Viewport) !void {
 
 /// Negotiates the current viewport against the owned renderer and shared model.
 /// Example: `const size = try gui.resizeViewport(viewport);`
-pub fn resizeViewport(self: *GuiClient, viewport: native.Viewport) !core.TerminalSize {
+pub fn resizeViewport(self: *GuiAdapter, viewport: native.Viewport) !core.TerminalSize {
     if (self.app.presentation.active != null) {
         return error.PresentationBusy;
     }
@@ -294,7 +294,7 @@ pub fn resizeViewport(self: *GuiClient, viewport: native.Viewport) !core.Termina
 
 /// Prepares one frame without starting the runtime. Native readiness owns startup.
 /// Example: `const token = try gui.draw(viewport);`
-pub fn draw(self: *GuiClient, viewport: native.Viewport) !u64 {
+pub fn draw(self: *GuiAdapter, viewport: native.Viewport) !u64 {
     core.profiling.add(.gui_draw, 1);
     const profile_started = core.profiling.start(self.app.io);
     defer core.profiling.finish(self.app.io, .gui_draw, profile_started);
@@ -337,7 +337,7 @@ pub fn draw(self: *GuiClient, viewport: native.Viewport) !u64 {
 
 /// Admits native input once ready, retaining pre-start focus transitions.
 /// Example: `_ = try gui.input(decoded);`
-pub fn input(self: *GuiClient, event: event_module.Event) !bool {
+pub fn input(self: *GuiAdapter, event: event_module.Event) !bool {
     if (!self.started) {
         if (event == .focus) {
             try self.driver.inbox.post(
@@ -357,7 +357,7 @@ pub fn input(self: *GuiClient, event: event_module.Event) !bool {
 
 /// Records the first window failure and wakes the native loop to close it.
 /// Example: `gui.fail(err);`
-pub fn fail(self: *GuiClient, err: anyerror) void {
+pub fn fail(self: *GuiAdapter, err: anyerror) void {
     if (self.failure == null) {
         std.log.err(
             "native client: {s}",
@@ -371,13 +371,13 @@ pub fn fail(self: *GuiClient, err: anyerror) void {
     native.telar_gui_wake(self.driver.fds[1]);
 }
 
-fn now(self: *const GuiClient) u64 {
+fn now(self: *const GuiAdapter) u64 {
     return @intCast(@max(0, std.Io.Clock.awake.now(self.app.io).toNanoseconds()));
 }
 
 /// Reports the next cursor or widget animation wake without advancing either.
 /// Example: `const delay = gui.wakeupAfter();`
-pub fn wakeupAfter(self: *const GuiClient) u32 {
+pub fn wakeupAfter(self: *const GuiAdapter) u32 {
     const now_ns = self.now();
     const widgets = if (self.app.presentation.active == null) self.chrome.animation.wakeupAfter(now_ns) else 0;
     return FrameClock.earliest(self.cursor_clock.wakeupAfter(now_ns), widgets);
@@ -385,7 +385,7 @@ pub fn wakeupAfter(self: *const GuiClient) u32 {
 
 /// Reports native frame admission delay from visible terminal frame identities.
 /// Example: `const delay_ns = gui.frameDelayNs();`
-pub fn frameDelayNs(self: *GuiClient) u64 {
+pub fn frameDelayNs(self: *GuiAdapter) u64 {
     var visible: [core.max_panes_per_tab]FramePacer.Pane = undefined;
     var count: usize = 0;
     const model = &self.app.model;
@@ -414,7 +414,7 @@ pub fn frameDelayNs(self: *GuiClient) u64 {
 
 /// Copies a changed title into native-owned output storage.
 /// Example: `const changed = try gui.windowTitle(out);`
-pub fn windowTitle(self: *GuiClient, out: *native.WindowTitle) !bool {
+pub fn windowTitle(self: *GuiAdapter, out: *native.WindowTitle) !bool {
     out.* = .{};
     const model = &self.app.model;
     const tab_label = if (model.tabs.activeSlot()) |tab| shared_model.tab_label.text(model, tab) else "";
@@ -448,7 +448,7 @@ fn copyWindowTitle(context: *anyopaque, title: []const u8) !void {
 
 /// Publishes native capabilities and starts runtime I/O and configuration tasks.
 /// Example: `try gui.start(colors);`
-fn start(self: *GuiClient, colors: core.TerminalColors) !void {
+fn start(self: *GuiAdapter, colors: core.TerminalColors) !void {
     var capabilities = self.app.model.host.host_capabilities;
 
     capabilities.terminal_colors = colors;
@@ -482,7 +482,7 @@ fn start(self: *GuiClient, colors: core.TerminalColors) !void {
 
 /// Copies borrowed input before the host callback returns. A full input queue
 /// rejects admission; inbox failures propagate to the host. Example: `_ = try gui.acceptInput(event);`
-pub fn acceptInput(self: *GuiClient, event: event_module.Event) !bool {
+pub fn acceptInput(self: *GuiAdapter, event: event_module.Event) !bool {
     if (event == .focus) {
         // Focus transitions must remain ordered even when native input coalesces.
         try self.driver.inbox.post(
@@ -514,7 +514,7 @@ pub fn acceptInput(self: *GuiClient, event: event_module.Event) !bool {
 /// Drains one bounded turn, then folds reconnectable layout state once.
 /// Workers only publish owned messages; the window thread owns mutation.
 /// Example: `const status = try gui.update();`
-pub fn update(self: *GuiClient) !?u8 {
+pub fn update(self: *GuiAdapter) !?u8 {
     core.profiling.add(.gui_update, 1);
     const loop = &self.driver;
     const status: ?u8 = turn: {
@@ -567,7 +567,7 @@ pub fn update(self: *GuiClient) !?u8 {
     return status;
 }
 
-fn dispatch(self: *GuiClient, event: gui_event.Message) !?u8 {
+fn dispatch(self: *GuiAdapter, event: gui_event.Message) !?u8 {
     core.profiling.add(.gui_dispatch, 1);
     switch (event) {
         .client => |message| {
@@ -607,7 +607,7 @@ fn pathFor(event: gui_event.Message) core.Path {
 }
 
 /// Finishes startup and resumes input once a runtime message lands.
-fn resumeAfterRuntime(self: *GuiClient) !void {
+fn resumeAfterRuntime(self: *GuiAdapter) !void {
     if (self.app.model.startup.phase == .opening and self.app.model.activeTabLocation() != null) {
         self.app.model.startup.phase = .active;
     }
@@ -617,7 +617,7 @@ fn resumeAfterRuntime(self: *GuiClient) !void {
 }
 
 /// Consumes bounded native input and schedules another turn if it can advance.
-fn inputReady(self: *GuiClient) !void {
+fn inputReady(self: *GuiAdapter) !void {
     if (self.input_queue.len != 0) {
         self.input_revision +%= 1;
         try self.drainInput();
@@ -628,7 +628,7 @@ fn inputReady(self: *GuiClient) !void {
 /// Adopts bindings and retires the deadline of the previous keymap.
 /// Replaces bindings without transferring held keys to their new meanings.
 /// Example: `gui.adoptBindings(config);`
-pub fn adoptBindings(self: *GuiClient, config: client.RouterConfig) void {
+pub fn adoptBindings(self: *GuiAdapter, config: client.RouterConfig) void {
     var replacement = input_routing.build(config) catch unreachable;
 
     replacement.inheritPhysicalLeases(&self.router);
@@ -640,12 +640,12 @@ pub fn adoptBindings(self: *GuiClient, config: client.RouterConfig) void {
 
 /// Cancels a partial chord and its original widget before input changes owner.
 /// Held physical keys retain their leases. Example: `gui.cancelBinding();`
-pub fn cancelBinding(self: *GuiClient) void {
+pub fn cancelBinding(self: *GuiAdapter) void {
     self.router.cancelSequence();
     self.binding_target = null;
 }
 
-fn statusMode(self: *const GuiClient) client.Mode {
+fn statusMode(self: *const GuiAdapter) client.Mode {
     if (!self.router.prefixPending()) {
         return if (client.copy_mode.copyModeActive(&self.app)) .copy else .normal;
     }
@@ -693,7 +693,7 @@ fn statusMode(self: *const GuiClient) client.Mode {
 }
 
 /// Stops before the shared outbox fills, resuming on transport completion.
-fn drainInput(self: *GuiClient) !void {
+fn drainInput(self: *GuiAdapter) !void {
     core.profiling.add(.gui_input_drain, 1);
     const app = &self.app;
     const pending_input = &self.input_queue;
@@ -830,7 +830,7 @@ fn drainInput(self: *GuiClient) !void {
 
 /// Resolve and execute one semantic key before accepting the next event.
 /// Example: `_ = try gui.routeKey(event);`
-pub fn routeKey(self: *GuiClient, event: input_routing.Type.KeyInput) !shared_model.keybind.Control {
+pub fn routeKey(self: *GuiAdapter, event: input_routing.Type.KeyInput) !shared_model.keybind.Control {
     errdefer self.router.eventFailed(event.key);
 
     defer {
@@ -853,7 +853,7 @@ pub fn routeKey(self: *GuiClient, event: input_routing.Type.KeyInput) !shared_mo
     return control;
 }
 
-fn applyInputDecision(self: *GuiClient, decision: input_routing.Type.Decision) !shared_model.keybind.Control {
+fn applyInputDecision(self: *GuiAdapter, decision: input_routing.Type.Decision) !shared_model.keybind.Control {
     switch (decision) {
         .forward => |value| {
             _ = try client.key_routing.routeKeyInput(
@@ -896,7 +896,7 @@ fn applyInputDecision(self: *GuiClient, decision: input_routing.Type.Decision) !
     return .continue_routing;
 }
 
-fn deliverKey(self: *GuiClient, value: shared_model.Key) !void {
+fn deliverKey(self: *GuiAdapter, value: shared_model.Key) !void {
     if (self.binding_target) |owner| {
         if (value.phase == .press) {
             try widget_routing.replayBindingKey(
@@ -921,7 +921,7 @@ fn deliverKey(self: *GuiClient, value: shared_model.Key) !void {
 /// keys open the native palette already prefixed, and sidebar resize uses
 /// this window's pixel preference. Other actions keep the shared routing.
 /// Copy mode retires first, as the shared native action policy does.
-fn executeAction(self: *GuiClient, value: shared_model.actions.Action) !shared_model.keybind.Control {
+fn executeAction(self: *GuiAdapter, value: shared_model.actions.Action) !shared_model.keybind.Control {
     if (value == .scroll_pane) {
         if (try widget_routing.scrollFocusedThread(self, value.scroll_pane)) {
             return .continue_routing;
@@ -952,7 +952,7 @@ fn executeAction(self: *GuiClient, value: shared_model.actions.Action) !shared_m
     return .continue_routing;
 }
 
-fn dispatchKey(self: *GuiClient, key: KeyInput) !void {
+fn dispatchKey(self: *GuiAdapter, key: KeyInput) !void {
     if (try self.widgetInput(
         .{
             .key = key,
@@ -986,7 +986,7 @@ fn dispatchKey(self: *GuiClient, key: KeyInput) !void {
 }
 
 /// Repeated requests share one outstanding transfer. Example: `try gui.readTerminalClipboard();`
-fn readTerminalClipboard(self: *GuiClient) !void {
+fn readTerminalClipboard(self: *GuiAdapter) !void {
     const clipboard = &self.terminal_clipboard;
 
     if (clipboard.request_id != 0 or self.app.model.name_prompt.active() or self.app.model.copyModeActive()) {
@@ -1007,7 +1007,7 @@ fn readTerminalClipboard(self: *GuiClient) !void {
 
 /// Completes once, discarding a response whose original attachment is no
 /// longer the focused terminal. Example: `if (gui.takeTerminalClipboard(result)) startPaste();`
-fn takeTerminalClipboard(self: *GuiClient, result: ClipboardResult) bool {
+fn takeTerminalClipboard(self: *GuiAdapter, result: ClipboardResult) bool {
     const clipboard = &self.terminal_clipboard;
 
     if (result.request_id != clipboard.request_id) {
@@ -1026,7 +1026,7 @@ fn takeTerminalClipboard(self: *GuiClient, result: ClipboardResult) bool {
     return pane.id == clipboard.pane_id and pane.attachment_generation == clipboard.generation;
 }
 
-fn dispatchClipboard(self: *GuiClient, result: ClipboardResult) !bool {
+fn dispatchClipboard(self: *GuiAdapter, result: ClipboardResult) !bool {
     if (self.terminal_clipboard.offset == null) {
         const kind = self.host.complete(result) orelse return true;
 
@@ -1087,7 +1087,7 @@ fn dispatchClipboard(self: *GuiClient, result: ClipboardResult) !bool {
 
 /// New gestures require current physical geometry; child drags keep their
 /// original pane while copy-mode and chrome retain their own owners.
-fn dispatchPointer(self: *GuiClient, value: PointerSample) !void {
+fn dispatchPointer(self: *GuiAdapter, value: PointerSample) !void {
     const app = &self.app;
     const pointer = &self.pointer;
 
@@ -1215,7 +1215,7 @@ fn dispatchPointer(self: *GuiClient, value: PointerSample) !void {
     }
 }
 
-fn dispatchBandPointer(self: *GuiClient, event: PointerEvent) !void {
+fn dispatchBandPointer(self: *GuiAdapter, event: PointerEvent) !void {
     const app = &self.app;
     const command = self.chrome.bandPointer(event) orelse {
         if (event.kind == .move) {
@@ -1247,7 +1247,7 @@ fn dispatchBandPointer(self: *GuiClient, event: PointerEvent) !void {
 
 /// Closes existing gestures on focus loss, without assigning their releases
 /// to chrome or to a pane that happens to be focused. Example: `try gui.releasePointer();`
-fn releasePointer(self: *GuiClient) !void {
+fn releasePointer(self: *GuiAdapter) !void {
     const app = &self.app;
     const pointer = &self.pointer;
 
@@ -1286,7 +1286,7 @@ fn releasePointer(self: *GuiClient) !void {
 
 /// New widget and terminal gestures share the same delivered geometry guard.
 /// Example: `const current = gui.pointerGeometryMatches();`
-pub fn pointerGeometryMatches(self: *GuiClient) bool {
+pub fn pointerGeometryMatches(self: *GuiAdapter) bool {
     const app = &self.app;
     const delivered = app.presentation.delivered_geometry orelse return false;
     const snapshot = client.capture(
@@ -1300,7 +1300,7 @@ pub fn pointerGeometryMatches(self: *GuiClient) bool {
     return delivered.matches(&current);
 }
 
-fn dispatchScroll(self: *GuiClient, sample: *ScrollSample) !bool {
+fn dispatchScroll(self: *GuiAdapter, sample: *ScrollSample) !bool {
     if (sample.geometry_revision != self.pointer.revision or sample.gesture_revision != self.pointer.gesture_revision) {
         self.pointer.scroll_remainder = 0;
 
@@ -1363,7 +1363,7 @@ fn dispatchScroll(self: *GuiClient, sample: *ScrollSample) !bool {
     return sample.lines == 0;
 }
 
-fn finishInput(self: *GuiClient, pending: bool) !void {
+fn finishInput(self: *GuiAdapter, pending: bool) !void {
     const app = &self.app;
 
     if (self.router.bindingDeadline() == null and !self.router.prefixPending()) {
@@ -1385,7 +1385,7 @@ fn finishInput(self: *GuiClient, pending: bool) !void {
 
 /// Reserves one control slot to finish gestures even when ordinary input is
 /// saturated. Example: `try gui.cancelPointer();`
-fn cancelPointer(self: *GuiClient) !void {
+fn cancelPointer(self: *GuiAdapter) !void {
     const pending_input = &self.input_queue;
 
     self.pointer.invalidateGestures();
@@ -1394,7 +1394,7 @@ fn cancelPointer(self: *GuiClient) !void {
     try self.resumeInput();
 }
 
-fn expireBinding(self: *GuiClient, result: anyerror!void) !void {
+fn expireBinding(self: *GuiAdapter, result: anyerror!void) !void {
     const app = &self.app;
 
     try self.binding_timeout.complete(result);
@@ -1405,7 +1405,7 @@ fn expireBinding(self: *GuiClient, result: anyerror!void) !void {
 
 /// A clipboard response retains the widget that requested it across focus
 /// changes. Example: `try gui.requestClipboardRead(id, generation);`
-pub fn requestClipboardRead(self: *GuiClient, target_id: u64, generation: u64) !void {
+pub fn requestClipboardRead(self: *GuiAdapter, target_id: u64, generation: u64) !void {
     try widget_routing.beginClipboardRead(
         self,
         .{
@@ -1418,7 +1418,7 @@ pub fn requestClipboardRead(self: *GuiClient, target_id: u64, generation: u64) !
 /// Copies selected UTF-8 before the native host drains the request.
 /// Example: `try gui.requestClipboardWrite(selection);`
 /// Lets the frame pacer hurry the frame that echoes input to a visible pane.
-fn notePaneInput(self: *GuiClient, pane_id: core.PaneId, at_ns: u64) void {
+fn notePaneInput(self: *GuiAdapter, pane_id: core.PaneId, at_ns: u64) void {
     const model = &self.app.model;
     const tab = model.tabs.activeSlot() orelse return;
     const pane = model.panes.findInConst(model.tabs.location[tab].tab_id, pane_id) orelse return;
@@ -1434,7 +1434,7 @@ fn notePaneInput(self: *GuiClient, pane_id: core.PaneId, at_ns: u64) void {
 /// then starts the runtime write and every queued job. A job that fails to
 /// start can leave new host requests, so both drain until the host queue is
 /// empty.
-fn deliverHostEffects(self: *GuiClient) !void {
+fn deliverHostEffects(self: *GuiAdapter) !void {
     while (true) {
         try self.deliverRequests();
         try self.startJobs();
@@ -1446,7 +1446,7 @@ fn deliverHostEffects(self: *GuiClient) !void {
 
 /// The window has no outer terminal and no media capture, and it redraws
 /// every image placement each frame.
-fn deliverRequests(self: *GuiClient) !void {
+fn deliverRequests(self: *GuiAdapter) !void {
     const effects = &self.app.model.to_host;
     _ = effects.takePlacementInvalidation();
     if (effects.rebind_input) {
@@ -1481,7 +1481,7 @@ fn deliverRequests(self: *GuiClient) !void {
 
 /// Starts each queued job; one the inbox rejects finishes as a failure,
 /// which may queue its successor.
-fn startJobs(self: *GuiClient) !void {
+fn startJobs(self: *GuiAdapter) !void {
     try self.app.flush();
     while (self.app.to_workers.pop()) |job| {
         const started = if (self.job_hook) |hook| hook.start(hook.context, job) else workers.start(self, job);
@@ -1492,14 +1492,14 @@ fn startJobs(self: *GuiClient) !void {
     }
 }
 
-pub fn requestClipboardWrite(self: *GuiClient, bytes: []const u8) !void {
+pub fn requestClipboardWrite(self: *GuiAdapter, bytes: []const u8) !void {
     _ = try self.host.write(bytes);
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
 }
 
 /// Requests a link copy with a bottom confirmation after host success.
 /// Example: `try gui.copyLink(destination);`
-pub fn copyLink(self: *GuiClient, bytes: []const u8) !void {
+pub fn copyLink(self: *GuiAdapter, bytes: []const u8) !void {
     self.widgets.copy_feedback.pending = try self.requestClipboardWriteOwned(
         .{},
         bytes,
@@ -1508,14 +1508,14 @@ pub fn copyLink(self: *GuiClient, bytes: []const u8) !void {
 
 /// The editor can commit a cut only after the matching native write succeeds.
 /// Example: `const request = try gui.requestClipboardWriteOwned(owner, bytes);`
-pub fn requestClipboardWriteOwned(self: *GuiClient, owner: ClipboardOwner, bytes: []const u8) !u64 {
+pub fn requestClipboardWriteOwned(self: *GuiAdapter, owner: ClipboardOwner, bytes: []const u8) !u64 {
     const request = try self.host.writeOwned(owner, bytes);
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);
 
     return request;
 }
 
-fn focus(self: *GuiClient, focused: bool) !void {
+fn focus(self: *GuiAdapter, focused: bool) !void {
     self.focused = focused;
 
     if (!focused) {
@@ -1547,7 +1547,7 @@ fn focus(self: *GuiClient, focused: bool) !void {
 
 /// Queue one readiness notification only when input can make progress.
 /// Example: `try gui.resumeInput();`
-pub fn resumeInput(self: *GuiClient) !void {
+pub fn resumeInput(self: *GuiAdapter) !void {
     if (self.input_queue.len != 0 and !self.app.model.startup.holdsInput() and self.app.model.to_runtime.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots)) {
         try self.driver.inbox.notify(.input_ready);
     }
@@ -1555,7 +1555,7 @@ pub fn resumeInput(self: *GuiClient) !void {
 
 /// Copies the visible cursor identity for the native blink clock.
 /// Example: `clock.observe(gui.cursorTarget(), now_ns);`
-fn cursorTarget(self: *GuiClient) CursorTarget {
+fn cursorTarget(self: *GuiAdapter) CursorTarget {
     if (self.app.model.name_prompt.active()) {
         return .{};
     }
@@ -1584,7 +1584,7 @@ fn cursorTarget(self: *GuiClient) CursorTarget {
 /// next keyboard step or drag clamps to it. The caller still negotiates the
 /// PTY with `resize`.
 /// Example: `const size = try gui.measure(&renderer, viewport);`
-fn measure(self: *GuiClient, renderer: *Renderer, viewport: native.Viewport) !core.TerminalSize {
+fn measure(self: *GuiAdapter, renderer: *Renderer, viewport: native.Viewport) !core.TerminalSize {
     const viewport_changed = !std.meta.eql(
         renderer.viewport,
         [2]u32{
@@ -1607,7 +1607,7 @@ fn measure(self: *GuiClient, renderer: *Renderer, viewport: native.Viewport) !co
 /// Applies a dragged or stepped sidebar width: the preference changes and
 /// the next preparation measures the grid again.
 /// Example: `gui.adoptSidebarWidth(command.sidebar_width.?);`
-pub fn adoptSidebarWidth(self: *GuiClient, width: u32) void {
+pub fn adoptSidebarWidth(self: *GuiAdapter, width: u32) void {
     if (self.sidebar.drag(width)) {
         self.chrome.invalidate();
     }
@@ -1615,7 +1615,7 @@ pub fn adoptSidebarWidth(self: *GuiClient, width: u32) void {
 
 /// Publishes exact font metrics and lets shared geometry negotiate the PTY.
 /// Example: `try gui.resize(size, renderer.theme);`
-pub fn resize(self: *GuiClient, size: core.TerminalSize, theme: shared_model.TerminalTheme) !void {
+pub fn resize(self: *GuiAdapter, size: core.TerminalSize, theme: shared_model.TerminalTheme) !void {
     var capabilities = self.app.model.host.host_capabilities;
 
     capabilities.window_width_px = @as(u32, size.cols) * size.cell_width_px;
@@ -1641,7 +1641,7 @@ pub fn resize(self: *GuiClient, size: core.TerminalSize, theme: shared_model.Ter
 }
 
 /// Retires captured damage after GPU delivery, preserving newer received state.
-fn complete(self: *GuiClient, token: u64, delivered: bool) !void {
+fn complete(self: *GuiAdapter, token: u64, delivered: bool) !void {
     core.profiling.add(.gui_complete, 1);
     const active = self.app.presentation.active orelse return;
 
@@ -1673,7 +1673,7 @@ fn complete(self: *GuiClient, token: u64, delivered: bool) !void {
 
 /// Applies runtime graphics commands to this connection's retained resources.
 /// Example: `try gui.applyGraphics(command);`
-pub fn applyGraphics(self: *GuiClient, command: shared_model.pane_graphics.Command) !void {
+pub fn applyGraphics(self: *GuiAdapter, command: shared_model.pane_graphics.Command) !void {
     return switch (command) {
         .snapshot => |value| self.graphics_store.applySnapshot(value),
         .image => |value| self.graphics_store.applyImage(value),
@@ -1687,7 +1687,7 @@ pub fn applyGraphics(self: *GuiClient, command: shared_model.pane_graphics.Comma
 
 /// Borrows the projection synchronously and seals only the rendered pane frames.
 /// Example: `const token = try gui.prepare(&renderer);`
-fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
+fn prepare(self: *GuiAdapter, renderer: *Renderer) !u64 {
     self.widgets.tab_drag.validate(&self.app.model);
 
     if (!self.app.model.request_lifecycle.tracker.has(.tab_operation)) {
@@ -1752,20 +1752,20 @@ fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
 }
 
 /// Defers image adoption until the current GPU consumer releases its frame.
-fn landDiagram(self: *GuiClient) void {
+fn landDiagram(self: *GuiAdapter) void {
     self.diagrams.notify();
     self.chrome.invalidate();
 }
 
 /// The inbox synchronizes completed tokens; adoption waits for frame preparation.
-fn landSyntax(self: *GuiClient) void {
+fn landSyntax(self: *GuiAdapter) void {
     self.syntax.notify();
     self.chrome.invalidate();
 }
 
 /// Opens a runtime review for either a terminal pane or a managed agent.
 /// Example: `try gui.openChangeReview(pane_id);`
-pub fn openChangeReview(self: *GuiClient, pane_id: core.PaneId) !void {
+pub fn openChangeReview(self: *GuiAdapter, pane_id: core.PaneId) !void {
     try self.review.open(&self.app, pane_id);
     try self.releasePointer();
     self.pointer.invalidateGestures();
@@ -1778,13 +1778,13 @@ pub fn openChangeReview(self: *GuiClient, pane_id: core.PaneId) !void {
 }
 
 /// Inbox completion releases the worker's immutable patch for the next frame.
-fn landChangeReview(self: *GuiClient) void {
+fn landChangeReview(self: *GuiAdapter) void {
     self.review.notify();
     self.chrome.invalidate();
 }
 
 /// Lands one favicon lookup from the inbox; the next preparation places it.
-fn landFavicon(self: *GuiClient, completion: client.FaviconCompletion) void {
+fn landFavicon(self: *GuiAdapter, completion: client.FaviconCompletion) void {
     const image: ?*client.FaviconImage = switch (client.favicons.complete(&self.app, completion)) {
         .stale => return,
         .missing => null,
@@ -1803,7 +1803,7 @@ fn landFavicon(self: *GuiClient, completion: client.FaviconCompletion) void {
 
 // Places a landed favicon into the page and starts the next lookup the
 // list needs. Warm frames find nothing landed and nothing wanted.
-fn resolveFavicons(self: *GuiClient, renderer: *Renderer) !void {
+fn resolveFavicons(self: *GuiAdapter, renderer: *Renderer) !void {
     const page = if (renderer.sprites) |*sprites| sprites else return;
     const favicons = &self.chrome.favicons;
     favicons.refresh(self.app.gpa, page);
@@ -1824,7 +1824,7 @@ fn resolveFavicons(self: *GuiClient, renderer: *Renderer) !void {
     favicons.started(want.workspace);
 }
 
-fn refreshPointer(self: *GuiClient) void {
+fn refreshPointer(self: *GuiAdapter) void {
     self.pointer.hover.refresh(self);
     self.pointer.link_gesture.validate(self.pointer.hover.link, self.app.model.version());
     message_links.refresh(self);
@@ -1832,7 +1832,7 @@ fn refreshPointer(self: *GuiClient) void {
 
 /// Captures semantic state plus adapter-owned routing and interaction revisions.
 /// Example: `const projected = gui.projection();`
-pub fn projection(self: *GuiClient) client.Projection {
+pub fn projection(self: *GuiAdapter) client.Projection {
     return client.capture(
         &self.app.model,
         .{
@@ -1845,7 +1845,7 @@ pub fn projection(self: *GuiClient) client.Projection {
 
 /// Captures the revisions used to decide whether another presentation is needed.
 /// Example: `_ = gui.app.presentation.observe(gui.observation());`
-pub fn observation(self: *const GuiClient) client.Observation {
+pub fn observation(self: *const GuiAdapter) client.Observation {
     return .{
         .model = self.app.model.version(),
         .geometry_revision = shared_model.workbench.region(&self.app.model).revision,
@@ -1853,7 +1853,7 @@ pub fn observation(self: *const GuiClient) client.Observation {
     };
 }
 
-fn ingress(self: *const GuiClient) client.PresentationIngress {
+fn ingress(self: *const GuiAdapter) client.PresentationIngress {
     return .{
         .input_routing = self.binding_revision,
         .view_interaction = self.chrome.revision +% self.pointer.hover.revision +% self.widgets.dispatcher.revision +% self.app.model.change_review.version,
@@ -1861,7 +1861,7 @@ fn ingress(self: *const GuiClient) client.PresentationIngress {
 }
 
 /// Routes delivered widget targets before falling back to terminal input.
-fn widgetInput(self: *GuiClient, event: event_module.Event) !bool {
+fn widgetInput(self: *GuiAdapter, event: event_module.Event) !bool {
     if (self.review.active) {
         if (try widget_routing.continueFallback(self, event)) {
             return true;
@@ -1875,7 +1875,7 @@ fn widgetInput(self: *GuiClient, event: event_module.Event) !bool {
     return widget_routing.apply(self, event);
 }
 
-fn beginWidgetPaste(self: *GuiClient) !bool {
+fn beginWidgetPaste(self: *GuiAdapter) !bool {
     if (self.review.active) {
         self.review.beginPaste();
 
@@ -1885,7 +1885,7 @@ fn beginWidgetPaste(self: *GuiClient) !bool {
     return widget_routing.beginPaste(self);
 }
 
-fn widgetPaste(self: *GuiClient, bytes: []const u8) !void {
+fn widgetPaste(self: *GuiAdapter, bytes: []const u8) !void {
     if (self.review.paste_generation != null) {
         self.review.appendPaste(bytes);
 
@@ -1895,7 +1895,7 @@ fn widgetPaste(self: *GuiClient, bytes: []const u8) !void {
     try widget_routing.paste(self, bytes);
 }
 
-fn endWidgetPaste(self: *GuiClient) !void {
+fn endWidgetPaste(self: *GuiAdapter) !void {
     if (self.review.paste_generation != null) {
         try self.review.endPaste();
         self.chrome.invalidate();
@@ -1908,7 +1908,7 @@ fn endWidgetPaste(self: *GuiClient) !void {
 
 /// Publishes current editing state with the delivered caret geometry.
 /// Example: `const available = gui.widgetTextContext(&context);`
-pub fn widgetTextContext(self: *GuiClient, output: *native.TextContext) bool {
+pub fn widgetTextContext(self: *GuiAdapter, output: *native.TextContext) bool {
     if (self.review.active) {
         return self.review.widget.textContext(output);
     }
@@ -1918,7 +1918,7 @@ pub fn widgetTextContext(self: *GuiClient, output: *native.TextContext) bool {
 
 /// Publishes owned widget semantics using delivered geometry.
 /// Example: `const available = gui.widgetAccessibility(&tree);`
-pub fn widgetAccessibility(self: *GuiClient, output: *native.AccessibilityTree) bool {
+pub fn widgetAccessibility(self: *GuiAdapter, output: *native.AccessibilityTree) bool {
     if (self.review.active) {
         return self.review.widget.accessibility(output);
     }

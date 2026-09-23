@@ -1,7 +1,7 @@
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const Client = @import("AttachedClient.zig");
+const Client = @import("execution/Client.zig");
 const copy_mode = @import("input/copy_mode.zig");
 /// Preserves native reader admission and terminal copy-mode behavior.
 /// Example: `try agentReaders(enterCopyMode);`

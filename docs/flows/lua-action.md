@@ -11,9 +11,9 @@ configured binding
       |
 Router.routeEvent -> applyInputDecision / applyDecision
       |
-AttachedClient.executeAction -> AttachedClient.executeLuaAction
+actions.executeAction -> lua_action.executeLuaAction
       |
-AttachedClient.evaluateLuaAction
+lua_action.evaluateLuaAction
       |
 ClientModel.callbackContext
       |
@@ -21,12 +21,12 @@ client-owned Generation.invokeCallback / invokeExpression
       |
       +-- callback --> EffectBatch --> lua_actions.validateBatch
       |                                  |
-      |                         AttachedClient.applyLuaEffect
+      |                         lua_action.applyLuaEffect
       |                         -> executeAction / startPluginAction
       |
-      +-- expression --> InputDecision --> AttachedClient.routeKeyInput / pasteExpression
+      +-- expression --> InputDecision --> key_routing.routeKeyInput / pasteExpression
       |
-      +-- failure --> AttachedClient.publishLuaFailure -> client_diagnostic.replace
+      +-- failure --> lua_action.publishLuaFailure -> client_diagnostic.replace
                                |
                   ClientModel.replaceDiagnostic
                                |
@@ -35,16 +35,16 @@ client-owned Generation.invokeCallback / invokeExpression
                     presentation_lifecycle.observe -> Presenter
 ```
 
-The host consumes the router decision through `AttachedClient.executeAction`.
-`AttachedClient.executeLuaAction` translates an expression decision into
+The host consumes the router decision through `actions.executeAction`.
+`lua_action.executeLuaAction` translates an expression decision into
 semantic keys or paste. The host adapter does not access the Lua generation,
-plugin registry or diagnostic buffer. Built-in effects reuse `AttachedClient.executeAction`. Plugin effects reuse
+plugin registry or diagnostic buffer. Built-in effects reuse `actions.executeAction`. Plugin effects reuse
 the separate asynchronous [`plugin_action`](plugin-action.md) slice.
 
 ## State and ownership
 
 The client owns one live `config.Generation`. It contains the bounded Lua VM
-and closures for the active configuration generation. `AttachedClient.completeConfigReload` builds
+and closures for the active configuration generation. `config_adoption.completeConfigReload` builds
 a complete replacement before swapping that pointer, registry and input router
 together. The VM never enters `ClientModel` or the presenter.
 
@@ -62,7 +62,7 @@ no-op. Invalid UTF-8 or text beyond the fixed buffer is rejected before commit.
 
 ## Callback policy
 
-`AttachedClient.evaluateLuaAction` owns this order:
+`lua_action.evaluateLuaAction` owns this order:
 
 1. capture one callback context from `ClientModel`;
 2. invoke the exact callback generation and identity;
@@ -85,9 +85,9 @@ the sequence.
 
 An expression returns `consume`, `forward_binding`, semantic keys or bounded
 paste. After a successful invocation, the operation clears any older
-diagnostic and returns the value to `AttachedClient.executeLuaAction`. Keys pass through
-`AttachedClient.routeKeyInput`; paste passes through
-`AttachedClient.pasteExpression`. Both use the focused child's acknowledged
+diagnostic and returns the value to `lua_action.executeLuaAction`. Keys pass through
+`key_routing.routeKeyInput`; paste passes through
+`pane_input.pasteExpression`. Both use the focused child's acknowledged
 terminal modes and the existing pane-input target checks.
 
 An expression does not return a terminal-encoding result. The client encodes
@@ -125,7 +125,7 @@ authority.
   projection, diagnostic validation, equality and revision behavior.
 - `src/client/config/client_diagnostic.zig` proves shared
   diagnostic validation, fallback and clear semantics.
-- `src/client/AttachedClient.zig` owns invocation, validate-before-apply order,
+- `src/client/input/lua_action.zig` owns invocation, validate-before-apply order,
   diagnostic order, sequential exit and failure classification
   (`evaluateLuaAction`), and router control, semantic-key reinjection and
   copy-mode paste suppression (`executeLuaAction`).

@@ -4,14 +4,14 @@ const routing = @import("routing.zig");
 const message_links = @import("message_links.zig");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const Target = @import("Target.zig");
 const Event = @import("../../input/ScrollEvent.zig");
 const Entry = @import("ThreadScrollMotion.zig");
 
 /// Keeps a precise gesture and its native momentum on the original transcript.
 /// Example: `if (try thread_scroll.captured(gui, event)) return true;`
-pub fn captured(gui: *GuiClient, event: Event) !bool {
+pub fn captured(gui: *GuiAdapter, event: Event) !bool {
     const motions = &gui.widgets.thread_scroll;
     if (!event.precise or event.phase == .begin or (event.phase == .none and event.momentum == .none)) {
         motions.gesture = null;
@@ -37,7 +37,7 @@ pub fn captured(gui: *GuiClient, event: Event) !bool {
 
 /// Routes physical motion independently of the host that supplied the gesture.
 /// Example: `try thread_scroll.input(gui, transcript_target, event);`
-pub fn input(gui: *GuiClient, target: Target, event: Event) !void {
+pub fn input(gui: *GuiAdapter, target: Target, event: Event) !void {
     if (target.action != .transcript or !gui.focused) {
         return;
     }
@@ -89,7 +89,7 @@ pub fn input(gui: *GuiClient, target: Target, event: Event) !void {
 
 /// Uses elapsed monotonic time once, before borrowing the model for drawing.
 /// Example: `try thread_scroll.advance(gui, now_ns);`
-pub fn advance(gui: *GuiClient, now_ns: u64) !void {
+pub fn advance(gui: *GuiAdapter, now_ns: u64) !void {
     const motions = &gui.widgets.thread_scroll;
     if (!gui.focused or gui.app.model.name_prompt.active() or gui.widgets.image_preview != null or gui.widgets.composer_menu.selector != null) {
         motions.clear();
@@ -122,7 +122,7 @@ pub fn advance(gui: *GuiClient, now_ns: u64) !void {
 
 /// Adopts only successfully presented limits and committed page-anchor changes.
 /// Example: `thread_scroll.delivered(gui);`
-pub fn delivered(gui: *GuiClient) void {
+pub fn delivered(gui: *GuiAdapter) void {
     const motions = &gui.widgets.thread_scroll;
     const registry = gui.widgets.dispatcher.maps.presented();
     motions.retain(registry);
@@ -143,7 +143,7 @@ pub fn delivered(gui: *GuiClient) void {
     }
 }
 
-fn apply(gui: *GuiClient, entry: *Entry) !void {
+fn apply(gui: *GuiAdapter, entry: *Entry) !void {
     if (!entry.geometry_ready) {
         return;
     }
@@ -154,7 +154,7 @@ fn apply(gui: *GuiClient, entry: *Entry) !void {
     entry.applied = pane.transcript_scroll;
 }
 
-fn navigate(gui: *GuiClient, entry: *const Entry, delta: f64) void {
+fn navigate(gui: *GuiAdapter, entry: *const Entry, delta: f64) void {
     const pane_id = entry.key.pane_id;
     const next = entry.applied;
     if (gui.widgets.thread_selection.retains(pane_id)) {
@@ -190,7 +190,7 @@ fn navigate(gui: *GuiClient, entry: *const Entry, delta: f64) void {
     }
 }
 
-fn reviewing(gui: *const GuiClient, pane_id: core.PaneId) bool {
+fn reviewing(gui: *const GuiAdapter, pane_id: core.PaneId) bool {
     const review = gui.widgets.approval_review orelse return false;
     const tab = gui.app.model.tabs.activeSlot() orelse return false;
     if (gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, pane_id) == null) {

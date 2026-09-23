@@ -12,7 +12,7 @@ const Adoption = @import("../resources/Adoption.zig");
 const notifications = @import("../notifications/notifications.zig");
 const pane_resize = @import("../panes/pane_resize.zig");
 const sidebar_toggle = @import("../workspace/sidebar_toggle.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Selects the live configuration resources before scheduling their next watch.
 /// No configured file means no watch; incomplete ownership is an explicit error.

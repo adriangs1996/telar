@@ -2,7 +2,7 @@
 
 const client_module = @import("telar-client");
 const data = @import("model");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const capabilities_module = @import("../../graphics/capabilities.zig");
 const negotiation = @import("host_negotiation.zig");
 const term = @import("../../presentation/screen_support.zig");
@@ -11,7 +11,7 @@ const std = @import("std");
 
 /// Starts the exterior-terminal probes through one owner.
 /// Example: `try begin(terminal);`.
-pub fn begin(terminal: *TerminalClient) !void {
+pub fn begin(terminal: *TerminalAdapter) !void {
     try terminal.writer.writeAll(capabilities_module.query);
     try queryColors(terminal);
     try terminal.writer.flush();
@@ -19,13 +19,13 @@ pub fn begin(terminal: *TerminalClient) !void {
 
 /// Coalesces overlapping color probes. A resize needs no protocol details.
 /// Example: `try refresh(terminal);`.
-pub fn refresh(terminal: *TerminalClient) !void {
+pub fn refresh(terminal: *TerminalAdapter) !void {
     try terminal.writer.writeAll(negotiation.pixel_query);
     try queryColors(terminal);
     try terminal.writer.flush();
 }
 
-fn queryColors(terminal: *TerminalClient) !void {
+fn queryColors(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     if (!terminal.host_negotiation.begin(client_module.monotonic(client.io))) {
@@ -37,7 +37,7 @@ fn queryColors(terminal: *TerminalClient) !void {
 }
 
 /// Example: `try scheduleExpiry(terminal);`.
-pub fn scheduleExpiry(terminal: *TerminalClient) !void {
+pub fn scheduleExpiry(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     const state = &terminal.host_negotiation;
@@ -57,7 +57,7 @@ pub fn scheduleExpiry(terminal: *TerminalClient) !void {
 /// ```zig
 /// _ = try handleExpiry(terminal, result);
 /// ```
-pub fn handleExpiry(terminal: *TerminalClient, result: anyerror!void) !?data.HostCommit {
+pub fn handleExpiry(terminal: *TerminalAdapter, result: anyerror!void) !?data.HostCommit {
     const client = &terminal.app;
 
     try terminal.host_negotiation.timer.complete(result);
@@ -74,7 +74,7 @@ pub fn handleExpiry(terminal: *TerminalClient, result: anyerror!void) !?data.Hos
 /// ```zig
 /// _ = try observe(terminal, response);
 /// ```
-pub fn observe(terminal: *TerminalClient, response: term.Event.TerminalResponse) !?data.HostCommit {
+pub fn observe(terminal: *TerminalAdapter, response: term.Event.TerminalResponse) !?data.HostCommit {
     const client = &terminal.app;
 
     const color: ?negotiation.Color = switch (response) {
@@ -103,7 +103,7 @@ pub fn observe(terminal: *TerminalClient, response: term.Event.TerminalResponse)
 /// ```zig
 /// _ = try expire(terminal);
 /// ```
-pub fn expire(terminal: *TerminalClient) !?data.HostCommit {
+pub fn expire(terminal: *TerminalAdapter) !?data.HostCommit {
     const client = &terminal.app;
 
     const capabilities = negotiation.settledCapabilities(client.model.host.host_capabilities);

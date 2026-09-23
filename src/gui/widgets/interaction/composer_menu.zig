@@ -1,7 +1,7 @@
 const event_module = @import("../../input/event.zig");
 const std = @import("std");
 const client = @import("telar-client");
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const Target = @import("Target.zig");
 const Selector = @import("ComposerSelector.zig");
 const ComposerOptions = @import("../ComposerOptions.zig");
@@ -9,7 +9,7 @@ const Route = @import("Route.zig");
 
 /// Revalidates the exact pane, catalog and draft settings represented on screen.
 /// Example: `if (!composer_menu.eligible(gui, target)) return;`
-pub fn eligible(gui: *const GuiClient, target: Target) bool {
+pub fn eligible(gui: *const GuiAdapter, target: Target) bool {
     const selector = selectorOf(target) orelse return false;
     const tab = gui.app.model.tabs.activeSlot() orelse return false;
     const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, selector.pane_id) orelse return false;
@@ -23,7 +23,7 @@ pub fn eligible(gui: *const GuiClient, target: Target) bool {
 
 /// Opens or applies a delivered option. A retired menu cannot select by index.
 /// Example: `try composer_menu.activate(gui, target);`
-pub fn activate(gui: *GuiClient, target: Target) !void {
+pub fn activate(gui: *GuiAdapter, target: Target) !void {
     if (!eligible(gui, target)) {
         close(gui);
         return;
@@ -83,7 +83,7 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
 
 /// Consumes menu input after the dispatcher establishes physical-key ownership.
 /// Example: `if (try composer_menu.route(gui, event, route)) return true;`
-pub fn route(gui: *GuiClient, event: event_module.Event, decision: Route) !bool {
+pub fn route(gui: *GuiAdapter, event: event_module.Event, decision: Route) !bool {
     const state = &gui.widgets.composer_menu;
     const selector = state.selector orelse return false;
     const fallback_lease = switch (event) {
@@ -176,14 +176,14 @@ pub fn route(gui: *GuiClient, event: event_module.Event, decision: Route) !bool 
     return true;
 }
 
-fn move(gui: *GuiClient, count: u8, forward: bool) void {
+fn move(gui: *GuiAdapter, count: u8, forward: bool) void {
     const state = &gui.widgets.composer_menu;
     state.selected = if (forward) @min(state.selected +| 1, count -| 1) else state.selected -| 1;
     state.reveal(count);
     gui.widgets.dispatcher.revision +%= 1;
 }
 
-fn close(gui: *GuiClient) void {
+fn close(gui: *GuiAdapter) void {
     const selector = gui.widgets.composer_menu.selector;
     gui.widgets.composer_menu.selector = null;
     gui.widgets.dispatcher.revision +%= 1;

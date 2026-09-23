@@ -1,6 +1,6 @@
 //! Agent sound: plays agent sounds one at a time on a worker.
 const core = @import("telar-core");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 const AgentSoundOutcome = enum { stale, accepted };
 

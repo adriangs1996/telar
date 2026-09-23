@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const runtime_io = @import("../connection/runtime_io.zig");
 const pane_focus = @import("pane_focus.zig");
 const pane_resize = @import("pane_resize.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Requests closure without mutating runtime-owned pane membership.
 pub fn requestPaneClose(model: *data.ClientModel) !?data.PaneClosure {

@@ -76,18 +76,18 @@ and observation for tests that deliberately execute one transition.
 Shared client work starts with `client.workers.start(job)`. Both adapters run
 it as `inbox.start(.client, .{ job_runner.run, ... })`; the GUI hands only the
 config watch to `ConfigurationReload`. The finished `client.Message` arrives as
-the `.client` event and goes to `AttachedClient.update`.
+the `.client` event and goes to `Client.update`.
 
 `gui/NativeLoop` uses the same inbox and a nonblocking wake pipe. Socket actors
 use its task group. `ConfigurationReload` reserves a slot for its font/watch
 worker, retaining its own join and staged-resource lifetime. Native callbacks
 publish input readiness, focus and presentation completion. The window-thread
-consumer is `GuiClient.update`, which classifies events and calls the shared
+consumer is `GuiAdapter.update`, which classifies events and calls the shared
 runtime/config operations directly. `NativeLoop` owns transport and wake resources,
-not dispatch policy. `GuiClient.acceptInput` copies native input into the bounded
-queue; `GuiClient.draw` seals a frame and `GuiClient.complete` consumes the
+not dispatch policy. `GuiAdapter.acceptInput` copies native input into the bounded
+queue; `GuiAdapter.draw` seals a frame and `GuiAdapter.complete` consumes the
 GPU result from the inbox.
-`GuiClient.update` derives cursor state and decides whether to draw after
+`GuiAdapter.update` derives cursor state and decides whether to draw after
 draining. `draw` prepares the latest projection. A reloaded configuration is
 adopted at the start of `draw`, when no frame is in flight, because adoption
 swaps the renderer and its font atlas; geometry changes run on that same

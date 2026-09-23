@@ -4,10 +4,10 @@ The client owns its visible scroll position. The runtime keeps an independent
 per-attachment projection so it can return the requested history rows.
 
 ```text
-AttachedClient.sendPaneInput, inputPaneMouse or applyCopyMode
-  -> AttachedClient.applyPaneViewport
+pane_input.sendPaneInput, inputPaneMouse or applyCopyMode
+  -> pane_viewport.applyPaneViewport
      -> ClientModel.setPaneViewport
-     -> AttachedClient.deliverPaneViewport
+     -> pane_viewport.deliverPaneViewport
         -> validate exact committed pane, viewport and revision
         -> graphics.setPaneVisible
         -> sendRuntime(set_pane_viewport)
@@ -21,7 +21,7 @@ targets are no-ops. Copy mode owns its viewport transaction exclusively, so a
 standalone viewport request cannot interfere with it.
 
 Copy movement/exit commits viewport and copy state together, then calls
-`AttachedClient.deliverPaneViewport` with the resulting change. The delivery entrypoint
+`pane_viewport.deliverPaneViewport` with the resulting change. The delivery entrypoint
 therefore retains exact commit validation. Stale location, attachment, offset,
 bottom state or revision executes no physical effect.
 
@@ -42,7 +42,7 @@ operations do not invalidate presentation caches or schedule draws.
 
 This work performs bounded arithmetic and at most one viewport enqueue.
 Client death discards the attachment projection without changing the PTY.
-Source: `src/client/AttachedClient.zig`.
+Source: `src/client/panes/pane_viewport.zig`.
 Tests: `src/model/state/tests/input_and_frames.zig`,
 `src/frontend/client/tests/host_interaction.zig`, `input.zig` and
 `mouse_selection.zig`; runtime attachment tests cover pinning and live-screen

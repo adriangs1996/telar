@@ -5,7 +5,7 @@ bounded replica for chrome and positional navigation.
 
 ```text
 runtime Workspaces revision and per-client cursor -> workspace_list
-  -> AttachedClient.handleServerMessage
+  -> runtime_messages.handleServerMessage
   -> ClientModel.applyWorkspaceList
      -> decode bounded domain inputs
      -> ClientModel.reconcileWorkspaceList -> model.workspace_list_snapshot.replace

@@ -8,7 +8,7 @@ const actions = @import("../input/actions.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_input = @import("pane_input.zig");
 const pane_resize = @import("pane_resize.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 const FocusReportOutcome = enum { applied, unchanged };
 

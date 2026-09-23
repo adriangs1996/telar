@@ -7,7 +7,7 @@ const encoding_support = @import("encoding_support.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const name_prompt = @import("name_prompt.zig");
 const pane_input = @import("../panes/pane_input.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Blocks incomplete or oversized pastes while keeping the browser open.
 /// Example: `_ = history_palette.canSubmitHistory(client, selection);`

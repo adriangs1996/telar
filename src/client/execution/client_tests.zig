@@ -1,21 +1,21 @@
-//! Test bodies for AttachedClient. Private implementations are supplied by the
+//! Test bodies for Client. Private implementations are supplied by the
 //! owner's test declarations as concrete compile-time functions.
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const AttachedClient = @import("AttachedClient.zig");
-const Job = @import("execution/Job.zig").Job;
-const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
-const Credit = @import("graphics/Credit.zig");
-const actions = @import("input/actions.zig");
-const change_review = @import("change_review/change_review.zig");
-const runtime_io = @import("connection/runtime_io.zig");
-const workspace_rename = @import("workspace/workspace_rename.zig");
+const Client = @import("Client.zig");
+const Job = @import("Job.zig").Job;
+const GraphicsRetention = @import("../graphics/GraphicsRetention.zig");
+const Credit = @import("../graphics/Credit.zig");
+const actions = @import("../input/actions.zig");
+const change_review = @import("../change_review/change_review.zig");
+const runtime_io = @import("../connection/runtime_io.zig");
+const workspace_rename = @import("../workspace/workspace_rename.zig");
 
 /// Layout export decodes to the same active pane and split tree.
-/// Example: `try attached_client_tests.layoutRoundTrip(writeCommandLayout);`
+/// Example: `try client_tests.layoutRoundTrip(writeCommandLayout);`
 pub fn layoutRoundTrip(comptime write_layout: fn (*const data.ClientModel, *core.ClientCommand) anyerror!void) !void {
-    var app: AttachedClient = undefined;
+    var app: Client = undefined;
     app.model = data.ClientModel.init(std.testing.allocator, true);
     defer app.model.deinit();
     const location: core.TabLocation = .{
@@ -56,9 +56,9 @@ pub fn layoutRoundTrip(comptime write_layout: fn (*const data.ClientModel, *core
 }
 
 /// Host resources reject empty and stale commits before calling ports.
-/// Example: `try attached_client_tests.rejectStaleHostCommits(deliverHostCommit);`
-pub fn rejectStaleHostCommits(comptime deliver: fn (*AttachedClient, data.HostCommit) anyerror!void) !void {
-    const app = try std.testing.allocator.create(AttachedClient);
+/// Example: `try client_tests.rejectStaleHostCommits(deliverHostCommit);`
+pub fn rejectStaleHostCommits(comptime deliver: fn (*Client, data.HostCommit) anyerror!void) !void {
+    const app = try std.testing.allocator.create(Client);
     defer std.testing.allocator.destroy(app);
     // Only the model is initialized: invalid commits must never reach a host port.
     app.model.initInto(
@@ -121,7 +121,7 @@ const Driver = struct {
     sends: usize = 0,
     payload: []const u8 = &.{},
 
-    fn drain(self: *Driver, app: *AttachedClient) !void {
+    fn drain(self: *Driver, app: *Client) !void {
         while (app.to_workers.pop()) |job| {
             self.start(job) catch |err| try app.failJob(job, err);
         }
@@ -150,8 +150,8 @@ const Driver = struct {
 };
 
 /// A client with only the transport and outbox a transport test touches.
-fn transportClient(send_buffer: []u8) !*AttachedClient {
-    const app = try std.testing.allocator.create(AttachedClient);
+fn transportClient(send_buffer: []u8) !*Client {
+    const app = try std.testing.allocator.create(Client);
     errdefer std.testing.allocator.destroy(app);
     app.io = std.testing.io;
     app.to_workers = .{};
@@ -167,14 +167,14 @@ fn transportClient(send_buffer: []u8) !*AttachedClient {
     return app;
 }
 
-fn destroyTransportClient(app: *AttachedClient) void {
+fn destroyTransportClient(app: *Client) void {
     app.model.to_runtime.deinit(std.testing.allocator);
     std.testing.allocator.destroy(app);
 }
 
 /// Transport scheduling releases rejected reservations and retries queued frames in order.
-/// Example: `try attached_client_tests.retryTransportScheduling(flush);`
-pub fn retryTransportScheduling(comptime flush: fn (*AttachedClient) anyerror!void) !void {
+/// Example: `try client_tests.retryTransportScheduling(flush);`
+pub fn retryTransportScheduling(comptime flush: fn (*Client) anyerror!void) !void {
     var capture: Driver = .{};
     var send_buffer: [64]u8 = undefined;
     const app = try transportClient(&send_buffer);
@@ -246,8 +246,8 @@ pub fn retryTransportScheduling(comptime flush: fn (*AttachedClient) anyerror!vo
 }
 
 /// Enqueue retains copied input after rejected scheduling and preserves order on retry.
-/// Example: `try attached_client_tests.retainQueuedInput(flush);`
-pub fn retainQueuedInput(comptime flush: fn (*AttachedClient) anyerror!void) !void {
+/// Example: `try client_tests.retainQueuedInput(flush);`
+pub fn retainQueuedInput(comptime flush: fn (*Client) anyerror!void) !void {
     var capture: Driver = .{};
     var send_buffer: [data.input_limits.max_encoded_bytes + 64]u8 = undefined;
     const app = try transportClient(&send_buffer);
@@ -323,9 +323,9 @@ pub fn retainQueuedInput(comptime flush: fn (*AttachedClient) anyerror!void) !vo
 }
 
 /// Change review operation accepts terminal panes and rejects replaced attachments.
-/// Example: `try attached_client_tests.rejectReplacedReviewAttachment(openChangeReviewSession, changeReviewOperation, applyChangeReviewResponse);`
+/// Example: `try client_tests.rejectReplacedReviewAttachment(openChangeReviewSession, changeReviewOperation, applyChangeReviewResponse);`
 pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*data.ClientModel, core.PaneId) anyerror!void, comptime operation: fn (*data.ClientModel, u64) anyerror!data.ChangeReviewOperation, comptime apply_response: fn (*data.ClientModel, data.ChangeReviewOperation, core.ChangeReviewSnapshotView) anyerror!bool) !void {
-    const app = try std.testing.allocator.create(AttachedClient);
+    const app = try std.testing.allocator.create(Client);
     const model = &app.model;
     defer std.testing.allocator.destroy(app);
     model.* = data.ClientModel.init(std.testing.allocator, true);
@@ -378,9 +378,9 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*data.ClientMod
 }
 
 /// Change review operation updates closed review availability without opening or querying a view.
-/// Example: `try attached_client_tests.retainReviewAvailability(openChangeReviewSession, changeReviewChanged);`
+/// Example: `try client_tests.retainReviewAvailability(openChangeReviewSession, changeReviewChanged);`
 pub fn retainReviewAvailability(comptime open_session: fn (*data.ClientModel, core.PaneId) anyerror!void, comptime changed: fn (*data.ClientModel, core.ChangeReviewChanged) bool) !void {
-    const app = try std.testing.allocator.create(AttachedClient);
+    const app = try std.testing.allocator.create(Client);
     const model = &app.model;
     defer std.testing.allocator.destroy(app);
     model.* = data.ClientModel.init(std.testing.allocator, true);
@@ -441,9 +441,9 @@ pub fn retainReviewAvailability(comptime open_session: fn (*data.ClientModel, co
 }
 
 /// Owned request deliveries roll back only their own correlation when the outbox is full.
-/// Example: `try attached_client_tests.rollBackFullOutbox(sendTabRenameRequest, sendCreateTabRequest, sendAgentPromptRequest);`
+/// Example: `try client_tests.rollBackFullOutbox(sendTabRenameRequest, sendCreateTabRequest, sendAgentPromptRequest);`
 pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.RenameTab, data.RequestsContinuation) anyerror!void, comptime create_tab: fn (*data.ClientModel, core.CreateTab) anyerror!void, comptime prompt: fn (*data.ClientModel, core.AgentPrompt, data.AgentOperation) anyerror!void) !void {
-    const app = try std.testing.allocator.create(AttachedClient);
+    const app = try std.testing.allocator.create(Client);
     defer std.testing.allocator.destroy(app);
     app.model = data.ClientModel.init(std.testing.allocator, true);
     defer app.model.deinit();
@@ -565,9 +565,9 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*data.ClientModel, core.Renam
 }
 
 /// Stale sidebar commits must fail before accessing any host resource.
-/// Example: `try attached_client_tests.rejectStaleSidebarCommits(deliverSidebarLayout);`
-pub fn rejectStaleSidebarCommits(comptime deliver: fn (*AttachedClient, data.SidebarLayout) anyerror!void) !void {
-    const app = try std.testing.allocator.create(AttachedClient);
+/// Example: `try client_tests.rejectStaleSidebarCommits(deliverSidebarLayout);`
+pub fn rejectStaleSidebarCommits(comptime deliver: fn (*Client, data.SidebarLayout) anyerror!void) !void {
+    const app = try std.testing.allocator.create(Client);
     defer std.testing.allocator.destroy(app);
     // Uninitialized ports make accidental delivery of a rejected commit invalid.
     app.model = data.ClientModel.init(std.testing.allocator, true);

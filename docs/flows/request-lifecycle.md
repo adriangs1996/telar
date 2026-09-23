@@ -18,7 +18,7 @@ an autonomous runtime lifecycle message, and `maxInt(u64)` is a terminal
 sentinel rather than a reusable identity.
 
 Queries, consumption and retirement call the tracker directly. No request
-registry method receives an `AttachedClient`. The connection owner coordinates
+registry method receives an `Client`. The connection owner coordinates
 registration with transport; the tracker only owns bounded correlation data.
 
 This state does not decide whether a tab move, pane split or snapshot is valid.
@@ -38,7 +38,7 @@ check one tracker slot and request-ID space
         |
 operation constructs message and Continuation
         |
-AttachedClient.sendRuntimeRequest
+runtime_io.sendRuntimeRequest
         |
 Tracker.add -> model.to_runtime.push -> startRuntimeSend
         |
@@ -46,12 +46,12 @@ local rejection -> Tracker.take rollback
 ```
 
 The client loop is single threaded, so identity allocation and delivery cannot
-interleave with another request start. `AttachedClient.sendRuntimeRequest` registers the continuation
+interleave with another request start. `runtime_io.sendRuntimeRequest` registers the continuation
 before it gives the message to transport. If bounded copying or outbox capacity
 rejects the message, the sender removes that continuation. It does not reuse the
 identity.
 
-Renames, launches, prompts and notifications use methods on `AttachedClient`
+Renames, launches, prompts and notifications use methods on `Client`
 that register correlation, copy the payload into the outbox, and start its write.
 The old separate uncorrelated send methods have been removed. Fixed-size requests use `sendRuntimeRequest` directly.
 The request lifecycle never borrows text beyond the synchronous call.
@@ -63,10 +63,10 @@ delivery fails.
 before provisional attachment effects begin.
 
 After host negotiation settles, the adapter (`client_startup.advance` in the
-TUI, `GuiClient` in the GUI) calls `model.to_runtime.pushBootstrap`, which
+TUI, `GuiAdapter` in the GUI) calls `model.to_runtime.pushBootstrap`, which
 queues graphics and color configuration and the `request_runtime_state`
 subscription through the ordinary send path. Reads are already
-armed. The later `client_layout_snapshot` enters `AttachedClient.restoreClientLayout`, which
+armed. The later `client_layout_snapshot` enters `client_layout.restoreClientLayout`, which
 restores geometry and registers the fixed `initial_open` continuation before
 enqueueing its corresponding open request. Registration and send admission use
 the same rollback rule as other requests.
@@ -74,7 +74,7 @@ the same rollback rule as other requests.
 ## Consuming a response
 
 ```text
-AttachedClient.receiveRuntime
+runtime_io.receiveRuntime
         |
 decoded terminal response
         |
@@ -91,7 +91,7 @@ operation
 target. An incompatible, malformed or replayed terminal response therefore
 cannot reuse the same request. An unknown identity is a protocol error.
 
-Runtime `request_failed` follows the same rule. `AttachedClient.failRuntimeRequest` consumes the
+Runtime `request_failed` follows the same rule. `request_failure.failRuntimeRequest` consumes the
 continuation once, then chooses recovery, notification or
 fatal client shutdown.
 
@@ -131,7 +131,7 @@ snapshots.
   `src/frontend/client/tests/` crosses the public request and transport
   boundaries and proves transactional rollback.
 - `owned request deliveries roll back only their own correlation when the outbox is full`
-  in `src/client/AttachedClient.zig` checks the five variable-payload send paths
+  in `src/client/connection/runtime_io.zig` checks the five variable-payload send paths
   (tab rename, workspace rename, tab creation, agent prompt, notification) and
   preserves an unrelated request.
 - Bootstrap and the request-specific client tests prove exact wire identity,

@@ -7,7 +7,7 @@ semantic model state, requests a draw or enters the interactive path.
 ## End-to-end path
 
 ```text
-AttachedClient.init
+Client.init
     |
 TelemetryState.init -> core.Sink
     |
@@ -28,7 +28,7 @@ telemetry.handleWritten
 release token or finish deferred sink shutdown
 ```
 
-`AttachedClient` owns one `TelemetryState` (`client.telemetry`). That object
+`Client` owns one `TelemetryState` (`client.telemetry`). That object
 owns the metrics epoch, the diagnostics sink, the fixed 8192-byte line buffer
 and the single in-flight write token. `client_startup` starts the flow; the
 TUI's `events` dispatches its two events. Neither constructs file names, formats JSON or manages write
@@ -48,7 +48,7 @@ observations alive.
 
 Metrics record successful work at the component that performs it, but their
 storage belongs to `TelemetryState`. The presenter borrows that metrics
-address after the heap-stable `AttachedClient` has been initialized. Moving the client
+address after the heap-stable `Client` has been initialized. Moving the client
 or replacing the metrics object while it is live is therefore forbidden.
 
 ## Pacing, coalescence and failure

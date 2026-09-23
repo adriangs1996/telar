@@ -1,7 +1,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const host_effects = @import("../host/host_effects.zig");
@@ -13,8 +13,8 @@ peer: core.SocketChannel,
 input_read: std.Io.File,
 input_write: std.Io.File,
 sink: std.Io.Writer.Discarding,
-client: *client_module.AttachedClient,
-terminal: *TerminalClient,
+client: *client_module.Client,
+terminal: *TerminalAdapter,
 
 pub fn init(self: *TestHarness) !void {
     try self.initWithAsyncOutput(false);
@@ -48,7 +48,7 @@ pub fn initWithOptions(self: *TestHarness, async_output: bool, options: client_m
     self.input_read = .{ .handle = pipe_fds[0], .flags = .{ .nonblocking = false } };
     self.input_write = .{ .handle = pipe_fds[1], .flags = .{ .nonblocking = false } };
     self.sink = .init(&.{});
-    const terminal = try TerminalClient.init(.{
+    const terminal = try TerminalAdapter.init(.{
         .gpa = std.testing.allocator,
         .io = std.testing.io,
         .connection = &self.connection,

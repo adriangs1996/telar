@@ -4,18 +4,18 @@ Creation is a runtime transaction followed by one atomic client replacement.
 The client owns its prompt, navigation history and disposable projection.
 
 ```text
-AttachedClient.inputPrompt -> submitPrompt(.create_workspace) -> submitWorkspacePrompt
-  -> AttachedClient.requestWorkspaceCreation
+name_prompt.inputPrompt -> submitPrompt(.create_workspace) -> submitWorkspacePrompt
+  -> workspace_creation.requestWorkspaceCreation
      -> idle gate, validate name, choose CWD source, retain request size
-     -> AttachedClient.sendCreateWorkspaceRequest
+     -> workspace_creation.sendCreateWorkspaceRequest
   -> runtime commits workspace/root and replaces this client's attachments
   -> pane_opened(create_workspace continuation)
-  -> AttachedClient.handleServerMessage
-  -> AttachedClient.completePaneOpen
-     -> AttachedClient.createOpenedWorkspace
+  -> runtime_messages.handleServerMessage
+  -> pane_attachment.completePaneOpen
+     -> workspace_creation.createOpenedWorkspace
         -> ClientModel.replaceWorkspace -> workspace_handoff.replaceWithRoot
-        -> AttachedClient.releaseWorkspace(departure)
-        -> AttachedClient.activateWorkspace(root)
+        -> workspace_handoff.releaseWorkspace(departure)
+        -> workspace_handoff.activateWorkspace(root)
   -> adapter observes presentation revisions
 ```
 
@@ -40,10 +40,10 @@ store. Validation/allocation failure keeps the previous projection and all
 revisions. Success advances workspace, tabs, active-tab and panes once; there
 is no intermediate empty model.
 
-In the same synchronous operation, `AttachedClient.releaseWorkspace` remembers
+In the same synchronous operation, `workspace_handoff.releaseWorkspace` remembers
 the old focused pane/layout and clears exact copy, paste, focus and graphics
 owners. It silently forgets any remaining obsolete report context.
-`AttachedClient.activateWorkspace` validates the committed root and revision
+`workspace_handoff.activateWorkspace` validates the committed root and revision
 deltas, synchronizes active resources, resumes host input, then requests the
 workspace snapshot followed by the tab snapshot.
 
@@ -53,7 +53,7 @@ and becomes an owned notice. Unknown, incompatible, malformed or replayed
 confirmation cannot replace the model. Empty-source confirmation remains valid
 for recovery. Presentation is driven by the committed revision.
 
-Source: `src/client/AttachedClient.zig`, `src/model/state/ClientModel.zig`,
+Source: `src/client/workspace/workspace_creation.zig`, `src/model/state/ClientModel.zig`,
 `src/model/workspace/workspace_handoff.zig` and
 `src/model/workspace/NavigationHistory.zig`.
 Tests: `src/frontend/client/tests/workspace_lifecycle.zig`,

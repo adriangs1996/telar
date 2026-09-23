@@ -1,12 +1,12 @@
 const core = @import("telar-core");
 const event_module = @import("../../input/event.zig");
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const Target = @import("Target.zig");
 const ImagePreview = @import("ImagePreview.zig");
 
 /// Revalidates a delivered image control before copying its local reference.
 /// Example: `image_preview.open(gui, target);`
-pub fn open(gui: *GuiClient, target: Target) void {
+pub fn open(gui: *GuiAdapter, target: Target) void {
     const control = target.action.agent_control;
     const pane = gui.app.model.agentPane(control.pane_id) orelse return;
     const images = pane.composerImages();
@@ -26,7 +26,7 @@ pub fn open(gui: *GuiClient, target: Target) void {
 }
 
 /// Example: `image_preview.close(gui);`
-pub fn close(gui: *GuiClient) void {
+pub fn close(gui: *GuiAdapter) void {
     const preview = gui.widgets.image_preview orelse return;
     gui.widgets.image_preview = null;
     gui.widgets.dispatcher.revision +%= 1;
@@ -41,7 +41,7 @@ pub fn close(gui: *GuiClient) void {
 
 /// Consumes preview input even before its first frame lands or while it closes.
 /// Example: `if (image_preview.route(gui, event)) return true;`
-pub fn route(gui: *GuiClient, event: event_module.Event) bool {
+pub fn route(gui: *GuiAdapter, event: event_module.Event) bool {
     const preview = gui.widgets.image_preview orelse return false;
     const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
     const pane = gui.app.model.agentPane(preview.control.pane_id);

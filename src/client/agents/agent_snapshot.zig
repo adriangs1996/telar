@@ -6,7 +6,7 @@ const core = @import("telar-core");
 const agent_snapshot_delivery = @import("agent_snapshot_delivery.zig");
 const notifications = @import("../notifications/notifications.zig");
 const pane_attachment = @import("../panes/pane_attachment.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Maps one validated wire view into bounded agent inputs and synchronizes
 /// dependent client state after committing the canonical revision.

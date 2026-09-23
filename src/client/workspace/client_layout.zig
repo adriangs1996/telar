@@ -7,7 +7,7 @@ const layout_updates = @import("../resources/client_layouts.zig");
 const client_startup = @import("../connection/client_startup.zig");
 const runtime_io = @import("../connection/runtime_io.zig");
 const sidebar_toggle = @import("sidebar_toggle.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Coalesces the complete, canonical layout of the current workspace into the
 /// runtime outbox. Tabs without a runtime snapshot are omitted until known.

@@ -4,11 +4,11 @@ Detach ends this client only. Runtime panes, PTYs and terminal state remain
 available for another attachment.
 
 ```text
-AttachedClient.executeAction(.detach)
-  -> AttachedClient.synchronizeClientLayout
-  -> AttachedClient.detachAllTabs
+actions.executeAction(.detach)
+  -> client_layout.synchronizeClientLayout
+  -> tab_removal.detachAllTabs
      -> capture bounded stable TabLocation list
-     -> AttachedClient.detachTab for each location
+     -> tab_removal.detachTab for each location
         -> ClientModel.planTabDetachment
         -> finish tab-owned paste
         -> tab-owned focus-out
@@ -17,8 +17,8 @@ AttachedClient.executeAction(.detach)
   -> return KeybindControl.stop to the event loop
 ```
 
-`AttachedClient.detachAllTabs` captures tab locations before the first effect and
-walks them in stable client order. `AttachedClient.detachTab` plans one exact tab,
+`tab_removal.detachAllTabs` captures tab locations before the first effect and
+walks them in stable client order. `tab_removal.detachTab` plans one exact tab,
 then applies its effects in paste/focus/pane order. Pending opens also receive a
 detach and their continuations become ignored, so late confirmations cannot
 revive ownership. The model commits attachment flags and retires pending frames
@@ -34,7 +34,7 @@ applied; a partially processed tab does not claim all its flags detached. The
 normal error path terminates the client and destroys disposable resources while
 the runtime continues.
 
-Source: `src/client/AttachedClient.zig` and
+Source: `src/client/workspace/tab_removal.zig` and
 `src/model/state/ClientModel.zig`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig` covers stable multi-tab
 wire order, local attachment cleanup, exact paste/focus ownership, version

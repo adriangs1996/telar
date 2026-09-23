@@ -3,7 +3,7 @@ const event_module = @import("../../input/event.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const Target = @import("Target.zig");
 const Route = @import("Route.zig");
 const Id = @import("Id.zig");
@@ -11,7 +11,7 @@ const ComposerSelector = @import("ComposerSelector.zig");
 
 /// Revalidates draft and catalog identities before using delivered suggestions.
 /// Example: `completions.refresh(gui);`
-pub fn refresh(gui: *GuiClient) void {
+pub fn refresh(gui: *GuiAdapter) void {
     const state = &gui.widgets.completions;
     const tab = gui.app.model.tabs.activeSlot() orelse return;
     const target = gui.widgets.dispatcher.focusedTarget();
@@ -35,7 +35,7 @@ pub fn refresh(gui: *GuiClient) void {
 
 /// Completion rows never take the IME target away from the composer.
 /// Example: `if (try completions.route(gui, event, decision)) return true;`
-pub fn route(gui: *GuiClient, event: event_module.Event, decision: Route) !bool {
+pub fn route(gui: *GuiAdapter, event: event_module.Event, decision: Route) !bool {
     const state = &gui.widgets.completions;
     if (!state.open) {
         return decision.target != null and decision.target.?.action == .composer_completion;
@@ -108,7 +108,7 @@ pub fn route(gui: *GuiClient, event: event_module.Event, decision: Route) !bool 
 }
 
 /// Example: `if (completions.eligible(gui, target)) activate();`
-pub fn eligible(gui: *const GuiClient, target: Target) bool {
+pub fn eligible(gui: *const GuiAdapter, target: Target) bool {
     const choice = target.action.composer_completion;
     const state = &gui.widgets.completions;
     const pane = gui.app.model.agentPane(choice.pane_id) orelse return false;
@@ -116,14 +116,14 @@ pub fn eligible(gui: *const GuiClient, target: Target) bool {
 }
 
 /// Example: `try completions.activate(gui, target);`
-pub fn activate(gui: *GuiClient, target: Target) !void {
+pub fn activate(gui: *GuiAdapter, target: Target) !void {
     refresh(gui);
     if (eligible(gui, target)) {
         try choose(gui, target.action.composer_completion.index, true);
     }
 }
 
-fn choose(gui: *GuiClient, index: u8, execute: bool) !void {
+fn choose(gui: *GuiAdapter, index: u8, execute: bool) !void {
     const state = &gui.widgets.completions;
     const pane_id = state.pane_id orelse return;
     const pane = gui.app.model.agentPane(pane_id) orelse return;
@@ -166,7 +166,7 @@ fn choose(gui: *GuiClient, index: u8, execute: bool) !void {
 
 /// Executes local selectors or submits conversation commands to runtime authority.
 /// Example: `try completions.submit(gui, pane_id);`
-pub fn submit(gui: *GuiClient, pane_id: core.PaneId) !void {
+pub fn submit(gui: *GuiAdapter, pane_id: core.PaneId) !void {
     const pane = gui.app.model.agentPane(pane_id) orelse return;
     if (gui.widgets.pastingImage(pane_id)) {
         return;
@@ -226,7 +226,7 @@ pub fn submit(gui: *GuiClient, pane_id: core.PaneId) !void {
     try client.agent_control.submitAgentPrompt(&gui.app.model, pane_id);
 }
 
-fn restoreEditor(gui: *GuiClient) void {
+fn restoreEditor(gui: *GuiAdapter) void {
     const pane_id = gui.widgets.completions.pane_id orelse return;
     for (gui.widgets.dispatcher.maps.presented().targets[0..gui.widgets.dispatcher.maps.presented().len]) |target| {
         if (target.action == .composer and target.action.composer == pane_id) {

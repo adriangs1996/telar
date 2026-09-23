@@ -4,19 +4,19 @@ The client removes a pane only after the runtime reports `pane_exited`.
 Requesting closure does not predict when shutdown and output draining finish.
 
 ```text
-AttachedClient.executeAction
-  -> AttachedClient.requestPaneClose
+actions.executeAction
+  -> pane_closure.requestPaneClose
      -> pending pane-operation gate
      -> ClientModel.planPaneClosure
-     -> AttachedClient.sendRuntimeRequest(close_pane)
+     -> runtime_io.sendRuntimeRequest(close_pane)
   -> runtime requests idempotent child shutdown
 
 runtime pane_exited
-  -> AttachedClient.handleServerMessage
-  -> AttachedClient.applyPaneExit
+  -> runtime_messages.handleServerMessage
+  -> pane_closure.applyPaneExit
      -> ClientModel.retirePane
      -> tracker.ignoreAttachment + tracker.completePaneClose
-     -> AttachedClient.releasePaneResources
+     -> pane_closure.releasePaneResources
      -> active: model.to_host.invalidate_placements, synchronizeActivePane
      -> resizeAttachedPanes when the active tab remains nonempty
   -> adapter observes presentation revisions
@@ -53,7 +53,7 @@ remain applied, and the normal client error/reconnect path repairs disposable
 resources. This flow adds no queue; scans and cleanup are bounded by tab/pane
 capacity. Presentation follows model revisions, not an explicit draw request.
 
-Source: `src/client/AttachedClient.zig`, particularly `requestPaneClose`,
+Source: `src/client/panes/pane_closure.zig`, particularly `requestPaneClose`,
 `applyPaneExit` and `releasePaneResources`.
 Tests: `src/frontend/client/tests/pane_lifecycle.zig`,
 `src/frontend/client/tests/tab_lifecycle.zig`,

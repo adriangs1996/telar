@@ -17,7 +17,7 @@ const message_links = @import("message_links.zig");
 const thread_items = @import("thread_items.zig");
 const thread_selection = @import("thread_selection.zig");
 
-const GuiClient = @import("../../GuiClient.zig");
+const GuiAdapter = @import("../../GuiAdapter.zig");
 const Key = @import("../../input/KeyInput.zig");
 const Id = @import("Id.zig");
 const Target = @import("Target.zig");
@@ -33,7 +33,7 @@ const GenericField = data.GenericField;
 
 /// Delivered controls may outlive their pane's keyboard focus between frames.
 /// Example: `routing.reconcileFocus(gui);`
-pub fn reconcileFocus(gui: *GuiClient) void {
+pub fn reconcileFocus(gui: *GuiAdapter) void {
     const state = &gui.widgets;
     const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
 
@@ -64,7 +64,7 @@ pub fn reconcileFocus(gui: *GuiClient) void {
 /// Runs after queue admission, before the existing terminal fallback.
 /// Targeted stale events are consumed, never retargeted to another editor.
 /// Example: `if (try routing.apply(gui, event)) return;`
-pub fn apply(gui: *GuiClient, event: event_module.Event) !bool {
+pub fn apply(gui: *GuiAdapter, event: event_module.Event) !bool {
     reconcileFocus(gui);
     completions.refresh(gui);
     const state = &gui.widgets;
@@ -239,7 +239,7 @@ pub fn apply(gui: *GuiClient, event: event_module.Event) !bool {
 
 /// Latches paste ownership once, including when a control merely consumes it.
 /// Example: `const owned = try routing.beginPaste(gui);`
-pub fn beginPaste(gui: *GuiClient) !bool {
+pub fn beginPaste(gui: *GuiAdapter) !bool {
     reconcileFocus(gui);
     const state = &gui.widgets;
     if (state.image_preview != null) {
@@ -263,7 +263,7 @@ pub fn beginPaste(gui: *GuiClient) !bool {
 }
 
 /// Example: `try routing.paste(gui, bytes);`
-pub fn paste(gui: *GuiClient, bytes: []const u8) !void {
+pub fn paste(gui: *GuiAdapter, bytes: []const u8) !void {
     const owner = gui.widgets.paste_owner orelse return;
     const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
     if (field(gui, target) == null) {
@@ -274,7 +274,7 @@ pub fn paste(gui: *GuiClient, bytes: []const u8) !void {
 }
 
 /// Example: `try routing.endPaste(gui);`
-pub fn endPaste(gui: *GuiClient) !void {
+pub fn endPaste(gui: *GuiAdapter) !void {
     reconcileFocus(gui);
     defer gui.widgets.paste_owner = null;
     defer gui.widgets.paste_consumed = false;
@@ -299,11 +299,11 @@ fn explicitTarget(event: event_module.Event) ?Id {
     };
 }
 
-fn field(gui: *const GuiClient, target: Target) ?FieldView {
+fn field(gui: *const GuiAdapter, target: Target) ?FieldView {
     return FieldView.captureClient(&gui.app, target);
 }
 
-fn editingRevision(gui: *const GuiClient) u64 {
+fn editingRevision(gui: *const GuiAdapter) u64 {
     if (gui.widgets.dispatcher.focusedTarget()) |target| {
         if (target.action == .composer and !gui.app.model.name_prompt.active()) {
             return FieldView.revision(&gui.app, target);
@@ -315,7 +315,7 @@ fn editingRevision(gui: *const GuiClient) u64 {
 
 /// Completes held terminal input before a modal consumes newly pressed keys.
 /// Example: `if (try routing.continueFallback(gui, event)) return true;`
-pub fn continueFallback(gui: *GuiClient, event: event_module.Event) !bool {
+pub fn continueFallback(gui: *GuiAdapter, event: event_module.Event) !bool {
     switch (event) {
         .key => |key| if (key.phase == .press) {
             return false;
@@ -328,7 +328,7 @@ pub fn continueFallback(gui: *GuiClient, event: event_module.Event) !bool {
     return routeAgentBinding(gui, event);
 }
 
-fn routeAgentBinding(gui: *GuiClient, event: event_module.Event) !bool {
+fn routeAgentBinding(gui: *GuiAdapter, event: event_module.Event) !bool {
     const key: data.Key = switch (event) {
         .key => |value| value.terminalKey(),
         .text => |value| blk: {
@@ -406,7 +406,7 @@ fn routeAgentBinding(gui: *GuiClient, event: event_module.Event) !bool {
 /// Replays an unmatched or expired chord only to its original live composer.
 /// Held keys return to widget ownership before ordinary repeat/release routing.
 /// Example: `try routing.replayBindingKey(gui, owner, key);`
-pub fn replayBindingKey(gui: *GuiClient, owner: Id, key: data.Key) !void {
+pub fn replayBindingKey(gui: *GuiAdapter, owner: Id, key: data.Key) !void {
     const target = gui.widgets.dispatcher.focusedTarget();
     const focused_pane: ?core.PaneId = if (gui.app.model.tabs.activeSlot()) |tab| gui.app.model.tabs.layout[tab].focused() else null;
     const valid = gui.widgets.dispatcher.window_focused and gui.widgets.dispatcher.maps.presented().modal_layer == 0 and gui.widgets.composer_menu.selector == null and target != null and target.?.id.eql(owner) and target.?.action == .composer and focused_pane == target.?.action.composer and field(gui, target.?) != null;
@@ -428,7 +428,7 @@ pub fn replayBindingKey(gui: *GuiClient, owner: Id, key: data.Key) !void {
     }
 }
 
-fn composerKey(gui: *GuiClient, target: Target, key: Key) !void {
+fn composerKey(gui: *GuiAdapter, target: Target, key: Key) !void {
     const value: data.name_prompt.Command = switch (key.code) {
         .enter => {
             if (key.mods.shift) {
@@ -479,7 +479,7 @@ fn composerKey(gui: *GuiClient, target: Target, key: Key) !void {
 
 /// Validates a delivered control against the current attachment and modal owner.
 /// Example: `if (!routing.eligible(gui, target)) return;`
-pub fn eligible(gui: *const GuiClient, target: Target) bool {
+pub fn eligible(gui: *const GuiAdapter, target: Target) bool {
     if (target.action == .agent_control and target.action.agent_control.kind == .close_image) {
         const preview = gui.widgets.image_preview orelse return false;
         return target.layer == 1 and target.id.generation == preview.generation and target.action.agent_control.pane_id == preview.control.pane_id;
@@ -513,7 +513,7 @@ pub fn eligible(gui: *const GuiClient, target: Target) bool {
     return target.layer == 0 and pane.attached and (if (target.action == .change_review) pane.hasChangeReview() else pane.kind == .agent) and pane.attachment_generation == target.id.generation;
 }
 
-fn focus(gui: *GuiClient, target: Target) !void {
+fn focus(gui: *GuiAdapter, target: Target) !void {
     gui.cancelBinding();
     if (target.paneId()) |pane_id| {
         if (!eligible(gui, target)) {
@@ -534,7 +534,7 @@ fn focus(gui: *GuiClient, target: Target) !void {
     }
 }
 
-fn command(gui: *GuiClient, value: data.name_prompt.Command) !void {
+fn command(gui: *GuiAdapter, value: data.name_prompt.Command) !void {
     const revision = editingRevision(gui);
     if (!gui.app.model.name_prompt.active()) {
         if (gui.widgets.dispatcher.focusedTarget()) |target| {
@@ -560,7 +560,7 @@ fn command(gui: *GuiClient, value: data.name_prompt.Command) !void {
     }
 }
 
-fn editor(gui: *GuiClient, target: Target, event: event_module.Event) !void {
+fn editor(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
     // Modifier changes can arrive as stationary pointer motion over an editor.
     // Only selection gestures may focus it and cancel a pending key sequence.
     if (event == .pointer and (event.pointer.button != .left or (event.pointer.kind != .press and event.pointer.kind != .drag))) {
@@ -679,7 +679,7 @@ fn editor(gui: *GuiClient, target: Target, event: event_module.Event) !void {
     }
 }
 
-fn shortcut(gui: *GuiClient, target: Target, key: Key) !bool {
+fn shortcut(gui: *GuiAdapter, target: Target, key: Key) !bool {
     if (key.code != .char or key.code.char.len != 1 or (!key.mods.ctrl and !key.mods.super)) {
         return false;
     }
@@ -719,7 +719,7 @@ fn buttonActivated(event: event_module.Event, target: Target) bool {
     };
 }
 
-fn threadItemKey(gui: *GuiClient, target: Target, event: event_module.Event) !bool {
+fn threadItemKey(gui: *GuiAdapter, target: Target, event: event_module.Event) !bool {
     if (event != .key or event.key.phase == .release) {
         return false;
     }
@@ -758,7 +758,7 @@ fn threadItemKey(gui: *GuiClient, target: Target, event: event_module.Event) !bo
     return false;
 }
 
-fn scrollDirectory(gui: *GuiClient, target: Target, event: event_module.Event) !void {
+fn scrollDirectory(gui: *GuiAdapter, target: Target, event: event_module.Event) !void {
     const pointer_scroll = event == .pointer and (event.pointer.kind == .scroll_up or event.pointer.kind == .scroll_down);
     if (event != .scroll and !pointer_scroll) {
         return;
@@ -786,7 +786,7 @@ fn scrollDirectory(gui: *GuiClient, target: Target, event: event_module.Event) !
     }
 }
 
-fn activateControl(gui: *GuiClient, target: Target) !void {
+fn activateControl(gui: *GuiAdapter, target: Target) !void {
     gui.widgets.cancelComposition();
     switch (target.action) {
         .change_review => |pane_id| try gui.openChangeReview(pane_id),
@@ -860,13 +860,13 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
     }
 }
 
-fn dispatchIntent(gui: *GuiClient, intent: client.Intent) !void {
+fn dispatchIntent(gui: *GuiAdapter, intent: client.Intent) !void {
     const tab = gui.app.model.tabs.activeSlot() orelse return;
     _ = try client.view_interactions.apply(&gui.app, tab, .{ .intent = intent, .consumed = true });
     _ = gui.widgets.dispatcher.focus(null);
 }
 
-fn scroll(gui: *GuiClient, event: event_module.Event) !bool {
+fn scroll(gui: *GuiAdapter, event: event_module.Event) !bool {
     if (!gui.focused) {
         return true;
     }
@@ -914,7 +914,7 @@ fn scroll(gui: *GuiClient, event: event_module.Event) !bool {
     return true;
 }
 
-fn threadScrollTarget(gui: *const GuiClient, target: Target) Target {
+fn threadScrollTarget(gui: *const GuiAdapter, target: Target) Target {
     const pane_id = switch (target.action) {
         .thread_item => |control| control.pane_id,
         .message_link => |control| control.owner.pane_id,
@@ -933,7 +933,7 @@ fn threadScrollTarget(gui: *const GuiClient, target: Target) Target {
 
 /// Routes a pane scroll binding through the delivered transcript's wheel policy.
 /// Example: `_ = try routing.scrollFocusedThread(gui, .up);`
-pub fn scrollFocusedThread(gui: *GuiClient, direction: data.actions.ScrollDirection) !bool {
+pub fn scrollFocusedThread(gui: *GuiAdapter, direction: data.actions.ScrollDirection) !bool {
     const tab = gui.app.model.tabs.activeSlot() orelse return false;
     const pane = data.tab_layout.focusedPaneConst(&gui.app.model, tab) orelse return false;
     if (pane.kind != .agent) {
@@ -951,7 +951,7 @@ pub fn scrollFocusedThread(gui: *GuiClient, direction: data.actions.ScrollDirect
     return true;
 }
 
-fn scrollHistory(gui: *GuiClient, event: event_module.Event) !bool {
+fn scrollHistory(gui: *GuiAdapter, event: event_module.Event) !bool {
     const prompt = gui.app.model.name_prompt.currentConst() orelse return true;
     const state = &gui.widgets;
     const history = &gui.app.model.history_palette;
@@ -1030,7 +1030,7 @@ fn scrollHistory(gui: *GuiClient, event: event_module.Event) !bool {
     return true;
 }
 
-fn accessibility(gui: *GuiClient, value: AccessibilityAction) !void {
+fn accessibility(gui: *GuiAdapter, value: AccessibilityAction) !void {
     const target = gui.widgets.dispatcher.maps.presented().find(.{ .target_id = value.target_id, .generation = value.generation }) orelse return;
     if (gui.widgets.composer_menu.selector != null and target.action != .composer_selector and target.action != .composer_choice) {
         return;
@@ -1095,7 +1095,7 @@ fn accessibility(gui: *GuiClient, value: AccessibilityAction) !void {
     }
 }
 
-fn beginCut(gui: *GuiClient, target: Target, range: [2]u32) !void {
+fn beginCut(gui: *GuiAdapter, target: Target, range: [2]u32) !void {
     const current = field(gui, target) orelse return;
     for (&gui.widgets.pending_cuts) |*slot| {
         if (slot.* != null) {
@@ -1110,7 +1110,7 @@ fn beginCut(gui: *GuiClient, target: Target, range: [2]u32) !void {
 
 /// Retains the exact editable revision before asynchronous system clipboard I/O.
 /// Example: `try routing.beginClipboardRead(gui, target.id);`
-pub fn beginClipboardRead(gui: *GuiClient, owner: Id) !void {
+pub fn beginClipboardRead(gui: *GuiAdapter, owner: Id) !void {
     const target = gui.widgets.dispatcher.maps.presented().find(owner) orelse return;
     const current = field(gui, target) orelse return;
     if (target.action == .composer and gui.widgets.pastingImage(target.action.composer)) {
@@ -1133,7 +1133,7 @@ pub fn beginClipboardRead(gui: *GuiClient, owner: Id) !void {
     return error.HostRequestsFull;
 }
 
-fn finishPaste(gui: *GuiClient, result: ClipboardResult) !void {
+fn finishPaste(gui: *GuiAdapter, result: ClipboardResult) !void {
     const owner: Id = .{ .target_id = result.target_id, .generation = result.generation };
     for (&gui.widgets.pending_pastes) |*slot| {
         const pending = slot.* orelse continue;
@@ -1191,7 +1191,7 @@ fn finishPaste(gui: *GuiClient, result: ClipboardResult) !void {
     }
 }
 
-fn finishCut(gui: *GuiClient, result: ClipboardResult) !void {
+fn finishCut(gui: *GuiAdapter, result: ClipboardResult) !void {
     const id: Id = .{ .target_id = result.target_id, .generation = result.generation };
     for (&gui.widgets.pending_cuts) |*slot| {
         const cut = slot.* orelse continue;

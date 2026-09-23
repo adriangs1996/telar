@@ -2,8 +2,8 @@
 //! sends its comments.
 const data = @import("model");
 const core = @import("telar-core");
-const attached_client_tests = @import("../attached_client_tests.zig");
-const Client = @import("../AttachedClient.zig");
+const client_tests = @import("../execution/client_tests.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Opens the latest review for any attached pane, preserving an already open edition.
 /// Example: `try change_review.openChangeReview(app, pane_id);`
@@ -230,7 +230,7 @@ fn resolveReviewPane(model: *data.ClientModel, owner: data.ChangeReviewOperation
 }
 
 test "change review operation accepts terminal panes and rejects replaced attachments" {
-    try attached_client_tests.rejectReplacedReviewAttachment(
+    try client_tests.rejectReplacedReviewAttachment(
         openChangeReviewSession,
         changeReviewOperation,
         applyChangeReviewResponse,
@@ -238,5 +238,5 @@ test "change review operation accepts terminal panes and rejects replaced attach
 }
 
 test "change review operation updates closed review availability without opening or querying a view" {
-    try attached_client_tests.retainReviewAvailability(openChangeReviewSession, changeReviewChanged);
+    try client_tests.retainReviewAvailability(openChangeReviewSession, changeReviewChanged);
 }

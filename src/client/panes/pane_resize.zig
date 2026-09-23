@@ -6,7 +6,7 @@ const std = @import("std");
 const runtime_io = @import("../connection/runtime_io.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_focus = @import("pane_focus.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Commits one split-edge move before delivering geometry. Example: `_ = try pane_resize.resizePane(client, command);`
 pub fn resizePane(client: *Client, command: data.ResizePaneRequest) !?data.PaneGeometryChange {

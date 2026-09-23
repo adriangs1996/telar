@@ -4,7 +4,7 @@ const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");
 const core = @import("telar-core");
-const GuiClient = @import("../GuiClient.zig");
+const GuiAdapter = @import("../GuiAdapter.zig");
 const Event = @import("PointerEvent.zig");
 const message_links = @import("../widgets/interaction/message_links.zig");
 const Hit = @import("LinkHit.zig");
@@ -34,7 +34,7 @@ pub fn observe(self: *Hover, event: Event) void {
 
 /// Reuses the cached cell until model state or delivered controls change.
 /// Example: `hover.refresh(gui);`
-pub fn refresh(self: *Hover, gui: *GuiClient) void {
+pub fn refresh(self: *Hover, gui: *GuiAdapter) void {
     if (!gui.focused) {
         self.clear();
         return;
@@ -172,7 +172,7 @@ const Stamp = struct {
 
     /// Captures only values; no model or hit-map pointer escapes.
     /// Example: `const stamp = HoverStamp.capture(gui, cell, mods);`
-    pub fn capture(gui: *const GuiClient, cell: [2]u16, mods: u32) Stamp {
+    pub fn capture(gui: *const GuiAdapter, cell: [2]u16, mods: u32) Stamp {
         return .{ .cell = cell, .mods = mods, .model = gui.app.model.version(), .geometry = gui.pointer.revision, .chrome = gui.chrome.revision, .chrome_gesture = gui.chrome.gesture_button, .sidebar_resize = gui.chrome.sidebar_resize_active, .overlay_gesture = gui.overlays.gesture };
     }
 };

@@ -3,7 +3,7 @@ const data = @import("model");
 const pane_focus = @import("../panes/pane_focus.zig");
 const tab_removal = @import("tab_removal.zig");
 const tab_snapshot = @import("tab_snapshot.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 /// Selects canonical identity, retires previous input authorities and requests current membership. Example: `_ = try select(client, command);`
 /// Example: `_ = try tab_selection.selectTab(app, command);`

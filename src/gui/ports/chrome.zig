@@ -2,10 +2,10 @@
 const data = @import("model");
 const client = @import("telar-client");
 const hover_target = @import("../input/hover_target.zig");
-const GuiClient = @import("../GuiClient.zig");
+const GuiAdapter = @import("../GuiAdapter.zig");
 
 /// Example: `gui.app.chrome = chrome.port(gui);`
-pub fn port(gui: *GuiClient) client.HostChrome {
+pub fn port(gui: *GuiAdapter) client.HostChrome {
     return .{
         .context = gui,
         .pointer_fn = pointer,
@@ -14,7 +14,7 @@ pub fn port(gui: *GuiClient) client.HostChrome {
     };
 }
 
-fn host(context: *anyopaque) *GuiClient {
+fn host(context: *anyopaque) *GuiAdapter {
     return @ptrCast(@alignCast(context));
 }
 

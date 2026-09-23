@@ -6,7 +6,7 @@ const core = @import("telar-core");
 
 /// Reports fixed capacity separately from live pane payloads. Example: `try client_storage.report(writer, gpa);`
 pub fn report(writer: *std.Io.Writer, gpa: std.mem.Allocator) !void {
-    inline for (.{ client.AttachedClient, data.ClientModel, data.Tabs, data.Panes, data.Pane }) |T| {
+    inline for (.{ client.Client, data.ClientModel, data.Tabs, data.Panes, data.Pane }) |T| {
         try writer.print("{{\"type\":\"size\",\"name\":\"{s}\",\"bytes\":{d}}}\n", .{ @typeName(T), @sizeOf(T) });
     }
 

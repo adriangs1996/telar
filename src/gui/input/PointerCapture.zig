@@ -14,7 +14,7 @@ cell_height: u16,
 
 /// A left press that starts selection belongs to copy mode, not this lease.
 /// Example: `const capture = Capture.begin(app, mouse);`
-pub fn begin(app: *client.AttachedClient, event: data.Mouse) ?Capture {
+pub fn begin(app: *client.Client, event: data.Mouse) ?Capture {
     const tab = app.model.tabs.activeSlot() orelse return null;
     const plan = data.tab_layout.planPaneMouse(&app.model, tab, event, app.geometry().area) orelse return null;
     if (!plan.protocol.sgr or plan.protocol.tracking == .none or plan.protocol.tracking == .x10) {
@@ -33,7 +33,7 @@ pub fn begin(app: *client.AttachedClient, event: data.Mouse) ?Capture {
 /// Visible panes update the captured geometry. Hidden panes keep their last
 /// rectangle so a tab or fullscreen change cannot strand an acquired press.
 /// Detachment still invalidates the lease. Example: `try capture.deliver(app, mouse);`
-pub fn deliver(self: *Capture, app: *client.AttachedClient, event: data.Mouse) !void {
+pub fn deliver(self: *Capture, app: *client.Client, event: data.Mouse) !void {
     const tab = app.model.tabs.find(self.location.tab_id) orelse return;
     if (!std.meta.eql(app.model.tabs.location[tab], self.location)) {
         return;

@@ -15,13 +15,13 @@ TUI presentation State.handleMouse -> focus_agent AgentKey
        |
 view_interactions.apply
        |
-AttachedClient.navigateAgent
+agent_navigation.navigateAgent
        |
 ClientModel.planAgentNavigation
        |
-       +-- local tab -> AttachedClient.selectTab -> AttachedClient.applyPaneFocus
+       +-- local tab -> tab_selection.selectTab -> pane_focus.applyPaneFocus
        |
-       +-- remote pane -> AttachedClient.requestWorkspacePane
+       +-- remote pane -> workspace_handoff.requestWorkspacePane
 ```
 
 The operation owns the branch and local ordering. A pane in an
@@ -58,7 +58,7 @@ selection. See [Client layout persistence](client-layout-persistence.md).
 
 - `src/model/state/ClientModel.zig` resolves exact generations and local or
   remote plans without exposing the agent replica.
-- `src/client/AttachedClient.zig` applies selection before
+- `src/client/agents/agent_navigation.zig` applies selection before
   focus and calls the concrete tab, focus and handoff operations.
 - `src/frontend/client/tests/notifications_and_agents.zig` and
   `src/frontend/client/tests/synchronization.zig` exercise stale/pending

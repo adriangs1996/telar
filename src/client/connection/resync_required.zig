@@ -4,7 +4,7 @@ const core = @import("telar-core");
 const std = @import("std");
 const workspace_handoff = @import("../workspace/workspace_handoff.zig");
 const workspace_list_snapshot = @import("../workspace/workspace_list_snapshot.zig");
-const Client = @import("../AttachedClient.zig");
+const Client = @import("../execution/Client.zig");
 
 const ResyncOutcome = enum { coalesced, snapshot_requested, handoff_requested, exit };
 

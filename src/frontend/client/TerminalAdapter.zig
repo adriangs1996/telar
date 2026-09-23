@@ -1,4 +1,4 @@
-//! The TUI's client: the shared `AttachedClient` plus the terminal resources
+//! The TUI's client: the shared `Client` plus the terminal resources
 //! that only make sense while somebody is looking. `init` builds the shared
 //! state in place, then binds every host port to this heap-stable value.
 
@@ -44,9 +44,9 @@ pub const ClientEvent = union(enum) {
     clipboard_image: data.Completion,
 };
 
-const TerminalClient = @This();
+const TerminalAdapter = @This();
 
-app: client_module.AttachedClient,
+app: client_module.Client,
 writer: *std.Io.Writer,
 output: ?Output = null,
 inbox: client_module.GenericInbox(ClientEvent),
@@ -60,11 +60,11 @@ chrome_observed: ChromeRevisions = .{},
 /// Creates a heap-owned client (the tab models alone are megabytes) and
 /// takes ownership of the configuration generation, plugin registry and
 /// trust store carried inside `params.options`; `deinit` releases them.
-pub fn init(params: Params) !*TerminalClient {
+pub fn init(params: Params) !*TerminalAdapter {
     const gpa = params.gpa;
-    const terminal = try gpa.create(TerminalClient);
+    const terminal = try gpa.create(TerminalAdapter);
     errdefer gpa.destroy(terminal);
-    try client_module.AttachedClient.init(&terminal.app, .{
+    try client_module.Client.init(&terminal.app, .{
         .gpa = gpa,
         .io = params.io,
         .connection = params.connection,
@@ -146,22 +146,22 @@ pub fn init(params: Params) !*TerminalClient {
 }
 
 fn scheduleCompression(context: *anyopaque, job: *Compression) !void {
-    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalAdapter = @ptrCast(@alignCast(context));
     try terminal.inbox.start(.compression_done, .{ Compression.run, .{job} });
 }
 
 fn scheduleDraw(context: *anyopaque, deadline_ns: u64) !void {
-    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalAdapter = @ptrCast(@alignCast(context));
     try terminal.inbox.start(.draw, .{ waitForPresentation, .{ terminal.app.io, deadline_ns } });
 }
 
 fn drawNow(context: *anyopaque) !void {
-    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalAdapter = @ptrCast(@alignCast(context));
     try presentation_lifecycle.presentNow(terminal);
 }
 
 fn scheduleMedia(context: *anyopaque, deadline_ns: u64) !void {
-    const terminal: *TerminalClient = @ptrCast(@alignCast(context));
+    const terminal: *TerminalAdapter = @ptrCast(@alignCast(context));
     try terminal.inbox.start(.media_tick, .{ waitForPresentation, .{ terminal.app.io, deadline_ns } });
 }
 
@@ -173,7 +173,7 @@ fn waitForPresentation(io: std.Io, deadline_ns: u64) anyerror!void {
 /// Cancels every admitted producer first — the reload task publishes
 /// into the orphan slots — then releases terminal resources, the shared
 /// state and finally the allocation.
-pub fn deinit(self: *TerminalClient) void {
+pub fn deinit(self: *TerminalAdapter) void {
     const gpa = self.app.gpa;
     self.inbox.deinit();
     if (self.output) |*output| {

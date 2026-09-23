@@ -3,7 +3,7 @@
 const client_module = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalAdapter = @import("../TerminalAdapter.zig");
 const FormatRequest = @import("FormatRequest.zig");
 const std = @import("std");
 const Snapshot = @import("Snapshot.zig");
@@ -203,7 +203,7 @@ pub fn format(buffer: []u8, request: FormatRequest) ![]const u8 {
 /// ```zig
 /// try telemetry.start(terminal);
 /// ```
-pub fn start(terminal: *TerminalClient) !void {
+pub fn start(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     if (!client.telemetry.available()) {
@@ -218,7 +218,7 @@ pub fn start(terminal: *TerminalClient) !void {
 /// ```zig
 /// telemetry.handleTick(terminal, result, heap.snapshot());
 /// ```
-pub fn handleTick(terminal: *TerminalClient, result: anyerror!void, heap: core.SnapshotSnapshot) void {
+pub fn handleTick(terminal: *TerminalAdapter, result: anyerror!void, heap: core.SnapshotSnapshot) void {
     const client = &terminal.app;
 
     result catch {
@@ -266,13 +266,13 @@ pub fn handleTick(terminal: *TerminalClient, result: anyerror!void, heap: core.S
 /// ```zig
 /// telemetry.handleWritten(terminal, result);
 /// ```
-pub fn handleWritten(terminal: *TerminalClient, result: anyerror!void) void {
+pub fn handleWritten(terminal: *TerminalAdapter, result: anyerror!void) void {
     const client = &terminal.app;
 
     finishWrite(&client.telemetry, client.io, result);
 }
 
-fn capture(terminal: *TerminalClient, heap: core.SnapshotSnapshot) ?Snapshot {
+fn capture(terminal: *TerminalAdapter, heap: core.SnapshotSnapshot) ?Snapshot {
     const client = &terminal.app;
 
     const active = client.model.tabs.activeSlot() orelse return null;
@@ -311,7 +311,7 @@ fn capture(terminal: *TerminalClient, heap: core.SnapshotSnapshot) ?Snapshot {
     };
 }
 
-fn scheduleTick(terminal: *TerminalClient) !void {
+fn scheduleTick(terminal: *TerminalAdapter) !void {
     const client = &terminal.app;
 
     try terminal.inbox.start(.telemetry_tick, .{ core.waitForTick, .{client.io} });
