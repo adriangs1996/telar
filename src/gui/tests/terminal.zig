@@ -1,6 +1,7 @@
 const Regions = @import("../widgets/Regions.zig");
 const builtin = @import("builtin");
 const Quad_module = @import("../render/Quad.zig");
+const CellMesh = @import("../render/CellMesh.zig");
 const data = @import("model");
 const input_support = @import("input_support.zig");
 const host_ports = @import("../host_ports.zig");
@@ -146,7 +147,7 @@ test "background opacity preserves cell ink cursor and explicit backgrounds" {
     try session.bootstrap();
     try session.receiveFrame(1);
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
-    pane.buffer.cells[0].style.bg = .{ .rgb = .{ 255, 0, 0 } };
+    pane.buffer.cells[0].style.bg = .rgb(.{ 255, 0, 0 });
     try present(session);
     const shape_calls = session.gui.renderer.atlas.?.shape_calls;
     const atlas_version = session.gui.renderer.atlas_version;
@@ -194,12 +195,13 @@ test "cursor shapes focus and blink reuse retained ink without changing the atla
     const bounds = session.gui.renderer.metrics.rect(session.gui.renderer.origin, content);
     pane.cursor.x = 0;
     try paintTerminal(session);
+    var storage: [CellMesh.capacity]Quad_module.Quad = undefined;
     const ink = try std.testing.allocator.dupe(Quad_module.Quad, session.gui.renderer.retained.at(
         .{
             content.x,
             content.y,
         },
-    ).items());
+    ).collect(&storage));
     defer std.testing.allocator.free(ink);
     const shape_calls = session.gui.renderer.atlas.?.shape_calls;
     const version = session.gui.renderer.atlas_version;
@@ -229,7 +231,7 @@ test "cursor shapes focus and blink reuse retained ink without changing the atla
                 content.x,
                 content.y,
             },
-        ).items(),
+        ).collect(&storage),
     );
     try std.testing.expectEqual(shape_calls, session.gui.renderer.atlas.?.shape_calls);
     try std.testing.expectEqual(version, session.gui.renderer.atlas_version);
@@ -253,7 +255,7 @@ test "a block cursor recolors wide cell ink and ANSI colors belong to the GUI th
     try session.bootstrap();
     try session.receiveFrame(1);
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
-    pane.buffer.cells[0] = .{ .bytes = .{ 0xe7, 0x95, 0x8c } ++ .{0} ** 13, .len = 3, .width = 2, .style = .{ .fg = .{ .indexed = 1 } } };
+    pane.buffer.cells[0] = .{ .bytes = .{ 0xe7, 0x95, 0x8c } ++ .{0} ** 13, .len = 3, .width = 2, .style = .{ .fg = .indexed(1) } };
     pane.buffer.cells[1].width = 0;
     const content = paneContent(session);
     const bounds = session.gui.renderer.metrics.rect(session.gui.renderer.origin, content);
@@ -289,8 +291,8 @@ test "a block cursor recolors wide cell ink and ANSI colors belong to the GUI th
         try std.testing.expectEqual(@as(f32, 0), glyph.r);
         try std.testing.expectEqual(@as(f32, 1), glyph.g);
     }
-    try std.testing.expectApproxEqAbs(@as(f32, 12.0 / 255.0), mesh.items()[1].r, 0.001);
-    try std.testing.expectApproxEqAbs(@as(f32, 34.0 / 255.0), mesh.items()[1].g, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f32, 12.0 / 255.0), mesh.primaryInk()[0].r, 0.001);
+    try std.testing.expectApproxEqAbs(@as(f32, 34.0 / 255.0), mesh.primaryInk()[0].g, 0.001);
 }
 
 test "native terminal acknowledges received patches while presentation is busy or fails" {

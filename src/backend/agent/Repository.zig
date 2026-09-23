@@ -1,9 +1,19 @@
+const std = @import("std");
 const core = @import("telar-core");
 const Agent = @import("Agent.zig");
 const PaneKeyType = @import("../pane/PaneKey.zig");
 pub const Repository = @This();
 
-slots: [core.max_agent_snapshot_entries]?Agent = @splat(null),
+pub const capacity = core.max_agent_snapshot_entries;
+const Occupancy = std.bit_set.IntegerBitSet(capacity);
+
+/// Aggregates are several KiB each. Lookups run on every PTY ingest, so they
+/// scan the dense `keys` copy and the `occupied` mask instead of touching one
+/// aggregate per slot. An aggregate's key never changes after insertion, and
+/// every insertion and removal updates all three fields together.
+slots: [capacity]?Agent = @splat(null),
+keys: [capacity]PaneKeyType = undefined,
+occupied: Occupancy = .initEmpty(),
 
 pub const Iterator = @import("Iterator.zig");
 
@@ -20,13 +30,12 @@ pub fn insert(repository: *Repository, candidate: Agent) ?*Agent {
         return null;
     }
 
-    for (&repository.slots) |*slot| {
-        if (slot.* != null) {
-            continue;
-        }
-
-        slot.* = candidate;
-        return &slot.*.?;
+    var free = repository.occupied.complement().iterator(.{});
+    if (free.next()) |index| {
+        repository.slots[index] = candidate;
+        repository.keys[index] = candidate.paneKey();
+        repository.occupied.set(index);
+        return &repository.slots[index].?;
     }
 
     return null;
@@ -38,15 +47,8 @@ pub fn insert(repository: *Repository, candidate: Agent) ?*Agent {
 /// const agent = repository.find(pane_key) orelse return;
 /// ```
 pub fn find(repository: *Repository, key: PaneKeyType) ?*Agent {
-    for (&repository.slots) |*slot| {
-        const agent = if (slot.*) |*value| value else continue;
-
-        if (agent.matches(key)) {
-            return agent;
-        }
-    }
-
-    return null;
+    const index = repository.indexOf(key) orelse return null;
+    return &repository.slots[index].?;
 }
 
 /// Finds the immutable aggregate for one exact pane generation.
@@ -55,15 +57,8 @@ pub fn find(repository: *Repository, key: PaneKeyType) ?*Agent {
 /// const agent = repository.findConst(pane_key) orelse return;
 /// ```
 pub fn findConst(repository: *const Repository, key: PaneKeyType) ?*const Agent {
-    for (&repository.slots) |*slot| {
-        const agent = if (slot.*) |*value| value else continue;
-
-        if (agent.matches(key)) {
-            return agent;
-        }
-    }
-
-    return null;
+    const index = repository.indexOf(key) orelse return null;
+    return &repository.slots[index].?;
 }
 
 /// Removes one exact pane generation without applying lifecycle policy.
@@ -72,18 +67,34 @@ pub fn findConst(repository: *const Repository, key: PaneKeyType) ?*const Agent 
 /// _ = repository.remove(pane_key);
 /// ```
 pub fn remove(repository: *Repository, key: PaneKeyType) bool {
-    for (&repository.slots) |*slot| {
-        const agent = if (slot.*) |*value| value else continue;
+    const index = repository.indexOf(key) orelse return false;
+    repository.release(index);
+    return true;
+}
 
-        if (!agent.matches(key)) {
-            continue;
+/// Whether a slot holds an aggregate, without reading the aggregate.
+pub fn occupiedAt(repository: *const Repository, index: usize) bool {
+    return repository.occupied.isSet(index);
+}
+
+/// Empties one occupied slot. Iterators remove their current aggregate here.
+pub fn release(repository: *Repository, index: usize) void {
+    std.debug.assert(repository.occupied.isSet(index));
+    repository.slots[index] = null;
+    repository.occupied.unset(index);
+}
+
+fn indexOf(repository: *const Repository, key: PaneKeyType) ?usize {
+    var occupied = repository.occupied.iterator(.{});
+    while (occupied.next()) |index| {
+        const candidate = repository.keys[index];
+        if (candidate.id == key.id and candidate.generation == key.generation) {
+            std.debug.assert(repository.slots[index].?.matches(key));
+            return index;
         }
-
-        slot.* = null;
-        return true;
     }
 
-    return false;
+    return null;
 }
 
 /// Creates a mutable iterator over the current repository contents.

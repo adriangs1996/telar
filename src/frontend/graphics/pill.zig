@@ -51,7 +51,7 @@ test "small labels use JetBrains Mono and a centered three-quarter-height pill" 
         for (0..@as(usize, plan.labels[0].width) * renderer.cell_width) |x| {
             const pixel = renderer.pixels[(y * width + x) * 4 ..][0..4];
             if (pixel[3] != 0) {
-                try std.testing.expectEqualSlices(u8, &palette.subtext0.rgb, pixel[0..3]);
+                try std.testing.expectEqualSlices(u8, &palette.subtext0.value, pixel[0..3]);
                 text_pixels += 1;
             }
         }
@@ -144,7 +144,7 @@ test "label coverage rejects stale focus text theme and cell size" {
     try std.testing.expect(!renderer.coversText(&plan, &palette));
     writer = std.Io.Writer.fixed(&storage);
     _ = try renderer.write(&writer);
-    palette.subtext0 = .{ .rgb = .{ 12, 34, 56 } };
+    palette.subtext0 = .rgb(.{ 12, 34, 56 });
     try std.testing.expect(!renderer.coversText(&plan, &palette));
     renderer.prepare(&plan, &palette);
     try std.testing.expect(renderer.retirementPending());

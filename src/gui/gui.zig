@@ -48,6 +48,7 @@ test {
     _ = @import("animation/Transition.zig");
     _ = @import("animation/Spring.zig");
     _ = @import("widgets/ScrollMotion.zig");
+    _ = @import("widgets/MessageHeights.zig");
     _ = @import("native/decode_input.zig");
     _ = @import("tests/links.zig");
     _ = @import("tests/link_metadata.zig");

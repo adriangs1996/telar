@@ -5,6 +5,7 @@ const Session = @import("Session.zig");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const QuadList = @import("../render/QuadList.zig");
 const Quad = @import("../render/Quad.zig").Quad;
+const CellMesh = @import("../render/CellMesh.zig");
 const Rect = @import("../render/Rect.zig");
 const Atlas = @import("../text/GlyphAtlas.zig");
 
@@ -60,7 +61,7 @@ test "italic overhang stays above adjacent backgrounds and the block cursor" {
     defer session.deinit();
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     word(session, .{ 2, 1 }, "New");
-    pane.buffer.cells[pane.buffer.w + 3].style.bg = .{ .rgb = .{ 255, 0, 0 } };
+    pane.buffer.cells[pane.buffer.w + 3].style.bg = .rgb(.{ 255, 0, 0 });
     pane.cursor = .{ .visible = true, .x = 3, .y = 1, .appearance = .{ .shape = .block } };
     session.gui.renderer.theme.cursor_color = .{
         0,
@@ -101,11 +102,12 @@ test "italic clipping follows pane geometry while retained ink keeps its full te
     var natural = try naturalWord(session, .{ last, 1 }, "N");
     defer natural.deinit();
     const mesh = renderer.retained.at(.{ area.x + last, area.y + 1 });
-    try std.testing.expectEqualSlices(Quad, natural.items(), mesh.items()[1..]);
+    var storage: [CellMesh.capacity]Quad = undefined;
+    try std.testing.expectEqualSlices(Quad, natural.items(), mesh.collect(&storage)[1..]);
     const bounds = renderer.metrics.rect(renderer.origin, area);
     natural.clipFrom(0, bounds);
     try std.testing.expectEqualSlices(Quad, natural.items(), renderer.quads.items());
-    try std.testing.expect(renderer.quads.items()[0].u1 < mesh.items()[1].u1);
+    try std.testing.expect(renderer.quads.items()[0].u1 < mesh.primaryInk()[0].u1);
 
     // Tall combining ink may cross a row boundary, but never the pane boundary.
     @memset(pane.buffer.cells, .{});

@@ -12,7 +12,7 @@ const TextFit = @import("TextFit.zig");
 const attention = @import("attention.zig");
 const workspace_identity = @import("workspace_identity.zig");
 const WorkspaceRow = @This();
-const inactive_ink: core.Color = .{ .rgb = .{ 115, 115, 115 } };
+const inactive_ink: core.Color = .rgb(.{ 115, 115, 115 });
 
 context: *const Context,
 bounds: Rect,

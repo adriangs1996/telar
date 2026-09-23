@@ -175,6 +175,20 @@ fn blitRow(projection: *const RowProjection, default_style: core.Style) void {
     const graphemes = cells.items(.grapheme);
 
     const width = @min(area.w, @as(u16, @intCast(cells.len)));
+
+    // When the whole row segment is inside the clip, ASCII cells are stored
+    // straight into the row instead of going through `setCell`, which would
+    // re-check the clip and copy one byte through a length-generic memcpy.
+    const destination_y = area.y + y;
+    const direct: ?[]core.Cell = if (width != 0 and b.clip.contains(area.x, destination_y) and b.clip.contains(area.x + width - 1, destination_y))
+        b.cells[@as(usize, destination_y) * b.w + area.x ..][0..width]
+    else
+        null;
+
+    // A row lives in one emulator page, so one style id names one style for
+    // the whole row. Runs of equally styled cells translate their colours once.
+    var translated_id: ?@TypeOf(raws[0].style_id) = null;
+    var translated: core.Style = default_style;
     var x: u16 = 0;
     while (x < width) : (x += 1) {
         const raw = raws[x];
@@ -182,7 +196,13 @@ fn blitRow(projection: *const RowProjection, default_style: core.Style) void {
         // Style id zero is the default style and the emulator does not fill
         // `style` for it, so reading it unconditionally is reading undefined
         // memory.
-        const style = if (raw.style_id == 0) default_style else translate(styles[x], colors, default_style);
+        if (raw.style_id != 0 and translated_id != raw.style_id) {
+            translated = translate(styles[x], colors, default_style);
+            translated_id = raw.style_id;
+        }
+
+        std.debug.assert(raw.style_id == 0 or std.meta.eql(translated, translate(styles[x], colors, default_style)));
+        const style = if (raw.style_id == 0) default_style else translated;
 
         switch (raw.wide) {
             // The emulator's own marker for the column a wide glyph continues
@@ -206,8 +226,16 @@ fn blitRow(projection: *const RowProjection, default_style: core.Style) void {
 
         switch (raw.content_tag) {
             .codepoint, .codepoint_grapheme => {
+                const base = raw.codepoint();
+                if (direct) |row| {
+                    if (raw.content_tag == .codepoint and cell_width == 1 and base > 0 and base < 0x80) {
+                        row[x] = asciiCell(@intCast(base), style);
+                        continue;
+                    }
+                }
+
                 var utf8: [core.Cell.max_bytes]u8 = undefined;
-                const text = encode(&utf8, raw.codepoint(), if (raw.content_tag == .codepoint_grapheme)
+                const text = encode(&utf8, base, if (raw.content_tag == .codepoint_grapheme)
                     graphemes[x]
                 else
                     &.{});
@@ -222,7 +250,7 @@ fn blitRow(projection: *const RowProjection, default_style: core.Style) void {
             } }),
             .bg_color_rgb => {
                 const c = raw.content.color_rgb;
-                b.setCell(.{ .x = area.x + x, .y = area.y + y }, .{ .text = " ", .width = 1, .style = .{ .bg = .{ .rgb = .{ c.r, c.g, c.b } } } });
+                b.setCell(.{ .x = area.x + x, .y = area.y + y }, .{ .text = " ", .width = 1, .style = .{ .bg = .rgb(.{ c.r, c.g, c.b }) } });
             },
         }
     }
@@ -234,6 +262,17 @@ fn blitRow(projection: *const RowProjection, default_style: core.Style) void {
             .bg = default_style.bg,
         } });
     }
+}
+
+/// The cell `Buffer.setCell` writes for one printable ASCII byte.
+fn asciiCell(byte: u8, style: core.Style) core.Cell {
+    var cell: core.Cell = .{
+        .len = 1,
+        .width = 1,
+        .style = style,
+    };
+    cell.bytes[0] = byte;
+    return cell;
 }
 
 /// Encodes a grapheme cluster as UTF-8.
@@ -313,11 +352,11 @@ fn paletteColor(source: *const ColorSource, index: u8) core.Color {
         return rgb(source.colors.palette[index]);
     }
 
-    return .{ .indexed = index };
+    return .indexed(index);
 }
 
 fn rgb(c: vt.color.RGB) core.Color {
-    return .{ .rgb = .{ c.r, c.g, c.b } };
+    return .rgb(.{ c.r, c.g, c.b });
 }
 
 /// Marks the cursor by swapping the cell's colours.
@@ -459,10 +498,9 @@ test "unmodified colours defer to the outer terminal theme" {
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
 
     const styled = buf.at(0, 0).?;
-    try std.testing.expect(styled.style.fg == .indexed);
-    try std.testing.expectEqual(@as(u8, 1), styled.style.fg.indexed);
-    try std.testing.expect(styled.style.bg == .default);
-    try std.testing.expect(buf.at(9, 1).?.style.bg == .default);
+    try std.testing.expectEqual(core.Color.indexed(1), styled.style.fg);
+    try std.testing.expectEqual(core.Color.default, styled.style.bg);
+    try std.testing.expectEqual(core.Color.default, buf.at(9, 1).?.style.bg);
 }
 
 test "host query defaults do not turn semantic cells into opaque RGB backgrounds" {
@@ -476,10 +514,10 @@ test "host query defaults do not turn semantic cells into opaque RGB backgrounds
 
     try pane.write("x\x1b[48;2;44;44;44my");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
-    try std.testing.expect(buf.at(0, 0).?.style.fg == .default);
-    try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
-    try std.testing.expect(buf.at(9, 1).?.style.bg == .default);
-    try std.testing.expectEqual(core.Color{ .rgb = .{ 44, 44, 44 } }, buf.at(1, 0).?.style.bg);
+    try std.testing.expectEqual(core.Color.default, buf.at(0, 0).?.style.fg);
+    try std.testing.expectEqual(core.Color.default, buf.at(0, 0).?.style.bg);
+    try std.testing.expectEqual(core.Color.default, buf.at(9, 1).?.style.bg);
+    try std.testing.expectEqual(core.Color.rgb(.{ 44, 44, 44 }), buf.at(1, 0).?.style.bg);
 }
 
 test "OSC default colour overrides stay inside the pane" {
@@ -492,13 +530,13 @@ test "OSC default colour overrides stay inside the pane" {
     try pane.write("\x1b]11;rgb:12/34/56\x07x");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
     try std.testing.expectEqual(
-        core.Color{ .rgb = .{ 0x12, 0x34, 0x56 } },
+        core.Color.rgb(.{ 0x12, 0x34, 0x56 }),
         buf.at(0, 0).?.style.bg,
     );
 
     try pane.write("\x1b]111\x1b\\");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
-    try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
+    try std.testing.expectEqual(core.Color.default, buf.at(0, 0).?.style.bg);
 }
 
 test "default colours refresh across reverse mode and OSC changes including padding" {
@@ -513,14 +551,14 @@ test "default colours refresh across reverse mode and OSC changes including padd
     try pane.write("a\x1b[7mb\x1b[0;31;4;58;5;2mc\x1b[?5h");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
 
-    const reversed_foreground: core.Color = .{ .rgb = .{ 10, 20, 30 } };
-    const reversed_background: core.Color = .{ .rgb = .{ 240, 230, 220 } };
+    const reversed_foreground: core.Color = .rgb(.{ 10, 20, 30 });
+    const reversed_background: core.Color = .rgb(.{ 240, 230, 220 });
     try std.testing.expectEqual(reversed_foreground, buf.at(0, 0).?.style.fg);
     try std.testing.expectEqual(reversed_background, buf.at(0, 0).?.style.bg);
     try std.testing.expectEqual(reversed_foreground, buf.at(1, 0).?.style.fg);
     try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
-    try std.testing.expectEqual(core.Color{ .indexed = 1 }, buf.at(2, 0).?.style.fg);
-    try std.testing.expectEqual(core.Color{ .indexed = 2 }, buf.at(2, 0).?.style.underline_color);
+    try std.testing.expectEqual(core.Color.indexed(1), buf.at(2, 0).?.style.fg);
+    try std.testing.expectEqual(core.Color.indexed(2), buf.at(2, 0).?.style.underline_color);
     try std.testing.expectEqual(reversed_background, buf.at(2, 0).?.style.bg);
     try std.testing.expectEqual(reversed_background, buf.at(5, 0).?.style.bg);
     try std.testing.expectEqual(reversed_background, buf.at(0, 2).?.style.bg);
@@ -530,8 +568,8 @@ test "default colours refresh across reverse mode and OSC changes including padd
     // stay clean after OSC alone; Pane.render supplies force for this case.
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
 
-    const foreground_override: core.Color = .{ .rgb = .{ 0x12, 0x34, 0x56 } };
-    const background_override: core.Color = .{ .rgb = .{ 0x65, 0x43, 0x21 } };
+    const foreground_override: core.Color = .rgb(.{ 0x12, 0x34, 0x56 });
+    const background_override: core.Color = .rgb(.{ 0x65, 0x43, 0x21 });
     try std.testing.expectEqual(background_override, buf.at(0, 0).?.style.fg);
     try std.testing.expectEqual(foreground_override, buf.at(0, 0).?.style.bg);
     try std.testing.expectEqual(foreground_override, buf.at(2, 0).?.style.bg);
@@ -546,15 +584,15 @@ test "default colours refresh across reverse mode and OSC changes including padd
 
     try pane.write("\x1b]110\x07\x1b]111\x07");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{ .force = true } });
-    try std.testing.expect(buf.at(0, 0).?.style.fg == .default);
-    try std.testing.expect(buf.at(0, 0).?.style.bg == .default);
-    try std.testing.expect(buf.at(1, 0).?.style.fg == .default);
+    try std.testing.expect(buf.at(0, 0).?.style.fg.kind == .default);
+    try std.testing.expect(buf.at(0, 0).?.style.bg.kind == .default);
+    try std.testing.expect(buf.at(1, 0).?.style.fg.kind == .default);
     try std.testing.expect(buf.at(1, 0).?.style.flags.inverse);
-    try std.testing.expectEqual(core.Color{ .indexed = 1 }, buf.at(2, 0).?.style.fg);
-    try std.testing.expectEqual(core.Color{ .indexed = 2 }, buf.at(2, 0).?.style.underline_color);
-    try std.testing.expect(buf.at(2, 0).?.style.bg == .default);
-    try std.testing.expect(buf.at(5, 0).?.style.bg == .default);
-    try std.testing.expect(buf.at(0, 2).?.style.bg == .default);
+    try std.testing.expectEqual(core.Color.indexed(1), buf.at(2, 0).?.style.fg);
+    try std.testing.expectEqual(core.Color.indexed(2), buf.at(2, 0).?.style.underline_color);
+    try std.testing.expect(buf.at(2, 0).?.style.bg.kind == .default);
+    try std.testing.expect(buf.at(5, 0).?.style.bg.kind == .default);
+    try std.testing.expect(buf.at(0, 2).?.style.bg.kind == .default);
 }
 
 test "palette colours are resolved with the pane's own palette" {
@@ -571,10 +609,8 @@ test "palette colours are resolved with the pane's own palette" {
     try pane.write("\x1b]4;1;rgb:00/ff/00\x07\x1b[31mx");
     _ = blit(.{ .buffer = &buf, .area = buf.area(), .terminal = &pane.term, .state = &pane.state, .options = .{} });
 
-    switch (buf.at(0, 0).?.style.fg) {
-        .rgb => |c| try std.testing.expectEqual([3]u8{ 0x00, 0xff, 0x00 }, c),
-        else => return error.ColourNotResolved,
-    }
+    const resolved = buf.at(0, 0).?.style.fg.rgbChannels() orelse return error.ColourNotResolved;
+    try std.testing.expectEqual([3]u8{ 0x00, 0xff, 0x00 }, resolved);
 }
 
 test "clean rows are skipped and the caller can override that" {
@@ -826,4 +862,45 @@ test "a selection outside the pane is refused rather than guessed at" {
         .anchor = .{ .x = 0, .y = 0 },
         .head = .{ .x = 0, .y = 99 },
     }));
+}
+
+test "direct ASCII rows match cells written through setCell" {
+    const gpa = std.testing.allocator;
+    var pane = try BlitPane.init(gpa, 12, 3);
+    defer pane.deinit();
+    try pane.write("ab\x1b[1;38;5;3mcd\x1b[48;2;1;2;3m e\x1b[0m界f\r\n\x1b[4:3;58;5;9mxy\u{301}z\x1b[0m~\r\n\x1b[7m 0123456789");
+
+    var direct = try core.Buffer.init(gpa, 12, 3);
+    defer direct.deinit();
+    _ = blit(.{
+        .buffer = &direct,
+        .area = direct.area(),
+        .terminal = &pane.term,
+        .state = &pane.state,
+        .options = .{
+            .force = true,
+        },
+    });
+
+    var clipped = try core.Buffer.init(gpa, 12, 3);
+    defer clipped.deinit();
+    clipped.pushClip(.{
+        .w = 11,
+        .h = 3,
+    });
+    _ = blit(.{
+        .buffer = &clipped,
+        .area = clipped.area(),
+        .terminal = &pane.term,
+        .state = &pane.state,
+        .options = .{
+            .force = true,
+        },
+    });
+
+    for (0..3) |row| {
+        for (0..11) |col| {
+            try std.testing.expectEqualDeep(direct.at(@intCast(col), @intCast(row)).?.*, clipped.at(@intCast(col), @intCast(row)).?.*);
+        }
+    }
 }

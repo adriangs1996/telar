@@ -207,7 +207,7 @@ fn drawMark(card: AgentCard, canvas: *Canvas, chip: Rect) !void {
     const palette = canvas.theme.palette;
     if (canvas.providerMark(card.agent.provider)) |mark| {
         const tint: core.Color = if (card.agent.provider == .codex)
-            (if (palette.text == .default) .{ .rgb = canvas.theme.terminal.foreground } else palette.text)
+            (if (palette.text.kind == .default) .rgb(canvas.theme.terminal.foreground) else palette.text)
         else
             .default;
         try canvas.spriteTintedAt(chip, .{ .sprite = mark, .color = tint, .alpha = provider_alpha });

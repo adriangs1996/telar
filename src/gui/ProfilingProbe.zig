@@ -14,11 +14,14 @@ const Probe = @This();
 const iterations = 1000;
 const warmup = 200;
 const Mode = enum { retained, sparse, full, theme, resize, selection, font, two_one_active, two_all_active, cursor, focus, reattach };
+/// `repeated` stays inside the shaping cache; `distinct` gives every word its own text, as long transcripts do.
+const Transcript = enum { repeated, distinct };
 
 io: std.Io,
 gpa: std.mem.Allocator,
 writer: *std.Io.Writer,
 terminal_only: bool = false,
+agent_only: bool = false,
 terminal_mode: ?[]const u8 = null,
 sample_count: ?usize = null,
 warmup_count: ?usize = null,
@@ -35,6 +38,12 @@ pub fn run(self: *Probe) !void {
         try self.writer.writeAll("]}\n");
     }
 
+    if (self.agent_only) {
+        try self.conversation(.repeated);
+        try self.conversation(.distinct);
+        return;
+    }
+
     for ([_]u16{ 80, 160 }) |cols| {
         inline for (std.meta.tags(Mode)) |mode| {
             if (self.terminal_mode == null or std.mem.eql(u8, self.terminal_mode.?, @tagName(mode))) {
@@ -49,7 +58,8 @@ pub fn run(self: *Probe) !void {
     for ([_]usize{ 1, 8, 64 }) |count| {
         try self.workspace(count);
     }
-    try self.conversation();
+    try self.conversation(.repeated);
+    try self.conversation(.distinct);
     for ([_]usize{ 100, 1000, 10000 }) |lines| {
         try self.review(lines);
     }
@@ -222,17 +232,30 @@ fn review(self: *Probe, lines: usize) !void {
     try self.counts(before);
 }
 
-fn conversation(self: *Probe) !void {
+fn conversation(self: *Probe, transcript: Transcript) !void {
     const snapshot = try self.gpa.create(core.AgentThreadSnapshot);
     defer self.gpa.destroy(snapshot);
     snapshot.* = .{ .pane_id = @enumFromInt(1), .pane_generation = 1, .status = .working };
     const message = "A deterministic reply with **bold text** and `code`.\n";
+    var len: usize = 0;
+    var word: usize = 0;
     for (0..32) |index| {
-        @memcpy(snapshot.text_storage[index * message.len ..][0..message.len], message);
-        snapshot.item_storage[index] = .{ .identity = index + 1, .turn_identity = index + 1, .role = .assistant, .status = .completed, .text_offset = @intCast(index * message.len), .text_len = message.len };
+        const start = len;
+        switch (transcript) {
+            .repeated => {
+                @memcpy(snapshot.text_storage[len..][0..message.len], message);
+                len += message.len;
+            },
+            .distinct => while (len - start < 600) : (word += 1) {
+                len += (try std.fmt.bufPrint(snapshot.text_storage[len..], "word{d}x ", .{word})).len;
+            },
+        }
+
+        snapshot.item_storage[index] = .{ .identity = index + 1, .turn_identity = index + 1, .role = .assistant, .status = .completed, .text_offset = @intCast(start), .text_len = @intCast(len - start) };
     }
+
     snapshot.item_count = 32;
-    snapshot.text_len = 32 * message.len;
+    snapshot.text_len = @intCast(len);
     var renderer = Renderer.init(self.gpa);
     defer renderer.deinit();
     _ = try renderer.measure(.{ .width = 1200, .height = 900, .scale = 1 });
@@ -264,7 +287,7 @@ fn conversation(self: *Probe) !void {
     if (checksum == 0 or flow.len != 32) {
         return error.InvalidConversationWorkload;
     }
-    try self.writer.print("{{\"type\":\"workload\",\"name\":\"agent/32-messages\",\"iterations\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"checksum\":{d},", .{ iterations, warmup, std.Io.Clock.awake.now(self.io).nanoseconds - started, checksum });
+    try self.writer.print("{{\"type\":\"workload\",\"name\":\"agent/32-messages/{s}\",\"iterations\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"checksum\":{d},", .{ @tagName(transcript), iterations, warmup, std.Io.Clock.awake.now(self.io).nanoseconds - started, checksum });
     try self.counts(before);
 }
 

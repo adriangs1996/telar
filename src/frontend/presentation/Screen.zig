@@ -171,7 +171,7 @@ pub fn flush(s: *Screen, w: *std.Io.Writer) !Stats {
             // unchanged screen this is where the bytes are saved.
             const contiguous = cursor != null and cursor.?.y == y and cursor.?.x == x;
             if (!contiguous) {
-                try w.print("\x1b[{d};{d}H", .{ y + 1, x + 1 });
+                try screen_support.writeCursorPosition(w, .{ @as(u32, y) + 1, @as(u32, x) + 1 });
             }
 
             if (last_style == null or !last_style.?.eql(next.style)) {
@@ -194,7 +194,7 @@ pub fn flush(s: *Screen, w: *std.Io.Writer) !Stats {
     // The cursor is placed after the diff, so it ends up where the caller
     // asked rather than wherever the last cell happened to be.
     if (s.cursor) |at| {
-        try w.print("\x1b[{d};{d}H", .{ at.y + 1, at.x + 1 });
+        try screen_support.writeCursorPosition(w, .{ @as(u32, at.y) + 1, @as(u32, at.x) + 1 });
         try w.writeAll("\x1b[?25h");
     } else {
         try w.writeAll("\x1b[?25l");

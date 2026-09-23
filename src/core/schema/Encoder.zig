@@ -32,7 +32,7 @@ pub fn writeBytes(encoder: *Encoder, bytes: []const u8) error{BufferTooSmall}!vo
         return error.BufferTooSmall;
     }
 
-    std.mem.copyForwards(u8, encoder.buffer[encoder.index..][0..bytes.len], bytes);
+    @memmove(encoder.buffer[encoder.index..][0..bytes.len], bytes);
     encoder.index += bytes.len;
 }
 

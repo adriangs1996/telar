@@ -349,6 +349,14 @@ const width_shift = 5;
 const style_changed_bit: u8 = 0x80;
 
 fn encodeCells(encoder: *EncoderType, cells: []const CellType, body_start: usize) !void {
+    // When the worst case of the whole run fits both the frame budget and the
+    // buffer, neither check can fail per cell, so the run is written without
+    // them. The output bytes are identical either way.
+    const worst = cells.len * max_cell_size;
+    if (encoder.index - body_start + worst <= max_body_size and encoder.buffer.len - encoder.index >= worst) {
+        return encodeCellsWithin(encoder, cells);
+    }
+
     var previous_style: ?StyleType = null;
     for (cells) |cell| {
         try validateCell(cell);
@@ -371,6 +379,42 @@ fn encodeCells(encoder: *EncoderType, cells: []const CellType, body_start: usize
         try encoder.writeBytes(cell.bytes[0..cell.len]);
         previous_style = cell.style;
     }
+}
+
+/// Writes a run whose worst-case size is already reserved. Each cell stores
+/// its complete inline text and advances by `len`; the extra bytes stay
+/// past the encoder index and inside the reservation, and the next cell or
+/// `finish` never exposes them.
+fn encodeCellsWithin(encoder: *EncoderType, cells: []const CellType) !void {
+    const out = encoder.buffer;
+    var index = encoder.index;
+    defer encoder.index = index;
+
+    var previous_style: ?StyleType = null;
+    for (cells) |cell| {
+        try validateCell(cell);
+        const style_changed = previous_style == null or !previous_style.?.eql(cell.style);
+        out[index] = cell.len | (cell.width << width_shift) | if (style_changed) style_changed_bit else 0;
+        index += cell_header_size;
+        if (style_changed) {
+            index += writeStyleWithin(out[index..], cell.style);
+        }
+
+        out[index..][0..CellType.max_bytes].* = cell.bytes;
+        index += cell.len;
+        previous_style = cell.style;
+    }
+}
+
+fn writeStyleWithin(out: []u8, style: StyleType) usize {
+    std.mem.writeInt(u16, out[0..2], @bitCast(style.flags), .little);
+    var len: usize = @sizeOf(u16);
+    inline for (.{ style.fg, style.bg, style.underline_color }) |color| {
+        out[len..][0..4].* = @bitCast(color);
+        len += encodedColorSize(color);
+    }
+
+    return len;
 }
 
 /// Exact wire size of a cell run, excluding its span header.
@@ -443,10 +487,15 @@ fn encodedStyleSize(style: StyleType) usize {
 }
 
 fn encodedColorSize(color: cell_support.Color) usize {
-    return switch (color) {
-        .default => 1,
-        .indexed => 2,
-        .rgb => 4,
+    return 1 + colorChannels(color);
+}
+
+/// Wire channels after the kind byte: none, the palette index, or RGB.
+fn colorChannels(color: cell_support.Color) usize {
+    return switch (color.kind) {
+        .default => 0,
+        .indexed => 1,
+        .rgb => 3,
     };
 }
 
@@ -460,25 +509,16 @@ fn validateFlags(bits: u16) !void {
 }
 
 fn encodeColor(encoder: *EncoderType, color: cell_support.Color) !void {
-    switch (color) {
-        .default => try encoder.writeByte(0),
-        .indexed => |index| {
-            try encoder.writeByte(1);
-            try encoder.writeByte(index);
-        },
-        .rgb => |rgb| {
-            try encoder.writeByte(2);
-            try encoder.writeBytes(&rgb);
-        },
-    }
+    try encoder.writeByte(@intFromEnum(color.kind));
+    try encoder.writeBytes(color.value[0..colorChannels(color)]);
 }
 
 fn decodeColor(decoder: *DecoderType) !cell_support.Color {
     const tag = try decoder.readByte();
     return switch (tag) {
         0 => .default,
-        1 => .{ .indexed = try decoder.readByte() },
-        2 => .{ .rgb = (try decoder.readBytes(3))[0..3].* },
+        1 => .indexed(try decoder.readByte()),
+        2 => .rgb((try decoder.readBytes(3))[0..3].*),
         else => error.InvalidColor,
     };
 }
@@ -491,8 +531,8 @@ test "full snapshots preserve cells, styles and cursor" {
             .len = 1,
             .width = 1,
             .style = .{
-                .fg = .{ .rgb = .{ 1, 2, 3 } },
-                .bg = .{ .indexed = 4 },
+                .fg = .rgb(.{ 1, 2, 3 }),
+                .bg = .indexed(4),
                 .flags = .{ .bold = true, .underline = .curly },
             },
         },
@@ -640,4 +680,36 @@ test "scroll metadata cannot point beyond retained history" {
         .scroll = .{ .total_rows = 10, .offset = 9 },
         .spans = &spans,
     }));
+}
+
+test "reserved cell runs encode the same bytes as checked runs" {
+    var random = std.Random.DefaultPrng.init(0x5eed);
+    const rng = random.random();
+    var cells: [257]CellType = undefined;
+    for (&cells) |*cell| {
+        const colors = [_]cell_support.Color{ .default, .indexed(rng.int(u8)), .rgb(.{ rng.int(u8), rng.int(u8), rng.int(u8) }) };
+        const len = rng.intRangeAtMost(u8, 1, CellType.max_bytes);
+        cell.* = .{
+            .len = len,
+            .width = rng.intRangeAtMost(u8, 1, 2),
+            .style = .{
+                .fg = colors[rng.uintLessThan(usize, colors.len)],
+                .bg = if (rng.boolean()) colors[rng.uintLessThan(usize, colors.len)] else .default,
+                .flags = .{ .bold = rng.boolean(), .underline = if (rng.boolean()) .curly else .none },
+            },
+        };
+        for (cell.bytes[0..len]) |*byte| {
+            byte.* = rng.intRangeAtMost(u8, 'a', 'z');
+        }
+    }
+
+    var reserved_storage: [cells.len * max_cell_size]u8 = undefined;
+    var reserved = EncoderType.init(&reserved_storage);
+    try encodeCells(&reserved, &cells, 0);
+
+    var exact_storage: [cells.len * max_cell_size]u8 = undefined;
+    var checked = EncoderType.init(exact_storage[0..reserved.index]);
+    try encodeCells(&checked, &cells, 0);
+    try std.testing.expectEqualSlices(u8, checked.finish(), reserved.finish());
+    try std.testing.expectEqual(encodedCellsSize(&cells, null), reserved.index);
 }

@@ -276,7 +276,7 @@ fn matches(renderer: *const Renderer, plan: *const PlanType, key: Key) bool {
 fn renderKey(renderer: *const Renderer, plan: *const PlanType, palette: *const data.Palette) ?Key {
     if (!renderer.supported or renderer.cell_width == 0 or renderer.cell_height < 8 or renderer.cell_height > 256 or
         plan.len == 0 or plan.len > core.max_panes_per_tab or plan.area.h != 1 or plan.area.w == 0 or
-        palette.accent != .rgb or palette.surface_dim != .rgb or palette.subtext0 != .rgb)
+        palette.accent.kind != .rgb or palette.surface_dim.kind != .rgb or palette.subtext0.kind != .rgb)
     {
         return null;
     }
@@ -307,9 +307,9 @@ fn renderKey(renderer: *const Renderer, plan: *const PlanType, palette: *const d
         .cell_width = renderer.cell_width,
         .cell_height = renderer.cell_height,
         .font_height = @intCast(@min(@as(u32, height) * 2 / 3, @as(u32, renderer.cell_width) * 4 / 3)),
-        .accent = palette.accent.rgb,
-        .selected_text = palette.surface_dim.rgb,
-        .inactive_text = palette.subtext0.rgb,
+        .accent = palette.accent.value,
+        .selected_text = palette.surface_dim.value,
+        .inactive_text = palette.subtext0.value,
     };
 }
 

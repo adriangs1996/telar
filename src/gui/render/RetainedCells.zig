@@ -6,13 +6,15 @@ const Mesh = @import("CellMesh.zig");
 const Metadata = @import("CellMetadata.zig");
 const Paint = @import("CellPaint.zig");
 const Quad = @import("Quad.zig").Quad;
+const Row = @import("CellRow.zig");
 const Grid = @This();
 
 pub const max_cells = 65536;
 
 allocator: std.mem.Allocator,
 entries: std.ArrayList(Metadata) = .empty,
-geometry: std.ArrayList([Mesh.capacity]Quad) = .empty,
+primary: std.ArrayList([Mesh.primary_capacity]Quad) = .empty,
+overflow: std.ArrayList([Mesh.overflow_capacity]Quad) = .empty,
 cols: u16 = 0,
 rows: u16 = 0,
 
@@ -22,7 +24,8 @@ pub fn init(allocator: std.mem.Allocator) Grid {
 
 pub fn deinit(grid: *Grid) void {
     grid.entries.deinit(grid.allocator);
-    grid.geometry.deinit(grid.allocator);
+    grid.primary.deinit(grid.allocator);
+    grid.overflow.deinit(grid.allocator);
 }
 
 /// Geometry changes invalidate positions; steady frames allocate nothing.
@@ -38,9 +41,11 @@ pub fn resize(grid: *Grid, size: [2]u16) !void {
     }
 
     try grid.entries.ensureTotalCapacityPrecise(grid.allocator, count);
-    try grid.geometry.ensureTotalCapacityPrecise(grid.allocator, count);
+    try grid.primary.ensureTotalCapacityPrecise(grid.allocator, count);
+    try grid.overflow.ensureTotalCapacityPrecise(grid.allocator, count);
     grid.entries.items.len = count;
-    grid.geometry.items.len = count;
+    grid.primary.items.len = count;
+    grid.overflow.items.len = count;
     grid.cols = size[0];
     grid.rows = size[1];
     grid.invalidate();
@@ -53,13 +58,26 @@ pub fn invalidate(grid: *Grid) void {
     }
 }
 
-/// Borrows both arrays until resize or deinit. Example: `grid.at(.{ x, y }).items();`
+/// Borrows every array until resize or deinit. Example: `grid.at(.{ x, y }).background();`
 pub fn at(grid: *Grid, position: [2]u16) Mesh {
     std.debug.assert(position[0] < grid.cols and position[1] < grid.rows);
     const index = @as(usize, position[1]) * grid.cols + position[0];
     return .{
         .metadata = &grid.entries.items[index],
-        .quads = &grid.geometry.items[index],
+        .primary = &grid.primary.items[index],
+        .overflow = &grid.overflow.items[index],
+    };
+}
+
+/// Borrows `len` consecutive cells starting at `position` until resize or
+/// deinit. Example: `const row = grid.row(.{ x, y }, cols);`
+pub fn row(grid: *Grid, position: [2]u16, len: u16) Row {
+    std.debug.assert(position[1] < grid.rows and @as(usize, position[0]) + len <= grid.cols);
+    const start = @as(usize, position[1]) * grid.cols + position[0];
+    return .{
+        .metadata = grid.entries.items[start..][0..len],
+        .primary = grid.primary.items[start..][0..len],
+        .overflow = grid.overflow.items[start..][0..len],
     };
 }
 
@@ -96,14 +114,17 @@ fn resizeWithFailures(allocator: std.mem.Allocator) !void {
         try std.testing.expectEqual(@as(u16, 2), grid.cols);
         try std.testing.expectEqual(@as(u16, 2), grid.rows);
         try std.testing.expectEqual(@as(usize, 4), grid.entries.items.len);
-        try std.testing.expectEqual(@as(usize, 4), grid.geometry.items.len);
+        try std.testing.expectEqual(@as(usize, 4), grid.primary.items.len);
+        try std.testing.expectEqual(@as(usize, 4), grid.overflow.items.len);
         try std.testing.expect(grid.at(.{ 1, 1 }).matches(paint));
-        try std.testing.expectEqualSlices(Quad, &quads, grid.at(.{ 1, 1 }).items());
+        var storage: [Mesh.capacity]Quad = undefined;
+        try std.testing.expectEqualSlices(Quad, &quads, grid.at(.{ 1, 1 }).collect(&storage));
         return err;
     };
 
     try std.testing.expectEqual(@as(usize, 256), grid.entries.items.len);
-    try std.testing.expectEqual(grid.entries.items.len, grid.geometry.items.len);
+    try std.testing.expectEqual(grid.entries.items.len, grid.primary.items.len);
+    try std.testing.expectEqual(grid.entries.items.len, grid.overflow.items.len);
     try std.testing.expect(!grid.at(.{ 1, 1 }).matches(paint));
     for (grid.entries.items) |entry| {
         try std.testing.expect(!entry.valid);

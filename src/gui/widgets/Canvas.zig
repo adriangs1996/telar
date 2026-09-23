@@ -104,7 +104,7 @@ pub fn fill(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
 /// `fill` over a device-pixel rectangle, for chrome laid out in pixels.
 /// Example: `try canvas.fillAt(thumb, palette.overlay0);`
 pub fn fillAt(canvas: *Canvas, bounds: Rect, ink_color: core.Color) !void {
-    if (bounds.width <= 0 or bounds.height <= 0 or ink_color == .default) {
+    if (bounds.width <= 0 or bounds.height <= 0 or ink_color.kind == .default) {
         return;
     }
 
@@ -126,7 +126,7 @@ pub fn fillRounded(canvas: *Canvas, area: core.Rect, fill_value: RoundedFill) !v
 /// the shorter side is clamped, so `999` draws a pill.
 /// Example: `try canvas.fillRoundedAt(pill, .{ .radius = 999, .color = palette.accent });`
 pub fn fillRoundedAt(canvas: *Canvas, bounds: Rect, fill_value: RoundedFill) !void {
-    if (bounds.width <= 0 or bounds.height <= 0 or fill_value.color == .default) {
+    if (bounds.width <= 0 or bounds.height <= 0 or fill_value.color.kind == .default) {
         return;
     }
 
@@ -394,7 +394,7 @@ pub fn border(canvas: *Canvas, area: core.Rect, ink_color: core.Color) !void {
 /// what lies beneath them instead of showing the translucent window.
 /// Example: `try canvas.fill(modal.area, canvas.covering(palette.panel_bg));`
 pub fn covering(canvas: Canvas, value: core.Color) core.Color {
-    return if (value == .default) .{ .rgb = canvas.theme.terminal.background } else value;
+    return if (value.kind == .default) .rgb(canvas.theme.terminal.background) else value;
 }
 
 fn color(canvas: Canvas, value: core.Color, fallback: [3]u8) Color {

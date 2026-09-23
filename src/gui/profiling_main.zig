@@ -19,6 +19,7 @@ pub fn main(init: std.process.Init) !void {
     var output = std.Io.File.stdout().writer(init.io, &buffer);
     var probe: Probe = .{ .io = init.io, .gpa = init.gpa, .writer = &output.interface };
     probe.terminal_only = init.environ_map.get("DOD_TERMINAL_ONLY") != null;
+    probe.agent_only = init.environ_map.get("DOD_AGENT_ONLY") != null;
     probe.terminal_mode = init.environ_map.get("DOD_MODE");
     probe.verify = init.environ_map.get("DOD_VERIFY") != null;
     if (init.environ_map.get("DOD_SAMPLES")) |value| {

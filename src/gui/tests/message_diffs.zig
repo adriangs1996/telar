@@ -128,7 +128,7 @@ test "diff syntax follows every theme and recolors existing source after palette
         try expectInk(&canvas, canvas.theme.syntax(.comment));
     }
 
-    const override: core.Color = .{ .rgb = .{ 17, 37, 227 } };
+    const override: core.Color = .rgb(.{ 17, 37, 227 });
     canvas.theme.syntax_styles.set(.keyword, .{ .color = override });
     fixture.quads.clear();
     try text.draw(&canvas);

@@ -74,7 +74,7 @@ test "progress arcs stay bounded at every fraction scale and rotation without al
         for ([_]f32{ 0, 0.001, 0.25, 0.73, 1 }) |fraction| {
             for ([_]f32{ 0, 0.173, 0.5, 0.92 }) |rotation| {
                 quads.clear();
-                try (ProgressRing{ .area = bounds, .color = .{ .rgb = .{ 255, 0, 0 } }, .fraction = fraction, .rotation = rotation }).draw(&canvas);
+                try (ProgressRing{ .area = bounds, .color = .rgb(.{ 255, 0, 0 }), .fraction = fraction, .rotation = rotation }).draw(&canvas);
                 try std.testing.expect(quads.items().len <= segments + 2);
                 try std.testing.expectEqual(@as(f32, 0.18), quads.items()[0].border_a);
                 for (quads.items()) |item| {

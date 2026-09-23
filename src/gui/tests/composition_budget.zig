@@ -136,7 +136,7 @@ fn populateMultiplexer(fixture: *Fixture) !void {
             cell.style.flags.bold = index % 2 == 0;
             cell.style.flags.underline = if (cell_index % 7 == 0) .single else .none;
             if (cell_index % 5 == 0) {
-                cell.style.bg = .{ .indexed = 1 };
+                cell.style.bg = .indexed(1);
             }
         }
     }

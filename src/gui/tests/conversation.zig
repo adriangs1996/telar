@@ -239,3 +239,45 @@ test "subagent status updates preserve fixed identity card height and parent ind
         try std.testing.expectEqual(@as(u64, 7), flow.rows[2].item.identity);
     }
 }
+
+test "retained message heights match fresh measurement through streaming and resizing" {
+    var cached = try Fixture.init();
+    defer cached.deinit();
+    try cached.enableCache();
+    var fresh = try Fixture.init();
+    defer fresh.deinit();
+    const snapshot = try std.testing.allocator.create(core.AgentThreadSnapshot);
+    defer std.testing.allocator.destroy(snapshot);
+    snapshot.* = .{ .pane_id = @enumFromInt(1), .pane_generation = 1, .status = .working };
+    const texts = [_][]const u8{
+        "Short prompt",
+        "A reply with **bold**, `code` and a list:\n- one\n- two words that wrap around the column edge\n",
+        "```zig\nconst value = 42;\n```\nAfter the block.",
+        "| a | b |\n|---|---|\n| 1 | 2 |\n",
+    };
+    var len: usize = 0;
+    for (texts, 0..) |text, index| {
+        @memcpy(snapshot.text_storage[len..][0..text.len], text);
+        snapshot.item_storage[index] = .{ .identity = index + 1, .role = if (index == 0) .user else .assistant, .status = .completed, .complete = true, .text_offset = @intCast(len), .text_len = @intCast(text.len) };
+        len += text.len;
+    }
+
+    snapshot.item_count = texts.len;
+    snapshot.text_len = @intCast(len);
+    const thread: @FieldType(ThreadFlow, "thread") = .{ .pane_id = snapshot.pane_id, .agent = null, .composer = "", .kind = .agent, .transcript = snapshot };
+    for ([_]f32{ 400, 400, 260, 400 }) |width| {
+        for (0..2) |streamed| {
+            snapshot.item_storage[1].complete = streamed == 1;
+            var warm: ThreadFlow = .{ .bounds = .{ .x = 0, .y = 0, .width = width, .height = 300 }, .thread = thread };
+            var canvas = cached.canvas();
+            try warm.resolve(&canvas);
+            var reference: ThreadFlow = .{ .bounds = warm.bounds, .thread = thread };
+            var fresh_canvas = fresh.canvas();
+            try reference.resolve(&fresh_canvas);
+            try std.testing.expectEqual(reference.len, warm.len);
+            for (reference.rows[0..reference.len], warm.rows[0..warm.len]) |expected, actual| {
+                try std.testing.expectEqual(expected.bounds.height, actual.bounds.height);
+            }
+        }
+    }
+}

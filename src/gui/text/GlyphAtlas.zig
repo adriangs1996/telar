@@ -29,6 +29,8 @@ const ShapedText = @import("ShapedText.zig");
 const GlyphTransform = @import("GlyphTransform.zig");
 const GlyphFailures = @import("GlyphFailures.zig");
 const Braille = @import("Braille.zig");
+const AsciiGlyph = @import("AsciiGlyph.zig");
+const AsciiGlyphs = @import("AsciiGlyphs.zig");
 const Box = @import("BoxDrawing.zig");
 const Block = @import("BlockElement.zig");
 const BlockInk = @import("BlockInk.zig");
@@ -70,6 +72,7 @@ raster_attempts: usize = 0,
 failed_glyphs: GlyphFailures = .{},
 boxes: BoxCache = .{},
 glyphs: std.AutoHashMapUnmanaged(u64, GlyphSlot) = .empty,
+ascii: AsciiGlyphs = .{},
 
 /// `options.font` must outlive the atlas: FreeType borrows memory faces.
 /// Example: `var atlas = try GlyphAtlas.init(allocator, .{ .font = face_bytes, .pixel_height = 28 });`
@@ -162,6 +165,21 @@ pub fn place(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
         return 0;
     }
 
+    atlas.syncFontRevision();
+    if (AsciiGlyphs.index(run, atlas.pixel_height)) |entry| {
+        if (atlas.ascii.find(entry)) |glyph| {
+            return paintAscii(run, glyph, list);
+        }
+
+        const advance = try atlas.placeShaped(run, list);
+        try atlas.rememberAscii(run, entry);
+        return advance;
+    }
+
+    return atlas.placeShaped(run, list);
+}
+
+fn placeShaped(atlas: *GlyphAtlas, run: TextRun, list: *QuadList) !f32 {
     if (Braille.parse(run.text)) |pattern| {
         var current = run;
         current.cell_bounds = try atlas.gridBounds(run);
@@ -475,6 +493,52 @@ fn gridBounds(atlas: *GlyphAtlas, run: TextRun) !Rect {
     return atlas.naturalCellBounds(run.pixel_height);
 }
 
+/// Records a one-byte run that `paint` placed from one natural glyph. Runs
+/// shaped into several glyphs or fitted from a fallback keep the full path.
+fn rememberAscii(atlas: *GlyphAtlas, run: TextRun, entry: usize) !void {
+    const shaped = atlas.shaping_cache.find(shapingKey(run.text, run)) orelse return;
+    if (shaped.font.fitted() or shaped.glyphs.len != 1) {
+        return;
+    }
+
+    const position = shaped.positions[0];
+    atlas.ascii.remember(
+        entry,
+        .{
+            .slot = try atlas.visibleSlot(.{ .font = shaped.font, .index = shaped.glyphs[0].codepoint }, run),
+            .x_offset = position.x_offset,
+            .y_offset = position.y_offset,
+            .x_advance = position.x_advance,
+        },
+    );
+}
+
+/// The natural single-glyph case of `paint`, with the same arithmetic.
+fn paintAscii(run: TextRun, glyph: AsciiGlyph, list: *QuadList) !f32 {
+    const placed = glyph.slot;
+    if (placed.width > 0 and placed.height > 0) {
+        const origin: i64 = @intFromFloat(@round(run.x * 64));
+        const x = FontSize.round26(origin + glyph.x_offset) + placed.left;
+        const y = -FontSize.round26(glyph.y_offset) - placed.top;
+        try list.push(.{
+            .x = @floatFromInt(x),
+            .y = @round(run.y) + @as(f32, @floatFromInt(y)),
+            .width = @floatFromInt(placed.width),
+            .height = @floatFromInt(placed.height),
+            .u0 = placed.u0,
+            .v0 = placed.v0,
+            .u1 = placed.u1,
+            .v1 = placed.v1,
+            .r = run.color.r,
+            .g = run.color.g,
+            .b = run.color.b,
+            .a = run.color.a,
+        });
+    }
+
+    return @floatFromInt(FontSize.round26(@as(i64, glyph.x_advance)));
+}
+
 fn paint(atlas: *GlyphAtlas, text: ShapedText, list: *QuadList) !f32 {
     const run = text.run;
     const shaped = text.shaped;
@@ -750,6 +814,7 @@ fn syncFontRevision(atlas: *GlyphAtlas) void {
     }
 
     atlas.shaping_cache.clear();
+    atlas.ascii.clear();
     if (atlas.editor_shaping_cache) |cache| {
         cache.clear();
     }
@@ -1311,4 +1376,40 @@ test "Braille uses natural metrics when callers omit cell bounds" {
     try std.testing.expectEqual(@as(usize, 1), list.items().len);
     run.pixel_height = 0;
     try std.testing.expectError(error.InvalidPixelHeight, atlas.place(run, &list));
+}
+
+test "cached ASCII glyphs place exactly what the shaping path places" {
+    var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
+    defer atlas.deinit();
+    var shaped = QuadList.init(std.testing.allocator);
+    defer shaped.deinit();
+    var cached = QuadList.init(std.testing.allocator);
+    defer cached.deinit();
+    const positions = [_][2]f32{ .{ 0, 13 }, .{ 27, 45.5 }, .{ 3.3, 7.75 }, .{ 1920, 1117 } };
+    for (0..128) |byte| {
+        const text = [_]u8{@intCast(byte)};
+        for (0..4) |style| {
+            for (positions) |position| {
+                const run: TextRun = .{ .text = &text, .x = position[0], .y = position[1], .color = .{ .r = 0.25, .g = 0.5, .b = 0.75, .a = 1 }, .pixel_height = 16, .bold = style & 1 != 0, .italic = style & 2 != 0 };
+                atlas.ascii.clear();
+                shaped.clear();
+                const expected = atlas.place(run, &shaped) catch |err| {
+                    try std.testing.expectEqual(error.InvalidUtf8, err);
+                    continue;
+                };
+                cached.clear();
+                const entry = AsciiGlyphs.index(run, atlas.pixel_height).?;
+                const actual = try atlas.place(run, &cached);
+                try std.testing.expectEqual(expected, actual);
+                try std.testing.expectEqualSlices(quad.Quad, shaped.items(), cached.items());
+                if (atlas.ascii.find(entry) == null) {
+                    continue;
+                }
+
+                cached.clear();
+                try std.testing.expectEqual(expected, try atlas.place(run, &cached));
+                try std.testing.expectEqualSlices(quad.Quad, shaped.items(), cached.items());
+            }
+        }
+    }
 }

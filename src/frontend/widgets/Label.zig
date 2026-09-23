@@ -111,7 +111,7 @@ test "automatic tab labels draw the application icon while manual labels retain 
     };
     const placement: Placement = .{
         .rect = .{ .x = 2, .y = 0, .w = automatic.width(), .h = 1 },
-        .style = .{ .fg = .{ .rgb = .{ 220, 220, 220 } }, .bg = .{ .rgb = .{ 30, 30, 30 } } },
+        .style = .{ .fg = .rgb(.{ 220, 220, 220 }), .bg = .rgb(.{ 30, 30, 30 }) },
     };
     automatic.draw(&context, placement);
     try std.testing.expectEqualStrings(data.icons.Icon.app_editor.unicodeGlyph(), buffer.at(5, 0).?.text());
@@ -161,7 +161,7 @@ test "tab application icons remain within clipped labels" {
         plan.reset();
         label.draw(&context, .{
             .rect = .{ .x = 2, .y = 0, .w = available, .h = 1 },
-            .style = .{ .fg = .{ .rgb = .{ 220, 220, 220 } }, .bg = .{ .rgb = .{ 30, 30, 30 } } },
+            .style = .{ .fg = .rgb(.{ 220, 220, 220 }), .bg = .rgb(.{ 30, 30, 30 }) },
         });
         try std.testing.expectEqualStrings(".", buffer.at(1, 0).?.text());
         try std.testing.expectEqualStrings(".", buffer.at(2 + available, 0).?.text());

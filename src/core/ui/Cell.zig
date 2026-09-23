@@ -1,5 +1,6 @@
 const Style = @import("Style.zig");
 const std = @import("std");
+const builtin = @import("builtin");
 /// One screen position.
 ///
 /// The payload is a grapheme cluster, not a codepoint: `é` may be two
@@ -25,12 +26,38 @@ pub fn text(c: *const Cell) []const u8 {
 }
 
 /// The diff calls this once per position per frame, so it is the hottest
-/// comparison in the renderer.
+/// comparison in the renderer. It compares complete representations as one
+/// 32-byte vector. Equal bytes imply equal values; cells built through
+/// `Buffer.setCell`, the wire decoder or the defaults are canonical (bytes
+/// after `len` keep their default, colors zero unused channels), so equal
+/// values are also equal bytes on every hot path. A non-canonical cell can
+/// only compare unequal, which costs a redundant repaint, never a stale one.
+///
+/// ```zig
+/// if (next.eqlPublic(&previous)) continue;
+/// ```
 pub fn eqlPublic(a: *const Cell, b: *const Cell) bool {
-    return a.eql(b);
+    // Whole-cell loads through pointers: a byte view of the struct lets LLVM
+    // reassemble lanes from fields it already loaded. The reduction differs
+    // per target because each lowers the other poorly:
+    //   AArch64: LDP, EOR, ORR, UMAXV (a byte-mask reduction becomes
+    //            BIC/ZIP1/ADDV per 16 bytes);
+    //   x86-64:  PCMPEQB, PAND, PMOVMSKB with SSE2 and VPXOR, VPTEST with
+    //            AVX2 (a max reduction becomes PSHUFD/PMAXUB rounds).
+    if (comptime builtin.cpu.arch.isAARCH64()) {
+        const left: *align(1) const [2]Lanes = @ptrCast(a);
+        const right: *align(1) const [2]Lanes = @ptrCast(b);
+        return @reduce(.Max, (left[0] ^ right[0]) | (left[1] ^ right[1])) == 0;
+    }
+
+    const left: *align(1) const @Vector(@sizeOf(Cell), u8) = @ptrCast(a);
+    const right: *align(1) const @Vector(@sizeOf(Cell), u8) = @ptrCast(b);
+    return @reduce(.And, left.* == right.*);
 }
 
-fn eql(a: *const Cell, b: *const Cell) bool {
-    return a.len == b.len and a.width == b.width and
-        std.mem.eql(u8, a.text(), b.text()) and a.style.eql(b.style);
+const Lanes = @Vector(16, u8);
+
+comptime {
+    std.debug.assert(@sizeOf(Cell) == 32);
+    std.debug.assert(std.meta.hasUniqueRepresentation(Cell));
 }

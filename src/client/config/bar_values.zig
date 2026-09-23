@@ -158,7 +158,7 @@ pub fn parseBarColor(state: *lua_api.c.lua_State, index: c_int, diagnostic: *dat
             return error.InvalidBarContent;
         }
 
-        return .{ .value = .{ .indexed = @intCast(value) } };
+        return .{ .value = .indexed(@intCast(value)) };
     }
 
     const name = lua_value.string(state, index) orelse {
@@ -178,11 +178,11 @@ pub fn parseBarColor(state: *lua_api.c.lua_State, index: c_int, diagnostic: *dat
             diagnostic.set("bar color '{s}' is not #RRGGBB", .{name});
             return error.InvalidBarContent;
         };
-        return .{ .value = .{ .rgb = .{
+        return .{ .value = .rgb(.{
             @intCast((value >> 16) & 0xff),
             @intCast((value >> 8) & 0xff),
             @intCast(value & 0xff),
-        } } };
+        }) };
     }
 
     diagnostic.set("unknown bar color '{s}'", .{name});

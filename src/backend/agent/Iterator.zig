@@ -21,9 +21,9 @@ pub fn next(cursor: *Iterator) ?*Agent {
         const index = cursor.next_index;
         cursor.next_index += 1;
 
-        if (cursor.repository.slots[index]) |*agent| {
+        if (cursor.repository.occupiedAt(index)) {
             cursor.current_index = index;
-            return agent;
+            return &cursor.repository.slots[index].?;
         }
     }
 
@@ -40,12 +40,12 @@ pub fn next(cursor: *Iterator) ?*Agent {
 pub fn removeCurrent(cursor: *Iterator) bool {
     const index = cursor.current_index orelse return false;
 
-    if (cursor.repository.slots[index] == null) {
+    if (!cursor.repository.occupiedAt(index)) {
         cursor.current_index = null;
         return false;
     }
 
-    cursor.repository.slots[index] = null;
+    cursor.repository.release(index);
     cursor.current_index = null;
     return true;
 }

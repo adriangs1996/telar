@@ -128,10 +128,7 @@ pub fn fill(pixels: []u8, color: [3]u8) void {
 }
 
 pub fn rgb(color: core.Color) ?[3]u8 {
-    return switch (color) {
-        .rgb => |value| value,
-        else => null,
-    };
+    return color.rgbChannels();
 }
 
 pub fn imageId(index: usize) u32 {
@@ -186,8 +183,8 @@ test "modal assets use the same background as the client chrome" {
     defer renderer.deinit();
     _ = renderer.configure(.{ .support = .supported, .cell_width = 10, .cell_height = 20 });
     var palette = data.theme_support.default_theme.palette;
-    palette.panel_bg = .{ .rgb = .{ 1, 2, 3 } };
-    palette.surface0 = .{ .rgb = .{ 4, 5, 6 } };
+    palette.panel_bg = .rgb(.{ 1, 2, 3 });
+    palette.surface0 = .rgb(.{ 4, 5, 6 });
 
     renderer.prepare(.{ .x = 2, .y = 1, .w = 40, .h = 12 }, &palette);
 

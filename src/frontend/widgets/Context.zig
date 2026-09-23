@@ -31,14 +31,8 @@ pub fn drawIcon(context: *Context, draw: IconDraw) u16 {
     // icons need the theme and an RGB pair for their opaque slot.
     const artwork = draw.icon == .telar_mark;
     const requested = if (context.icon_theme == .nerd_font or artwork) context.icon_plan else null;
-    const foreground = switch (draw.style.fg) {
-        .rgb => |value| value,
-        else => null,
-    };
-    const background = switch (draw.style.bg) {
-        .rgb => |value| value,
-        else => null,
-    };
+    const foreground = draw.style.fg.rgbChannels();
+    const background = draw.style.bg.rgbChannels();
     const graphical = requested != null and (artwork or (foreground != null and background != null));
     const fallback = if (graphical) draw.icon.cellFallbackGlyph() else draw.icon.unicodeGlyph();
     const written = context.buffer.writeText(draw.area, .{ .point = draw.point, .text = fallback, .style = draw.style });

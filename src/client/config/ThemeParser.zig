@@ -217,10 +217,8 @@ fn terminal(parser: Parser, initial: data.TerminalTheme) !data.TerminalTheme {
 }
 
 fn rgb(parser: Parser, field: []const u8) ![3]u8 {
-    return switch (try parser.color(field)) {
-        .rgb => |bytes| bytes,
-        else => parser.invalid("theme.terminal colors must be explicit #RRGGBB values"),
-    };
+    const parsed = try parser.color(field);
+    return parsed.rgbChannels() orelse parser.invalid("theme.terminal colors must be explicit #RRGGBB values");
 }
 
 fn color(parser: Parser, field: []const u8) !core.Color {
@@ -239,7 +237,7 @@ fn color(parser: Parser, field: []const u8) !core.Color {
         parser.diagnostic.set("theme color {s} contains invalid hexadecimal digits", .{field});
         return error.InvalidConfig;
     };
-    return .{ .rgb = result };
+    return .rgb(result);
 }
 
 fn invalid(parser: Parser, message: []const u8) error{InvalidConfig} {

@@ -119,7 +119,7 @@ pub fn render(context: *ContextType, application: core.Rect, input: GotoPickerIn
 test "cell fallback connects every border edge and graphical frame keeps corners untouched" {
     var buffer = try core.Buffer.init(std.testing.allocator, 40, 12);
     defer buffer.deinit();
-    const outside: core.Style = .{ .bg = .{ .rgb = .{ 1, 2, 3 } } };
+    const outside: core.Style = .{ .bg = .rgb(.{ 1, 2, 3 }) };
     buffer.fill(buffer.area(), .{ .glyph = "#", .style = outside });
     var hits: widget.Hits = .{};
     var context: ContextType = .{

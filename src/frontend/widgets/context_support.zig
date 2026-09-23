@@ -47,8 +47,8 @@ test "Nerd Font icons retain a cell fallback and publish a graphical mark" {
         .icon_plan = &plan,
     };
     const style: core.Style = .{
-        .fg = .{ .rgb = .{ 1, 2, 3 } },
-        .bg = .{ .rgb = .{ 4, 5, 6 } },
+        .fg = .rgb(.{ 1, 2, 3 }),
+        .bg = .rgb(.{ 4, 5, 6 }),
     };
     try std.testing.expectEqual(@as(u16, 1), context.drawIcon(.{
         .area = buffer.area(),

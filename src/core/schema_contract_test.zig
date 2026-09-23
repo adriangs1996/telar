@@ -521,8 +521,8 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
             .len = 1,
             .width = 1,
             .style = .{
-                .fg = .{ .rgb = .{ 1, 2, 3 } },
-                .bg = .{ .indexed = 4 },
+                .fg = .rgb(.{ 1, 2, 3 }),
+                .bg = .indexed(4),
                 .flags = .{ .bold = true, .underline = .curly },
             },
         },
@@ -2318,11 +2318,11 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
             .width = 1,
             .style = .{
                 .fg = if (index % 2 == 0)
-                    .{ .rgb = .{ 255, 0, 0 } }
+                    .rgb(.{ 255, 0, 0 })
                 else
-                    .{ .rgb = .{ 0, 0, 255 } },
-                .bg = .{ .rgb = .{ 1, 2, 3 } },
-                .underline_color = .{ .rgb = .{ 4, 5, 6 } },
+                    .rgb(.{ 0, 0, 255 }),
+                .bg = .rgb(.{ 1, 2, 3 }),
+                .underline_color = .rgb(.{ 4, 5, 6 }),
             },
         };
         @memset(cell.bytes[0..CellType.max_bytes], 'a');

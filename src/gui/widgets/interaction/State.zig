@@ -49,6 +49,7 @@ thread_selection: @import("ThreadSelection.zig") = .{},
 thread_text: ?*@import("ThreadTextStore.zig") = null,
 message_layout: ?*@import("../MessageLayoutCache.zig") = null,
 message_layout_allocator: std_module.mem.Allocator = undefined,
+message_heights: ?*@import("../MessageHeights.zig") = null,
 image_preview: ?@import("ImagePreview.zig") = null,
 approval_review: ?@import("AgentReview.zig") = null,
 composer_menu: @import("ComposerMenuState.zig") = .{},
@@ -88,6 +89,19 @@ pub fn messageLayout(state: *State, allocator: std_module.mem.Allocator) !*@impo
     return state.message_layout.?;
 }
 
+/// Retains message heights once a conversation is measured; shares the
+/// layout cache allocator. Example: `const heights = try state.messageHeights(allocator);`
+pub fn messageHeights(state: *State, allocator: std_module.mem.Allocator) !*@import("../MessageHeights.zig") {
+    _ = try state.messageLayout(allocator);
+    if (state.message_heights == null) {
+        const heights = try state.message_layout_allocator.create(@import("../MessageHeights.zig"));
+        heights.* = .{};
+        state.message_heights = heights;
+    }
+
+    return state.message_heights.?;
+}
+
 /// Owns text hit geometry only when an agent conversation is prepared.
 /// Example: `const text = try state.threadText(canvas.atlas.allocator);`
 pub fn threadText(state: *State, allocator: std_module.mem.Allocator) !*@import("ThreadTextStore.zig") {
@@ -106,6 +120,11 @@ pub fn deinit(state: *State) void {
         store.allocator.destroy(store);
         state.thread_text = null;
     }
+    if (state.message_heights) |heights| {
+        state.message_layout_allocator.destroy(heights);
+        state.message_heights = null;
+    }
+
     if (state.message_layout) |cache| {
         state.message_layout_allocator.destroy(cache);
         state.message_layout = null;

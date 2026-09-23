@@ -293,8 +293,8 @@ test "native configured bar segments preserve colors decorations and faint ink" 
     var state: data.BarsState = .{};
     var content: data.Content = .{};
     try content.append(.{ .text = "Styled", .style = .{
-        .foreground = .{ .value = .{ .rgb = .{ 255, 0, 0 } } },
-        .background = .{ .value = .{ .rgb = .{ 0, 255, 0 } } },
+        .foreground = .{ .value = .rgb(.{ 255, 0, 0 }) },
+        .background = .{ .value = .rgb(.{ 0, 255, 0 }) },
         .bold = true,
         .italic = true,
         .faint = true,
@@ -333,7 +333,7 @@ test "native sidebar ignores configured footer slots" {
     defer std.testing.allocator.free(before);
 
     var content: data.Content = .{};
-    try content.append(.{ .text = "footer", .style = .{ .background = .{ .value = .{ .rgb = .{ 0, 0, 255 } } } } });
+    try content.append(.{ .text = "footer", .style = .{ .background = .{ .value = .rgb(.{ 0, 0, 255 }) } } });
     state.layout.sidebar_footer = .{ .{ .content = content }, .empty, .metrics };
     try fixture.paint(projection);
     try std.testing.expectEqualSlices(Quad.Quad, before, renderer.quads.items());

@@ -37,15 +37,17 @@ test "terminal box borders join adjacent cells for light heavy double and mixed 
         }
 
         try paint(session);
+        var first: [CellMesh.capacity]Quad = undefined;
+        var second: [CellMesh.capacity]Quad = undefined;
         for ([_]u16{ 0, 2, 4 }) |row| {
             for (0..4) |col| {
-                try expectJoin(mesh(session, @intCast(col), row).items()[1..], mesh(session, @intCast(col + 1), row).items()[1..], false);
+                try expectJoin(mesh(session, @intCast(col), row).collect(&first)[1..], mesh(session, @intCast(col + 1), row).collect(&second)[1..], false);
             }
         }
 
         for ([_]u16{ 0, 2, 4 }) |col| {
             for (0..4) |row| {
-                try expectJoin(mesh(session, col, @intCast(row)).items()[1..], mesh(session, col, @intCast(row + 1)).items()[1..], true);
+                try expectJoin(mesh(session, col, @intCast(row)).collect(&first)[1..], mesh(session, col, @intCast(row + 1)).collect(&second)[1..], true);
             }
         }
 
@@ -76,7 +78,8 @@ test "faint straight box glyphs never blend overlapping strokes or consult a fon
         pane.buffer.cells[0] = cell(@intCast(value));
         pane.buffer.cells[0].style.flags = .{ .faint = true, .bold = true, .italic = true };
         try paint(session);
-        const ink = mesh(session, 0, 0).items()[1..];
+        var storage: [CellMesh.capacity]Quad = undefined;
+        const ink = mesh(session, 0, 0).collect(&storage)[1..];
         try std.testing.expect(ink.len > 0 and ink.len < CellMesh.capacity);
         for (ink, 0..) |a, index| {
             try std.testing.expect(isSolid(a));

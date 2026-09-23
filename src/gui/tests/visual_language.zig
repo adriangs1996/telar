@@ -39,9 +39,9 @@ test "rounded fills and rings are single quads carrying their shape" {
     defer fixture.deinit();
     var canvas = fixture.canvas();
     const area: core.Rect = .{ .x = 1, .y = 1, .w = 20, .h = 3 };
-    try canvas.fillRounded(area, .{ .radius = 8, .color = .{ .rgb = .{ 10, 20, 30 } } });
-    try canvas.ring(area, .{ .width = 2, .color = .{ .rgb = .{ 255, 200, 0 } } });
-    try canvas.ring(area, .{ .width = 1, .radius = 8, .color = .{ .rgb = .{ 255, 255, 255 } } });
+    try canvas.fillRounded(area, .{ .radius = 8, .color = .rgb(.{ 10, 20, 30 }) });
+    try canvas.ring(area, .{ .width = 2, .color = .rgb(.{ 255, 200, 0 }) });
+    try canvas.ring(area, .{ .width = 1, .radius = 8, .color = .rgb(.{ 255, 255, 255 }) });
     try canvas.fillRounded(.{ .x = 0, .y = 0, .w = 0, .h = 3 }, .{ .radius = 8, .color = .default });
     try canvas.ring(.{ .x = 0, .y = 0, .w = 5, .h = 0 }, .{ .width = 2, .color = .default });
     const items = fixture.quads.items();

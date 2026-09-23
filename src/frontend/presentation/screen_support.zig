@@ -61,24 +61,12 @@ pub fn writeStyle(w: *std.Io.Writer, style: core.Style) !void {
     if (f.underline != .none) {
         try w.print(";4:{d}", .{@intFromEnum(f.underline)});
     }
-    switch (style.fg) {
-        .default => {},
-        .indexed => |i| try w.print(";38;5;{d}", .{i}),
-        .rgb => |c| try w.print(";38;2;{d};{d};{d}", .{ c[0], c[1], c[2] }),
-    }
-    switch (style.bg) {
-        .default => {},
-        .indexed => |i| try w.print(";48;5;{d}", .{i}),
-        .rgb => |c| try w.print(";48;2;{d};{d};{d}", .{ c[0], c[1], c[2] }),
-    }
+    try writeColor(w, style.fg, .foreground);
+    try writeColor(w, style.bg, .background);
     // Only when there is an underline to colour. Emitting SGR 58 unconditionally
     // costs bytes on every run and confuses terminals that parse it loosely.
     if (f.underline != .none) {
-        switch (style.underline_color) {
-            .default => {},
-            .indexed => |i| try w.print(";58;5;{d}", .{i}),
-            .rgb => |c| try w.print(";58;2;{d};{d};{d}", .{ c[0], c[1], c[2] }),
-        }
+        try writeColor(w, style.underline_color, .underline);
     }
     try w.writeAll("m");
 }
@@ -843,6 +831,130 @@ fn expectMouse(input: []const u8, expected: Event.Mouse) !void {
     try std.testing.expectEqual(expected.kind, parsed.event.mouse.kind);
 }
 
+
+/// SGR parameters introducing an extended color for each styled layer.
+const ColorLayer = enum(u8) {
+    foreground = 38,
+    background = 48,
+    underline = 58,
+};
+
+/// Longest extended color parameter: `;38;2;255;255;255`.
+const max_color_len = 17;
+
+/// Longest cursor position: `ESC [ 4294967295 ; 4294967295 H`.
+const max_cursor_position_len = 2 + 10 + 1 + 10 + 1;
+
+fn writeColor(w: *std.Io.Writer, color: core.Color, comptime layer: ColorLayer) !void {
+    const prefix = std.fmt.comptimePrint(";{d}", .{@intFromEnum(layer)});
+    const channels = color.value;
+    if (color.kind == .default) {
+        return;
+    }
+
+    if (w.unusedCapacityLen() < max_color_len) {
+        switch (color.kind) {
+            .default => unreachable,
+            .indexed => try w.print(prefix ++ ";5;{d}", .{channels[0]}),
+            .rgb => try w.print(prefix ++ ";2;{d};{d};{d}", .{ channels[0], channels[1], channels[2] }),
+        }
+
+        return;
+    }
+
+    const out = w.unusedCapacitySlice();
+    var len: usize = 0;
+    len += appendLiteral(out[len..], prefix);
+    if (color.kind == .indexed) {
+        len += appendLiteral(out[len..], ";5;");
+        len += appendDecimal(out[len..], channels[0]);
+    } else {
+        len += appendLiteral(out[len..], ";2;");
+        len += appendDecimal(out[len..], channels[0]);
+        len += appendLiteral(out[len..], ";");
+        len += appendDecimal(out[len..], channels[1]);
+        len += appendLiteral(out[len..], ";");
+        len += appendDecimal(out[len..], channels[2]);
+    }
+
+    w.advance(len);
+}
+
+/// Moves the host cursor to a one-based `row` and `column`, formatting the
+/// digits in place instead of through `std.fmt`: every run of changed cells
+/// starts with one. Example: `try screen_support.writeCursorPosition(w, .{ y + 1, x + 1 });`
+pub fn writeCursorPosition(w: *std.Io.Writer, position: [2]u32) !void {
+    if (w.unusedCapacityLen() < max_cursor_position_len) {
+        try w.print("\x1b[{d};{d}H", .{ position[0], position[1] });
+        return;
+    }
+
+    const out = w.unusedCapacitySlice();
+    var len = appendLiteral(out, "\x1b[");
+    len += appendDecimal(out[len..], position[0]);
+    len += appendLiteral(out[len..], ";");
+    len += appendDecimal(out[len..], position[1]);
+    len += appendLiteral(out[len..], "H");
+    w.advance(len);
+}
+
+fn appendLiteral(out: []u8, comptime literal: []const u8) usize {
+    out[0..literal.len].* = literal[0..literal.len].*;
+    return literal.len;
+}
+
+fn appendDecimal(out: []u8, value: u32) usize {
+    var digits: [10]u8 = undefined;
+    var remaining = value;
+    var start: usize = digits.len;
+    while (true) {
+        start -= 1;
+        digits[start] = '0' + @as(u8, @intCast(remaining % 10));
+        remaining /= 10;
+        if (remaining == 0) {
+            break;
+        }
+    }
+
+    const len = digits.len - start;
+    @memcpy(out[0..len], digits[start..]);
+    return len;
+}
+
+test "direct escape formatting matches std.fmt at every boundary" {
+    var direct_storage: [64]u8 = undefined;
+    var formatted_storage: [64]u8 = undefined;
+    for ([_]u32{ 0, 1, 9, 10, 99, 100, 999, 65535, 65536, std.math.maxInt(u32) }) |row| {
+        for ([_]u32{ 1, 10, 255, 65536 }) |column| {
+            var direct = std.Io.Writer.fixed(&direct_storage);
+            var formatted = std.Io.Writer.fixed(&formatted_storage);
+            try writeCursorPosition(&direct, .{ row, column });
+            try formatted.print("\x1b[{d};{d}H", .{ row, column });
+            try std.testing.expectEqualStrings(formatted.buffered(), direct.buffered());
+        }
+    }
+
+    for ([_]core.Color{ .default, .indexed(0), .indexed(7), .indexed(255), .rgb(.{ 0, 9, 10 }), .rgb(.{ 255, 255, 255 }) }) |color| {
+        var direct = std.Io.Writer.fixed(&direct_storage);
+        try writeColor(&direct, color, .underline);
+        var formatted = std.Io.Writer.fixed(&formatted_storage);
+        switch (color.kind) {
+            .default => {},
+            .indexed => try formatted.print(";58;5;{d}", .{color.value[0]}),
+            .rgb => try formatted.print(";58;2;{d};{d};{d}", .{ color.value[0], color.value[1], color.value[2] }),
+        }
+
+        try std.testing.expectEqualStrings(formatted.buffered(), direct.buffered());
+    }
+}
+
+test "direct escape formatting falls back near the end of a fixed buffer" {
+    var storage: [9]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&storage);
+    try writeCursorPosition(&writer, .{ 12, 34 });
+    try std.testing.expectEqualStrings("\x1b[12;34H", writer.buffered());
+    try std.testing.expectError(error.WriteFailed, writeCursorPosition(&writer, .{ 1, 1 }));
+}
 test "mouse reports are parsed and converted to zero based coordinates" {
     // Terminals count from one. Getting this wrong puts every click one cell
     // down and to the right, which looks like a layout bug for a long time.

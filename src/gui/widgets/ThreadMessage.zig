@@ -1,4 +1,5 @@
 //! Sent prompts and assistant prose have distinct, quiet conversation surfaces.
+const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const MessageText = @import("MessageText.zig");
@@ -6,12 +7,51 @@ const Message = @This();
 
 view: @import("ThreadItemView.zig"),
 
-/// Measures a prompt bubble or assistant message using the paint text layout.
+/// Measures a prompt bubble or assistant message using the paint text layout,
+/// reusing the height retained for identical layout inputs.
 /// Example: `const height = try message.measure(canvas);`
 pub fn measure(message: Message, canvas: *Canvas) !f32 {
+    const state = canvas.widgets orelse return message.measureLayout(canvas);
+    const key = message.heightKey(canvas) orelse return message.measureLayout(canvas);
+    const heights = try state.messageHeights(canvas.atlas.allocator);
+    if (heights.find(key)) |height| {
+        return height;
+    }
+
+    const height = try message.measureLayout(canvas);
+    heights.remember(key, height);
+    return height;
+}
+
+fn measureLayout(message: Message, canvas: *Canvas) !f32 {
     const user = message.view.item.role == .user;
     const content = message.body(canvas);
     return try content.measure(canvas) + canvas.chrome.px(if (user) @as(f32, 48) else if (message.copyable()) 78 else 50) + canvas.chrome.px(if (message.fragment()) @as(f32, 22) else 0);
+}
+
+/// Null when the height also depends on state outside the text: a Mermaid
+/// block measures differently once its diagram is ready.
+fn heightKey(message: Message, canvas: *const Canvas) ?@import("MessageHeightKey.zig") {
+    const item = message.view.item;
+    const text = message.view.text();
+    if (std.mem.indexOf(u8, text, "mermaid") != null) {
+        return null;
+    }
+
+    return .{
+        .text_hash = std.hash.Wyhash.hash(0, text),
+        .text_len = @intCast(text.len),
+        .width = message.view.bounds.width,
+        .font_identity = canvas.atlas.fonts.identity,
+        .font_revision = canvas.atlas.fonts.revision,
+        .chrome = canvas.chrome,
+        .metrics = canvas.metrics,
+        .role = item.role,
+        .complete = item.complete,
+        .identified = item.identity != 0,
+        .fragment_start = item.fragment_start,
+        .fragment_end = item.fragment_end,
+    };
 }
 
 /// Paints sent text, structured prose, and a stable copy control after completion.

@@ -8,6 +8,7 @@ const Renderer = @import("../render/TerminalRenderer.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const QuadList = @import("../render/QuadList.zig");
 const Quad = @import("../render/Quad.zig").Quad;
+const CellMesh = @import("../render/CellMesh.zig");
 
 test "Braille pattern replacement removes retained dots and blank Braille erases all ink" {
     const session = try Session.init();
@@ -64,7 +65,7 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
     try session.receiveFrame(1);
     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
     pane.buffer.cells[0] = cell(0x05);
-    pane.buffer.cells[0].style = .{ .fg = .{ .rgb = .{ 255, 0, 0 } }, .bg = .{ .rgb = .{ 0, 0, 255 } }, .flags = .{ .inverse = true, .faint = true, .underline = .single, .strikethrough = true } };
+    pane.buffer.cells[0].style = .{ .fg = .rgb(.{ 255, 0, 0 }), .bg = .rgb(.{ 0, 0, 255 }), .flags = .{ .inverse = true, .faint = true, .underline = .single, .strikethrough = true } };
     pane.cursor.x = 0;
     pane.cursor.y = 0;
     pane.cursor.appearance.shape = .block;
@@ -87,9 +88,11 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
         },
     );
     try std.testing.expectEqual(@as(usize, 5), mesh.metadata.len);
-    try std.testing.expectEqual(@as(f32, 1), mesh.items()[0].r);
-    try std.testing.expectEqual(@as(f32, 0), mesh.items()[0].b);
-    for (mesh.items()[1..]) |ink| {
+    var storage: [CellMesh.capacity]Quad = undefined;
+    const items = mesh.collect(&storage);
+    try std.testing.expectEqual(@as(f32, 1), items[0].r);
+    try std.testing.expectEqual(@as(f32, 0), items[0].b);
+    for (items[1..]) |ink| {
         try expectSolid(ink);
         try std.testing.expectEqual(@as(f32, 0), ink.r);
         try std.testing.expectEqual(@as(f32, 1), ink.b);
@@ -99,7 +102,7 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
     const frame = session.gui.renderer.quads.items();
     const cursor = frame[frame.len - mesh.metadata.len ..];
     try std.testing.expectEqual(@as(f32, 1), cursor[0].r);
-    for (cursor[1..], mesh.items()[1..]) |actual, original| {
+    for (cursor[1..], items[1..]) |actual, original| {
         var recolored = original;
         recolored.r = 0;
         recolored.g = 1;
@@ -108,12 +111,12 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
         try std.testing.expectEqualDeep(recolored, actual);
     }
 
-    const retained = try std.testing.allocator.dupe(Quad, mesh.items());
+    const retained = try std.testing.allocator.dupe(Quad, items);
     defer std.testing.allocator.free(retained);
     session.gui.renderer.cursor_on = false;
     try paint(session);
     try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
-    try std.testing.expectEqualSlices(Quad, retained, mesh.items());
+    try std.testing.expectEqualSlices(Quad, retained, mesh.collect(&storage));
     try std.testing.expectEqual(retained.len, session.gui.renderer.quads.items().len);
     pane.buffer.cells[0].style.flags.invisible = true;
     try paint(session);
@@ -134,7 +137,7 @@ test "Braille chrome preserves blank columns clipping colors and configured grid
         const bounds = canvas.rect(area);
         const width: f32 = @floatFromInt(renderer.metrics.cell_width);
         const height: f32 = @floatFromInt(renderer.metrics.cell_height);
-        const label = @import("../widgets/Label.zig"){ .text = "\u{2801}\u{2800}\u{2880}", .color = .{ .rgb = .{ 0, 255, 0 } }, .faint = true };
+        const label = @import("../widgets/Label.zig"){ .text = "\u{2801}\u{2800}\u{2880}", .color = .rgb(.{ 0, 255, 0 }), .faint = true };
         const version = renderer.atlas.?.version;
         quads.clear();
         try canvas.text(area, label);

@@ -211,15 +211,15 @@ fn rgb24(value: u24) [3]u8 {
 }
 
 fn rgb24c(value: u24) core.Color {
-    return .{ .rgb = rgb24(value) };
+    return .rgb(rgb24(value));
 }
 
 fn rgb(red: u8, green: u8, blue: u8) core.Color {
-    return .{ .rgb = .{ red, green, blue } };
+    return .rgb(.{ red, green, blue });
 }
 
 fn indexed(index: u8) core.Color {
-    return .{ .indexed = index };
+    return .indexed(index);
 }
 
 fn eql(a: []const u8, b: []const u8) bool {

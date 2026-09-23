@@ -14,10 +14,11 @@ pub fn resolve(color: core.Color, fallback: Color) Color {
 /// Resolves terminal defaults and the native host's ANSI palette.
 /// Example: `const fg = cell_colors.withPalette(cell.style.fg, foreground, &theme.terminal.palette);`
 pub fn withPalette(color: core.Color, fallback: Color, palette: *const [16][3]u8) Color {
-    return switch (color) {
+    const channels = color.value;
+    return switch (color.kind) {
         .default => fallback,
-        .rgb => |rgb| Color.rgb(rgb[0], rgb[1], rgb[2]),
-        .indexed => |index| if (index < 16) Color.rgb(palette[index][0], palette[index][1], palette[index][2]) else indexed(index),
+        .rgb => Color.rgb(channels[0], channels[1], channels[2]),
+        .indexed => if (channels[0] < 16) Color.rgb(palette[channels[0]][0], palette[channels[0]][1], palette[channels[0]][2]) else indexed(channels[0]),
     };
 }
 
@@ -42,14 +43,14 @@ test "default defers to the fallback and rgb passes through" {
     const std = @import("std");
     const fallback = Color.rgb(1, 2, 3);
     try std.testing.expectEqual(Color.black, resolve(.default, Color.black));
-    try std.testing.expectEqual(Color.rgb(9, 8, 7), resolve(.{ .rgb = .{ 9, 8, 7 } }, fallback));
+    try std.testing.expectEqual(Color.rgb(9, 8, 7), resolve(.rgb(.{ 9, 8, 7 }), fallback));
 }
 
 test "indexed colors follow the xterm cube and gray ramp" {
     const std = @import("std");
-    try std.testing.expectEqual(Color.rgb(0, 0, 0), resolve(.{ .indexed = 16 }, Color.white));
-    try std.testing.expectEqual(Color.rgb(255, 255, 255), resolve(.{ .indexed = 231 }, Color.black));
-    try std.testing.expectEqual(Color.rgb(95, 135, 0), resolve(.{ .indexed = 64 }, Color.black));
-    try std.testing.expectEqual(Color.rgb(8, 8, 8), resolve(.{ .indexed = 232 }, Color.black));
-    try std.testing.expectEqual(Color.rgb(238, 238, 238), resolve(.{ .indexed = 255 }, Color.black));
+    try std.testing.expectEqual(Color.rgb(0, 0, 0), resolve(.indexed(16), Color.white));
+    try std.testing.expectEqual(Color.rgb(255, 255, 255), resolve(.indexed(231), Color.black));
+    try std.testing.expectEqual(Color.rgb(95, 135, 0), resolve(.indexed(64), Color.black));
+    try std.testing.expectEqual(Color.rgb(8, 8, 8), resolve(.indexed(232), Color.black));
+    try std.testing.expectEqual(Color.rgb(238, 238, 238), resolve(.indexed(255), Color.black));
 }

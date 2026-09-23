@@ -35,8 +35,8 @@ test "theme overrides inherit through profiles and selecting a preset replaces t
     const custom = try load(source, "custom");
     defer custom.deinit();
     const snapshot = &custom.snapshot;
-    try std.testing.expectEqualDeep(core.Color{ .rgb = .{ 1, 2, 3 } }, snapshot.theme.palette.accent);
-    try std.testing.expect(snapshot.theme.palette.text == .default);
+    try std.testing.expectEqualDeep(core.Color.rgb(.{ 1, 2, 3 }), snapshot.theme.palette.accent);
+    try std.testing.expect(snapshot.theme.palette.text.kind == .default);
     try std.testing.expectEqual([3]u8{ 0xab, 0xcd, 0xef }, snapshot.theme.terminal.foreground);
     try std.testing.expectEqual([3]u8{ 0x44, 0x55, 0x66 }, snapshot.theme.terminal.background);
     try std.testing.expectEqual(@as(?[3]u8, .{ 0x11, 0x22, 0x33 }), snapshot.theme.terminal.cursor_color);
@@ -72,7 +72,7 @@ test "the default generation selects Shade and the Lua spellings agree" {
     const implicit = try load("return { api_version = 2 }", null);
     defer implicit.deinit();
     try std.testing.expectEqualDeep(data.theme_support.default_theme, implicit.snapshot.theme);
-    try std.testing.expect(implicit.snapshot.theme.palette.panel_bg == .default);
+    try std.testing.expect(implicit.snapshot.theme.palette.panel_bg.kind == .default);
     for ([_][]const u8{ "shade", "osaka-jade", "osaka_jade", "osakajade" }) |name| {
         var buffer: [128]u8 = undefined;
         const source = try std.fmt.bufPrint(&buffer, "return {{ api_version = 2, theme = '{s}' }}", .{name});
@@ -98,8 +98,8 @@ test "syntax styles inherit through profiles independently of chrome and termina
     const generation = try load(source, "custom");
     defer generation.deinit();
     const theme = generation.snapshot.theme;
-    try std.testing.expectEqualDeep(core.Color{ .rgb = .{ 0x11, 0x22, 0x33 } }, theme.syntax(.keyword));
-    try std.testing.expectEqualDeep(core.Color{ .rgb = .{ 0x44, 0x55, 0x66 } }, theme.syntax(.parameter));
+    try std.testing.expectEqualDeep(core.Color.rgb(.{ 0x11, 0x22, 0x33 }), theme.syntax(.keyword));
+    try std.testing.expectEqualDeep(core.Color.rgb(.{ 0x44, 0x55, 0x66 }), theme.syntax(.parameter));
     try std.testing.expect(!theme.syntaxStyle(.parameter).italic);
     try std.testing.expect(theme.syntaxStyle(.comment).bold);
     try std.testing.expectEqualDeep(data.theme_support.builtin(.shade).syntax(.comment), theme.syntax(.comment));

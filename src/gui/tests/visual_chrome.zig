@@ -119,7 +119,7 @@ fn coloredQuads(quads: []const Quad, bounds: Rect, color: core.Color) usize {
 }
 
 fn matchesColor(quad: Quad, color: core.Color) bool {
-    const rgb = color.rgb;
+    const rgb = color.rgbChannels().?;
     return @abs(quad.r - @as(f32, @floatFromInt(rgb[0])) / 255) < 0.01 and @abs(quad.g - @as(f32, @floatFromInt(rgb[1])) / 255) < 0.01 and @abs(quad.b - @as(f32, @floatFromInt(rgb[2])) / 255) < 0.01;
 }
 

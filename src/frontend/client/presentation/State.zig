@@ -435,10 +435,7 @@ pub fn prepareGraphics(state: *State, snapshot: *const data.Center, media_idle: 
         .area = state.graphics_plan.sidebar_area,
         .focused_card = state.graphics_plan.focused_card,
         .provider_marks = state.graphics_plan.provider_marks[0..state.graphics_plan.provider_mark_count],
-        .provider_foreground = switch (state.palette().text) {
-            .rgb => |value| value,
-            else => state.theme.terminal.foreground,
-        },
+        .provider_foreground = state.palette().text.rgbChannels() orelse state.theme.terminal.foreground,
     }, .{ .width = state.cell_width_px, .height = state.cell_height_px });
     var icon_fallback_changed = false;
     state.kitty_icons.prepare(state.graphics_plan.icons.slice()) catch {
@@ -638,10 +635,7 @@ pub fn render(state: *State, screen: *ScreenType, input: RenderInput) !RenderSta
     state.graphics_plan.icons.reset();
     const hybrid = state.sidebar_rendering == .kitty_hybrid or
         state.sidebar_rendering == .kitty_full;
-    const focused_card_color: ?[3]u8 = if (hybrid) switch (state.palette().surface0) {
-        .rgb => |value| value,
-        .default, .indexed => null,
-    } else null;
+    const focused_card_color: ?[3]u8 = if (hybrid) state.palette().surface0.rgbChannels() else null;
     var context: ContextType = .{
         .buffer = &state.scratch,
         .hits = &state.hits,

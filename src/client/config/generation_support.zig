@@ -253,7 +253,7 @@ test "client config compiles theme, bindings, and callbacks" {
     try std.testing.expectEqual(@as(u64, 40 * std.time.ns_per_ms), generation.snapshot.input_escape_timeout_ns);
     try std.testing.expectEqual(@as(u64, 750 * std.time.ns_per_ms), generation.snapshot.input_sequence_timeout_ns);
     try std.testing.expectEqualDeep(
-        core.Color{ .rgb = .{ 1, 2, 3 } },
+        core.Color.rgb(.{ 1, 2, 3 }),
         generation.snapshot.theme.palette.accent,
     );
     try std.testing.expectEqualDeep(
@@ -659,9 +659,9 @@ test "client bars compile styled static dynamic and command sources" {
     try std.testing.expectEqual(data.icons.Icon.cpu, left.slice()[0].icon.?);
     try std.testing.expectEqualStrings(" CPU", left.text(left.slice()[0]));
     try std.testing.expectEqualDeep(data.bar_values.Color{ .palette = .teal }, left.slice()[0].style.foreground.?);
-    try std.testing.expectEqualDeep(data.bar_values.Color{ .value = .{ .rgb = .{ 1, 2, 3 } } }, left.slice()[0].style.background.?);
+    try std.testing.expectEqualDeep(data.bar_values.Color{ .value = .rgb(.{ 1, 2, 3 }) }, left.slice()[0].style.background.?);
     try std.testing.expect(left.slice()[0].style.bold);
-    try std.testing.expectEqualDeep(data.bar_values.Color{ .value = .{ .indexed = 7 } }, left.slice()[1].style.foreground.?);
+    try std.testing.expectEqualDeep(data.bar_values.Color{ .value = .indexed(7) }, left.slice()[1].style.foreground.?);
     try std.testing.expect(left.slice()[1].style.italic);
     try std.testing.expect(generation.snapshot.bars.bottom[1] == .tabs);
 

@@ -22,6 +22,8 @@ const CellPaint = @import("CellPaint.zig");
 const CellMesh = @import("CellMesh.zig");
 const CursorPaint = @import("CursorPaint.zig");
 const copy_selection = @import("copy_selection.zig");
+const InkTarget = @import("InkTarget.zig");
+const Quad = @import("Quad.zig").Quad;
 
 allocator: std.mem.Allocator,
 /// Reads discovered fallback font files; `configured` sets it, and a
@@ -276,33 +278,51 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
 
     const pane = paint.pane;
     const area = paint.view.content;
-    const rows = @min(area.h, pane.buffer.h);
-    const cols = @min(area.w, pane.buffer.w);
+    const rows: u16 = @min(area.h, pane.buffer.h);
+    const cols: u16 = @min(area.w, pane.buffer.w);
     for (0..rows) |row| {
-        for (0..cols) |col| {
-            var cell = pane.buffer.cells[row * pane.buffer.w + col];
-            if (paint.copy) |copy| {
-                if (copy.selected(@intCast(col), pane.scroll.offset + @as(u32, @intCast(row)))) {
-                    cell.style.flags.inverse = !cell.style.flags.inverse;
+        const y = area.y + @as(u16, @intCast(row));
+        const source = pane.buffer.cells[row * pane.buffer.w ..][0..cols];
+        const retained = renderer.retained.row(.{ area.x, y }, cols);
+        for (source, retained.metadata, 0..) |*original, *metadata, col| {
+            // Only a selected cell needs a projected copy; every other cell
+            // is compared in place in the pane buffer.
+            var selected: core.Cell = undefined;
+            const cell: *const core.Cell = if (paint.copy) |copy| projected: {
+                if (!copy.selected(@intCast(col), pane.scroll.offset + @as(u32, @intCast(row)))) {
+                    break :projected original;
                 }
-            }
-            const position: [2]u16 = .{ area.x + @as(u16, @intCast(col)), area.y + @as(u16, @intCast(row)) };
-            const key: CellPaint = .{ .cell = cell, .rect = renderer.cellRect(.{ .x = position[0], .y = position[1], .w = @intCast(@min(@max(1, cell.width), cols - col)), .h = 1 }) };
-            const mesh = renderer.retained.at(position);
+
+                selected = original.*;
+                selected.style.flags.inverse = !selected.style.flags.inverse;
+                break :projected &selected;
+            } else original;
+
+            const rect = renderer.cellRect(.{
+                .x = area.x + @as(u16, @intCast(col)),
+                .y = y,
+                .w = @intCast(@min(@max(1, cell.width), cols - col)),
+                .h = 1,
+            });
+            const mesh = retained.at(col);
             visited += 1;
-            if (!mesh.matches(key)) {
+            if (!mesh.matchesCell(cell, rect)) {
+                const key: CellPaint = .{
+                    .cell = cell.*,
+                    .rect = rect,
+                };
                 try renderer.paintCell(key);
                 mesh.replace(key, renderer.cell_quads.items());
+                mesh.classifyBackground(renderer.background);
                 renderer.repainted_cells += 1;
                 rebuilt += 1;
             } else {
                 hits += 1;
             }
 
-            item_calls += 1;
-            const background = mesh.items()[0];
-            if (background.r != renderer.background.r or background.g != renderer.background.g or background.b != renderer.background.b) {
-                try renderer.quads.push(background);
+            if (metadata.background) {
+                item_calls += 1;
+                try renderer.quads.push(mesh.background());
             }
         }
     }
@@ -318,22 +338,21 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
     // owns its color; italic overhang remains visible across adjacent cells.
     const bounds = renderer.cellRect(area);
     for (0..rows) |row| {
-        for (0..cols) |col| {
-            const mesh = renderer.retained.at(.{ area.x + @as(u16, @intCast(col)), area.y + @as(u16, @intCast(row)) });
+        const retained = renderer.retained.row(.{ area.x, area.y + @as(u16, @intCast(row)) }, cols);
+        for (retained.metadata, 0..) |*metadata, col| {
             ink_visited += 1;
-            item_calls += 1;
-            const cursor_color = if (cursor) |visible| visible.inkColor(mesh.metadata.paint.rect) else null;
-            for (mesh.items()[1..]) |original| {
-                var item = original;
-                if (cursor_color) |override| {
-                    item.r = override.r;
-                    item.g = override.g;
-                    item.b = override.b;
-                    item.a = override.a;
-                }
-
-                try renderer.quads.pushClipped(item, bounds);
+            if (metadata.len <= 1) {
+                continue;
             }
+
+            item_calls += 1;
+            const mesh = retained.at(col);
+            const target: InkTarget = .{
+                .bounds = bounds,
+                .color = if (cursor) |visible| visible.inkColor(metadata.paint.rect) else null,
+            };
+            try renderer.pushInk(mesh.primaryInk(), target);
+            try renderer.pushInk(mesh.overflowInk(), target);
         }
     }
 
@@ -341,6 +360,21 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
         if (visible.style != .block) {
             try visible.paint(&renderer.quads);
         }
+    }
+}
+
+/// Appends retained ink clipped to its pane, recolored under a block cursor.
+fn pushInk(renderer: *Renderer, ink: []const Quad, target: InkTarget) !void {
+    for (ink) |original| {
+        var item = original;
+        if (target.color) |override| {
+            item.r = override.r;
+            item.g = override.g;
+            item.b = override.b;
+            item.a = override.a;
+        }
+
+        try renderer.quads.pushClipped(item, target.bounds);
     }
 }
 

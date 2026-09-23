@@ -738,7 +738,7 @@ test "fullscreen tabs follow focus and survive progress animation without idle r
     try std.testing.expectEqualStrings("z", screen.back.at(7, 1).?.text());
 
     var changed_palette = palette.*;
-    changed_palette.surface_dim = .{ .rgb = .{ 1, 2, 3 } };
+    changed_palette.surface_dim = .rgb(.{ 1, 2, 3 });
     const restyled = try testingRender(&compositor, .{ .model = &model, .screen = &screen, .area = area, .palette = &changed_palette });
     try std.testing.expect(restyled.full);
     try std.testing.expectEqual(changed_palette.surface_dim, screen.back.at(24, 1).?.style.fg);

@@ -151,16 +151,16 @@ test "native copy selection recolors only projected cells and restores retained 
     const position = [2]u16{ view.content.x, view.content.y };
     var projection = session.gui.projection();
     _ = try session.gui.renderer.prepare(projection);
-    const original = session.gui.renderer.retained.at(position).items()[0];
+    const original = session.gui.renderer.retained.at(position).background();
     projection.copy = .{ .pane_id = pane.id, .view = .{ .cursor = .{ .x = 0, .y = pane.scroll.offset }, .anchor = .{ .x = 0, .y = pane.scroll.offset }, .linewise = false } };
     _ = try session.gui.renderer.prepare(projection);
     try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
-    const selected = session.gui.renderer.retained.at(position).items()[0];
+    const selected = session.gui.renderer.retained.at(position).background();
     try std.testing.expect(original.r != selected.r or original.g != selected.g or original.b != selected.b);
     try std.testing.expectEqualDeep(canonical, pane.buffer.cells[0]);
     projection.copy = null;
     _ = try session.gui.renderer.prepare(projection);
-    try std.testing.expectEqualDeep(original, session.gui.renderer.retained.at(position).items()[0]);
+    try std.testing.expectEqualDeep(original, session.gui.renderer.retained.at(position).background());
     try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
 }
 

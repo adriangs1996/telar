@@ -18,8 +18,8 @@ pub fn next(cursor: *ConstIterator) ?*const Agent {
         const index = cursor.next_index;
         cursor.next_index += 1;
 
-        if (cursor.repository.slots[index]) |*agent| {
-            return agent;
+        if (cursor.repository.occupiedAt(index)) {
+            return &cursor.repository.slots[index].?;
         }
     }
 

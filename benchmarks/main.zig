@@ -19,6 +19,7 @@ const OutboxContext = @import("OutboxContext.zig");
 const KeybindContext = @import("KeybindContext.zig");
 const LuaCallbackContext = @import("LuaCallbackContext.zig");
 const ClientUiContext = @import("ClientUiContext.zig");
+const BlitContext = @import("BlitContext.zig");
 const CursorContext = @import("CursorContext.zig");
 const PacerContext = @import("PacerContext.zig");
 const LayoutContext = @import("LayoutContext.zig");
@@ -137,6 +138,7 @@ const cases = [_]Case{
         .work_unit = "glyphs",
         .p99_budget_ns = std.time.ns_per_ms,
     },
+    .{ .name = "backend.blit.full_screen", .work_per_op = cell_count, .work_unit = "cells" },
 };
 
 fn timestamp(io: std.Io) u64 {
@@ -204,11 +206,11 @@ pub fn fillEditor(cells: []core.Cell, variant: u8) void {
         cell.* = .{};
         cell.bytes[0] = 'a' + @as(u8, @intCast((x + y + variant) % 26));
         if (x < 5) {
-            cell.style.fg = .{ .indexed = 8 };
+            cell.style.fg = .indexed(8);
         } else if ((x / 11 + y) % 5 == 0) {
-            cell.style.fg = .{ .indexed = 12 };
+            cell.style.fg = .indexed(12);
         } else if ((x / 17 + y) % 7 == 0) {
-            cell.style.fg = .{ .indexed = 10 };
+            cell.style.fg = .indexed(10);
             cell.style.flags.bold = true;
         }
     }
@@ -546,6 +548,15 @@ fn runTextRaster(context: *TextRasterContext, iterations: usize) !u64 {
     return checksum +% context.pixels[context.pixels.len / 2];
 }
 
+fn runBlit(context: *BlitContext, iterations: usize) !u64 {
+    var checksum: u64 = 0;
+    for (0..iterations) |_| {
+        checksum +%= context.blitAll();
+    }
+
+    return checksum;
+}
+
 fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: *Fixture) !void {
     const io = resources.io;
     const gpa = resources.gpa;
@@ -785,6 +796,17 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
         try result_writer.write(
             text_raster_case,
             try measure(.{ .io = io, .config = config, .context = &context }, runTextRaster),
+        );
+    }
+
+    const blit_case = cases[case_index];
+    case_index += 1;
+    if (config.includes(blit_case.name)) {
+        var context = try BlitContext.init(gpa, io);
+        defer context.deinit();
+        try result_writer.write(
+            blit_case,
+            try measure(.{ .io = io, .config = config, .context = &context }, runBlit),
         );
     }
     std.debug.assert(case_index == cases.len);

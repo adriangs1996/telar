@@ -38,10 +38,7 @@ pub fn resolveColors(palette: *const data.Palette) ?Colors {
 }
 
 fn rgb(color: core.Color) ?[3]u8 {
-    return switch (color) {
-        .rgb => |value| value,
-        else => null,
-    };
+    return color.rgbChannels();
 }
 
 pub fn rasterColor(value: [3]u8) GraphicsColor {

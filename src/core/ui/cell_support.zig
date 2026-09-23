@@ -8,19 +8,7 @@
 const std = @import("std");
 const Style = @import("Style.zig");
 
-pub const Color = union(enum) {
-    default,
-    indexed: u8,
-    rgb: [3]u8,
-
-    pub fn eql(a: Color, b: Color) bool {
-        return switch (a) {
-            .default => b == .default,
-            .indexed => |v| b == .indexed and b.indexed == v,
-            .rgb => |v| b == .rgb and std.mem.eql(u8, &v, &b.rgb),
-        };
-    }
-};
+pub const Color = @import("Color.zig").Color;
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -38,5 +26,5 @@ test "the diff distinguishes attributes that used to be invisible to it" {
         try std.testing.expect(!plain.eql(.{ .flags = flags }));
     }
     try std.testing.expect(!plain.eql(.{ .flags = .{ .underline = .dotted } }));
-    try std.testing.expect(!plain.eql(.{ .underline_color = .{ .rgb = .{ 255, 0, 0 } } }));
+    try std.testing.expect(!plain.eql(.{ .underline_color = .rgb(.{ 255, 0, 0 }) }));
 }
