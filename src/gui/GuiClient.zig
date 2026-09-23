@@ -1623,7 +1623,7 @@ fn complete(self: *GuiClient, token: u64, delivered: bool) !void {
 
 /// Applies runtime graphics commands to this connection's retained resources.
 /// Example: `try gui.applyGraphics(command);`
-pub fn applyGraphics(self: *GuiClient, command: shared_model.application_panes_pane_graphics.Command) !void {
+pub fn applyGraphics(self: *GuiClient, command: shared_model.pane_graphics.Command) !void {
     return switch (command) {
         .snapshot => |value| self.graphics_store.applySnapshot(value),
         .image => |value| self.graphics_store.applyImage(value),

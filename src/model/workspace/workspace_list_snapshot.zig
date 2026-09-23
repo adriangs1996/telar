@@ -1,6 +1,6 @@
 //! Application use case for reconciling the runtime workspace-list replica.
 
-const WorkspaceListCommit = @import("../../state/WorkspaceListCommit.zig");
+const WorkspaceListCommit = @import("../state/WorkspaceListCommit.zig");
 
 pub const Rejection = enum {
     too_many_workspaces,

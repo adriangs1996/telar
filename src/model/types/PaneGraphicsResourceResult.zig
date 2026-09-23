@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const ResourceState = @import("../application/panes/ResourceState.zig");
+const ResourceState = @import("../panes/ResourceState.zig");
 
 pub const PaneGraphicsResourceResult = union(enum) {
     unchanged,

@@ -1,4 +1,4 @@
-const PointerCommand = @import("../application/input/PointerCommand.zig");
+const PointerCommand = @import("../input/PointerCommand.zig");
 const action_module = @import("../input/action.zig");
 
 pub const PaneMouseCommand = union(enum) {

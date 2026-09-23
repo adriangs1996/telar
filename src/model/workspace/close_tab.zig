@@ -2,9 +2,9 @@
 
 const ApplyTabRemoval = @import("ApplyTabRemoval.zig");
 
-pub const RemovalTrigger = @import("../../types/TabCloseRemovalTrigger.zig").TabCloseRemovalTrigger;
+pub const RemovalTrigger = @import("../types/TabCloseRemovalTrigger.zig").TabCloseRemovalTrigger;
 
-pub const TabRemovalDirective = @import("../../types/TabCloseTabRemovalDirective.zig").TabCloseTabRemovalDirective;
+pub const TabRemovalDirective = @import("../types/TabCloseTabRemovalDirective.zig").TabCloseTabRemovalDirective;
 
 pub fn validateWorkspaceTransition(command: ApplyTabRemoval) !void {
     if (!command.workspace_removed and command.previous_workspace != null) {
@@ -22,4 +22,4 @@ pub fn validateWorkspaceTransition(command: ApplyTabRemoval) !void {
     }
 }
 
-pub const RequestStep = @import("../../types/TabCloseRequestStep.zig").TabCloseRequestStep;
+pub const RequestStep = @import("../types/TabCloseRequestStep.zig").TabCloseRequestStep;

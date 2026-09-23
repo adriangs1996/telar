@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const model_data = @import("../../model.zig");
+const model_data = @import("../model.zig");
 const PluginResult = @This();
 
 execution_id: model_data.PluginExecutionId,

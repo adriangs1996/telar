@@ -1,4 +1,4 @@
-const Mouse = @import("../../input/Mouse.zig");
+const Mouse = @import("Mouse.zig");
 const PointerCommand = @This();
 
 event: Mouse,

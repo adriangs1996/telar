@@ -1,15 +1,15 @@
 //! Application policy for delivering one resolved configuration reload.
 
-const Diagnostic = @import("../../config/Diagnostic.zig");
-const ConfigurationCommit = @import("../../state/ConfigurationCommit.zig");
+const Diagnostic = @import("Diagnostic.zig");
+const ConfigurationCommit = @import("../state/ConfigurationCommit.zig");
 
-pub const Resolution = @import("../../types/ConfigReloadResolution.zig").ConfigReloadResolution;
+pub const Resolution = @import("../types/ConfigReloadResolution.zig").ConfigReloadResolution;
 
-pub const Outcome = @import("../../types/ConfigReloadOutcome.zig").ConfigReloadOutcome;
+pub const Outcome = @import("../types/ConfigReloadOutcome.zig").ConfigReloadOutcome;
 
-pub const Event = @import("../../types/ConfigReloadEvent.zig").ConfigReloadEvent;
+pub const Event = @import("../types/ConfigReloadEvent.zig").ConfigReloadEvent;
 
-pub const Failure = @import("../../types/ConfigReloadFailure.zig").ConfigReloadFailure;
+pub const Failure = @import("../types/ConfigReloadFailure.zig").ConfigReloadFailure;
 
 pub fn testingCommit() ConfigurationCommit {
     return .{
