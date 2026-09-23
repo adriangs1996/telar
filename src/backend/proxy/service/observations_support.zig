@@ -1,7 +1,7 @@
 //! Observation pipeline and bounded delivery channel owned as one component.
 
 const std = @import("std");
-const LivenessCapture = @import("LivenessCapture.zig");
+const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
 const Observations = @import("Observations.zig");
 const MiddlewareEvent = @import("../MiddlewareEvent.zig");
@@ -35,3 +35,13 @@ test "published observations traverse the owned channel exactly once" {
     try std.testing.expect(std.meta.eql(expected, actual));
     try std.testing.expectEqual(@as(u64, 0), observations.metrics().queued);
 }
+
+const LivenessCapture = struct {
+    credential: Credential,
+
+    pub fn contains(context: *anyopaque, credential: *const Credential) bool {
+        const capture: *const LivenessCapture = @ptrCast(@alignCast(context));
+
+        return std.meta.eql(capture.credential, credential.*);
+    }
+};

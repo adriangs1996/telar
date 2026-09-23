@@ -1,6 +1,5 @@
 const Observation = @import("Observation.zig");
 const Geometry = @import("Geometry.zig");
-const Flight = @import("Flight.zig");
 const std = @import("std");
 const Submission = @import("Submission.zig");
 const lifecycle = @import("lifecycle.zig");
@@ -83,3 +82,10 @@ pub fn complete(self: *State, token: lifecycle.Token, outcome: lifecycle.Outcome
     self.delivered_geometry = flight.geometry;
     return flight.delivery;
 }
+
+const Flight = struct {
+    token: lifecycle.Token,
+    observation: Observation,
+    geometry: Geometry,
+    delivery: PresentationDelivery,
+};

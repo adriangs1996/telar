@@ -1,6 +1,5 @@
 const data = @import("model");
 const core = @import("telar-core");
-const GeometryPane = @import("GeometryPane.zig");
 const Projection = @import("Projection.zig");
 const std = @import("std");
 const Geometry = @This();
@@ -55,3 +54,10 @@ pub fn matches(self: *const Geometry, current: *const Geometry) bool {
 
     return true;
 }
+
+const GeometryPane = struct {
+    id: core.PaneId,
+    attachment_generation: u64,
+    cols: u16,
+    rows: u16,
+};

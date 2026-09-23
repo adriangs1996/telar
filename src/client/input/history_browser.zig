@@ -2,7 +2,6 @@
 //! Operations own wire decoding and delivery; bounded model APIs own storage.
 
 const data = @import("model");
-const Read = @import("Read.zig");
 const std = @import("std");
 
 pub fn begin(model: *data.ClientModel, options: struct { enter_runs: bool, match_fuzzy: bool }) void {
@@ -151,3 +150,5 @@ test "inspection constraints change semantic scroll only when it exceeds the bou
     constrainInspection(state, 0);
     try std.testing.expectEqual(@as(u32, 0), state.name_prompt.currentConst().?.detailScroll());
 }
+
+const Read = struct { id: u64, kind: enum { command, output } };

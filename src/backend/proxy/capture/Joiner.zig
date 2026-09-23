@@ -1,5 +1,4 @@
 const table = @import("table.zig");
-const Entry = @import("Entry.zig");
 const Half = @import("Half.zig");
 const Exchange = @import("Exchange.zig");
 const Key = @import("Key.zig");
@@ -108,3 +107,14 @@ fn empty(self: *const Joiner) ?usize {
 
     return null;
 }
+
+const Entry = struct {
+    key: Key,
+    request: ?*Half = null,
+    response: ?*Half = null,
+    expires_at_ms: i64,
+
+    pub fn exchange(self: Entry) Exchange {
+        return .{ .request = self.request, .response = self.response };
+    }
+};

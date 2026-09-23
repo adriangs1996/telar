@@ -4,7 +4,6 @@ const data = @import("model");
 const lua_api = @import("lua-api");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
-const CommandInput = @import("CommandInput.zig");
 const CommandSpec = @import("CommandSpec.zig");
 const std = @import("std");
 const IntegerInput = @import("IntegerInput.zig");
@@ -131,3 +130,9 @@ fn parseBoundedInteger(state: *lua_api.c.lua_State, input: IntegerInput, diagnos
 
     return @intCast(parsed);
 }
+
+const CommandInput = struct {
+    table: c_int,
+    label: []const u8,
+    command_path: []const u8,
+};

@@ -5,7 +5,6 @@ const data = @import("model");
 const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
 const platform = @import("../../platform/platform.zig");
-const Source = @import("Source.zig");
 const host_capabilities = @import("host_capabilities.zig");
 const std = @import("std");
 const Size = @import("../../platform/Size.zig");
@@ -97,3 +96,8 @@ test "initial host size normalizes an empty grid and resolves pixels" {
         .height_px = 480,
     }));
 }
+
+const Source = struct {
+    tty: *const platform.Tty,
+    watcher: *platform.ResizeWatcher,
+};

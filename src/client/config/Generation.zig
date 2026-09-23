@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const Snapshot = @import("Snapshot.zig");
 const Callback = @import("Callback.zig");
-const BarCallback = @import("BarCallback.zig");
 const State = @import("State.zig");
 const generation_support = @import("generation_support.zig");
 
@@ -1438,3 +1437,7 @@ fn parseAction(self: *Generation, action_input: ActionInput, diagnostic: *data.D
     try lua_value.ensureOnlyFields(state, .{ .index = absolute, .allowed = &.{"kind"}, .path = "action" }, diagnostic);
     return action;
 }
+
+const BarCallback = struct {
+    registry_ref: c_int,
+};

@@ -4,7 +4,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
-const Geometry = @import("Geometry.zig");
 const Context = @import("Context.zig");
 const HistoryBrowserInput = @import("HistoryBrowserInput.zig");
 const GotoPickerOutput = @import("GotoPickerOutput.zig");
@@ -229,3 +228,8 @@ test "history renderer puts the query below results and contains control bytes" 
         }
     }
 }
+
+const Geometry = struct {
+    count: u16,
+    inspecting: bool,
+};

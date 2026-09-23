@@ -2,7 +2,6 @@ const std = @import("std");
 const ViolationType = @import("Violation.zig");
 const analyzer_support = @import("analysis.zig");
 const syntax = @import("syntax.zig");
-const Finding = @import("Finding.zig");
 const diagnostic = @import("diagnostic.zig");
 const Analyzer = @This();
 
@@ -66,3 +65,8 @@ fn append(self: Analyzer, token: std.zig.Ast.TokenIndex, finding: Finding) !void
         .detail = finding.detail,
     });
 }
+
+const Finding = struct {
+    rule: diagnostic.Rule,
+    detail: usize = 0,
+};

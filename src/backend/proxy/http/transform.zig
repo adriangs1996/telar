@@ -9,7 +9,6 @@ const Headers = @import("../Headers.zig");
 const head = @import("head_support.zig");
 const std = @import("std");
 const middleware = @import("../middleware.zig");
-const Encoding = @import("Encoding.zig");
 const TestDecisionInput = @import("TestDecisionInput.zig");
 const Transformation = @import("../Transformation.zig");
 const TransformPipeline = @import("../TransformPipeline.zig");
@@ -318,3 +317,10 @@ test "request classification remains tied to the original route" {
         "PUT /v1/responses HTTP/1.1\r\n",
     ));
 }
+
+const Encoding = struct {
+    output: []u8,
+    start_line: []const u8,
+    is_response: bool,
+    headers: *const Headers,
+};

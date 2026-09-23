@@ -19,7 +19,6 @@ const Screen = @import("../../presentation/Screen.zig");
 const PatchSink = @import("../../presentation/PatchSink.zig");
 const diff = @import("../../presentation/diff.zig");
 const Compositor = @import("../../workspace/Compositor.zig");
-const TestingComposition = @import("TestingComposition.zig");
 const State = @import("State.zig");
 const term = @import("../../presentation/screen_support.zig");
 const RenderInput = @import("RenderInput.zig");
@@ -1401,3 +1400,13 @@ test "the top bar lists open workspaces and clicking one requests a switch" {
     try std.testing.expect(workspace_list_toggle.intent == .toggle_workspace_list);
     try std.testing.expect(state.workspace_list_collapsed);
 }
+
+const TestingComposition = struct {
+    model: *data.ClientModel,
+    /// The composed tab; tests compose their only tab.
+    tab: usize = 0,
+    screen: *Screen,
+    area: core.Rect,
+    palette: *const data.Palette = &data.theme_support.default_theme.palette,
+    bottom_reservation: ?data.PaneBottomReservation = null,
+};

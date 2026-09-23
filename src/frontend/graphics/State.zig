@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const kitty = @import("kitty.zig");
-const CompressionScheduler = @import("CompressionScheduler.zig");
 const Compression = @import("Compression.zig");
 const PartialTransmission = @import("PartialTransmission.zig");
 const State = @This();
@@ -21,3 +20,8 @@ shared_expiries: u8 = 0,
 clock_ns: u64 = 0,
 retire_latency: core.Timing = .{},
 partial: ?PartialTransmission = null,
+
+const CompressionScheduler = struct {
+    context: *anyopaque,
+    start: *const fn (*anyopaque, *Compression) anyerror!void,
+};

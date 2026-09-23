@@ -1,5 +1,5 @@
 const Decoder = @import("Decoder.zig");
-const SpanView = @import("SpanView.zig");
+const CellIterator = @import("CellIterator.zig");
 const SpanIterator = @This();
 
 decoder: Decoder,
@@ -21,3 +21,16 @@ pub fn next(self: *SpanIterator) error{Truncated}!?SpanView {
         .encoded_cells = encoded_cells,
     };
 }
+
+const SpanView = struct {
+    start: u32,
+    cell_count: u32,
+    encoded_cells: []const u8,
+
+    pub fn cells(self: SpanView) CellIterator {
+        return .{
+            .decoder = .init(self.encoded_cells),
+            .remaining = self.cell_count,
+        };
+    }
+};

@@ -12,7 +12,6 @@ const Metrics = @import("Metrics.zig");
 const std = @import("std");
 const icons_module = @import("../ui/icons.zig");
 const PairInput = @import("PairInput.zig");
-const WriteInput = @import("WriteInput.zig");
 const widget = @import("context_support.zig");
 
 pub fn render(context: *Context, area: core.Rect, metrics: ?Metrics) void {
@@ -241,3 +240,10 @@ test "key labels preserve modifiers and special keys" {
         formatKey(&buffer, try data.chord.parseKey("ctrl+alt+left")),
     );
 }
+
+const WriteInput = struct {
+    area: core.Rect,
+    x: *u16,
+    text: []const u8,
+    style: core.Style,
+};

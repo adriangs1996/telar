@@ -9,7 +9,6 @@ const osc = @import("osc.zig");
 const TerminalOutputObservation = @import("TerminalOutputObservation.zig");
 const Clock = @import("Clock.zig");
 const Command = @import("Command.zig");
-const ExitObservation = @import("ExitObservation.zig");
 const TerminalCompletion = @import("TerminalCompletion.zig");
 const Tracker = @This();
 
@@ -514,3 +513,8 @@ fn freeCommand(self: *Tracker) void {
     }
     self.command = null;
 }
+
+const ExitObservation = struct {
+    clock: Clock,
+    exit_code: i32,
+};

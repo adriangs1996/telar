@@ -2,7 +2,6 @@
 
 const data = @import("model");
 const core = @import("telar-core");
-const CopyModePointerCommand = @import("CopyModePointerCommand.zig");
 const Client = @import("../AttachedClient.zig");
 
 /// Gives copy mode first refusal for one cell-based pointer event on tab
@@ -118,4 +117,9 @@ pub const Outcome = enum {
     consumed,
     moved,
     exited,
+};
+
+const CopyModePointerCommand = struct {
+    kind: data.Mouse.Kind,
+    left_button: bool = true,
 };

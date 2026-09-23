@@ -3,13 +3,11 @@
 const core = @import("telar-core");
 const Pane = @import("../../pane/Pane.zig");
 const AttachmentStore = @import("AttachmentStore.zig");
-const Consumers = @import("Consumers.zig");
 const attachment_mod = @import("attachment_namespace.zig");
 const std = @import("std");
 const PaneFixture = @import("../tests/PaneFixture.zig");
 const shared_transfer_module = @import("../../media/shared_transfer.zig");
 const StatsType = @import("../../media/Stats.zig");
-
 
 const Stats = struct {
     staged: u64 = 0,
@@ -307,3 +305,27 @@ test "a failed freeze abandons only its client graphics projection" {
     try std.testing.expect(!attachment.hasFrozenGraphics());
     try std.testing.expect(attachment.graphicsCaughtUp());
 }
+
+const Consumers = struct {
+    pane_id: core.PaneId,
+    stores: []const *AttachmentStore,
+
+    /// Example: `const needed = consumers.wants(key, true);`.
+    pub fn wants(self: Consumers, key: core.ImageKey, shared: bool) bool {
+        for (self.stores) |store| {
+            const attachment = store.find(self.pane_id) orelse continue;
+            if (attachment.graphics.shared_transport != shared or attachment_mod.knowsImage(attachment, key)) {
+                continue;
+            }
+            if (attachment.graphics.transfer) |transfer| {
+                if (std.meta.eql(transfer.metadata.key, key)) {
+                    continue;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+};

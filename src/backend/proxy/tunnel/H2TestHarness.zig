@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const H2Capture = @import("H2Capture.zig");
+const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const Pipeline = @import("../Pipeline.zig");
 const Counters = @import("../Counters.zig");
 const Exchange = @import("Exchange.zig");
@@ -46,3 +46,14 @@ pub fn snapshot(self: *const TestHarness) Snapshot {
         .observations = .{ .queued = 0, .high_water = 0, .dropped = 0 },
     });
 }
+
+const H2Capture = struct {
+    events: [16]MiddlewareEvent = undefined,
+    len: usize = 0,
+
+    pub fn observe(context: *anyopaque, _: std.Io, event: MiddlewareEvent) void {
+        const observed: *H2Capture = @ptrCast(@alignCast(context));
+        observed.events[observed.len] = event;
+        observed.len += 1;
+    }
+};

@@ -6,7 +6,6 @@ const std = @import("std");
 const TransmissionChunks = @import("TransmissionChunks.zig");
 const PngTransmissionChunks = @import("PngTransmissionChunks.zig");
 const Transmission = @import("Transmission.zig");
-const SharedTransmission = @import("SharedTransmission.zig");
 const PlacementCommand = @import("PlacementCommand.zig");
 
 pub const transmission_budget_per_frame: usize = 256 * 1024;
@@ -89,3 +88,9 @@ fn protocolImage(image: core.Image) kitty_protocol.Image {
         .height = image.height,
     };
 }
+
+const SharedTransmission = struct {
+    external_id: u32,
+    image: core.Image,
+    name: []const u8,
+};

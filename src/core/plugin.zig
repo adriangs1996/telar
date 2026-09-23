@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const PluginManifest = @import("PluginManifest.zig");
-const WireManifest = @import("WireManifest.zig");
+const Source = @import("Source.zig");
 const Grant = @import("Grant.zig");
 const TrustStore = @import("TrustStore.zig");
 
@@ -235,3 +235,13 @@ test "trust store round trips digest-bound capability grants" {
     try std.testing.expectEqual(@as(u8, 1), decoded.count);
     try std.testing.expect(decoded.entries[0].grant.allows(.{ .id = "sample", .digest = digest }, .history_read));
 }
+
+const WireManifest = struct {
+    api_version: u16,
+    id: []const u8,
+    version: []const u8,
+    entry: []const u8,
+    source: Source,
+    actions: []const []const u8 = &.{},
+    capabilities: []const []const u8 = &.{},
+};

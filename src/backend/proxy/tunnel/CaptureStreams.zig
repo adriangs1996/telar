@@ -1,7 +1,6 @@
 const Producer = @import("../capture/Producer.zig");
 const Exchange = @import("Exchange.zig");
 const buffer_support = @import("../capture/buffer_support.zig");
-const CaptureSlot = @import("CaptureSlot.zig");
 const HeaderBlock = @import("../h2/HeaderBlock.zig");
 const std = @import("std");
 const Half = @import("../capture/Half.zig");
@@ -111,3 +110,8 @@ fn publish(self: *CaptureStreams, half: *Half, outcome: buffer_support.Outcome) 
         .half = half,
     });
 }
+
+const CaptureSlot = struct {
+    stream_id: u32,
+    half: *Half,
+};

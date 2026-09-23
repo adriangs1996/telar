@@ -1,5 +1,4 @@
 const std = @import("std");
-const Record = @import("Record.zig");
 const echo_trace = @import("echo_trace.zig");
 const Recorder = @This();
 
@@ -45,3 +44,10 @@ pub fn dump(self: *const Recorder, io: std.Io, directory: []const u8) !void {
     try writer.interface.print("{{\"dropped\":{d}}}\n", .{count -| capacity});
     try writer.interface.flush();
 }
+
+const Record = struct {
+    ns: u64,
+    tag: echo_trace.Tag,
+    cpu_ns: if (echo_trace.cpu_enabled) u64 else void = if (echo_trace.cpu_enabled) 0 else {},
+    thread: if (echo_trace.cpu_enabled) std.Thread.Id else void = if (echo_trace.cpu_enabled) 0 else {},
+};

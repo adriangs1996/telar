@@ -1,5 +1,4 @@
 const plugin = @import("plugin.zig");
-const ActionName = @import("ActionName.zig");
 const std = @import("std");
 const Manifest = @This();
 
@@ -42,3 +41,12 @@ pub fn hasAction(self: *const Manifest, name: []const u8) bool {
         if (std.mem.eql(u8, candidate.slice(), name)) return true;
     return false;
 }
+
+const ActionName = struct {
+    bytes: [plugin.max_action_bytes]u8 = undefined,
+    len: u8,
+
+    pub fn slice(self: *const ActionName) []const u8 {
+        return self.bytes[0..self.len];
+    }
+};

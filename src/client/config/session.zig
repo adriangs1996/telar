@@ -5,7 +5,6 @@ const lua_api = @import("lua-api");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
 const std = @import("std");
-const OptionalBoolean = @import("OptionalBoolean.zig");
 
 pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
@@ -63,3 +62,9 @@ fn optionalBoolean(state: *lua_api.c.lua_State, input: OptionalBoolean, diagnost
 
     return lua_api.c.lua_toboolean(state, -1) != 0;
 }
+
+const OptionalBoolean = struct {
+    table: c_int,
+    field: [*:0]const u8,
+    default: bool,
+};

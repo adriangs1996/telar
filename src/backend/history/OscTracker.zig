@@ -4,7 +4,6 @@ const std = @import("std");
 const Observation = @import("Observation.zig");
 const builtin = @import("builtin");
 const Clock = @import("Clock.zig");
-const SemanticObservation = @import("SemanticObservation.zig");
 const OscCompletion = @import("OscCompletion.zig");
 const Tracker = @This();
 
@@ -214,3 +213,8 @@ fn setCwd(self: *Tracker, cwd: []const u8) void {
     self.cwd_len = @min(cwd.len, self.cwd.len);
     @memcpy(self.cwd[0..self.cwd_len], cwd[0..self.cwd_len]);
 }
+
+const SemanticObservation = struct {
+    body: []const u8,
+    clock: Clock,
+};

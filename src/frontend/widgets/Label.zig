@@ -4,7 +4,6 @@ const client = @import("telar-client");
 const std = @import("std");
 const tab_bar = @import("tab_bar.zig");
 const Context = @import("Context.zig");
-const Placement = @import("Placement.zig");
 const Plan = @import("../ui/Plan.zig");
 const widget = @import("context_support.zig");
 /// A tab's shortcut, optional application icon, name and fullscreen marker.
@@ -154,3 +153,8 @@ test "tab application icons remain within clipped labels" {
         try std.testing.expectEqual(@as(u8, if (available >= 5) 1 else 0), plan.len);
     }
 }
+
+const Placement = struct {
+    rect: core.Rect,
+    style: core.Style,
+};

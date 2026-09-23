@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const RestoredAgent = @import("RestoredAgent.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const SessionTitle = @import("SessionTitle.zig");
 const ResumeSession = @import("ResumeSession.zig");
@@ -88,3 +87,9 @@ fn indexOf(self: *const RestoredAgents, key: PaneKey) ?usize {
 
     return null;
 }
+
+const RestoredAgent = struct {
+    key: PaneKey,
+    title: ?SessionTitle = null,
+    session: ?ResumeSession = null,
+};

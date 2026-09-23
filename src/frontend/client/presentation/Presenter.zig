@@ -17,7 +17,8 @@ const Stats = @import("../../graphics/Stats.zig");
 const delivery_module = @import("../../attachments/delivery.zig");
 const CellPresentation = @import("CellPresentation.zig");
 const Presented = @import("Presented.zig");
-const CellGraphicsWriter = @import("CellGraphicsWriter.zig");
+const KittyGraphicsWriter = @import("../../graphics/KittyGraphicsWriter.zig");
+const PillRenderer = @import("../../graphics/PillRenderer.zig");
 
 const Presenter = @This();
 
@@ -599,3 +600,16 @@ fn flushMedia(self: *Presenter, writer: *std.Io.Writer) !void {
         self.metrics.media_flush.observe(core.elapsed(started, core.now(self.io)));
     }
 }
+
+const CellGraphicsWriter = struct {
+    panes: ?KittyGraphicsWriter = null,
+    pill: *PillRenderer,
+    pill_bytes: usize = 0,
+
+    pub fn writeOpaque(context: *anyopaque, writer: *std.Io.Writer) std.Io.Writer.Error!usize {
+        const self: *CellGraphicsWriter = @ptrCast(@alignCast(context));
+        self.pill_bytes = try self.pill.writeRetirements(writer);
+        const pane_bytes = if (self.panes) |*panes| try panes.write(writer) else 0;
+        return self.pill_bytes + pane_bytes;
+    }
+};

@@ -7,7 +7,6 @@
 //! previous copies disagreed even about what an *empty* row looked like.
 
 const core = @import("telar-core");
-const RowSync = @import("RowSync.zig");
 const std = @import("std");
 
 /// Walks [start, end) of one row, finds each run where `source` and
@@ -62,3 +61,10 @@ test "run diffing copies exactly the disagreeing runs" {
     try std.testing.expectEqual([2]u16{ 1, 2 }, sink.runs[0]);
     try std.testing.expectEqual([2]u16{ 5, 1 }, sink.runs[1]);
 }
+
+const RowSync = struct {
+    source: []const core.Cell,
+    reference: []const core.Cell,
+    start: u16,
+    end: u16,
+};

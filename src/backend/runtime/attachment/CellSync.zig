@@ -7,7 +7,7 @@ const Pane = @import("../../pane/Pane.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
 const Projection = @import("Projection.zig");
 const blit_module = @import("../../pane/blit.zig");
-const Preparation = @import("Preparation.zig");
+const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const Diff = @import("../../pane/Diff.zig");
 const damage_module = @import("../../pane/damage.zig");
 const Sync = @This();
@@ -344,3 +344,11 @@ fn observeProjection(self: *Sync, pane: *const Pane, projection: Projection) voi
 
     self.observed_revision = pane.cell_revision;
 }
+
+const Preparation = struct {
+    io: std.Io,
+    buffer: []u8,
+    pane: *Pane,
+    force_snapshot: bool,
+    metrics: *RuntimeMetrics,
+};

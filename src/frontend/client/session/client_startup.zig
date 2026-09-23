@@ -4,7 +4,7 @@
 const data = @import("model");
 const client_module = @import("telar-client");
 const TerminalClient = @import("../TerminalClient.zig");
-const StartupRequest = @import("StartupRequest.zig");
+const platform = @import("../../platform/platform.zig");
 const host_capabilities = @import("../host/host_capabilities.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const host_inputs = @import("../input/host_inputs.zig");
@@ -58,3 +58,7 @@ pub fn advance(terminal: *TerminalClient) !bool {
 
     return false;
 }
+
+const StartupRequest = struct {
+    resize_watcher: *platform.ResizeWatcher,
+};

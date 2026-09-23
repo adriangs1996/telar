@@ -7,7 +7,6 @@
 
 const data = @import("model");
 const std = @import("std");
-const ExpansionInput = @import("ExpansionInput.zig");
 
 pub const max_path_bytes = data.PathCompletionResult.max_path_bytes;
 
@@ -156,3 +155,12 @@ test "basename ignores trailing separators" {
     try std.testing.expect(endsWithSeparator("/work/"));
     try std.testing.expect(!endsWithSeparator("/work"));
 }
+
+const ExpansionInput = struct {
+    /// The typed directory as written by the user.
+    text: []const u8,
+    environ: std.process.Environ,
+    /// Absolute directory relative paths resolve against, usually the focused
+    /// pane's cwd; empty when the client does not know it.
+    base: []const u8,
+};

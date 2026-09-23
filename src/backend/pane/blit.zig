@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const Operation = @import("Operation.zig");
+const Options = @import("Options.zig");
 const Stats = @import("Stats.zig");
 const ColorSource = @import("ColorSource.zig");
 const std = @import("std");
@@ -904,3 +904,11 @@ test "direct ASCII rows match cells written through setCell" {
         }
     }
 }
+
+const Operation = struct {
+    buffer: *core.Buffer,
+    area: core.Rect,
+    terminal: *const vt.Terminal,
+    state: *vt.RenderState,
+    options: Options,
+};

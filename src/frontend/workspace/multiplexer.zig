@@ -16,7 +16,6 @@ const Plan = @import("../presentation/Plan.zig");
 const Result = @import("Result.zig");
 const fullscreen_tabs = @import("fullscreen_tabs.zig");
 const Compositor = @import("Compositor.zig");
-const TestingComposition = @import("TestingComposition.zig");
 const RenderStats = @import("RenderStats.zig");
 const Position = @import("../presentation/Position.zig");
 const term = @import("../presentation/screen_support.zig");
@@ -1267,3 +1266,15 @@ test "focused pane mouse planning ignores missing and empty pane content" {
     try std.testing.expect(data.tab_layout.removePane(&model, pane_id));
     try std.testing.expect(data.tab_layout.planFocusedPaneMouse(&model, 0, area) == null);
 }
+
+const TestingComposition = struct {
+    model: *data.ClientModel,
+    /// The composed tab; tests compose their only tab.
+    tab: usize = 0,
+    screen: *Screen,
+    area: core.Rect,
+    palette: *const data.Palette = &data.theme_support.default_theme.palette,
+    copy: ?client.CopyProjection = null,
+    bottom_reservation: ?data.PaneBottomReservation = null,
+    force: bool = false,
+};

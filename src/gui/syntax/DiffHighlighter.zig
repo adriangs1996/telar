@@ -5,7 +5,6 @@ const std = @import("std");
 const client = @import("telar-client");
 const SourceSide = @import("SourceSide.zig");
 const CapturedSpan = @import("CapturedSpan.zig").CapturedSpan;
-const NativeRequest = @import("NativeRequest.zig").NativeRequest;
 const captures = @import("captures.zig");
 const limits = @import("limits.zig");
 const Self = @This();
@@ -136,3 +135,12 @@ fn highlight(self: *Self, side: *const SourceSide) !void {
         return error.InvalidSyntaxResult;
     }
 }
+
+const NativeRequest = extern struct {
+    language: [*:0]const u8,
+    source: [*]const u8,
+    source_len: usize,
+    spans: [*]CapturedSpan,
+    capacity: usize,
+    count: usize = 0,
+};

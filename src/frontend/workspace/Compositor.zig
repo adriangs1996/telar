@@ -4,7 +4,6 @@ const data = @import("model");
 const std = @import("std");
 const BorderTheme = @import("BorderTheme.zig");
 const Plan = @import("../presentation/Plan.zig");
-const PaneProjection = @import("PaneProjection.zig");
 const Composition = @import("Composition.zig");
 const CompositionResult = @import("CompositionResult.zig");
 const RenderStats = @import("RenderStats.zig");
@@ -438,3 +437,14 @@ fn paneProjectionChanged(self: *Compositor, model: *const data.ClientModel, tab:
     }
     return changed;
 }
+
+const PaneProjection = struct {
+    pane_id: core.PaneId,
+    surface: core.PaneSurface,
+    cols: u16,
+    rows: u16,
+    scroll_offset: u32,
+    graphics_placeholder: bool,
+    progress_state: core.PaneProgressState,
+    progress_percent: ?u8,
+};

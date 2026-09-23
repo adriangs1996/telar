@@ -4,7 +4,6 @@ const client = @import("telar-client");
 const data = @import("model");
 const builtin = @import("builtin");
 const std = @import("std");
-const ClipboardImage = @import("ClipboardImage.zig");
 
 pub fn platformSupported() bool {
     return builtin.os.tag == .macos;
@@ -74,3 +73,9 @@ fn readClipboardPng(gpa: std.mem.Allocator) !ClipboardImage {
 }
 
 extern fn telar_macos_clipboard_copy_png(bytes: *?[*]u8, len: *usize, width: *u32, height: *u32, max_source_bytes_value: usize, max_png_bytes_value: usize, max_pixels_value: u64) c_int;
+
+const ClipboardImage = struct {
+    png: []u8,
+    width: u32,
+    height: u32,
+};

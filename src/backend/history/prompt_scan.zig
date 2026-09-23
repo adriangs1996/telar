@@ -9,7 +9,6 @@
 //! a configured agent has none and relies on its manifest phrases.
 
 const core = @import("telar-core");
-const Scan = @import("Scan.zig");
 const vt = @import("ghostty-vt");
 const std = @import("std");
 
@@ -120,3 +119,9 @@ fn hasBackground(color: vt.Style.Color) bool {
 test {
     std.testing.refAllDecls(@This());
 }
+
+const Scan = struct {
+    provider: core.AgentProvider,
+    confidence: u8,
+    ready: *const fn (terminal: *const vt.Terminal) bool,
+};

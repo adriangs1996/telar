@@ -6,7 +6,6 @@ const data = @import("model");
 const Context = @import("Context.zig");
 const widget = @import("context_support.zig");
 const modal = @import("modal.zig");
-const ModalInput = @import("ModalInput.zig");
 const std = @import("std");
 
 const card_width: u16 = 18;
@@ -211,3 +210,10 @@ test "graphical modal leaves corner cells to its rounded frame" {
     try std.testing.expectEqualStrings(".", buffer.at(area.x + area.w - 1, area.y).?.text());
     try std.testing.expectEqualDeep(palette.panel_bg, buffer.at(area.x + 1, area.y).?.style.bg);
 }
+
+const ModalInput = struct {
+    application: core.Rect,
+    snapshot: *const client.AttachmentSnapshot,
+    plan: *client.Plan,
+    graphical_frame: bool,
+};

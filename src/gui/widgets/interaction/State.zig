@@ -8,7 +8,7 @@ const client = @import("telar-client");
 const Canvas = @import("../Canvas.zig");
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
 const Dispatcher = @import("Dispatcher.zig");
-const Editors = @import("Editors.zig");
+const Geometry = @import("EditorGeometry.zig");
 const Preedit = @import("Preedit.zig");
 const Target = @import("Target.zig");
 const Id = @import("Id.zig");
@@ -289,3 +289,30 @@ test "long message geometry is lazy reusable and released by its original alloca
     state.deinit();
     try std.testing.expect(state.message_layout == null);
 }
+
+const Editors = struct {
+    pub const capacity = 16;
+    items: [capacity]Geometry = undefined,
+    len: usize = 0,
+
+    /// Example: `try editors.add(geometry);`
+    pub fn add(self: *Editors, geometry: Geometry) !void {
+        if (self.len == capacity) {
+            return error.WidgetEditorCapacityExceeded;
+        }
+
+        self.items[self.len] = geometry;
+        self.len += 1;
+    }
+
+    /// Example: `const geometry = editors.find(target.id) orelse return;`
+    pub fn find(self: *const Editors, id: Id) ?Geometry {
+        for (self.items[0..self.len]) |item| {
+            if (item.id.eql(id)) {
+                return item;
+            }
+        }
+
+        return null;
+    }
+};

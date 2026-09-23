@@ -5,7 +5,6 @@ const Canvas = @import("../widgets/Canvas.zig");
 const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
 const CanvasFixture = @import("CanvasFixture.zig");
 const Surface = @import("../widgets/Surface.zig");
-const Text = @import("../widgets/Text.zig");
 const Sprite = @import("../widgets/Sprite.zig");
 
 const Widget = union(enum) {
@@ -90,3 +89,14 @@ test "sprite widgets keep page selection tint and placement inside a composed li
     try list.draw(&canvas);
     try std.testing.expectEqual(@as(usize, 1), fixture.quads.items().len);
 }
+
+/// A shaped label inside its parent's assigned pixel rectangle.
+const Text = struct {
+    bounds: @import("../render/Rect.zig"),
+    label: @import("../widgets/Label.zig"),
+
+    /// Example: `try label.draw(canvas);`
+    pub fn draw(self: Text, canvas: *Canvas) !void {
+        _ = try canvas.textAt(self.bounds, self.label);
+    }
+};

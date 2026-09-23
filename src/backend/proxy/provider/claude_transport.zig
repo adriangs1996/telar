@@ -6,7 +6,7 @@ const middleware = @import("../middleware.zig");
 const request = @import("request_support.zig");
 const HeaderView = @import("../HeaderView.zig");
 const std = @import("std");
-const TransformCase = @import("TransformCase.zig");
+const types = @import("../../agent/types.zig");
 const EffectBatch = @import("../EffectBatch.zig");
 
 var stateless_context: u8 = 0;
@@ -163,3 +163,12 @@ test "Claude identity negotiation rejects ambiguous pseudo headers" {
     try std.testing.expectEqual(middleware.TransformStatus.preserve, status);
     try std.testing.expectEqual(@as(u8, 0), effects.len);
 }
+
+const TransformCase = struct {
+    dialect: types.ApiDialect = .anthropic_messages,
+    direction: middleware.Direction = .request,
+    kind: middleware.HeaderKind = .request,
+    method: []const u8 = "POST",
+    target: []const u8 = "/v1/messages",
+    encoding: ?[]const u8 = "gzip, br",
+};

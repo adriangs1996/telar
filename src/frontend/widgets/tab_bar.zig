@@ -4,7 +4,6 @@ const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
-const TabBarInput = @import("TabBarInput.zig");
 const Label = @import("Label.zig");
 const widget = @import("context_support.zig");
 
@@ -184,3 +183,12 @@ fn alignedStart(input: TabBarInput, width: u16) u16 {
         .right => input.area.x + input.area.w - width,
     };
 }
+
+const TabBarInput = struct {
+    area: core.Rect,
+    model: *const data.ClientModel,
+    /// The active tab's slot in `model.tabs`.
+    tab: usize,
+    alignment: data.bar_values.Alignment = .right,
+    animation_frame: u8 = 0,
+};

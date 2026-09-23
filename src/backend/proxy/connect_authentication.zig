@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const GenericCredentialPort = @import("GenericCredentialPort.zig").Type;
 const GenericConnectAuthenticationCommand = @import("GenericConnectAuthenticationCommand.zig").Type;
 const std = @import("std");
-const TestStore = @import("TestStore.zig");
 const Credential = @import("Credential.zig");
 const ExpectedRejection = @import("ExpectedRejection.zig");
 
@@ -247,3 +246,14 @@ test "a live credential and valid CONNECT target produce authenticated input" {
     try std.testing.expectEqual(@as(u16, 443), authenticated.target.port);
     try std.testing.expectEqual(@as(usize, 1), store.lookups);
 }
+
+const TestStore = struct {
+    expected: Credential,
+    live: bool = true,
+    lookups: usize = 0,
+
+    pub fn contains(self: *TestStore, credential: *const Credential) bool {
+        self.lookups += 1;
+        return self.live and std.meta.eql(self.expected, credential.*);
+    }
+};

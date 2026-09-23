@@ -2,7 +2,6 @@ const freetype = @import("freetype");
 const rasterizer_support = @import("rasterizer_support.zig");
 const Metrics = @import("Metrics.zig");
 const TextDraw = @import("TextDraw.zig");
-const ShapedText = @import("ShapedText.zig");
 const std = @import("std");
 const Rasterizer = @This();
 
@@ -189,3 +188,8 @@ pub fn shapeText(self: *Rasterizer, text: []const u8) !ShapedText {
         .positions = positions[0..glyph_count],
     };
 }
+
+const ShapedText = struct {
+    glyphs: []const freetype.c.hb_glyph_info_t,
+    positions: []const freetype.c.hb_glyph_position_t,
+};

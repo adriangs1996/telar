@@ -1,7 +1,6 @@
 const std = @import("std");
 const types = @import("../../agent/types.zig");
 const provider = @import("provider.zig");
-const ResponseStreamsSlot = @import("ResponseStreamsSlot.zig");
 const ResponseObserver = @import("ResponseObserver.zig");
 /// Bounded collection of response interpreters keyed by HTTP/2 stream ID.
 const ResponseStreams = @This();
@@ -96,3 +95,8 @@ fn create(self: *ResponseStreams, stream_id: u32) ?*ResponseStreamsSlot {
 
     return null;
 }
+
+const ResponseStreamsSlot = struct {
+    stream_id: u32 = 0,
+    response: ?*ResponseObserver = null,
+};

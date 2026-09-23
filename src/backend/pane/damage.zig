@@ -1,7 +1,6 @@
 //! Cost-aware frame spans from conservative terminal row damage.
 
 const core = @import("telar-core");
-const Input = @import("Input.zig");
 const Diff = @import("Diff.zig");
 const std = @import("std");
 
@@ -198,3 +197,10 @@ test "too many damaged runs request a snapshot" {
     const diff = collectSpans(.{ .current = &current, .acknowledged = &acknowledged, .cols = 32, .damaged_rows = &damaged_rows }, &spans);
     try std.testing.expect(diff.snapshot_required);
 }
+
+const Input = struct {
+    current: []const core.Cell,
+    acknowledged: []const core.Cell,
+    cols: u16,
+    damaged_rows: []const bool,
+};

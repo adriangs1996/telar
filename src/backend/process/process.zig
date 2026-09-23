@@ -6,7 +6,6 @@
 
 const core = @import("telar-core");
 const builtin = @import("builtin");
-const ProbeInput = @import("ProbeInput.zig");
 const Probe = @import("Probe.zig");
 const Identification = @import("Identification.zig");
 const std = @import("std");
@@ -518,3 +517,9 @@ test "pane-root acquisition can recognize an agent after exec in the same proces
     try std.testing.expect(ready.inspected);
     try std.testing.expect(!shellForeground(ready.cache, root_pid));
 }
+
+const ProbeInput = struct {
+    process_group_id: ?std.c.pid_t,
+    previous: Cache,
+    manifests: *const core.Table = &core.builtin_table,
+};

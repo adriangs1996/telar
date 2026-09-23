@@ -3,7 +3,6 @@ const store_support = @import("store_support.zig");
 const Session = @import("Session.zig");
 const std = @import("std");
 const ClientKey = @import("../../history/ClientKey.zig");
-const RemovalResources = @import("RemovalResources.zig");
 const Store = @This();
 
 comptime {
@@ -135,3 +134,8 @@ pub fn deinit(self: *Store, io: std.Io, gpa: std.mem.Allocator) void {
     }
     self.count = 0;
 }
+
+const RemovalResources = struct {
+    io: std.Io,
+    gpa: std.mem.Allocator,
+};

@@ -6,7 +6,6 @@ const kitty_protocol = @import("kitty_protocol");
 const std = @import("std");
 const Rasterizer = @import("Rasterizer.zig");
 const Plan = @import("../presentation/Plan.zig");
-const Key = @import("Key.zig");
 const pill = @import("pill.zig");
 const kitty_codec = @import("kitty_codec.zig");
 const labels = @import("../presentation/pane_labels.zig");
@@ -366,3 +365,14 @@ fn rasterize(self: *Renderer, key: Key) !void {
         }
     }
 }
+
+const Key = struct {
+    width: u32,
+    height: u16,
+    cell_width: u16,
+    cell_height: u16,
+    font_height: u16,
+    accent: [3]u8,
+    selected_text: [3]u8,
+    inactive_text: [3]u8,
+};

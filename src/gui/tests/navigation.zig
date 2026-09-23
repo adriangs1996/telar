@@ -8,8 +8,6 @@ const Session = @import("Session.zig");
 const GuiClient = @import("../GuiClient.zig");
 const routing = @import("../input/router.zig");
 
-const ActionCapture = @import("ActionCapture.zig");
-
 test "update processes a horizontal split shortcut and its correlated runtime reply" {
     const session = try Session.init();
     defer session.deinit();
@@ -535,3 +533,19 @@ test "native application repeat keeps its pane when focus changes" {
     try drainInput(session);
     try std.testing.expectEqual(second, app.model.tabs.layout[tab].focused().?);
 }
+
+const ActionCapture = struct {
+    value: ?data.actions.Action = null,
+    keys: usize = 0,
+
+    pub fn action(self: *ActionCapture, value: data.actions.Action) !data.keybind.Control {
+        self.value = value;
+        return .continue_routing;
+    }
+
+    pub fn key(self: *ActionCapture, _: data.Key) !void {
+        self.keys += 1;
+    }
+
+    pub fn forward(_: *ActionCapture, _: []const u8) !void {}
+};

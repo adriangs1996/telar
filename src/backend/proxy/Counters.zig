@@ -1,6 +1,8 @@
 const std = @import("std");
 const metrics = @import("metrics.zig");
-const LiveState = @import("LiveState.zig");
+const SlotSnapshot = @import("SlotSnapshot.zig");
+const ObservationQueueMetrics = @import("ObservationQueueMetrics.zig");
+const CaptureMetrics = @import("capture/CaptureMetrics.zig");
 const Snapshot = @import("Snapshot.zig");
 const Counters = @This();
 
@@ -84,3 +86,9 @@ pub fn snapshot(self: *const Counters, live: LiveState) Snapshot {
         .capture_queue_high_water = live.captures.queue_high_water,
     };
 }
+
+const LiveState = struct {
+    connections: SlotSnapshot,
+    observations: ObservationQueueMetrics,
+    captures: CaptureMetrics = .{},
+};

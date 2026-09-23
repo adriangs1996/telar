@@ -21,7 +21,6 @@
 const SseCapture = @import("SseCapture.zig");
 const CapturedExpectation = @import("CapturedExpectation.zig");
 const std = @import("std");
-const CountExpectation = @import("CountExpectation.zig");
 
 /// Maximum number of bytes retained for one `event` field value.
 pub const max_event_name_bytes = 128;
@@ -549,3 +548,8 @@ test "an oversized line resynchronizes at a lone CR" {
     try expectCaptured(&capture, 0, .{ .name = "oversized", .data = "kept", .truncated = true });
     try expectCaptured(&capture, 1, .{ .name = "next", .data = "ok", .truncated = false });
 }
+
+const CountExpectation = struct {
+    count: usize,
+    hint: []const u8,
+};

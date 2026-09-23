@@ -6,7 +6,6 @@ const Context = @import("Context.zig");
 const TabRenameInput = @import("TabRenameInput.zig");
 const Cursor = @import("Cursor.zig");
 const LabelInput = @import("InlineLabel.zig");
-const FieldInput = @import("InlineField.zig");
 
 pub const Field = data.GenericField(core.max_tab_label_bytes);
 pub const Kind = enum { rename_tab, create_workspace, rename_workspace, copy_search_forward, copy_search_backward };
@@ -140,3 +139,10 @@ fn writeField(context: *Context, input: FieldInput) void {
         .flags = .{ .bold = focused },
     } });
 }
+
+/// One single-row field of the inline new-context form.
+const FieldInput = struct {
+    area: core.Rect,
+    text: []const u8,
+    focused: bool,
+};

@@ -1,5 +1,4 @@
 const plugin = @import("plugin.zig");
-const PluginIdentity = @import("PluginIdentity.zig");
 const std = @import("std");
 const Grant = @This();
 
@@ -17,3 +16,8 @@ pub fn allows(self: Grant, identity: PluginIdentity, capability: plugin.Capabili
         std.mem.eql(u8, &self.digest, &identity.digest) and
         self.capabilities.contains(capability);
 }
+
+const PluginIdentity = struct {
+    id: []const u8,
+    digest: plugin.Digest,
+};

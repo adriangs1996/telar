@@ -6,7 +6,6 @@ const RequiredField = @import("RequiredField.zig");
 const std = @import("std");
 const OptionalString = @import("OptionalString.zig");
 const OptionalInteger = @import("OptionalInteger.zig");
-const OptionalMebibytes = @import("OptionalMebibytes.zig");
 const OptionalMilliseconds = @import("OptionalMilliseconds.zig");
 const Fields = @import("Fields.zig");
 const Array = @import("Array.zig");
@@ -199,3 +198,9 @@ pub fn ensureArrayOnly(state: *lua_api.c.lua_State, input: Array, diagnostic: *d
         }
     }
 }
+
+const OptionalMebibytes = struct {
+    index: c_int,
+    name: [*:0]const u8,
+    default: usize,
+};

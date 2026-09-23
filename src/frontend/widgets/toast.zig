@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const data = @import("model");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
-const RenderMode = @import("RenderMode.zig");
 const CardInput = @import("CardInput.zig");
 const widget = @import("context_support.zig");
 const std_module = @import("std");
@@ -186,3 +185,9 @@ test "toast cards register activation and a separate close target" {
         hits.at(area.x + area.w - 2, area.y).?,
     );
 }
+
+const RenderMode = struct {
+    area: core.Rect,
+    center: *const data.Center,
+    paint: bool,
+};

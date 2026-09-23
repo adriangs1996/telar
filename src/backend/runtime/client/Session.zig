@@ -4,7 +4,8 @@ const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const Delivery = @import("../delivery/Delivery.zig");
 const session_support = @import("session_support.zig");
 const PendingPaneFocus = @import("PendingPaneFocus.zig");
-const PendingSearch = @import("PendingSearch.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
+const Cursor = @import("../../pane/Cursor.zig");
 const std = @import("std");
 const PendingClientCommand = @import("PendingClientCommand.zig");
 const Session = @This();
@@ -115,3 +116,10 @@ pub fn deinit(self: *Session, io: std.Io, gpa: std.mem.Allocator) void {
     gpa.free(self.receive_buffer);
     gpa.free(self.read_buffer);
 }
+
+const PendingSearch = struct {
+    request_id: core.RequestId,
+    pane: PaneKey,
+    cursor: Cursor,
+    deadline_ns: i128,
+};

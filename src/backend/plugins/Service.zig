@@ -3,7 +3,7 @@ const std = @import("std");
 const service_support = @import("service_support.zig");
 const Worker = @import("Worker.zig");
 const Result = @import("Result.zig");
-const InitOptions = @import("InitOptions.zig");
+const ServiceSpec = @import("ServiceSpec.zig");
 const Exchange = @import("../proxy/capture/Exchange.zig");
 const ExchangeIdentity = @import("ExchangeIdentity.zig");
 const Frame = @import("Frame.zig");
@@ -126,3 +126,9 @@ fn encodeFrame(self: *Service, captured: *const Exchange, identity: ExchangeIden
     };
     return frame;
 }
+
+const InitOptions = struct {
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    specs: []const ServiceSpec,
+};

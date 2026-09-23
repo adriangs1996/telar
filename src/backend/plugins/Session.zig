@@ -1,5 +1,4 @@
 const std = @import("std");
-const SessionSpec = @import("SessionSpec.zig");
 const Request = @import("Request.zig");
 const Result = @import("Result.zig");
 const protocol = @import("protocol.zig");
@@ -154,3 +153,10 @@ fn readExact(self: *Session, output: []u8, timeout: std.Io.Timeout) !void {
         };
     }
 }
+
+const SessionSpec = struct {
+    package_index: u8,
+    plugin_id: u64,
+    digest: [32]u8,
+    generation: u64,
+};

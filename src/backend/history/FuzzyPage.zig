@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const Scored = @import("Scored.zig");
 const Query = @import("Query.zig");
 const FuzzyPage = @This();
 
@@ -35,3 +34,5 @@ pub fn consider(self: *FuzzyPage, candidate: struct { id: i64, command: []const 
 
     self.best[index] = .{ .score = score, .id = candidate.id };
 }
+
+const Scored = struct { score: u32, id: i64 };

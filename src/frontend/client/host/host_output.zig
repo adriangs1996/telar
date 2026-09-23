@@ -2,7 +2,6 @@
 
 const client = @import("telar-client");
 const std = @import("std");
-const PrefixWriter = @import("PrefixWriter.zig");
 const Output = @import("Output.zig");
 
 test "a nonblocking prefix and the output actor transmit each byte exactly once" {
@@ -71,3 +70,15 @@ test "a failed write cannot complete a successful presentation" {
     try std.testing.expect(!output.pending);
     try std.testing.expect(output.delivery == null);
 }
+
+const PrefixWriter = struct {
+    writer: *std.Io.Writer,
+    limit: usize,
+
+    pub fn write(context: *anyopaque, bytes: []const u8) !usize {
+        const prefix: *PrefixWriter = @ptrCast(@alignCast(context));
+        const count = @min(prefix.limit, bytes.len);
+        try prefix.writer.writeAll(bytes[0..count]);
+        return count;
+    }
+};

@@ -6,7 +6,6 @@ const queue = @import("queue.zig");
 const table = @import("table.zig");
 const Producer = @import("Producer.zig");
 const std = @import("std");
-const TestGate = @import("TestGate.zig");
 const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
 
@@ -44,3 +43,9 @@ test "disabled capture does not allocate or reserve quota" {
     try std.testing.expectEqual(@as(u64, 0), producer.metrics().started);
     try std.testing.expectEqual(@as(u64, 0), producer.metrics().skipped_quota);
 }
+
+const TestGate = struct {
+    pub fn accepts(_: *anyopaque, _: *const Credential) bool {
+        return true;
+    }
+};

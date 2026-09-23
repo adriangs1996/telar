@@ -1,6 +1,5 @@
 const core = @import("telar-core");
 const Label = @import("Label.zig");
-const PaintedLabel = @import("PaintedLabel.zig");
 const std = @import("std");
 const Plan = @This();
 
@@ -81,3 +80,9 @@ pub fn sameContent(self: *const Plan, other: *const Plan) bool {
 
     return true;
 }
+
+const PaintedLabel = struct {
+    buffer: *const core.Buffer,
+    area: core.Rect,
+    selected: bool,
+};

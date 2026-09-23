@@ -3,7 +3,6 @@
 
 const core = @import("telar-core");
 const vt = @import("ghostty-vt");
-const Row = @import("Row.zig");
 const std = @import("std");
 
 const max_rows = 32;
@@ -89,3 +88,57 @@ test "Codex composer drafts prove readiness without claiming identity" {
     stream.nextSlice("\x1b[?25l");
     try std.testing.expect(scan(&terminal, &core.builtin_table) == null);
 }
+
+const Row = struct {
+    bytes: [1024]u8 = undefined,
+    len: usize = 0,
+    first: u21 = 0,
+    column: usize = 0,
+
+    pub fn read(terminal: *const vt.Terminal, y: usize) Row {
+        var row: Row = .{};
+        const pin = terminal.screens.active.pages.pin(.{ .active = .{ .y = @intCast(y) } }) orelse return row;
+
+        for (pin.cells(.all), 0..) |cell, x| {
+            const cp = cell.codepoint();
+            if (row.first == 0 and cp != 0 and cp != ' ') {
+                row.first = cp;
+                row.column = x;
+            }
+
+            if (row.len == row.bytes.len) {
+                break;
+            }
+
+            row.bytes[row.len] = if (cp > 0 and cp < 128) @intCast(cp) else ' ';
+            row.len += 1;
+        }
+
+        return row;
+    }
+
+    pub fn text(self: *const Row) []const u8 {
+        return std.mem.trim(u8, self.bytes[0..self.len], " ");
+    }
+
+    pub fn isStatus(self: *const Row) bool {
+        const line = self.text();
+        const open = std.mem.indexOfScalar(u8, line, '(') orelse return false;
+        const heading = std.mem.trim(u8, line[0..open], " ");
+        const spinner = self.first == 0x2022 or (self.first >= 0x2800 and self.first <= 0x28ff);
+        if (!spinner and !std.mem.eql(u8, heading, "Working") and !std.mem.eql(u8, heading, "Thinking") and !std.mem.eql(u8, heading, "Reconnecting") and !std.mem.eql(u8, heading, "Compacting")) {
+            return false;
+        }
+
+        // A clock is part of the live status contract, including when the
+        // interrupt shortcut is remapped, hidden, or clipped by a narrow pane.
+        var index = open + 1;
+        const digits = index;
+        while (index < line.len and std.ascii.isDigit(line[index])) : (index += 1) {}
+        if (index == digits or index == line.len) {
+            return false;
+        }
+
+        return line[index] == 's' or line[index] == 'm' or line[index] == 'h';
+    }
+};

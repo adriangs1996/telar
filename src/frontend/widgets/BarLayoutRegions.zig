@@ -1,5 +1,4 @@
 const core = @import("telar-core");
-const Widths = @import("Widths.zig");
 const Regions = @This();
 
 items: [3]core.Rect,
@@ -60,3 +59,8 @@ pub fn calculate(area: core.Rect, input: Widths) Regions {
 
     return .{ .items = .{ left, center, right } };
 }
+
+const Widths = struct {
+    desired: [3]u16,
+    tabs_index: u2,
+};

@@ -6,7 +6,6 @@
 //! the size of a terminal cell.
 
 const Bitmap = @import("Bitmap.zig");
-const BitmapPoint = @import("BitmapPoint.zig");
 const Axis = @import("Axis.zig");
 const std = @import("std");
 
@@ -93,3 +92,8 @@ test "a region samples only inside its origin" {
     const right: Bitmap = .{ .pixels = &pixels, .stride = 4, .origin_x = 2, .side = 2 };
     try std.testing.expectEqualSlices(u8, &.{ 255, 255, 255, 255 }, &sample(right, .{ .x = 1, .y = 1 }, 2));
 }
+
+const BitmapPoint = struct {
+    x: u32,
+    y: u32,
+};

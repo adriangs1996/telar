@@ -4,7 +4,6 @@ const core = @import("telar-core");
 const SidebarProviderPlacement = @import("SidebarProviderPlacement.zig");
 const std = @import("std");
 const Size = @import("Size.zig");
-const ProviderAtlasInput = @import("ProviderAtlasInput.zig");
 const Bitmap = @import("Bitmap.zig");
 const KittySidebarRenderer = @import("KittySidebarRenderer.zig");
 const bitmap = @import("bitmap_support.zig");
@@ -245,3 +244,10 @@ test "sidebar focused card is rounded bounded and moves without retransmission" 
     try std.testing.expect(std.mem.indexOf(u8, moved_writer.buffered(), "a=p") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_writer.buffered(), "a=t") == null);
 }
+
+const ProviderAtlasInput = struct {
+    destination: []u8,
+    atlas: Size,
+    slot: Size,
+    foreground: [3]u8 = @splat(255),
+};

@@ -10,7 +10,7 @@ const PendingTabRenamed = @import("PendingTabRenamed.zig");
 const PendingNotification = @import("PendingNotification.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
 const PendingPaneText = @import("PendingPaneText.zig");
-const PendingPaneMatches = @import("PendingPaneMatches.zig");
+const Matches = @import("Matches.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
 const PendingSuggestion = @import("PendingSuggestion.zig");
@@ -173,3 +173,11 @@ test "notification backpressure is counted and never overwrites queued work" {
     try std.testing.expectEqual(@as(u8, queue.items.len), queue.len);
     try std.testing.expectEqual(@as(u64, 1), queue.dropped);
 }
+
+const PendingPaneMatches = struct {
+    /// Search matches are small and computed at request time, so the reply owns
+    /// its copy.
+    request_id: core.RequestId,
+    pane_id: core.PaneId,
+    matches: Matches,
+};

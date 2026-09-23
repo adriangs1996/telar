@@ -2,7 +2,6 @@
 
 const data = @import("model");
 const std = @import("std");
-const Input = @import("Input.zig");
 const generation_support = @import("../config/generation_support.zig");
 const Generation = @import("../config/Generation.zig");
 const protocol = @import("protocol.zig");
@@ -86,3 +85,9 @@ fn validActionName(value: []const u8) bool {
             return false;
     return true;
 }
+
+const Input = struct {
+    entry_path: []const u8,
+    action_name: []const u8,
+    context: data.CallbackContext,
+};

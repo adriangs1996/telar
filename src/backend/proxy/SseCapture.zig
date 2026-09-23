@@ -1,5 +1,4 @@
 const sse = @import("sse.zig");
-const CapturedEvent = @import("CapturedEvent.zig");
 const SseEvent = @import("SseEvent.zig");
 const std = @import("std");
 const Capture = @This();
@@ -20,3 +19,19 @@ pub fn emit(self: *Capture, event: SseEvent) void {
     destination.truncated = event.truncated;
     self.len += 1;
 }
+
+const CapturedEvent = struct {
+    name: [sse.max_event_name_bytes]u8 = undefined,
+    name_len: usize = 0,
+    data: [sse.max_data_bytes]u8 = undefined,
+    data_len: usize = 0,
+    truncated: bool = false,
+
+    pub fn nameSlice(self: *const CapturedEvent) []const u8 {
+        return self.name[0..self.name_len];
+    }
+
+    pub fn dataSlice(self: *const CapturedEvent) []const u8 {
+        return self.data[0..self.data_len];
+    }
+};

@@ -5,7 +5,8 @@
 //! scheduling around it.
 
 const assets = @import("assets");
-const BitmapBlend = @import("BitmapBlend.zig");
+const RasterizerPoint = @import("RasterizerPoint.zig");
+const Color = @import("Color.zig");
 const freetype = @import("freetype");
 const Surface = @import("Surface.zig");
 const PixelBlend = @import("PixelBlend.zig");
@@ -154,3 +155,10 @@ test "surface length is checked before rasterization" {
         .max_width = 1,
     }));
 }
+
+const BitmapBlend = struct {
+    surface: Surface,
+    bitmap: freetype.c.FT_Bitmap,
+    destination: RasterizerPoint,
+    color: Color,
+};

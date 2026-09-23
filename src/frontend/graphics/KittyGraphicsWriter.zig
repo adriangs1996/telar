@@ -7,7 +7,6 @@ const kitty_codec = @import("kitty_codec.zig");
 const std = @import("std");
 const kitty = @import("kitty.zig");
 const FallbackFrame = @import("FallbackFrame.zig");
-const PlacementGeometry = @import("PlacementGeometry.zig");
 const KittyGraphicsWriter = @This();
 
 store: *delivery.Store,
@@ -346,3 +345,9 @@ fn geometry(self: *const KittyGraphicsWriter, geometry_input: PlacementGeometry)
         .rows = @intCast(std.math.divCeil(u64, clipped.destination.height + pixel_y % self.cell_height, self.cell_height) catch 1),
     };
 }
+
+const PlacementGeometry = struct {
+    pane_id: core.PaneId,
+    placement: core.Placement,
+    image: core.Image,
+};

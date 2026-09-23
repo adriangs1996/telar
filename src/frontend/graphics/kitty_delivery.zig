@@ -5,7 +5,6 @@ const core = @import("telar-core");
 const Compression = @import("Compression.zig");
 const std = @import("std");
 const kitty = @import("kitty.zig");
-const PartialPlacement = @import("PartialPlacement.zig");
 
 pub const Store = client.GenericResourceStore(@This());
 const ImageEntry = Store.ImageEntry;
@@ -466,3 +465,9 @@ pub fn deinit(store: *Store) void {
     }
     store.gpa.free(store.delivery.compression_input);
 }
+
+const PartialPlacement = struct {
+    pane_id: core.PaneId,
+    placement: core.Placement,
+    external_id: u32,
+};

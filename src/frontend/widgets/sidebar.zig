@@ -17,7 +17,6 @@ const AgentLocationInput = @import("AgentLocationInput.zig");
 const AgentMetaInput = @import("AgentMetaInput.zig");
 const AgentStatusInput = @import("AgentStatusInput.zig");
 const icons_module = @import("../ui/icons.zig");
-const ScrollbarInput = @import("ScrollbarInput.zig");
 const RuleInput = @import("RuleInput.zig");
 const State = @import("State.zig");
 
@@ -820,3 +819,10 @@ test "42 and 62 column cards reserve status before truncating context" {
         try std.testing.expectEqualStrings("r", buffer.at(width - 4, 4).?.text());
     }
 }
+
+const ScrollbarInput = struct {
+    state: *State,
+    list: core.Rect,
+    total: u16,
+    background: core.Color,
+};

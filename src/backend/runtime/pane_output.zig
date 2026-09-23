@@ -10,7 +10,6 @@ const PaneIngestStats = @import("../pane/PaneIngestStats.zig");
 const pane_namespace = @import("../pane/pane_namespace.zig");
 const OutputCompletion = @import("events/OutputCompletion.zig");
 const IngestCompletion = @import("events/IngestCompletion.zig");
-const OutputIngest = @import("events/OutputIngest.zig");
 const IngestTestGate = @import("IngestTestGate.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_graphics = @import("pane_graphics.zig");
@@ -171,3 +170,10 @@ fn ingestPane(ingest: OutputIngest, gate: ?*IngestTestGate) IngestCompletion {
 
     return .{ .pane = ingest.pane.key(), .result = stats };
 }
+
+const OutputIngest = struct {
+    /// Output-buffer borrow handed to the VT ingest actor.
+    io: std.Io,
+    pane: *Pane,
+    bytes: []const u8,
+};

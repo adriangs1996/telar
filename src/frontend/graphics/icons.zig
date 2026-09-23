@@ -17,7 +17,6 @@ const ui_icons = @import("../ui/icons.zig");
 const Placement = @import("Placement.zig");
 const RasterSize = @import("RasterSize.zig");
 const Rasterizer = @import("Rasterizer.zig");
-const AtlasInput = @import("AtlasInput.zig");
 const Surface = @import("Surface.zig");
 const Bitmap = @import("Bitmap.zig");
 const bitmap = @import("bitmap_support.zig");
@@ -417,3 +416,10 @@ test "unsupported terminals keep the renderer empty" {
     }});
     try std.testing.expect(!renderer.damaged());
 }
+
+const AtlasInput = struct {
+    pixels: []u8,
+    raster_size: RasterSize,
+    atlas_width: u32,
+    slots: []const IconsSlot,
+};

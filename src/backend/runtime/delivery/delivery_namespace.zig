@@ -5,7 +5,7 @@ const ReviewResult = @import("../../change_review/Result.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
-const AttachmentWork = @import("AttachmentWork.zig");
+const Prepared = @import("../attachment/Prepared.zig");
 const Transaction = @import("Transaction.zig");
 const Completion = @import("Completion.zig");
 const std = @import("std");
@@ -366,3 +366,8 @@ test "agent conversation delivery coalesces revisions independently for reconnec
     _ = second.complete({});
     try std.testing.expect(second.requested_agent_thread == null);
 }
+
+const AttachmentWork = struct {
+    index: usize,
+    prepared: Prepared,
+};

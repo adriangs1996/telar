@@ -1,4 +1,8 @@
-const H2Options = @import("H2Options.zig");
+const std = @import("std");
+const TransformPipeline = @import("../TransformPipeline.zig");
+const Session = @import("../Session.zig");
+const Exchange = @import("Exchange.zig");
+const Producer = @import("../capture/Producer.zig");
 const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Streams = @import("../provider/Streams.zig");
 const RelayContext = @import("RelayContext.zig");
@@ -42,3 +46,13 @@ pub fn run(self: *Connection) void {
 
     h2.RelayConnection.run(&relay);
 }
+
+const H2Options = struct {
+    io: std.Io,
+    gpa: std.mem.Allocator,
+    transforms: *const TransformPipeline,
+    has_custom_transformers: bool,
+    session: *Session,
+    exchange: *Exchange,
+    captures: ?*Producer = null,
+};

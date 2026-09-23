@@ -1,7 +1,7 @@
 //! Application policy for the shared bounded client diagnostic banner.
 const model_data = @import("model");
 
-const Replacement = @import("Replacement.zig");
+const data = @import("model");
 const std = @import("std");
 
 /// Formats one bounded diagnostic value without mutating client state.
@@ -92,3 +92,8 @@ pub fn replace(model: *model_data.ClientModel, replacement: Replacement) !model_
             error.InvalidClientDiagnostic,
     };
 }
+
+const Replacement = struct {
+    diagnostic: data.Diagnostic,
+    invalid_fallback: ?data.Diagnostic = null,
+};

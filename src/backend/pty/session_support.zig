@@ -3,7 +3,6 @@
 const Size = @import("Size.zig");
 const std = @import("std");
 const Session = @import("Session.zig");
-const ReadExpectation = @import("ReadExpectation.zig");
 const Command = @import("Command.zig");
 const exit_mod = @import("exit.zig");
 const ChildEnvironment = @import("ChildEnvironment.zig");
@@ -404,3 +403,8 @@ test "shutdown and wait coordinate ownership of the child PID" {
     try std.testing.expectEqual(@as(?anyerror, null), capture.failure);
     try std.testing.expectEqual(exit_mod.Exit{ .signaled = .KILL }, capture.result.?);
 }
+
+const ReadExpectation = struct {
+    buffer: []u8,
+    suffix: []const u8,
+};

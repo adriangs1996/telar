@@ -1,5 +1,4 @@
 const ClientKey = @import("../../history/ClientKey.zig");
-const StopRequested = @import("StopRequested.zig");
 const State = @This();
 
 requested: bool = false,
@@ -33,3 +32,7 @@ pub fn request(self: *State, initiator: ClientKey) ?StopRequested {
 pub fn isRequested(self: *const State) bool {
     return self.requested;
 }
+
+const StopRequested = struct {
+    initiator: ClientKey,
+};

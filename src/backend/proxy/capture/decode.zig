@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const Options = @import("Options.zig");
-const Result = @import("Result.zig");
 const DecodeInput = @import("DecodeInput.zig");
 const CollectOptions = @import("CollectOptions.zig");
 
@@ -293,3 +292,21 @@ test "unknown and malformed encodings preserve bounded wire bytes" {
     try std.testing.expect(!malformed.decoded);
     try std.testing.expect(malformed.failed);
 }
+
+const Result = struct {
+    bytes: []u8,
+    decoded: bool,
+    truncated: bool,
+    failed: bool = false,
+
+    /// Erases and releases decoded output owned by this result.
+    ///
+    /// ```zig
+    /// defer result.deinit(gpa);
+    /// ```
+    pub fn deinit(self: *Result, gpa: std.mem.Allocator) void {
+        std.crypto.secureZero(u8, self.bytes);
+        gpa.free(self.bytes);
+        self.* = .{ .bytes = &.{}, .decoded = false, .truncated = false };
+    }
+};

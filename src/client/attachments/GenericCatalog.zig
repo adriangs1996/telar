@@ -1,7 +1,7 @@
 const core = @import("telar-core");
 const model_data = @import("model");
 const std = @import("std");
-const PendingDeletion = @import("PendingDeletion.zig");
+const data = @import("model");
 const catalog = @import("catalog.zig");
 const AttachmentSnapshot = @import("AttachmentSnapshot.zig");
 const Item = @import("Item.zig");
@@ -604,3 +604,8 @@ pub fn Type(comptime Delivery: type) type {
         }
     };
 }
+
+const PendingDeletion = struct {
+    target: data.AttachmentTarget,
+    frames: u8,
+};

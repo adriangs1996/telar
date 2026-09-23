@@ -2,7 +2,6 @@
 
 const core = @import("telar-core");
 const std = @import("std");
-const ColumnMigration = @import("ColumnMigration.zig");
 const model = @import("../model.zig");
 const CommandFinished = @import("../CommandFinished.zig");
 const LocationColumns = @import("LocationColumns.zig");
@@ -1075,3 +1074,9 @@ pub fn bindQueryFilters(stmt: *c.sqlite3_stmt, parameter: *c_int, request: *cons
         },
     }
 }
+
+const ColumnMigration = struct {
+    table: []const u8,
+    column: []const u8,
+    alter_sql: [:0]const u8,
+};

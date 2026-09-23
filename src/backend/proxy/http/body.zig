@@ -4,7 +4,6 @@
 //! from the head and keeps all buffers fixed-size.
 
 const Direction = @import("Direction.zig");
-const Exact = @import("Exact.zig");
 const std = @import("std");
 const FakeSessionType = @import("FakeSession.zig");
 const Activity = @import("Activity.zig");
@@ -302,3 +301,9 @@ test "an incomplete trailer block reports failure" {
     ));
     try std.testing.expectEqualStrings(encoded, fake.childOutput());
 }
+
+const Exact = struct {
+    direction: Direction,
+    count: usize,
+    payload: bool,
+};

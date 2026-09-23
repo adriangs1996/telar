@@ -4,7 +4,6 @@
 //! owns the file I/O.
 
 const core = @import("telar-core");
-const Scan = @import("Scan.zig");
 const std = @import("std");
 const TitleLine = @import("TitleLine.zig");
 
@@ -73,3 +72,12 @@ test "scan reports a cleared name as an empty title and bounds long names" {
     try std.testing.expectEqual(@as(usize, 96), bounded.title.?.len);
     try std.testing.expect(std.unicode.utf8ValidateSlice(bounded.title.?));
 }
+
+const Scan = struct {
+    /// Bytes fully handled: up to and including the last newline, so a
+    /// partial trailing line is read again once complete.
+    consumed: usize,
+    /// The last name written for the session, copied into the caller's
+    /// buffer and cut to the title bound. Empty means the name was cleared.
+    title: ?[]const u8,
+};

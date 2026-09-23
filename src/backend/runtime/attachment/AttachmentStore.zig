@@ -2,7 +2,7 @@ const core = @import("telar-core");
 const Attachment = @import("Attachment.zig");
 const std = @import("std");
 const attachment_namespace = @import("attachment_namespace.zig");
-const SelectionQuery = @import("SelectionQuery.zig");
+const Range = @import("Range.zig");
 const selection = @import("selection.zig");
 const Pane = @import("../../pane/Pane.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
@@ -309,3 +309,8 @@ test "attachments keep their client's bit in the pane observer mask" {
     second.clearAttachments();
     try std.testing.expectEqual(@as(u8, 0), pane.observers);
 }
+
+const SelectionQuery = struct {
+    range: Range,
+    scratch: []u8,
+};

@@ -26,7 +26,6 @@ const FontSet = @import("FontSet.zig");
 const FontRuns = @import("FontRuns.zig");
 const FontRun = @import("FontRun.zig");
 const ShapedText = @import("ShapedText.zig");
-const GlyphTransform = @import("GlyphTransform.zig");
 const GlyphFailures = @import("GlyphFailures.zig");
 const Braille = @import("Braille.zig");
 const AsciiGlyph = @import("AsciiGlyph.zig");
@@ -1413,3 +1412,27 @@ test "cached ASCII glyphs place exactly what the shaping path places" {
         }
     }
 }
+
+/// Fits fallback ink to the configured grid while preserving its aspect ratio.
+const GlyphTransform = struct {
+    x: f32 = 0,
+    y: f32 = 0,
+    scale: f32 = 1,
+
+    /// Bounds use coordinates relative to the pen baseline; covered primary text bypasses this.
+    /// Example: `const transform = GlyphTransform.fit(ink_bounds, cell_bounds);`
+    pub fn fit(ink: Rect, cell: Rect) GlyphTransform {
+        if (!std.math.isFinite(ink.width) or ink.width <= 0 or ink.height <= 0) {
+            return .{};
+        }
+
+        const scale = @min(1, @min(cell.width / ink.width, cell.height / ink.height));
+        const top = ink.y * scale;
+        const bottom = top + ink.height * scale;
+        return .{
+            .scale = scale,
+            .x = cell.x + (cell.width - ink.width * scale) / 2 - ink.x * scale,
+            .y = if (top < cell.y) cell.y - top else if (bottom > cell.y + cell.height) cell.y + cell.height - bottom else 0,
+        };
+    }
+};

@@ -12,7 +12,6 @@ const PillRenderer = @import("../../graphics/PillRenderer.zig");
 const delivery_module = @import("../../attachments/delivery.zig");
 const GraphicsPlan = @import("GraphicsPlan.zig");
 const std = @import("std");
-const Dimensions = @import("Dimensions.zig");
 const Appearance = @import("Appearance.zig");
 const attachment_preview_module = @import("../../widgets/attachment_preview.zig");
 const screen_support = @import("../../presentation/screen_support.zig");
@@ -894,3 +893,8 @@ fn renderTabInsertion(self: *State, screen: *Screen) void {
         return;
     }
 }
+
+const Dimensions = struct {
+    width: u16,
+    height: u16,
+};

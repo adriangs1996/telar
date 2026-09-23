@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const OscTracker = @import("OscTracker.zig");
-const OscCollected = @import("OscCollected.zig");
+const Command = @import("Command.zig");
 
 pub const max_command_bytes = 64 * 1024;
 pub const max_osc_bytes = 8 * 1024;
@@ -106,3 +106,13 @@ test "an oversized OSC does not prevent later markers" {
     try std.testing.expectEqual(@as(usize, 1), collected.count);
     try std.testing.expectEqual(@as(?i32, 7), collected.last.?.exit_code);
 }
+
+const OscCollected = struct {
+    count: usize = 0,
+    last: ?Command = null,
+
+    pub fn emit(self: *OscCollected, command: Command) void {
+        self.count += 1;
+        self.last = command;
+    }
+};

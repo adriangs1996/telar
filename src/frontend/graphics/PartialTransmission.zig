@@ -1,6 +1,5 @@
 const client = @import("telar-client");
 const core = @import("telar-core");
-const FallbackPlacement = @import("FallbackPlacement.zig");
 /// A chunked transfer the frame budget interrupted. The next frame resumes
 /// it before emitting any other graphics escape, which the protocol demands.
 const PartialTransmission = @This();
@@ -13,3 +12,8 @@ offset: usize,
 compressed: bool = false,
 fallback_count: usize = 0,
 fallbacks: [core.max_placements_per_pane]FallbackPlacement = undefined,
+
+const FallbackPlacement = struct {
+    placement: core.Placement,
+    external_id: u32,
+};

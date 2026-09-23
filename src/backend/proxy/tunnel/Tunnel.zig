@@ -1,7 +1,6 @@
 const core = @import("telar-core");
 const Dependencies = @import("Dependencies.zig");
 const std = @import("std");
-const TunnelOptions = @import("TunnelOptions.zig");
 const head_support = @import("../http/head_support.zig");
 const tunnel_namespace = @import("tunnel_namespace.zig");
 const Exchange = @import("Exchange.zig");
@@ -128,3 +127,8 @@ pub fn run(self: *Tunnel) std.Io.Cancelable!void {
     });
     connection.run();
 }
+
+const TunnelOptions = struct {
+    dependencies: Dependencies,
+    child: std.Io.net.Stream,
+};

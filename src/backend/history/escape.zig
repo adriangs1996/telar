@@ -11,7 +11,6 @@
 //! (submits and bracketed paste).
 
 pub const OscScanner = @import("OscScanner.zig");
-const OscCapture = @import("OscCapture.zig");
 pub const InputScanner = @import("InputScanner.zig");
 const std = @import("std");
 pub const KittyFramingCounter = @import("KittyFramingCounter.zig");
@@ -124,3 +123,8 @@ test "UTF-8 continuation bytes do not desynchronize the Kitty framing counter" {
     try std.testing.expectEqual(@as(usize, 0), counter.observe("ß"));
     try std.testing.expectEqual(@as(usize, 1), counter.observe("\x1b_Gm=1;AA\x1b\\"));
 }
+
+const OscCapture = struct {
+    payloads: *std.ArrayList(u8),
+    ends: *usize,
+};

@@ -4,7 +4,6 @@
 //! writer. It is the wire vocabulary between the owners of those resources.
 
 const Rect = @import("Rect.zig");
-const Clip = @import("Clip.zig");
 const std = @import("std");
 const Image = @import("Image.zig");
 const Placement = @import("Placement.zig");
@@ -213,3 +212,8 @@ test "placement source rectangles are bounded by their image" {
         .source_width = 11,
     }).sourceRect(image));
 }
+
+const Clip = struct {
+    destination: Rect,
+    source: Rect,
+};

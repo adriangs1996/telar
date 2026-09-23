@@ -9,7 +9,6 @@ const EventResources = @import("../EventResources.zig");
 const std = @import("std");
 const TestHarness = @import("TestHarness.zig");
 const TerminalClient = @import("../TerminalClient.zig");
-const TestingPlugin = @import("TestingPlugin.zig");
 
 pub fn clientEventResourcesForTest(heap: *const core.Heap) EventResources {
     return .{
@@ -335,3 +334,8 @@ pub fn receiveClient(terminal: *TerminalClient) !client_module.Message {
         else => error.UnexpectedEvent,
     };
 }
+
+const TestingPlugin = struct {
+    action: data.PluginAction,
+    digest: core.Digest,
+};

@@ -11,7 +11,6 @@ const core = @import("telar-core");
 const kitty_protocol = @import("kitty_protocol");
 const data = @import("model");
 const std = @import("std");
-const Colors = @import("Colors.zig");
 const GraphicsColor = @import("Color.zig");
 const Metrics = @import("Metrics.zig");
 const Surface = @import("Surface.zig");
@@ -207,3 +206,22 @@ test "rasterization waits for media idle and oversized cells fall back" {
     try std.testing.expect(!renderer.frame_usable);
     try std.testing.expect(!renderer.coversAll());
 }
+
+const Colors = struct {
+    surface0: [3]u8,
+    text: [3]u8,
+    subtext: [3]u8,
+    blue: [3]u8,
+    green: [3]u8,
+    yellow: [3]u8,
+    red: [3]u8,
+
+    pub fn level(self: Colors, value: data.NotificationLevel) [3]u8 {
+        return switch (value) {
+            .info => self.blue,
+            .success => self.green,
+            .warning => self.yellow,
+            .failure => self.red,
+        };
+    }
+};

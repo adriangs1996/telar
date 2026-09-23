@@ -20,7 +20,7 @@ const BodyCollector = @import("BodyCollector.zig");
 const TestTranscodeSetup = @import("TestTranscodeSetup.zig");
 const Transformation = @import("../Transformation.zig");
 const TransformPipeline = @import("../TransformPipeline.zig");
-const FakeWriteSession = @import("FakeWriteSession.zig");
+const Session = @import("../Session.zig");
 
 pub const c = @cImport({
     @cInclude("nghttp2/nghttp2.h");
@@ -1593,3 +1593,17 @@ test "HTTP2 PUSH_PROMISE exposes the promised stream to transformers" {
         .big,
     ));
 }
+
+const FakeWriteSession = struct {
+    output: [512 * 1024]u8 = undefined,
+    len: usize = 0,
+
+    pub fn writeAll(self: *FakeWriteSession, _: Session.Side, bytes: []const u8) bool {
+        if (bytes.len > self.output.len - self.len) {
+            return false;
+        }
+        @memcpy(self.output[self.len..][0..bytes.len], bytes);
+        self.len += bytes.len;
+        return true;
+    }
+};

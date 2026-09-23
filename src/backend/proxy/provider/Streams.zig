@@ -1,6 +1,6 @@
 const types = @import("../../agent/types.zig");
 const request_body = @import("request_body.zig");
-const StreamsSlot = @import("StreamsSlot.zig");
+const Observer = @import("Observer.zig");
 const Fragment = @import("Fragment.zig");
 const request_support = @import("request_support.zig");
 /// Bounded collection of request observers keyed by HTTP/2 stream ID.
@@ -112,3 +112,8 @@ fn find(self: *Streams, stream_id: u32) ?*StreamsSlot {
 
     return null;
 }
+
+const StreamsSlot = struct {
+    stream_id: u32 = 0,
+    observer: Observer = .{},
+};

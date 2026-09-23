@@ -1,5 +1,4 @@
 const PatternList = @import("PatternList.zig");
-const Input = @import("Input.zig");
 const history_filter = @import("history_filter.zig");
 /// Record-time policy. The defaults record everything except commands that
 /// look like credentials.
@@ -57,3 +56,8 @@ pub fn shouldRecordAgent(self: *const Filters, input: Input, redact: bool) bool 
 
     return true;
 }
+
+const Input = struct {
+    command: []const u8,
+    cwd: []const u8,
+};

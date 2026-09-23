@@ -4,7 +4,6 @@ const Package = @import("Package.zig");
 const LoadContext = @import("LoadContext.zig");
 const plugins = @import("plugins.zig");
 const std = @import("std");
-const Invocation = @import("Invocation.zig");
 const WorkerRequest = @import("WorkerRequest.zig");
 const BatchAuthorization = @import("BatchAuthorization.zig");
 const Registry = @This();
@@ -163,3 +162,10 @@ pub fn watchFingerprint(self: *const Registry, gpa: std.mem.Allocator, io: std.I
         plugins.updatePackageFingerprint(gpa, io, .{ .hasher = &hasher, .root = package.root() });
     return hasher.final();
 }
+
+const Invocation = struct {
+    package_index: u8,
+    action_index: u8,
+    plugin_id: u64,
+    action_id: u64,
+};

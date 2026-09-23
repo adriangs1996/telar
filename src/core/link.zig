@@ -4,7 +4,6 @@
 const Prefix = @import("Prefix.zig");
 const std = @import("std");
 const Match = @import("Match.zig");
-const DelimiterCounts = @import("DelimiterCounts.zig");
 
 pub const max_uri_bytes = 4096;
 
@@ -333,3 +332,12 @@ test "trailing punctuation is not part of the link" {
     );
     try std.testing.expect(extractAt(line, period) == null);
 }
+
+const DelimiterCounts = struct {
+    open_parentheses: usize = 0,
+    close_parentheses: usize = 0,
+    open_brackets: usize = 0,
+    close_brackets: usize = 0,
+    open_braces: usize = 0,
+    close_braces: usize = 0,
+};

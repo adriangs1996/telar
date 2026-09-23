@@ -6,7 +6,6 @@ const Credential = @import("../Credential.zig");
 const TestServiceFixture = @import("TestServiceFixture.zig");
 const Pane = @import("Pane.zig");
 const Headers = @import("../Headers.zig");
-const TestOrigin = @import("TestOrigin.zig");
 const Service = @import("Service.zig");
 const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const observation_queue = @import("../observation_queue.zig");
@@ -459,3 +458,5 @@ test "loopback service maps CONNECT authentication and target rejections" {
         service.metrics().rejected_connections,
     );
 }
+
+const TestOrigin = struct { listener: std.Io.net.Server, port: u16 };

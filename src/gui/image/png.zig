@@ -9,7 +9,6 @@ const std = @import("std");
 const PngHeader = @import("PngHeader.zig");
 const PngPalette = @import("PngPalette.zig");
 const DecodedImage = @import("DecodedImage.zig");
-const PngLimits = @import("PngLimits.zig");
 const PngChunk = @import("PngChunk.zig");
 const PngExpansion = @import("PngExpansion.zig");
 const PngTestSpec = @import("PngTestSpec.zig");
@@ -458,3 +457,11 @@ test "rejects interlaced, oversized, invalid-depth, corrupt and non-PNG input wi
     std.mem.writeInt(u32, lying[signature.len + 21 ..][0..4], crc.final(), .big);
     try std.testing.expectError(error.InvalidPngData, decode(allocator, lying, .{}));
 }
+
+/// Bounds a PNG must satisfy before any pixel buffer is allocated.
+const PngLimits = struct {
+    /// Largest width or height accepted.
+    max_side: u32 = 4096,
+    /// Largest width times height accepted; the decoded RGBA is four times it.
+    max_pixels: u32 = 1 << 20,
+};

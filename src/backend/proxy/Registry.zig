@@ -2,7 +2,6 @@ const core = @import("telar-core");
 const std = @import("std");
 const Credential = @import("Credential.zig");
 const credential_registry = @import("credential_registry.zig");
-const PaneGeneration = @import("PaneGeneration.zig");
 const Registry = @This();
 
 mutex: std.Io.Mutex = .init,
@@ -94,3 +93,8 @@ pub fn contains(self: *Registry, io: std.Io, credential: *const Credential) bool
 
     return false;
 }
+
+const PaneGeneration = struct {
+    id: core.PaneId,
+    generation: u64,
+};

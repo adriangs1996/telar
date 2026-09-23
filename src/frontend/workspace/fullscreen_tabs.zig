@@ -6,7 +6,6 @@ const client = @import("telar-client");
 const Input = @import("Input.zig");
 const Result = @import("Result.zig");
 const std = @import("std");
-const Label = @import("Label.zig");
 
 /// Shrinks labels before hiding panes. The active label stays visible and
 /// earlier labels join it while they fit. Reports the occupied border width
@@ -193,3 +192,20 @@ test "fullscreen tabs truncate Unicode names at grapheme boundaries" {
     try std.testing.expectEqualStrings("e\u{301}", buffer.at(12, 0).?.text());
     try std.testing.expectEqualStrings("…", buffer.at(16, 0).?.text());
 }
+
+const Label = struct {
+    buffer: [core.max_foreground_name_bytes + 32]u8 = undefined,
+    len: usize,
+    width: u16,
+
+    pub fn init(name: []const u8, index: usize) Label {
+        var label: Label = .{ .len = 0, .width = 0 };
+        const text = std.fmt.bufPrint(&label.buffer, " {d} {s} ", .{
+            index + 1,
+            if (name.len == 0) "shell" else name,
+        }) catch unreachable;
+        label.len = text.len;
+        label.width = core.measure(text);
+        return label;
+    }
+};

@@ -2,7 +2,6 @@ const types = @import("../types.zig");
 const id = @import("../id.zig");
 const codec = @import("../codec.zig");
 const std = @import("std");
-const ClientLayoutTreeSummary = @import("ClientLayoutTreeSummary.zig");
 const ClientLayoutTreeValidation = @This();
 
 panes: [types.max_panes_per_tab]id.PaneId = undefined,
@@ -46,3 +45,8 @@ pub fn finish(self: *const ClientLayoutTreeValidation, layout: ClientLayoutTreeS
         return error.InvalidClientLayoutFocus;
     }
 }
+
+const ClientLayoutTreeSummary = struct {
+    node_count: usize,
+    focused_pane: id.PaneId,
+};

@@ -1,7 +1,8 @@
 //! Immutable borrowed projections and owned presentation-completion values.
 
 const data = @import("model");
-const Context = @import("Context.zig");
+const PresentationIngress = @import("PresentationIngress.zig");
+const hints_support = @import("../input/hints_support.zig");
 const Projection = @import("Projection.zig");
 const CopyProjection = @import("../workspace/CopyProjection.zig");
 
@@ -49,3 +50,9 @@ pub fn capture(model: *data.ClientModel, context: Context) Projection {
         .window_title_template = model.windowTitleTemplate(),
     };
 }
+
+const Context = struct {
+    presentation_ingress: PresentationIngress = .{},
+    status_mode: hints_support.Mode = .normal,
+    geometry: data.Region,
+};

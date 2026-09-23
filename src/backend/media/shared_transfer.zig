@@ -11,7 +11,6 @@
 const core = @import("telar-core");
 const builtin = @import("builtin");
 const std = @import("std");
-const ChildObject = @import("ChildObject.zig");
 const PreparedTransfer = @import("PreparedTransfer.zig");
 const GraphicsBudget = @import("GraphicsBudget.zig");
 const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
@@ -366,3 +365,14 @@ test "parking is bounded and releases what the emulator dropped" {
     try std.testing.expect(!prepared.covers(.{ .image_id = 1, .generation = 1 }));
     try std.testing.expect(prepared.covers(.{ .image_id = 2, .generation = 1 }));
 }
+
+const ChildObject = struct {
+    /// A child's shared object mapped read-only for one copy out of it.
+    pixels: []align(std.heap.page_size_min) u8,
+
+    /// Unmaps the object; the name was already unlinked, as the protocol
+    /// asks of whoever consumes a `t=s` transmission.
+    pub fn close(self: ChildObject) void {
+        std.posix.munmap(self.pixels);
+    }
+};

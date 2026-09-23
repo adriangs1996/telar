@@ -12,7 +12,6 @@ const ClientSent = @import("events/ClientSent.zig");
 const LocalListener = @import("../transport/LocalListener.zig");
 const Read = @import("client/Read.zig");
 const Sources = @import("Sources.zig");
-const Write = @import("client/Write.zig");
 const client_control = @import("client_control.zig");
 const client_request = @import("client_request.zig");
 const geometry_lease = @import("geometry_lease.zig");
@@ -290,3 +289,10 @@ fn send(write: Write) ClientSent {
     defer core.mark(write.io, .runtime_send_done);
     return .{ .client = write.key, .result = write.connection.send(write.io, write.payload) };
 }
+
+const Write = struct {
+    io: std.Io,
+    key: ClientKey,
+    connection: *core.SocketChannel,
+    payload: []const u8,
+};

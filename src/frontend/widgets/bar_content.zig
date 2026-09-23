@@ -4,7 +4,6 @@ const data = @import("model");
 const core = @import("telar-core");
 const client = @import("telar-client");
 const Context = @import("Context.zig");
-const BarContentInput = @import("BarContentInput.zig");
 
 pub fn render(context: *Context, area: core.Rect, input: BarContentInput) void {
     if (area.isEmpty()) {
@@ -53,3 +52,8 @@ fn resolveColor(context: *const Context, color: data.bar_values.Color) core.Colo
         },
     };
 }
+
+const BarContentInput = struct {
+    content: *const data.Content,
+    alignment: data.bar_values.Alignment,
+};

@@ -15,7 +15,6 @@ const Clock = @import("Clock.zig");
 const vt = @import("ghostty-vt");
 const std = @import("std");
 const Command = @import("Command.zig");
-const CodexTestSink = @import("CodexTestSink.zig");
 
 pub const batch_bytes = 4 * 16 * 1024;
 pub const batch_events = 512;
@@ -309,3 +308,7 @@ test "observation loss cannot manufacture an idle Codex screen from a partial re
     const idle = try codexTestBatch(&observer, "\x1b[1;1H\x1b[2K\x1b[4;3H", 400);
     try std.testing.expect(idle.agent_observation.?.signal.ready_confirmed);
 }
+
+const CodexTestSink = struct {
+    pub fn emit(_: *@This(), _: Command) void {}
+};

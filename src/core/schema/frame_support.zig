@@ -12,7 +12,6 @@ const FrameView = @import("FrameView.zig");
 const Mouse = @import("Mouse.zig");
 const InputModes = @import("InputModes.zig");
 const Scroll = @import("Scroll.zig");
-const Header = @import("Header.zig");
 const Style = @import("../ui/Style.zig");
 const cell_support = @import("../ui/cell_support.zig");
 const Span = @import("Span.zig");
@@ -713,3 +712,14 @@ test "reserved cell runs encode the same bytes as checked runs" {
     try std.testing.expectEqualSlices(u8, checked.finish(), reserved.finish());
     try std.testing.expectEqual(encodedCellsSize(&cells, null), reserved.index);
 }
+
+const Header = struct {
+    pane_id: id.PaneId,
+    frame_id: u64,
+    base_frame_id: u64,
+    cols: u16,
+    rows: u16,
+    cursor: Cursor,
+    scroll: Scroll,
+    span_count: usize,
+};

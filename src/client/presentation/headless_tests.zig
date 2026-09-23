@@ -1,7 +1,6 @@
 const core = @import("telar-core");
 const data = @import("model");
 const Fixture = @import("Fixture.zig");
-const FrameInput = @import("FrameInput.zig");
 const std = @import("std");
 const Geometry = @import("Geometry.zig");
 const retained = @import("../graphics/retained.zig");
@@ -338,3 +337,10 @@ test "production dispatch owns borrowed pane metadata before receive reuse" {
     try std.testing.expectEqualStrings("review title", fixture.model.panes.find(pane_id).?.titleSlice());
     try std.testing.expect(fixture.outbox.peek() == null);
 }
+
+const FrameInput = struct {
+    frame_id: u64 = 1,
+    base: u64 = 0,
+    text: u8 = 'A',
+    cursor_keys: bool = true,
+};

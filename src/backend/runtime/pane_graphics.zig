@@ -9,7 +9,6 @@ const Pane = @import("../pane/Pane.zig");
 const AttachmentStore = @import("attachment/AttachmentStore.zig");
 const MediaCompletion = @import("events/MediaCompletion.zig");
 const MediaStats = @import("../media/Stats.zig");
-const MediaWork = @import("events/MediaWork.zig");
 const attachment_namespace = @import("attachment/attachment_namespace.zig");
 const media_projection = @import("attachment/media_projection.zig");
 const pane_input = @import("pane_input.zig");
@@ -128,3 +127,8 @@ fn recordMediaMetrics(model: *RuntimeModel, stats: MediaStats) void {
         model.metrics.media_resets +|= 1;
     }
 }
+
+const MediaWork = struct {
+    pane: *Pane,
+    current_size: core.TerminalSize,
+};

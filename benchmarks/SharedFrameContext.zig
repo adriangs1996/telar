@@ -3,7 +3,6 @@ const backend = @import("telar-backend");
 const std = @import("std");
 const builtin = @import("builtin");
 const main = @import("main.zig");
-const Sink = @import("Sink.zig");
 /// One terminal-browser style frame at 4K crossing the runtime: the child
 /// publishes a shared object, the media pipeline folds the envelope and lets
 /// Ghostty VT copy and unlink it, and the attachment freezes the resident
@@ -139,3 +138,21 @@ pub fn freeze(self: *SharedFrameContext) !u64 {
     _ = std.c.shm_unlink(name.sliceZ());
     return name.slice().len;
 }
+
+const Sink = struct {
+    pipeline: *backend.Pipeline,
+
+    pub fn observe(self: *Sink, bytes: []const u8) void {
+        self.pipeline.stream.nextSlice(bytes);
+    }
+
+    /// The bare pipeline measures the emulator's own shared-memory load;
+    /// the pane-level single-copy path is exercised by the runtime tests.
+    pub fn observeSharedFrame(_: *Sink, _: backend.SharedFrameView) bool {
+        return false;
+    }
+
+    pub fn observeFileQuery(_: *Sink, _: backend.FileQueryView) bool {
+        return false;
+    }
+};

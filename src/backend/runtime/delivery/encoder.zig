@@ -1,7 +1,7 @@
 //! Runtime protocol projection from authoritative state.
 const core = @import("telar-core");
 
-const EncodeContext = @import("EncodeContext.zig");
+const ReviewResult = @import("../../change_review/Result.zig");
 const response_queue = @import("response_queue.zig");
 const QueryResult = @import("../../history/QueryResult.zig");
 const std = @import("std");
@@ -278,3 +278,15 @@ test "a command suggestion encodes its owned text and a bare status" {
     try std.testing.expectEqual(core.SuggestionStatus.timeout, bare.command_suggestion.status);
     try std.testing.expectEqual(@as(usize, 0), bare.command_suggestion.text.len);
 }
+
+const EncodeContext = struct {
+    buffer: []u8,
+    panes: *const PaneStore,
+    workspaces: *const Workspaces,
+    history_result: *?*QueryResult,
+    history_output: *?*OutputResult,
+    history_stats: *?*StatsResult,
+    agent_history: ?*?*@import("OwnedAgentHistoryPage.zig") = null,
+
+    change_review: ?*?*ReviewResult = null,
+};

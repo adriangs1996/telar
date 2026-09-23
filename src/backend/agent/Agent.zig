@@ -23,7 +23,6 @@ const DescriptionFinished = @import("DescriptionFinished.zig");
 const SessionTitle = @import("SessionTitle.zig");
 const types = @import("types.zig");
 const ProxyExchange = @import("ProxyExchange.zig");
-const ReportDetail = @import("ReportDetail.zig");
 const EventLine = @import("EventLine.zig");
 
 const Agent = @This();
@@ -1222,3 +1221,11 @@ test "managed official state persists idle and stronger authority cannot be repl
     _ = agent.reproject(.{ .sequence = 3, .now_ms = 40, .can_queue_description = false });
     try std.testing.expectEqual(core.AgentStatus.done, agent.projected.status);
 }
+
+/// What a lifecycle report says beyond its state: why the agent is blocked
+/// and one line naming the moment. It is shown only while that report is
+/// the evidence the projection follows.
+const ReportDetail = struct {
+    blocked_reason: core.AgentBlockedReason = .none,
+    event: EventLine = .{},
+};

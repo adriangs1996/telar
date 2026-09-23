@@ -3,7 +3,7 @@
 const MiddlewareEvent = @import("MiddlewareEvent.zig");
 const identity = @import("identity.zig");
 const std = @import("std");
-const GateState = @import("GateState.zig");
+const Credential = @import("Credential.zig");
 
 pub const capacity = 256;
 
@@ -158,3 +158,16 @@ test "closure wakes a receiver waiting on an empty channel" {
 
     try std.testing.expectError(error.Closed, receiver.await(std.testing.io));
 }
+
+const GateState = struct {
+    live_generation: u64 = 1,
+
+    fn isLive(context: *anyopaque, credential: *const Credential) bool {
+        const state: *GateState = @ptrCast(@alignCast(context));
+        return credential.pane_generation == state.live_generation;
+    }
+
+    pub fn gate(self: *GateState) CredentialGate {
+        return .{ .context = self, .is_live = isLive };
+    }
+};

@@ -5,7 +5,6 @@ const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
 const std = @import("std");
-const ThreadSurfaceInput = @import("ThreadSurfaceInput.zig");
 
 /// Paints one thread surface into `area`, clearing it first so stale terminal
 /// cells never show through.
@@ -92,3 +91,8 @@ test "thread surface paints header, body and composer inside its area" {
     try std.testing.expectEqualStrings(" ", buffer.at(0, 0).?.text());
     try std.testing.expectEqualStrings(" ", buffer.at(27, 4).?.text());
 }
+
+const ThreadSurfaceInput = struct {
+    view: client.ThreadView,
+    palette: *const data.Palette,
+};

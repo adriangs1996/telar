@@ -1,6 +1,5 @@
 const types = @import("../types.zig");
 const TabLocation = @import("../TabLocation.zig");
-const ClientLayoutEntry = @import("ClientLayoutEntry.zig");
 const std = @import("std");
 const ClientLayoutCollection = @This();
 
@@ -45,3 +44,9 @@ pub fn validateActive(self: *const ClientLayoutCollection, active: TabLocation) 
 
     return error.InvalidClientLayoutActiveTab;
 }
+
+const ClientLayoutEntry = struct {
+    location: TabLocation,
+    workspace_active: bool,
+    node_count: usize,
+};

@@ -6,7 +6,6 @@ const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
 const Status = @import("Status.zig");
 const metrics = @import("../metrics.zig");
-const TransformTarget = @import("TransformTarget.zig");
 const TransformContext = @import("../TransformContext.zig");
 const Exchange = @This();
 
@@ -101,3 +100,9 @@ pub fn transformContext(self: *const Exchange, target: TransformTarget) Transfor
 pub fn record(self: *Exchange, counter: metrics.Counter) void {
     self.telemetry.record(counter);
 }
+
+const TransformTarget = struct {
+    direction: middleware.Direction,
+    kind: middleware.HeaderKind,
+    stream_id: u32,
+};

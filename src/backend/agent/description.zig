@@ -5,7 +5,7 @@
 
 const core = @import("telar-core");
 const std = @import("std");
-const Generation = @import("Generation.zig");
+const Command = @import("Command.zig");
 const Result = @import("Result.zig");
 const Capture = @import("Capture.zig");
 const Job = @import("Job.zig");
@@ -363,3 +363,8 @@ test "description command succeeds, rejects invalid output, times out, and may b
     });
     try std.testing.expectEqual(ResultStatus.unavailable, unavailable.status);
 }
+
+const Generation = struct {
+    command: Command,
+    job: Job,
+};

@@ -5,7 +5,6 @@ const Pane = @import("../../pane/Pane.zig");
 const Range = @import("Range.zig");
 const std = @import("std");
 const vt = @import("ghostty-vt");
-const Endpoints = @import("Endpoints.zig");
 const Point = @import("Point.zig");
 
 pub const scratch_bytes = 2 * core.max_clipboard_bytes + 1;
@@ -102,3 +101,8 @@ test "a zero-width pane has no selectable endpoints" {
         .linewise = false,
     }, 0) == null);
 }
+
+const Endpoints = struct {
+    start: Point,
+    end: Point,
+};

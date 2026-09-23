@@ -2,7 +2,6 @@ const core = @import("telar-core");
 const data = @import("model");
 const GenericInput = @import("GenericInput.zig").Type;
 const std = @import("std");
-const FunctionKeyParameters = @import("FunctionKeyParameters.zig");
 const KittyModifierEvent = @import("KittyModifierEvent.zig");
 const pointer = @import("pointer.zig");
 
@@ -830,7 +829,6 @@ fn expectMouse(input: []const u8, expected: Event.Mouse) !void {
     try std.testing.expectEqual(expected.y, parsed.event.mouse.y);
     try std.testing.expectEqual(expected.kind, parsed.event.mouse.kind);
 }
-
 
 /// SGR parameters introducing an extended color for each styled layer.
 const ColorLayer = enum(u8) {
@@ -1755,3 +1753,8 @@ test "an OSC 11 reply reports the host background and other OSCs are consumed" {
     try std.testing.expect(partial.event == .incomplete);
     try std.testing.expectEqual(@as(usize, 0), partial.len);
 }
+
+const FunctionKeyParameters = struct {
+    number: u32,
+    modifier_event: KittyModifierEvent,
+};

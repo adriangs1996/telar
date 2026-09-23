@@ -9,7 +9,6 @@ const provider = @import("../provider/request_support.zig");
 const middleware = @import("../middleware.zig");
 const framing_module = @import("framing.zig");
 const PeerSettings = @import("PeerSettings.zig");
-const CompletedFrame = @import("CompletedFrame.zig");
 const Transcoder = @This();
 
 inflater: ?*relay.c.nghttp2_hd_inflater = null,
@@ -583,3 +582,9 @@ fn headerPayloadPrefixLength(self: *const Transcoder) usize {
 fn hasObservableSseBody(self: *const Transcoder, stream_id: u32) bool {
     return self.streams.hasObservableSseBody(stream_id);
 }
+
+const CompletedFrame = struct {
+    frame_type: u8,
+    flags: u8,
+    stream_id: u32,
+};

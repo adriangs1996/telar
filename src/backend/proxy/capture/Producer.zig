@@ -2,7 +2,7 @@ const std = @import("std");
 const Config = @import("Config.zig");
 const Quota = @import("Quota.zig");
 const Channel = @import("Channel.zig");
-const InitOptions = @import("InitOptions.zig");
+const CredentialGate = @import("../CredentialGate.zig");
 const StartOptions = @import("StartOptions.zig");
 const Half = @import("Half.zig");
 const CapturePublication = @import("CapturePublication.zig");
@@ -171,3 +171,8 @@ pub fn metrics(self: *const Producer) CaptureMetrics {
         .queue_high_water = queue_metrics.high_water,
     };
 }
+
+const InitOptions = struct {
+    config: Config,
+    gate: CredentialGate,
+};

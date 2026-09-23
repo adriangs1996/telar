@@ -21,7 +21,7 @@ const Streams = @import("../provider/Streams.zig");
 const TransformPipeline = @import("../TransformPipeline.zig");
 const ResponseStreams = @import("../provider/ResponseStreams.zig");
 const Producer = @import("../capture/Producer.zig");
-const H2CaptureGate = @import("H2CaptureGate.zig");
+const Credential = @import("../Credential.zig");
 const HeaderField = @import("../h2/HeaderField.zig");
 const Joiner = @import("../capture/Joiner.zig");
 
@@ -373,3 +373,9 @@ test "HTTP2 capture keeps interleaved streams independent for unknown dialects" 
     try std.testing.expect(saw_first);
     try std.testing.expect(saw_second);
 }
+
+const H2CaptureGate = struct {
+    pub fn accepts(_: *anyopaque, _: *const Credential) bool {
+        return true;
+    }
+};

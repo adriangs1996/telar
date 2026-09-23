@@ -11,7 +11,7 @@ const codec = @import("kitty_codec.zig");
 const delivery = @import("kitty_delivery.zig");
 const KittyGraphicsWriter = @import("KittyGraphicsWriter.zig");
 const TransmissionFixture = @import("TransmissionFixture.zig");
-const TestCompressionScheduler = @import("TestCompressionScheduler.zig");
+const Compression = @import("Compression.zig");
 
 /// Whether this client build can map POSIX shared memory the runtime names.
 /// The client declares it to the runtime explicitly; nothing is assumed.
@@ -1687,3 +1687,19 @@ test "a host that never consumes shared names loses them and gets pixels inline"
     // stops offering them.
     try std.testing.expect(!store.shared_memory);
 }
+
+const TestCompressionScheduler = struct {
+    pending: ?*Compression = null,
+
+    pub fn schedule(context: *anyopaque, job: *Compression) anyerror!void {
+        const scheduler: *TestCompressionScheduler = @ptrCast(@alignCast(context));
+        try std.testing.expect(scheduler.pending == null);
+        scheduler.pending = job;
+    }
+
+    pub fn complete(self: *TestCompressionScheduler, store: *delivery.Store) void {
+        const job = self.pending orelse return;
+        delivery.completeCompression(store, Compression.run(job));
+        self.pending = null;
+    }
+};

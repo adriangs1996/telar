@@ -12,7 +12,6 @@ const core = @import("telar-core");
 const lua_api = @import("lua-api");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
-const EntryInput = @import("EntryInput.zig");
 const FieldLookup = @import("FieldLookup.zig");
 const std = @import("std");
 const TextValue = @import("TextValue.zig");
@@ -228,3 +227,9 @@ fn hasControlBytes(text: []const u8) bool {
 
     return false;
 }
+
+const EntryInput = struct {
+    entry: c_int,
+    manifest: *core.AgentManifest,
+    position: usize,
+};

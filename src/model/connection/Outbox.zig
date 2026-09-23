@@ -1,4 +1,3 @@
-const RuntimeBootstrap = @import("RuntimeBootstrap.zig");
 const data = @import("../model.zig");
 const outbox_support = @import("outbox_support.zig");
 const OwnedLaunchCwd = @import("OwnedLaunchCwd.zig");
@@ -694,3 +693,10 @@ test "runtime bootstrap queues colors before subscribing to the initial layout" 
     try std.testing.expect(runtime_state == .request_runtime_state);
     try std.testing.expectEqual(@as(core.ClientIdentity, @enumFromInt(9)), runtime_state.request_runtime_state.client_identity);
 }
+
+/// What a client tells the runtime right after host negotiation.
+const RuntimeBootstrap = struct {
+    graphics_shared: bool,
+    client_identity: core.ClientIdentity,
+    terminal_colors: core.TerminalColors = .{},
+};

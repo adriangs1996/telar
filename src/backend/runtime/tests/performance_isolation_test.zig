@@ -9,7 +9,9 @@ const attachment_mod = @import("../attachment/attachment_namespace.zig");
 const Stats = @import("../../media/Stats.zig");
 const system_metrics = @import("../observability/system_metrics.zig");
 const RequestFixture = @import("RequestFixture.zig");
-const CountedRelay = @import("CountedRelay.zig");
+const FakeSession = @import("../../proxy/http/FakeSession.zig");
+const Session = @import("../../proxy/Session.zig");
+const Fragment = @import("../../proxy/http/Fragment.zig");
 const body = @import("../../proxy/http/body.zig");
 const Service = @import("../../history/Service.zig");
 const Query = @import("../../history/Query.zig");
@@ -172,3 +174,22 @@ test "performance probe executes a queued history burst and preserves every corr
     }
     std.debug.print("PERF history_burst queued=32 sqlite_queries={d} elapsed_ns={d}\n", .{ service.statsSnapshot().sqlite_queries, elapsed(started) });
 }
+
+const CountedRelay = struct {
+    fake: FakeSession,
+    writes: usize = 0,
+
+    /// Example: `const count = counted.read(.origin, buffer);`.
+    pub fn read(self: *CountedRelay, side: Session.Side, bytes: []u8) ?usize {
+        return self.fake.read(side, bytes);
+    }
+
+    /// Example: `const forwarded = counted.writeAll(.child, bytes);`.
+    pub fn writeAll(self: *CountedRelay, side: Session.Side, bytes: []const u8) bool {
+        self.writes += 1;
+        return self.fake.writeAll(side, bytes);
+    }
+
+    /// Example: `counted.observe(fragment);`.
+    pub fn observe(_: *CountedRelay, _: Fragment) void {}
+};

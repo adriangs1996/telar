@@ -2,7 +2,7 @@ const queue = @import("queue.zig");
 const Envelope = @import("Envelope.zig");
 const std = @import("std");
 const CredentialGate = @import("../CredentialGate.zig");
-const QueuePublication = @import("QueuePublication.zig");
+const Credential = @import("../Credential.zig");
 const Half = @import("Half.zig");
 const QueueMetrics = @import("QueueMetrics.zig");
 const Channel = @This();
@@ -128,3 +128,8 @@ fn release(self: *Channel) void {
     const previous = self.queued.fetchSub(1, .monotonic);
     std.debug.assert(previous != 0);
 }
+
+const QueuePublication = struct {
+    credential: Credential,
+    half: *Half,
+};

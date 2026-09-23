@@ -4,7 +4,6 @@ const client = @import("telar-client");
 const context_support = @import("context_support.zig");
 const Plan = @import("../ui/Plan.zig");
 const std = @import("std");
-const IconDraw = @import("IconDraw.zig");
 /// Widgets receive no client state and cannot mutate navigation, layout,
 /// transport, or runtime models.
 const Context = @This();
@@ -53,3 +52,13 @@ pub fn drawIcon(self: *Context, draw: IconDraw) u16 {
     });
     return written;
 }
+
+const IconDraw = struct {
+    area: core.Rect,
+    point: core.Point,
+    icon: data.icons.Icon,
+    style: core.Style,
+    /// Cells the graphical mark may span sideways. The fallback glyph still
+    /// takes the first cell only; the caller blanks the rest.
+    columns: u16 = 1,
+};

@@ -1,6 +1,6 @@
 const std = @import("std");
 const Reservation = @import("Reservation.zig");
-const Pane = @import("Pane.zig");
+const core = @import("telar-core");
 const types = @import("../../agent/types.zig");
 const middleware = @import("../middleware.zig");
 const Key = @import("Key.zig");
@@ -204,3 +204,8 @@ fn headerValue(bytes: []const u8, wanted: []const u8) ?[]const u8 {
 
     return null;
 }
+
+const Pane = struct {
+    id: core.PaneId,
+    generation: u64,
+};

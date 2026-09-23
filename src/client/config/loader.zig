@@ -1,7 +1,6 @@
 //! Resolves configuration sources before a generation evaluates them.
 
 const std = @import("std");
-const Environment = @import("Environment.zig");
 
 pub fn defaultPath(environ: std.process.Environ, buffer: []u8) ![]const u8 {
     return resolveDefaultPath(.{
@@ -51,3 +50,9 @@ test "development config path overrides user config lookup" {
         resolveDefaultPath(.{ .development = null, .xdg_config_home = null, .home = null }, &buffer),
     );
 }
+
+const Environment = struct {
+    development: ?[]const u8,
+    xdg_config_home: ?[]const u8,
+    home: ?[]const u8,
+};

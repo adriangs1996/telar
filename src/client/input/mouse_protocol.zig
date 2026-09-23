@@ -2,7 +2,7 @@
 
 const core = @import("telar-core");
 const data = @import("model");
-const SgrInput = @import("SgrInput.zig");
+const PixelProjection = @import("PixelProjection.zig");
 const std = @import("std");
 
 pub fn tracked(tracking: core.MouseTracking, kind: data.Mouse.Kind) bool {
@@ -41,3 +41,9 @@ pub fn encodeSgr(buffer: []u8, input: SgrInput) ![]const u8 {
         final,
     });
 }
+
+const SgrInput = struct {
+    event: data.Mouse,
+    pane_position: core.Point,
+    pixels: ?PixelProjection = null,
+};

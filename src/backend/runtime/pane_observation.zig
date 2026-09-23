@@ -11,7 +11,7 @@ const HistoryObservationCompletion = @import("../pane/HistoryObservationCompleti
 const HistoryStats = @import("../history/Stats.zig");
 const Probe = @import("../process/Probe.zig");
 const ObservationCompletion = @import("events/ObservationCompletion.zig");
-const ObservationWork = @import("events/ObservationWork.zig");
+const Cache = @import("../process/Cache.zig");
 const agent_description = @import("agent_description.zig");
 const agent_identity = @import("agent_identity.zig");
 const agent_process = @import("../process/process.zig");
@@ -177,3 +177,9 @@ fn reconcileScreen(model: *RuntimeModel, pane: *Pane, stats: HistoryStats, shell
         .sound = transition,
     });
 }
+
+const ObservationWork = struct {
+    pane: *Pane,
+    current_size: core.TerminalSize,
+    process_cache: Cache,
+};

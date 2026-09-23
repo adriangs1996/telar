@@ -5,7 +5,6 @@ const Exchange = @import("Exchange.zig");
 const Producer = @import("../capture/Producer.zig");
 const Observer = @import("../provider/Observer.zig");
 const Half = @import("../capture/Half.zig");
-const Http1Options = @import("Http1Options.zig");
 const http1 = @import("http1.zig");
 const StartOptions = @import("../capture/StartOptions.zig");
 const Connection = @This();
@@ -77,3 +76,11 @@ pub fn beginCapture(self: *Connection) void {
     response.side = .response;
     self.response_capture = producer.start(response);
 }
+
+const Http1Options = struct {
+    io: std.Io,
+    transforms: *const TransformPipeline,
+    session: *Session,
+    exchange: *Exchange,
+    captures: ?*Producer = null,
+};

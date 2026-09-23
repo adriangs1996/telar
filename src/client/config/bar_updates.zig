@@ -13,7 +13,6 @@ const Job = @import("../execution/Job.zig").Job;
 const BarUpdatesCompletion = @import("../bars/BarUpdatesCompletion.zig");
 const CallbackRequest = @import("CallbackRequest.zig");
 const CommandOutput = @import("CommandOutput.zig");
-const BarCommandFailure = @import("BarCommandFailure.zig");
 const BarUpdateCommand = @import("BarUpdateCommand.zig");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const BarMetrics = @import("BarMetrics.zig");
@@ -331,3 +330,10 @@ test "bar timer scheduling retries failure and reuses one pending worker" {
     try std.testing.expectEqual(@as(usize, 2), timer.calls);
     try std.testing.expect(!state.scheduler.pending);
 }
+
+const BarCommandFailure = struct {
+    generation: u64,
+    position: data.bar_values.Position,
+    reason: anyerror,
+    kind: []const u8,
+};

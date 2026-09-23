@@ -2,7 +2,6 @@
 
 const core = @import("telar-core");
 const kitty_protocol = @import("kitty_protocol");
-const Size = @import("Size.zig");
 const std = @import("std");
 
 /// Example: `const placement = fitPlacement(image_size, cell_size, area);`.
@@ -50,3 +49,5 @@ pub fn optionalPlacementEql(a: ?kitty_protocol.OutputPlacement, b: ?kitty_protoc
     }
     return std.meta.eql(a.?, b.?);
 }
+
+const Size = struct { width: u32, height: u32 };

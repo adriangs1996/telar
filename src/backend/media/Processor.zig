@@ -11,7 +11,6 @@ const FileQueryView = @import("FileQueryView.zig");
 const LiveImages = @import("LiveImages.zig");
 const shared_transfer = @import("shared_transfer.zig");
 const PreparedTransfer = @import("PreparedTransfer.zig");
-const GraphicsIngest = @import("GraphicsIngest.zig");
 const Processor = @This();
 
 state: *State,
@@ -293,3 +292,9 @@ pub fn queueGraphicsLimitResponse(self: *Processor, image_id: u32) void {
     ) catch return;
     self.responses.write(bytes);
 }
+
+const GraphicsIngest = struct {
+    io: std.Io,
+    previous_loading_id: ?u32,
+    completed_commands: usize,
+};

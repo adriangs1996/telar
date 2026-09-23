@@ -1,5 +1,6 @@
 const data = @import("model");
-const PlanItem = @import("PlanItem.zig");
+const core = @import("telar-core");
+const model_data = @import("model");
 const Plan = @This();
 
 thumbnails: [data.attachment_types.max_items]PlanItem = undefined,
@@ -9,3 +10,8 @@ modal: ?PlanItem = null,
 pub fn thumbnailSlice(self: *const Plan) []const PlanItem {
     return self.thumbnails[0..self.thumbnail_count];
 }
+
+const PlanItem = struct {
+    id: model_data.AttachmentId,
+    area: core.Rect,
+};

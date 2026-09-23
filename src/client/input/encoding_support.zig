@@ -6,7 +6,6 @@
 const data = @import("model");
 const core = @import("telar-core");
 const std = @import("std");
-const Encoding = @import("Encoding.zig");
 
 pub fn encodeKey(buffer: []u8, key: data.Key, modes: core.InputModes) ![]const u8 {
     var writer: std.Io.Writer = .fixed(buffer);
@@ -250,3 +249,43 @@ fn withAlt(writer: *std.Io.Writer, alt: bool, bytes: []const u8) !void {
     }
     try writer.writeAll(bytes);
 }
+
+const Encoding = struct {
+    modifier: u8,
+    kitty_flags: u5,
+    event_types: bool,
+    event: ?u2,
+    cursor_keys: bool,
+
+    pub fn init(key: data.Key, modes: core.InputModes) Encoding {
+        const event_types = modes.kitty_keyboard_flags & 0b00010 != 0;
+
+        return .{
+            .modifier = 1 + @as(u8, @intFromBool(key.mods.shift)) +
+                2 * @as(u8, @intFromBool(key.mods.alt)) +
+                4 * @as(u8, @intFromBool(key.mods.ctrl)),
+            .kitty_flags = modes.kitty_keyboard_flags,
+            .event_types = event_types,
+            .event = if (event_types and key.phase != .press) @intFromEnum(key.phase) else null,
+            .cursor_keys = modes.cursor_keys,
+        };
+    }
+
+    pub fn reportsAllKeys(self: Encoding) bool {
+        return self.kitty_flags & 0b01000 != 0;
+    }
+
+    pub fn usesKittyFor(self: Encoding, key: data.Key) bool {
+        if (self.kitty_flags == 0) {
+            return false;
+        }
+
+        return switch (key.code) {
+            .char, .escape => true,
+            .enter, .backspace, .tab => self.modifier != 1 or
+                self.reportsAllKeys() or
+                (self.event_types and key.kitty != null),
+            else => false,
+        };
+    }
+};

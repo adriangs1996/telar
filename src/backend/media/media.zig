@@ -13,7 +13,6 @@ const std = @import("std");
 const FileQueryControl = @import("FileQueryControl.zig");
 const FilterInput = @import("FilterInput.zig");
 const FilterStats = @import("FilterStats.zig");
-const SelectedSharedFrame = @import("SelectedSharedFrame.zig");
 const SharedFrame = @import("SharedFrame.zig");
 const SharedFrameKey = @import("SharedFrameKey.zig");
 const FrameResource = @import("FrameResource.zig");
@@ -907,3 +906,10 @@ test "graphics terminal answers KGP queries and rejects unsupported payloads" {
     stream.nextSlice("\x1b_Ga=q,f=24,s=1,v=1,t=f,i=9;L3RtcC9pbWFnZQ==\x1b\\");
     try std.testing.expect(std.mem.indexOf(u8, Capture.bytes[0..Capture.len], "EINVAL: unsupported medium") != null);
 }
+
+const SelectedSharedFrame = struct {
+    key: SharedFrameKey,
+    recent_starts: [8]usize = undefined,
+    recent_count: u4,
+    start: ?usize = null,
+};

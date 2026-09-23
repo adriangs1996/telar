@@ -1,6 +1,14 @@
 //! Vertical tests for the runtime-state subscription and delivery projection.
 
-const RuntimeStateFixture = @import("RuntimeStateFixture.zig");
+const core = @import("telar-core");
+const Delivery = @import("../delivery/Delivery.zig");
+const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const PaneStore = @import("../../pane/PaneStore.zig");
+const Tracker = @import("../../agent/Tracker.zig");
+const Sampler = @import("../observability/Sampler.zig");
+const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
+const Sources = @import("../delivery/Sources.zig");
+const Workspaces = @import("../../workspace/Workspaces.zig");
 const std = @import("std");
 const PaneFixture = @import("PaneFixture.zig");
 
@@ -61,3 +69,65 @@ test "runtime-state foreground updates reach panes without cell attachments" {
     try std.testing.expectEqualStrings("zsh", reused.name);
     try std.testing.expect((try fixture.next()) == null);
 }
+
+const RuntimeStateFixture = struct {
+    delivery: Delivery,
+    attachments: AttachmentStore = .{},
+    panes: PaneStore = .{},
+    workspaces: Workspaces = .{},
+    agents: Tracker = .{},
+    system_metrics: Sampler = .{},
+    metrics: RuntimeMetrics = .{ .started_ns = 0 },
+
+    pub fn create() !*RuntimeStateFixture {
+        const fixture = try std.testing.allocator.create(RuntimeStateFixture);
+        errdefer std.testing.allocator.destroy(fixture);
+
+        fixture.* = .{
+            .delivery = try Delivery.init(std.testing.allocator),
+        };
+        fixture.system_metrics = .{
+            .revision = 7,
+            .latest = .{
+                .cpu_percent = 23,
+                .memory_used_decigib = 41,
+                .battery_percent = 88,
+            },
+        };
+        return fixture;
+    }
+
+    pub fn destroy(self: *RuntimeStateFixture) void {
+        self.attachments.deinit();
+        self.delivery.deinit(std.testing.allocator);
+        std.testing.allocator.destroy(self);
+    }
+
+    fn sources(self: *RuntimeStateFixture) Sources {
+        return .{
+            .panes = &self.panes,
+            .workspaces = &self.workspaces,
+            .agents = &self.agents,
+            .system_metrics = &self.system_metrics,
+            .proxy_active = true,
+            .home = null,
+        };
+    }
+
+    pub fn next(self: *RuntimeStateFixture) !?core.ServerMessage {
+        const prepared = (try self.delivery.prepare(.{
+            .io = std.testing.io,
+            .attachments = &self.attachments,
+            .sources = self.sources(),
+            .metrics = &self.metrics,
+        })) orelse return null;
+        const message = try core.decodeServer(prepared.payload);
+        self.delivery.commit(.{
+            .prepared = prepared,
+            .attachments = &self.attachments,
+            .metrics = &self.metrics,
+        });
+        _ = self.delivery.complete({});
+        return message;
+    }
+};

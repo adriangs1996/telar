@@ -14,7 +14,6 @@ const Delete = @import("Delete.zig");
 const Prune = @import("Prune.zig");
 const StatsQuery = @import("StatsQuery.zig");
 const QueryResult = @import("QueryResult.zig");
-const Failure = @import("Failure.zig");
 const Pruned = @import("Pruned.zig");
 const OutputResult = @import("OutputResult.zig");
 const StatsResult = @import("StatsResult.zig");
@@ -164,3 +163,9 @@ pub fn deinitResponse(response: Response, _: std.mem.Allocator) void {
         .stats_result => |value| value.deinit(),
     }
 }
+
+const Failure = struct {
+    request_id: core.RequestId,
+    origin: QueryOrigin,
+    message: []const u8,
+};

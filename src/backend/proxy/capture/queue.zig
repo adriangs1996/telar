@@ -5,7 +5,6 @@ const identity = @import("../identity.zig");
 const Quota = @import("Quota.zig");
 const Half = @import("Half.zig");
 const std = @import("std");
-const GateState = @import("GateState.zig");
 const Channel = @import("Channel.zig");
 
 pub const capacity = 256;
@@ -80,3 +79,12 @@ test "delivery rejects a credential revoked after publication" {
     try std.testing.expectError(error.Closed, channel.receive(std.testing.io));
     try std.testing.expectEqual(@as(usize, 0), quota.used());
 }
+
+const GateState = struct {
+    generation: u64 = 1,
+
+    pub fn accepts(context: *anyopaque, credential: *const Credential) bool {
+        const state: *const GateState = @ptrCast(@alignCast(context));
+        return credential.pane_generation == state.generation;
+    }
+};

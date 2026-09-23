@@ -6,7 +6,6 @@ const lua_api = @import("lua-api");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
 const value = @import("lua_value.zig");
 const std = @import("std");
-const PositiveField = @import("PositiveField.zig");
 
 pub fn parse(state: *lua_api.c.lua_State, runtime: *RuntimeSnapshot, diagnostic: *data.Diagnostic) !void {
     const absolute = lua_api.c.lua_absindex(state, -1);
@@ -272,3 +271,9 @@ test "host validation accepts exact and leading wildcard DNS labels" {
     try std.testing.expect(!validHostname("a" ** 64 ++ ".com"));
     try std.testing.expectEqual(core.max_hostname_bytes, core.max_hostname_bytes);
 }
+
+const PositiveField = struct {
+    table: c_int,
+    name: [*:0]const u8,
+    default: usize,
+};

@@ -3,7 +3,6 @@
 const GenericLifecyclePort = @import("GenericLifecyclePort.zig").Type;
 const GenericLifecycle = @import("GenericLifecycle.zig").Type;
 const FakeService = @import("FakeService.zig");
-const FakeWorker = @import("FakeWorker.zig");
 const std = @import("std");
 const LifecycleCapture = @import("LifecycleCapture.zig");
 
@@ -84,3 +83,5 @@ test "successful startup retains every resource until deinit" {
 
     try expectSteps(&capture, &.{ .start, .cancel, .close, .destroy });
 }
+
+const FakeWorker = struct {};

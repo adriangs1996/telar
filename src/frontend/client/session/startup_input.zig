@@ -2,7 +2,7 @@
 //! through the normal presentation parser. Storage saturation fails explicitly.
 
 const StartupInput = @import("StartupInput.zig");
-const Capture = @import("Capture.zig");
+const term = @import("../../presentation/screen_support.zig");
 const std = @import("std");
 
 test "startup preserves typing and partial escapes at every reply boundary" {
@@ -39,3 +39,11 @@ fn collect(state: *StartupInput, bytes: []const u8, capture: *Capture) !void {
         try capture.terminalResponse(response);
     }
 }
+
+const Capture = struct {
+    replies: usize = 0,
+
+    pub fn terminalResponse(self: *Capture, _: term.Event.TerminalResponse) !void {
+        self.replies += 1;
+    }
+};

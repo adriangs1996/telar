@@ -14,7 +14,6 @@ const client_request = @import("client_request.zig");
 const InputCompletion = @import("events/InputCompletion.zig");
 const ResponseCompletion = @import("events/ResponseCompletion.zig");
 const InputWrite = @import("events/InputWrite.zig");
-const ResponseWrite = @import("events/ResponseWrite.zig");
 
 const paste_start = "\x1b[200~";
 const paste_end = "\x1b[201~";
@@ -273,3 +272,10 @@ test "promptBytes frames a paste only when the child asked for it" {
     try std.testing.expectEqualStrings("hello\r", promptBytes(&storage, "hello", false));
     try std.testing.expectEqualStrings("\x1b[200~hello\x1b[201~\r", promptBytes(&storage, "hello", true));
 }
+
+const ResponseWrite = struct {
+    /// Stable response borrowed from the queue until completion is handled.
+    io: std.Io,
+    pane: *Pane,
+    bytes: []const u8,
+};

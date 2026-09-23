@@ -3,7 +3,8 @@ const Revision = @import("Revision.zig");
 const Comment = @import("Comment.zig");
 const Anchor = @import("Anchor.zig");
 const limits = @import("limits.zig");
-const Search = @import("Search.zig");
+const data = @import("model");
+const SearchMatch = @import("SearchMatch.zig");
 const Self = @This();
 
 revisions: [2]Revision = @splat(.{}),
@@ -590,3 +591,22 @@ test "review search rejects oversized or invalid queries atomically and handles 
     model.last();
     try std.testing.expect(!model.startSearch("new"));
 }
+
+const Search = struct {
+    pub const Direction = enum { forward, backward };
+
+    query: data.GenericField(limits.search_bytes) = .{},
+    match: ?SearchMatch = null,
+
+    /// Retains a bounded literal query; invalid input leaves the previous search intact.
+    /// Example: `_ = search.setQuery("café");`
+    pub fn setQuery(self: *Search, query: []const u8) bool {
+        if (query.len > limits.search_bytes or !std.unicode.utf8ValidateSlice(query) or std.mem.indexOfAny(u8, query, "\x00\r\n") != null) {
+            return false;
+        }
+
+        _ = self.query.replace(.{ 0, @intCast(self.query.len) }, query);
+        self.match = null;
+        return true;
+    }
+};

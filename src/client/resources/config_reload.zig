@@ -15,7 +15,7 @@ const Adoption = @import("Adoption.zig");
 const ResolveArgs = @import("ResolveArgs.zig");
 const RejectContext = @import("RejectContext.zig");
 const Generation = @import("../config/Generation.zig");
-const Partial = @import("Partial.zig");
+const Orphans = @import("Orphans.zig");
 const Registry = @import("../plugins/Registry.zig");
 const std = @import("std");
 const Job = @import("../execution/Job.zig").Job;
@@ -272,3 +272,22 @@ test "forced reload survives scheduling failure and is consumed by a successful 
     try schedule(&state, args);
     try std.testing.expect(!capture.force);
 }
+
+const Partial = struct {
+    /// The pieces the async task has built so far, so every failure unwinds
+    /// through one place instead of repeating the partial free by hand.
+    generation: *Generation,
+    trust: ?*core.TrustStore = null,
+    registry: ?*Registry = null,
+
+    pub fn abandon(self: Partial, gpa: std.mem.Allocator, orphans: *Orphans) void {
+        orphans.* = .{};
+        if (self.registry) |registry| {
+            gpa.destroy(registry);
+        }
+        self.generation.deinit();
+        if (self.trust) |trust| {
+            gpa.destroy(trust);
+        }
+    }
+};

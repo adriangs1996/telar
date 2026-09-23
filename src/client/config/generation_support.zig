@@ -6,7 +6,7 @@ const std = @import("std");
 const lua_api = @import("lua-api");
 const BarCallbackContext = @import("BarCallbackContext.zig");
 const FieldTarget = @import("FieldTarget.zig");
-const DecisionInput = @import("DecisionInput.zig");
+const Callback = @import("Callback.zig");
 const lua_value = @import("lua_value.zig");
 const Generation = @import("Generation.zig");
 const default_bindings = @import("default_bindings.zig");
@@ -1452,3 +1452,8 @@ test "editor configuration rejects invalid executables before adoption" {
         try std.testing.expect(std.mem.startsWith(u8, diagnostic.message(), "config.client.editor must be"));
     }
 }
+
+const DecisionInput = struct {
+    index: c_int,
+    callback: *const Callback,
+};

@@ -2,7 +2,6 @@
 
 const builtin = @import("builtin");
 const std = @import("std");
-const Pair = @import("Pair.zig");
 const CLD = @import("CLD.zig");
 const exit = @import("exit.zig");
 
@@ -193,3 +192,8 @@ test "output readiness never waits and does not consume queued bytes" {
 
     try std.testing.expect(!outputReady(-1));
 }
+
+const Pair = struct {
+    master: std.c.fd_t,
+    slave: std.c.fd_t,
+};

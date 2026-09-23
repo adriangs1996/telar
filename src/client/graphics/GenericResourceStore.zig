@@ -4,7 +4,6 @@ const SharedPixels = @import("SharedPixels.zig");
 const std = @import("std");
 const ImageIdentity = @import("ImageIdentity.zig");
 const PlacementIdentity = @import("PlacementIdentity.zig");
-const PixelAllocation = @import("PixelAllocation.zig");
 const store_ops = @import("store.zig");
 
 /// Creates one resource catalog with an explicit image-delivery lifetime policy.
@@ -763,3 +762,8 @@ pub fn Type(comptime Delivery: type) type {
         }
     };
 }
+
+const PixelAllocation = struct {
+    pixels: []u8,
+    shared: ?SharedPixels = null,
+};

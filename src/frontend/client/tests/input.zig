@@ -8,7 +8,6 @@ const TestHarness = @import("TestHarness.zig");
 const support = @import("support.zig");
 const std = @import("std");
 const host_inputs = @import("../input/host_inputs.zig");
-const PiFrame = @import("PiFrame.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const Chunk = @import("../input/Chunk.zig");
 const term = @import("../../presentation/screen_support.zig");
@@ -458,7 +457,9 @@ test "name prompt rejects pointer routing after host telemetry" {
     const terminal = harness.terminal;
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true };
-    const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
+    const pane_view = data.tab_layout.view(
+        &client.model,
+        client.model.tabs.active,
         pane.id,
         terminal.view.workbench(),
     ).?;
@@ -494,7 +495,9 @@ test "mouse reports preserve scrollback and remain outside user-input telemetry"
         .total_rows = @as(u32, pane.buffer.h) + 10,
         .offset = 0,
     };
-    const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
+    const pane_view = data.tab_layout.view(
+        &client.model,
+        client.model.tabs.active,
         pane.id,
         terminal.view.workbench(),
     ).?;
@@ -545,7 +548,9 @@ test "mouse reports preserve exact host pixels relative to pane content" {
     _ = try client.model.observeHostCapability(.{ .pointer_pixels = .supported });
     const pane = client.model.panes.find(TestHarness.bootstrap_pane).?;
     pane.mouse = .{ .tracking = .normal, .sgr = true, .pixels = true };
-    const pane_view = data.tab_layout.view(&client.model, client.model.tabs.active, 
+    const pane_view = data.tab_layout.view(
+        &client.model,
+        client.model.tabs.active,
         pane.id,
         terminal.view.workbench(),
     ).?;
@@ -1045,3 +1050,9 @@ test "detach stops a host batch before its remaining text reaches the pane" {
     try std.testing.expectEqual(before, client.telemetry.metrics.input_events);
     try std.testing.expectEqual(@as(usize, 0), terminal.host_input.router.input_end);
 }
+
+const PiFrame = struct {
+    target: data.AttachmentTarget,
+    prompt: []const u8,
+    id: u64,
+};

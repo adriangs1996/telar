@@ -4,7 +4,6 @@ const data = @import("model");
 const lua_api = @import("lua-api");
 const lua_value = @import("lua_value.zig");
 const std = @import("std");
-const ParsedBarSegment = @import("ParsedBarSegment.zig");
 
 pub fn parseBarInterval(state: *lua_api.c.lua_State, index: c_int, diagnostic: *data.Diagnostic) !u64 {
     const absolute = lua_api.c.lua_absindex(state, index);
@@ -213,3 +212,9 @@ pub fn normalizedNameEql(left: []const u8, right: []const u8) bool {
 
     return true;
 }
+
+const ParsedBarSegment = struct {
+    text: []const u8,
+    icon: ?data.icons.Icon,
+    style: data.Style,
+};

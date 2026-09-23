@@ -6,11 +6,11 @@
 //! secretly assumes one column per byte anywhere, that test fails - which is
 //! the only way to tell a seam from a comment claiming there is one.
 
-const UnicodeFakeMeasured = @import("UnicodeFakeMeasured.zig");
-
 pub fn graphemeWidth(codepoints: []const u21) UnicodeFakeMeasured {
     if (codepoints.len == 0) {
         return .{ .len = 0, .width = 0 };
     }
     return .{ .len = 1, .width = 2 };
 }
+
+const UnicodeFakeMeasured = struct { len: usize, width: u8 };

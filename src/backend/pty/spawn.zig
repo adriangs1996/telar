@@ -2,7 +2,6 @@
 
 const Command = @import("Command.zig");
 const std = @import("std");
-const Spawned = @import("Spawned.zig");
 const native = @import("native.zig");
 const ChildExec = @import("ChildExec.zig");
 const ChildDescriptor = @import("ChildDescriptor.zig");
@@ -294,3 +293,8 @@ test "environment lookup requires the complete variable name" {
     try std.testing.expectEqualStrings("/bin", environmentValue(&environment, "PATH").?);
     try std.testing.expect(environmentValue(&environment, "MISSING") == null);
 }
+
+const Spawned = struct {
+    master: std.c.fd_t,
+    pid: std.c.pid_t,
+};

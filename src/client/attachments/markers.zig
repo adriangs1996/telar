@@ -6,7 +6,6 @@ const MarkerScreen = @import("MarkerScreen.zig");
 const MarkerPosition = @import("MarkerPosition.zig");
 const std = @import("std");
 const MarkerScan = @import("MarkerScan.zig");
-const MarkerBoundary = @import("MarkerBoundary.zig");
 const MarkerTail = @import("MarkerTail.zig");
 
 const marker_head = "[Image";
@@ -324,3 +323,9 @@ pub fn atomicSteps(buffer: *const core.Buffer, y: u16, span: model_data.Span) ?u
 
     return @intCast(steps);
 }
+
+const MarkerBoundary = struct {
+    ordinal: u16,
+    cursor: core.Cursor,
+    deletion: model_data.AttachmentMarkerDeletion,
+};

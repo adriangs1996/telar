@@ -10,7 +10,6 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Asset = @import("Asset.zig");
 const ModalRenderKey = @import("ModalRenderKey.zig");
-const CornerPixel = @import("CornerPixel.zig");
 const RoundedRectangle = @import("RoundedRectangle.zig");
 const PixelPoint = @import("PixelPoint.zig");
 const std = @import("std");
@@ -234,3 +233,11 @@ test "closing a stale modal frame leaves no media work behind" {
     try std.testing.expect(!renderer.damaged());
     try std.testing.expectEqual(@as(usize, placement_count), std.mem.count(u8, closed.written(), "a=d,d=i"));
 }
+
+const CornerPixel = struct {
+    destination: PixelPoint,
+    local: PixelPoint,
+    right: bool,
+    bottom: bool,
+    key: ModalRenderKey,
+};

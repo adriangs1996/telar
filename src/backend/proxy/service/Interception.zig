@@ -1,7 +1,6 @@
 const std = @import("std");
 const Authority = @import("../Authority.zig");
 const Roots = @import("../Roots.zig");
-const Trust = @import("Trust.zig");
 const Policy = @import("../Policy.zig");
 const Paths = @import("Paths.zig");
 const Resources = @import("../Resources.zig");
@@ -86,3 +85,8 @@ pub fn tunnelResources(self: *Interception, telemetry: *Counters) TunnelResource
         .telemetry = telemetry,
     };
 }
+
+const Trust = struct {
+    certificate_path: []const u8,
+    bundle_path: []const u8,
+};

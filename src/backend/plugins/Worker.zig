@@ -4,7 +4,6 @@ const Result = @import("Result.zig");
 const Frame = @import("Frame.zig");
 const service_support = @import("service_support.zig");
 const Session = @import("Session.zig");
-const WorkerInitOptions = @import("WorkerInitOptions.zig");
 const Worker = @This();
 
 gpa: std.mem.Allocator,
@@ -130,3 +129,9 @@ pub fn recordRestart(self: *Worker, io: std.Io) void {
     std.mem.copyForwards(i64, self.restarts[0 .. service_support.restart_limit - 1], self.restarts[1..]);
     self.restarts[service_support.restart_limit - 1] = now_ms;
 }
+
+const WorkerInitOptions = struct {
+    gpa: std.mem.Allocator,
+    spec: ServiceSpec,
+    results: *std.Io.Queue(*Result),
+};

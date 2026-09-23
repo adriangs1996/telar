@@ -13,7 +13,6 @@
 //! sysfs, battery included.
 
 const std = @import("std");
-const CpuTicks = @import("CpuTicks.zig");
 const Raw = @import("Raw.zig");
 const builtin = @import("builtin");
 const darwin = @import("darwin.zig");
@@ -221,3 +220,10 @@ test "the revision moves only when a visible value changes" {
     try std.testing.expect(sampler.revision != first);
     try std.testing.expectEqual(@as(u8, 50), sampler.latest.?.cpu_percent);
 }
+
+const CpuTicks = struct {
+    /// The first read has no predecessor, so it reports zero instead of a
+    /// since-boot average that would spike the bar on startup.
+    busy: u64,
+    total: u64,
+};

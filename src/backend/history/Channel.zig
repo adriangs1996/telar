@@ -1,7 +1,6 @@
 const std = @import("std");
 const model = @import("model.zig");
 const channel_support = @import("channel_support.zig");
-const Submission = @import("Submission.zig");
 const Counters = @import("Counters.zig");
 const Channel = @This();
 
@@ -141,3 +140,9 @@ pub fn sendResponse(self: *Channel, io: std.Io, response: model.Response) !void 
 pub fn receiveResponse(self: *Channel, io: std.Io) !model.Response {
     return self.responses.getOne(io);
 }
+
+const Submission = struct {
+    io: std.Io,
+    request: model.Request,
+    metrics: *Counters,
+};

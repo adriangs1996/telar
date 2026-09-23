@@ -1,7 +1,6 @@
 const core = @import("telar-core");
 const shared_transfer = @import("shared_transfer.zig");
 const PreparedTransfer = @import("PreparedTransfer.zig");
-const FrozenGeneration = @import("FrozenGeneration.zig");
 const PaneMediaAllocator = @import("PaneMediaAllocator.zig");
 const std = @import("std");
 /// Bounded parking space for frozen generations plus the memory of which
@@ -155,3 +154,8 @@ fn rememberFrozen(self: *PreparedTransfers, key: core.ImageKey) void {
         self.frozen[index] = .{ .image_id = key.image_id, .generation = key.generation };
     }
 }
+
+const FrozenGeneration = struct {
+    image_id: u32,
+    generation: u64,
+};

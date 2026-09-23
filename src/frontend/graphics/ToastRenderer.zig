@@ -11,7 +11,6 @@ const toast = @import("toast.zig");
 const toast_module = @import("../widgets/toast.zig");
 const ToastRenderKey = @import("ToastRenderKey.zig");
 const kitty_codec = @import("kitty_codec.zig");
-const SlotRender = @import("SlotRender.zig");
 const Surface = @import("Surface.zig");
 const Renderer = @This();
 
@@ -533,3 +532,9 @@ fn allImagesReady(self: *const Renderer) bool {
     }
     return count == self.visible_count;
 }
+
+const SlotRender = struct {
+    slot: *ToastSlot,
+    item: *const data.NotificationItem,
+    key: ToastRenderKey,
+};

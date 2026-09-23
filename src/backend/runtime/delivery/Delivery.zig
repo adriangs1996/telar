@@ -12,7 +12,7 @@ const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
 const runtime_encoder = @import("encoder.zig");
 const LayoutSnapshotStorage = @import("../LayoutSnapshotStorage.zig");
-const Commit = @import("Commit.zig");
+const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const Completion = @import("Completion.zig");
 const PreparedType = @import("../attachment/Prepared.zig");
 const ForegroundProjection = @import("ForegroundProjection.zig");
@@ -576,3 +576,9 @@ pub fn stage(self: *Delivery, payload: []const u8, effect: delivery_namespace.Ef
     self.phase = .{ .prepared = .{ .ticket = ticket, .effect = effect } };
     return .{ .payload = payload, .ticket = ticket };
 }
+
+const Commit = struct {
+    prepared: Prepared,
+    attachments: *AttachmentStore,
+    metrics: *RuntimeMetrics,
+};

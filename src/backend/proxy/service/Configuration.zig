@@ -2,7 +2,6 @@ const TransformPipeline = @import("../TransformPipeline.zig");
 const std = @import("std");
 const claude_transport = @import("../provider/claude_transport.zig");
 const Transformer = @import("../Transformer.zig");
-const View = @import("View.zig");
 const Configuration = @This();
 
 transforms: TransformPipeline = .{},
@@ -67,3 +66,8 @@ pub fn view(self: *const Configuration) View {
         .has_custom_transformers = self.has_custom_transformers,
     };
 }
+
+const View = struct {
+    transforms: *const TransformPipeline,
+    has_custom_transformers: bool,
+};

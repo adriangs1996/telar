@@ -2,8 +2,6 @@
 const core = @import("telar-core");
 const model_data = @import("model");
 
-const CapturedImage = @import("CapturedImage.zig");
-
 pub const StartOutcome = union(enum) {
     started: model_data.ClipboardCapture,
     busy,
@@ -78,3 +76,9 @@ fn successfulCommand(capture: model_data.ClipboardCapture) CompletionCommand {
         .target = capture.target,
     } };
 }
+
+const CapturedImage = struct {
+    execution_id: model_data.ClipboardCaptureId,
+    result_id: model_data.ClipboardCaptureId,
+    target: model_data.AttachmentTarget,
+};

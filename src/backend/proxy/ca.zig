@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const tlsz = @import("tls");
-const SecureWrite = @import("SecureWrite.zig");
 
 pub const Error = error{
     KeygenFailed,
@@ -231,3 +230,9 @@ test "system authorities have a bounded 30-day lifetime" {
     try std.testing.expect(!(try (Authority{ .pair = try generate(io, ca_seconds) }).hasSystemLifetime()));
     try std.testing.expectEqual(@as(usize, 40), authority.fingerprint().len);
 }
+
+const SecureWrite = struct {
+    path: []const u8,
+    bytes: []const u8,
+    exclusive: bool,
+};

@@ -1,6 +1,5 @@
 //! Shared antialiased RGBA fill for client-owned rounded backgrounds.
 
-const Input = @import("Input.zig");
 const std = @import("std");
 const Shape = @import("Shape.zig");
 const RoundedRectanglePoint = @import("RoundedRectanglePoint.zig");
@@ -102,3 +101,10 @@ test "rounded fill has transparent corners opaque center and symmetric alpha" {
         }
     }
 }
+
+const Input = struct {
+    pixels: []u8,
+    shape: Shape,
+    color: [3]u8,
+    stride: ?u32 = null,
+};

@@ -3,7 +3,6 @@
 const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
 const std = @import("std");
-const Link = @import("Link.zig");
 const vt = @import("ghostty-vt");
 const builtin = @import("builtin");
 
@@ -196,3 +195,5 @@ pub fn main(init: std.process.Init) !void {
     defer session.deinit();
     return relay(.{ .{ .input = socket, .output = session.master }, .{ .input = session.master, .output = if (socket == 0) 1 else socket } });
 }
+
+const Link = struct { input: std.c.fd_t, output: std.c.fd_t };

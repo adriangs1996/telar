@@ -9,7 +9,7 @@ const Exchange = @import("Exchange.zig");
 const Credential = @import("../Credential.zig");
 const identity = @import("../identity.zig");
 const std = @import("std");
-const ExchangeCapture = @import("ExchangeCapture.zig");
+const MiddlewareEvent = @import("../MiddlewareEvent.zig");
 const types = @import("../../agent/types.zig");
 
 /// Maps provider request classification to the lifecycle phase shared by
@@ -109,3 +109,14 @@ test "request classification maps to one lifecycle phase" {
     try std.testing.expectEqual(middleware.Phase.request_started, requestPhase(.inference));
     try std.testing.expectEqual(middleware.Phase.auxiliary_request_started, requestPhase(.auxiliary));
 }
+
+const ExchangeCapture = struct {
+    events: [8]MiddlewareEvent = undefined,
+    len: usize = 0,
+
+    pub fn observe(context: *anyopaque, _: std.Io, event: MiddlewareEvent) void {
+        const capture: *ExchangeCapture = @ptrCast(@alignCast(context));
+        capture.events[capture.len] = event;
+        capture.len += 1;
+    }
+};
