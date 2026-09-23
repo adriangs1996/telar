@@ -1,6 +1,6 @@
-const types = @import("types.zig");
+const ClipboardCaptureId = @import("../types/ClipboardCaptureId.zig").ClipboardCaptureId;
 const AttachmentTarget = @import("../attachments/AttachmentTarget.zig");
 const ClipboardCapture = @This();
 
-id: types.ClipboardCaptureId,
+id: ClipboardCaptureId,
 target: AttachmentTarget,

@@ -49,7 +49,6 @@ pub const pane_frame = @import("panes/pane_frame.zig");
 const sidebar_rendering = @import("config/sidebar_rendering.zig");
 pub const SidebarRendering = sidebar_rendering.SidebarRendering;
 pub const ResolvedSidebarRendering = sidebar_rendering.ResolvedSidebarRendering;
-pub const state_types = @import("state/types.zig");
 pub const tab_close = @import("application/tabs/close_tab.zig");
 pub const theme_support = @import("appearance/theme_support.zig");
 pub const workspace_list = @import("workspace/workspace_list.zig");

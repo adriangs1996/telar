@@ -72,6 +72,8 @@ const NewTab = @import("NewTab.zig");
 const RemoveTab = @import("RemoveTab.zig");
 const ClientModel = @This();
 
+pub const max_window_title_template_bytes = 128;
+
 gpa: std.mem.Allocator,
 /// Settings adopted from the active configuration generation.
 config: Config = .{},
@@ -120,7 +122,7 @@ suggestion: SuggestionState = .{},
 path_completion: model_data.PathCompletionState = .{},
 workspace_revision: u64 = 0,
 configuration_generation: u64 = 0,
-window_title_template: [model_data.state_types.max_window_title_template_bytes]u8 = undefined,
+window_title_template: [max_window_title_template_bytes]u8 = undefined,
 window_title_template_len: u8 = 0,
 configuration_revision: u64 = 0,
 client_diagnostic: model_data.Diagnostic = .{},

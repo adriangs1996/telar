@@ -1,6 +1,8 @@
 const core = @import("telar-core");
 const root = @import("../environment/environment.zig");
-const types = @import("types.zig");
+const HostAppearance = @import("../types/HostAppearance.zig").HostAppearance;
+const HostCapabilityObservation = @import("../types/HostCapabilityObservation.zig").HostCapabilityObservation;
+const HostCapabilitySupport = @import("../types/HostCapabilitySupport.zig").HostCapabilitySupport;
 const std = @import("std");
 const HostCapabilities = @This();
 
@@ -11,7 +13,7 @@ window_height_px: u32 = 0,
 cell_width_px: u32 = 0,
 cell_height_px: u32 = 0,
 pointer_pixels: root.Support = .unknown,
-appearance: types.HostAppearance = .unknown,
+appearance: HostAppearance = .unknown,
 terminal_colors: core.TerminalColors = .{},
 
 /// Resolves one cell size, preferring the host's explicit cell report.
@@ -44,10 +46,10 @@ pub fn cellSize(capabilities: *const HostCapabilities, cols: u16, rows: u16) str
 /// ```zig
 /// const next = capabilities.withObservation(.{ .pointer_pixels = .supported });
 /// ```
-pub fn withObservation(capabilities: HostCapabilities, observation: types.HostCapabilityObservation) HostCapabilities {
+pub fn withObservation(capabilities: HostCapabilities, observation: HostCapabilityObservation) HostCapabilities {
     var next = capabilities;
     switch (observation) {
-        .images => |support| next.images = types.observedSupport(support),
+        .images => |support| next.images = observedSupport(support),
         .window_pixels => |size| {
             next.window_width_px = size.width;
             next.window_height_px = size.height;
@@ -56,7 +58,7 @@ pub fn withObservation(capabilities: HostCapabilities, observation: types.HostCa
             next.cell_width_px = size.width;
             next.cell_height_px = size.height;
         },
-        .pointer_pixels => |support| next.pointer_pixels = types.observedSupport(support),
+        .pointer_pixels => |support| next.pointer_pixels = observedSupport(support),
         .foreground => |color| next.terminal_colors.foreground = .{ color.r, color.g, color.b },
         .background => |color| {
             next.terminal_colors.background = .{ color.r, color.g, color.b };
@@ -67,4 +69,11 @@ pub fn withObservation(capabilities: HostCapabilities, observation: types.HostCa
     }
 
     return next;
+}
+
+fn observedSupport(support: HostCapabilitySupport) root.Support {
+    return switch (support) {
+        .unsupported => .unsupported,
+        .supported => .supported,
+    };
 }

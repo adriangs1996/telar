@@ -1,6 +1,6 @@
 const core = @import("telar-core");
-const types = @import("types.zig");
+const PaneFocusTarget = @import("../types/PaneFocusTarget.zig").PaneFocusTarget;
 const PaneFocusRequest = @This();
 
-target: types.PaneFocusTarget,
+target: PaneFocusTarget,
 area: core.Rect,

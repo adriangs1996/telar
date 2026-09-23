@@ -1,12 +1,13 @@
 const core = @import("telar-core");
-const types = @import("types.zig");
+const Change = @import("../types/Change.zig").Change;
+const PaneSplitDisposition = @import("../types/PaneSplitDisposition.zig").PaneSplitDisposition;
 const PaneSplitCommit = @This();
 
 pane_id: core.PaneId,
 location: core.TabLocation,
 area: core.Rect,
-disposition: types.PaneSplitDisposition,
-change: types.Change,
+disposition: PaneSplitDisposition,
+change: Change,
 layout_revision: u64,
 workspace_revision: u64,
 tabs_revision: u64,
