@@ -11,8 +11,8 @@ pub const Builtin = enum {
     tokyo_night,
     terminal,
 
-    pub fn canonicalName(value: Builtin) []const u8 {
-        return switch (value) {
+    pub fn canonicalName(self: Builtin) []const u8 {
+        return switch (self) {
             .shade => "shade",
             .vesper => "vesper",
             .catppuccin => "catppuccin",
