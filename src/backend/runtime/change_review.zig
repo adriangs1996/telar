@@ -1,12 +1,13 @@
 //! Review admission, worker completion and cooperative provider handoff.
+const client_connection = @import("client_connection.zig");
 const std = @import("std");
 const core = @import("telar-core");
-const RuntimeModel = @import("../RuntimeModel.zig");
-const Session = @import("../client/Session.zig");
-const Context = @import("../../change_review/Context.zig");
-const Job = @import("../../change_review/Job.zig");
-const PendingFailure = @import("../delivery/PendingFailure.zig");
-const PaneKey = @import("../../pane/PaneKey.zig");
+const RuntimeModel = @import("RuntimeModel.zig");
+const Session = @import("client/Session.zig");
+const Context = @import("../change_review/Context.zig");
+const Job = @import("../change_review/Job.zig");
+const PendingFailure = @import("delivery/PendingFailure.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
 
 /// Admits one review query, command or sample and starts its worker.
 ///
@@ -110,12 +111,12 @@ fn retire(model: *RuntimeModel, job: *Job) void {
     }
     if (job.failure) |err| {
         client.delivery.responses.push(.{ .request_failed = failure(job.request_id, err) }) catch {
-            model.dropClient(client_key);
+            client_connection.drop(model, client_key);
             return;
         };
     } else if (job.result) |result| {
         client.delivery.responses.push(.{ .change_review = result }) catch {
-            model.dropClient(client_key);
+            client_connection.drop(model, client_key);
             return;
         };
         job.result = null;

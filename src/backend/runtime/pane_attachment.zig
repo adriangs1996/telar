@@ -1,6 +1,8 @@
 //! A client attaches to a running pane, launching the workspace's first
 //! pane when needed, and detaches from it again.
 
+const pane_graphics = @import("pane_graphics.zig");
+const pane_observation = @import("pane_observation.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -9,7 +11,6 @@ const Pane = @import("../pane/Pane.zig");
 const PaneDetached = @import("attachment/PaneDetached.zig");
 const Proposal = @import("../workspace/Proposal.zig");
 const client_request = @import("client_request.zig");
-const events = @import("application/events.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const launch_cwd = @import("client/launch_cwd.zig");
 const pane_launch = @import("pane_launch.zig");
@@ -106,8 +107,8 @@ fn attachTarget(model: *RuntimeModel, session: *Session, request: core.OpenPaneV
         else
             active.resize(request.size);
         resize_result catch return error.PaneResizeFailed;
-        try events.panes.Projection.scheduleObservation(model, active);
-        try events.panes.Projection.scheduleMedia(model, active);
+        try pane_observation.start(model, active);
+        try pane_graphics.startMedia(model, active);
     }
 
     const attachment = try session.attachments.attach(model.gpa, active);

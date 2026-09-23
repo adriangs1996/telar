@@ -1,6 +1,7 @@
 //! A client moves a tab within its workspace and receives the absolute
 //! position the runtime committed.
 
+const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
@@ -26,7 +27,7 @@ pub fn move(model: *RuntimeModel, session: *Session, request: core.MoveTab) !voi
         };
     };
 
-    model.noteSessionChange();
+    session_checkpoint.noteChange(model);
     resync_required.notify(model, .{ .origin = session.key, .workspace = moved.location.workspace });
     try session.delivery.responses.push(.{ .tab_moved = .{
         .request_id = request.request_id,

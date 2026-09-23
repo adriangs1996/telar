@@ -81,7 +81,7 @@ pub fn discard(completed: Event, io: std.Io) void {
             const effects = result catch return;
             effects.deinit();
         },
-        // These pointers name slots still retained by Application.
+        // These pointers name slots still retained by RuntimeModel.
         .change_review_completed, .agent_history_completed, .editor_opened => {},
         // Other events contain values or borrows whose owners outlive the join.
         .handshaken,

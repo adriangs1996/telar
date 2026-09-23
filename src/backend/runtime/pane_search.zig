@@ -1,15 +1,16 @@
 //! Correlated, bounded search turns. No worker borrows terminal state.
 
-const RuntimeModel = @import("../RuntimeModel.zig");
-const Session = @import("../client/Session.zig");
-const PaneStore = @import("../../pane/PaneStore.zig");
-const PaneKey = @import("../../pane/PaneKey.zig");
-const Pane = @import("../../pane/Pane.zig");
+const client_connection = @import("client_connection.zig");
+const RuntimeModel = @import("RuntimeModel.zig");
+const Session = @import("client/Session.zig");
+const PaneStore = @import("../pane/PaneStore.zig");
+const PaneKey = @import("../pane/PaneKey.zig");
+const Pane = @import("../pane/Pane.zig");
 const core = @import("telar-core");
-const Cursor = @import("../../pane/Cursor.zig");
+const Cursor = @import("../pane/Cursor.zig");
 const std = @import("std");
-const Wake = @import("Wake.zig");
-const MatchesType = @import("../delivery/Matches.zig");
+const Wake = @import("application/Wake.zig");
+const MatchesType = @import("delivery/Matches.zig");
 
 /// Starts a search, replacing only this client's previous search.
 /// Example: `try start(model, session, request);`.
@@ -46,7 +47,7 @@ pub fn advance(model: *RuntimeModel, completion: Wake) !void {
     const session = model.clients.resolve(completion.client) orelse return;
     session.search_scheduled = false;
     if (session.closing) {
-        model.finalizeClient(completion.client);
+        client_connection.finalize(model, completion.client);
         return;
     }
 

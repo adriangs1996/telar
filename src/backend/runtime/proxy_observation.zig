@@ -1,14 +1,43 @@
-//! Runtime anti-corruption layer from proxy events to agent observations.
+//! A proxy observation of a model exchange becomes agent evidence for the
+//! pane whose credential made the request.
 
-const ObservationType = @import("../../../proxy/Observation.zig");
-const Pane = @import("../../../pane/Pane.zig");
-const ProxyObservationType = @import("../../../agent/ProxyObservation.zig");
-const types = @import("../../../agent/types.zig");
-const agent_identity = @import("../../application/coordinators/agent_identity.zig");
-const middleware = @import("../../../proxy/middleware.zig");
+const core = @import("telar-core");
+const ObservationType = @import("../proxy/Observation.zig");
+const Pane = @import("../pane/Pane.zig");
+const ProxyObservationType = @import("../agent/ProxyObservation.zig");
+const RuntimeModel = @import("RuntimeModel.zig");
+const Sources = @import("Sources.zig");
+const types = @import("../agent/types.zig");
+const agent_description = @import("agent_description.zig");
+const agent_identity = @import("application/coordinators/agent_identity.zig");
+const middleware = @import("../proxy/middleware.zig");
 const std = @import("std");
 
-pub fn translate(event: ObservationType, pane: *const Pane) ?ProxyObservationType {
+/// Rearms the proxy receive and records one observation as agent evidence.
+///
+/// ```zig
+/// try proxy_observation.receive(model, result);
+/// ```
+pub fn receive(model: *RuntimeModel, result: anyerror!ObservationType) !void {
+    const event = result catch return;
+    var sources = Sources.init(model.io, model.select);
+    try sources.receiveProxyObservation(&model.resources.proxy);
+
+    const pane = model.panes.resolve(event.pane) orelse {
+        model.metrics.stale_pane_events += 1;
+        return;
+    };
+
+    if (comptime core.enabled) {
+        model.metrics.proxy_observations +|= 1;
+    }
+
+    const observation = translate(event, pane) orelse return;
+    _ = model.agents.observeProxy(observation);
+    agent_description.start(model);
+}
+
+fn translate(event: ObservationType, pane: *const Pane) ?ProxyObservationType {
     const phase: types.ProxyPhase = switch (event.phase) {
         .request_started => .request_started,
         .auxiliary_request_started => return null,
@@ -50,7 +79,7 @@ pub fn eventFor(pane: *const Pane, phase: middleware.Phase, protocol: middleware
     };
 }
 
-const PaneFixture = @import("../../tests/PaneFixture.zig");
+const PaneFixture = @import("tests/PaneFixture.zig");
 
 test "every proxy protocol and inference phase translates without losing identity" {
     var fixture: PaneFixture = .{};

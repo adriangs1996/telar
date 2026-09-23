@@ -1,13 +1,15 @@
 //! The one flush that follows every runtime update: reaps finished panes,
 //! delivers at most one message per client and settles observed damage.
 
+const pane_closure = @import("pane_closure.zig");
+const pane_graphics = @import("pane_graphics.zig");
+const client_connection = @import("client_connection.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const PaneType = @import("../pane/Pane.zig");
-const change_review = @import("application/change_review.zig");
-const events = @import("application/events.zig");
+const change_review = @import("change_review.zig");
 const store_support = @import("client/store_support.zig");
 
 /// Delivers pending output to every affected client in a single pass. A
@@ -21,7 +23,7 @@ const store_support = @import("client/store_support.zig");
 pub fn flush(model: *RuntimeModel) !void {
     var passes: usize = 0;
     while (passes <= store_support.max_clients) : (passes += 1) {
-        model.collect();
+        pane_closure.collect(model);
         change_review.discover(model);
 
         if (!pumpClients(model)) {
@@ -35,7 +37,7 @@ pub fn flush(model: *RuntimeModel) !void {
 
     for (model.panes.items) |slot| {
         const pane = slot orelse continue;
-        try events.panes.Projection.scheduleMedia(model, pane);
+        try pane_graphics.startMedia(model, pane);
         settlePaneDamage(model, pane);
     }
 }
@@ -86,7 +88,7 @@ fn pumpClients(model: *RuntimeModel) bool {
         const key = session.key;
 
         pump(model, session) catch {
-            model.dropClient(key);
+            client_connection.drop(model, key);
             dropped = true;
         };
     }
@@ -124,7 +126,7 @@ fn pump(model: *RuntimeModel, session: *Session) !void {
     };
     errdefer session.delivery.abort(prepared);
 
-    try events.clients.startSend(model, session, prepared.payload);
+    try client_connection.startSend(model, session, prepared.payload);
     session.delivery.commit(.{
         .prepared = prepared,
         .attachments = &session.attachments,

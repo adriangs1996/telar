@@ -1,5 +1,6 @@
 //! Composition root for one long-lived backend runtime.
 
+const session_checkpoint = @import("session_checkpoint.zig");
 const pane_launch = @import("pane_launch.zig");
 const core = @import("telar-core");
 const std = @import("std");
@@ -180,9 +181,9 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
     defer second.deinit();
     const reader = second.model.workspaceReader();
 
-    try std.testing.expect(!second.model.session.restore_failed);
-    try std.testing.expectEqual(@as(u16, 1), second.model.session.restored_panes);
-    try std.testing.expectEqual(@as(u16, 2), second.model.session.dropped_tabs);
+    try std.testing.expect(!second.model.checkpoint.restore_failed);
+    try std.testing.expectEqual(@as(u16, 1), second.model.checkpoint.restored_panes);
+    try std.testing.expectEqual(@as(u16, 2), second.model.checkpoint.dropped_tabs);
     try std.testing.expect(reader.contains(kept.location));
     try std.testing.expect(!reader.contains(logs_location));
     try std.testing.expect(!reader.containsWorkspace(dropped.location.workspace));
@@ -241,26 +242,26 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
         .observed_at_ms = 1_000,
     }));
     try std.testing.expect(try first.model.agents.setManualTitle(pane.key(), "Investigate proxy lifecycle"));
-    try std.testing.expect(first.model.session.dirty);
+    try std.testing.expect(first.model.checkpoint.dirty);
     first.deinit();
-    try std.testing.expectEqual(@as(u64, 1), first.model.session.writes);
+    try std.testing.expectEqual(@as(u64, 1), first.model.checkpoint.writes);
 
     var second: Runtime = undefined;
     try second.init(initialization);
     defer second.deinit();
     const reader = second.model.workspaceReader();
 
-    try std.testing.expect(!second.model.session.restore_failed);
-    try std.testing.expectEqual(@as(u16, 1), second.model.session.restored_workspaces);
-    try std.testing.expectEqual(@as(u16, 2), second.model.session.restored_panes);
-    try std.testing.expectEqual(@as(u16, 0), second.model.session.dropped_tabs);
+    try std.testing.expect(!second.model.checkpoint.restore_failed);
+    try std.testing.expectEqual(@as(u16, 1), second.model.checkpoint.restored_workspaces);
+    try std.testing.expectEqual(@as(u16, 2), second.model.checkpoint.restored_panes);
+    try std.testing.expectEqual(@as(u16, 0), second.model.checkpoint.dropped_tabs);
     try std.testing.expectEqualStrings("core", reader.workspaceName(ensured.location.workspace).?);
     try std.testing.expectEqualStrings("", reader.tabLabel(ensured.location).?);
     try std.testing.expectEqualStrings("logs", reader.tabLabel(.{ .workspace = ensured.location.workspace, .tab_id = logs_tab }).?);
     const restored = second.model.panes.find(pane_id).?;
     try std.testing.expect(restored.generation > pane_generation);
     try std.testing.expectEqualStrings("/bin/sleep\x00600\x00", restored.launch_record.slice());
-    try std.testing.expectEqual(@as(u16, 1), second.model.session.resumed_agents);
+    try std.testing.expectEqual(@as(u16, 1), second.model.checkpoint.resumed_agents);
     try std.testing.expectEqualStrings(
         "claude --resume 0192aaaa-bbbb-cccc-dddd-eeeeffff0000\r",
         restored.input_queue.nextChunk().?,
@@ -344,9 +345,9 @@ test "a restart restores every workspace and tab from unordered pane records" {
     defer runtime.deinit();
     const reader = runtime.model.workspaceReader();
 
-    try std.testing.expect(!runtime.model.session.restore_failed);
-    try std.testing.expectEqual(@as(u16, 3), runtime.model.session.restored_panes);
-    try std.testing.expectEqual(@as(u16, 0), runtime.model.session.dropped_tabs);
+    try std.testing.expect(!runtime.model.checkpoint.restore_failed);
+    try std.testing.expectEqual(@as(u16, 3), runtime.model.checkpoint.restored_panes);
+    try std.testing.expectEqual(@as(u16, 0), runtime.model.checkpoint.dropped_tabs);
     try std.testing.expectEqual(@as(usize, 2), reader.count());
     for ([_]u64{ 4, 2, 3 }, 0..) |pane_id, index| {
         const pane = runtime.model.panes.find(@enumFromInt(pane_id)).?;
@@ -407,8 +408,8 @@ test "repeated restarts preserve pending agent resumes and reject duplicate sess
             .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = session_path },
         });
         defer runtime.deinit();
-        try std.testing.expectEqual(@as(u16, 2), runtime.model.session.restored_panes);
-        try std.testing.expectEqual(@as(u16, 1), runtime.model.session.resumed_agents);
+        try std.testing.expectEqual(@as(u16, 2), runtime.model.checkpoint.restored_panes);
+        try std.testing.expectEqual(@as(u16, 1), runtime.model.checkpoint.resumed_agents);
         const pane = runtime.model.panes.find(@enumFromInt(1)).?;
         try std.testing.expectEqualStrings("claude --resume " ++ reference ++ "\r", pane.input_queue.nextChunk().?);
         try std.testing.expectEqualStrings(reference, runtime.model.agents.resumeSession(pane.key()).?.reference.slice());
@@ -465,7 +466,7 @@ test "direct agent restore launches resume argv and preserves the original comma
         const pane = runtime.model.panes.find(@enumFromInt(1)).?;
         try std.testing.expectEqualStrings(arguments, pane.launch_record.slice());
         try std.testing.expect(pane.input_queue.nextChunk() == null);
-        try std.testing.expectEqual(@as(u16, if (resume_agents) 1 else 0), runtime.model.session.resumed_agents);
+        try std.testing.expectEqual(@as(u16, if (resume_agents) 1 else 0), runtime.model.checkpoint.resumed_agents);
         const actual = try awaitArguments(temp.dir);
         defer std.testing.allocator.free(actual);
         try std.testing.expectEqualStrings(if (resume_agents) "--resume\n" ++ reference ++ "\n" else "original-option\n", actual);
@@ -489,7 +490,6 @@ fn awaitArguments(directory: std.Io.Dir) ![]u8 {
 }
 
 test "process observation checkpoints a session reported before provider detection and its later exit" {
-    const application_namespace = @import("application/application_namespace.zig");
     const pane_namespace = @import("../pane/pane_namespace.zig");
     const io = std.testing.io;
     var temp = std.testing.tmpDir(.{});
@@ -520,8 +520,8 @@ test "process observation checkpoints a session reported before provider detecti
     try std.testing.expect(runtime.model.agents.resumeSession(pane.key()) == null);
 
     for ([_]bool{ true, false }) |agent_foreground| {
-        application_namespace.SessionCheckpoint.writeNow(&runtime.model);
-        try std.testing.expect(!runtime.model.session.dirty);
+        session_checkpoint.writeNow(&runtime.model);
+        try std.testing.expect(!runtime.model.checkpoint.dirty);
         pane.queueHistoryOutput(.{ .bytes = "observed", .shell_foreground = false, .clock = pane_namespace.historyClock(io) });
         try std.testing.expect(pane.beginHistoryObservation() != null);
         const shell_id: u32 = @intCast(pane.session.processId());
@@ -534,7 +534,7 @@ test "process observation checkpoints a session reported before provider detecti
                 .inspected = true,
             },
         } });
-        try std.testing.expect(runtime.model.session.dirty);
+        try std.testing.expect(runtime.model.checkpoint.dirty);
         try std.testing.expectEqual(agent_foreground, runtime.model.agents.resumeSession(pane.key()) != null);
     }
 }

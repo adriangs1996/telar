@@ -1,6 +1,7 @@
 //! A client opens a local file link in an editor: a worker reuses an
 //! editor already running in a pane of the same tab when it can.
 
+const client_connection = @import("client_connection.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -38,7 +39,7 @@ pub fn finish(model: *RuntimeModel, job: *EditorOpenJob) void {
     }
 
     client.delivery.responses.push(.{ .editor_opened = result }) catch {
-        model.dropClient(job.client);
+        client_connection.drop(model, job.client);
     };
 }
 

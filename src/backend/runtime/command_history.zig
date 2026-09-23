@@ -9,6 +9,11 @@ const Query = @import("../history/Query.zig");
 const Prune = @import("../history/Prune.zig");
 const StatsQuery = @import("../history/StatsQuery.zig");
 const client_request = @import("client_request.zig");
+const Sources = @import("Sources.zig");
+const history_model = @import("../history/model.zig");
+const QueryResult = @import("../history/QueryResult.zig");
+const OutputResult = @import("../history/OutputResult.zig");
+const StatsResult = @import("../history/StatsResult.zig");
 
 /// Queues one history search for the history worker.
 ///
@@ -134,6 +139,74 @@ pub fn stats(model: *RuntimeModel, session: *Session, request: core.HistoryStats
 
     if (!model.resources.history.service().statsHistory(model.io, scoped)) {
         return refuse(session, request.request_id);
+    }
+}
+
+/// Rearms the history receive and moves one worker response into the queue
+/// of the client that asked, which then owns any result buffers.
+///
+/// ```zig
+/// try command_history.receive(model, result);
+/// ```
+pub fn receive(model: *RuntimeModel, result: anyerror!history_model.Response) !void {
+    const response = result catch return;
+    var owned_query: ?*QueryResult = switch (response) {
+        .query_result => |value| value,
+        else => null,
+    };
+    defer if (owned_query) |value| {
+        value.deinit();
+    };
+    var owned_output: ?*OutputResult = switch (response) {
+        .output_result => |value| value,
+        else => null,
+    };
+    defer if (owned_output) |value| {
+        value.deinit();
+    };
+    var owned_stats: ?*StatsResult = switch (response) {
+        .stats_result => |value| value,
+        else => null,
+    };
+    defer if (owned_stats) |value| {
+        value.deinit();
+    };
+
+    var sources = Sources.init(model.io, model.select);
+    try sources.receiveHistory(model.resources.history.service());
+
+    switch (response) {
+        .query_result => |value| {
+            const session = model.clients.resolve(value.origin.client) orelse return;
+            session.delivery.setCloseAfterReply(value.origin.close_after_reply);
+            owned_query = null;
+            session.delivery.responses.push(.{ .history_result = value }) catch value.deinit();
+        },
+        .failed => |failure| {
+            const session = model.clients.resolve(failure.origin.client) orelse return;
+            session.delivery.setCloseAfterReply(failure.origin.close_after_reply);
+            client_request.fail(session, failure.request_id, .internal, failure.message) catch {};
+        },
+        .pruned => |pruned| {
+            const session = model.clients.resolve(pruned.origin.client) orelse return;
+            session.delivery.setCloseAfterReply(pruned.origin.close_after_reply);
+            session.delivery.responses.push(.{ .history_pruned = .{
+                .request_id = pruned.request_id,
+                .removed = pruned.removed,
+            } }) catch {};
+        },
+        .output_result => |value| {
+            const session = model.clients.resolve(value.origin.client) orelse return;
+            session.delivery.setCloseAfterReply(value.origin.close_after_reply);
+            session.delivery.responses.push(.{ .history_output = value }) catch return;
+            owned_output = null;
+        },
+        .stats_result => |value| {
+            const session = model.clients.resolve(value.origin.client) orelse return;
+            session.delivery.setCloseAfterReply(value.origin.close_after_reply);
+            session.delivery.responses.push(.{ .history_stats = value }) catch return;
+            owned_stats = null;
+        },
     }
 }
 

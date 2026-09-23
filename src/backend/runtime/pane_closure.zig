@@ -1,8 +1,20 @@
-//! A client asks to close a pane; the child's exit later retires it.
+//! A pane closes when a client asks or its child exits. The authoritative
+//! exit revokes the pane's proxy credential; collection destroys the pane
+//! once no actor or attachment borrows it and removes a tab left empty.
 
 const core = @import("telar-core");
+const std = @import("std");
+const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
+const Pane = @import("../pane/Pane.zig");
+const ExitCompletion = @import("entrypoints/events/pane/ExitCompletion.zig");
+const exit_module = @import("../pty/exit.zig");
 const client_request = @import("client_request.zig");
+const commands = @import("../workspace/commands.zig");
+const geometry_lease = @import("geometry_lease.zig");
+const pane_observation = @import("pane_observation.zig");
+const session_checkpoint = @import("session_checkpoint.zig");
+const tab_removal = @import("tab_removal.zig");
 
 /// Requests closure of an attached pane. The pane stays until its exit.
 ///
@@ -15,4 +27,134 @@ pub fn close(session: *Session, request: core.ClosePane) !void {
     };
 
     _ = attachment.pane.requestClose();
+}
+
+/// Commits the child's exit, retires its agent and credential, and
+/// schedules the final history observation once output has drained.
+///
+/// ```zig
+/// try pane_closure.finishExit(model, completion);
+/// ```
+pub fn finishExit(model: *RuntimeModel, completion: ExitCompletion) !void {
+    const transition = model.panes.completeExit(completion.pane, exitOrSynthetic(completion.result)) orelse {
+        model.metrics.stale_pane_events += 1;
+        return;
+    };
+
+    _ = model.agents.remove(transition.pane.key());
+    revokeCredential(model, transition.pane);
+
+    if (transition.launch_aborting) {
+        return;
+    }
+
+    if (transition.output_done) {
+        transition.pane.queueExitedHistory(transition.exit);
+        try pane_observation.start(model, transition.pane);
+    }
+}
+
+/// Destroys exited panes that no actor or attachment borrows, removes tabs
+/// left without panes and completes deferred workspace departures. Costs
+/// one branch while nothing has exited.
+///
+/// ```zig
+/// pane_closure.collect(model);
+/// ```
+pub fn collect(model: *RuntimeModel) void {
+    const store = &model.panes;
+    if (store.exited_count == 0) {
+        return;
+    }
+
+    var workspaces = model.workspaceRepository();
+    for (&store.items) |*slot| {
+        const pane = slot.* orelse continue;
+
+        if (!pane.readyToDestroy() or isAttached(model, pane.id)) {
+            continue;
+        }
+
+        const location = pane.location;
+        store.index.remove(core.raw(pane.id));
+        store.exited_count -= 1;
+        slot.* = null;
+        store.count -= 1;
+
+        if (!model.agents.remove(pane.key())) {
+            model.agents.touch();
+        }
+
+        revokeCredential(model, pane);
+        pane.destroy();
+        session_checkpoint.noteChange(model);
+
+        if (!store.hasAt(location) and workspaces.reader().contains(location)) {
+            const removed = commands.removeTab(&workspaces, location).?;
+            tab_removal.announce(model, removed);
+        }
+
+        leaveEmptyWorkspace(model, location.workspace);
+    }
+}
+
+/// Revokes the pane generation's proxy credential, when the proxy runs.
+/// Example: `pane_closure.revokeCredential(model, pane);`.
+pub fn revokeCredential(model: *RuntimeModel, pane: *Pane) void {
+    if (model.resources.proxy.capability()) |proxy| {
+        proxy.revokePane(pane.key());
+    }
+}
+
+fn isAttached(model: *RuntimeModel, pane_id: core.PaneId) bool {
+    for (&model.clients.items) |*slot| {
+        const client = slot.* orelse continue;
+        if (client.attachments.find(pane_id) != null) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/// Completes departures deferred by a pane exit only after every pane that
+/// can still publish lifecycle changes for the workspace is reaped.
+fn leaveEmptyWorkspace(model: *RuntimeModel, workspace: core.WorkspaceLocation) void {
+    for (model.panes.items) |slot| {
+        const pane = slot orelse continue;
+
+        if (pane.exit != null and std.meta.eql(pane.location.workspace, workspace)) {
+            return;
+        }
+    }
+
+    for (&model.clients.items) |*slot| {
+        const session = slot.* orelse continue;
+
+        if (session.attachments.len() != 0 or !session.attachments.observes(workspace)) {
+            continue;
+        }
+
+        const left_workspace = session.attachments.leaveWorkspace(workspace);
+        std.debug.assert(left_workspace);
+
+        if (left_workspace) {
+            geometry_lease.release(model, session.key, workspace);
+        }
+    }
+}
+
+fn exitOrSynthetic(result: anyerror!exit_module.Exit) exit_module.Exit {
+    return result catch .{ .signaled = .KILL };
+}
+
+test "wait failure becomes a synthetic SIGKILL exit" {
+    try std.testing.expectEqual(
+        exit_module.Exit{ .signaled = .KILL },
+        exitOrSynthetic(error.WaitpidFailed),
+    );
+    try std.testing.expectEqual(
+        exit_module.Exit{ .exited = 7 },
+        exitOrSynthetic(exit_module.Exit{ .exited = 7 }),
+    );
 }

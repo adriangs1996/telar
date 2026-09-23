@@ -1,6 +1,7 @@
 //! A tab disappears from its workspace, requested by a client or caused by
 //! the loss of its final pane. A workspace left without tabs goes with it.
 
+const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
@@ -21,7 +22,7 @@ pub fn remove(model: *RuntimeModel, session: *Session, request: core.CloseTab) !
     };
 
     model.panes.closeAt(removed.location);
-    model.noteSessionChange();
+    session_checkpoint.noteChange(model);
     resync_required.notify(model, .{
         .origin = session.key,
         .workspace = removed.location.workspace,

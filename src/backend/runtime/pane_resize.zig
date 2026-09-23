@@ -1,10 +1,11 @@
 //! The geometry lease holder offers a pane size; the runtime resizes the
 //! child, or defers the resize until the in-flight ingest completes.
 
+const pane_graphics = @import("pane_graphics.zig");
+const pane_observation = @import("pane_observation.zig");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
-const events = @import("application/events.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const pane_attachment = @import("pane_attachment.zig");
 const pane_input = @import("pane_input.zig");
@@ -36,8 +37,8 @@ pub fn resize(model: *RuntimeModel, session: *Session, request: core.PaneResize)
         _ = pane.requestClose();
         return;
     };
-    try events.panes.Projection.scheduleObservation(model, pane);
-    try events.panes.Projection.scheduleMedia(model, pane);
+    try pane_observation.start(model, pane);
+    try pane_graphics.startMedia(model, pane);
 
     _ = attachment.resizeIfNeeded() catch {
         _ = pane_attachment.detachPane(model, session, request.pane_id);

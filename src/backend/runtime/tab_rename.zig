@@ -1,5 +1,6 @@
 //! A client renames a tab; other observers of its workspace resync.
 
+const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
@@ -24,7 +25,7 @@ pub fn rename(model: *RuntimeModel, session: *Session, request: core.RenameTab) 
         };
     };
 
-    model.noteSessionChange();
+    session_checkpoint.noteChange(model);
     model.agents.touch();
     resync_required.notify(model, .{ .origin = session.key, .workspace = renamed.location.workspace });
 

@@ -1,5 +1,6 @@
+const session_checkpoint = @import("../session_checkpoint.zig");
 const pane_launch = @import("../pane_launch.zig");
-const agent_threads = @import("../application/agent_threads.zig");
+const agent_panes = @import("../agent_panes.zig");
 const SessionTitle = @import("../../agent/SessionTitle.zig");
 const core_module = @import("telar-core");
 const std = @import("std");
@@ -41,9 +42,9 @@ test "shutdown replaces a pending checkpoint with the latest session and release
     });
     const first_pane_id = first_pane.id;
 
-    first.model.session.last_change_ns = 0;
-    try first.model.flushSessionCheckpoint();
-    try std.testing.expect(first.model.session.pending != null);
+    first.model.checkpoint.last_change_ns = 0;
+    try session_checkpoint.start(&first.model);
+    try std.testing.expect(first.model.checkpoint.pending != null);
 
     const tab_id = try repository.nextTabId();
     _ = try repository.find(workspace.location.workspace).?.createTab(tab_id, "late tab");
@@ -59,16 +60,16 @@ test "shutdown replaces a pending checkpoint with the latest session and release
     _ = try commands.renameWorkspace(&repository, workspace.location.workspace, "latest name");
 
     first.deinit();
-    try std.testing.expect(first.model.session.pending == null);
-    try std.testing.expectEqual(@as(u64, 1), first.model.session.writes);
-    try std.testing.expectEqual(@as(u64, 0), first.model.session.failures);
+    try std.testing.expect(first.model.checkpoint.pending == null);
+    try std.testing.expectEqual(@as(u64, 1), first.model.checkpoint.writes);
+    try std.testing.expectEqual(@as(u64, 0), first.model.checkpoint.failures);
 
     var second: Runtime = undefined;
     try second.init(initialization);
     defer second.deinit();
 
-    try std.testing.expect(!second.model.session.restore_failed);
-    try std.testing.expectEqual(@as(u16, 2), second.model.session.restored_panes);
+    try std.testing.expect(!second.model.checkpoint.restore_failed);
+    try std.testing.expectEqual(@as(u16, 2), second.model.checkpoint.restored_panes);
     try std.testing.expect(second.model.panes.find(first_pane_id) != null);
     try std.testing.expect(second.model.panes.find(second_pane_id) != null);
     const reader = second.model.workspaceReader();
@@ -128,7 +129,7 @@ test "failed startup joins restored children and preserves the original checkpoi
         .dependencies = .{ .io = io, .allocator = std.testing.allocator },
         .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = checkpoint_path },
     }, true));
-    try std.testing.expectEqual(@as(u16, 1), runtime.model.session.restored_panes);
+    try std.testing.expectEqual(@as(u16, 1), runtime.model.checkpoint.restored_panes);
     try std.testing.expectEqual(@as(usize, 0), runtime.model.panes.count);
     try std.testing.expectError(error.FileNotFound, std.Io.Dir.cwd().statFile(io, endpoint, .{ .follow_symlinks = false }));
 
@@ -153,7 +154,8 @@ fn awaitManagedPane(runtime: *Runtime, pane: *@import("../../pane/Pane.zig")) !v
     while (true) {
         switch (try runtime.loop.next()) {
             .agent_thread_changed => |changed| {
-                if (try agent_threads.handle(&runtime.model, changed)) {
+                try agent_panes.receive(&runtime.model, changed);
+                if (pane.exit != null) {
                     return error.ProviderStopped;
                 }
 
@@ -224,21 +226,21 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
     });
     const pane_id = pane.id;
     const first_generation = pane.generation;
-    first.model.session.dirty = false;
+    first.model.checkpoint.dirty = false;
     try awaitManagedPane(first, pane);
-    try std.testing.expect(first.model.session.dirty);
+    try std.testing.expect(first.model.checkpoint.dirty);
     try std.testing.expect(!pane.agent_thread.?.resumed);
     // A contended publication must defer persistence without failing maintenance.
     pane.session.agent.session.mutex.lockUncancelable(io);
     {
         defer pane.session.agent.session.mutex.unlock(io);
-        first.model.session.last_change_ns = 0;
-        try first.model.flushSessionCheckpoint();
-        try std.testing.expect(first.model.session.pending == null);
-        try std.testing.expect(first.model.session.dirty);
+        first.model.checkpoint.last_change_ns = 0;
+        try session_checkpoint.start(&first.model);
+        try std.testing.expect(first.model.checkpoint.pending == null);
+        try std.testing.expect(first.model.checkpoint.dirty);
     }
 
-    first.model.restoreAgentTitle(pane, try SessionTitle.init("Keep this title", .manual));
+    session_checkpoint.restoreAgentTitle(&first.model, pane, try SessionTitle.init("Keep this title", .manual));
     first.deinit();
 
     // A second shutdown before processing provider events must preserve the intention.
@@ -246,7 +248,7 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
     defer gpa.destroy(second);
     try second.init(initialization);
     defer second.deinit();
-    try std.testing.expectEqual(@as(u16, 2), second.model.session.restored_panes);
+    try std.testing.expectEqual(@as(u16, 2), second.model.checkpoint.restored_panes);
     const starting = second.model.panes.find(pane_id).?;
     try std.testing.expectEqual(core.PaneKind.agent, starting.kind);
     try std.testing.expect(starting.generation > first_generation);
@@ -269,7 +271,7 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
     try std.testing.expectEqualStrings("Agent work", third.model.workspaceReader().tabLabel(location).?);
     try std.testing.expectEqualStrings("Keep this title", third.model.agents.checkpointTitle(restored.key()).?.slice());
     try std.testing.expectEqual(core.PaneKind.terminal, third.model.panes.find(terminal_id).?.kind);
-    try std.testing.expectEqual(@as(u16, 1), third.model.session.resumed_agents);
+    try std.testing.expectEqual(@as(u16, 1), third.model.checkpoint.resumed_agents);
     third.deinit();
 
     initialization.options.resume_agents = false;
@@ -281,7 +283,7 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
     try awaitManagedPane(fresh, fresh_pane);
     try std.testing.expectEqual(core.PaneKind.agent, fresh_pane.kind);
     try std.testing.expect(!fresh_pane.agent_thread.?.resumed);
-    try std.testing.expectEqual(@as(u16, 0), fresh.model.session.resumed_agents);
+    try std.testing.expectEqual(@as(u16, 0), fresh.model.checkpoint.resumed_agents);
     try std.testing.expect(fresh.model.agents.checkpointTitle(fresh_pane.key()) == null);
 }
 
@@ -330,9 +332,9 @@ test "agent checkpoint skips duplicate claims and retains empty panes when the p
         var runtime: Runtime = undefined;
         try runtime.init(initialization);
         defer runtime.deinit();
-        try std.testing.expect(!runtime.model.session.restore_failed);
-        try std.testing.expectEqual(@as(u16, 2), runtime.model.session.restored_panes);
-        try std.testing.expectEqual(@as(u16, 1), runtime.model.session.resumed_agents);
+        try std.testing.expect(!runtime.model.checkpoint.restore_failed);
+        try std.testing.expectEqual(@as(u16, 2), runtime.model.checkpoint.restored_panes);
+        try std.testing.expectEqual(@as(u16, 1), runtime.model.checkpoint.resumed_agents);
         try std.testing.expectEqualStrings("saved-thread", runtime.model.panes.find(@enumFromInt(1)).?.agent_thread.?.threadId());
         try std.testing.expect(runtime.model.panes.find(@enumFromInt(2)) == null);
         try std.testing.expectEqual(core.PaneKind.agent, runtime.model.panes.find(@enumFromInt(3)).?.kind);

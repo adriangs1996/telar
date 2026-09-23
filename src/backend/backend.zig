@@ -154,15 +154,7 @@ test {
     _ = @import("pty/pty_tests.zig");
     _ = @import("pty/session_support.zig");
     _ = @import("pty/spawn.zig");
-    _ = @import("runtime/application/application_namespace.zig");
-    _ = @import("runtime/application/event_dispatcher/agent.zig");
-    _ = @import("runtime/application/event_dispatcher/client.zig");
-    _ = @import("runtime/application/event_dispatcher/history.zig");
-    _ = @import("runtime/application/event_dispatcher/observability.zig");
-    _ = @import("runtime/application/event_dispatcher/pane/pipeline.zig");
-    _ = @import("runtime/application/event_dispatcher/pane/projection.zig");
     _ = @import("runtime/RuntimeModel.zig");
-    _ = @import("runtime/application/operation_scheduler.zig");
     _ = @import("runtime/pane_launch.zig");
     _ = @import("runtime/pane_input.zig");
     _ = @import("runtime/geometry_lease.zig");
@@ -176,7 +168,8 @@ test {
     _ = @import("runtime/workspace_creation.zig");
     _ = @import("runtime/link_opening.zig");
     _ = @import("runtime/suggest_command.zig");
-    _ = @import("runtime/application/session_checkpoint.zig");
+    _ = @import("runtime/session_checkpoint.zig");
+    _ = @import("runtime/pane_closure.zig");
     _ = @import("runtime/application/suggestion.zig");
     _ = @import("runtime/attachment/attachment_namespace.zig");
     _ = @import("runtime/attachment/cell.zig");
@@ -190,9 +183,8 @@ test {
     _ = @import("runtime/delivery/delivery_namespace.zig");
     _ = @import("runtime/delivery/encoder.zig");
     _ = @import("runtime/delivery/response_queue.zig");
-    _ = @import("runtime/entrypoints/events/pane/exit.zig");
     _ = @import("runtime/entrypoints/events/pane/media_projection.zig");
-    _ = @import("runtime/entrypoints/events/proxy_observation.zig");
+    _ = @import("runtime/proxy_observation.zig");
     _ = @import("runtime/event.zig");
     _ = @import("runtime/event_loop.zig");
     _ = @import("runtime/event_sources.zig");

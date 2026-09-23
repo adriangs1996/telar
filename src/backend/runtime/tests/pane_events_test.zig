@@ -1,9 +1,10 @@
 //! Actor ownership and recovery through production event dispatch.
+const pane_graphics = @import("../pane_graphics.zig");
+const pane_observation = @import("../pane_observation.zig");
 const std = @import("std");
 const pane_input = @import("../pane_input.zig");
 const core = @import("telar-core");
 const EventFixture = @import("EventFixture.zig");
-const events = @import("../application/events.zig");
 const event = @import("../event.zig");
 const pane_mod = @import("../../pane/pane_namespace.zig");
 const agent_identity = @import("../application/coordinators/agent_identity.zig");
@@ -91,11 +92,11 @@ test "runtime observation and media admission roll back sealed actor borrows" {
     fixture.failScheduling();
     const pane = fixture.pane;
     pane.queueHistoryOutput(.{ .bytes = "history", .shell_foreground = false, .clock = pane_mod.historyClock(std.testing.io) });
-    try std.testing.expectError(error.ConcurrencyUnavailable, events.panes.Projection.scheduleObservation(fixture.model, pane));
+    try std.testing.expectError(error.ConcurrencyUnavailable, pane_observation.start(fixture.model, pane));
     try std.testing.expect(pane.history_observer.worker == null);
     try std.testing.expect(!pane.history_observer.hasPending());
     pane.queueMediaOutput("media");
-    try std.testing.expectError(error.ConcurrencyUnavailable, events.panes.Projection.scheduleMedia(fixture.model, pane));
+    try std.testing.expectError(error.ConcurrencyUnavailable, pane_graphics.startMedia(fixture.model, pane));
     try std.testing.expect(pane.media.worker == null);
     try std.testing.expectEqual(@as(u8, 0), pane.actor_count);
 }

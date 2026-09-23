@@ -3,8 +3,8 @@ const std = @import("std");
 const core = @import("telar-core");
 const EventFixture = @import("EventFixture.zig");
 const RequestFixture = @import("RequestFixture.zig");
-const agent_events = @import("../application/event_dispatcher/agent_events.zig");
-const proxy_observation = @import("../entrypoints/events/proxy_observation.zig");
+const agent_description = @import("../agent_description.zig");
+const proxy_observation = @import("../proxy_observation.zig");
 const agent_identity = @import("../application/coordinators/agent_identity.zig");
 const description = @import("../../agent/description.zig");
 const AgentResult = @import("../../agent/Result.zig");
@@ -45,8 +45,8 @@ test "runtime disabled descriptions leave queued work and its global actor slot 
     defer fixture.deinit();
     const model = &fixture.runtime.model;
     _ = try seedDescription(&model.agents, 1);
-    agent_events.scheduleDescription(model);
-    try std.testing.expect(!model.agent_description_state.isPending());
+    agent_description.start(model);
+    try std.testing.expect(!model.agent_description_pending);
     var job = model.agents.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &job.query);
     try std.testing.expectEqualStrings("refactor proxy", job.querySlice());
@@ -61,9 +61,9 @@ test "runtime description completion commits valid output and classifies every g
         _ = try seedDescription(&model.agents, 1);
         var job = model.agents.nextDescriptionJob().?;
         defer std.crypto.secureZero(u8, &job.query);
-        model.agent_description_state.begin();
+        model.agent_description_pending = true;
         _ = try fixture.runtime.update(.{ .agent_description = resultFor(job, status, "Refactor proxy") });
-        try std.testing.expect(!model.agent_description_state.isPending());
+        try std.testing.expect(!model.agent_description_pending);
         var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
         const entry = model.agents.snapshot(&entries, 0)[0];
         try std.testing.expectEqual(if (status == .success) core.AgentTitleState.ready else .failed, entry.title_state);
@@ -81,12 +81,12 @@ test "runtime invalid generated titles and late manual-title completions retain 
         const identity = try seedDescription(&model.agents, 1);
         var job = model.agents.nextDescriptionJob().?;
         defer std.crypto.secureZero(u8, &job.query);
-        model.agent_description_state.begin();
+        model.agent_description_pending = true;
         if (manual) {
             _ = try model.agents.setManualTitle(identity.key, "Manual title");
         }
         _ = try fixture.runtime.update(.{ .agent_description = resultFor(job, .success, "invalid\ntitle") });
-        try std.testing.expect(!model.agent_description_state.isPending());
+        try std.testing.expect(!model.agent_description_pending);
         var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
         const entry = model.agents.snapshot(&entries, 0)[0];
         try std.testing.expectEqualStrings(if (manual) "Manual title" else "New agent session", entry.session_title);
@@ -102,8 +102,8 @@ test "runtime description admission failure commits failure without retaining th
     const model = fixture.model;
     _ = try seedDescription(fixture.agents, 1);
     model.agent_description_options = .{ .arguments = &.{"generator"}, .timeout_ms = 1000 };
-    agent_events.scheduleDescription(model);
-    try std.testing.expect(!model.agent_description_state.isPending());
+    agent_description.start(model);
+    try std.testing.expect(!model.agent_description_pending);
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
     try std.testing.expectEqual(core.AgentTitleState.failed, fixture.agents.snapshot(&entries, 0)[0].title_state);
 }
@@ -116,11 +116,11 @@ test "runtime retired description completion releases the actor slot and cannot 
     const identity = try seedDescription(&model.agents, 1);
     var job = model.agents.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &job.query);
-    model.agent_description_state.begin();
+    model.agent_description_pending = true;
     try std.testing.expect(model.agents.remove(identity.key));
     const replacement = try seedDescription(&model.agents, 2);
     _ = try fixture.runtime.update(.{ .agent_description = resultFor(job, .success, "Retired title") });
-    try std.testing.expect(!model.agent_description_state.isPending());
+    try std.testing.expect(!model.agent_description_pending);
     var next = model.agents.nextDescriptionJob().?;
     defer std.crypto.secureZero(u8, &next.query);
     try std.testing.expectEqualDeep(replacement.key, next.pane);

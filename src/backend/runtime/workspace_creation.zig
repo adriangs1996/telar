@@ -2,6 +2,7 @@
 //! geometry lease, launches the root pane and commits the workspace only
 //! after the pane launch commits.
 
+const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
@@ -75,7 +76,7 @@ fn createWorkspace(model: *RuntimeModel, session: *Session, request: core.Create
 
     _ = proposal.commit();
     committed = true;
-    model.noteSessionChange();
+    session_checkpoint.noteChange(model);
     resync_required.notify(model, .{ .origin = session.key, .workspace = location.workspace });
 
     const pane = model.panes.findRunning(root_pane_id) orelse return error.LaunchedPaneUnavailable;

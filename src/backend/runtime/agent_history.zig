@@ -1,9 +1,10 @@
 //! Correlated observation reads. Live pane snapshots remain independent.
+const client_connection = @import("client_connection.zig");
 const core = @import("telar-core");
-const RuntimeModel = @import("../RuntimeModel.zig");
-const Session = @import("../client/Session.zig");
-const Job = @import("AgentHistoryJob.zig");
-const PendingFailure = @import("../delivery/PendingFailure.zig");
+const RuntimeModel = @import("RuntimeModel.zig");
+const Session = @import("client/Session.zig");
+const Job = @import("application/AgentHistoryJob.zig");
+const PendingFailure = @import("delivery/PendingFailure.zig");
 
 /// Admits a read without retaining the client's wire buffer or a pane pointer.
 /// Example: `try agent_history.start(model, client, query);`.
@@ -63,12 +64,12 @@ pub fn finish(model: *RuntimeModel, job: *Job) void {
     const err: ?anyerror = if (pane == null) error.PaneNotFound else if (pane.?.close_requested or pane.?.exit != null) error.PaneExited else job.failure;
     if (err) |problem| {
         client.delivery.responses.push(.{ .request_failed = failure(job.request_id, problem) }) catch {
-            model.dropClient(job.client);
+            client_connection.drop(model, job.client);
             return;
         };
     } else if (job.result) |result| {
         client.delivery.responses.push(.{ .agent_history_page = result }) catch {
-            model.dropClient(job.client);
+            client_connection.drop(model, job.client);
             return;
         };
         job.result = null;

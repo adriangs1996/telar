@@ -1,6 +1,7 @@
 //! A terminal client's layout is retained as one bounded replica per client
 //! identity, checked against runtime state, and restored on reconnect.
 
+const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
@@ -24,5 +25,5 @@ pub fn retain(model: *RuntimeModel, session: *Session, update: core.ClientLayout
             .workspaces = model.workspaceReader(),
         },
     });
-    model.noteSessionChange();
+    session_checkpoint.noteChange(model);
 }

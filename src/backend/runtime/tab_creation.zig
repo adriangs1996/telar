@@ -1,6 +1,7 @@
 //! A client creates a tab: the runtime proposes the tab, launches its root
 //! pane and commits the tab only after the pane launch commits.
 
+const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -66,7 +67,7 @@ fn createTab(model: *RuntimeModel, session: *Session, request: core.CreateTabVie
 
     workspaces.recordTabCreated(tab_id);
     committed = true;
-    model.noteSessionChange();
+    session_checkpoint.noteChange(model);
     resync_required.notify(model, .{ .origin = session.key, .workspace = created.location.workspace });
 
     const running = model.panes.findRunning(root_pane_id) orelse return error.LaunchedPaneUnavailable;

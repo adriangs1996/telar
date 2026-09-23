@@ -2,6 +2,7 @@
 //! text and runtime responses queue on the pane and one bounded write per
 //! kind runs at a time.
 
+const pane_observation = @import("pane_observation.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -10,7 +11,6 @@ const Pane = @import("../pane/Pane.zig");
 const PaneKey = @import("../pane/PaneKey.zig");
 const pane_namespace = @import("../pane/pane_namespace.zig");
 const client_request = @import("client_request.zig");
-const events = @import("application/events.zig");
 const InputCompletion = @import("entrypoints/events/pane/InputCompletion.zig");
 const ResponseCompletion = @import("entrypoints/events/pane/ResponseCompletion.zig");
 const InputWrite = @import("entrypoints/events/pane/InputWrite.zig");
@@ -192,7 +192,7 @@ fn forward(model: *RuntimeModel, pane: *Pane, bytes: []const u8) !void {
         .clock = pane_namespace.historyClock(model.io),
     });
     core.mark(model.io, .input_observed);
-    try events.panes.Projection.scheduleObservation(model, pane);
+    try pane_observation.start(model, pane);
 
     if (pane.queuePtyInput(bytes) and bytes.len != 0) {
         pane.cell_input_ns = core.monotonic(model.io);

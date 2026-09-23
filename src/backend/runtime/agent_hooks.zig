@@ -2,6 +2,7 @@
 //! commands and title from inside its pane. Official reports outrank
 //! inferred evidence.
 
+const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -37,7 +38,7 @@ pub fn receiveSession(model: *RuntimeModel, session: *Session, report: core.Repo
     try client_request.complete(session, report.request_id);
 
     if (recorded) {
-        model.noteSessionChange();
+        session_checkpoint.noteChange(model);
     }
 }
 
@@ -86,7 +87,7 @@ pub fn receive(model: *RuntimeModel, session: *Session, report: core.ReportAgent
     else
         false;
     if (session_recorded) {
-        model.noteSessionChange();
+        session_checkpoint.noteChange(model);
     }
 
     if (!changed) {
@@ -147,7 +148,7 @@ pub fn receiveTitle(model: *RuntimeModel, session: *Session, report: core.Report
     switch (recordTitle(model, .{ .id = report.pane_id, .generation = report.pane_generation }, report.title)) {
         .recorded => {
             try client_request.complete(session, report.request_id);
-            model.noteSessionChange();
+            session_checkpoint.noteChange(model);
         },
         .unchanged => try client_request.complete(session, report.request_id),
         .pane_not_found => try client_request.fail(session, report.request_id, .pane_not_found, "pane not found"),

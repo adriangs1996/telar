@@ -1,4 +1,5 @@
 //! Cancellation owns completed results until they are released or retained by the model.
+const client_connection = @import("../client_connection.zig");
 const std = @import("std");
 const core = @import("telar-core");
 const Loop = @import("../Loop.zig");
@@ -16,7 +17,7 @@ const ReviewJob = @import("../../change_review/Job.zig");
 const ReviewResult = @import("../../change_review/Result.zig");
 const RequestFixture = @import("RequestFixture.zig");
 const EventFixture = @import("EventFixture.zig");
-const pane_search = @import("../application/pane_search.zig");
+const pane_search = @import("../pane_search.zig");
 
 fn finishHistory(result: history.Response) anyerror!history.Response {
     return result;
@@ -159,7 +160,7 @@ test "closing clients retain their search slot until the matching wake retires i
     const key = fixture.session.key;
     try fixture.send(.{ .search_pane = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .needle = "search" } });
     fixture.session.send_pending = false;
-    fixture.runtime.model.dropClient(key);
+    client_connection.drop(&fixture.runtime.model, key);
     try std.testing.expect(fixture.session.closing);
     try std.testing.expect(fixture.session.search_scheduled);
     try std.testing.expect(fixture.runtime.model.clients.resolve(key) != null);
@@ -185,7 +186,7 @@ test "a failed search wake retires a closing session without admitting more work
     const key = fixture.session.key;
     fixture.session.search_scheduled = true;
     fixture.session.send_pending = false;
-    fixture.runtime.model.dropClient(key);
+    client_connection.drop(&fixture.runtime.model, key);
     try std.testing.expect(fixture.runtime.model.clients.resolve(key) != null);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .pane_search = .{
@@ -211,6 +212,6 @@ test "failed search admission cannot retain a closing client slot" {
     try std.testing.expect(session.pending_search == null);
     const key = session.key;
     session.send_pending = false;
-    fixture.model.dropClient(key);
+    client_connection.drop(fixture.model, key);
     try std.testing.expect(fixture.model.clients.resolve(key) == null);
 }

@@ -2,6 +2,7 @@
 //! run a client command or focus a pane. The interactive client answers and
 //! the runtime correlates the answer with the waiting control client.
 
+const client_connection = @import("client_connection.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
@@ -60,7 +61,7 @@ pub fn detach(model: *RuntimeModel, session: *Session, request: core.DetachClien
         return rejectDetach(session, request.request_id);
     }
 
-    model.dropClient(target);
+    client_connection.drop(model, target);
     try client_request.complete(session, request.request_id);
 }
 
@@ -180,7 +181,7 @@ pub fn abandon(model: *RuntimeModel, key: ClientKey) void {
 
         requester.pending_client_command = null;
         client_request.fail(requester, pending.request_id, .invalid_request, "target client disconnected before confirming the operation") catch {
-            model.dropClient(requester.key);
+            client_connection.drop(model, requester.key);
         };
     }
 
@@ -194,7 +195,7 @@ pub fn abandon(model: *RuntimeModel, key: ClientKey) void {
 
         requester.releaseFocus();
         client_request.fail(requester, pending.request_id, .invalid_request, "focus client disconnected") catch {
-            model.dropClient(requester.key);
+            client_connection.drop(model, requester.key);
             continue;
         };
         requester.delivery.close_after_reply = true;

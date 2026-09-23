@@ -4,10 +4,11 @@
 //! actor scheduling either establish a fully observable pane or run the
 //! matching rollback path.
 
+const session_checkpoint = @import("session_checkpoint.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const RuntimeModel = @import("RuntimeModel.zig");
-const agent_threads = @import("application/agent_threads.zig");
+const agent_panes = @import("agent_panes.zig");
 const command_support = @import("../pty/command_support.zig");
 const proxy_mod = @import("../proxy/proxy_namespace.zig");
 const history_model = @import("../history/model.zig");
@@ -49,7 +50,7 @@ pub fn launch(model: *RuntimeModel, request: LaunchRequest) !*Pane {
         try launchTerminal(model, request);
 
     model.agents.touch();
-    model.noteSessionChange();
+    session_checkpoint.noteChange(model);
     return fresh;
 }
 
@@ -237,7 +238,7 @@ fn launchAgent(model: *RuntimeModel, request: LaunchRequest) !*Pane {
     _ = pane.beginExitWait();
     errdefer pane.cancelExitWait();
 
-    try model.select.concurrent(.agent_thread_changed, agent_threads.waitForChange, .{ model.io, pane });
+    try model.select.concurrent(.agent_thread_changed, agent_panes.waitForChange, .{ model.io, pane });
     pane.commitLaunch("codex app-server");
     return pane;
 }
