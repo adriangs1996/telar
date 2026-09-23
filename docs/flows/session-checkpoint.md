@@ -11,26 +11,26 @@ runtime death loses live PTYs still holds.
 ```text
 command handler / pane launch / pane collection
         |
-Application.noteSessionChange -> session.State.noteChange (dirty, timestamp)
+session_checkpoint.noteChange -> CheckpointWriter.noteChange (dirty, timestamp)
         |
-agent maintenance tick -> Application.flushSessionCheckpoint
+agent maintenance tick -> agent_maintenance.tick -> session_checkpoint.start
         |
-State.due?  (dirty, settled ≥ 500 ms, no write in flight)
+CheckpointWriter.due?  (dirty, settled ≥ 500 ms, no write in flight)
         |
-SessionCheckpoint.encode -> persistence.checkpoint.Encoder (owned 1 MiB buffer)
+session_checkpoint.encode -> persistence.checkpoint.Encoder (owned 1 MiB buffer)
         |
 select.concurrent(.checkpoint_written, writeFile)   -- worker thread
         |
 <path>.tmp (0600) -> fsync -> rename over <path>
         |
-Event.checkpoint_written -> State.completeWrite (retry on failure)
+Event.checkpoint_written -> session_checkpoint.finish -> CheckpointWriter.completeWrite (retry on failure)
 
-runtime start: Resources -> Application -> restoreSession -> listener
+runtime start: Resources -> RuntimeModel -> session_checkpoint.restore -> listener
         |
 read file -> validate every record -> apply
         |
 Repository.restoreWorkspace / restoreTab   (original ids, counters advance)
-PaneStore.reserveRestoredKey + Application.launchPane (original pane id)
+PaneStore.reserveRestoredKey + pane_launch.launch (original pane id)
 ClientLayoutStore.replace(decoded update_client_layout)   (validated)
 ```
 
@@ -92,7 +92,7 @@ It leaves the source checkpoint untouched for a later startup attempt.
 
 After the last record, every tab left without a pane is retired through the
 same `workspace.removeTab` the final pane exit uses, and a workspace left
-without tabs goes with it (`State.dropped_tabs` counts them). A tab exists for
+without tabs goes with it (`CheckpointWriter.dropped_tabs` counts them). A tab exists for
 clients only together with a running pane: the tab snapshot query answers
 `tab_not_found` for an empty one, and a client that selects such a tab treats
 that reply as fatal. `src/backend/runtime/instance.zig` proves the sweep with
@@ -146,7 +146,7 @@ agent retires that live agent normally. If the resume command fails before
 the agent can be observed, the pending intention remains available for the
 next restart; it is never reported as a running agent.
 
-`State.resumed_agents` counts queued resume commands and direct launches.
+`CheckpointWriter.resumed_agents` counts queued resume commands and direct launches.
 It does not confirm that the external CLI accepted its session reference.
 Actual agent activity still comes from process observations and lifecycle
 reports.
@@ -183,7 +183,7 @@ the session volatile.
   prove that a restored title reaches only the resumed agent's generation,
   skips title generation and is dropped with its pane. Provider and session
   mismatches cannot transfer pending titles or authorize a different resume.
-- `src/backend/runtime/application/session_checkpoint.zig` proves the
+- `src/backend/runtime/session_checkpoint.zig` proves the
   debounce, coalescing and retry state machine and the atomic private write.
 - `src/backend/workspace/repository_support.zig` and `src/backend/pane/pane_namespace.zig` prove
   identity-preserving restore and counter advancement.
@@ -203,7 +203,7 @@ the session volatile.
 
 ## Managed agent panes
 
-Agent panes restore through `Application.launchPane(kind = .agent)` and the
+Agent panes restore through `pane_launch.launch(kind = .agent)` and the
 existing observation worker. `Session` owns a copied conversation reference
 before scheduling its worker. Initialization sends `thread/resume` directly
 when a saved reference exists, or `thread/start` for an empty pane. Resume

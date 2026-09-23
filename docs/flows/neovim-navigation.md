@@ -41,8 +41,8 @@ runtime correlates the reply to the waiting control connection. A target UI
 disconnect turns the pending request into a failure instead of leaving the CLI
 waiting forever.
 
-`requests.dispatch` calls `routeRequestPaneFocus` or `routeCompletePaneFocus`
-in `src/backend/runtime/application/operations/clients.zig`. The concrete
+`client_request.receive` calls `client_control.requestFocus` or
+`client_control.finishFocus` in `src/backend/runtime/client_control.zig`. The concrete
 operation resolves the pane/client identities and queues the correlated command
 or reply. `src/backend/runtime/client/Session.zig` retains the pending exchange
 and its reservation, correlation and retirement state. This is connection state, not a runtime-owned focus model.

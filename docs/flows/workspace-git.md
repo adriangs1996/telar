@@ -10,7 +10,7 @@ workspace names and does not mark dirty workspaces.
 ```text
 agent maintenance tick (1 s)
         |
-GitObserver.tick: one stalest workspace, ≥ 5 s since its last probe,
+workspace_git.start: one stalest workspace, ≥ 5 s since its last probe,
                   at most one probe in flight runtime-wide
         |
 select.concurrent(.git_status, probe)   -- worker thread
@@ -39,7 +39,7 @@ subprocess is only consulted for cleanliness.
 
 ## Validation
 
-- `src/backend/runtime/application/GenericGitStatusObserver.zig` proves HEAD parsing.
+- `src/backend/runtime/workspace_git.zig` proves probe reservation and stale results.
 - `src/backend/workspace/workspace_support.zig` proves bounded storage and change
   detection.
 - `src/core/schema_contract_test.zig` pins the extended workspace list bytes.

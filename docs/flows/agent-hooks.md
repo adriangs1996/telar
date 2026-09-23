@@ -274,7 +274,7 @@ for `SessionEnd` and `Interrupt`.
 
 - `src/backend/agent/tracker_support.zig` proves precedence over screen evidence,
   `exited` withdrawal and expiry.
-- `src/backend/runtime/application/operations/agents.zig` and
+- `src/backend/runtime/agent_hooks.zig` and
   `report_agent_title.zig` prove the reply contracts.
 - `src/backend/agent/tracker_support.zig` proves that an agent title outranks a
   generated one, never clears a manual one, clears on an empty report and is

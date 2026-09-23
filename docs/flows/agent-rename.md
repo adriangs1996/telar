@@ -138,7 +138,7 @@ the probe then degrades to reporting nothing.
 - `src/backend/agent/transcript.zig` proves the scan: last line wins, partial
   lines wait, foreign sessions and malformed lines are skipped, long names are
   bounded.
-- `src/backend/runtime/application/session_name.zig` proves both probes
+- `src/backend/runtime/agent_rename.zig` proves both probes
   against real files: transcript seeding at the end, reading only appended
   lines, idling, rewritten and missing files; database names, NULL names,
   unknown threads and missing databases.

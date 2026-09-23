@@ -16,7 +16,7 @@ while `runtime.proxy.capture.enabled` is true.
    erases and frees the half; it never waits for capacity.
 3. `event_sources.Sources.receiveProxyCapture` completes
    `RuntimeEvent.proxy_capture`. The dispatcher delegates to
-   `entrypoints/events/proxy_capture.handle`, which rearms receive first.
+   `proxy_capture.receive`, which rearms receive first.
 4. The entrypoint rejects stale pane generations, then asks the proxy resource
    to decode a content-coded body on the observation path.
 5. `capture.Joiner` owns the half until its peer arrives. Matching

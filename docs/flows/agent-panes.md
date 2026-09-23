@@ -308,10 +308,10 @@ retryable, without polling the provider on every rendered frame.
 
 | Trigger | Client entrypoint | Wire request | Runtime owner |
 | --- | --- | --- | --- |
-| `prefix + a` | `AttachedClient.createAgentTab` → `AttachedClient.requestTabCreation` | `create_tab` with kind `agent` | `operations/tabs.routeCreateTab`, pane launcher |
+| `prefix + a` | `AttachedClient.createAgentTab` → `AttachedClient.requestTabCreation` | `create_tab` with kind `agent` | `tab_creation.create`, `pane_launch.launch` |
 | Composer edit | GUI widget routing, `Model.editAgentComposer` | none | client pane composer |
 | Model, effort or access choice | `Model.changeAgentOption` | included in the next `agent_prompt` | client draft, then runtime/provider validation |
-| Enter or Send | `AttachedClient.submitAgentPrompt` | `agent_prompt` | `requests.dispatch`, `agent_threads`, provider worker |
+| Enter or Send | `AttachedClient.submitAgentPrompt` | `agent_prompt` | `client_request.receive`, `agent_control.send`, `agent_panes`, provider worker |
 | `/` or `$` completion | `completions`, `CompletionState`, `CompletionMenu` | none | client draft and delivered widget identities |
 | `/clear` or `/rename` | `completions.submit`, `AttachedClient.submitAgentPrompt` | `agent_prompt` | `Codex.runCommand`, provider response, retained snapshot |
 | Skill catalog refresh | provider `skills/changed`, `skills/list` | `agent_thread_snapshot` | `SkillCatalog`, provider worker |
@@ -477,7 +477,7 @@ titles of 160 bytes. Listing uses the existing provider record and parsing
 quotas. Listing failure does not prevent starting a new conversation.
 
 The client sends `AgentResume` with the pane generation and selected index.
-`requests.dispatch` translates it; `agent_threads` verifies that the
+`client_request.receive` routes it to `agent_control.send`; `agent_panes` verifies that the
 pane has no user turns and that another managed pane has not already claimed
 the conversation. `Session.resumeConversation` reserves its identifier before
 enqueueing the provider command, excluding concurrent prompts and resumes.

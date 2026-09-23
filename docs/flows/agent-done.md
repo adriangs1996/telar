@@ -23,7 +23,7 @@ ClientModel.takeAgentAcknowledgement  (focused pane, status done, once)
         |
 outbox.acknowledge_agent -> schema.AcknowledgeAgent
         |
-Runtime.update -> requests.dispatch -> agents.routeAcknowledgeAgent
+Runtime.update -> client_request.receive -> agent_done.acknowledge
         |
 Tracker.acknowledge -> Agent.acknowledge (seen = true) -> reproject -> ready
         |
@@ -93,7 +93,7 @@ silent.
 - `src/backend/runtime/tests/requests_test.zig` proves the
   request-to-tracker path, idempotence, stale generations and re-arming
   after a new turn.
-- `src/backend/runtime/application/operations/agents.zig` contains the direct
+- `src/backend/runtime/agent_done.zig` contains the direct
   acknowledgement operation and stale accounting.
 - `src/core/schema_contract_test.zig` pins the `acknowledge_agent` bytes.
 - `src/model/state/tests/observations.zig` proves once-per-completion
