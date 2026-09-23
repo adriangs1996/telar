@@ -9,6 +9,7 @@ const Pane = @import("../pane/Pane.zig");
 const core = @import("telar-core");
 const Cursor = @import("../pane/Cursor.zig");
 const std = @import("std");
+const client_request = @import("client_request.zig");
 const Wake = @import("events/Wake.zig");
 const MatchesType = @import("delivery/Matches.zig");
 
@@ -16,12 +17,7 @@ const MatchesType = @import("delivery/Matches.zig");
 /// Example: `try start(model, session, request);`.
 pub fn start(model: *RuntimeModel, session: *Session, request: core.SearchPane) !void {
     const pane = resolveTarget(&model.panes, session, request.pane_id) orelse {
-        try session.delivery.responses.push(.{ .request_failed = .{
-            .request_id = request.request_id,
-            .code = .pane_not_found,
-            .message = "pane is not available for this search",
-        } });
-        return;
+        return client_request.fail(session, request.request_id, .pane_not_found, "pane is not available for this search");
     };
     if (session.pending_search) |previous| {
         try fail(session, previous.request_id, "Pane search superseded");
@@ -98,11 +94,7 @@ pub fn advance(model: *RuntimeModel, completion: Wake) !void {
 }
 
 fn fail(session: *Session, request_id: core.RequestId, message: []const u8) !void {
-    try session.delivery.responses.push(.{ .request_failed = .{
-        .request_id = request_id,
-        .code = .resource_limit,
-        .message = message,
-    } });
+    try client_request.fail(session, request_id, .resource_limit, message);
 }
 
 fn schedule(model: *RuntimeModel, wake: Wake, busy: bool) !void {

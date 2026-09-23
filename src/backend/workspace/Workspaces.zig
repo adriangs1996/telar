@@ -878,6 +878,30 @@ test "tabs are created, described and bounded per workspace" {
     try std.testing.expectEqual(@as(u8, max_tabs), table.tab_count[slot]);
 }
 
+test "created tabs own their labels and path-derived names may exceed the label limit" {
+    const gpa = std.testing.allocator;
+    const table = try testingTable();
+    defer destroyTestingTable(table);
+    const first = try table.insert(gpa, "/work/telar", null);
+    const slot = table.slotOf(first.workspace).?;
+    const logs: core.TabLocation = .{ .workspace = first.workspace, .tab_id = try core.tab(2) };
+    var source = [_]u8{ 'l', 'o', 'g', 's' };
+
+    _ = try table.addTab(slot, logs.tab_id, &source);
+    @memset(&source, 'x');
+    try std.testing.expectEqualStrings("logs", table.tabLabel(logs).?);
+
+    const oversized_label: [core.max_tab_label_bytes + 1]u8 = @splat('x');
+    try std.testing.expectError(error.InvalidTabLabel, table.addTab(slot, try core.tab(3), &oversized_label));
+    try std.testing.expectEqual(@as(u8, 2), table.tab_count[slot]);
+
+    const long_path = "/work/" ++ [_]u8{'p'} ** (core.max_tab_label_bytes + 1);
+    const long = try table.insert(gpa, long_path, null);
+    const derived = table.workspaceName(long.workspace).?;
+    try std.testing.expectEqual(@as(usize, core.max_tab_label_bytes + 1), derived.len);
+    try std.testing.expect(std.mem.allEqual(u8, derived, 'p'));
+}
+
 test "anchored tab moves preserve the order and identity of every intervening tab" {
     const gpa = std.testing.allocator;
     const cases = .{

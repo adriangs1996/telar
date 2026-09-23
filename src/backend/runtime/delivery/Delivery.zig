@@ -18,6 +18,7 @@ const PreparedType = @import("../attachment/Prepared.zig");
 const ForegroundProjection = @import("ForegroundProjection.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const PaneKey = @import("../../pane/PaneKey.zig");
 const Delivery = @This();
 
 send_buffer: []u8,
@@ -34,7 +35,7 @@ proxy_status_sent: bool = false,
 agent_revision_sent: u64 = 0,
 agent_snapshot_requested: bool = false,
 agent_threads_sent: [PaneStore.capacity]?@import("AgentThreadProjection.zig") = @splat(null),
-requested_agent_thread: ?@import("../../pane/PaneKey.zig") = null,
+requested_agent_thread: ?PaneKey = null,
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
 foregrounds_sent: [PaneStore.capacity]?ForegroundProjection = @splat(null),
@@ -66,6 +67,15 @@ pub fn requestWorkspaceResync(delivery: *Delivery, workspace: core.WorkspaceLoca
     delivery.responses.resync_previous_workspace = previous_workspace;
 }
 
+/// Forces a current thread snapshot after a generation-checked query.
+///
+/// ```zig
+/// delivery.requestAgentThread(pane.key());
+/// ```
+pub fn requestAgentThread(delivery: *Delivery, key: PaneKey) void {
+    delivery.requested_agent_thread = key;
+}
+
 /// Schedules one agent snapshot for a client that holds no runtime-state
 /// subscription. The snapshot is the same enriched projection UI clients
 /// receive; the next delivery sends it regardless of revision baselines.
@@ -73,12 +83,6 @@ pub fn requestWorkspaceResync(delivery: *Delivery, workspace: core.WorkspaceLoca
 /// ```zig
 /// delivery.requestAgentSnapshot();
 /// ```
-/// Forces a current snapshot after a generation-checked query.
-/// Example: `delivery.requestAgentThread(pane.key());`.
-pub fn requestAgentThread(delivery: *Delivery, key: @import("../../pane/PaneKey.zig")) void {
-    delivery.requested_agent_thread = key;
-}
-
 pub fn requestAgentSnapshot(delivery: *Delivery) void {
     delivery.agent_snapshot_requested = true;
 }
