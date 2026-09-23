@@ -266,7 +266,7 @@ pub fn markAttached(model: *Model, pane_id: core.PaneId, generation: u64) !void 
 }
 
 pub fn removePane(self: *Model, pane_id: core.PaneId) bool {
-    if (pane_id == .invalid or core.raw(pane_id) == multiplexer.PaneIndex.tombstone_key) {
+    if (pane_id == .invalid) {
         return false;
     }
 
@@ -521,7 +521,7 @@ fn exerciseInsertion(gpa: std.mem.Allocator) !void {
     try std.testing.expect(self.removePane(second));
     try std.testing.expect(!self.removePane(second));
     try std.testing.expect(!self.removePane(.invalid));
-    try std.testing.expect(!self.removePane(@enumFromInt(multiplexer.PaneIndex.tombstone_key)));
+    try std.testing.expect(!self.removePane(@enumFromInt(std.math.maxInt(u64))));
     try std.testing.expectEqualStrings("keep draft", original.composerSlice());
 }
 
