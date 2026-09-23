@@ -28,7 +28,9 @@ upstream layout. Names follow [naming](naming.md).
 
 ## Enforcement
 
-`zig build codestyle` checks these rules with `std.zig.Ast` and fixes what it
+`zig build codestyle` checks these rules with `std.zig.Ast`, together with
+receiver names (a method's receiver is `self`, a `ClientModel` or
+`RuntimeModel` parameter is `model`) and inline imports, and fixes what it
 can with `-- --fix`; `zig build test` and `zig build check` run it without
 fixing. A file's category comes from its declarations, not from comments or
 strings. `zig build check-client-boundaries` and
