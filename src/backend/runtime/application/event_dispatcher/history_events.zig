@@ -9,15 +9,15 @@ const PrunedType = @import("../../../history/Pruned.zig");
 const ResponseQueueType = @import("../../delivery/ResponseQueue.zig");
 const PendingFailureType = @import("../../delivery/PendingFailure.zig");
 
-const Application = @import("../Application.zig");
+const RuntimeModel = @import("../../RuntimeModel.zig");
 
 /// Rearms the history response source, resolves its client and transfers
 /// the result into that client's bounded delivery queue.
 ///
 /// ```zig
-/// try HistoryEvents.handle(&application, result);
+/// try HistoryEvents.handle(&model, result);
 /// ```
-pub fn handle(application: *Application, response_result: anyerror!model_module.Response) !void {
+pub fn handle(model: *RuntimeModel, response_result: anyerror!model_module.Response) !void {
     const response = response_result catch return;
     var owned_query: ?*QueryResultType = switch (response) {
         .query_result => |result| result,
@@ -41,14 +41,14 @@ pub fn handle(application: *Application, response_result: anyerror!model_module.
         result.deinit();
     };
 
-    try rearmHistoryResponse(application);
+    try rearmHistoryResponse(model);
 
     switch (response) {
         .query_result => |result| {
-            const session = (application.clients.resolve(result.origin.client)) orelse return;
+            const session = (model.clients.resolve(result.origin.client)) orelse return;
             session.delivery.setCloseAfterReply(result.origin.close_after_reply);
 
-            if (enqueueHistoryQueryResult(application, session, result)) {
+            if (enqueueHistoryQueryResult(model, session, result)) {
                 owned_query = null;
             } else {
                 result.deinit();
@@ -56,43 +56,43 @@ pub fn handle(application: *Application, response_result: anyerror!model_module.
             }
         },
         .failed => |failure| {
-            const session = (application.clients.resolve(failure.origin.client)) orelse return;
+            const session = (model.clients.resolve(failure.origin.client)) orelse return;
             session.delivery.setCloseAfterReply(failure.origin.close_after_reply);
-            _ = enqueueHistoryFailure(application, session, failure);
+            _ = enqueueHistoryFailure(model, session, failure);
         },
         .pruned => |pruned| {
-            const session = (application.clients.resolve(pruned.origin.client)) orelse return;
+            const session = (model.clients.resolve(pruned.origin.client)) orelse return;
             session.delivery.setCloseAfterReply(pruned.origin.close_after_reply);
-            _ = enqueueHistoryPruned(application, session, pruned);
+            _ = enqueueHistoryPruned(model, session, pruned);
         },
         .output_result => |result| {
-            const session = (application.clients.resolve(result.origin.client)) orelse return;
+            const session = (model.clients.resolve(result.origin.client)) orelse return;
             session.delivery.setCloseAfterReply(result.origin.close_after_reply);
-            if (enqueueHistoryOutputResult(application, session, result)) {
+            if (enqueueHistoryOutputResult(model, session, result)) {
                 owned_output = null;
             }
         },
         .stats_result => |result| {
-            const session = (application.clients.resolve(result.origin.client)) orelse return;
+            const session = (model.clients.resolve(result.origin.client)) orelse return;
             session.delivery.setCloseAfterReply(result.origin.close_after_reply);
-            if (enqueueHistoryStatsResult(application, session, result)) {
+            if (enqueueHistoryStatsResult(model, session, result)) {
                 owned_stats = null;
             }
         },
     }
 }
 
-fn rearmHistoryResponse(application: *Application) !void {
-    var sources = SourcesType.init(application.io, application.select);
-    try sources.receiveHistory(application.history_service);
+fn rearmHistoryResponse(model: *RuntimeModel) !void {
+    var sources = SourcesType.init(model.io, model.select);
+    try sources.receiveHistory(model.resources.history.service());
 }
 
-fn enqueueHistoryQueryResult(_: *Application, session: *Session, result: *QueryResultType) bool {
+fn enqueueHistoryQueryResult(_: *RuntimeModel, session: *Session, result: *QueryResultType) bool {
     session.delivery.responses.push(.{ .history_result = result }) catch return false;
     return true;
 }
 
-fn enqueueHistoryFailure(_: *Application, session: *Session, failure: FailureType) bool {
+fn enqueueHistoryFailure(_: *RuntimeModel, session: *Session, failure: FailureType) bool {
     queueFailure(&session.delivery.responses, .{
         .request_id = failure.request_id,
         .code = .internal,
@@ -101,17 +101,17 @@ fn enqueueHistoryFailure(_: *Application, session: *Session, failure: FailureTyp
     return true;
 }
 
-fn enqueueHistoryStatsResult(_: *Application, session: *Session, result: *StatsResultType) bool {
+fn enqueueHistoryStatsResult(_: *RuntimeModel, session: *Session, result: *StatsResultType) bool {
     session.delivery.responses.push(.{ .history_stats = result }) catch return false;
     return true;
 }
 
-fn enqueueHistoryOutputResult(_: *Application, session: *Session, result: *OutputResultType) bool {
+fn enqueueHistoryOutputResult(_: *RuntimeModel, session: *Session, result: *OutputResultType) bool {
     session.delivery.responses.push(.{ .history_output = result }) catch return false;
     return true;
 }
 
-fn enqueueHistoryPruned(_: *Application, session: *Session, pruned: PrunedType) bool {
+fn enqueueHistoryPruned(_: *RuntimeModel, session: *Session, pruned: PrunedType) bool {
     session.delivery.responses.push(.{ .history_pruned = .{
         .request_id = pruned.request_id,
         .removed = pruned.removed,

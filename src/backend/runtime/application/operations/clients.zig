@@ -1,7 +1,7 @@
 //! Runtime clients operations, reached from requests.dispatch.
 
 const core = @import("telar-core");
-const Application = @import("../Application.zig");
+const RuntimeModel = @import("../../RuntimeModel.zig");
 const PaneKeyType = @import("../../../pane/PaneKey.zig");
 const Session = @import("../../client/Session.zig");
 const std = @import("std");
@@ -10,12 +10,12 @@ const RequestContext = @import("../RequestContext.zig");
 
 /// Example: `try clients.routeRequestPaneFocus(request, focus);`.
 pub fn routeRequestPaneFocus(request: *RequestContext, focus: core.RequestPaneFocus) !void {
-    try requestFocus(request.application, request.session, focus);
+    try requestFocus(request.model, request.session, focus);
 }
 
 /// Example: `try clients.routeCompletePaneFocus(request, completion);`.
 pub fn routeCompletePaneFocus(request: *RequestContext, completion: core.CompletePaneFocus) !void {
-    try completeFocus(request.application, request.session, completion);
+    try completeFocus(request.model, request.session, completion);
 }
 
 /// Example: `try clients.routeRequestRuntimeState(request, runtime_state);`.
@@ -30,15 +30,15 @@ pub fn routeUpdateClientLayout(request: *RequestContext, update: core.ClientLayo
         return error.ClientLayoutNotSubscribed;
     }
 
-    try request.application.model.client_layouts.replace(.{
+    try request.model.client_layouts.replace(.{
         .identity = identity,
         .layout = update,
         .sources = .{
-            .panes = &request.application.model.panes,
+            .panes = &request.model.panes,
             .workspaces = request.workspaces.reader(),
         },
     });
-    request.application.noteSessionChange();
+    request.model.noteSessionChange();
 }
 
 /// Example: `try clients.routeClientCommand(request, command);`.
@@ -75,7 +75,7 @@ pub fn routeQueryClients(request: *RequestContext, query: core.QueryClients) !vo
     try request.session.delivery.responses.push(.{ .client_list = result });
 }
 
-fn requestFocus(application: *Application, session: *Session, focus: core.RequestPaneFocus) !void {
+fn requestFocus(model: *RuntimeModel, session: *Session, focus: core.RequestPaneFocus) !void {
     if (session.role != .control) {
         return error.InvalidClientRole;
     }
@@ -84,7 +84,7 @@ fn requestFocus(application: *Application, session: *Session, focus: core.Reques
         .id = focus.pane_id,
         .generation = focus.pane_generation,
     };
-    const pane = application.model.panes.resolve(source_key) orelse {
+    const pane = model.panes.resolve(source_key) orelse {
         try session.delivery.responses.push(.{ .request_failed = .{
             .request_id = focus.request_id,
             .code = .pane_not_found,
@@ -112,7 +112,7 @@ fn requestFocus(application: *Application, session: *Session, focus: core.Reques
         return;
     }
 
-    const target = paneFocusOrigin(application, source_key) orelse {
+    const target = paneFocusOrigin(model, source_key) orelse {
         try session.delivery.responses.push(.{ .request_failed = .{
             .request_id = focus.request_id,
             .code = .invalid_request,
@@ -139,7 +139,7 @@ fn requestFocus(application: *Application, session: *Session, focus: core.Reques
     };
 }
 
-fn completeFocus(application: *Application, session: *Session, completion: core.CompletePaneFocus) !void {
+fn completeFocus(model: *RuntimeModel, session: *Session, completion: core.CompletePaneFocus) !void {
     if (session.role != .ui) {
         return error.InvalidClientRole;
     }
@@ -148,13 +148,13 @@ fn completeFocus(application: *Application, session: *Session, completion: core.
         .id = completion.requester.id,
         .generation = completion.requester.generation,
     };
-    const requester = application.clients.resolve(requester_key) orelse return;
+    const requester = model.clients.resolve(requester_key) orelse return;
     if (requester.pending_pane_focus == null) {
         return;
     }
 
     if (requester.role != .control or !requester.acceptsFocusCompletion(session.key, completion)) {
-        application.metrics.stale_client_messages += 1;
+        model.metrics.stale_client_messages += 1;
         return;
     }
 
@@ -167,10 +167,10 @@ fn completeFocus(application: *Application, session: *Session, completion: core.
     requester.delivery.close_after_reply = true;
 }
 
-fn paneFocusOrigin(application: *Application, pane_key: PaneKeyType) ?*Session {
+fn paneFocusOrigin(model: *RuntimeModel, pane_key: PaneKeyType) ?*Session {
     var found: ?*Session = null;
     var sequence: u64 = 0;
-    for (&application.clients.items) |*slot| {
+    for (&model.clients.items) |*slot| {
         const client = slot.* orelse continue;
         if (!client.active() or client.role != .ui or client.last_input_pane != pane_key.id or
             client.last_input_sequence <= sequence)
@@ -191,7 +191,7 @@ fn paneFocusOrigin(application: *Application, pane_key: PaneKeyType) ?*Session {
 
 fn queryClients(request: *RequestContext) core.ClientList {
     var result: core.ClientList = .{ .request_id = .none };
-    for (request.application.clients.items) |slot| {
+    for (request.model.clients.items) |slot| {
         const client = slot orelse continue;
         if (client.closing or client.role != .ui or client.delivery.client_identity == .invalid) {
             continue;
@@ -212,12 +212,12 @@ fn queryClients(request: *RequestContext) core.ClientList {
 }
 
 fn detachClient(request: *RequestContext, target: ClientKeyType) !void {
-    const client = request.application.clients.resolve(target) orelse return error.ClientNotFound;
+    const client = request.model.clients.resolve(target) orelse return error.ClientNotFound;
     if (client.closing or client.role != .ui or client.delivery.client_identity == .invalid) {
         return error.ClientNotFound;
     }
 
-    request.application.dropClient(target);
+    request.model.dropClient(target);
 }
 
 fn rejectDetachClient(request: *RequestContext, request_id: core.RequestId) !void {
@@ -229,7 +229,7 @@ fn requestClientCommand(request: *RequestContext, session: *Session, command: co
         return error.InvalidClientCommand;
     }
 
-    const target = request.application.clients.resolve(.{ .id = command.route.id, .generation = command.route.generation }) orelse return error.ClientNotFound;
+    const target = request.model.clients.resolve(.{ .id = command.route.id, .generation = command.route.generation }) orelse return error.ClientNotFound;
     if (target.closing or target.role != .ui or target.delivery.client_identity == .invalid) {
         return error.ClientNotFound;
     }
@@ -246,7 +246,7 @@ fn finishClientCommand(request: *RequestContext, session: *Session, completion: 
         return error.InvalidClientRole;
     }
 
-    const requester = request.application.clients.resolve(.{ .id = completion.route.id, .generation = completion.route.generation }) orelse return;
+    const requester = request.model.clients.resolve(.{ .id = completion.route.id, .generation = completion.route.generation }) orelse return;
     const pending = requester.pending_client_command orelse return;
     if (requester.closing or requester.role != .control or !pending.accepts(session.key, completion)) {
         return;

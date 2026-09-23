@@ -6,17 +6,17 @@ const PaneType = @import("../../../../pane/Pane.zig");
 const InputWrite = @import("../../../entrypoints/events/pane/InputWrite.zig");
 const ResponseWrite = @import("../../../entrypoints/events/pane/ResponseWrite.zig");
 
-const Application = @import("../../Application.zig");
+const RuntimeModel = @import("../../../RuntimeModel.zig");
 
 /// Releases one completed user-input write and starts the next queued
 /// write for that pane when one exists.
 ///
 /// ```zig
-/// try PaneIoEvents.handleInputWritten(&application, event);
+/// try PaneIoEvents.handleInputWritten(&model, event);
 /// ```
-pub fn handleInputWritten(application: *Application, completion: InputCompletion) !void {
-    const pane = application.model.panes.resolve(completion.pane) orelse {
-        application.metrics.stale_pane_events += 1;
+pub fn handleInputWritten(model: *RuntimeModel, completion: InputCompletion) !void {
+    const pane = model.panes.resolve(completion.pane) orelse {
+        model.metrics.stale_pane_events += 1;
         return;
     };
 
@@ -25,13 +25,13 @@ pub fn handleInputWritten(application: *Application, completion: InputCompletion
     pane.completePtyInputWrite(result);
 
     if (comptime core.enabled) {
-        application.metrics.input_write.observe(
-            core.elapsed(completion.started_ns, core.now(application.io)),
+        model.metrics.input_write.observe(
+            core.elapsed(completion.started_ns, core.now(model.io)),
         );
     }
 
     if (result == .succeeded) {
-        try scheduleInput(application, pane);
+        try scheduleInput(model, pane);
     }
 }
 
@@ -39,11 +39,11 @@ pub fn handleInputWritten(application: *Application, completion: InputCompletion
 /// queued response for that pane when one exists.
 ///
 /// ```zig
-/// try PaneIoEvents.handleResponseWritten(&application, event);
+/// try PaneIoEvents.handleResponseWritten(&model, event);
 /// ```
-pub fn handleResponseWritten(application: *Application, completion: ResponseCompletion) !void {
-    const pane = application.model.panes.resolve(completion.pane) orelse {
-        application.metrics.stale_pane_events += 1;
+pub fn handleResponseWritten(model: *RuntimeModel, completion: ResponseCompletion) !void {
+    const pane = model.panes.resolve(completion.pane) orelse {
+        model.metrics.stale_pane_events += 1;
         return;
     };
 
@@ -52,7 +52,7 @@ pub fn handleResponseWritten(application: *Application, completion: ResponseComp
     pane.completePtyResponseWrite(result);
 
     if (result == .succeeded) {
-        try scheduleResponse(application, pane);
+        try scheduleResponse(model, pane);
     }
 }
 
@@ -60,18 +60,18 @@ pub fn handleResponseWritten(application: *Application, completion: ResponseComp
 /// already in flight.
 ///
 /// ```zig
-/// try PaneIoEvents.scheduleInput(&application, pane);
+/// try PaneIoEvents.scheduleInput(&model, pane);
 /// ```
-pub fn scheduleInput(application: *Application, pane: *PaneType) !void {
+pub fn scheduleInput(model: *RuntimeModel, pane: *PaneType) !void {
     const bytes = pane.beginPtyInputWrite() orelse return;
     const write: InputWrite = .{
-        .io = application.io,
+        .io = model.io,
         .pane = pane,
         .bytes = bytes,
-        .started_ns = if (comptime core.enabled) core.now(application.io) else 0,
+        .started_ns = if (comptime core.enabled) core.now(model.io) else 0,
     };
 
-    startPaneInputWrite(application, write) catch |err| {
+    startPaneInputWrite(model, write) catch |err| {
         pane.cancelPtyInputWrite();
         return err;
     };
@@ -81,25 +81,25 @@ pub fn scheduleInput(application: *Application, pane: *PaneType) !void {
 /// write is already in flight.
 ///
 /// ```zig
-/// try PaneIoEvents.scheduleResponse(&application, pane);
+/// try PaneIoEvents.scheduleResponse(&model, pane);
 /// ```
-pub fn scheduleResponse(application: *Application, pane: *PaneType) !void {
+pub fn scheduleResponse(model: *RuntimeModel, pane: *PaneType) !void {
     const bytes = pane.beginPtyResponseWrite() orelse return;
     const write: ResponseWrite = .{
-        .io = application.io,
+        .io = model.io,
         .pane = pane,
         .bytes = bytes,
     };
 
-    startPaneResponseWrite(application, write) catch |err| {
+    startPaneResponseWrite(model, write) catch |err| {
         pane.cancelPtyResponseWrite();
         return err;
     };
 }
 
-fn startPaneInputWrite(application: *Application, write: InputWrite) !void {
-    core.mark(application.io, .pty_write_queued);
-    try application.select.concurrent(.pane_input_written, writePaneInput, .{write});
+fn startPaneInputWrite(model: *RuntimeModel, write: InputWrite) !void {
+    core.mark(model.io, .pty_write_queued);
+    try model.select.concurrent(.pane_input_written, writePaneInput, .{write});
 }
 
 fn writePaneInput(write: InputWrite) InputCompletion {
@@ -118,8 +118,8 @@ fn writePaneInput(write: InputWrite) InputCompletion {
     };
 }
 
-fn startPaneResponseWrite(application: *Application, write: ResponseWrite) !void {
-    try application.select.concurrent(.pane_response_written, writePaneResponse, .{write});
+fn startPaneResponseWrite(model: *RuntimeModel, write: ResponseWrite) !void {
+    try model.select.concurrent(.pane_response_written, writePaneResponse, .{write});
 }
 
 fn writePaneResponse(write: ResponseWrite) ResponseCompletion {

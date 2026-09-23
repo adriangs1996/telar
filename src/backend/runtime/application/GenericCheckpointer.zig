@@ -17,81 +17,81 @@ const SessionReference = @import("../../agent/SessionReference.zig");
 const LayoutRecordType = @import("../../persistence/LayoutRecord.zig");
 const PersistenceEncoder = @import("../../persistence/Encoder.zig");
 
-/// Binds checkpointing to one application type. `Application` provides
+/// Binds checkpointing to one model type. `RuntimeModel` provides
 /// `io`, `gpa`, `session`, `model`, `select`, `workspaceRepository()`,
 /// `launchPane()`, `queueRestoredInput()` and `restoreAgentTitle()`.
 ///
 /// ```zig
-/// const SessionCheckpoint = Checkpointer(Application);
+/// const SessionCheckpoint = Checkpointer(RuntimeModel);
 /// ```
-pub fn Type(comptime Application: type) type {
+pub fn Type(comptime RuntimeModel: type) type {
     return struct {
         /// Marks the session changed at the current monotonic time.
         ///
         /// ```zig
-        /// SessionCheckpoint.noteChange(&application);
+        /// SessionCheckpoint.noteChange(&model);
         /// ```
-        pub fn noteChange(application: *Application) void {
-            application.session.noteChange(nowNs(application));
+        pub fn noteChange(model: *RuntimeModel) void {
+            model.session.noteChange(nowNs(model));
         }
 
         /// Starts one write when the checkpoint is due. Called from the
         /// maintenance tick.
         ///
         /// ```zig
-        /// try SessionCheckpoint.flushIfDue(&application);
+        /// try SessionCheckpoint.flushIfDue(&model);
         /// ```
-        pub fn flushIfDue(application: *Application) !void {
-            if (!application.session.due(nowNs(application))) {
+        pub fn flushIfDue(model: *RuntimeModel) !void {
+            if (!model.session.due(nowNs(model))) {
                 return;
             }
-            const path = application.session.path.?;
+            const path = model.session.path.?;
 
             const job: WriteJob = prepared: {
-                const buffer = try application.gpa.alloc(u8, session_checkpoint.snapshot_bytes);
-                errdefer application.gpa.free(buffer);
-                const len = encode(application, buffer) catch |err| switch (err) {
+                const buffer = try model.gpa.alloc(u8, session_checkpoint.snapshot_bytes);
+                errdefer model.gpa.free(buffer);
+                const len = encode(model, buffer) catch |err| switch (err) {
                     error.AgentBusy => {
-                        application.gpa.free(buffer);
+                        model.gpa.free(buffer);
                         return;
                     },
                     else => return err,
                 };
 
-                break :prepared .{ .io = application.io, .path = path, .buffer = buffer, .len = len };
+                break :prepared .{ .io = model.io, .path = path, .buffer = buffer, .len = len };
             };
-            try application.session.startWrite(.{ .allocator = application.gpa, .job = job }, application.select);
+            try model.session.startWrite(.{ .allocator = model.gpa, .job = job }, model.select);
         }
 
         /// Completes the in-flight write and releases its buffer.
         ///
         /// ```zig
-        /// SessionCheckpoint.handleWritten(&application, result);
+        /// SessionCheckpoint.handleWritten(&model, result);
         /// ```
-        pub fn handleWritten(application: *Application, result: anyerror!void) void {
-            application.session.completeWrite(result);
+        pub fn handleWritten(model: *RuntimeModel, result: anyerror!void) void {
+            model.session.completeWrite(result);
         }
 
         /// Writes the current shape synchronously. Used at shutdown after
         /// actors are joined and before the canonical model is destroyed.
         ///
         /// ```zig
-        /// SessionCheckpoint.writeNow(&application);
+        /// SessionCheckpoint.writeNow(&model);
         /// ```
-        pub fn writeNow(application: *Application) void {
-            const path = application.session.path orelse return;
-            if (application.session.pending != null) {
+        pub fn writeNow(model: *RuntimeModel) void {
+            const path = model.session.path orelse return;
+            if (model.session.pending != null) {
                 return;
             }
-            const buffer = application.gpa.alloc(u8, session_checkpoint.snapshot_bytes) catch return;
-            defer application.gpa.free(buffer);
-            const len = encode(application, buffer) catch return;
-            session_checkpoint.writeFile(.{ .io = application.io, .path = path, .buffer = buffer, .len = len }) catch {
-                application.session.failures += 1;
+            const buffer = model.gpa.alloc(u8, session_checkpoint.snapshot_bytes) catch return;
+            defer model.gpa.free(buffer);
+            const len = encode(model, buffer) catch return;
+            session_checkpoint.writeFile(.{ .io = model.io, .path = path, .buffer = buffer, .len = len }) catch {
+                model.session.failures += 1;
                 return;
             };
-            application.session.dirty = false;
-            application.session.writes += 1;
+            model.session.dirty = false;
+            model.session.writes += 1;
         }
 
         /// Rebuilds workspaces, tabs, panes and client layouts from the
@@ -99,27 +99,27 @@ pub fn Type(comptime Application: type) type {
         /// moved aside as `<path>.corrupt` and ignored.
         ///
         /// ```zig
-        /// SessionCheckpoint.restore(&application);
+        /// SessionCheckpoint.restore(&model);
         /// ```
-        pub fn restore(application: *Application) void {
-            const path = application.session.path orelse return;
-            const io = application.io;
-            const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, application.gpa, .limited(checkpoint.max_file_bytes)) catch |err| switch (err) {
+        pub fn restore(model: *RuntimeModel) void {
+            const path = model.session.path orelse return;
+            const io = model.io;
+            const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, model.gpa, .limited(checkpoint.max_file_bytes)) catch |err| switch (err) {
                 error.FileNotFound => return,
                 else => {
-                    application.session.restore_failed = true;
+                    model.session.restore_failed = true;
                     return;
                 },
             };
-            defer application.gpa.free(bytes);
+            defer model.gpa.free(bytes);
 
             validate(bytes) catch {
-                application.session.restore_failed = true;
+                model.session.restore_failed = true;
                 quarantine(io, path);
                 return;
             };
-            apply(application, bytes) catch {
-                application.session.restore_failed = true;
+            apply(model, bytes) catch {
+                model.session.restore_failed = true;
             };
         }
 
@@ -136,10 +136,10 @@ pub fn Type(comptime Application: type) type {
             }
         }
 
-        fn apply(application: *Application, bytes: []const u8) !void {
+        fn apply(model: *RuntimeModel, bytes: []const u8) !void {
             var reader = try ReaderType.init(bytes);
-            var repository = application.workspaceRepository();
-            const panes = &application.model.panes;
+            var repository = model.workspaceRepository();
+            const panes = &model.panes;
             var pane_records: [core.max_panes_per_tab]PaneRecordType = undefined;
             var pane_count: usize = 0;
 
@@ -152,7 +152,7 @@ pub fn Type(comptime Application: type) type {
                         .first_tab_id = try core.tab(workspace.first_tab_id),
                         .first_tab_label = workspace.first_tab_label,
                     }) catch continue;
-                    application.session.restored_workspaces +|= 1;
+                    model.session.restored_workspaces +|= 1;
                 },
                 .tab => |tab| {
                     const workspace_id = try core.workspace(tab.workspace_id);
@@ -172,18 +172,18 @@ pub fn Type(comptime Application: type) type {
             // Restored key reservation must still advance monotonically.
             std.mem.sort(PaneRecordType, pane_records[0..pane_count], {}, paneIdLessThan);
             for (pane_records[0..pane_count]) |pane| {
-                restorePane(application, reader.counters, pane) catch continue;
+                restorePane(model, reader.counters, pane) catch continue;
             }
 
             panes.advanceCounters(reader.counters.next_pane_id, reader.counters.next_pane_generation);
-            application.model.workspaces.next_workspace_id = @max(application.model.workspaces.next_workspace_id, reader.counters.next_workspace_id);
-            application.model.workspaces.next_tab_id = @max(application.model.workspaces.next_tab_id, reader.counters.next_tab_id);
-            dropEmptyTabs(application);
+            model.workspaces.next_workspace_id = @max(model.workspaces.next_workspace_id, reader.counters.next_workspace_id);
+            model.workspaces.next_tab_id = @max(model.workspaces.next_tab_id, reader.counters.next_tab_id);
+            dropEmptyTabs(model);
 
             reader = try ReaderType.init(bytes);
             while (try reader.next()) |record| {
                 if (record == .layout) {
-                    restoreLayout(application, record.layout) catch continue;
+                    restoreLayout(model, record.layout) catch continue;
                 }
             }
         }
@@ -199,12 +199,12 @@ pub fn Type(comptime Application: type) type {
         /// for an empty one, and a client that selects it treats that reply
         /// as fatal. Tabs stay empty when a pane record fails to relaunch,
         /// for example because its working directory is gone.
-        fn dropEmptyTabs(application: *Application) void {
-            var repository = application.workspaceRepository();
-            while (findEmptyTab(repository.reader(), &application.model.panes)) |location| {
+        fn dropEmptyTabs(model: *RuntimeModel) void {
+            var repository = model.workspaceRepository();
+            while (findEmptyTab(repository.reader(), &model.panes)) |location| {
                 _ = commands.removeTab(&repository, location) orelse break;
-                application.session.dropped_tabs +|= 1;
-                application.noteSessionChange();
+                model.session.dropped_tabs +|= 1;
+                model.noteSessionChange();
             }
         }
 
@@ -225,25 +225,25 @@ pub fn Type(comptime Application: type) type {
             return null;
         }
 
-        fn restorePane(application: *Application, counters: CountersType, record: PaneRecordType) !void {
+        fn restorePane(model: *RuntimeModel, counters: CountersType, record: PaneRecordType) !void {
             const workspace_id = try core.workspace(record.workspace_id);
             const location: core.TabLocation = .{
                 .workspace = .{ .workspace = workspace_id },
                 .tab_id = try core.tab(record.tab_id),
             };
-            const reader = application.workspaceReader();
+            const reader = model.workspaceReader();
             if (!reader.contains(location)) {
                 return error.TabNotFound;
             }
             const workspace_path = reader.workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
 
             if (record.kind == .agent) {
-                return restoreAgentPane(application, counters, record);
+                return restoreAgentPane(model, counters, record);
             }
 
             var argument_buffer: [checkpoint.max_launch_bytes + 2 * checkpoint.max_launch_arguments]u8 = undefined;
             var encoder = core.Encoder.init(&argument_buffer);
-            const resumable = resumeForPane(application, record);
+            const resumable = resumeForPane(model, record);
             var arguments = ArgumentIteratorType.init(record.arguments);
             const executable = arguments.next() orelse return error.InvalidLaunch;
             try encoder.writeSized16(executable);
@@ -270,8 +270,8 @@ pub fn Type(comptime Application: type) type {
                 .rows = if (record.rows == 0) 24 else record.rows,
             };
 
-            try application.model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
-            const pane = try application.launchPane(.{
+            try model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
+            const pane = try model.launchPane(.{
                 .location = location,
                 .size = size,
                 .launch = .{
@@ -286,39 +286,39 @@ pub fn Type(comptime Application: type) type {
                 .workspace_path = workspace_path,
             });
             pane.launch_record.capture(original_launch);
-            application.session.restored_panes +|= 1;
+            model.session.restored_panes +|= 1;
 
             if (resumable) |session| {
                 if (direct_count == null) {
                     var command_buffer: [session_checkpoint.max_resume_command_bytes]u8 = undefined;
                     const command = session_checkpoint.resumeCommand(&command_buffer, session.provider, session.reference.slice()).?;
-                    try application.queueRestoredInput(pane, command);
+                    try model.queueRestoredInput(pane, command);
                 }
 
-                if (!application.model.agents.restoreSession(pane.key(), session)) {
+                if (!model.agents.restoreSession(pane.key(), session)) {
                     return error.AgentCapacityExceeded;
                 }
 
-                application.session.resumed_agents +|= 1;
+                model.session.resumed_agents +|= 1;
                 if (restoredTitle(record)) |title| {
-                    application.restoreAgentTitle(pane, title);
+                    model.restoreAgentTitle(pane, title);
                 }
             }
         }
 
-        fn restoreAgentPane(application: *Application, counters: CountersType, record: PaneRecordType) !void {
-            const conversation = if (application.session.resume_agents and record.agent_session.len != 0)
+        fn restoreAgentPane(model: *RuntimeModel, counters: CountersType, record: PaneRecordType) !void {
+            const conversation = if (model.session.resume_agents and record.agent_session.len != 0)
                 try core.RecentConversation.init(record.agent_session, record.agent_title)
             else
                 null;
             if (conversation) |value| {
-                if (managedConversationClaimed(application, value.idSlice())) {
+                if (managedConversationClaimed(model, value.idSlice())) {
                     return error.ConversationAlreadyOpen;
                 }
 
                 const reference = try SessionReference.init(value.idSlice(), 0);
                 if (ResumeSession.init(.codex, reference)) |session| {
-                    if (application.model.agents.hasRestoredSession(session)) {
+                    if (model.agents.hasRestoredSession(session)) {
                         return error.ConversationAlreadyOpen;
                     }
                 } else |_| {}
@@ -328,9 +328,9 @@ pub fn Type(comptime Application: type) type {
                 .workspace = .{ .workspace = try core.workspace(record.workspace_id) },
                 .tab_id = try core.tab(record.tab_id),
             };
-            const workspace_path = application.workspaceReader().workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
-            try application.model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
-            const pane = try application.launchPane(.{
+            const workspace_path = model.workspaceReader().workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
+            try model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
+            const pane = try model.launchPane(.{
                 .location = location,
                 .kind = .agent,
                 .restore_conversation = conversation,
@@ -339,17 +339,17 @@ pub fn Type(comptime Application: type) type {
                 .launch_cwd = record.cwd,
                 .workspace_path = workspace_path,
             });
-            application.session.restored_panes +|= 1;
+            model.session.restored_panes +|= 1;
             if (conversation != null) {
-                application.session.resumed_agents +|= 1;
+                model.session.resumed_agents +|= 1;
                 if (restoredTitle(record)) |title| {
-                    application.restoreAgentTitle(pane, title);
+                    model.restoreAgentTitle(pane, title);
                 }
             }
         }
 
-        fn managedConversationClaimed(application: *Application, id: []const u8) bool {
-            for (application.model.panes.items) |slot| {
+        fn managedConversationClaimed(model: *RuntimeModel, id: []const u8) bool {
+            for (model.panes.items) |slot| {
                 const pane = slot orelse continue;
                 if (pane.agent_thread) |snapshot| {
                     if (std.mem.eql(u8, snapshot.threadId(), id)) {
@@ -361,14 +361,14 @@ pub fn Type(comptime Application: type) type {
             return false;
         }
 
-        fn resumeForPane(application: *Application, record: PaneRecordType) ?ResumeSession {
-            if (!application.session.resume_agents) {
+        fn resumeForPane(model: *RuntimeModel, record: PaneRecordType) ?ResumeSession {
+            if (!model.session.resume_agents) {
                 return null;
             }
 
             const reference = SessionReference.init(record.agent_session, 0) catch return null;
             const session = ResumeSession.init(@enumFromInt(record.agent_provider), reference) catch return null;
-            if (application.model.agents.hasRestoredSession(session) or (session.provider == .codex and managedConversationClaimed(application, record.agent_session))) {
+            if (model.agents.hasRestoredSession(session) or (session.provider == .codex and managedConversationClaimed(model, record.agent_session))) {
                 return null;
             }
 
@@ -386,18 +386,18 @@ pub fn Type(comptime Application: type) type {
             return SessionTitleType.init(record.agent_title, source) catch null;
         }
 
-        fn restoreLayout(application: *Application, record: LayoutRecordType) !void {
+        fn restoreLayout(model: *RuntimeModel, record: LayoutRecordType) !void {
             const message = try core.decodeClient(record.payload);
             const update = switch (message) {
                 .update_client_layout => |view| view,
                 else => return error.InvalidCheckpoint,
             };
-            try application.model.client_layouts.replace(.{
+            try model.client_layouts.replace(.{
                 .identity = @enumFromInt(record.identity),
                 .layout = update,
                 .sources = .{
-                    .panes = &application.model.panes,
-                    .workspaces = application.workspaceReader(),
+                    .panes = &model.panes,
+                    .workspaces = model.workspaceReader(),
                 },
             });
         }
@@ -411,14 +411,14 @@ pub fn Type(comptime Application: type) type {
         /// Encodes the restorable model shape into `buffer`.
         ///
         /// ```zig
-        /// const len = try encode(&application, buffer);
+        /// const len = try encode(&model, buffer);
         /// ```
-        pub fn encode(application: *Application, buffer: []u8) !usize {
-            const reader = application.workspaceReader();
-            const panes = &application.model.panes;
+        pub fn encode(model: *RuntimeModel, buffer: []u8) !usize {
+            const reader = model.workspaceReader();
+            const panes = &model.panes;
             var encoder = try PersistenceEncoder.init(buffer, .{
-                .next_workspace_id = application.model.workspaces.next_workspace_id,
-                .next_tab_id = application.model.workspaces.next_tab_id,
+                .next_workspace_id = model.workspaces.next_workspace_id,
+                .next_tab_id = model.workspaces.next_tab_id,
                 .next_pane_id = panes.next_id,
                 .next_pane_generation = panes.next_generation,
             });
@@ -456,17 +456,17 @@ pub fn Type(comptime Application: type) type {
                     continue;
                 }
 
-                const conversation = if (pane.kind == .agent) try pane.session.agent.session.checkpoint(application.io) else null;
-                const resumable = if (pane.kind == .terminal) application.model.agents.resumeSession(pane.key()) else null;
+                const conversation = if (pane.kind == .agent) try pane.session.agent.session.checkpoint(model.io) else null;
+                const resumable = if (pane.kind == .terminal) model.agents.resumeSession(pane.key()) else null;
                 const title = if (conversation) |*value| title: {
                     if (std.mem.eql(u8, pane.agent_thread.?.threadId(), value.idSlice())) {
-                        if (application.model.agents.checkpointTitle(pane.key())) |saved| {
+                        if (model.agents.checkpointTitle(pane.key())) |saved| {
                             break :title saved;
                         }
                     }
 
                     break :title if (value.title_len != 0) SessionTitleType.init(value.titleSlice(), .agent) catch null else null;
-                } else if (resumable != null) application.model.agents.checkpointTitle(pane.key()) else null;
+                } else if (resumable != null) model.agents.checkpointTitle(pane.key()) else null;
                 try encoder.pane(.{
                     .kind = pane.kind,
                     .pane_id = core.raw(pane.id),
@@ -485,7 +485,7 @@ pub fn Type(comptime Application: type) type {
             }
 
             var layout_buffer: [core.max_client_layout_wire_bytes]u8 = undefined;
-            const store = &application.model.client_layouts;
+            const store = &model.client_layouts;
             var index: usize = 0;
             while (index < store.capacity()) : (index += 1) {
                 const exported = try store.exportRecord(index, &layout_buffer) orelse continue;
@@ -499,13 +499,13 @@ pub fn Type(comptime Application: type) type {
             return (try encoder.finish()).len;
         }
 
-        fn nowNs(application: *Application) u64 {
-            return @intCast(std.Io.Timestamp.now(application.io, .awake).toNanoseconds());
+        fn nowNs(model: *RuntimeModel) u64 {
+            return @intCast(std.Io.Timestamp.now(model.io, .awake).toNanoseconds());
         }
     };
 }
 
-test "checkpoint pane records fit the bounded restore storage before application" {
+test "checkpoint pane records fit the bounded restore storage before model" {
     const Checkpointer = Type(void);
     var buffer: [16384]u8 = undefined;
     for ([_]usize{ core.max_panes_per_tab, core.max_panes_per_tab + 1 }) |count| {

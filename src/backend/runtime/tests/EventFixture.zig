@@ -1,7 +1,7 @@
 const std = @import("std");
 const core = @import("telar-core");
 const RequestFixture = @import("RequestFixture.zig");
-const Application = @import("../application/Application.zig");
+const RuntimeModel = @import("../RuntimeModel.zig");
 const Pane = @import("../../pane/Pane.zig");
 const Tracker = @import("../../agent/Tracker.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
@@ -12,7 +12,7 @@ const ObservationCompletion = @import("../entrypoints/events/pane/ObservationCom
 const EventFixture = @This();
 
 request: RequestFixture,
-application: *Application,
+model: *RuntimeModel,
 pane: *Pane,
 agents: *Tracker,
 metrics: *RuntimeMetrics,
@@ -25,17 +25,17 @@ unavailable_storage: [1]event.Event,
 pub fn init(self: *EventFixture) !void {
     try self.request.init();
     errdefer self.request.deinit();
-    self.application = &self.request.runtime.application;
-    self.agents = &self.application.model.agents;
-    self.metrics = &self.application.metrics;
+    self.model = &self.request.runtime.model;
+    self.agents = &self.model.agents;
+    self.metrics = &self.model.metrics;
     self.unavailable = .init(std.Io.failing, &self.unavailable_storage);
     const arguments = [_][*:0]const u8{ "/bin/sleep", "600" };
     const command = try Command.fromArgv(&arguments);
     self.pane = try Pane.create(.{
         .io = std.testing.io,
         .gpa = std.testing.allocator,
-        .history_service = self.application.history_service,
-        .graphics_budget = &self.application.model.panes.graphics_budget,
+        .history_service = self.model.resources.history.service(),
+        .graphics_budget = &self.model.panes.graphics_budget,
     }, .{
         .identity = .{ .id = @enumFromInt(7), .generation = 11 },
         .location = .{ .workspace = .{ .workspace = @enumFromInt(2) }, .tab_id = @enumFromInt(5) },
@@ -46,7 +46,7 @@ pub fn init(self: *EventFixture) !void {
         .graphics_limits = .{},
     });
     self.pane.commitLaunch("/bin/sleep");
-    self.application.model.panes.insert(self.pane) catch |err| {
+    self.model.panes.insert(self.pane) catch |err| {
         self.pane.session.shutdown();
         self.pane.destroy();
         return err;
@@ -55,14 +55,14 @@ pub fn init(self: *EventFixture) !void {
 }
 
 pub fn deinit(self: *EventFixture) void {
-    self.application.select = self.request.runtime.loop.selector();
+    self.model.select = self.request.runtime.loop.selector();
     self.request.deinit();
 }
 
 /// Rejects actor admission at std.Io, preserving production rollback policy.
 /// Example: `fixture.failScheduling();`.
 pub fn failScheduling(self: *EventFixture) void {
-    self.application.select = &self.unavailable;
+    self.model.select = &self.unavailable;
 }
 
 pub fn beginObservation(self: *EventFixture) !void {

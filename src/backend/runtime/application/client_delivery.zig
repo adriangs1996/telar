@@ -3,7 +3,7 @@
 
 const core = @import("telar-core");
 const std = @import("std");
-const Application = @import("Application.zig");
+const RuntimeModel = @import("../RuntimeModel.zig");
 const Session = @import("../client/Session.zig");
 const PaneType = @import("../../pane/Pane.zig");
 const change_review = @import("change_review.zig");
@@ -16,41 +16,41 @@ const store_support = @import("../client/store_support.zig");
 /// closing and closing sessions are never pumped, which bounds the repeats.
 ///
 /// ```zig
-/// try client_delivery.flush(application);
+/// try client_delivery.flush(model);
 /// ```
-pub fn flush(application: *Application) !void {
+pub fn flush(model: *RuntimeModel) !void {
     var passes: usize = 0;
     while (passes <= store_support.max_clients) : (passes += 1) {
-        application.collect();
-        change_review.discover(application);
+        model.collect();
+        change_review.discover(model);
 
-        if (!pumpClients(application)) {
+        if (!pumpClients(model)) {
             break;
         }
     }
 
-    scheduleCellPublication(application) catch {
+    scheduleCellPublication(model) catch {
         // The timer reset itself; the next flush retries it.
     };
 
-    for (application.model.panes.items) |slot| {
+    for (model.panes.items) |slot| {
         const pane = slot orelse continue;
-        try events.panes.Projection.scheduleMedia(application, pane);
-        settlePaneDamage(application, pane);
+        try events.panes.Projection.scheduleMedia(model, pane);
+        settlePaneDamage(model, pane);
     }
 }
 
 /// Reports whether every live client has consumed the shutdown delivery.
 ///
 /// ```zig
-/// if (client_delivery.shutdownDelivered(application)) return true;
+/// if (client_delivery.shutdownDelivered(model)) return true;
 /// ```
-pub fn shutdownDelivered(application: *const Application) bool {
-    if (!application.shutdown.isRequested()) {
+pub fn shutdownDelivered(model: *const RuntimeModel) bool {
+    if (!model.shutdown.isRequested()) {
         return false;
     }
 
-    for (&application.clients.items) |*slot| {
+    for (&model.clients.items) |*slot| {
         const session = slot.* orelse continue;
         if (!session.closing and (session.delivery.stopping() or session.send_pending)) {
             return false;
@@ -60,14 +60,14 @@ pub fn shutdownDelivered(application: *const Application) bool {
     return true;
 }
 
-fn pumpClients(application: *Application) bool {
+fn pumpClients(model: *RuntimeModel) bool {
     var dropped = false;
-    for (&application.clients.items) |*slot| {
+    for (&model.clients.items) |*slot| {
         const session = slot.* orelse continue;
         const key = session.key;
 
-        pump(application, session) catch {
-            application.dropClient(key);
+        pump(model, session) catch {
+            model.dropClient(key);
             dropped = true;
         };
     }
@@ -75,29 +75,29 @@ fn pumpClients(application: *Application) bool {
     return dropped;
 }
 
-fn pump(application: *Application, session: *Session) !void {
+fn pump(model: *RuntimeModel, session: *Session) !void {
     session.cell_deadline_ns = null;
     if (!session.active() or session.send_pending) {
         return;
     }
 
     const pending = try session.delivery.prepare(.{
-        .io = application.io,
+        .io = model.io,
         .attachments = &session.attachments,
         .sources = .{
-            .panes = &application.model.panes,
-            .workspaces = application.workspaceReader(),
-            .agents = &application.model.agents,
-            .manifests = application.agent_manifests,
-            .system_metrics = &application.system_metrics,
-            .proxy_active = application.proxy_runtime.active(),
-            .proxy_scope = application.proxy_runtime.interceptionScope(),
-            .proxy_system_trusted = application.proxy_runtime.systemTrusted(),
-            .home = application.home,
-            .client_layouts = &application.model.client_layouts,
-            .now_ms = std.Io.Timestamp.now(application.io, .real).toMilliseconds(),
+            .panes = &model.panes,
+            .workspaces = model.workspaceReader(),
+            .agents = &model.agents,
+            .manifests = &model.resources.agent_manifests,
+            .system_metrics = &model.system_metrics,
+            .proxy_active = model.resources.proxy.active(),
+            .proxy_scope = model.resources.proxy.interceptionScope(),
+            .proxy_system_trusted = model.resources.proxy.systemTrusted(),
+            .home = model.home,
+            .client_layouts = &model.client_layouts,
+            .now_ms = std.Io.Timestamp.now(model.io, .real).toMilliseconds(),
         },
-        .metrics = &application.metrics,
+        .metrics = &model.metrics,
     });
     const prepared = pending orelse {
         session.cell_deadline_ns = session.attachments.cellDeadline();
@@ -105,11 +105,11 @@ fn pump(application: *Application, session: *Session) !void {
     };
     errdefer session.delivery.abort(prepared);
 
-    try events.clients.startSend(application, session, prepared.payload);
+    try events.clients.startSend(model, session, prepared.payload);
     session.delivery.commit(.{
         .prepared = prepared,
         .attachments = &session.attachments,
-        .metrics = &application.metrics,
+        .metrics = &model.metrics,
     });
 }
 
@@ -118,9 +118,9 @@ fn pump(application: *Application, session: *Session) !void {
 // concurrent work; retaining armed deadlines avoids rebuilding transient waits.
 // There is no task per output update. Reusing the cancellable scheduler keeps
 // shutdown under the runtime's actor lifetime, before the model is released.
-fn scheduleCellPublication(application: *Application) !void {
+fn scheduleCellPublication(model: *RuntimeModel) !void {
     var earliest: ?u64 = null;
-    for (&application.clients.items) |*slot| {
+    for (&model.clients.items) |*slot| {
         const session = slot.* orelse continue;
         if (!session.active() or session.send_pending) {
             continue;
@@ -130,22 +130,22 @@ fn scheduleCellPublication(application: *Application) !void {
         earliest = @min(earliest orelse deadline, deadline);
     }
 
-    if (application.cell_timer.updateEarlier(application.io, earliest) != .schedule) {
+    if (model.cell_timer.updateEarlier(model.io, earliest) != .schedule) {
         return;
     }
 
-    application.select.concurrent(.cell_publication_due, core.deadline_timer.wait, .{ application.io, &application.cell_timer }) catch |err| {
-        application.cell_timer.schedulingFailed();
+    model.select.concurrent(.cell_publication_due, core.deadline_timer.wait, .{ model.io, &model.cell_timer }) catch |err| {
+        model.cell_timer.schedulingFailed();
         return err;
     };
 }
 
-fn settlePaneDamage(application: *Application, pane: *PaneType) void {
+fn settlePaneDamage(model: *RuntimeModel, pane: *PaneType) void {
     if (pane.render_pending) {
         return;
     }
 
-    for (&application.clients.items) |*slot| {
+    for (&model.clients.items) |*slot| {
         const session = slot.* orelse continue;
         const attachment = session.attachments.find(pane.id) orelse continue;
 

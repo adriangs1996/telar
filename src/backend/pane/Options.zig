@@ -4,7 +4,7 @@ const Options = @This();
 /// Cells to draw as selected, in coordinates relative to `area`.
 ///
 /// Passed in rather than read off the render state because the gesture
-/// belongs to the application: the emulator has a selection concept, but
+/// belongs to the model: the emulator has a selection concept, but
 /// which drag the user is making, and whether it is even aimed at this
 /// pane, is not something it can know.
 selection: ?core.Range = null,

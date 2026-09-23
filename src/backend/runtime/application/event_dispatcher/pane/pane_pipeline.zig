@@ -14,21 +14,21 @@ const PaneIngestStats = @import("../../../../pane/PaneIngestStats.zig");
 const ReadType = @import("../../../entrypoints/events/pane/Read.zig");
 const pane_launcher_mod = @import("../../pane_launcher.zig");
 
-const Application = @import("../../Application.zig");
+const RuntimeModel = @import("../../../RuntimeModel.zig");
 
 /// Classifies one PTY read into observation, media and terminal-ingest
 /// work without performing slow projection work on the event-loop path.
 ///
 /// ```zig
-/// try PanePipelineEvents.handleOutput(&application, event, ingest_gate);
+/// try PanePipelineEvents.handleOutput(&model, event, ingest_gate);
 /// ```
-pub fn handleOutput(application: *Application, event: OutputCompletion, ingest_gate: ?*IngestTestGateType) !void {
-    core.mark(application.io, .output_dispatch);
-    var context: OutputRuntime = .{ .application = application, .ingest_gate = ingest_gate };
+pub fn handleOutput(model: *RuntimeModel, event: OutputCompletion, ingest_gate: ?*IngestTestGateType) !void {
+    core.mark(model.io, .output_dispatch);
+    var context: OutputRuntime = .{ .model = model, .ingest_gate = ingest_gate };
     try processOutput(&context, event);
 
     if (context.inline_ingest) |result| {
-        try handleIngested(application, result);
+        try handleIngested(model, result);
     }
 }
 
@@ -36,30 +36,30 @@ pub fn handleOutput(application: *Application, event: OutputCompletion, ingest_g
 /// the pane's next PTY read.
 ///
 /// ```zig
-/// try PanePipelineEvents.handleIngested(&application, event);
+/// try PanePipelineEvents.handleIngested(&model, event);
 /// ```
-pub fn handleIngested(application: *Application, event: IngestCompletion) !void {
-    core.mark(application.io, .ingest_dispatch);
-    try commitIngest(application, event);
+pub fn handleIngested(model: *RuntimeModel, event: IngestCompletion) !void {
+    core.mark(model.io, .ingest_dispatch);
+    try commitIngest(model, event);
 }
 
 /// Applies one pane-process exit, revokes its proxy credential and
 /// schedules the final observation before lifecycle collection.
 ///
 /// ```zig
-/// try PanePipelineEvents.handleExit(&application, event);
+/// try PanePipelineEvents.handleExit(&model, event);
 /// ```
-pub fn handleExit(application: *Application, completion: ExitCompletion) !void {
-    const transition = application.model.panes.completeExit(
+pub fn handleExit(model: *RuntimeModel, completion: ExitCompletion) !void {
+    const transition = model.panes.completeExit(
         completion.pane,
         exit_ops.exitOrSynthetic(completion.result),
     ) orelse {
-        application.metrics.stale_pane_events += 1;
+        model.metrics.stale_pane_events += 1;
         return;
     };
 
-    _ = application.model.agents.remove(transition.pane.key());
-    application.revokePaneCredential(transition.pane);
+    _ = model.agents.remove(transition.pane.key());
+    model.revokePaneCredential(transition.pane);
 
     if (transition.launch_aborting) {
         return;
@@ -67,7 +67,7 @@ pub fn handleExit(application: *Application, completion: ExitCompletion) !void {
 
     if (transition.output_done) {
         transition.pane.queueExitedHistory(transition.exit);
-        try projection.scheduleObservation(application, transition.pane);
+        try projection.scheduleObservation(model, transition.pane);
     }
 }
 
@@ -84,11 +84,11 @@ fn startOutputIngest(context: *OutputRuntime, ingest: OutputIngest) !void {
         return;
     }
 
-    try context.application.select.concurrent(.pane_ingested, ingestPane, .{task});
+    try context.model.select.concurrent(.pane_ingested, ingestPane, .{task});
 }
 
 fn paneHasOutstandingFrame(context: *OutputRuntime, pane_id: core.PaneId) bool {
-    for (&context.application.clients.items) |*slot| {
+    for (&context.model.clients.items) |*slot| {
         const client = slot.* orelse continue;
         const attachment = client.attachments.find(pane_id) orelse continue;
 
@@ -125,24 +125,24 @@ fn ingestPane(task: PaneIngestTask) IngestCompletion {
     return .{ .pane = task.ingest.pane.key(), .result = stats };
 }
 
-fn refreshPaneClients(application: *Application, pane: *PaneType) void {
-    for (&application.clients.items) |*slot| {
+fn refreshPaneClients(model: *RuntimeModel, pane: *PaneType) void {
+    for (&model.clients.items) |*slot| {
         const client = slot.* orelse continue;
         const attachment = client.attachments.find(pane.id) orelse continue;
 
         _ = attachment.resizeIfNeeded() catch {
-            _ = application.detachSessionPane(client, pane.id);
+            _ = model.detachSessionPane(client, pane.id);
         };
     }
 }
 
-fn startNextPaneRead(application: *Application, read: ReadType) !void {
-    try application.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ read.io, read.pane });
+fn startNextPaneRead(model: *RuntimeModel, read: ReadType) !void {
+    try model.select.concurrent(.pane_output, pane_launcher_mod.readPane, .{ read.io, read.pane });
 }
 
 fn processOutput(context: *OutputRuntime, completion: OutputCompletion) !void {
-    const pane = context.application.model.panes.resolve(completion.pane) orelse {
-        context.application.metrics.stale_pane_events += 1;
+    const pane = context.model.panes.resolve(completion.pane) orelse {
+        context.model.metrics.stale_pane_events += 1;
         return;
     };
     const output_len = completion.result catch {
@@ -158,11 +158,11 @@ fn processOutput(context: *OutputRuntime, completion: OutputCompletion) !void {
     pane.completePtyOutputRead(.data);
 
     if (comptime core.enabled) {
-        context.application.metrics.pty_events += 1;
-        context.application.metrics.pty_bytes += output_len;
+        context.model.metrics.pty_events += 1;
+        context.model.metrics.pty_bytes += output_len;
 
         if (paneHasOutstandingFrame(context, pane.id)) {
-            context.application.metrics.folded_pty_events += 1;
+            context.model.metrics.folded_pty_events += 1;
         }
     }
 
@@ -172,15 +172,15 @@ fn processOutput(context: *OutputRuntime, completion: OutputCompletion) !void {
     pane.queueHistoryOutput(.{
         .bytes = bytes,
         .shell_foreground = shell_foreground,
-        .clock = pane_mod.historyClock(context.application.io),
+        .clock = pane_mod.historyClock(context.model.io),
     });
-    try (projection.scheduleObservation(context.application, pane));
+    try (projection.scheduleObservation(context.model, pane));
 
     pane.queueMediaOutput(bytes);
-    try (projection.scheduleMedia(context.application, pane));
+    try (projection.scheduleMedia(context.model, pane));
 
     const ingest: OutputIngest = .{
-        .io = context.application.io,
+        .io = context.model.io,
         .pane = pane,
         .bytes = pane.beginOutputIngest(output_len),
     };
@@ -193,13 +193,13 @@ fn processOutput(context: *OutputRuntime, completion: OutputCompletion) !void {
 fn finishOutput(context: *OutputRuntime, pane: *PaneType) !void {
     if (pane.exit) |exit| {
         pane.queueExitedHistory(exit);
-        try (projection.scheduleObservation(context.application, pane));
+        try (projection.scheduleObservation(context.model, pane));
     }
 }
 
-fn commitIngest(application: *Application, completion: IngestCompletion) !void {
-    const pane = application.model.panes.resolve(completion.pane) orelse {
-        application.metrics.stale_pane_events += 1;
+fn commitIngest(model: *RuntimeModel, completion: IngestCompletion) !void {
+    const pane = model.panes.resolve(completion.pane) orelse {
+        model.metrics.stale_pane_events += 1;
         return;
     };
 
@@ -211,24 +211,24 @@ fn commitIngest(application: *Application, completion: IngestCompletion) !void {
     };
 
     if (comptime core.enabled) {
-        application.metrics.ingest.observe(stats.elapsed_ns);
+        model.metrics.ingest.observe(stats.elapsed_ns);
     }
 
     pane.applyPendingResize() catch {
         _ = pane.requestClose();
     };
-    try projection.scheduleObservation(application, pane);
-    try projection.scheduleMedia(application, pane);
-    refreshPaneClients(application, pane);
-    try io_events.scheduleResponse(application, pane);
+    try projection.scheduleObservation(model, pane);
+    try projection.scheduleMedia(model, pane);
+    refreshPaneClients(model, pane);
+    try io_events.scheduleResponse(model, pane);
 
     const read: ReadType = .{
-        .io = application.io,
+        .io = model.io,
         .pane = pane,
     };
     const read_started = pane.beginPtyOutputRead();
     std.debug.assert(read_started);
-    startNextPaneRead(application, read) catch |err| {
+    startNextPaneRead(model, read) catch |err| {
         pane.cancelPtyOutputRead();
         return err;
     };

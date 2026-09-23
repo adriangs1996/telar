@@ -4,7 +4,6 @@ const Exchange = @import("../../proxy/capture/Exchange.zig");
 const ServiceType = @import("../../plugins/Service.zig");
 const std = @import("std");
 const StateType = @import("../observability/State.zig");
-const StoreType = @import("../client/Store.zig");
 const Resources = @import("Resources.zig");
 
 pub const AcquisitionPhase = enum {
@@ -12,7 +11,6 @@ pub const AcquisitionPhase = enum {
     proxy,
     listener,
     telemetry,
-    clients,
     history,
     plugins,
     engine,
@@ -33,12 +31,6 @@ pub fn initTelemetry(io: std.Io, endpoint: []const u8) StateType {
     var suffix_buffer: [64]u8 = undefined;
     const suffix = std.fmt.bufPrint(&suffix_buffer, "runtime-{d}", .{std.c.getpid()}) catch "runtime";
     return StateType.init(io, endpoint, suffix);
-}
-
-pub fn createClientStore(gpa: std.mem.Allocator) !*StoreType {
-    const clients = try gpa.create(StoreType);
-    clients.* = .{};
-    return clients;
 }
 
 test "every resource acquisition checkpoint rolls back" {

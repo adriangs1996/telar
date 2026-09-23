@@ -1,7 +1,7 @@
 //! Runtime workspaces operations, reached from requests.dispatch.
 
 const core = @import("telar-core");
-const Application = @import("../Application.zig");
+const RuntimeModel = @import("../../RuntimeModel.zig");
 const CreateWorkspace = @import("../commands/CreateWorkspace.zig");
 const CreateWorkspaceResult = @import("../commands/CreateWorkspaceResult.zig");
 const create_workspace = @import("../commands/create_workspace.zig");
@@ -105,14 +105,14 @@ fn prepareCreateWorkspaceLaunch(client: *RequestContext, request: CreateWorkspac
         .any,
     ) catch return error.InvalidLaunchCwd;
     if (request.create_cwd and request.launch.cwd_source == null) {
-        launch_cwd_module.createLaunchDirectory(client.application.io, cwd) catch return error.LaunchCwdCreateFailed;
+        launch_cwd_module.createLaunchDirectory(client.model.io, cwd) catch return error.LaunchCwdCreateFailed;
     }
 
     return cwd;
 }
 
-fn launchCreatedWorkspacePane(application: *Application, request: CreateWorkspaceLaunchPane) !CreateWorkspaceLaunchedPane {
-    const pane = try application.launchPane(.{
+fn launchCreatedWorkspacePane(model: *RuntimeModel, request: CreateWorkspaceLaunchPane) !CreateWorkspaceLaunchedPane {
+    const pane = try model.launchPane(.{
         .location = request.location,
         .size = request.size,
         .launch = request.launch,
@@ -124,32 +124,32 @@ fn launchCreatedWorkspacePane(application: *Application, request: CreateWorkspac
 }
 
 fn replaceCreatedWorkspaceAttachments(client: *RequestContext, launched: CreateWorkspaceLaunchedPane) !void {
-    const pane = client.application.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
+    const pane = client.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
     const previous_workspace = client.session.attachments.currentWorkspace();
 
     client.session.attachments.clearAttachments();
     if (previous_workspace) |previous| {
-        client.application.releaseGeometryFor(client.session.key, previous);
+        client.model.releaseGeometryFor(client.session.key, previous);
     }
 
-    const attachment = try client.session.attachments.attach(client.application.gpa, pane);
+    const attachment = try client.session.attachments.attach(client.model.gpa, pane);
     _ = try attachment.resizeIfNeeded();
 }
 
 fn publishWorkspaceRenamed(publication: *RequestContext, event: WorkspaceRenamedType) void {
-    publication.application.noteSessionChange();
+    publication.model.noteSessionChange();
 
-    publication.application.model.agents.touch();
-    publication.application.notifyWorkspaceChanged(publication.session.key, event.location);
+    publication.model.agents.touch();
+    publication.model.notifyWorkspaceChanged(publication.session.key, event.location);
 }
 
 fn publishWorkspaceCreated(publication: *RequestContext, event: WorkspaceCreatedType) void {
-    publication.application.noteSessionChange();
-    publication.application.notifyWorkspaceChanged(publication.session.key, event.location.workspace);
+    publication.model.noteSessionChange();
+    publication.model.notifyWorkspaceChanged(publication.session.key, event.location.workspace);
 }
 
 fn createWorkspace(request: *RequestContext, command: CreateWorkspace) anyerror!CreateWorkspaceResult {
-    const application = request.application;
+    const model = request.model;
 
     const launch_cwd = try prepareCreateWorkspaceLaunch(request, .{
         .launch = command.launch,
@@ -165,15 +165,15 @@ fn createWorkspace(request: *RequestContext, command: CreateWorkspace) anyerror!
     var lease_acquired = false;
     var committed = false;
     defer if (!committed and lease_acquired) {
-        request.application.releaseGeometryFor(request.session.key, location.workspace);
+        request.model.releaseGeometryFor(request.session.key, location.workspace);
     };
 
-    if (!request.application.holdsGeometry(request.session.key, location.workspace)) {
+    if (!request.model.holdsGeometry(request.session.key, location.workspace)) {
         return error.GeometryUnavailable;
     }
     lease_acquired = true;
 
-    const launched = launchCreatedWorkspacePane(application, .{
+    const launched = launchCreatedWorkspacePane(model, .{
         .location = location,
         .size = command.size,
         .launch = command.launch,

@@ -1,7 +1,7 @@
 //! Runtime panes operations, reached from requests.dispatch.
 
 const core = @import("telar-core");
-const Application = @import("../Application.zig");
+const RuntimeModel = @import("../../RuntimeModel.zig");
 const PaneResize = @import("../commands/PaneResize.zig");
 const pane_resize = @import("../commands/pane_resize.zig");
 const AcknowledgeFrame = @import("../commands/AcknowledgeFrame.zig");
@@ -75,31 +75,31 @@ pub fn routeOpenPane(request: *RequestContext, wire: core.OpenPaneView) !void {
 /// Example: `try panes.routePaneInput(request, input);`.
 pub fn routePaneInput(request: *RequestContext, input: core.PaneInput) !void {
     const attachment = request.session.attachments.find(input.pane_id) orelse {
-        request.application.metrics.stale_client_messages += 1;
+        request.model.metrics.stale_client_messages += 1;
         return;
     };
     const pane = attachment.pane;
     if (pane.kind == .agent or pane.exit != null) {
-        request.application.metrics.stale_client_messages += 1;
+        request.model.metrics.stale_client_messages += 1;
         return;
     }
 
-    try forwardInput(request.application, pane, input.bytes);
-    notePaneInput(request.application, request.session, input.pane_id);
+    try forwardInput(request.model, pane, input.bytes);
+    notePaneInput(request.model, request.session, input.pane_id);
 }
 
-fn notePaneInput(application: *Application, session: *Session, pane_id: core.PaneId) void {
-    application.input_sequence +%= 1;
-    if (application.input_sequence == 0) {
-        for (&application.clients.items) |*slot| {
+fn notePaneInput(model: *RuntimeModel, session: *Session, pane_id: core.PaneId) void {
+    model.input_sequence +%= 1;
+    if (model.input_sequence == 0) {
+        for (&model.clients.items) |*slot| {
             const client = slot.* orelse continue;
             client.last_input_sequence = 0;
         }
-        application.input_sequence = 1;
+        model.input_sequence = 1;
     }
 
     session.last_input_pane = pane_id;
-    session.last_input_sequence = application.input_sequence;
+    session.last_input_sequence = model.input_sequence;
 }
 
 /// Example: `try panes.routePaneResize(request, wire);`.
@@ -111,8 +111,8 @@ pub fn routePaneResize(request: *RequestContext, wire: core.PaneResize) !void {
 
     switch (result) {
         .handled => {},
-        .pane_not_attached => request.application.metrics.stale_client_messages += 1,
-        .geometry_rejected => request.application.metrics.geometry_rejections += 1,
+        .pane_not_attached => request.model.metrics.stale_client_messages += 1,
+        .geometry_rejected => request.model.metrics.geometry_rejections += 1,
     }
 }
 
@@ -121,16 +121,16 @@ pub fn routeFrameAck(request: *RequestContext, ack: core.FrameAck) !void {
     const result = try frameAck(request, .{
         .pane_id = ack.pane_id,
         .frame_id = ack.frame_id,
-        .received_at_ns = core.now(request.application.io),
+        .received_at_ns = core.now(request.model.io),
     });
 
     switch (result) {
         .acknowledged => |elapsed| {
             if (comptime core.enabled) {
-                request.application.metrics.ack.observe(elapsed);
+                request.model.metrics.ack.observe(elapsed);
             }
         },
-        .stale => request.application.metrics.stale_client_messages += 1,
+        .stale => request.model.metrics.stale_client_messages += 1,
     }
 }
 
@@ -140,7 +140,7 @@ pub fn routeRequestSnapshot(request: *RequestContext, wire: core.RequestSnapshot
     const result = try requestSnapshot(request, .{ .pane_id = wire.pane_id });
 
     if (result == .pane_not_attached) {
-        request.application.metrics.stale_client_messages += 1;
+        request.model.metrics.stale_client_messages += 1;
     }
 }
 
@@ -149,7 +149,7 @@ pub fn routeDetachPane(request: *RequestContext, wire: core.DetachPane) !void {
     const result = try detachPane(request, .{ .pane_id = wire.pane_id });
 
     if (result == .not_attached) {
-        request.application.metrics.stale_client_messages += 1;
+        request.model.metrics.stale_client_messages += 1;
     }
 }
 
@@ -204,7 +204,7 @@ pub fn routeSetPaneViewport(request: *RequestContext, viewport: core.SetPaneView
     });
 
     if (result == .pane_not_attached) {
-        request.application.metrics.stale_client_messages += 1;
+        request.model.metrics.stale_client_messages += 1;
     }
 }
 
@@ -255,7 +255,7 @@ pub fn routeSendPaneText(request: *RequestContext, wire: core.SendPaneText) !voi
 
 /// Example: `try panes.routeSearchPane(request, search);`.
 pub fn routeSearchPane(request: *RequestContext, search: core.SearchPane) !void {
-    try pane_search.start(request.application, request.session, search);
+    try pane_search.start(request.model, request.session, search);
 }
 
 /// Example: `try panes.routeCopySelection(request, selection);`.
@@ -264,7 +264,7 @@ pub fn routeCopySelection(request: *RequestContext, selection: core.CopySelectio
 }
 
 fn findOpenPane(request: *RequestContext, pane_id: core.PaneId) ?*PaneType {
-    const pane = request.application.model.panes.findRunning(pane_id) orelse return null;
+    const pane = request.model.panes.findRunning(pane_id) orelse return null;
     if (pane.close_requested or pane.exit != null) {
         return null;
     }
@@ -283,22 +283,22 @@ fn openPane(request: *RequestContext, command: OpenPane) anyerror!OpenPaneResult
                 .workspace = workspace_location,
                 .tab_id = tab_id,
             };
-            break :workspace request.application.model.panes.firstAt(location) orelse return error.WorkspaceHasNoPane;
+            break :workspace request.model.panes.firstAt(location) orelse return error.WorkspaceHasNoPane;
         },
         .default => try openPaneOpenDefault(request, command, &created),
     };
 
-    if (request.application.holdsGeometry(request.session.key, active.location.workspace)) {
+    if (request.model.holdsGeometry(request.session.key, active.location.workspace)) {
         const resize_result = if (active.ingest_pending)
             active.requestResize(command.size)
         else
             active.resize(command.size);
         resize_result catch return error.PaneResizeFailed;
-        try events.panes.Projection.scheduleObservation(request.application, active);
-        try events.panes.Projection.scheduleMedia(request.application, active);
+        try events.panes.Projection.scheduleObservation(request.model, active);
+        try events.panes.Projection.scheduleMedia(request.model, active);
     }
 
-    const attachment = try request.session.attachments.attach(request.application.gpa, active);
+    const attachment = try request.session.attachments.attach(request.model.gpa, active);
     _ = try attachment.resizeIfNeeded();
     return .{ .pane = .{ .key = active.key(), .location = active.location, .kind = active.kind }, .created = created };
 }
@@ -316,17 +316,17 @@ fn openPaneOpenDefault(request: *RequestContext, command: OpenPane, created: *bo
         break :location proposal.?.location();
     };
 
-    if (request.application.model.panes.firstAt(location)) |existing| {
+    if (request.model.panes.firstAt(location)) |existing| {
         return existing;
     }
 
     var provisional_lease = false;
     var committed = false;
     defer if (!committed and provisional_lease and proposal != null) {
-        request.application.releaseGeometryFor(request.session.key, location.workspace);
+        request.model.releaseGeometryFor(request.session.key, location.workspace);
     };
 
-    if (!request.application.holdsGeometry(request.session.key, location.workspace)) {
+    if (!request.model.holdsGeometry(request.session.key, location.workspace)) {
         return error.GeometryUnavailable;
     }
     provisional_lease = true;
@@ -335,7 +335,7 @@ fn openPaneOpenDefault(request: *RequestContext, command: OpenPane, created: *bo
         candidate.path()
     else
         request.workspaces.reader().workspacePath(location.workspace).?;
-    const launched = request.application.launchPane(.{
+    const launched = request.model.launchPane(.{
         .location = location,
         .size = command.size,
         .launch = launch,
@@ -345,12 +345,12 @@ fn openPaneOpenDefault(request: *RequestContext, command: OpenPane, created: *bo
 
     if (proposal) |*candidate| {
         _ = candidate.commit();
-        request.application.notifyWorkspaceChanged(request.session.key, location.workspace);
+        request.model.notifyWorkspaceChanged(request.session.key, location.workspace);
     }
 
     committed = true;
     created.* = true;
-    request.application.notifyWorkspaceChanged(request.session.key, launched.location.workspace);
+    request.model.notifyWorkspaceChanged(request.session.key, launched.location.workspace);
     return launched;
 }
 
@@ -363,23 +363,23 @@ fn openPaneQueueFailure(request: *RequestContext, request_id: core.RequestId, fa
 }
 
 fn createPane(request: *RequestContext, command: CreatePane) anyerror!PaneLaunchedType {
-    const application = request.application;
+    const model = request.model;
 
     if (!request.workspaces.reader().contains(command.location)) {
         return error.TabNotFound;
     }
 
-    if (application.model.panes.countAt(command.location) == 0) {
+    if (model.panes.countAt(command.location) == 0) {
         return error.TabNotFound;
     }
 
-    if (!application.holdsGeometry(request.session.key, command.location.workspace)) {
+    if (!model.holdsGeometry(request.session.key, command.location.workspace)) {
         return error.GeometryUnavailable;
     }
 
     const launch_cwd = launch_cwd_module.resolveLaunchCwd(&request.session.attachments, command.launch, .{ .tab = command.location }) catch return error.InvalidLaunchCwd;
     const workspace_path = request.workspaces.reader().workspacePath(command.location.workspace) orelse return error.TabNotFound;
-    const launched = application.launchPane(.{
+    const launched = model.launchPane(.{
         .location = command.location,
         .size = command.size,
         .launch = command.launch,
@@ -387,8 +387,8 @@ fn createPane(request: *RequestContext, command: CreatePane) anyerror!PaneLaunch
         .workspace_path = workspace_path,
     }) catch |err| return create_pane.mapLaunchError(err);
 
-    request.application.notifyWorkspaceChanged(request.session.key, launched.location.workspace);
-    _ = try request.session.attachments.attach(application.gpa, launched);
+    request.model.notifyWorkspaceChanged(request.session.key, launched.location.workspace);
+    _ = try request.session.attachments.attach(model.gpa, launched);
     return .{ .key = launched.key(), .location = launched.location, .kind = launched.kind };
 }
 
@@ -411,7 +411,7 @@ fn detachPane(request: *RequestContext, command: DetachPane) anyerror!detach_pan
             return error.AttachmentStateConflict;
         }
 
-        request.application.releaseGeometryFor(request.session.key, detached.workspace);
+        request.model.releaseGeometryFor(request.session.key, detached.workspace);
     }
 
     return .detached;
@@ -423,7 +423,7 @@ fn paneResize(request: *RequestContext, command: PaneResize) anyerror!pane_resiz
     const attachment = session.attachments.find(command.pane_id) orelse return .pane_not_attached;
     const pane = attachment.pane;
 
-    if (!(request.application.holdsGeometry(request.session.key, pane.location.workspace))) {
+    if (!(request.model.holdsGeometry(request.session.key, pane.location.workspace))) {
         return .geometry_rejected;
     }
 
@@ -437,15 +437,15 @@ fn paneResize(request: *RequestContext, command: PaneResize) anyerror!pane_resiz
         _ = pane.requestClose();
         return .handled;
     };
-    try events.panes.Projection.scheduleObservation(request.application, pane);
-    try events.panes.Projection.scheduleMedia(request.application, pane);
+    try events.panes.Projection.scheduleObservation(request.model, pane);
+    try events.panes.Projection.scheduleMedia(request.model, pane);
 
     _ = attachment.resizeIfNeeded() catch {
         paneResizeDetachFailedProjection(request, command.pane_id);
         return .handled;
     };
 
-    try events.panes.Io.scheduleResponse(request.application, pane);
+    try events.panes.Io.scheduleResponse(request.model, pane);
     return .handled;
 }
 
@@ -462,7 +462,7 @@ fn paneResizeDetachFailedProjection(request: *RequestContext, pane_id: core.Pane
     std.debug.assert(left_workspace);
 
     if (left_workspace) {
-        request.application.releaseGeometryFor(request.session.key, detached.workspace);
+        request.model.releaseGeometryFor(request.session.key, detached.workspace);
     }
 }
 
@@ -496,9 +496,9 @@ fn setPaneViewport(request: *RequestContext, command: SetPaneViewport) anyerror!
 }
 
 fn sendPaneText(request: *RequestContext, command: SendPaneText) anyerror!send_pane_text.SendPaneTextResult {
-    const application = request.application;
+    const model = request.model;
 
-    const pane = application.model.panes.resolveControl(command.pane) orelse return .pane_not_found;
+    const pane = model.panes.resolveControl(command.pane) orelse return .pane_not_found;
 
     if (pane.kind == .agent) {
         return .not_terminal;
@@ -512,7 +512,7 @@ fn sendPaneText(request: *RequestContext, command: SendPaneText) anyerror!send_p
     const bytes = switch (command.mode) {
         .raw => command.text,
         .prompt => prompt: {
-            if (application.model.agents.projectedStatus(command.pane) == .blocked) {
+            if (model.agents.projectedStatus(command.pane) == .blocked) {
                 return .agent_blocked;
             }
 
@@ -520,7 +520,7 @@ fn sendPaneText(request: *RequestContext, command: SendPaneText) anyerror!send_p
         },
     };
 
-    try forwardInput(request.application, pane, bytes);
+    try forwardInput(request.model, pane, bytes);
     if (command.mode == .prompt or std.mem.indexOfScalar(u8, bytes, '\r') != null) {
         pane.noteInjectedSubmission();
     }
@@ -568,36 +568,36 @@ fn receiveCopySelection(request: *RequestContext, wire: core.CopySelection) void
             const accepted = request.session.delivery.setClipboard(wire.pane_id, bytes);
             std.debug.assert(accepted);
         },
-        .pane_not_attached => request.application.metrics.stale_client_messages += 1,
+        .pane_not_attached => request.model.metrics.stale_client_messages += 1,
         .unavailable, .too_large => {},
     }
 }
 
-fn forwardInput(application: *Application, pane: *PaneType, bytes: []const u8) !void {
-    core.mark(application.io, .input_forward);
+fn forwardInput(model: *RuntimeModel, pane: *PaneType, bytes: []const u8) !void {
+    core.mark(model.io, .input_forward);
     if (comptime core.enabled) {
-        application.metrics.input_events += 1;
-        application.metrics.input_bytes += bytes.len;
+        model.metrics.input_events += 1;
+        model.metrics.input_bytes += bytes.len;
     }
 
-    if (if (application.agent_description_options != null) &application.model.agents else null) |tracker| {
+    if (if (model.agent_description_options != null) &model.agents else null) |tracker| {
         _ = tracker.observeInput(pane.key(), bytes);
     }
 
-    core.mark(application.io, .foreground_start);
+    core.mark(model.io, .foreground_start);
     const foreground = pane.session.shellForeground() orelse false;
-    core.mark(application.io, .foreground_done);
+    core.mark(model.io, .foreground_done);
     pane.queueHistoryInput(.{
         .bytes = bytes,
         .shell_foreground = foreground,
-        .clock = pane_mod.historyClock(application.io),
+        .clock = pane_mod.historyClock(model.io),
     });
-    core.mark(application.io, .input_observed);
-    try events.panes.Projection.scheduleObservation(application, pane);
+    core.mark(model.io, .input_observed);
+    try events.panes.Projection.scheduleObservation(model, pane);
 
     if (pane.queuePtyInput(bytes) and bytes.len != 0) {
-        pane.cell_input_ns = core.monotonic(application.io);
+        pane.cell_input_ns = core.monotonic(model.io);
     }
 
-    try events.panes.Io.scheduleInput(application, pane);
+    try events.panes.Io.scheduleInput(model, pane);
 }

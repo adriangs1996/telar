@@ -11,16 +11,16 @@ const SourcesType = @import("../../Sources.zig");
 const handshake_module = @import("../../../transport/handshake.zig");
 const Read = @import("../../client/Read.zig");
 
-const Application = @import("../Application.zig");
+const RuntimeModel = @import("../../RuntimeModel.zig");
 
 /// Rearms admission and transfers an accepted connection into the
 /// single-flight handshake state when capacity and lifecycle allow it.
 ///
 /// ```zig
-/// try ClientEvents.handleAccepted(&application, result, listener);
+/// try ClientEvents.handleAccepted(&model, result, listener);
 /// ```
-pub fn handleAccepted(application: *Application, result: anyerror!core.SocketChannel, listener: *LocalListenerType) !void {
-    var runtime: AdmissionRuntime = .{ .application = application, .listener = listener };
+pub fn handleAccepted(model: *RuntimeModel, result: anyerror!core.SocketChannel, listener: *LocalListenerType) !void {
+    var runtime: AdmissionRuntime = .{ .model = model, .listener = listener };
     try acceptClient(&runtime, result);
 }
 
@@ -28,25 +28,25 @@ pub fn handleAccepted(application: *Application, result: anyerror!core.SocketCha
 /// first read when negotiation succeeded.
 ///
 /// ```zig
-/// ClientEvents.handleHandshaken(&application, result);
+/// ClientEvents.handleHandshaken(&model, result);
 /// ```
-pub fn handleHandshaken(application: *Application, result: anyerror!void) void {
-    var negotiated = application.client_admission.takePending();
+pub fn handleHandshaken(model: *RuntimeModel, result: anyerror!void) void {
+    var negotiated = model.client_admission.takePending();
     var connection_owned = true;
     defer if (connection_owned) {
-        negotiated.deinit(application.io);
+        negotiated.deinit(model.io);
     };
 
     result catch return;
 
-    if ((application.shutdown.isRequested())) {
+    if ((model.shutdown.isRequested())) {
         return;
     }
 
-    const session = (application.clients.add(application.gpa, negotiated)) catch return;
+    const session = (model.clients.add(model.gpa, negotiated)) catch return;
     connection_owned = false;
-    startNegotiatedClientRead(application, session) catch {
-        application.dropClient(session.key);
+    startNegotiatedClientRead(model, session) catch {
+        model.dropClient(session.key);
     };
 }
 
@@ -54,36 +54,36 @@ pub fn handleHandshaken(application: *Application, result: anyerror!void) void {
 /// unless shutdown has started. Delivery happens in the update's flush.
 ///
 /// ```zig
-/// ClientEvents.handleMessage(&application, event);
+/// ClientEvents.handleMessage(&model, event);
 /// ```
-pub fn handleMessage(application: *Application, event: ClientMessage) void {
-    core.mark(application.io, .runtime_dispatch);
-    const session = application.clients.resolve(event.client) orelse {
-        application.metrics.stale_client_messages += 1;
+pub fn handleMessage(model: *RuntimeModel, event: ClientMessage) void {
+    core.mark(model.io, .runtime_dispatch);
+    const session = model.clients.resolve(event.client) orelse {
+        model.metrics.stale_client_messages += 1;
         return;
     };
 
     session.read_pending = false;
 
     if (session.closing) {
-        application.finalizeClient(event.client);
+        model.finalizeClient(event.client);
         return;
     }
 
     const payload = event.result catch {
-        application.dropClient(event.client);
+        model.dropClient(event.client);
         return;
     };
-    const decode_started = core.now(application.io);
+    const decode_started = core.now(model.io);
     const message = core.decodeClient(payload) catch {
-        application.dropClient(event.client);
+        model.dropClient(event.client);
         return;
     };
 
     if (comptime core.enabled) {
-        application.metrics.client_messages += 1;
-        application.metrics.decode.observe(
-            core.elapsed(decode_started, core.now(application.io)),
+        model.metrics.client_messages += 1;
+        model.metrics.decode.observe(
+            core.elapsed(decode_started, core.now(model.io)),
         );
     }
 
@@ -94,13 +94,13 @@ pub fn handleMessage(application: *Application, event: ClientMessage) void {
         };
     }
 
-    requests.dispatch(application, session, message) catch {
-        application.dropClient(event.client);
+    requests.dispatch(model, session, message) catch {
+        model.dropClient(event.client);
         return;
     };
 
-    if (!application.shutdown.isRequested()) {
-        startNegotiatedClientRead(application, session) catch application.dropClient(event.client);
+    if (!model.shutdown.isRequested()) {
+        startNegotiatedClientRead(model, session) catch model.dropClient(event.client);
     }
 }
 
@@ -108,23 +108,23 @@ pub fn handleMessage(application: *Application, event: ClientMessage) void {
 /// session's next delivery.
 ///
 /// ```zig
-/// ClientEvents.handleSent(&application, event);
+/// ClientEvents.handleSent(&model, event);
 /// ```
-pub fn handleSent(application: *Application, event: ClientSent) void {
-    sendCompleted(application, event);
+pub fn handleSent(model: *RuntimeModel, event: ClientSent) void {
+    sendCompleted(model, event);
 }
 
 /// Starts one bounded session write and rolls back `send_pending` when
 /// the async operation cannot be scheduled.
 ///
 /// ```zig
-/// try ClientEvents.startSend(&application, session, payload);
+/// try ClientEvents.startSend(&model, session, payload);
 /// ```
-pub fn startSend(application: *Application, session: *SessionType, payload: []const u8) !void {
+pub fn startSend(model: *RuntimeModel, session: *SessionType, payload: []const u8) !void {
     std.debug.assert(!session.send_pending);
     session.send_pending = true;
-    application.select.concurrent(.client_sent, sendSession, .{Write{
-        .io = application.io,
+    model.select.concurrent(.client_sent, sendSession, .{Write{
+        .io = model.io,
         .key = session.key,
         .connection = &session.connection,
         .payload = payload,
@@ -137,23 +137,23 @@ pub fn startSend(application: *Application, session: *SessionType, payload: []co
 const AdmissionRuntime = @import("AdmissionRuntime.zig");
 
 fn rearmClientAccept(runtime: *AdmissionRuntime) !void {
-    var sources = SourcesType.init(runtime.application.io, runtime.application.select);
+    var sources = SourcesType.init(runtime.model.io, runtime.model.select);
     try sources.acceptClient(runtime.listener);
 }
 
 fn shutdownAdmissionConnection(runtime: *AdmissionRuntime, connection: *core.SocketChannel) void {
-    connection.shutdown(runtime.application.io);
+    connection.shutdown(runtime.model.io);
 }
 
 fn startClientHandshake(runtime: *AdmissionRuntime, connection: *core.SocketChannel) !void {
-    try runtime.application.select.concurrent(.handshaken, handshakeClient, .{ runtime.application.io, connection });
+    try runtime.model.select.concurrent(.handshaken, handshakeClient, .{ runtime.model.io, connection });
 }
 
-fn startNegotiatedClientRead(application: *Application, session: *SessionType) !void {
+fn startNegotiatedClientRead(model: *RuntimeModel, session: *SessionType) !void {
     std.debug.assert(!session.read_pending);
     session.read_pending = true;
-    application.select.concurrent(.client_message, receiveSession, .{Read{
-        .io = application.io,
+    model.select.concurrent(.client_message, receiveSession, .{Read{
+        .io = model.io,
         .key = session.key,
         .connection = &session.connection,
         .buffer = session.receive_buffer,
@@ -190,47 +190,47 @@ fn acceptClient(runtime: *AdmissionRuntime, result: anyerror!core.SocketChannel)
     };
     var accepted_owned = true;
     defer if (accepted_owned) {
-        accepted.deinit(runtime.application.io);
+        accepted.deinit(runtime.model.io);
     };
 
-    if ((runtime.application.shutdown.isRequested())) {
+    if ((runtime.model.shutdown.isRequested())) {
         return;
     }
 
     try rearmClientAccept(runtime);
 
-    if (runtime.application.client_admission.isPending()) {
-        shutdownAdmissionConnection(runtime, runtime.application.client_admission.pendingConnection().?);
+    if (runtime.model.client_admission.isPending()) {
+        shutdownAdmissionConnection(runtime, runtime.model.client_admission.pendingConnection().?);
         return;
     }
 
-    if (!(runtime.application.clients.hasCapacity())) {
+    if (!(runtime.model.clients.hasCapacity())) {
         return;
     }
 
-    runtime.application.client_admission.begin(accepted);
+    runtime.model.client_admission.begin(accepted);
     accepted_owned = false;
-    startClientHandshake(runtime, runtime.application.client_admission.pendingConnection().?) catch {
-        var unstarted = runtime.application.client_admission.takePending();
-        unstarted.deinit(runtime.application.io);
+    startClientHandshake(runtime, runtime.model.client_admission.pendingConnection().?) catch {
+        var unstarted = runtime.model.client_admission.takePending();
+        unstarted.deinit(runtime.model.io);
     };
 }
 
-fn sendCompleted(application: *Application, event: ClientSent) void {
-    const session = application.clients.resolve(event.client) orelse {
-        application.metrics.stale_client_messages += 1;
+fn sendCompleted(model: *RuntimeModel, event: ClientSent) void {
+    const session = model.clients.resolve(event.client) orelse {
+        model.metrics.stale_client_messages += 1;
         return;
     };
 
     session.send_pending = false;
     if (session.closing) {
-        application.finalizeClient(event.client);
+        model.finalizeClient(event.client);
         return;
     }
 
     const completion = session.delivery.complete(event.result);
     if (completion.close_client) {
-        application.dropClient(event.client);
+        model.dropClient(event.client);
         return;
     }
 
@@ -238,7 +238,7 @@ fn sendCompleted(application: *Application, event: ClientSent) void {
         _ = session.attachments.detach(detach);
     }
 
-    if (session.delivery.shouldCloseAfterReply() and !application.shutdown.isRequested()) {
-        application.dropClient(event.client);
+    if (session.delivery.shouldCloseAfterReply() and !model.shutdown.isRequested()) {
+        model.dropClient(event.client);
     }
 }

@@ -159,10 +159,10 @@ test "closing clients retain their search slot until the matching wake retires i
     const key = fixture.session.key;
     try fixture.send(.{ .search_pane = .{ .request_id = @enumFromInt(41), .pane_id = pane.id, .needle = "search" } });
     fixture.session.send_pending = false;
-    fixture.runtime.application.dropClient(key);
+    fixture.runtime.model.dropClient(key);
     try std.testing.expect(fixture.session.closing);
     try std.testing.expect(fixture.session.search_scheduled);
-    try std.testing.expect(fixture.runtime.application.clients.resolve(key) != null);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(key) != null);
     var stale = key;
     stale.generation += 1;
     try std.testing.expect(!try fixture.runtime.update(.{ .pane_search = .{ .client = stale, .request_id = @enumFromInt(41) } }));
@@ -175,7 +175,7 @@ test "closing clients retain their search slot until the matching wake retires i
             break;
         }
     }
-    try std.testing.expect(fixture.runtime.application.clients.resolve(key) == null);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(key) == null);
 }
 
 test "a failed search wake retires a closing session without admitting more work" {
@@ -185,15 +185,15 @@ test "a failed search wake retires a closing session without admitting more work
     const key = fixture.session.key;
     fixture.session.search_scheduled = true;
     fixture.session.send_pending = false;
-    fixture.runtime.application.dropClient(key);
-    try std.testing.expect(fixture.runtime.application.clients.resolve(key) != null);
+    fixture.runtime.model.dropClient(key);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(key) != null);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .pane_search = .{
         .client = key,
         .request_id = @enumFromInt(41),
         .result = error.Canceled,
     } }));
-    try std.testing.expect(fixture.runtime.application.clients.resolve(key) == null);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(key) == null);
 }
 
 test "failed search admission cannot retain a closing client slot" {
@@ -202,7 +202,7 @@ test "failed search admission cannot retain a closing client slot" {
     defer fixture.deinit();
     fixture.failScheduling();
     const session = fixture.request.session;
-    try std.testing.expectError(error.ConcurrencyUnavailable, pane_search.start(fixture.application, session, .{
+    try std.testing.expectError(error.ConcurrencyUnavailable, pane_search.start(fixture.model, session, .{
         .request_id = @enumFromInt(41),
         .pane_id = fixture.pane.id,
         .needle = "search",
@@ -211,6 +211,6 @@ test "failed search admission cannot retain a closing client slot" {
     try std.testing.expect(session.pending_search == null);
     const key = session.key;
     session.send_pending = false;
-    fixture.application.dropClient(key);
-    try std.testing.expect(fixture.application.clients.resolve(key) == null);
+    fixture.model.dropClient(key);
+    try std.testing.expect(fixture.model.clients.resolve(key) == null);
 }

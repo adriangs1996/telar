@@ -175,7 +175,7 @@ test {
     _ = @import("runtime/application/event_dispatcher/pane/io.zig");
     _ = @import("runtime/application/event_dispatcher/pane/pipeline.zig");
     _ = @import("runtime/application/event_dispatcher/pane/projection.zig");
-    _ = @import("runtime/application/model.zig");
+    _ = @import("runtime/RuntimeModel.zig");
     _ = @import("runtime/application/operation_scheduler.zig");
     _ = @import("runtime/application/pane_launcher.zig");
     _ = @import("runtime/application/session_checkpoint.zig");

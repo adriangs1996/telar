@@ -1,6 +1,6 @@
 //! Correlated, bounded search turns. No worker borrows terminal state.
 
-const Application = @import("Application.zig");
+const RuntimeModel = @import("../RuntimeModel.zig");
 const Session = @import("../client/Session.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
@@ -12,9 +12,9 @@ const Wake = @import("Wake.zig");
 const MatchesType = @import("commands/Matches.zig");
 
 /// Starts a search, replacing only this client's previous search.
-/// Example: `try start(application, session, request);`.
-pub fn start(application: *Application, session: *Session, request: core.SearchPane) !void {
-    const pane = resolveTarget(&application.model.panes, session, request.pane_id) orelse {
+/// Example: `try start(model, session, request);`.
+pub fn start(model: *RuntimeModel, session: *Session, request: core.SearchPane) !void {
+    const pane = resolveTarget(&model.panes, session, request.pane_id) orelse {
         try session.delivery.responses.push(.{ .request_failed = .{
             .request_id = request.request_id,
             .code = .pane_not_found,
@@ -30,23 +30,23 @@ pub fn start(application: *Application, session: *Session, request: core.SearchP
         .request_id = request.request_id,
         .pane = pane,
         .cursor = Cursor.init(request.needle),
-        .deadline_ns = std.Io.Clock.awake.now(application.io).nanoseconds + 250 * std.time.ns_per_ms,
+        .deadline_ns = std.Io.Clock.awake.now(model.io).nanoseconds + 250 * std.time.ns_per_ms,
     };
     if (session.search_scheduled) {
         return;
     }
 
     errdefer session.pending_search = null;
-    try schedule(application, .{ .client = session.key, .request_id = request.request_id }, false);
+    try schedule(model, .{ .client = session.key, .request_id = request.request_id }, false);
 }
 
 /// Resolves ownership again before inspecting at most one row budget.
-/// Example: `try advance(application, wake);`.
-pub fn advance(application: *Application, completion: Wake) !void {
-    const session = application.clients.resolve(completion.client) orelse return;
+/// Example: `try advance(model, wake);`.
+pub fn advance(model: *RuntimeModel, completion: Wake) !void {
+    const session = model.clients.resolve(completion.client) orelse return;
     session.search_scheduled = false;
     if (session.closing) {
-        application.finalizeClient(completion.client);
+        model.finalizeClient(completion.client);
         return;
     }
 
@@ -57,7 +57,7 @@ pub fn advance(application: *Application, completion: Wake) !void {
     const pending = if (session.pending_search) |*pending| pending else return;
     const wake: Wake = .{ .client = completion.client, .request_id = pending.request_id };
 
-    const pane = application.model.panes.resolve(pending.pane) orelse {
+    const pane = model.panes.resolve(pending.pane) orelse {
         session.pending_search = null;
         try fail(session, wake.request_id, "Pane search target exited");
         return;
@@ -68,7 +68,7 @@ pub fn advance(application: *Application, completion: Wake) !void {
         return;
     }
 
-    if (std.Io.Clock.awake.now(application.io).nanoseconds >= pending.deadline_ns) {
+    if (std.Io.Clock.awake.now(model.io).nanoseconds >= pending.deadline_ns) {
         session.pending_search = null;
         try fail(session, wake.request_id, "Pane search deadline exceeded; retry");
         return;
@@ -92,7 +92,7 @@ pub fn advance(application: *Application, completion: Wake) !void {
             .matches = matches,
         } });
     } else {
-        try schedule(application, wake, pane.ingest_pending);
+        try schedule(model, wake, pane.ingest_pending);
     }
 }
 
@@ -104,13 +104,13 @@ fn fail(session: *Session, request_id: core.RequestId, message: []const u8) !voi
     } });
 }
 
-fn schedule(application: *Application, wake: Wake, busy: bool) !void {
-    const session = application.clients.resolve(wake.client) orelse return;
+fn schedule(model: *RuntimeModel, wake: Wake, busy: bool) !void {
+    const session = model.clients.resolve(wake.client) orelse return;
     std.debug.assert(!session.search_scheduled);
     session.search_scheduled = true;
     errdefer session.search_scheduled = false;
 
-    try application.select.concurrent(.pane_search, yield, .{ application.io, wake, busy });
+    try model.select.concurrent(.pane_search, yield, .{ model.io, wake, busy });
 }
 
 fn yield(io: std.Io, wake: Wake, busy: bool) Wake {

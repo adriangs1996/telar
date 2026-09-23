@@ -1,12 +1,11 @@
 const core = @import("telar-core");
 const ResourcesType = @import("resources/Resources.zig");
 const Loop = @import("Loop.zig");
-const ApplicationType = @import("application/Application.zig");
+const RuntimeModel = @import("RuntimeModel.zig");
 const IngestTestGateType = @import("IngestTestGate.zig");
 const InitializationType = @import("Initialization.zig");
 const InitialSourcesType = @import("InitialSources.zig");
 const SourcesType = @import("Sources.zig");
-const OptionsType = @import("Options.zig");
 const runtime_event = @import("event.zig");
 const events = @import("application/events.zig");
 const change_review = @import("application/change_review.zig");
@@ -15,13 +14,13 @@ const agent_threads = @import("application/agent_threads.zig");
 const pane_search_module = @import("application/pane_search.zig");
 const editors = @import("application/operations/editors.zig");
 const client_delivery = @import("application/client_delivery.zig");
-/// Owns and composes the resources, event loop and application for one
+/// Owns and composes the resources, event loop and model for one
 /// long-lived backend lifetime.
 const Runtime = @This();
 
 resources: ResourcesType,
 loop: Loop,
-application: ApplicationType,
+model: RuntimeModel,
 ingest_gate: ?*IngestTestGateType,
 teardown_state: enum { running, shutting_down, stopped },
 
@@ -47,14 +46,14 @@ pub fn start(runtime: *Runtime, initialization: InitializationType, comptime fai
     runtime.loop.init(runtime.resources.io(), initialization.options.stop);
     errdefer runtime.loop.cancel();
 
-    try runtime.composeApplication(initialization.options);
+    try runtime.model.init(&runtime.resources, runtime.loop.selector(), initialization.options);
     errdefer {
-        runtime.application.model.panes.shutdown();
+        runtime.model.panes.shutdown();
         runtime.loop.cancel();
-        runtime.application.deinitModel();
+        runtime.model.deinitModel();
     }
 
-    runtime.application.restoreSession();
+    runtime.model.restoreSession();
     try runtime.scheduleInitialEvents();
 
     if (comptime fail_after_actors) {
@@ -75,29 +74,6 @@ fn scheduleInitialEvents(runtime: *Runtime) !void {
     };
 
     try initial_sources.schedule();
-}
-
-fn composeApplication(runtime: *Runtime, options: OptionsType) !void {
-    try runtime.application.init(.{
-        .io = runtime.resources.io(),
-        .gpa = runtime.resources.gpa,
-        .heap = &runtime.resources.heap,
-        .select = runtime.loop.selector(),
-        .history_service = runtime.resources.history.service(),
-        .child_environment = &runtime.resources.child_environment,
-        .inherited_environment = options.environment,
-        .socket_path = options.endpoint,
-        .agent_manifests = &runtime.resources.agent_manifests,
-        .session_path = options.session_path,
-        .resume_agents = options.resume_agents,
-        .proxy_runtime = &runtime.resources.proxy,
-        .plugin_service = runtime.resources.pluginService(),
-        .agent_description_options = options.agent_descriptions,
-        .engine_service = runtime.resources.engineService(),
-        .launch_fault = options.launch_fault,
-        .clients = runtime.resources.clients,
-        .graphics = options.graphics,
-    });
 }
 
 /// Runs the event loop until the runtime receives a stop event or an
@@ -131,24 +107,23 @@ pub fn deinit(self: *Runtime) void {
 
     self.teardown_state = .shutting_down;
     self.resources.listener.shutdown();
-    self.application.stopClientConnections();
-    self.application.model.panes.shutdown();
+    self.model.stopClientConnections();
+    self.model.panes.shutdown();
     // Actors must release their borrows before any backing storage is destroyed.
     self.loop.cancel();
-    self.application.persistSession();
+    self.model.persistSession();
 
     self.resources.proxy.deinit();
     self.resources.plugins.deinit();
     self.resources.listener.deinit(self.resources.io());
-    self.application.deinitClients();
-    self.application.deinitModel();
+    self.model.deinitClients();
+    self.model.deinitModel();
 
     if (self.resources.engine) |*engine| {
         engine.deinit();
     }
 
     self.resources.history.deinit();
-    self.resources.gpa.destroy(self.resources.clients);
     self.resources.telemetry.deinit(self.resources.io());
     self.resources.child_environment.deinit();
     self.teardown_state = .stopped;
@@ -161,93 +136,93 @@ pub fn update(self: *Runtime, event: runtime_event.Event) !bool {
     switch (event) {
         .stopped => |result| return self.loop.completeStop(result),
         .accepted => |result| {
-            try events.clients.handleAccepted(&self.application, result, &self.resources.listener);
+            try events.clients.handleAccepted(&self.model, result, &self.resources.listener);
         },
         .handshaken => |result| {
-            events.clients.handleHandshaken(&self.application, result);
+            events.clients.handleHandshaken(&self.model, result);
         },
-        .client_message => |value| events.clients.handleMessage(&self.application, value),
-        .client_sent => |value| events.clients.handleSent(&self.application, value),
+        .client_message => |value| events.clients.handleMessage(&self.model, value),
+        .client_sent => |value| events.clients.handleSent(&self.model, value),
         .cell_publication_due => |result| {
-            try self.application.cellPublicationDue(result);
+            try self.model.cellPublicationDue(result);
         },
         .history_response => |result| {
-            try events.history.handle(&self.application, result);
+            try events.history.handle(&self.model, result);
         },
         .proxy_event => |result| {
-            try events.agents.handleProxyObservation(&self.application, result);
+            try events.agents.handleProxyObservation(&self.model, result);
         },
         .proxy_capture => |result| {
-            try events.agents.handleProxyCapture(&self.application, result);
+            try events.agents.handleProxyCapture(&self.model, result);
         },
         .plugin_effects => |result| {
-            try events.agents.handlePluginEffects(&self.application, result);
+            try events.agents.handlePluginEffects(&self.model, result);
         },
         .agent_tick => |result| {
-            try events.agents.handleMaintenance(&self.application, result);
+            try events.agents.handleMaintenance(&self.model, result);
         },
         .agent_description => |result| {
-            events.agents.handleDescription(&self.application, result);
+            events.agents.handleDescription(&self.model, result);
         },
-        .change_review_completed => |job| change_review.complete(&self.application, job),
-        .agent_history_completed => |job| agent_history.complete(&self.application, job),
+        .change_review_completed => |job| change_review.complete(&self.model, job),
+        .agent_history_completed => |job| agent_history.complete(&self.model, job),
         .agent_thread_changed => |result| {
-            if (try agent_threads.handle(&self.application, result)) {
-                try events.panes.Pipeline.handleExit(&self.application, .{ .pane = result.pane, .result = .{ .exited = 0 } });
+            if (try agent_threads.handle(&self.model, result)) {
+                try events.panes.Pipeline.handleExit(&self.model, .{ .pane = result.pane, .result = .{ .exited = 0 } });
             }
         },
         .engine_response => |result| {
-            try events.agents.handleEngineResponse(&self.application, result);
+            try events.agents.handleEngineResponse(&self.model, result);
         },
         .metrics_tick => |result| {
-            try events.observability.handleMetricsTick(&self.application, result);
+            try events.observability.handleMetricsTick(&self.model, result);
         },
-        .metrics_sampled => |sample| events.observability.handleMetricsSample(&self.application, sample),
+        .metrics_sampled => |sample| events.observability.handleMetricsSample(&self.model, sample),
         .pane_input_written => |value| {
-            try events.panes.Io.handleInputWritten(&self.application, value);
+            try events.panes.Io.handleInputWritten(&self.model, value);
         },
         .pane_response_written => |value| {
-            try events.panes.Io.handleResponseWritten(&self.application, value);
+            try events.panes.Io.handleResponseWritten(&self.model, value);
         },
         .pane_output => |value| {
-            try events.panes.Pipeline.handleOutput(&self.application, value, self.ingest_gate);
+            try events.panes.Pipeline.handleOutput(&self.model, value, self.ingest_gate);
         },
         .pane_ingested => |value| {
-            try events.panes.Pipeline.handleIngested(&self.application, value);
+            try events.panes.Pipeline.handleIngested(&self.model, value);
         },
         .pane_observed => |value| {
-            try events.panes.Projection.handleObserved(&self.application, value);
+            try events.panes.Projection.handleObserved(&self.model, value);
         },
         .pane_media => |value| {
-            try events.panes.Projection.handleMedia(&self.application, value);
+            try events.panes.Projection.handleMedia(&self.model, value);
         },
         .pane_search => |value| {
-            try pane_search_module.advance(&self.application, value);
+            try pane_search_module.advance(&self.model, value);
         },
         .pane_exit => |value| {
-            try events.panes.Pipeline.handleExit(&self.application, value);
+            try events.panes.Pipeline.handleExit(&self.model, value);
         },
         .telemetry_tick => |result| {
-            events.observability.handleTelemetryTick(&self.application, &self.resources.telemetry, result);
+            events.observability.handleTelemetryTick(&self.model, &self.resources.telemetry, result);
         },
         .telemetry_written => |result| {
-            events.observability.handleTelemetryWritten(&self.application, &self.resources.telemetry, result);
+            events.observability.handleTelemetryWritten(&self.model, &self.resources.telemetry, result);
         },
         .checkpoint_written => |result| {
-            self.application.sessionCheckpointWritten(result);
+            self.model.sessionCheckpointWritten(result);
         },
-        .editor_opened => |job| editors.complete(&self.application, job),
+        .editor_opened => |job| editors.complete(&self.model, job),
         .git_status => |completion| {
-            self.application.gitStatusCompleted(completion);
+            self.model.gitStatusCompleted(completion);
         },
         .session_name => |completion| {
-            self.application.sessionNameCompleted(completion);
+            self.model.sessionNameCompleted(completion);
         },
     }
 
-    try client_delivery.flush(&self.application);
+    try client_delivery.flush(&self.model);
     return switch (event) {
-        .client_message, .client_sent => client_delivery.shutdownDelivered(&self.application),
+        .client_message, .client_sent => client_delivery.shutdownDelivered(&self.model),
         else => false,
     };
 }

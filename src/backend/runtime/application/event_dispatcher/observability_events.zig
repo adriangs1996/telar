@@ -9,42 +9,42 @@ const ClientSampleType = @import("../../observability/ClientSample.zig");
 const telemetry_module = @import("../../observability/telemetry.zig");
 const std = @import("std");
 
-const Application = @import("../Application.zig");
+const RuntimeModel = @import("../../RuntimeModel.zig");
 
 /// Rearms the periodic source and admits at most one observation job.
 ///
 /// ```zig
-/// try ObservabilityEvents.handleMetricsTick(&application, result);
+/// try ObservabilityEvents.handleMetricsTick(&model, result);
 /// ```
-pub fn handleMetricsTick(application: *Application, result: anyerror!void) !void {
+pub fn handleMetricsTick(model: *RuntimeModel, result: anyerror!void) !void {
     result catch return;
-    try rearmSystemMetrics(application);
-    if (application.system_metrics_pending) {
+    try rearmSystemMetrics(model);
+    if (model.system_metrics_pending) {
         return;
     }
 
-    application.system_metrics_pending = true;
-    errdefer application.system_metrics_pending = false;
-    try scheduleSystemMetrics(application, application.system_metrics);
+    model.system_metrics_pending = true;
+    errdefer model.system_metrics_pending = false;
+    try scheduleSystemMetrics(model, model.system_metrics);
 }
 
 /// Publishes a complete value-owned observation before client delivery.
-/// Example: `ObservabilityEvents.handleMetricsSample(&application, sample);`.
-pub fn handleMetricsSample(application: *Application, sample: SystemMetricsSample) void {
-    application.metrics.system_sample.observe(sample.duration_ns);
-    application.metrics.system_sample_last_ns = sample.captured_ns;
-    publishMetrics(application, sample.sampler);
+/// Example: `ObservabilityEvents.handleMetricsSample(&model, sample);`.
+pub fn handleMetricsSample(model: *RuntimeModel, sample: SystemMetricsSample) void {
+    model.metrics.system_sample.observe(sample.duration_ns);
+    model.metrics.system_sample_last_ns = sample.captured_ns;
+    publishMetrics(model, sample.sampler);
 }
 
 /// Formats and schedules one telemetry sample when its sink remains
 /// available; source or formatting failures disable that sink.
 ///
 /// ```zig
-/// ObservabilityEvents.handleTelemetryTick(&application, telemetry, result);
+/// ObservabilityEvents.handleTelemetryTick(&model, telemetry, result);
 /// ```
-pub fn handleTelemetryTick(application: *Application, telemetry: *State, result: anyerror!void) void {
+pub fn handleTelemetryTick(model: *RuntimeModel, telemetry: *State, result: anyerror!void) void {
     result catch {
-        telemetry.deinit(application.io);
+        telemetry.deinit(model.io);
         return;
     };
 
@@ -52,8 +52,8 @@ pub fn handleTelemetryTick(application: *Application, telemetry: *State, result:
         return;
     }
 
-    scheduleTelemetryTick(application) catch {
-        telemetry.deinit(application.io);
+    scheduleTelemetryTick(model) catch {
+        telemetry.deinit(model.io);
         return;
     };
 
@@ -61,11 +61,11 @@ pub fn handleTelemetryTick(application: *Application, telemetry: *State, result:
         return;
     }
 
-    const line = formatTelemetrySample(application, telemetry.buffer()) catch return;
+    const line = formatTelemetrySample(model, telemetry.buffer()) catch return;
     telemetry.beginWrite();
-    scheduleTelemetryWrite(application, telemetry, line) catch {
+    scheduleTelemetryWrite(model, telemetry, line) catch {
         telemetry.cancelWrite();
-        telemetry.deinit(application.io);
+        telemetry.deinit(model.io);
     };
 }
 
@@ -73,35 +73,35 @@ pub fn handleTelemetryTick(application: *Application, telemetry: *State, result:
 /// failed.
 ///
 /// ```zig
-/// ObservabilityEvents.handleTelemetryWritten(&application, telemetry, result);
+/// ObservabilityEvents.handleTelemetryWritten(&model, telemetry, result);
 /// ```
-pub fn handleTelemetryWritten(application: *Application, telemetry: *State, result: anyerror!void) void {
+pub fn handleTelemetryWritten(model: *RuntimeModel, telemetry: *State, result: anyerror!void) void {
     switch (telemetry.finishWrite(result)) {
         .ready => {},
-        .disable_sink => telemetry.deinit(application.io),
+        .disable_sink => telemetry.deinit(model.io),
     }
 }
 
-fn rearmSystemMetrics(application: *Application) !void {
-    var sources = SourcesType.init(application.io, application.select);
+fn rearmSystemMetrics(model: *RuntimeModel) !void {
+    var sources = SourcesType.init(model.io, model.select);
     try sources.waitForSystemMetrics();
 }
 
-fn scheduleSystemMetrics(application: *Application, sampler: SamplerType) !void {
-    try application.select.concurrent(.metrics_sampled, system_metrics_module.sampleOwned, .{ application.io, sampler });
+fn scheduleSystemMetrics(model: *RuntimeModel, sampler: SamplerType) !void {
+    try model.select.concurrent(.metrics_sampled, system_metrics_module.sampleOwned, .{ model.io, sampler });
 }
 
-fn scheduleTelemetryTick(application: *Application) !void {
-    var sources = SourcesType.init(application.io, application.select);
+fn scheduleTelemetryTick(model: *RuntimeModel) !void {
+    var sources = SourcesType.init(model.io, model.select);
     try sources.waitForTelemetry();
 }
 
-fn formatTelemetrySample(application: *Application, buffer: []u8) ![]const u8 {
+fn formatTelemetrySample(model: *RuntimeModel, buffer: []u8) ![]const u8 {
     var attachment_stores: [store_support.max_clients]*const AttachmentStoreType = undefined;
     var attachment_count: usize = 0;
-    var clients: ClientSampleType = .{ .count = application.clients.count };
+    var clients: ClientSampleType = .{ .count = model.clients.count };
 
-    for (&application.clients.items) |*slot| {
+    for (&model.clients.items) |*slot| {
         const session = slot.* orelse continue;
         attachment_stores[attachment_count] = &session.attachments;
         attachment_count += 1;
@@ -112,19 +112,19 @@ fn formatTelemetrySample(application: *Application, buffer: []u8) ![]const u8 {
 
     clients.attachment_stores = attachment_stores[0..attachment_count];
 
-    const proxy_metrics = application.proxy_runtime.metrics();
-    const workspaces = application.workspaceReader();
+    const proxy_metrics = model.resources.proxy.metrics();
+    const workspaces = model.workspaceReader();
 
     return telemetry_module.formatRuntimeTelemetry(buffer, .{
-        .io = application.io,
-        .metrics = &application.metrics,
+        .io = model.io,
+        .metrics = &model.metrics,
         .clients = clients,
         .workspace_count = workspaces.count(),
         .tab_count = workspaces.totalTabs(),
-        .panes = &application.model.panes,
-        .history_service = application.history_service,
+        .panes = &model.panes,
+        .history_service = model.resources.history.service(),
         .proxy = .{
-            .active = application.proxy_runtime.active(),
+            .active = model.resources.proxy.active(),
             .active_connections = proxy_metrics.active_connections,
             .event_queue_depth = proxy_metrics.queued_events,
             .event_queue_high_water = proxy_metrics.event_queue_high_water,
@@ -153,20 +153,20 @@ fn formatTelemetrySample(application: *Application, buffer: []u8) ![]const u8 {
             .capture_queue_depth = proxy_metrics.queued_captures,
             .capture_queue_high_water = proxy_metrics.capture_queue_high_water,
         },
-        .heap = application.heap,
+        .heap = &model.resources.heap,
     });
 }
 
-fn scheduleTelemetryWrite(application: *Application, state: *State, line: []const u8) !void {
-    try application.select.concurrent(.telemetry_written, writeDiagnostics, .{ application.io, state, line });
+fn scheduleTelemetryWrite(model: *RuntimeModel, state: *State, line: []const u8) !void {
+    try model.select.concurrent(.telemetry_written, writeDiagnostics, .{ model.io, state, line });
 }
 
 fn writeDiagnostics(io: std.Io, state: *State, bytes: []const u8) anyerror!void {
     try state.write(io, bytes);
 }
 
-fn publishMetrics(application: *Application, sampled: SamplerType) void {
-    std.debug.assert(application.system_metrics_pending);
-    application.system_metrics_pending = false;
-    application.system_metrics = sampled;
+fn publishMetrics(model: *RuntimeModel, sampled: SamplerType) void {
+    std.debug.assert(model.system_metrics_pending);
+    model.system_metrics_pending = false;
+    model.system_metrics = sampled;
 }

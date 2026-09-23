@@ -41,7 +41,7 @@ pub fn routeQueryHistory(request: *RequestContext, wire: core.QueryHistory) !voi
         },
         error.HistoryQueueFull => {
             if (comptime core.enabled) {
-                request.application.metrics.history_query_failures += 1;
+                request.model.metrics.history_query_failures += 1;
             }
 
             try queryHistoryQueueFailure(request, .{
@@ -55,14 +55,14 @@ pub fn routeQueryHistory(request: *RequestContext, wire: core.QueryHistory) !voi
     };
 
     if (comptime core.enabled) {
-        request.application.metrics.history_queries += 1;
+        request.model.metrics.history_queries += 1;
     }
 }
 
 /// Example: `try history.routeDeleteHistory(request, delete);`.
 pub fn routeDeleteHistory(request: *RequestContext, delete: core.DeleteHistory) !void {
     try historyDeleteHistory(request, .{
-        .io = request.application.io,
+        .io = request.model.io,
         .origin = .{
             .client = request.session.key,
             .close_after_reply = request.session.role == .control,
@@ -74,7 +74,7 @@ pub fn routeDeleteHistory(request: *RequestContext, delete: core.DeleteHistory) 
 /// Example: `try history.routePruneHistory(request, prune);`.
 pub fn routePruneHistory(request: *RequestContext, prune: core.PruneHistory) !void {
     try historyPruneHistory(request, .{
-        .io = request.application.io,
+        .io = request.model.io,
         .origin = .{
             .client = request.session.key,
             .close_after_reply = request.session.role == .control,
@@ -86,7 +86,7 @@ pub fn routePruneHistory(request: *RequestContext, prune: core.PruneHistory) !vo
 /// Example: `try history.routeReadHistoryOutput(request, read);`.
 pub fn routeReadHistoryOutput(request: *RequestContext, read: core.ReadHistoryOutput) !void {
     try historyReadHistoryOutput(request, .{
-        .io = request.application.io,
+        .io = request.model.io,
         .origin = .{
             .client = request.session.key,
             .close_after_reply = request.session.role == .control,
@@ -98,7 +98,7 @@ pub fn routeReadHistoryOutput(request: *RequestContext, read: core.ReadHistoryOu
 /// Example: `try history.routeHistoryStats(request, query);`.
 pub fn routeHistoryStats(request: *RequestContext, query: core.HistoryStatsQuery) !void {
     try historyHistoryStats(request, .{
-        .io = request.application.io,
+        .io = request.model.io,
         .origin = .{
             .client = request.session.key,
             .close_after_reply = request.session.role == .control,
@@ -109,11 +109,11 @@ pub fn routeHistoryStats(request: *RequestContext, query: core.HistoryStatsQuery
 
 /// Example: `try history.routeImportHistory(request, batch);`.
 pub fn routeImportHistory(request: *RequestContext, batch: core.ImportHistoryView) !void {
-    try historyImportHistory(request, request.application.io, batch);
+    try historyImportHistory(request, request.model.io, batch);
 }
 
 fn queryHistory(request: *RequestContext, command: HistoryRequest) anyerror!void {
-    const application = request.application;
+    const model = request.model;
 
     const query = QueryType.init(.{
         .request_id = command.request_id,
@@ -134,7 +134,7 @@ fn queryHistory(request: *RequestContext, command: HistoryRequest) anyerror!void
         return error.InvalidHistoryQuery;
     };
 
-    if (!application.history_service.query(application.io, query)) {
+    if (!model.resources.history.service().query(model.io, query)) {
         return error.HistoryQueueFull;
     }
 }
@@ -148,7 +148,7 @@ fn queryHistoryQueueFailure(request: *RequestContext, failure: HistoryQueryFailu
 }
 
 fn historyDeleteHistory(request: *RequestContext, context: DeleteContextType) !void {
-    if (!request.application.history_service.deleteHistory(context.io, .{
+    if (!request.model.resources.history.service().deleteHistory(context.io, .{
         .request_id = context.request.request_id,
         .origin = context.origin,
         .id = context.request.id,
@@ -176,7 +176,7 @@ fn historyPruneHistory(request: *RequestContext, context: PruneContextType) !voi
         return;
     };
 
-    if (!request.application.history_service.pruneHistory(context.io, prune)) {
+    if (!request.model.resources.history.service().pruneHistory(context.io, prune)) {
         try historyRefuse(request, context.request.request_id);
     }
 }
@@ -190,7 +190,7 @@ fn historyRefuse(request: *RequestContext, request_id: core.RequestId) !void {
 }
 
 fn historyReadHistoryOutput(request: *RequestContext, context: ReadContextType) !void {
-    if (!request.application.history_service.readOutput(context.io, .{
+    if (!request.model.resources.history.service().readOutput(context.io, .{
         .request_id = context.request.request_id,
         .origin = context.origin,
         .id = context.request.id,
@@ -220,7 +220,7 @@ fn historyHistoryStats(request: *RequestContext, context: StatsContextType) !voi
         return;
     };
 
-    if (!request.application.history_service.statsHistory(context.io, query)) {
+    if (!request.model.resources.history.service().statsHistory(context.io, query)) {
         try request.session.delivery.responses.push(.{ .request_failed = .{
             .request_id = context.request.request_id,
             .code = .resource_limit,
@@ -230,7 +230,7 @@ fn historyHistoryStats(request: *RequestContext, context: StatsContextType) !voi
 }
 
 fn historyImportHistory(request: *RequestContext, io: std.Io, batch: core.ImportHistoryView) !void {
-    if (!request.application.history_service.importBatch(io, batch)) {
+    if (!request.model.resources.history.service().importBatch(io, batch)) {
         try request.session.delivery.responses.push(.{ .request_failed = .{
             .request_id = batch.request_id,
             .code = .resource_limit,

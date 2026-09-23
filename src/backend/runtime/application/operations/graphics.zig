@@ -14,7 +14,7 @@ pub fn routeRequestGraphicsSnapshot(request: *RequestContext, wire: core.Request
     const result = try requestGraphicsSnapshot(request, .{ .pane_id = wire.pane_id });
 
     if (result == .pane_not_attached) {
-        request.application.metrics.stale_client_messages += 1;
+        request.model.metrics.stale_client_messages += 1;
     }
 }
 
@@ -26,7 +26,7 @@ pub fn routeGraphicsCredit(request: *RequestContext, credit: core.GraphicsCredit
     });
 
     if (result != .returned) {
-        request.application.metrics.stale_client_messages += 1;
+        request.model.metrics.stale_client_messages += 1;
     }
 }
 
@@ -38,7 +38,7 @@ pub fn routeConfigureGraphics(request: *RequestContext, configure: core.Configur
 /// Example: `try graphics.routeConfigureTerminalColors(request, colors);`.
 pub fn routeConfigureTerminalColors(request: *RequestContext, colors: core.TerminalColors) !void {
     if (request.session.setTerminalColors(colors)) {
-        request.application.refreshTerminalColors(request.session.key);
+        request.model.refreshTerminalColors(request.session.key);
     }
 }
 

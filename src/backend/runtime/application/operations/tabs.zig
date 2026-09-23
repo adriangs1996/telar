@@ -1,7 +1,7 @@
 //! Runtime tabs operations, reached from requests.dispatch.
 
 const core = @import("telar-core");
-const Application = @import("../Application.zig");
+const RuntimeModel = @import("../../RuntimeModel.zig");
 const CreateTab = @import("../commands/CreateTab.zig");
 const CreateTabResult = @import("../commands/CreateTabResult.zig");
 const create_tab = @import("../commands/create_tab.zig");
@@ -169,7 +169,7 @@ pub fn routeMoveTab(request: *RequestContext, wire: core.MoveTab) !void {
 }
 
 fn prepareCreateTabLaunch(client: *RequestContext, request: CreateTabPrepareLaunch) ![]const u8 {
-    if (!client.application.holdsGeometry(client.session.key, request.workspace)) {
+    if (!client.model.holdsGeometry(client.session.key, request.workspace)) {
         return error.GeometryUnavailable;
     }
 
@@ -181,13 +181,13 @@ fn prepareCreateTabLaunch(client: *RequestContext, request: CreateTabPrepareLaun
 }
 
 fn attachCreatedTab(client: *RequestContext, launched: CreateTabLaunchedPane) !void {
-    const pane = client.application.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
+    const pane = client.model.panes.findRunning(launched.id) orelse return error.LaunchedPaneUnavailable;
 
-    _ = try client.session.attachments.attach(client.application.gpa, pane);
+    _ = try client.session.attachments.attach(client.model.gpa, pane);
 }
 
-fn launchCreatedTabPane(application: *Application, request: CreateTabLaunchPane) !CreateTabLaunchedPane {
-    const pane = try application.launchPane(.{
+fn launchCreatedTabPane(model: *RuntimeModel, request: CreateTabLaunchPane) !CreateTabLaunchedPane {
+    const pane = try model.launchPane(.{
         .location = request.location,
         .kind = request.kind,
         .size = request.size,
@@ -200,38 +200,38 @@ fn launchCreatedTabPane(application: *Application, request: CreateTabLaunchPane)
 }
 
 fn publishTabCreated(publication: *RequestContext, event: TabCreatedType) void {
-    publication.application.noteSessionChange();
-    publication.application.notifyWorkspaceChanged(publication.session.key, event.location.workspace);
+    publication.model.noteSessionChange();
+    publication.model.notifyWorkspaceChanged(publication.session.key, event.location.workspace);
 }
 
 fn publishTabRenamed(publication: *RequestContext, event: TabRenamedType) void {
-    publication.application.noteSessionChange();
+    publication.model.noteSessionChange();
 
-    publication.application.model.agents.touch();
-    publication.application.notifyWorkspaceChanged(publication.session.key, event.location.workspace);
+    publication.model.agents.touch();
+    publication.model.notifyWorkspaceChanged(publication.session.key, event.location.workspace);
 }
 
 fn publishTabMoved(publication: *RequestContext, event: TabMovedType) void {
-    publication.application.noteSessionChange();
-    publication.application.notifyWorkspaceChanged(publication.session.key, event.location.workspace);
+    publication.model.noteSessionChange();
+    publication.model.notifyWorkspaceChanged(publication.session.key, event.location.workspace);
 }
 
 fn publishTabRemoved(publication: *RequestContext, event: TabRemovedType) void {
-    publication.application.noteSessionChange();
+    publication.model.noteSessionChange();
 
     if (event.workspace_removed) {
-        publication.application.notifyWorkspaceClosed(.{
+        publication.model.notifyWorkspaceClosed(.{
             .origin = publication.session.key,
             .workspace = event.location.workspace,
             .previous_workspace = event.previous_workspace,
         });
     } else {
-        publication.application.notifyWorkspaceChanged(publication.session.key, event.location.workspace);
+        publication.model.notifyWorkspaceChanged(publication.session.key, event.location.workspace);
     }
 }
 
 fn createTab(request: *RequestContext, command: CreateTab) anyerror!CreateTabResult {
-    const application = request.application;
+    const model = request.model;
 
     const workspace = request.workspaces.find(command.workspace) orelse return error.WorkspaceNotFound;
     const launch_cwd = try prepareCreateTabLaunch(request, .{
@@ -247,7 +247,7 @@ fn createTab(request: *RequestContext, command: CreateTab) anyerror!CreateTabRes
         std.debug.assert(removed);
     };
 
-    const launched = launchCreatedTabPane(application, .{
+    const launched = launchCreatedTabPane(model, .{
         .location = created.location,
         .kind = command.kind,
         .size = command.size,
@@ -313,11 +313,11 @@ fn moveTabQueueFailure(request: *RequestContext, request_id: core.RequestId, fai
 }
 
 fn closeTab(request: *RequestContext, command: CloseTab) anyerror!TabRemovedType {
-    const application = request.application;
+    const model = request.model;
 
     const removed = commands.removeTab(&request.workspaces, command.location) orelse return error.TabNotFound;
 
-    application.model.panes.closeAt(removed.location);
+    model.panes.closeAt(removed.location);
     publishTabRemoved(request, removed);
     return removed;
 }
@@ -335,7 +335,7 @@ fn requestTabSnapshot(request: *RequestContext, command: TabSnapshotRequest) any
         return error.TabNotFound;
     }
 
-    if ((request.application.model.panes.countAt(command.location)) == 0) {
+    if ((request.model.panes.countAt(command.location)) == 0) {
         return error.TabNotFound;
     }
 

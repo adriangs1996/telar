@@ -27,8 +27,8 @@ test "runtime update ignores retired client and pane generations" {
     for (completions) |completion| {
         try std.testing.expect(!try fixture.runtime.update(completion));
     }
-    try std.testing.expectEqual(@as(u64, 2), fixture.runtime.application.metrics.stale_client_messages);
-    try std.testing.expectEqual(@as(u64, 4), fixture.runtime.application.metrics.stale_pane_events);
+    try std.testing.expectEqual(@as(u64, 2), fixture.runtime.model.metrics.stale_client_messages);
+    try std.testing.expectEqual(@as(u64, 4), fixture.runtime.model.metrics.stale_pane_events);
     try std.testing.expectEqual(actors, pane.actor_count);
     try std.testing.expect(pane.exit == null);
     try std.testing.expect(fixture.session.send_pending);
@@ -48,14 +48,14 @@ test "runtime update retains a closing client until its final socket borrow comp
     try std.testing.expect(!fixture.session.read_pending);
     try std.testing.expect(fixture.session.send_pending);
     try std.testing.expect(fixture.session.closing);
-    try std.testing.expect(fixture.runtime.application.clients.resolve(key) != null);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(key) != null);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .client_sent = .{
         .client = key,
         .result = error.BrokenPipe,
     } }));
-    try std.testing.expect(fixture.runtime.application.clients.resolve(key) == null);
-    try std.testing.expectEqual(@as(usize, 0), fixture.runtime.application.clients.count);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(key) == null);
+    try std.testing.expectEqual(@as(usize, 0), fixture.runtime.model.clients.count);
 }
 
 test "runtime update releases a failed PTY input borrow and discards its queued suffix" {
@@ -94,8 +94,8 @@ test "runtime update decodes a first stop request and records its control role" 
     } }));
     try std.testing.expectEqual(.control, fixture.session.role);
     try std.testing.expect(!fixture.session.read_pending);
-    try std.testing.expect(fixture.runtime.application.shutdown.isRequested());
-    try std.testing.expectEqualDeep(fixture.session.key, fixture.runtime.application.shutdown.initiator.?);
+    try std.testing.expect(fixture.runtime.model.shutdown.isRequested());
+    try std.testing.expectEqualDeep(fixture.session.key, fixture.runtime.model.shutdown.initiator.?);
 }
 
 test "runtime update transfers history ownership only to the matching available client queue" {

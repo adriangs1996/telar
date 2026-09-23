@@ -1,4 +1,4 @@
-//! Runtime protocol contracts exercised through the concrete application dispatch.
+//! Runtime protocol contracts exercised through the concrete model dispatch.
 
 const std = @import("std");
 const core = @import("telar-core");
@@ -31,7 +31,7 @@ test "runtime dispatch counts stale one-way pane requests exactly once" {
     };
     for (messages, 1..) |message, count| {
         try fixture.send(message);
-        try std.testing.expectEqual(@as(u64, count), fixture.runtime.application.metrics.stale_client_messages);
+        try std.testing.expectEqual(@as(u64, count), fixture.runtime.model.metrics.stale_client_messages);
         try std.testing.expect(fixture.response() == null);
     }
     try std.testing.expectEqual(@as(u64, 0), fixture.session.last_input_sequence);
@@ -57,10 +57,10 @@ test "runtime dispatch rejects an unavailable workspace without creating one" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
-    const initial_revision = fixture.runtime.application.workspaceReader().revision();
+    const initial_revision = fixture.runtime.model.workspaceReader().revision();
     try fixture.send(.{ .request_workspace_snapshot = .{ .request_id = @enumFromInt(41), .workspace = missing_location.workspace } });
     try expectFailure(&fixture, .workspace_not_found);
-    try std.testing.expectEqual(initial_revision, fixture.runtime.application.workspaceReader().revision());
+    try std.testing.expectEqual(initial_revision, fixture.runtime.model.workspaceReader().revision());
 }
 
 test "runtime dispatch preserves a committed pane when its reply queue is full" {
@@ -68,7 +68,7 @@ test "runtime dispatch preserves a committed pane when its reply queue is full" 
     try fixture.init();
     defer fixture.deinit();
     const first = try fixture.openPane();
-    const count = fixture.runtime.application.model.panes.count;
+    const count = fixture.runtime.model.panes.count;
     try fixture.fillResponses();
     var launch_buffer: [64]u8 = undefined;
 
@@ -78,7 +78,7 @@ test "runtime dispatch preserves a committed pane when its reply queue is full" 
         .size = .{ .cols = 30, .rows = 8 },
         .launch = try RequestFixture.sleepLaunch(&launch_buffer),
     } }));
-    try std.testing.expectEqual(count + 1, fixture.runtime.application.model.panes.count);
+    try std.testing.expectEqual(count + 1, fixture.runtime.model.panes.count);
     try std.testing.expectEqual(@as(usize, 2), fixture.session.attachments.count);
 }
 
@@ -94,7 +94,7 @@ test "runtime dispatch retains tab rename after response backpressure" {
         .location = pane.location,
         .label = "logs",
     } }));
-    try std.testing.expectEqualStrings("logs", fixture.runtime.application.workspaceReader().tabLabel(pane.location).?);
+    try std.testing.expectEqualStrings("logs", fixture.runtime.model.workspaceReader().tabLabel(pane.location).?);
 }
 
 test "runtime dispatch validates graphics credits against exact outstanding bytes" {
@@ -110,7 +110,7 @@ test "runtime dispatch validates graphics credits against exact outstanding byte
     for ([_]u64{ 0, 1, std.math.maxInt(u64) }, 1..) |bytes, count| {
         try fixture.send(.{ .graphics_credit = .{ .pane_id = pane.id, .bytes = bytes } });
         try std.testing.expectEqual(capacity, attachment.graphics.credit);
-        try std.testing.expectEqual(@as(u64, count), fixture.runtime.application.metrics.stale_client_messages);
+        try std.testing.expectEqual(@as(u64, count), fixture.runtime.model.metrics.stale_client_messages);
     }
 }
 
@@ -126,7 +126,7 @@ test "runtime dispatch keeps graphics configuration scoped to one connection" {
     try std.testing.expect(fixture.session.attachments.find(pane.id) != null);
     try fixture.send(.{ .configure_graphics = .{ .shared = false } });
     try std.testing.expect(!fixture.session.attachments.shared_graphics);
-    try std.testing.expectEqual(@as(u64, 0), fixture.runtime.application.metrics.stale_client_messages);
+    try std.testing.expectEqual(@as(u64, 0), fixture.runtime.model.metrics.stale_client_messages);
 }
 
 test "runtime stop records its first initiator and remains idempotent" {
@@ -135,8 +135,8 @@ test "runtime stop records its first initiator and remains idempotent" {
     defer fixture.deinit();
     try fixture.send(.runtime_stop);
     try fixture.send(.runtime_stop);
-    try std.testing.expect(fixture.runtime.application.shutdown.isRequested());
-    try std.testing.expectEqualDeep(fixture.session.key, fixture.runtime.application.shutdown.initiator.?);
+    try std.testing.expect(fixture.runtime.model.shutdown.isRequested());
+    try std.testing.expectEqualDeep(fixture.session.key, fixture.runtime.model.shutdown.initiator.?);
     try std.testing.expect(fixture.session.delivery.stopping());
 }
 
@@ -157,13 +157,13 @@ test "runtime dispatch admits multiple viewers but preserves one geometry owner"
     try std.testing.expect(other.attachments.find(pane.id) != null);
     try std.testing.expectEqualDeep(initial_size, pane.size);
     try fixture.sendTo(other, .{ .pane_resize = .{ .pane_id = pane.id, .size = requested_size } });
-    try std.testing.expectEqual(@as(u64, 1), fixture.runtime.application.metrics.geometry_rejections);
+    try std.testing.expectEqual(@as(u64, 1), fixture.runtime.model.metrics.geometry_rejections);
     try std.testing.expectEqualDeep(initial_size, pane.size);
 
     try fixture.send(.{ .detach_pane = .{ .pane_id = pane.id } });
     try fixture.sendTo(other, .{ .pane_resize = .{ .pane_id = pane.id, .size = requested_size } });
     try std.testing.expectEqualDeep(requested_size, pane.size);
-    try std.testing.expectEqual(@as(u64, 1), fixture.runtime.application.metrics.geometry_rejections);
+    try std.testing.expectEqual(@as(u64, 1), fixture.runtime.model.metrics.geometry_rejections);
 }
 
 test "runtime dispatch defers geometry changes while output owns the terminal" {
@@ -178,7 +178,7 @@ test "runtime dispatch defers geometry changes while output owns the terminal" {
     try fixture.send(.{ .pane_resize = .{ .pane_id = pane.id, .size = requested_size } });
     try std.testing.expectEqualDeep(initial_size, pane.size);
     try std.testing.expectEqualDeep(requested_size, pane.pending_size.?);
-    try std.testing.expectEqual(@as(u64, 0), fixture.runtime.application.metrics.geometry_rejections);
+    try std.testing.expectEqual(@as(u64, 0), fixture.runtime.model.metrics.geometry_rejections);
 }
 
 test "runtime dispatch rolls back a tab when post-spawn registration fails" {
@@ -186,12 +186,12 @@ test "runtime dispatch rolls back a tab when post-spawn registration fails" {
     try fixture.init();
     defer fixture.deinit();
     const pane = try fixture.openPane();
-    const reader = fixture.runtime.application.workspaceReader();
+    const reader = fixture.runtime.model.workspaceReader();
     const initial_tabs = reader.totalTabs();
     const initial_revision = reader.revision();
     var fault: LaunchTestFault = .{ .phase = .pane_registration };
-    fixture.runtime.application.launch_fault = &fault;
-    defer fixture.runtime.application.launch_fault = null;
+    fixture.runtime.model.launch_fault = &fault;
+    defer fixture.runtime.model.launch_fault = null;
     var launch_buffer: [64]u8 = undefined;
     try fixture.send(.{ .create_tab = .{
         .request_id = @enumFromInt(41),
@@ -204,7 +204,7 @@ test "runtime dispatch rolls back a tab when post-spawn registration fails" {
     try std.testing.expect(fault.claimed.load(.acquire));
     try std.testing.expectEqual(initial_tabs, reader.totalTabs());
     try std.testing.expectEqual(initial_revision, reader.revision());
-    try std.testing.expectEqual(@as(usize, 1), fixture.runtime.application.model.panes.count);
+    try std.testing.expectEqual(@as(usize, 1), fixture.runtime.model.panes.count);
     try std.testing.expectEqual(@as(usize, 1), fixture.session.attachments.count);
 }
 
@@ -229,7 +229,7 @@ test "runtime dispatch rejects exited pane input without assigning recent-input 
     pane.exit = .{ .exited = 0 };
     defer pane.exit = null;
     try fixture.send(.{ .pane_input = .{ .pane_id = pane.id, .bytes = "ignored" } });
-    try std.testing.expectEqual(@as(u64, 1), fixture.runtime.application.metrics.stale_client_messages);
+    try std.testing.expectEqual(@as(u64, 1), fixture.runtime.model.metrics.stale_client_messages);
     try std.testing.expectEqual(@as(u64, 0), fixture.session.last_input_sequence);
     try std.testing.expectEqual(core.PaneId.invalid, fixture.session.last_input_pane);
 }

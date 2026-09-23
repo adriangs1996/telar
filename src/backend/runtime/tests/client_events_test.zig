@@ -24,26 +24,26 @@ fn expectPeerClosed(peer: *core.SocketChannel) !void {
 }
 
 fn commitQueuedResponse(fixture: *RequestFixture) !void {
-    const application = &fixture.runtime.application;
+    const model = &fixture.runtime.model;
     const session = fixture.session;
     try session.delivery.responses.push(.{ .request_completed = .{ .request_id = @enumFromInt(41) } });
     const prepared = (try session.delivery.prepare(.{
         .io = std.testing.io,
         .attachments = &session.attachments,
         .sources = .{
-            .panes = &application.model.panes,
-            .workspaces = application.workspaceReader(),
-            .agents = &application.model.agents,
-            .system_metrics = &application.system_metrics,
+            .panes = &model.panes,
+            .workspaces = model.workspaceReader(),
+            .agents = &model.agents,
+            .system_metrics = &model.system_metrics,
             .proxy_active = false,
             .home = null,
         },
-        .metrics = &application.metrics,
+        .metrics = &model.metrics,
     })).?;
     session.delivery.commit(.{
         .prepared = prepared,
         .attachments = &session.attachments,
-        .metrics = &application.metrics,
+        .metrics = &model.metrics,
     });
 }
 
@@ -53,12 +53,12 @@ test "runtime update releases a rejected handshake slot and closes its exact soc
     defer fixture.deinit();
     var sockets = try socketPair();
     defer sockets[1].deinit(std.testing.io);
-    const clients_before = fixture.runtime.application.clients.count;
-    fixture.runtime.application.client_admission.begin(sockets[0]);
+    const clients_before = fixture.runtime.model.clients.count;
+    fixture.runtime.model.client_admission.begin(sockets[0]);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .handshaken = error.IncompatibleProtocol }));
-    try std.testing.expect(!fixture.runtime.application.client_admission.isPending());
-    try std.testing.expectEqual(clients_before, fixture.runtime.application.clients.count);
+    try std.testing.expect(!fixture.runtime.model.client_admission.isPending());
+    try std.testing.expectEqual(clients_before, fixture.runtime.model.clients.count);
     try expectPeerClosed(&sockets[1]);
 }
 
@@ -68,13 +68,13 @@ test "runtime update refuses completed negotiation after shutdown starts" {
     defer fixture.deinit();
     var sockets = try socketPair();
     defer sockets[1].deinit(std.testing.io);
-    const clients_before = fixture.runtime.application.clients.count;
-    fixture.runtime.application.client_admission.begin(sockets[0]);
+    const clients_before = fixture.runtime.model.clients.count;
+    fixture.runtime.model.client_admission.begin(sockets[0]);
     try fixture.send(.runtime_stop);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .handshaken = {} }));
-    try std.testing.expect(!fixture.runtime.application.client_admission.isPending());
-    try std.testing.expectEqual(clients_before, fixture.runtime.application.clients.count);
+    try std.testing.expect(!fixture.runtime.model.client_admission.isPending());
+    try std.testing.expectEqual(clients_before, fixture.runtime.model.clients.count);
     try expectPeerClosed(&sockets[1]);
 }
 
@@ -84,14 +84,14 @@ test "runtime update closes a negotiated socket when client identities are exhau
     defer fixture.deinit();
     var sockets = try socketPair();
     defer sockets[1].deinit(std.testing.io);
-    const clients_before = fixture.runtime.application.clients.count;
-    fixture.runtime.application.client_admission.begin(sockets[0]);
-    fixture.runtime.application.clients.next_id = std.math.maxInt(u64);
+    const clients_before = fixture.runtime.model.clients.count;
+    fixture.runtime.model.client_admission.begin(sockets[0]);
+    fixture.runtime.model.clients.next_id = std.math.maxInt(u64);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .handshaken = {} }));
-    try std.testing.expect(!fixture.runtime.application.client_admission.isPending());
-    try std.testing.expectEqual(clients_before, fixture.runtime.application.clients.count);
-    try std.testing.expect(fixture.runtime.application.clients.resolve(fixture.session.key) == fixture.session);
+    try std.testing.expect(!fixture.runtime.model.client_admission.isPending());
+    try std.testing.expectEqual(clients_before, fixture.runtime.model.clients.count);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(fixture.session.key) == fixture.session);
     try expectPeerClosed(&sockets[1]);
 }
 
@@ -101,13 +101,13 @@ test "runtime update transfers a negotiated connection before starting its first
     defer fixture.deinit();
     var sockets = try socketPair();
     defer sockets[1].deinit(std.testing.io);
-    const clients = fixture.runtime.application.clients;
+    const clients = &fixture.runtime.model.clients;
     const expected_key: ClientKey = .{ .id = clients.next_id, .generation = clients.next_generation };
     const admitted_fd = sockets[0].stream.socket.handle;
-    fixture.runtime.application.client_admission.begin(sockets[0]);
+    fixture.runtime.model.client_admission.begin(sockets[0]);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .handshaken = {} }));
-    try std.testing.expect(!fixture.runtime.application.client_admission.isPending());
+    try std.testing.expect(!fixture.runtime.model.client_admission.isPending());
     const admitted = clients.resolve(expected_key).?;
     try std.testing.expectEqual(admitted_fd, admitted.connection.stream.socket.handle);
     try std.testing.expect(admitted.read_pending);
@@ -123,11 +123,11 @@ test "runtime update closes accepted sockets while shutdown owns the runtime" {
     var sockets = try socketPair();
     defer sockets[1].deinit(std.testing.io);
     try fixture.send(.runtime_stop);
-    const clients_before = fixture.runtime.application.clients.count;
+    const clients_before = fixture.runtime.model.clients.count;
 
     try std.testing.expect(!try fixture.runtime.update(.{ .accepted = sockets[0] }));
-    try std.testing.expect(!fixture.runtime.application.client_admission.isPending());
-    try std.testing.expectEqual(clients_before, fixture.runtime.application.clients.count);
+    try std.testing.expect(!fixture.runtime.model.client_admission.isPending());
+    try std.testing.expectEqual(clients_before, fixture.runtime.model.clients.count);
     try expectPeerClosed(&sockets[1]);
 }
 
@@ -140,16 +140,16 @@ test "runtime update interrupts a stalled handshake without replacing its borrow
     var incoming = try socketPair();
     defer incoming[1].deinit(std.testing.io);
     const borrowed_fd = stalled[0].stream.socket.handle;
-    fixture.runtime.application.client_admission.begin(stalled[0]);
+    fixture.runtime.model.client_admission.begin(stalled[0]);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .accepted = incoming[0] }));
-    try std.testing.expect(fixture.runtime.application.client_admission.isPending());
-    try std.testing.expectEqual(borrowed_fd, fixture.runtime.application.client_admission.pendingConnection().?.stream.socket.handle);
+    try std.testing.expect(fixture.runtime.model.client_admission.isPending());
+    try std.testing.expectEqual(borrowed_fd, fixture.runtime.model.client_admission.pendingConnection().?.stream.socket.handle);
     try expectPeerClosed(&incoming[1]);
     try expectPeerClosed(&stalled[1]);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .handshaken = error.ConnectionClosed }));
-    try std.testing.expect(!fixture.runtime.application.client_admission.isPending());
+    try std.testing.expect(!fixture.runtime.model.client_admission.isPending());
 }
 
 test "runtime update closes a one-shot client only after its reply write completes" {
@@ -159,10 +159,10 @@ test "runtime update closes a one-shot client only after its reply write complet
     const key = fixture.session.key;
     fixture.session.delivery.setCloseAfterReply(true);
     try commitQueuedResponse(&fixture);
-    try std.testing.expect(fixture.runtime.application.clients.resolve(key) != null);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(key) != null);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .client_sent = .{ .client = key, .result = {} } }));
-    try std.testing.expect(fixture.runtime.application.clients.resolve(key) == null);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(key) == null);
     try expectPeerClosed(&fixture.peers[0].?);
 }
 
@@ -175,7 +175,7 @@ test "runtime update releases and closes an active client after a failed reply w
     try std.testing.expect(!fixture.session.closing);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .client_sent = .{ .client = key, .result = error.BrokenPipe } }));
-    try std.testing.expect(fixture.runtime.application.clients.resolve(key) == null);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(key) == null);
     try expectPeerClosed(&fixture.peers[0].?);
 }
 
@@ -206,7 +206,7 @@ test "runtime update defers pane detachment until its exit publication is writte
     session.delivery.commit(.{
         .prepared = prepared,
         .attachments = &session.attachments,
-        .metrics = &fixture.runtime.application.metrics,
+        .metrics = &fixture.runtime.model.metrics,
     });
     try std.testing.expect(attachment.exit_sent);
     try std.testing.expect(session.attachments.find(pane.id) != null);
@@ -228,7 +228,7 @@ test "runtime update delivers shutdown before retiring a one-shot client" {
     try fixture.send(.runtime_stop);
 
     try std.testing.expect(!try fixture.runtime.update(.{ .client_sent = .{ .client = key, .result = {} } }));
-    try std.testing.expect(fixture.runtime.application.clients.resolve(key) != null);
+    try std.testing.expect(fixture.runtime.model.clients.resolve(key) != null);
     try std.testing.expect(fixture.session.send_pending);
     var response: [16]u8 = undefined;
     const bytes = try fixture.peers[0].?.receive(std.testing.io, &response);
@@ -244,7 +244,7 @@ test "runtime update delivers shutdown before retiring a one-shot client" {
         }
     }
     try std.testing.expect(!fixture.session.send_pending);
-    try std.testing.expect(client_delivery.shutdownDelivered(&fixture.runtime.application));
+    try std.testing.expect(client_delivery.shutdownDelivered(&fixture.runtime.model));
 }
 
 test "runtime update delivers a workspace resync to other observers in the same update" {
@@ -253,7 +253,7 @@ test "runtime update delivers a workspace resync to other observers in the same 
     defer fixture.deinit();
     const pane = try fixture.openPane();
     const observer = try fixture.addClient();
-    _ = try observer.attachments.attach(fixture.runtime.application.gpa, pane);
+    _ = try observer.attachments.attach(fixture.runtime.model.gpa, pane);
     observer.send_pending = false;
 
     var wire: [64]u8 = undefined;

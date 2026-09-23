@@ -1,7 +1,7 @@
-const Application = @import("Application.zig");
+const RuntimeModel = @import("../RuntimeModel.zig");
 const Session = @import("../client/Session.zig");
 const Repository = @import("../../workspace/Repository.zig");
 
-application: *Application,
+model: *RuntimeModel,
 session: *Session,
 workspaces: Repository,

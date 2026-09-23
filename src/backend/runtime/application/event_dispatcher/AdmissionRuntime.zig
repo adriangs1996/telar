@@ -1,5 +1,5 @@
 const LocalListenerType = @import("../../../transport/LocalListener.zig");
-const Application = @import("../Application.zig");
+const RuntimeModel = @import("../../RuntimeModel.zig");
 
-application: *Application,
+model: *RuntimeModel,
 listener: *LocalListenerType,

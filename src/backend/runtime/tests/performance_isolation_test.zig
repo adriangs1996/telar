@@ -120,15 +120,15 @@ test "performance probe counts work while host sampling is blocked or unchanged"
     var fixture: RequestFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
-    const application = &fixture.runtime.application;
-    application.system_metrics_pending = true;
-    const before = application.system_metrics;
+    const model = &fixture.runtime.model;
+    model.system_metrics_pending = true;
+    const before = model.system_metrics;
     const started = now();
     for (0..100) |_| {
         _ = try fixture.runtime.update(.{ .metrics_tick = {} });
     }
-    try std.testing.expect(application.system_metrics_pending);
-    try std.testing.expectEqualDeep(before, application.system_metrics);
+    try std.testing.expect(model.system_metrics_pending);
+    try std.testing.expectEqualDeep(before, model.system_metrics);
     std.debug.print("PERF metrics_pending_ticks ticks=100 elapsed_ns={d}\n", .{elapsed(started)});
 }
 

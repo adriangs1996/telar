@@ -1,9 +1,9 @@
-const Application = @import("Application.zig");
+const RuntimeModel = @import("../RuntimeModel.zig");
 const Context = @import("../../change_review/Context.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
 
-pub fn resolve(application: *Application, key: PaneKey) !Context {
-    const pane = application.model.panes.resolve(key) orelse return error.PaneNotFound;
+pub fn resolve(model: *RuntimeModel, key: PaneKey) !Context {
+    const pane = model.panes.resolve(key) orelse return error.PaneNotFound;
     if (pane.close_requested or pane.exit != null) {
         return error.PaneExited;
     }
@@ -11,7 +11,7 @@ pub fn resolve(application: *Application, key: PaneKey) !Context {
         const snapshot = pane.agent_thread orelse return error.AgentNotReady;
         return Context.init(key, .codex, snapshot.threadId());
     }
-    const provider = application.model.agents.projectedProvider(key);
-    const reference = application.model.agents.sessionReference(key) orelse return error.AgentNotReady;
+    const provider = model.agents.projectedProvider(key);
+    const reference = model.agents.sessionReference(key) orelse return error.AgentNotReady;
     return Context.init(key, provider, reference.slice());
 }

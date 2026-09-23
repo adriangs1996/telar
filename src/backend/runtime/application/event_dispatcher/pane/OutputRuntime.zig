@@ -1,7 +1,7 @@
 const IngestTestGateType = @import("../../../IngestTestGate.zig");
 const IngestCompletion = @import("../../../entrypoints/events/pane/IngestCompletion.zig");
-const Application = @import("../../Application.zig");
+const RuntimeModel = @import("../../../RuntimeModel.zig");
 
-application: *Application,
+model: *RuntimeModel,
 ingest_gate: ?*IngestTestGateType,
 inline_ingest: ?IngestCompletion = null,

@@ -1,5 +1,5 @@
 const core = @import("telar-core");
-const Application = @import("Application.zig");
+const RuntimeModel = @import("../RuntimeModel.zig");
 const Session = @import("../client/Session.zig");
 const RequestContext = @import("RequestContext.zig");
 const panes = @import("operations/panes.zig");
@@ -14,9 +14,9 @@ const notifications = @import("operations/notifications.zig");
 const editors = @import("operations/editors.zig");
 
 /// Routes each protocol message directly to its runtime operation.
-/// Example: `try requests.dispatch(application, session, message);`.
-pub fn dispatch(application: *Application, session: *Session, message: core.ClientMessage) !void {
-    var context: RequestContext = .{ .application = application, .session = session, .workspaces = application.workspaceRepository() };
+/// Example: `try requests.dispatch(model, session, message);`.
+pub fn dispatch(model: *RuntimeModel, session: *Session, message: core.ClientMessage) !void {
+    var context: RequestContext = .{ .model = model, .session = session, .workspaces = model.workspaceRepository() };
     return switch (message) {
         .open_editor => |request| editors.routeOpenEditor(&context, request),
         .open_pane => |request| panes.routeOpenPane(&context, request),

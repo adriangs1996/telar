@@ -1,14 +1,14 @@
 //! Correlated observation reads. Live pane snapshots remain independent.
 const core = @import("telar-core");
-const Application = @import("Application.zig");
+const RuntimeModel = @import("../RuntimeModel.zig");
 const Session = @import("../client/Session.zig");
 const Job = @import("AgentHistoryJob.zig");
 const PendingFailure = @import("../delivery/PendingFailure.zig");
 
 /// Admits a read without retaining the client's wire buffer or a pane pointer.
-/// Example: `try agent_history.request(application, client, query);`.
-pub fn request(application: *Application, client: *Session, query: core.QueryAgentHistory) !void {
-    start(application, client, query) catch |err| {
+/// Example: `try agent_history.request(model, client, query);`.
+pub fn request(model: *RuntimeModel, client: *Session, query: core.QueryAgentHistory) !void {
+    start(model, client, query) catch |err| {
         if (client.role == .control) {
             client.delivery.setCloseAfterReply(true);
         }
@@ -17,8 +17,8 @@ pub fn request(application: *Application, client: *Session, query: core.QueryAge
     };
 }
 
-fn start(application: *Application, client: *Session, query: core.QueryAgentHistory) !void {
-    const pane = application.model.panes.resolve(.{ .id = query.pane_id, .generation = query.pane_generation }) orelse return error.PaneNotFound;
+fn start(model: *RuntimeModel, client: *Session, query: core.QueryAgentHistory) !void {
+    const pane = model.panes.resolve(.{ .id = query.pane_id, .generation = query.pane_generation }) orelse return error.PaneNotFound;
     if (pane.kind != .agent) {
         return error.NotAnAgentPane;
     }
@@ -29,10 +29,10 @@ fn start(application: *Application, client: *Session, query: core.QueryAgentHist
         return error.AgentHistoryBusy;
     }
 
-    const slot = try application.agent_history_jobs.available(client.key);
+    const slot = try model.agent_history_jobs.available(client.key);
     const snapshot = pane.agent_thread orelse return error.AgentNotReady;
-    const job = &application.agent_history_jobs.storage[slot];
-    job.* = try Job.init(application.gpa, .{
+    const job = &model.agent_history_jobs.storage[slot];
+    job.* = try Job.init(model.gpa, .{
         .client = client.key,
         .pane = pane.key(),
         .thread_id = snapshot.threadId(),
@@ -40,17 +40,17 @@ fn start(application: *Application, client: *Session, query: core.QueryAgentHist
         .request = query,
     });
     errdefer job.deinit();
-    application.agent_history_jobs.items[slot] = job;
-    errdefer application.agent_history_jobs.items[slot] = null;
-    try application.select.concurrent(.agent_history_completed, Job.run, .{ job, application.io });
+    model.agent_history_jobs.items[slot] = job;
+    errdefer model.agent_history_jobs.items[slot] = null;
+    try model.select.concurrent(.agent_history_completed, Job.run, .{ job, model.io });
 }
 
 /// Delivers only to the original client generation and validates pane reuse.
-/// Example: `agent_history.complete(application, job);`.
-pub fn complete(application: *Application, job: *Job) void {
-    application.agent_history_jobs.remove(job);
+/// Example: `agent_history.complete(model, job);`.
+pub fn complete(model: *RuntimeModel, job: *Job) void {
+    model.agent_history_jobs.remove(job);
     defer job.deinit();
-    const client = application.clients.resolve(job.client) orelse return;
+    const client = model.clients.resolve(job.client) orelse return;
     if (!client.active()) {
         return;
     }
@@ -59,16 +59,16 @@ pub fn complete(application: *Application, job: *Job) void {
         client.delivery.setCloseAfterReply(true);
     }
 
-    const pane = application.model.panes.resolve(job.pane);
+    const pane = model.panes.resolve(job.pane);
     const err: ?anyerror = if (pane == null) error.PaneNotFound else if (pane.?.close_requested or pane.?.exit != null) error.PaneExited else job.failure;
     if (err) |problem| {
         client.delivery.responses.push(.{ .request_failed = failure(job.request_id, problem) }) catch {
-            application.dropClient(job.client);
+            model.dropClient(job.client);
             return;
         };
     } else if (job.result) |result| {
         client.delivery.responses.push(.{ .agent_history_page = result }) catch {
-            application.dropClient(job.client);
+            model.dropClient(job.client);
             return;
         };
         job.result = null;
