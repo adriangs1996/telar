@@ -1050,7 +1050,7 @@ test "sans composer pointer selection and IME caret use delivered measured advan
     try send(session, .{ .pointer = .{ .kind = .press, .x = x + 0.1, .y = y } });
     try send(session, .{ .pointer = .{ .kind = .release, .x = x + 0.1, .y = y } });
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
-    try std.testing.expectEqual(@as(usize, 3), pane.composer_field.head);
+    try std.testing.expectEqual(@as(usize, 3), pane.composer.?.field.head);
     var context: native.TextContext = .{};
     try std.testing.expect(session.gui.widgetTextContext(&context));
     try std.testing.expectApproxEqAbs(@as(f64, x), context.x, 0.01);

@@ -171,7 +171,7 @@ test "only a snapshot can resize pane storage" {
 }
 
 test "same-size frame admission allocates no additional storage" {
-    var storage: [4096 + @sizeOf(Pane.ComposerField) + core.text_metadata_limits.capacity(initial.spec.size.rows)]u8 = undefined;
+    var storage: [4096 + core.text_metadata_limits.capacity(initial.spec.size.rows)]u8 = undefined;
     var allocator = std.heap.FixedBufferAllocator.init(&storage);
     var pane = try Pane.init(allocator.allocator(), initial);
     defer pane.deinit();

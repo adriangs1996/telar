@@ -40,7 +40,8 @@ pub fn captureClient(app: *const client.AttachedClient, target: Target) ?FieldVi
             return null;
         }
 
-        const value = &pane.composer_field;
+        const composer = pane.composer orelse return .{ .text = "", .head = 0, .anchor = 0 };
+        const value = &composer.field;
         return .{ .text = value.text(), .head = @intCast(value.head), .anchor = @intCast(value.anchor) };
     }
 

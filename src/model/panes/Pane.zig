@@ -13,7 +13,7 @@ const core = @import("telar-core");
 pub const ImageRemoval = @import("ComposerImageRemoval.zig");
 const ChangeReviewAvailability = @import("ChangeReviewAvailability.zig");
 
-pub const ComposerField = data.GenericField(4096);
+const Composer = @import("Composer.zig");
 
 gpa: std.mem.Allocator,
 id: core.PaneId,
@@ -37,10 +37,12 @@ foreground_name_len: u8 = 0,
 progress_state: core.PaneProgressState = .remove,
 progress_percent: ?u8 = null,
 title: []u8 = &.{},
-/// What the user is writing for the agent in this pane, owned like the title.
-composer_field: ComposerField = .{},
+/// What the user is writing for the agent in this pane, allocated on first
+/// use and owned like the title.
+composer: ?*Composer = null,
+/// Advances on every composer edit, including selection moves.
 composer_revision: u64 = 0,
-composer_images: ?*core.AgentImages = null,
+/// Advances only when the composer's text or images change.
 composer_content_revision: u64 = 0,
 kind: core.PaneKind = .terminal,
 pane_generation: u64 = 0,
@@ -89,8 +91,8 @@ pub fn init(gpa: std.mem.Allocator, initial: Initial) !Pane {
 pub fn deinit(pane: *Pane) void {
     pane.gpa.free(pane.cwd);
     pane.gpa.free(pane.title);
-    if (pane.composer_images) |images| {
-        pane.gpa.destroy(images);
+    if (pane.composer) |composer| {
+        pane.gpa.destroy(composer);
     }
     if (pane.agent_thread) |thread| {
         pane.gpa.destroy(thread);
@@ -269,7 +271,7 @@ pub fn titleSlice(pane: *const Pane) []const u8 {
     return pane.title;
 }
 
-pub const max_composer_bytes = 4096;
+pub const max_composer_bytes = Composer.max_bytes;
 
 /// Replaces the composer draft the thread surface shows.
 ///
@@ -290,7 +292,12 @@ pub fn setComposer(pane: *Pane, text: []const u8) !void {
     }
 
     const content_changed = !std.mem.eql(u8, pane.composerSlice(), text);
-    if (pane.composer_field.replace(.{ 0, @intCast(pane.composer_field.len) }, text)) {
+    if (pane.composer == null and text.len == 0) {
+        return;
+    }
+
+    const field = &(try pane.ensureComposer()).field;
+    if (field.replace(.{ 0, @intCast(field.len) }, text)) {
         pane.composer_revision +%= 1;
         if (content_changed) {
             pane.composer_content_revision +%= 1;
@@ -299,7 +306,21 @@ pub fn setComposer(pane: *Pane, text: []const u8) !void {
 }
 
 pub fn composerSlice(pane: *const Pane) []const u8 {
-    return pane.composer_field.text();
+    const composer = pane.composer orelse return "";
+    return composer.field.text();
+}
+
+/// The composer, allocated on first use.
+/// Example: `const composer = try pane.ensureComposer();`
+pub fn ensureComposer(pane: *Pane) !*Composer {
+    if (pane.composer) |composer| {
+        return composer;
+    }
+
+    const composer = try pane.gpa.create(Composer);
+    composer.* = .{};
+    pane.composer = composer;
+    return composer;
 }
 
 /// Installs a client attachment, preserving notices received before its first frame.
@@ -460,7 +481,8 @@ fn catalogRevision(snapshot: *const core.AgentThreadSnapshot) u64 {
 /// Borrows image references without allocating storage for empty terminal panes.
 /// Example: `const images = pane.composerImages();`
 pub fn composerImages(pane: *const Pane) *const core.AgentImages {
-    return pane.composer_images orelse &empty_composer_images;
+    const composer = pane.composer orelse return &empty_composer_images;
+    return &composer.images;
 }
 
 const empty_composer_images: core.AgentImages = .{};
@@ -469,21 +491,16 @@ const empty_composer_images: core.AgentImages = .{};
 /// Example: `try pane.attachComposerImage("/private/tmp/image.png");`
 pub fn attachComposerImage(pane: *Pane, path: []const u8) !void {
     try core.AgentImages.validatePath(path);
-    if (pane.composer_images == null) {
-        const images = try pane.gpa.create(core.AgentImages);
-        images.* = .{};
-        pane.composer_images = images;
-    }
-
-    try pane.composer_images.?.append(path);
+    const composer = try pane.ensureComposer();
+    try composer.images.append(path);
     pane.composer_revision +%= 1;
     pane.composer_content_revision +%= 1;
 }
 
 /// Rejects stale removal controls after another edit. Example: `_ = pane.removeComposerImage(.{ .index = 0, .revision = revision });`
-pub fn removeComposerImage(pane: *Pane, removal: @import("ComposerImageRemoval.zig")) bool {
-    const images = pane.composer_images orelse return false;
-    if (removal.revision != pane.composer_revision or !images.remove(removal.index)) {
+pub fn removeComposerImage(pane: *Pane, removal: ImageRemoval) bool {
+    const composer = pane.composer orelse return false;
+    if (removal.revision != pane.composer_revision or !composer.images.remove(removal.index)) {
         return false;
     }
 
@@ -500,7 +517,7 @@ pub fn acceptComposer(pane: *Pane, revision: u64) bool {
 
     pane.setComposer("") catch unreachable;
     if (pane.composerImages().count != 0) {
-        pane.composer_images.?.* = .{};
+        pane.composer.?.images = .{};
         pane.composer_revision +%= 1;
         pane.composer_content_revision +%= 1;
     }
@@ -561,7 +578,7 @@ pub fn scrollConversation(pane: *Pane, delta: f64) bool {
 
 /// Applies bounded editor input without allocating. Example: `_ = pane.editComposer(.backspace);`
 pub fn editComposer(pane: *Pane, command: anytype) bool {
-    const field = &pane.composer_field;
+    const field = &(pane.ensureComposer() catch return false).field;
     const previous = .{ field.len, field.head, field.anchor };
     const content_changed = switch (command) {
         .insert => |text| replacementChangesText(field, .{ @intCast(@min(field.head, field.anchor)), @intCast(@max(field.head, field.anchor)) }, text),
@@ -613,7 +630,7 @@ pub fn editComposer(pane: *Pane, command: anytype) bool {
     return changed;
 }
 
-fn replacementChangesText(field: *const ComposerField, range: [2]u32, text: []const u8) bool {
+fn replacementChangesText(field: *const Composer.Field, range: [2]u32, text: []const u8) bool {
     if (range[0] > range[1] or range[1] > field.len) {
         return false;
     }

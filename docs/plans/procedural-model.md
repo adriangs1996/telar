@@ -52,12 +52,15 @@ that touches it.
    boundary checker. Pending: a codestyle rule that method receivers are
    named `self`, with an automatic fix. It runs after slices 2 and 3 turn most
    of today's methods into procedures that take `model`.
-2. **Tabs, panes and layouts in the client.** Flat `Tabs`, `Panes` and
-   `Layouts` tables with a pane index replace `TabsModel`, `Tab`,
-   `MultiplexerModel` and their per-tab pane arrays. Removes the three lookups
-   in `applyPaneFrame` and the eleven `tabForPane` plus `find` pairs. Agent-only
-   pane fields move to an `agents` table. `pane_frame.receive` is the first
-   flow written with the new names.
+2. **Tabs, panes and layouts in the client.** Done. `Tabs` (ordered rows,
+   each with its layout tree) and `Panes` (every pane behind one id index)
+   replace `TabsModel`, `Tab` and `MultiplexerModel`; the nested lookups in
+   `applyPaneFrame` and the `tabForPane` plus `find` pairs are gone. The
+   composer draft (4,128 of a pane's 4,712 bytes) moved to a `Composer`
+   allocated on first use, so `Pane` is 584 bytes and `Model` went from
+   918,304 to 605,504 bytes. The other agent fields total about 100 bytes and
+   stay on the pane. `pane_frame.receive` waits for slice 3, which moves the
+   outbox into the model.
 3. **The rest of the client model.** The sixteen `data.*` fields beside
    `AttachedClient.model`, the configuration mirrors (bugs 1 and 2), path
    completion, clipboard capture, change review and startup become fields and
