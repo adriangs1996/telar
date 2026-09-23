@@ -1,7 +1,10 @@
 const model_data = @import("model");
 const MarkerScreenType = @import("MarkerScreen.zig");
-/// The adapter-owned attachment shelf and modal: adopting captures, keeping
-/// markers reconciled with the pane, and the modal's input ownership.
+const DeletionProbeType = @import("DeletionProbe.zig");
+/// The attachment shelf a host that draws image previews owns: the catalog
+/// it instantiates from `GenericCatalog` with its own preview state, marker
+/// plans over that catalog, and the preview modal's input ownership. A host
+/// without previews leaves `AttachedClient.attachments` null.
 const AttachmentShelf = @This();
 
 context: *anyopaque,
@@ -13,9 +16,14 @@ remove_prompt_fn: *const fn (*anyopaque, model_data.AttachmentTarget) ?bool,
 modal_active_fn: *const fn (*anyopaque) bool,
 close_modal_fn: *const fn (*anyopaque) bool,
 reservation_fn: *const fn (*anyopaque) ?model_data.PaneBottomReservation,
+visible_target_fn: *const fn (*anyopaque) ?model_data.AttachmentTarget,
+plan_marker_removal_fn: *const fn (*anyopaque, model_data.AttachmentId, MarkerScreenType) ?model_data.MarkerRemoval,
+id_at_marker_deletion_fn: *const fn (*anyopaque, MarkerScreenType, model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId,
+pending_marker_at_deletion_fn: *const fn (*anyopaque, MarkerScreenType, DeletionProbeType) bool,
+expect_marker_deletion_fn: *const fn (*anyopaque, model_data.AttachmentTarget) void,
 
 /// Takes ownership of one capture; reports whether the layout changed.
-/// Example: `const layout_changed = try client.attachment_shelf.adopt(capture);`.
+/// Example: `const layout_changed = try shelf.adopt(capture);`.
 pub fn adopt(port: AttachmentShelf, capture: *model_data.Capture) !bool {
     return port.adopt_fn(port.context, capture);
 }
@@ -36,7 +44,7 @@ pub fn removePrompt(port: AttachmentShelf, target: model_data.AttachmentTarget) 
     return port.remove_prompt_fn(port.context, target);
 }
 
-/// Whether the modal owns host input. Example: `if (client.attachment_shelf.modalActive()) ...`.
+/// Whether the modal owns host input. Example: `if (shelf.modalActive()) ...`.
 pub fn modalActive(port: AttachmentShelf) bool {
     return port.modal_active_fn(port.context);
 }
@@ -48,4 +56,25 @@ pub fn closeModal(port: AttachmentShelf) bool {
 /// Space the shelf asks for below the pane that owns the visible previews.
 pub fn reservation(port: AttachmentShelf) ?model_data.PaneBottomReservation {
     return port.reservation_fn(port.context);
+}
+
+/// Example: `const target = shelf.visibleTarget() orelse return;`.
+pub fn visibleTarget(port: AttachmentShelf) ?model_data.AttachmentTarget {
+    return port.visible_target_fn(port.context);
+}
+
+pub fn planMarkerRemoval(port: AttachmentShelf, id: model_data.AttachmentId, screen: MarkerScreenType) ?model_data.MarkerRemoval {
+    return port.plan_marker_removal_fn(port.context, id, screen);
+}
+
+pub fn idAtMarkerDeletion(port: AttachmentShelf, screen: MarkerScreenType, deletion: model_data.AttachmentMarkerDeletion) ?model_data.AttachmentId {
+    return port.id_at_marker_deletion_fn(port.context, screen, deletion);
+}
+
+pub fn pendingMarkerAtDeletion(port: AttachmentShelf, screen: MarkerScreenType, probe: DeletionProbeType) bool {
+    return port.pending_marker_at_deletion_fn(port.context, screen, probe);
+}
+
+pub fn expectMarkerDeletion(port: AttachmentShelf, target: model_data.AttachmentTarget) void {
+    port.expect_marker_deletion_fn(port.context, target);
 }

@@ -50,7 +50,6 @@ const Registry = @import("plugins/Registry.zig");
 const ConfigReloadState = @import("resources/ConfigReloadState.zig");
 const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
 const HostChrome = @import("presentation/HostChrome.zig");
-const AttachmentCatalogPort = @import("attachments/AttachmentCatalogPort.zig");
 const AttachmentShelf = @import("attachments/AttachmentShelf.zig");
 const PresentationLifecycle = @import("presentation/LifecycleState.zig");
 const Workers = @import("execution/Workers.zig");
@@ -99,8 +98,8 @@ list_submission_alternate: bool = false,
 workers: Workers = undefined,
 graphics: GraphicsRetention = undefined,
 chrome: HostChrome = undefined,
-attachment_catalog: AttachmentCatalogPort = undefined,
-attachment_shelf: AttachmentShelf = undefined,
+/// Bound only by hosts that draw attachment previews.
+attachments: ?AttachmentShelf = null,
 /// The one presentation in flight and what the host last delivered, shared
 /// by every adapter.
 presentation: PresentationLifecycle = .{},
@@ -659,7 +658,8 @@ pub fn synchronizePaneAttachments(self: *AttachedClient) !bool {
         );
     }
 
-    if (!self.attachment_shelf.syncTarget(self.model.focusedAttachmentTarget())) {
+    const shelf = self.attachments orelse return false;
+    if (!shelf.syncTarget(self.model.focusedAttachmentTarget())) {
         return false;
     }
 
@@ -780,7 +780,7 @@ pub fn reconcileHostCapabilities(self: *AttachedClient, capabilities: data.HostC
 /// Example: `try self.resizeAttachedPanes(tab, area);`
 pub fn resizeAttachedPanes(self: *AttachedClient, tab: usize, area: core.Rect) !void {
     var layout = data.tab_layout.snapshot(&self.model, tab, area).*;
-    _ = layout.reserveBelowPane(self.attachment_shelf.reservation());
+    _ = layout.reserveBelowPane(if (self.attachments) |shelf| shelf.reservation() else null);
     var panes = self.model.panes.iterate(self.model.tabs.location[tab].tab_id);
 
     while (panes.next()) |pane| {
@@ -857,7 +857,7 @@ pub fn synchronizeBars(self: *AttachedClient) !void {
 /// Example: `const captures_keys = key_policy.captures(self.keyRoutingAuthority());`
 pub fn keyRoutingAuthority(self: *const AttachedClient) data.KeyRoutingAuthority {
     return .{
-        .attachment_modal_active = self.attachment_shelf.modalActive(),
+        .attachment_modal_active = if (self.attachments) |shelf| shelf.modalActive() else false,
         .prompt_active = self.model.name_prompt.active(),
         .copy_mode_active = self.model.copyModeActive(),
     };
@@ -2067,7 +2067,8 @@ pub fn openNamePrompt(self: *AttachedClient, intent: name_prompt_opening.Intent)
 pub fn dismissAttachment(self: *AttachedClient, id: data.AttachmentId) !bool {
     const command = self.planAttachmentRemoval(id) orelse return false;
     try self.deliverAttachmentRemoval(command);
-    return self.attachment_shelf.remove(id) orelse false;
+    const shelf = self.attachments orelse return false;
+    return shelf.remove(id) orelse false;
 }
 
 /// Records a marker deletion only for the visible attachment target and compatible key.
@@ -2077,7 +2078,8 @@ pub fn expectMarkerDeletion(self: *AttachedClient, pane_id: core.PaneId, command
         .bytes => return,
         .key => |value| value,
     };
-    const target = self.attachment_catalog.visibleTarget() orelse return;
+    const shelf = self.attachments orelse return;
+    const target = shelf.visibleTarget() orelse return;
     if (target.pane_id != pane_id) {
         return;
     }
@@ -2087,7 +2089,7 @@ pub fn expectMarkerDeletion(self: *AttachedClient, pane_id: core.PaneId, command
         return;
     }
 
-    self.attachment_catalog.expectMarkerDeletion(target);
+    shelf.expectMarkerDeletion(target);
 }
 
 /// Resolves one reload completion, applies its outcome and rearms the watcher.
@@ -6160,7 +6162,9 @@ fn routeCurrentKey(self: *AttachedClient, command: data.KeyRoutingCommand, autho
         .key => |key| {
             if (authority.attachment_modal_active) {
                 if (key.code == .escape) {
-                    _ = self.attachment_shelf.closeModal();
+                    if (self.attachments) |shelf| {
+                        _ = shelf.closeModal();
+                    }
                 }
 
                 return .{
@@ -6598,7 +6602,8 @@ fn observeAttachmentInput(self: *AttachedClient, pane_id: core.PaneId, command: 
         return false;
     }
 
-    const target = self.attachment_catalog.visibleTarget() orelse
+    const shelf = self.attachments orelse return false;
+    const target = shelf.visibleTarget() orelse
         self.model.focusedAttachmentTarget() orelse return false;
     if (target.pane_id != pane_id) {
         return false;
@@ -6612,7 +6617,7 @@ fn observeAttachmentInput(self: *AttachedClient, pane_id: core.PaneId, command: 
 
             _ = self.model.clipboard.cancel(target);
 
-            return self.attachment_shelf.removePrompt(target) orelse false;
+            return shelf.removePrompt(target) orelse false;
         },
         .backspace, .delete => {
             const deletion: data.AttachmentMarkerDeletion = if (key.code == .backspace) .backward else .forward;
@@ -6625,7 +6630,7 @@ fn observeAttachmentInput(self: *AttachedClient, pane_id: core.PaneId, command: 
                 return false;
             }
 
-            return self.attachment_shelf.remove(id.?) orelse false;
+            return shelf.remove(id.?) orelse false;
         },
         else => return false,
     }
@@ -6643,14 +6648,15 @@ fn attachmentMarkerPolicy(self: *AttachedClient, target: data.AttachmentTarget) 
 /// Reconciles learned attachment identities (Claude numbers, Pi paths)
 /// after one pane frame.
 fn reconcileAttachmentFrame(self: *AttachedClient, pane_id: core.PaneId) bool {
-    const target = self.attachment_catalog.visibleTarget() orelse return false;
+    const shelf = self.attachments orelse return false;
+    const target = shelf.visibleTarget() orelse return false;
     if (target.pane_id != pane_id or self.attachmentMarkerPolicy(target) == null) {
         return false;
     }
 
     const pane = self.model.panes.findConst(pane_id) orelse return false;
 
-    return self.attachment_shelf.reconcileMarkers(
+    return shelf.reconcileMarkers(
         target,
         .{
             .buffer = &pane.buffer,
@@ -6660,10 +6666,11 @@ fn reconcileAttachmentFrame(self: *AttachedClient, pane_id: core.PaneId) bool {
 }
 
 fn planAttachmentRemoval(self: *AttachedClient, id: data.AttachmentId) ?data.RemovalCommand {
-    const target = self.attachment_catalog.visibleTarget() orelse return null;
+    const shelf = self.attachments orelse return null;
+    const target = shelf.visibleTarget() orelse return null;
     const model = self.model.tabs.activeSlot() orelse return null;
     const pane = self.model.panes.findInConst(self.model.tabs.location[model].tab_id, target.pane_id) orelse return null;
-    const marker = self.attachment_catalog.planMarkerRemoval(
+    const marker = shelf.planMarkerRemoval(
         id,
         .{
             .buffer = &pane.buffer,
@@ -6722,11 +6729,12 @@ fn deliverAttachmentRemoval(self: *AttachedClient, command: data.RemovalCommand)
 }
 
 fn attachmentMarkerAtCursor(self: *AttachedClient, deletion: data.AttachmentMarkerDeletion) ?data.AttachmentId {
-    const target = self.attachment_catalog.visibleTarget() orelse return null;
+    const shelf = self.attachments orelse return null;
+    const target = shelf.visibleTarget() orelse return null;
     const model = self.model.tabs.activeSlot() orelse return null;
     const pane = self.model.panes.findInConst(self.model.tabs.location[model].tab_id, target.pane_id) orelse return null;
 
-    return self.attachment_catalog.idAtMarkerDeletion(
+    return shelf.idAtMarkerDeletion(
         .{
             .buffer = &pane.buffer,
             .cursor = pane.cursor,
@@ -6742,7 +6750,8 @@ fn pendingAttachmentMarkerAtCursor(self: *AttachedClient, deletion: data.Attachm
 
     const markers = self.model.attachmentMarkers(target) orelse return false;
 
-    return self.attachment_catalog.pendingMarkerAtDeletion(
+    const shelf = self.attachments orelse return false;
+    return shelf.pendingMarkerAtDeletion(
         .{
             .buffer = &pane.buffer,
             .cursor = pane.cursor,
@@ -7419,10 +7428,11 @@ fn scheduleClipboardCapture(self: *AttachedClient, capture: data.ClipboardCaptur
 
 fn adoptClipboardCapture(self: *AttachedClient, capture: *data.Capture) !bool {
     const request = capture.request;
-    var layout_changed = try self.attachment_shelf.adopt(capture);
+    const shelf = self.attachments orelse return error.AttachmentsUnsupported;
+    var layout_changed = try shelf.adopt(capture);
     if (request.marker_policy.learnsIdentity()) {
         if (self.model.panes.findConst(request.target.pane_id)) |value| {
-            layout_changed = layout_changed or (self.attachment_shelf.reconcileMarkers(
+            layout_changed = layout_changed or (shelf.reconcileMarkers(
                 request.target,
                 .{
                     .buffer = &value.buffer,

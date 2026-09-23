@@ -44,7 +44,7 @@ fn snapshot(client: *const Client) PasteRoutingAuthority {
     const prompt = client.model.name_prompt.currentConst();
 
     return .{
-        .attachment_modal_active = client.attachment_shelf.modalActive(),
+        .attachment_modal_active = if (client.attachments) |shelf| shelf.modalActive() else false,
         .prompt_active = prompt != null,
         .prompt_pasting = if (prompt) |value| value.pasting else false,
         .copy_mode_active = client.model.copyModeActive(),

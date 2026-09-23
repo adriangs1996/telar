@@ -139,8 +139,7 @@ pub fn init(params: Params) !*TerminalClient {
     client.model.host.animation_frame_ns = core.pace.default_interval;
     client.graphics = host_ports.graphicsRetention(client);
     client.chrome = host_ports.chrome(client);
-    client.attachment_catalog = host_ports.attachmentCatalog(client);
-    client.attachment_shelf = host_ports.attachmentShelf(client);
+    client.attachments = host_ports.attachmentShelf(client);
     client.workers = host_ports.workers(client);
     client.host_input_source = host_ports.hostInput(client);
     // The presenter borrows the inbox and metrics, whose heap addresses

@@ -29,7 +29,6 @@ adapter: AdapterType = undefined,
 outbox: *model_data.Outbox,
 graphics: retained_module.Store,
 activations: usize = 0,
-resource_syncs: usize = 0,
 media_requests: usize = 0,
 
 pub fn init() !*Fixture {
@@ -57,10 +56,6 @@ pub fn initWithAllocator(allocator: std.mem.Allocator) !*Fixture {
     // execute the production operations. Unused host capabilities stay unbound.
     fixture.app.workers = .{ .context = fixture, .start_fn = startJob };
     fixture.app.graphics = .{ .context = fixture, .apply_fn = unsupportedGraphics, .clear_pane_fn = clearPane, .set_pane_visible_fn = setVisible, .pane_visible_fn = visible, .has_pane_graphics_fn = hasGraphics, .ingress_version_fn = ingress, .peek_credit_fn = peekCredit, .consume_credit_fn = consumeCredit };
-    fixture.app.attachment_shelf.context = fixture;
-    fixture.app.attachment_shelf.sync_target_fn = syncTarget;
-    fixture.app.attachment_catalog.context = fixture;
-    fixture.app.attachment_catalog.visible_target_fn = noTarget;
     fixture.adapter = .{ .state = &fixture.app.presentation };
     fixture.app.model.host.animation_frame_ns = core.pace.default_interval;
     try fixture.arrive();
@@ -155,16 +150,6 @@ fn visible(context: *anyopaque, id: core.PaneId) bool {
 fn setVisible(context: *anyopaque, id: core.PaneId, value: bool) !void {
     const fixture: *Fixture = @ptrCast(@alignCast(context));
     try fixture.graphics.setPaneVisible(id, value);
-}
-
-fn syncTarget(context: *anyopaque, _: ?model_data.AttachmentTarget) bool {
-    const fixture: *Fixture = @ptrCast(@alignCast(context));
-    fixture.resource_syncs += 1;
-    return false;
-}
-
-fn noTarget(_: *anyopaque) ?model_data.AttachmentTarget {
-    return null;
 }
 
 fn startJob(context: *anyopaque, job: Job) !void {

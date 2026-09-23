@@ -5,10 +5,7 @@ const core = @import("telar-core");
 const chrome_module = @import("ports/chrome.zig");
 const host_input = @import("ports/host_input.zig");
 const worker_ports = @import("ports/workers.zig");
-const std = @import("std");
 const GuiClient = @import("GuiClient.zig");
-const NativeLoop = @import("NativeLoop.zig");
-const native = @import("native/native.zig");
 
 /// Example: `const port = graphicsRetention(app);`.
 pub fn graphicsRetention(client: *client_module.AttachedClient) client_module.GraphicsRetention {
@@ -25,48 +22,9 @@ pub fn graphicsRetention(client: *client_module.AttachedClient) client_module.Gr
     };
 }
 
-/// Example: `const port = attachmentCatalog(app);`.
-pub fn attachmentCatalog(client: *client_module.AttachedClient) client_module.AttachmentCatalogPort {
-    return .{
-        .context = client,
-        .visible_target_fn = visibleAttachmentTarget,
-        .plan_marker_removal_fn = planMarkerRemoval,
-        .id_at_marker_deletion_fn = idAtMarkerDeletion,
-        .pending_marker_at_deletion_fn = pendingMarkerAtDeletion,
-        .expect_marker_deletion_fn = expectMarkerDeletion,
-    };
-}
-
-/// Example: `const port = attachmentShelf(app);`.
-pub fn attachmentShelf(client: *client_module.AttachedClient) client_module.AttachmentShelf {
-    return .{
-        .context = client,
-        .adopt_fn = adoptAttachment,
-        .reconcile_markers_fn = reconcileAttachmentMarkers,
-        .sync_target_fn = syncAttachmentTarget,
-        .remove_fn = removeAttachment,
-        .remove_prompt_fn = removePromptAttachments,
-        .modal_active_fn = attachmentModalActive,
-        .close_modal_fn = closeAttachmentModal,
-        .reservation_fn = attachmentReservation,
-    };
-}
-
-fn adoptAttachment(_: *anyopaque, _: *data.Capture) !bool {
-    return false;
-}
-
 fn applyGraphics(context: *anyopaque, command: data.PaneGraphicsCommand) !void {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
     return GuiClient.of(client).applyGraphics(command);
-}
-
-fn attachmentModalActive(_: *anyopaque) bool {
-    return false;
-}
-
-fn attachmentReservation(_: *anyopaque) ?data.PaneBottomReservation {
-    return null;
 }
 
 fn clearPaneGraphics(context: *anyopaque, pane_id: core.PaneId) void {
@@ -74,16 +32,10 @@ fn clearPaneGraphics(context: *anyopaque, pane_id: core.PaneId) void {
     GuiClient.of(client).graphics_store.clearPane(pane_id);
 }
 
-fn closeAttachmentModal(_: *anyopaque) bool {
-    return false;
-}
-
 fn consumeGraphicsCredit(context: *anyopaque, credit: client_module.GraphicsCredit) void {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
     GuiClient.of(client).graphics_store.consumeCredit(credit);
 }
-
-fn expectMarkerDeletion(_: *anyopaque, _: data.AttachmentTarget) void {}
 
 fn graphicsIngressVersion(context: *anyopaque) u64 {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
@@ -93,10 +45,6 @@ fn graphicsIngressVersion(context: *anyopaque) u64 {
 fn hasPaneGraphics(context: *anyopaque, pane_id: core.PaneId) bool {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
     return GuiClient.of(client).graphics_store.hasPaneGraphics(pane_id);
-}
-
-fn idAtMarkerDeletion(_: *anyopaque, _: client_module.MarkerScreen, _: data.AttachmentMarkerDeletion) ?data.AttachmentId {
-    return null;
 }
 
 fn paneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId) bool {
@@ -109,37 +57,9 @@ fn peekGraphicsCredit(context: *anyopaque) ?client_module.GraphicsCredit {
     return GuiClient.of(client).graphics_store.peekCredit();
 }
 
-fn pendingMarkerAtDeletion(_: *anyopaque, _: client_module.MarkerScreen, _: client_module.DeletionProbe) bool {
-    return false;
-}
-
-fn planMarkerRemoval(_: *anyopaque, _: data.AttachmentId, _: client_module.MarkerScreen) ?data.MarkerRemoval {
-    return null;
-}
-
-fn reconcileAttachmentMarkers(_: *anyopaque, _: data.AttachmentTarget, _: client_module.MarkerScreen) ?bool {
-    return null;
-}
-
-fn removeAttachment(_: *anyopaque, _: data.AttachmentId) ?bool {
-    return null;
-}
-
-fn removePromptAttachments(_: *anyopaque, _: data.AttachmentTarget) ?bool {
-    return null;
-}
-
 fn setPaneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId, visible: bool) !void {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
     try GuiClient.of(client).graphics_store.setPaneVisible(pane_id, visible);
-}
-
-fn syncAttachmentTarget(_: *anyopaque, _: ?data.AttachmentTarget) bool {
-    return false;
-}
-
-fn visibleAttachmentTarget(_: *anyopaque) ?data.AttachmentTarget {
-    return null;
 }
 
 pub const chrome = chrome_module.port;

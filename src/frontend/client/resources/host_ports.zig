@@ -116,18 +116,6 @@ fn pointer(context: *anyopaque, event: data.Mouse) client_module.ViewInteraction
     return interaction;
 }
 
-/// Example: `client.attachment_catalog = host_ports.attachmentCatalog(client);`.
-pub fn attachmentCatalog(client: *client_module.AttachedClient) client_module.AttachmentCatalogPort {
-    return .{
-        .context = client,
-        .visible_target_fn = visibleAttachmentTarget,
-        .plan_marker_removal_fn = planMarkerRemoval,
-        .id_at_marker_deletion_fn = idAtMarkerDeletion,
-        .pending_marker_at_deletion_fn = pendingMarkerAtDeletion,
-        .expect_marker_deletion_fn = expectMarkerDeletion,
-    };
-}
-
 fn visibleAttachmentTarget(context: *anyopaque) ?data.AttachmentTarget {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
 
@@ -158,7 +146,7 @@ fn expectMarkerDeletion(context: *anyopaque, target: data.AttachmentTarget) void
     TerminalClient.of(client).view.kittyAttachments().expectMarkerDeletion(target);
 }
 
-/// Example: `client.attachment_shelf = host_ports.attachmentShelf(client);`.
+/// Example: `client.attachments = host_ports.attachmentShelf(client);`.
 pub fn attachmentShelf(client: *client_module.AttachedClient) client_module.AttachmentShelf {
     return .{
         .context = client,
@@ -170,6 +158,11 @@ pub fn attachmentShelf(client: *client_module.AttachedClient) client_module.Atta
         .modal_active_fn = attachmentModalActive,
         .close_modal_fn = closeAttachmentModal,
         .reservation_fn = attachmentReservation,
+        .visible_target_fn = visibleAttachmentTarget,
+        .plan_marker_removal_fn = planMarkerRemoval,
+        .id_at_marker_deletion_fn = idAtMarkerDeletion,
+        .pending_marker_at_deletion_fn = pendingMarkerAtDeletion,
+        .expect_marker_deletion_fn = expectMarkerDeletion,
     };
 }
 
@@ -265,8 +258,6 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
     }
 }
 
-/// The reload validated the bindings with the same keymap limits, so a
-/// failure here is a programming error; the previous router stays in place.
 /// Example: `client.workers = host_ports.workers(client);`.
 pub fn workers(client: *client_module.AttachedClient) client_module.Workers {
     return .{ .context = client, .start_fn = startJob };

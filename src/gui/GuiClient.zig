@@ -190,8 +190,6 @@ pub fn init(params: client.ClientInit) !*GuiClient {
 
     gui.app.graphics = host_ports.graphicsRetention(&gui.app);
     gui.app.chrome = host_ports.chrome(&gui.app);
-    gui.app.attachment_catalog = host_ports.attachmentCatalog(&gui.app);
-    gui.app.attachment_shelf = host_ports.attachmentShelf(&gui.app);
     gui.app.workers = host_ports.workers(&gui.app);
     gui.app.host_input_source = host_ports.hostInput(&gui.app);
 
