@@ -42,11 +42,6 @@ pub const CompletionDirective = enum {
     exit_client,
 };
 
-pub const CompletionEvent = enum {
-    authorize,
-    apply,
-};
-
 fn successfulCommand(execution_id: model_data.PluginExecutionId, batch: *const model_data.EffectBatch) CompletionCommand {
     return .{ .succeeded = .{
         .execution_id = execution_id,

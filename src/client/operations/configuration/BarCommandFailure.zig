@@ -1,5 +1,5 @@
 const data = @import("model");
-const Failure = @This();
+const BarCommandFailure = @This();
 
 generation: u64,
 position: data.bar_values.Position,

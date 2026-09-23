@@ -1,7 +1,6 @@
 //! Wires host pointer authority and normalization to client pointer owners.
 
 const data = @import("model");
-const pointer_routing = @import("../../application/input/pointer_routing.zig");
 const core = @import("telar-core");
 const projection_support = @import("../../presentation/projection_support.zig");
 const Client = @import("../../AttachedClient.zig");
@@ -15,7 +14,7 @@ const view_interactions = @import("view_interactions.zig");
 /// ```zig
 /// _ = try apply(client, event);
 /// ```
-pub fn apply(client: *Client, event: data.Mouse) !pointer_routing.Outcome {
+pub fn apply(client: *Client, event: data.Mouse) !Outcome {
     if (comptime core.enabled) {
         client.telemetry.metrics.mouse_events += 1;
     }
@@ -48,7 +47,7 @@ pub fn apply(client: *Client, event: data.Mouse) !pointer_routing.Outcome {
     return .pane;
 }
 
-fn resolve(client: *Client, event: data.Mouse) pointer_routing.Authority {
+fn resolve(client: *Client, event: data.Mouse) Authority {
     const selection = client.model.pointerSelection();
     const captured = if (selection) |value| value.dragging else false;
     if (client.model.name_prompt.active() and !captured) {
@@ -84,3 +83,16 @@ fn resolve(client: *Client, event: data.Mouse) pointer_routing.Authority {
         .cell_height_px = host_size.cell_height_px,
     } };
 }
+
+pub const Authority = union(enum) {
+    unavailable,
+    available: data.PointerCommand,
+};
+
+pub const Outcome = enum {
+    unavailable,
+    copy_mode,
+    view,
+    link,
+    pane,
+};

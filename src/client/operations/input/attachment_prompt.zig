@@ -69,12 +69,6 @@ fn isLetter(key: model_data.Key, letter: u8) bool {
     };
 }
 
-pub const Event = enum {
-    plan,
-    deliver,
-    remove,
-};
-
 test "marker policies follow each provider's prompt conventions" {
     try std.testing.expect(markerPolicy(.ordered) == .ordered);
     try std.testing.expect(markerPolicy(.none) == .ordered);

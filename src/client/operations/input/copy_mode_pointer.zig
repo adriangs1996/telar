@@ -2,8 +2,7 @@
 
 const data = @import("model");
 const core = @import("telar-core");
-const CopyModePointerCommand = @import("../../application/input/CopyModePointerCommand.zig");
-const copy_mode_pointer = @import("../../application/input/copy_mode_pointer.zig");
+const CopyModePointerCommand = @import("CopyModePointerCommand.zig");
 const Client = @import("../../AttachedClient.zig");
 
 /// Gives copy mode first refusal for one cell-based pointer event on tab
@@ -18,7 +17,7 @@ pub fn apply(client: *Client, tab: usize, event: data.Mouse) !bool {
     return outcome != .unowned;
 }
 
-fn resolve(client: *Client, tab: usize, event: data.Mouse) copy_mode_pointer.Authority {
+fn resolve(client: *Client, tab: usize, event: data.Mouse) Authority {
     const area = client.geometry().area;
     if (client.model.pointerSelection()) |selection| {
         const view = data.tab_layout.view(&client.model, tab, selection.pane_id, area);
@@ -43,7 +42,7 @@ fn resolve(client: *Client, tab: usize, event: data.Mouse) copy_mode_pointer.Aut
     } };
 }
 
-fn route(client: *Client, command: CopyModePointerCommand, authority: copy_mode_pointer.Authority) !copy_mode_pointer.Outcome {
+fn route(client: *Client, command: CopyModePointerCommand, authority: Authority) !Outcome {
     const pointer_inside = switch (authority) {
         .unowned => return .unowned,
         .target_missing => {
@@ -101,3 +100,22 @@ fn route(client: *Client, command: CopyModePointerCommand, authority: copy_mode_
     });
     return .moved;
 }
+
+pub const Authority = union(enum) {
+    unowned,
+    target_missing,
+    selection: struct {
+        dragging: bool,
+        position: ?core.Point,
+    },
+    owned: struct {
+        pointer_inside: bool,
+    },
+};
+
+pub const Outcome = enum {
+    unowned,
+    consumed,
+    moved,
+    exited,
+};

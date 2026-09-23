@@ -2439,7 +2439,7 @@ pub fn reconcileTab(model: *Model, snapshot: PaneSnapshot, area: core.Rect) !Tab
 /// ```zig
 /// const result = model.confirmPaneAttachment(attachment);
 /// ```
-pub fn confirmPaneAttachment(model: *Model, attachment: model_data.PaneAttachment) !model_data.StateTypesPaneAttachmentConfirmation {
+pub fn confirmPaneAttachment(model: *Model, attachment: model_data.PaneAttachment) !model_data.AttachmentConfirmation {
     const active = model.activeTabLocation() orelse return .stale;
     if (!std.meta.eql(active, attachment.location)) {
         return .stale;

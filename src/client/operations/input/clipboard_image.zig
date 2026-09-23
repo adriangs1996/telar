@@ -44,11 +44,6 @@ pub fn classifyFailure(reason: anyerror) CompletionOutcome {
     };
 }
 
-pub const CompletionEvent = enum {
-    adopt,
-    resize,
-};
-
 fn installFocusedTarget(model: *model_data.Model) !model_data.AttachmentTarget {
     const location: core.TabLocation = .{
         .workspace = .{ .workspace = @enumFromInt(1) },

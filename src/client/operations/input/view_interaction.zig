@@ -29,14 +29,3 @@ pub fn capturesPaneInput(intent: Intent) bool {
     };
 }
 
-pub const Event = union(enum) {
-    intent: Intent,
-    invalidate_graphics_placements,
-    offer_pane_geometry,
-};
-
-pub const Failure = enum {
-    none,
-    intent,
-    pane_geometry,
-};

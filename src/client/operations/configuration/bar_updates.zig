@@ -1,17 +1,17 @@
 //! Owns configured bar ticks, bounded Lua evaluation and command workers.
 
-const bar_update = @import("../../application/configuration/bar_update.zig");
+const bar_update = @import("bar_update.zig");
 const data = @import("model");
-const client_diagnostic = @import("../../application/configuration/client_diagnostic.zig");
-const BarFailure = @import("../../application/configuration/Failure.zig");
+const client_diagnostic = @import("client_diagnostic.zig");
+const BarUpdateFailure = @import("BarUpdateFailure.zig");
 const core = @import("telar-core");
 const std = @import("std");
 const Client = @import("../../AttachedClient.zig");
 const BarUpdatesCompletion = @import("../../bars/BarUpdatesCompletion.zig");
 const CallbackRequest = @import("CallbackRequest.zig");
 const CommandOutput = @import("CommandOutput.zig");
-const Failure = @import("Failure.zig");
-const BarUpdateCommand = @import("../../application/configuration/BarUpdateCommand.zig");
+const BarCommandFailure = @import("BarCommandFailure.zig");
+const BarUpdateCommand = @import("BarUpdateCommand.zig");
 const BarCallbackContextType = @import("../../config/BarCallbackContext.zig");
 const BarMetricsType = @import("../../config/BarMetrics.zig");
 
@@ -126,7 +126,7 @@ fn applyCommandOutput(client: *Client, completed: CommandOutput) !void {
     });
 }
 
-fn publishFailure(client: *Client, failure: Failure) !bar_update.Outcome {
+fn publishFailure(client: *Client, failure: BarCommandFailure) !bar_update.Outcome {
     var diagnostic: data.Diagnostic = .{};
     diagnostic.set(
         "bar {s} at {s} failed: {s}",
@@ -235,7 +235,7 @@ fn commitContent(client: *Client, command: BarUpdateCommand, content: data.Conte
     return if (update_commit) |value| .{ .updated = value } else .unchanged;
 }
 
-fn commitFailure(client: *Client, command: BarUpdateCommand, failure: BarFailure) !bar_update.Outcome {
+fn commitFailure(client: *Client, command: BarUpdateCommand, failure: BarUpdateFailure) !bar_update.Outcome {
     const state = client.model.barState();
     if (command.generation != client.model.configurationGeneration() or
         state.layout.generation != command.generation or

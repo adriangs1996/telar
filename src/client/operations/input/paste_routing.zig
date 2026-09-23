@@ -1,16 +1,15 @@
 //! Wires streamed host paste ownership to prompt and pane paste use cases.
 
-const routing = @import("../../application/input/paste_routing.zig");
 const Client = @import("../../AttachedClient.zig");
-const PasteRoutingAuthority = @import("../../application/input/PasteRoutingAuthority.zig");
-const RouteType = @import("../../application/input/Route.zig");
+const PasteRoutingAuthority = @import("PasteRoutingAuthority.zig");
+const RouteType = @import("Route.zig");
 
 /// Routes one opening boundary using the current client authority.
 ///
 /// ```zig
 /// _ = try start(client);
 /// ```
-pub fn start(client: *Client) !routing.Outcome {
+pub fn start(client: *Client) !Outcome {
     return dispatch(client, .start);
 }
 
@@ -19,7 +18,7 @@ pub fn start(client: *Client) !routing.Outcome {
 /// ```zig
 /// _ = try content(client, bytes);
 /// ```
-pub fn content(client: *Client, text: []const u8) !routing.Outcome {
+pub fn content(client: *Client, text: []const u8) !Outcome {
     return dispatch(client, .{ .content = text });
 }
 
@@ -28,12 +27,12 @@ pub fn content(client: *Client, text: []const u8) !routing.Outcome {
 /// ```zig
 /// _ = try finish(client);
 /// ```
-pub fn finish(client: *Client) !routing.Outcome {
+pub fn finish(client: *Client) !Outcome {
     return dispatch(client, .finish);
 }
 
-fn dispatch(client: *Client, command: routing.Command) !routing.Outcome {
-    const owner = routing.resolve(snapshot(client), command) orelse return .ignored;
+fn dispatch(client: *Client, command: Command) !Outcome {
+    const owner = resolve(snapshot(client), command) orelse return .ignored;
     try route(client, .{ .owner = owner, .command = command });
     return switch (owner) {
         .prompt => .prompt_owned,
@@ -70,4 +69,41 @@ fn route(client: *Client, value: RouteType) !void {
             .finish => _ = try client.finishPanePaste(),
         },
     }
+}
+
+pub const Command = union(enum) {
+    start,
+    /// Borrowed only for the synchronous routing effect.
+    content: []const u8,
+    finish,
+};
+
+pub const Owner = enum {
+    prompt,
+    pane,
+};
+
+pub const Outcome = enum {
+    ignored,
+    prompt_owned,
+    pane_owned,
+};
+
+pub fn resolve(authority: PasteRoutingAuthority, command: Command) ?Owner {
+    return switch (command) {
+        .start => if (authority.attachment_modal_active)
+            null
+        else if (authority.prompt_active)
+            .prompt
+        else if (authority.copy_mode_active)
+            null
+        else
+            .pane,
+        .content, .finish => if (authority.pane_paste_active)
+            .pane
+        else if (authority.prompt_pasting)
+            .prompt
+        else
+            null,
+    };
 }

@@ -1,11 +1,11 @@
 //! Application policy for one configured bar-source result.
 
 const data = @import("model");
-const Failure = @import("Failure.zig");
+const BarUpdateFailure = @import("BarUpdateFailure.zig");
 
 pub const Result = union(enum) {
     content: data.Content,
-    failed: Failure,
+    failed: BarUpdateFailure,
 };
 
 pub const Outcome = union(enum) {

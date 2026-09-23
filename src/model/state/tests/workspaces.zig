@@ -747,12 +747,12 @@ test "pane attachment confirmation changes only active operational state" {
     const attachment: model_data.PaneAttachment = .{ .pane_id = discovered, .location = location };
 
     try std.testing.expect(model.needsPaneAttachment(attachment));
-    try std.testing.expectEqual(model_data.StateTypesPaneAttachmentConfirmation.confirmed, try model.confirmPaneAttachment(attachment));
+    try std.testing.expectEqual(model_data.AttachmentConfirmation.confirmed, try model.confirmPaneAttachment(attachment));
     try std.testing.expect(!model.needsPaneAttachment(attachment));
     try std.testing.expect(model.panes.find(discovered).?.attached);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 
-    try std.testing.expectEqual(model_data.StateTypesPaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(attachment));
+    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try model.confirmPaneAttachment(attachment));
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 }
 
@@ -775,15 +775,15 @@ test "pane attachment confirmation ignores inactive missing and wrong-location p
     try std.testing.expectEqualDeep(second, model.activeTabLocation().?);
 
     const inactive: model_data.PaneAttachment = .{ .pane_id = discovered, .location = first };
-    try std.testing.expectEqual(model_data.StateTypesPaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(inactive));
+    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try model.confirmPaneAttachment(inactive));
     try std.testing.expect(!model.needsPaneAttachment(inactive));
     try std.testing.expect(!model.panes.find(discovered).?.attached);
 
     try std.testing.expect(model_data.tab_selection.select(&model, first.tab_id));
     const missing: model_data.PaneAttachment = .{ .pane_id = @enumFromInt(9), .location = first };
     const wrong_location: model_data.PaneAttachment = .{ .pane_id = discovered, .location = second };
-    try std.testing.expectEqual(model_data.StateTypesPaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(missing));
-    try std.testing.expectEqual(model_data.StateTypesPaneAttachmentConfirmation.stale, try model.confirmPaneAttachment(wrong_location));
+    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try model.confirmPaneAttachment(missing));
+    try std.testing.expectEqual(model_data.AttachmentConfirmation.stale, try model.confirmPaneAttachment(wrong_location));
     try std.testing.expect(!model.needsPaneAttachment(missing));
     try std.testing.expect(!model.needsPaneAttachment(wrong_location));
     try std.testing.expect(!model.panes.find(discovered).?.attached);

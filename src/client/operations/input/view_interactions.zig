@@ -1,10 +1,10 @@
 //! Wires semantic view interactions to existing client use cases.
 
-const view_interaction = @import("../../application/input/view_interaction.zig");
+const view_interaction = @import("view_interaction.zig");
 const Client = @import("../../AttachedClient.zig");
-const ViewInteractionCommand = @import("../../application/input/ViewInteractionCommand.zig");
-const ViewInteractionOutcome = @import("../../application/input/ViewInteractionOutcome.zig");
-const IntentOutcomeType = @import("../../application/input/IntentOutcome.zig");
+const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
+const ViewInteractionOutcome = @import("ViewInteractionOutcome.zig");
+const IntentOutcomeType = @import("IntentOutcome.zig");
 
 /// Applies one interaction emitted by the view and returns its pane-input
 /// routing decision.

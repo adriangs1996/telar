@@ -1,7 +1,7 @@
 const data = @import("model");
 const sidebar_rendering = @import("../config/sidebar_rendering.zig");
 const SidebarRendererInputType = @import("../layout/SidebarRendererInput.zig");
-const ViewInteractionCommandType = @import("../application/input/ViewInteractionCommand.zig");
+const ViewInteractionCommandType = @import("../operations/input/ViewInteractionCommand.zig");
 /// The adapter's chrome as the client application drives it: appearance,
 /// sidebar renderer, size, committed chrome layout and pointer hit testing.
 /// Reads of chrome geometry go through `Region`; this port only pushes.

@@ -7,7 +7,7 @@ pub const Change = @import("../types/Change.zig").Change;
 
 pub const TabSelectionTarget = @import("../types/TabSelectionTarget.zig").TabSelectionTarget;
 
-pub const PaneAttachmentConfirmation = @import("../types/StateTypesPaneAttachmentConfirmation.zig").StateTypesPaneAttachmentConfirmation;
+pub const AttachmentConfirmation = @import("../types/AttachmentConfirmation.zig").AttachmentConfirmation;
 
 pub const PaneFocusTarget = @import("../types/PaneFocusTarget.zig").PaneFocusTarget;
 

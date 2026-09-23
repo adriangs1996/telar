@@ -1,5 +1,5 @@
 const data = @import("model");
-const Failure = @This();
+const BarUpdateFailure = @This();
 
 reason: anyerror,
 diagnostic: data.Diagnostic,
