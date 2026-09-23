@@ -238,7 +238,6 @@ pub const PathCompletionCompletion = @import("completion/PathCompletionCompletio
 pub const PathCompletionEntry = @import("state/PathCompletionEntry.zig");
 pub const PathCompletionResult = @import("state/PathCompletionResult.zig");
 pub const PathCompletionState = @import("state/PathCompletionState.zig");
-pub const PathCompletionsState = @import("state/PathCompletionsState.zig");
 pub const Physical = @import("input/Physical.zig");
 pub const PluginAction = @import("input/PluginAction.zig");
 pub const PluginActionsCompletion = @import("plugins/PluginActionsCompletion.zig");

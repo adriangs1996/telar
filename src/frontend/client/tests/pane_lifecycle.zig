@@ -748,7 +748,7 @@ test "an active split commits once and presentation observes the model" {
     const client = harness.client;
 
     const split_pane: core.PaneId = @enumFromInt(21);
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
         .axis = .horizontal,
@@ -792,7 +792,7 @@ test "an inactive split is retained detached without a visible revision" {
     try std.testing.expectEqualDeep(second_location, client.model.activeTabLocation().?);
 
     const split_pane: core.PaneId = @enumFromInt(21);
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
         .axis = .horizontal,
@@ -827,17 +827,17 @@ test "a split reply for a retired tab detaches and refreshes canonical state" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    _ = client.request_lifecycle.tracker.take(@enumFromInt(2)) orelse return error.MissingWorkspaceSnapshot;
+    _ = client.model.request_lifecycle.tracker.take(@enumFromInt(2)) orelse return error.MissingWorkspaceSnapshot;
     _ = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
 
     const split_pane: core.PaneId = @enumFromInt(21);
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
         .axis = .horizontal,
         .area = TerminalClient.of(client).view.workbench(),
     } });
-    client.request_lifecycle.tracker.ignoreTab(TestHarness.bootstrap_location.tab_id);
+    client.model.request_lifecycle.tracker.ignoreTab(TestHarness.bootstrap_location.tab_id);
     try std.testing.expect(data.tab_removal.remove(&client.model, TestHarness.bootstrap_location.tab_id));
     const version_before = client.model.version();
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
@@ -872,14 +872,14 @@ test "a split reply replaces its target after canonical retirement" {
     const client = harness.client;
 
     const split_pane: core.PaneId = @enumFromInt(21);
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
         .axis = .horizontal,
         .area = TerminalClient.of(client).view.workbench(),
     } });
     try std.testing.expect(data.tab_layout.removePane(&client.model, TestHarness.bootstrap_pane));
-    client.request_lifecycle.tracker.ignorePane(TestHarness.bootstrap_pane);
+    client.model.request_lifecycle.tracker.ignorePane(TestHarness.bootstrap_pane);
     const version_before = client.model.version();
     var payload: [128]u8 = undefined;
     const opened = try core.encodePaneOpened(&payload, .{
@@ -910,7 +910,7 @@ test "a failed split never resizes the tab selected afterwards" {
         pane.pending_frame_id = 0;
     }
 
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
         .axis = .horizontal,
@@ -937,14 +937,14 @@ test "a failed split for a retired target is silent" {
     try harness.bootstrap();
     const client = harness.client;
 
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .split = .{
         .target_pane = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
         .axis = .horizontal,
         .area = TerminalClient.of(client).view.workbench(),
     } });
     try std.testing.expect(data.tab_layout.removePane(&client.model, TestHarness.bootstrap_pane));
-    client.request_lifecycle.tracker.ignorePane(TestHarness.bootstrap_pane);
+    client.model.request_lifecycle.tracker.ignorePane(TestHarness.bootstrap_pane);
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
     var payload: [128]u8 = undefined;
     const failed = try core.encodeRequestFailed(&payload, .{
@@ -1016,7 +1016,7 @@ test "tab detachment retires an in-flight pane attachment" {
     }
     try std.testing.expect(detached_root);
     try std.testing.expect(detached_discovered);
-    try std.testing.expect(!client.request_lifecycle.tracker.hasPane(.attachment, discovered));
+    try std.testing.expect(!client.model.request_lifecycle.tracker.hasPane(.attachment, discovered));
 
     const pending_updates_before_confirmation = TerminalClient.of(client).presenter.pending_updates;
     const opened = try core.encodePaneOpened(&payload, .{
@@ -1158,7 +1158,7 @@ test "detach action captures layout changes from the same input batch" {
     const client = harness.client;
     const active = client.model.tabs.active;
     client.model.tabs.snapshot_loaded[active] = true;
-    try client.client_layouts.markSnapshotReceived();
+    try client.model.client_layouts.markSnapshotReceived();
 
     _ = try client.executeAction(
         .{
@@ -1202,14 +1202,14 @@ test "a missing pane attachment keeps local membership until a canonical snapsho
     const pane = client.model.panes.find(discovered) orelse return error.PaneRemovedBeforeSnapshot;
     try std.testing.expect(!pane.attached);
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
-    try std.testing.expect(client.request_lifecycle.tracker.has(.tab_snapshot));
+    try std.testing.expect(client.model.request_lifecycle.tracker.has(.tab_snapshot));
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;
     const recovery = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(recovery == .request_tab_snapshot);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, recovery.request_tab_snapshot.location);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
 }
 
 test "an internal pane attachment failure waits for a later resync" {
@@ -1234,9 +1234,9 @@ test "an internal pane attachment failure waits for a later resync" {
     const pane = client.model.panes.find(discovered) orelse return error.PaneRemovedAfterInternalFailure;
     try std.testing.expect(!pane.attached);
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
-    try std.testing.expect(!client.request_lifecycle.tracker.has(.tab_snapshot));
+    try std.testing.expect(!client.model.request_lifecycle.tracker.has(.tab_snapshot));
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
 }
 
 test "a late pane attachment confirmation retired by a snapshot is ignored" {
@@ -1249,7 +1249,7 @@ test "a late pane attachment confirmation retired by a snapshot is ignored" {
     const discovered: core.PaneId = @enumFromInt(11);
     var payload: [256]u8 = undefined;
     const attachment_request = try harness.discoverAndRequestAttachment(discovered, &payload);
-    try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
 
     const reconciled = try core.encodeTabSnapshot(&payload, .{
         .request_id = @enumFromInt(90),
@@ -1278,11 +1278,11 @@ test "a late failed pane attachment does not notify or draw" {
     try harness.bootstrap();
     const client = harness.client;
 
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .attach_pane = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .attach_pane = .{
         .pane_id = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
     } });
-    try std.testing.expect(client.request_lifecycle.tracker.ignoreAttachment(TestHarness.bootstrap_pane));
+    try std.testing.expect(client.model.request_lifecycle.tracker.ignoreAttachment(TestHarness.bootstrap_pane));
     const pending_updates_before_failure = TerminalClient.of(client).presenter.pending_updates;
     var payload: [256]u8 = undefined;
     const failed = try core.encodeRequestFailed(&payload, .{
@@ -1294,6 +1294,6 @@ test "a late failed pane attachment does not notify or draw" {
     _ = try client.handleServerMessage(try core.decodeServer(failed));
 
     try std.testing.expectEqual(pending_updates_before_failure, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expect(!client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.notification_scheduler.pending);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }

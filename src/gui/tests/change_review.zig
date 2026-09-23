@@ -39,7 +39,7 @@ pub fn ready() !*Session {
 }
 
 pub fn response(session: *Session, revision: u64) core.ChangeReviewSnapshotView {
-    return .{ .request_id = session.gui.app.change_review.pending.?, .pane_id = Session.pane_id, .pane_generation = 77, .session = "thread-A", .edition_id = 1, .latest_edition_id = 1, .revision = revision, .patch = patch };
+    return .{ .request_id = session.gui.app.model.change_review.pending.?, .pane_id = Session.pane_id, .pane_generation = 77, .session = "thread-A", .edition_id = 1, .latest_edition_id = 1, .revision = revision, .patch = patch };
 }
 
 pub fn reply(session: *Session, snapshot: core.ChangeReviewSnapshotView) !void {
@@ -53,7 +53,7 @@ pub fn reply(session: *Session, snapshot: core.ChangeReviewSnapshotView) !void {
 
 pub fn adopt(session: *Session) !void {
     const panel = session.gui.review;
-    const state = &session.gui.app.change_review;
+    const state = &session.gui.app.model.change_review;
     const index = 1 - panel.visible_slot;
     const slot = &panel.slots[index];
     slot.generation = state.generation;
@@ -224,7 +224,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     snapshot.source = .observed_snapshot;
     try reply(session, snapshot);
     const index = 1 - panel.visible_slot;
-    panel.slots[index].generation = gui.app.change_review.generation;
+    panel.slots[index].generation = gui.app.model.change_review.generation;
     panel.slots[index].edition = 2;
     panel.slots[index].failure = error.SyntaxUnavailable;
     panel.job = index;
@@ -238,7 +238,7 @@ test "runtime review failed preparation keeps the old edition read only and retr
     panel.widget.command = .refresh;
     try panel.synchronize(&gui.app);
     try std.testing.expectEqual(@as(u64, 2), (try core.decodeClient(session.pending.?)).query_change_review.edition_id);
-    snapshot.request_id = gui.app.change_review.pending.?;
+    snapshot.request_id = gui.app.model.change_review.pending.?;
     try reply(session, snapshot);
     try adopt(session);
     try std.testing.expectEqual(@as(u64, 2), panel.edition);
@@ -317,7 +317,7 @@ test "runtime review coalesces new edition notices behind pending saves without 
     const panel = session.gui.review;
     const index = draft(session, "feedback");
     try panel.synchronize(&session.gui.app);
-    const save_id = session.gui.app.change_review.pending.?;
+    const save_id = session.gui.app.model.change_review.pending.?;
     _ = try session.gui.app.handleServerMessage(
         .{
             .change_review_changed = .{
@@ -328,7 +328,7 @@ test "runtime review coalesces new edition notices behind pending saves without 
             },
         },
     );
-    try std.testing.expectEqual(save_id, session.gui.app.change_review.pending.?);
+    try std.testing.expectEqual(save_id, session.gui.app.model.change_review.pending.?);
     try reply(session, withComment(response(session, 2), "feedback"));
     const query = (try core.decodeClient(session.pending.?)).query_change_review;
     try std.testing.expectEqual(@as(u64, 1), query.edition_id);
@@ -376,12 +376,12 @@ test "runtime review retains a retired conversation draft and explicitly reopens
             .change_review_snapshot = stale,
         },
     );
-    try std.testing.expectEqual(request.request_id, gui.app.change_review.pending.?);
+    try std.testing.expectEqual(request.request_id, gui.app.model.change_review.pending.?);
     var snapshot = response(session, 1);
     snapshot.session = "thread-B";
     try reply(session, snapshot);
     try adopt(session);
-    try std.testing.expectEqualStrings("thread-B", gui.app.change_review.snapshot.session);
+    try std.testing.expectEqualStrings("thread-B", gui.app.model.change_review.snapshot.session);
     try std.testing.expect(!gui.review.widget.model.comments[index].alive);
 }
 
@@ -410,10 +410,10 @@ test "runtime review loads through its real worker and inbox after the previous 
     try gui.openChangeReview(Session.pane_id);
     var buffer: [128 * 1024]u8 = undefined;
     const request = (try core.decodeClient(try session.peer.receive(std.testing.io, &buffer))).query_change_review;
-    try std.testing.expectEqual(gui.app.change_review.pending.?, request.request_id);
+    try std.testing.expectEqual(gui.app.model.change_review.pending.?, request.request_id);
     try std.testing.expectEqual(@as(u64, 0), request.edition_id);
     try session.peer.send(std.testing.io, try core.encodeChangeReviewSnapshot(&buffer, response(session, 1)));
-    while (!gui.app.change_review.loaded) {
+    while (!gui.app.model.change_review.loaded) {
         try session.gui.driver.inbox.wait();
         _ = try gui.update();
     }

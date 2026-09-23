@@ -36,7 +36,7 @@ test "config reload outcomes that carry no new generation" {
         } }),
     );
     try std.testing.expectEqual(@as(i128, 7), client.reload.mtime_ns);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expect(client.model.diagnostic() != null);
     try harness.settle();
 }
@@ -63,7 +63,7 @@ test "resolved configuration adoption crosses delivery before watcher rearm" {
         .configuration = 1,
         .notifications = 1,
     }, client.model.version());
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     try harness.settle();
 }
 
@@ -87,9 +87,9 @@ test "configuration adoption swaps ownership after commit and presents by versio
 
     try std.testing.expectEqualDeep(
         data.SoundRequestOutcome{ .start = .ready },
-        client.sound_playback.request(.ready),
+        client.model.sound_playback.request(.ready),
     );
-    try std.testing.expect(client.sound_playback.request(.ready) == .queued);
+    try std.testing.expect(client.model.sound_playback.request(.ready) == .queued);
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
     const changed = try support.testingConfigAdoption(2, true);
     const changed_generation = changed.generation;
@@ -117,7 +117,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
         .configuration = .{ .enabled = false },
         .active = true,
         .queued = null,
-    }, client.sound_playback.snapshot());
+    }, client.model.sound_playback.snapshot());
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 
     // Check adoption before queued notification ticks can advance its revision.
@@ -236,7 +236,7 @@ test "dynamic bar ticks commit current Lua content before paced presentation" {
     const commit = try support.reloadConfiguration(client, adoption);
 
     try std.testing.expect(commit.bars_changed);
-    try std.testing.expect(client.bar_updates.scheduler.pending);
+    try std.testing.expect(client.model.bar_updates.scheduler.pending);
     const event = try TerminalClient.of(client).inbox.receive();
     switch (event) {
         .bar_tick => |result| try client_module.operations.bar_updates.handleTick(client, result),
@@ -283,7 +283,7 @@ test "command completion from a replaced bar generation is discarded" {
         .bar_tick => |result| try client_module.operations.bar_updates.handleTick(client, result),
         else => return error.UnexpectedEvent,
     }
-    try std.testing.expect(client.bar_updates.command_execution != null);
+    try std.testing.expect(client.model.bar_updates.command_execution != null);
 
     const replacement = try support.testingConfigAdoptionSource(2,
         \\local telar = require("telar")
@@ -305,7 +305,7 @@ test "command completion from a replaced bar generation is discarded" {
 
     const slot = client.model.barState().layout.slot(.bottom_left);
     try std.testing.expectEqualStrings("new", slot.content.text(slot.content.slice()[0]));
-    try std.testing.expect(client.bar_updates.command_execution == null);
+    try std.testing.expect(client.model.bar_updates.command_execution == null);
     try std.testing.expectEqualDeep(version_after_reload, client.model.version());
     try std.testing.expect(client.model.diagnostic() == null);
 }
@@ -419,7 +419,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
         client.model.diagnostic().?,
         "CapabilityNotGranted",
     ) != null);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
@@ -450,7 +450,7 @@ test "plugin worker failure and unmatched completion preserve lifecycle identity
         client.model.diagnostic().?,
         "TestPluginWorkerFailure",
     ) != null);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
 }
 
 test "busy plugin start skips resolution and a rejected action leaves no run" {
@@ -482,7 +482,7 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
     );
 
     try std.testing.expect(client.model.pluginExecution() == null);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expect(std.mem.indexOf(
         u8,
         client.model.diagnostic().?,
@@ -834,7 +834,7 @@ test "clipboard image completion publishes resource ingress before presentation"
     });
 
     try std.testing.expect(client.model.clipboardCapture() == null);
-    try std.testing.expect(client.clipboard_capture_resources.orphan == null);
+    try std.testing.expect(client.model.clipboard_capture_resources.orphan == null);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(@as(u64, 1), TerminalClient.of(client).view.kittyAttachments().ingressVersion());
     try std.testing.expectEqual(@as(u8, 1), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
@@ -874,7 +874,7 @@ test "clipboard image from a retired agent target is consumed and freed" {
     });
 
     try std.testing.expect(client.model.clipboardCapture() == null);
-    try std.testing.expect(client.clipboard_capture_resources.orphan == null);
+    try std.testing.expect(client.model.clipboard_capture_resources.orphan == null);
     try std.testing.expectEqual(@as(u64, 0), TerminalClient.of(client).view.kittyAttachments().ingressVersion());
     try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -912,7 +912,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
 
     try std.testing.expect(client.model.clipboardCapture() == null);
     try std.testing.expect(client.model.version().notifications > version_before_large.notifications);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);
 
     const invalid = (try client.model.beginClipboardCapture(target)).?;
@@ -925,7 +925,7 @@ test "clipboard image failures settle lifecycle without direct presentation" {
     });
 
     try std.testing.expect(client.model.clipboardCapture() == null);
-    try std.testing.expect(client.clipboard_capture_resources.orphan == null);
+    try std.testing.expect(client.model.clipboard_capture_resources.orphan == null);
     try std.testing.expect(client.model.version().notifications > version_before_invalid.notifications);
     try std.testing.expectEqual(@as(u64, 0), TerminalClient.of(client).view.kittyAttachments().ingressVersion());
     try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);
@@ -961,8 +961,8 @@ test "bar configuration excludes Lua sources from a different model generation" 
     const client = harness.client;
     try std.testing.expect(client.barConfiguration() == null);
     try client.synchronizeBars();
-    try std.testing.expect(client.bar_updates.nextDeadline() == null);
-    try std.testing.expect(!client.bar_updates.scheduler.pending);
+    try std.testing.expect(client.model.bar_updates.nextDeadline() == null);
+    try std.testing.expect(!client.model.bar_updates.scheduler.pending);
 
     _ = try support.reloadConfiguration(client, try support.testingConfigAdoption(1, false));
     const generation = client.lua_generation.?;
@@ -978,11 +978,11 @@ test "bar configuration excludes Lua sources from a different model generation" 
         },
     );
     try std.testing.expect(client.barConfiguration() == null);
-    client.bar_updates.pending_callbacks = data.bar_values.Position.bottom_left.bit();
+    client.model.bar_updates.pending_callbacks = data.bar_values.Position.bottom_left.bit();
     try client.synchronizeBars();
-    try std.testing.expectEqual(@as(u8, 0), client.bar_updates.pending_callbacks);
-    try std.testing.expect(client.bar_updates.nextDeadline() == null);
-    try std.testing.expect(!client.bar_updates.scheduler.pending);
+    try std.testing.expectEqual(@as(u8, 0), client.model.bar_updates.pending_callbacks);
+    try std.testing.expect(client.model.bar_updates.nextDeadline() == null);
+    try std.testing.expect(!client.model.bar_updates.scheduler.pending);
 }
 
 test "the configuration a client starts with governs history and notifications before any reload" {

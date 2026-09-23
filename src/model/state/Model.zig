@@ -75,6 +75,23 @@ const Model = @This();
 gpa: std.mem.Allocator,
 /// Settings adopted from the active configuration generation.
 config: Config = .{},
+startup: model_data.StartupState = .{},
+request_lifecycle: model_data.RequestLifecycle = .{},
+/// Retained tab layouts sent to the runtime for reconnect.
+client_layouts: model_data.ClientLayoutsState = .{},
+navigation_history: model_data.NavigationHistory = .{},
+sound_playback: model_data.SoundPlayback = .{ .configuration = .{} },
+clipboard_capture_resources: model_data.CaptureResources = .{},
+link_opening: model_data.Opening = .{},
+link_pointer: model_data.Pointer = .{},
+change_review: model_data.ChangeReviewSession = .{},
+sidebar_animation_scheduler: core.DeadlineScheduler = .{},
+notification_scheduler: core.DeadlineScheduler = .{},
+bar_updates: model_data.BarUpdatesState = .{},
+favicons: model_data.FaviconsState = .{},
+/// Application key leases, owned by routing rather than by the host reader.
+input_leases: model_data.key_routing.Leases = .{},
+editor_open: model_data.EditorOpening = .{},
 tabs: Tabs = .{},
 panes: Panes = .{},
 /// The runtime workspace this client shows; null before arrival and after
@@ -209,6 +226,7 @@ pub fn initInto(self: *Model, gpa: std.mem.Allocator, initial: InitialClientStat
 /// ```
 pub fn deinit(model: *Model) void {
     model.history_palette.deinit();
+    model.clipboard_capture_resources.deinit(model.gpa);
     workspace_handoff.clear(model);
     model.saved_layouts = .{};
 }

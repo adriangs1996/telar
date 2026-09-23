@@ -199,7 +199,7 @@ pub const bootstrap_pane: core.PaneId = @enumFromInt(10);
 /// the client with one attached pane and its two snapshot requests (ids
 /// 2 and 3) delivered to the peer.
 pub fn bootstrap(harness: *TestHarness) !void {
-    try harness.client.request_lifecycle.tracker.add(
+    try harness.client.model.request_lifecycle.tracker.add(
         client_module.initial_request_id,
         .{
             .initial_open = .{},
@@ -256,7 +256,7 @@ pub fn addInactiveTab(harness: *TestHarness, tab_id: core.TabId, pane_id: core.P
 }
 
 pub fn allowTabSelection(harness: *TestHarness) !void {
-    const continuation = harness.client.request_lifecycle.tracker.take(@enumFromInt(3)) orelse
+    const continuation = harness.client.model.request_lifecycle.tracker.take(@enumFromInt(3)) orelse
         return error.MissingBootstrapTabSnapshot;
     try std.testing.expect(continuation == .tab_snapshot);
 }

@@ -20,13 +20,13 @@ const TestRunner = @import("FaviconTestRunner.zig");
 /// ```
 pub fn request(client: *Client, wanted: RequestType) !bool {
     const runner = client.favicon_runner orelse return false;
-    if (client.favicons.busy() or wanted.cell == 0 or wanted.cell > ImageType.max_side) {
+    if (client.model.favicons.busy() or wanted.cell == 0 or wanted.cell > ImageType.max_side) {
         return false;
     }
 
-    const id = client.favicons.reserve(wanted.workspace);
+    const id = client.model.favicons.reserve(wanted.workspace);
     runner.start(.init(.{ .execution_id = id, .workspace = wanted.workspace, .cell = wanted.cell }, wanted.cwd)) catch |err| {
-        client.favicons.reset();
+        client.model.favicons.reset();
         return err;
     };
     return true;
@@ -41,7 +41,7 @@ pub fn request(client: *Client, wanted: RequestType) !bool {
 /// switch (complete(client, completion)) { .image => |image| place(image), else => {} }
 /// ```
 pub fn complete(client: *Client, completion: CompletionType) favicon_outcome.FaviconOutcome {
-    const answered = client.favicons.finish(completion.execution_id);
+    const answered = client.model.favicons.finish(completion.execution_id);
     const result = completion.result catch |err| {
         if (answered and err != error.FaviconNotFound) {
             std.log.scoped(.favicons).warn("favicon of workspace {d} unusable: {s}", .{ @intFromEnum(completion.workspace), @errorName(err) });
@@ -64,7 +64,7 @@ pub fn complete(client: *Client, completion: CompletionType) favicon_outcome.Fav
 /// cancel(client);
 /// ```
 pub fn cancel(client: *Client) void {
-    client.favicons.reset();
+    client.model.favicons.reset();
 }
 
 pub const Request = RequestType;
@@ -73,7 +73,7 @@ pub const Completion = CompletionType;
 test "one lookup runs at a time, stale and cancelled results are released and failures leave the runner idle" {
     var client: Client = undefined;
     client.gpa = std.testing.allocator;
-    client.favicons = .{};
+    client.model.favicons = .{};
     client.favicon_runner = null;
     try std.testing.expect(!try request(&client, .{ .workspace = @enumFromInt(1), .cwd = "/a", .cell = 16 }));
 
@@ -89,13 +89,13 @@ test "one lookup runs at a time, stale and cancelled results are released and fa
     const stale = try std.testing.allocator.create(ImageType);
     stale.* = .{ .side = 16 };
     try std.testing.expect(complete(&client, .{ .execution_id = @enumFromInt(99), .workspace = @enumFromInt(1), .result = stale }) == .stale);
-    try std.testing.expect(client.favicons.busy());
+    try std.testing.expect(client.model.favicons.busy());
 
     const landed = try std.testing.allocator.create(ImageType);
     landed.* = .{ .side = 16 };
     const owned = complete(&client, .{ .execution_id = first, .workspace = @enumFromInt(1), .result = landed });
     std.testing.allocator.destroy(owned.image);
-    try std.testing.expect(!client.favicons.busy());
+    try std.testing.expect(!client.model.favicons.busy());
 
     try std.testing.expect(try request(&client, .{ .workspace = @enumFromInt(2), .cwd = "/b", .cell = 16 }));
     const second = runner.last.?.execution_id;
@@ -107,9 +107,9 @@ test "one lookup runs at a time, stale and cancelled results are released and fa
     try std.testing.expect(try request(&client, .{ .workspace = @enumFromInt(3), .cwd = "/c", .cell = 16 }));
     try std.testing.expect(complete(&client, .{ .execution_id = runner.last.?.execution_id, .workspace = @enumFromInt(3), .result = error.FaviconNotFound }) == .missing);
     try std.testing.expect(complete(&client, .{ .execution_id = @enumFromInt(5), .workspace = @enumFromInt(3), .result = error.InvalidPngData }) == .stale);
-    try std.testing.expect(!client.favicons.busy());
+    try std.testing.expect(!client.model.favicons.busy());
 
     runner.fail = true;
     try std.testing.expectError(error.RunnerUnavailable, request(&client, .{ .workspace = @enumFromInt(4), .cwd = "/d", .cell = 16 }));
-    try std.testing.expect(!client.favicons.busy());
+    try std.testing.expect(!client.model.favicons.busy());
 }

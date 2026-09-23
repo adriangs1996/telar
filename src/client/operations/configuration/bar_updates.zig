@@ -26,7 +26,7 @@ pub const CommandExecutionId = data.command_execution.Id;
 /// try handleTick(client, result);
 /// ```
 pub fn handleTick(client: *Client, result: anyerror!void) !void {
-    try client.bar_updates.scheduler.complete(result);
+    try client.model.bar_updates.scheduler.complete(result);
     const generation = client.lua_generation orelse {
         try client.synchronizeBars();
         return;
@@ -35,17 +35,17 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
         try client.synchronizeBars();
         return;
     };
-    const due = client.bar_updates.takeDue(.{
+    const due = client.model.bar_updates.takeDue(.{
         .generation = generation.number,
         .configuration = configuration,
         .now_ns = core.monotonic(client.io),
     });
 
-    client.bar_updates.pending_callbacks |= due.dynamic_mask;
-    client.bar_updates.pending_commands |= due.command_mask;
+    client.model.bar_updates.pending_callbacks |= due.dynamic_mask;
+    client.model.bar_updates.pending_commands |= due.command_mask;
     try invokeNextCallback(client, configuration);
     try startNextCommand(client);
-    try client.timers.rearmBars(client.io, &client.bar_updates);
+    try client.timers.rearmBars(client.io, &client.model.bar_updates);
 }
 
 /// Resolves one command worker by exact identity and discards stale generations.
@@ -54,7 +54,7 @@ pub fn handleTick(client: *Client, result: anyerror!void) !void {
 /// try completeCommand(client, completion);
 /// ```
 pub fn completeCommand(client: *Client, completion: BarUpdatesCompletion) !void {
-    const execution = client.bar_updates.finishCommand(completion.execution_id) orelse return;
+    const execution = client.model.bar_updates.finishCommand(completion.execution_id) orelse return;
     const generation = client.lua_generation;
     const configuration = client.barConfiguration();
     if (generation != null and configuration != null and generation.?.number == execution.generation) {
@@ -178,11 +178,11 @@ fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContex
 
 fn invokeNextCallback(client: *Client, configuration: *const data.BarConfiguration) !void {
     for (std.enums.values(data.bar_values.Position)) |position| {
-        if (client.bar_updates.pending_callbacks & position.bit() == 0) {
+        if (client.model.bar_updates.pending_callbacks & position.bit() == 0) {
             continue;
         }
 
-        client.bar_updates.pending_callbacks &= ~position.bit();
+        client.model.bar_updates.pending_callbacks &= ~position.bit();
         const source = configuration.source(position);
         if (source.* != .dynamic) {
             continue;
@@ -197,26 +197,26 @@ fn invokeNextCallback(client: *Client, configuration: *const data.BarConfigurati
 }
 
 fn startNextCommand(client: *Client) !void {
-    if (client.bar_updates.command_execution != null) {
+    if (client.model.bar_updates.command_execution != null) {
         return;
     }
     const generation = client.lua_generation orelse return;
     const configuration = client.barConfiguration() orelse return;
 
     for (std.enums.values(data.bar_values.Position)) |position| {
-        if (client.bar_updates.pending_commands & position.bit() == 0) {
+        if (client.model.bar_updates.pending_commands & position.bit() == 0) {
             continue;
         }
 
-        client.bar_updates.pending_commands &= ~position.bit();
+        client.model.bar_updates.pending_commands &= ~position.bit();
         const source = configuration.source(position);
         if (source.* != .command) {
             continue;
         }
 
-        const execution = try client.bar_updates.reserveCommand(generation.number, position);
+        const execution = try client.model.bar_updates.reserveCommand(generation.number, position);
         client.bar_runner.start(.{ .execution_id = execution.id, .command = source.command }) catch |err| {
-            client.bar_updates.command_execution = null;
+            client.model.bar_updates.command_execution = null;
             return err;
         };
         return;

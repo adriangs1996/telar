@@ -225,8 +225,8 @@ test "reattachment prevents old presentation completion from retiring replacemen
     const old = try fixture.prepare();
     try fixture.model.commitTabDetachment(try fixture.model.planTabDetachment(location));
     const attachment: data.PaneAttachment = .{ .pane_id = pane_id, .location = location };
-    const request_id = try fixture.app.request_lifecycle.nextId();
-    try fixture.app.request_lifecycle.tracker.add(
+    const request_id = try fixture.app.model.request_lifecycle.nextId();
+    try fixture.app.model.request_lifecycle.tracker.add(
         request_id,
         .{
             .attach_pane = .{

@@ -366,12 +366,11 @@ test "the inline new-context form shows both fields and the selected completion 
     defer screen.deinit();
     var prompt: data.Prompt = .{ .mode = .{ .create_workspace = .{ .focus = .directory, .selection = 1 } }, .field = .init("agents"), .directory = .init("/work/te") };
     var completion: data.PathCompletionState = .{};
-    completion.expect(@enumFromInt(1));
     var result: data.PathCompletionResult = .{};
     try result.setBase("/work");
     try result.append("telar");
     try result.append("tests");
-    try std.testing.expect(completion.apply(@enumFromInt(1), .{ .query = "/work/te", .result = &result }));
+    completion.land(.{ .query = "/work/te", .result = &result });
 
     _ = try state.render(&screen, .{ .model = &model, .tab = 0, .prompt = &prompt, .path_completion = &completion, .force = true });
 

@@ -77,7 +77,7 @@ test "workspace rename separates prompt submission canonical commit and presenta
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = TerminalClient.of(client).presenter.pending_updates;
-    try client.request_lifecycle.tracker.add(@enumFromInt(90), .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{
         .rename_workspace = TestHarness.bootstrap_location.workspace,
     });
     const unchanged = try core.encodeWorkspaceSnapshot(&payload, .{
@@ -101,10 +101,10 @@ test "pending workspace operation keeps the rename prompt without sending" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    try client.request_lifecycle.tracker.add(@enumFromInt(90), .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{
         .rename_workspace = TestHarness.bootstrap_location.workspace,
     });
-    const next_request_id = client.request_lifecycle.next_request_id;
+    const next_request_id = client.model.request_lifecycle.next_request_id;
     const version_before_request = client.model.version();
 
     try std.testing.expect(client.openNamePrompt(.rename_workspace));
@@ -112,7 +112,7 @@ test "pending workspace operation keeps the rename prompt without sending" {
 
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
-    try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
@@ -128,7 +128,7 @@ test "an unexpected tab rename is rejected without effects" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const version_before = client.model.version();
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
     const renamed: core.TabRenamed = .{
@@ -143,7 +143,7 @@ test "an unexpected tab rename is rejected without effects" {
         },
     ));
 
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
@@ -156,10 +156,10 @@ test "tab rename consumes an incompatible continuation before rejection" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const request_id: core.RequestId = @enumFromInt(90);
     const version_before = client.model.version();
-    try client.request_lifecycle.tracker.add(request_id, .notification);
+    try client.model.request_lifecycle.tracker.add(request_id, .notification);
     const renamed: core.TabRenamed = .{
         .request_id = request_id,
         .location = TestHarness.bootstrap_location,
@@ -171,7 +171,7 @@ test "tab rename consumes an incompatible continuation before rejection" {
             .tab_renamed = renamed,
         },
     ));
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
         .{
             .tab_renamed = renamed,
@@ -187,10 +187,10 @@ test "tab rename consumes a mismatched location before rejection" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const request_id: core.RequestId = @enumFromInt(90);
     const version_before = client.model.version();
-    try client.request_lifecycle.tracker.add(request_id, .{ .rename_tab = TestHarness.bootstrap_location });
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .rename_tab = TestHarness.bootstrap_location });
     const renamed: core.TabRenamed = .{
         .request_id = request_id,
         .location = .{
@@ -205,7 +205,7 @@ test "tab rename consumes a mismatched location before rejection" {
             .tab_renamed = renamed,
         },
     ));
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
 }
@@ -216,14 +216,14 @@ test "tab rename consumes a canonical response rejected by the model" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const request_id: core.RequestId = @enumFromInt(90);
     const missing: core.TabLocation = .{
         .workspace = TestHarness.bootstrap_location.workspace,
         .tab_id = @enumFromInt(9),
     };
     const version_before = client.model.version();
-    try client.request_lifecycle.tracker.add(request_id, .{ .rename_tab = missing });
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .rename_tab = missing });
     const renamed: core.TabRenamed = .{
         .request_id = request_id,
         .location = missing,
@@ -235,7 +235,7 @@ test "tab rename consumes a canonical response rejected by the model" {
             .tab_renamed = renamed,
         },
     ));
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(error.UnexpectedTabRenamed, client.handleServerMessage(
         .{
             .tab_renamed = renamed,
@@ -251,7 +251,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const version_before_request = client.model.version();
     const pending_updates_before_request = TerminalClient.of(client).presenter.pending_updates;
 
@@ -278,10 +278,10 @@ test "tab rename separates prompt submission canonical commit and presentation" 
     try std.testing.expect(message == .rename_tab);
     try std.testing.expectEqualStrings("shellx", message.rename_tab.label);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, message.rename_tab.location);
-    const continuation = client.request_lifecycle.tracker.take(message.rename_tab.request_id).?;
+    const continuation = client.model.request_lifecycle.tracker.take(message.rename_tab.request_id).?;
     try std.testing.expect(continuation == .rename_tab);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, continuation.rename_tab);
-    try client.request_lifecycle.tracker.add(message.rename_tab.request_id, continuation);
+    try client.model.request_lifecycle.tracker.add(message.rename_tab.request_id, continuation);
 
     var payload: [256]u8 = undefined;
     const renamed = try core.encodeTabRenamed(&payload, .{
@@ -306,7 +306,7 @@ test "tab rename separates prompt submission canonical commit and presentation" 
 
     const version_before_noop = client.model.version();
     const pending_updates_before_noop = TerminalClient.of(client).presenter.pending_updates;
-    try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .rename_tab = TestHarness.bootstrap_location });
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{ .rename_tab = TestHarness.bootstrap_location });
     const unchanged = try core.encodeTabRenamed(&payload, .{
         .request_id = @enumFromInt(90),
         .location = TestHarness.bootstrap_location,
@@ -325,7 +325,7 @@ test "tab rename response must match the requested identity" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
 
     try std.testing.expect(client.openNamePrompt(
         .{
@@ -354,7 +354,7 @@ test "tab rename response must match the requested identity" {
 
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
     try std.testing.expectEqualDeep(version_before_response, client.model.version());
-    try std.testing.expect(!client.request_lifecycle.tracker.has(.tab_operation));
+    try std.testing.expect(!client.model.request_lifecycle.tracker.has(.tab_operation));
 }
 
 test "a failed tab rename preserves the label and notifies" {
@@ -363,7 +363,7 @@ test "a failed tab rename preserves the label and notifies" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
 
     try std.testing.expect(client.openNamePrompt(
         .{
@@ -386,8 +386,8 @@ test "a failed tab rename preserves the label and notifies" {
 
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
-    try std.testing.expect(!client.request_lifecycle.tracker.has(.tab_operation));
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.request_lifecycle.tracker.has(.tab_operation));
+    try std.testing.expect(client.model.notification_scheduler.pending);
 }
 
 test "pending tab operation keeps the rename prompt without sending" {
@@ -396,9 +396,9 @@ test "pending tab operation keeps the rename prompt without sending" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
-    try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .move_tab = TestHarness.bootstrap_location });
-    const next_request_id = client.request_lifecycle.next_request_id;
+    client.model.request_lifecycle.tracker = .{};
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{ .move_tab = TestHarness.bootstrap_location });
+    const next_request_id = client.model.request_lifecycle.next_request_id;
     const version_before_request = client.model.version();
 
     try std.testing.expect(client.openNamePrompt(
@@ -410,7 +410,7 @@ test "pending tab operation keeps the rename prompt without sending" {
 
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
-    try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
     try std.testing.expect(client.model.version().prompt > version_before_request.prompt);
@@ -426,7 +426,7 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const version_before_request = client.model.version();
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
@@ -442,7 +442,7 @@ test "a full outbox keeps the tab rename prompt and rolls back correlation" {
 
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(client.model.name_prompt.active());
-    try std.testing.expect(!client.request_lifecycle.tracker.has(.tab_operation));
+    try std.testing.expect(!client.model.request_lifecycle.tracker.has(.tab_operation));
     try std.testing.expectEqual(data.outbox_support.capacity, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expectEqualStrings("shell", data.tab_label.text(&client.model, client.model.tabs.active));
     try support.expectNonPromptVersionEqual(version_before_request, client.model.version());
@@ -455,7 +455,7 @@ test "escaping the prompt editor closes model state without changing mode" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
 
     _ = try client.executeAction(.new_workspace, .binding);
     try std.testing.expect(client.model.name_prompt.active());

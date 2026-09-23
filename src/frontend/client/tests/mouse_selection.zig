@@ -102,7 +102,7 @@ test "Shift selects child-tracked links instead of opening them or reporting the
     const content = data.tab_layout.view(&client.model, model, pane.id, TerminalClient.of(client).view.workbench()).?.content;
 
     try host_inputs.mouse(client, .{ .x = content.x, .y = content.y, .kind = .press, .button = 4 });
-    try std.testing.expect(!client.link_pointer.owned);
+    try std.testing.expect(!client.model.link_pointer.owned);
     try std.testing.expect(client.model.pointerSelection().?.dragging);
     // Modifier changes cannot transfer an already captured gesture.
     try host_inputs.mouse(client, .{ .x = content.x + 5, .y = content.y, .kind = .drag, .button = 32 });

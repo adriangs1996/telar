@@ -306,7 +306,7 @@ test "history request admission failure is retryable and stale failure only wake
     defer session.deinit();
     const app = &session.gui.app;
     const pane = app.model.panes.find(Session.pane_id).?;
-    app.request_lifecycle.next_request_id = std.math.maxInt(u64);
+    app.model.request_lifecycle.next_request_id = std.math.maxInt(u64);
     _ = client.agent_reading.navigate(
         &app.model,
         pane.id,
@@ -315,17 +315,17 @@ test "history request admission failure is retryable and stale failure only wake
     try app.flushAgentHistory();
     try std.testing.expect(pane.agent_history.?.pending == null);
     try std.testing.expectEqualStrings("RequestIdExhausted", pane.agent_history.?.failureMessage());
-    try std.testing.expect(!app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(!app.model.request_lifecycle.tracker.has(.agent_history));
     try app.flushAgentHistory();
     try std.testing.expect(pane.agent_history.?.pending == null);
-    app.request_lifecycle.next_request_id = 200;
+    app.model.request_lifecycle.next_request_id = 200;
     _ = client.agent_reading.navigate(
         &app.model,
         pane.id,
         .older,
     );
     try app.flushAgentHistory();
-    try std.testing.expect(app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(app.model.request_lifecycle.tracker.has(.agent_history));
     _ = client.agent_reading.navigate(
         &app.model,
         pane.id,
@@ -336,7 +336,7 @@ test "history request admission failure is retryable and stale failure only wake
     var buffer: [1024]u8 = undefined;
     const bytes = try core.encodeRequestFailed(&buffer, .{ .request_id = @enumFromInt(200), .code = .internal, .message = "Obsolete timeout" });
     _ = try app.handleServerMessage(try core.decodeServer(bytes));
-    try std.testing.expect(!app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(!app.model.request_lifecycle.tracker.has(.agent_history));
     try std.testing.expect(app.model.panes_revision > revision);
     try std.testing.expectEqual(notification_revision, app.model.notifications_revision);
     try std.testing.expect(!pane.agent_history.?.failed);
@@ -362,7 +362,7 @@ test "history page loading starts after successful delivery and not after a fail
         false,
     );
     try std.testing.expect(pane.agent_history == null);
-    try std.testing.expect(!gui.app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(!gui.app.model.request_lifecycle.tracker.has(.agent_history));
     const delivered = try session.draw();
     try input_support.presented(
         gui,
@@ -370,7 +370,7 @@ test "history page loading starts after successful delivery and not after a fail
         true,
     );
     try std.testing.expect(pane.agent_history != null);
-    try std.testing.expect(gui.app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(gui.app.model.request_lifecycle.tracker.has(.agent_history));
     try session.settle();
 }
 
@@ -429,7 +429,7 @@ test "history outbound pressure clears pending state and keeps a visible retry r
     const window = app.model.agentPane(Session.pane_id).?.agent_history.?;
     try std.testing.expect(window.pending == null);
     try std.testing.expectEqualStrings("ClientOutboxFull", window.failureMessage());
-    try std.testing.expect(!app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(!app.model.request_lifecycle.tracker.has(.agent_history));
 }
 
 test "retired history replies wake visible navigation waiting for the connection slot" {
@@ -441,7 +441,7 @@ test "retired history replies wake visible navigation waiting for the connection
         Session.pane_id,
         .older,
     );
-    try app.request_lifecycle.tracker.add(@enumFromInt(500), .ignored);
+    try app.model.request_lifecycle.tracker.add(@enumFromInt(500), .ignored);
     var before = app.model.panes_revision;
     try std.testing.expectEqual(@as(?u8, null), try app.handleServerMessage(
         .{
@@ -462,7 +462,7 @@ test "retired history replies wake visible navigation waiting for the connection
         },
     ));
     try std.testing.expect(app.model.panes_revision > before);
-    try app.request_lifecycle.tracker.add(@enumFromInt(501), .ignored);
+    try app.model.request_lifecycle.tracker.add(@enumFromInt(501), .ignored);
     before = app.model.panes_revision;
     const notifications = app.model.notifications_revision;
     var bytes: [1024]u8 = undefined;
@@ -578,7 +578,7 @@ fn foldedHistorySession() !*Session {
 
 fn deliverHistory(session: *Session, page: *core.AgentHistoryPage) !void {
     const app = &session.gui.app;
-    page.request_id = @enumFromInt(app.request_lifecycle.next_request_id - 1);
+    page.request_id = @enumFromInt(app.model.request_lifecycle.next_request_id - 1);
     page.view_generation = app.model.agentPane(Session.pane_id).?.history_generation;
     var buffer: [8192]u8 = undefined;
     const response = (try core.decodeServer(try core.encodeAgentHistoryPage(&buffer, page))).agent_history_page;
@@ -602,7 +602,7 @@ test "one history gesture crosses folded pages without evicting the visible answ
         failed,
         false,
     );
-    try std.testing.expect(!gui.app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(!gui.app.model.request_lifecycle.tracker.has(.agent_history));
     const delivered = try session.draw();
     try input_support.presented(
         gui,
@@ -610,7 +610,7 @@ test "one history gesture crosses folded pages without evicting the visible answ
         true,
     );
     try session.settle();
-    try std.testing.expect(gui.app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(gui.app.model.request_lifecycle.tracker.has(.agent_history));
     try std.testing.expect(window.preserve_seam);
 
     const page = try std.testing.allocator.create(core.AgentHistoryPage);
@@ -630,7 +630,7 @@ test "one history gesture crosses folded pages without evicting the visible answ
         true,
     );
     try session.settle();
-    try std.testing.expect(gui.app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(gui.app.model.request_lifecycle.tracker.has(.agent_history));
     try std.testing.expect(window.preserve_seam);
 
     page.before = try core.AgentHistoryCursor.init("older-1");
@@ -647,7 +647,7 @@ test "one history gesture crosses folded pages without evicting the visible answ
         true,
     );
     try session.settle();
-    try std.testing.expect(!gui.app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(!gui.app.model.request_lifecycle.tracker.has(.agent_history));
     try std.testing.expect(window.findItem(1) != null);
     try std.testing.expect(window.findItem(answer) != null);
     try std.testing.expectEqual(@as(u8, 2), window.count);

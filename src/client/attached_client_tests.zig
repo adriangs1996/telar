@@ -325,8 +325,8 @@ pub fn rejectReplacedReviewAttachment(comptime open_session: fn (*AttachedClient
     defer std.testing.allocator.destroy(app);
     model.* = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    app.change_review = .{};
-    const session = &app.change_review;
+    app.model.change_review = .{};
+    const session = &app.model.change_review;
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
         .workspace = .{
@@ -379,8 +379,8 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
     defer std.testing.allocator.destroy(app);
     model.* = data.Model.init(std.testing.allocator, true);
     defer model.deinit();
-    app.change_review = .{};
-    const session = &app.change_review;
+    app.model.change_review = .{};
+    const session = &app.model.change_review;
     const pane_id: core.PaneId = @enumFromInt(1);
     const location: core.TabLocation = .{
         .workspace = .{
@@ -447,7 +447,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
         .adopt_bindings_fn = undefined,
     };
 
-    app.request_lifecycle = .{};
+    app.model.request_lifecycle = .{};
     app.runtime_transport.outbox = .{};
     const pane_id: core.PaneId = @enumFromInt(1);
     const tab_location: core.TabLocation = .{
@@ -457,8 +457,8 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
         .tab_id = @enumFromInt(1),
     };
 
-    const retained = try app.request_lifecycle.nextId();
-    try app.request_lifecycle.tracker.add(retained, .notification);
+    const retained = try app.model.request_lifecycle.nextId();
+    try app.model.request_lifecycle.tracker.add(retained, .notification);
     while (app.runtime_transport.outbox.hasCapacity()) {
         try app.runtime_transport.outbox.push(
             .{
@@ -479,7 +479,7 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
 
     const Delivery = enum { tab_rename, workspace_rename, tab_create, agent_prompt, notification };
     for (std.enums.values(Delivery)) |delivery| {
-        const request_id = try app.request_lifecycle.nextId();
+        const request_id = try app.model.request_lifecycle.nextId();
         const location = tab_location;
         const result: anyerror!void = switch (delivery) {
             .tab_rename => rename_tab(
@@ -548,12 +548,12 @@ pub fn rollBackFullOutbox(comptime rename_tab: fn (*AttachedClient, core.RenameT
         };
 
         try std.testing.expectError(error.ClientOutboxFull, result);
-        try std.testing.expect(app.request_lifecycle.tracker.take(request_id) == null);
-        try std.testing.expectEqual(@as(usize, 1), app.request_lifecycle.tracker.count);
+        try std.testing.expect(app.model.request_lifecycle.tracker.take(request_id) == null);
+        try std.testing.expectEqual(@as(usize, 1), app.model.request_lifecycle.tracker.count);
         try std.testing.expectEqual(queued, app.runtime_transport.outbox.len);
     }
 
-    try std.testing.expect(app.request_lifecycle.tracker.take(retained).? == .notification);
+    try std.testing.expect(app.model.request_lifecycle.tracker.take(retained).? == .notification);
 }
 
 /// Stale sidebar commits must fail before accessing any host resource.

@@ -174,7 +174,7 @@ test "request delivery rolls correlation back when transport is full" {
             .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
         });
     }
-    const request_id = try client.request_lifecycle.nextId();
+    const request_id = try client.model.request_lifecycle.nextId();
 
     try std.testing.expectError(error.ClientOutboxFull, client.sendRuntimeRequest(.{
         .registration = .{
@@ -186,8 +186,8 @@ test "request delivery rolls correlation back when transport is full" {
             .location = TestHarness.bootstrap_location,
         } },
     }));
-    try std.testing.expect(client.request_lifecycle.tracker.take(request_id) == null);
-    try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
+    try std.testing.expect(client.model.request_lifecycle.tracker.take(request_id) == null);
+    try std.testing.expect(client.model.request_lifecycle.tracker.isEmpty());
 }
 
 test "client startup validates geometry before request registration" {
@@ -201,7 +201,7 @@ test "client startup validates geometry before request registration" {
         .resize_watcher = undefined,
     }));
 
-    try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
+    try std.testing.expect(client.model.request_lifecycle.tracker.isEmpty());
     try std.testing.expect(!client.runtime_transport.receive_pending);
 }
 
@@ -237,7 +237,7 @@ test "client startup waits for runtime layout before its initial open" {
         .resize_watcher = &watcher,
     });
 
-    try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
+    try std.testing.expect(client.model.request_lifecycle.tracker.isEmpty());
     try std.testing.expect(client.runtime_transport.receive_pending);
     try std.testing.expect(TerminalClient.of(client).host_input.read_pending);
     try std.testing.expectEqual(@as(u8, 0), client.runtime_transport.outbox.len);
@@ -272,7 +272,7 @@ test "client startup waits for runtime layout before its initial open" {
     _ = try client.handleServerMessage(try core.decodeServer(empty_layout));
     try harness.settle();
 
-    try std.testing.expect(client.request_lifecycle.tracker.has(.initial_open));
+    try std.testing.expect(client.model.request_lifecycle.tracker.has(.initial_open));
     const open = try harness.nextClientMessage(&buffer);
     try std.testing.expect(open == .open_pane);
     try std.testing.expectEqual(client_module.initial_request_id, open.open_pane.request_id);
@@ -288,7 +288,7 @@ test "startup timeout publishes unknown colors once and consumes late replies" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    client.startup.phase = .probing;
+    client.model.startup.phase = .probing;
     _ = TerminalClient.of(client).host_negotiation.begin(0);
     _ = try host_capabilities.handleExpiry(client, {});
     try std.testing.expect(!try client_startup.advance(client));
@@ -312,7 +312,7 @@ test "startup replays early typing exactly once after pane activation" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    client.startup.phase = .opening;
+    client.model.startup.phase = .opening;
     const bytes = "abc\x1b]11;rgb:10/10/10\x07";
     var chunk: ChunkType = .{ .len = bytes.len };
     @memcpy(chunk.bytes[0..bytes.len], bytes);
@@ -377,7 +377,7 @@ test "restored client layout controls the initial attach geometry" {
     try std.testing.expectEqual(@as(u16, 50), TerminalClient.of(client).view.regions.sidebar.w);
     try std.testing.expectEqual(@as(u16, 50), TerminalClient.of(client).view.regions.top.x);
     try std.testing.expectEqual(pane_id, client.model.saved_layouts.find(location).?.pane_id);
-    try std.testing.expectEqual(pane_id, client.navigation_history.find(location.workspace).?.pane_id);
+    try std.testing.expectEqual(pane_id, client.model.navigation_history.find(location.workspace).?.pane_id);
 
     const open = try harness.nextClientMessage(&buffer);
     try std.testing.expect(open == .open_pane);
@@ -448,7 +448,7 @@ test "client layout observation sends one canonical workspace update" {
     try harness.bootstrap();
     const client = harness.client;
     client.model.tabs.snapshot_loaded[client.model.tabs.active] = true;
-    try client.client_layouts.markSnapshotReceived();
+    try client.model.client_layouts.markSnapshotReceived();
     try std.testing.expect(client.model.restoreSidebarLayout(true, 53) != null);
     try std.testing.expect(client.model.setWorkspaceListCollapsed(true) != null);
 

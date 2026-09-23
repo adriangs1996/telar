@@ -524,14 +524,13 @@ test "context folder clicks complete without submitting and reject stale listing
     gui.app.model.name_prompt.begin(.create_workspace);
     _ = gui.app.model.name_prompt.apply(.tab);
     _ = gui.app.model.name_prompt.apply(.{ .insert = "/work/te" });
-    _ = gui.app.path_completions.want("/work/te");
     var result: data.PathCompletionResult = .{};
     try result.setBase("/work");
     try result.append("telar");
     try result.append("tests");
     gui.app.model.path_completion.begin();
-    gui.app.model.path_completion.expect(@enumFromInt(1));
-    try std.testing.expect(gui.app.model.path_completion.apply(@enumFromInt(1), .{ .query = "/work/te", .result = &result }));
+    _ = gui.app.model.path_completion.want("/work/te");
+    gui.app.model.path_completion.land(.{ .query = "/work/te", .result = &result });
     try publish(session);
     const folder = try promptControl(session, "tests");
     try click(session, folder);
@@ -607,8 +606,7 @@ test "context folder scrolling accumulates precise deltas and clamps at the last
         try result.append(name);
     }
     gui.app.model.path_completion.begin();
-    gui.app.model.path_completion.expect(@enumFromInt(1));
-    try std.testing.expect(gui.app.model.path_completion.apply(@enumFromInt(1), .{ .query = "/work/", .result = &result }));
+    gui.app.model.path_completion.land(.{ .query = "/work/", .result = &result });
     try publish(session);
     const row = try promptControl(session, "api");
     const scroll_event: @import("../input/ScrollEvent.zig") = .{ .x = row.bounds.x + 1, .y = row.bounds.y + 1, .delta_y = row.bounds.height * 0.6, .precise = true };
@@ -639,7 +637,7 @@ fn addDragTabs(session: *Session) !void {
     for (2..4) |id| {
         _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "tab", .root_pane_id = @enumFromInt(id * 10) }, .size = model.hostSize() });
     }
-    _ = session.gui.app.request_lifecycle.tracker.take(@enumFromInt(3));
+    _ = session.gui.app.model.request_lifecycle.tracker.take(@enumFromInt(3));
     try publish(session);
 }
 
@@ -719,7 +717,7 @@ test "native tab drag cancels on Escape focus loss and outside drops without pan
         try session.settle();
         try std.testing.expectEqual(@as(usize, 0), session.input_len);
         try std.testing.expectEqual(@as(?usize, 2), session.gui.app.model.tabs.find(@enumFromInt(3)));
-        try std.testing.expect(!session.gui.app.request_lifecycle.tracker.has(.tab_operation));
+        try std.testing.expect(!session.gui.app.model.request_lifecycle.tracker.has(.tab_operation));
     }
 }
 
@@ -962,7 +960,7 @@ test "composer menu preserves terminal repeats and releases across pane focus ch
     try std.testing.expect(session.input_len > repeated);
     try std.testing.expectEqual(@as(usize, 0), gui.widgets.dispatcher.keys.len);
     try std.testing.expectEqual(@as(usize, 0), gui.router.leases.len);
-    try std.testing.expectEqual(@as(usize, 0), gui.app.input_leases.len);
+    try std.testing.expectEqual(@as(usize, 0), gui.app.model.input_leases.len);
     try std.testing.expectEqualStrings("", gui.app.model.panes.findConst(Session.pane_id).?.composerSlice());
     try std.testing.expect(gui.widgets.composer_menu.selector != null);
 }
@@ -1624,7 +1622,7 @@ fn adoptAgentBinding(session: *Session, binding: data.config_values.ConfiguredBi
 fn expectReleasedKeys(session: *Session) !void {
     try std.testing.expectEqual(@as(usize, 0), session.gui.widgets.dispatcher.keys.len);
     try std.testing.expectEqual(@as(usize, 0), session.gui.router.leases.len);
-    try std.testing.expectEqual(@as(usize, 0), session.gui.app.input_leases.len);
+    try std.testing.expectEqual(@as(usize, 0), session.gui.app.model.input_leases.len);
 }
 
 test "agent scroll bindings move the focused transcript without editing the composer" {
@@ -2387,7 +2385,7 @@ test "resolved approval review no longer captures conversation history scrolling
     } else return error.MissingTranscript;
     try send(session, .{ .pointer = .{ .kind = .scroll_up, .x = transcript.bounds.x + 1, .y = transcript.bounds.y + 1 } });
     try std.testing.expectEqual(core.agent_history.Direction.older, pane.agent_history.?.pending.?);
-    try std.testing.expect(session.gui.app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(session.gui.app.model.request_lifecycle.tracker.has(.agent_history));
 }
 
 test "delayed composer cut cannot steal focus from another agent split" {
@@ -3062,7 +3060,7 @@ test "nano always gets a new pane and failed remote opens never duplicate an edi
         } else {
             try editorReply(session, .failed);
             try std.testing.expectEqual(@as(usize, 0), session.pane_creation_count);
-            try std.testing.expect(session.gui.app.editor_open.pending == null);
+            try std.testing.expect(session.gui.app.model.editor_open.pending == null);
         }
     }
 }
@@ -3112,7 +3110,7 @@ test "review hides underlying message links before delivery and restores them af
     }
 
     _ = try session.gui.app.handleServerMessage(.{ .change_review_snapshot = .{
-        .request_id = session.gui.app.change_review.pending.?,
+        .request_id = session.gui.app.model.change_review.pending.?,
         .pane_id = Session.pane_id,
         .pane_generation = 77,
         .session = "thread-A",

@@ -358,7 +358,7 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
     // the inbox and the next preparation places the cell.
     const first = try session.draw();
     try std.testing.expect(gui.chrome.favicons.stateOf(workspace) == .pending);
-    try std.testing.expect(gui.app.favicons.busy());
+    try std.testing.expect(gui.app.model.favicons.busy());
     try input_support.presented(
         gui,
         first,
@@ -382,13 +382,13 @@ fn expectFaviconCard(name: []const u8, bytes: []const u8) !void {
             break;
         }
 
-        if (gui.app.favicons.busy()) {
+        if (gui.app.model.favicons.busy()) {
             try session.gui.driver.inbox.wait();
             _ = try gui.update();
         }
     }
 
-    try std.testing.expect(!gui.app.favicons.busy());
+    try std.testing.expect(!gui.app.model.favicons.busy());
     const placed = gui.chrome.favicons.sprite(Session.location.workspace).?;
     try std.testing.expectEqual(@as(u16, 3), placed.index);
     try std.testing.expectEqual(@as(u16, 4), renderer.sprites.?.count);

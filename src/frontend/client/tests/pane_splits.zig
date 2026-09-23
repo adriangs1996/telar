@@ -21,7 +21,7 @@ test "pending pane creation suppresses another split without changing state" {
     )).?;
     try std.testing.expectEqual(TestHarness.bootstrap_pane, plan.split.target_pane);
     const queued = app.runtime_transport.outbox.len;
-    const next_id = app.request_lifecycle.next_request_id;
+    const next_id = app.model.request_lifecycle.next_request_id;
 
     try std.testing.expect(try app.requestPaneSplit(
         .{
@@ -30,7 +30,7 @@ test "pending pane creation suppresses another split without changing state" {
         },
     ) == null);
     try std.testing.expectEqual(queued, app.runtime_transport.outbox.len);
-    try std.testing.expectEqual(next_id, app.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(next_id, app.model.request_lifecycle.next_request_id);
     try std.testing.expectEqualDeep(before, app.model.version());
     try harness.settle();
 }
@@ -43,7 +43,7 @@ test "split restores the original size when request identity allocation fails" {
     const app = harness.client;
     const before = app.model.version();
     const plan = app.model.planPaneSplit(.{ .axis = .horizontal, .area = app.geometry().area }).?;
-    app.request_lifecycle.next_request_id = std.math.maxInt(u64);
+    app.model.request_lifecycle.next_request_id = std.math.maxInt(u64);
 
     try std.testing.expectError(error.RequestIdExhausted, app.requestPaneSplit(
         .{
@@ -51,7 +51,7 @@ test "split restores the original size when request identity allocation fails" {
             .area = app.geometry().area,
         },
     ));
-    try std.testing.expect(!app.request_lifecycle.tracker.has(.pane_operation));
+    try std.testing.expect(!app.model.request_lifecycle.tracker.has(.pane_operation));
     try std.testing.expectEqualDeep(before, app.model.version());
     try harness.settle();
     var buffer: [512]u8 = undefined;
@@ -77,7 +77,7 @@ test "split rejects mismatched runtime confirmations without mutation or deliver
         .{ .request_id = @enumFromInt(4), .pane_id = @enumFromInt(21), .location = .{ .workspace = TestHarness.bootstrap_location.workspace, .tab_id = @enumFromInt(99) }, .created = true },
     };
     for (invalid) |opened| {
-        try app.request_lifecycle.tracker.add(opened.request_id, .{ .split = .{
+        try app.model.request_lifecycle.tracker.add(opened.request_id, .{ .split = .{
             .target_pane = plan.split.target_pane,
             .location = plan.split.location,
             .axis = plan.split.axis,
@@ -89,7 +89,7 @@ test "split rejects mismatched runtime confirmations without mutation or deliver
                 .pane_opened = opened,
             },
         ));
-        try std.testing.expect(!app.request_lifecycle.tracker.has(.pane_operation));
+        try std.testing.expect(!app.model.request_lifecycle.tracker.has(.pane_operation));
         try std.testing.expectEqualDeep(before, app.model.version());
         try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
     }
@@ -109,7 +109,7 @@ test "split retains the runtime creation when confirmation delivery fails" {
     const pane: core.PaneId = @enumFromInt(21);
 
     const request_id: core.RequestId = @enumFromInt(4);
-    try app.request_lifecycle.tracker.add(
+    try app.model.request_lifecycle.tracker.add(
         request_id,
         .{
             .split = .{
@@ -149,7 +149,7 @@ test "late split confirmation never detaches a currently represented pane" {
     const before = app.model.version();
 
     const request_id: core.RequestId = @enumFromInt(4);
-    try app.request_lifecycle.tracker.add(
+    try app.model.request_lifecycle.tracker.add(
         request_id,
         .{
             .split = .{
@@ -188,7 +188,7 @@ test "split recovery preserves model state when its resize cannot be queued" {
     }
     const before = app.model.version();
     const request_id: core.RequestId = @enumFromInt(4);
-    try app.request_lifecycle.tracker.add(request_id, .{ .split = .{
+    try app.model.request_lifecycle.tracker.add(request_id, .{ .split = .{
         .target_pane = plan.split.target_pane,
         .location = plan.split.location,
         .axis = plan.split.axis,
@@ -204,7 +204,7 @@ test "split recovery preserves model state when its resize cannot be queued" {
             },
         },
     ));
-    try std.testing.expect(!app.request_lifecycle.tracker.has(.pane_operation));
+    try std.testing.expect(!app.model.request_lifecycle.tracker.has(.pane_operation));
     try std.testing.expectEqual(@as(u8, 0), app.model.notificationSnapshot().count);
     try std.testing.expectEqualDeep(before, app.model.version());
 }
@@ -255,7 +255,7 @@ test "routed pane focus reports applied or failed with the original correlation"
     try harness.bootstrap();
     const app = harness.client;
     const before = app.model.version();
-    const pending = app.request_lifecycle.tracker.count;
+    const pending = app.model.request_lifecycle.tracker.count;
     var command: core.ClientCommand = .{
         .request_id = @enumFromInt(91),
         .route = .{
@@ -295,7 +295,7 @@ test "routed pane focus reports applied or failed with the original correlation"
     try std.testing.expectEqual(.failed, failed.complete_client_command.status);
     try std.testing.expectEqualStrings("InvalidPaneId", failed.complete_client_command.text());
     try std.testing.expectEqualDeep(before, app.model.version());
-    try std.testing.expectEqual(pending, app.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(pending, app.model.request_lifecycle.tracker.count);
 }
 
 test "routed pane split acknowledges admission before runtime creation" {
@@ -332,7 +332,7 @@ test "routed pane split acknowledges admission before runtime creation" {
     const created = try harness.nextClientMessage(&buffer);
     try std.testing.expect(created == .create_pane);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, created.create_pane.launch.cwd_source.?);
-    const continuation = app.request_lifecycle.tracker.take(created.create_pane.request_id).?;
+    const continuation = app.model.request_lifecycle.tracker.take(created.create_pane.request_id).?;
     try std.testing.expect(continuation == .split);
     try std.testing.expectEqual(.vertical, continuation.split.axis);
     const reply = try harness.nextClientMessage(&buffer);

@@ -177,7 +177,7 @@ pub fn settle(session: *Session) !void {
 
 pub fn bootstrap(session: *Session) !void {
     const app = &session.gui.app;
-    try app.request_lifecycle.tracker.add(
+    try app.model.request_lifecycle.tracker.add(
         client.initial_request_id,
         .{
             .initial_open = .{},
@@ -186,7 +186,7 @@ pub fn bootstrap(session: *Session) !void {
     var buffer: [128]u8 = undefined;
     const opened = try core.encodePaneOpened(&buffer, .{ .request_id = client.initial_request_id, .pane_id = pane_id, .location = location, .created = true });
     _ = try app.handleServerMessage(try core.decodeServer(opened));
-    app.startup.phase = .active;
+    app.model.startup.phase = .active;
     try session.settle();
 }
 

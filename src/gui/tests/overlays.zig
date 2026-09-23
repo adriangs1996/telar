@@ -297,8 +297,7 @@ test "native new-context form paints both fields, the completion list and the co
     try result.append("telar");
     try result.append("tests");
     fixture.model.path_completion.begin();
-    fixture.model.path_completion.expect(@enumFromInt(1));
-    try std.testing.expect(fixture.model.path_completion.apply(@enumFromInt(1), .{ .query = "/work/te", .result = &result }));
+    fixture.model.path_completion.land(.{ .query = "/work/te", .result = &result });
     _ = fixture.model.name_prompt.apply(.move_down);
     try fixture.paint();
 

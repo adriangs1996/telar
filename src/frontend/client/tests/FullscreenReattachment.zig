@@ -36,7 +36,7 @@ pub fn selectTab(scenario: FullscreenReattachment, index: u8, panes: []const cor
 
 pub fn confirmAttachment(scenario: FullscreenReattachment, pane_id: core.PaneId) !void {
     const client = scenario.harness.client;
-    try std.testing.expect(client.request_lifecycle.tracker.hasPane(.attachment, pane_id));
+    try std.testing.expect(client.model.request_lifecycle.tracker.hasPane(.attachment, pane_id));
     try scenario.harness.settle();
     var buffer: [256]u8 = undefined;
     const message = try scenario.harness.nextClientMessage(&buffer);

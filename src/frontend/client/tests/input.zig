@@ -98,7 +98,7 @@ test "child marker deletion and prompt submission retire paired previews" {
     );
 
     try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
-    try std.testing.expect(client.clipboard_capture_resources.orphan == null);
+    try std.testing.expect(client.model.clipboard_capture_resources.orphan == null);
 }
 
 test "Claude marker disappearance in a committed frame retires its paired preview" {

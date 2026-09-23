@@ -102,7 +102,7 @@ fn routeChunk(client: *client_module.AttachedClient) !bool {
         return true;
     }
 
-    if (client.startup.holdsInput()) {
+    if (client.model.startup.holdsInput()) {
         var early = chunk.slice();
         while (try state.startup_input.next(&early)) |response| {
             try terminalResponse(client, response);

@@ -133,7 +133,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
 
     const cells = [_]core.Cell{.{}};
     var payload: [256]u8 = undefined;
@@ -408,7 +408,7 @@ test "close pane request waits for the authoritative exit before committing" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const closing_pane: core.PaneId = @enumFromInt(11);
     const split = try client.model.commitPaneSplit(.{
         .split = .{
@@ -443,7 +443,7 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(client.model.panes.find(closing_pane) != null);
     try std.testing.expectEqualDeep(version_before_request, client.model.version());
     try std.testing.expectEqual(pending_updates_before_request, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 1), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 1), client.model.request_lifecycle.tracker.count);
 
     try harness.settle();
     var message_buffer: [256]u8 = undefined;
@@ -464,12 +464,12 @@ test "close pane request waits for the authoritative exit before committing" {
     try std.testing.expect(client.model.panes.find(closing_pane) == null);
     try std.testing.expectEqual(version_before_request.panes + 1, client.model.version().panes);
     try std.testing.expectEqual(pending_updates_before_request, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(?core.PaneId, TestHarness.bootstrap_pane), support.reportedPaneId(client));
     try std.testing.expect(!TerminalClient.of(client).graphics_store.hasPaneGraphics(closing_pane));
-    try std.testing.expect(!client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.notification_scheduler.pending);
 
     try presentation_lifecycle.observe(client);
 
@@ -530,7 +530,7 @@ test "an unrequested pane exit removes the pane silently" {
     try std.testing.expect(!client.model.copyModeActive());
     try std.testing.expectEqual(@as(?core.PaneId, null), support.reportedPaneId(client));
     try std.testing.expect(!TerminalClient.of(client).graphics_store.hasPaneGraphics(TestHarness.bootstrap_pane));
-    try std.testing.expect(!client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.notification_scheduler.pending);
 
     try presentation_lifecycle.observe(client);
 
@@ -545,7 +545,7 @@ test "an inactive pane exit retires only inactive state" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const inactive_pane: core.PaneId = @enumFromInt(20);
     const inactive = try harness.addInactiveTab(@enumFromInt(2), inactive_pane);
     try TerminalClient.of(client).graphics_store.applyImage(.{
@@ -559,11 +559,11 @@ test "an inactive pane exit retires only inactive state" {
             .byte_len = 3,
         },
     });
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .close_pane = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .close_pane = .{
         .pane_id = inactive_pane,
         .location = inactive,
     } });
-    try client.request_lifecycle.tracker.add(@enumFromInt(5), .{ .attach_pane = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(5), .{ .attach_pane = .{
         .pane_id = inactive_pane,
         .location = inactive,
     } });
@@ -584,9 +584,9 @@ test "an inactive pane exit retires only inactive state" {
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqual(@as(?core.PaneId, TestHarness.bootstrap_pane), support.reportedPaneId(client));
     try std.testing.expect(!TerminalClient.of(client).graphics_store.hasPaneGraphics(inactive_pane));
-    try std.testing.expect(client.request_lifecycle.tracker.take(@enumFromInt(4)) == null);
-    try std.testing.expect(client.request_lifecycle.tracker.take(@enumFromInt(5)).? == .ignored);
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expect(client.model.request_lifecycle.tracker.take(@enumFromInt(4)) == null);
+    try std.testing.expect(client.model.request_lifecycle.tracker.take(@enumFromInt(5)).? == .ignored);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     try presentation_lifecycle.observe(client);

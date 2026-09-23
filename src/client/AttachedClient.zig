@@ -97,34 +97,17 @@ runtime_transport: RuntimeTransportState,
 options: Options,
 client_identity: core.ClientIdentity,
 telemetry: TelemetryState,
-client_layouts: data.ClientLayoutsState = .{},
-startup: data.StartupState = .{},
 model: data.Model,
-navigation_history: data.NavigationHistory = .{},
 lua_generation: ?*Generation,
 plugin_registry: ?*Registry,
 trust_store: ?*core.TrustStore,
 reload: ConfigReloadState,
-sound_playback: data.SoundPlayback,
 /// Transient: the alternate flag of the list submission being finished.
 list_submission_alternate: bool = false,
-clipboard_capture_resources: data.CaptureResources = .{},
-link_opening: data.Opening = .{},
-link_pointer: data.Pointer = .{},
-request_lifecycle: data.RequestLifecycle = .{},
-change_review: data.ChangeReviewSession = .{},
-sidebar_animation_scheduler: core.DeadlineScheduler = .{},
-notification_scheduler: core.DeadlineScheduler = .{},
-bar_updates: data.BarUpdatesState = .{},
-path_completions: data.PathCompletionsState = .{},
-favicons: data.FaviconsState = .{},
-/// Application key leases, owned by routing rather than by the host reader.
-input_leases: data.key_routing.Leases = .{},
 /// Host ports, bound by the adapter before the first event.
 sound_port: SoundPort = undefined,
 notifier: HostNotifier = undefined,
 link_opener: LinkOpener = undefined,
-editor_open: data.EditorOpening = .{},
 capture_port: CapturePort = undefined,
 host_clipboard: HostClipboard = undefined,
 host_graphics: HostGraphics = undefined,
@@ -188,7 +171,6 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
         .plugin_registry = params.options.plugin_registry,
         .trust_store = params.options.trust_store,
         .reload = .{ .mtime_ns = params.options.config_mtime_ns },
-        .sound_playback = .init(params.options.sound),
     };
 
     client.model.initInto(gpa, .{
@@ -202,6 +184,7 @@ pub fn init(client: *AttachedClient, params: ClientInit) !void {
         .window_title = if (snapshot) |value| value.windowTitle() else "",
     });
     errdefer client.model.deinit();
+    client.model.sound_playback = .init(params.options.sound);
     try client.model.history_palette.prepare(gpa);
     _ = client.model.setSidebarVisible(params.options.sidebar_visible);
 }
@@ -222,7 +205,6 @@ pub fn deinit(client: *AttachedClient) void {
     const gpa = client.gpa;
     client.telemetry.deinit(client.io);
     client.reload.deinit(gpa);
-    client.clipboard_capture_resources.deinit(gpa);
     if (client.lua_generation) |generation| {
         generation.deinit();
     }
@@ -599,8 +581,8 @@ pub fn executeAction(self: *AttachedClient, value: data.Action, origin: ActionOr
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try self.sendRuntimeRequest(delivery);`
 pub fn sendRuntimeRequest(self: *AttachedClient, delivery: data.ConnectionDelivery) !void {
-    try self.request_lifecycle.tracker.add(delivery.registration.request_id, delivery.registration.continuation);
-    errdefer _ = self.request_lifecycle.tracker.take(delivery.registration.request_id);
+    try self.model.request_lifecycle.tracker.add(delivery.registration.request_id, delivery.registration.continuation);
+    errdefer _ = self.model.request_lifecycle.tracker.take(delivery.registration.request_id);
     try self.runtime_transport.outbox.push(delivery.message);
     try self.startRuntimeSend();
 }
@@ -608,13 +590,13 @@ pub fn sendRuntimeRequest(self: *AttachedClient, delivery: data.ConnectionDelive
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try self.sendWorkspaceRenameRequest(rename);`
 pub fn sendWorkspaceRenameRequest(self: *AttachedClient, rename: core.RenameWorkspace) !void {
-    try self.request_lifecycle.tracker.add(
+    try self.model.request_lifecycle.tracker.add(
         rename.request_id,
         .{
             .rename_workspace = rename.workspace,
         },
     );
-    errdefer _ = self.request_lifecycle.tracker.take(rename.request_id);
+    errdefer _ = self.model.request_lifecycle.tracker.take(rename.request_id);
     try self.runtime_transport.outbox.pushWorkspaceRename(rename);
     try self.startRuntimeSend();
 }
@@ -668,7 +650,7 @@ pub fn togglePaneFullscreen(self: *AttachedClient, command: data.TogglePaneFulls
 /// Requests creation without committing layout; restores geometry if delivery fails.
 /// Example: `_ = try self.requestPaneSplit(.{ .axis = .horizontal, .area = self.geometry().area });`
 pub fn requestPaneSplit(self: *AttachedClient, command: data.RequestPaneSplit) !?data.PaneSplitPlan {
-    if (self.request_lifecycle.tracker.has(.pane_operation)) {
+    if (self.model.request_lifecycle.tracker.has(.pane_operation)) {
         return null;
     }
 
@@ -821,7 +803,7 @@ pub fn barConfiguration(self: *const AttachedClient) ?*const data.BarConfigurati
 /// Replaces bar deadlines from the active configuration and rearms their timer.
 /// Example: `try client.synchronizeBars();`
 pub fn synchronizeBars(self: *AttachedClient) !void {
-    self.bar_updates.synchronize(
+    self.model.bar_updates.synchronize(
         .{
             .generation = if (self.lua_generation) |generation| generation.number else self.model.configurationGeneration(),
             .configuration = self.barConfiguration(),
@@ -829,7 +811,7 @@ pub fn synchronizeBars(self: *AttachedClient) !void {
         },
     );
 
-    try self.timers.rearmBars(self.io, &self.bar_updates);
+    try self.timers.rearmBars(self.io, &self.model.bar_updates);
 }
 
 /// Snapshot the current exclusive keyboard owners without exposing client state.
@@ -860,7 +842,7 @@ pub fn repeatPane(self: *const AttachedClient) ?core.PaneId {
 /// Example: `try app.openChangeReview(pane_id);`
 pub fn openChangeReview(self: *AttachedClient, pane_id: core.PaneId) !void {
     try self.openChangeReviewSession(pane_id);
-    try self.queryChangeReview(if (self.change_review.loaded) self.change_review.snapshot.edition_id else 0);
+    try self.queryChangeReview(if (self.model.change_review.loaded) self.model.change_review.snapshot.edition_id else 0);
 }
 
 /// Zero requests latest; explicit navigation never replaces a review on new edits.
@@ -871,8 +853,8 @@ pub fn queryChangeReview(self: *AttachedClient, edition_id: u64) !void {
         return err;
     };
 
-    const request_id = try self.request_lifecycle.nextId();
-    try self.request_lifecycle.tracker.add(
+    const request_id = try self.model.request_lifecycle.nextId();
+    try self.model.request_lifecycle.tracker.add(
         request_id,
         .{
             .change_review_query = owner,
@@ -888,7 +870,7 @@ pub fn queryChangeReview(self: *AttachedClient, edition_id: u64) !void {
             .session = owner.sessionSlice(),
         },
     ) catch |err| {
-        _ = self.request_lifecycle.tracker.take(request_id);
+        _ = self.model.request_lifecycle.tracker.take(request_id);
         _ = self.failChangeReview(owner, @errorName(err));
         return err;
     };
@@ -898,28 +880,28 @@ pub fn queryChangeReview(self: *AttachedClient, edition_id: u64) !void {
 /// Pass the displayed edition and revision to bind a delayed gesture to its owner.
 /// Example: `try app.commandChangeReview(request);`
 pub fn commandChangeReview(self: *AttachedClient, request: core.ChangeReviewCommand) !void {
-    if (!self.change_review.loaded) {
+    if (!self.model.change_review.loaded) {
         self.reportChangeReview("No change review is loaded");
         return error.ChangeReviewNotLoaded;
     }
 
-    const edition_id = if (request.edition_id == 0) self.change_review.snapshot.edition_id else request.edition_id;
+    const edition_id = if (request.edition_id == 0) self.model.change_review.snapshot.edition_id else request.edition_id;
     const owner = self.changeReviewOperation(edition_id) catch |err| {
         self.reportChangeReview(@errorName(err));
         return err;
     };
 
     var outgoing = request;
-    outgoing.request_id = try self.request_lifecycle.nextId();
+    outgoing.request_id = try self.model.request_lifecycle.nextId();
     outgoing.pane_id = owner.pane_id;
     outgoing.pane_generation = owner.pane_generation;
     outgoing.edition_id = edition_id;
     outgoing.session = owner.sessionSlice();
     if (outgoing.expected_revision == 0) {
-        outgoing.expected_revision = self.change_review.snapshot.revision;
+        outgoing.expected_revision = self.model.change_review.snapshot.revision;
     }
 
-    try self.request_lifecycle.tracker.add(
+    try self.model.request_lifecycle.tracker.add(
         outgoing.request_id,
         .{
             .change_review_command = owner,
@@ -927,7 +909,7 @@ pub fn commandChangeReview(self: *AttachedClient, request: core.ChangeReviewComm
     );
     self.beginChangeReview(outgoing.request_id);
     self.sendRuntimeChangeReviewCommand(outgoing) catch |err| {
-        _ = self.request_lifecycle.tracker.take(outgoing.request_id);
+        _ = self.model.request_lifecycle.tracker.take(outgoing.request_id);
         _ = self.failChangeReview(owner, @errorName(err));
         return err;
     };
@@ -937,21 +919,21 @@ pub fn commandChangeReview(self: *AttachedClient, request: core.ChangeReviewComm
 /// refresh can never be mistaken for the acknowledgement of an earlier save.
 /// Example: `app.refreshChangeReview();`
 pub fn refreshChangeReview(self: *AttachedClient) void {
-    if (self.change_review.needsRefresh() and self.change_review.errorSlice().len == 0) {
-        self.queryChangeReview(if (self.change_review.loaded) self.change_review.snapshot.edition_id else 0) catch {};
+    if (self.model.change_review.needsRefresh() and self.model.change_review.errorSlice().len == 0) {
+        self.queryChangeReview(if (self.model.change_review.loaded) self.model.change_review.snapshot.edition_id else 0) catch {};
     }
 }
 
 /// Resolves the review owner without retaining an address across lifecycle changes.
 /// Example: `_ = app.isChangeReviewAttached();`
 pub fn isChangeReviewAttached(self: *AttachedClient) bool {
-    const owner = self.change_review.owner orelse return false;
+    const owner = self.model.change_review.owner orelse return false;
     return resolveReviewPane(&self.model, owner) != null;
 }
 
 /// Example: `app.closeChangeReview();`
 pub fn closeChangeReview(self: *AttachedClient) void {
-    self.change_review.close();
+    self.model.change_review.close();
     self.model.chrome_revision +%= 1;
 }
 
@@ -1001,7 +983,7 @@ pub fn inputLinkPointer(self: *AttachedClient, tab: usize, event: data.Mouse) !b
         )
     else
         null;
-    const outcome = self.link_pointer.handle(command, target);
+    const outcome = self.model.link_pointer.handle(command, target);
     if (outcome.open) |selected| {
         _ = try self.openLink(selected);
     }
@@ -1020,9 +1002,9 @@ pub fn completeLinkOpening(self: *AttachedClient, result: anyerror!void) !void {
         try self.reportLinkFailure(err);
     }
 
-    const next = self.link_opening.complete() orelse return;
+    const next = self.model.link_opening.complete() orelse return;
     self.link_opener.start(next) catch |err| {
-        self.link_opening.schedulingFailed();
+        self.model.link_opening.schedulingFailed();
         try self.reportLinkFailure(err);
     };
 }
@@ -1041,7 +1023,7 @@ pub fn openMessageFile(self: *AttachedClient, pane_id: core.PaneId, path: data.F
 /// Starts at most one history request for this connection after frame delivery.
 /// Example: `try app.flushAgentHistory();`
 pub fn flushAgentHistory(self: *AttachedClient) !void {
-    if (self.request_lifecycle.tracker.has(.agent_history)) {
+    if (self.model.request_lifecycle.tracker.has(.agent_history)) {
         return;
     }
 
@@ -1066,7 +1048,7 @@ pub fn flushAgentHistory(self: *AttachedClient) !void {
             .view_generation = query.view_generation,
         };
 
-        query.request_id = self.request_lifecycle.nextId() catch |err| {
+        query.request_id = self.model.request_lifecycle.nextId() catch |err| {
             _ = agent_reading.failed(
                 &self.model,
                 operation,
@@ -1076,7 +1058,7 @@ pub fn flushAgentHistory(self: *AttachedClient) !void {
             return;
         };
 
-        self.request_lifecycle.tracker.add(
+        self.model.request_lifecycle.tracker.add(
             query.request_id,
             .{
                 .agent_history = operation,
@@ -1092,7 +1074,7 @@ pub fn flushAgentHistory(self: *AttachedClient) !void {
         };
 
         self.sendRuntimeAgentHistory(query) catch |err| {
-            _ = self.request_lifecycle.tracker.take(query.request_id);
+            _ = self.model.request_lifecycle.tracker.take(query.request_id);
             _ = agent_reading.failed(
                 &self.model,
                 operation,
@@ -1128,12 +1110,12 @@ pub fn attachAgentImage(self: *AttachedClient, pane_id: core.PaneId, path: []con
 /// Copies and correlates a prompt, preserving the draft until acknowledgement.
 /// Example: `try app.submitAgentPrompt(pane_id);`
 pub fn submitAgentPrompt(self: *AttachedClient, pane_id: core.PaneId) !void {
-    if (self.request_lifecycle.tracker.hasPane(.agent_prompt, pane_id)) {
+    if (self.model.request_lifecycle.tracker.hasPane(.agent_prompt, pane_id)) {
         return;
     }
 
     const intent = self.model.planAgentPrompt(pane_id) orelse return;
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendAgentPromptRequest(
         .{
             .request_id = request_id,
@@ -1156,11 +1138,11 @@ pub fn submitAgentPrompt(self: *AttachedClient, pane_id: core.PaneId) !void {
 /// Example: `try app.interruptAgent(pane_id);`
 pub fn interruptAgent(self: *AttachedClient, pane_id: core.PaneId) !void {
     const pending = agentOperation(&self.model, pane_id) orelse return;
-    if (self.request_lifecycle.tracker.hasPane(.agent_control, pane_id)) {
+    if (self.model.request_lifecycle.tracker.hasPane(.agent_control, pane_id)) {
         return;
     }
 
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -1186,11 +1168,11 @@ pub fn resumeAgentConversation(self: *AttachedClient, pane_id: core.PaneId, inde
     const pending = agentOperation(&self.model, pane_id) orelse return;
     const pane = self.model.agentPane(pane_id) orelse return;
     const snapshot = pane.agent_thread orelse return;
-    if (!snapshot.canResume() or index >= snapshot.recent.count or self.request_lifecycle.tracker.hasPane(.agent_control, pane_id) or self.request_lifecycle.tracker.hasPane(.agent_prompt, pane_id)) {
+    if (!snapshot.canResume() or index >= snapshot.recent.count or self.model.request_lifecycle.tracker.hasPane(.agent_control, pane_id) or self.model.request_lifecycle.tracker.hasPane(.agent_prompt, pane_id)) {
         return;
     }
 
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -1218,11 +1200,11 @@ pub fn approveAgent(self: *AttachedClient, decision: data.AgentDecision) !void {
     const pane = self.model.agentPane(decision.pane_id) orelse return;
     const thread = pane.agent_thread orelse return;
     const approval = thread.pending_approval orelse return;
-    if (approval.id != decision.approval_id or self.request_lifecycle.tracker.hasPane(.agent_control, decision.pane_id)) {
+    if (approval.id != decision.approval_id or self.model.request_lifecycle.tracker.hasPane(.agent_control, decision.pane_id)) {
         return;
     }
 
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -1246,13 +1228,13 @@ pub fn approveAgent(self: *AttachedClient, decision: data.AgentDecision) !void {
 
 /// Example: `_ = try app.requestTabCreation(command);`
 pub fn requestTabCreation(self: *AttachedClient, command: data.RequestTabCreation) !bool {
-    if (self.request_lifecycle.tracker.has(.tab_operation)) {
+    if (self.model.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 
     try data.label_validation.validate(command.label, .new_tab);
     const plan = self.model.planTabCreation() orelse return false;
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendCreateTabRequest(
         .{
             .kind = command.kind,
@@ -1287,7 +1269,7 @@ pub fn detachTab(self: *AttachedClient, location: core.TabLocation) !void {
     }
 
     for (plan.slice()) |pane| {
-        const pending = self.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id);
+        const pending = self.model.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id);
         if (!pane.attached and !pending) {
             continue;
         }
@@ -1299,7 +1281,7 @@ pub fn detachTab(self: *AttachedClient, location: core.TabLocation) !void {
                 },
             },
         );
-        _ = self.request_lifecycle.tracker.ignoreAttachment(pane.pane_id);
+        _ = self.model.request_lifecycle.tracker.ignoreAttachment(pane.pane_id);
         try self.graphics.setPaneVisible(pane.pane_id, false);
     }
 
@@ -1309,7 +1291,7 @@ pub fn detachTab(self: *AttachedClient, location: core.TabLocation) !void {
 /// Selects a known inactive workspace only while this connection is idle.
 /// Example: `_ = try app.selectWorkspace(.{ .position = 1 });`
 pub fn selectWorkspace(self: *AttachedClient, target: data.WorkspaceSelectionTarget) !bool {
-    if (!self.request_lifecycle.tracker.isEmpty()) {
+    if (!self.model.request_lifecycle.tracker.isEmpty()) {
         return false;
     }
 
@@ -1357,7 +1339,7 @@ pub fn requestWorkspace(self: *AttachedClient, workspace: core.WorkspaceId) !dat
 /// Validates a workspace creation and retains its launch parameters until confirmation.
 /// Example: `_ = try app.requestWorkspaceCreation(.{ .name = "agents" });`
 pub fn requestWorkspaceCreation(self: *AttachedClient, command: data.RequestWorkspaceCreation) !bool {
-    if (!self.request_lifecycle.tracker.isEmpty()) {
+    if (!self.model.request_lifecycle.tracker.isEmpty()) {
         return false;
     }
 
@@ -1366,7 +1348,7 @@ pub fn requestWorkspaceCreation(self: *AttachedClient, command: data.RequestWork
         self.model.planWorkspaceCreation() orelse return false
     else
         null;
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendCreateWorkspaceRequest(
         .{
             .request_id = request_id,
@@ -1387,7 +1369,7 @@ pub fn requestWorkspaceCreation(self: *AttachedClient, command: data.RequestWork
 /// Validates one request and retains its correlation before delivery.
 /// Example: `_ = try self.requestTabMove(command);`
 pub fn requestTabMove(self: *AttachedClient, command: data.RequestTabMove) !bool {
-    if (self.request_lifecycle.tracker.has(.tab_operation)) {
+    if (self.model.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 
@@ -1403,7 +1385,7 @@ pub fn requestTabMove(self: *AttachedClient, command: data.RequestTabMove) !bool
         }
     }
 
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -1524,7 +1506,7 @@ pub fn publishNotificationNow(self: *AttachedClient, input: data.NotificationInp
 /// state in the client model.
 /// Example: `_ = try self.completeNotificationTick(result);`
 pub fn completeNotificationTick(self: *AttachedClient, result: anyerror!void) !?data.NotificationChange {
-    try self.notification_scheduler.complete(result);
+    try self.model.notification_scheduler.complete(result);
 
     return self.advanceNotifications(core.monotonic(self.io));
 }
@@ -1547,7 +1529,7 @@ pub fn dismissNotificationNow(self: *AttachedClient, id: data.NotificationId) !?
 /// Example: `try self.completeAgentSound(result);`
 pub fn completeAgentSound(self: *AttachedClient, result: anyerror!void) !void {
     _ = result catch {};
-    const next = self.sound_playback.complete() orelse return;
+    const next = self.model.sound_playback.complete() orelse return;
 
     try self.startAgentSound(next);
 }
@@ -1564,7 +1546,7 @@ pub fn applyPaneFocus(self: *AttachedClient, command: data.PaneFocusRequest) !?d
 /// Completes one timer, advances the model and rearms only active animation.
 /// Example: `_ = try self.completeSidebarAnimationTick(result);`
 pub fn completeSidebarAnimationTick(self: *AttachedClient, result: anyerror!void) !?data.SidebarAnimationChange {
-    try self.sidebar_animation_scheduler.complete(result);
+    try self.model.sidebar_animation_scheduler.complete(result);
     const change = self.model.advanceSidebarAnimation() orelse return null;
     try self.scheduleSidebarAnimation();
     return change;
@@ -1573,7 +1555,7 @@ pub fn completeSidebarAnimationTick(self: *AttachedClient, result: anyerror!void
 /// Selects canonical identity, retires previous input authorities and requests current membership. Example: `_ = try select(client, command);`
 /// Example: `_ = try app.selectTab(command);`
 pub fn selectTab(self: *AttachedClient, command: data.SelectTab) !?data.TabSelection {
-    if (self.request_lifecycle.tracker.has(.tab_snapshot)) {
+    if (self.model.request_lifecycle.tracker.has(.tab_snapshot)) {
         return null;
     }
 
@@ -1617,12 +1599,12 @@ pub fn resizeSidebar(self: *AttachedClient, requested: data.SidebarResize) !?dat
 /// runtime outbox. Tabs without a runtime snapshot are omitted until known.
 /// Example: `try app.synchronizeClientLayout();`
 pub fn synchronizeClientLayout(self: *AttachedClient) !void {
-    if (!self.client_layouts.snapshot_received) {
+    if (!self.model.client_layouts.snapshot_received) {
         return;
     }
 
     const version = layout_updates.captureVersion(&self.model) orelse return;
-    if (self.client_layouts.last_sent) |last| {
+    if (self.model.client_layouts.last_sent) |last| {
         if (last.eql(&version)) {
             return;
         }
@@ -1640,7 +1622,7 @@ pub fn synchronizeClientLayout(self: *AttachedClient) !void {
         else => return err,
     };
 
-    self.client_layouts.last_sent = version;
+    self.model.client_layouts.last_sent = version;
 }
 
 /// Delivers one user-input command through the application boundary.
@@ -2002,7 +1984,7 @@ pub fn openNamePrompt(self: *AttachedClient, intent: name_prompt_opening.Intent)
 
     const command: data.PromptBegin = switch (intent) {
         .create_workspace => create: {
-            if (!self.request_lifecycle.tracker.isEmpty()) {
+            if (!self.model.request_lifecycle.tracker.isEmpty()) {
                 return false;
             }
             if (self.model.planWorkspaceCreation() == null) {
@@ -2179,21 +2161,19 @@ pub fn completePluginAction(self: *AttachedClient, completion: data.PluginAction
 pub fn completePathCompletion(self: *AttachedClient, completion: data.PathCompletionCompletion) !void {
     const result = completion.result catch null;
     defer if (result) |owned| self.gpa.destroy(owned);
-    if (!self.path_completions.finish(completion.execution_id)) {
+    const completion_state = &self.model.path_completion;
+    if (!completion_state.retire(completion.execution_id)) {
         return;
     }
-    if (self.path_completions.superseded() or self.model.name_prompt.currentConst() == null) {
+    if (completion_state.superseded() or self.model.name_prompt.currentConst() == null) {
         try self.startPathCompletion();
         return;
     }
     if (result) |owned| {
-        _ = self.model.path_completion.apply(
-            completion.execution_id,
-            .{
-                .query = self.path_completions.inflightSlice(),
-                .result = owned,
-            },
-        );
+        completion_state.land(.{
+            .query = completion_state.inflightSlice(),
+            .result = owned,
+        });
     } else {
         self.model.path_completion.invalidate();
     }
@@ -2208,7 +2188,7 @@ pub fn completeClipboardCapture(self: *AttachedClient, completion: data.Completi
     };
 
     const command: clipboard_image.CompletionCommand = if (completion.result) |completed| completed: {
-        const capture = self.clipboard_capture_resources.take(completed);
+        const capture = self.model.clipboard_capture_resources.take(completed);
         owned_capture = capture;
         break :completed .{
             .succeeded = .{
@@ -2286,7 +2266,7 @@ pub fn navigateAgent(self: *AttachedClient, key: data.AgentKey) !AgentNavigation
             break :local .focused;
         },
         .handoff => |handoff| handoff: {
-            if (!self.request_lifecycle.tracker.isEmpty()) {
+            if (!self.model.request_lifecycle.tracker.isEmpty()) {
                 break :handoff .ignored;
             }
             _ = try self.requestWorkspacePane(handoff.pane_id, handoff.fallback_workspace);
@@ -2308,7 +2288,7 @@ fn sendRuntimeClientLayout(self: *AttachedClient, update: core.ClientLayoutUpdat
 /// Requests a canonical snapshot with its exact target retained until the reply.
 /// Example: `try self.requestTabSnapshot(location);`
 fn requestTabSnapshot(self: *AttachedClient, location: core.TabLocation) !void {
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -2330,7 +2310,7 @@ fn requestTabSnapshot(self: *AttachedClient, location: core.TabLocation) !void {
 /// Requests a canonical snapshot with its exact target retained until the reply.
 /// Example: `try self.requestWorkspaceSnapshot(workspace);`
 fn requestWorkspaceSnapshot(self: *AttachedClient, workspace: core.WorkspaceLocation) !void {
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -2357,12 +2337,12 @@ fn attachVisiblePanes(self: *AttachedClient, tab: usize, area: core.Rect) !void 
     var panes = self.model.panes.iterate(self.model.tabs.location[tab].tab_id);
 
     while (panes.next()) |pane| {
-        if (pane.attached or self.request_lifecycle.tracker.hasPane(.attachment, pane.id)) {
+        if (pane.attached or self.model.request_lifecycle.tracker.hasPane(.attachment, pane.id)) {
             continue;
         }
 
         const size = data.tab_layout.contentSize(&self.model, tab, pane.id, area) orelse continue;
-        const request_id = try self.request_lifecycle.nextId();
+        const request_id = try self.model.request_lifecycle.nextId();
         try self.sendRuntimeRequest(
             .{
                 .registration = .{
@@ -2391,7 +2371,7 @@ fn attachVisiblePanes(self: *AttachedClient, tab: usize, area: core.Rect) !void 
 
 /// Example: `try app.recoverTabSnapshot(location);`
 fn recoverTabSnapshot(self: *AttachedClient, location: core.TabLocation) !TabSnapshotRecovery {
-    if (self.request_lifecycle.tracker.has(.tab_snapshot)) {
+    if (self.model.request_lifecycle.tracker.has(.tab_snapshot)) {
         return .coalesced;
     }
 
@@ -2401,13 +2381,13 @@ fn recoverTabSnapshot(self: *AttachedClient, location: core.TabLocation) !TabSna
 
 /// Example: `_ = try app.requestTabRename(command);`
 fn requestTabRename(self: *AttachedClient, command: data.RequestRenameTab) !bool {
-    if (self.request_lifecycle.tracker.has(.tab_operation)) {
+    if (self.model.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 
     try data.label_validation.validate(command.label, .renamed_tab);
     const location = self.model.tabLocation(command.tab_id) orelse return false;
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendTabRenameRequest(
         .{
             .request_id = request_id,
@@ -2455,7 +2435,7 @@ fn refreshHistoryInspection(self: *AttachedClient) !void {
         }
 
         const read = next orelse return;
-        const request_id = try self.request_lifecycle.nextId();
+        const request_id = try self.model.request_lifecycle.nextId();
         if (!history_browser.requestRead(
             &self.model,
             core.raw(request_id),
@@ -2513,7 +2493,7 @@ fn pasteHistorySelection(self: *AttachedClient, request: data.HistoryPasteReques
 /// the row disappears only once it is actually gone.
 /// Example: `try self.deleteHistorySelection(selection);`
 fn deleteHistorySelection(self: *AttachedClient, selection: u16) !void {
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     const id = history_browser.requestDelete(
         &self.model,
         core.raw(request_id),
@@ -2546,7 +2526,7 @@ fn requestSuggestion(self: *AttachedClient, text: []const u8) !void {
         return;
     };
 
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     var owned: data.OwnedSuggestion = .{
         .request_id = request_id,
         .pane_id = pane_id,
@@ -2578,8 +2558,8 @@ fn pasteSuggestion(self: *AttachedClient) !void {
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try self.sendNotificationRequest(request);`
 fn sendNotificationRequest(self: *AttachedClient, request: core.ShowNotification) !void {
-    try self.request_lifecycle.tracker.add(request.request_id, .notification);
-    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
+    try self.model.request_lifecycle.tracker.add(request.request_id, .notification);
+    errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
     try self.runtime_transport.outbox.pushNotification(request);
     try self.startRuntimeSend();
 }
@@ -2610,13 +2590,13 @@ fn deliverPaneFocus(self: *AttachedClient, focus: data.PaneFocus, area: core.Rec
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try self.sendCreateWorkspaceRequest(request);`
 fn sendCreateWorkspaceRequest(self: *AttachedClient, request: core.CreateWorkspace) !void {
-    try self.request_lifecycle.tracker.add(
+    try self.model.request_lifecycle.tracker.add(
         request.request_id,
         .{
             .create_workspace = request.size,
         },
     );
-    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
+    errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
     try self.runtime_transport.outbox.pushCreateWorkspace(request);
     try self.startRuntimeSend();
 }
@@ -2628,7 +2608,7 @@ fn tabDetachmentCapacity(self: *const AttachedClient, location: core.TabLocation
     var required = @as(usize, @intFromBool(plan.paste_marker_required));
     required += @intFromBool(plan.focus_out_required);
     for (plan.slice()) |pane| {
-        required += @intFromBool(pane.attached or self.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id));
+        required += @intFromBool(pane.attached or self.model.request_lifecycle.tracker.hasPane(.attachment, pane.pane_id));
     }
 
     return required;
@@ -2658,8 +2638,8 @@ fn sendRuntimeChangeReviewCommand(self: *AttachedClient, request: core.ChangeRev
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try self.sendTabRenameRequest(rename, continuation);`
 fn sendTabRenameRequest(self: *AttachedClient, rename: core.RenameTab, continuation: data.RequestsContinuation) !void {
-    try self.request_lifecycle.tracker.add(rename.request_id, continuation);
-    errdefer _ = self.request_lifecycle.tracker.take(rename.request_id);
+    try self.model.request_lifecycle.tracker.add(rename.request_id, continuation);
+    errdefer _ = self.model.request_lifecycle.tracker.take(rename.request_id);
     try self.runtime_transport.outbox.pushRename(rename);
     try self.startRuntimeSend();
 }
@@ -2667,7 +2647,7 @@ fn sendTabRenameRequest(self: *AttachedClient, rename: core.RenameTab, continuat
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try self.sendCreateTabRequest(request);`
 fn sendCreateTabRequest(self: *AttachedClient, request: core.CreateTab) !void {
-    try self.request_lifecycle.tracker.add(
+    try self.model.request_lifecycle.tracker.add(
         request.request_id,
         .{
             .create_tab = .{
@@ -2676,7 +2656,7 @@ fn sendCreateTabRequest(self: *AttachedClient, request: core.CreateTab) !void {
             },
         },
     );
-    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
+    errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
     try self.runtime_transport.outbox.pushCreateTab(request);
     try self.startRuntimeSend();
 }
@@ -2684,13 +2664,13 @@ fn sendCreateTabRequest(self: *AttachedClient, request: core.CreateTab) !void {
 /// Registers correlation before copying the request; failed delivery removes only that registration.
 /// Example: `try self.sendAgentPromptRequest(request, operation);`
 fn sendAgentPromptRequest(self: *AttachedClient, request: core.AgentPrompt, operation: data.AgentOperation) !void {
-    try self.request_lifecycle.tracker.add(
+    try self.model.request_lifecycle.tracker.add(
         request.request_id,
         .{
             .agent_prompt = operation,
         },
     );
-    errdefer _ = self.request_lifecycle.tracker.take(request.request_id);
+    errdefer _ = self.model.request_lifecycle.tracker.take(request.request_id);
     try self.runtime_transport.outbox.pushAgentPrompt(request);
     try self.startRuntimeSend();
 }
@@ -3145,7 +3125,7 @@ fn selectCommandTabOffset(self: *AttachedClient, reply: *core.ClientCommand, off
         return error.NoActiveTab;
     }
 
-    if (self.request_lifecycle.tracker.has(.tab_snapshot)) {
+    if (self.model.request_lifecycle.tracker.has(.tab_snapshot)) {
         return error.ClientBusy;
     }
 
@@ -3205,7 +3185,7 @@ fn writeCommandLayout(self: *const AttachedClient, reply: *core.ClientCommand) !
 
 /// Validates the owned layout token before committing geometry.
 fn applyCommandLayout(self: *AttachedClient, reply: *core.ClientCommand) !void {
-    if (!self.request_lifecycle.tracker.isEmpty()) {
+    if (!self.model.request_lifecycle.tracker.isEmpty()) {
         return error.ClientBusy;
     }
 
@@ -3380,7 +3360,7 @@ fn recoverPaneAttachment(self: *AttachedClient, attachment: data.PaneAttachment)
 }
 
 fn sendPaneSplitRequest(self: *AttachedClient, plan: data.PaneSplitPlan) !void {
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -3457,7 +3437,7 @@ fn confirmPaneSplit(self: *AttachedClient, command: data.ConfirmPaneSplit) !data
                 },
             );
             if (self.model.workspace) |workspace| {
-                if (std.meta.eql(workspace, commit.location.workspace) and !self.request_lifecycle.tracker.has(.workspace_snapshot)) {
+                if (std.meta.eql(workspace, commit.location.workspace) and !self.model.request_lifecycle.tracker.has(.workspace_snapshot)) {
                     try self.requestWorkspaceSnapshot(workspace);
                 }
             }
@@ -3492,7 +3472,7 @@ fn recoverPaneSplit(self: *AttachedClient, split: data.PaneSplit) !SplitRecovery
 
 /// Consumes the request once before applying its confirmation and agent attachment.
 fn completePaneOpen(self: *AttachedClient, opened: core.PaneOpened) !PaneOpenOutcome {
-    const continuation = self.request_lifecycle.tracker.take(opened.request_id) orelse
+    const continuation = self.model.request_lifecycle.tracker.take(opened.request_id) orelse
         return error.UnexpectedRequest;
     const outcome: PaneOpenOutcome = switch (continuation) {
         .initial_open => result: {
@@ -3558,7 +3538,7 @@ fn translateOpenedPane(opened: core.PaneOpened) data.OpenedPane {
 fn arriveOpenedWorkspace(self: *AttachedClient, opened: data.OpenedPane) !void {
     const size = data.multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall;
     const activation = try self.model.arriveWorkspace(workspaceArrival(
-        &self.navigation_history,
+        &self.model.navigation_history,
         opened,
         size,
     ));
@@ -3571,7 +3551,7 @@ fn createOpenedWorkspace(self: *AttachedClient, confirmation: data.WorkspaceCrea
     }
 
     const replacement = try self.model.replaceWorkspace(workspaceArrival(
-        &self.navigation_history,
+        &self.model.navigation_history,
         confirmation.opened,
         confirmation.requested_size,
     ));
@@ -3595,7 +3575,7 @@ fn confirmPaneAttachment(self: *AttachedClient, confirmation: data.PaneAttachmen
 
 /// Recovers the correlated operation before publishing its failure notification.
 fn failRuntimeRequest(self: *AttachedClient, failure: core.RequestFailed) !data.RequestFailureOutcome {
-    const continuation = self.request_lifecycle.tracker.take(failure.request_id) orelse {
+    const continuation = self.model.request_lifecycle.tracker.take(failure.request_id) orelse {
         reportRuntimeFailure(failure.message);
 
         return error.UnexpectedRequestFailure;
@@ -3628,7 +3608,7 @@ fn failRuntimeRequest(self: *AttachedClient, failure: core.RequestFailed) !data.
         else => {},
     }
 
-    _ = self.editor_open.complete(failure.request_id);
+    _ = self.model.editor_open.complete(failure.request_id);
 
     errdefer reportRuntimeFailure(failure.message);
     switch (continuation) {
@@ -3728,7 +3708,7 @@ fn deliverHostCommit(self: *AttachedClient, commit: data.HostCommit) !void {
 
     if (commit.capabilities) |change| {
         if (!std.meta.eql(change.previous.terminal_colors, change.current.terminal_colors) and
-            (self.startup.phase == .opening or self.startup.phase == .active))
+            (self.model.startup.phase == .opening or self.model.startup.phase == .active))
         {
             try self.sendRuntime(
                 .{
@@ -3816,7 +3796,7 @@ fn validateHostCommit(model: *const data.Model, commit: data.HostCommit) !void {
 
 /// Copies borrowed wire content before the next receive can overwrite it.
 fn applyChangeReview(self: *AttachedClient, response: core.ChangeReviewSnapshotView) !bool {
-    const continuation = self.request_lifecycle.tracker.take(response.request_id) orelse return false;
+    const continuation = self.model.request_lifecycle.tracker.take(response.request_id) orelse return false;
     const owner: data.ChangeReviewOperation = switch (continuation) {
         .change_review_query, .change_review_command => |owner| owner,
         .ignored => {
@@ -3836,18 +3816,18 @@ fn applyChangeReview(self: *AttachedClient, response: core.ChangeReviewSnapshotV
 
 /// Retires a correlated reply after pane or tab removal without leaving a busy view.
 fn retireChangeReview(self: *AttachedClient, request_id: core.RequestId) void {
-    if (self.change_review.pending != request_id) {
+    if (self.model.change_review.pending != request_id) {
         return;
     }
 
-    const owner = self.change_review.owner orelse return;
+    const owner = self.model.change_review.owner orelse return;
     _ = self.failChangeReview(owner, "The pane was detached; reopen its review");
 }
 
 /// Opens any attached pane, including an agent launched in an ordinary terminal.
 fn openChangeReviewSession(self: *AttachedClient, pane_id: core.PaneId) !void {
     const pane = findReviewPane(&self.model, pane_id) orelse return error.ChangeReviewPaneUnavailable;
-    self.change_review.open(
+    self.model.change_review.open(
         .{
             .pane_id = pane.id,
             .pane_generation = pane.pane_generation,
@@ -3862,29 +3842,29 @@ fn openChangeReviewSession(self: *AttachedClient, pane_id: core.PaneId) !void {
 
 /// Captures the attached owner for a bounded, correlated request.
 fn changeReviewOperation(self: *AttachedClient, edition_id: u64) !data.ChangeReviewOperation {
-    if (self.change_review.session_changed) {
+    if (self.model.change_review.session_changed) {
         return error.RetiredChangeReviewSession;
     }
 
-    if (self.change_review.pending != null) {
+    if (self.model.change_review.pending != null) {
         return error.ChangeReviewRequestPending;
     }
 
-    var owner = self.change_review.owner orelse return error.ChangeReviewClosed;
+    var owner = self.model.change_review.owner orelse return error.ChangeReviewClosed;
     if (resolveReviewPane(&self.model, owner) == null) {
         return error.ChangeReviewPaneUnavailable;
     }
 
     owner.edition_id = edition_id;
-    if (self.change_review.loaded) {
-        try owner.setSession(self.change_review.snapshot.session);
+    if (self.model.change_review.loaded) {
+        try owner.setSession(self.model.change_review.snapshot.session);
     }
 
     return owner;
 }
 
 fn beginChangeReview(self: *AttachedClient, request_id: core.RequestId) void {
-    self.change_review.begin(request_id);
+    self.model.change_review.begin(request_id);
     self.model.chrome_revision +%= 1;
 }
 
@@ -3895,7 +3875,7 @@ fn applyChangeReviewResponse(self: *AttachedClient, owner: data.ChangeReviewOper
         return false;
     }
 
-    const applied = try self.change_review.apply(owner, response);
+    const applied = try self.model.change_review.apply(owner, response);
     if (applied) {
         self.model.chrome_revision +%= 1;
     }
@@ -3907,7 +3887,7 @@ fn applyChangeReviewResponse(self: *AttachedClient, owner: data.ChangeReviewOper
 fn changeReviewChanged(self: *AttachedClient, notification: core.ChangeReviewChanged) bool {
     const pane = findReviewPane(&self.model, notification.pane_id) orelse return false;
     const availability_changed = pane.applyChangeReview(notification);
-    const review_changed = if (self.change_review.owner) |owner| resolveReviewPane(&self.model, owner) != null and self.change_review.changed(notification) else false;
+    const review_changed = if (self.model.change_review.owner) |owner| resolveReviewPane(&self.model, owner) != null and self.model.change_review.changed(notification) else false;
     if (!availability_changed and !review_changed) {
         return false;
     }
@@ -3918,7 +3898,7 @@ fn changeReviewChanged(self: *AttachedClient, notification: core.ChangeReviewCha
 
 /// Retains review content and exposes failure without clearing adapter drafts.
 fn failChangeReview(self: *AttachedClient, owner: data.ChangeReviewOperation, message: []const u8) bool {
-    if (!self.change_review.failed(owner, message)) {
+    if (!self.model.change_review.failed(owner, message)) {
         return false;
     }
 
@@ -3927,7 +3907,7 @@ fn failChangeReview(self: *AttachedClient, owner: data.ChangeReviewOperation, me
 }
 
 fn reportChangeReview(self: *AttachedClient, message: []const u8) void {
-    self.change_review.report(message);
+    self.model.change_review.report(message);
     self.model.chrome_revision +%= 1;
 }
 
@@ -3972,10 +3952,10 @@ fn openLinkFile(self: *AttachedClient, path: data.FilePath) !void {
 }
 
 fn openExternalLink(self: *AttachedClient, target: data.LinkTarget) !void {
-    switch (self.link_opening.request(target)) {
+    switch (self.model.link_opening.request(target)) {
         .queued => {},
         .start => |selected| self.link_opener.start(selected) catch |err| {
-            self.link_opening.schedulingFailed();
+            self.model.link_opening.schedulingFailed();
 
             return err;
         },
@@ -4020,9 +4000,9 @@ fn openEditorPane(self: *AttachedClient, pane_id: core.PaneId, path: data.FilePa
         return self.splitEditorPane(request);
     }
 
-    request.request_id = try self.request_lifecycle.nextId();
-    try self.editor_open.begin(request);
-    errdefer _ = self.editor_open.complete(request.request_id);
+    request.request_id = try self.model.request_lifecycle.nextId();
+    try self.model.editor_open.begin(request);
+    errdefer _ = self.model.editor_open.complete(request.request_id);
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -4045,8 +4025,8 @@ fn openEditorPane(self: *AttachedClient, pane_id: core.PaneId, path: data.FilePa
 
 /// Applies a correlated reply only while the originating view still exists.
 fn completeEditorOpen(self: *AttachedClient, reply: core.EditorOpened) !void {
-    const request = self.editor_open.complete(reply.request_id) orelse return;
-    const continuation = self.request_lifecycle.tracker.take(reply.request_id) orelse return;
+    const request = self.model.editor_open.complete(reply.request_id) orelse return;
+    const continuation = self.model.request_lifecycle.tracker.take(reply.request_id) orelse return;
     if (continuation != .editor_open) {
         return;
     }
@@ -4098,7 +4078,7 @@ fn splitEditorPane(self: *AttachedClient, request: core.OwnedEditorOpen) !void {
 
 /// Consumes a page response once, before receive storage can be reused.
 fn applyAgentHistory(self: *AttachedClient, response: core.AgentHistoryPageView) !bool {
-    const continuation = self.request_lifecycle.tracker.take(response.request_id) orelse return false;
+    const continuation = self.model.request_lifecycle.tracker.take(response.request_id) orelse return false;
 
     defer agent_reading.retired(&self.model);
     if (continuation == .ignored) {
@@ -4156,11 +4136,11 @@ fn createAgentTab(self: *AttachedClient) !void {
 
 fn queryAgentThread(self: *AttachedClient, pane_id: core.PaneId) !void {
     const pending = agentOperation(&self.model, pane_id) orelse return;
-    if (self.request_lifecycle.tracker.hasPane(.agent_query, pane_id)) {
+    if (self.model.request_lifecycle.tracker.hasPane(.agent_query, pane_id)) {
         return;
     }
 
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -4181,7 +4161,7 @@ fn queryAgentThread(self: *AttachedClient, pane_id: core.PaneId) !void {
 }
 
 fn completeAgentRequest(self: *AttachedClient, reply: core.RequestCompleted) !void {
-    const continuation = self.request_lifecycle.tracker.take(reply.request_id) orelse return error.UnexpectedControlReply;
+    const continuation = self.model.request_lifecycle.tracker.take(reply.request_id) orelse return error.UnexpectedControlReply;
     switch (continuation) {
         .agent_prompt => |pending| {
             _ = self.model.completeAgentPrompt(pending);
@@ -4209,7 +4189,7 @@ fn agentOperation(model: *const data.Model, pane_id: core.PaneId) ?data.AgentOpe
 }
 
 fn applyTabSnapshot(self: *AttachedClient, snapshot: core.TabSnapshotView) !TabSnapshotOutcome {
-    const continuation = self.request_lifecycle.tracker.take(snapshot.request_id) orelse
+    const continuation = self.model.request_lifecycle.tracker.take(snapshot.request_id) orelse
         return error.UnexpectedTabSnapshot;
     const expected_location = switch (continuation) {
         .tab_snapshot => |location| location,
@@ -4242,7 +4222,7 @@ fn applyTabSnapshot(self: *AttachedClient, snapshot: core.TabSnapshotView) !TabS
     );
 
     for (reconciliation.removed_panes.slice()) |pane_id| {
-        self.request_lifecycle.tracker.ignorePane(pane_id);
+        self.model.request_lifecycle.tracker.ignorePane(pane_id);
         self.releasePaneResources(pane_id);
     }
 
@@ -4257,7 +4237,7 @@ fn applyTabSnapshot(self: *AttachedClient, snapshot: core.TabSnapshotView) !TabS
 }
 
 fn applyWorkspaceSnapshot(self: *AttachedClient, snapshot: core.WorkspaceSnapshotView) !void {
-    const continuation = self.request_lifecycle.tracker.take(snapshot.request_id) orelse
+    const continuation = self.model.request_lifecycle.tracker.take(snapshot.request_id) orelse
         return error.UnexpectedWorkspaceSnapshot;
     const expected_workspace = switch (continuation) {
         .workspace_snapshot => |workspace| workspace,
@@ -4307,7 +4287,7 @@ fn applyWorkspaceSnapshot(self: *AttachedClient, snapshot: core.WorkspaceSnapsho
         },
     );
     for (reconciliation.removed_tabs.slice()) |location| {
-        self.request_lifecycle.tracker.ignoreTab(location.tab_id);
+        self.model.request_lifecycle.tracker.ignoreTab(location.tab_id);
     }
 
     for (reconciliation.removed_panes.slice()) |pane_id| {
@@ -4325,7 +4305,7 @@ fn applyWorkspaceSnapshot(self: *AttachedClient, snapshot: core.WorkspaceSnapsho
         try self.synchronizeActivePane();
     }
 
-    if (self.request_lifecycle.tracker.has(.tab_snapshot)) {
+    if (self.model.request_lifecycle.tracker.has(.tab_snapshot)) {
         return;
     }
 
@@ -4338,7 +4318,7 @@ fn applyWorkspaceSnapshot(self: *AttachedClient, snapshot: core.WorkspaceSnapsho
 }
 
 fn completeTabCreation(self: *AttachedClient, created: core.TabCreated) !data.TabCreation {
-    const continuation = self.request_lifecycle.tracker.take(created.request_id) orelse
+    const continuation = self.model.request_lifecycle.tracker.take(created.request_id) orelse
         return error.UnexpectedTabCreated;
     const requested = switch (continuation) {
         .create_tab => |creation| creation,
@@ -4373,7 +4353,7 @@ fn completeTabCreation(self: *AttachedClient, created: core.TabCreated) !data.Ta
 }
 
 fn completeTabRename(self: *AttachedClient, renamed: core.TabRenamed) !data.Change {
-    const continuation = self.request_lifecycle.tracker.take(renamed.request_id) orelse
+    const continuation = self.model.request_lifecycle.tracker.take(renamed.request_id) orelse
         return error.UnexpectedTabRenamed;
     const expected_location = switch (continuation) {
         .rename_tab => |location| location,
@@ -4393,13 +4373,13 @@ fn completeTabRename(self: *AttachedClient, renamed: core.TabRenamed) !data.Chan
 }
 
 fn requestTabClose(self: *AttachedClient) !bool {
-    if (self.request_lifecycle.tracker.has(.tab_operation)) {
+    if (self.model.request_lifecycle.tracker.has(.tab_operation)) {
         return false;
     }
 
     const location = self.model.activeTabLocation() orelse return false;
     const required = try self.tabDetachmentCapacity(location);
-    try self.request_lifecycle.ensureCanStart(2);
+    try self.model.request_lifecycle.ensureCanStart(2);
     if (1 + required > self.runtime_transport.outbox.availableCapacity()) {
         return error.ClientOutboxFull;
     }
@@ -4435,7 +4415,7 @@ fn completeTabClose(self: *AttachedClient, closed: core.TabClosed) !TabCloseOutc
     const trigger: data.TabCloseRemovalTrigger = if (closed.request_id == .none)
         .lifecycle
     else requested: {
-        const continuation = self.request_lifecycle.tracker.take(closed.request_id) orelse
+        const continuation = self.model.request_lifecycle.tracker.take(closed.request_id) orelse
             return error.UnexpectedTabClosed;
         const expected_location = switch (continuation) {
             .close_tab => |location| location,
@@ -4473,13 +4453,13 @@ fn completeTabClose(self: *AttachedClient, closed: core.TabClosed) !TabCloseOutc
 
     const removal = switch (commit) {
         .stale => |stale| {
-            self.request_lifecycle.tracker.ignoreTab(stale.location.tab_id);
+            self.model.request_lifecycle.tracker.ignoreTab(stale.location.tab_id);
             return .applied;
         },
         .removed => |removed| removed,
     };
 
-    self.request_lifecycle.tracker.ignoreTab(removal.removed.tab_id);
+    self.model.request_lifecycle.tracker.ignoreTab(removal.removed.tab_id);
     for (removal.panes.slice()) |pane_id| {
         self.releasePaneResources(pane_id);
     }
@@ -4502,7 +4482,7 @@ fn completeTabClose(self: *AttachedClient, closed: core.TabClosed) !TabCloseOutc
         return .applied;
     }
 
-    self.navigation_history.forget(removal.removed.workspace);
+    self.model.navigation_history.forget(removal.removed.workspace);
     const previous = command.previous_workspace orelse return .exit;
     _ = try self.requestWorkspaceSwitch(
         .{
@@ -4514,7 +4494,7 @@ fn completeTabClose(self: *AttachedClient, closed: core.TabClosed) !TabCloseOutc
 }
 
 fn sendTabClose(self: *AttachedClient, intent: data.TabCloseIntent) !void {
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
 
     try self.sendRuntimeRequest(
         .{
@@ -4539,7 +4519,7 @@ fn requestWorkspaceSwitch(self: *AttachedClient, target: WorkspaceSwitchTarget, 
     const size = data.multiplexer.rectSize(self.geometry().area) orelse return error.TerminalTooSmall;
     const command: data.WorkspaceHandoff = switch (target) {
         .workspace => |workspace| selected: {
-            const bookmark = self.navigation_history.find(
+            const bookmark = self.model.navigation_history.find(
                 .{
                     .workspace = workspace,
                 },
@@ -4565,7 +4545,7 @@ fn requestWorkspaceSwitch(self: *AttachedClient, target: WorkspaceSwitchTarget, 
 
     switch (authority) {
         .requested_departure => {
-            if (!self.request_lifecycle.tracker.isEmpty()) {
+            if (!self.model.request_lifecycle.tracker.isEmpty()) {
                 return error.WorkspaceSwitchWhileRequestPending;
             }
         },
@@ -4576,7 +4556,7 @@ fn requestWorkspaceSwitch(self: *AttachedClient, target: WorkspaceSwitchTarget, 
         },
     }
 
-    try self.request_lifecycle.ensureCanStart(2);
+    try self.model.request_lifecycle.ensureCanStart(2);
     var required: usize = 1;
     for (self.model.tabs.location[0..self.model.tabs.count]) |location| {
         required += try self.tabDetachmentCapacity(location);
@@ -4621,7 +4601,7 @@ fn recoverWorkspaceSwitch(self: *AttachedClient, fallback_workspace: ?core.Works
         return .unrecoverable;
     }
 
-    self.navigation_history.forget(
+    self.model.navigation_history.forget(
         .{
             .workspace = workspace,
         },
@@ -4640,7 +4620,7 @@ fn recoverWorkspaceSwitch(self: *AttachedClient, fallback_workspace: ?core.Works
 
 /// Correlates the open before its owned message enters the runtime outbox.
 fn sendWorkspaceOpen(self: *AttachedClient, command: data.WorkspaceHandoff) !void {
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -4682,7 +4662,7 @@ fn workspaceArrival(history: *const data.NavigationHistory, opened: data.OpenedP
 /// Remembers departed navigation before releasing pane resources.
 fn releaseWorkspace(self: *AttachedClient, departure: *const data.WorkspaceDeparture) void {
     if (departure.bookmark) |bookmark| {
-        self.navigation_history.remember(
+        self.model.navigation_history.remember(
             .{
                 .location = bookmark.location,
                 .pane_id = bookmark.pane_id,
@@ -4730,7 +4710,7 @@ fn activateWorkspace(self: *AttachedClient, activation: data.WorkspaceActivation
 
 /// Consumes one correlated runtime completion before committing canonical state.
 fn completeTabMove(self: *AttachedClient, moved: core.TabMoved) !data.Change {
-    const continuation = self.request_lifecycle.tracker.take(moved.request_id) orelse
+    const continuation = self.model.request_lifecycle.tracker.take(moved.request_id) orelse
         return error.UnexpectedTabMoved;
     const expected_location = switch (continuation) {
         .move_tab => |location| location,
@@ -4890,12 +4870,12 @@ fn paneFocusDirection(value: core.PaneDirection) data.LayoutDirection {
 
 /// Requests closure without mutating runtime-owned pane membership.
 fn requestPaneClose(self: *AttachedClient) !?data.PaneClosure {
-    if (self.request_lifecycle.tracker.has(.pane_operation)) {
+    if (self.model.request_lifecycle.tracker.has(.pane_operation)) {
         return null;
     }
 
     const closure = self.model.planPaneClosure() orelse return null;
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendRuntimeRequest(
         .{
             .registration = .{
@@ -4921,8 +4901,8 @@ fn requestPaneClose(self: *AttachedClient) !?data.PaneClosure {
 /// Commits authoritative retirement and performs idempotent cleanup for late exits.
 fn applyPaneExit(self: *AttachedClient, exited: core.PaneExited) !data.PaneExit {
     const transition = self.model.retirePane(exited.pane_id);
-    _ = self.request_lifecycle.tracker.ignoreAttachment(exited.pane_id);
-    _ = self.request_lifecycle.tracker.completePaneClose(exited.pane_id);
+    _ = self.model.request_lifecycle.tracker.ignoreAttachment(exited.pane_id);
+    _ = self.model.request_lifecycle.tracker.completePaneClose(exited.pane_id);
     self.releasePaneResources(exited.pane_id);
 
     const retirement = switch (transition) {
@@ -5000,7 +4980,7 @@ fn beginHistoryPalette(self: *AttachedClient) !bool {
 }
 
 fn requestHistoryPage(self: *AttachedClient, query: []const u8) !void {
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
 
     var owned: data.OwnedHistoryQuery = .{
         .request_id = request_id,
@@ -5142,7 +5122,7 @@ fn completeHistoryPrune(self: *AttachedClient, confirmation: core.HistoryPruned)
 /// Delivers one bounded semantic notification through the runtime and records
 /// the continuation consumed by its delivery report.
 fn requestNotificationDelivery(self: *AttachedClient, notification: *const data.Notification) !core.RequestId {
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendNotificationRequest(
         .{
             .request_id = request_id,
@@ -5161,7 +5141,7 @@ fn requestNotificationDelivery(self: *AttachedClient, notification: *const data.
 
 /// Consumes one correlated runtime delivery report and applies its policy.
 fn completeNotificationDelivery(self: *AttachedClient, shown: core.NotificationShown) !data.NotificationDeliveryOutcome {
-    const continuation = self.request_lifecycle.tracker.take(shown.request_id) orelse
+    const continuation = self.model.request_lifecycle.tracker.take(shown.request_id) orelse
         return error.UnexpectedNotificationReply;
     if (continuation != .notification) {
         return error.UnexpectedNotificationReply;
@@ -5287,7 +5267,7 @@ fn applyAgentSound(self: *AttachedClient, notification: core.AgentSoundNotificat
         return .stale;
     }
 
-    switch (self.sound_playback.request(notification.sound)) {
+    switch (self.model.sound_playback.request(notification.sound)) {
         .ignored, .queued => {},
         .start => |kind| try self.startAgentSound(kind),
     }
@@ -5297,7 +5277,7 @@ fn applyAgentSound(self: *AttachedClient, notification: core.AgentSoundNotificat
 
 fn startAgentSound(self: *AttachedClient, kind: core.AgentSound) !void {
     self.sound_port.start(kind) catch |err| {
-        self.sound_playback.schedulingFailed();
+        self.model.sound_playback.schedulingFailed();
         return err;
     };
 }
@@ -5305,7 +5285,7 @@ fn startAgentSound(self: *AttachedClient, kind: core.AgentSound) !void {
 /// Consumes the single bootstrap snapshot, restores client-owned preferences
 /// and sends the initial attach-or-create request with the restored geometry.
 fn restoreClientLayout(self: *AttachedClient, snapshot: core.ClientLayoutSnapshotView) !void {
-    if (self.client_layouts.snapshot_received) {
+    if (self.model.client_layouts.snapshot_received) {
         return error.DuplicateClientLayoutSnapshot;
     }
 
@@ -5330,14 +5310,14 @@ fn restoreClientLayout(self: *AttachedClient, snapshot: core.ClientLayoutSnapsho
         }
 
         self.model.restoreClientLayouts(saved_layouts);
-        self.navigation_history = history;
+        self.model.navigation_history = history;
     }
 
     const size = data.multiplexer.rectSize(self.geometry().area) orelse
         return error.TerminalTooSmall;
     const request = self.initialPaneRequest(restored, size);
     try self.sendRuntimeRequest(request);
-    try self.client_layouts.markSnapshotReceived();
+    try self.model.client_layouts.markSnapshotReceived();
 }
 
 fn parseClientLayoutSnapshot(snapshot: core.ClientLayoutSnapshotView, layouts: *data.SavedLayouts, history: *data.NavigationHistory) !?data.SavedLayout {
@@ -5411,7 +5391,7 @@ fn initialPaneRequest(self: *AttachedClient, restored: ?data.SavedLayout, size: 
 /// The client loop maps only the returned `exit` outcome to process status.
 fn applyResyncRequirement(self: *AttachedClient, required: core.ResyncRequired) !ResyncOutcome {
     if (required.workspace_closed) {
-        self.navigation_history.forget(required.workspace);
+        self.model.navigation_history.forget(required.workspace);
         const previous = required.previous_workspace orelse return .exit;
         _ = try self.requestWorkspace(previous);
         return .handoff_requested;
@@ -5422,7 +5402,7 @@ fn applyResyncRequirement(self: *AttachedClient, required: core.ResyncRequired) 
         return error.UnexpectedResync;
     }
 
-    if (self.request_lifecycle.tracker.has(.workspace_snapshot)) {
+    if (self.model.request_lifecycle.tracker.has(.workspace_snapshot)) {
         return .coalesced;
     }
 
@@ -5639,7 +5619,7 @@ fn scheduleSidebarAnimation(self: *AttachedClient) !void {
         return;
     }
 
-    const scheduler = &self.sidebar_animation_scheduler;
+    const scheduler = &self.model.sidebar_animation_scheduler;
     if (scheduler.pending) {
         return;
     }
@@ -5657,7 +5637,7 @@ fn scheduleSidebarAnimation(self: *AttachedClient) !void {
 /// Replaces the pending deadline from current model state and starts at most
 /// one inbox producer through the timer port.
 fn scheduleNotificationTimer(self: *AttachedClient) !void {
-    const scheduler = &self.notification_scheduler;
+    const scheduler = &self.model.notification_scheduler;
     const now_ns = core.monotonic(self.io);
     const deadline_ns = self.model.nextNotificationDeadline(
         now_ns,
@@ -6074,10 +6054,10 @@ fn routePhysicalKey(self: *AttachedClient, key: data.Key, authority: data.KeyRou
 
     return switch (key.phase) {
         .press => self.routeKeyPress(key, authority),
-        .repeat => self.routeKeyRepeat(key, self.input_leases.owner(identity) orelse return .{
+        .repeat => self.routeKeyRepeat(key, self.model.input_leases.owner(identity) orelse return .{
             .owner = .ignored,
         }),
-        .release => self.routeKeyRelease(key, self.input_leases.release(identity) orelse return .{
+        .release => self.routeKeyRelease(key, self.model.input_leases.release(identity) orelse return .{
             .owner = .ignored,
         }),
     };
@@ -6085,13 +6065,13 @@ fn routePhysicalKey(self: *AttachedClient, key: data.Key, authority: data.KeyRou
 
 fn routeKeyPress(self: *AttachedClient, key: data.Key, authority: data.KeyRoutingAuthority) !data.KeyRoutingOutcome {
     const identity = key.physical.?;
-    if (!self.input_leases.acquire(identity, .ignored)) {
+    if (!self.model.input_leases.acquire(identity, .ignored)) {
         return .{
             .owner = .ignored,
             .lease_overflow = true,
         };
     }
-    errdefer _ = self.input_leases.release(identity);
+    errdefer _ = self.model.input_leases.release(identity);
 
     const routed = try self.routeCurrentKey(
         .{
@@ -6099,7 +6079,7 @@ fn routeKeyPress(self: *AttachedClient, key: data.Key, authority: data.KeyRoutin
         },
         authority,
     );
-    const assigned = self.input_leases.acquire(identity, routed.lease_owner);
+    const assigned = self.model.input_leases.acquire(identity, routed.lease_owner);
     std.debug.assert(assigned);
 
     return routed.outcome;
@@ -6504,7 +6484,7 @@ fn submitPrompt(self: *AttachedClient, submission: data.Submission) !bool {
         },
         .copy_search => blk: {
             const pane_id = self.model.copyModeTarget() orelse break :blk true;
-            const request_id = try self.request_lifecycle.nextId();
+            const request_id = try self.model.request_lifecycle.nextId();
             var owned: data.OwnedSearch = .{
                 .request_id = request_id,
                 .pane_id = pane_id,
@@ -6817,7 +6797,7 @@ fn adoptConfiguration(self: *AttachedClient, adoption: Adoption) !data.Configura
     self.trust_store = adoption.trust_store;
     self.host_input_source.adoptBindings(adoption.input);
     self.chrome.adoptSidebarRenderer(adoption.sidebar_rendering);
-    self.sound_playback.configure(snapshot.sound);
+    self.model.sound_playback.configure(snapshot.sound);
     consumed = true;
 
     if (previous_generation) |generation| {
@@ -7296,7 +7276,6 @@ fn publishLuaFailure(self: *AttachedClient, failure: data.Failure) !void {
 /// Starts the completion list when the form opens.
 fn openPathCompletion(self: *AttachedClient) !void {
     self.model.path_completion.begin();
-    self.path_completions.reset();
     try self.refreshPathCompletion();
 }
 
@@ -7312,7 +7291,7 @@ fn refreshPathCompletion(self: *AttachedClient) !void {
     const text = prompt.directory.text();
     const expanded = self.expandPromptDirectory(text, &buffer) catch {
         self.model.path_completion.invalidate();
-        self.path_completions.reset();
+        self.model.path_completion.forgetQuery();
         return;
     };
     const query = path_queries.listingQuery(
@@ -7320,7 +7299,7 @@ fn refreshPathCompletion(self: *AttachedClient) !void {
         expanded,
         &buffer,
     );
-    if (!self.path_completions.want(query)) {
+    if (!self.model.path_completion.want(query)) {
         return;
     }
     if (self.model.path_completion.matches(query)) {
@@ -7335,7 +7314,7 @@ fn refreshPathCompletion(self: *AttachedClient) !void {
 fn acceptPathCompletion(self: *AttachedClient) !void {
     const prompt = self.model.name_prompt.currentConst() orelse return;
     const entries = self.model.path_completion.entries();
-    if (entries.len == 0 or !self.model.path_completion.matches(self.path_completions.wantedSlice())) {
+    if (entries.len == 0 or !self.model.path_completion.matches(self.model.path_completion.wantedSlice())) {
         return;
     }
 
@@ -7355,7 +7334,6 @@ fn acceptPathCompletion(self: *AttachedClient) !void {
 /// nothing.
 fn closePathCompletion(self: *AttachedClient) void {
     self.model.path_completion.begin();
-    self.path_completions.reset();
 }
 
 /// Expands the typed directory against the focused pane's cwd.
@@ -7382,14 +7360,14 @@ fn promptDirectoryStatus(self: *const AttachedClient, path: []const u8) path_que
 }
 
 fn startPathCompletion(self: *AttachedClient) !void {
-    if (self.path_completions.execution != .none or self.path_completions.wanted_len == 0) {
+    const completion_state = &self.model.path_completion;
+    if (completion_state.pending != .none or completion_state.wanted_len == 0) {
         return;
     }
 
-    const id = self.path_completions.reserve();
-    self.model.path_completion.expect(id);
-    self.path_completion_runner.start(.init(id, self.path_completions.inflightSlice())) catch |err| {
-        self.path_completions.execution = .none;
+    const id = completion_state.reserve();
+    self.path_completion_runner.start(.init(id, completion_state.inflightSlice())) catch |err| {
+        completion_state.pending = .none;
         return err;
     };
 }
@@ -7470,7 +7448,7 @@ fn reportClipboardCapture(self: *AttachedClient, outcome: clipboard_image.Comple
 
 /// Validates one request and retains its correlation before delivery. Example: `_ = try request(client, command);`
 fn requestWorkspaceRename(self: *AttachedClient, command: data.RequestRenameWorkspace) !bool {
-    if (self.request_lifecycle.tracker.has(.workspace_operation)) {
+    if (self.model.request_lifecycle.tracker.has(.workspace_operation)) {
         return false;
     }
 
@@ -7479,7 +7457,7 @@ fn requestWorkspaceRename(self: *AttachedClient, command: data.RequestRenameWork
         return false;
     }
 
-    const request_id = try self.request_lifecycle.nextId();
+    const request_id = try self.model.request_lifecycle.nextId();
     try self.sendWorkspaceRenameRequest(
         .{
             .request_id = request_id,

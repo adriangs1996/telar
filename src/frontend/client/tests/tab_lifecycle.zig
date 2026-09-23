@@ -17,7 +17,7 @@ test "an unexpected tab creation is rejected without effects" {
     try harness.bootstrap();
     const client = harness.client;
     const version_before = client.model.version();
-    const request_count_before = client.request_lifecycle.tracker.count;
+    const request_count_before = client.model.request_lifecycle.tracker.count;
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
     const created: core.TabCreated = .{
         .request_id = @enumFromInt(99),
@@ -36,7 +36,7 @@ test "an unexpected tab creation is rejected without effects" {
         },
     ));
 
-    try std.testing.expectEqual(request_count_before, client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(request_count_before, client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
@@ -49,7 +49,7 @@ test "tab creation consumes an incompatible continuation before rejection" {
     defer harness.deinit();
     const client = harness.client;
     const request_id: core.RequestId = @enumFromInt(4);
-    try client.request_lifecycle.tracker.add(request_id, .notification);
+    try client.model.request_lifecycle.tracker.add(request_id, .notification);
     const created: core.TabCreated = .{
         .request_id = request_id,
         .location = .{
@@ -66,7 +66,7 @@ test "tab creation consumes an incompatible continuation before rejection" {
             .tab_created = created,
         },
     ));
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
         .{
             .tab_created = created,
@@ -82,7 +82,7 @@ test "tab creation consumes a mismatched workspace before rejection" {
     defer harness.deinit();
     const client = harness.client;
     const request_id: core.RequestId = @enumFromInt(4);
-    try client.request_lifecycle.tracker.add(request_id, .{ .create_tab = .{
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .create_tab = .{
         .workspace = TestHarness.bootstrap_location.workspace,
         .size = .{ .cols = 80, .rows = 20 },
     } });
@@ -102,7 +102,7 @@ test "tab creation consumes a mismatched workspace before rejection" {
             .tab_created = created,
         },
     ));
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
@@ -128,7 +128,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     // Created: the new tab becomes active and the old one detaches.
     const version_before_creation = client.model.version();
     const pending_updates_before_creation = TerminalClient.of(client).presenter.pending_updates;
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_tab = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_tab = .{
         .workspace = workspace,
         .size = requested_size,
     } });
@@ -146,7 +146,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     );
     @memset(&payload, 'x');
 
-    try std.testing.expect(!client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.notification_scheduler.pending);
     try std.testing.expectEqualDeep(second_location, client.model.activeTabLocation().?);
     try std.testing.expectEqual(@as(usize, 2), client.model.tabs.count);
     try std.testing.expectEqual(second_location.tab_id, client.model.tabs.location[client.model.tabs.active].tab_id);
@@ -174,7 +174,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     // Renamed.
     const version_before_rename = client.model.version();
     const pending_updates_before_rename = TerminalClient.of(client).presenter.pending_updates;
-    try client.request_lifecycle.tracker.add(@enumFromInt(5), .{ .rename_tab = second_location });
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(5), .{ .rename_tab = second_location });
     const renamed = try core.encodeTabRenamed(&payload, .{
         .request_id = @enumFromInt(5),
         .location = second_location,
@@ -188,7 +188,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expectEqual(version_before_rename.tabs + 1, client.model.version().tabs);
     try std.testing.expectEqual(version_before_rename.active_tab, client.model.version().active_tab);
     try std.testing.expectEqual(pending_updates_before_rename, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expect(!client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.notification_scheduler.pending);
 
     try presentation_lifecycle.observe(client);
 
@@ -197,7 +197,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
 
     // Moved to the front.
-    try client.request_lifecycle.tracker.add(@enumFromInt(6), .{ .move_tab = second_location });
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(6), .{ .move_tab = second_location });
     const moved = try core.encodeTabMoved(&payload, .{
         .request_id = @enumFromInt(6),
         .location = second_location,
@@ -219,7 +219,7 @@ test "tab lifecycle: created, renamed, moved, closed" {
     try std.testing.expect(TerminalClient.of(client).graphics_store.hasPaneGraphics(@enumFromInt(20)));
     const version_before_close = client.model.version();
     const pending_updates_before_close = TerminalClient.of(client).presenter.pending_updates;
-    try client.request_lifecycle.tracker.add(@enumFromInt(7), .{ .close_tab = second_location });
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(7), .{ .close_tab = second_location });
     const closed = try core.encodeTabClosed(&payload, .{
         .request_id = @enumFromInt(7),
         .location = second_location,
@@ -274,8 +274,8 @@ test "rejected tab creation leaves the active tab attached" {
     const client = harness.client;
     const version_before_creation = client.model.version();
     const pending_updates_before_creation = TerminalClient.of(client).presenter.pending_updates;
-    const request_count_before_creation = client.request_lifecycle.tracker.count;
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{
+    const request_count_before_creation = client.model.request_lifecycle.tracker.count;
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{
         .create_tab = .{
             .workspace = TestHarness.bootstrap_location.workspace,
             .size = .{ .cols = 80, .rows = 20 },
@@ -300,7 +300,7 @@ test "rejected tab creation leaves the active tab attached" {
         ),
     );
 
-    try std.testing.expectEqual(request_count_before_creation, client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(request_count_before_creation, client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
         .{
             .tab_created = response,
@@ -322,7 +322,7 @@ test "a failed tab creation preserves the current projection and notifies" {
     const client = harness.client;
     const version_before_failure = client.model.version();
     const location_before_failure = client.model.activeTabLocation().?;
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_tab = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_tab = .{
         .workspace = TestHarness.bootstrap_location.workspace,
         .size = .{ .cols = 80, .rows = 20 },
     } });
@@ -338,7 +338,7 @@ test "a failed tab creation preserves the current projection and notifies" {
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
 }
 
 test "an unexpected tab move is rejected without effects" {
@@ -347,7 +347,7 @@ test "an unexpected tab move is rejected without effects" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const version_before = client.model.version();
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
     const moved: core.TabMoved = .{
@@ -362,7 +362,7 @@ test "an unexpected tab move is rejected without effects" {
         },
     ));
 
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(?usize, 0), client.model.tabs.find(TestHarness.bootstrap_location.tab_id));
@@ -375,10 +375,10 @@ test "tab move consumes an incompatible continuation before rejection" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const request_id: core.RequestId = @enumFromInt(90);
     const version_before = client.model.version();
-    try client.request_lifecycle.tracker.add(request_id, .notification);
+    try client.model.request_lifecycle.tracker.add(request_id, .notification);
     const moved: core.TabMoved = .{
         .request_id = request_id,
         .location = TestHarness.bootstrap_location,
@@ -390,7 +390,7 @@ test "tab move consumes an incompatible continuation before rejection" {
             .tab_moved = moved,
         },
     ));
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
         .{
             .tab_moved = moved,
@@ -406,10 +406,10 @@ test "tab move consumes a canonical response rejected by the model" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const request_id: core.RequestId = @enumFromInt(90);
     const version_before = client.model.version();
-    try client.request_lifecycle.tracker.add(request_id, .{ .move_tab = TestHarness.bootstrap_location });
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .move_tab = TestHarness.bootstrap_location });
     const moved: core.TabMoved = .{
         .request_id = request_id,
         .location = TestHarness.bootstrap_location,
@@ -421,7 +421,7 @@ test "tab move consumes a canonical response rejected by the model" {
             .tab_moved = moved,
         },
     ));
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(error.UnexpectedTabMoved, client.handleServerMessage(
         .{
             .tab_moved = moved,
@@ -458,10 +458,10 @@ test "move tab waits for the canonical response and preserves active identity" {
     try std.testing.expectEqualDeep(second, message.move_tab.location);
     try std.testing.expectEqual(core.TabMoveDirection.previous, message.move_tab.direction);
     try std.testing.expectEqual(@as(?usize, 1), client.model.tabs.find(second.tab_id));
-    const continuation = client.request_lifecycle.tracker.take(message.move_tab.request_id).?;
+    const continuation = client.model.request_lifecycle.tracker.take(message.move_tab.request_id).?;
     try std.testing.expect(continuation == .move_tab);
     try std.testing.expectEqualDeep(second, continuation.move_tab);
-    try client.request_lifecycle.tracker.add(message.move_tab.request_id, continuation);
+    try client.model.request_lifecycle.tracker.add(message.move_tab.request_id, continuation);
 
     try std.testing.expect(data.tab_selection.select(&client.model, TestHarness.bootstrap_location.tab_id));
     const version_before_response = client.model.version();
@@ -495,9 +495,9 @@ test "pending tab operation suppresses a move request" {
     try harness.bootstrap();
     const client = harness.client;
     const second = try harness.addTab(@enumFromInt(2), @enumFromInt(20));
-    try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .rename_tab = second });
-    const request_count = client.request_lifecycle.tracker.count;
-    const next_request_id = client.request_lifecycle.next_request_id;
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{ .rename_tab = second });
+    const request_count = client.model.request_lifecycle.tracker.count;
+    const next_request_id = client.model.request_lifecycle.next_request_id;
 
     _ = try client.executeAction(
         .{
@@ -506,8 +506,8 @@ test "pending tab operation suppresses a move request" {
         .effect,
     );
 
-    try std.testing.expectEqual(request_count, client.request_lifecycle.tracker.count);
-    try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(request_count, client.model.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(@as(?usize, 1), client.model.tabs.find(second.tab_id));
 }
@@ -551,7 +551,7 @@ test "canonical tab move at an edge does not advance or schedule the model" {
 
     try std.testing.expectEqualDeep(version_before_response, client.model.version());
     try std.testing.expectEqual(pending_updates_before_response, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expect(!client.request_lifecycle.tracker.has(.tab_operation));
+    try std.testing.expect(!client.model.request_lifecycle.tracker.has(.tab_operation));
 }
 
 test "tab move response must match the requested identity" {
@@ -586,7 +586,7 @@ test "tab move response must match the requested identity" {
 
     try std.testing.expectEqual(@as(?usize, 1), client.model.tabs.find(second.tab_id));
     try std.testing.expectEqualDeep(version_before_response, client.model.version());
-    try std.testing.expect(!client.request_lifecycle.tracker.has(.tab_operation));
+    try std.testing.expect(!client.model.request_lifecycle.tracker.has(.tab_operation));
 }
 
 test "a failed tab move preserves order and notifies" {
@@ -620,8 +620,8 @@ test "a failed tab move preserves order and notifies" {
     try std.testing.expectEqual(@as(?usize, 1), client.model.tabs.find(second.tab_id));
     try std.testing.expectEqualDeep(active_before_failure, client.model.activeTabLocation().?);
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
-    try std.testing.expect(!client.request_lifecycle.tracker.has(.tab_operation));
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.request_lifecycle.tracker.has(.tab_operation));
+    try std.testing.expect(client.model.notification_scheduler.pending);
 }
 
 test "select tab closes captured paste before detaching and requesting the target snapshot" {
@@ -688,7 +688,7 @@ test "tab selection offset wraps while full turns remain no-ops" {
     const client = harness.client;
     const second = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     const version_before_selection = client.model.version();
-    const request_id_before_selection = client.request_lifecycle.next_request_id;
+    const request_id_before_selection = client.model.request_lifecycle.next_request_id;
     const pending_updates_before_selection = TerminalClient.of(client).presenter.pending_updates;
 
     _ = try client.executeAction(
@@ -700,7 +700,7 @@ test "tab selection offset wraps while full turns remain no-ops" {
 
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version_before_selection, client.model.version());
-    try std.testing.expectEqual(request_id_before_selection, client.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(request_id_before_selection, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 
     _ = try client.executeAction(
@@ -712,8 +712,8 @@ test "tab selection offset wraps while full turns remain no-ops" {
 
     try std.testing.expectEqualDeep(second, client.model.activeTabLocation().?);
     try std.testing.expectEqual(version_before_selection.active_tab + 1, client.model.version().active_tab);
-    try std.testing.expectEqual(request_id_before_selection + 1, client.request_lifecycle.next_request_id);
-    try std.testing.expect(client.request_lifecycle.tracker.has(.tab_snapshot));
+    try std.testing.expectEqual(request_id_before_selection + 1, client.model.request_lifecycle.next_request_id);
+    try std.testing.expect(client.model.request_lifecycle.tracker.has(.tab_snapshot));
     try std.testing.expectEqual(@as(usize, 2), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(pending_updates_before_selection, TerminalClient.of(client).presenter.pending_updates);
 
@@ -730,7 +730,7 @@ test "pending tab snapshot suppresses tab selection without effects" {
     const second_pane: core.PaneId = @enumFromInt(20);
     _ = try harness.addInactiveTab(@enumFromInt(2), second_pane);
     const version_before_selection = client.model.version();
-    const next_request_id = client.request_lifecycle.next_request_id;
+    const next_request_id = client.model.request_lifecycle.next_request_id;
 
     _ = try client.executeAction(
         .{
@@ -743,7 +743,7 @@ test "pending tab snapshot suppresses tab selection without effects" {
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expect(!client.model.panes.find(second_pane).?.attached);
     try std.testing.expectEqualDeep(version_before_selection, client.model.version());
-    try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -753,7 +753,7 @@ test "close tab request detaches before delivery and rejection requests restorat
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const version_before_request = client.model.version();
     const pending_updates_before_request = TerminalClient.of(client).presenter.pending_updates;
 
@@ -787,7 +787,7 @@ test "close tab request detaches before delivery and rejection requests restorat
         TestHarness.bootstrap_location,
         recovery.request_tab_snapshot.location,
     );
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     try support.expectOnlyNotificationVersionChanged(version_before_request, client.model.version());
 }
 
@@ -797,13 +797,13 @@ test "close tab capacity failure preserves attachment and request state" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     while (client.runtime_transport.outbox.len < data.outbox_support.capacity - 1) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version_before = client.model.version();
     const focus_before = client.model.reportedPaneFocus();
-    const next_request_id = client.request_lifecycle.next_request_id;
+    const next_request_id = client.model.request_lifecycle.next_request_id;
 
     try std.testing.expectError(
         error.ClientOutboxFull,
@@ -813,8 +813,8 @@ test "close tab capacity failure preserves attachment and request state" {
     try std.testing.expectEqual(data.outbox_support.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqualDeep(focus_before, client.model.reportedPaneFocus());
-    try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
 }
 
@@ -824,7 +824,7 @@ test "close tab reserves its focus-out message" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
     try client.synchronizeActivePane();
     try harness.settle();
@@ -837,7 +837,7 @@ test "close tab reserves its focus-out message" {
     }
     const version = client.model.version();
     const reported = client.model.reportedPaneFocus();
-    const next_request_id = client.request_lifecycle.next_request_id;
+    const next_request_id = client.model.request_lifecycle.next_request_id;
 
     try std.testing.expectError(
         error.ClientOutboxFull,
@@ -847,8 +847,8 @@ test "close tab reserves its focus-out message" {
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqualDeep(reported, client.model.reportedPaneFocus());
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
 }
 
 test "close tab reserves its captured paste closing marker" {
@@ -857,7 +857,7 @@ test "close tab reserves its captured paste closing marker" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
     _ = try client_module.operations.paste_routing.start(client);
     try harness.settle();
@@ -869,7 +869,7 @@ test "close tab reserves its captured paste closing marker" {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
-    const next_request_id = client.request_lifecycle.next_request_id;
+    const next_request_id = client.model.request_lifecycle.next_request_id;
 
     try std.testing.expectError(
         error.ClientOutboxFull,
@@ -878,8 +878,8 @@ test "close tab reserves its captured paste closing marker" {
 
     try std.testing.expect(client.model.panePasteActive());
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expectEqual(next_request_id, client.request_lifecycle.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version, client.model.version());
 }
 
@@ -889,7 +889,7 @@ test "an unexpected tab closure is rejected without effects" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const version_before = client.model.version();
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
     const closed: core.TabClosed = .{
@@ -904,7 +904,7 @@ test "an unexpected tab closure is rejected without effects" {
         },
     ));
 
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
@@ -917,10 +917,10 @@ test "tab closure consumes an incompatible continuation before rejection" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const request_id: core.RequestId = @enumFromInt(90);
     const version_before = client.model.version();
-    try client.request_lifecycle.tracker.add(request_id, .notification);
+    try client.model.request_lifecycle.tracker.add(request_id, .notification);
     const closed: core.TabClosed = .{
         .request_id = request_id,
         .location = TestHarness.bootstrap_location,
@@ -932,7 +932,7 @@ test "tab closure consumes an incompatible continuation before rejection" {
             .tab_closed = closed,
         },
     ));
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(error.UnexpectedTabClosed, client.handleServerMessage(
         .{
             .tab_closed = closed,
@@ -948,10 +948,10 @@ test "tab close response must match the requested identity" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const second = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     const request_id: core.RequestId = @enumFromInt(7);
-    try client.request_lifecycle.tracker.add(request_id, .{ .close_tab = TestHarness.bootstrap_location });
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .close_tab = TestHarness.bootstrap_location });
     const version_before = client.model.version();
 
     var payload: [128]u8 = undefined;
@@ -972,7 +972,7 @@ test "tab close response must match the requested identity" {
     try std.testing.expectEqual(@as(usize, 2), client.model.tabs.count);
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expectEqualDeep(version_before, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
 }
 
 test "late correlated close after lifecycle removal is ignored" {
@@ -981,10 +981,10 @@ test "late correlated close after lifecycle removal is ignored" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const second = try harness.addInactiveTab(@enumFromInt(2), @enumFromInt(20));
     const request_id: core.RequestId = @enumFromInt(7);
-    try client.request_lifecycle.tracker.add(request_id, .{ .close_tab = second });
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .close_tab = second });
 
     var payload: [128]u8 = undefined;
     const lifecycle = try core.encodeTabClosed(&payload, .{
@@ -1011,7 +1011,7 @@ test "late correlated close after lifecycle removal is ignored" {
 
     try std.testing.expectEqual(@as(usize, 1), client.model.tabs.count);
     try std.testing.expectEqualDeep(version_after_lifecycle, client.model.version());
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
 }
 
 test "inactive tab lifecycle closure changes only the tab collection" {
@@ -1020,7 +1020,7 @@ test "inactive tab lifecycle closure changes only the tab collection" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const second_pane: core.PaneId = @enumFromInt(20);
     const second = try harness.addInactiveTab(@enumFromInt(2), second_pane);
     try TerminalClient.of(client).graphics_store.applyImage(.{ .pane_id = second_pane, .revision = 1, .image = .{
@@ -1070,7 +1070,7 @@ test "invalid last tab closure has no semantic or cleanup effects" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     try TerminalClient.of(client).graphics_store.applyImage(.{ .pane_id = TestHarness.bootstrap_pane, .revision = 1, .image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgb,
@@ -1078,8 +1078,8 @@ test "invalid last tab closure has no semantic or cleanup effects" {
         .height = 1,
         .byte_len = 3,
     } });
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .close_tab = TestHarness.bootstrap_location });
-    try client.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .close_tab = TestHarness.bootstrap_location });
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(90), .{ .tab_snapshot = TestHarness.bootstrap_location });
     const version_before_close = client.model.version();
     const pending_updates_before_close = TerminalClient.of(client).presenter.pending_updates;
 
@@ -1098,7 +1098,7 @@ test "invalid last tab closure has no semantic or cleanup effects" {
         ),
     );
 
-    try std.testing.expectEqual(@as(usize, 1), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 1), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(
         error.UnexpectedTabClosed,
         client.handleServerMessage(
@@ -1114,7 +1114,7 @@ test "invalid last tab closure has no semantic or cleanup effects" {
     try std.testing.expectEqualDeep(version_before_close, client.model.version());
     try std.testing.expectEqual(pending_updates_before_close, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
-    try std.testing.expect(client.request_lifecycle.tracker.take(@enumFromInt(90)).? == .tab_snapshot);
+    try std.testing.expect(client.model.request_lifecycle.tracker.take(@enumFromInt(90)).? == .tab_snapshot);
 }
 
 test "closing the last workspace exits the client" {
@@ -1123,7 +1123,7 @@ test "closing the last workspace exits the client" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     try TerminalClient.of(client).graphics_store.applyImage(.{ .pane_id = TestHarness.bootstrap_pane, .revision = 1, .image = .{
         .key = .{ .image_id = 1, .generation = 1 },
         .format = .rgb,
@@ -1157,13 +1157,13 @@ test "tab removal follows the runtime predecessor after its workspace disappears
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
-    client.navigation_history.remember(.{
+    client.model.request_lifecycle.tracker = .{};
+    client.model.navigation_history.remember(.{
         .location = TestHarness.bootstrap_location,
         .pane_id = TestHarness.bootstrap_pane,
     });
     const close_request_id: core.RequestId = @enumFromInt(7);
-    try client.request_lifecycle.tracker.add(close_request_id, .{ .close_tab = TestHarness.bootstrap_location });
+    try client.model.request_lifecycle.tracker.add(close_request_id, .{ .close_tab = TestHarness.bootstrap_location });
 
     var payload: [128]u8 = undefined;
     const closed = try core.encodeTabClosed(&payload, .{
@@ -1178,7 +1178,7 @@ test "tab removal follows the runtime predecessor after its workspace disappears
     );
 
     try std.testing.expect(client.model.workspaceLocation() == null);
-    try std.testing.expect(client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null);
+    try std.testing.expect(client.model.navigation_history.find(TestHarness.bootstrap_location.workspace) == null);
     try harness.settle();
 
     var buffer: [256]u8 = undefined;
@@ -1188,17 +1188,17 @@ test "tab removal follows the runtime predecessor after its workspace disappears
         core.PaneTarget{ .workspace = @enumFromInt(2) },
         message.open_pane.target,
     );
-    const continuation = client.request_lifecycle.tracker.take(message.open_pane.request_id).?;
+    const continuation = client.model.request_lifecycle.tracker.take(message.open_pane.request_id).?;
     try std.testing.expect(continuation == .initial_open);
     try std.testing.expectEqual(@as(?core.WorkspaceId, @enumFromInt(2)), continuation.initial_open.fallback_workspace);
-    try std.testing.expect(client.request_lifecycle.tracker.take(close_request_id).? == .ignored);
+    try std.testing.expect(client.model.request_lifecycle.tracker.take(close_request_id).? == .ignored);
 }
 
 test "resync follows the runtime predecessor after a workspace disappears" {
     var harness: TestHarness = undefined;
     try harness.init();
     defer harness.deinit();
-    harness.client.navigation_history.remember(.{
+    harness.client.model.navigation_history.remember(.{
         .location = TestHarness.bootstrap_location,
         .pane_id = TestHarness.bootstrap_pane,
     });
@@ -1222,7 +1222,7 @@ test "resync follows the runtime predecessor after a workspace disappears" {
         message.open_pane.target,
     );
     try std.testing.expect(
-        harness.client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
+        harness.client.model.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
     );
 }
 
@@ -1231,7 +1231,7 @@ test "resync forgets the final workspace before exiting" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    client.navigation_history.remember(.{
+    client.model.navigation_history.remember(.{
         .location = TestHarness.bootstrap_location,
         .pane_id = TestHarness.bootstrap_pane,
     });
@@ -1249,9 +1249,9 @@ test "resync forgets the final workspace before exiting" {
         try client.handleServerMessage(try core.decodeServer(resync)),
     );
     try std.testing.expect(
-        client.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
+        client.model.navigation_history.find(TestHarness.bootstrap_location.workspace) == null,
     );
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
@@ -1323,9 +1323,9 @@ test "tab creation validates labels before retaining a request" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const version = client.model.version();
-    const next_request = client.request_lifecycle.next_request_id;
+    const next_request = client.model.request_lifecycle.next_request_id;
 
     try std.testing.expectError(error.InvalidTabLabel, client.requestTabCreation(
         .{
@@ -1339,8 +1339,8 @@ test "tab creation validates labels before retaining a request" {
     ));
 
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(next_request, client.request_lifecycle.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(next_request, client.model.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -1350,7 +1350,7 @@ test "tab creation outbox failure releases correlation without mutating the proj
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
@@ -1360,7 +1360,7 @@ test "tab creation outbox failure releases correlation without mutating the proj
         .{},
     ));
 
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
@@ -1372,9 +1372,9 @@ test "canonical tab creation remains committed when previous attachment retireme
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const request_id: core.RequestId = @enumFromInt(4);
-    try client.request_lifecycle.tracker.add(request_id, .{ .create_tab = .{
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .create_tab = .{
         .workspace = TestHarness.bootstrap_location.workspace,
         .size = .{ .cols = 80, .rows = 20 },
     } });
@@ -1400,7 +1400,7 @@ test "canonical tab creation remains committed when previous attachment retireme
     try std.testing.expectEqual(@as(usize, 2), client.model.tabs.count);
     try std.testing.expect(client.model.panes.find(@enumFromInt(20)).?.attached);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(error.UnexpectedTabCreated, client.handleServerMessage(
         .{
             .tab_created = created,

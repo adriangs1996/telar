@@ -29,8 +29,8 @@ test "key press rolls back its physical lease when runtime delivery fails" {
             .key = key,
         },
     ));
-    try std.testing.expectEqual(@as(usize, 0), client.input_leases.count());
-    try std.testing.expect(client.input_leases.owner(key.physical.?) == null);
+    try std.testing.expectEqual(@as(usize, 0), client.model.input_leases.count());
+    try std.testing.expect(client.model.input_leases.owner(key.physical.?) == null);
 }
 
 test "physical key repeat and release keep their pane after focus and prompt changes" {
@@ -76,7 +76,7 @@ test "physical key repeat and release keep their pane after focus and prompt cha
         },
     );
     try std.testing.expectEqual(.pane, released.owner);
-    try std.testing.expectEqual(@as(usize, 0), client.input_leases.count());
+    try std.testing.expectEqual(@as(usize, 0), client.model.input_leases.count());
     const duplicate = try client.routeKeyInput(
         .{
             .key = key,
@@ -92,7 +92,7 @@ test "physical lease saturation rejects input before mutation or transport" {
     try harness.bootstrap();
     const client = harness.client;
     var identity: u32 = 1;
-    while (client.input_leases.acquire(.{ .value = identity }, .ignored)) {
+    while (client.model.input_leases.acquire(.{ .value = identity }, .ignored)) {
         identity += 1;
     }
     const version = client.model.version();
@@ -182,7 +182,7 @@ test "obsolete clipboard completion frees its image without consuming a newer ca
     );
 
     try std.testing.expectEqual(current.id, client.model.clipboardCapture().?.id);
-    try std.testing.expect(client.clipboard_capture_resources.orphan == null);
+    try std.testing.expect(client.model.clipboard_capture_resources.orphan == null);
     try std.testing.expectEqual(@as(u8, 0), TerminalClient.of(client).view.kittyAttachments().snapshot().len);
 }
 

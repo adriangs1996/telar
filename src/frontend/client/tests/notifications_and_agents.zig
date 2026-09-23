@@ -19,7 +19,7 @@ test "a failed request surfaces as a notification" {
     try harness.bootstrap();
     const client = harness.client;
 
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .close_pane = .{
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .close_pane = .{
         .pane_id = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
     } });
@@ -33,7 +33,7 @@ test "a failed request surfaces as a notification" {
     try harness.settle();
     const notification = client.model.notificationSnapshot().itemAt(0).?;
 
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expectEqualStrings("Could not close pane", notification.title());
     try std.testing.expectEqualStrings("no such pane", notification.message());
     try std.testing.expectEqualDeep(
@@ -58,7 +58,7 @@ test "a failed snapshot request is fatal after consuming its continuation" {
     defer harness.deinit();
     const client = harness.client;
     const request_id: core.RequestId = @enumFromInt(4);
-    try client.request_lifecycle.tracker.add(request_id, .{
+    try client.model.request_lifecycle.tracker.add(request_id, .{
         .workspace_snapshot = TestHarness.bootstrap_location.workspace,
     });
 
@@ -73,7 +73,7 @@ test "a failed snapshot request is fatal after consuming its continuation" {
         error.RuntimeRequestFailed,
         client.handleServerMessage(try core.decodeServer(failed)),
     );
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
 }
 
@@ -84,7 +84,7 @@ test "a vanished remembered pane retries its workspace once before failing fatal
     const client = harness.client;
     const request_id: core.RequestId = @enumFromInt(4);
     const workspace: core.WorkspaceId = @enumFromInt(7);
-    try client.request_lifecycle.tracker.add(request_id, .{ .initial_open = .{ .fallback_workspace = workspace } });
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .initial_open = .{ .fallback_workspace = workspace } });
     var payload: [256]u8 = undefined;
     const failed = try core.encodeRequestFailed(&payload, .{
         .request_id = request_id,
@@ -106,7 +106,7 @@ test "a vanished remembered pane retries its workspace once before failing fatal
     });
 
     try std.testing.expectError(error.RuntimeRequestFailed, client.handleServerMessage(try core.decodeServer(retry_failed)));
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
 }
@@ -149,7 +149,7 @@ test "a runtime notification translates and owns its wire payload" {
     );
     try std.testing.expectEqual(version_before.notifications + 1, client.model.version().notifications);
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
 }
 
 test "notification action delivers one correlated runtime request without model effects" {
@@ -157,7 +157,7 @@ test "notification action delivers one correlated runtime request without model 
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const request_id: core.RequestId = @enumFromInt(client.request_lifecycle.next_request_id);
+    const request_id: core.RequestId = @enumFromInt(client.model.request_lifecycle.next_request_id);
     const version_before = client.model.version();
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
     try client.sendRuntime(
@@ -185,7 +185,7 @@ test "notification action delivers one correlated runtime request without model 
         ),
     );
 
-    try std.testing.expect(client.request_lifecycle.tracker.has(.notification));
+    try std.testing.expect(client.model.request_lifecycle.tracker.has(.notification));
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
     @memset(&notification.title_bytes, 'x');
@@ -220,7 +220,7 @@ test "notification request rolls correlation back when transport is full" {
             .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane },
         });
     }
-    const next_request_id = client.request_lifecycle.next_request_id;
+    const next_request_id = client.model.request_lifecycle.next_request_id;
     const version_before = client.model.version();
     const pending_updates_before = TerminalClient.of(client).presenter.pending_updates;
     const notification = try data.Notification.init(.{
@@ -241,8 +241,8 @@ test "notification request rolls correlation back when transport is full" {
         ),
     );
 
-    try std.testing.expectEqual(next_request_id + 1, client.request_lifecycle.next_request_id);
-    try std.testing.expect(client.request_lifecycle.tracker.isEmpty());
+    try std.testing.expectEqual(next_request_id + 1, client.model.request_lifecycle.next_request_id);
+    try std.testing.expect(client.model.request_lifecycle.tracker.isEmpty());
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates_before, TerminalClient.of(client).presenter.pending_updates);
 }
@@ -259,7 +259,7 @@ test "notification timer commits lifecycle state before presenter observation" {
     });
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
 
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     switch (try TerminalClient.of(client).inbox.receive()) {
         .notification_tick => |result| {
             const change = (try client.completeNotificationTick(result)).?;
@@ -272,7 +272,7 @@ test "notification timer commits lifecycle state before presenter observation" {
         else => return error.UnexpectedEvent,
     }
 
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expectEqual(@as(u64, 2), client.model.version().notifications);
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 
@@ -302,10 +302,10 @@ test "an unexpected notification delivery report is rejected without effects" {
         ),
     );
 
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
-    try std.testing.expect(!client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.notification_scheduler.pending);
 }
 
 test "notification delivery consumes an incompatible continuation before rejection" {
@@ -314,7 +314,7 @@ test "notification delivery consumes an incompatible continuation before rejecti
     defer harness.deinit();
     const client = harness.client;
     const request_id: core.RequestId = @enumFromInt(90);
-    try client.request_lifecycle.tracker.add(request_id, .{ .move_tab = TestHarness.bootstrap_location });
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .move_tab = TestHarness.bootstrap_location });
     const shown: core.NotificationShown = .{
         .request_id = request_id,
         .delivered_clients = 1,
@@ -328,7 +328,7 @@ test "notification delivery consumes an incompatible continuation before rejecti
             },
         ),
     );
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(
         error.UnexpectedNotificationReply,
         client.handleServerMessage(
@@ -338,7 +338,7 @@ test "notification delivery consumes an incompatible continuation before rejecti
         ),
     );
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
-    try std.testing.expect(!client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.notification_scheduler.pending);
 }
 
 test "a delivered notification report consumes correlation without model effects" {
@@ -348,7 +348,7 @@ test "a delivered notification report consumes correlation without model effects
     const client = harness.client;
     const request_id: core.RequestId = @enumFromInt(90);
     const version_before = client.model.version();
-    try client.request_lifecycle.tracker.add(request_id, .notification);
+    try client.model.request_lifecycle.tracker.add(request_id, .notification);
 
     try std.testing.expectEqual(
         @as(?u8, null),
@@ -362,10 +362,10 @@ test "a delivered notification report consumes correlation without model effects
         ),
     );
 
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
-    try std.testing.expect(!client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.notification_scheduler.pending);
 }
 
 test "runtime notifications and delivery failures reach the toasts" {
@@ -377,10 +377,10 @@ test "runtime notifications and delivery failures reach the toasts" {
     var payload: [256]u8 = undefined;
     const notification = try core.encodeNotification(&payload, .{ .title = "hello" });
     _ = try client.handleServerMessage(try core.decodeServer(notification));
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     const version_after_runtime = client.model.version();
 
-    try client.request_lifecycle.tracker.add(@enumFromInt(2), .notification);
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(2), .notification);
     const shown = try core.encodeNotificationShown(&payload, .{
         .request_id = @enumFromInt(2),
         .delivered_clients = 0,
@@ -395,7 +395,7 @@ test "runtime notifications and delivery failures reach the toasts" {
         "No connected client could accept the notification",
         snapshot.itemAt(0).?.message(),
     );
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
 
     const unexpected = try core.encodeNotificationShown(&payload, .{
         .request_id = @enumFromInt(9),
@@ -683,7 +683,7 @@ test "workspace position navigation resolves the committed client model" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
 
     var payload: [512]u8 = undefined;
     const list = try core.encodeWorkspaceList(&payload, .{
@@ -789,7 +789,7 @@ test "sidebar animation commits model state before the presenter observes it" {
     _ = try client.handleServerMessage(try core.decodeServer(snapshot));
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
 
-    try std.testing.expect(client.sidebar_animation_scheduler.pending);
+    try std.testing.expect(client.model.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(@as(u8, 0), client.model.sidebarAnimationFrame());
     switch (try TerminalClient.of(client).inbox.receive()) {
         .sidebar_animation_tick => |result| {
@@ -801,7 +801,7 @@ test "sidebar animation commits model state before the presenter observes it" {
         else => return error.UnexpectedEvent,
     }
 
-    try std.testing.expect(client.sidebar_animation_scheduler.pending);
+    try std.testing.expect(client.model.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(data.Version{
         .agents = 1,
         .sidebar_animation = 1,
@@ -871,7 +871,7 @@ test "agent sounds validate exact identity against the client model" {
         },
     );
 
-    try std.testing.expect(!client.sound_playback.snapshot().active);
+    try std.testing.expect(!client.model.sound_playback.snapshot().active);
 
     const known = try core.encodeAgentSound(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -884,7 +884,7 @@ test "agent sounds validate exact identity against the client model" {
         },
     );
 
-    try std.testing.expect(client.sound_playback.snapshot().active);
+    try std.testing.expect(client.model.sound_playback.snapshot().active);
 
     const urgent = try core.encodeAgentSound(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -897,7 +897,7 @@ test "agent sounds validate exact identity against the client model" {
         },
     );
 
-    try std.testing.expectEqual(core.AgentSound.needs_input, client.sound_playback.snapshot().queued.?);
+    try std.testing.expectEqual(core.AgentSound.needs_input, client.model.sound_playback.snapshot().queued.?);
     try std.testing.expectEqualDeep(version_before_sound, client.model.version());
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 }
@@ -912,9 +912,9 @@ test "agent sound completion releases a failed worker before scheduling its succ
 
     try std.testing.expectEqualDeep(
         data.SoundRequestOutcome{ .start = .ready },
-        client.sound_playback.request(.ready),
+        client.model.sound_playback.request(.ready),
     );
-    try std.testing.expect(client.sound_playback.request(.needs_input) == .queued);
+    try std.testing.expect(client.model.sound_playback.request(.needs_input) == .queued);
 
     try client.completeAgentSound(error.SoundUnavailable);
 
@@ -922,7 +922,7 @@ test "agent sound completion releases a failed worker before scheduling its succ
         .configuration = .{},
         .active = true,
         .queued = null,
-    }, client.sound_playback.snapshot());
+    }, client.model.sound_playback.snapshot());
     try std.testing.expectEqualDeep(version_before, client.model.version());
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 }
@@ -948,12 +948,12 @@ test "sound scheduling failure releases its token and does not poison a later re
     try std.testing.expectError(error.SoundSchedulingFailed, client.handleServerMessage(try core.decodeServer(message)));
 
     try std.testing.expectEqual(@as(usize, 1), calls);
-    try std.testing.expect(!client.sound_playback.snapshot().active);
-    try std.testing.expect(client.sound_playback.snapshot().queued == null);
+    try std.testing.expect(!client.model.sound_playback.snapshot().active);
+    try std.testing.expect(client.model.sound_playback.snapshot().queued == null);
     try std.testing.expectEqualDeep(version, client.model.version());
     client.sound_port = sound_port;
     _ = try client.handleServerMessage(try core.decodeServer(message));
-    try std.testing.expect(client.sound_playback.snapshot().active);
+    try std.testing.expect(client.model.sound_playback.snapshot().active);
 }
 
 test "agent snapshot limits alert publication while retaining every canonical status change" {
@@ -1021,7 +1021,7 @@ test "agent alert host failure preserves the canonical snapshot and owned notifi
     try std.testing.expectEqual(@as(usize, 1), calls);
     try std.testing.expectEqual(@as(u64, 2), client.model.agentSnapshot().revision);
     try std.testing.expectEqual(data.NotificationLevel.warning, client.model.notificationSnapshot().itemAt(0).?.level);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
     const version = client.model.version();
     _ = try client.handleServerMessage(try core.decodeServer(changed));
     try std.testing.expectEqualDeep(version, client.model.version());
@@ -1034,10 +1034,10 @@ test "attachment rejection consumes correlation but does not notify when recover
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     client.model.panes.find(TestHarness.bootstrap_pane).?.attached = false;
-    const request_id = try client.request_lifecycle.nextId();
-    try client.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
+    const request_id = try client.model.request_lifecycle.nextId();
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
         .pane_id = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
     } });
@@ -1054,7 +1054,7 @@ test "attachment rejection consumes correlation but does not notify when recover
 
     try std.testing.expectError(error.ClientOutboxFull, client.handleServerMessage(try core.decodeServer(failed)));
 
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(@as(u8, 0), client.model.notificationSnapshot().count);
     try std.testing.expectError(error.UnexpectedRequestFailure, client.handleServerMessage(try core.decodeServer(failed)));
@@ -1066,10 +1066,10 @@ test "request failure retains canonical recovery when host notification delivery
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     client.model.panes.find(TestHarness.bootstrap_pane).?.attached = false;
-    const request_id = try client.request_lifecycle.nextId();
-    try client.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
+    const request_id = try client.model.request_lifecycle.nextId();
+    try client.model.request_lifecycle.tracker.add(request_id, .{ .attach_pane = .{
         .pane_id = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
     } });
@@ -1086,7 +1086,7 @@ test "request failure retains canonical recovery when host notification delivery
     try std.testing.expectError(error.HostNotificationFailed, client.handleServerMessage(try core.decodeServer(failed)));
 
     try std.testing.expectEqual(@as(usize, 1), calls);
-    try std.testing.expect(client.request_lifecycle.tracker.has(.tab_snapshot));
+    try std.testing.expect(client.model.request_lifecycle.tracker.has(.tab_snapshot));
     try std.testing.expectEqual(@as(u8, 1), client.model.notificationSnapshot().count);
     try std.testing.expectEqualStrings("pane disappeared", client.model.notificationSnapshot().itemAt(0).?.message());
     try std.testing.expectError(error.UnexpectedRequestFailure, client.handleServerMessage(try core.decodeServer(failed)));

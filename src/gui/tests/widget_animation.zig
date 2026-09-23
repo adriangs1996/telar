@@ -83,7 +83,7 @@ test "hiding the only animated widget removes its frame deadline" {
     const version = app.model.version();
     try std.testing.expectEqual(.host, app.timers.animation_clock);
     try std.testing.expect(app.model.sidebarAnimationActive());
-    try std.testing.expect(!app.sidebar_animation_scheduler.pending);
+    try std.testing.expect(!app.model.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(version, app.model.version());
 
     fixture.chrome.now_ns = 100 * std.time.ns_per_s;
@@ -95,7 +95,7 @@ test "hiding the only animated widget removes its frame deadline" {
     fixture.chrome.now_ns += std.time.ns_per_s;
     projection = fixture.projection();
     try fixture.paint(projection);
-    try std.testing.expect(!app.sidebar_animation_scheduler.pending);
+    try std.testing.expect(!app.model.sidebar_animation_scheduler.pending);
     try std.testing.expectEqual(@as(u32, 0), fixture.chrome.animation.wakeupAfter(fixture.chrome.now_ns));
     try std.testing.expect(!fixture.chrome.animation.due(std.math.maxInt(u64)));
 
@@ -132,7 +132,7 @@ test "native indeterminate progress paints each frame without model ticks and fo
     try fixture.paint(fixture.projection());
     try std.testing.expectEqual(fixture.chrome.now_ns + FrameClock.frame_interval_ns, fixture.chrome.animation.deadline_ns.?);
     try std.testing.expectEqual(version, app.model.version());
-    try std.testing.expect(!app.sidebar_animation_scheduler.pending);
+    try std.testing.expect(!app.model.sidebar_animation_scheduler.pending);
 }
 
 test "native paused failed and removed progress stop their frame clock" {

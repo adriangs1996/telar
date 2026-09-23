@@ -475,7 +475,7 @@ fn start(self: *GuiClient, colors: core.TerminalColors) !void {
         },
     );
 
-    self.app.startup.phase = .opening;
+    self.app.model.startup.phase = .opening;
 
     try self.app.runtime_transport.bootstrap(
         .{
@@ -628,8 +628,8 @@ fn receive(self: *GuiClient, result: anyerror!*const shared_model.RuntimeMessage
         return status;
     }
 
-    if (self.app.startup.phase == .opening and self.app.model.activeTabLocation() != null) {
-        self.app.startup.phase = .active;
+    if (self.app.model.startup.phase == .opening and self.app.model.activeTabLocation() != null) {
+        self.app.model.startup.phase = .active;
     }
 
     try self.resumeInput();
@@ -720,7 +720,7 @@ fn drainInput(self: *GuiClient) !void {
     const app = &self.app;
     const pending_input = &self.input_queue;
 
-    if (app.startup.holdsInput()) {
+    if (app.model.startup.holdsInput()) {
         return;
     }
 
@@ -1493,7 +1493,7 @@ fn focus(self: *GuiClient, focused: bool) !void {
 /// Queue one readiness notification only when input can make progress.
 /// Example: `try gui.resumeInput();`
 pub fn resumeInput(self: *GuiClient) !void {
-    if (self.input_queue.len != 0 and !self.app.startup.holdsInput() and self.app.runtime_transport.outbox.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots)) {
+    if (self.input_queue.len != 0 and !self.app.model.startup.holdsInput() and self.app.runtime_transport.outbox.availableCapacity() >= @intFromEnum(InputLimit.minimum_outbox_slots)) {
         try self.driver.inbox.notify(.input_ready);
     }
 }
@@ -1653,7 +1653,7 @@ pub fn applyGraphics(self: *GuiClient, command: shared_model.application_panes_p
 fn prepare(self: *GuiClient, renderer: *Renderer) !u64 {
     self.widgets.tab_drag.validate(&self.app.model);
 
-    if (!self.app.request_lifecycle.tracker.has(.tab_operation)) {
+    if (!self.app.model.request_lifecycle.tracker.has(.tab_operation)) {
         self.widgets.tab_drop_pending = null;
     }
 
@@ -1816,7 +1816,7 @@ pub fn observation(self: *const GuiClient) client.Observation {
 fn ingress(self: *const GuiClient) client.PresentationIngress {
     return .{
         .input_routing = self.binding_revision,
-        .view_interaction = self.chrome.revision +% self.pointer.hover.revision +% self.widgets.dispatcher.revision +% self.app.change_review.version,
+        .view_interaction = self.chrome.revision +% self.pointer.hover.revision +% self.widgets.dispatcher.revision +% self.app.model.change_review.version,
     };
 }
 

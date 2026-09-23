@@ -167,7 +167,7 @@ fn startCapture(context: *anyopaque, request: data.CaptureRequest) !void {
     try TerminalClient.of(client).inbox.start(.clipboard_image, .{ executeCapture, .{
         client.gpa,
         request,
-        &client.clipboard_capture_resources.orphan,
+        &client.model.clipboard_capture_resources.orphan,
     } });
 }
 

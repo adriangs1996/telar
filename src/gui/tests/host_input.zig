@@ -57,7 +57,7 @@ test "each GUI drains only its own queue and respects its own startup gate" {
     try first.receiveFrame(1);
     try second.receiveFrame(1);
 
-    first.gui.app.startup.phase = .probing;
+    first.gui.app.model.startup.phase = .probing;
     try input_support.accept(first.gui, .{ .text = .{ .bytes = "left" } });
     try input_support.accept(second.gui, .{ .text = .{ .bytes = "right" } });
     try input_support.pump(first.gui);
@@ -68,7 +68,7 @@ test "each GUI drains only its own queue and respects its own startup gate" {
     try std.testing.expectEqualStrings("right", second.input[0..second.input_len]);
     try std.testing.expectEqual(@as(usize, 0), second.gui.input_queue.len);
 
-    first.gui.app.startup.phase = .active;
+    first.gui.app.model.startup.phase = .active;
     try input_support.pump(first.gui);
     try first.settle();
     try std.testing.expectEqualStrings("left", first.input[0..first.input_len]);

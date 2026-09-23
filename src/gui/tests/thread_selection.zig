@@ -88,7 +88,7 @@ test "selection freezes paging and exposes edge state until Escape releases the 
     try fixture.send(.{ .scroll = .{ .x = target.bounds.x + 5, .y = target.bounds.y + 5, .delta_y = -10000 } });
     try std.testing.expect(gui.widgets.thread_selection.blocked_edge);
     try std.testing.expect(gui.app.model.agentPane(Fixture.pane_id).?.history_intent == null);
-    try std.testing.expect(!gui.app.request_lifecycle.tracker.has(.agent_history));
+    try std.testing.expect(!gui.app.model.request_lifecycle.tracker.has(.agent_history));
     try fixture.send(.{ .key = .{ .code = .escape } });
     try fixture.publish();
     try std.testing.expect(gui.widgets.thread_selection.owner == null);

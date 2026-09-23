@@ -129,7 +129,7 @@ test "host resize waits for canonical membership then resizes before attaching w
         },
     );
     try std.testing.expect(!client.model.tabs.snapshot_loaded[tab]);
-    const initial_request_id = client.request_lifecycle.next_request_id;
+    const initial_request_id = client.model.request_lifecycle.next_request_id;
     var buffer: [256]u8 = undefined;
 
     _ = try host_resizes.apply(
@@ -145,8 +145,8 @@ test "host resize waits for canonical membership then resizes before attaching w
     const before_snapshot = try harness.nextClientMessage(&buffer);
     try std.testing.expect(before_snapshot == .pane_resize);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, before_snapshot.pane_resize.pane_id);
-    try std.testing.expectEqual(initial_request_id, client.request_lifecycle.next_request_id);
-    try std.testing.expect(!client.request_lifecycle.tracker.hasPane(.attachment, sibling));
+    try std.testing.expectEqual(initial_request_id, client.model.request_lifecycle.next_request_id);
+    try std.testing.expect(!client.model.request_lifecycle.tracker.hasPane(.attachment, sibling));
 
     _ = try client.model.reconcileTab(
         .{
@@ -175,8 +175,8 @@ test "host resize waits for canonical membership then resizes before attaching w
     try std.testing.expect(opened == .open_pane);
     try std.testing.expectEqual(sibling, opened.open_pane.target.pane);
     try std.testing.expectEqualDeep(data.tab_layout.contentSize(&client.model, tab, sibling, client.geometry().area).?, opened.open_pane.size);
-    try std.testing.expect(client.request_lifecycle.tracker.hasPane(.attachment, sibling));
-    const pending_request_id = client.request_lifecycle.next_request_id;
+    try std.testing.expect(client.model.request_lifecycle.tracker.hasPane(.attachment, sibling));
+    const pending_request_id = client.model.request_lifecycle.next_request_id;
 
     _ = try host_resizes.apply(
         client,
@@ -191,7 +191,7 @@ test "host resize waits for canonical membership then resizes before attaching w
     const repeated = try harness.nextClientMessage(&buffer);
     try std.testing.expect(repeated == .pane_resize);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, repeated.pane_resize.pane_id);
-    try std.testing.expectEqual(pending_request_id, client.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(pending_request_id, client.model.request_lifecycle.next_request_id);
 }
 
 test "host resize rolls back rejected attachment correlation after offering connected pane sizes" {
@@ -222,7 +222,7 @@ test "host resize rolls back rejected attachment correlation after offering conn
         );
     }
 
-    const initial_request_id = client.request_lifecycle.next_request_id;
+    const initial_request_id = client.model.request_lifecycle.next_request_id;
     try std.testing.expectError(error.ClientOutboxFull, host_resizes.apply(
         client,
         .{
@@ -233,8 +233,8 @@ test "host resize rolls back rejected attachment correlation after offering conn
         },
     ));
 
-    try std.testing.expectEqual(initial_request_id + 1, client.request_lifecycle.next_request_id);
-    try std.testing.expect(!client.request_lifecycle.tracker.hasPane(.attachment, sibling));
+    try std.testing.expectEqual(initial_request_id + 1, client.model.request_lifecycle.next_request_id);
+    try std.testing.expect(!client.model.request_lifecycle.tracker.hasPane(.attachment, sibling));
     try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
     try std.testing.expectEqual(@as(u16, 100), client.model.hostSize().cols);
     try std.testing.expect(!client.model.panes.find(sibling).?.attached);
@@ -783,14 +783,14 @@ test "a left click opens a file URI and owns the complete mouse gesture" {
         .kind = .press,
         .button = 0,
     });
-    try std.testing.expect(client.link_pointer.owned);
+    try std.testing.expect(client.model.link_pointer.owned);
     try host_inputs.mouse(client, .{
         .x = pane_view.content.x + 10,
         .y = pane_view.content.y,
         .kind = .release,
         .button = 0,
     });
-    try std.testing.expect(!client.link_pointer.owned);
+    try std.testing.expect(!client.model.link_pointer.owned);
     try harness.settle();
 
     var buffer: [512]u8 = undefined;

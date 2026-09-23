@@ -36,7 +36,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     };
     const version_before_creation = client.model.version();
     const pending_updates_before_creation = TerminalClient.of(client).presenter.pending_updates;
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
     var payload: [128]u8 = undefined;
     const opened = try core.encodePaneOpened(&payload, .{
         .request_id = @enumFromInt(4),
@@ -46,7 +46,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     });
     _ = try client.handleServerMessage(try core.decodeServer(opened));
 
-    try std.testing.expect(!client.notification_scheduler.pending);
+    try std.testing.expect(!client.model.notification_scheduler.pending);
     try std.testing.expectEqualDeep(
         @as(?core.WorkspaceLocation, new_location.workspace),
         client.model.workspace,
@@ -62,7 +62,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try std.testing.expectEqual(pending_updates_before_creation, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expectEqual(@as(?core.PaneId, @enumFromInt(30)), support.reportedPaneId(client));
 
-    const bookmark = client.navigation_history.find(prior_location.workspace).?;
+    const bookmark = client.model.navigation_history.find(prior_location.workspace).?;
     try std.testing.expectEqual(prior_location, bookmark.location);
     try std.testing.expectEqual(bottom_right, bookmark.pane_id);
     const saved_layout = bookmark.tab_layout.?;
@@ -88,7 +88,7 @@ test "a created workspace bookmarks and replaces the prior layout" {
     try std.testing.expectEqualDeep(client.model.version(), TerminalClient.of(client).presenter.presentation_state.prepared.model);
 
     // Return through the same runtime handoff used by workspace selection.
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     _ = try client.requestWorkspace(prior_location.workspace.workspace);
     try harness.settle();
     const detached = try harness.nextClientMessage(&message_buffer);
@@ -143,11 +143,11 @@ test "a failed workspace creation preserves the current projection" {
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const version_before_failure = client.model.version();
     const location_before_failure = client.model.activeTabLocation().?;
 
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
     var payload: [256]u8 = undefined;
     const failed = try core.encodeRequestFailed(&payload, .{
         .request_id = @enumFromInt(4),
@@ -159,7 +159,7 @@ test "a failed workspace creation preserves the current projection" {
     try support.expectOnlyNotificationVersionChanged(version_before_failure, client.model.version());
     try std.testing.expectEqualDeep(location_before_failure, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) != null);
-    try std.testing.expect(client.notification_scheduler.pending);
+    try std.testing.expect(client.model.notification_scheduler.pending);
 }
 
 test "workspace creation validates names before request ownership or projection mutation" {
@@ -168,9 +168,9 @@ test "workspace creation validates names before request ownership or projection 
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     const version = client.model.version();
-    const next_request = client.request_lifecycle.next_request_id;
+    const next_request = client.model.request_lifecycle.next_request_id;
 
     try std.testing.expectError(error.InvalidWorkspaceName, client.requestWorkspaceCreation(
         .{
@@ -189,8 +189,8 @@ test "workspace creation validates names before request ownership or projection 
     ));
 
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(next_request, client.request_lifecycle.next_request_id);
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(next_request, client.model.request_lifecycle.next_request_id);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
 
@@ -200,7 +200,7 @@ test "workspace creation outbox failure releases correlation and retains the cur
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
+    client.model.request_lifecycle.tracker = .{};
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
@@ -214,7 +214,7 @@ test "workspace creation outbox failure releases correlation and retains the cur
 
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.activeTabLocation().?);
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
 }
 
@@ -224,8 +224,8 @@ test "canonical workspace replacement survives failure to deliver activation sna
     defer harness.deinit();
     try harness.bootstrap();
     const client = harness.client;
-    client.request_lifecycle.tracker = .{};
-    try client.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
+    client.model.request_lifecycle.tracker = .{};
+    try client.model.request_lifecycle.tracker.add(@enumFromInt(4), .{ .create_workspace = .{ .cols = 80, .rows = 20 } });
     while (client.runtime_transport.outbox.hasCapacity()) {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
@@ -243,7 +243,7 @@ test "canonical workspace replacement survives failure to deliver activation sna
     try std.testing.expectEqualDeep(location, client.model.activeTabLocation().?);
     try std.testing.expect(client.model.panes.find(@enumFromInt(30)).?.attached);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) == null);
-    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.navigation_history.find(TestHarness.bootstrap_location.workspace).?.location);
-    try std.testing.expectEqual(@as(usize, 0), client.request_lifecycle.tracker.count);
+    try std.testing.expectEqualDeep(TestHarness.bootstrap_location, client.model.navigation_history.find(TestHarness.bootstrap_location.workspace).?.location);
+    try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectError(error.UnexpectedRequest, client.handleServerMessage(try core.decodeServer(opened)));
 }

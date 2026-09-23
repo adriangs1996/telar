@@ -33,7 +33,7 @@ paste_failed: bool = false,
 /// Keeps one pane's unacknowledged edits alive until its runtime reply arrives.
 /// Example: `try panel.open(app, pane_id);`
 pub fn open(self: *Self, app: *client.AttachedClient, pane_id: core.PaneId) !void {
-    const state = &app.change_review;
+    const state = &app.model.change_review;
     if (state.owner) |owner| {
         if (owner.pane_id == pane_id and app.isChangeReviewAttached() and !state.session_changed) {
             self.active = true;
@@ -75,7 +75,7 @@ pub fn open(self: *Self, app: *client.AttachedClient, pane_id: core.PaneId) !voi
 /// Called before preparing a frame, after the preceding GPU borrow has ended.
 /// Example: `try panel.synchronize(app);`
 pub fn synchronize(self: *Self, app: *client.AttachedClient) !void {
-    const state = &app.change_review;
+    const state = &app.model.change_review;
     if (state.owner == null) {
         self.active = false;
         return;
@@ -199,7 +199,7 @@ pub fn synchronize(self: *Self, app: *client.AttachedClient) !void {
 /// Copies one bounded patch and starts its index/highlight work off the UI path.
 /// Example: `panel.start(.{ .app = app, .inbox = inbox });`
 pub fn start(self: *Self, context: struct { app: *client.AttachedClient, inbox: *gui_event.Inbox }) void {
-    const state = &context.app.change_review;
+    const state = &context.app.model.change_review;
     if (self.job != null or !state.loaded or state.snapshot.edition_id == 0 or state.snapshot.edition_id == self.edition or !self.widget.loading) {
         return;
     }

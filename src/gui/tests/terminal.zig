@@ -61,7 +61,7 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     try std.testing.expectEqual(pending_count, app.runtime_transport.outbox.len);
     try std.testing.expectEqual(pending_bytes.ptr, session.pending.?.ptr);
     try std.testing.expect(session.gui.started);
-    try std.testing.expect(app.startup.phase == .opening);
+    try std.testing.expect(app.model.startup.phase == .opening);
     try std.testing.expect(app.runtime_transport.receive_pending);
     try std.testing.expectEqualDeep(colors, app.model.hostCapabilities().terminal_colors);
     try std.testing.expect(app.model.hostCapabilities().agent_panes);
@@ -86,7 +86,7 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     try app.completeRuntimeSend({});
     try std.testing.expect(session.pending == null);
     try std.testing.expectEqual(@as(usize, 0), app.runtime_transport.outbox.len);
-    try std.testing.expect(app.startup.phase == .opening);
+    try std.testing.expect(app.model.startup.phase == .opening);
 }
 
 test "drawing does not activate the runtime before native readiness" {
