@@ -1,10 +1,10 @@
 //! Encodes pane-relative SGR mouse reports, including exact host pixels.
 
 const data = @import("model");
-const mouse_protocol = @import("../../input/mouse_protocol.zig");
+const mouse_protocol = @import("mouse_protocol.zig");
 const core = @import("telar-core");
 const std = @import("std");
-const PixelProjection = @import("../../input/PixelProjection.zig");
+const PixelProjection = @import("PixelProjection.zig");
 
 /// Projects host pixels into pane coordinates before encoding the report.
 /// Example: `const bytes = try pane_mouse_inputs.encodeReport(&buffer, report);`

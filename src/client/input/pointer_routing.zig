@@ -2,9 +2,9 @@
 
 const data = @import("model");
 const core = @import("telar-core");
-const projection_support = @import("../../presentation/projection_support.zig");
-const Client = @import("../../AttachedClient.zig");
-const Geometry = @import("../../presentation/Geometry.zig");
+const projection_support = @import("../presentation/projection_support.zig");
+const Client = @import("../AttachedClient.zig");
+const Geometry = @import("../presentation/Geometry.zig");
 const std = @import("std");
 const copy_mode_pointer = @import("copy_mode_pointer.zig");
 const view_interactions = @import("view_interactions.zig");

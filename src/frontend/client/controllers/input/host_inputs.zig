@@ -273,7 +273,7 @@ pub fn mouse(terminal: *TerminalClient, event: data.Mouse) !void {
         return;
     }
 
-    _ = try client_module.operations.pointer_routing.apply(client, event);
+    _ = try client_module.pointer_routing.apply(client, event);
 }
 
 /// Reconciles one host-terminal response without forwarding it: capability
@@ -318,7 +318,7 @@ fn decoded(terminal: *TerminalClient, event: Router.Decoded, now_ns: u64) !data.
 
     const router = &terminal.host_input.router;
     if (event.paste_content) {
-        _ = try client_module.operations.paste_routing.content(client, event.raw);
+        _ = try client_module.paste_routing.content(client, event.raw);
         return .continue_routing;
     }
     switch (event.event) {
@@ -349,11 +349,11 @@ fn decoded(terminal: *TerminalClient, event: Router.Decoded, now_ns: u64) !data.
         },
         .paste_start => {
             _ = try applyDecision(terminal, router.interrupt());
-            _ = try client_module.operations.paste_routing.start(client);
+            _ = try client_module.paste_routing.start(client);
         },
         .paste_end => {
             _ = try applyDecision(terminal, router.interrupt());
-            _ = try client_module.operations.paste_routing.finish(client);
+            _ = try client_module.paste_routing.finish(client);
         },
         .incomplete => {
             _ = try applyDecision(terminal, router.interrupt());

@@ -1,7 +1,7 @@
 //! Wires semantic view interactions to existing client use cases.
 
 const view_interaction = @import("view_interaction.zig");
-const Client = @import("../../AttachedClient.zig");
+const Client = @import("../AttachedClient.zig");
 const ViewInteractionCommand = @import("ViewInteractionCommand.zig");
 const ViewInteractionOutcome = @import("ViewInteractionOutcome.zig");
 const IntentOutcome = @import("IntentOutcome.zig");

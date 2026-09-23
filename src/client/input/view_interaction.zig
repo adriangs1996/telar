@@ -9,7 +9,7 @@ pub const Intent = union(enum) {
     toggle_workspace_list,
     focus_agent: model_data.AgentKey,
     select_tab: core.TabId,
-    move_tab: @import("../tabs/TabMoveIntent.zig"),
+    move_tab: @import("../workspace/TabMoveIntent.zig"),
     focus_pane: core.PaneId,
     rename_tab: core.TabId,
     /// The strip's `+` control: the same request the `create_tab` action sends.

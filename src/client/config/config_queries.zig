@@ -2,8 +2,8 @@
 const data = @import("model");
 const std = @import("std");
 const core = @import("telar-core");
-const Snapshot = @import("../../config/Snapshot.zig");
-const Query = @import("../../config/ConfigurationQuery.zig");
+const Snapshot = @import("Snapshot.zig");
+const Query = @import("ConfigurationQuery.zig");
 pub const Section = enum { client, theme, gui, input, runtime, binding };
 
 /// Writes one immutable configuration section into the bounded reply writer.

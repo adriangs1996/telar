@@ -3,7 +3,7 @@
 const data = @import("model");
 const core = @import("telar-core");
 const CopyModePointerCommand = @import("CopyModePointerCommand.zig");
-const Client = @import("../../AttachedClient.zig");
+const Client = @import("../AttachedClient.zig");
 
 /// Gives copy mode first refusal for one cell-based pointer event on tab
 /// `tab`, and reports whether copy mode took it.

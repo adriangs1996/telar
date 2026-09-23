@@ -1,5 +1,5 @@
 const data = @import("model");
-const ViewInteractionCommand = @import("../operations/input/ViewInteractionCommand.zig");
+const ViewInteractionCommand = @import("../input/ViewInteractionCommand.zig");
 /// Questions only the adapter's drawn chrome can answer: what a pointer hit
 /// and how far the inspector scrolls under its layout. Everything the chrome
 /// draws, the adapter reads from the model.

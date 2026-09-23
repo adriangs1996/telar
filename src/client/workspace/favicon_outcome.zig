@@ -1,5 +1,5 @@
 //! What landing one favicon completion meant for the workspace it names.
-const FaviconImage = @import("../../completion/FaviconImage.zig");
+const FaviconImage = @import("../completion/FaviconImage.zig");
 
 pub const FaviconOutcome = union(enum) {
     /// The result answered no in-flight lookup and was released.

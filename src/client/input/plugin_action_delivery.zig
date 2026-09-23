@@ -2,7 +2,7 @@
 
 const data = @import("model");
 const plugin_action = @import("plugin_action.zig");
-const client_diagnostic = @import("../configuration/client_diagnostic.zig");
+const client_diagnostic = @import("../config/client_diagnostic.zig");
 
 pub fn startFailurePublication(outcome: plugin_action.StartOutcome) ?data.FailurePublication {
     return switch (outcome) {

@@ -208,7 +208,7 @@ fn pointer(gui: *GuiClient, event: @import("../../input/PointerEvent.zig"), targ
         gui.widgets.dispatcher.captures[0] = container.id;
         _ = gui.widgets.dispatcher.focus(container.id);
         const tab = gui.app.model.tabs.activeSlot() orelse return true;
-        _ = try client.operations.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
+        _ = try client.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
         message_links.clear(gui);
         gui.widgets.dispatcher.revision +%= 1;
         return true;

@@ -66,7 +66,7 @@ fn startCapture(terminal: *TerminalClient, request: data.CaptureRequest) !void {
     } });
 }
 
-fn capture(gpa: std.mem.Allocator, request: data.CaptureRequest, orphan: *?*data.Capture) client_module.operations.ClipboardImageCompletion {
+fn capture(gpa: std.mem.Allocator, request: data.CaptureRequest, orphan: *?*data.Capture) data.Completion {
     return .{
         .execution_id = @enumFromInt(request.sequence),
         .result = capture_module.captureClipboard(gpa, request, orphan),

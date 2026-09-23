@@ -1,22 +1,22 @@
 //! Owns configured bar ticks, bounded Lua evaluation and command workers.
 
 const bar_update = @import("bar_update.zig");
-const local_time = @import("../../resources/local_time.zig");
+const local_time = @import("../resources/local_time.zig");
 const data = @import("model");
 const client_diagnostic = @import("client_diagnostic.zig");
 const BarUpdateFailure = @import("BarUpdateFailure.zig");
 const core = @import("telar-core");
 const std = @import("std");
-const Client = @import("../../AttachedClient.zig");
-const Workers = @import("../../execution/Workers.zig");
-const Job = @import("../../execution/Job.zig").Job;
-const BarUpdatesCompletion = @import("../../bars/BarUpdatesCompletion.zig");
+const Client = @import("../AttachedClient.zig");
+const Workers = @import("../execution/Workers.zig");
+const Job = @import("../execution/Job.zig").Job;
+const BarUpdatesCompletion = @import("../bars/BarUpdatesCompletion.zig");
 const CallbackRequest = @import("CallbackRequest.zig");
 const CommandOutput = @import("CommandOutput.zig");
 const BarCommandFailure = @import("BarCommandFailure.zig");
 const BarUpdateCommand = @import("BarUpdateCommand.zig");
-const BarCallbackContext = @import("../../config/BarCallbackContext.zig");
-const BarMetrics = @import("../../config/BarMetrics.zig");
+const BarCallbackContext = @import("BarCallbackContext.zig");
+const BarMetrics = @import("BarMetrics.zig");
 
 pub const no_deadline = data.bar_timing.no_deadline;
 pub const position_count = data.bar_timing.position_count;

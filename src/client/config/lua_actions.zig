@@ -1,6 +1,6 @@
 //! Validates Lua action batches and preserves invocation diagnostics.
 const data = @import("model");
-const Registry = @import("../../plugins/Registry.zig");
+const Registry = @import("../plugins/Registry.zig");
 
 /// Preserves the VM diagnostic or supplies the invocation error.
 /// Example: `const outcome = lua_actions.invocationFailure(&diagnostic, err);`

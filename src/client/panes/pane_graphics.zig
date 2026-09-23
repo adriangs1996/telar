@@ -1,7 +1,7 @@
 //! Reconciles retained resources and semantic fallbacks using concrete dependencies.
 
 const data = @import("model");
-const GraphicsRetention = @import("../../graphics/GraphicsRetention.zig");
+const GraphicsRetention = @import("../graphics/GraphicsRetention.zig");
 
 const std = @import("std");
 const core = @import("telar-core");

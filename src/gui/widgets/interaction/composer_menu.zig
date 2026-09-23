@@ -41,7 +41,7 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
         gui.widgets.cancelComposition();
         gui.cancelBinding();
         const tab = gui.app.model.tabs.activeSlot() orelse return;
-        _ = try client.operations.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = selector.pane_id }, .consumed = true });
+        _ = try client.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = selector.pane_id }, .consumed = true });
         state.* = .{ .selector = selector, .attachment_generation = target.id.generation, .generation = state.generation +% 1, .anchor = target.bounds, .selected = options.selected() };
         state.reveal(options.count());
         gui.widgets.dispatcher.revision +%= 1;

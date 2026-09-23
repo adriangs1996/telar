@@ -41,7 +41,7 @@ pub const ClientEvent = union(enum) {
     compression_done: *Compression,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
-    clipboard_image: client_module.operations.ClipboardImageCompletion,
+    clipboard_image: data.Completion,
 };
 
 const TerminalClient = @This();

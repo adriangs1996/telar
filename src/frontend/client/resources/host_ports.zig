@@ -246,7 +246,7 @@ fn routePromptBytes(context: *anyopaque, bytes: []const u8) !void {
         }
 
         offset += parsed.len;
-        const input: client_module.operations.name_prompts.Input = switch (parsed.event) {
+        const input: client_module.name_prompts.Input = switch (parsed.event) {
             .key => |key| .{ .key = key },
             .paste_start => .paste_start,
             .paste_end => .paste_end,

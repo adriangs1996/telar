@@ -42,7 +42,7 @@ test "closing a preview deletes its matching atomic image marker" {
     const first = terminal.view.kittyAttachments().snapshot().items[0].id;
     const model = client.model.tabs.active;
 
-    _ = try client_module.operations.view_interactions.apply(client, model, .{
+    _ = try client_module.view_interactions.apply(client, model, .{
         .intent = .{ .attachment_dismiss = first },
         .consumed = true,
     });
@@ -207,7 +207,7 @@ test "closing a Pi preview deletes its whole pasted path from the editor" {
     const id = terminal.view.kittyAttachments().snapshot().items[0].id;
     const model = client.model.tabs.active;
 
-    _ = try client_module.operations.view_interactions.apply(client, model, .{
+    _ = try client_module.view_interactions.apply(client, model, .{
         .intent = .{ .attachment_dismiss = id },
         .consumed = true,
     });
@@ -362,13 +362,13 @@ test "streamed paste captures target and framing while restoring its live viewpo
     const input_bytes = client.telemetry.metrics.input_bytes;
     const timing_count = client.telemetry.metrics.input_enqueue.count;
 
-    _ = try client_module.operations.paste_routing.start(client);
+    _ = try client_module.paste_routing.start(client);
     try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.pane_paste.?.pane_id);
     try std.testing.expect(client.model.pane_paste.?.bracketed_paste);
     pane.input_modes.bracketed_paste = false;
     try std.testing.expect(client.model.tabs.layout[tab].focusPane(other_pane));
-    _ = try client_module.operations.paste_routing.content(client, "pasted");
-    _ = try client_module.operations.paste_routing.finish(client);
+    _ = try client_module.paste_routing.content(client, "pasted");
+    _ = try client_module.paste_routing.finish(client);
 
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expectEqual(@as(u32, 10), pane.scroll.offset);
@@ -401,7 +401,7 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
     const client = harness.client;
     const version = client.model.version();
 
-    _ = try client_module.operations.paste_routing.start(client);
+    _ = try client_module.paste_routing.start(client);
 
     try std.testing.expect(client.model.panePasteActive());
     try std.testing.expect(!client.model.enterCopyMode());
@@ -410,7 +410,7 @@ test "streamed pane paste excludes prompt and copy-mode ownership until finish" 
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expectEqualDeep(version, client.model.version());
 
-    _ = try client_module.operations.paste_routing.finish(client);
+    _ = try client_module.paste_routing.finish(client);
 
     try std.testing.expect(!client.model.panePasteActive());
     try std.testing.expect(client.openNamePrompt(.rename_workspace));
@@ -425,10 +425,10 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     const terminal = harness.terminal;
     try std.testing.expect(client.openNamePrompt(.rename_active_tab));
 
-    _ = try client_module.operations.paste_routing.start(client);
+    _ = try client_module.paste_routing.start(client);
     try std.testing.expect(client.model.name_prompt.currentConst().?.pasting);
-    _ = try client_module.operations.paste_routing.content(client, " one\r");
-    _ = try client_module.operations.paste_routing.finish(client);
+    _ = try client_module.paste_routing.content(client, " one\r");
+    _ = try client_module.paste_routing.finish(client);
 
     const prompt = client.model.name_prompt.currentConst().?;
     try std.testing.expect(!prompt.pasting);
@@ -440,9 +440,9 @@ test "streamed paste keeps prompt ownership and copy mode accepts no owner" {
     try std.testing.expect(!client.model.name_prompt.active());
     try std.testing.expect(client.model.enterCopyMode());
 
-    _ = try client_module.operations.paste_routing.start(client);
-    _ = try client_module.operations.paste_routing.content(client, "ignored");
-    _ = try client_module.operations.paste_routing.finish(client);
+    _ = try client_module.paste_routing.start(client);
+    _ = try client_module.paste_routing.content(client, "ignored");
+    _ = try client_module.paste_routing.finish(client);
 
     try std.testing.expect(client.model.copyModeActive());
     try std.testing.expect(!client.model.panePasteActive());

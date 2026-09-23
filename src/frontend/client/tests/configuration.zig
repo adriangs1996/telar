@@ -244,7 +244,7 @@ test "dynamic bar ticks commit current Lua content before paced presentation" {
     try std.testing.expect(client.model.bar_updates.scheduler.pending);
     const event = try support.receiveClient(terminal);
     switch (event) {
-        .bar_tick => |result| try client_module.operations.bar_updates.handleTick(client, result),
+        .bar_tick => |result| try client_module.bar_updates.handleTick(client, result),
         else => return error.UnexpectedEvent,
     }
 
@@ -286,7 +286,7 @@ test "command completion from a replaced bar generation is discarded" {
 
     const tick = try support.receiveClient(terminal);
     switch (tick) {
-        .bar_tick => |result| try client_module.operations.bar_updates.handleTick(client, result),
+        .bar_tick => |result| try client_module.bar_updates.handleTick(client, result),
         else => return error.UnexpectedEvent,
     }
     try std.testing.expect(client.model.bar_updates.command_execution != null);
@@ -307,7 +307,7 @@ test "command completion from a replaced bar generation is discarded" {
         }
     };
     const version_after_reload = client.model.version();
-    try client_module.operations.bar_updates.completeCommand(client, completed);
+    try client_module.bar_updates.completeCommand(client, completed);
 
     const slot = client.model.bars.layout.slot(.bottom_left);
     try std.testing.expectEqualStrings("new", slot.content.text(slot.content.slice()[0]));

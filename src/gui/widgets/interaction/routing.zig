@@ -518,7 +518,7 @@ fn focus(gui: *GuiClient, target: Target) !void {
 
         _ = gui.widgets.dispatcher.focus(target.id);
         const tab = gui.app.model.tabs.activeSlot() orelse return;
-        _ = try client.operations.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
+        _ = try client.view_interactions.apply(&gui.app, tab, .{ .intent = .{ .focus_pane = pane_id }, .consumed = true });
         return;
     }
 
@@ -852,7 +852,7 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
 
 fn dispatchIntent(gui: *GuiClient, intent: client.Intent) !void {
     const tab = gui.app.model.tabs.activeSlot() orelse return;
-    _ = try client.operations.view_interactions.apply(&gui.app, tab, .{ .intent = intent, .consumed = true });
+    _ = try client.view_interactions.apply(&gui.app, tab, .{ .intent = intent, .consumed = true });
     _ = gui.widgets.dispatcher.focus(null);
 }
 

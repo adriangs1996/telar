@@ -710,21 +710,21 @@ fn drainInput(self: *GuiClient) !void {
                 self.paste_route = if (try self.beginWidgetPaste()) .widget else .shared;
 
                 if (self.paste_route == .shared) {
-                    _ = try client.operations.paste_routing.start(app);
+                    _ = try client.paste_routing.start(app);
                 }
             },
             .paste_text => |*chunk| {
                 if (self.paste_route == .widget) {
                     try self.widgetPaste(chunk.bytes[0..chunk.len]);
                 } else {
-                    _ = try client.operations.paste_routing.content(app, chunk.bytes[0..chunk.len]);
+                    _ = try client.paste_routing.content(app, chunk.bytes[0..chunk.len]);
                 }
             },
             .paste_finish => {
                 if (self.paste_route == .widget) {
                     try self.endWidgetPaste();
                 } else {
-                    _ = try client.operations.paste_routing.finish(app);
+                    _ = try client.paste_routing.finish(app);
                 }
 
                 self.paste_route = .shared;
@@ -1164,7 +1164,7 @@ fn dispatchPointer(self: *GuiClient, value: PointerSample) !void {
         }
     }
 
-    const outcome = try client.operations.pointer_routing.apply(app, mouse);
+    const outcome = try client.pointer_routing.apply(app, mouse);
 
     if (event.interruptsKeys()) {
         pointer.hover.dirty = true;
@@ -1215,7 +1215,7 @@ fn dispatchBandPointer(self: *GuiClient, event: PointerEvent) !void {
     }
 
     const tab = app.model.tabs.activeSlot() orelse return;
-    _ = try client.operations.view_interactions.apply(
+    _ = try client.view_interactions.apply(
         app,
         tab,
         command.interaction,
@@ -1251,7 +1251,7 @@ fn releasePointer(self: *GuiClient) !void {
                 var released = pointer.last[@intFromEnum(PointerEvent.Button.left)];
                 released.kind = .release;
                 released.button = @intFromEnum(PointerEvent.Button.left);
-                _ = try client.operations.copy_mode_pointer.apply(
+                _ = try client.copy_mode_pointer.apply(
                     app,
                     tab,
                     released,
@@ -1735,7 +1735,7 @@ fn landChangeReview(self: *GuiClient) void {
 
 /// Lands one favicon lookup from the inbox; the next preparation places it.
 fn landFavicon(self: *GuiClient, completion: client.FaviconCompletion) void {
-    const image: ?*client.FaviconImage = switch (client.operations.favicons.complete(&self.app, completion)) {
+    const image: ?*client.FaviconImage = switch (client.favicons.complete(&self.app, completion)) {
         .stale => return,
         .missing => null,
         .image => |owned| owned,
@@ -1759,7 +1759,7 @@ fn resolveFavicons(self: *GuiClient, renderer: *Renderer) !void {
     favicons.refresh(self.app.gpa, page);
     const want = favicons.next(&self.app.model.workspace_list_snapshot) orelse return;
 
-    const job = client.operations.favicons.request(
+    const job = client.favicons.request(
         &self.app,
         .{
             .workspace = want.workspace,
@@ -1768,7 +1768,7 @@ fn resolveFavicons(self: *GuiClient, renderer: *Renderer) !void {
         },
     ) orelse return;
     self.driver.inbox.start(.favicon, .{ favicon_worker.execute, .{ self.app.io, self.app.gpa, job } }) catch |err| {
-        client.operations.favicons.cancel(&self.app);
+        client.favicons.cancel(&self.app);
         return err;
     };
     favicons.started(want.workspace);

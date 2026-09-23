@@ -1,6 +1,6 @@
 //! Builds bounded directory-listing queries from expanded prompt paths.
 
-const path_expansion = @import("../../completion/path_expansion.zig");
+const path_expansion = @import("../completion/path_expansion.zig");
 
 pub const max_path_bytes = path_expansion.max_path_bytes;
 

@@ -1063,7 +1063,7 @@ test "tab detachment closes a captured bracketed paste before the pane detaches"
     const client = harness.client;
     client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
 
-    _ = try client_module.operations.paste_routing.start(client);
+    _ = try client_module.paste_routing.start(client);
     try harness.settle();
 
     var message_buffer: [256]u8 = undefined;

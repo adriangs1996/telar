@@ -348,7 +348,7 @@ test "workspace handoff reserves its captured paste closing marker" {
     const client = harness.client;
     client.model.request_lifecycle.tracker = .{};
     client.model.panes.find(TestHarness.bootstrap_pane).?.input_modes.bracketed_paste = true;
-    _ = try client_module.operations.paste_routing.start(client);
+    _ = try client_module.paste_routing.start(client);
     try harness.settle();
     var buffer: [256]u8 = undefined;
     const opening = try harness.nextClientMessage(&buffer);

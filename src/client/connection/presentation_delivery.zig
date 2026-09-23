@@ -1,5 +1,5 @@
 const data = @import("model");
-const Client = @import("../../AttachedClient.zig");
+const Client = @import("../AttachedClient.zig");
 const core = @import("telar-core");
 
 /// Retires exactly the delivered pane generations before returning resource credit.

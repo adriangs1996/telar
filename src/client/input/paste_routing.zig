@@ -1,6 +1,6 @@
 //! Wires streamed host paste ownership to prompt and pane paste use cases.
 
-const Client = @import("../../AttachedClient.zig");
+const Client = @import("../AttachedClient.zig");
 const PasteRoutingAuthority = @import("PasteRoutingAuthority.zig");
 const Route = @import("Route.zig");
 
