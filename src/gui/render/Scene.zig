@@ -11,15 +11,21 @@ const Canvas = @import("../widgets/Canvas.zig");
 const Composition = @import("../widgets/Composition.zig");
 const SyntaxStore = @import("../syntax/Store.zig");
 const ReviewWidget = @import("../change_review/Widget.zig");
+const TerminalRenderer = @import("TerminalRenderer.zig");
+const Chrome = @import("../widgets/Chrome.zig");
+const Overlays = @import("../widgets/overlays/Overlays.zig");
+const LinkHit = @import("../input/LinkHit.zig");
+const State = @import("../widgets/interaction/State.zig");
+const Store = @import("../diagrams/Store.zig");
 const Scene = @This();
 
-terminal: *@import("TerminalRenderer.zig"),
-chrome: *@import("../widgets/Chrome.zig"),
-overlays: *@import("../widgets/overlays/Overlays.zig"),
+terminal: *TerminalRenderer,
+chrome: *Chrome,
+overlays: *Overlays,
 theme: data.ColorTheme,
-link: ?*const @import("../input/LinkHit.zig") = null,
-widgets: ?*@import("../widgets/interaction/State.zig") = null,
-diagrams: ?*@import("../diagrams/Store.zig") = null,
+link: ?*const LinkHit = null,
+widgets: ?*State = null,
+diagrams: ?*Store = null,
 syntax: ?*SyntaxStore = null,
 review: ?*ReviewWidget = null,
 

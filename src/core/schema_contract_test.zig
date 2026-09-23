@@ -59,6 +59,14 @@ const Frame = @import("schema/Frame.zig");
 const tags = @import("schema/messages/tags.zig");
 const TextMetadataBuilder = @import("text_metadata/Builder.zig");
 const text_metadata_limits = @import("text_metadata/limits.zig");
+const AgentThreadSnapshot = @import("AgentThreadSnapshot.zig");
+const AgentHistoryPage = @import("AgentHistoryPage.zig");
+const ChangeReviewSnapshotView = @import("schema/messages/ChangeReviewSnapshotView.zig");
+const MoveTab = @import("schema/messages/MoveTab.zig");
+const AgentPrompt = @import("schema/messages/AgentPrompt.zig");
+const QueryAgentHistory = @import("schema/messages/QueryAgentHistory.zig");
+const AgentOptions = @import("AgentOptions.zig");
+const CreateTab = @import("schema/messages/CreateTab.zig");
 
 test {
     std.testing.refAllDecls(schema);
@@ -1009,7 +1017,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     helper.add(.{ .name = "query_agent_thread", .direction = .client, .golden_hex = golden.query_agent_thread }, helper.commit(
         try agent_threads.encodeQueryAgentThread(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3 }),
     ));
-    var thread_snapshot: @import("AgentThreadSnapshot.zig") = .{ .pane_id = @enumFromInt(5), .pane_generation = 3, .revision = 1, .status = .ready, .item_count = 1, .text_len = 2, .metadata_len = 13, .thread_id_len = 1, .current_turn_id_len = 1 };
+    var thread_snapshot: AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 3, .revision = 1, .status = .ready, .item_count = 1, .text_len = 2, .metadata_len = 13, .thread_id_len = 1, .current_turn_id_len = 1 };
     thread_snapshot.thread_id[0] = 't';
     thread_snapshot.current_turn_id[0] = 'u';
     @memcpy(thread_snapshot.text_storage[0..2], "ok");
@@ -1025,7 +1033,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     ));
     thread_snapshot.item_storage[0].fragment_offset = 1024;
     thread_snapshot.item_storage[0].fragment_start = false;
-    const history_page: @import("AgentHistoryPage.zig") = .{
+    const history_page: AgentHistoryPage = .{
         .request_id = @enumFromInt(5),
         .view_generation = 7,
         .snapshot = thread_snapshot,
@@ -1074,7 +1082,7 @@ fn buildCorpus(storage: []u8) ![corpus_len]Entry {
     helper.add(.{ .name = "report_change_review_sample", .direction = .client, .golden_hex = golden.report_change_review_sample }, helper.commit(
         try review.encodeReportChangeReviewSample(helper.space(), .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .provider = .codex, .session = "thread", .tool_call_id = "edit", .phase = .before, .path = "file.zig", .exists = true, .content = "before\n" }),
     ));
-    var review_snapshot: @import("schema/messages/ChangeReviewSnapshotView.zig") = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .revision = 4, .edition_id = 2, .latest_edition_id = 3, .previous_edition_id = 1, .next_edition_id = 3, .patch = "Updated file.zig\n@@ -1 +1 @@\n-a\n+b\n", .comment_count = 1 };
+    var review_snapshot: ChangeReviewSnapshotView = .{ .request_id = @enumFromInt(5), .pane_id = @enumFromInt(5), .pane_generation = 3, .revision = 4, .edition_id = 2, .latest_edition_id = 3, .previous_edition_id = 1, .next_edition_id = 3, .patch = "Updated file.zig\n@@ -1 +1 @@\n-a\n+b\n", .comment_count = 1 };
     review_snapshot.comment_storage[0] = .{ .id = 7, .path = "file.zig", .first_line = 1, .last_line = 1, .body = "review" };
     helper.add(.{ .name = "change_review_snapshot", .direction = .server, .golden_hex = golden.change_review_snapshot }, helper.commit(
         try review.encodeChangeReviewSnapshot(helper.space(), review_snapshot),
@@ -2365,7 +2373,7 @@ test "a frame past the body budget reports FrameTooLarge, not a full buffer" {
 
 test "anchored tab moves round trip and reject invalid anchor identities" {
     var buffer: [128]u8 = undefined;
-    const request: @import("schema/messages/MoveTab.zig") = .{
+    const request: MoveTab = .{
         .request_id = @enumFromInt(42),
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(3) },
         .direction = .next,
@@ -2431,7 +2439,7 @@ test "agent snapshot owns a bounded conversation and rejects corrupt ranges" {
 test "agent controls reject unbound generations and oversized prompts" {
     const agent_threads = @import("schema/messages/agent_thread.zig");
     var buffer: [16 * 1024]u8 = undefined;
-    const request: @import("schema/messages/AgentPrompt.zig") = .{ .request_id = @enumFromInt(1), .pane_id = @enumFromInt(2), .pane_generation = 0, .text = "hello" };
+    const request: AgentPrompt = .{ .request_id = @enumFromInt(1), .pane_id = @enumFromInt(2), .pane_generation = 0, .text = "hello" };
     try std.testing.expectError(error.InvalidPaneGeneration, agent_threads.encodeAgentPrompt(&buffer, request));
     var valid = request;
     valid.pane_generation = 3;
@@ -2448,7 +2456,7 @@ test "history queries correlate navigation and reject oversized ambiguous or mal
     const agent_history = @import("schema/messages/agent_history.zig");
     const Cursor = @import("AgentHistoryCursor.zig");
     var buffer: [4096]u8 = undefined;
-    var query: @import("schema/messages/QueryAgentHistory.zig") = .{ .request_id = @enumFromInt(8), .pane_id = @enumFromInt(2), .pane_generation = 3, .view_generation = 4, .anchor = "item-1", .anchor_turn = "turn-1" };
+    var query: QueryAgentHistory = .{ .request_id = @enumFromInt(8), .pane_id = @enumFromInt(2), .pane_generation = 3, .view_generation = 4, .anchor = "item-1", .anchor_turn = "turn-1" };
     var encoded = try agent_history.encodeQueryAgentHistory(&buffer, query);
     try std.testing.expectEqualDeep(query, (try root.decodeClient(encoded)).query_agent_history);
     buffer[33] = 255;
@@ -2644,15 +2652,15 @@ test "agent snapshot maximum metadata text catalog and approval fit a bounded fr
     try std.testing.expectEqualDeep(snapshot.items(), copied.items());
 }
 
-fn fixtureAgentOptions() !@import("AgentOptions.zig") {
-    var options: @import("AgentOptions.zig") = .{ .effort = try AgentEffort.init("low") };
+fn fixtureAgentOptions() !AgentOptions {
+    var options: AgentOptions = .{ .effort = try AgentEffort.init("low") };
     try options.setModel("fake-model");
     return options;
 }
 
 test "agent tab launch carries only cwd and rejects executable overrides" {
     var buffer: [512]u8 = undefined;
-    var request: @import("schema/messages/CreateTab.zig") = .{
+    var request: CreateTab = .{
         .request_id = @enumFromInt(1),
         .workspace = .{ .workspace = @enumFromInt(2) },
         .kind = .agent,
@@ -2692,7 +2700,7 @@ test "resume request bounds and recent catalog survive owned snapshot decoding" 
 test "agent images round trip without text and reject malformed counts and paths" {
     const threads = @import("schema/messages/agent_thread.zig");
     var storage: [16 * 1024]u8 = undefined;
-    var request: @import("schema/messages/AgentPrompt.zig") = .{ .request_id = @enumFromInt(1), .pane_id = @enumFromInt(2), .pane_generation = 3, .text = "", .options = try fixtureAgentOptions() };
+    var request: AgentPrompt = .{ .request_id = @enumFromInt(1), .pane_id = @enumFromInt(2), .pane_generation = 3, .text = "", .options = try fixtureAgentOptions() };
     try std.testing.expectError(error.InvalidPrompt, threads.encodeAgentPrompt(&storage, request));
     try request.images.append("/tmp/a.png");
     try request.images.append("/tmp/b.png");

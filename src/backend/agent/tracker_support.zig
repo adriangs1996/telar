@@ -16,6 +16,7 @@ const SessionReference = @import("SessionReference.zig");
 const SessionTitle = @import("SessionTitle.zig");
 const SessionFile = @import("SessionFile.zig");
 const Completion = @import("Completion.zig");
+const Transcript = @import("../agent_panes/Transcript.zig");
 
 pub const AcknowledgeResult = enum {
     unknown_agent,
@@ -1446,7 +1447,7 @@ test "managed conversation activity republishes sidebar events without restartin
     var tracker: Tracker = .{};
     const identity = try testIdentity();
     var entries: [core.max_agent_snapshot_entries]core.AgentSnapshotEntry = undefined;
-    var transcript: @import("../agent_panes/Transcript.zig") = .{ .value = .{ .pane_id = identity.key.id, .pane_generation = identity.key.generation, .status = .working } };
+    var transcript: Transcript = .{ .value = .{ .pane_id = identity.key.id, .pane_generation = identity.key.generation, .status = .working } };
     try transcript.setTurn("turn-1");
     transcript.update(.{ .id = "message", .role = .assistant, .text = "Checking the parser" });
 
@@ -1475,7 +1476,7 @@ test "managed conversation activity republishes sidebar events without restartin
 
 test "managed sidebar activity excludes old turns and child output and owns bounded UTF8" {
     const ManagedState = @import("ManagedState.zig");
-    var transcript: @import("../agent_panes/Transcript.zig") = .{ .value = .{ .pane_id = try core.pane(7), .pane_generation = 3 } };
+    var transcript: Transcript = .{ .value = .{ .pane_id = try core.pane(7), .pane_generation = 3 } };
     try std.testing.expectEqualStrings("Connecting", ManagedState.fromSnapshot(&transcript.value, 100).event.slice());
     transcript.value.status = .working;
     try transcript.setTurn("old-turn");

@@ -10,6 +10,7 @@ const Modal = @import("../widgets/overlays/Modal.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
 const WrappedLines = @import("../widgets/overlays/WrappedLines.zig");
 const ThreadPane = @import("../widgets/ThreadPane.zig");
+const PointerEvent = @import("../input/PointerEvent.zig");
 
 test "native history keeps the visible page while a replacement query is pending" {
     const fixture = try Fixture.init();
@@ -120,8 +121,8 @@ test "native notification replacement retains the delivered card identity" {
     _ = fixture.model.advanceNotifications(data.notifications.transition_duration_ns * 3);
     try fixture.prepare();
     try std.testing.expectEqual(close, fixture.overlays.prepared().notifications.hits[1].bounds);
-    const mouse: @import("../input/PointerEvent.zig") = .{ .x = close.x, .y = close.y, .kind = .press };
-    const release: @import("../input/PointerEvent.zig") = .{ .x = 0, .y = 0, .kind = .release };
+    const mouse: PointerEvent = .{ .x = close.x, .y = close.y, .kind = .press };
+    const release: PointerEvent = .{ .x = 0, .y = 0, .kind = .release };
     try std.testing.expectEqualDeep(client.Intent{ .notification_dismiss = first }, fixture.pointer(mouse).intent);
     _ = fixture.pointer(release);
     fixture.present(false);

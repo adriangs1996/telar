@@ -286,6 +286,8 @@ test "history scroll can reach the beginning of two newline-heavy pages" {
 }
 
 const Session = @import("Session.zig");
+const MessageLinkControl = @import("../widgets/interaction/MessageLinkControl.zig");
+const ThreadExpansions = @import("../widgets/interaction/ThreadExpansions.zig");
 
 fn historySession() !*Session {
     const session = try Session.init();
@@ -488,7 +490,7 @@ test "historical copy and link targets resolve owned page bytes and retire on ev
     page.item_count = 1;
     page.item_storage[0].identity = 700;
     page.item_storage[0].text_len = text.len;
-    const link: @import("../widgets/interaction/MessageLinkControl.zig") = .{ .owner = .{ .pane_id = pane.id, .attachment_generation = pane.attachment_generation, .pane_generation = pane.pane_generation, .snapshot_revision = page.revision, .item_identity = 700, .section = .body, .source_offset = 0 }, .destination_offset = @intCast(std.mem.indexOf(u8, text, url).?), .destination_len = url.len, .fragment_offset = 6 };
+    const link: MessageLinkControl = .{ .owner = .{ .pane_id = pane.id, .attachment_generation = pane.attachment_generation, .pane_generation = pane.pane_generation, .snapshot_revision = page.revision, .item_identity = 700, .section = .body, .source_offset = 0 }, .destination_offset = @intCast(std.mem.indexOf(u8, text, url).?), .destination_len = url.len, .fragment_offset = 6 };
     const links = @import("../widgets/interaction/message_links.zig");
     try std.testing.expectEqualStrings(url, links.destination(gui, link).?);
     const target: Target = .{ .id = .{ .target_id = 900, .generation = pane.attachment_generation }, .bounds = .{ .x = 0, .y = 0, .width = 30, .height = 30 }, .action = .{ .thread_item = .{ .pane_id = pane.id, .attachment_generation = pane.attachment_generation, .identity = 700, .operation = .copy } } };
@@ -534,7 +536,7 @@ test "reused provider item IDs in different turns retain both messages anchors a
     try publish(&fixture, &flow);
     try std.testing.expectEqual(@as(usize, 8), flow.len);
     try std.testing.expectApproxEqAbs(before, try rowY(&flow, 20), 0.01);
-    var expansions: @import("../widgets/interaction/ThreadExpansions.zig") = .{};
+    var expansions: ThreadExpansions = .{};
     const old = flow.rows[3].control();
     const current = flow.rows[4].control();
     try std.testing.expectEqual(@as(u64, 999), old.identity);

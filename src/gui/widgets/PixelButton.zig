@@ -11,10 +11,11 @@ const Label = @import("Label.zig");
 const AttentionDot = @import("AttentionDot.zig");
 const Layout = @import("../layout/Layout.zig");
 const Item = @import("../layout/Item.zig");
+const Rect = @import("../render/Rect.zig");
 const PixelButton = @This();
 
 context: *const Context,
-area: @import("../render/Rect.zig"),
+area: Rect,
 intent: client.Intent,
 text: []const u8,
 active: bool = false,

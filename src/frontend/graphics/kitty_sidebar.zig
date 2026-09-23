@@ -8,6 +8,8 @@ const Bitmap = @import("Bitmap.zig");
 const KittySidebarRenderer = @import("KittySidebarRenderer.zig");
 const bitmap = @import("bitmap_support.zig");
 const SidebarFocus = @import("SidebarFocus.zig");
+const SidebarContent = @import("SidebarContent.zig");
+const CellSize = @import("CellSize.zig");
 
 /// Column of the shipped provider-mark atlas. Only built-in agents have
 /// artwork; a configured agent draws its manifest glyph as cells instead.
@@ -116,8 +118,8 @@ test "sidebar theme changes recolor OpenAI without reallocating or changing othe
     var renderer = KittySidebarRenderer.init(std.testing.allocator);
     defer renderer.deinit();
     const providers = [_]SidebarProviderPlacement{.{ .area = .{ .w = 2, .h = 2 }, .provider = .codex }};
-    var content: @import("SidebarContent.zig") = .{ .area = .{ .w = 8, .h = 8 }, .focused_card = null, .provider_marks = &providers };
-    const cell: @import("CellSize.zig") = .{ .width = 10, .height = 20 };
+    var content: SidebarContent = .{ .area = .{ .w = 8, .h = 8 }, .focused_card = null, .provider_marks = &providers };
+    const cell: CellSize = .{ .width = 10, .height = 20 };
     try renderer.prepare(content, cell);
     const original = try std.testing.allocator.dupe(u8, renderer.provider_atlas);
     defer std.testing.allocator.free(original);

@@ -4,6 +4,7 @@ const protocol = @import("protocol.zig");
 const Transcript = @import("Transcript.zig");
 const ChildAgent = @import("ChildAgent.zig");
 const ChildEvent = @import("ChildEvent.zig");
+const ItemNormalizer = @import("ItemNormalizer.zig");
 const ChildAgents = @This();
 
 root: [128]u8 = undefined,
@@ -158,7 +159,7 @@ pub fn observe(self: *ChildAgents, transcript: *Transcript, event: ChildEvent) b
             child.message_complete = completed;
             publish(child, transcript, .{ .text = protocol.string(protocol.field(value, "text")) });
         } else if (child.turn_active) {
-            var normalizer: @import("ItemNormalizer.zig") = .{};
+            var normalizer: ItemNormalizer = .{};
             if (normalizer.item(value, std.mem.eql(u8, event.method, "item/completed"))) |update| {
                 const activity = std.fmt.bufPrint(&child.activity, "{s} · {s}\n{s}", .{ update.title orelse "Activity", @tagName(update.status orelse .running), update.detail orelse "" }) catch child.activity[0..];
                 child.activity_len = @intCast(activity.len);

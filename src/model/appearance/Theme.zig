@@ -5,13 +5,14 @@ const Palette = @import("Palette.zig");
 const Overrides = @import("Overrides.zig");
 const std = @import("std");
 const SyntaxStyle = @import("SyntaxStyle.zig");
+const TerminalTheme = @import("TerminalTheme.zig");
 const Theme = @This();
 
 pub const SyntaxStyles = std.EnumArray(role_module.Role, ?SyntaxStyle);
 
 base: theme_support.Builtin,
 palette: Palette,
-terminal: @import("TerminalTheme.zig") = .{},
+terminal: TerminalTheme = .{},
 syntax_styles: SyntaxStyles = .initFill(null),
 
 /// Resolves syntax roles at paint time, including live palette overrides.

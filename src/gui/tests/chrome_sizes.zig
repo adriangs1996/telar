@@ -14,6 +14,7 @@ const CardGeometry = @import("../widgets/CardGeometry.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const Label = @import("../widgets/Label.zig");
 const Quad = @import("../render/Quad.zig").Quad;
+const Rect = @import("../render/Rect.zig");
 
 const roles = [_]label_size.Size{ .terminal, .title, .body, .small };
 
@@ -37,7 +38,7 @@ test "a label measures narrower at small than at title and paints in its own lin
 
     // A small label in a tall row sits on one baseline centred in the row,
     // not on the terminal cell's baseline, and its glyphs are shorter.
-    const row: @import("../render/Rect.zig") = .{ .x = 10, .y = 100, .width = 300, .height = 40 };
+    const row: Rect = .{ .x = 10, .y = 100, .width = 300, .height = 40 };
     _ = try canvas.textAt(row, .{ .text = "Hg", .face = .sans, .size = .small });
     const small_quads = try std.testing.allocator.dupe(Quad, fixture.quads.items());
     defer std.testing.allocator.free(small_quads);

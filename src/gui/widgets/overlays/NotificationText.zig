@@ -4,6 +4,7 @@ const core = @import("telar-core");
 const Canvas = @import("../Canvas.zig");
 const Label = @import("../Label.zig");
 const TextFit = @import("../TextFit.zig");
+const NotificationTextInput = @import("NotificationTextInput.zig");
 const Text = @This();
 
 lines: [3][]const u8 = @splat(""),
@@ -13,7 +14,7 @@ tail_len: ?usize = null,
 
 /// Breaks at words or whole graphemes; only the final line uses an ellipsis.
 /// Example: `try text.wrap(canvas, .{ .text = message, .width = width });`
-pub fn wrap(self: *Text, canvas: *Canvas, input: @import("NotificationTextInput.zig")) !void {
+pub fn wrap(self: *Text, canvas: *Canvas, input: NotificationTextInput) !void {
     self.* = .{};
     var remaining = std.mem.trim(u8, input.text, " \t\r\n");
     while (remaining.len > 0 and self.count < self.lines.len) {

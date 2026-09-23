@@ -1,6 +1,7 @@
 const core = @import("telar-core");
+const Rect = @import("../render/Rect.zig");
 const TabSlot = @This();
 
 id: core.TabId,
-bounds: @import("../render/Rect.zig"),
+bounds: Rect,
 immediate: bool = false,

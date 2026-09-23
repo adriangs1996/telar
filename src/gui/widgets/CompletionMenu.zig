@@ -6,6 +6,8 @@ const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Target = @import("interaction/Target.zig");
+const ComposerSurface = @import("ComposerSurface.zig");
+const Label = @import("Label.zig");
 
 thread: client.ThreadView,
 anchor: Rect,
@@ -44,7 +46,7 @@ pub fn draw(menu: @This(), canvas: *Canvas) !void {
     const bounds: Rect = .{ .x = menu.anchor.x + padding, .y = menu.anchor.y - height, .width = @max(0, menu.anchor.width - padding * 2), .height = height };
     const first_quad = canvas.quads.items().len;
     defer canvas.quads.clipFrom(first_quad, menu.pane_bounds);
-    try (@import("ComposerSurface.zig"){ .bounds = bounds, .radius = canvas.chrome.px(14) }).draw(canvas);
+    try (ComposerSurface{ .bounds = bounds, .radius = canvas.chrome.px(14) }).draw(canvas);
     _ = try widgets.dispatcher.add((Target{ .namespace = 0x4343, .bounds = bounds, .action = .{ .custom = 0x4343 }, .focusable = false }).labelled(if (state.slash) "Commands and skills" else "Skills"));
     const palette = canvas.theme.palette;
     if (partial) {
@@ -102,9 +104,9 @@ pub fn draw(menu: @This(), canvas: *Canvas) !void {
     }
 }
 
-fn fitted(canvas: *Canvas, bounds: Rect, label: @import("Label.zig")) !void {
+fn fitted(canvas: *Canvas, bounds: Rect, label: Label) !void {
     var buffer: [TextFit.max_bytes]u8 = undefined;
     var value = label;
-    value.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = bounds.width }).fit(label, &buffer);
+    value.text = try (TextFit{ .canvas = canvas, .width = bounds.width }).fit(label, &buffer);
     _ = try canvas.textAt(bounds, value);
 }

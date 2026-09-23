@@ -21,7 +21,7 @@ caret_count: u16 = 0,
 saturated: bool = false,
 
 /// Example: `geometry.addRow(view, order);`
-pub fn addRow(self: *Geometry, view: @import("../ThreadItemView.zig"), order: u16) void {
+pub fn addRow(self: *Geometry, view: ThreadItemView, order: u16) void {
     if (self.row_count == max_rows) {
         self.saturated = true;
         return;
@@ -77,7 +77,7 @@ pub fn append(self: *Geometry, canvas: *Canvas, run: Run) !?Fragment {
 
 /// Resolves source ownership without retaining the source buffer.
 /// Example: `const row = geometry.findRow(owner) orelse return;`
-pub fn findRow(self: *const Geometry, owner: @import("../MessageLayoutOwner.zig")) ?u16 {
+pub fn findRow(self: *const Geometry, owner: MessageLayoutOwner) ?u16 {
     for (self.rows[0..self.row_count], 0..) |row, index| {
         const value = row.owner;
         if (value.pane_id == owner.pane_id and value.attachment_generation == owner.attachment_generation and value.pane_generation == owner.pane_generation and value.snapshot_revision == owner.snapshot_revision and value.item_identity == owner.item_identity) {
@@ -128,3 +128,5 @@ pub fn hit(self: *const Geometry, query: Hit) ?Position {
 }
 
 const Hit = @import("ThreadTextHit.zig");
+const ThreadItemView = @import("../ThreadItemView.zig");
+const MessageLayoutOwner = @import("../MessageLayoutOwner.zig");

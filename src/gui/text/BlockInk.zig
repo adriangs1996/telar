@@ -6,6 +6,7 @@ const Block = @import("BlockElement.zig");
 const block_shapes = @import("block_shapes.zig");
 const QuadList = @import("../render/QuadList.zig");
 const TextRun = @import("TextRun.zig");
+const BlockSlab = @import("BlockSlab.zig");
 const Ink = @This();
 
 pub const capacity = 2;
@@ -51,7 +52,7 @@ pub fn paint(self: *const Ink, run: TextRun, list: *QuadList) !void {
     }
 }
 
-fn slab(self: *Ink, cell: Rect, shape: @import("BlockSlab.zig")) void {
+fn slab(self: *Ink, cell: Rect, shape: BlockSlab) void {
     switch (shape.side) {
         .top => self.append(.{ .x = 0, .y = 0, .width = cell.width, .height = split(cell.height, shape.eighths) }),
         .bottom => {

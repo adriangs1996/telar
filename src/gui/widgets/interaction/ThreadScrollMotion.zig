@@ -2,10 +2,13 @@
 const std_module = @import("std");
 const data = @import("model");
 const client = @import("telar-client");
+const ScrollMotion = @import("../ScrollMotion.zig");
+const Target = @import("Target.zig");
+const ScrollEvent = @import("../../input/ScrollEvent.zig");
 const Motion = @This();
 
 key: data.AgentKey,
-motion: @import("../ScrollMotion.zig") = .{},
+motion: ScrollMotion = .{},
 applied: f64 = 0,
 anchor_revision: u64 = 0,
 step: f64 = 24,
@@ -31,7 +34,7 @@ pub fn synchronize(self: *Motion, pane: *const data.Pane, now_ns: u64) void {
 
 /// Only delivered geometry may replace a trajectory's bounds and pixel scale.
 /// Example: `entry.geometry(target, now_ns);`
-pub fn geometry(self: *Motion, target: @import("Target.zig"), now_ns: u64) void {
+pub fn geometry(self: *Motion, target: Target, now_ns: u64) void {
     const step: f64 = @max(1, target.scroll_step);
     if (self.step != step) {
         self.step = step;
@@ -54,7 +57,7 @@ pub fn geometry(self: *Motion, target: @import("Target.zig"), now_ns: u64) void 
 /// Retains direct movement blocked on page loading until the same gesture ends.
 /// A new gesture or reversal takes control from the current visible position.
 /// Example: `entry.input(normalized_pixel_event, now_ns);`
-pub fn input(self: *Motion, event: @import("../../input/ScrollEvent.zig"), now_ns: u64) void {
+pub fn input(self: *Motion, event: ScrollEvent, now_ns: u64) void {
     if (!std_module.math.isFinite(event.delta_y)) {
         return;
     }
@@ -139,7 +142,7 @@ test "committed thread anchors translate velocity and remaining travel without r
     const std = @import("std");
     var pane = try testPane();
     defer pane.deinit();
-    var pixels: @import("../ScrollMotion.zig") = .{};
+    var pixels: ScrollMotion = .{};
     pixels.reset(1200, 0);
     pixels.input(.{ .delta_y = 120 }, 0);
     pixels.advance(30 * std.time.ns_per_ms);
@@ -169,7 +172,7 @@ test "uncommitted page limits cannot clip travel after newer input overtakes a f
     var pane = try testPane();
     defer pane.deinit();
     pane.transcript_anchor_revision = 7;
-    var pixels: @import("../ScrollMotion.zig") = .{};
+    var pixels: ScrollMotion = .{};
     pixels.reset(20 * 24, 0);
     pixels.input(.{ .delta_y = -1200 }, 0);
     pixels.advance(std.time.ns_per_ms);
@@ -299,7 +302,7 @@ test "direct input at a soft edge takes over without inheriting a wheel destinat
     try std.testing.expectEqual(@as(f64, 0), entry.motion.spring.velocity);
 }
 
-fn testGeometry(limit: f64) @import("Target.zig") {
+fn testGeometry(limit: f64) Target {
     return .{ .bounds = .{ .x = 0, .y = 0, .width = 100, .height = 100 }, .action = .{ .transcript = @enumFromInt(1) }, .scroll_limit = limit, .scroll_step = 24 };
 }
 

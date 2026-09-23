@@ -3,13 +3,15 @@ const GlyphAtlas = @import("../../text/GlyphAtlas.zig");
 const assets = @import("assets");
 const core = @import("telar-core");
 const WrappedLines = @import("EditorLines.zig");
+const EditorFont = @import("EditorFont.zig");
+const EditorShapingCache = @import("../../text/EditorShapingCache.zig");
 const Layout = @This();
 
 text: []const u8,
 head: u32,
 columns: u16,
 rows: u32,
-font: ?@import("EditorFont.zig") = null,
+font: ?EditorFont = null,
 
 /// Returns the first visible row while keeping the caret inside the editor.
 /// Example: `const first = layout.firstRow();`
@@ -84,7 +86,7 @@ test "proportional composer shares measured word wrapping and grapheme hit posit
     const std = @import("std");
     var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
-    const font: @import("EditorFont.zig") = .{ .atlas = &atlas, .pixel_height = 16 };
+    const font: EditorFont = .{ .atlas = &atlas, .pixel_height = 16 };
     try font.prepare("WWW iii café e\u{301}");
     try std.testing.expect(font.measure("iii") < font.measure("WWW"));
     const layout: Layout = .{ .text = "WWW iii café", .head = 0, .columns = font.measure("WWW "), .rows = 4, .font = font };
@@ -120,7 +122,7 @@ test "shaped editor lines share kerning and internal ligature carets with pointe
     const std = @import("std");
     var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
-    const font: @import("EditorFont.zig") = .{ .atlas = &atlas, .pixel_height = 16 };
+    const font: EditorFont = .{ .atlas = &atlas, .pixel_height = 16 };
     const text = "AV office fi e\u{301}x\nAV office fi";
     try font.prepare(text);
     const layout: Layout = .{ .text = text, .head = 0, .columns = font.measure("AV office "), .rows = 32, .font = font };
@@ -141,7 +143,7 @@ test "maximum composer shaped queries keep native allocations discovery and rast
     const std = @import("std");
     var atlas = try GlyphAtlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
     defer atlas.deinit();
-    const font: @import("EditorFont.zig") = .{ .atlas = &atlas, .pixel_height = 16 };
+    const font: EditorFont = .{ .atlas = &atlas, .pixel_height = 16 };
     const text = "AV office café " ** 256;
     comptime std.debug.assert(text.len == 4096);
     try font.prepare(text);
@@ -163,7 +165,7 @@ test "maximum composer shaped queries keep native allocations discovery and rast
     }
 
     const elapsed = started.durationTo(std.Io.Clock.awake.now(std.testing.io));
-    std.debug.print("\neditor 4KiB position+hit: {d}us/pair; scratch={d} bytes; cache={d} bytes; extra_shapes={d}\n", .{ @divTrunc(elapsed.toMicroseconds(), 20), @sizeOf(WrappedLines), @sizeOf(@import("../../text/EditorShapingCache.zig")), atlas.shape_calls - shapes });
+    std.debug.print("\neditor 4KiB position+hit: {d}us/pair; scratch={d} bytes; cache={d} bytes; extra_shapes={d}\n", .{ @divTrunc(elapsed.toMicroseconds(), 20), @sizeOf(WrappedLines), @sizeOf(EditorShapingCache), atlas.shape_calls - shapes });
     try std.testing.expectEqual(@as(usize, 0), failing.allocations);
     try std.testing.expectEqual(@as(usize, 0), failing.allocated_bytes);
     try std.testing.expectEqual(rasters, atlas.raster_attempts);

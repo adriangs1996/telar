@@ -5,6 +5,9 @@ const Canvas = @import("../widgets/Canvas.zig");
 const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
 const CanvasFixture = @import("CanvasFixture.zig");
 const Surface = @import("../widgets/Surface.zig");
+const Rect = @import("../render/Rect.zig");
+const Label = @import("../widgets/Label.zig");
+const SpritePaint = @import("../widgets/SpritePaint.zig");
 
 const Widget = union(enum) {
     surface: Surface,
@@ -45,7 +48,7 @@ test "warm widget drawing uses the supplied canvas without allocations" {
     var canvas = fixture.canvas();
     const WidgetList = GenericWidgetList(Widget, 2);
     var list: WidgetList = .{};
-    const bounds: @import("../render/Rect.zig") = .{ .x = 0, .y = 0, .width = 100, .height = 24 };
+    const bounds: Rect = .{ .x = 0, .y = 0, .width = 100, .height = 24 };
     try list.append(.{ .surface = .{ .bounds = bounds, .fill = .{ .color = canvas.theme.palette.surface0, .radius = 4 } } });
     try list.append(.{ .text = .{ .bounds = bounds, .label = .{ .text = "Warm", .face = .sans, .size = .body } } });
     try list.draw(&canvas);
@@ -91,8 +94,8 @@ test "sprite widgets keep page selection tint and placement inside a composed li
 
 /// A shaped label inside its parent's assigned pixel rectangle.
 const Text = struct {
-    bounds: @import("../render/Rect.zig"),
-    label: @import("../widgets/Label.zig"),
+    bounds: Rect,
+    label: Label,
 
     /// Example: `try label.draw(canvas);`
     pub fn draw(self: Text, canvas: *Canvas) !void {
@@ -102,8 +105,8 @@ const Text = struct {
 
 /// An image reference and its placement; the renderer owns the texture page.
 const Sprite = struct {
-    bounds: @import("../render/Rect.zig"),
-    paint: @import("../widgets/SpritePaint.zig"),
+    bounds: Rect,
+    paint: SpritePaint,
 
     /// Example: `try mascot.draw(canvas);`
     pub fn draw(self: Sprite, canvas: *Canvas) !void {

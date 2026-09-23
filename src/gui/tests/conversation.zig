@@ -6,6 +6,9 @@ const Text = @import("../widgets/MessageText.zig");
 const TextFlow = @import("../widgets/MessageTextFlow.zig");
 const ThreadFlow = @import("../widgets/ThreadFlow.zig");
 const Rect = @import("../render/Rect.zig");
+const ThreadTranscript = @import("../widgets/ThreadTranscript.zig");
+const ActivityText = @import("../widgets/ActivityText.zig");
+const MessageLayoutCache = @import("../widgets/MessageLayoutCache.zig");
 
 test "conversation text wraps measured sans glyphs and shares paint geometry" {
     var fixture = try Fixture.init();
@@ -90,16 +93,16 @@ test "warm transcript frame measures and paints a full 48 KiB retained response"
         }
 
         for ([_]f32{ 160, 640 }) |width| {
-            const transcript: @import("../widgets/ThreadTranscript.zig") = .{ .bounds = .{ .x = 0, .y = 32, .width = width, .height = 400 }, .thread = .{ .pane_id = snapshot.pane_id, .agent = null, .composer = "", .kind = .agent, .transcript = snapshot } };
+            const transcript: ThreadTranscript = .{ .bounds = .{ .x = 0, .y = 32, .width = width, .height = 400 }, .thread = .{ .pane_id = snapshot.pane_id, .agent = null, .composer = "", .kind = .agent, .transcript = snapshot } };
             try transcript.draw(&canvas);
             try std.testing.expect(fixture.state.?.message_layout != null);
             fixture.quads.clear();
             fixture.clock.begin(0);
             const start = std.Io.Clock.awake.now(std.testing.io);
             try transcript.draw(&canvas);
-            try (@import("../widgets/ActivityText.zig"){ .bounds = .{ .x = 0, .y = 0, .width = width, .height = 32 }, .label = .{ .text = "Writing response", .face = .sans, .size = .small }, .active = true }).draw(&canvas);
+            try (ActivityText{ .bounds = .{ .x = 0, .y = 0, .width = width, .height = 32 }, .label = .{ .text = "Writing response", .face = .sans, .size = .small }, .active = true }).draw(&canvas);
             const elapsed = start.durationTo(std.Io.Clock.awake.now(std.testing.io));
-            std.debug.print("\nconversation frame48KiB {s} width{d}: {d}us; quads={d}; layoutcache={d} bytes\n", .{ cluster, width, elapsed.toMicroseconds(), fixture.quads.items().len, @sizeOf(@import("../widgets/MessageLayoutCache.zig")) });
+            std.debug.print("\nconversation frame48KiB {s} width{d}: {d}us; quads={d}; layoutcache={d} bytes\n", .{ cluster, width, elapsed.toMicroseconds(), fixture.quads.items().len, @sizeOf(MessageLayoutCache) });
             try std.testing.expect(fixture.clock.deadline_ns != null);
             try std.testing.expect(fixture.quads.items().len < 4096);
             fixture.quads.clear();

@@ -1,5 +1,6 @@
 const std = @import("std");
 const core = @import("telar-core");
+const ItemUpdate = @import("ItemUpdate.zig");
 const Transcript = @This();
 
 value: core.AgentThreadSnapshot,
@@ -22,7 +23,7 @@ pub fn setTurn(self: *Transcript, id: []const u8) !void {
 
 /// Keeps the most recent items within both count and UTF-8 byte limits.
 /// Example: `transcript.update(.{ .id = "item-1", .role = .assistant, .text = "Hello" });`
-pub fn update(self: *Transcript, value: @import("ItemUpdate.zig")) void {
+pub fn update(self: *Transcript, value: ItemUpdate) void {
     var item = value;
     if (item.source_turn.len == 0 and item.id.len != 0 and (item.turn_identity orelse self.turn_identity) == self.turn_identity) {
         item.source_turn = self.value.currentTurnId();
@@ -97,7 +98,7 @@ pub fn update(self: *Transcript, value: @import("ItemUpdate.zig")) void {
     self.metadata(index, item);
 }
 
-fn updateFields(self: *Transcript, index: usize, item: @import("ItemUpdate.zig")) void {
+fn updateFields(self: *Transcript, index: usize, item: ItemUpdate) void {
     const stored = &self.value.item_storage[index];
     stored.complete = item.complete;
     stored.kind = item.kind orelse stored.kind;
@@ -147,7 +148,7 @@ fn findIdentity(self: *const Transcript, local_identity: u64) ?usize {
     return null;
 }
 
-fn metadata(self: *Transcript, index: usize, update_item: @import("ItemUpdate.zig")) void {
+fn metadata(self: *Transcript, index: usize, update_item: ItemUpdate) void {
     if (update_item.title == null and update_item.detail == null and update_item.reference == null and update_item.id.len == 0 and update_item.source_turn.len == 0) {
         return;
     }
@@ -206,7 +207,7 @@ fn compactMetadata(self: *Transcript) void {
     }
 }
 
-fn find(self: *const Transcript, update_item: @import("ItemUpdate.zig")) ?usize {
+fn find(self: *const Transcript, update_item: ItemUpdate) ?usize {
     if (update_item.id.len == 0) {
         return null;
     }
@@ -222,7 +223,7 @@ fn find(self: *const Transcript, update_item: @import("ItemUpdate.zig")) ?usize 
     return null;
 }
 
-fn append(self: *Transcript, item: @import("ItemUpdate.zig")) usize {
+fn append(self: *Transcript, item: ItemUpdate) usize {
     const reference: []const u8 = item.reference orelse "";
     const metadata_bytes = metadataPrefix(item.title orelse "", core.agent_thread.max_item_title_bytes) + metadataPrefix(item.detail orelse "", core.agent_thread.max_item_detail_bytes) + @min(reference.len, core.agent_thread.max_item_reference_bytes) + item.id.len + item.source_turn.len;
     while (self.value.item_count != 0 and self.value.metadata_len + metadata_bytes > core.agent_thread.max_metadata_bytes) {

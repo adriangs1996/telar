@@ -12,6 +12,12 @@ const Target = @import("../widgets/interaction/Target.zig");
 const Session = @import("Session.zig");
 const native = @import("../native/native.zig");
 const routing = @import("../widgets/interaction/routing.zig");
+const TextInput = @import("../input/TextInput.zig");
+const ScrollEvent = @import("../input/ScrollEvent.zig");
+const ComposerSelector = @import("../widgets/interaction/ComposerSelector.zig");
+const Canvas = @import("../widgets/Canvas.zig");
+const ThreadPane = @import("../widgets/ThreadPane.zig");
+const FrameClock = @import("../animation/FrameClock.zig");
 
 fn control(value: u64, x: f32) Target {
     return .{ .bounds = .{ .x = x, .y = 0, .width = 10, .height = 10 }, .action = .{ .custom = value } };
@@ -276,7 +282,7 @@ test "activating chrome navigation returns subsequent text to the terminal" {
 
 test "targeted stale physical commits acquire a sink instead of falling back to terminal" {
     var dispatcher: Dispatcher = .{};
-    const value: @import("../input/TextInput.zig") = .{ .bytes = "x", .physical = .{ .value = 25 }, .target_id = 9, .generation = 2 };
+    const value: TextInput = .{ .bytes = "x", .physical = .{ .value = 25 }, .target_id = 9, .generation = 2 };
     const pressed = dispatcher.route(.{ .text = value });
     try std.testing.expect(pressed.consumed and pressed.target == null);
     var released = value;
@@ -618,7 +624,7 @@ test "context folder scrolling accumulates precise deltas and clamps at the last
     gui.app.model.path_completion.land(.{ .query = "/work/", .result = &result });
     try publish(session);
     const row = try promptControl(session, "api");
-    const scroll_event: @import("../input/ScrollEvent.zig") = .{ .x = row.bounds.x + 1, .y = row.bounds.y + 1, .delta_y = row.bounds.height * 0.6, .precise = true };
+    const scroll_event: ScrollEvent = .{ .x = row.bounds.x + 1, .y = row.bounds.y + 1, .delta_y = row.bounds.height * 0.6, .precise = true };
     try send(session, .{ .scroll = scroll_event });
     try std.testing.expectEqual(@as(u16, 0), gui.app.model.name_prompt.currentConst().?.selection());
     try send(session, .{ .scroll = scroll_event });
@@ -806,7 +812,7 @@ fn composerTarget(session: *Session) !Target {
     return error.MissingComposer;
 }
 
-fn composerSelector(session: *Session, kind: @FieldType(@import("../widgets/interaction/ComposerSelector.zig"), "kind")) !Target {
+fn composerSelector(session: *Session, kind: @FieldType(ComposerSelector, "kind")) !Target {
     const registry = session.gui.widgets.dispatcher.maps.presented();
     for (registry.targets[0..registry.len]) |target| {
         if (target.action == .composer_selector and target.action.composer_selector.kind == kind) {
@@ -1262,7 +1268,7 @@ test "agent thread warm drawing allocates no glyph or quad storage and clips sma
         session.gui.pointer.configure(session.gui.renderer.origin, size);
         try publish(session);
         session.gui.renderer.quads.clear();
-        var canvas: @import("../widgets/Canvas.zig") = .{
+        var canvas: Canvas = .{
             .atlas = &session.gui.renderer.atlas.?,
             .quads = &session.gui.renderer.quads,
             .metrics = session.gui.renderer.metrics,
@@ -1271,7 +1277,7 @@ test "agent thread warm drawing allocates no glyph or quad storage and clips sma
             .chrome = session.gui.renderer.chrome,
         };
         const thread = client.ThreadView.capture(&session.gui.app.model, null, Session.pane_id).?;
-        try (@import("../widgets/ThreadPane.zig"){ .area = data.workbench.region(&session.gui.app.model).area, .thread = thread }).draw(&canvas);
+        try (ThreadPane{ .area = data.workbench.region(&session.gui.app.model).area, .thread = thread }).draw(&canvas);
         for (session.gui.renderer.quads.items()) |quad| {
             try std.testing.expect(quad.x >= 0 and quad.y >= 0);
             try std.testing.expect(quad.x + quad.width <= @as(f32, @floatFromInt(session.gui.renderer.viewport[0])));
@@ -1425,7 +1431,7 @@ test "copy confirmation expires once and failed native writes never confirm" {
     try std.testing.expect(session.gui.widgets.copied_item == null);
     session.gui.widgets.copied_item = target.action.thread_item;
     session.gui.widgets.copied_until_ns = 2000;
-    var clock: @import("../animation/FrameClock.zig") = .{};
+    var clock: FrameClock = .{};
     clock.begin(1000);
     try std.testing.expect(session.gui.widgets.threadCopied(target.action.thread_item, &clock));
     try std.testing.expectEqual(@as(?u64, 2000), clock.deadline_ns);
@@ -2342,7 +2348,7 @@ test "precise conversation scrolling moves on every fractional delta including m
     const pane = session.gui.app.model.agentPane(Session.pane_id).?;
     const step = session.gui.renderer.chrome.px(24);
     var displacement: f64 = 0;
-    const Phase = @FieldType(@import("../input/ScrollEvent.zig"), "phase");
+    const Phase = @FieldType(ScrollEvent, "phase");
     for ([_]Phase{ .begin, .update, .end, .none, .none, .none, .begin, .update }, 0..) |phase, index| {
         const delta: f64 = if (index < 6) -0.25 else 0.125;
         try send(session, .{ .scroll = .{ .x = link.bounds.x + 2, .y = link.bounds.y + 2, .delta_y = delta, .precise = true, .phase = phase, .momentum = if (index >= 3 and index < 6) .update else .none } });

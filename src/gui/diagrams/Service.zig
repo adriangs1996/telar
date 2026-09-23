@@ -2,11 +2,14 @@
 const gui_event = @import("../gui_event.zig");
 const worker = @import("worker.zig");
 const std = @import("std");
+const Store = @import("Store.zig");
+const Job = @import("Job.zig");
+const Completion = @import("Completion.zig");
 const Service = @This();
 
-store: @import("Store.zig"),
-job: ?@import("Job.zig") = null,
-result: ?@import("Completion.zig") = null,
+store: Store,
+job: ?Job = null,
+result: ?Completion = null,
 notified: bool = false,
 
 /// Example: `var service = Service.init(allocator);`

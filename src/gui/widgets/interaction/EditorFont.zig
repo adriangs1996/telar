@@ -1,9 +1,10 @@
 //! Resident shaping shared by composer painting and native input.
 const std = @import("std");
 const core = @import("telar-core");
+const GlyphAtlas = @import("../../text/GlyphAtlas.zig");
 const Font = @This();
 
-atlas: *@import("../../text/GlyphAtlas.zig"),
+atlas: *GlyphAtlas,
 pixel_height: u16,
 
 pub const max_bytes = 8192;

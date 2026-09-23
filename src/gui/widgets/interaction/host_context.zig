@@ -8,6 +8,7 @@ const client = @import("telar-client");
 const GuiClient = @import("../../GuiClient.zig");
 const native = @import("../../native/native.zig");
 const FieldView = @import("FieldView.zig");
+const MultilineLayout = @import("MultilineLayout.zig");
 const GenericField = data.GenericField;
 
 /// Uses current committed text and the delivered editor's geometry. Preedit
@@ -25,7 +26,7 @@ pub fn text(gui: *GuiClient, output: *native.TextContext) bool {
     const preedit = if (gui.widgets.preedit.owner) |owner| if (owner.eql(target.id)) &gui.widgets.preedit else null else null;
     var display = EditorDisplay.capture(current, preedit);
     const view = display.field.view(geometry.columns);
-    const multiline: @import("MultilineLayout.zig") = .{ .text = display.field.text(), .head = @intCast(display.field.head), .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
+    const multiline: MultilineLayout = .{ .text = display.field.text(), .head = @intCast(display.field.head), .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
     const caret = if (geometry.multiline) multiline.position(@intCast(display.field.head)) else [2]u32{ view.cursor, 0 };
     output.* = .{
         .target_id = target.id.target_id,

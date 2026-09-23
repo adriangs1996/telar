@@ -2,6 +2,8 @@
 //! modified until commit, so cancellation cannot lose the prior selection.
 const std = @import("std");
 const Id = @import("Id.zig");
+const PreeditUpdate = @import("PreeditUpdate.zig");
+const FieldView = @import("FieldView.zig");
 const Preedit = @This();
 
 pub const capacity = 4096;
@@ -13,14 +15,14 @@ replacement: [2]u32 = .{ 0, 0 },
 
 /// Owns the preedit before the native callback's text borrow expires.
 /// Example: `try preedit.update(id, .{ .composition = value, .current = field });`
-pub fn update(self: *Preedit, id: Id, input: @import("PreeditUpdate.zig")) !void {
+pub fn update(self: *Preedit, id: Id, input: PreeditUpdate) !void {
     const value = input.composition;
     if (value.cancel) {
         self.clear();
         return;
     }
 
-    const provisional: @import("FieldView.zig") = .{ .text = value.text, .head = value.selection_end, .anchor = value.selection_start };
+    const provisional: FieldView = .{ .text = value.text, .head = value.selection_end, .anchor = value.selection_start };
     if (value.text.len > capacity or !std.unicode.utf8ValidateSlice(value.text) or !provisional.validRange(.{ value.selection_start, value.selection_end })) {
         return error.InvalidWidgetComposition;
     }

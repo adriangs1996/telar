@@ -10,12 +10,14 @@ const Session = @import("Session.zig");
 const CommandPalette = @import("../widgets/overlays/CommandPalette.zig");
 const PaletteHits = @import("../widgets/overlays/PaletteHits.zig");
 const routing = @import("../input/router.zig");
+const PaletteRow = @import("../widgets/overlays/PaletteRow.zig");
+const WrappedLines = @import("../widgets/overlays/WrappedLines.zig");
 
 test "palette row clips long hints in narrow and empty widget bounds" {
     const fixture = try Fixture.init();
     defer fixture.deinit();
     var canvas = fixture.canvas();
-    var row: @import("../widgets/overlays/PaletteRow.zig") = .{ .icon = ">", .primary = "A long action", .secondary = "Additional detail", .hint = "Shift+Enter" };
+    var row: PaletteRow = .{ .icon = ">", .primary = "A long action", .secondary = "Additional detail", .hint = "Shift+Enter" };
     try row.draw(&canvas);
     try std.testing.expectEqual(@as(usize, 0), fixture.renderer.quads.items().len);
 
@@ -220,7 +222,7 @@ test "suggestion separates the request command and paste control across window s
         }
 
         try std.testing.expect(found_field and found_submit);
-        const lines: @import("../widgets/overlays/WrappedLines.zig") = .{ .text = command, .width = preview.w - 2 };
+        const lines: WrappedLines = .{ .text = command, .width = preview.w - 2 };
         try std.testing.expect(lines.count() <= preview.h - 2);
         if (width == 1280) {
             try std.testing.expect(canvas.rect(modal).width >= 900);

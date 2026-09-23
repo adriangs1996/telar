@@ -18,6 +18,8 @@ const ForegroundProjection = @import("ForegroundProjection.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const PaneKey = @import("../../pane/PaneKey.zig");
+const AgentThreadProjection = @import("AgentThreadProjection.zig");
+const OwnedAgentHistoryPage = @import("OwnedAgentHistoryPage.zig");
 const Delivery = @This();
 
 send_buffer: []u8,
@@ -33,7 +35,7 @@ client_layout_sent: bool = false,
 proxy_status_sent: bool = false,
 agent_revision_sent: u64 = 0,
 agent_snapshot_requested: bool = false,
-agent_threads_sent: [PaneStore.capacity]?@import("AgentThreadProjection.zig") = @splat(null),
+agent_threads_sent: [PaneStore.capacity]?AgentThreadProjection = @splat(null),
 requested_agent_thread: ?PaneKey = null,
 system_metrics_revision_sent: u64 = 0,
 workspace_list_revision_sent: u64 = 0,
@@ -168,7 +170,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         var history_result: ?*QueryResult = null;
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
-        var agent_history: ?*@import("OwnedAgentHistoryPage.zig") = null;
+        var agent_history: ?*OwnedAgentHistoryPage = null;
         var change_review: ?*ReviewResult = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,
@@ -353,7 +355,7 @@ pub fn prepare(self: *Delivery, preparation: Preparation) !?Prepared {
         var history_result: ?*QueryResult = null;
         var history_output: ?*OutputResult = null;
         var history_stats: ?*StatsResult = null;
-        var agent_history: ?*@import("OwnedAgentHistoryPage.zig") = null;
+        var agent_history: ?*OwnedAgentHistoryPage = null;
         var change_review: ?*ReviewResult = null;
         const payload = try runtime_encoder.encodeResponse(.{
             .buffer = buffer,

@@ -1,11 +1,13 @@
 //! A generation-scoped conversation control clipped to the visible transcript.
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
+const ThreadItemControl = @import("interaction/ThreadItemControl.zig");
+const Target = @import("interaction/Target.zig");
 const Button = @This();
 
 bounds: Rect,
 viewport: Rect,
-control: @import("interaction/ThreadItemControl.zig"),
+control: ThreadItemControl,
 label: []const u8,
 
 /// Publishes the visible part of one toggle or copy action.
@@ -24,5 +26,5 @@ pub fn register(self: Button, canvas: *Canvas) !void {
         return;
     }
 
-    _ = try state.dispatcher.add((@import("interaction/Target.zig"){ .id = .{ .generation = self.control.attachment_generation }, .bounds = .{ .x = left, .y = top, .width = right - left, .height = bottom - top }, .action = .{ .thread_item = self.control }, .thread_header_offset = self.bounds.y - self.viewport.y }).labelled(self.label));
+    _ = try state.dispatcher.add((Target{ .id = .{ .generation = self.control.attachment_generation }, .bounds = .{ .x = left, .y = top, .width = right - left, .height = bottom - top }, .action = .{ .thread_item = self.control }, .thread_header_offset = self.bounds.y - self.viewport.y }).labelled(self.label));
 }

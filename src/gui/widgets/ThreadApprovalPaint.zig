@@ -1,3 +1,4 @@
 const core = @import("telar-core");
-bounds: @import("../render/Rect.zig"),
+const Rect = @import("../render/Rect.zig");
+bounds: Rect,
 request: core.AgentApprovalRequest,

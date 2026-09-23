@@ -6,11 +6,13 @@ const client = @import("telar-client");
 const Entry = @import("ThreadScrollMotion.zig");
 const Clock = @import("../../animation/FrameClock.zig");
 const Target = @import("Target.zig");
+const Id = @import("Id.zig");
+const Registry = @import("Registry.zig");
 const Motions = @This();
 
 entries: [core.max_panes_per_tab]Entry = undefined,
 len: usize = 0,
-gesture: ?@import("Id.zig") = null,
+gesture: ?Id = null,
 gesture_pane: ?core.PaneId = null,
 foreign_gesture: bool = false,
 discarded_gesture: bool = false,
@@ -88,7 +90,7 @@ pub fn schedule(self: *Motions, target: Target, clock: *Clock) void {
 
 /// A failed frame cannot retire the previous visible set.
 /// Example: `motions.retain(registry);`
-pub fn retain(self: *Motions, registry: *const @import("Registry.zig")) void {
+pub fn retain(self: *Motions, registry: *const Registry) void {
     var kept: usize = 0;
     for (self.entries[0..self.len]) |entry| {
         for (registry.targets[0..registry.len]) |target| {

@@ -1,3 +1,6 @@
+const AgentImagePaths = @import("AgentImagePaths.zig");
+const AgentOptions = @import("AgentOptions.zig");
+
 text: []const u8,
-images: @import("AgentImagePaths.zig") = .{},
-options: @import("AgentOptions.zig"),
+images: AgentImagePaths = .{},
+options: AgentOptions,

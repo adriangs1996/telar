@@ -6,6 +6,8 @@ const Position = @import("HistoryPosition.zig");
 const Stream = @import("Stream.zig");
 const protocol = @import("protocol.zig");
 const history_page = @import("history_page.zig");
+const LegacyHistory = @import("LegacyHistory.zig");
+const ItemNormalizer = @import("ItemNormalizer.zig");
 const ProviderHistory = @This();
 
 pub const max_response_bytes = 2 * 1024 * 1024;
@@ -156,7 +158,7 @@ fn loadLegacyPage(self: *ProviderHistory) !*core.AgentHistoryPage {
         return error.InvalidHistoryThread;
     }
 
-    const history = try self.gpa.create(@import("LegacyHistory.zig"));
+    const history = try self.gpa.create(LegacyHistory);
     defer self.gpa.destroy(history);
     history.* = .{ .body = self.body, .query = self.request_value.query };
     try history.load(thread);
@@ -243,7 +245,7 @@ fn loadPage(self: *ProviderHistory) !*core.AgentHistoryPage {
             continue;
         }
 
-        var normalizer: @import("ItemNormalizer.zig") = .{ .body_buffer = self.body, .include_history_details = true };
+        var normalizer: ItemNormalizer = .{ .body_buffer = self.body, .include_history_details = true };
         var update = try historical_item.normalize(&normalizer, raw_item);
         if (update.truncated) {
             return error.HistoryItemNotRepresentable;

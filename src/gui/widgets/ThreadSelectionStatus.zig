@@ -1,12 +1,15 @@
 //! Reader status occupies the existing footer rather than obscuring selectable text.
 const core = @import("telar-core");
 const TextFit = @import("TextFit.zig");
+const Rect = @import("../render/Rect.zig");
+const Canvas = @import("Canvas.zig");
+const Label = @import("Label.zig");
 const Status = @This();
-bounds: @import("../render/Rect.zig"),
+bounds: Rect,
 pane_id: core.PaneId,
 
 /// Example: `try status.draw(canvas);`
-pub fn draw(self: Status, canvas: *@import("Canvas.zig")) !void {
+pub fn draw(self: Status, canvas: *Canvas) !void {
     const state = canvas.widgets orelse return;
     const selection = &state.thread_selection;
     const owner = selection.owner orelse return;
@@ -24,7 +27,7 @@ pub fn draw(self: Status, canvas: *@import("Canvas.zig")) !void {
         .geometry_limit => "Selection exceeds the visible text limit · reduce the selected area",
     } else if (selection.blocked_edge) "Clear selection with Esc to load more messages" else if (selection.keyboard) "Copy mode · arrows/hjkl · v select · y copy · Esc exit" else if (selection.selected()) "Text selected · Cmd/Ctrl+C copy · Esc clear" else return;
     var storage: [TextFit.max_bytes]u8 = undefined;
-    var label: @import("Label.zig") = .{ .text = text, .face = .sans, .size = .small, .color = if (selection.problem != null or selection.blocked_edge) canvas.theme.palette.yellow else canvas.theme.palette.subtext0 };
-    label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = self.bounds.width }).fit(label, &storage);
+    var label: Label = .{ .text = text, .face = .sans, .size = .small, .color = if (selection.problem != null or selection.blocked_edge) canvas.theme.palette.yellow else canvas.theme.palette.subtext0 };
+    label.text = try (TextFit{ .canvas = canvas, .width = self.bounds.width }).fit(label, &storage);
     _ = try canvas.textAt(self.bounds, label);
 }

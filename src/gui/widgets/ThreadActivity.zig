@@ -6,9 +6,14 @@ const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Label = @import("Label.zig");
 const MessageText = @import("MessageText.zig");
+const ThreadItemView = @import("ThreadItemView.zig");
+const ActivityText = @import("ActivityText.zig");
+const ThreadItemButton = @import("ThreadItemButton.zig");
+const ThreadDetails = @import("ThreadDetails.zig");
+const ThreadLabelPaint = @import("ThreadLabelPaint.zig");
 const Activity = @This();
 
-view: @import("ThreadItemView.zig"),
+view: ThreadItemView,
 
 /// Measures the collapsed identity row and any explicitly expanded detail.
 /// Example: `const height = try activity.measure(canvas);`
@@ -54,15 +59,15 @@ pub fn draw(self: Activity, canvas: *Canvas) !void {
     const title_bounds: Rect = .{ .x = title_x, .y = header.y, .width = @max(0, header.x + header.width - inset - status_width - chevron_width - title_x), .height = row };
     var storage: [TextFit.max_bytes]u8 = undefined;
     var label: Label = .{ .text = self.title(), .face = .sans, .size = .body, .bold = child or dispatch, .color = if (view.item.status == .failed) palette.red else if (child or dispatch) palette.text else palette.subtext0 };
-    label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = title_bounds.width }).fit(label, &storage);
-    try (@import("ActivityText.zig"){ .bounds = title_bounds, .label = label, .active = view.active() and title_bounds.y + title_bounds.height > view.viewport.y and title_bounds.y < view.viewport.y + view.viewport.height }).draw(canvas);
+    label.text = try (TextFit{ .canvas = canvas, .width = title_bounds.width }).fit(label, &storage);
+    try (ActivityText{ .bounds = title_bounds, .label = label, .active = view.active() and title_bounds.y + title_bounds.height > view.viewport.y and title_bounds.y < view.viewport.y + view.viewport.height }).draw(canvas);
     const status_bounds: Rect = .{ .x = header.x + header.width - inset - status_width - chevron_width, .y = header.y, .width = status_width, .height = row };
     try self.fitted(canvas, .{ .bounds = status_bounds, .label = .{ .text = status, .face = .sans, .size = .small, .color = self.statusColor(canvas) } });
     if (self.expandable()) {
         try canvas.iconAt(.{ .x = header.x + header.width - inset - chevron_width, .y = header.y, .width = chevron_width, .height = row }, .{ .text = if (view.expanded) "\u{f078}" else "\u{f054}", .face = .sans, .size = .small, .color = palette.overlay1 });
         var action_label: [240]u8 = undefined;
         const text = std.fmt.bufPrint(&action_label, "{s} {s}", .{ if (view.expanded) "Collapse" else "Expand", self.title() }) catch "Expand activity";
-        try (@import("ThreadItemButton.zig"){ .bounds = header, .viewport = view.viewport, .control = view.control(), .label = text }).register(canvas);
+        try (ThreadItemButton{ .bounds = header, .viewport = view.viewport, .control = view.control(), .label = text }).register(canvas);
     }
 
     if (child) {
@@ -109,7 +114,7 @@ fn expandable(self: Activity) bool {
     return (self.view.text().len > 0 or self.view.item.detail(self.view.thread.transcript.?).len > 0) and self.view.item.identity != 0;
 }
 
-fn metadata(self: Activity, canvas: *const Canvas) @import("ThreadDetails.zig") {
+fn metadata(self: Activity, canvas: *const Canvas) ThreadDetails {
     return .{ .bounds = self.body(canvas).bounds, .view = self.view };
 }
 
@@ -196,10 +201,10 @@ fn dispatchSummary(self: Activity, buffer: []u8) []const u8 {
     return std.fmt.bufPrint(buffer, "{d} {s} · {d} working", .{ total, if (total == 1) "agent" else "agents", working }) catch "";
 }
 
-fn fitted(_: Activity, canvas: *Canvas, input: @import("ThreadLabelPaint.zig")) !void {
+fn fitted(_: Activity, canvas: *Canvas, input: ThreadLabelPaint) !void {
     var storage: [TextFit.max_bytes]u8 = undefined;
     var label = input.label;
-    label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = input.bounds.width }).fit(label, &storage);
+    label.text = try (TextFit{ .canvas = canvas, .width = input.bounds.width }).fit(label, &storage);
     _ = try canvas.textAt(input.bounds, label);
 }
 

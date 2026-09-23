@@ -14,6 +14,7 @@ const StatsResult = @import("../../history/StatsResult.zig");
 const PendingSuggestion = @import("PendingSuggestion.zig");
 const ResponseQueue = @import("ResponseQueue.zig");
 const std = @import("std");
+const OwnedAgentHistoryPage = @import("OwnedAgentHistoryPage.zig");
 
 pub const capacity = core.max_panes_per_tab * 2;
 
@@ -35,7 +36,7 @@ pub const PendingResponse = union(enum) {
     agent_sound: core.AgentSoundNotification,
     history_result: *QueryResult,
     change_review: *ReviewResult,
-    agent_history_page: *@import("OwnedAgentHistoryPage.zig"),
+    agent_history_page: *OwnedAgentHistoryPage,
     request_completed: core.RequestCompleted,
     pane_text: PendingPaneText,
     pane_matches: PendingPaneMatches,

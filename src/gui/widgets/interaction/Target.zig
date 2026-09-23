@@ -3,11 +3,20 @@
 const core = @import("telar-core");
 const client = @import("telar-client");
 const history_action = @import("history_action.zig");
+const Id = @import("Id.zig");
+const Rect = @import("../../render/Rect.zig");
+const ThreadItemControl = @import("ThreadItemControl.zig");
+const MessageLinkControl = @import("MessageLinkControl.zig");
+const AgentControl = @import("AgentControl.zig");
+const ComposerSelector = @import("ComposerSelector.zig");
+const ComposerChoice = @import("ComposerChoice.zig");
+const CompletionChoice = @import("CompletionChoice.zig");
+const PathCompletionChoice = @import("PathCompletionChoice.zig");
 const Target = @This();
 
-id: @import("Id.zig") = .{},
+id: Id = .{},
 namespace: u64 = 0,
-bounds: @import("../../render/Rect.zig"),
+bounds: Rect,
 action: Action,
 layer: u8 = 0,
 focusable: bool = true,
@@ -45,14 +54,14 @@ pub const Action = union(enum) {
     composer: core.PaneId,
     change_review: core.PaneId,
     transcript: core.PaneId,
-    thread_item: @import("ThreadItemControl.zig"),
-    message_link: @import("MessageLinkControl.zig"),
-    agent_control: @import("AgentControl.zig"),
-    composer_selector: @import("ComposerSelector.zig"),
-    composer_choice: @import("ComposerChoice.zig"),
-    composer_completion: @import("CompletionChoice.zig"),
+    thread_item: ThreadItemControl,
+    message_link: MessageLinkControl,
+    agent_control: AgentControl,
+    composer_selector: ComposerSelector,
+    composer_choice: ComposerChoice,
+    composer_completion: CompletionChoice,
     prompt: PromptAction,
-    complete_path: @import("PathCompletionChoice.zig"),
+    complete_path: PathCompletionChoice,
     history: history_action.Action,
     resize_sidebar,
     custom: u64,

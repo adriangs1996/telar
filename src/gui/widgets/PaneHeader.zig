@@ -12,6 +12,7 @@ const attention = @import("attention.zig");
 const Canvas = @import("Canvas.zig");
 const PaneProgress = @import("PaneProgress.zig");
 const ChangeReviewButton = @import("ChangeReviewButton.zig");
+const AgentAges = @import("AgentAges.zig");
 const PaneHeader = @This();
 
 context: *const Context,
@@ -120,7 +121,7 @@ test "pane header duration advances with the card clock between runtime reports"
         .status_age_s = 5,
     };
     _ = try agents.replace(.{ .revision = 1, .agents = &.{input} });
-    var ages: @import("AgentAges.zig") = .{};
+    var ages: AgentAges = .{};
     const context: Context = .{ .hits = undefined, .bands = undefined, .projection = undefined, .hovered = null, .ages = &ages };
     const header: PaneHeader = .{ .context = &context, .pane = undefined, .agent = &agents.slice()[0], .index = 1, .area = .{ .x = 0, .y = 0, .width = 0, .height = 0 } };
     var storage: [32]u8 = undefined;

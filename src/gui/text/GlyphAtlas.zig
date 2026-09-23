@@ -39,6 +39,9 @@ const BoxCache = @import("BoxCache.zig");
 const Rect = @import("../render/Rect.zig");
 const FontSize = @import("FontSize.zig");
 const LineBox = @import("LineBox.zig");
+const EditorShapingCache = @import("EditorShapingCache.zig");
+const CaretCluster = @import("CaretCluster.zig");
+const GlyphId = @import("GlyphId.zig");
 
 extern fn FT_GlyphSlot_Embolden(freetype.c.FT_GlyphSlot) void;
 extern fn FT_GlyphSlot_Oblique(freetype.c.FT_GlyphSlot) void;
@@ -65,7 +68,7 @@ shaping_buffer: *freetype.c.hb_buffer_t,
 /// The terminal cell height: the size fallback glyphs are prepared at.
 pixel_height: u16 = 0,
 shaping_cache: ShapingCache,
-editor_shaping_cache: ?*@import("EditorShapingCache.zig") = null,
+editor_shaping_cache: ?*EditorShapingCache = null,
 shape_calls: usize = 0,
 raster_attempts: usize = 0,
 failed_glyphs: GlyphFailures = .{},
@@ -242,7 +245,7 @@ pub fn measureResident(self: *GlyphAtlas, run: TextRun) !f32 {
 /// Example: `try atlas.prepareEditor();`
 pub fn prepareEditor(self: *GlyphAtlas) !void {
     if (self.editor_shaping_cache == null) {
-        const cache = try self.allocator.create(@import("EditorShapingCache.zig"));
+        const cache = try self.allocator.create(EditorShapingCache);
         cache.* = .{};
         self.editor_shaping_cache = cache;
     }
@@ -305,7 +308,7 @@ pub fn caretPositions(self: *GlyphAtlas, run: TextRun, output: []u32) !void {
     }
 }
 
-fn fillCaretCluster(cluster: @import("CaretCluster.zig"), output: []u32) void {
+fn fillCaretCluster(cluster: CaretCluster, output: []u32) void {
     var iterator: core.GraphemeIterator = .{ .bytes = cluster.text };
     var count: u32 = 0;
     while (iterator.next() != null) {
@@ -633,14 +636,14 @@ fn naturalCellBounds(self: *GlyphAtlas, pixel_height: u16) !Rect {
     };
 }
 
-fn visibleSlot(self: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRun) !GlyphSlot {
+fn visibleSlot(self: *GlyphAtlas, glyph_id: GlyphId, run: TextRun) !GlyphSlot {
     return self.slot(glyph_id, run) catch |err| switch (err) {
         error.AtlasFull => self.slot(.{}, run),
         else => err,
     };
 }
 
-fn slot(self: *GlyphAtlas, glyph_id: @import("GlyphId.zig"), run: TextRun) !GlyphSlot {
+fn slot(self: *GlyphAtlas, glyph_id: GlyphId, run: TextRun) !GlyphSlot {
     const index = glyph_id.index;
     const font = self.fonts.get(glyph_id.font);
     const glyph_key = (@as(u64, @intFromEnum(glyph_id.font)) << 50) | (@as(u64, index) << 18) | (@as(u64, run.pixel_height) << 2) | @as(u64, @intFromBool(run.bold)) | (@as(u64, @intFromBool(run.italic)) << 1);

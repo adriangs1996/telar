@@ -1,5 +1,6 @@
 //! Bounded local image references. Only same-machine clients may submit paths.
 const std = @import("std");
+const AgentImagePaths = @import("AgentImagePaths.zig");
 const Images = @This();
 
 pub const capacity = 4;
@@ -29,8 +30,8 @@ pub fn path(self: *const Images, index: usize) []const u8 {
 }
 
 /// Borrows paths only until this value changes. Example: `request.images = images.view();`
-pub fn view(self: *const Images) @import("AgentImagePaths.zig") {
-    var result: @import("AgentImagePaths.zig") = .{ .count = self.count };
+pub fn view(self: *const Images) AgentImagePaths {
+    var result: AgentImagePaths = .{ .count = self.count };
     for (0..self.count) |index| {
         result.storage[index] = self.path(index);
     }
@@ -39,7 +40,7 @@ pub fn view(self: *const Images) @import("AgentImagePaths.zig") {
 }
 
 /// Copies a validated borrowed list for asynchronous ownership. Example: `prompt.images = try Images.copy(request.images);`
-pub fn copy(paths: @import("AgentImagePaths.zig")) !Images {
+pub fn copy(paths: AgentImagePaths) !Images {
     try paths.validate();
     var images: Images = .{};
     for (paths.storage[0..paths.count]) |value| {

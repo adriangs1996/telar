@@ -1,9 +1,10 @@
 const data = @import("model");
 const RuntimeSnapshot = @import("RuntimeSnapshot.zig");
+const GuiConfig = @import("GuiConfig.zig");
 const Snapshot = @This();
 
 theme: data.ColorTheme = data.theme_support.default_theme,
-gui: @import("GuiConfig.zig") = .{},
+gui: GuiConfig = .{},
 icon_theme: data.icons.Theme = .unicode,
 sidebar_rendering: data.SidebarRendering = .automatic,
 sidebar_visible: bool = true,

@@ -2,12 +2,15 @@
 const data = @import("model");
 const client = @import("telar-client");
 const core = @import("telar-core");
+const Rect = @import("../render/Rect.zig");
+const ThreadItemControl = @import("interaction/ThreadItemControl.zig");
+const MessageLayoutOwner = @import("MessageLayoutOwner.zig");
 const View = @This();
 
 thread: client.ThreadView,
 item: *const core.AgentThreadItem,
-bounds: @import("../render/Rect.zig"),
-viewport: @import("../render/Rect.zig"),
+bounds: Rect,
+viewport: Rect,
 expanded: bool = false,
 depth: u8 = 0,
 work_count: u16 = 0,
@@ -16,7 +19,7 @@ work_active: bool = false,
 
 /// Resolves the delivered item without carrying a snapshot pointer into input.
 /// Example: `const action = view.control();`
-pub fn control(self: View) @import("interaction/ThreadItemControl.zig") {
+pub fn control(self: View) ThreadItemControl {
     if (self.work_count != 0) {
         return .{ .pane_id = self.thread.pane_id, .attachment_generation = self.thread.attachment_generation, .identity = self.item.identity, .source_key = self.work_key, .operation = .toggle_work };
     }
@@ -36,7 +39,7 @@ pub fn text(self: View) []const u8 {
 
 /// Identifies immutable source bytes without retaining the snapshot borrow.
 /// Example: `const owner = view.source(.body);`
-pub fn source(self: View, section: @FieldType(@import("MessageLayoutOwner.zig"), "section")) @import("MessageLayoutOwner.zig") {
+pub fn source(self: View, section: @FieldType(MessageLayoutOwner, "section")) MessageLayoutOwner {
     const snapshot = self.thread.transcript.?;
     return .{ .pane_id = self.thread.pane_id, .attachment_generation = self.thread.attachment_generation, .pane_generation = snapshot.pane_generation, .snapshot_revision = snapshot.revision, .item_identity = self.item.identity, .section = section, .source_offset = if (section == .body) self.item.text_offset else self.item.detail_offset };
 }

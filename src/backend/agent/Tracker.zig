@@ -21,6 +21,7 @@ const Watch = @import("Watch.zig");
 const Completion = @import("Completion.zig");
 const Agent = @import("Agent.zig");
 const description = @import("description.zig");
+const ManagedState = @import("ManagedState.zig");
 const Tracker = @This();
 
 repository: Repository = .{},
@@ -656,7 +657,7 @@ fn bumpRevision(self: *Tracker) void {
 
 /// Updates the lifecycle projection for one runtime-owned provider session.
 /// Example: `_ = tracker.observeManaged(identity, state);`.
-pub fn observeManaged(self: *Tracker, identity: Identity, state: @import("ManagedState.zig")) bool {
+pub fn observeManaged(self: *Tracker, identity: Identity, state: ManagedState) bool {
     const agent = self.ensure(identity) orelse return false;
     agent.applyManaged(state);
     return self.reproject(agent, state.observed_at_ms);

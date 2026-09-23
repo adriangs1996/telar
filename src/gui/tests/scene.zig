@@ -3,6 +3,9 @@ const model_data = @import("model");
 const input_support = @import("input_support.zig");
 const std = @import("std");
 const Session = @import("Session.zig");
+const Overlays = @import("../widgets/overlays/Overlays.zig");
+const Scene = @import("../render/Scene.zig");
+const TerminalRenderer = @import("../render/TerminalRenderer.zig");
 
 test "native theme backgrounds share window opacity across bands and pane headers" {
     var fixture = try ChromeFixture.init();
@@ -12,8 +15,8 @@ test "native theme backgrounds share window opacity across bands and pane header
     const projection = fixture.projection();
     const tab = model.tabs.active;
     try model_data.pane_split.split(model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = projection.geometry.area });
-    var overlays: @import("../widgets/overlays/Overlays.zig") = .{};
-    var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
+    var overlays: Overlays = .{};
+    var scene: Scene = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
 
     for ([_]model_data.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .terminal }) |theme| {
         scene.theme = model_data.theme_support.builtin(theme);
@@ -56,8 +59,8 @@ test "agent and terminal panes share the configured theme background opacity and
     const tab = model.tabs.active;
     try model_data.pane_split.split(model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(20), .location = Session.location, .axis = .horizontal, .area = fixture.projection().geometry.area });
     try std.testing.expect(model.identifyPane(.{ .request_id = @enumFromInt(1), .pane_id = Session.pane_id, .location = Session.location, .created = false, .kind = .agent, .pane_generation = 77 }));
-    var overlays: @import("../widgets/overlays/Overlays.zig") = .{};
-    var scene: @import("../render/Scene.zig") = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
+    var overlays: Overlays = .{};
+    var scene: Scene = .{ .terminal = renderer, .chrome = &fixture.chrome, .overlays = &overlays, .theme = model_data.theme_support.builtin(.vesper) };
     renderer.config.window.background_blur = 40;
     for ([_]model_data.theme_support.Builtin{ .vesper, .shade, .catppuccin, .tokyo_night, .terminal }) |theme| {
         scene.theme = model_data.theme_support.builtin(theme);
@@ -87,7 +90,7 @@ test "agent and terminal panes share the configured theme background opacity and
 }
 
 // Samples premultiplied color away from glyphs, rounded corners and frame strokes.
-fn backgroundColor(renderer: *const @import("../render/TerminalRenderer.zig"), point: [2]f32) ![4]f32 {
+fn backgroundColor(renderer: *const TerminalRenderer, point: [2]f32) ![4]f32 {
     const quad = @import("../render/Quad.zig");
     var color = renderer.frame(1).background;
     for (color[0..3]) |*component| {

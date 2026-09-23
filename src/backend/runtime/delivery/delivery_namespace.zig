@@ -18,6 +18,9 @@ const Sampler = @import("../observability/Sampler.zig");
 const Sources = @import("Sources.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
 const ForegroundProjection = @import("ForegroundProjection.zig");
+const OwnedAgentHistoryPage = @import("OwnedAgentHistoryPage.zig");
+const AgentThreadProjection = @import("AgentThreadProjection.zig");
+const Pane = @import("../../pane/Pane.zig");
 
 pub const Effect = union(enum) {
     stopping,
@@ -26,7 +29,7 @@ pub const Effect = union(enum) {
         history_result: ?*QueryResult,
         history_output: ?*OutputResult,
         history_stats: ?*StatsResult,
-        agent_history: ?*@import("OwnedAgentHistoryPage.zig") = null,
+        agent_history: ?*OwnedAgentHistoryPage = null,
         change_review: ?*ReviewResult = null,
     },
     resync,
@@ -34,7 +37,7 @@ pub const Effect = union(enum) {
     client_layout,
     proxy_status,
     agent_revision: u64,
-    agent_thread: @import("AgentThreadProjection.zig"),
+    agent_thread: AgentThreadProjection,
     system_metrics_revision: u64,
     workspace_list_revision: u64,
     foreground: ForegroundProjection,
@@ -329,7 +332,7 @@ test "agent conversation delivery coalesces revisions independently for reconnec
     var agents: Tracker = .{};
     var system_metrics: Sampler = .{};
     var snapshot: core_module.AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 8, .revision = 1, .status = .ready };
-    var pane: @import("../../pane/Pane.zig") = undefined;
+    var pane: Pane = undefined;
     pane.id = snapshot.pane_id;
     pane.generation = snapshot.pane_generation;
     pane.close_requested = false;

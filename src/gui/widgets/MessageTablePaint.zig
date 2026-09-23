@@ -4,12 +4,14 @@ const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Table = @import("MessageTable.zig");
 const Blocks = @import("MessageBlocks.zig");
+const MessageLayoutOwner = @import("MessageLayoutOwner.zig");
+const MessageTableRowPaint = @import("MessageTableRowPaint.zig");
 const Paint = @This();
 
 bounds: Rect,
 viewport: Rect,
 table: Table,
-owner: ?@import("MessageLayoutOwner.zig") = null,
+owner: ?MessageLayoutOwner = null,
 source_start: usize,
 muted: bool = false,
 
@@ -17,7 +19,7 @@ muted: bool = false,
 /// Example: `const height = try table.layout(canvas, true);`
 pub fn layout(self: Paint, canvas: *Canvas, paint: bool) !f32 {
     var widths: [Table.max_columns]f32 = @splat(0);
-    var row = @import("MessageTableRowPaint.zig"){ .table = self, .canvas = canvas, .widths = &widths };
+    var row = MessageTableRowPaint{ .table = self, .canvas = canvas, .widths = &widths };
     try row.measureWidths(self.table.header, true);
     var lines: Blocks = .{ .text = self.table.body, .markdown = false };
     while (lines.next()) |line| {

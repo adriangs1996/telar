@@ -1,3 +1,5 @@
 //! The bounded scroll offset used while preparing one disclosure frame.
-request: @import("ThreadScrollRequest.zig"),
+const ThreadScrollRequest = @import("ThreadScrollRequest.zig");
+
+request: ThreadScrollRequest,
 scroll: f64,

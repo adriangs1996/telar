@@ -5,6 +5,10 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
+const ThreadFlow = @import("ThreadFlow.zig");
+const Target = @import("interaction/Target.zig");
+const MessageText = @import("MessageText.zig");
+const Label = @import("Label.zig");
 const Transcript = @This();
 
 bounds: Rect,
@@ -29,7 +33,7 @@ pub fn draw(self: Transcript, source: *Canvas) !void {
         return;
     }
 
-    var flow: @import("ThreadFlow.zig") = .{ .bounds = self.bounds, .thread = self.thread };
+    var flow: ThreadFlow = .{ .bounds = self.bounds, .thread = self.thread };
     try flow.resolve(&canvas);
     if (canvas.widgets) |state| {
         const navigation = flow.navigation(self.target(&canvas, flow.scroll_limit));
@@ -66,12 +70,12 @@ fn register(self: Transcript, canvas: *Canvas, limit: f64) !void {
     }
 }
 
-fn target(self: Transcript, canvas: *Canvas, limit: f64) @import("interaction/Target.zig") {
-    return (@import("interaction/Target.zig"){ .id = .{ .generation = self.thread.attachment_generation }, .bounds = self.bounds, .action = .{ .transcript = self.thread.pane_id }, .focusable = self.request == null, .role = 6, .scroll_limit = limit, .scroll_step = canvas.chrome.px(24) }).labelled("Conversation");
+fn target(self: Transcript, canvas: *Canvas, limit: f64) Target {
+    return (Target{ .id = .{ .generation = self.thread.attachment_generation }, .bounds = self.bounds, .action = .{ .transcript = self.thread.pane_id }, .focusable = self.request == null, .role = 6, .scroll_limit = limit, .scroll_step = canvas.chrome.px(24) }).labelled("Conversation");
 }
 
 fn drawRequest(self: Transcript, canvas: *Canvas, request: *const core.AgentApprovalRequest) !void {
-    var text: @import("MessageText.zig") = .{ .bounds = self.bounds, .viewport = self.bounds, .text = request.text(), .markdown = false };
+    var text: MessageText = .{ .bounds = self.bounds, .viewport = self.bounds, .text = request.text(), .markdown = false };
     if (self.thread.transcript) |snapshot| {
         text.owner = .{ .pane_id = self.thread.pane_id, .attachment_generation = self.thread.attachment_generation, .pane_generation = snapshot.pane_generation, .snapshot_revision = snapshot.revision, .item_identity = request.id, .section = .approval, .source_offset = 0 };
     }
@@ -87,14 +91,14 @@ fn empty(self: Transcript, canvas: *Canvas) !void {
     const area = self.bounds;
     const height = @min(canvas.chrome.px(32), area.height / 2);
     const y = area.y + @max(0, (area.height - 2 * height) / 2);
-    const labels = [_]@import("Label.zig"){
+    const labels = [_]Label{
         .{ .text = "What would you like to build?", .face = .sans, .size = .title, .bold = true, .color = canvas.theme.palette.text },
         .{ .text = "Describe a task, ask a question, or explore your project.", .face = .sans, .size = .body, .color = canvas.theme.palette.subtext0 },
     };
     for (labels, 0..) |value, row| {
         var storage: [TextFit.max_bytes]u8 = undefined;
         var label = value;
-        label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = area.width }).fit(value, &storage);
+        label.text = try (TextFit{ .canvas = canvas, .width = area.width }).fit(value, &storage);
         _ = try canvas.textAt(.{ .x = area.x, .y = y + @as(f32, @floatFromInt(row)) * height, .width = area.width, .height = height }, label);
     }
 }

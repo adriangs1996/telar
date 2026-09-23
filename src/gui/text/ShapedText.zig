@@ -1,3 +1,6 @@
 //! Paint attributes paired with a borrowed shaping result.
-run: @import("TextRun.zig"),
-shaped: @import("ShapedRun.zig"),
+const TextRun = @import("TextRun.zig");
+const ShapedRun = @import("ShapedRun.zig");
+
+run: TextRun,
+shaped: ShapedRun,

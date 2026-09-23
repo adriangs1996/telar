@@ -2,9 +2,11 @@
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
+const ThreadItemView = @import("ThreadItemView.zig");
+const MessageText = @import("MessageText.zig");
 const Details = @This();
 
-view: @import("ThreadItemView.zig"),
+view: ThreadItemView,
 bounds: Rect,
 
 /// Measures only metadata lines not already present in the tool result.
@@ -29,7 +31,7 @@ fn layout(self: Details, canvas: *Canvas, paint: bool) !f32 {
             continue;
         }
 
-        var text: @import("MessageText.zig") = .{ .bounds = self.bounds, .viewport = self.view.viewport, .text = line, .markdown = false, .muted = true };
+        var text: MessageText = .{ .bounds = self.bounds, .viewport = self.view.viewport, .text = line, .markdown = false, .muted = true };
         text.owner = self.view.source(.metadata);
         text.owner.?.source_offset += @intCast(@intFromPtr(line.ptr) - @intFromPtr(item.detail(snapshot).ptr));
         text.bounds.y += height;

@@ -5,6 +5,7 @@ const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Target = @import("interaction/Target.zig");
+const AgentControl = @import("interaction/AgentControl.zig");
 const Widget = @This();
 
 bounds: Rect,
@@ -37,7 +38,7 @@ pub fn draw(self: Widget, canvas: *Canvas) !void {
     try canvas.fillRoundedAt(remove, .{ .color = palette.surface_dim, .radius = canvas.chrome.px(6) });
     try canvas.iconAt(remove, .{ .text = "\u{f00d}", .size = .small, .color = palette.text });
     if (canvas.widgets) |state| {
-        const control: @import("interaction/AgentControl.zig") = .{ .pane_id = self.thread.pane_id, .kind = .preview_image, .image_index = self.index, .composer_revision = self.thread.composer_revision };
+        const control: AgentControl = .{ .pane_id = self.thread.pane_id, .kind = .preview_image, .image_index = self.index, .composer_revision = self.thread.composer_revision };
         var storage: [32]u8 = undefined;
         _ = try state.dispatcher.add((Target{ .id = .{ .generation = self.thread.attachment_generation }, .bounds = area, .action = .{ .agent_control = control } }).labelled(try std.fmt.bufPrint(&storage, "Preview image {d}", .{self.index + 1})));
         var removal = control;

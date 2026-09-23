@@ -1,9 +1,12 @@
+const ComposerSelector = @import("ComposerSelector.zig");
+const Rect = @import("../../render/Rect.zig");
+
 const Menu = @This();
 
-selector: ?@import("ComposerSelector.zig") = null,
+selector: ?ComposerSelector = null,
 attachment_generation: u64 = 0,
 generation: u64 = 0,
-anchor: @import("../../render/Rect.zig") = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
+anchor: Rect = .{ .x = 0, .y = 0, .width = 0, .height = 0 },
 selected: u8 = 0,
 first: u8 = 0,
 

@@ -24,6 +24,7 @@ const proxy_config = @import("proxy.zig");
 const client_history_config = @import("client_history.zig");
 const ThemeParser = @import("ThemeParser.zig");
 const notifications_config = @import("notifications.zig");
+const GuiConfigParser = @import("GuiConfigParser.zig");
 const Generation = @This();
 
 gpa: std.mem.Allocator,
@@ -300,7 +301,7 @@ fn parseSnapshot(self: *Generation, diagnostic: *data.Diagnostic) !void {
 
     _ = lua_api.c.lua_getfield(state, -1, "gui");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
-        const parser: @import("GuiConfigParser.zig") = .{ .state = state, .diagnostic = diagnostic };
+        const parser: GuiConfigParser = .{ .state = state, .diagnostic = diagnostic };
         self.snapshot.gui = try parser.parse(self.snapshot.gui);
     }
     lua_value.pop(state, 1);
@@ -352,7 +353,7 @@ fn parseProfile(self: *Generation, index: c_int, diagnostic: *data.Diagnostic) !
 
     _ = lua_api.c.lua_getfield(state, absolute, "gui");
     if (lua_api.c.lua_type(state, -1) != lua_api.c.LUA_TNIL) {
-        const parser: @import("GuiConfigParser.zig") = .{ .state = state, .diagnostic = diagnostic };
+        const parser: GuiConfigParser = .{ .state = state, .diagnostic = diagnostic };
         self.snapshot.gui = try parser.parse(self.snapshot.gui);
     }
     lua_value.pop(state, 1);

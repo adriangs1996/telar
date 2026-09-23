@@ -282,7 +282,7 @@ test "native workspace visibility follows available width and tiny bars stay wit
         }
 
         const renderer = &fixture.session.gui.renderer;
-        const bounds: @import("../render/Rect.zig") = .{ .x = 0, .y = 0, .width = @floatFromInt(renderer.viewport[0]), .height = @floatFromInt(renderer.viewport[1]) };
+        const bounds: Rect = .{ .x = 0, .y = 0, .width = @floatFromInt(renderer.viewport[0]), .height = @floatFromInt(renderer.viewport[1]) };
         for (renderer.quads.items()) |quad| {
             try std.testing.expect(quad.x >= bounds.x and quad.y >= bounds.y);
             try std.testing.expect(quad.x + quad.width <= bounds.x + bounds.width);

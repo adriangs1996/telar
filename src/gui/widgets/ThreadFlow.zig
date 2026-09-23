@@ -7,6 +7,11 @@ const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const View = @import("ThreadItemView.zig");
+const ThreadConversation = @import("ThreadConversation.zig");
+const ThreadMessage = @import("ThreadMessage.zig");
+const ThreadActivity = @import("ThreadActivity.zig");
+const Target = @import("interaction/Target.zig");
+const MessageText = @import("MessageText.zig");
 const Flow = @This();
 
 bounds: Rect,
@@ -31,7 +36,7 @@ pub fn resolve(self: *Flow, canvas: *Canvas) !void {
     self.reanchored = false;
     self.height = canvas.chrome.px(12);
     self.scroll_step = canvas.chrome.px(24);
-    var conversation: @import("ThreadConversation.zig") = .{ .rows = &self.rows };
+    var conversation: ThreadConversation = .{ .rows = &self.rows };
     const page_count: usize = if (self.thread.history) |window| window.count else 1;
     const unique = if (self.thread.history) |window| uniqueItems(window) else null;
 
@@ -66,7 +71,7 @@ pub fn resolve(self: *Flow, canvas: *Canvas) !void {
             view.bounds.x = self.bounds.x;
             view.bounds.width = self.bounds.width;
         }
-        view.bounds.height = if (view.work_count != 0) ThreadWork.measure(canvas) else if (message(view.item)) try (@import("ThreadMessage.zig"){ .view = view.* }).measure(canvas) else if (notice(view.item)) try noticeText(view.*).measure(canvas) + canvas.chrome.px(20) else try (@import("ThreadActivity.zig"){ .view = view.* }).measure(canvas);
+        view.bounds.height = if (view.work_count != 0) ThreadWork.measure(canvas) else if (message(view.item)) try (ThreadMessage{ .view = view.* }).measure(canvas) else if (notice(view.item)) try noticeText(view.*).measure(canvas) + canvas.chrome.px(20) else try (ThreadActivity{ .view = view.* }).measure(canvas);
         self.height += view.bounds.height;
         if (canvas.widgets) |state| {
             if (view.work_count == 0) {
@@ -128,7 +133,7 @@ pub fn resolve(self: *Flow, canvas: *Canvas) !void {
 
 /// Captures bounded row anchors in the same registry as the delivered viewport.
 /// Example: `const target = flow.navigation(target);`
-pub fn navigation(self: *const Flow, original: @import("interaction/Target.zig")) @import("interaction/Target.zig") {
+pub fn navigation(self: *const Flow, original: Target) Target {
     var target = original;
     target.thread_window_revision = self.windowRevision();
     target.thread_live_revision = self.liveRevision();
@@ -301,7 +306,7 @@ pub fn draw(self: *const Flow, canvas: *Canvas) !void {
 
         visible += 1;
         if (view.work_count != 0) {
-            try (@import("ThreadWork.zig"){ .view = view }).draw(canvas);
+            try (ThreadWork{ .view = view }).draw(canvas);
             continue;
         }
 
@@ -312,11 +317,11 @@ pub fn draw(self: *const Flow, canvas: *Canvas) !void {
         }
 
         if (message(view.item)) {
-            try (@import("ThreadMessage.zig"){ .view = view }).draw(canvas);
+            try (ThreadMessage{ .view = view }).draw(canvas);
         } else if (notice(view.item)) {
             try noticeText(view).draw(canvas);
         } else {
-            try (@import("ThreadActivity.zig"){ .view = view }).draw(canvas);
+            try (ThreadActivity{ .view = view }).draw(canvas);
         }
     }
 }
@@ -329,7 +334,7 @@ fn notice(item: *const core.AgentThreadItem) bool {
     return item.kind == .system or (item.kind == .message and item.role == .system);
 }
 
-fn noticeText(view: View) @import("MessageText.zig") {
+fn noticeText(view: View) MessageText {
     return .{ .bounds = view.bounds, .viewport = view.viewport, .text = view.text(), .markdown = false, .muted = true, .owner = view.source(.body) };
 }
 

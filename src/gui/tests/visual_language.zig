@@ -7,6 +7,7 @@ const QuadList = @import("../render/QuadList.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 
 const Fixture = @import("CanvasFixture.zig");
+const Color = @import("../render/Color.zig");
 
 test "plain fills keep the textured quad path bit for bit" {
     var fixture = try Fixture.init();
@@ -30,7 +31,7 @@ test "plain fills keep the textured quad path bit for bit" {
     try std.testing.expectEqualDeep(reference.items()[0], plain);
 }
 
-fn plain_color(item: Quad) @import("../render/Color.zig") {
+fn plain_color(item: Quad) Color {
     return .{ .r = item.r, .g = item.g, .b = item.b, .a = item.a };
 }
 

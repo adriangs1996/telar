@@ -2,6 +2,7 @@ const routing_tests = @import("routing_tests.zig");
 const data = @import("model");
 const GenericKeymap = @import("GenericKeymap.zig").Type;
 const std = @import("std");
+const Capture = @import("Capture.zig");
 
 pub fn Type(comptime Action: type, comptime limits: data.RouterLimits, comptime Decoder: type) type {
     const term = Decoder;
@@ -593,7 +594,7 @@ test "binding admission keeps ordinary chord misses with the router until replay
     const Router = testRouter();
     const Binding = data.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{ "a", "b" }, .next)});
-    var capture: @import("Capture.zig") = .{};
+    var capture: Capture = .{};
     const first = try data.keybind.parseKey("a");
     const miss = try data.keybind.parseKey("x");
     try std.testing.expect(router.wantsBinding(first));
@@ -616,7 +617,7 @@ test "binding admission resolves persistent prefix misses and Escape without cla
     const Binding = data.GenericBinding(routing_tests.Action, 4);
     const prefix = try data.keybind.parseKey("ctrl+b");
     var router = try Router.initWithPrefix(&.{try Binding.parse(&.{ "ctrl+b", "n" }, .next)}, prefix);
-    var capture: @import("Capture.zig") = .{};
+    var capture: Capture = .{};
     for ([_][]const u8{ "x", "escape" }) |name| {
         _ = try capture.apply(router.routeEvent(.{ .key = prefix, .raw = "", .now_ns = 1 }, .{}));
         const press = try data.keybind.parseKey(name);
@@ -639,8 +640,8 @@ test "binding admission retains a physical shortcut through focus and keymap rep
     const Router = testRouter();
     const Binding = data.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
-    var original: @import("Capture.zig") = .{};
-    var other_focus: @import("Capture.zig") = .{};
+    var original: Capture = .{};
+    var other_focus: Capture = .{};
     var event = try data.keybind.parseKey("ctrl+n");
     event.physical = .{ .value = 42 };
     try std.testing.expect(router.wantsBinding(event));
@@ -665,7 +666,7 @@ test "binding admission cannot steal application repeats or releases when modifi
     const Router = testRouter();
     const Binding = data.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
-    var capture: @import("Capture.zig") = .{};
+    var capture: Capture = .{};
     var event = try data.keybind.parseKey("n");
     event.physical = .{ .value = 42 };
     try std.testing.expect(!router.wantsBinding(event));
@@ -691,7 +692,7 @@ test "replayed chord keys can return their physical ownership to the original wi
     const Router = testRouter();
     const Binding = data.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{ "a", "b" }, .next)});
-    var capture: @import("Capture.zig") = .{};
+    var capture: Capture = .{};
     var first = try data.keybind.parseKey("a");
     first.physical = .{ .value = 1 };
     var miss = try data.keybind.parseKey("x");
@@ -703,7 +704,7 @@ test "replayed chord keys can return their physical ownership to the original wi
     router.relinquishKey(miss.physical.?);
     try std.testing.expectEqual(@as(usize, 0), router.leases.count());
     // Stale routing cannot forward these lifecycles to a newly focused owner.
-    var other_focus: @import("Capture.zig") = .{};
+    var other_focus: Capture = .{};
     first.phase = .repeat;
     _ = try other_focus.apply(router.routeEvent(.{ .key = first, .raw = "", .now_ns = 3 }, .{}));
     miss.phase = .release;
@@ -716,7 +717,7 @@ test "relinquishing a physical key preserves another shortcut repeat and cancels
     const Router = testRouter();
     const Binding = data.GenericBinding(routing_tests.Action, 4);
     var router = try Router.init(&.{try Binding.parse(&.{"ctrl+n"}, .next)});
-    var capture: @import("Capture.zig") = .{};
+    var capture: Capture = .{};
     var event = try data.keybind.parseKey("ctrl+n");
     event.physical = .{ .value = 42 };
     _ = try capture.apply(router.routeEvent(.{ .key = event, .raw = "", .now_ns = 1 }, .{}));

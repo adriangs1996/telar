@@ -4,7 +4,9 @@ const Fixture = @import("ConversationFixture.zig");
 const Text = @import("../widgets/MessageText.zig");
 const Target = @import("../widgets/interaction/Target.zig");
 const Registry = @import("../widgets/interaction/Registry.zig");
-const owner: @import("../widgets/MessageLayoutOwner.zig") = .{ .pane_id = @enumFromInt(1), .attachment_generation = 3, .pane_generation = 5, .snapshot_revision = 7, .item_identity = 11, .section = .body, .source_offset = 120 };
+const MessageLayoutOwner = @import("../widgets/MessageLayoutOwner.zig");
+const MessageLinkPreview = @import("../widgets/MessageLinkPreview.zig");
+const owner: MessageLayoutOwner = .{ .pane_id = @enumFromInt(1), .attachment_generation = 3, .pane_generation = 5, .snapshot_revision = 7, .item_identity = 11, .section = .body, .source_offset = 120 };
 
 fn message(source: []const u8) Text {
     return .{ .bounds = .{ .x = 10, .y = 20, .width = 600, .height = 600 }, .viewport = .{ .x = 10, .y = 20, .width = 600, .height = 600 }, .text = source, .owner = owner };
@@ -200,7 +202,7 @@ test "Markdown destination tooltip wraps inside a small window without adding hi
     const registry = fixture.state.?.dispatcher.maps.preparing();
     try std.testing.expectEqual(@as(usize, 1), registry.len);
     const target = registry.targets[0];
-    const preview: @import("../widgets/MessageLinkPreview.zig") = .{ .control = target.action.message_link, .anchor = target.bounds, .pointer = .{ target.bounds.x + 1, target.bounds.y + 1 }, .destination = try .init(destination) };
+    const preview: MessageLinkPreview = .{ .control = target.action.message_link, .anchor = target.bounds, .pointer = .{ target.bounds.x + 1, target.bounds.y + 1 }, .destination = try .init(destination) };
     fixture.quads.clear();
     try preview.draw(&canvas);
     try std.testing.expect(fixture.quads.items().len > 2);
@@ -228,7 +230,7 @@ test "Markdown destination tooltip rejects changed content geometry and modal co
     try message("[documentation](https://example.test)").draw(&canvas);
     const registry = fixture.state.?.dispatcher.maps.preparing();
     const target = registry.targets[0];
-    const preview: @import("../widgets/MessageLinkPreview.zig") = .{ .control = target.action.message_link, .anchor = target.bounds, .pointer = .{ target.bounds.x + 1, target.bounds.y + 1 }, .destination = try .init("https://example.test") };
+    const preview: MessageLinkPreview = .{ .control = target.action.message_link, .anchor = target.bounds, .pointer = .{ target.bounds.x + 1, target.bounds.y + 1 }, .destination = try .init("https://example.test") };
     fixture.quads.clear();
     var stale = preview;
     stale.control.owner.snapshot_revision += 1;

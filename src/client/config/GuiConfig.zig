@@ -1,6 +1,12 @@
 //! Typed native-host preferences. No Lua values or host resources are retained.
-font: @import("GuiFont.zig") = .{},
-cursor: @import("GuiCursor.zig") = .{},
-window: @import("GuiWindow.zig") = .{},
-chrome: @import("GuiChrome.zig") = .{},
-sidebar: @import("GuiSidebar.zig") = .{},
+const GuiFont = @import("GuiFont.zig");
+const GuiCursor = @import("GuiCursor.zig");
+const GuiWindow = @import("GuiWindow.zig");
+const GuiChrome = @import("GuiChrome.zig");
+const GuiSidebar = @import("GuiSidebar.zig");
+
+font: GuiFont = .{},
+cursor: GuiCursor = .{},
+window: GuiWindow = .{},
+chrome: GuiChrome = .{},
+sidebar: GuiSidebar = .{},

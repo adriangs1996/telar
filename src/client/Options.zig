@@ -3,6 +3,7 @@ const core = @import("telar-core");
 const Generation = @import("config/Generation.zig");
 const Registry = @import("plugins/Registry.zig");
 const std = @import("std");
+const GuiConfig = @import("config/GuiConfig.zig");
 const Options = @This();
 
 arguments: []const []const u8,
@@ -13,7 +14,7 @@ environ: std.process.Environ = .empty,
 prefix: data.Key = data.keybind.default_prefix,
 bindings: []const data.config_values.ConfiguredBinding = &.{},
 theme: data.ColorTheme = data.theme_support.default_theme,
-gui: @import("config/GuiConfig.zig") = .{},
+gui: GuiConfig = .{},
 icon_theme: data.icons.Theme = .unicode,
 sidebar_rendering: data.SidebarRendering = .automatic,
 sidebar_visible: bool = true,

@@ -2,9 +2,13 @@
 const std = @import("std");
 const core = @import("telar-core");
 const Rect = @import("../../render/Rect.zig");
+const AgentControl = @import("AgentControl.zig");
+const ImagePreviewSource = @import("ImagePreviewSource.zig");
+const Request = @import("../../diagrams/Request.zig");
+const Target = @import("Target.zig");
 const Preview = @This();
 
-control: @import("AgentControl.zig"),
+control: AgentControl,
 generation: u64,
 path_storage: [core.AgentImages.max_path_bytes]u8 = undefined,
 path_len: u16,
@@ -16,7 +20,7 @@ pub fn path(self: *const Preview) []const u8 {
 
 /// Original pixels do not depend on draft text, image order, theme or DPI.
 /// Example: `const request = ImagePreview.requestFor(source);`
-pub fn requestFor(source: @import("ImagePreviewSource.zig")) @import("../../diagrams/Request.zig") {
+pub fn requestFor(source: ImagePreviewSource) Request {
     return .{
         .kind = .local_image,
         .owner = .{ .pane_id = source.pane_id, .attachment_generation = source.generation, .pane_generation = 0, .snapshot_revision = 0, .item_identity = 0, .section = .body, .source_offset = 0 },
@@ -39,6 +43,6 @@ pub fn fit(area: Rect, size: [2]u32) Rect {
 }
 
 /// Example: `if (preview.matches(target)) keepOpen();`
-pub fn matches(self: Preview, target: @import("Target.zig")) bool {
+pub fn matches(self: Preview, target: Target) bool {
     return target.id.generation == self.generation and target.action == .agent_control and std.meta.eql(target.action.agent_control, self.control);
 }

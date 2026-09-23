@@ -73,7 +73,7 @@ pub fn init(allocator: std.mem.Allocator) Renderer {
 
 /// Builds a replacement independently; callers swap it only after GPU consumers finish.
 /// Example: `var renderer = try Renderer.configured(gpa, io, .{ .config = config.gui });`
-pub fn configured(allocator: std.mem.Allocator, io: std.Io, options: @import("RendererOptions.zig")) !Renderer {
+pub fn configured(allocator: std.mem.Allocator, io: std.Io, options: RendererOptions) !Renderer {
     var renderer = Renderer.init(allocator);
     errdefer renderer.deinit();
     renderer.io = io;
@@ -257,6 +257,7 @@ pub fn seal(self: *Renderer) void {
 }
 
 const PanePaint = @import("PanePaint.zig");
+const RendererOptions = @import("RendererOptions.zig");
 
 /// The Canvas terminal operation reuses retained cell meshes and cursor policy.
 /// Example: `try renderer.drawPane(paint);`

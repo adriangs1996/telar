@@ -71,7 +71,7 @@ input_write_pending: bool = false,
 input_write_len: usize = 0,
 size: core.TerminalSize,
 render_state: vt.RenderState = .empty,
-text_metadata: @import("TextMetadataCapture.zig"),
+text_metadata: TextMetadataCapture,
 screen: core.Buffer,
 damaged_rows: []bool,
 output_buffer: [pane_namespace.output_chunk_size]u8 = undefined,
@@ -1066,6 +1066,7 @@ pub fn recordAgentCommand(self: *Pane, report: AgentCommand) bool {
 }
 
 pub const CaptureContext = @import("CaptureContext.zig");
+const TextMetadataCapture = @import("TextMetadataCapture.zig");
 
 /// Marks the next completed command as submitted by automation. Called
 /// when control-API text or a restored resume command carries Enter.

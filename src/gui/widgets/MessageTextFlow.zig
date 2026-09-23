@@ -4,6 +4,16 @@ const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Label = @import("Label.zig");
 const Rect = @import("../render/Rect.zig");
+const MessageLayoutOwner = @import("MessageLayoutOwner.zig");
+const MessageLinkControl = @import("interaction/MessageLinkControl.zig");
+const MessageTextAlignment = @import("MessageTextAlignment.zig");
+const MessageLayoutPlan = @import("MessageLayoutPlan.zig");
+const MessageSpans = @import("MessageSpans.zig");
+const MessageLayoutResult = @import("MessageLayoutResult.zig");
+const MessageFragment = @import("MessageFragment.zig");
+const ThreadTextPaint = @import("ThreadTextPaint.zig");
+const MessageLinkButton = @import("MessageLinkButton.zig");
+const MessageLayoutKey = @import("MessageLayoutKey.zig");
 const Flow = @This();
 
 canvas: *Canvas,
@@ -17,12 +27,12 @@ max_x: f32 = 0,
 measured_bytes: usize = 0,
 max_measured_span: usize = 0,
 laid_out_bytes: usize = 0,
-owner: ?@import("MessageLayoutOwner.zig") = null,
-link: ?@import("interaction/MessageLinkControl.zig") = null,
+owner: ?MessageLayoutOwner = null,
+link: ?MessageLinkControl = null,
 source_start: usize = 0,
-alignment: ?*@import("MessageTextAlignment.zig") = null,
+alignment: ?*MessageTextAlignment = null,
 table_cell: bool = false,
-recording: ?*@import("MessageLayoutPlan.zig") = null,
+recording: ?*MessageLayoutPlan = null,
 recording_start: usize = 0,
 recording_y: f32 = 0,
 
@@ -31,7 +41,7 @@ pub const chunk_bytes = 256;
 /// Appends inline styles and links with the same source identity as plain text.
 /// Example: `try flow.appendStyled(cell, .{ .text = "", .bold = header });`
 pub fn appendStyled(self: *Flow, text: []const u8, base: Label) !void {
-    var spans: @import("MessageSpans.zig") = .{ .text = text, .table_cell = self.table_cell };
+    var spans: MessageSpans = .{ .text = text, .table_cell = self.table_cell };
     while (spans.next()) |span| {
         self.link = null;
         if (span.destination) |destination| {
@@ -92,7 +102,7 @@ pub fn append(self: *Flow, label: Label) !void {
     defer self.recording = null;
 
     try self.appendUncached(label);
-    const result: @import("MessageLayoutResult.zig") = .{ .height = self.y - start_y, .x = self.x, .max_x = self.max_x };
+    const result: MessageLayoutResult = .{ .height = self.y - start_y, .x = self.x, .max_x = self.max_x };
     cache.remember(key, result);
     if (self.recording) |plan| {
         plan.complete(result);
@@ -171,7 +181,7 @@ fn appendChunk(self: *Flow, value: Label) !void {
     }
 }
 
-fn paintFragment(self: *Flow, fragment: @import("MessageFragment.zig")) !void {
+fn paintFragment(self: *Flow, fragment: MessageFragment) !void {
     self.laid_out_bytes += fragment.label.text.len;
     if (self.paint and self.visible()) {
         if (self.recording) |plan| {
@@ -193,7 +203,7 @@ fn paintFragment(self: *Flow, fragment: @import("MessageFragment.zig")) !void {
                     const geometry = store.maps.preparing();
                     const offset = owner.source_offset + @as(u32, @intCast(@intFromPtr(fragment.label.text.ptr) - self.source_start));
                     if (try geometry.append(self.canvas, .{ .owner = owner, .offset = offset, .text = fragment.label.text, .bounds = area, .viewport = self.viewport, .advance = fragment.advance, .face = fragment.label.face, .bold = fragment.label.bold, .pixel_height = self.canvas.chrome.text(fragment.label.size) orelse self.canvas.metrics.pixel_height })) |hit| {
-                        try (@import("ThreadTextPaint.zig"){ .geometry = geometry, .fragment = hit }).draw(self.canvas);
+                        try (ThreadTextPaint{ .geometry = geometry, .fragment = hit }).draw(self.canvas);
                     }
                 }
             }
@@ -202,7 +212,7 @@ fn paintFragment(self: *Flow, fragment: @import("MessageFragment.zig")) !void {
         if (self.link) |link| {
             var control = link;
             control.fragment_offset = control.owner.source_offset + @as(u32, @intCast(@intFromPtr(fragment.label.text.ptr) - self.source_start));
-            try (@import("MessageLinkButton.zig"){ .bounds = area, .viewport = self.viewport, .control = control, .label = fragment.label, .advance = fragment.advance }).draw(self.canvas);
+            try (MessageLinkButton{ .bounds = area, .viewport = self.viewport, .control = control, .label = fragment.label, .advance = fragment.advance }).draw(self.canvas);
         } else {
             _ = try self.canvas.textAt(area, fragment.label);
         }
@@ -217,7 +227,7 @@ fn paintFragment(self: *Flow, fragment: @import("MessageFragment.zig")) !void {
     }
 }
 
-fn replay(self: *Flow, label: Label, plan: *const @import("MessageLayoutPlan.zig")) !void {
+fn replay(self: *Flow, label: Label, plan: *const MessageLayoutPlan) !void {
     const base_y = self.y;
     const before = self.laid_out_bytes;
     for (plan.fragments[0..plan.len]) |fragment| {
@@ -234,7 +244,7 @@ fn replay(self: *Flow, label: Label, plan: *const @import("MessageLayoutPlan.zig
     self.laid_out_bytes = before + label.text.len;
 }
 
-fn cacheKey(self: *const Flow, label: Label) @import("MessageLayoutKey.zig") {
+fn cacheKey(self: *const Flow, label: Label) MessageLayoutKey {
     var owner = self.owner.?;
     owner.source_offset += @intCast(@intFromPtr(label.text.ptr) - self.source_start);
     return .{ .text_hash = std.hash.Wyhash.hash(0, label.text), .text_len = label.text.len, .owner = owner, .font_identity = self.canvas.atlas.fonts.identity, .font_revision = self.canvas.atlas.fonts.revision, .width = self.bounds.width, .start_x = self.x, .row = self.row, .scale = self.canvas.chrome.ratio, .pixel_height = self.canvas.chrome.text(label.size) orelse self.canvas.metrics.pixel_height, .cell_width = self.canvas.metrics.cell_width, .cell_height = self.canvas.metrics.cell_height, .face = label.face, .bold = label.bold, .italic = label.italic };

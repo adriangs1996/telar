@@ -16,6 +16,7 @@ const Sidebar = @import("../widgets/Sidebar.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 const Rect = @import("../render/Rect.zig");
 const sprites = @import("sprites.zig");
+const SidebarState = @import("../widgets/SidebarState.zig");
 
 test {
     _ = @import("../widgets/age_label.zig");
@@ -101,7 +102,7 @@ test "replacement sidebar widgets retain scrolling and clip their own card contr
     var hits: HitMap = .{};
     var band_hits: BandHitMap = .{};
     const context: Context = .{ .hits = &hits, .bands = &band_hits, .projection = &projection, .hovered = null };
-    var state: @import("../widgets/SidebarState.zig") = .{};
+    var state: SidebarState = .{};
     var canvas: Canvas = .{ .atlas = &renderer.atlas.?, .quads = &renderer.quads, .metrics = renderer.metrics, .origin = renderer.origin, .theme = fixture.session.gui.app.model.theme, .chrome = renderer.chrome, .viewport = renderer.viewport, .sidebar = renderer.sidebar };
     const GenericWidgetList = @import("../widgets/GenericWidgetList.zig").Type;
     const List = GenericWidgetList(Sidebar, 1);

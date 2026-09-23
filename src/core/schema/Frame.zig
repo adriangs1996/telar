@@ -5,6 +5,7 @@ const InputModes = @import("InputModes.zig");
 const frame_support = @import("frame_support.zig");
 const Scroll = @import("Scroll.zig");
 const Span = @import("Span.zig");
+const View = @import("../text_metadata/View.zig");
 const Frame = @This();
 
 pane_id: id.PaneId,
@@ -19,6 +20,6 @@ mouse: Mouse = .{},
 input_modes: InputModes = .{},
 pointer_shape: frame_support.PointerShape = .default,
 /// Null preserves patch metadata; encoding a snapshot with null emits an empty replacement.
-text_metadata: ?@import("../text_metadata/View.zig") = null,
+text_metadata: ?View = null,
 scroll: Scroll,
 spans: []const Span,

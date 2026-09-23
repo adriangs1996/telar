@@ -6,6 +6,7 @@ const data = @import("../model.zig");
 const Position = @import("Position.zig");
 const LinkMatch = @import("LinkMatch.zig");
 const std = @import("std");
+const LinkGrid = @import("LinkGrid.zig");
 
 const row_window_bytes = core_module.max_uri_bytes * 2 + core_module.Cell.max_bytes * 2;
 const max_walk_cells = row_window_bytes * 2;
@@ -29,9 +30,9 @@ pub fn match(buffer: *const core_module.Buffer, scroll: core_module.Scroll, posi
 
 /// Resolves OSC 8 first, then visible URI text across VT-confirmed soft wraps.
 /// Example: `const found = resolve(pane, .{ .x = 3, .y = pane.scroll.offset });`
-pub fn resolve(pane: *const @import("../panes/Pane.zig"), position: Position) ?LinkMatch {
+pub fn resolve(pane: *const Pane, position: Position) ?LinkMatch {
     const metadata = pane.text_metadata.view();
-    const grid: @import("LinkGrid.zig") = .{ .buffer = &pane.buffer, .scroll = pane.scroll, .rows = metadata.rows };
+    const grid: LinkGrid = .{ .buffer = &pane.buffer, .scroll = pane.scroll, .rows = metadata.rows };
     const index = grid.cellIndex(position) orelse return null;
     if (metadata.at(@intCast(index))) |run| {
         return .{
@@ -50,7 +51,7 @@ pub fn resolve(pane: *const @import("../panes/Pane.zig"), position: Position) ?L
     return matchGrid(grid, position);
 }
 
-fn matchGrid(grid: @import("LinkGrid.zig"), position: Position) ?LinkMatch {
+fn matchGrid(grid: LinkGrid, position: Position) ?LinkMatch {
     const cursor = grid.cellIndex(position) orelse return null;
     var start = cursor;
     var bytes_before: usize = 0;
@@ -110,7 +111,7 @@ fn matchGrid(grid: @import("LinkGrid.zig"), position: Position) ?LinkMatch {
     };
 }
 
-fn completeRange(grid: @import("LinkGrid.zig"), range: [2]Position) bool {
+fn completeRange(grid: LinkGrid, range: [2]Position) bool {
     if (grid.rows.len == 0) {
         return true;
     }
@@ -124,7 +125,7 @@ fn completeRange(grid: @import("LinkGrid.zig"), range: [2]Position) bool {
     return !(range[1].y - grid.scroll.offset == grid.rows.len - 1 and range[1].x == last_text_column and last.wrap);
 }
 
-fn positions(grid: @import("LinkGrid.zig"), first: usize, span: [2]usize) ?[2]Position {
+fn positions(grid: LinkGrid, first: usize, span: [2]usize) ?[2]Position {
     var index = first;
     var offset: usize = 0;
     var start: ?Position = null;
@@ -270,7 +271,7 @@ test "matching retains supported schemes and does not join physical rows" {
     }
 }
 
-fn testPane(size: [2]u16) !@import("../panes/Pane.zig") {
+fn testPane(size: [2]u16) !Pane {
     var pane = try Pane.init(std.testing.allocator, .{
         .spec = .{
             .pane_id = @enumFromInt(1),

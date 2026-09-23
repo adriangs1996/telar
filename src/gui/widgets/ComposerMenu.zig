@@ -5,6 +5,8 @@ const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Target = @import("interaction/Target.zig");
+const ComposerOptions = @import("ComposerOptions.zig");
+const ComposerSurface = @import("ComposerSurface.zig");
 const Menu = @This();
 
 thread: client.ThreadView,
@@ -20,7 +22,7 @@ pub fn draw(self: Menu, canvas: *Canvas) !void {
         return;
     }
 
-    const options: @import("ComposerOptions.zig") = .{ .thread = self.thread, .kind = selector.kind };
+    const options: ComposerOptions = .{ .thread = self.thread, .kind = selector.kind };
     const count = options.count();
     if (count == 0) {
         return;
@@ -34,7 +36,7 @@ pub fn draw(self: Menu, canvas: *Canvas) !void {
     const bounds: Rect = .{ .x = std.math.clamp(open.anchor.x, self.pane_bounds.x + padding, self.pane_bounds.x + self.pane_bounds.width - padding - width), .y = std.math.clamp(open.anchor.y - height - padding, self.pane_bounds.y + padding, @max(self.pane_bounds.y + padding, self.pane_bounds.y + self.pane_bounds.height - height - padding)), .width = width, .height = height };
     const first_quad = canvas.quads.items().len;
     defer canvas.quads.clipFrom(first_quad, self.pane_bounds);
-    try (@import("ComposerSurface.zig"){ .bounds = bounds, .radius = canvas.chrome.px(13) }).draw(canvas);
+    try (ComposerSurface{ .bounds = bounds, .radius = canvas.chrome.px(13) }).draw(canvas);
     _ = try state.dispatcher.add((Target{ .namespace = 0x434d, .id = .{ .generation = open.generation }, .bounds = bounds, .action = .{ .custom = 0x434d }, .focusable = false }).labelled("Composer options"));
     const palette = canvas.theme.palette;
     const title = switch (selector.kind) {
@@ -59,10 +61,10 @@ pub fn draw(self: Menu, canvas: *Canvas) !void {
         const detail = options.detail(index);
         const text: Rect = .{ .x = row.x + canvas.chrome.px(10), .y = row.y, .width = @max(0, row.width - canvas.chrome.px(40)), .height = if (detail.len > 0) row.height * 0.55 else row.height };
         var storage: [TextFit.max_bytes]u8 = undefined;
-        const label = try (@import("TextFit.zig"){ .canvas = canvas, .width = text.width }).fit(.{ .text = options.label(index), .face = .sans, .size = .body }, &storage);
+        const label = try (TextFit{ .canvas = canvas, .width = text.width }).fit(.{ .text = options.label(index), .face = .sans, .size = .body }, &storage);
         _ = try canvas.textAt(text, .{ .text = label, .face = .sans, .size = .body, .color = palette.text });
         if (detail.len > 0) {
-            const fitted = try (@import("TextFit.zig"){ .canvas = canvas, .width = @max(0, row.width - canvas.chrome.px(20)) }).fit(.{ .text = detail, .face = .sans, .size = .small }, &storage);
+            const fitted = try (TextFit{ .canvas = canvas, .width = @max(0, row.width - canvas.chrome.px(20)) }).fit(.{ .text = detail, .face = .sans, .size = .small }, &storage);
             _ = try canvas.textAt(.{ .x = text.x, .y = text.y + text.height, .width = @max(0, row.width - canvas.chrome.px(20)), .height = row.height - text.height }, .{ .text = fitted, .face = .sans, .size = .small, .color = palette.subtext0 });
         }
 

@@ -6,11 +6,12 @@ const client = @import("telar-client");
 const native = @import("native/native.zig");
 const Loop = @This();
 const FramePacer = @import("FramePacer.zig");
+const ConfigurationReload = @import("ConfigurationReload.zig");
 
 io: std.Io,
 fds: [2]c_int,
 inbox: gui_event.Inbox,
-configuration: @import("ConfigurationReload.zig"),
+configuration: ConfigurationReload,
 frame_pacer: FramePacer = .{},
 
 pub fn init(io: std.Io) !Loop {

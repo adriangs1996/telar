@@ -1,6 +1,7 @@
 //! Application policy for dispatching one semantic view interaction.
 const core = @import("telar-core");
 const model_data = @import("model");
+const TabMoveIntent = @import("../workspace/TabMoveIntent.zig");
 
 pub const Intent = union(enum) {
     none,
@@ -9,7 +10,7 @@ pub const Intent = union(enum) {
     toggle_workspace_list,
     focus_agent: model_data.AgentKey,
     select_tab: core.TabId,
-    move_tab: @import("../workspace/TabMoveIntent.zig"),
+    move_tab: TabMoveIntent,
     focus_pane: core.PaneId,
     rename_tab: core.TabId,
     /// The strip's `+` control: the same request the `create_tab` action sends.
@@ -28,4 +29,3 @@ pub fn capturesPaneInput(intent: Intent) bool {
         else => false,
     };
 }
-

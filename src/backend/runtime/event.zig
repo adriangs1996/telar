@@ -22,6 +22,9 @@ const SystemMetricsSample = @import("observability/SystemMetricsSample.zig");
 const Completion = @import("resources/Completion.zig");
 const AgentCompletion = @import("../agent/Completion.zig");
 const std = @import("std");
+const AgentThreadChanged = @import("events/AgentThreadChanged.zig");
+const Job = @import("../change_review/Job.zig");
+const AgentHistoryJob = @import("AgentHistoryJob.zig");
 
 pub const Event = union(enum) {
     accepted: anyerror!core.SocketChannel,
@@ -46,9 +49,9 @@ pub const Event = union(enum) {
     agent_tick: anyerror!void,
     agent_description: AgentResult,
     engine_response: anyerror!Response,
-    agent_thread_changed: @import("events/AgentThreadChanged.zig"),
-    change_review_completed: *@import("../change_review/Job.zig"),
-    agent_history_completed: *@import("AgentHistoryJob.zig"),
+    agent_thread_changed: AgentThreadChanged,
+    change_review_completed: *Job,
+    agent_history_completed: *AgentHistoryJob,
     metrics_tick: anyerror!void,
     metrics_sampled: SystemMetricsSample,
     checkpoint_written: anyerror!void,

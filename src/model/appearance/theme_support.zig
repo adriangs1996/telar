@@ -27,6 +27,7 @@ pub const Palette = @import("Palette.zig");
 pub const Overrides = @import("Overrides.zig");
 
 pub const Theme = @import("Theme.zig");
+const TerminalTheme = @import("TerminalTheme.zig");
 
 pub const default_theme = builtin(.shade);
 
@@ -161,7 +162,7 @@ fn syntax(name: Builtin) Theme.SyntaxStyles {
     return result;
 }
 
-fn terminal(name: Builtin) @import("TerminalTheme.zig") {
+fn terminal(name: Builtin) TerminalTheme {
     // Palette sources are recorded in docs/configuration.md. These are ANSI
     // colors, not a positional conversion of the chrome's semantic roles.
     return switch (name) {

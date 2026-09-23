@@ -17,6 +17,24 @@ const CopyFeedback = @import("../CopyFeedback.zig");
 const MessageLinkPreview = @import("../MessageLinkPreview.zig");
 const TabDropSlots = @import("TabDropSlots.zig");
 const TabMotions = @import("../TabMotions.zig");
+const PasteBuffer = @import("PasteBuffer.zig");
+const ThreadExpansions = @import("ThreadExpansions.zig");
+const ThreadScrollAnchor = @import("ThreadScrollAnchor.zig");
+const ThreadScrollMotions = @import("ThreadScrollMotions.zig");
+const ThreadSelection = @import("ThreadSelection.zig");
+const ThreadTextStore = @import("ThreadTextStore.zig");
+const MessageLayoutCache = @import("../MessageLayoutCache.zig");
+const MessageHeights = @import("../MessageHeights.zig");
+const ImagePreview = @import("ImagePreview.zig");
+const AgentReview = @import("AgentReview.zig");
+const ComposerMenuState = @import("ComposerMenuState.zig");
+const PendingCut = @import("PendingCut.zig");
+const PendingPaste = @import("PendingPaste.zig");
+const ThreadCopy = @import("ThreadCopy.zig");
+const ThreadItemControl = @import("ThreadItemControl.zig");
+const FrameClock = @import("../../animation/FrameClock.zig");
+const ChromeRegistration = @import("ChromeRegistration.zig");
+const Overlays = @import("../overlays/Overlays.zig");
 const TabMoveIntent = ?client.TabMoveIntent;
 
 const State = @This();
@@ -37,29 +55,29 @@ preedit: Preedit = .{},
 prompt_generation: u64 = 0,
 paste_owner: ?Id = null,
 paste_consumed: bool = false,
-paste_buffer: @import("PasteBuffer.zig") = .{},
+paste_buffer: PasteBuffer = .{},
 paste_selection: [2]u32 = .{ 0, 0 },
 paste_revision: u64 = 0,
 directory_scroll_remainder: f64 = 0,
 history_scroll_remainder: f64 = 0,
-thread_expansions: @import("ThreadExpansions.zig") = .{},
-thread_anchor: @import("ThreadScrollAnchor.zig") = .{},
-thread_scroll: @import("ThreadScrollMotions.zig") = .{},
-thread_selection: @import("ThreadSelection.zig") = .{},
-thread_text: ?*@import("ThreadTextStore.zig") = null,
-message_layout: ?*@import("../MessageLayoutCache.zig") = null,
+thread_expansions: ThreadExpansions = .{},
+thread_anchor: ThreadScrollAnchor = .{},
+thread_scroll: ThreadScrollMotions = .{},
+thread_selection: ThreadSelection = .{},
+thread_text: ?*ThreadTextStore = null,
+message_layout: ?*MessageLayoutCache = null,
 message_layout_allocator: std_module.mem.Allocator = undefined,
-message_heights: ?*@import("../MessageHeights.zig") = null,
-image_preview: ?@import("ImagePreview.zig") = null,
-approval_review: ?@import("AgentReview.zig") = null,
-composer_menu: @import("ComposerMenuState.zig") = .{},
+message_heights: ?*MessageHeights = null,
+image_preview: ?ImagePreview = null,
+approval_review: ?AgentReview = null,
+composer_menu: ComposerMenuState = .{},
 history_scroll_generation: u64 = 0,
 history_scroll_inspecting: bool = false,
 native_nodes: [Registry.capacity]native.AccessibilityNode = undefined,
-pending_cuts: [4]?@import("PendingCut.zig") = @splat(null),
-pending_pastes: [4]?@import("PendingPaste.zig") = @splat(null),
-pending_thread_copies: [4]?@import("ThreadCopy.zig") = @splat(null),
-copied_item: ?@import("ThreadItemControl.zig") = null,
+pending_cuts: [4]?PendingCut = @splat(null),
+pending_pastes: [4]?PendingPaste = @splat(null),
+pending_thread_copies: [4]?ThreadCopy = @splat(null),
+copied_item: ?ThreadItemControl = null,
 copied_until_ns: u64 = 0,
 
 /// Includes reads still converting an image, so send cannot strand a late attachment.
@@ -78,9 +96,9 @@ pub fn pastingImage(self: *const State, pane_id: core.PaneId) bool {
 
 /// Reserves bounded geometry for long messages during frame preparation only.
 /// Example: `const cache = try state.messageLayout(canvas.atlas.allocator);`
-pub fn messageLayout(self: *State, allocator: std_module.mem.Allocator) !*@import("../MessageLayoutCache.zig") {
+pub fn messageLayout(self: *State, allocator: std_module.mem.Allocator) !*MessageLayoutCache {
     if (self.message_layout == null) {
-        const cache = try allocator.create(@import("../MessageLayoutCache.zig"));
+        const cache = try allocator.create(MessageLayoutCache);
         cache.* = .{};
         self.message_layout = cache;
         self.message_layout_allocator = allocator;
@@ -91,10 +109,10 @@ pub fn messageLayout(self: *State, allocator: std_module.mem.Allocator) !*@impor
 
 /// Retains message heights once a conversation is measured; shares the
 /// layout cache allocator. Example: `const heights = try state.messageHeights(allocator);`
-pub fn messageHeights(self: *State, allocator: std_module.mem.Allocator) !*@import("../MessageHeights.zig") {
+pub fn messageHeights(self: *State, allocator: std_module.mem.Allocator) !*MessageHeights {
     _ = try self.messageLayout(allocator);
     if (self.message_heights == null) {
-        const heights = try self.message_layout_allocator.create(@import("../MessageHeights.zig"));
+        const heights = try self.message_layout_allocator.create(MessageHeights);
         heights.* = .{};
         self.message_heights = heights;
     }
@@ -104,9 +122,9 @@ pub fn messageHeights(self: *State, allocator: std_module.mem.Allocator) !*@impo
 
 /// Owns text hit geometry only when an agent conversation is prepared.
 /// Example: `const text = try state.threadText(canvas.atlas.allocator);`
-pub fn threadText(self: *State, allocator: std_module.mem.Allocator) !*@import("ThreadTextStore.zig") {
+pub fn threadText(self: *State, allocator: std_module.mem.Allocator) !*ThreadTextStore {
     if (self.thread_text == null) {
-        const store = try allocator.create(@import("ThreadTextStore.zig"));
+        const store = try allocator.create(ThreadTextStore);
         store.* = .{ .allocator = allocator };
         self.thread_text = store;
     }
@@ -132,7 +150,7 @@ pub fn deinit(self: *State) void {
 }
 
 /// Call only when the copy indicator is visible. Example: `const copied = state.threadCopied(control, canvas.animation);`
-pub fn threadCopied(self: *const State, control: @import("ThreadItemControl.zig"), animation: ?*@import("../../animation/FrameClock.zig")) bool {
+pub fn threadCopied(self: *const State, control: ThreadItemControl, animation: ?*FrameClock) bool {
     const copied = self.copied_item orelse return false;
     const clock = animation orelse return false;
     if (!copied.sameItem(control) or clock.now_ns >= self.copied_until_ns) {
@@ -144,7 +162,7 @@ pub fn threadCopied(self: *const State, control: @import("ThreadItemControl.zig"
 }
 
 /// Example: `if (state.threadExpanded(control)) drawToolOutput();`
-pub fn threadExpanded(self: *const State, control: @import("ThreadItemControl.zig")) bool {
+pub fn threadExpanded(self: *const State, control: ThreadItemControl) bool {
     return self.thread_expansions.contains(control);
 }
 
@@ -169,7 +187,7 @@ pub fn begin(self: *State, modal: bool) void {
 
 /// Imports existing chrome's semantic controls with their exact rectangles.
 /// Example: `try state.chrome(canvas, &chrome);`
-pub fn chrome(self: *State, canvas: *Canvas, input: @import("ChromeRegistration.zig")) !void {
+pub fn chrome(self: *State, canvas: *Canvas, input: ChromeRegistration) !void {
     self.tab_drag_step = canvas.chrome.px(4);
     const value = input.chrome;
     if (value.prepared().bands.sidebar.width > 0) {
@@ -197,7 +215,7 @@ pub fn chrome(self: *State, canvas: *Canvas, input: @import("ChromeRegistration.
 
 /// Imports modal result rows after their field, preserving painter priority.
 /// Example: `try state.overlays(canvas, &overlays);`
-pub fn overlays(self: *State, canvas: *Canvas, value: *@import("../overlays/Overlays.zig")) !void {
+pub fn overlays(self: *State, canvas: *Canvas, value: *Overlays) !void {
     const notifications = &value.prepared().notifications;
     for (notifications.hits[0..notifications.count]) |hit| {
         _ = try self.dispatcher.add(hit);
@@ -285,7 +303,7 @@ test "long message geometry is lazy reusable and released by its original alloca
     try std.testing.expect(state.message_layout == null);
     const retained = try state.messageLayout(std.testing.allocator);
     try std.testing.expectEqual(retained, try state.messageLayout(failing.allocator()));
-    try std.testing.expect(@sizeOf(@import("../MessageLayoutCache.zig")) <= 256 * 1024);
+    try std.testing.expect(@sizeOf(MessageLayoutCache) <= 256 * 1024);
     state.deinit();
     try std.testing.expect(state.message_layout == null);
 }

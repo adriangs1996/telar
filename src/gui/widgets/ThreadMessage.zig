@@ -3,9 +3,12 @@ const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const MessageText = @import("MessageText.zig");
+const ThreadItemView = @import("ThreadItemView.zig");
+const MessageHeightKey = @import("MessageHeightKey.zig");
+const ThreadItemButton = @import("ThreadItemButton.zig");
 const Message = @This();
 
-view: @import("ThreadItemView.zig"),
+view: ThreadItemView,
 
 /// Measures a prompt bubble or assistant message using the paint text layout,
 /// reusing the height retained for identical layout inputs.
@@ -31,7 +34,7 @@ fn measureLayout(self: Message, canvas: *Canvas) !f32 {
 
 /// Null when the height also depends on state outside the text: a Mermaid
 /// block measures differently once its diagram is ready.
-fn heightKey(self: Message, canvas: *const Canvas) ?@import("MessageHeightKey.zig") {
+fn heightKey(self: Message, canvas: *const Canvas) ?MessageHeightKey {
     const item = self.view.item;
     const text = self.view.text();
     if (std.mem.indexOf(u8, text, "mermaid") != null) {
@@ -90,7 +93,7 @@ pub fn draw(self: Message, canvas: *Canvas) !void {
         const visible = area.y + area.height > view.viewport.y and area.y < view.viewport.y + view.viewport.height;
         const copied = if (canvas.widgets) |state| visible and state.threadCopied(control, canvas.animation) else false;
         try canvas.iconAt(area, .{ .text = if (copied) "\u{f00c}" else "\u{f0c5}", .face = .sans, .size = .small, .color = if (copied) palette.teal else palette.overlay1 });
-        try (@import("ThreadItemButton.zig"){ .bounds = area, .viewport = view.viewport, .control = control, .label = if (self.fragment()) "Copy segment" else "Copy response" }).register(canvas);
+        try (ThreadItemButton{ .bounds = area, .viewport = view.viewport, .control = control, .label = if (self.fragment()) "Copy segment" else "Copy response" }).register(canvas);
     }
 }
 

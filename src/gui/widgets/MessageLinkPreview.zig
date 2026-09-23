@@ -3,12 +3,14 @@ const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const WrappedLines = @import("overlays/WrappedLines.zig");
+const MessageLinkControl = @import("interaction/MessageLinkControl.zig");
+const MessageLinkDestination = @import("MessageLinkDestination.zig");
 const Preview = @This();
 
-control: @import("interaction/MessageLinkControl.zig"),
+control: MessageLinkControl,
 anchor: Rect,
 pointer: [2]f64,
-destination: @import("MessageLinkDestination.zig"),
+destination: MessageLinkDestination,
 
 /// Draws after conversation clipping, only while the new frame retains this hit.
 /// The passive tooltip never takes input away from the underlying label.

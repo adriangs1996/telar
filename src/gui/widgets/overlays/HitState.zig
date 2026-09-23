@@ -1,8 +1,12 @@
 const core = @import("telar-core");
+const HistoryModalMetrics = @import("HistoryModalMetrics.zig");
+const Rect = @import("../../render/Rect.zig");
+const NotificationHits = @import("NotificationHits.zig");
+const PaletteHits = @import("PaletteHits.zig");
 
 modal: ?core.Rect = null,
-history_metrics: ?@import("HistoryModalMetrics.zig") = null,
-native_modal: ?@import("../../render/Rect.zig") = null,
-notifications: @import("NotificationHits.zig") = .{},
+history_metrics: ?HistoryModalMetrics = null,
+native_modal: ?Rect = null,
+notifications: NotificationHits = .{},
 /// Visible palette rows; empty for every other prompt.
-palette: @import("PaletteHits.zig") = .{},
+palette: PaletteHits = .{},

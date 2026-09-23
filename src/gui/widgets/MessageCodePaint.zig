@@ -1,2 +1,4 @@
-block: @import("MessageBlock.zig"),
+const MessageBlock = @import("MessageBlock.zig");
+
+block: MessageBlock,
 paint: bool,

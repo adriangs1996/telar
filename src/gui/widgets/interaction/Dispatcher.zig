@@ -13,6 +13,7 @@ const Target = @import("Target.zig");
 const Registry = @import("Registry.zig");
 const Route = @import("Route.zig");
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
+const TextInput = @import("../../input/TextInput.zig");
 const GenericTable = data.GenericTable;
 const Dispatcher = @This();
 
@@ -204,7 +205,7 @@ fn text(self: *const Dispatcher) Route {
     return .{ .consumed = target != null or self.maps.presented().modal_layer != 0, .target = target };
 }
 
-fn textKey(self: *Dispatcher, value: @import("../../input/TextInput.zig")) Route {
+fn textKey(self: *Dispatcher, value: TextInput) Route {
     var key_value: Key = .{ .code = .{ .char = .{ .bytes = @splat(0), .len = @intCast(@min(4, value.bytes.len)) } }, .phase = value.phase, .physical = value.physical, .target_id = value.target_id, .generation = value.generation };
     @memcpy(key_value.code.char.bytes[0..key_value.code.char.len], value.bytes[0..key_value.code.char.len]);
     return self.key(key_value, true);

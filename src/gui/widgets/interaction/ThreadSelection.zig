@@ -4,6 +4,7 @@ const Selection = @This();
 const Position = @import("ThreadTextPosition.zig");
 const MessageLinkControl = @import("MessageLinkControl.zig");
 const Owner = @import("ThreadSelectionOwner.zig");
+const ThreadSelectionClipboard = @import("ThreadSelectionClipboard.zig");
 owner: ?Owner = null,
 release: ?Owner = null,
 anchor: ?Position = null,
@@ -19,7 +20,7 @@ next_scroll_ns: u64 = 0,
 selecting: bool = false,
 pending_vertical: i8 = 0,
 preferred_x: ?f64 = null,
-clipboard: ?@import("ThreadSelectionClipboard.zig") = null,
+clipboard: ?ThreadSelectionClipboard = null,
 problem: ?enum { copy_limit, copy_failed, geometry_limit } = null,
 
 /// Example: `if (selection.selected()) copyRange();`

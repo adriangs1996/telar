@@ -28,6 +28,7 @@ const toast_module = @import("../../widgets/toast.zig");
 const Cursor = @import("../../widgets/Cursor.zig");
 const SidebarProviderPlacement = @import("../../graphics/SidebarProviderPlacement.zig");
 const kitty_sidebar_module = @import("../../graphics/kitty_sidebar.zig");
+const TabDrag = @import("TabDrag.zig");
 const State = @This();
 
 scratch: core.Buffer,
@@ -35,7 +36,7 @@ regions: data.GridRegions,
 theme: data.ColorTheme,
 icon_theme: data.icons.Theme,
 hits: context_support.Hits = .{},
-tab_drag: @import("TabDrag.zig") = .{},
+tab_drag: TabDrag = .{},
 sidebar_requested: bool = true,
 sidebar_preferred_width: u16 = data.sidebar.default_width,
 sidebar_resize_active: bool = false,

@@ -12,6 +12,14 @@ const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Block = @import("MessageBlock.zig");
 const Label = @import("Label.zig");
+const MessageLayoutOwner = @import("MessageLayoutOwner.zig");
+const MessageBlocks = @import("MessageBlocks.zig");
+const MessageTablePaint = @import("MessageTablePaint.zig");
+const MessageTextFlow = @import("MessageTextFlow.zig");
+const MessageCodePaint = @import("MessageCodePaint.zig");
+const DiffPaint = @import("DiffPaint.zig");
+const WrappedLines = @import("overlays/WrappedLines.zig");
+const ThreadTextPaint = @import("ThreadTextPaint.zig");
 const Text = @This();
 
 bounds: Rect,
@@ -21,7 +29,7 @@ markdown: bool = true,
 muted: bool = false,
 code: bool = false,
 diff: bool = false,
-owner: ?@import("MessageLayoutOwner.zig") = null,
+owner: ?MessageLayoutOwner = null,
 
 /// Returns the height used by the exact same word layout as the painter.
 /// Example: `const height = try message.measure(canvas);`
@@ -42,7 +50,7 @@ fn layout(self: Text, canvas: *Canvas, paint: bool) !f32 {
         return self.codeBlock(canvas, .{ .block = .{ .text = self.text, .kind = .code, .language = if (self.diff) "Changes" else "Output" }, .paint = paint });
     }
 
-    var blocks: @import("MessageBlocks.zig") = .{ .text = self.text, .markdown = self.markdown };
+    var blocks: MessageBlocks = .{ .text = self.text, .markdown = self.markdown };
     var y: f32 = 0;
     while (blocks.next()) |block| {
         if (block.kind == .spacer or block.kind == .rule) {
@@ -62,14 +70,14 @@ fn layout(self: Text, canvas: *Canvas, paint: bool) !f32 {
         }
 
         if (block.kind == .table) {
-            y += try (@import("MessageTablePaint.zig"){ .bounds = .{ .x = self.bounds.x, .y = self.bounds.y + y, .width = self.bounds.width, .height = 0 }, .viewport = self.viewport, .table = MessageTable.parse(block.text).?, .owner = self.owner, .source_start = @intFromPtr(self.text.ptr), .muted = self.muted }).layout(canvas, paint);
+            y += try (MessageTablePaint{ .bounds = .{ .x = self.bounds.x, .y = self.bounds.y + y, .width = self.bounds.width, .height = 0 }, .viewport = self.viewport, .table = MessageTable.parse(block.text).?, .owner = self.owner, .source_start = @intFromPtr(self.text.ptr), .muted = self.muted }).layout(canvas, paint);
             continue;
         }
 
         const indent = if (block.kind == .bullet or block.kind == .quote) @min(canvas.chrome.px(26), self.bounds.width / 5) else 0;
         const top = if (block.kind == .heading) canvas.chrome.px(7) else 0;
         const row = canvas.chrome.px(if (block.kind == .heading) @as(f32, 30) else 25);
-        var flow: @import("MessageTextFlow.zig") = .{ .canvas = canvas, .bounds = .{ .x = self.bounds.x + indent, .y = self.bounds.y + y + top, .width = @max(1, self.bounds.width - indent), .height = 0 }, .viewport = self.viewport, .row = row, .paint = paint, .owner = self.owner, .source_start = @intFromPtr(self.text.ptr) };
+        var flow: MessageTextFlow = .{ .canvas = canvas, .bounds = .{ .x = self.bounds.x + indent, .y = self.bounds.y + y + top, .width = @max(1, self.bounds.width - indent), .height = 0 }, .viewport = self.viewport, .row = row, .paint = paint, .owner = self.owner, .source_start = @intFromPtr(self.text.ptr) };
         const label: Label = .{ .text = block.text, .face = .sans, .size = if (block.kind == .heading) .title else .body, .bold = block.kind == .heading, .color = if (self.muted or block.kind == .quote) canvas.theme.palette.subtext0 else canvas.theme.palette.text };
         if (self.markdown) {
             try flow.appendStyled(block.text, label);
@@ -91,9 +99,9 @@ fn layout(self: Text, canvas: *Canvas, paint: bool) !f32 {
     return y;
 }
 
-fn codeBlock(self: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig")) !f32 {
+fn codeBlock(self: Text, canvas: *Canvas, input: MessageCodePaint) !f32 {
     if (self.diff or std.mem.eql(u8, input.block.language, "diff") or std.mem.eql(u8, input.block.language, "patch")) {
-        var diff: @import("DiffPaint.zig") = .{ .canvas = canvas, .bounds = self.bounds, .viewport = self.viewport, .text = input.block.text, .owner = self.owner, .source_start = @intFromPtr(self.text.ptr), .paint = input.paint };
+        var diff: DiffPaint = .{ .canvas = canvas, .bounds = self.bounds, .viewport = self.viewport, .text = input.block.text, .owner = self.owner, .source_start = @intFromPtr(self.text.ptr), .paint = input.paint };
         return diff.layout();
     }
 
@@ -116,7 +124,7 @@ fn codeBlock(self: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig")
     const header = canvas.chrome.px(30);
     const row: f32 = @max(canvas.chrome.px(21), @as(f32, @floatFromInt(canvas.metrics.cell_height)));
     const columns: u16 = @intFromFloat(@max(1, @min(65535, @floor((self.bounds.width - 2 * inset) / @as(f32, @floatFromInt(canvas.metrics.cell_width))))));
-    var lines: @import("overlays/WrappedLines.zig") = .{ .text = input.block.text, .width = columns };
+    var lines: WrappedLines = .{ .text = input.block.text, .width = columns };
     const height = header + @as(f32, @floatFromInt(lines.count())) * row + canvas.chrome.px(12);
     if (!input.paint or !self.visible(self.bounds.y, height + canvas.chrome.px(10))) {
         return height + canvas.chrome.px(10);
@@ -133,7 +141,7 @@ fn codeBlock(self: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig")
     try canvas.ringAt(card, .{ .color = canvas.theme.palette.overlay0, .width = 1, .radius = canvas.chrome.px(8), .alpha = 0.4 });
     var storage: [TextFit.max_bytes]u8 = undefined;
     var label: Label = .{ .text = if (diagram != null) MermaidBlock.label(diagram_view) else if (input.block.language.len > 0) input.block.language else "Code", .face = .sans, .size = .small, .color = canvas.theme.palette.subtext0 };
-    label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = @max(0, card.width - 2 * inset) }).fit(label, &storage);
+    label.text = try (TextFit{ .canvas = canvas, .width = @max(0, card.width - 2 * inset) }).fit(label, &storage);
     if (self.visible(card.y, header)) {
         _ = try canvas.textAt(.{ .x = card.x + inset, .y = card.y, .width = card.width - 2 * inset, .height = header }, label);
     }
@@ -147,7 +155,7 @@ fn codeBlock(self: Text, canvas: *Canvas, input: @import("MessageCodePaint.zig")
                         const geometry = store.maps.preparing();
                         const at = owner.source_offset + @as(u32, @intCast(@intFromPtr(line.ptr) - @intFromPtr(self.text.ptr)));
                         if (try geometry.append(canvas, .{ .owner = owner, .offset = at, .text = line, .bounds = area, .viewport = self.viewport, .advance = 0, .face = .mono, .pixel_height = canvas.metrics.pixel_height })) |hit| {
-                            try (@import("ThreadTextPaint.zig"){ .geometry = geometry, .fragment = hit }).draw(canvas);
+                            try (ThreadTextPaint{ .geometry = geometry, .fragment = hit }).draw(canvas);
                         }
                     }
                 }

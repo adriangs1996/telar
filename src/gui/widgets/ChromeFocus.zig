@@ -1,9 +1,10 @@
 //! Drawn after chrome controls so focus uses their newly prepared rectangles.
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
+const Chrome = @import("Chrome.zig");
 const ChromeFocus = @This();
 
-chrome: *@import("Chrome.zig"),
+chrome: *Chrome,
 projection: *const client.Projection,
 
 /// Registers the painted controls and outlines the focused one before overlays.

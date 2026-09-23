@@ -1,6 +1,9 @@
 //! Visible message text selected by source byte offsets, with no retained slices.
 const MessageTable = @import("MessageTable.zig");
 const std = @import("std");
+const MessageBlocks = @import("MessageBlocks.zig");
+const MessageSpans = @import("MessageSpans.zig");
+const MessageTableCells = @import("MessageTableCells.zig");
 const Selection = @This();
 
 text: []const u8,
@@ -23,13 +26,13 @@ pub fn write(self: Selection, writer: *std.Io.Writer) !void {
         return;
     }
 
-    var blocks: @import("MessageBlocks.zig") = .{ .text = selected.text };
+    var blocks: MessageBlocks = .{ .text = selected.text };
     while (blocks.index < selected.range[1]) {
         const block = blocks.next() orelse break;
         if (block.kind == .table) {
             const table = MessageTable.parse(block.text).?;
             try selected.writeRow(writer, table.rowCells(table.header));
-            var rows: @import("MessageBlocks.zig") = .{ .text = table.body, .markdown = false };
+            var rows: MessageBlocks = .{ .text = table.body, .markdown = false };
             while (rows.next()) |row| {
                 try selected.writeRow(writer, table.rowCells(row.text));
             }
@@ -47,7 +50,7 @@ pub fn write(self: Selection, writer: *std.Io.Writer) !void {
             continue;
         }
 
-        var spans: @import("MessageSpans.zig") = .{ .text = block.text };
+        var spans: MessageSpans = .{ .text = block.text };
         while (spans.next()) |span| {
             try selected.writeSlice(writer, span.text);
         }
@@ -80,7 +83,7 @@ fn bounds(self: Selection) [2]u32 {
     return .{ @intCast(start), @intCast(end) };
 }
 
-fn writeRow(self: Selection, writer: *std.Io.Writer, row: @import("MessageTableCells.zig")) !void {
+fn writeRow(self: Selection, writer: *std.Io.Writer, row: MessageTableCells) !void {
     var cells = row;
     var first = true;
     while (cells.next()) |cell| {
@@ -90,7 +93,7 @@ fn writeRow(self: Selection, writer: *std.Io.Writer, row: @import("MessageTableC
         }
 
         first = false;
-        var spans: @import("MessageSpans.zig") = .{ .text = cell, .table_cell = true };
+        var spans: MessageSpans = .{ .text = cell, .table_cell = true };
         while (spans.next()) |span| {
             try self.writeSlice(writer, span.text);
         }

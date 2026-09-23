@@ -1,15 +1,22 @@
+const PointerSample = @import("input/PointerSample.zig");
+const KeyInput = @import("input/KeyInput.zig");
+const TextCommit = @import("input/TextCommit.zig");
+const PasteChunk = @import("PasteChunk.zig");
+const ScrollSample = @import("input/ScrollSample.zig");
+const Composition = @import("input/Composition.zig");
+
 pub const Admission = enum { accepted, recovery };
 
 pub const Item = union(enum) {
     release_recovery,
-    pointer: @import("input/PointerSample.zig"),
-    key: @import("input/KeyInput.zig"),
-    text: @import("input/TextCommit.zig"),
+    pointer: PointerSample,
+    key: KeyInput,
+    text: TextCommit,
     paste_start,
-    paste_text: @import("PasteChunk.zig"),
+    paste_text: PasteChunk,
     paste_finish,
-    scroll: @import("input/ScrollSample.zig"),
+    scroll: ScrollSample,
     owned_small: u8,
     owned_large: u8,
-    composition_cancel: @import("input/Composition.zig"),
+    composition_cancel: Composition,
 };

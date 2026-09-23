@@ -9,6 +9,13 @@ const Position = @import("ThreadTextPosition.zig");
 const Geometry = @import("ThreadTextGeometry.zig");
 const message_links = @import("message_links.zig");
 const Selection = @import("ThreadSelection.zig");
+const Route = @import("Route.zig");
+const PointerEvent = @import("../../input/PointerEvent.zig");
+const KeyInput = @import("../../input/KeyInput.zig");
+const ThreadSelectionCopy = @import("ThreadSelectionCopy.zig");
+const Owner = @import("../../host/Owner.zig");
+const ClipboardResult = @import("../../input/ClipboardResult.zig");
+const Rect = @import("../../render/Rect.zig");
 
 /// Enters through the semantic action port, preserving configured bindings.
 /// Example: `_ = thread_selection.enter(gui, pane_id);`
@@ -140,7 +147,7 @@ pub fn delivered(gui: *GuiClient) void {
 
 /// Routes only gestures and keys owned by the delivered conversation target.
 /// Example: `if (try thread_selection.route(gui, event, decision)) return true;`
-pub fn route(gui: *GuiClient, event: event_module.Event, decision: @import("Route.zig")) !bool {
+pub fn route(gui: *GuiClient, event: event_module.Event, decision: Route) !bool {
     const selection = &gui.widgets.thread_selection;
     if (event == .focus and !event.focus) {
         cancel(gui);
@@ -169,7 +176,7 @@ pub fn route(gui: *GuiClient, event: event_module.Event, decision: @import("Rout
     return event == .composition or event == .paste or event == .delete_surrounding;
 }
 
-fn pointer(gui: *GuiClient, event: @import("../../input/PointerEvent.zig"), target: ?Target) !bool {
+fn pointer(gui: *GuiClient, event: PointerEvent, target: ?Target) !bool {
     const selection = &gui.widgets.thread_selection;
     if (event.button != .left) {
         return false;
@@ -249,7 +256,7 @@ fn pointer(gui: *GuiClient, event: @import("../../input/PointerEvent.zig"), targ
     return false;
 }
 
-fn key(gui: *GuiClient, target: Target, value: @import("../../input/KeyInput.zig")) !void {
+fn key(gui: *GuiClient, target: Target, value: KeyInput) !void {
     const selection = &gui.widgets.thread_selection;
     if (value.code == .escape) {
         _ = leave(gui);
@@ -397,12 +404,12 @@ fn copy(gui: *GuiClient, exit_after: bool) void {
     const target = transcript(gui, owner.pane_id) orelse return;
     var bytes: [event_module.max_text_bytes]u8 = undefined;
     var writer: std.Io.Writer = .fixed(&bytes);
-    (@import("ThreadSelectionCopy.zig"){ .gui = gui, .range = selection.range().?, .writer = &writer }).write() catch |err| {
+    (ThreadSelectionCopy{ .gui = gui, .range = selection.range().?, .writer = &writer }).write() catch |err| {
         selection.problem = if (err == error.WriteFailed) .copy_limit else if (err == error.SelectionGeometryLimit) .geometry_limit else .copy_failed;
         gui.widgets.dispatcher.revision +%= 1;
         return;
     };
-    const request_owner: @import("../../host/Owner.zig") = .{ .target_id = target.id.target_id, .generation = target.id.generation };
+    const request_owner: Owner = .{ .target_id = target.id.target_id, .generation = target.id.generation };
     const request = gui.requestClipboardWriteOwned(request_owner, writer.buffered()) catch {
         selection.problem = .copy_failed;
         gui.widgets.dispatcher.revision +%= 1;
@@ -414,7 +421,7 @@ fn copy(gui: *GuiClient, exit_after: bool) void {
 
 /// Failure preserves the selection; exiting copy mode waits for host success.
 /// Example: `thread_selection.copied(gui, result);`
-pub fn copied(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig")) void {
+pub fn copied(gui: *GuiClient, result: ClipboardResult) void {
     const selection = &gui.widgets.thread_selection;
     const pending = selection.clipboard orelse return;
     if (pending.request_id != result.request_id or pending.owner.target_id != result.target_id or pending.owner.generation != result.generation) {
@@ -479,7 +486,7 @@ fn adjacent(geometry: *const Geometry, current: Position, forward: bool) ?Positi
     return result;
 }
 
-fn locate(geometry: *const Geometry, current: Position) ?@import("../../render/Rect.zig") {
+fn locate(geometry: *const Geometry, current: Position) ?Rect {
     for (geometry.fragments[0..geometry.fragment_count]) |fragment| {
         for (geometry.carets[fragment.caret_start..][0..fragment.caret_count], 0..) |caret, index| {
             if (current.eql(geometry.position(fragment, index))) {

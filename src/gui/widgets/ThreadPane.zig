@@ -4,6 +4,15 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
+const ComposerTrigger = @import("ComposerTrigger.zig");
+const ActivityText = @import("ActivityText.zig");
+const ThreadTranscript = @import("ThreadTranscript.zig");
+const AgentComposer = @import("AgentComposer.zig");
+const ThreadSelectionStatus = @import("ThreadSelectionStatus.zig");
+const ThreadApprovalPaint = @import("ThreadApprovalPaint.zig");
+const WrappedLines = @import("overlays/WrappedLines.zig");
+const ThreadControl = @import("ThreadControl.zig");
+const ThreadLayoutOptions = @import("ThreadLayoutOptions.zig");
 const ThreadPane = @This();
 
 area: core.Rect,
@@ -40,7 +49,7 @@ pub fn draw(self: ThreadPane, canvas: *Canvas) !void {
             .failed => "Conversations unavailable",
             .ready => if (recent.count == 0) "No recent conversations" else "Resume conversation…",
         };
-        try (@import("ComposerTrigger.zig"){
+        try (ComposerTrigger{
             .bounds = .{ .x = header.x + header.width - status_width - resume_width, .y = header.y, .width = resume_width, .height = header.height },
             .selector = .{ .pane_id = self.thread.pane_id, .kind = .recent, .catalog_revision = self.thread.catalog_revision, .options_revision = self.thread.options_revision },
             .generation = self.thread.attachment_generation,
@@ -50,7 +59,7 @@ pub fn draw(self: ThreadPane, canvas: *Canvas) !void {
     }
 
     _ = try canvas.textAt(.{ .x = header.x, .y = header.y, .width = @max(0, header.width - status_width - resume_width), .height = header.height }, .{ .text = title, .face = .sans, .size = .title, .bold = true, .color = palette.text });
-    try (@import("ActivityText.zig"){ .bounds = .{ .x = header.x + header.width - status_width, .y = header.y, .width = status_width, .height = header.height }, .label = .{ .text = status_text, .face = .sans, .size = .small, .color = if (status == .blocked) palette.yellow else if (status == .failed) palette.red else palette.subtext0 }, .active = thread_status.active(self.thread.transcript) }).draw(canvas);
+    try (ActivityText{ .bounds = .{ .x = header.x + header.width - status_width, .y = header.y, .width = status_width, .height = header.height }, .label = .{ .text = status_text, .face = .sans, .size = .small, .color = if (status == .blocked) palette.yellow else if (status == .failed) palette.red else palette.subtext0 }, .active = thread_status.active(self.thread.transcript) }).draw(canvas);
     var request: ?*const core.AgentApprovalRequest = null;
     if (canvas.widgets) |state| {
         if (state.approval_review) |review| {
@@ -58,14 +67,14 @@ pub fn draw(self: ThreadPane, canvas: *Canvas) !void {
         }
     }
 
-    try (@import("ThreadTranscript.zig"){ .bounds = layout.body, .thread = self.thread, .request = request }).draw(canvas);
+    try (ThreadTranscript{ .bounds = layout.body, .thread = self.thread, .request = request }).draw(canvas);
 
     if (approval) |pending| {
         try self.drawApproval(canvas, .{ .bounds = layout.approval, .request = pending });
     }
 
-    try (@import("AgentComposer.zig"){ .bounds = layout.composer, .pane_bounds = bounds, .thread = self.thread }).draw(canvas);
-    try (@import("ThreadSelectionStatus.zig"){ .bounds = layout.footer, .pane_id = self.thread.pane_id }).draw(canvas);
+    try (AgentComposer{ .bounds = layout.composer, .pane_bounds = bounds, .thread = self.thread }).draw(canvas);
+    try (ThreadSelectionStatus{ .bounds = layout.footer, .pane_id = self.thread.pane_id }).draw(canvas);
 }
 
 fn drawTerminalThread(self: ThreadPane, canvas: *Canvas) !void {
@@ -92,7 +101,7 @@ fn drawTerminalThread(self: ThreadPane, canvas: *Canvas) !void {
     try canvas.text(composer.splitLeft(2)[1], .{ .text = if (self.thread.composer.len == 0) "write to the agent" else self.thread.composer, .color = if (self.thread.composer.len == 0) palette.overlay1 else palette.text });
 }
 
-fn drawApproval(self: ThreadPane, canvas: *Canvas, input: @import("ThreadApprovalPaint.zig")) !void {
+fn drawApproval(self: ThreadPane, canvas: *Canvas, input: ThreadApprovalPaint) !void {
     const area = input.bounds;
     const palette = canvas.theme.palette;
     const row = @min(canvas.chrome.px(28), area.height / 4);
@@ -101,7 +110,7 @@ fn drawApproval(self: ThreadPane, canvas: *Canvas, input: @import("ThreadApprova
     try canvas.ringAt(area, .{ .color = palette.yellow, .radius = canvas.chrome.px(8), .width = 1, .alpha = 0.6 });
     _ = try canvas.textAt(.{ .x = area.x + inset, .y = area.y, .width = area.width - 2 * inset, .height = row }, .{ .text = "Approval required · review the requested action in the conversation", .face = .sans, .size = .small, .bold = true, .color = palette.yellow });
     const columns: u16 = @intFromFloat(@max(1, @min(65535, @floor((area.width - 2 * inset) / @as(f32, @floatFromInt(canvas.metrics.cell_width))))));
-    var lines: @import("overlays/WrappedLines.zig") = .{ .text = input.request.text(), .width = columns };
+    var lines: WrappedLines = .{ .text = input.request.text(), .width = columns };
     for (0..2) |index| {
         const line = lines.next() orelse break;
         _ = try canvas.textAt(.{ .x = area.x + inset, .y = area.y + @as(f32, @floatFromInt(index + 1)) * row, .width = area.width - 2 * inset, .height = row }, .{ .text = line, .color = palette.text });
@@ -109,9 +118,9 @@ fn drawApproval(self: ThreadPane, canvas: *Canvas, input: @import("ThreadApprova
 
     const width = @min(canvas.chrome.px(112), (area.width - 4 * inset) / 3);
     const y = area.y + area.height - row;
-    try (@import("ThreadControl.zig"){ .bounds = .{ .x = area.x + inset, .y = y, .width = @max(0, area.width - 4 * inset - 2 * width), .height = row }, .pane_id = self.thread.pane_id, .generation = self.thread.attachment_generation, .kind = .review, .approval_id = input.request.id, .label = "Review full request" }).draw(canvas);
-    try (@import("ThreadControl.zig"){ .bounds = .{ .x = area.x + area.width - inset - width, .y = y, .width = width, .height = row }, .pane_id = self.thread.pane_id, .generation = self.thread.attachment_generation, .kind = .approve, .approval_id = input.request.id, .label = "Approve" }).draw(canvas);
-    try (@import("ThreadControl.zig"){ .bounds = .{ .x = area.x + area.width - 2 * inset - 2 * width, .y = y, .width = width, .height = row }, .pane_id = self.thread.pane_id, .generation = self.thread.attachment_generation, .kind = .decline, .approval_id = input.request.id, .label = "Decline" }).draw(canvas);
+    try (ThreadControl{ .bounds = .{ .x = area.x + inset, .y = y, .width = @max(0, area.width - 4 * inset - 2 * width), .height = row }, .pane_id = self.thread.pane_id, .generation = self.thread.attachment_generation, .kind = .review, .approval_id = input.request.id, .label = "Review full request" }).draw(canvas);
+    try (ThreadControl{ .bounds = .{ .x = area.x + area.width - inset - width, .y = y, .width = width, .height = row }, .pane_id = self.thread.pane_id, .generation = self.thread.attachment_generation, .kind = .approve, .approval_id = input.request.id, .label = "Approve" }).draw(canvas);
+    try (ThreadControl{ .bounds = .{ .x = area.x + area.width - 2 * inset - 2 * width, .y = y, .width = width, .height = row }, .pane_id = self.thread.pane_id, .generation = self.thread.attachment_generation, .kind = .decline, .approval_id = input.request.id, .label = "Decline" }).draw(canvas);
 }
 
 const ThreadLayout = struct {
@@ -123,7 +132,7 @@ const ThreadLayout = struct {
 
     /// Keeps the composer and actions inside tiny panes in one content column.
     /// Example: `const layout = ThreadLayout.resolve(canvas, bounds, .{ .blocked = blocked });`
-    pub fn resolve(canvas: *const Canvas, bounds: Rect, options: @import("ThreadLayoutOptions.zig")) ThreadLayout {
+    pub fn resolve(canvas: *const Canvas, bounds: Rect, options: ThreadLayoutOptions) ThreadLayout {
         const inset = @min(canvas.chrome.px(24), bounds.width / 12);
         const width = @min(canvas.chrome.px(880), @max(0, bounds.width - 2 * inset));
         const x = bounds.x + (bounds.width - width) / 2;

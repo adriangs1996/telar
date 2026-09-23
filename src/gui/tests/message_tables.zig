@@ -4,7 +4,8 @@ const Fixture = @import("ConversationFixture.zig");
 const Text = @import("../widgets/MessageText.zig");
 const TablePaint = @import("../widgets/MessageTablePaint.zig");
 const Registry = @import("../widgets/interaction/Registry.zig");
-const owner: @import("../widgets/MessageLayoutOwner.zig") = .{ .pane_id = @enumFromInt(1), .attachment_generation = 3, .pane_generation = 5, .snapshot_revision = 7, .item_identity = 11, .section = .body, .source_offset = 120 };
+const MessageLayoutOwner = @import("../widgets/MessageLayoutOwner.zig");
+const owner: MessageLayoutOwner = .{ .pane_id = @enumFromInt(1), .attachment_generation = 3, .pane_generation = 5, .snapshot_revision = 7, .item_identity = 11, .section = .body, .source_offset = 120 };
 
 fn message(source: []const u8) Text {
     return .{ .bounds = .{ .x = 10, .y = 20, .width = 650, .height = 700 }, .viewport = .{ .x = 10, .y = 20, .width = 650, .height = 700 }, .text = source, .owner = owner };

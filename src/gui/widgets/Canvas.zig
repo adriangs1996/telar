@@ -22,36 +22,43 @@ const SpritePage = @import("../image/SpritePage.zig");
 const Sprite = @import("../image/Sprite.zig");
 const Canvas = @This();
 const SyntaxStore = @import("../syntax/Store.zig");
+const State = @import("interaction/State.zig");
+const TerminalMetrics = @import("../TerminalMetrics.zig");
+const FrameClock = @import("../animation/FrameClock.zig");
+const SidebarBand = @import("SidebarBand.zig");
+const Store = @import("../diagrams/Store.zig");
+const PanePaint = @import("../render/PanePaint.zig");
+const SpritePaint = @import("SpritePaint.zig");
 
-widgets: ?*@import("interaction/State.zig") = null,
+widgets: ?*State = null,
 /// The specialized cell cache is available to terminal widgets in a GUI frame.
-terminal_renderer: ?*@import("../render/TerminalRenderer.zig") = null,
+terminal_renderer: ?*TerminalRenderer = null,
 
-atlas: *@import("../text/GlyphAtlas.zig"),
-quads: *@import("../render/QuadList.zig"),
-metrics: @import("../TerminalMetrics.zig"),
+atlas: *GlyphAtlas,
+quads: *QuadList,
+metrics: TerminalMetrics,
 origin: [2]u32,
 theme: data.ColorTheme,
 background_opacity: f32 = 1,
 /// Shared presentation time and next wake request; null for static consumers.
-animation: ?*@import("../animation/FrameClock.zig") = null,
+animation: ?*FrameClock = null,
 /// Band heights already subtracted from the grid by the renderer.
 chrome: ChromeMetrics = .{},
 /// Whole window in device pixels; the bands span it, the grid sits inside.
 viewport: [2]u32 = .{ 0, 0 },
 /// The sidebar band the renderer took off the left of the grid.
-sidebar: @import("SidebarBand.zig") = .{},
+sidebar: SidebarBand = .{},
 /// The RGBA sprite page of the renderer; `null` while a fixture has none,
 /// in which case `spriteAt` draws nothing and `providerMark` finds nothing.
 sprites: ?*const SpritePage = null,
 /// Diagram requests copy their source into the client-owned deferred store.
-diagrams: ?*@import("../diagrams/Store.zig") = null,
+diagrams: ?*Store = null,
 syntax: ?*SyntaxStore = null,
 
 /// Draws canonical terminal cells and their cursor through the frame's retained
 /// cache. A canvas backed by another quad list cannot use that cache.
 /// Example: `try canvas.terminal(.{ .pane = pane, .view = view });`
-pub fn terminal(self: *Canvas, paint: @import("../render/PanePaint.zig")) !void {
+pub fn terminal(self: *Canvas, paint: PanePaint) !void {
     const renderer = self.terminal_renderer orelse return error.TerminalPainterUnavailable;
     if (self.quads != &renderer.quads or self.atlas != &renderer.atlas.?) {
         return error.TerminalCanvasMismatch;
@@ -176,7 +183,7 @@ pub fn spriteAt(self: *Canvas, bounds: Rect, sprite: Sprite) !void {
 
 /// Tints and fades a sprite without changing or uploading its pixels.
 /// Example: `try canvas.spriteTintedAt(box, .{ .sprite = mark, .alpha = 0.6 });`
-pub fn spriteTintedAt(self: *Canvas, bounds: Rect, paint: @import("SpritePaint.zig")) !void {
+pub fn spriteTintedAt(self: *Canvas, bounds: Rect, paint: SpritePaint) !void {
     const page = self.sprites orelse return;
     if (bounds.width <= 0 or bounds.height <= 0) {
         return;

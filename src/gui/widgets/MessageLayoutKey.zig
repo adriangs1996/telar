@@ -1,8 +1,9 @@
 //! Exact geometry context plus a fingerprint of the complete source span.
 const label_face = @import("label_face.zig");
+const MessageLayoutOwner = @import("MessageLayoutOwner.zig");
 text_hash: u64,
 text_len: usize,
-owner: @import("MessageLayoutOwner.zig"),
+owner: MessageLayoutOwner,
 font_identity: u64,
 font_revision: u64,
 width: f32,

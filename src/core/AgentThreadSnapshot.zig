@@ -5,6 +5,8 @@ const AgentApprovalRequest = @import("AgentApprovalRequest.zig");
 const std = @import("std");
 const AgentModel = @import("AgentModel.zig");
 const AgentOptions = @import("AgentOptions.zig");
+const RecentConversations = @import("RecentConversations.zig");
+const AgentSkills = @import("AgentSkills.zig");
 
 pane_id: id.PaneId,
 pane_generation: u64,
@@ -25,9 +27,9 @@ truncated: bool = false,
 model_storage: [agent_thread.max_models]AgentModel = @splat(.{}),
 model_count: u8 = 0,
 options: AgentOptions = .{},
-recent: @import("RecentConversations.zig") = .{},
+recent: RecentConversations = .{},
 resumed: bool = false,
-skills: @import("AgentSkills.zig") = .{},
+skills: AgentSkills = .{},
 
 /// Example: `drawThreadId(snapshot.threadId());`
 pub fn threadId(snapshot: *const @This()) []const u8 {

@@ -1,6 +1,7 @@
 const std = @import("std");
 const Job = @import("AgentHistoryJob.zig");
 const ClientKey = @import("../history/ClientKey.zig");
+const HistoryOptions = @import("../agent_panes/HistoryOptions.zig");
 const Jobs = @This();
 
 items: [4]?*Job = @splat(null),
@@ -69,7 +70,7 @@ test "agent history shutdown releases an owned result whose completion was disca
     const gpa = std.testing.allocator;
     var jobs: Jobs = .{};
     const job = &jobs.storage[0];
-    const options = try gpa.create(@import("../agent_panes/HistoryOptions.zig"));
+    const options = try gpa.create(HistoryOptions);
     options.* = .{
         .gpa = gpa,
         .cwd = try gpa.dupe(u8, "/tmp"),

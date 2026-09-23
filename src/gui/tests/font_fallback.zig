@@ -11,6 +11,7 @@ const FontMatch = @import("../native/FontMatch.zig").FontMatch;
 const FallbackPool = @import("../text/FallbackPool.zig");
 const QuadList = @import("../render/QuadList.zig");
 const TextRun = @import("../text/TextRun.zig");
+const ShapingKey = @import("../text/ShapingKey.zig");
 
 /// U+23F5, the arrow Claude Code prints in `⏵⏵ auto mode on`; in neither
 /// JetBrains Mono nor Symbols Nerd Font Mono.
@@ -294,8 +295,8 @@ test "font discovery retires cached missing glyphs in painting measurement and e
     var name: [32]u8 = undefined;
     try temp.dir.writeFile(io, .{ .sub_path = try copyName(plex_only[1], &name), .data = assets.plex_sans });
     const long_text = plex_only[0] ++ "a" ** 80;
-    const key: @import("../text/ShapingKey.zig") = .{ .text = plex_only[0], .pixel_height = 16 };
-    const long_key: @import("../text/ShapingKey.zig") = .{ .text = long_text, .pixel_height = 16 };
+    const key: ShapingKey = .{ .text = plex_only[0], .pixel_height = 16 };
+    const long_key: ShapingKey = .{ .text = long_text, .pixel_height = 16 };
     inline for (.{ "paint", "measure", "caret" }) |entrypoint| {
         var atlas = try discoveringAtlas();
         defer atlas.deinit();

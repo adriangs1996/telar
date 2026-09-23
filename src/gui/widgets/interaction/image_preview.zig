@@ -2,6 +2,7 @@ const core = @import("telar-core");
 const event_module = @import("../../input/event.zig");
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
+const ImagePreview = @import("ImagePreview.zig");
 
 /// Revalidates a delivered image control before copying its local reference.
 /// Example: `image_preview.open(gui, target);`
@@ -14,7 +15,7 @@ pub fn open(gui: *GuiClient, target: Target) void {
     }
 
     const path = images.path(control.image_index);
-    var preview: @import("ImagePreview.zig") = .{ .control = control, .generation = target.id.generation, .path_len = @intCast(path.len) };
+    var preview: ImagePreview = .{ .control = control, .generation = target.id.generation, .path_len = @intCast(path.len) };
     @memcpy(preview.path_storage[0..path.len], path);
     gui.widgets.cancelComposition();
     gui.widgets.image_preview = preview;

@@ -6,13 +6,16 @@ const core = @import("telar-core");
 const Renderer = @import("../render/TerminalRenderer.zig");
 const Canvas = @import("../widgets/Canvas.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
+const State = @import("../widgets/interaction/State.zig");
+const FrameClock = @import("../animation/FrameClock.zig");
+const PointerEvent = @import("../input/PointerEvent.zig");
 const Fixture = @This();
 
 model: data.ClientModel,
 renderer: Renderer,
 overlays: Overlays = .{},
-widgets: @import("../widgets/interaction/State.zig") = .{},
-animation: ?@import("../animation/FrameClock.zig") = null,
+widgets: State = .{},
+animation: ?FrameClock = null,
 size: core.TerminalSize,
 
 pub fn init() !*Fixture {
@@ -69,7 +72,7 @@ pub fn present(self: *Fixture, delivered: bool) void {
 }
 
 /// Example: `const result = fixture.pointer(.{ .kind = .press, .x = 10, .y = 20 });`
-pub fn pointer(self: *Fixture, event: @import("../input/PointerEvent.zig")) client.ViewInteractionCommand {
+pub fn pointer(self: *Fixture, event: PointerEvent) client.ViewInteractionCommand {
     const routed = self.widgets.dispatcher.route(.{ .pointer = event });
     return .{ .consumed = routed.consumed, .intent = if (routed.target) |target| if (target.action == .intent) target.action.intent else .none else .none };
 }

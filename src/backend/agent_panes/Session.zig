@@ -11,6 +11,7 @@ const protocol = @import("protocol.zig");
 const Prompt = @import("Prompt.zig");
 const ThreadMetadata = @import("ThreadMetadata.zig");
 const HistoryOptions = @import("HistoryOptions.zig");
+const OutputFrame = @import("OutputFrame.zig");
 const Session = @This();
 
 gpa: std.mem.Allocator,
@@ -33,7 +34,7 @@ published: core.AgentThreadSnapshot,
 published_metadata: ThreadMetadata = .{},
 codex: Codex,
 stream: Stream = undefined,
-output_frame: @import("OutputFrame.zig") = .{},
+output_frame: OutputFrame = .{},
 json_storage: [protocol.max_json_bytes]u8 = undefined,
 
 /// Starts a bounded observation actor. Process spawn and JSON run on that actor.

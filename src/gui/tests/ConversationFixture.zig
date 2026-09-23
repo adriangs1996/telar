@@ -8,11 +8,14 @@ const Fixture = @This();
 const SyntaxStore = @import("../syntax/Store.zig");
 const SyntaxResult = @import("../syntax/Result.zig");
 const DiffHighlighter = @import("../syntax/DiffHighlighter.zig");
+const FrameClock = @import("../animation/FrameClock.zig");
+const State = @import("../widgets/interaction/State.zig");
+const Canvas = @import("../widgets/Canvas.zig");
 
-atlas: @import("../text/GlyphAtlas.zig"),
-quads: @import("../render/QuadList.zig"),
-clock: @import("../animation/FrameClock.zig") = .{},
-state: ?*@import("../widgets/interaction/State.zig") = null,
+atlas: GlyphAtlas,
+quads: QuadList,
+clock: FrameClock = .{},
+state: ?*State = null,
 syntax: ?*SyntaxStore = null,
 
 pub fn init() !Fixture {
@@ -32,7 +35,7 @@ pub fn deinit(self: *Fixture) void {
     }
 }
 
-pub fn canvas(self: *Fixture) @import("../widgets/Canvas.zig") {
+pub fn canvas(self: *Fixture) Canvas {
     return .{ .atlas = &self.atlas, .quads = &self.quads, .origin = .{ 0, 0 }, .metrics = .{ .cell_width = 9, .cell_height = 22, .baseline = 17, .pixel_height = 15 }, .theme = data.theme_support.default_theme, .chrome = .{ .body = 15, .title = 18, .small = 12, .ratio = 1 }, .animation = &self.clock, .widgets = self.state, .syntax = self.syntax };
 }
 
@@ -54,7 +57,7 @@ pub fn enableSyntax(self: *Fixture, text: []const u8) !void {
 }
 
 pub fn enableCache(self: *Fixture) !void {
-    const state = try std.testing.allocator.create(@import("../widgets/interaction/State.zig"));
+    const state = try std.testing.allocator.create(State);
     state.* = .{};
     self.state = state;
 }

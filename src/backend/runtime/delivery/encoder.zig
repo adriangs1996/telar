@@ -9,6 +9,7 @@ const PaneStore = @import("../../pane/PaneStore.zig");
 const OutputResult = @import("../../history/OutputResult.zig");
 const StatsResult = @import("../../history/StatsResult.zig");
 const Workspaces = @import("../../workspace/Workspaces.zig");
+const OwnedAgentHistoryPage = @import("OwnedAgentHistoryPage.zig");
 
 /// Encodes one queued response against the *current* stores. A response can
 /// outlive what it describes - the workspace of a queued snapshot may close
@@ -286,7 +287,7 @@ const EncodeContext = struct {
     history_result: *?*QueryResult,
     history_output: *?*OutputResult,
     history_stats: *?*StatsResult,
-    agent_history: ?*?*@import("OwnedAgentHistoryPage.zig") = null,
+    agent_history: ?*?*OwnedAgentHistoryPage = null,
 
     change_review: ?*?*ReviewResult = null,
 };

@@ -7,6 +7,16 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
+const ComposerSurface = @import("ComposerSurface.zig");
+const TextField = @import("TextField.zig");
+const ComposerSelector = @import("interaction/ComposerSelector.zig");
+const ComposerOptions = @import("ComposerOptions.zig");
+const ComposerTrigger = @import("ComposerTrigger.zig");
+const CompletionMenu = @import("CompletionMenu.zig");
+const ComposerMenu = @import("ComposerMenu.zig");
+const ComposerImage = @import("ComposerImage.zig");
+const Target = @import("interaction/Target.zig");
+const Label = @import("Label.zig");
 const Composer = @This();
 
 bounds: Rect,
@@ -18,14 +28,14 @@ thread: client.ThreadView,
 pub fn draw(self: Composer, canvas: *Canvas) !void {
     var layout = ComposerLayout.resolve(canvas, self.bounds);
     try self.drawContext(canvas, layout.context);
-    try (@import("ComposerSurface.zig"){ .bounds = layout.card, .radius = canvas.chrome.px(22), .focused = self.thread.focused }).draw(canvas);
+    try (ComposerSurface{ .bounds = layout.card, .radius = canvas.chrome.px(22), .focused = self.thread.focused }).draw(canvas);
     try self.drawImages(canvas, &layout.editor);
     const selection: [2]u32 = if (self.thread.composer_field) |field| .{ @intCast(field.anchor), @intCast(field.head) } else .{ 0, 0 };
-    try (@import("TextField.zig"){ .bounds = layout.editor, .text = self.thread.composer, .selection = selection, .action = .{ .composer = self.thread.pane_id }, .generation = self.thread.attachment_generation, .focused = self.thread.focused, .label = "Message to agent", .placeholder = "Ask for changes or send a follow-up…", .layer = 0, .multiline = true, .appearance = .embedded, .face = .sans, .font_pixels = @intFromFloat(@round(canvas.chrome.px(16))) }).draw(canvas);
+    try (TextField{ .bounds = layout.editor, .text = self.thread.composer, .selection = selection, .action = .{ .composer = self.thread.pane_id }, .generation = self.thread.attachment_generation, .focused = self.thread.focused, .label = "Message to agent", .placeholder = "Ask for changes or send a follow-up…", .layer = 0, .multiline = true, .appearance = .embedded, .face = .sans, .font_pixels = @intFromFloat(@round(canvas.chrome.px(16))) }).draw(canvas);
     var next_x = layout.selectors[0].x;
     const single_row = layout.selectors[0].y == layout.selectors[2].y;
-    for ([_]@FieldType(@import("interaction/ComposerSelector.zig"), "kind"){ .model, .effort, .access }, layout.selectors) |kind, area| {
-        const options: @import("ComposerOptions.zig") = .{ .thread = self.thread, .kind = kind };
+    for ([_]@FieldType(ComposerSelector, "kind"){ .model, .effort, .access }, layout.selectors) |kind, area| {
+        const options: ComposerOptions = .{ .thread = self.thread, .kind = kind };
         const count = options.count();
         const label = if (count > 0) options.label(options.selected()) else switch (kind) {
             .recent => unreachable,
@@ -45,7 +55,7 @@ pub fn draw(self: Composer, canvas: *Canvas) !void {
             next_x = bounds.x + bounds.width + canvas.chrome.px(20);
         }
 
-        try (@import("ComposerTrigger.zig"){
+        try (ComposerTrigger{
             .bounds = bounds,
             .selector = .{ .pane_id = self.thread.pane_id, .kind = kind, .catalog_revision = self.thread.catalog_revision, .options_revision = self.thread.options_revision },
             .generation = self.thread.attachment_generation,
@@ -55,8 +65,8 @@ pub fn draw(self: Composer, canvas: *Canvas) !void {
     }
 
     try self.drawSend(canvas, layout.send);
-    try (@import("CompletionMenu.zig"){ .thread = self.thread, .anchor = layout.card, .pane_bounds = self.pane_bounds }).draw(canvas);
-    try (@import("ComposerMenu.zig"){ .thread = self.thread, .pane_bounds = self.pane_bounds }).draw(canvas);
+    try (CompletionMenu{ .thread = self.thread, .anchor = layout.card, .pane_bounds = self.pane_bounds }).draw(canvas);
+    try (ComposerMenu{ .thread = self.thread, .pane_bounds = self.pane_bounds }).draw(canvas);
 }
 
 fn drawImages(self: Composer, canvas: *Canvas, editor: *Rect) !void {
@@ -69,7 +79,7 @@ fn drawImages(self: Composer, canvas: *Canvas, editor: *Rect) !void {
     const gap = @min(canvas.chrome.px(8), editor.width / 20);
     const width = @min(height, @max(0, (editor.width - gap * @as(f32, @floatFromInt(images.count - 1))) / @as(f32, @floatFromInt(images.count))));
     for (0..images.count) |index| {
-        try (@import("ComposerImage.zig"){
+        try (ComposerImage{
             .bounds = .{ .x = editor.x + @as(f32, @floatFromInt(index)) * (width + gap), .y = editor.y, .width = width, .height = height },
             .thread = self.thread,
             .index = @intCast(index),
@@ -97,7 +107,7 @@ fn drawSend(self: Composer, canvas: *Canvas, bounds: Rect) !void {
     }
 
     if (canvas.widgets) |state| {
-        _ = try state.dispatcher.add((@import("interaction/Target.zig"){ .id = .{ .generation = self.thread.attachment_generation }, .bounds = bounds, .action = .{ .agent_control = .{ .pane_id = self.thread.pane_id, .kind = if (working) .interrupt else .submit } }, .enabled = enabled }).labelled(if (working) "Stop agent" else if (pasting) "Pasting image" else "Send message"));
+        _ = try state.dispatcher.add((Target{ .id = .{ .generation = self.thread.attachment_generation }, .bounds = bounds, .action = .{ .agent_control = .{ .pane_id = self.thread.pane_id, .kind = if (working) .interrupt else .submit } }, .enabled = enabled }).labelled(if (working) "Stop agent" else if (pasting) "Pasting image" else "Send message"));
     }
 }
 
@@ -116,13 +126,13 @@ fn drawContext(self: Composer, canvas: *Canvas, bounds: Rect) !void {
     const icon_width = @min(canvas.chrome.px(22), folder_width / 4);
     try canvas.iconAt(.{ .x = row.x, .y = row.y, .width = icon_width, .height = row.height }, .{ .text = AgentCard.project_glyph, .color = palette.subtext0, .size = .small });
     var storage: [TextFit.max_bytes]u8 = undefined;
-    const label: @import("Label.zig") = .{ .text = if (self.thread.cwd.len > 0) std.fs.path.basename(self.thread.cwd) else "", .face = .sans, .size = .small, .color = palette.subtext0 };
-    const fitted = try (@import("TextFit.zig"){ .canvas = canvas, .width = @max(0, folder_width - icon_width) }).fit(label, &storage);
+    const label: Label = .{ .text = if (self.thread.cwd.len > 0) std.fs.path.basename(self.thread.cwd) else "", .face = .sans, .size = .small, .color = palette.subtext0 };
+    const fitted = try (TextFit{ .canvas = canvas, .width = @max(0, folder_width - icon_width) }).fit(label, &storage);
     _ = try canvas.textAt(.{ .x = row.x + icon_width, .y = row.y, .width = @max(0, folder_width - icon_width), .height = row.height }, .{ .text = fitted, .face = .sans, .size = .small, .color = palette.subtext0 });
     if (branch_width > 0) {
         const x = row.x + row.width - branch_width;
         try canvas.iconAt(.{ .x = x, .y = row.y, .width = canvas.chrome.px(22), .height = row.height }, .{ .text = data.icons.Icon.app_git.nerdGlyph(), .color = palette.subtext0, .size = .small });
-        const branch = try (@import("TextFit.zig"){ .canvas = canvas, .width = @max(0, branch_width - canvas.chrome.px(22)) }).fit(.{ .text = self.thread.branch, .face = .sans, .size = .small }, &storage);
+        const branch = try (TextFit{ .canvas = canvas, .width = @max(0, branch_width - canvas.chrome.px(22)) }).fit(.{ .text = self.thread.branch, .face = .sans, .size = .small }, &storage);
         _ = try canvas.textAt(.{ .x = x + canvas.chrome.px(22), .y = row.y, .width = @max(0, branch_width - canvas.chrome.px(22)), .height = row.height }, .{ .text = branch, .face = .sans, .size = .small, .color = palette.subtext0 });
     }
 }

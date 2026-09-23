@@ -1,12 +1,14 @@
 const core = @import("telar-core");
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
+const Rect = @import("../render/Rect.zig");
+const AgentControl = @import("interaction/AgentControl.zig");
 const Control = @This();
 
-bounds: @import("../render/Rect.zig"),
+bounds: Rect,
 pane_id: core.PaneId,
 generation: u64,
-kind: @FieldType(@import("interaction/AgentControl.zig"), "kind"),
+kind: @FieldType(AgentControl, "kind"),
 approval_id: u64 = 0,
 enabled: bool = true,
 label: []const u8,

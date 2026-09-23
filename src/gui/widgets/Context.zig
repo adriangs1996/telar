@@ -7,6 +7,9 @@ const HitMap = @import("HitMap.zig");
 const BandHitMap = @import("BandHitMap.zig");
 const client = @import("telar-client");
 const AgentAges = @import("AgentAges.zig");
+const SidebarRegions = @import("SidebarRegions.zig");
+const Favicons = @import("Favicons.zig");
+const ProgressMotions = @import("ProgressMotions.zig");
 const Context = @This();
 
 hits: *HitMap,
@@ -15,11 +18,11 @@ projection: *const client.Projection,
 hovered: ?action_module.Action,
 /// Last delivered project identity, used only during the empty handoff frame.
 presented_workspace: ?core.WorkspaceId = null,
-sidebar_regions: ?*const @import("SidebarRegions.zig") = null,
+sidebar_regions: ?*const SidebarRegions = null,
 ages: ?*const AgentAges = null,
 /// Placed workspace favicons; `null` in fixtures without a registry.
-favicons: ?*const @import("Favicons.zig") = null,
-progress: ?*@import("ProgressMotions.zig") = null,
+favicons: ?*const Favicons = null,
+progress: ?*ProgressMotions = null,
 
 /// Resolves the navigation highlight without retaining retired pane or tab data.
 /// Example: `const selected = context.workspaceId() == workspace;`

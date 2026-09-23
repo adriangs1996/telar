@@ -6,6 +6,9 @@ const Store = @import("../widgets/interaction/ThreadTextStore.zig");
 const Run = @import("../widgets/interaction/ThreadTextRun.zig");
 const View = @import("../widgets/ThreadItemView.zig");
 const Rect = @import("../render/Rect.zig");
+const ThreadTextPaint = @import("../widgets/ThreadTextPaint.zig");
+const ThreadTextHit = @import("../widgets/interaction/ThreadTextHit.zig");
+const MessageText = @import("../widgets/MessageText.zig");
 
 fn snapshot() core.AgentThreadSnapshot {
     var value: core.AgentThreadSnapshot = .{ .pane_id = @enumFromInt(1), .pane_generation = 3, .revision = 5 };
@@ -156,7 +159,7 @@ test "thread text carets and highlight stay inside the glyph fragment clip" {
     const hit = geometry.hit(.{ .pane_id = value.pane_id, .point = .{ 100, 25 } }).?;
     try std.testing.expectEqual(input.offset + 1, hit.offset);
     state.thread_selection = .{ .owner = .{ .pane_id = value.pane_id, .attachment_generation = input.owner.attachment_generation }, .anchor = geometry.position(fragment, 0), .head = geometry.position(fragment, 4) };
-    try (@import("../widgets/ThreadTextPaint.zig"){ .geometry = geometry, .fragment = fragment }).draw(&canvas);
+    try (ThreadTextPaint{ .geometry = geometry, .fragment = fragment }).draw(&canvas);
     try std.testing.expect(fixture.quads.items().len > 0);
     for (fixture.quads.items()) |quad| {
         try std.testing.expect(quad.x >= input.bounds.x and quad.y >= input.bounds.y);
@@ -178,7 +181,7 @@ test "thread text failed frame delivery retains old ownership until a successful
     _ = try store.maps.preparing().append(&canvas, run(view(&value), "first"));
     state.seal();
     state.present(true);
-    const hit: @import("../widgets/interaction/ThreadTextHit.zig") = .{ .pane_id = value.pane_id, .point = .{ 10, 25 } };
+    const hit: ThreadTextHit = .{ .pane_id = value.pane_id, .point = .{ 10, 25 } };
     const initial = store.maps.presented().hit(hit).?;
     value.revision += 1;
     value.item_storage[0].identity += 1;
@@ -339,7 +342,7 @@ test "thread text rendered wrapping preserves absolute source offsets and exclud
     geometry.addRow(view(&value), 0);
     const source = "office e\u{301} WWW `mono` [link](https://hidden.test)";
     const area: Rect = .{ .x = 10, .y = 20, .width = 65, .height = 300 };
-    const text: @import("../widgets/MessageText.zig") = .{ .bounds = area, .viewport = area, .text = source, .owner = view(&value).source(.body) };
+    const text: MessageText = .{ .bounds = area, .viewport = area, .text = source, .owner = view(&value).source(.body) };
     try text.draw(&canvas);
     try std.testing.expect(geometry.fragment_count > 3);
     var wrapped = false;

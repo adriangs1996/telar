@@ -1,2 +1,4 @@
+const Image = @import("Image.zig");
+
 id: u64,
-result: anyerror!@import("Image.zig"),
+result: anyerror!Image,

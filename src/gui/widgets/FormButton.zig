@@ -2,9 +2,10 @@
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
 const Label = @import("Label.zig");
+const Rect = @import("../render/Rect.zig");
 const FormButton = @This();
 
-bounds: @import("../render/Rect.zig"),
+bounds: Rect,
 text: []const u8,
 label: ?[]const u8 = null,
 action: Target.Action,

@@ -28,6 +28,7 @@ const EventLine = @import("EventLine.zig");
 const Agent = @This();
 
 pub const ProjectionContext = @import("ProjectionContext.zig");
+const ManagedState = @import("ManagedState.zig");
 
 pub const ProjectionResult = enum {
     no_evidence,
@@ -1191,7 +1192,7 @@ test "new proxy work resumes an obscured agent" {
 
 /// Applies official state from an app-server owned by this runtime.
 /// Example: `agent.applyManaged(.{ .status = .working, .observed_at_ms = now });`.
-pub fn applyManaged(self: *Agent, state: @import("ManagedState.zig")) void {
+pub fn applyManaged(self: *Agent, state: ManagedState) void {
     self.managed = .{
         .provider = .codex,
         .status = state.status,

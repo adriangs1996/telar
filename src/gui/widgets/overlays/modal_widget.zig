@@ -5,14 +5,22 @@ const HistoryModalLayout = @import("HistoryModalLayout.zig");
 const Canvas = @import("../Canvas.zig");
 const core = @import("telar-core");
 const Modal = @import("Modal.zig");
+const NamePrompt = @import("NamePrompt.zig");
+const WorkspaceForm = @import("WorkspaceForm.zig");
+const PickerModal = @import("PickerModal.zig");
+const HistoryModal = @import("HistoryModal.zig");
+const SuggestionModal = @import("SuggestionModal.zig");
+const CommandPalette = @import("CommandPalette.zig");
+const OverlayComposition = @import("OverlayComposition.zig");
+const HitState = @import("HitState.zig");
 
 pub const Widget = union(enum) {
-    name_prompt: @import("NamePrompt.zig"),
-    workspace_form: @import("WorkspaceForm.zig"),
-    picker: @import("PickerModal.zig"),
-    history: @import("HistoryModal.zig"),
-    suggestion: @import("SuggestionModal.zig"),
-    palette: @import("CommandPalette.zig"),
+    name_prompt: NamePrompt,
+    workspace_form: WorkspaceForm,
+    picker: PickerModal,
+    history: HistoryModal,
+    suggestion: SuggestionModal,
+    palette: CommandPalette,
 
     /// Example: `try modal.draw(canvas);`
     pub fn draw(self: Widget, canvas: *Canvas) !void {
@@ -24,7 +32,7 @@ pub const Widget = union(enum) {
 
 /// Resolves the prompt kind before drawing, borrowing the caller's projection
 /// until the list finishes. Example: `try modal_widget.compose(input, pending, widgets);`
-pub fn compose(input: @import("OverlayComposition.zig"), pending: *@import("HitState.zig"), widgets: anytype) !void {
+pub fn compose(input: OverlayComposition, pending: *HitState, widgets: anytype) !void {
     const prompt = if (input.projection.prompt) |*value| value else return;
     if (prompt.target() == .palette) {
         try widgets.append(.{ .modal = .{ .palette = .{ .projection = input.projection, .hits = &pending.palette, .modal = &pending.modal, .router = input.router, .scale = input.scale } } });

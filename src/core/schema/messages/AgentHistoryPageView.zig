@@ -1,10 +1,11 @@
 const id = @import("../id.zig");
 const Cursor = @import("../../AgentHistoryCursor.zig");
 const Page = @import("../../AgentHistoryPage.zig");
+const AgentThreadSnapshotView = @import("AgentThreadSnapshotView.zig");
 
 request_id: id.RequestId,
 view_generation: u64,
-snapshot: @import("AgentThreadSnapshotView.zig"),
+snapshot: AgentThreadSnapshotView,
 before: []const u8,
 after: []const u8,
 has_before: bool,

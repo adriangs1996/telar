@@ -4,6 +4,7 @@ const Rect = @import("../render/Rect.zig");
 const Grid = @import("BoxGrid.zig");
 const QuadList = @import("../render/QuadList.zig");
 const TextRun = @import("TextRun.zig");
+const BoxDrawing = @import("BoxDrawing.zig");
 const Ink = @This();
 
 pub const capacity = 21;
@@ -97,7 +98,7 @@ test "all box intersections and dash patterns remain disjoint and within the mes
         for (heights) |height| {
             for ([_]f32{ 1, 2, 3, 5 }) |thickness| {
                 for (0x2500..0x2580) |cp| {
-                    const box: @import("BoxDrawing.zig") = .{ .codepoint = @intCast(cp) };
+                    const box: BoxDrawing = .{ .codepoint = @intCast(cp) };
                     if (box.curve() != null) {
                         continue;
                     }
@@ -124,7 +125,7 @@ test "all box intersections and dash patterns remain disjoint and within the mes
 
 test "union preserves the exact stroke coverage and Unicode double center gap" {
     for (0x2500..0x2580) |cp| {
-        const box: @import("BoxDrawing.zig") = .{ .codepoint = @intCast(cp) };
+        const box: BoxDrawing = .{ .codepoint = @intCast(cp) };
         if (box.curve() != null) {
             continue;
         }

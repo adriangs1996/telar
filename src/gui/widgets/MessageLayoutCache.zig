@@ -3,13 +3,14 @@ const std = @import("std");
 const Key = @import("MessageLayoutKey.zig");
 const Result = @import("MessageLayoutResult.zig");
 const Plan = @import("MessageLayoutPlan.zig");
+const MessageLayoutMetric = @import("MessageLayoutMetric.zig");
 const Cache = @This();
 
 pub const minimum_bytes = 1024;
 pub const metric_capacity = 64;
 pub const plan_capacity = 4;
 
-metrics: [metric_capacity]?@import("MessageLayoutMetric.zig") = @splat(null),
+metrics: [metric_capacity]?MessageLayoutMetric = @splat(null),
 plans: [plan_capacity]Plan = @splat(.{}),
 next_metric: usize = 0,
 next_plan: usize = 0,

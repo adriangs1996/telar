@@ -3,6 +3,7 @@ const std = @import("std");
 const core = @import("telar-core");
 const Codex = @import("Codex.zig");
 const Prompt = @import("Prompt.zig");
+const ItemNormalizer = @import("ItemNormalizer.zig");
 
 fn init() Codex {
     return .{ .cwd = "/tmp", .transcript = .{ .value = .{ .pane_id = @enumFromInt(3), .pane_generation = 7 } } };
@@ -475,7 +476,7 @@ test "Codex distinguishes final message reasoning summary tools and structured p
 }
 
 test "Codex child tool preview does not replace the child response and retains public metadata" {
-    var codex: @import("Codex.zig") = .{ .cwd = "/tmp", .transcript = .{ .value = .{ .pane_id = @enumFromInt(1), .pane_generation = 2 } } };
+    var codex: Codex = .{ .cwd = "/tmp", .transcript = .{ .value = .{ .pane_id = @enumFromInt(1), .pane_generation = 2 } } };
     codex.children.setRoot("root");
     const events = [_][]const u8{
         "{\"method\":\"thread/started\",\"params\":{\"thread\":{\"id\":\"child\",\"source\":{\"subAgent\":{\"thread_spawn\":{\"parent_thread_id\":\"root\",\"agent_path\":\"/root/review\",\"agent_nickname\":\"Reviewer\",\"agent_role\":\"explorer\"}}}}}}",
@@ -796,7 +797,7 @@ test "Codex mixed images preserve text and do not execute a slash command instea
 test "provider image echoes never display local paths or inline image bytes" {
     const parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, "{\"type\":\"userMessage\",\"content\":[{\"type\":\"text\",\"text\":\"Inspect\"},{\"type\":\"localImage\",\"path\":\"/private/image.png\"},{\"type\":\"image\",\"url\":\"data:image/png;base64,private\"}]}", .{});
     defer parsed.deinit();
-    var normalizer: @import("ItemNormalizer.zig") = .{};
+    var normalizer: ItemNormalizer = .{};
     const item = normalizer.item(parsed.value, true).?;
     try std.testing.expectEqualStrings("Inspect\n[Image 1]\n[Image 2]", item.text);
 }

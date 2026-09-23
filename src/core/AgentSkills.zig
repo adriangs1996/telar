@@ -1,5 +1,8 @@
 const std = @import("std");
 const Skill = @import("AgentSkill.zig");
+const AgentSkillInfo = @import("AgentSkillInfo.zig");
+const Encoder = @import("schema/Encoder.zig");
+const Decoder = @import("schema/Decoder.zig");
 const Skills = @This();
 
 pub const capacity = 128;
@@ -14,7 +17,7 @@ text_len: u16 = 0,
 
 /// Owns the advertised metadata; provider paths remain in the runtime.
 /// Example: `try skills.append(.{ .name = "review", .description = "Review changes" });`
-pub fn append(self: *Skills, info: @import("AgentSkillInfo.zig")) !void {
+pub fn append(self: *Skills, info: AgentSkillInfo) !void {
     if (info.name.len == 0 or info.name.len > 128 or !validText(info.name)) {
         return error.InvalidSkill;
     }
@@ -82,7 +85,7 @@ pub fn nameByte(byte: u8) bool {
 }
 
 /// Example: `try skills.encode(encoder);`
-pub fn encode(self: *const Skills, encoder: *@import("schema/Encoder.zig")) !void {
+pub fn encode(self: *const Skills, encoder: *Encoder) !void {
     if (self.count > capacity or self.text_len > self.text.len) {
         return error.InvalidSkill;
     }
@@ -107,7 +110,7 @@ pub fn encode(self: *const Skills, encoder: *@import("schema/Encoder.zig")) !voi
 }
 
 /// Example: `const skills = try AgentSkills.decode(decoder);`
-pub fn decode(decoder: *@import("schema/Decoder.zig")) !Skills {
+pub fn decode(decoder: *Decoder) !Skills {
     var skills: Skills = .{ .revision = try decoder.readInt(u64), .phase = std.enums.fromInt(Phase, try decoder.readByte()) orelse return error.InvalidSkill, .truncated = try decoder.readBool() };
     const count = try decoder.readByte();
     if (count > capacity) {
@@ -149,14 +152,14 @@ test "skills own bounded metadata and match exact explicit references" {
     try std.testing.expectError(error.DuplicateSkill, skills.append(.{ .name = "review" }));
     try std.testing.expectError(error.InvalidSkill, skills.append(.{ .name = "bad name" }));
     var buffer: [1024]u8 = undefined;
-    var encoder: @import("schema/Encoder.zig") = .init(&buffer);
+    var encoder: Encoder = .init(&buffer);
     try skills.encode(&encoder);
-    var decoder: @import("schema/Decoder.zig") = .init(buffer[0..encoder.index]);
+    var decoder: Decoder = .init(buffer[0..encoder.index]);
     const copy = try Skills.decode(&decoder);
     @memset(&buffer, 0);
     try std.testing.expectEqualStrings("Code Review", copy.entries[0].label(&copy));
     try std.testing.expectEqualStrings("Inspect changes", copy.entries[0].description(&copy));
     try std.testing.expectEqual(@as(u64, 7), copy.revision);
-    var tiny: @import("schema/Decoder.zig") = .init(&.{0});
+    var tiny: Decoder = .init(&.{0});
     try std.testing.expectError(error.Truncated, Skills.decode(&tiny));
 }

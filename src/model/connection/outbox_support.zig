@@ -16,6 +16,8 @@ const OwnedNotification = @import("OwnedNotification.zig");
 const Outbox = @import("Outbox.zig");
 const core = @import("telar-core");
 const std = @import("std");
+const OwnedAgentPrompt = @import("OwnedAgentPrompt.zig");
+const OwnedAgentHistoryQuery = @import("OwnedAgentHistoryQuery.zig");
 
 pub const capacity = core.max_panes_per_tab + 16;
 
@@ -27,12 +29,12 @@ pub const Message = union(enum) {
     query_change_review: u16,
     change_review_command: u16,
     open_editor: core.OpenEditor,
-    agent_prompt: @import("OwnedAgentPrompt.zig"),
+    agent_prompt: OwnedAgentPrompt,
     agent_interrupt: core.AgentInterrupt,
     agent_resume: core.AgentResume,
     agent_approval: core.AgentApproval,
     query_agent_thread: core.QueryAgentThread,
-    query_agent_history: @import("OwnedAgentHistoryQuery.zig"),
+    query_agent_history: OwnedAgentHistoryQuery,
     open_pane: core.OpenPane,
     pane_input: OwnedInput,
     pane_resize: core.PaneResize,

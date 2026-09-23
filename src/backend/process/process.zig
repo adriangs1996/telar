@@ -10,8 +10,9 @@ const Probe = @import("Probe.zig");
 const Identification = @import("Identification.zig");
 const std = @import("std");
 const Cache = @import("Cache.zig");
+const darwin = @import("darwin.zig");
 
-const Native = if (builtin.os.tag == .macos) @import("darwin.zig") else void;
+const Native = if (builtin.os.tag == .macos) darwin else void;
 
 pub const max_acquisition_attempts: u8 = 6;
 pub const max_group_processes = 64;

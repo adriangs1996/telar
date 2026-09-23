@@ -4,8 +4,9 @@ const Store = @import("../diagrams/Store.zig");
 const Image = @import("../diagrams/Image.zig");
 const Text = @import("../widgets/MessageText.zig");
 const Quad = @import("../render/Quad.zig").Quad;
+const MessageLayoutOwner = @import("../widgets/MessageLayoutOwner.zig");
 const source = "```mermaid\nflowchart TD\nA[Start] --> B[Done]\n```";
-const owner: @import("../widgets/MessageLayoutOwner.zig") = .{ .pane_id = @enumFromInt(1), .attachment_generation = 1, .pane_generation = 1, .snapshot_revision = 1, .item_identity = 7, .section = .body, .source_offset = 0 };
+const owner: MessageLayoutOwner = .{ .pane_id = @enumFromInt(1), .attachment_generation = 1, .pane_generation = 1, .snapshot_revision = 1, .item_identity = 7, .section = .body, .source_offset = 0 };
 
 test "Mermaid measurement and hidden or incomplete fences never enqueue rendering" {
     var fixture = try Fixture.init();

@@ -2,6 +2,7 @@ const core = @import("telar-core");
 const data = @import("model");
 const std = @import("std");
 const Generation = @import("Generation.zig");
+const GuiConfig = @import("GuiConfig.zig");
 
 test "one theme name supplies chrome terminal palette and cursor defaults" {
     const names = [_][]const u8{ "shade", "vesper", "catppuccin", "tokyo-night", "terminal" };
@@ -16,7 +17,7 @@ test "one theme name supplies chrome terminal palette and cursor defaults" {
         try std.testing.expectEqual(data.theme_support.fromName(name).?.base, snapshot.theme.base);
         try std.testing.expectEqual(background, snapshot.theme.terminal.background);
         try std.testing.expectEqual(ansi_red, snapshot.theme.terminal.palette[1]);
-        try std.testing.expectEqualDeep(@import("GuiConfig.zig"){}, snapshot.gui);
+        try std.testing.expectEqualDeep(GuiConfig{}, snapshot.gui);
     }
 }
 

@@ -5,6 +5,7 @@ const protocol = @import("protocol.zig");
 const Position = @import("HistoryPosition.zig");
 const page = @import("history_page.zig");
 const Entry = @import("HistoricalItem.zig");
+const ItemNormalizer = @import("ItemNormalizer.zig");
 const LegacyHistory = @This();
 
 entries: [4096]Entry = undefined,
@@ -60,7 +61,7 @@ pub fn fill(self: *LegacyHistory, output: *core.AgentHistoryPage, thread_id: []c
 
     while (index >= 0 and index < self.count) : (index += if (older) @as(i64, -1) else 1) {
         const entry = self.entries[@intCast(index)];
-        var normalizer: @import("ItemNormalizer.zig") = .{ .body_buffer = self.body, .include_history_details = true };
+        var normalizer: ItemNormalizer = .{ .body_buffer = self.body, .include_history_details = true };
         var update = try historical_item.normalize(&normalizer, entry.value);
         if (update.truncated or !std.unicode.utf8ValidateSlice(update.text)) {
             return error.HistoryItemNotRepresentable;

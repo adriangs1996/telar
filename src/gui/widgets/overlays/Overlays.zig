@@ -5,11 +5,14 @@ const client = @import("telar-client");
 const HitState = @import("HitState.zig");
 const GenericPresentedState = @import("../../render/GenericPresentedState.zig").Type;
 const HistoryModal = @import("HistoryModal.zig");
+const Notifications = @import("Notifications.zig");
+const ModalMotion = @import("ModalMotion.zig");
+const OverlayComposition = @import("OverlayComposition.zig");
 const Overlays = @This();
 
 maps: GenericPresentedState(HitState) = .{},
-notifications: @import("Notifications.zig") = .{},
-history_motion: @import("ModalMotion.zig") = .{},
+notifications: Notifications = .{},
+history_motion: ModalMotion = .{},
 gesture: ?u8 = null,
 /// The native keymap, for the palette's bound-key column.
 router: ?*const router_module.Type = null,
@@ -19,7 +22,7 @@ scale: f32 = 1,
 /// Selects cards and the active modal without emitting quads. The list borrows
 /// the projection and pending hit storage until it finishes drawing.
 /// Example: `try overlays.compose(input, &widgets);`
-pub fn compose(self: *Overlays, input: @import("OverlayComposition.zig"), widgets: anytype) !void {
+pub fn compose(self: *Overlays, input: OverlayComposition, widgets: anytype) !void {
     const pending = self.maps.begin();
     pending.history_metrics = .fromCanvas(input.canvas);
     const cards = try self.notifications.prepare(input.canvas, input.projection.*);

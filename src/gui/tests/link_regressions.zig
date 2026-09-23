@@ -7,6 +7,7 @@ const client = @import("telar-client");
 const Fixture = @import("LinkFixture.zig");
 const HostRequest = @import("../native/HostRequest.zig").HostRequest;
 const Session = @import("Session.zig");
+const PointerHover = @import("../input/PointerHover.zig");
 
 test "captured native link consumes stationary modifier motion before release" {
     const fixture = try Fixture.init();
@@ -333,7 +334,7 @@ test "native one-row panes keep links visible without a self-covering preview" {
         },
     };
     try std.testing.expect(hit.previewArea() == null);
-    var hover: @import("../input/PointerHover.zig") = .{ .link = hit };
+    var hover: PointerHover = .{ .link = hit };
     hover.prepare();
     hover.present(true);
     try std.testing.expect(hover.shown_preview == null);

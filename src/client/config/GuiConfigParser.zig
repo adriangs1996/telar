@@ -5,6 +5,8 @@ const value = @import("lua_value.zig");
 const Config = @import("GuiConfig.zig");
 const Cursor = @import("GuiCursor.zig");
 const Sidebar = @import("GuiSidebar.zig");
+const GuiChrome = @import("GuiChrome.zig");
+const GuiWindow = @import("GuiWindow.zig");
 const Parser = @This();
 
 state: *lua_api.c.lua_State,
@@ -110,14 +112,14 @@ fn sidebar(self: Parser, initial: Sidebar) !Sidebar {
     return result;
 }
 
-fn chrome(self: Parser, initial: @import("GuiChrome.zig")) !@import("GuiChrome.zig") {
+fn chrome(self: Parser, initial: GuiChrome) !GuiChrome {
     try self.table("config.gui.chrome", &.{"scale"});
     var result = initial;
     result.scale = @floatCast(try self.number(.{ "scale", 0.5, 2 }, result.scale));
     return result;
 }
 
-fn window(self: Parser, initial: @import("GuiWindow.zig")) !@import("GuiWindow.zig") {
+fn window(self: Parser, initial: GuiWindow) !GuiWindow {
     try self.table("config.gui.window", &.{ "background_opacity", "background_blur", "titlebar", "padding" });
     var result = initial;
     result.background_opacity = @floatCast(try self.number(.{ "background_opacity", 0, 1 }, result.background_opacity));

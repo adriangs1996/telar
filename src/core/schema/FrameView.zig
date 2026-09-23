@@ -7,6 +7,7 @@ const Scroll = @import("Scroll.zig");
 const Decoder = @import("Decoder.zig");
 const Style = @import("../ui/Style.zig");
 const Cell = @import("../ui/Cell.zig");
+const View = @import("../text_metadata/View.zig");
 const FrameView = @This();
 
 pane_id: id.PaneId,
@@ -19,7 +20,7 @@ mouse: Mouse,
 input_modes: InputModes,
 pointer_shape: frame_support.PointerShape = .default,
 /// Null preserves patch metadata; encoding a snapshot with null emits an empty replacement.
-text_metadata: ?@import("../text_metadata/View.zig") = null,
+text_metadata: ?View = null,
 scroll: Scroll,
 span_count: u16,
 encoded_spans: []const u8,

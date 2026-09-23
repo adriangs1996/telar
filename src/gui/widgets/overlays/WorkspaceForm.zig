@@ -6,6 +6,8 @@ const Rect = @import("../../render/Rect.zig");
 const TextField = @import("../TextField.zig");
 const FormButton = @import("../FormButton.zig");
 const FormLayout = @import("WorkspaceFormLayout.zig");
+const DialogSurface = @import("DialogSurface.zig");
+const DirectorySuggestion = @import("DirectorySuggestion.zig");
 const WorkspaceForm = @This();
 
 layout: FormLayout,
@@ -14,7 +16,7 @@ projection: *const client.Projection,
 /// Example: `try form.draw(canvas);`
 pub fn draw(self: WorkspaceForm, canvas: *Canvas) !void {
     const layout = self.layout;
-    try (@import("DialogSurface.zig"){ .bounds = layout.bounds, .viewport = layout.viewport }).draw(canvas);
+    try (DialogSurface{ .bounds = layout.bounds, .viewport = layout.viewport }).draw(canvas);
     const first = canvas.quads.items().len;
     try self.header(canvas);
     if (layout.compact) {
@@ -86,7 +88,7 @@ fn completions(self: WorkspaceForm, canvas: *Canvas) !void {
     _ = try canvas.textAt(.{ .x = layout.directory.x, .y = layout.suggestions.y - layout.small_height - canvas.chrome.px(6), .width = layout.directory.width, .height = layout.small_height }, .{ .text = "Folders", .face = .sans, .size = .small, .color = canvas.theme.palette.subtext0 });
     for (0..layout.rows) |offset| {
         const index = start + offset;
-        try (@import("DirectorySuggestion.zig"){ .bounds = layout.completionRow(offset), .name = entries[index].slice(), .choice = .{ .index = @intCast(index), .revision = completion.version() }, .generation = self.projection.prompt.?.generation, .selected = index == selected, .enabled = completion.pending == .none }).draw(canvas);
+        try (DirectorySuggestion{ .bounds = layout.completionRow(offset), .name = entries[index].slice(), .choice = .{ .index = @intCast(index), .revision = completion.version() }, .generation = self.projection.prompt.?.generation, .selected = index == selected, .enabled = completion.pending == .none }).draw(canvas);
     }
 
     if (entries.len > layout.rows) {

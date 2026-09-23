@@ -7,7 +7,7 @@ pub const max_scan_pages = 32;
 pub const capacity = 16;
 
 pages: [capacity]core.AgentHistoryPage = undefined,
-gaps: [capacity]?@import("AgentHistoryGap.zig") = @splat(null),
+gaps: [capacity]?AgentHistoryGap = @splat(null),
 count: u8 = 0,
 generation: u64 = 0,
 revision: u64 = 1,
@@ -248,6 +248,7 @@ pub fn sameFragment(left: Item, right: Item) bool {
 }
 
 const Item = @import("AgentHistoryItem.zig");
+const AgentHistoryGap = @import("AgentHistoryGap.zig");
 
 /// Keeps the runtime's failure reason without retaining its receive buffer.
 /// Example: `window.fail("History is unavailable");`

@@ -3,9 +3,11 @@ const TextFit = @import("TextFit.zig");
 const Canvas = @import("Canvas.zig");
 const Target = @import("interaction/Target.zig");
 const Selector = @import("interaction/ComposerSelector.zig");
+const Rect = @import("../render/Rect.zig");
+const Label = @import("Label.zig");
 const Trigger = @This();
 
-bounds: @import("../render/Rect.zig"),
+bounds: Rect,
 selector: Selector,
 generation: u64,
 label: []const u8,
@@ -40,7 +42,7 @@ pub fn draw(self: Trigger, canvas: *Canvas) !void {
     text_bounds.width = @max(0, text_bounds.width - 2 * inset - icon_width);
     const tint = if (self.enabled) palette.text else palette.overlay1;
     if (self.selector.kind == .model or self.selector.kind == .access) {
-        const icon = @import("../render/Rect.zig"){ .x = text_bounds.x, .y = text_bounds.y, .width = icon_width, .height = text_bounds.height };
+        const icon = Rect{ .x = text_bounds.x, .y = text_bounds.y, .width = icon_width, .height = text_bounds.height };
         if (self.selector.kind == .model and canvas.providerMark(.codex) != null) {
             const mark = @min(canvas.chrome.px(17), icon_width);
             try canvas.spriteTintedAt(.{ .x = icon.x, .y = icon.y + (icon.height - mark) / 2, .width = mark, .height = mark }, .{ .sprite = canvas.providerMark(.codex).?, .color = tint });
@@ -53,8 +55,8 @@ pub fn draw(self: Trigger, canvas: *Canvas) !void {
     }
 
     var storage: [TextFit.max_bytes]u8 = undefined;
-    var label: @import("Label.zig") = .{ .text = self.label, .face = .sans, .size = .body, .color = tint };
-    label.text = try (@import("TextFit.zig"){ .canvas = canvas, .width = text_bounds.width }).fit(label, &storage);
+    var label: Label = .{ .text = self.label, .face = .sans, .size = .body, .color = tint };
+    label.text = try (TextFit{ .canvas = canvas, .width = text_bounds.width }).fit(label, &storage);
     const width = try canvas.textAt(text_bounds, label);
     const chevron_x = @min(text_bounds.x + width + inset, self.bounds.x + self.bounds.width - icon_width);
     try canvas.iconAt(.{ .x = chevron_x, .y = self.bounds.y, .width = icon_width, .height = self.bounds.height }, .{ .text = if (active) "\u{f077}" else "\u{f078}", .color = if (self.enabled) palette.subtext0 else palette.overlay1, .size = .small });

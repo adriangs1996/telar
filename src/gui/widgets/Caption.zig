@@ -2,10 +2,12 @@
 const core = @import("telar-core");
 const std = @import("std");
 const Canvas = @import("Canvas.zig");
+const Rect = @import("../render/Rect.zig");
+const Label = @import("Label.zig");
 const Caption = @This();
 
-bounds: @import("../render/Rect.zig"),
-label: @import("Label.zig"),
+bounds: Rect,
+label: Label,
 
 /// Word boundaries keep ordinary shaping intact while every run fits the
 /// existing cache. Only visible runs are painted; no storage is retained.

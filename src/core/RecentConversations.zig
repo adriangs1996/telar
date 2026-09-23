@@ -1,5 +1,7 @@
 const std = @import("std");
 const Entry = @import("RecentConversation.zig");
+const Encoder = @import("schema/Encoder.zig");
+const Decoder = @import("schema/Decoder.zig");
 
 pub const capacity = 16;
 pub const Phase = enum(u8) { loading, ready, failed };
@@ -27,7 +29,7 @@ pub fn append(recent: *@This(), entry: Entry) !void {
 }
 
 /// Example: `try recent.encode(encoder);`
-pub fn encode(recent: *const @This(), encoder: *@import("schema/Encoder.zig")) !void {
+pub fn encode(recent: *const @This(), encoder: *Encoder) !void {
     if (recent.count > capacity) {
         return error.TooManyConversations;
     }
@@ -47,7 +49,7 @@ pub fn encode(recent: *const @This(), encoder: *@import("schema/Encoder.zig")) !
 }
 
 /// Example: `const recent = try RecentConversations.decode(decoder);`
-pub fn decode(decoder: *@import("schema/Decoder.zig")) !@This() {
+pub fn decode(decoder: *Decoder) !@This() {
     var recent: @This() = .{
         .phase = std.enums.fromInt(Phase, try decoder.readByte()) orelse return error.InvalidConversation,
         .has_more = try decoder.readBool(),

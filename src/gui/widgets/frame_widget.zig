@@ -4,20 +4,29 @@ const Notifications = @import("overlays/Notifications.zig");
 const modal_widget = @import("overlays/modal_widget.zig");
 const Canvas = @import("Canvas.zig");
 const GenericWidgetList = @import("GenericWidgetList.zig").Type;
+const TerminalPane = @import("TerminalPane.zig");
+const ThreadPane = @import("ThreadPane.zig");
+const HoveredLink = @import("HoveredLink.zig");
+const TopBar = @import("TopBar.zig");
+const StatusBar = @import("StatusBar.zig");
+const Sidebar = @import("Sidebar.zig");
+const PaneDecorations = @import("PaneDecorations.zig");
+const ChromeFocus = @import("ChromeFocus.zig");
+const NotificationCard = @import("overlays/NotificationCard.zig");
 
 pub const capacity = core.max_panes_per_tab + 1 + 4 + 1 + Notifications.max_visible + 1;
 pub const List = GenericWidgetList(Widget, capacity);
 
 pub const Widget = union(enum) {
-    terminal_pane: @import("TerminalPane.zig"),
-    thread: @import("ThreadPane.zig"),
-    link: @import("HoveredLink.zig"),
-    top_bar: @import("TopBar.zig"),
-    status: @import("StatusBar.zig"),
-    sidebar: @import("Sidebar.zig"),
-    panes: @import("PaneDecorations.zig"),
-    chrome_focus: @import("ChromeFocus.zig"),
-    notification: @import("overlays/NotificationCard.zig"),
+    terminal_pane: TerminalPane,
+    thread: ThreadPane,
+    link: HoveredLink,
+    top_bar: TopBar,
+    status: StatusBar,
+    sidebar: Sidebar,
+    panes: PaneDecorations,
+    chrome_focus: ChromeFocus,
+    notification: NotificationCard,
     modal: modal_widget.Widget,
 
     /// Example: `try widget.draw(canvas);`

@@ -7,6 +7,7 @@ const Rect = @import("Rect.zig");
 const RoundedRect = @import("RoundedRect.zig");
 const SpriteQuad = @import("SpriteQuad.zig");
 const quad = @import("Quad.zig");
+const OpacityWave = @import("OpacityWave.zig");
 const Quad = quad.Quad;
 const QuadList = @This();
 
@@ -143,7 +144,7 @@ pub fn items(self: *const QuadList) []const Quad {
 
 /// Highlights existing glyphs without changing their geometry or reshaping.
 /// Example: `list.highlightFrom(first_glyph, .{ .center = x, .radius = 40 });`
-pub fn highlightFrom(self: *QuadList, start: usize, wave: @import("OpacityWave.zig")) void {
+pub fn highlightFrom(self: *QuadList, start: usize, wave: OpacityWave) void {
     for (self.quads.items[start..]) |*glyph| {
         glyph.a *= wave.at(glyph.x + glyph.width / 2);
     }

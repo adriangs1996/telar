@@ -1,17 +1,26 @@
 //! Semantic GUI input. Text and paste borrow UTF-8 bytes only for synchronous
 //! dispatch; InputQueue copies them before native callbacks return. Pointer,
 //! key and focus events are values. No widget consumes the native C ABI.
+const TextInput = @import("TextInput.zig");
+const KeyInput = @import("KeyInput.zig");
+const PointerEvent = @import("PointerEvent.zig");
+const Composition = @import("Composition.zig");
+const ScrollEvent = @import("ScrollEvent.zig");
+const ClipboardResult = @import("ClipboardResult.zig");
+const AccessibilityAction = @import("AccessibilityAction.zig");
+const DeleteSurrounding = @import("DeleteSurrounding.zig");
+
 pub const Event = union(enum) {
-    text: @import("TextInput.zig"),
+    text: TextInput,
     paste: []const u8,
-    key: @import("KeyInput.zig"),
-    pointer: @import("PointerEvent.zig"),
+    key: KeyInput,
+    pointer: PointerEvent,
     focus: bool,
-    composition: @import("Composition.zig"),
-    scroll: @import("ScrollEvent.zig"),
-    clipboard: @import("ClipboardResult.zig"),
-    accessibility: @import("AccessibilityAction.zig"),
-    delete_surrounding: @import("DeleteSurrounding.zig"),
+    composition: Composition,
+    scroll: ScrollEvent,
+    clipboard: ClipboardResult,
+    accessibility: AccessibilityAction,
+    delete_surrounding: DeleteSurrounding,
 
     pub fn isScrollOrPointerBegin(self: *const Event) bool {
         return self.isScroll() or (self.isPointer() and (self.pointer.kind == .press or self.pointer.kind == .scroll_up or self.pointer.kind == .scroll_down));

@@ -17,9 +17,15 @@ const Options = @import("../../AgentOptions.zig");
 const Model = @import("../../AgentModel.zig");
 const Effort = @import("../../AgentEffort.zig");
 pub const SnapshotView = @import("AgentThreadSnapshotView.zig");
+const AgentPrompt = @import("AgentPrompt.zig");
+const AgentInterrupt = @import("AgentInterrupt.zig");
+const AgentResume = @import("AgentResume.zig");
+const AgentApproval = @import("AgentApproval.zig");
+const QueryAgentThread = @import("QueryAgentThread.zig");
+const AgentImagePaths = @import("../../AgentImagePaths.zig");
 
 /// Example: `const bytes = try encodeAgentPrompt(buffer, prompt);`
-pub fn encodeAgentPrompt(buffer: []u8, request: @import("AgentPrompt.zig")) ![]const u8 {
+pub fn encodeAgentPrompt(buffer: []u8, request: AgentPrompt) ![]const u8 {
     try validateTarget(request);
     try validatePrompt(request.text, &request.images);
     var encoder = Encoder.init(buffer);
@@ -37,8 +43,8 @@ pub fn encodeAgentPrompt(buffer: []u8, request: @import("AgentPrompt.zig")) ![]c
 }
 
 /// Example: `const prompt = try decodeAgentPrompt(&decoder);`
-pub fn decodeAgentPrompt(decoder: *Decoder) !@import("AgentPrompt.zig") {
-    var request: @import("AgentPrompt.zig") = .{
+pub fn decodeAgentPrompt(decoder: *Decoder) !AgentPrompt {
+    var request: AgentPrompt = .{
         .request_id = try id.request(try decoder.readInt(u64)),
         .pane_id = try id.pane(try decoder.readInt(u64)),
         .pane_generation = try decoder.readInt(u64),
@@ -60,13 +66,13 @@ pub fn decodeAgentPrompt(decoder: *Decoder) !@import("AgentPrompt.zig") {
 }
 
 /// Example: `const bytes = try encodeAgentInterrupt(buffer, request);`
-pub fn encodeAgentInterrupt(buffer: []u8, request: @import("AgentInterrupt.zig")) ![]const u8 {
+pub fn encodeAgentInterrupt(buffer: []u8, request: AgentInterrupt) ![]const u8 {
     try validateTarget(request);
     return codec.encodeDerived(@intFromEnum(tags.ClientTag.agent_interrupt), buffer, request);
 }
 
 /// Example: `const bytes = try encodeAgentResume(buffer, request);`
-pub fn encodeAgentResume(buffer: []u8, request: @import("AgentResume.zig")) ![]const u8 {
+pub fn encodeAgentResume(buffer: []u8, request: AgentResume) ![]const u8 {
     try validateTarget(request);
     if (request.conversation_index >= RecentConversations.capacity) {
         return error.InvalidConversation;
@@ -76,7 +82,7 @@ pub fn encodeAgentResume(buffer: []u8, request: @import("AgentResume.zig")) ![]c
 }
 
 /// Example: `const bytes = try encodeAgentApproval(buffer, request);`
-pub fn encodeAgentApproval(buffer: []u8, request: @import("AgentApproval.zig")) ![]const u8 {
+pub fn encodeAgentApproval(buffer: []u8, request: AgentApproval) ![]const u8 {
     try validateTarget(request);
     if (request.approval_id == 0) {
         return error.InvalidApproval;
@@ -85,7 +91,7 @@ pub fn encodeAgentApproval(buffer: []u8, request: @import("AgentApproval.zig")) 
 }
 
 /// Example: `const bytes = try encodeQueryAgentThread(buffer, request);`
-pub fn encodeQueryAgentThread(buffer: []u8, request: @import("QueryAgentThread.zig")) ![]const u8 {
+pub fn encodeQueryAgentThread(buffer: []u8, request: QueryAgentThread) ![]const u8 {
     try validateTarget(request);
     return codec.encodeDerived(@intFromEnum(tags.ClientTag.query_agent_thread), buffer, request);
 }
@@ -115,7 +121,7 @@ fn validateTarget(request: anytype) !void {
     }
 }
 
-fn validatePrompt(text: []const u8, images: *const @import("../../AgentImagePaths.zig")) !void {
+fn validatePrompt(text: []const u8, images: *const AgentImagePaths) !void {
     try images.validate();
     if ((text.len == 0 and images.count == 0) or text.len > limits.max_prompt_bytes or !std.unicode.utf8ValidateSlice(text) or std.mem.indexOfScalar(u8, text, 0) != null) {
         return error.InvalidPrompt;

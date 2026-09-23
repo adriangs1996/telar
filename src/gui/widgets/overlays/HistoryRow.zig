@@ -6,6 +6,7 @@ const Canvas = @import("../Canvas.zig");
 const Rect = @import("../../render/Rect.zig");
 const Target = @import("../interaction/Target.zig");
 const labels = @import("history_labels.zig");
+const Label = @import("../Label.zig");
 const Row = @This();
 
 bounds: Rect,
@@ -54,7 +55,7 @@ pub fn draw(self: Row, canvas: *Canvas) !void {
     var age: [32]u8 = undefined;
     var storage: [96]u8 = undefined;
     const meta = std.fmt.bufPrint(&storage, "{s}  ·  {s}", .{ labels.duration(entry.duration_ns, &duration), labels.age(history.now_ms -| entry.started_at_ms, &age) }) catch "";
-    const label: @import("../Label.zig") = .{ .text = meta, .face = .sans, .size = .small, .color = palette.subtext0 };
+    const label: Label = .{ .text = meta, .face = .sans, .size = .small, .color = palette.subtext0 };
     const meta_width = @min(title.width, try canvas.measure(label));
     const metadata: Rect = .{ .x = title.x + title.width - meta_width, .y = top + line_height, .width = meta_width, .height = small_height };
     _ = try canvas.textAt(metadata, label);

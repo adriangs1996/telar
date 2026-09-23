@@ -9,6 +9,7 @@ const Target = @import("../widgets/interaction/Target.zig");
 const Entry = @import("../widgets/interaction/ThreadScrollMotion.zig");
 const Event = @import("../input/ScrollEvent.zig");
 const scroll = @import("../widgets/interaction/thread_scroll.zig");
+const FrameClock = @import("../animation/FrameClock.zig");
 const second_pane_id: core.PaneId = @enumFromInt(20);
 
 fn fixture() !*Session {
@@ -138,7 +139,7 @@ test "wheel motion delivers intermediate positions and matching link hit geometr
     try publish(session);
     try std.testing.expectEqual(@as(f64, 2), pane.transcript_scroll);
     try std.testing.expect(!(try entry(session)).motion.active());
-    var clock: @import("../animation/FrameClock.zig") = .{};
+    var clock: FrameClock = .{};
     clock.begin((try entry(session)).motion.timestamp_ns);
     session.gui.widgets.thread_scroll.schedule(try transcript(session), &clock);
     try std.testing.expect(clock.deadline_ns == null);

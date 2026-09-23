@@ -3,11 +3,13 @@ const Canvas = @import("../Canvas.zig");
 const Target = @import("../interaction/Target.zig");
 const Rect = @import("../../render/Rect.zig");
 const TextFit = @import("../TextFit.zig");
+const PathCompletionChoice = @import("../interaction/PathCompletionChoice.zig");
+const Label = @import("../Label.zig");
 const Suggestion = @This();
 
 bounds: Rect,
 name: []const u8,
-choice: @import("../interaction/PathCompletionChoice.zig"),
+choice: PathCompletionChoice,
 generation: u64,
 selected: bool,
 enabled: bool,
@@ -30,7 +32,7 @@ pub fn draw(self: Suggestion, canvas: *Canvas) !void {
     const icon_width = canvas.chrome.px(18);
     try canvas.iconAt(.{ .x = self.bounds.x + inset, .y = self.bounds.y, .width = icon_width, .height = self.bounds.height }, .{ .text = "\u{f07b}", .color = palette.subtext0, .size = .body });
     const text: Rect = .{ .x = self.bounds.x + inset * 2 + icon_width, .y = self.bounds.y, .width = @max(0, self.bounds.width - inset * 3 - icon_width * 2), .height = self.bounds.height };
-    var label: @import("../Label.zig") = .{ .text = self.name, .face = .sans, .size = .body, .color = palette.text, .alpha = if (self.enabled) 1 else 0.5 };
+    var label: Label = .{ .text = self.name, .face = .sans, .size = .body, .color = palette.text, .alpha = if (self.enabled) 1 else 0.5 };
     var buffer: [TextFit.max_bytes]u8 = undefined;
     label.text = try (TextFit{ .canvas = canvas, .width = text.width }).fit(label, &buffer);
     _ = try canvas.textAt(text, label);

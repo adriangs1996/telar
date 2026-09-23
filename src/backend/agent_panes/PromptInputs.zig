@@ -1,8 +1,9 @@
 const core = @import("telar-core");
 const std = @import("std");
+const SkillCatalog = @import("SkillCatalog.zig");
 text: []const u8,
 images: *const core.AgentImages,
-skills: *const @import("SkillCatalog.zig"),
+skills: *const SkillCatalog,
 
 /// Adds exact advertised skill paths without filesystem access or model lookup.
 /// Example: `try writer.write(PromptInputs{ .text = prompt, .skills = catalog });`

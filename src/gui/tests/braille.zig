@@ -9,6 +9,7 @@ const Canvas = @import("../widgets/Canvas.zig");
 const QuadList = @import("../render/QuadList.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 const CellMesh = @import("../render/CellMesh.zig");
+const Label = @import("../widgets/Label.zig");
 
 test "Braille pattern replacement removes retained dots and blank Braille erases all ink" {
     const session = try Session.init();
@@ -137,7 +138,7 @@ test "Braille chrome preserves blank columns clipping colors and configured grid
         const bounds = canvas.rect(area);
         const width: f32 = @floatFromInt(renderer.metrics.cell_width);
         const height: f32 = @floatFromInt(renderer.metrics.cell_height);
-        const label = @import("../widgets/Label.zig"){ .text = "\u{2801}\u{2800}\u{2880}", .color = .rgb(.{ 0, 255, 0 }), .faint = true };
+        const label = Label{ .text = "\u{2801}\u{2800}\u{2880}", .color = .rgb(.{ 0, 255, 0 }), .faint = true };
         const version = renderer.atlas.?.version;
         quads.clear();
         try canvas.text(area, label);

@@ -1,6 +1,7 @@
 //! Word wrapping in measured pixels for proportional editors or terminal cells.
 const core = @import("telar-core");
 const Font = @import("EditorFont.zig");
+const LineFit = @import("LineFit.zig");
 const Lines = @This();
 
 text: []const u8,
@@ -140,7 +141,7 @@ fn nextShaped(self: *Lines) []const u8 {
     return self.text[start..end];
 }
 
-fn fittingEnd(text: []const u8, input: @import("LineFit.zig")) usize {
+fn fittingEnd(text: []const u8, input: LineFit) usize {
     var iterator: core.GraphemeIterator = .{ .bytes = text };
     var boundary: usize = 0;
     var before: usize = 0;

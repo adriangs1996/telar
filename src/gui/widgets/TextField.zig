@@ -9,6 +9,11 @@ const Rect = @import("../render/Rect.zig");
 const TextField = @This();
 const GenericField = shared_model.GenericField;
 const EditorDisplay = @import("interaction/EditorDisplay.zig");
+const EditorFont = @import("interaction/EditorFont.zig");
+const Preedit = @import("interaction/Preedit.zig");
+const MultilinePaint = @import("MultilinePaint.zig");
+const MultilineLayout = @import("interaction/MultilineLayout.zig");
+const EditorLines = @import("interaction/EditorLines.zig");
 
 bounds: Rect,
 text: []const u8,
@@ -54,7 +59,7 @@ pub fn draw(self: TextField, canvas: *Canvas) !void {
     const palette = canvas.theme.palette;
     const first_quad = canvas.quads.items().len;
     defer canvas.quads.clipFrom(first_quad, self.bounds);
-    var font: ?@import("interaction/EditorFont.zig") = null;
+    var font: ?EditorFont = null;
     if (self.multiline and self.face == .sans) {
         const height = self.font_pixels orelse @max(1, canvas.chrome.body);
         const box = try canvas.atlas.lineBox(.sans, height);
@@ -86,7 +91,7 @@ pub fn draw(self: TextField, canvas: *Canvas) !void {
 
     const cell: f32 = @floatFromInt(painter.metrics.cell_width);
     const columns: u16 = @intFromFloat(@min(65535, @max(1, @floor(content.width / cell))));
-    var preedit: ?*const @import("interaction/Preedit.zig") = null;
+    var preedit: ?*const Preedit = null;
     if (canvas.widgets) |state| {
         const target = (Target{ .id = .{ .generation = self.generation }, .bounds = self.bounds, .action = self.action, .layer = self.layer, .traverse_tab = self.action == .composer, .role = 3 }).labelled(self.label);
         const id = try state.dispatcher.add(target);
@@ -131,7 +136,7 @@ pub fn draw(self: TextField, canvas: *Canvas) !void {
     }
 }
 
-fn drawMultiline(self: TextField, canvas: *Canvas, input: @import("MultilinePaint.zig")) !void {
+fn drawMultiline(self: TextField, canvas: *Canvas, input: MultilinePaint) !void {
     const content = input.content;
     const display = input.display;
     const field = &display.field;
@@ -139,10 +144,10 @@ fn drawMultiline(self: TextField, canvas: *Canvas, input: @import("MultilinePain
     const line_height: f32 = @floatFromInt(canvas.metrics.cell_height);
     const cell_width: f32 = @floatFromInt(canvas.metrics.cell_width);
     const rows: u32 = @intFromFloat(@max(1, @floor(content.height / line_height)));
-    const layout: @import("interaction/MultilineLayout.zig") = .{ .text = field.text(), .head = @intCast(field.head), .columns = input.columns, .rows = rows, .font = input.font };
+    const layout: MultilineLayout = .{ .text = field.text(), .head = @intCast(field.head), .columns = input.columns, .rows = rows, .font = input.font };
     const first = layout.firstRow();
     const selection = [2]usize{ @min(field.head, field.anchor), @max(field.head, field.anchor) };
-    var lines: @import("interaction/EditorLines.zig") = .{ .text = field.text(), .width = input.columns, .font = input.font };
+    var lines: EditorLines = .{ .text = field.text(), .width = input.columns, .font = input.font };
     var row: u32 = 0;
     while (lines.next()) |line| : (row += 1) {
         if (row < first) {

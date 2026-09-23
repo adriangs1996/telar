@@ -10,6 +10,10 @@ const HistoryDetails = @import("HistoryDetails.zig");
 const WrappedLines = @import("WrappedLines.zig");
 const Metrics = @import("HistoryModalMetrics.zig");
 const Layout = @import("HistoryModalLayout.zig");
+const DialogSurface = @import("DialogSurface.zig");
+const Label = @import("../Label.zig");
+const HistoryRow = @import("HistoryRow.zig");
+const Caption = @import("../Caption.zig");
 const HistoryModal = @This();
 
 layout: Layout,
@@ -20,7 +24,7 @@ reveal: f32 = 1,
 /// Example: `try widget.draw(canvas);`
 pub fn draw(self: HistoryModal, canvas: *Canvas) !void {
     const first = canvas.quads.items().len;
-    try (@import("DialogSurface.zig"){ .bounds = self.layout.bounds, .viewport = self.layout.viewport }).draw(canvas);
+    try (DialogSurface{ .bounds = self.layout.bounds, .viewport = self.layout.viewport }).draw(canvas);
     const content = canvas.quads.items().len;
     try self.header(canvas);
     try self.search(canvas);
@@ -73,7 +77,7 @@ fn summary(self: HistoryModal, canvas: *Canvas) !void {
         std.fmt.bufPrint(&storage, "{d}–{d} commands{s}", .{ @as(u64, history.page_offset) + 1, @as(u64, history.page_offset) + history.len, if (history.has_more) " +" else "" }) catch "Commands";
     const width = try canvas.textAt(area, .{ .text = text, .face = .sans, .size = .small, .color = palette.subtext0 });
     if (history.match_fuzzy and self.projection.prompt.?.field.text().len != 0) {
-        const label: @import("../Label.zig") = .{ .text = "Fuzzy search · newest 1,000", .face = .sans, .size = .small, .color = palette.subtext0 };
+        const label: Label = .{ .text = "Fuzzy search · newest 1,000", .face = .sans, .size = .small, .color = palette.subtext0 };
         const fuzzy_width = try canvas.measure(label);
         if (area.width > width + fuzzy_width + canvas.chrome.px(20)) {
             _ = try canvas.textAt(.{ .x = area.x + area.width - fuzzy_width, .y = area.y, .width = fuzzy_width, .height = area.height }, label);
@@ -101,7 +105,7 @@ fn rows(self: HistoryModal, canvas: *Canvas) !void {
     const start = (selected + 1) -| count;
     for (0..count) |offset| {
         const index: u16 = start + @as(u16, @intCast(offset));
-        try (@import("HistoryRow.zig"){ .bounds = layout.row(@intCast(offset)), .projection = self.projection, .index = index, .selected = index == selected }).draw(canvas);
+        try (HistoryRow{ .bounds = layout.row(@intCast(offset)), .projection = self.projection, .index = index, .selected = index == selected }).draw(canvas);
     }
 }
 
@@ -118,11 +122,11 @@ fn footer(self: HistoryModal, canvas: *Canvas) !void {
         std.fmt.bufPrint(&storage, "{s}  ·  Pane {d}", .{ if (history.slice()[index].author == .human) "You" else "Agent", core.raw(history.slice()[index].pane_id) }) catch ""
     else
         "Reuse a command from your shell.";
-    try (@import("../Caption.zig"){ .bounds = layout.detail, .label = .{ .text = detail, .face = .sans, .size = .small, .color = if (history.errorSlice().len == 0) palette.subtext0 else palette.red } }).draw(canvas);
+    try (Caption{ .bounds = layout.detail, .label = .{ .text = detail, .face = .sans, .size = .small, .color = if (history.errorSlice().len == 0) palette.subtext0 else palette.red } }).draw(canvas);
 
     if (selected != null and history.errorSlice().len == 0) {
         const text = std.fmt.bufPrint(&storage, "Command #{d}", .{history.slice()[selected.?].id}) catch "";
-        const label: @import("../Label.zig") = .{ .text = text, .face = .sans, .size = .small, .color = palette.subtext0 };
+        const label: Label = .{ .text = text, .face = .sans, .size = .small, .color = palette.subtext0 };
         const width = try canvas.measure(label);
         if (layout.detail.width > width + canvas.chrome.px(180)) {
             _ = try canvas.textAt(.{ .x = layout.detail.x + layout.detail.width - width, .y = layout.detail.y, .width = width, .height = layout.detail.height }, label);

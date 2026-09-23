@@ -4,6 +4,8 @@ const client = @import("telar-client");
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
 const Selector = @import("ComposerSelector.zig");
+const ComposerOptions = @import("../ComposerOptions.zig");
+const Route = @import("Route.zig");
 
 /// Revalidates the exact pane, catalog and draft settings represented on screen.
 /// Example: `if (!composer_menu.eligible(gui, target)) return;`
@@ -29,7 +31,7 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
 
     const selector = selectorOf(target).?;
     const thread = client.ThreadView.capture(&gui.app.model, null, selector.pane_id).?;
-    const options: @import("../ComposerOptions.zig") = .{ .thread = thread, .kind = selector.kind };
+    const options: ComposerOptions = .{ .thread = thread, .kind = selector.kind };
     const state = &gui.widgets.composer_menu;
     if (target.action == .composer_selector) {
         const same = if (state.selector) |open| std.meta.eql(open, selector) else false;
@@ -81,7 +83,7 @@ pub fn activate(gui: *GuiClient, target: Target) !void {
 
 /// Consumes menu input after the dispatcher establishes physical-key ownership.
 /// Example: `if (try composer_menu.route(gui, event, route)) return true;`
-pub fn route(gui: *GuiClient, event: event_module.Event, decision: @import("Route.zig")) !bool {
+pub fn route(gui: *GuiClient, event: event_module.Event, decision: Route) !bool {
     const state = &gui.widgets.composer_menu;
     const selector = state.selector orelse return false;
     const fallback_lease = switch (event) {
@@ -100,7 +102,7 @@ pub fn route(gui: *GuiClient, event: event_module.Event, decision: @import("Rout
     }
 
     const thread = client.ThreadView.capture(&gui.app.model, null, selector.pane_id).?;
-    const options: @import("../ComposerOptions.zig") = .{ .thread = thread, .kind = selector.kind };
+    const options: ComposerOptions = .{ .thread = thread, .kind = selector.kind };
     if (event == .key and event.key.target_id != 0 and decision.target == null) {
         return true;
     }

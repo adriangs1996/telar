@@ -1,6 +1,7 @@
 const native = @import("native/native.zig");
 const std = @import("std");
 const core = @import("telar-core");
+const Rect = @import("render/Rect.zig");
 const Metrics = @This();
 
 cell_width: u16,
@@ -10,7 +11,7 @@ pixel_height: u16,
 
 /// Maps host grid coordinates into physical pixels with an external inset.
 /// Example: `const pixels = metrics.rect(.{ 8, 12 }, pane.content);`
-pub fn rect(self: Metrics, origin: [2]u32, cells: core.Rect) @import("render/Rect.zig") {
+pub fn rect(self: Metrics, origin: [2]u32, cells: core.Rect) Rect {
     return .{
         .x = @floatFromInt(origin[0] + @as(u32, cells.x) * self.cell_width),
         .y = @floatFromInt(origin[1] + @as(u32, cells.y) * self.cell_height),
@@ -21,7 +22,7 @@ pub fn rect(self: Metrics, origin: [2]u32, cells: core.Rect) @import("render/Rec
 
 /// Supplies fallback fitting with the actual grid rather than natural font metrics.
 /// Example: `run.cell_bounds = metrics.glyphCell();`
-pub fn glyphCell(self: Metrics) @import("render/Rect.zig") {
+pub fn glyphCell(self: Metrics) Rect {
     return .{ .x = 0, .y = -self.baseline, .width = @floatFromInt(self.cell_width), .height = @floatFromInt(self.cell_height) };
 }
 

@@ -10,13 +10,16 @@ const Label = @import("Label.zig");
 const SyntaxPaint = @import("SyntaxPaint.zig");
 const DiffAnnotations = @import("DiffAnnotations.zig");
 const DiffRow = @import("DiffRow.zig");
+const MessageLayoutOwner = @import("MessageLayoutOwner.zig");
+const WrappedLines = @import("overlays/WrappedLines.zig");
+const ThreadTextPaint = @import("ThreadTextPaint.zig");
 const Paint = @This();
 
 canvas: *Canvas,
 bounds: Rect,
 viewport: Rect,
 text: []const u8,
-owner: ?@import("MessageLayoutOwner.zig") = null,
+owner: ?MessageLayoutOwner = null,
 source_start: usize,
 paint: bool,
 y: f32 = 0,
@@ -129,7 +132,7 @@ fn code(self: *Paint, line: core.ChangeReviewDiffLine) !void {
     const code_width = @max(1, self.bounds.width - gutter - padding);
     const code_columns: u16 = @intFromFloat(@min(65535, @max(1, @floor(code_width / cell))));
     const start_y = self.y;
-    var wrapped: @import("overlays/WrappedLines.zig") = .{ .text = line.text, .width = code_columns };
+    var wrapped: WrappedLines = .{ .text = line.text, .width = code_columns };
     var continuation = false;
     while (wrapped.next()) |text| {
         defer self.y += row;
@@ -189,7 +192,7 @@ fn literal(self: *Paint, area: Rect, text: []const u8) !void {
                 const geometry = store.maps.preparing();
                 const offset = owner.source_offset + @as(u32, @intCast(@intFromPtr(text.ptr) - self.source_start));
                 if (try geometry.append(canvas, .{ .owner = owner, .offset = offset, .text = text, .bounds = area, .viewport = self.viewport, .advance = 0, .face = .mono, .pixel_height = canvas.metrics.pixel_height })) |hit| {
-                    try (@import("ThreadTextPaint.zig"){ .geometry = geometry, .fragment = hit }).draw(canvas);
+                    try (ThreadTextPaint{ .geometry = geometry, .fragment = hit }).draw(canvas);
                 }
             }
         }
@@ -201,7 +204,7 @@ fn literal(self: *Paint, area: Rect, text: []const u8) !void {
 fn fitted(self: *Paint, area: Rect, original: Label) !void {
     var buffer: [TextFit.max_bytes]u8 = undefined;
     var label = original;
-    label.text = try (@import("TextFit.zig"){ .canvas = self.canvas, .width = area.width }).fit(label, &buffer);
+    label.text = try (TextFit{ .canvas = self.canvas, .width = area.width }).fit(label, &buffer);
     _ = try self.canvas.textAt(area, label);
 }
 

@@ -7,6 +7,7 @@ const std = @import("std");
 const Runtime = @import("../Runtime.zig");
 const Initialization = @import("../Initialization.zig");
 const PersistenceEncoder = @import("../../persistence/Encoder.zig");
+const Pane = @import("../../pane/Pane.zig");
 
 test "shutdown replaces a pending checkpoint with the latest session and releases its buffer" {
     const io = std.testing.io;
@@ -150,7 +151,7 @@ const managed_provider =
     \\done
 ;
 
-fn awaitManagedPane(runtime: *Runtime, pane: *@import("../../pane/Pane.zig")) !void {
+fn awaitManagedPane(runtime: *Runtime, pane: *Pane) !void {
     while (true) {
         switch (try runtime.loop.next()) {
             .agent_thread_changed => |changed| {

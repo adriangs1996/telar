@@ -1,6 +1,8 @@
+const PointerCapture = @import("PointerCapture.zig");
+
 pub const Owner = union(enum) {
     shared,
-    child: @import("PointerCapture.zig"),
+    child: PointerCapture,
     link,
     discarded,
 };

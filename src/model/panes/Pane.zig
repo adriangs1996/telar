@@ -48,7 +48,7 @@ kind: core.PaneKind = .terminal,
 pane_generation: u64 = 0,
 change_review: ChangeReviewAvailability = .{},
 agent_thread: ?*core.AgentThreadSnapshot = null,
-agent_history: ?*@import("AgentHistoryWindow.zig") = null,
+agent_history: ?*AgentHistoryWindow = null,
 history_intent: ?core.agent_history.Direction = null,
 history_generation: u64 = 0,
 transcript_scroll: f64 = 0,
@@ -59,6 +59,7 @@ catalog_revision: u64 = 0,
 resume_history_requested: bool = false,
 
 pub const Initial = @import("Initial.zig");
+const AgentHistoryWindow = @import("AgentHistoryWindow.zig");
 
 /// Reserves cells and row damage for one validated pane. Example: var pane = try Pane.init(gpa, initial);
 pub fn init(gpa: std.mem.Allocator, initial: Initial) !Pane {

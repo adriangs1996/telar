@@ -1,5 +1,7 @@
+const PointerEvent = @import("PointerEvent.zig");
+
 const Sample = @This();
 
-event: @import("PointerEvent.zig"),
+event: PointerEvent,
 geometry_revision: u64,
 gesture_revision: u64,

@@ -1,10 +1,13 @@
 //! Native geometry needed by both the history painter and its scroll controller.
 const Canvas = @import("../Canvas.zig");
+const Rect = @import("../../render/Rect.zig");
+const ChromeMetrics = @import("../ChromeMetrics.zig");
+const TerminalMetrics = @import("../../TerminalMetrics.zig");
 const Metrics = @This();
 
-viewport: @import("../../render/Rect.zig"),
-chrome: @import("../ChromeMetrics.zig"),
-terminal: @import("../../TerminalMetrics.zig"),
+viewport: Rect,
+chrome: ChromeMetrics,
+terminal: TerminalMetrics,
 
 /// Example: `const metrics = HistoryModalMetrics.fromCanvas(canvas);`
 pub fn fromCanvas(canvas: *const Canvas) Metrics {

@@ -66,10 +66,11 @@ fn section(self: Copy, value: Section) !void {
         try self.writer.writeAll("\n\n");
     }
     const content = self.writer.end;
-    try (@import("../MessageSelectionText.zig"){ .text = value.text, .markdown = value.markdown, .code = value.code, .range = .{ start, end } }).write(self.writer);
+    try (MessageSelectionText{ .text = value.text, .markdown = value.markdown, .code = value.code, .range = .{ start, end } }).write(self.writer);
     if (self.writer.end == content) {
         self.writer.end = before;
     }
 }
 
 const Section = @import("ThreadSelectionSection.zig");
+const MessageSelectionText = @import("../MessageSelectionText.zig");

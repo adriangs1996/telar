@@ -4,6 +4,7 @@ const core = @import("telar-core");
 const Clock = @import("../animation/FrameClock.zig");
 const Slot = @import("TabSlot.zig");
 const Rect = @import("../render/Rect.zig");
+const Transition = @import("../animation/Transition.zig");
 const TabMotions = @This();
 
 entries: [core.max_tabs_per_workspace]Motion = undefined,
@@ -93,7 +94,7 @@ const Motion = struct {
     id: core.TabId,
     from: Rect,
     to: Rect,
-    transition: @import("../animation/Transition.zig"),
+    transition: Transition,
     seen: bool = true,
 
     /// Cubic ease-out keeps a quick response and a soft landing.

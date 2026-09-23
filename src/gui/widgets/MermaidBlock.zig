@@ -3,10 +3,11 @@ const view_module = @import("../diagrams/view.zig");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Ready = @import("../diagrams/Ready.zig");
+const Request = @import("../diagrams/Request.zig");
 const Mermaid = @This();
 
 bounds: Rect,
-request: @import("../diagrams/Request.zig"),
+request: Request,
 
 /// Consults frame-stable results without admitting work from measurement.
 /// Example: `const result = mermaid.lookup(canvas);`

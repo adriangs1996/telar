@@ -9,6 +9,7 @@ const Session = @import("Session.zig");
 const Scene = @import("../render/Scene.zig");
 const Overlays = @import("../widgets/overlays/Overlays.zig");
 const Canvas = @import("../widgets/Canvas.zig");
+const Rect = @import("../render/Rect.zig");
 
 test "native composed multiplexer scenes keep warm allocation shaping and cell work at zero" {
     var fixture = try Fixture.init();
@@ -57,7 +58,7 @@ test "native composed multiplexer scenes keep warm allocation shaping and cell w
         try std.testing.expectEqual(@as(usize, 0), failing.allocated_bytes);
         try std.testing.expectEqual(version, renderer.last_page_version);
         try std.testing.expectEqual(frame_version, renderer.atlas_version);
-        const bounds: @import("../render/Rect.zig") = .{ .x = 0, .y = 0, .width = @floatFromInt(renderer.viewport[0]), .height = @floatFromInt(renderer.viewport[1]) };
+        const bounds: Rect = .{ .x = 0, .y = 0, .width = @floatFromInt(renderer.viewport[0]), .height = @floatFromInt(renderer.viewport[1]) };
         for (renderer.quads.items()) |quad| {
             try std.testing.expect(std.math.isFinite(quad.a) and quad.a >= 0 and quad.a <= 1);
             try std.testing.expect(quad.x >= bounds.x and quad.y >= bounds.y);

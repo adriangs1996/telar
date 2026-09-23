@@ -5,6 +5,9 @@ const core = @import("telar-core");
 const client = @import("telar-client");
 const GuiClient = @import("../../GuiClient.zig");
 const Target = @import("Target.zig");
+const Route = @import("Route.zig");
+const Id = @import("Id.zig");
+const ComposerSelector = @import("ComposerSelector.zig");
 
 /// Revalidates draft and catalog identities before using delivered suggestions.
 /// Example: `completions.refresh(gui);`
@@ -32,13 +35,13 @@ pub fn refresh(gui: *GuiClient) void {
 
 /// Completion rows never take the IME target away from the composer.
 /// Example: `if (try completions.route(gui, event, decision)) return true;`
-pub fn route(gui: *GuiClient, event: event_module.Event, decision: @import("Route.zig")) !bool {
+pub fn route(gui: *GuiClient, event: event_module.Event, decision: Route) !bool {
     const state = &gui.widgets.completions;
     if (!state.open) {
         return decision.target != null and decision.target.?.action == .composer_completion;
     }
     if (event == .key and event.key.target_id != 0) {
-        const id: @import("Id.zig") = .{ .target_id = event.key.target_id, .generation = event.key.generation };
+        const id: Id = .{ .target_id = event.key.target_id, .generation = event.key.generation };
         if (decision.target == null or !decision.target.?.id.eql(id)) {
             return true;
         }
@@ -188,7 +191,7 @@ pub fn submit(gui: *GuiClient, pane_id: core.PaneId) !void {
                     return;
                 },
                 .model, .permissions => {
-                    const kind: @FieldType(@import("ComposerSelector.zig"), "kind") = if (action.kind == .model) .model else .access;
+                    const kind: @FieldType(ComposerSelector, "kind") = if (action.kind == .model) .model else .access;
                     for (gui.widgets.dispatcher.maps.presented().targets[0..gui.widgets.dispatcher.maps.presented().len]) |target| {
                         if (target.action == .composer_selector and target.action.composer_selector.pane_id == pane_id and target.action.composer_selector.kind == kind) {
                             if (!composer_menu.eligible(gui, target)) {

@@ -3,10 +3,12 @@
 const builtin = @import("builtin");
 const std = @import("std");
 const exit = @import("exit.zig");
+const native_darwin = @import("native_darwin.zig");
+const native_linux = @import("native_linux.zig");
 
 const TIOC = switch (builtin.os.tag) {
-    .macos => @import("native_darwin.zig"),
-    .linux => @import("native_linux.zig"),
+    .macos => native_darwin,
+    .linux => native_linux,
     else => @compileError("telar's PTY bootstrap currently supports macOS and Linux"),
 };
 

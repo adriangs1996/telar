@@ -11,6 +11,7 @@ const colors = @import("../render/cell_colors.zig");
 const Rect = @import("../render/Rect.zig");
 const Quad = @import("../render/Quad.zig").Quad;
 const SyntaxPaint = @import("../widgets/SyntaxPaint.zig");
+const ThreadItemView = @import("../widgets/ThreadItemView.zig");
 
 const source = "Updated /project/src/runtime.zig\n@@ -1409,3 +1409,4 @@\n const pane = workspace.find(id);\n-try pane.scroll(100);\n+try pane.scroll(0);\n+try pane.render(\"Café 界 🙂\");\n return pane;\nAdded src/new.zig\n@@ -0,0 +1 @@\n+const ready = true;\n";
 
@@ -72,7 +73,7 @@ test "diff source coordinates exclude generated gutters and preserve Unicode thr
     text.bounds.width = 230;
     text.viewport.width = 230;
     text.owner.?.source_offset = 0;
-    const view: @import("../widgets/ThreadItemView.zig") = .{ .thread = .{ .pane_id = snapshot.pane_id, .attachment_generation = 3, .agent = null, .composer = "", .transcript = snapshot }, .item = &snapshot.item_storage[0], .bounds = text.bounds, .viewport = text.viewport, .expanded = true };
+    const view: ThreadItemView = .{ .thread = .{ .pane_id = snapshot.pane_id, .attachment_generation = 3, .agent = null, .composer = "", .transcript = snapshot }, .item = &snapshot.item_storage[0], .bounds = text.bounds, .viewport = text.viewport, .expanded = true };
     const geometry = store.maps.preparing();
     geometry.addRow(view, 0);
     var canvas = fixture.canvas();

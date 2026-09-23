@@ -6,12 +6,15 @@ const Canvas = @import("Canvas.zig");
 const Context = @import("Context.zig");
 const frame_widget = @import("frame_widget.zig");
 const copy_selection = @import("../render/copy_selection.zig");
+const Chrome = @import("Chrome.zig");
+const Overlays = @import("overlays/Overlays.zig");
+const LinkHit = @import("../input/LinkHit.zig");
 const Composition = @This();
 
-chrome: *@import("Chrome.zig"),
-overlays: *@import("overlays/Overlays.zig"),
+chrome: *Chrome,
+overlays: *Overlays,
 canvas: *Canvas,
-link: ?*const @import("../input/LinkHit.zig") = null,
+link: ?*const LinkHit = null,
 context: Context = undefined,
 commit: data.PresentationCommit = .{},
 

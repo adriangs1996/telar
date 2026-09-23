@@ -22,6 +22,13 @@ const Key = @import("../../input/KeyInput.zig");
 const Id = @import("Id.zig");
 const Target = @import("Target.zig");
 const FieldView = @import("FieldView.zig");
+const MultilineLayout = @import("MultilineLayout.zig");
+const PasteBuffer = @import("PasteBuffer.zig");
+const AgentReview = @import("AgentReview.zig");
+const ScrollEvent = @import("../../input/ScrollEvent.zig");
+const AccessibilityAction = @import("../../input/AccessibilityAction.zig");
+const Owner = @import("../../host/Owner.zig");
+const ClipboardResult = @import("../../input/ClipboardResult.zig");
 const GenericField = data.GenericField;
 
 /// Delivered controls may outlive their pane's keyboard focus between frames.
@@ -442,7 +449,7 @@ fn composerKey(gui: *GuiClient, target: Target, key: Key) !void {
         .up, .down => {
             const current = field(gui, target) orelse return;
             const geometry = gui.widgets.editors.presented().find(target.id) orelse return;
-            const layout: @import("MultilineLayout.zig") = .{ .text = current.text, .head = current.head, .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
+            const layout: MultilineLayout = .{ .text = current.text, .head = current.head, .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
             const caret = layout.position(current.head);
             const row = if (key.code == .up) caret[1] -| 1 else caret[1] + 1;
             var full = layout;
@@ -614,7 +621,7 @@ fn editor(gui: *GuiClient, target: Target, event: event_module.Event) !void {
             state.dispatcher.revision +%= 1;
         },
         .paste => |bytes| {
-            var buffer: @import("PasteBuffer.zig") = .{ .multiline = target.action == .composer };
+            var buffer: PasteBuffer = .{ .multiline = target.action == .composer };
             buffer.append(bytes);
             if (buffer.text()) |text| {
                 try command(gui, .{ .replace_range = .{ .range = current.selection(), .text = text } });
@@ -636,7 +643,7 @@ fn editor(gui: *GuiClient, target: Target, event: event_module.Event) !void {
             if (pointer.button == .left and (pointer.kind == .press or pointer.kind == .drag)) {
                 const geometry = state.editors.presented().find(target.id) orelse return;
                 if (geometry.multiline) {
-                    const layout: @import("MultilineLayout.zig") = .{ .text = current.text, .head = current.head, .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
+                    const layout: MultilineLayout = .{ .text = current.text, .head = current.head, .columns = geometry.columns, .rows = @intFromFloat(@max(1, @floor(geometry.bounds.height / geometry.line_height))), .font = geometry.font };
                     const offset = layout.offset(.{ (pointer.x - geometry.bounds.x) / geometry.cell_width, (pointer.y - geometry.bounds.y) / geometry.line_height });
                     const anchor = if (pointer.kind == .drag or pointer.mods & 1 != 0) current.anchor else offset;
                     state.cancelComposition();
@@ -817,7 +824,7 @@ fn activateControl(gui: *GuiClient, target: Target) !void {
                     return;
                 }
 
-                const value: @import("AgentReview.zig") = .{ .pane_id = control.pane_id, .generation = target.id.generation, .approval_id = control.approval_id };
+                const value: AgentReview = .{ .pane_id = control.pane_id, .generation = target.id.generation, .approval_id = control.approval_id };
                 const closing = if (gui.widgets.approval_review) |review| std.meta.eql(review, value) else false;
                 gui.widgets.approval_review = if (closing) null else value;
                 gui.widgets.thread_anchor.cancel(control.pane_id);
@@ -877,7 +884,7 @@ fn scroll(gui: *GuiClient, event: event_module.Event) !bool {
                 return true;
             }
 
-            const input: @import("../../input/ScrollEvent.zig") = if (event == .scroll) event.scroll else .{ .delta_y = if (event.pointer.kind == .scroll_up) -1 else 1 };
+            const input: ScrollEvent = if (event == .scroll) event.scroll else .{ .delta_y = if (event.pointer.kind == .scroll_up) -1 else 1 };
             try thread_scroll.input(gui, target, input);
 
             return true;
@@ -1020,7 +1027,7 @@ fn scrollHistory(gui: *GuiClient, event: event_module.Event) !bool {
     return true;
 }
 
-fn accessibility(gui: *GuiClient, value: @import("../../input/AccessibilityAction.zig")) !void {
+fn accessibility(gui: *GuiClient, value: AccessibilityAction) !void {
     const target = gui.widgets.dispatcher.maps.presented().find(.{ .target_id = value.target_id, .generation = value.generation }) orelse return;
     if (gui.widgets.composer_menu.selector != null and target.action != .composer_selector and target.action != .composer_choice) {
         return;
@@ -1112,7 +1119,7 @@ pub fn beginClipboardRead(gui: *GuiClient, owner: Id) !void {
             continue;
         }
 
-        const request_owner: @import("../../host/Owner.zig") = .{ .target_id = owner.target_id, .generation = owner.generation };
+        const request_owner: Owner = .{ .target_id = owner.target_id, .generation = owner.generation };
         const request_id = if (target.action == .composer) try gui.host.readImage(request_owner) else try gui.host.read(request_owner);
         slot.* = .{ .request_id = request_id, .owner = owner, .range = current.selection(), .revision = FieldView.revision(&gui.app, target) };
         gui.widgets.dispatcher.revision +%= 1;
@@ -1123,7 +1130,7 @@ pub fn beginClipboardRead(gui: *GuiClient, owner: Id) !void {
     return error.HostRequestsFull;
 }
 
-fn finishPaste(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig")) !void {
+fn finishPaste(gui: *GuiClient, result: ClipboardResult) !void {
     const owner: Id = .{ .target_id = result.target_id, .generation = result.generation };
     for (&gui.widgets.pending_pastes) |*slot| {
         const pending = slot.* orelse continue;
@@ -1170,7 +1177,7 @@ fn finishPaste(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig
             return;
         }
 
-        var buffer: @import("PasteBuffer.zig") = .{ .multiline = target.action == .composer };
+        var buffer: PasteBuffer = .{ .multiline = target.action == .composer };
         buffer.append(result.text);
         if (buffer.text()) |text| {
             try command(gui, .{ .replace_range = .{ .range = pending.range, .text = text } });
@@ -1180,7 +1187,7 @@ fn finishPaste(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig
     }
 }
 
-fn finishCut(gui: *GuiClient, result: @import("../../input/ClipboardResult.zig")) !void {
+fn finishCut(gui: *GuiClient, result: ClipboardResult) !void {
     const id: Id = .{ .target_id = result.target_id, .generation = result.generation };
     for (&gui.widgets.pending_cuts) |*slot| {
         const cut = slot.* orelse continue;

@@ -4,6 +4,7 @@ const lua_api = @import("lua-api");
 const core = @import("telar-core");
 const std = @import("std");
 const value = @import("lua_value.zig");
+const Snapshot = @import("Snapshot.zig");
 const Parser = @This();
 
 state: *lua_api.c.lua_State,
@@ -131,7 +132,7 @@ fn syntax(self: Parser, theme: *data.ColorTheme) !void {
 
 /// Appearance variants use the same complete theme and retain profile inheritance.
 /// Example: `try parser.appearance(&snapshot);`
-pub fn appearance(self: Parser, snapshot: *@import("Snapshot.zig")) !void {
+pub fn appearance(self: Parser, snapshot: *Snapshot) !void {
     if (lua_api.c.lua_type(self.state, -1) != lua_api.c.LUA_TTABLE) {
         return self.invalid("config.client.appearance must be a table");
     }

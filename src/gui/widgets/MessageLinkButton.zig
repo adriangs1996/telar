@@ -3,11 +3,13 @@ const std = @import("std");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Label = @import("Label.zig");
+const MessageLinkControl = @import("interaction/MessageLinkControl.zig");
+const Target = @import("interaction/Target.zig");
 const Button = @This();
 
 bounds: Rect,
 viewport: Rect,
-control: @import("interaction/MessageLinkControl.zig"),
+control: MessageLinkControl,
 label: Label,
 advance: f32,
 
@@ -47,5 +49,5 @@ pub fn draw(self: Button, canvas: *Canvas) !void {
 
     var control = self.control;
     control.fragment_offset += @intCast(leading);
-    _ = try state.dispatcher.addMessageLink((@import("interaction/Target.zig"){ .id = .{ .generation = control.owner.attachment_generation }, .bounds = .{ .x = left, .y = top, .width = right - left, .height = bottom - top }, .action = .{ .message_link = control }, .focusable = false, .role = 4 }).labelled(label.text));
+    _ = try state.dispatcher.addMessageLink((Target{ .id = .{ .generation = control.owner.attachment_generation }, .bounds = .{ .x = left, .y = top, .width = right - left, .height = bottom - top }, .action = .{ .message_link = control }, .focusable = false, .role = 4 }).labelled(label.text));
 }

@@ -5,6 +5,7 @@ const Atlas = @import("GlyphAtlas.zig");
 const QuadList = @import("../render/QuadList.zig");
 const TextRun = @import("TextRun.zig");
 const quad = @import("../render/Quad.zig");
+const Rect = @import("../render/Rect.zig");
 
 fn makeAtlas() !Atlas {
     return Atlas.init(std.testing.allocator, .{ .font = assets.jetbrains_mono, .pixel_height = 16 });
@@ -59,7 +60,7 @@ test "adjacent block cells and rows meet edge to edge with identical shade quads
     defer atlas.deinit();
     var list = QuadList.init(std.testing.allocator);
     defer list.deinit();
-    const cell: @import("../render/Rect.zig") = .{ .x = 0, .y = -22, .width = 11, .height = 29 };
+    const cell: Rect = .{ .x = 0, .y = -22, .width = 11, .height = 29 };
     try std.testing.expectEqual(@as(f32, 44), try atlas.place(.{ .text = "\u{2592}\u{2592}\u{2580}\u{2584}", .x = 3, .y = 30, .color = .white, .pixel_height = 16, .cell_bounds = cell }, &list));
     _ = try atlas.place(.{ .text = "\u{2592}\u{2592}\u{2584}\u{2580}", .x = 3, .y = 59, .color = .white, .pixel_height = 16, .cell_bounds = cell }, &list);
     const quads = list.items();

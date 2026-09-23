@@ -124,9 +124,9 @@ pub const ClientMessage = union(enum) {
     request_client_command: ClientCommand,
     complete_client_command: ClientCommand,
 
-    query_change_review: @import("QueryChangeReview.zig"),
-    change_review_command: @import("ChangeReviewCommand.zig"),
-    report_change_review_sample: @import("ReportChangeReviewSample.zig"),
+    query_change_review: QueryChangeReview,
+    change_review_command: ChangeReviewCommand,
+    report_change_review_sample: ReportChangeReviewSample,
     open_pane: OpenPaneView,
     pane_input: PaneInput,
     pane_resize: PaneResize,
@@ -140,12 +140,12 @@ pub const ClientMessage = union(enum) {
     query_history: QueryHistory,
     request_workspace_snapshot: RequestWorkspaceSnapshot,
     create_tab: CreateTabView,
-    agent_prompt: @import("AgentPrompt.zig"),
-    agent_interrupt: @import("AgentInterrupt.zig"),
-    agent_resume: @import("AgentResume.zig"),
-    agent_approval: @import("AgentApproval.zig"),
-    query_agent_thread: @import("QueryAgentThread.zig"),
-    query_agent_history: @import("QueryAgentHistory.zig"),
+    agent_prompt: AgentPrompt,
+    agent_interrupt: AgentInterrupt,
+    agent_resume: AgentResume,
+    agent_approval: AgentApproval,
+    query_agent_thread: QueryAgentThread,
+    query_agent_history: QueryAgentHistory,
     rename_tab: RenameTab,
     close_tab: CloseTab,
     move_tab: MoveTab,
@@ -182,6 +182,17 @@ pub const ClientMessage = union(enum) {
 
 const ChangeReviewChanged = @import("ChangeReviewChanged.zig");
 const change_review = @import("change_review.zig");
+const QueryChangeReview = @import("QueryChangeReview.zig");
+const ChangeReviewCommand = @import("ChangeReviewCommand.zig");
+const ReportChangeReviewSample = @import("ReportChangeReviewSample.zig");
+const AgentPrompt = @import("AgentPrompt.zig");
+const AgentInterrupt = @import("AgentInterrupt.zig");
+const AgentResume = @import("AgentResume.zig");
+const AgentApproval = @import("AgentApproval.zig");
+const QueryAgentThread = @import("QueryAgentThread.zig");
+const QueryAgentHistory = @import("QueryAgentHistory.zig");
+const ChangeReviewSnapshotView = @import("ChangeReviewSnapshotView.zig");
+const AgentHistoryPageView = @import("AgentHistoryPageView.zig");
 
 pub const ServerMessage = union(enum) {
     client_list: ClientList,
@@ -189,10 +200,10 @@ pub const ServerMessage = union(enum) {
     client_command_result: ClientCommand,
 
     change_review_changed: ChangeReviewChanged,
-    change_review_snapshot: @import("ChangeReviewSnapshotView.zig"),
+    change_review_snapshot: ChangeReviewSnapshotView,
     pane_opened: PaneOpened,
     agent_thread_snapshot: agent_thread.SnapshotView,
-    agent_history_page: @import("AgentHistoryPageView.zig"),
+    agent_history_page: AgentHistoryPageView,
     pane_frame: FrameView,
     pane_exited: PaneExited,
     request_failed: RequestFailed,
@@ -259,13 +270,13 @@ pub fn decodeClient(payload: []const u8) !ClientMessage {
         },
         .create_tab => .{ .create_tab = try tab.decodeCreateTab(&decoder) },
         .agent_prompt => .{ .agent_prompt = try agent_thread.decodeAgentPrompt(&decoder) },
-        .agent_interrupt => .{ .agent_interrupt = try agent_thread.decodeControl(@import("AgentInterrupt.zig"), &decoder) },
-        .agent_resume => .{ .agent_resume = try agent_thread.decodeControl(@import("AgentResume.zig"), &decoder) },
-        .agent_approval => .{ .agent_approval = try agent_thread.decodeControl(@import("AgentApproval.zig"), &decoder) },
-        .query_change_review => .{ .query_change_review = try change_review.decode(@import("QueryChangeReview.zig"), &decoder) },
-        .change_review_command => .{ .change_review_command = try change_review.decode(@import("ChangeReviewCommand.zig"), &decoder) },
-        .report_change_review_sample => .{ .report_change_review_sample = try change_review.decode(@import("ReportChangeReviewSample.zig"), &decoder) },
-        .query_agent_thread => .{ .query_agent_thread = try agent_thread.decodeControl(@import("QueryAgentThread.zig"), &decoder) },
+        .agent_interrupt => .{ .agent_interrupt = try agent_thread.decodeControl(AgentInterrupt, &decoder) },
+        .agent_resume => .{ .agent_resume = try agent_thread.decodeControl(AgentResume, &decoder) },
+        .agent_approval => .{ .agent_approval = try agent_thread.decodeControl(AgentApproval, &decoder) },
+        .query_change_review => .{ .query_change_review = try change_review.decode(QueryChangeReview, &decoder) },
+        .change_review_command => .{ .change_review_command = try change_review.decode(ChangeReviewCommand, &decoder) },
+        .report_change_review_sample => .{ .report_change_review_sample = try change_review.decode(ReportChangeReviewSample, &decoder) },
+        .query_agent_thread => .{ .query_agent_thread = try agent_thread.decodeControl(QueryAgentThread, &decoder) },
         .query_agent_history => .{ .query_agent_history = try agent_history.decodeQueryAgentHistory(&decoder) },
         .rename_tab => .{ .rename_tab = try tab.decodeRenameTab(&decoder) },
         .close_tab => .{ .close_tab = try GenericDerived(CloseTab).decode(&decoder) },
@@ -325,7 +336,7 @@ pub fn decodeServer(payload: []const u8) !ServerMessage {
     const tag = try decodeTag(tags.ServerTag, try decoder.readByte());
     const message: ServerMessage = switch (tag) {
         .change_review_changed => .{ .change_review_changed = try change_review.decode(ChangeReviewChanged, &decoder) },
-        .change_review_snapshot => .{ .change_review_snapshot = try change_review.decode(@import("ChangeReviewSnapshotView.zig"), &decoder) },
+        .change_review_snapshot => .{ .change_review_snapshot = try change_review.decode(ChangeReviewSnapshotView, &decoder) },
         .agent_thread_snapshot => .{ .agent_thread_snapshot = try agent_thread.decodeAgentThreadSnapshot(&decoder) },
         .agent_history_page => .{ .agent_history_page = try agent_history.decodeAgentHistoryPage(&decoder) },
         .pane_opened => .{ .pane_opened = try GenericDerived(PaneOpened).decode(&decoder) },

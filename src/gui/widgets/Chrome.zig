@@ -17,13 +17,16 @@ const Favicons = @import("Favicons.zig");
 const PointerEvent = @import("../input/PointerEvent.zig");
 const BandCommand = @import("BandCommand.zig");
 const GenericPresentedState = @import("../render/GenericPresentedState.zig").Type;
+const ProgressMotions = @import("ProgressMotions.zig");
+const FrameClock = @import("../animation/FrameClock.zig");
+const PixelScroll = @import("PixelScroll.zig");
 const Chrome = @This();
 
 maps: GenericPresentedState(HitState) = .{},
 sidebar: SidebarState = .{},
 ages: AgentAges = .{},
 rings: RingFades = .{},
-progress: @import("ProgressMotions.zig") = .{},
+progress: ProgressMotions = .{},
 favicons: Favicons = .{},
 hovered: ?action_module.Action = null,
 gesture_button: ?u8 = null,
@@ -32,7 +35,7 @@ sidebar_resize_active: bool = false,
 revision: u64 = 0,
 /// Monotonic time the driver stamps before each preparation.
 now_ns: u64 = 0,
-animation: @import("../animation/FrameClock.zig") = .{},
+animation: FrameClock = .{},
 
 /// Starts the pending hit map and returns a context borrowing only the caller's
 /// projection and persistent chrome state. Keep it alive until drawing ends.
@@ -190,7 +193,7 @@ pub fn bandPointer(self: *Chrome, event: PointerEvent) ?BandCommand {
 
 /// Selects a scroll owner using only the completed frame's list viewports.
 /// Example: `const scroll = chrome.sidebarScrollAt(point) orelse return;`
-pub fn sidebarScrollAt(self: *Chrome, point: [2]f64) ?*@import("PixelScroll.zig") {
+pub fn sidebarScrollAt(self: *Chrome, point: [2]f64) ?*PixelScroll {
     const list = self.presented().sidebar_regions.at(point) orelse return null;
     return switch (list) {
         .projects => &self.sidebar.projects,

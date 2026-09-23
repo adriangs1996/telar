@@ -1,6 +1,8 @@
 //! One source caret in the immutable reading window, independent of screen rows.
+const MessageLayoutOwner = @import("../MessageLayoutOwner.zig");
+
 const Position = @This();
-owner: @import("../MessageLayoutOwner.zig"),
+owner: MessageLayoutOwner,
 order: u16,
 offset: u32,
 

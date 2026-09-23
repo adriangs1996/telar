@@ -3,9 +3,12 @@ const MessageTable = @import("MessageTable.zig");
 const Canvas = @import("Canvas.zig");
 const Rect = @import("../render/Rect.zig");
 const Flow = @import("MessageTextFlow.zig");
+const MessageTablePaint = @import("MessageTablePaint.zig");
+const MessageTableRowOptions = @import("MessageTableRowOptions.zig");
+const MessageTextAlignment = @import("MessageTextAlignment.zig");
 const Row = @This();
 
-table: @import("MessageTablePaint.zig"),
+table: MessageTablePaint,
 canvas: *Canvas,
 widths: *[MessageTable.max_columns]f32,
 y: f32 = 0,
@@ -24,11 +27,11 @@ pub fn measureWidths(self: Row, text: []const u8, header: bool) !void {
 
 /// Measures before painting backgrounds, links and selectable cell text.
 /// Example: `try row.layout(text, .{ .header = true, .paint = true });`
-pub fn layout(self: *Row, text: []const u8, options: @import("MessageTableRowOptions.zig")) !void {
+pub fn layout(self: *Row, text: []const u8, options: MessageTableRowOptions) !void {
     var cells = self.table.table.rowCells(text);
     var height: f32 = self.canvas.chrome.px(25);
     const padding = self.canvas.chrome.px(9);
-    var alignments: [MessageTable.max_columns]@import("MessageTextAlignment.zig") = undefined;
+    var alignments: [MessageTable.max_columns]MessageTextAlignment = undefined;
     var x = self.table.bounds.x;
     for (self.widths[0..self.table.table.columns], 0..) |width, column| {
         const cell = cells.next() orelse "";

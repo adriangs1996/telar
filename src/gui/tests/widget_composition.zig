@@ -9,6 +9,7 @@ const Canvas = @import("../widgets/Canvas.zig");
 const Composition = @import("../widgets/Composition.zig");
 const FrameWidget = @import("../widgets/frame_widget.zig");
 const Quad = @import("../render/Quad.zig").Quad;
+const LinkHit = @import("../input/LinkHit.zig");
 
 test "projection composes terminal thread link chrome notifications and modal before drawing" {
     var fixture = try Fixture.init();
@@ -207,7 +208,7 @@ fn begin(fixture: *Fixture, projection: *const client.Projection) Canvas {
     };
 }
 
-fn linkFor(fixture: *Fixture) !@import("../input/LinkHit.zig") {
+fn linkFor(fixture: *Fixture) !LinkHit {
     const gui = fixture.session.gui;
     const pane = gui.app.model.panes.find(Session.pane_id).?;
     const view = data.tab_layout.view(&gui.app.model, gui.app.model.tabs.active, pane.id, data.workbench.region(&gui.app.model).area).?;

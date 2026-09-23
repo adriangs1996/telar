@@ -7,11 +7,18 @@ const Transcript = @import("Transcript.zig");
 const PendingApproval = @import("PendingApproval.zig");
 const Prompt = @import("Prompt.zig");
 const model_catalog = @import("model_catalog.zig");
+const ThreadMetadata = @import("ThreadMetadata.zig");
+const ChildAgents = @import("ChildAgents.zig");
+const SkillCatalog = @import("SkillCatalog.zig");
+const ProviderFrame = @import("ProviderFrame.zig");
+const PromptInputs = @import("PromptInputs.zig");
+const ItemNormalizer = @import("ItemNormalizer.zig");
+const ApprovalDescription = @import("ApprovalDescription.zig");
 const Codex = @This();
 
 transcript: Transcript,
-metadata: @import("ThreadMetadata.zig") = .{},
-children: @import("ChildAgents.zig") = .{},
+metadata: ThreadMetadata = .{},
+children: ChildAgents = .{},
 plan_identity: u64 = 0,
 cwd: []const u8,
 thread_id: [128]u8 = undefined,
@@ -25,7 +32,7 @@ pending_turn_request: ?u64 = null,
 pending_resume_request: ?u64 = null,
 resume_target: core.RecentConversation = .{},
 pending_options: ?core.AgentOptions = null,
-skills: @import("SkillCatalog.zig") = .{},
+skills: SkillCatalog = .{},
 skills_request: ?u64 = null,
 command_request: ?u64 = null,
 command_kind: core.AgentCommand.Kind = .clear,
@@ -56,7 +63,7 @@ pub fn initialize(self: *Codex) ![]const u8 {
 
 /// Applies one bounded, parsed server record and returns any reply to write.
 /// Example: `if (try codex.receive(.{ .value = parsed.value })) |reply| try transport.write(reply);`
-pub fn receive(self: *Codex, frame: @import("ProviderFrame.zig")) !?[]const u8 {
+pub fn receive(self: *Codex, frame: ProviderFrame) !?[]const u8 {
     const value = frame.value;
     if (value != .object) {
         return error.InvalidProviderFrame;
@@ -404,7 +411,7 @@ fn encodeTurn(self: *Codex, prompt: Prompt, sandbox_policy: anytype) ![]const u8
         .method = "turn/start",
         .params = .{
             .threadId = self.thread(),
-            .input = @import("PromptInputs.zig"){ .text = prompt.bytes[0..prompt.len], .skills = &self.skills, .images = &prompt.images },
+            .input = PromptInputs{ .text = prompt.bytes[0..prompt.len], .skills = &self.skills, .images = &prompt.images },
             .model = prompt.options.modelSlice(),
             .effort = prompt.options.effort.idSlice(),
             .approvalPolicy = if (prompt.options.access == .full_access) @as([]const u8, "never") else "untrusted",
@@ -563,7 +570,7 @@ fn observeName(self: *Codex, object: std.json.Value, field: []const u8) void {
     }
 }
 
-fn notification(self: *Codex, frame: @import("ProviderFrame.zig")) !void {
+fn notification(self: *Codex, frame: ProviderFrame) !void {
     const method = protocol.string(protocol.field(frame.value, "method"));
     const params = protocol.field(frame.value, "params");
     if (std.mem.eql(u8, method, "thread/name/updated")) {
@@ -653,7 +660,7 @@ fn notification(self: *Codex, frame: @import("ProviderFrame.zig")) !void {
             return;
         }
         const value = protocol.field(params, "item");
-        var normalizer: @import("ItemNormalizer.zig") = .{};
+        var normalizer: ItemNormalizer = .{};
         if (normalizer.item(value, std.mem.eql(u8, method, "item/completed"))) |normalized| {
             var update = normalized;
             update.truncated = update.truncated or frame.truncated;
@@ -773,7 +780,7 @@ fn serverRequest(self: *Codex, value: std.json.Value) !?[]const u8 {
     var approval: PendingApproval = .{ .value = .{ .id = self.next_approval, .kind = if (command_request) .command else .file_change } };
     const encoded_id = try protocol.encode(&approval.rpc_id, id);
     approval.rpc_id_len = @intCast(encoded_id.len - 1);
-    const description: @import("ApprovalDescription.zig") = .{ .params = params, .transcript = &self.transcript, .command_request = command_request };
+    const description: ApprovalDescription = .{ .params = params, .transcript = &self.transcript, .command_request = command_request };
     description.write(&approval.value) catch |err| return if (err == error.WriteFailed) error.ApprovalDescriptionTooLarge else err;
     self.transcript.update(.{ .role = .system, .text = approval.value.text(), .complete = true });
     self.approvals[self.approval_count] = approval;

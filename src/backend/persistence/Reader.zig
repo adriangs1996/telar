@@ -2,6 +2,7 @@ const core = @import("telar-core");
 const Counters = @import("Counters.zig");
 const checkpoint = @import("checkpoint.zig");
 const std = @import("std");
+const PaneRecord = @import("PaneRecord.zig");
 /// Reads one checkpoint. Every slice borrows the input bytes.
 ///
 /// ```zig
@@ -106,7 +107,7 @@ pub fn next(self: *Reader) !?checkpoint.Record {
             try checkpoint.validateTitle(agent_title, agent_title_source);
             const kind_value = if (self.version >= 4) try self.inner.readByte() else 0;
             const pane_kind = std.enums.fromInt(core.PaneKind, kind_value) orelse return error.InvalidCheckpoint;
-            const pane: @import("PaneRecord.zig") = .{
+            const pane: PaneRecord = .{
                 .kind = pane_kind,
                 .pane_id = pane_id,
                 .workspace_id = workspace_id,
