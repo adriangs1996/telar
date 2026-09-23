@@ -97,7 +97,7 @@ test "dragging the edge sets the exact width and the grid follows on the next me
     try fixture.paint(projection);
     const renderer = &fixture.session.gui.renderer;
     const gui = fixture.session.gui;
-    const before = gui.app.model.hostSize();
+    const before = gui.app.model.host.host_size;
     const band = fixture.band();
     const handle = fixture.resizeHandle().?;
     _ = fixture.chrome.bandPointer(.{ .kind = .press, .x = handle.x + 2, .y = band.y + 30 });
@@ -109,7 +109,7 @@ test "dragging the edge sets the exact width and the grid follows on the next me
     try fixture.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = 1 });
     try std.testing.expectEqual(@as(u32, 340), renderer.sidebar.width);
     try std.testing.expectEqual(@as(u32, 348), renderer.origin[0]);
-    const after = gui.app.model.hostSize();
+    const after = gui.app.model.host.host_size;
     try std.testing.expectEqual(before.rows, after.rows);
     try std.testing.expect(after.cols < before.cols);
     // A drag past the bounds stops at them.
@@ -124,7 +124,7 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
     defer fixture.deinit();
     const gui = fixture.session.gui;
     const renderer = &fixture.session.gui.renderer;
-    const shared = gui.app.model.sidebarWidth();
+    const shared = gui.app.model.sidebar_width;
     const revision = gui.chrome.revision;
     try std.testing.expectEqual(data.keybind.Control.continue_routing, try input_support.action(
         gui,
@@ -147,7 +147,7 @@ test "the keyboard resize action moves the band by sixteen logical pixels withou
         },
     ));
     try std.testing.expectEqual(@as(f32, 268), gui.sidebar.logical);
-    try std.testing.expectEqual(shared, gui.app.model.sidebarWidth());
+    try std.testing.expectEqual(shared, gui.app.model.sidebar_width);
     try fixture.measure(.{ .width = renderer.viewport[0], .height = renderer.viewport[1], .scale = 1 });
     try std.testing.expectEqual(@as(u32, 268), renderer.sidebar.width);
     for (0..20) |_| {
@@ -168,14 +168,14 @@ test "hiding the sidebar returns its pixels to the grid without moving top navig
     try fixture.paint(fixture.projection());
     const renderer = &fixture.session.gui.renderer;
     const gui = fixture.session.gui;
-    const shown = gui.app.model.hostSize();
+    const shown = gui.app.model.host.host_size;
     try std.testing.expect(fixture.band().width > 0);
     const top = fixture.chrome.presented().bands.top_bar;
     const tab = fixture.bandTarget(.{ .select_tab = Session.location.tab_id }).?;
     const toggle = fixture.bandTarget(.toggle_sidebar).?;
     try fixture.showSidebar(false);
     try fixture.paint(fixture.projection());
-    const hidden = gui.app.model.hostSize();
+    const hidden = gui.app.model.host.host_size;
     try std.testing.expectEqual(@as(u32, 0), renderer.sidebar.width);
     try std.testing.expectEqual(@as(f32, 0), fixture.band().width);
     try std.testing.expectEqualDeep(top, fixture.chrome.presented().bands.top_bar);
@@ -207,7 +207,7 @@ test "a configuration reload applies a new sidebar width without changing the PT
     try std.testing.expectEqual(@as(u32, 400), session.gui.renderer.sidebar.width);
     try std.testing.expectEqual(before.rows, after.rows);
     try std.testing.expect(after.cols < before.cols);
-    try std.testing.expectEqual(after, session.gui.app.model.hostSize());
+    try std.testing.expectEqual(after, session.gui.app.model.host.host_size);
     // An unrelated reload keeps a width the person chose after the last one.
     session.gui.adoptSidebarWidth(300);
     try fixture.write("config.lua", "return { api_version = 2, gui = { sidebar = { width = 400 }, chrome = { scale = 1.1 } } }");

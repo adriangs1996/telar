@@ -22,7 +22,7 @@ pub fn begin(app: *client.AttachedClient, event: data.Mouse) ?Capture {
     }
 
     const pane = app.model.panes.findIn(app.model.tabs.location[tab].tab_id, plan.pane_id) orelse return null;
-    const size = app.model.hostSize();
+    const size = app.model.host.host_size;
     if (size.cell_width_px == 0 or size.cell_height_px == 0) {
         return null;
     }
@@ -44,7 +44,7 @@ pub fn deliver(capture: *Capture, app: *client.AttachedClient, event: data.Mouse
         return;
     }
 
-    const size = app.model.hostSize();
+    const size = app.model.host.host_size;
     if (std.meta.eql(app.model.activeTabLocation(), @as(?core.TabLocation, capture.location))) {
         if (data.tab_layout.view(&app.model, tab, pane.id, app.geometry().area)) |view| {
             if (!view.content.isEmpty() and size.cell_width_px != 0 and size.cell_height_px != 0) {

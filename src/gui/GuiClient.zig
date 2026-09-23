@@ -252,7 +252,7 @@ pub fn run(self: *GuiClient, title: [*:0]const u8) !u8 {
     );
     self.renderer.deinit();
     self.renderer = renderer;
-    self.renderer.sidebar_request = self.sidebar.request(self.app.model.sidebarVisible());
+    self.renderer.sidebar_request = self.sidebar.request(self.app.model.sidebar_visible);
     const hostname = std.posix.gethostname(&self.hostname) catch "";
     self.hostname_len = hostname.len;
     const callbacks = native_callbacks.bind(self);
@@ -461,7 +461,7 @@ fn copyWindowTitle(context: *anyopaque, title: []const u8) !void {
 /// Publishes native capabilities and starts runtime I/O and configuration tasks.
 /// Example: `try gui.start(colors);`
 fn start(self: *GuiClient, colors: core.TerminalColors) !void {
-    var capabilities = self.app.model.hostCapabilities();
+    var capabilities = self.app.model.host.host_capabilities;
 
     capabilities.terminal_colors = colors;
     capabilities.images = .unsupported;
@@ -470,7 +470,7 @@ fn start(self: *GuiClient, colors: core.TerminalColors) !void {
 
     _ = try self.app.applyHostUpdate(
         .{
-            .size = self.app.model.hostSize(),
+            .size = self.app.model.host.host_size,
             .capabilities = capabilities,
         },
     );
@@ -1556,10 +1556,10 @@ fn measure(self: *GuiClient, renderer: *Renderer, viewport: native.Viewport) !co
             viewport.height,
         },
     ) or renderer.scale != viewport.scale;
-    renderer.sidebar_request = self.sidebar.request(self.app.model.sidebarVisible());
+    renderer.sidebar_request = self.sidebar.request(self.app.model.sidebar_visible);
     const size = try renderer.measure(viewport);
 
-    if (viewport_changed or !std.meta.eql(size, self.app.model.hostSize()) or self.widgets.tab_drag_step != renderer.chrome.px(@intFromEnum(TabDragStep.logical_pixels))) {
+    if (viewport_changed or !std.meta.eql(size, self.app.model.host.host_size) or self.widgets.tab_drag_step != renderer.chrome.px(@intFromEnum(TabDragStep.logical_pixels))) {
         self.widgets.tab_drag.cancel();
     }
 
@@ -1580,7 +1580,7 @@ pub fn adoptSidebarWidth(self: *GuiClient, width: u32) void {
 /// Publishes exact font metrics and lets shared geometry negotiate the PTY.
 /// Example: `try gui.resize(size, renderer.theme);`
 pub fn resize(self: *GuiClient, size: core.TerminalSize, theme: shared_model.TerminalTheme) !void {
-    var capabilities = self.app.model.hostCapabilities();
+    var capabilities = self.app.model.host.host_capabilities;
 
     capabilities.window_width_px = @as(u32, size.cols) * size.cell_width_px;
     capabilities.window_height_px = @as(u32, size.rows) * size.cell_height_px;
@@ -1770,7 +1770,7 @@ fn resolveFavicons(self: *GuiClient, renderer: *Renderer) !void {
     const page = if (renderer.sprites) |*sprites| sprites else return;
     const favicons = &self.chrome.favicons;
     favicons.refresh(self.app.gpa, page);
-    const want = favicons.next(self.app.model.workspaceListSnapshot()) orelse return;
+    const want = favicons.next(&self.app.model.workspace_list_snapshot) orelse return;
 
     if (try client.operations.favicons.request(
         &self.app,

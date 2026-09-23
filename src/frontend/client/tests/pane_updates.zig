@@ -160,7 +160,7 @@ test "a frame already sent before workspace departure is harmless during handoff
     try std.testing.expect(opened == .open_pane);
     try std.testing.expect(opened.open_pane.target == .workspace);
     try std.testing.expectEqual(@as(u64, 2), @intFromEnum(opened.open_pane.target.workspace));
-    try std.testing.expect(client.model.workspaceLocation() == null);
+    try std.testing.expect(client.model.workspace == null);
     const version = client.model.version();
     const pending_updates = TerminalClient.of(client).presenter.pending_updates;
     const graphics_version = TerminalClient.of(client).graphics_store.ingressVersion();
@@ -206,7 +206,7 @@ test "a frame already sent before workspace departure is harmless during handoff
         else => return error.UnexpectedEvent,
     }
 
-    try std.testing.expectEqualDeep(destination.workspace, client.model.workspaceLocation().?);
+    try std.testing.expectEqualDeep(destination.workspace, client.model.workspace.?);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) == null);
     const pane = client.model.panes.find(destination_pane).?;
     try std.testing.expect(pane.attached);

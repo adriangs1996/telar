@@ -592,7 +592,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
 
     const hidden_area = TerminalClient.of(client).view.workbench();
     try std.testing.expect(hidden_area.w > shown_area.w);
-    try std.testing.expect(!client.model.sidebarVisible());
+    try std.testing.expect(!client.model.sidebar_visible);
     try std.testing.expect(!TerminalClient.of(client).view.sidebar_requested);
     try std.testing.expectEqual(version_before_hide.chrome + 1, client.model.version().chrome);
     try std.testing.expectEqual(version_before_hide.workspace, client.model.version().workspace);
@@ -623,7 +623,7 @@ test "sidebar toggle commits chrome before geometry and presentation" {
     const pending_updates_before_show = TerminalClient.of(client).presenter.pending_updates;
     _ = try client.executeAction(.toggle_sidebar, .effect);
 
-    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expect(client.model.sidebar_visible);
     try std.testing.expect(TerminalClient.of(client).view.sidebar_requested);
     try std.testing.expectEqualDeep(shown_area, TerminalClient.of(client).view.workbench());
     try std.testing.expectEqual(version_before_show.chrome + 1, client.model.version().chrome);
@@ -660,7 +660,7 @@ test "sidebar resize keybinding commits width before pane geometry" {
         .effect,
     );
 
-    try std.testing.expectEqual(@as(u16, 44), client.model.sidebarWidth());
+    try std.testing.expectEqual(@as(u16, 44), client.model.sidebar_width);
     try std.testing.expectEqual(@as(u16, 44), TerminalClient.of(client).view.regions.sidebar.w);
     try std.testing.expectEqual(version.chrome + 1, client.model.version().chrome);
     try harness.settle();
@@ -685,7 +685,7 @@ test "sidebar toggle delivers the committed geometry to host resources" {
 
     _ = try client.executeAction(.toggle_sidebar, .effect);
 
-    try std.testing.expect(!client.model.sidebarVisible());
+    try std.testing.expect(!client.model.sidebar_visible);
     try std.testing.expect(!TerminalClient.of(client).view.sidebar_requested);
     try std.testing.expect(TerminalClient.of(client).view.workbench().w > shown_area.w);
     try std.testing.expect(TerminalClient.of(client).view.dirty);
@@ -704,7 +704,7 @@ test "workspace list toggle is projected only by the presenter" {
 
     _ = try client.executeAction(.toggle_workspace_list, .effect);
 
-    try std.testing.expect(client.model.workspaceListCollapsed());
+    try std.testing.expect(client.model.workspace_list_collapsed);
     try std.testing.expect(!TerminalClient.of(client).view.workspace_list_collapsed);
     try std.testing.expectEqual(version_before_collapse.chrome + 1, client.model.version().chrome);
     try std.testing.expectEqual(version_before_collapse.workspace, client.model.version().workspace);
@@ -726,7 +726,7 @@ test "workspace list toggle is projected only by the presenter" {
     const pending_updates_before_expand = TerminalClient.of(client).presenter.pending_updates;
     _ = try client.executeAction(.toggle_workspace_list, .effect);
 
-    try std.testing.expect(!client.model.workspaceListCollapsed());
+    try std.testing.expect(!client.model.workspace_list_collapsed);
     try std.testing.expect(TerminalClient.of(client).view.workspace_list_collapsed);
     try std.testing.expectEqual(version_before_expand.chrome + 1, client.model.version().chrome);
     try std.testing.expectEqual(pending_updates_before_expand, TerminalClient.of(client).presenter.pending_updates);
@@ -1076,7 +1076,7 @@ test "tab detachment sends focus-out before the pane detaches" {
 
     try client.detachTab(client.model.tabs.location[client.model.tabs.active]);
 
-    try std.testing.expect(client.model.reportedPaneFocus() == null);
+    try std.testing.expect(client.model.reported_pane_focus == null);
     try harness.settle();
     const focus_out = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(focus_out == .pane_input);
@@ -1105,11 +1105,11 @@ test "tab detachment preserves focus reported by another tab" {
     const inactive = try harness.addInactiveTab(@enumFromInt(2), inactive_pane);
     const tab = client.model.tabs.find(inactive.tab_id).?;
     client.model.panes.findIn(client.model.tabs.location[tab].tab_id, inactive_pane).?.attached = true;
-    const reported = client.model.reportedPaneFocus().?;
+    const reported = client.model.reported_pane_focus.?;
 
     try client.detachTab(client.model.tabs.location[tab]);
 
-    try std.testing.expectEqualDeep(reported, client.model.reportedPaneFocus().?);
+    try std.testing.expectEqualDeep(reported, client.model.reported_pane_focus.?);
     try harness.settle();
     const detached = try harness.nextClientMessage(&message_buffer);
     try std.testing.expect(detached == .detach_pane);

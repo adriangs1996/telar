@@ -802,7 +802,7 @@ test "close tab capacity failure preserves attachment and request state" {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version_before = client.model.version();
-    const focus_before = client.model.reportedPaneFocus();
+    const focus_before = client.model.reported_pane_focus;
     const next_request_id = client.model.request_lifecycle.next_request_id;
 
     try std.testing.expectError(
@@ -812,7 +812,7 @@ test "close tab capacity failure preserves attachment and request state" {
 
     try std.testing.expectEqual(data.outbox_support.capacity - 1, @as(usize, client.runtime_transport.outbox.len));
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
-    try std.testing.expectEqualDeep(focus_before, client.model.reportedPaneFocus());
+    try std.testing.expectEqualDeep(focus_before, client.model.reported_pane_focus);
     try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
     try std.testing.expectEqualDeep(version_before, client.model.version());
@@ -836,7 +836,7 @@ test "close tab reserves its focus-out message" {
         try client.runtime_transport.outbox.push(.{ .detach_pane = .{ .pane_id = TestHarness.bootstrap_pane } });
     }
     const version = client.model.version();
-    const reported = client.model.reportedPaneFocus();
+    const reported = client.model.reported_pane_focus;
     const next_request_id = client.model.request_lifecycle.next_request_id;
 
     try std.testing.expectError(
@@ -845,7 +845,7 @@ test "close tab reserves its focus-out message" {
     );
 
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqualDeep(reported, client.model.reportedPaneFocus());
+    try std.testing.expectEqualDeep(reported, client.model.reported_pane_focus);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane).?.attached);
     try std.testing.expectEqual(next_request_id, client.model.request_lifecycle.next_request_id);
     try std.testing.expectEqual(@as(usize, 0), client.model.request_lifecycle.tracker.count);
@@ -1177,7 +1177,7 @@ test "tab removal follows the runtime predecessor after its workspace disappears
         try client.handleServerMessage(try core.decodeServer(closed)),
     );
 
-    try std.testing.expect(client.model.workspaceLocation() == null);
+    try std.testing.expect(client.model.workspace == null);
     try std.testing.expect(client.model.navigation_history.find(TestHarness.bootstrap_location.workspace) == null);
     try harness.settle();
 

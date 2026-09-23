@@ -316,7 +316,7 @@ test "releasing the physical prefix preserves its logical sequence through clien
     const client = harness.client;
     const adoption = try support.testingConfigAdoption(1, true);
     _ = try support.reloadConfiguration(client, adoption);
-    try std.testing.expect(!client.model.sidebarVisible());
+    try std.testing.expect(!client.model.sidebar_visible);
 
     const lifecycle =
         "\x1b[115::115;5u" ++
@@ -328,7 +328,7 @@ test "releasing the physical prefix preserves its logical sequence through clien
 
     try std.testing.expect(!try host_inputs.handleRead(client, chunk));
 
-    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expect(client.model.sidebar_visible);
     try std.testing.expect(!TerminalClient.of(client).host_input.router.prefixPending());
 }
 
@@ -355,8 +355,8 @@ test "streamed paste captures target and framing while restoring its live viewpo
     const timing_count = client.telemetry.metrics.input_enqueue.count;
 
     _ = try client_module.operations.paste_routing.start(client);
-    try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.panePasteSession().?.pane_id);
-    try std.testing.expect(client.model.panePasteSession().?.bracketed_paste);
+    try std.testing.expectEqual(TestHarness.bootstrap_pane, client.model.pane_paste.?.pane_id);
+    try std.testing.expect(client.model.pane_paste.?.bracketed_paste);
     pane.input_modes.bracketed_paste = false;
     try std.testing.expect(client.model.tabs.layout[tab].focusPane(other_pane));
     _ = try client_module.operations.paste_routing.content(client, "pasted");
@@ -936,7 +936,7 @@ test "focus reporting emits focus-in only after the pane opts in" {
     // Bootstrap synced focus while the pane had focus events off: the focus
     // is remembered, no byte was sent.
     try std.testing.expectEqual(TestHarness.bootstrap_pane, support.reportedPaneId(client));
-    try std.testing.expect(!client.model.reportedPaneFocus().?.focus_events);
+    try std.testing.expect(!client.model.reported_pane_focus.?.focus_events);
 
     const model = client.model.tabs.active;
     client.model.panes.findIn(client.model.tabs.location[model].tab_id, TestHarness.bootstrap_pane).?.input_modes.focus_events = true;
@@ -944,7 +944,7 @@ test "focus reporting emits focus-in only after the pane opts in" {
     try client.synchronizeActivePane();
     try harness.settle();
 
-    try std.testing.expect(client.model.reportedPaneFocus().?.focus_events);
+    try std.testing.expect(client.model.reported_pane_focus.?.focus_events);
     if (comptime core.enabled) {
         try std.testing.expectEqual(input_events, client.telemetry.metrics.input_events);
     }
@@ -968,7 +968,7 @@ test "canonical reported focus retirement is silent and idempotent" {
     try std.testing.expect(client.model.forgetReportedPaneFocus());
     try std.testing.expect(!client.model.forgetReportedPaneFocus());
 
-    try std.testing.expect(client.model.reportedPaneFocus() == null);
+    try std.testing.expect(client.model.reported_pane_focus == null);
     try std.testing.expectEqualDeep(version, client.model.version());
     try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
 }

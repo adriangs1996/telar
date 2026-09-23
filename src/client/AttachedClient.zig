@@ -724,7 +724,7 @@ pub fn observeHostCapability(self: *AttachedClient, observation: data.HostCapabi
 /// Resolves geometry when a probe settles a complete set of capabilities.
 /// Example: `_ = try self.reconcileHostCapabilities(capabilities);`
 pub fn reconcileHostCapabilities(self: *AttachedClient, capabilities: data.HostCapabilities) !?data.HostCommit {
-    var size = self.model.hostSize();
+    var size = self.model.host.host_size;
     const cell_size = capabilities.cellSize(size.cols, size.rows);
     size.cell_width_px = cell_size.width;
     size.cell_height_px = cell_size.height;
@@ -793,7 +793,7 @@ pub fn scheduleConfigReload(self: *AttachedClient) !void {
 pub fn barConfiguration(self: *const AttachedClient) ?*const data.BarConfiguration {
     const generation = self.lua_generation orelse return null;
 
-    if (generation.number != self.model.configurationGeneration()) {
+    if (generation.number != self.model.configuration_generation) {
         return null;
     }
 
@@ -805,7 +805,7 @@ pub fn barConfiguration(self: *const AttachedClient) ?*const data.BarConfigurati
 pub fn synchronizeBars(self: *AttachedClient) !void {
     self.model.bar_updates.synchronize(
         .{
-            .generation = if (self.lua_generation) |generation| generation.number else self.model.configurationGeneration(),
+            .generation = if (self.lua_generation) |generation| generation.number else self.model.configuration_generation,
             .configuration = self.barConfiguration(),
             .now_ns = core.monotonic(self.io),
         },
@@ -1296,7 +1296,7 @@ pub fn selectWorkspace(self: *AttachedClient, target: data.WorkspaceSelectionTar
     }
 
     const workspace = switch (target) {
-        .position => |position| self.model.workspaceAtPosition(position) orelse return false,
+        .position => |position| self.model.workspace_list_snapshot.workspaceAtPosition(position) orelse return false,
         .workspace => |workspace| workspace,
     };
 
@@ -1304,7 +1304,7 @@ pub fn selectWorkspace(self: *AttachedClient, target: data.WorkspaceSelectionTar
         return false;
     }
 
-    if (self.model.workspaceLocation()) |current| {
+    if (self.model.workspace) |current| {
         switch (current) {
             .workspace => |active| {
                 if (active == workspace) {
@@ -1687,7 +1687,7 @@ pub fn startPanePaste(self: *AttachedClient) !data.PanePasteOutcome {
 /// Delivers one host paste chunk to the captured target.
 /// Example: `_ = try app.appendPanePaste(text);`
 pub fn appendPanePaste(self: *AttachedClient, text: []const u8) !data.PanePasteOutcome {
-    const session = self.model.panePasteSession() orelse return .ignored;
+    const session = self.model.pane_paste orelse return .ignored;
     const delivered = try self.deliverPanePaste(
         .{
             .content = .{
@@ -1703,7 +1703,7 @@ pub fn appendPanePaste(self: *AttachedClient, text: []const u8) !data.PanePasteO
 /// Finishes the current pane paste and releases its captured identity.
 /// Example: `_ = try app.finishPanePaste();`
 pub fn finishPanePaste(self: *AttachedClient) !data.PanePasteOutcome {
-    const session = self.model.panePasteSession() orelse return .ignored;
+    const session = self.model.pane_paste orelse return .ignored;
     defer {
         const finished = self.model.finishPanePaste(session);
         std.debug.assert(finished);
@@ -1737,7 +1737,7 @@ pub fn inputPaneMouse(self: *AttachedClient, tab: usize, command: data.PaneMouse
         },
         .focused_scroll => |direction| focused: {
             const plan = data.tab_layout.planFocusedPaneMouse(&self.model, tab, area) orelse return .ignored;
-            const host_size = self.model.hostSize();
+            const host_size = self.model.host.host_size;
 
             break :focused .{
                 .plan = plan,
@@ -1994,7 +1994,7 @@ pub fn openNamePrompt(self: *AttachedClient, intent: name_prompt_opening.Intent)
             break :create .create_workspace;
         },
         .rename_workspace => rename: {
-            const workspace = self.model.workspaceLocation() orelse return false;
+            const workspace = self.model.workspace orelse return false;
             break :rename .{
                 .rename_workspace = .{
                     .workspace = workspace,
@@ -2061,7 +2061,7 @@ pub fn completeConfigReload(self: *AttachedClient, result: anyerror!config_reloa
             .gpa = self.gpa,
             .reload = reload,
             .checks = .{
-                .kitty_support = self.model.hostCapabilities().images,
+                .kitty_support = self.model.host.host_capabilities.images,
                 .sidebar_renderer_locked = self.options.sidebar_renderer_locked,
                 .current_sidebar = self.chrome.sidebarRenderer(),
             },
@@ -2128,9 +2128,9 @@ pub fn completePluginAction(self: *AttachedClient, completion: data.PluginAction
             },
         };
 
-    const execution = self.model.finishPluginExecution(command.executionId()) orelse
+    const execution = self.model.plugins.finishPluginExecution(command.executionId()) orelse
         return self.reportPluginCompletion(.ignored);
-    if (execution.configuration_generation != self.model.configurationGeneration()) {
+    if (execution.configuration_generation != self.model.configuration_generation) {
         return self.reportPluginCompletion(.stale);
     }
 
@@ -2896,7 +2896,7 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
                 return error.WorkspaceNotFound;
             }
 
-            if (self.model.workspaceLocation()) |location| {
+            if (self.model.workspace) |location| {
                 if (location == .workspace and location.workspace == target) {
                     reply.status = .applied;
                     return;
@@ -2983,14 +2983,14 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
             try self.writeCommandSidebarState(reply);
         },
         .sidebar_hide => {
-            if (self.model.sidebarVisible()) {
+            if (self.model.sidebar_visible) {
                 _ = try self.toggleSidebar();
             }
 
             try self.writeCommandSidebarState(reply);
         },
         .sidebar_show => {
-            if (!self.model.sidebarVisible()) {
+            if (!self.model.sidebar_visible) {
                 _ = try self.toggleSidebar();
             }
 
@@ -3076,7 +3076,7 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
             reply.status = .applied;
         },
         .agent_create => {
-            if (!self.model.hostCapabilities().agent_panes) {
+            if (!self.model.host.host_capabilities.agent_panes) {
                 return error.AgentPanesUnsupported;
             }
 
@@ -3140,8 +3140,8 @@ fn selectCommandTabOffset(self: *AttachedClient, reply: *core.ClientCommand, off
 }
 
 fn writeCommandSidebarState(self: *const AttachedClient, reply: *core.ClientCommand) !void {
-    reply.value = self.model.sidebarWidth();
-    try reply.setText(if (self.model.sidebarVisible()) "visible" else "hidden");
+    reply.value = self.model.sidebar_width;
+    try reply.setText(if (self.model.sidebar_visible) "visible" else "hidden");
     reply.status = .applied;
 }
 
@@ -3165,9 +3165,9 @@ fn writeCommandLayout(self: *const AttachedClient, reply: *core.ClientCommand) !
         &buffer,
         .{
             .restored = true,
-            .sidebar_visible = self.model.sidebarVisible(),
-            .sidebar_width = self.model.sidebarWidth(),
-            .workspace_list_collapsed = self.model.workspaceListCollapsed(),
+            .sidebar_visible = self.model.sidebar_visible,
+            .sidebar_width = self.model.sidebar_width,
+            .workspace_list_collapsed = self.model.workspace_list_collapsed,
             .active_tab = self.model.tabs.location[tab],
             .tabs = &tabs,
         },
@@ -3732,7 +3732,7 @@ fn deliverHostCommit(self: *AttachedClient, commit: data.HostCommit) !void {
         if (change.previous.images != change.current.images) {
             pane_graphics.syncFallbacks(&self.model, self.graphics);
 
-            const size = self.model.hostSize();
+            const size = self.model.host.host_size;
             try self.chrome.configureSidebar(
                 .{
                     .support = change.current.images,
@@ -3753,7 +3753,7 @@ fn deliverHostCommit(self: *AttachedClient, commit: data.HostCommit) !void {
         if (resize.cell_size_changed) {
             try self.chrome.configureSidebar(
                 .{
-                    .support = self.model.hostCapabilities().images,
+                    .support = self.model.host.host_capabilities.images,
                     .cell_width = resize.current.cell_width_px,
                     .cell_height = resize.current.cell_height_px,
                 },
@@ -3780,7 +3780,7 @@ fn validateHostCommit(model: *const data.Model, commit: data.HostCommit) !void {
     const version = model.version();
 
     if (commit.capabilities) |change| {
-        if (!std.meta.eql(model.hostCapabilities(), change.current) or
+        if (!std.meta.eql(model.host.host_capabilities, change.current) or
             version.host_capabilities != change.host_capabilities_revision)
         {
             return error.StaleHostCommit;
@@ -3788,7 +3788,7 @@ fn validateHostCommit(model: *const data.Model, commit: data.HostCommit) !void {
     }
 
     if (commit.resize) |resize| {
-        if (!std.meta.eql(model.hostSize(), resize.current) or version.host != resize.host_revision) {
+        if (!std.meta.eql(model.host.host_size, resize.current) or version.host != resize.host_revision) {
             return error.StaleHostCommit;
         }
     }
@@ -4115,7 +4115,7 @@ fn reportAgentHistoryFailure(self: *AttachedClient, message: []const u8) !void {
 }
 
 fn createAgentTab(self: *AttachedClient) !void {
-    if (!self.model.hostCapabilities().agent_panes) {
+    if (!self.model.host.host_capabilities.agent_panes) {
         try self.publishNotificationNow(
             .{
                 .level = .info,
@@ -4550,7 +4550,7 @@ fn requestWorkspaceSwitch(self: *AttachedClient, target: WorkspaceSwitchTarget, 
             }
         },
         .canonical_follow => {
-            if (self.model.workspaceLocation() != null) {
+            if (self.model.workspace != null) {
                 return error.WorkspaceStillActive;
             }
         },
@@ -5024,13 +5024,13 @@ fn resolveHistoryScope(model: *const data.Model, owned: *data.OwnedHistoryQuery)
     switch (prompt.scope()) {
         .global => {},
         .workspace => {
-            const location = model.workspaceLocation() orelse return;
+            const location = model.workspace orelse return;
             const workspace = switch (location) {
                 .workspace => |workspace| workspace,
                 .worktree => return,
             };
 
-            const list = model.workspaceListSnapshot();
+            const list = &model.workspace_list_snapshot;
             const index = list.indexOf(workspace) orelse return;
             const path = list.pathAt(index);
             if (path.len == 0 or path.len > data.OwnedHistoryQuery.max_scope_bytes) {
@@ -5258,12 +5258,12 @@ fn navigateNotification(self: *AttachedClient, target: data.NotificationTarget) 
 
 /// Translates one runtime sound and applies it to an exact current agent.
 fn applyAgentSound(self: *AttachedClient, notification: core.AgentSoundNotification) !AgentSoundOutcome {
-    if (!self.model.knowsAgent(
+    if (!(self.model.agent_snapshot.find(
         .{
             .pane_id = notification.pane_id,
             .pane_generation = notification.pane_generation,
         },
-    )) {
+    ) != null)) {
         return .stale;
     }
 
@@ -5397,7 +5397,7 @@ fn applyResyncRequirement(self: *AttachedClient, required: core.ResyncRequired) 
         return .handoff_requested;
     }
 
-    const projected = self.model.workspaceLocation() orelse return error.UnexpectedResync;
+    const projected = self.model.workspace orelse return error.UnexpectedResync;
     if (!std.meta.eql(projected, required.workspace)) {
         return error.UnexpectedResync;
     }
@@ -5497,7 +5497,7 @@ fn applyAgentSnapshot(self: *AttachedClient, snapshot: core.AgentSnapshotView) !
     _ = try self.synchronizePaneAttachments();
 
     var alert_count: usize = 0;
-    const current = self.model.agentSnapshot();
+    const current = &self.model.agent_snapshot;
     for (commit.status_changes.slice()) |change| {
         if (alert_count == data.notifications.max_items) {
             break;
@@ -5542,7 +5542,7 @@ fn applyPaneGraphics(self: *AttachedClient, command: data.PaneGraphicsCommand) !
                     .pane_id = pane_id,
                     .fallback = self.model.setPaneGraphicsFallback(
                         pane_id,
-                        self.model.hostCapabilities().images != .supported and
+                        self.model.host.host_capabilities.images != .supported and
                             state.has_graphics,
                     ),
                 },
@@ -5639,7 +5639,7 @@ fn scheduleSidebarAnimation(self: *AttachedClient) !void {
 fn scheduleNotificationTimer(self: *AttachedClient) !void {
     const scheduler = &self.model.notification_scheduler;
     const now_ns = core.monotonic(self.io);
-    const deadline_ns = self.model.nextNotificationDeadline(
+    const deadline_ns = self.model.notification_center.nextDeadline(
         now_ns,
         if (self.timers.animation_clock == .host) std.math.maxInt(u64) else self.presentation.frameIntervalNs(),
     );
@@ -5741,7 +5741,7 @@ fn deliverPaneViewport(self: *AttachedClient, change: data.PaneViewportChange) !
 /// Applies one exact model commit to the view, physical graphics placements
 /// and attached runtime pane geometry.
 fn deliverSidebarLayout(self: *AttachedClient, change: data.SidebarLayout) !void {
-    if (self.model.sidebarVisible() != change.visible or self.model.sidebarWidth() != change.width or
+    if (self.model.sidebar_visible != change.visible or self.model.sidebar_width != change.width or
         self.model.version().chrome != change.chrome_revision)
     {
         return error.StaleSidebarLayout;
@@ -6404,8 +6404,8 @@ fn pickerCount(self: *AttachedClient, query: []const u8) u16 {
 
 fn pickerSources(model: *const data.Model) data.Sources {
     return .{
-        .agents = model.agentSnapshot(),
-        .workspaces = model.workspaceListSnapshot(),
+        .agents = &model.agent_snapshot,
+        .workspaces = &model.workspace_list_snapshot,
         .model = model,
     };
 }
@@ -6813,13 +6813,13 @@ fn adoptConfiguration(self: *AttachedClient, adoption: Adoption) !data.Configura
         try self.synchronizeBars();
     }
     if (!self.options.theme_locked) {
-        self.chrome.setTheme(snapshot.resolveTheme(self.model.hostCapabilities().appearance, null));
+        self.chrome.setTheme(snapshot.resolveTheme(self.model.host.host_capabilities.appearance, null));
     }
     self.chrome.setIconTheme(snapshot.icon_theme);
-    const host_size = self.model.hostSize();
+    const host_size = self.model.host.host_size;
     try self.chrome.configureSidebar(
         .{
-            .support = self.model.hostCapabilities().images,
+            .support = self.model.host.host_capabilities.images,
             .cell_width = host_size.cell_width_px,
             .cell_height = host_size.cell_height_px,
         },
@@ -6857,11 +6857,11 @@ fn showConfiguration(self: *AttachedClient, reply: *core.ClientCommand) !void {
             .{
                 .source = self.options.config_path,
                 .profile = self.options.profile,
-                .generation = self.model.configurationGeneration(),
-                .sidebar_visible = self.model.sidebarVisible(),
-                .sidebar_width = self.model.sidebarWidth(),
-                .workspace_list_collapsed = self.model.workspaceListCollapsed(),
-                .pane_gaps = self.model.paneGaps(),
+                .generation = self.model.configuration_generation,
+                .sidebar_visible = self.model.sidebar_visible,
+                .sidebar_width = self.model.sidebar_width,
+                .workspace_list_collapsed = self.model.workspace_list_collapsed,
+                .pane_gaps = self.model.pane_gaps,
                 .window_title = self.model.windowTitleTemplate(),
                 .sound = generation.snapshot.sound,
                 .notification_delivery = generation.snapshot.notification_delivery,
@@ -7074,7 +7074,7 @@ fn runPluginCommand(self: *AttachedClient, reply: *core.ClientCommand) !void {
 
 /// Resolves one configured action and schedules its work outside the input path.
 fn startPluginAction(self: *AttachedClient, requested: data.PluginAction, callback_context: data.CallbackContext) !plugin_action.StartOutcome {
-    if (self.model.pluginExecution() != null) {
+    if (self.model.plugins.pluginExecution() != null) {
         return self.reportPluginStart(.busy);
     }
 
@@ -7097,7 +7097,7 @@ fn startPluginAction(self: *AttachedClient, requested: data.PluginAction, callba
         return self.reportPluginStart(.busy);
     {
         errdefer {
-            const rolled_back = self.model.finishPluginExecution(execution.id);
+            const rolled_back = self.model.plugins.finishPluginExecution(execution.id);
             std.debug.assert(rolled_back != null);
         }
 
@@ -7452,7 +7452,7 @@ fn requestWorkspaceRename(self: *AttachedClient, command: data.RequestRenameWork
         return false;
     }
 
-    const current = self.model.workspaceLocation() orelse return false;
+    const current = self.model.workspace orelse return false;
     if (!std.meta.eql(current, command.workspace)) {
         return false;
     }

@@ -57,7 +57,7 @@ test "tab strip hits keep stable tab identities and the plus creates a tab" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
-    _ = try data.tab_creation.add(model, .{ .location = second_location, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
+    _ = try data.tab_creation.add(model, .{ .location = second_location, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.host.host_size);
     _ = data.tab_selection.select(model, Session.location.tab_id);
     try fixture.paint(fixture.projection());
     const strip = fixture.chrome.presented().bands.top_bar;
@@ -127,7 +127,7 @@ test "a blocked agent marks its tab and project independently of selection" {
     var fixture = try Fixture.init();
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
-    _ = try data.tab_creation.add(model, .{ .location = second_location, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
+    _ = try data.tab_creation.add(model, .{ .location = second_location, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.host.host_size);
     _ = data.tab_selection.select(model, Session.location.tab_id);
     var workspaces: data.WorkspaceListSnapshot = .{};
     _ = try workspaces.replace(.{ .revision = 1, .entries = &.{

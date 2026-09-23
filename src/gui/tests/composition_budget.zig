@@ -106,7 +106,7 @@ fn populateMultiplexer(fixture: *Fixture) !void {
         .{ .workspace = @enumFromInt(3), .name = "web", .path = "/web", .tab_count = 1 },
     } });
     for (2..5) |id| {
-        _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "terminal", .root_pane_id = @enumFromInt(id + 200) }, model.hostSize());
+        _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "terminal", .root_pane_id = @enumFromInt(id + 200) }, model.host.host_size);
     }
 
     _ = data.tab_selection.select(model, Session.location.tab_id);

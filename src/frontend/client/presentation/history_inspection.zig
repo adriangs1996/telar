@@ -17,7 +17,7 @@ pub fn scrollLimit(state: *const data.Model) ?u32 {
 
     const selection = @min(prompt.selection(), palette.len - 1);
     const entry = &palette.slice()[selection];
-    const size = state.hostSize();
+    const size = state.host.host_size;
     return widget.inspectionScrollLimit(.{ .w = size.cols, .h = size.rows }, .{
         .entry = .{
             .id = entry.id,

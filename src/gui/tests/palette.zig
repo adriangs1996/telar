@@ -334,10 +334,10 @@ test "native prefix keys open the palette prefixed and enter runs the chosen act
     try special(session, 3);
     try typeText(session, ">toggle sidebar");
     try std.testing.expectEqual(data.command_palette.Prefix.actions, model.name_prompt.currentConst().?.paletteMode());
-    const visible = model.sidebarVisible();
+    const visible = model.sidebar_visible;
     try special(session, 1);
     try std.testing.expect(!model.name_prompt.active());
-    try std.testing.expectEqual(!visible, model.sidebarVisible());
+    try std.testing.expectEqual(!visible, model.sidebar_visible);
     try std.testing.expectEqual(@as(usize, 0), session.input_len);
 
     try chord(session, "/");

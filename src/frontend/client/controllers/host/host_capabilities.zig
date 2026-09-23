@@ -96,7 +96,7 @@ pub fn observe(client: *client_module.AttachedClient, response: term.Event.Termi
 /// _ = try expire(client);
 /// ```
 pub fn expire(client: *client_module.AttachedClient) !?data.HostCommit {
-    const capabilities = negotiation.settledCapabilities(client.model.hostCapabilities());
+    const capabilities = negotiation.settledCapabilities(client.model.host.host_capabilities);
 
     if (TerminalClient.of(client).host_negotiation.zlib_support == .unknown) {
         TerminalClient.of(client).host_negotiation.zlib_support = .unsupported;

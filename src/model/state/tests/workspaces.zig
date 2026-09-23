@@ -847,7 +847,7 @@ test "tab detachment plans exact operational state before a silent commit" {
     try std.testing.expectEqual(@as(u64, 0), root_pane.pending_frame_id);
     try std.testing.expectEqual(@as(u64, 0), sibling_pane.pending_frame_id);
     try std.testing.expect(model.panePasteActive());
-    try std.testing.expect(model.reportedPaneFocus() != null);
+    try std.testing.expect(model.reported_pane_focus != null);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 
     try std.testing.expectError(error.UnexpectedTab, model.planTabDetachment(.{

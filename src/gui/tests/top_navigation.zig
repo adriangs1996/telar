@@ -25,7 +25,7 @@ test "workspace departure retains the delivered indicators and overflow window u
     _ = try model.reconcileWorkspaceList(.{ .revision = 1, .entries = &entries });
     for ([_]u32{ 900, 320 }) |width| {
         try fixture.measure(.{ .width = width, .height = 700, .scale = 1 });
-        _ = try model.replaceWorkspace(.{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = ids[4] }, .tab_id = Session.location.tab_id }, .size = model.hostSize() });
+        _ = try model.replaceWorkspace(.{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = ids[4] }, .tab_id = Session.location.tab_id }, .size = model.host.host_size });
         try fixture.paint(fixture.projection());
         const selected = fixture.bandTarget(.{ .select_workspace = ids[4] }).?;
         const region: Rect = .{ .x = 0, .y = 0, .width = selected.x + selected.width, .height = fixture.chrome.presented().bands.top_bar.height };
@@ -37,7 +37,7 @@ test "workspace departure retains the delivered indicators and overflow window u
         }
 
         _ = model.departWorkspace();
-        try std.testing.expect(model.workspaceLocation() == null);
+        try std.testing.expect(model.workspace == null);
         for (0..3) |_| {
             try fixture.paint(fixture.projection());
             var during = try quadsIn(fixture.session.gui.renderer.quads.items(), region);
@@ -48,7 +48,7 @@ test "workspace departure retains the delivered indicators and overflow window u
             }
         }
 
-        _ = try model.arriveWorkspace(.{ .pane_id = Session.pane_id, .location = Session.location, .size = model.hostSize() });
+        _ = try model.arriveWorkspace(.{ .pane_id = Session.pane_id, .location = Session.location, .size = model.host.host_size });
         try fixture.paint(fixture.projection());
         try std.testing.expectEqual(ids[0], fixture.chrome.presented().workspace.?);
         try std.testing.expect(fixture.bandTarget(.{ .select_workspace = ids[0] }) != null);
@@ -68,7 +68,7 @@ test "workspace handoff retains only delivered identities still present in the l
     const other = try createModel();
     defer std.testing.allocator.destroy(other);
     defer other.deinit();
-    try data.workspace_handoff.replaceWithRoot(other, .{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = @enumFromInt(9) }, .tab_id = Session.location.tab_id }, .size = model.hostSize() });
+    try data.workspace_handoff.replaceWithRoot(other, .{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = @enumFromInt(9) }, .tab_id = Session.location.tab_id }, .size = model.host.host_size });
     var projection = fixture.projection();
     projection.model = other;
     projection.tab = other.tabs.activeSlot();
@@ -104,7 +104,7 @@ test "five compact projects fit without pill backgrounds and reuse landed favico
     for ([_]f32{ 1, 2 }) |scale| {
         try fixture.measure(.{ .width = @intFromFloat(900 * scale), .height = @intFromFloat(700 * scale), .scale = scale });
         favicons.refresh(std.testing.allocator, &renderer.sprites.?);
-        const want = favicons.next(model.workspaceListSnapshot()).?;
+        const want = favicons.next(&model.workspace_list_snapshot).?;
         favicons.started(want.workspace);
         const image = try std.testing.allocator.create(client.FaviconImage);
         image.* = .{ .side = @intCast(renderer.sprites.?.cell) };
@@ -115,7 +115,7 @@ test "five compact projects fit without pill backgrounds and reuse landed favico
         try fixture.paint(fixture.projection());
         var last: f32 = 0;
         for (0..5) |index| {
-            const id = model.workspaceListSnapshot().workspaceAt(index);
+            const id = model.workspace_list_snapshot.workspaceAt(index);
             const bounds = fixture.bandTarget(.{ .select_workspace = id }).?;
             try std.testing.expect(bounds.x >= last);
             try std.testing.expectEqual(renderer.chrome.px(40), bounds.width);
@@ -257,7 +257,7 @@ test "native navigation names unlisted workspaces and worktrees without selectin
     } });
     const renderer = &fixture.session.gui.renderer;
     for ([_]core.WorkspaceLocation{ .{ .worktree = @enumFromInt(1) }, .{ .workspace = @enumFromInt(99) } }) |location| {
-        try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = .{ .workspace = location, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
+        try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = .{ .workspace = location, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.host.host_size });
         try data.workspace_reconciliation.reconcileTabs(model, .{ .workspace = location, .name = "current context", .tabs = &.{.{ .tab_id = Session.location.tab_id, .label = "main", .pane_count = 1 }} });
         var projection = fixture.projection();
         projection.model = model;
@@ -303,7 +303,7 @@ test "native project indicators keep all seven projects in stable positions acro
     var positions: [7]?Rect = @splat(null);
     for (1..workspaces.count - 1) |index| {
         const active_id = workspaces.workspaceAt(index);
-        try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = active_id }, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
+        try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = active_id }, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.host.host_size });
         var projection = fixture.projection();
         projection.model = model;
         projection.tab = model.tabs.activeSlot();
@@ -352,7 +352,7 @@ test "moving workspaces to the sidebar preserves every tab bound across sidebar 
         .{ .workspace = @enumFromInt(9), .name = "server", .path = "/server", .tab_count = 1 },
         .{ .workspace = @enumFromInt(30), .name = "config", .path = "/config", .tab_count = 1 },
     } });
-    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(2) }, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, model.hostSize());
+    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(2) }, .position = 1, .label = "editor", .root_pane_id = @enumFromInt(20) }, model.host.host_size);
 
     for ([_]u32{ 900, 1600 }) |width| {
         try fixture.measure(.{ .width = width, .height = 700, .scale = 1 });
@@ -394,7 +394,7 @@ test "native active tab remains reachable after long preceding labels at narrow 
     } });
     _ = try data.tab_rename.rename(model, Session.location.tab_id, "first tab with a deliberately long label");
     for (1..8) |index| {
-        _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(index + 1) }, .position = @intCast(index), .label = "another tab with a deliberately long label", .root_pane_id = @enumFromInt(index + 20) }, model.hostSize());
+        _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(index + 1) }, .position = @intCast(index), .label = "another tab with a deliberately long label", .root_pane_id = @enumFromInt(index + 20) }, model.host.host_size);
     }
 
     try fixture.showSidebar(false);

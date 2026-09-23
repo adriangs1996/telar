@@ -38,7 +38,7 @@ test "host resize commits before resources and presents by model version" {
         .cell_height_px = 20,
     };
     try std.testing.expectEqualDeep(expected, commit.current);
-    try std.testing.expectEqualDeep(expected, client.model.hostSize());
+    try std.testing.expectEqualDeep(expected, client.model.host.host_size);
     try std.testing.expectEqual(data.Version{
         .host = 1,
         .host_capabilities = 1,
@@ -51,8 +51,8 @@ test "host resize commits before resources and presents by model version" {
     try std.testing.expectEqual(@as(u16, 100), TerminalClient.of(client).view.scratch.w);
     try std.testing.expectEqual(@as(u16, 30), TerminalClient.of(client).view.scratch.h);
     const active = client.model.tabs.active;
-    try std.testing.expectEqual(@as(u16, 10), client.model.hostSize().cell_width_px);
-    try std.testing.expectEqual(@as(u16, 20), client.model.hostSize().cell_height_px);
+    try std.testing.expectEqual(@as(u16, 10), client.model.host.host_size.cell_width_px);
+    try std.testing.expectEqual(@as(u16, 20), client.model.host.host_size.cell_height_px);
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 
     const expected_pane_size = data.tab_layout.contentSize(&client.model, active, 
@@ -103,7 +103,7 @@ test "host resize retains committed geometry after outbox backpressure" {
         .rows = 28,
         .cell_width_px = 10,
         .cell_height_px = 20,
-    }, client.model.hostSize());
+    }, client.model.host.host_size);
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host);
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host_capabilities);
     try std.testing.expect(TerminalClient.of(client).presenter.screen.sizeMatches(90, 28));
@@ -236,7 +236,7 @@ test "host resize rolls back rejected attachment correlation after offering conn
     try std.testing.expectEqual(initial_request_id + 1, client.model.request_lifecycle.next_request_id);
     try std.testing.expect(!client.model.request_lifecycle.tracker.hasPane(.attachment, sibling));
     try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
-    try std.testing.expectEqual(@as(u16, 100), client.model.hostSize().cols);
+    try std.testing.expectEqual(@as(u16, 100), client.model.host.host_size.cols);
     try std.testing.expect(!client.model.panes.find(sibling).?.attached);
 }
 
@@ -245,8 +245,8 @@ test "oversized host measurement changes neither model nor capabilities" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const host_size = client.model.hostSize();
-    const capabilities = client.model.hostCapabilities();
+    const host_size = client.model.host.host_size;
+    const capabilities = client.model.host.host_capabilities;
 
     try std.testing.expectError(error.ScreenTooLarge, host_resizes.apply(client, .{
         .cols = std.math.maxInt(u16),
@@ -255,8 +255,8 @@ test "oversized host measurement changes neither model nor capabilities" {
         .height_px = 800,
     }));
 
-    try std.testing.expectEqualDeep(host_size, client.model.hostSize());
-    try std.testing.expectEqualDeep(capabilities, client.model.hostCapabilities());
+    try std.testing.expectEqualDeep(host_size, client.model.host.host_size);
+    try std.testing.expectEqualDeep(capabilities, client.model.host.host_capabilities);
     try std.testing.expectEqualDeep(data.Version{}, client.model.version());
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
 }
@@ -279,11 +279,11 @@ test "terminal pixel response keeps model host geometry authoritative" {
         .rows = 24,
         .cell_width_px = 12,
         .cell_height_px = 24,
-    }, client.model.hostSize());
+    }, client.model.host.host_size);
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host);
     try std.testing.expectEqual(@as(u64, 1), client.model.version().host_capabilities);
-    try std.testing.expectEqual(@as(u16, 12), client.model.hostSize().cell_width_px);
-    try std.testing.expectEqual(@as(u16, 24), client.model.hostSize().cell_height_px);
+    try std.testing.expectEqual(@as(u16, 12), client.model.host.host_size.cell_width_px);
+    try std.testing.expectEqual(@as(u16, 24), client.model.host.host_size.cell_height_px);
     try std.testing.expectEqual(pending_updates, TerminalClient.of(client).presenter.pending_updates);
 
     try presentation_lifecycle.observe(client);
@@ -344,7 +344,7 @@ test "a Kitty capability response commits before fallback projection and present
         .supported = true,
     } });
 
-    try std.testing.expectEqual(data.EnvironmentSupport.supported, client.model.hostCapabilities().images);
+    try std.testing.expectEqual(data.EnvironmentSupport.supported, client.model.host.host_capabilities.images);
     try std.testing.expect(!client.model.panes.find(TestHarness.bootstrap_pane).?.graphics_placeholder);
     try std.testing.expectEqual(version.host_capabilities + 1, client.model.version().host_capabilities);
     try std.testing.expectEqual(version.pane_graphics + 1, client.model.version().pane_graphics);
@@ -394,7 +394,7 @@ test "client event dispatch observes a completed capability expiry" {
     );
 
     try std.testing.expect(first == .keep_running);
-    const capabilities = client.model.hostCapabilities();
+    const capabilities = client.model.host.host_capabilities;
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, capabilities.images);
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, TerminalClient.of(client).host_negotiation.zlib_support);
     try std.testing.expectEqual(data.EnvironmentSupport.unsupported, capabilities.pointer_pixels);
@@ -466,7 +466,7 @@ test "failed capability deadline changes no host state" {
     try harness.init();
     defer harness.deinit();
     const client = harness.client;
-    const capabilities = client.model.hostCapabilities();
+    const capabilities = client.model.host.host_capabilities;
     const version = client.model.version();
 
     try std.testing.expectError(
@@ -474,7 +474,7 @@ test "failed capability deadline changes no host state" {
         host_capabilities.handleExpiry(client, error.CapabilityDeadlineFailed),
     );
 
-    try std.testing.expectEqualDeep(capabilities, client.model.hostCapabilities());
+    try std.testing.expectEqualDeep(capabilities, client.model.host.host_capabilities);
     try std.testing.expectEqualDeep(version, client.model.version());
 }
 
@@ -492,7 +492,7 @@ test "capability effect failure retains the committed fallback" {
         host_capabilities.handleExpiry(client, {}),
     );
 
-    try std.testing.expectEqual(data.EnvironmentSupport.unsupported, client.model.hostCapabilities().images);
+    try std.testing.expectEqual(data.EnvironmentSupport.unsupported, client.model.host.host_capabilities.images);
     try std.testing.expectEqual(data.Version{
         .host_capabilities = 1,
     }, client.model.version());
@@ -812,7 +812,7 @@ test "native action preflight retires copy mode before concrete delivery" {
     const version = client.model.version();
 
     try std.testing.expect(client.model.copyModeActive());
-    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expect(client.model.sidebar_visible);
     try std.testing.expectEqual(
         data.KeybindControl.continue_routing,
         try client.executeAction(.toggle_sidebar, .effect),
@@ -822,7 +822,7 @@ test "native action preflight retires copy mode before concrete delivery" {
     expected.copy += 1;
     expected.chrome += 1;
     try std.testing.expect(!client.model.copyModeActive());
-    try std.testing.expect(!client.model.sidebarVisible());
+    try std.testing.expect(!client.model.sidebar_visible);
     try std.testing.expectEqualDeep(expected, client.model.version());
 }
 

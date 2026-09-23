@@ -82,7 +82,7 @@ test "GUI admission stamps geometry and invalidates only its own gestures before
     const second = try Session.init();
     defer second.deinit();
     const gui = first.gui;
-    gui.pointer.configure(.{ 8, 8 }, gui.app.model.hostSize());
+    gui.pointer.configure(.{ 8, 8 }, gui.app.model.host.host_size);
     const generation = gui.pointer.gesture_revision;
     const other_generation = second.gui.pointer.gesture_revision;
     try input_support.accept(gui, .{ .pointer = .{ .kind = .press, .x = 10, .y = 10 } });

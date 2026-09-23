@@ -226,7 +226,7 @@ pub fn clearHover(state: *State) void {
 /// Projects the committed workspace-list preference into client chrome.
 ///
 /// ```zig
-/// view.setWorkspaceListCollapsed(model.workspaceListCollapsed());
+/// view.setWorkspaceListCollapsed(model.workspace_list_collapsed);
 /// ```
 pub fn setWorkspaceListCollapsed(state: *State, collapsed: bool) void {
     if (state.workspace_list_collapsed == collapsed) {
@@ -413,7 +413,7 @@ pub fn closeAttachmentModal(state: *State) bool {
 /// so media work never builds a visual replay behind interactive work.
 ///
 /// ```zig
-/// _ = try view.prepareGraphics(model.notificationSnapshot(), media_idle);
+/// _ = try view.prepareGraphics(&model.notification_center, media_idle);
 /// ```
 pub fn prepareGraphics(state: *State, snapshot: *const data.Center, media_idle: bool) !bool {
     if (!state.graphics_plan_dirty and
@@ -454,7 +454,7 @@ pub fn graphicsPreparationPending(state: *const State) bool {
 /// Reports whether prepared toast rasters exactly cover this snapshot.
 ///
 /// ```zig
-/// const covered = view.graphicalToastsCover(model.notificationSnapshot());
+/// const covered = view.graphicalToastsCover(&model.notification_center);
 /// ```
 pub fn graphicalToastsCover(state: *const State, snapshot: *const data.Center) bool {
     return state.kitty_toasts.covers(snapshot);

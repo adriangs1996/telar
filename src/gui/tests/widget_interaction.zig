@@ -404,12 +404,12 @@ test "new modal blocks already delivered background actions before its first fra
     }
 
     const target = toggle orelse return error.MissingToggle;
-    const visible = gui.app.model.sidebarVisible();
+    const visible = gui.app.model.sidebar_visible;
     gui.app.model.name_prompt.begin(.{ .rename_tab = .{ .tab_id = Session.location.tab_id, .label = "modal" } });
     try send(session, .{ .pointer = .{ .kind = .press, .x = target.bounds.x + 1, .y = target.bounds.y + 1 } });
     try send(session, .{ .pointer = .{ .kind = .release, .x = target.bounds.x + 1, .y = target.bounds.y + 1 } });
     try send(session, .{ .accessibility = .{ .target_id = target.id.target_id, .generation = target.id.generation, .action = .press } });
-    try std.testing.expectEqual(visible, gui.app.model.sidebarVisible());
+    try std.testing.expectEqual(visible, gui.app.model.sidebar_visible);
     try std.testing.expectEqualStrings("modal", gui.app.model.name_prompt.currentConst().?.field.text());
 }
 
@@ -635,7 +635,7 @@ fn tabTarget(session: *Session, tab_id: core.TabId) !Target {
 fn addDragTabs(session: *Session) !void {
     const model = &session.gui.app.model;
     for (2..4) |id| {
-        _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "tab", .root_pane_id = @enumFromInt(id * 10) }, .size = model.hostSize() });
+        _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = @enumFromInt(id) }, .position = @intCast(id - 1), .label = "tab", .root_pane_id = @enumFromInt(id * 10) }, .size = model.host.host_size });
     }
     _ = session.gui.app.model.request_lifecycle.tracker.take(@enumFromInt(3));
     try publish(session);
@@ -2124,12 +2124,12 @@ test "agent unprefixed sequences consume matches and replay mismatches to the co
         defer session.deinit();
         const target = try composerTarget(session);
         adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
-        const visible = session.gui.app.model.sidebarVisible();
+        const visible = session.gui.app.model.sidebar_visible;
         try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 110 } } });
         try std.testing.expectEqualStrings("", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
         const suffix = if (matched) "g" else "x";
         try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = suffix, .physical = .{ .value = 111 } } });
-        try std.testing.expectEqual(if (matched) !visible else visible, session.gui.app.model.sidebarVisible());
+        try std.testing.expectEqual(if (matched) !visible else visible, session.gui.app.model.sidebar_visible);
         try std.testing.expectEqualStrings(if (matched) "" else "gx", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
         try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 110 }, .phase = .release } });
         try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = suffix, .physical = .{ .value = 111 }, .phase = .release } });
@@ -2144,19 +2144,19 @@ test "agent unprefixed sequence timeout restores text and physical ownership to 
     defer session.deinit();
     const target = try composerTarget(session);
     adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
-    const visible = session.gui.app.model.sidebarVisible();
+    const visible = session.gui.app.model.sidebar_visible;
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 112 } } });
     session.gui.router.binding_since_ns = 0;
     session.gui.router.sequence_timeout_ns = 0;
     try input_support.bindingExpired(session.gui);
     try std.testing.expectEqualStrings("g", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
-    try std.testing.expectEqual(visible, session.gui.app.model.sidebarVisible());
+    try std.testing.expectEqual(visible, session.gui.app.model.sidebar_visible);
     try std.testing.expectEqual(@as(usize, 0), session.gui.router.leases.len);
     const owner = session.gui.widgets.dispatcher.keys.owner(.{ .value = 112 }).?;
     try std.testing.expect(owner == .widget and owner.widget.eql(target.id));
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 112 }, .phase = .repeat } });
     try std.testing.expectEqualStrings("gg", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
-    try std.testing.expectEqual(visible, session.gui.app.model.sidebarVisible());
+    try std.testing.expectEqual(visible, session.gui.app.model.sidebar_visible);
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 112 }, .phase = .release } });
     try expectReleasedKeys(session);
 }
@@ -2166,7 +2166,7 @@ test "agent IME commits never start or complete a global character binding" {
     defer session.deinit();
     const target = try composerTarget(session);
     adoptAgentBinding(session, try data.config_values.ConfiguredBinding.parse(&.{ "g", "g" }, .toggle_sidebar));
-    const visible = session.gui.app.model.sidebarVisible();
+    const visible = session.gui.app.model.sidebar_visible;
     try send(session, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "g", .selection_start = 1, .selection_end = 1 } });
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g" } });
     try std.testing.expectEqualStrings("g", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
@@ -2174,7 +2174,7 @@ test "agent IME commits never start or complete a global character binding" {
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 113 } } });
     try send(session, .{ .composition = .{ .target_id = target.id.target_id, .generation = target.id.generation, .text = "g", .selection_start = 1, .selection_end = 1 } });
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g" } });
-    try std.testing.expectEqual(visible, session.gui.app.model.sidebarVisible());
+    try std.testing.expectEqual(visible, session.gui.app.model.sidebar_visible);
     try std.testing.expectEqualStrings("gg", session.gui.app.model.agentPane(Session.pane_id).?.composerSlice());
     try send(session, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 113 }, .phase = .release } });
     try expectReleasedKeys(session);
@@ -2192,7 +2192,7 @@ test "one native input batch retires composer replay ownership before a terminal
     try publish(session);
     const target = try composerTarget(session);
     const view = data.tab_layout.view(&gui.app.model, tab, terminal, gui.region.area).?;
-    const size = gui.app.model.hostSize();
+    const size = gui.app.model.host.host_size;
     const x = @as(f64, @floatFromInt(view.content.x)) * size.cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
     const y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
     try input_support.accept(gui, .{ .text = .{ .target_id = target.id.target_id, .generation = target.id.generation, .bytes = "g", .physical = .{ .value = 114 } } });

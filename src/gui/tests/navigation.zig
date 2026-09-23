@@ -186,9 +186,9 @@ test "native pointer rejects queued presses after geometry replacement" {
     defer session.deinit();
     try session.bootstrap();
     const app = &session.gui.app;
-    session.gui.pointer.configure(.{ 0, 0 }, app.model.hostSize());
+    session.gui.pointer.configure(.{ 0, 0 }, app.model.host.host_size);
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = 20, .y = 20 });
-    session.gui.pointer.configure(.{ 8, 8 }, app.model.hostSize());
+    session.gui.pointer.configure(.{ 8, 8 }, app.model.host.host_size);
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 2, .x = 20, .y = 20 });
     try input_support.pump(session.gui);
     try session.settle();
@@ -271,7 +271,7 @@ test "native pointer rejects a newer layout even before a GPU flight starts" {
     try session.settle();
     const app = &session.gui.app;
     const tab = app.model.tabs.active;
-    session.gui.pointer.configure(.{ 0, 0 }, app.model.hostSize());
+    session.gui.pointer.configure(.{ 0, 0 }, app.model.host.host_size);
     try data.pane_split.split(&app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = @enumFromInt(11), .location = Session.location, .axis = .horizontal, .area = session.gui.region.area });
     try std.testing.expect(!app.presentation.inFlight());
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = 10, .y = 10 });
@@ -298,10 +298,10 @@ test "native focus loss releases an acquired child mouse gesture" {
         true,
     );
     try session.settle();
-    session.gui.pointer.configure(session.gui.renderer.origin, app.model.hostSize());
+    session.gui.pointer.configure(session.gui.renderer.origin, app.model.host.host_size);
     const view = data.tab_layout.view(&app.model, tab, pane.id, session.gui.region.area).?;
-    const x = @as(f64, @floatFromInt(view.content.x)) * app.model.hostSize().cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
-    const y = @as(f64, @floatFromInt(view.content.y)) * app.model.hostSize().cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
+    const x = @as(f64, @floatFromInt(view.content.x)) * app.model.host.host_size.cell_width_px + @as(f64, @floatFromInt(session.gui.renderer.origin[0])) + 1;
+    const y = @as(f64, @floatFromInt(view.content.y)) * app.model.host.host_size.cell_height_px + @as(f64, @floatFromInt(session.gui.renderer.origin[1])) + 1;
     try input_support.acceptNative(session.gui, .{ .kind = 6, .code = 1, .x = x, .y = y });
     try input_support.pump(session.gui);
     try session.settle();
@@ -322,7 +322,7 @@ test "native mouse release reaches its original tab and a pane hidden by fullscr
     try input_support.acceptNative(gui, press);
     try drainInput(session);
     const second_tab: core.TabId = @enumFromInt(2);
-    _ = try data.tab_creation.add(&app.model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_tab }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, app.model.hostSize());
+    _ = try data.tab_creation.add(&app.model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_tab }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, app.model.host.host_size);
     var release = press;
     release.code = 2;
     try input_support.acceptNative(gui, release);
@@ -446,13 +446,13 @@ fn prepareMouse(session: *Session) !void {
         true,
     );
     try session.settle();
-    session.gui.pointer.configure(session.gui.renderer.origin, session.gui.app.model.hostSize());
+    session.gui.pointer.configure(session.gui.renderer.origin, session.gui.app.model.host.host_size);
 }
 
 fn pointerPress(session: *Session) native.InputEvent {
     const tab = session.gui.app.model.tabs.active;
     const view = data.tab_layout.view(&session.gui.app.model, tab, Session.pane_id, session.gui.region.area).?;
-    const size = session.gui.app.model.hostSize();
+    const size = session.gui.app.model.host.host_size;
     return .{
         .kind = 6,
         .code = 1,

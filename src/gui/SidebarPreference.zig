@@ -21,7 +21,7 @@ pub fn init(configured: f32) Preference {
 }
 
 /// The request the renderer measures with.
-/// Example: `renderer.sidebar_request = gui.sidebar.request(model.sidebarVisible());`
+/// Example: `renderer.sidebar_request = gui.sidebar.request(model.sidebar_visible);`
 pub fn request(preference: *const Preference, visible: bool) SidebarRequest {
     return .{ .visible = visible, .logical_width = preference.logical };
 }

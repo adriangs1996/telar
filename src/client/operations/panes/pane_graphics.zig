@@ -8,7 +8,7 @@ const core = @import("telar-core");
 
 /// Reconciles all fallbacks when host support changes. Example: `syncFallbacks(model, graphics);`
 pub fn syncFallbacks(model: *data.Model, graphics: GraphicsRetention) void {
-    const fallback_required = model.hostCapabilities().images != .supported;
+    const fallback_required = model.host.host_capabilities.images != .supported;
     var inspected: usize = 0;
     var panes = model.panes.iterate(null);
     while (panes.next()) |pane| {

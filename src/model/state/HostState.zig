@@ -9,14 +9,8 @@ host_capabilities: model_data.HostCapabilities,
 host_capabilities_revision: u64 = 0,
 
 /// Example: `const result = state.hostSize(...);`.
-pub fn hostSize(state: *const State) core.TerminalSize {
-    return state.host_size;
-}
 
 /// Example: `const result = state.hostCapabilities(...);`.
-pub fn hostCapabilities(state: *const State) model_data.HostCapabilities {
-    return state.host_capabilities;
-}
 
 /// Example: `const result = state.reconcileHost(...);`.
 pub fn reconcileHost(state: *State, update: model_data.HostUpdate) !?model_data.HostCommit {

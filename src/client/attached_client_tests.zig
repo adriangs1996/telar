@@ -79,7 +79,7 @@ pub fn rejectStaleHostCommits(comptime deliver: fn (*AttachedClient, data.HostCo
     );
     const stale_size = (try app.model.reconcileHost(
         .{
-            .capabilities = app.model.hostCapabilities(),
+            .capabilities = app.model.host.host_capabilities,
             .size = .{
                 .cols = 100,
                 .rows = 30,
@@ -88,7 +88,7 @@ pub fn rejectStaleHostCommits(comptime deliver: fn (*AttachedClient, data.HostCo
     )).?;
     _ = try app.model.reconcileHost(
         .{
-            .capabilities = app.model.hostCapabilities(),
+            .capabilities = app.model.host.host_capabilities,
             .size = .{
                 .cols = 101,
                 .rows = 30,

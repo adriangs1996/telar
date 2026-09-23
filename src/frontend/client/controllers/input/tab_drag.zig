@@ -49,8 +49,8 @@ pub fn retained(app: *client.AttachedClient, event: data.Mouse) !bool {
     }
 
     var mouse = event;
-    const size = app.model.hostSize();
-    if (app.model.hostCapabilities().pointer_pixels == .supported and size.cell_width_px != 0 and size.cell_height_px != 0) {
+    const size = app.model.host.host_size;
+    if (app.model.host.host_capabilities.pointer_pixels == .supported and size.cell_width_px != 0 and size.cell_height_px != 0) {
         mouse.x = std.math.cast(u16, event.raw_x / size.cell_width_px) orelse std.math.maxInt(u16);
         mouse.y = std.math.cast(u16, event.raw_y / size.cell_height_px) orelse std.math.maxInt(u16);
     }

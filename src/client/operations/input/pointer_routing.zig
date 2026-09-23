@@ -64,8 +64,8 @@ fn resolve(client: *Client, event: data.Mouse) Authority {
         }
     }
 
-    const capabilities = client.model.hostCapabilities();
-    const host_size = client.model.hostSize();
+    const capabilities = client.model.host.host_capabilities;
+    const host_size = client.model.host.host_size;
     const exterior_pixels = capabilities.pointer_pixels == .supported and
         host_size.cell_width_px != 0 and host_size.cell_height_px != 0;
     var cell_event = event;

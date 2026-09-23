@@ -69,9 +69,9 @@ pub fn buildUpdate(model: *data.Model, nodes: *[core.max_client_layout_nodes]cor
     }
 
     return .{
-        .sidebar_visible = model.sidebarVisible(),
-        .sidebar_width = model.sidebarWidth(),
-        .workspace_list_collapsed = model.workspaceListCollapsed(),
+        .sidebar_visible = model.sidebar_visible,
+        .sidebar_width = model.sidebar_width,
+        .workspace_list_collapsed = model.workspace_list_collapsed,
         .active_tab = active_tab,
         .tabs = output[0..tab_count],
     };

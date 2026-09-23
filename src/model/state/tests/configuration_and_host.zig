@@ -9,14 +9,14 @@ test "sidebar visibility advances only the chrome revision" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expect(model.sidebarVisible());
+    try std.testing.expect(model.sidebar_visible);
     try std.testing.expect(model.setSidebarVisible(true) == null);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 
     const hidden = model.toggleSidebar();
 
     try std.testing.expect(!hidden.visible);
-    try std.testing.expect(!model.sidebarVisible());
+    try std.testing.expect(!model.sidebar_visible);
     try std.testing.expectEqual(@as(u64, 1), hidden.chrome_revision);
     try std.testing.expectEqual(VersionType{ .chrome = 1 }, model.version());
     try std.testing.expect(model.setSidebarVisible(false) == null);
@@ -24,7 +24,7 @@ test "sidebar visibility advances only the chrome revision" {
     const shown = model.setSidebarVisible(true).?;
 
     try std.testing.expect(shown.visible);
-    try std.testing.expect(model.sidebarVisible());
+    try std.testing.expect(model.sidebar_visible);
     try std.testing.expectEqual(@as(u64, 2), shown.chrome_revision);
     try std.testing.expectEqual(VersionType{ .chrome = 2 }, model.version());
 }
@@ -44,9 +44,9 @@ test "configuration adoption commits generation sidebar and pane gaps once" {
     try std.testing.expect(!changed.sidebar.?.visible);
     try std.testing.expect(changed.pane_gaps_changed);
     try std.testing.expectEqual(@as(u64, 1), changed.panes_revision);
-    try std.testing.expectEqual(@as(u64, 2), model.configurationGeneration());
-    try std.testing.expect(!model.sidebarVisible());
-    try std.testing.expect(!model.paneGaps());
+    try std.testing.expectEqual(@as(u64, 2), model.configuration_generation);
+    try std.testing.expect(!model.sidebar_visible);
+    try std.testing.expect(!model.pane_gaps);
     try std.testing.expectEqual(VersionType{
         .configuration = 1,
         .panes = 1,
@@ -79,9 +79,9 @@ test "configuration adoption rejects an old generation without partial state" {
         .pane_gaps = false,
     }));
 
-    try std.testing.expectEqual(@as(u64, 4), model.configurationGeneration());
-    try std.testing.expect(model.sidebarVisible());
-    try std.testing.expect(model.paneGaps());
+    try std.testing.expectEqual(@as(u64, 4), model.configuration_generation);
+    try std.testing.expect(model.sidebar_visible);
+    try std.testing.expect(model.pane_gaps);
     try std.testing.expectEqualDeep(version, model.version());
 }
 
@@ -157,12 +157,12 @@ test "plugin execution is single flight and completion matches its exact identit
 
     try std.testing.expectEqual(@as(u64, 1), @intFromEnum(first.id));
     try std.testing.expectEqual(@as(u64, 7), first.configuration_generation);
-    try std.testing.expectEqualDeep(first, model.pluginExecution().?);
+    try std.testing.expectEqualDeep(first, model.plugins.pluginExecution().?);
     try std.testing.expect((try model.beginPluginExecution()) == null);
-    try std.testing.expect(model.finishPluginExecution(@enumFromInt(99)) == null);
-    try std.testing.expectEqualDeep(first, model.pluginExecution().?);
-    try std.testing.expectEqualDeep(first, model.finishPluginExecution(first.id).?);
-    try std.testing.expect(model.pluginExecution() == null);
+    try std.testing.expect(model.plugins.finishPluginExecution(@enumFromInt(99)) == null);
+    try std.testing.expectEqualDeep(first, model.plugins.pluginExecution().?);
+    try std.testing.expectEqualDeep(first, model.plugins.finishPluginExecution(first.id).?);
+    try std.testing.expect(model.plugins.pluginExecution() == null);
 
     const second = (try model.beginPluginExecution()).?;
 
@@ -181,8 +181,8 @@ test "plugin execution retains its launch generation across configuration reload
         .pane_gaps = true,
     });
 
-    try std.testing.expectEqual(@as(u64, 3), model.pluginExecution().?.configuration_generation);
-    try std.testing.expectEqualDeep(execution, model.finishPluginExecution(execution.id).?);
+    try std.testing.expectEqual(@as(u64, 3), model.plugins.pluginExecution().?.configuration_generation);
+    try std.testing.expectEqualDeep(execution, model.plugins.finishPluginExecution(execution.id).?);
 }
 
 test "plugin execution identity exhaustion cannot publish a partial reservation" {
@@ -193,9 +193,9 @@ test "plugin execution identity exhaustion cannot publish a partial reservation"
     const last = (try model.beginPluginExecution()).?;
 
     try std.testing.expectEqual(std.math.maxInt(u64), @intFromEnum(last.id));
-    _ = model.finishPluginExecution(last.id);
+    _ = model.plugins.finishPluginExecution(last.id);
     try std.testing.expectError(error.PluginExecutionIdExhausted, model.beginPluginExecution());
-    try std.testing.expect(model.pluginExecution() == null);
+    try std.testing.expect(model.plugins.pluginExecution() == null);
 }
 
 test "clipboard capture is single flight and completion matches its exact identity" {
@@ -278,7 +278,7 @@ test "host resize commits resolved geometry once" {
     };
 
     const commit = (try model.reconcileHost(.{
-        .capabilities = model.hostCapabilities(),
+        .capabilities = model.host.host_capabilities,
         .size = resized,
     })).?.resize.?;
 
@@ -287,10 +287,10 @@ test "host resize commits resolved geometry once" {
     try std.testing.expect(commit.grid_changed);
     try std.testing.expect(!commit.cell_size_changed);
     try std.testing.expectEqual(@as(u64, 1), commit.host_revision);
-    try std.testing.expectEqualDeep(resized, model.hostSize());
+    try std.testing.expectEqualDeep(resized, model.host.host_size);
     try std.testing.expectEqual(VersionType{ .host = 1 }, model.version());
     try std.testing.expect((try model.reconcileHost(.{
-        .capabilities = model.hostCapabilities(),
+        .capabilities = model.host.host_capabilities,
         .size = resized,
     })) == null);
     try std.testing.expectEqual(VersionType{ .host = 1 }, model.version());
@@ -299,22 +299,22 @@ test "host resize commits resolved geometry once" {
 test "host resize rejects invalid and oversized grids without partial state" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    const size = model.hostSize();
+    const size = model.host.host_size;
     const version = model.version();
 
     try std.testing.expectError(error.InvalidTerminalSize, model.reconcileHost(.{
-        .capabilities = model.hostCapabilities(),
+        .capabilities = model.host.host_capabilities,
         .size = .{ .cols = 0, .rows = 24 },
     }));
     try std.testing.expectError(error.ScreenTooLarge, model.reconcileHost(.{
-        .capabilities = model.hostCapabilities(),
+        .capabilities = model.host.host_capabilities,
         .size = .{
             .cols = std.math.maxInt(u16),
             .rows = std.math.maxInt(u16),
         },
     }));
 
-    try std.testing.expectEqualDeep(size, model.hostSize());
+    try std.testing.expectEqualDeep(size, model.host.host_size);
     try std.testing.expectEqualDeep(version, model.version());
 }
 
@@ -324,8 +324,8 @@ test "presentation capabilities commit independently without probe policy" {
 
     const graphics_commit = (try model.observeHostCapability(.{ .images = .supported })).?;
     try std.testing.expect(graphics_commit.resize == null);
-    try std.testing.expectEqual(model_data.EnvironmentSupport.supported, model.hostCapabilities().images);
-    try std.testing.expectEqual(model_data.EnvironmentSupport.unknown, model.hostCapabilities().pointer_pixels);
+    try std.testing.expectEqual(model_data.EnvironmentSupport.supported, model.host.host_capabilities.images);
+    try std.testing.expectEqual(model_data.EnvironmentSupport.unknown, model.host.host_capabilities.pointer_pixels);
 
     _ = try model.observeHostCapability(.{ .pointer_pixels = .unsupported });
     const version = model.version();
@@ -347,7 +347,7 @@ test "host pixel observations commit raw measurements and resolved geometry atom
         .rows = 24,
         .cell_width_px = 10,
         .cell_height_px = 20,
-    }, model.hostSize());
+    }, model.host.host_size);
     try std.testing.expect(window.capabilities != null);
     try std.testing.expect(window.resize != null);
     try std.testing.expectEqual(VersionType{
@@ -360,16 +360,16 @@ test "host pixel observations commit raw measurements and resolved geometry atom
         .height = 24,
     } })).?;
     try std.testing.expect(cell.resize != null);
-    try std.testing.expectEqual(@as(u16, 12), model.hostSize().cell_width_px);
-    try std.testing.expectEqual(@as(u16, 24), model.hostSize().cell_height_px);
+    try std.testing.expectEqual(@as(u16, 12), model.host.host_size.cell_width_px);
+    try std.testing.expectEqual(@as(u16, 24), model.host.host_size.cell_height_px);
 
     const later_window = (try model.observeHostCapability(.{ .window_pixels = .{
         .width = 1600,
         .height = 960,
     } })).?;
     try std.testing.expect(later_window.resize == null);
-    try std.testing.expectEqual(@as(u16, 12), model.hostSize().cell_width_px);
-    try std.testing.expectEqual(@as(u16, 24), model.hostSize().cell_height_px);
+    try std.testing.expectEqual(@as(u16, 12), model.host.host_size.cell_width_px);
+    try std.testing.expectEqual(@as(u16, 24), model.host.host_size.cell_height_px);
     try std.testing.expectEqual(VersionType{
         .host = 2,
         .host_capabilities = 3,
@@ -379,9 +379,9 @@ test "host pixel observations commit raw measurements and resolved geometry atom
 test "host reconciliation validates geometry before publishing capabilities" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
-    var capabilities = model.hostCapabilities();
+    var capabilities = model.host.host_capabilities;
     capabilities.window_width_px = 1200;
-    const size = model.hostSize();
+    const size = model.host.host_size;
     const version = model.version();
 
     try std.testing.expectError(error.InconsistentHostGeometry, model.reconcileHost(.{
@@ -396,8 +396,8 @@ test "host reconciliation validates geometry before publishing capabilities" {
         },
     }));
 
-    try std.testing.expectEqualDeep(size, model.hostSize());
-    try std.testing.expectEqualDeep(model_data.HostCapabilities{}, model.hostCapabilities());
+    try std.testing.expectEqualDeep(size, model.host.host_size);
+    try std.testing.expectEqualDeep(model_data.HostCapabilities{}, model.host.host_capabilities);
     try std.testing.expectEqualDeep(version, model.version());
 }
 
@@ -405,14 +405,14 @@ test "workspace list collapse advances only the chrome revision" {
     var model = ModelType.init(std.testing.allocator, true);
     defer model.deinit();
 
-    try std.testing.expect(!model.workspaceListCollapsed());
+    try std.testing.expect(!model.workspace_list_collapsed);
     try std.testing.expect(model.setWorkspaceListCollapsed(false) == null);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 
     const collapsed = model.toggleWorkspaceList();
 
     try std.testing.expect(collapsed.collapsed);
-    try std.testing.expect(model.workspaceListCollapsed());
+    try std.testing.expect(model.workspace_list_collapsed);
     try std.testing.expectEqual(@as(u64, 1), collapsed.chrome_revision);
     try std.testing.expectEqual(VersionType{ .chrome = 1 }, model.version());
     try std.testing.expect(model.setWorkspaceListCollapsed(true) == null);
@@ -420,7 +420,7 @@ test "workspace list collapse advances only the chrome revision" {
     const expanded = model.setWorkspaceListCollapsed(false).?;
 
     try std.testing.expect(!expanded.collapsed);
-    try std.testing.expect(!model.workspaceListCollapsed());
+    try std.testing.expect(!model.workspace_list_collapsed);
     try std.testing.expectEqual(@as(u64, 2), expanded.chrome_revision);
     try std.testing.expectEqual(VersionType{ .chrome = 2 }, model.version());
 }
@@ -446,12 +446,12 @@ test "workspace list reconciliation owns navigation state and one isolated revis
     try std.testing.expectEqual(@as(usize, 2), commit.count);
     try std.testing.expectEqual(@as(u64, 1), commit.workspace_list_revision);
     try std.testing.expectEqual(VersionType{ .workspace_list = 1 }, model.version());
-    try std.testing.expectEqualStrings("telar", model.workspaceListSnapshot().nameAt(0));
-    try std.testing.expectEqualStrings("/w/telar", model.workspaceListSnapshot().pathAt(0));
+    try std.testing.expectEqualStrings("telar", model.workspace_list_snapshot.nameAt(0));
+    try std.testing.expectEqualStrings("/w/telar", model.workspace_list_snapshot.pathAt(0));
     try std.testing.expect(model.knowsWorkspace(@enumFromInt(1)));
     try std.testing.expect(!model.knowsWorkspace(@enumFromInt(9)));
-    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(2)), model.workspaceAtPosition(1).?);
-    try std.testing.expect(model.workspaceAtPosition(2) == null);
+    try std.testing.expectEqual(@as(core.WorkspaceId, @enumFromInt(2)), model.workspace_list_snapshot.workspaceAtPosition(1).?);
+    try std.testing.expect(model.workspace_list_snapshot.workspaceAtPosition(2) == null);
 
     try std.testing.expect((try model.reconcileWorkspaceList(.{
         .revision = 6,
@@ -468,5 +468,5 @@ test "workspace list reconciliation owns navigation state and one isolated revis
         .entries = &duplicate,
     }));
     try std.testing.expectEqual(VersionType{ .workspace_list = 1 }, model.version());
-    try std.testing.expectEqualStrings("telar", model.workspaceListSnapshot().nameAt(0));
+    try std.testing.expectEqualStrings("telar", model.workspace_list_snapshot.nameAt(0));
 }

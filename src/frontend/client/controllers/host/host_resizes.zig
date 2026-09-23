@@ -43,7 +43,7 @@ fn wait(io: std.Io, watcher: *platform.ResizeWatcher) anyerror!void {
 /// const commit = try apply(client, measurement);
 /// ```
 pub fn apply(client: *client_module.AttachedClient, measurement: SizeType) !?data.HostCommit {
-    const update = resolve(client.model.hostCapabilities(), measurement);
+    const update = resolve(client.model.host.host_capabilities, measurement);
 
     return client.applyHostUpdate(update);
 }

@@ -284,7 +284,7 @@ fn capture(client: *client_module.AttachedClient, heap: core.SnapshotSnapshot) ?
         .media_pending = TerminalClient.of(client).presenter.media_tick_pending,
         .outbox = client.runtime_transport.outbox.snapshot(),
         .inbox = TerminalClient.of(client).inbox.snapshot(),
-        .capabilities = client.model.hostCapabilities(),
+        .capabilities = client.model.host.host_capabilities,
         .zlib_support = TerminalClient.of(client).host_negotiation.zlib_support,
         .sidebar_rendering = TerminalClient.of(client).view.sidebar_rendering,
         .lua_used = if (client.lua_generation) |generation| generation.vm.meter.used else 0,

@@ -82,7 +82,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
 
     try std.testing.expectEqual(@as(u64, 1), first.generation);
     try std.testing.expect(client.lua_generation == initial_generation);
-    try std.testing.expectEqual(@as(u64, 1), client.model.configurationGeneration());
+    try std.testing.expectEqual(@as(u64, 1), client.model.configuration_generation);
     try std.testing.expect(client.model.diagnostic() == null);
 
     try std.testing.expectEqualDeep(
@@ -100,9 +100,9 @@ test "configuration adoption swaps ownership after commit and presents by versio
     try std.testing.expect(!second.sidebar.?.visible);
     try std.testing.expect(second.pane_gaps_changed);
     try std.testing.expect(client.lua_generation == changed_generation);
-    try std.testing.expectEqual(@as(u64, 2), client.model.configurationGeneration());
-    try std.testing.expect(!client.model.sidebarVisible());
-    try std.testing.expect(!client.model.paneGaps());
+    try std.testing.expectEqual(@as(u64, 2), client.model.configuration_generation);
+    try std.testing.expect(!client.model.sidebar_visible);
+    try std.testing.expect(!client.model.pane_gaps);
     try std.testing.expect(!TerminalClient.of(client).view.sidebar_requested);
     try std.testing.expectEqualDeep(try data.chord.parseKey("ctrl+s"), TerminalClient.of(client).host_input.router.prefix.?);
     try std.testing.expectEqual(
@@ -150,7 +150,7 @@ test "configuration adoption swaps ownership after commit and presents by versio
     const stale = try support.testingConfigAdoption(2, false);
     try std.testing.expectError(error.StaleConfiguration, support.reloadConfiguration(client, stale));
     try std.testing.expect(client.lua_generation == changed_generation);
-    try std.testing.expectEqual(@as(u64, 2), client.model.configurationGeneration());
+    try std.testing.expectEqual(@as(u64, 2), client.model.configuration_generation);
 }
 
 test "configuration adoption keeps new ownership after geometry failure" {
@@ -168,10 +168,10 @@ test "configuration adoption keeps new ownership after geometry failure" {
     try std.testing.expectError(error.ClientOutboxFull, support.reloadConfiguration(client, adoption));
 
     try std.testing.expect(client.lua_generation == generation);
-    try std.testing.expectEqual(@as(u64, 1), client.model.configurationGeneration());
+    try std.testing.expectEqual(@as(u64, 1), client.model.configuration_generation);
     try std.testing.expectEqual(@as(u64, 1), client.model.version().configuration);
-    try std.testing.expect(!client.model.sidebarVisible());
-    try std.testing.expect(!client.model.paneGaps());
+    try std.testing.expect(!client.model.sidebar_visible);
+    try std.testing.expect(!client.model.pane_gaps);
     try std.testing.expect(!TerminalClient.of(client).view.sidebar_requested);
     try std.testing.expectEqual(@as(usize, data.outbox_support.capacity), client.runtime_transport.outbox.len);
 }
@@ -243,7 +243,7 @@ test "dynamic bar ticks commit current Lua content before paced presentation" {
         else => return error.UnexpectedEvent,
     }
 
-    const slot = client.model.barState().layout.slot(.bottom_left);
+    const slot = client.model.bars.layout.slot(.bottom_left);
     try std.testing.expect(slot.* == .content);
     try std.testing.expectEqualStrings("tick 1", slot.content.text(slot.content.slice()[0]));
     try std.testing.expect(slot.content.slice()[0].style.bold);
@@ -303,7 +303,7 @@ test "command completion from a replaced bar generation is discarded" {
     const version_after_reload = client.model.version();
     try client_module.operations.bar_updates.completeCommand(client, completed);
 
-    const slot = client.model.barState().layout.slot(.bottom_left);
+    const slot = client.model.bars.layout.slot(.bottom_left);
     try std.testing.expectEqualStrings("new", slot.content.text(slot.content.slice()[0]));
     try std.testing.expect(client.model.bar_updates.command_execution == null);
     try std.testing.expectEqualDeep(version_after_reload, client.model.version());
@@ -335,8 +335,8 @@ test "plugin completion applies one authorized batch through model observation" 
     });
 
     try std.testing.expect(!exit);
-    try std.testing.expect(client.model.pluginExecution() == null);
-    try std.testing.expect(client.model.workspaceListCollapsed());
+    try std.testing.expect(client.model.plugins.pluginExecution() == null);
+    try std.testing.expect(client.model.workspace_list_collapsed);
     try std.testing.expectEqual(version_before.chrome + 1, client.model.version().chrome);
     try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);
     try std.testing.expect(!TerminalClient.of(client).view.workspace_list_collapsed);
@@ -378,8 +378,8 @@ test "plugin completion from an old configuration is consumed without effects" {
     });
 
     try std.testing.expect(!exit);
-    try std.testing.expect(client.model.pluginExecution() == null);
-    try std.testing.expect(!client.model.workspaceListCollapsed());
+    try std.testing.expect(client.model.plugins.pluginExecution() == null);
+    try std.testing.expect(!client.model.workspace_list_collapsed);
     try std.testing.expectEqualDeep(version_after_reload, client.model.version());
     try std.testing.expect(client.model.diagnostic() == null);
     try std.testing.expectEqual(pending_before, TerminalClient.of(client).presenter.pending_updates);
@@ -410,7 +410,7 @@ test "plugin authorization denial consumes the run before publishing failure" {
     });
 
     try std.testing.expect(!exit);
-    try std.testing.expect(client.model.pluginExecution() == null);
+    try std.testing.expect(client.model.plugins.pluginExecution() == null);
     try std.testing.expect(client.model.panes.find(TestHarness.bootstrap_pane) != null);
     try std.testing.expectEqual(@as(usize, 0), client.runtime_transport.outbox.len);
     try std.testing.expect(client.model.version().notifications > version_before.notifications);
@@ -437,14 +437,14 @@ test "plugin worker failure and unmatched completion preserve lifecycle identity
         .execution_id = @enumFromInt(@intFromEnum(execution.id) + 1),
         .result = error.TestPluginWorkerFailure,
     }));
-    try std.testing.expectEqualDeep(execution, client.model.pluginExecution().?);
+    try std.testing.expectEqualDeep(execution, client.model.plugins.pluginExecution().?);
     try std.testing.expect(client.model.diagnostic() == null);
 
     try std.testing.expect(!try client.completePluginAction(.{
         .execution_id = execution.id,
         .result = error.TestPluginWorkerFailure,
     }));
-    try std.testing.expect(client.model.pluginExecution() == null);
+    try std.testing.expect(client.model.plugins.pluginExecution() == null);
     try std.testing.expect(std.mem.indexOf(
         u8,
         client.model.diagnostic().?,
@@ -468,8 +468,8 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
         .binding,
     );
 
-    try std.testing.expectEqualDeep(execution, client.model.pluginExecution().?);
-    _ = client.model.finishPluginExecution(execution.id);
+    try std.testing.expectEqualDeep(execution, client.model.plugins.pluginExecution().?);
+    _ = client.model.plugins.finishPluginExecution(execution.id);
 
     _ = try client.executeAction(
         .{
@@ -481,7 +481,7 @@ test "busy plugin start skips resolution and a rejected action leaves no run" {
         .binding,
     );
 
-    try std.testing.expect(client.model.pluginExecution() == null);
+    try std.testing.expect(client.model.plugins.pluginExecution() == null);
     try std.testing.expect(client.model.notification_scheduler.pending);
     try std.testing.expect(std.mem.indexOf(
         u8,
@@ -510,7 +510,7 @@ test "name prompt suppresses a configured action before source dispatch" {
         const control = try client.executeAction(action, .binding);
         try std.testing.expect(control == .continue_routing);
         try std.testing.expect(client.model.name_prompt.active());
-        try std.testing.expect(client.model.sidebarVisible());
+        try std.testing.expect(client.model.sidebar_visible);
         try std.testing.expectEqualDeep(version, client.model.version());
         try std.testing.expectEqual(outbox_len, client.runtime_transport.outbox.len);
     }
@@ -523,12 +523,12 @@ test "validated native effects preserve their authority while a name prompt is o
     try harness.bootstrap();
     const client = harness.client;
     try std.testing.expect(client.openNamePrompt(.rename_active_tab));
-    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expect(client.model.sidebar_visible);
 
     _ = try client.executeAction(.toggle_sidebar, .binding);
-    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expect(client.model.sidebar_visible);
     _ = try client.executeAction(.toggle_sidebar, .effect);
-    try std.testing.expect(!client.model.sidebarVisible());
+    try std.testing.expect(!client.model.sidebar_visible);
     try std.testing.expect(client.model.name_prompt.active());
 }
 
@@ -563,7 +563,7 @@ test "Lua callback applies a validated batch through model observation" {
     const control = try client.executeAction(configured, .binding);
 
     try std.testing.expect(control == .continue_routing);
-    try std.testing.expect(client.model.workspaceListCollapsed());
+    try std.testing.expect(client.model.workspace_list_collapsed);
     try std.testing.expect(client.model.diagnostic() == null);
     var expected = version_before;
     expected.chrome += 1;
@@ -606,7 +606,7 @@ test "Lua callback validates every plugin reference before native effects" {
     const control = try client.executeAction(configured, .binding);
 
     try std.testing.expect(control == .continue_routing);
-    try std.testing.expect(client.model.sidebarVisible());
+    try std.testing.expect(client.model.sidebar_visible);
     try std.testing.expect(std.mem.indexOf(
         u8,
         client.model.diagnostic().?,

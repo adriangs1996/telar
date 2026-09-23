@@ -152,7 +152,7 @@ fn publishEvaluation(client: *Client, command: BarUpdateCommand) !bar_update.Out
 
 fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContextType {
     const local = client.clock.localTime();
-    const metrics: ?BarMetricsType = if (client.model.systemMetrics()) |value| .{
+    const metrics: ?BarMetricsType = if (client.model.system_metrics) |value| .{
         .cpu_percent = value.cpu_percent,
         .memory_used_decigib = value.memory_used_decigib,
         .battery_percent = value.battery_percent,
@@ -236,8 +236,8 @@ fn commitContent(client: *Client, command: BarUpdateCommand, content: data.Conte
 }
 
 fn commitFailure(client: *Client, command: BarUpdateCommand, failure: BarUpdateFailure) !bar_update.Outcome {
-    const state = client.model.barState();
-    if (command.generation != client.model.configurationGeneration() or
+    const state = &client.model.bars;
+    if (command.generation != client.model.configuration_generation or
         state.layout.generation != command.generation or
         !state.layout.isLive(command.position))
     {

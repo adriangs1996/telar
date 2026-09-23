@@ -97,8 +97,8 @@ pub fn init(params: Params) !*TerminalClient {
         .options = params.options,
     });
     errdefer terminal.app.deinit();
-    const host_size = terminal.app.model.hostSize();
-    const capabilities = terminal.app.model.hostCapabilities();
+    const host_size = terminal.app.model.host.host_size;
+    const capabilities = terminal.app.model.host.host_capabilities;
     var screen = try ScreenType.init(gpa, host_size.cols, host_size.rows);
     errdefer screen.deinit();
     var view = try PresentationState.initWithAppearance(

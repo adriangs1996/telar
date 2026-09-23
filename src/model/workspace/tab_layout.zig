@@ -44,7 +44,7 @@ pub fn view(model: *Model, slot: usize, pane_id: core.PaneId, area: core.Rect) ?
 pub fn contentSize(model: *Model, slot: usize, pane_id: core.PaneId, area: core.Rect) ?core.TerminalSize {
     const pane_view = view(model, slot, pane_id, area) orelse return null;
     var size = multiplexer.rectSize(pane_view.content) orelse return null;
-    const host_size = model.host.hostSize();
+    const host_size = model.host.host_size;
     size.cell_width_px = host_size.cell_width_px;
     size.cell_height_px = host_size.cell_height_px;
     return size;

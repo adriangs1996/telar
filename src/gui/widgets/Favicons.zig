@@ -69,7 +69,7 @@ pub fn refresh(favicons: *Favicons, gpa: std.mem.Allocator, page: *SpritePage) v
 
 /// The next workspace of the list that still needs a lookup, registering
 /// new workspaces and evicting departed ones when the table is full.
-/// Example: `if (favicons.next(model.workspaceListSnapshot())) |want| try request(want);`
+/// Example: `if (favicons.next(&model.workspace_list_snapshot)) |want| try request(want);`
 pub fn next(favicons: *Favicons, workspaces: *const data.WorkspaceListSnapshot) ?Want {
     for (0..workspaces.count) |index| {
         const workspace = workspaces.workspaceAt(index);

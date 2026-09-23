@@ -419,15 +419,6 @@ pub fn commitPresentation(model: *Model, commit: PresentationCommitType) Present
     return presentation_delivery.retire(model, commit);
 }
 
-/// Returns the active configuration generation owned by this client.
-///
-/// ```zig
-/// const generation = model.configurationGeneration();
-/// ```
-pub fn configurationGeneration(model: *const Model) u64 {
-    return model.configuration_generation;
-}
-
 /// Returns the bounded client diagnostic currently shown in the chrome.
 ///
 /// ```zig
@@ -522,17 +513,6 @@ pub fn callbackContext(model: *const Model) model_data.CallbackContext {
     };
 }
 
-/// Returns the single plugin execution currently owned by the client.
-///
-/// ```zig
-/// if (model.pluginExecution() != null) {
-///     return;
-/// }
-/// ```
-pub fn pluginExecution(model: *const Model) ?PluginExecutionType {
-    return model.plugins.pluginExecution();
-}
-
 /// Reserves one plugin execution against the current configuration.
 ///
 /// ```zig
@@ -540,42 +520,6 @@ pub fn pluginExecution(model: *const Model) ?PluginExecutionType {
 /// ```
 pub fn beginPluginExecution(model: *Model) !?PluginExecutionType {
     return model.plugins.beginPluginExecution(model.configuration_generation);
-}
-
-/// Finishes only the matching plugin execution and preserves newer work.
-///
-/// ```zig
-/// const execution = model.finishPluginExecution(id) orelse return;
-/// ```
-pub fn finishPluginExecution(model: *Model, id: model_data.PluginExecutionId) ?PluginExecutionType {
-    return model.plugins.finishPluginExecution(id);
-}
-
-/// Returns the pane-gap preference used by current and future tabs.
-///
-/// ```zig
-/// if (model.paneGaps()) drawGutters();
-/// ```
-pub fn paneGaps(model: *const Model) bool {
-    return model.pane_gaps;
-}
-
-/// Returns the resolved host grid and cell geometry.
-///
-/// ```zig
-/// const host_size = model.hostSize();
-/// ```
-pub fn hostSize(model: *const Model) core.TerminalSize {
-    return model.host.hostSize();
-}
-
-/// Returns the host features and raw pixel measurements observed so far.
-///
-/// ```zig
-/// const capabilities = model.hostCapabilities();
-/// ```
-pub fn hostCapabilities(model: *const Model) model_data.HostCapabilities {
-    return model.host.hostCapabilities();
 }
 
 /// Atomically reconciles raw host capabilities and resolved geometry.
@@ -646,15 +590,6 @@ pub fn windowTitleTemplate(model: *const Model) []const u8 {
     return model.window_title_template[0..model.window_title_template_len];
 }
 
-/// Returns the immutable configured bar presentation owned by this client.
-///
-/// ```zig
-/// const current = model.barState();
-/// ```
-pub fn barState(model: *const Model) *const StateType {
-    return &model.bars;
-}
-
 /// Commits one current-generation dynamic block without retaining Lua values.
 ///
 /// ```zig
@@ -678,24 +613,6 @@ pub fn updateBar(model: *Model, input: BarUpdateInputType) !?BarUpdateCommitType
         .position = input.position,
         .bars_revision = model.bars_revision,
     };
-}
-
-/// Returns the sidebar preference committed in client state.
-///
-/// ```zig
-/// if (model.sidebarVisible()) showSidebar();
-/// ```
-pub fn sidebarVisible(model: *const Model) bool {
-    return model.sidebar_visible;
-}
-
-/// Returns the preferred width retained independently of host clamping.
-///
-/// ```zig
-/// const width = model.sidebarWidth();
-/// ```
-pub fn sidebarWidth(model: *const Model) u16 {
-    return model.sidebar_width;
 }
 
 /// Commits an explicit sidebar preference. Repeated values preserve the
@@ -765,15 +682,6 @@ fn commitSidebarLayout(model: *Model, visible: bool, width: u16) ?model_data.Sid
         .width = width,
         .chrome_revision = model.chrome_revision,
     };
-}
-
-/// Returns whether the top-bar workspace list is collapsed.
-///
-/// ```zig
-/// if (model.workspaceListCollapsed()) showActiveWorkspaceOnly();
-/// ```
-pub fn workspaceListCollapsed(model: *const Model) bool {
-    return model.workspace_list_collapsed;
 }
 
 /// Commits an explicit workspace-list collapse preference. Repeated
@@ -860,15 +768,6 @@ pub fn reconcileWorkspaceList(model: *Model, input: SnapshotInputType) !?Workspa
     };
 }
 
-/// Borrows the immutable workspace-list projection for one presentation.
-///
-/// ```zig
-/// const workspaces = model.workspaceListSnapshot();
-/// ```
-pub fn workspaceListSnapshot(model: *const Model) *const WorkspaceListSnapshot {
-    return &model.workspace_list_snapshot;
-}
-
 /// Reports whether the latest runtime list contains one workspace.
 ///
 /// ```zig
@@ -876,15 +775,6 @@ pub fn workspaceListSnapshot(model: *const Model) *const WorkspaceListSnapshot {
 /// ```
 pub fn knowsWorkspace(model: *const Model, workspace: core.WorkspaceId) bool {
     return model.workspace_list_snapshot.indexOf(workspace) != null;
-}
-
-/// Resolves one zero-based workspace position from committed client state.
-///
-/// ```zig
-/// const workspace = model.workspaceAtPosition(0) orelse return;
-/// ```
-pub fn workspaceAtPosition(model: *const Model, position: usize) ?core.WorkspaceId {
-    return model.workspace_list_snapshot.workspaceAtPosition(position);
 }
 
 /// Commits one changed runtime proxy state. Repeated values produce no
@@ -917,33 +807,6 @@ pub fn reconcileProxyStatus(model: *Model, status: core.ProxyStatus) ?model_data
         .proxy_status_revision_before = proxy_status_revision_before,
         .proxy_status_revision = model.proxy_status_revision,
     };
-}
-
-/// Returns whether the runtime's TLS interception service is active.
-///
-/// ```zig
-/// if (model.proxyTlsActive()) renderProxyBadge();
-/// ```
-pub fn proxyTlsActive(model: *const Model) bool {
-    return model.proxy_tls_active;
-}
-
-/// Returns the configured interception scope reported by the runtime.
-///
-/// ```zig
-/// const expanded = model.proxyTlsScope() == .wildcard;
-/// ```
-pub fn proxyTlsScope(model: *const Model) core.ProxyScope {
-    return model.proxy_tls_scope;
-}
-
-/// Returns whether Telar's authority remains in the platform trust store.
-///
-/// ```zig
-/// if (model.proxySystemTrusted()) renderTrustBadge();
-/// ```
-pub fn proxySystemTrusted(model: *const Model) bool {
-    return model.proxy_system_trusted;
 }
 
 /// Commits one newer host-health replica. Invalid newer values preserve
@@ -979,15 +842,6 @@ pub fn reconcileSystemMetrics(model: *Model, metrics: SystemMetricsType) !?Syste
     };
 }
 
-/// Returns the latest immutable host-health projection, when available.
-///
-/// ```zig
-/// const metrics = model.systemMetrics() orelse return;
-/// ```
-pub fn systemMetrics(model: *const Model) ?SystemMetricsType {
-    return model.system_metrics;
-}
-
 /// Publishes one bounded client notification and advances its isolated
 /// version. The center owns all borrowed text before this call returns.
 ///
@@ -1002,25 +856,6 @@ pub fn publishNotification(model: *Model, now_ns: u64, input: model_data.Notific
         .id = id,
         .notifications_revision = model.notifications_revision,
     };
-}
-
-/// Borrows the immutable notification snapshot for one presentation.
-///
-/// ```zig
-/// const snapshot = model.notificationSnapshot();
-/// ```
-pub fn notificationSnapshot(model: *const Model) *const model_data.Center {
-    return &model.notification_center;
-}
-
-/// Returns the next notification lifecycle deadline without changing
-/// client state.
-///
-/// ```zig
-/// const deadline = model.nextNotificationDeadline(now_ns, frame_ns);
-/// ```
-pub fn nextNotificationDeadline(model: *const Model, now_ns: u64, frame_interval_ns: u64) ?u64 {
-    return model.notification_center.nextDeadline(now_ns, frame_interval_ns);
 }
 
 /// Advances notification lifecycles to one monotonic timestamp.
@@ -1111,15 +946,6 @@ pub fn reconcileAgentSnapshot(model: *Model, input: AgentsSnapshotInput) !?model
     };
 }
 
-/// Borrows the immutable agent projection owned by this client model.
-///
-/// ```zig
-/// const snapshot = model.agentSnapshot();
-/// ```
-pub fn agentSnapshot(model: *const Model) *const SnapshotType {
-    return &model.agent_snapshot;
-}
-
 /// Returns the window title the focused pane of the active tab last set,
 /// or an empty slice.
 ///
@@ -1143,15 +969,6 @@ pub fn focusedPaneForeground(model: *const Model) []const u8 {
     const slot = model.tabs.activeSlot() orelse return "";
     const pane = tab_layout.focusedPaneConst(model, slot) orelse return "";
     return pane.foregroundName();
-}
-
-/// Reports whether one exact pane generation is current.
-///
-/// ```zig
-/// if (!model.knowsAgent(key)) discardNotification();
-/// ```
-pub fn knowsAgent(model: *const Model, key: model_data.AgentKey) bool {
-    return model.agent_snapshot.find(key) != null;
 }
 
 /// Returns the focused agent that finished unseen, once per completion,
@@ -1202,16 +1019,6 @@ pub fn sidebarAnimationActive(model: *const Model) bool {
     }
 
     return false;
-}
-
-/// Returns the current model-owned animation frame rendered by the
-/// sidebar.
-///
-/// ```zig
-/// const frame = model.sidebarAnimationFrame();
-/// ```
-pub fn sidebarAnimationFrame(model: *const Model) u8 {
-    return model.sidebar_animation_frame;
 }
 
 /// Advances the visible sidebar animation only while a working agent
@@ -1306,16 +1113,6 @@ pub fn attachmentMarkers(model: *const Model, target: model_data.AttachmentTarge
     }) orelse return null;
 
     return if (agent.attachments == .none) null else agent.attachments;
-}
-
-/// Returns the pane identity and reporting mode last synchronized with the
-/// child protocol.
-///
-/// ```zig
-/// const reported = model.reportedPaneFocus() orelse return;
-/// ```
-pub fn reportedPaneFocus(model: *const Model) ?ReportedPaneFocusType {
-    return model.reported_pane_focus;
 }
 
 /// Commits the active focused pane as the protocol-reporting target. The
@@ -1413,15 +1210,6 @@ fn commitReportedPaneFocus(model: *Model, current: ?ReportedPaneFocusType) ?Pane
 
     model.reported_pane_focus = current;
     return transition;
-}
-
-/// Returns the pane paste currently owned by this client.
-///
-/// ```zig
-/// const session = model.panePasteSession() orelse return;
-/// ```
-pub fn panePasteSession(model: *const Model) ?model_data.PanePasteSession {
-    return model.pane_paste;
 }
 
 /// Reports whether a streamed pane paste owns host input.
@@ -2044,15 +1832,6 @@ pub fn activeTabLocation(model: *const Model) ?core.TabLocation {
 pub fn activePaneConst(model: *const Model, pane_id: core.PaneId) ?*const AgentPane {
     const slot = model.tabs.activeSlot() orelse return null;
     return model.panes.findInConst(model.tabs.location[slot].tab_id, pane_id);
-}
-
-/// Returns the runtime workspace currently projected by this client.
-///
-/// ```zig
-/// const workspace = model.workspaceLocation() orelse return;
-/// ```
-pub fn workspaceLocation(model: *const Model) ?core.WorkspaceLocation {
-    return model.workspace;
 }
 
 /// The canonical name of the workspace this client shows.

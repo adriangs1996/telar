@@ -63,9 +63,9 @@ test "native startup sends the ordered bootstrap without graphics credits or a s
     try std.testing.expect(session.gui.started);
     try std.testing.expect(app.model.startup.phase == .opening);
     try std.testing.expect(app.runtime_transport.receive_pending);
-    try std.testing.expectEqualDeep(colors, app.model.hostCapabilities().terminal_colors);
-    try std.testing.expect(app.model.hostCapabilities().agent_panes);
-    try std.testing.expectEqual(data.environment.Support.supported, app.model.hostCapabilities().pointer_pixels);
+    try std.testing.expectEqualDeep(colors, app.model.host.host_capabilities.terminal_colors);
+    try std.testing.expect(app.model.host.host_capabilities.agent_panes);
+    try std.testing.expectEqual(data.environment.Support.supported, app.model.host.host_capabilities.pointer_pixels);
     const graphics = try core.decodeClient(session.pending.?);
     try std.testing.expect(graphics == .configure_graphics);
     try std.testing.expect(!graphics.configure_graphics.shared);
@@ -379,8 +379,8 @@ test "native resize publishes exact grid pixels and preserves runtime-owned pane
     try session.settle();
     const regions = Regions.calculate(size.cols, size.rows);
     try std.testing.expectEqual(regions.workbench, session.gui.region.area);
-    try std.testing.expectEqual(size, session.gui.app.model.hostSize());
-    try std.testing.expectEqual(size.cell_width_px, session.gui.app.model.hostSize().cell_width_px);
+    try std.testing.expectEqual(size, session.gui.app.model.host.host_size);
+    try std.testing.expectEqual(size.cell_width_px, session.gui.app.model.host.host_size.cell_width_px);
     try std.testing.expect(session.resize_count > 0);
     try std.testing.expect(session.gui.app.model.panes.find(Session.pane_id) != null);
 }

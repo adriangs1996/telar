@@ -25,7 +25,7 @@ test "named theme reload changes chrome terminal colors and cursor without repla
     try std.testing.expectEqualDeep(session.gui.theme.terminal, session.gui.renderer.theme);
     try std.testing.expectEqual(pixels, session.gui.renderer.atlas.?.pixels.ptr);
     try std.testing.expectEqual(version, session.gui.renderer.atlas_version);
-    try std.testing.expectEqual(session.gui.renderer.theme.palette, session.gui.app.model.hostCapabilities().terminal_colors.palette.?);
+    try std.testing.expectEqual(session.gui.renderer.theme.palette, session.gui.app.model.host.host_capabilities.terminal_colors.palette.?);
 
     try fixture.write("config.lua", "return { api_version = 2, theme = { base = 'catppuccin', terminal = { cursor_color = '#123456' } } }");
     try fixture.wait();
@@ -115,7 +115,7 @@ test "GUI theme and cursor reload reuse glyph storage and publish terminal color
     try std.testing.expectEqual(version, session.gui.renderer.atlas_version);
     try std.testing.expectEqual(.bar, session.gui.renderer.config.cursor.style);
     try std.testing.expect(!session.gui.renderer.config.cursor.blink);
-    try std.testing.expectEqual([3]u8{ 0x23, 0x45, 0x67 }, session.gui.app.model.hostCapabilities().terminal_colors.background);
+    try std.testing.expectEqual([3]u8{ 0x23, 0x45, 0x67 }, session.gui.app.model.host.host_capabilities.terminal_colors.background);
     try std.testing.expectApproxEqAbs(
         @as(f32, 35.0 / 255.0),
         session.gui.renderer.background.r,
@@ -208,7 +208,7 @@ test "GUI native resources follow an adopted generation when downstream delivery
     }
 
     try std.testing.expectError(error.ClientOutboxFull, reload.apply(session.gui, &session.gui.renderer));
-    try std.testing.expectEqual(@as(u64, 2), session.gui.app.model.configurationGeneration());
+    try std.testing.expectEqual(@as(u64, 2), session.gui.app.model.configuration_generation);
     try std.testing.expectEqual(@as(u64, 2), session.gui.app.lua_generation.?.number);
     try std.testing.expectEqual(@as(f32, 21), session.gui.renderer.config.font.size);
     try std.testing.expectEqual(@as(u16, 21), session.gui.renderer.atlas.?.pixel_height);
@@ -254,7 +254,7 @@ test "chrome scale reload enlarges chrome text without resizing the PTY or the a
     const reload = &session.gui.driver.configuration;
     try session.receiveFrame(1);
     try present(session);
-    const size = session.gui.app.model.hostSize();
+    const size = session.gui.app.model.host.host_size;
     const resize_count = session.resize_count;
     const pixels = session.gui.renderer.atlas.?.pixels.ptr;
     const before = session.gui.renderer.chrome;
@@ -292,7 +292,7 @@ test "font weight reload keeps PTY geometry and rebuilds only for effective macO
     const reload = &session.gui.driver.configuration;
     try session.receiveFrame(1);
     try present(session);
-    const size = session.gui.app.model.hostSize();
+    const size = session.gui.app.model.host.host_size;
     const resize_count = session.resize_count;
     for ([_][]const u8{
         "thicken_strength = 0",
@@ -326,7 +326,7 @@ test "window reload reuses the atlas and padding publishes grid size without its
     try present(session);
     const pixels = session.gui.renderer.atlas.?.pixels.ptr;
     const version = session.gui.renderer.atlas_version;
-    const previous_size = session.gui.app.model.hostSize();
+    const previous_size = session.gui.app.model.host.host_size;
     try fixture.write("config.lua", "return { api_version = 2, gui = { window = { background_opacity = 0.45, background_blur = true, titlebar = false } } }");
     try fixture.wait();
     try std.testing.expect(reload.prepared == null);
@@ -344,7 +344,7 @@ test "window reload reuses the atlas and padding publishes grid size without its
     try session.gui.resize(size, session.gui.renderer.theme);
     try present(session);
     try std.testing.expect(size.cols < previous_size.cols and size.rows < previous_size.rows);
-    try std.testing.expectEqual(size, session.gui.app.model.hostSize());
+    try std.testing.expectEqual(size, session.gui.app.model.host.host_size);
     const pane_origin = session.gui.region.area;
     const pixels_origin = session.gui.renderer.metrics.rect(session.gui.renderer.origin, pane_origin);
     const retained = session.gui.renderer.retained.at(
@@ -380,7 +380,7 @@ test "blur radius and titlebar reload preserve the atlas and geometry through va
     const pixels = session.gui.renderer.atlas.?.pixels.ptr;
     const version = session.gui.renderer.atlas_version;
     const shape_calls = session.gui.renderer.atlas.?.shape_calls;
-    const size = session.gui.app.model.hostSize();
+    const size = session.gui.app.model.host.host_size;
     const resizes = session.resize_count;
     for ([_]u8{ 1, 40, 255, 0 }, [_]bool{ false, true, false, true }) |radius, titlebar| {
         var source: [256]u8 = undefined;

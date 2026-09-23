@@ -87,7 +87,7 @@ test "runtime reads own one token and do not rearm after shutdown" {
         else => return error.UnexpectedEvent,
     }
     try std.testing.expect(client.runtime_transport.receive_pending);
-    try std.testing.expectEqual(@as(u64, 1), client.model.systemMetrics().?.runtime_revision);
+    try std.testing.expectEqual(@as(u64, 1), client.model.system_metrics.?.runtime_revision);
 
     try harness.peer.send(io, try core.encodeRuntimeStopping(&payload));
     switch (try TerminalClient.of(client).inbox.receive()) {
@@ -371,9 +371,9 @@ test "restored client layout controls the initial attach geometry" {
     _ = try client.handleServerMessage(try core.decodeServer(payload));
     try harness.settle();
 
-    try std.testing.expect(client.model.sidebarVisible());
-    try std.testing.expectEqual(@as(u16, 50), client.model.sidebarWidth());
-    try std.testing.expect(client.model.workspaceListCollapsed());
+    try std.testing.expect(client.model.sidebar_visible);
+    try std.testing.expectEqual(@as(u16, 50), client.model.sidebar_width);
+    try std.testing.expect(client.model.workspace_list_collapsed);
     try std.testing.expectEqual(@as(u16, 50), TerminalClient.of(client).view.regions.sidebar.w);
     try std.testing.expectEqual(@as(u16, 50), TerminalClient.of(client).view.regions.top.x);
     try std.testing.expectEqual(pane_id, client.model.saved_layouts.find(location).?.pane_id);
@@ -413,8 +413,8 @@ test "sidebar preferences survive when retained pane layouts become stale" {
     _ = try client.handleServerMessage(try core.decodeServer(payload));
     try harness.settle();
 
-    try std.testing.expectEqual(@as(u16, 51), client.model.sidebarWidth());
-    try std.testing.expect(client.model.workspaceListCollapsed());
+    try std.testing.expectEqual(@as(u16, 51), client.model.sidebar_width);
+    try std.testing.expect(client.model.workspace_list_collapsed);
     const open = try harness.nextClientMessage(&buffer);
     try std.testing.expect(open == .open_pane);
     try std.testing.expect(open.open_pane.target == .default);

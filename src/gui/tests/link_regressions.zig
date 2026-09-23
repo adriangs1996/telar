@@ -68,7 +68,7 @@ test "native link gesture remains cancelled after switching tabs away and back" 
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
     const second: core.TabId = @enumFromInt(2);
-    _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, .size = model.hostSize() });
+    _ = try model.createTab(.{ .created = .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, .size = model.host.host_size });
     _ = try model.selectTab(.{ .tab_id = Session.location.tab_id });
     try fixture.present();
     try fixture.send(fixture.event(1));
@@ -209,7 +209,7 @@ test "native displayed link previews consume hidden URL clicks until replacement
     try fixture.send(fixture.event(6));
     try fixture.present();
     const preview = gui.pointer.hover.shown_preview.?;
-    const size = gui.app.model.hostSize();
+    const size = gui.app.model.host.host_size;
     var pointer = fixture.event(6);
     pointer.x = @as(f64, @floatFromInt(preview.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[0])) + 1;
     pointer.y = @as(f64, @floatFromInt(preview.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[1])) + 1;
@@ -265,7 +265,7 @@ test "native preview coverage survives pointer leave failed presentation and lat
 
     const pane = gui.app.model.panes.find(Session.pane_id).?;
     pane.mouse = .{ .tracking = .button, .sgr = true };
-    const size = gui.app.model.hostSize();
+    const size = gui.app.model.host.host_size;
     var pointer = fixture.event(1);
     pointer.mods = 0;
     pointer.x = @as(f64, @floatFromInt(preview.x)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[0])) + 1;
@@ -303,7 +303,7 @@ test "native hover computes absolute rows without adding the host offset to hist
     try fixture.present();
     const view = data.tab_layout.view(&gui.app.model, tab, second, gui.region.area).?;
     try std.testing.expect(view.content.y > pane.buffer.h);
-    const size = gui.app.model.hostSize();
+    const size = gui.app.model.host.host_size;
     var pointer = fixture.event(6);
     pointer.x = @as(f64, @floatFromInt(view.content.x + 2)) * size.cell_width_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[0])) + 1;
     pointer.y = @as(f64, @floatFromInt(view.content.y)) * size.cell_height_px + @as(f64, @floatFromInt(fixture.session.gui.renderer.origin[1])) + 1;

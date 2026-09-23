@@ -46,7 +46,7 @@ pub fn slice(self: *const Probe) []const Event {
 
 fn record(self: *Probe, event: Event) !void {
     if (self.expected_size) |size| {
-        self.committed = self.committed and std.meta.eql(size, self.app.model.hostSize());
+        self.committed = self.committed and std.meta.eql(size, self.app.model.host.host_size);
     }
 
     self.events[self.len] = event;
@@ -59,20 +59,20 @@ fn record(self: *Probe, event: Event) !void {
 fn configureSidebar(context: *anyopaque, input: client.SidebarRendererInput) !void {
     const self: *Probe = @ptrCast(@alignCast(context));
     self.sidebar = input;
-    self.committed = self.committed and input.support == self.app.model.hostCapabilities().images;
+    self.committed = self.committed and input.support == self.app.model.host.host_capabilities.images;
     try self.record(.sidebar);
 }
 
 fn resizePresenter(context: *anyopaque, cols: u16, rows: u16) !void {
     const self: *Probe = @ptrCast(@alignCast(context));
-    const size = self.app.model.hostSize();
+    const size = self.app.model.host.host_size;
     self.committed = self.committed and cols == size.cols and rows == size.rows;
     try self.record(.presenter);
 }
 
 fn resizeView(context: *anyopaque, cols: u16, rows: u16) !void {
     const self: *Probe = @ptrCast(@alignCast(context));
-    const size = self.app.model.hostSize();
+    const size = self.app.model.host.host_size;
     self.committed = self.committed and cols == size.cols and rows == size.rows;
     try self.record(.view);
 }

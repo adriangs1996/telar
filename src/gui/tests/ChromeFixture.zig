@@ -33,7 +33,7 @@ pub fn deinit(fixture: *Fixture) void {
 pub fn resize(fixture: *Fixture, cols: u16, rows: u16) !void {
     const renderer = &fixture.session.gui.renderer;
     const gui = fixture.session.gui;
-    const reserved = SidebarBand.resolve(gui.sidebar.request(gui.app.model.sidebarVisible()), .{ .width = 65535, .cell_width = renderer.metrics.cell_width }).reserved();
+    const reserved = SidebarBand.resolve(gui.sidebar.request(gui.app.model.sidebar_visible), .{ .width = 65535, .cell_width = renderer.metrics.cell_width }).reserved();
     try fixture.measure(.{ .width = @as(u32, renderer.metrics.cell_width) * cols + reserved, .height = @as(u32, renderer.metrics.cell_height) * rows + renderer.chrome.vertical(), .scale = 1 });
 }
 

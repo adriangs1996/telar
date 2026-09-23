@@ -205,7 +205,7 @@ test "split recovery preserves model state when its resize cannot be queued" {
         },
     ));
     try std.testing.expect(!app.model.request_lifecycle.tracker.has(.pane_operation));
-    try std.testing.expectEqual(@as(u8, 0), app.model.notificationSnapshot().count);
+    try std.testing.expectEqual(@as(u8, 0), app.model.notification_center.count);
     try std.testing.expectEqualDeep(before, app.model.version());
 }
 

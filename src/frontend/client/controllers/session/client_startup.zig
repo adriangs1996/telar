@@ -41,7 +41,7 @@ pub fn advance(client: *client_module.AttachedClient) !bool {
         try client.runtime_transport.bootstrap(.{
             .graphics_shared = client_module.supportsSharedMemory(),
             .client_identity = client.client_identity,
-            .terminal_colors = client.model.hostCapabilities().terminal_colors,
+            .terminal_colors = client.model.host.host_capabilities.terminal_colors,
         });
         client.model.startup.phase = .opening;
         try client.flushGraphicsCredits();

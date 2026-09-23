@@ -141,14 +141,14 @@ test "reported pane focus derives protocol edges outside presentation versions" 
     try std.testing.expectEqualDeep(ReportedPaneFocusType{
         .pane_id = second,
         .focus_events = true,
-    }, model.reportedPaneFocus().?);
+    }, model.reported_pane_focus.?);
     try std.testing.expectEqualDeep(version, model.version());
 
     model.panes.find(second).?.input_modes.focus_events = false;
     const opted_out = model.syncReportedPaneFocus().?;
     try std.testing.expect(opted_out.focus_out == null);
     try std.testing.expect(opted_out.focus_in == null);
-    try std.testing.expect(!model.reportedPaneFocus().?.focus_events);
+    try std.testing.expect(!model.reported_pane_focus.?.focus_events);
     try std.testing.expectEqualDeep(version, model.version());
 }
 
@@ -169,7 +169,7 @@ test "reported pane focus distinguishes intentional clear from stale retirement"
     pane.attached = false;
     const clear = model.clearReportedPaneFocus().?;
     try std.testing.expect(clear.focus_out == null);
-    try std.testing.expect(model.reportedPaneFocus() == null);
+    try std.testing.expect(model.reported_pane_focus == null);
     try std.testing.expect(model.clearReportedPaneFocus() == null);
 
     _ = model.syncReportedPaneFocus().?;
@@ -202,7 +202,7 @@ test "pane paste captures one exact target and framing mode outside presentation
         .pane_id = pane_id,
         .bracketed_paste = true,
     }, session);
-    try std.testing.expectEqualDeep(session, model.panePasteSession().?);
+    try std.testing.expectEqualDeep(session, model.pane_paste.?);
     try std.testing.expect(model.panePasteActive());
     try std.testing.expect(model.beginPanePaste() == null);
     try std.testing.expectEqualDeep(version, model.version());

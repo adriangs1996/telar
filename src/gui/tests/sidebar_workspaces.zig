@@ -89,7 +89,7 @@ test "workspace changes reveal the selected row without rewinding manual scroll 
     try fixture.measure(.{ .width = 1100, .height = 500, .scale = 1 });
     const model = &fixture.session.gui.app.model;
     const last = workspaceId(core.max_workspace_list_entries - 1);
-    try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = last }, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.hostSize() });
+    try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = .{ .workspace = .{ .workspace = last }, .tab_id = Session.location.tab_id }, .size = fixture.session.gui.app.model.host.host_size });
     const projection = fixture.projection();
     try fixture.paint(projection);
     const hit = fixture.bandTarget(.{ .select_workspace = last }).?;
@@ -101,7 +101,7 @@ test "workspace changes reveal the selected row without rewinding manual scroll 
     const manual = fixture.chrome.sidebar.projects.scroll;
     try fixture.paint(projection);
     try std.testing.expectEqual(manual, fixture.chrome.sidebar.projects.scroll);
-    try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = Session.location, .size = fixture.session.gui.app.model.hostSize() });
+    try data.workspace_handoff.replaceWithRoot(model, .{ .pane_id = Session.pane_id, .location = Session.location, .size = fixture.session.gui.app.model.host.host_size });
     try fixture.paint(fixture.projection());
     try std.testing.expectEqual(@as(u16, 0), fixture.chrome.sidebar.projects.scroll);
     try std.testing.expect(fixture.bandTarget(.{ .select_workspace = workspaceId(0) }) != null);
@@ -219,5 +219,5 @@ fn projects(fixture: *Fixture, count: usize) !void {
     }
 
     const model = &fixture.session.gui.app.model;
-    _ = try model.reconcileWorkspaceList(.{ .revision = model.workspaceListSnapshot().revision + 1, .entries = entries[0..count] });
+    _ = try model.reconcileWorkspaceList(.{ .revision = model.workspace_list_snapshot.revision + 1, .entries = entries[0..count] });
 }

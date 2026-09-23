@@ -18,13 +18,13 @@ test "host resources suppress repeated and invalid geometry before ports" {
 
     try std.testing.expect(try app.applyHostUpdate(
         .{
-            .size = app.model.hostSize(),
-            .capabilities = app.model.hostCapabilities(),
+            .size = app.model.host.host_size,
+            .capabilities = app.model.host.host_capabilities,
         },
     ) == null);
     try std.testing.expectError(error.InvalidTerminalSize, app.applyHostUpdate(.{
         .size = .{ .cols = 80, .rows = 0 },
-        .capabilities = app.model.hostCapabilities(),
+        .capabilities = app.model.host.host_capabilities,
     }));
     try std.testing.expectEqualDeep(version, app.model.version());
     try std.testing.expectEqual(@as(usize, 0), probe.len);
@@ -50,7 +50,7 @@ test "host resources select grid and cell changes independently in order" {
         probe.expected_size = size;
         probe.bind();
         defer probe.restore();
-        var capabilities = app.model.hostCapabilities();
+        var capabilities = app.model.host.host_capabilities;
         capabilities.cell_width_px = size.cell_width_px;
         capabilities.cell_height_px = size.cell_height_px;
 
@@ -91,7 +91,7 @@ test "host resources stop at each failed resize port and retain the commit" {
         probe.expected_size = size;
         probe.bind();
         defer probe.restore();
-        var capabilities = app.model.hostCapabilities();
+        var capabilities = app.model.host.host_capabilities;
         capabilities.cell_width_px = size.cell_width_px;
         capabilities.cell_height_px = size.cell_height_px;
 
@@ -103,8 +103,8 @@ test "host resources stop at each failed resize port and retain the commit" {
         ));
         try std.testing.expectEqualSlices(Probe.Event, events, probe.slice());
         try std.testing.expect(probe.committed);
-        try std.testing.expectEqualDeep(size, app.model.hostSize());
-        try std.testing.expectEqualDeep(capabilities, app.model.hostCapabilities());
+        try std.testing.expectEqualDeep(size, app.model.host.host_size);
+        try std.testing.expectEqualDeep(capabilities, app.model.host.host_capabilities);
     }
 }
 
@@ -124,7 +124,7 @@ test "host resources configure graphics before invalidating and suppress repeate
     );
     try std.testing.expectEqualSlices(Probe.Event, &.{ .sidebar, .invalidate }, probe.slice());
     try std.testing.expect(probe.committed);
-    _ = try app.reconcileHostCapabilities(app.model.hostCapabilities().withObservation(
+    _ = try app.reconcileHostCapabilities(app.model.host.host_capabilities.withObservation(
         .{
             .pointer_pixels = .unsupported,
         },
@@ -136,7 +136,7 @@ test "host resources configure graphics before invalidating and suppress repeate
             .images = .supported,
         },
     ) == null);
-    try std.testing.expect(try app.reconcileHostCapabilities(app.model.hostCapabilities()) == null);
+    try std.testing.expect(try app.reconcileHostCapabilities(app.model.host.host_capabilities) == null);
     try std.testing.expectEqualDeep(version, app.model.version());
     try std.testing.expectEqual(@as(usize, 2), probe.len);
 }
@@ -158,5 +158,5 @@ test "host resources retain graphics capabilities when sidebar setup fails" {
     ));
     try std.testing.expectEqualSlices(Probe.Event, &.{.sidebar}, probe.slice());
     try std.testing.expect(probe.committed);
-    try std.testing.expectEqual(data.environment.Support.supported, app.model.hostCapabilities().images);
+    try std.testing.expectEqual(data.environment.Support.supported, app.model.host.host_capabilities.images);
 }

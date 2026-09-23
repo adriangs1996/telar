@@ -160,7 +160,7 @@ test "hiding native pane progress retires its retained motion and stops repainti
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
     const second: core.TabId = @enumFromInt(2);
-    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, model.hostSize());
+    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, model.host.host_size);
     _ = data.tab_selection.select(model, Session.location.tab_id);
     const pane = model.panes.find(Session.pane_id).?;
     _ = pane.setProgress(.{ .pane_id = Session.pane_id, .state = .indeterminate });

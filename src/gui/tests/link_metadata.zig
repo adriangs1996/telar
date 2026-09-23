@@ -78,7 +78,7 @@ test "native wrapped URLs underline both physical rows and require a VT soft wra
     pane.text_metadata.replace(builder.finish(.complete));
     try fixture.present();
     var event = fixture.event(6);
-    event.y += gui.app.model.hostSize().cell_height_px;
+    event.y += gui.app.model.host.host_size.cell_height_px;
     try fixture.send(event);
     const hit = &gui.pointer.hover.link.?;
     try std.testing.expectEqualStrings("https://e/path", hit.match.target.uri());

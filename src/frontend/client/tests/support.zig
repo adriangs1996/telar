@@ -17,7 +17,7 @@ pub fn clientEventResourcesForTest(heap: *const core.Heap) ResourcesType {
 }
 
 pub fn reportedPaneId(client: *const client_module.AttachedClient) ?core.PaneId {
-    const reported = client.model.reportedPaneFocus() orelse return null;
+    const reported = client.model.reported_pane_focus orelse return null;
 
     return reported.pane_id;
 }

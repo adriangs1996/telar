@@ -160,7 +160,7 @@ test "native tabs always retain the active tab when their row overflows" {
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
     const second_id: core.TabId = @enumFromInt(2);
-    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "long second tab name", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
+    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "long second tab name", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.host.host_size);
     _ = data.tab_selection.select(model, second_id);
     try fixture.showSidebar(false);
     try fixture.resize(12, 4);
@@ -384,7 +384,7 @@ test "native tab hit maps change only after their reordered frame is delivered" 
     defer fixture.deinit();
     const model = &fixture.session.gui.app.model;
     const second_id: core.TabId = @enumFromInt(2);
-    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.hostSize());
+    _ = try data.tab_creation.add(model, .{ .location = .{ .workspace = Session.location.workspace, .tab_id = second_id }, .position = 1, .label = "second", .root_pane_id = @enumFromInt(20) }, fixture.session.gui.app.model.host.host_size);
     _ = data.tab_selection.select(model, Session.location.tab_id);
     try fixture.prepare(fixture.projection());
     try std.testing.expectEqual(@as(usize, 0), fixture.chrome.presented().hits.len);

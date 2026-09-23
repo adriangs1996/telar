@@ -10,7 +10,7 @@ test "proxy status reconciliation commits only changed runtime state" {
     defer model.deinit();
 
     try std.testing.expect(model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = false }) == null);
-    try std.testing.expect(!model.proxyTlsActive());
+    try std.testing.expect(!model.proxy_tls_active);
     try std.testing.expectEqualDeep(VersionType{}, model.version());
 
     const enabled = model.reconcileProxyStatus(.{ .active = true, .scope = .wildcard, .system_trusted = false }).?;
@@ -20,7 +20,7 @@ test "proxy status reconciliation commits only changed runtime state" {
     try std.testing.expectEqual(core.ProxyScope.wildcard, enabled.scope);
     try std.testing.expectEqual(@as(u64, 0), enabled.proxy_status_revision_before);
     try std.testing.expectEqual(@as(u64, 1), enabled.proxy_status_revision);
-    try std.testing.expect(model.proxyTlsActive());
+    try std.testing.expect(model.proxy_tls_active);
     try std.testing.expectEqual(VersionType{ .proxy_status = 1 }, model.version());
     try std.testing.expect(model.reconcileProxyStatus(.{ .active = true, .scope = .wildcard, .system_trusted = false }) == null);
     try std.testing.expectEqual(VersionType{ .proxy_status = 1 }, model.version());
@@ -31,14 +31,14 @@ test "proxy status reconciliation commits only changed runtime state" {
     try std.testing.expect(!disabled.active);
     try std.testing.expectEqual(@as(u64, 1), disabled.proxy_status_revision_before);
     try std.testing.expectEqual(@as(u64, 2), disabled.proxy_status_revision);
-    try std.testing.expect(!model.proxyTlsActive());
+    try std.testing.expect(!model.proxy_tls_active);
     try std.testing.expectEqual(VersionType{ .proxy_status = 2 }, model.version());
 
     const trusted = model.reconcileProxyStatus(.{ .active = false, .scope = .exact, .system_trusted = true }).?;
 
     try std.testing.expect(!trusted.previous_system_trusted);
     try std.testing.expect(trusted.system_trusted);
-    try std.testing.expect(model.proxySystemTrusted());
+    try std.testing.expect(model.proxy_system_trusted);
     try std.testing.expectEqual(VersionType{ .proxy_status = 3 }, model.version());
 }
 
@@ -61,7 +61,7 @@ test "system metrics reconciliation owns the latest replica and one isolated rev
         .cpu_percent = 25,
         .memory_used_decigib = 123,
         .battery_percent = null,
-    }, model.systemMetrics().?);
+    }, model.system_metrics.?);
 
     try std.testing.expect((try model.reconcileSystemMetrics(.{
         .runtime_revision = 3,
@@ -79,7 +79,7 @@ test "system metrics reconciliation owns the latest replica and one isolated rev
     })).?;
 
     try std.testing.expectEqual(@as(u64, 2), second.system_metrics_revision);
-    try std.testing.expectEqual(@as(?u8, 80), model.systemMetrics().?.battery_percent);
+    try std.testing.expectEqual(@as(?u8, 80), model.system_metrics.?.battery_percent);
     try std.testing.expectEqual(VersionType{ .system_metrics = 2 }, model.version());
 }
 
@@ -113,7 +113,7 @@ test "rejected system metrics preserve the latest replica and version" {
         .battery_percent = 101,
     }));
 
-    try std.testing.expectEqualDeep(initial, model.systemMetrics().?);
+    try std.testing.expectEqualDeep(initial, model.system_metrics.?);
     try std.testing.expectEqual(VersionType{ .system_metrics = 1 }, model.version());
 }
 
@@ -133,10 +133,10 @@ test "notification lifecycle is model-owned and versioned by semantic change" {
     @memset(&title, 'x');
 
     try std.testing.expectEqual(VersionType{ .notifications = 1 }, model.version());
-    try std.testing.expectEqualStrings("Ready", model.notificationSnapshot().itemAt(0).?.title());
+    try std.testing.expectEqualStrings("Ready", model.notification_center.itemAt(0).?.title());
     try std.testing.expectEqual(
         started_ns + std.time.ns_per_s / 60,
-        model.nextNotificationDeadline(started_ns, std.time.ns_per_s / 60).?,
+        model.notification_center.nextDeadline(started_ns, std.time.ns_per_s / 60).?,
     );
 
     const activation_ns = started_ns + model_data.notifications.transition_duration_ns;
@@ -151,7 +151,7 @@ test "notification lifecycle is model-owned and versioned by semantic change" {
     const removal = model.advanceNotifications(activation_ns + model_data.notifications.transition_duration_ns).?;
 
     try std.testing.expectEqual(@as(u64, 3), removal.notifications_revision);
-    try std.testing.expect(!model.notificationSnapshot().hasItems());
+    try std.testing.expect(!model.notification_center.hasItems());
     try std.testing.expectEqual(VersionType{ .notifications = 3 }, model.version());
 
     const second = model.publishNotification(1000, .{ .title = "Saved", .message = "Done" });
@@ -192,8 +192,8 @@ test "agent reconciliation owns labels versions and existing status transitions"
     try std.testing.expectEqual(@as(u64, 0), first.agent_revision_before);
     try std.testing.expectEqual(@as(u64, 1), first.agent_revision);
     try std.testing.expectEqual(VersionType{ .agents = 1 }, model.version());
-    try std.testing.expectEqualStrings("first", model.agentSnapshot().find(key).?.sessionTitle());
-    try std.testing.expect(model.knowsAgent(key));
+    try std.testing.expectEqualStrings("first", model.agent_snapshot.find(key).?.sessionTitle());
+    try std.testing.expect(model.agent_snapshot.find(key) != null);
     try std.testing.expect(model.sidebarAnimationActive());
 
     agent.session_title = "second";
@@ -236,7 +236,7 @@ test "sidebar animation advances its own revision only while active" {
     _ = try model.reconcileAgentSnapshot(.{ .revision = 1, .agents = &.{agent} });
 
     try std.testing.expect(model.advanceSidebarAnimation() == null);
-    try std.testing.expectEqual(@as(u8, 0), model.sidebarAnimationFrame());
+    try std.testing.expectEqual(@as(u8, 0), model.sidebar_animation_frame);
     try std.testing.expectEqual(VersionType{ .agents = 1 }, model.version());
 
     agent.status = .working;
@@ -248,7 +248,7 @@ test "sidebar animation advances its own revision only while active" {
     try std.testing.expectEqual(@as(u64, 1), first.sidebar_animation_revision);
     try std.testing.expectEqual(@as(u8, 2), second.frame);
     try std.testing.expectEqual(@as(u64, 2), second.sidebar_animation_revision);
-    try std.testing.expectEqual(@as(u8, 2), model.sidebarAnimationFrame());
+    try std.testing.expectEqual(@as(u8, 2), model.sidebar_animation_frame);
     try std.testing.expectEqual(VersionType{
         .agents = 2,
         .sidebar_animation = 2,
@@ -281,8 +281,8 @@ test "rejected agent reconciliation preserves replica and version" {
     }));
 
     try std.testing.expectEqual(VersionType{ .agents = 1 }, model.version());
-    try std.testing.expectEqual(@as(u64, 1), model.agentSnapshot().revision);
-    try std.testing.expect(model.knowsAgent(agent.key));
+    try std.testing.expectEqual(@as(u64, 1), model.agent_snapshot.revision);
+    try std.testing.expect(model.agent_snapshot.find(agent.key) != null);
 }
 
 test "agent navigation and focused attachments derive from committed client state" {

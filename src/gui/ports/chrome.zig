@@ -42,7 +42,7 @@ fn resize(context: *anyopaque, cols: u16, rows: u16) !void {
 
 fn sidebarLayout(context: *anyopaque, _: bool, _: u16) void {
     const gui = host(context);
-    const size = gui.app.model.hostSize();
+    const size = gui.app.model.host.host_size;
     gui.resizeRegion(size.cols, size.rows);
 }
 

@@ -99,7 +99,7 @@ pub fn apply(reload: *Reload, gui: *GuiClient, renderer: *Renderer) !bool {
 
     const config = if (result == .loaded) result.loaded.generation.snapshot.gui else null;
     const theme = if (result == .loaded) result.loaded.generation.snapshot.resolveTheme(
-        gui.app.model.hostCapabilities().appearance,
+        gui.app.model.host.host_capabilities.appearance,
         if (gui.app.options.theme_locked) gui.app.options.theme else null,
     ).terminal else null;
     const generation = if (result == .loaded) result.loaded.generation.number else null;
