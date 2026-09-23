@@ -1,0 +1,5 @@
+//! Policies compared by Trial.draw; admission is local to the experiment.
+const std = @import("std");
+
+pub const Kind = enum { cells, always, stable, retained };
+pub const count = std.meta.tags(Kind).len;

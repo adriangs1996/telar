@@ -300,6 +300,7 @@ pub fn startRuntimeRead(self: *AttachedClient) !void {
 /// if (try self.receiveRuntime(result)) |status| return status;
 /// ```
 pub fn receiveRuntime(self: *AttachedClient, result: anyerror!*const data.RuntimeMessage) !?u8 {
+    core.profiling.add(.client_receive, 1);
     core.mark(self.io, .client_frame);
     const received = try self.runtime_transport.completeRead(result);
     self.telemetry.recordMessage(received);
@@ -4746,6 +4747,9 @@ fn completeTabMove(self: *AttachedClient, moved: core.TabMoved) !data.Change {
 
 /// Applies validated cells and acknowledges ownership before host resources.
 fn applyPaneFrame(self: *AttachedClient, frame: core.FrameView) !data.PaneFrameOutcome {
+    core.profiling.add(.client_apply_frame, 1);
+    const profile_started = core.profiling.start(self.io);
+    defer core.profiling.finish(self.io, .client_frame, profile_started);
     const started = core.now(self.io);
     const outcome = try self.model.applyPaneFrame(frame);
     switch (outcome) {

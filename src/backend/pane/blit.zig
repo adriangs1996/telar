@@ -42,6 +42,7 @@ const BlitPane = @import("BlitPane.zig");
 /// _ = blit(.{ .buffer = buffer, .area = area, .terminal = terminal, .state = state, .options = options });
 /// ```
 pub fn blit(operation: Operation) Stats {
+    core.profiling.add(.runtime_blit, 1);
     const b = operation.buffer;
     const area = operation.area;
     const terminal = operation.terminal;

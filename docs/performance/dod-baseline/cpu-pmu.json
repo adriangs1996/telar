@@ -1,0 +1,211 @@
+{
+  "pmu": {
+    "mode": "bottlenecks",
+    "intervals": 5175,
+    "counted_cycles": 9371232513.0,
+    "cycle_weighted_fractions": {
+      "Instruction Delivery Bottleneck": 0.03657494242805196,
+      "Discarded Bottleneck": 0.07360890593889644,
+      "Instruction Processing Bottleneck": 0.31841989377585345,
+      "Useful": 0.5713962558646523
+    },
+    "raw_events": [
+      "Cycles",
+      "Discarded Bottleneck",
+      "Instruction Delivery Bottleneck",
+      "Instruction Processing Bottleneck",
+      "Useful"
+    ],
+    "scope": "Whole CPU probe process, including setup, warmup, all workloads and teardown.",
+    "limitation": "This mode did not export L1D/LLC misses, instructions or bytes read from DRAM. No cache miss rate or IPC is derived."
+  },
+  "cpu": {
+    "running_samples": 2512,
+    "sampled_weight_ns": 2512000000,
+    "leaf_weight_ns": {
+      "ProfilingProbe.terminal": 999000000,
+      "text.GlyphAtlas.paint": 200000000,
+      "text.ShapingCache.find": 138000000,
+      "change_review.DiffLines.next": 138000000,
+      "widgets.DiffPaint.layout": 125000000,
+      "text.GlyphAtlas.place": 122000000,
+      "unicode.grapheme.graphemeWidth__anon_39428": 120000000,
+      "text.GlyphAtlas.slot": 72000000,
+      "text.ShapingCache.matches": 71000000,
+      "_platform_memmove": 70000000,
+      "change_review.Paint.after": 57000000,
+      "hash.wyhash.Wyhash.hash": 47000000,
+      "widgets.Canvas.textAt": 38000000,
+      "text.GlyphAtlas.penAdvance": 30000000,
+      "tt_cmap4_char_map_binary": 30000000,
+      "mem.findPos__anon_17667": 25000000,
+      "ui.GraphemeIterator.next": 20000000,
+      "meta.eql__anon_16458": 17000000,
+      "render.cell_colors.withPalette": 14000000,
+      "widgets.interaction.Dispatcher.add": 14000000,
+      "DYLD-STUB$$memcpy": 13000000,
+      "OT::Layout::Common::Coverage::get_coverage(unsigned int) const": 11000000,
+      "__bzero": 9000000,
+      "widgets.MessageTextFlow.appendStyled": 9000000,
+      "render.QuadList.clipFrom": 9000000,
+      "text.GlyphAtlas.caretPositions": 8000000,
+      "render.TerminalRenderer.begin": 7000000,
+      "widgets.MessageTextFlow.appendUncached": 7000000,
+      "apply_forward(OT::hb_ot_apply_context_t*, OT::hb_ot_layout_lookup_accelerator_t const&, unsigned int)": 7000000,
+      "render.TerminalRenderer.measure": 4000000,
+      "text.FontSet.source": 4000000,
+      "widgets.interaction.ThreadTextGeometry.append": 4000000,
+      "OT::Layout::GPOS_impl::PairPosFormat2_4<OT::Layout::SmallTypes>::_apply(OT::hb_ot_apply_context_t*, bool) const": 4000000,
+      "_hb_ot_shape": 4000000,
+      "TT_RunIns": 3000000,
+      "text.GlyphAtlas.measure": 3000000,
+      "widgets.MessageTextFlow.paintFragment": 3000000,
+      "unicode.utf8Decode": 3000000,
+      "OT::ClassDef::get_class(unsigned int) const": 3000000,
+      "tt_cmap4_char_index": 3000000
+    },
+    "workload_ancestor_weight_ns": {
+      "ProfilingProbe.terminal": 1640000000,
+      "ProfilingProbe.review": 721000000,
+      "ProfilingProbe.conversation": 76000000,
+      "ProfilingProbe.run": 67000000,
+      "setup/dependency/other": 8000000
+    },
+    "limitation": "Sample weights, not measured calls or an application-wide ranking. Includes initialization and warmup."
+  },
+  "processing": {
+    "intervals": 4763,
+    "rows": 23815,
+    "exported_sums": {
+      "Cycles": 9351472741.0
+    },
+    "duration_weighted_fractions": {
+      "Executing": 0.935272153521687,
+      "Execution Latency": 0.04063653024243834,
+      "Critical L1D Cache Miss": 0.007530189968337937,
+      "Critical L1D Cache Miss While Executing": 0.01656112426666426
+    },
+    "scope": "Whole CPU probe, including setup, warmup, all cases and teardown."
+  },
+  "l1d_miss_sampling": {
+    "intervals": 3606,
+    "rows": 14424,
+    "exported_sums": {
+      "Cycles": 9335243098.0,
+      "L1D Cache Load Misses": 1450062145.0,
+      "L1D Cache Store Misses": 326833741.0,
+      "L1D TLB Misses": 37566948.0
+    },
+    "duration_weighted_fractions": {},
+    "scope": "Whole CPU probe, including setup, warmup, all cases and teardown.",
+    "retired_instruction_samples": {
+      "l1d_store_miss": {
+        "samples": 32607,
+        "leaf_samples": {
+          "_platform_memmove": 21846,
+          "ProfilingProbe.terminal": 7099,
+          "__bzero": 1623,
+          "render.TerminalRenderer.begin": 1071,
+          "widgets.interaction.Dispatcher.add": 151,
+          "text.GlyphAtlas.paint": 119,
+          "_platform_memset": 93,
+          "render.QuadList.clipFrom": 81,
+          "text.GlyphAtlas.place": 73,
+          "render.TerminalRenderer.measure": 56,
+          "panes.Pane.init": 56,
+          "text.ShapingCache.find": 48,
+          "hb_buffer_add_utf8": 42,
+          "ProfilingProbe.conversation": 36,
+          "ProfilingProbe.review": 23
+        },
+        "pc_samples": {
+          "0x186ddd408": 9848,
+          "0x186ddd434": 3936,
+          "0x186ddd43c": 3789,
+          "0x186ddd414": 3052,
+          "0x104249bac": 1799,
+          "0x186ddd070": 1621,
+          "0x10424a304": 1469,
+          "0x186ddd3b8": 1212,
+          "0x104249bb4": 1172,
+          "0x1042fb638": 1067
+        }
+      },
+      "l1d_load_miss": {
+        "samples": 144438,
+        "leaf_samples": {
+          "ProfilingProbe.terminal": 142128,
+          "_platform_memmove": 489,
+          "mem.findPos__anon_17667": 401,
+          "render.QuadList.clipFrom": 188,
+          "change_review.DiffLines.next": 132,
+          "change_review.Paint.after": 106,
+          "ProfilingProbe.review": 99,
+          "text.ShapingCache.find": 88,
+          "text.ShapingCache.matches": 86,
+          "text.GlyphAtlas.slot": 78,
+          "text.GlyphAtlas.penAdvance": 54,
+          "render.TerminalRenderer.begin": 43,
+          "ProfilingProbe.run": 43,
+          "apply_forward(OT::hb_ot_apply_context_t*, OT::hb_ot_layout_lookup_accelerator_t const&, unsigned int)": 43,
+          "text.GlyphAtlas.paint": 35
+        },
+        "pc_samples": {
+          "0x10424a234": 40915,
+          "0x104249054": 31490,
+          "0x104249bd4": 16071,
+          "0x10424a410": 5405,
+          "0x10424a3f8": 5326,
+          "0x10424a408": 5013,
+          "0x104249bec": 4791,
+          "0x10424913c": 3782,
+          "0x104249be0": 3538,
+          "0x104249be8": 3518
+        }
+      },
+      "l1d_tlb_miss": {
+        "samples": 3754,
+        "leaf_samples": {
+          "ProfilingProbe.terminal": 2982,
+          "render.TerminalRenderer.begin": 581,
+          "text.ShapingCache.matches": 37,
+          "text.ShapingCache.find": 27,
+          "__bzero": 25,
+          "render.TerminalRenderer.measure": 18,
+          "_platform_memmove": 8,
+          "_platform_memset": 7,
+          "text.GlyphAtlas.slot": 5,
+          "text.GlyphAtlas.paint": 4,
+          "panes.Pane.init": 4,
+          "apply_forward(OT::hb_ot_apply_context_t*, OT::hb_ot_layout_lookup_accelerator_t const&, unsigned int)": 4,
+          "void hb_ot_map_t::apply<GSUBProxy>(GSUBProxy const&, hb_ot_shape_plan_t const*, hb_font_t*, hb_buffer_t*) const": 3,
+          "hb_ucd_script(hb_unicode_funcs_t*, unsigned int, void*)": 3,
+          "ui.GraphemeIterator.next": 3
+        },
+        "pc_samples": {
+          "0x10424a234": 1525,
+          "0x104249054": 804,
+          "0x1042fb638": 579,
+          "0x10424a3f8": 178,
+          "0x10424a364": 115,
+          "0x10424a368": 78,
+          "0x10424a410": 76,
+          "0x10424a408": 61,
+          "0x186ddd070": 24,
+          "0x1042f6c14": 17
+        }
+      }
+    },
+    "core_samples": {
+      "CPU 5 (P Core)": 41253,
+      "CPU 7 (P Core)": 64183,
+      "CPU 6 (P Core)": 26376,
+      "CPU 4 (P Core)": 48879,
+      "CPU 2 (E Core)": 21,
+      "CPU 3 (E Core)": 80,
+      "CPU 1 (E Core)": 2,
+      "CPU 0 (E Core)": 5
+    },
+    "sample_limit": "Samples are not the exported event totals. No total load denominator, cache hit ratio, or DRAM byte estimate is available."
+  }
+}

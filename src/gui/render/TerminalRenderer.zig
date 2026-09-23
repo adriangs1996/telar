@@ -61,7 +61,12 @@ cursor_on: bool = true,
 focused: bool = true,
 
 pub fn init(allocator: std.mem.Allocator) Renderer {
-    return .{ .allocator = allocator, .quads = .init(allocator), .cell_quads = .init(allocator), .retained = .init(allocator) };
+    return .{
+        .allocator = allocator,
+        .quads = .init(allocator),
+        .cell_quads = .init(allocator),
+        .retained = .init(allocator),
+    };
 }
 
 /// Builds a replacement independently; callers swap it only after GPU consumers finish.
@@ -102,7 +107,18 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
 
     if (renderer.atlas == null or renderer.scale != viewport.scale) {
         const pixel_height: u16 = @intFromFloat(@round(renderer.config.font.scaledSize(viewport.scale)));
-        var replacement = try GlyphAtlas.init(renderer.allocator, .{ .font = renderer.font.bytes, .pixel_height = pixel_height, .face_index = renderer.font.match.face_index, .postscript = std.mem.sliceTo(&renderer.font.match.postscript, 0), .thicken = renderer.config.font.thicken, .thicken_strength = renderer.config.font.thicken_strength, .io = renderer.io });
+        var replacement = try GlyphAtlas.init(
+            renderer.allocator,
+            .{
+                .font = renderer.font.bytes,
+                .pixel_height = pixel_height,
+                .face_index = renderer.font.match.face_index,
+                .postscript = std.mem.sliceTo(&renderer.font.match.postscript, 0),
+                .thicken = renderer.config.font.thicken,
+                .thicken_strength = renderer.config.font.thicken_strength,
+                .io = renderer.io,
+            },
+        );
         errdefer replacement.deinit();
         try replacement.prepareFallbacks();
         var sprites = try SpritePage.init(renderer.allocator, SpritePage.cellFor(viewport.scale));
@@ -110,6 +126,7 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
         const natural_height: f32 = @floatFromInt(try replacement.lineHeight(pixel_height));
         const height = @round(natural_height * renderer.config.font.line_height);
         const width = @round(@as(f32, @floatFromInt(try replacement.cellWidth(pixel_height))) + renderer.config.font.letter_spacing * viewport.scale);
+
         if (height < 1 or height > 65535 or width < 1 or width > 65535) {
             return error.InvalidFontSpacing;
         }
@@ -146,23 +163,29 @@ pub fn measure(renderer: *Renderer, viewport: native.Viewport) !core.TerminalSiz
     const y = @min(@as(u32, @intFromFloat(@round(padding.y * viewport.scale))), (body_height -| renderer.metrics.cell_height) / 2);
     const sidebar = SidebarBand.resolve(renderer.sidebar_request, .{ .width = viewport.width, .cell_width = renderer.metrics.cell_width, .padding_x = x, .scale = viewport.scale });
     const left = if (sidebar.visible()) sidebar.reserved() else x;
+
     const size = try renderer.metrics.measure(.{
         .width = viewport.width -| left -| x,
         .height = body_height -| (2 * y),
         .scale = viewport.scale,
     });
+
     renderer.chrome = chrome;
     renderer.sidebar = sidebar;
     renderer.origin = .{ left, chrome.top_bar + y };
     renderer.viewport = .{ viewport.width, viewport.height };
     const cells = @as(usize, size.cols) * size.rows;
+
     if (cells > RetainedCells.max_cells) {
         return error.NativeCellBudgetExceeded;
     }
 
     try renderer.quads.reserve(frame_budget.quads(cells));
     try renderer.cell_quads.reserve(CellMesh.capacity);
-    try renderer.retained.resize(.{ size.cols, size.rows });
+    try renderer.retained.resize(.{
+        size.cols,
+        size.rows,
+    });
     return size;
 }
 
@@ -174,6 +197,7 @@ pub fn begin(renderer: *Renderer) void {
     renderer.repainted_cells = 0;
     const background = rgb(renderer.theme.background);
     const foreground = rgb(renderer.theme.foreground);
+
     if (renderer.last_theme == null or !renderer.theme.sameCells(renderer.last_theme.?)) {
         renderer.retained.invalidate();
     }
@@ -197,7 +221,12 @@ pub fn prepare(renderer: *Renderer, projection: client.Projection) !data.Present
         }
 
         const pane = model.findConst(view.pane_id) orelse continue;
-        try renderer.drawPane(.{ .pane = pane, .view = view, .copy = copy_selection.forPane(projection.copy, pane.id), .hide_cursor = projection.prompt != null });
+        try renderer.drawPane(.{
+            .pane = pane,
+            .view = view,
+            .copy = copy_selection.forPane(projection.copy, pane.id),
+            .hide_cursor = projection.prompt != null,
+        });
         commit.append(pane);
     }
 
@@ -227,6 +256,24 @@ const PanePaint = @import("PanePaint.zig");
 /// The Canvas terminal operation reuses retained cell meshes and cursor policy.
 /// Example: `try renderer.drawPane(paint);`
 pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
+    core.profiling.add(.gui_pane_draw, 1);
+    var visited: u64 = 0;
+    var ink_visited: u64 = 0;
+    var hits: u64 = 0;
+    var rebuilt: u64 = 0;
+    var item_calls: u64 = 0;
+    const quads_before = renderer.quads.items().len;
+
+    defer {
+        core.profiling.add(.gui_cell_visit, visited);
+        core.profiling.add(.gui_ink_visit, ink_visited);
+        core.profiling.add(.mesh_compare, visited);
+        core.profiling.add(.mesh_hit, hits);
+        core.profiling.add(.mesh_rebuild, rebuilt);
+        core.profiling.add(.mesh_items, item_calls);
+        core.profiling.add(.gui_quads, renderer.quads.items().len - quads_before);
+    }
+
     const pane = paint.pane;
     const area = paint.view.content;
     const rows = @min(area.h, pane.buffer.h);
@@ -242,12 +289,17 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
             const position: [2]u16 = .{ area.x + @as(u16, @intCast(col)), area.y + @as(u16, @intCast(row)) };
             const key: CellPaint = .{ .cell = cell, .rect = renderer.cellRect(.{ .x = position[0], .y = position[1], .w = @intCast(@min(@max(1, cell.width), cols - col)), .h = 1 }) };
             const mesh = renderer.retained.at(position);
+            visited += 1;
             if (!mesh.matches(key)) {
                 try renderer.paintCell(key);
                 mesh.replace(key, renderer.cell_quads.items());
                 renderer.repainted_cells += 1;
+                rebuilt += 1;
+            } else {
+                hits += 1;
             }
 
+            item_calls += 1;
             const background = mesh.items()[0];
             if (background.r != renderer.background.r or background.g != renderer.background.g or background.b != renderer.background.b) {
                 try renderer.quads.push(background);
@@ -268,6 +320,8 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
     for (0..rows) |row| {
         for (0..cols) |col| {
             const mesh = renderer.retained.at(.{ area.x + @as(u16, @intCast(col)), area.y + @as(u16, @intCast(row)) });
+            ink_visited += 1;
+            item_calls += 1;
             const cursor_color = if (cursor) |visible| visible.inkColor(mesh.paint.rect) else null;
             for (mesh.items()[1..]) |original| {
                 var item = original;

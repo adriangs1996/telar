@@ -74,6 +74,7 @@ pub fn invalidate(compositor: *Compositor) void {
 /// const result = try compositor.render(composition);
 /// ```
 pub fn render(compositor: *Compositor, composition: Composition) !CompositionResult {
+    core.profiling.add(.tui_compose, 1);
     const model = composition.model;
     const screen = composition.screen;
     const options = composition.input;

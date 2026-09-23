@@ -1,0 +1,50 @@
+{
+  "binary": "/Users/adriangonzalez/sandbox/telar/zig-out/bin/run-widget",
+  "binary_sha256": "cf913c7fe948be90960514287c7cb80ce6fed7b1e5a30ac3458c44cf2b1ea815",
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "machine": "Apple M3",
+  "zig": "0.16.0",
+  "head": "adf2acc4c5b0741d893d27336eb411462c3b7b72",
+  "seed": 20260922,
+  "sizes": [
+    [
+      40,
+      10
+    ],
+    [
+      80,
+      20
+    ],
+    [
+      160,
+      40
+    ]
+  ],
+  "pauses": [
+    0,
+    1,
+    2,
+    5,
+    20,
+    100
+  ],
+  "active_panes": [
+    1,
+    2
+  ],
+  "rounds": 6,
+  "policies": [
+    "cells",
+    "always",
+    "retained"
+  ],
+  "measurement": "Per-frame begin/draw/seal, one selected renderer per process; no verification, UI or GPU inside timing.",
+  "memory": "cache_bytes is additional pane quad capacity; fixture owns all lab renderers, only selected renderer is exercised during timing.",
+  "omissions": [
+    "GPU/input latency",
+    "hardware cache misses",
+    "RSS attribution",
+    "IPC bytes",
+    "queue depth"
+  ]
+}

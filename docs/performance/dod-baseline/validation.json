@@ -1,0 +1,26 @@
+{
+  "tests": "139/139 steps succeeded; 3024/3026 tests passed (2 skipped)",
+  "final_build": "install build-dod-probe build-bench -Doptimize=ReleaseFast -Dprofile-counts=true -Dprofile-timing=true",
+  "final_build_status": 0,
+  "python_compile_status": 0,
+  "diff_check_status": 0,
+  "checks": {
+    "verified-tests.log": {
+      "sha256": "d0a658de9f462a69c1e3ffbddd071e25d9c58b588edddc53bb1a095696502308",
+      "path": "/private/tmp/telar-dod-analysis/verified-tests.log"
+    },
+    "profile-unit-tests.log": {
+      "sha256": "a0e3bc67ae805220e3988ef84446d6c4dbe5f78c6c9df5fbb43887123a5ead3e",
+      "path": "/private/tmp/telar-dod-analysis/profile-unit-tests.log"
+    },
+    "verification-build.log": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "path": "/private/tmp/telar-dod-analysis/verification-build.log"
+    }
+  },
+  "source_snapshot_note": "Final source after test discovery, serializer visibility and export ordering changes. Collection manifests identify earlier measured source hashes.",
+  "source_snapshots": {
+    "source-final.patch": "5d1a79717db134fbcbf9a077a4f0af0796dd88faaaa1ca30d61527087be451fa",
+    "source-final-new-files.tar.gz": "90a4aba18e43eebb27f3772085e1ba2c69588ed48611c3705c057e06d5827579"
+  }
+}

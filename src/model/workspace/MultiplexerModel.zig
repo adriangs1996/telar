@@ -81,18 +81,22 @@ pub fn displayIndex(model: *const Model, pane_id: core.PaneId) ?u16 {
 }
 
 pub fn find(model: *Model, pane_id: core.PaneId) ?*PaneType {
+    core.profiling.add(.pane_find, 1);
     if (pane_id == .invalid) {
         return null;
     }
     const slot = model.pane_index.get(core.raw(pane_id)) orelse return null;
+    core.profiling.add(.pane_find_found, 1);
     return model.panes[slot].?;
 }
 
 pub fn findConst(model: *const Model, pane_id: core.PaneId) ?*const PaneType {
+    core.profiling.add(.pane_find, 1);
     if (pane_id == .invalid) {
         return null;
     }
     const slot = model.pane_index.get(core.raw(pane_id)) orelse return null;
+    core.profiling.add(.pane_find_found, 1);
     return model.panes[slot].?;
 }
 
@@ -379,9 +383,11 @@ pub fn planFocusedPaneMouse(self: *Model, area: core.Rect) ?model_data.PaneMouse
 }
 
 pub fn layoutSnapshot(model: *Model, area: core.Rect) *const model_data.LayoutSnapshot {
+    core.profiling.add(.layout_query, 1);
     if (model.layout_snapshot.revision != model.layout.currentRevision() or
         !std.meta.eql(model.layout_snapshot.area, area))
     {
+        core.profiling.add(.layout_rebuild, 1);
         model.layout.snapshot(area, &model.layout_snapshot);
     }
     return &model.layout_snapshot;

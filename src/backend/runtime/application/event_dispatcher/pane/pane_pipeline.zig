@@ -106,6 +106,10 @@ fn paneHasOutstandingFrame(context: *OutputRuntime, pane_id: core.PaneId) bool {
 }
 
 fn ingestPane(task: PaneIngestTask) IngestCompletion {
+    core.profiling.add(.runtime_ingest, 1);
+    core.profiling.add(.runtime_ingest_bytes, task.ingest.bytes.len);
+    const profile_started = core.profiling.start(task.ingest.io);
+    defer core.profiling.finish(task.ingest.io, .runtime_ingest, profile_started);
     core.mark(task.ingest.io, .vt_start);
     defer core.mark(task.ingest.io, .vt_done);
 

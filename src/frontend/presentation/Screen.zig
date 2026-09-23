@@ -122,6 +122,7 @@ pub fn resize(s: *Screen, w: u16, h: u16) !void {
 
 /// Sends the difference to `w`.
 pub fn flush(s: *Screen, w: *std.Io.Writer) !Stats {
+    core.profiling.add(.tui_flush, 1);
     // The diff commits cells into `front` as it emits them. If the writer
     // fails partway, `front` claims cells the terminal never received, so
     // the only honest recovery is to forget the terminal's contents and

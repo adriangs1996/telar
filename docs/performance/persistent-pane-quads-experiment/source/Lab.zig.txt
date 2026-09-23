@@ -1,0 +1,323 @@
+const std = @import("std");
+const data = @import("model");
+const core = @import("telar-core");
+const policy = @import("policy.zig");
+const Trial = @import("Trial.zig");
+const Self = @This();
+
+pub const Workload = enum { quiet, one, both, full, burst };
+const burst_period = 20;
+const burst_active_frames = 5;
+const glyph_count = 20;
+
+allocator: std.mem.Allocator,
+io: std.Io,
+panes: [2]data.Pane = undefined,
+trials: [policy.count]Trial = undefined,
+pane_count: usize = 0,
+trial_count: usize = 0,
+workload: Workload = .one,
+frame: u64 = 0,
+equivalent: bool = true,
+quiet_frames: ?u16 = null,
+cycling_panes: u2 = 2,
+
+/// Creates isolated renderers with identical cells and fixed geometry.
+/// Example: `const lab = try Lab.create(gpa, io);`
+pub fn create(allocator: std.mem.Allocator, io: std.Io) !*Self {
+    return createSized(allocator, io, .{ .cols = Trial.cols, .rows = Trial.rows });
+}
+
+/// Creates a bounded batch fixture. Example: `try Lab.createSized(gpa, io, size);`
+pub fn createSized(allocator: std.mem.Allocator, io: std.Io, size: core.TerminalSize) !*Self {
+    if (size.cols == 0 or size.rows == 0 or size.cols > 160 or size.rows > 40) {
+        return error.InvalidLabSize;
+    }
+
+    const self = try allocator.create(Self);
+    self.* = .{ .allocator = allocator, .io = io };
+    errdefer self.destroy();
+
+    for (&self.panes, 0..) |*pane, index| {
+        pane.* = try data.Pane.init(allocator, .{
+            .spec = .{
+                .pane_id = @enumFromInt(index + 1),
+                .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
+                .size = size,
+            },
+            .attached = true,
+        });
+        pane.attachment_generation = 1;
+        self.pane_count += 1;
+    }
+
+    for (&self.trials, 0..) |*trial, index| {
+        trial.* = try Trial.init(allocator, @as(policy.Kind, @enumFromInt(index)), size);
+        self.trial_count += 1;
+    }
+
+    self.reset(.one);
+
+    return self;
+}
+
+pub fn destroy(self: *Self) void {
+    for (self.trials[0..self.trial_count]) |*trial| {
+        trial.deinit();
+    }
+
+    for (self.panes[0..self.pane_count]) |*pane| {
+        pane.deinit();
+    }
+
+    self.allocator.destroy(self);
+}
+
+/// Rewinds the deterministic workload and clears all policy history.
+/// Example: `lab.reset(.burst);`
+pub fn reset(self: *Self, workload: Workload) void {
+    self.workload = workload;
+    self.frame = 0;
+    self.equivalent = true;
+
+    for (&self.panes, 0..) |*pane, index| {
+        pane.applied_frame_id = 1;
+        for (pane.buffer.cells, 0..) |*cell, offset| {
+            cell.* = .{};
+            cell.bytes[0] = @intCast('a' + (offset + index) % glyph_count);
+        }
+    }
+
+    for (&self.trials) |*trial| {
+        trial.reset();
+    }
+}
+
+/// Prepares the next deterministic input without rendering or timing it.
+/// Example: `lab.advance(); try trial.draw(&lab.panes);`
+pub fn advance(self: *Self) void {
+    for (&self.panes, 0..) |*pane, index| {
+        const changed = if (self.quiet_frames) |quiet| index < self.cycling_panes and self.frame % (@as(u64, quiet) + 1) == 0 else switch (self.workload) {
+            .quiet => false,
+            .one => index == 0,
+            .both, .full => true,
+            .burst => index == 0 and self.frame % burst_period < burst_active_frames,
+        };
+        if (!changed) {
+            continue;
+        }
+
+        pane.applied_frame_id += 1;
+
+        if (self.workload == .full) {
+            for (pane.buffer.cells) |*cell| {
+                cell.bytes[0] = @intCast('a' + self.frame % glyph_count);
+            }
+        } else {
+            const cell = &pane.buffer.cells[self.frame % pane.buffer.cells.len];
+            cell.bytes[0] = if (cell.bytes[0] == 'z') 'a' else 'z';
+        }
+    }
+
+    self.frame += 1;
+}
+
+/// Advances one shared input, then rotates policy measurement order. Byte
+/// comparison is outside the clock. Example: `try lab.step();`
+pub fn step(self: *Self) !void {
+    const frame = self.frame;
+    self.advance();
+
+    for (0..self.trials.len) |offset| {
+        const trial = &self.trials[(frame + offset) % self.trials.len];
+        const started = std.Io.Clock.awake.now(self.io).nanoseconds;
+        try trial.draw(&self.panes);
+        trial.last_ns = @intCast(@max(0, std.Io.Clock.awake.now(self.io).nanoseconds - started));
+        if (frame >= Trial.warmup_frames) {
+            trial.total_ns += trial.last_ns;
+            trial.samples += 1;
+        }
+    }
+
+    const expected = std.mem.sliceAsBytes(self.trials[0].renderer.quads.items());
+    for (self.trials[1..]) |*trial| {
+        self.equivalent = self.equivalent and std.mem.eql(u8, expected, std.mem.sliceAsBytes(trial.renderer.quads.items()));
+        self.equivalent = self.equivalent and std.mem.eql(u8, self.trials[0].renderer.atlas.?.pixels, trial.renderer.atlas.?.pixels);
+    }
+}
+
+test "cache lab compares policies and stable admission avoids copies during continuous edits" {
+    const lab = try Self.create(std.testing.allocator, std.testing.io);
+    defer lab.destroy();
+
+    for (std.meta.tags(Workload)) |workload| {
+        lab.reset(workload);
+        for (0..30) |_| {
+            try lab.step();
+            try std.testing.expect(lab.equivalent);
+        }
+
+        if (workload == .both or workload == .full) {
+            try std.testing.expectEqual(@as(usize, 0), lab.trials[2].renderer.pane_draws.copied_bytes);
+            try std.testing.expect(lab.trials[1].renderer.pane_draws.copied_bytes > 0);
+        }
+
+        if (workload == .quiet) {
+            try std.testing.expectEqual(@as(usize, 2), lab.trials[2].renderer.pane_draws.hits);
+        }
+    }
+}
+
+test "cache lab warm frames allocate nothing and reset reproduces workloads" {
+    var accounting = std.testing.FailingAllocator.init(std.testing.allocator, .{});
+    const lab = try Self.create(accounting.allocator(), std.testing.io);
+    defer lab.destroy();
+    lab.reset(.full);
+    for (0..40) |_| {
+        try lab.step();
+    }
+
+    const allocations = accounting.allocations;
+
+    for (std.meta.tags(Workload)) |workload| {
+        lab.reset(workload);
+        for (0..40) |_| {
+            try lab.step();
+            try std.testing.expect(lab.equivalent);
+        }
+    }
+
+    try std.testing.expectEqual(allocations, accounting.allocations);
+}
+
+test "cache lab admission delay and copies match complete change cycles at every size" {
+    const sizes = [_]core.TerminalSize{
+        .{ .cols = 40, .rows = 10 },
+        .{ .cols = 80, .rows = 20 },
+        .{ .cols = 160, .rows = 40 },
+    };
+    for (sizes) |size| {
+        // Geometry of the measured fixture is exercised below, independently
+        // of the interactive widget's fixed preview dimensions.
+        const sized = try Self.createSized(std.testing.allocator, std.testing.io, size);
+        defer sized.destroy();
+        for ([_]u16{ 0, 1, 2, 5, 20, 100 }) |quiet| {
+            sized.reset(.one);
+            sized.quiet_frames = quiet;
+            sized.cycling_panes = 2;
+            const period = @as(usize, quiet) + 1;
+            for (0..period * 2) |_| {
+                try sized.step();
+                try std.testing.expect(sized.equivalent);
+            }
+
+            var hits: [policy.count]usize = @splat(0);
+            var copies: [policy.count]usize = @splat(0);
+            for (0..period) |_| {
+                try sized.step();
+                try std.testing.expect(sized.equivalent);
+                for (&sized.trials, 0..) |*trial, index| {
+                    hits[index] += trial.hits;
+                    copies[index] += trial.copied_bytes;
+                }
+            }
+
+            try std.testing.expectEqual(@as(usize, 0), hits[0]);
+            try std.testing.expectEqual(@as(usize, quiet) * 2, hits[1]);
+            try std.testing.expectEqual(@as(usize, quiet -| 1) * 2, hits[2]);
+            try std.testing.expect(copies[2] < copies[1]);
+            if (quiet == 0) {
+                try std.testing.expectEqual(@as(usize, 0), copies[2]);
+            }
+        }
+    }
+}
+
+test "cache lab retained pane keeps its storage and copies only to the final scene" {
+    const lab = try Self.create(std.testing.allocator, std.testing.io);
+    defer lab.destroy();
+    lab.reset(.quiet);
+    try lab.step();
+    const retained = &lab.trials[@intFromEnum(policy.Kind.retained)];
+    const always = &lab.trials[@intFromEnum(policy.Kind.always)];
+    const first = retained.persistent[0].quads.items();
+    const saved = try std.testing.allocator.dupe(u8, std.mem.sliceAsBytes(first));
+    defer std.testing.allocator.free(saved);
+    try lab.step();
+    try std.testing.expect(lab.equivalent);
+    try std.testing.expectEqual(@as(usize, 2), retained.hits);
+    try std.testing.expectEqual(first.ptr, retained.persistent[0].quads.items().ptr);
+    try std.testing.expectEqualSlices(u8, saved, std.mem.sliceAsBytes(retained.persistent[0].quads.items()));
+    try std.testing.expectEqual(always.copied_bytes / 2, retained.copied_bytes);
+    try std.testing.expectEqual(always.cacheBytes() / 2, retained.cacheBytes());
+
+    // The submitted native frame never borrows persistent pane storage. Losing
+    // or replacing a cache cannot mutate the frame awaiting GPU completion.
+    const frame = retained.renderer.frame(1);
+    const delivered = try std.testing.allocator.dupe(u8, std.mem.sliceAsBytes(retained.renderer.quads.items()));
+    defer std.testing.allocator.free(delivered);
+    try std.testing.expect(@intFromPtr(frame.quads.?) != @intFromPtr(first.ptr));
+    retained.persistent[0].quads.quads.items[0].x += 1;
+    retained.persistent[0].key = null;
+    try std.testing.expectEqualSlices(u8, delivered, std.mem.sliceAsBytes(retained.renderer.quads.items()));
+    try lab.step();
+    try std.testing.expect(lab.equivalent);
+
+    // Exhausting pane-local storage falls back to cell rendering and never
+    // publishes a partial cache. Retrying a full scene remains safe as well.
+    retained.persistent[0].key = null;
+    retained.persistent[0].quads.limit = 1;
+    try lab.step();
+    try std.testing.expect(lab.equivalent);
+    try std.testing.expect(retained.persistent[0].key == null);
+    const limit = retained.renderer.quads.limit;
+    retained.renderer.quads.limit = 0;
+    try std.testing.expectError(error.NativeQuadBudgetExceeded, retained.draw(&lab.panes));
+    retained.renderer.quads.limit = limit;
+    try lab.step();
+    try std.testing.expect(lab.equivalent);
+}
+
+test "cache lab persistent identity invalidates visuals and has identical variable-length output" {
+    const lab = try Self.create(std.testing.allocator, std.testing.io);
+    defer lab.destroy();
+    lab.reset(.quiet);
+    const Change = enum { initial, cells, cursor, origin, focus, theme, epoch, attachment, location, detach, reattach };
+    const retained = &lab.trials[@intFromEnum(policy.Kind.retained)];
+    inline for (std.meta.tags(Change)) |change| {
+        switch (change) {
+            .initial => {},
+            .cells => {
+                lab.panes[0].buffer.cells[0].style.flags.underline = .single;
+                lab.panes[0].applied_frame_id += 1;
+            },
+            .cursor => lab.panes[0].cursor.x += 1,
+            .origin => for (&lab.trials) |*trial| {
+                trial.renderer.origin[0] += 1;
+            },
+            .focus => for (&lab.trials) |*trial| {
+                trial.renderer.focused = false;
+            },
+            .theme => for (&lab.trials) |*trial| {
+                trial.renderer.theme.foreground = .{ 200, 100, 50 };
+            },
+            .epoch => for (&lab.trials) |*trial| {
+                trial.renderer.retained.invalidate();
+            },
+            .attachment => lab.panes[0].attachment_generation += 1,
+            .location => lab.panes[0].location.tab_id = @enumFromInt(2),
+            .detach => lab.panes[0].attached = false,
+            .reattach => {
+                lab.panes[0].attached = true;
+                lab.panes[0].attachment_generation += 1;
+            },
+        }
+
+        try lab.step();
+        try std.testing.expect(lab.equivalent);
+        try std.testing.expect(retained.hits < 2);
+        try lab.step();
+        try std.testing.expect(lab.equivalent);
+        try std.testing.expectEqual(@as(usize, if (change == .detach) 1 else 2), retained.hits);
+    }
+}

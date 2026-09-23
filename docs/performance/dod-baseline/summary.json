@@ -1,0 +1,1799 @@
+{
+  "comparison": [
+    {
+      "name": "backend.damage.one_cell",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 569,
+          "minimum": 569,
+          "maximum": 570,
+          "p95": 570.0,
+          "p99": 570.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 573,
+          "minimum": 573,
+          "maximum": 575,
+          "p95": 574.8,
+          "p99": 574.96
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.7029876977152849,
+        "minimum": 0.5263157894736858,
+        "maximum": 1.0544815465729274,
+        "p95": 0.9841827768013989,
+        "p99": 1.0404217926186217
+      }
+    },
+    {
+      "name": "backend.damage.fragmented",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 17689,
+          "minimum": 17605,
+          "maximum": 17804,
+          "p95": 17784.0,
+          "p99": 17800.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 17556,
+          "minimum": 17507,
+          "maximum": 17750,
+          "p95": 17737.0,
+          "p99": 17747.4
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.6683891260390928,
+        "minimum": -1.1127428829643016,
+        "maximum": 0.34484708010626974,
+        "p95": 0.22021166010887316,
+        "p99": 0.31991999610679045
+      }
+    },
+    {
+      "name": "backend.damage.full_screen",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 6471,
+          "minimum": 6461,
+          "maximum": 6513,
+          "p95": 6509.4,
+          "p99": 6512.28
+        },
+        "B2": {
+          "n": 5,
+          "median": 6514,
+          "minimum": 6482,
+          "maximum": 6764,
+          "p95": 6715.2,
+          "p99": 6754.24
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.7572245402565292,
+        "minimum": -0.4759711346537743,
+        "maximum": 4.60872254871636,
+        "p95": 3.85103932979494,
+        "p99": 4.457185904932076
+      }
+    },
+    {
+      "name": "backend.frame.fragmented",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 22253,
+          "minimum": 22225,
+          "maximum": 22370,
+          "p95": 22361.2,
+          "p99": 22368.24
+        },
+        "B2": {
+          "n": 5,
+          "median": 22218,
+          "minimum": 22194,
+          "maximum": 23203,
+          "p95": 23025.4,
+          "p99": 23167.48
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.12137559002023401,
+        "minimum": -0.5106154259607587,
+        "maximum": 3.723737147966033,
+        "p95": 3.034712542261739,
+        "p99": 3.5859322268251743
+      }
+    },
+    {
+      "name": "backend.history.input_scan",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 41,
+          "minimum": 41,
+          "maximum": 42,
+          "p95": 42.0,
+          "p99": 42.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 41,
+          "minimum": 41,
+          "maximum": 42,
+          "p95": 41.8,
+          "p99": 41.96
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.0,
+        "minimum": -2.3809523809523836,
+        "maximum": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      }
+    },
+    {
+      "name": "schema.encode.one_cell",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 17,
+          "minimum": 17,
+          "maximum": 17,
+          "p95": 17.0,
+          "p99": 17.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 17,
+          "minimum": 17,
+          "maximum": 18,
+          "p95": 17.8,
+          "p99": 17.96
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.0,
+        "minimum": 0.0,
+        "maximum": 5.882352941176472,
+        "p95": 4.705882352941177,
+        "p99": 5.647058823529413
+      }
+    },
+    {
+      "name": "schema.encode.fragmented",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 2839,
+          "minimum": 2827,
+          "maximum": 2841,
+          "p95": 2840.8,
+          "p99": 2840.96
+        },
+        "B2": {
+          "n": 5,
+          "median": 2908,
+          "minimum": 2902,
+          "maximum": 2999,
+          "p95": 2983.8,
+          "p99": 2995.96
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 2.615765288087668,
+        "minimum": 2.183098591549304,
+        "maximum": 5.635787249031354,
+        "p95": 5.187794992008952,
+        "p99": 5.546188797626874
+      }
+    },
+    {
+      "name": "schema.encode.full_screen",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 29028,
+          "minimum": 28933,
+          "maximum": 29568,
+          "p95": 29498.8,
+          "p99": 29554.16
+        },
+        "B2": {
+          "n": 5,
+          "median": 30825,
+          "minimum": 30661,
+          "maximum": 32134,
+          "p95": 31897.4,
+          "p99": 32086.68
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 6.190574617610589,
+        "minimum": 3.69656385281385,
+        "maximum": 9.965094791595375,
+        "p95": 9.36702277966969,
+        "p99": 9.845480389210238
+      }
+    },
+    {
+      "name": "schema.decode.one_cell",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 64,
+          "minimum": 63,
+          "maximum": 64,
+          "p95": 64.0,
+          "p99": 64.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 63,
+          "minimum": 63,
+          "maximum": 67,
+          "p95": 66.4,
+          "p99": 66.88
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.0,
+        "minimum": -1.5625,
+        "maximum": 6.349206349206349,
+        "p95": 5.079365079365078,
+        "p99": 6.095238095238095
+      }
+    },
+    {
+      "name": "schema.decode.fragmented",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 458,
+          "minimum": 456,
+          "maximum": 460,
+          "p95": 459.6,
+          "p99": 459.92
+        },
+        "B2": {
+          "n": 5,
+          "median": 465,
+          "minimum": 462,
+          "maximum": 470,
+          "p95": 469.6,
+          "p99": 469.92
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 1.5317286652078765,
+        "minimum": 0.8733624454148492,
+        "maximum": 2.6315789473684292,
+        "p95": 2.5400457665903975,
+        "p99": 2.613272311212823
+      }
+    },
+    {
+      "name": "schema.decode.full_screen",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 63,
+          "minimum": 63,
+          "maximum": 63,
+          "p95": 63.0,
+          "p99": 63.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 64,
+          "minimum": 63,
+          "maximum": 64,
+          "p95": 64.0,
+          "p99": 64.0
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 1.5873015873015817,
+        "minimum": 0.0,
+        "maximum": 1.5873015873015817,
+        "p95": 1.5873015873015817,
+        "p99": 1.5873015873015817
+      }
+    },
+    {
+      "name": "frontend.pipeline.one_cell",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 151,
+          "minimum": 148,
+          "maximum": 152,
+          "p95": 152.0,
+          "p99": 152.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 157,
+          "minimum": 155,
+          "maximum": 158,
+          "p95": 158.0,
+          "p99": 158.0
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 3.9473684210526327,
+        "minimum": 2.6490066225165476,
+        "maximum": 6.0810810810810745,
+        "p95": 5.931531531531524,
+        "p99": 6.051171171171164
+      }
+    },
+    {
+      "name": "frontend.pipeline.fragmented",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 18551,
+          "minimum": 18261,
+          "maximum": 18608,
+          "p95": 18600.6,
+          "p99": 18606.52
+        },
+        "B2": {
+          "n": 5,
+          "median": 18424,
+          "minimum": 18302,
+          "maximum": 18837,
+          "p95": 18770.4,
+          "p99": 18823.68
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.79155672823219,
+        "minimum": -1.3918744625967316,
+        "maximum": 3.154263183834405,
+        "p95": 2.510448784267782,
+        "p99": 3.0255003039210804
+      }
+    },
+    {
+      "name": "frontend.pipeline.full_screen",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 70635,
+          "minimum": 70266,
+          "maximum": 70740,
+          "p95": 70728.6,
+          "p99": 70737.72
+        },
+        "B2": {
+          "n": 5,
+          "median": 70258,
+          "minimum": 69786,
+          "maximum": 73923,
+          "p95": 73205.2,
+          "p99": 73779.44
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.5337297373823158,
+        "minimum": -1.3486005089058506,
+        "maximum": 5.204508581675338,
+        "p95": 4.079507815348057,
+        "p99": 4.979508428409882
+      }
+    },
+    {
+      "name": "frontend.outbox.input",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 9,
+          "minimum": 9,
+          "maximum": 9,
+          "p95": 9.0,
+          "p99": 9.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 9,
+          "minimum": 9,
+          "maximum": 9,
+          "p95": 9.0,
+          "p99": 9.0
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.0,
+        "minimum": 0.0,
+        "maximum": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      }
+    },
+    {
+      "name": "frontend.keybind.route",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 187,
+          "minimum": 185,
+          "maximum": 189,
+          "p95": 188.8,
+          "p99": 188.96
+        },
+        "B2": {
+          "n": 5,
+          "median": 186,
+          "minimum": 182,
+          "maximum": 190,
+          "p95": 189.2,
+          "p99": 189.84
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -1.5873015873015928,
+        "minimum": -2.67379679144385,
+        "maximum": 2.1505376344086002,
+        "p95": 1.828538215634987,
+        "p99": 2.0861377506538776
+      }
+    },
+    {
+      "name": "frontend.lua.callback",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 508,
+          "minimum": 505,
+          "maximum": 513,
+          "p95": 512.6,
+          "p99": 512.92
+        },
+        "B2": {
+          "n": 5,
+          "median": 497,
+          "minimum": 494,
+          "maximum": 502,
+          "p95": 501.2,
+          "p99": 501.84
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -2.7559055118110187,
+        "minimum": -2.92397660818714,
+        "maximum": -0.5940594059405946,
+        "p95": -1.0231927302319281,
+        "p99": -0.6798860707988612
+      }
+    },
+    {
+      "name": "frontend.pacer.late_frame",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 2,
+          "minimum": 2,
+          "maximum": 2,
+          "p95": 2.0,
+          "p99": 2.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 2,
+          "minimum": 2,
+          "maximum": 2,
+          "p95": 2.0,
+          "p99": 2.0
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.0,
+        "minimum": 0.0,
+        "maximum": 0.0,
+        "p95": 0.0,
+        "p99": 0.0
+      }
+    },
+    {
+      "name": "frontend.flush.cursor_only",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 61,
+          "minimum": 61,
+          "maximum": 62,
+          "p95": 62.0,
+          "p99": 62.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 69,
+          "minimum": 69,
+          "maximum": 72,
+          "p95": 71.6,
+          "p99": 71.92
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 13.114754098360649,
+        "minimum": 11.290322580645151,
+        "maximum": 16.129032258064523,
+        "p95": 15.854045478582766,
+        "p99": 16.074034902168172
+      }
+    },
+    {
+      "name": "frontend.client_ui.chrome.tabs_1",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 20918,
+          "minimum": 20852,
+          "maximum": 20958,
+          "p95": 20953.0,
+          "p99": 20957.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 20980,
+          "minimum": 20928,
+          "maximum": 21567,
+          "p95": 21450.2,
+          "p99": 21543.64
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.42595960562841206,
+        "minimum": -0.14314342971657457,
+        "maximum": 3.102591069891969,
+        "p95": 2.5856600417950255,
+        "p99": 2.9992048642725804
+      }
+    },
+    {
+      "name": "frontend.client_ui.chrome.tabs_8",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 24036,
+          "minimum": 24020,
+          "maximum": 24142,
+          "p95": 24121.6,
+          "p99": 24137.92
+        },
+        "B2": {
+          "n": 5,
+          "median": 24124,
+          "minimum": 23978,
+          "maximum": 24220,
+          "p95": 24211.4,
+          "p99": 24218.28
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.33283408221000954,
+        "minimum": -0.2371541501976271,
+        "maximum": 0.5698835274542402,
+        "p95": 0.542501326542908,
+        "p99": 0.5644070872719738
+      }
+    },
+    {
+      "name": "frontend.client_ui.chrome.tabs_64",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 28541,
+          "minimum": 28388,
+          "maximum": 28627,
+          "p95": 28612.8,
+          "p99": 28624.16
+        },
+        "B2": {
+          "n": 5,
+          "median": 28356,
+          "minimum": 28234,
+          "maximum": 28412,
+          "p95": 28403.4,
+          "p99": 28410.28
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.7003782042302897,
+        "minimum": -1.1492646801970152,
+        "maximum": -0.06692968860081416,
+        "p95": -0.1243886286557006,
+        "p99": -0.07842147661179144
+      }
+    },
+    {
+      "name": "frontend.layout.directional_focus",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 131,
+          "minimum": 130,
+          "maximum": 137,
+          "p95": 135.8,
+          "p99": 136.76
+        },
+        "B2": {
+          "n": 5,
+          "median": 120,
+          "minimum": 120,
+          "maximum": 121,
+          "p95": 120.8,
+          "p99": 120.96
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -8.3969465648855,
+        "minimum": -12.408759124087588,
+        "maximum": -6.923076923076921,
+        "p95": -7.076923076923074,
+        "p99": -6.953846153846151
+      }
+    },
+    {
+      "name": "frontend.multiplexer.compose_four",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 43268,
+          "minimum": 43134,
+          "maximum": 44980,
+          "p95": 44645.4,
+          "p99": 44913.08
+        },
+        "B2": {
+          "n": 5,
+          "median": 43180,
+          "minimum": 43103,
+          "maximum": 43270,
+          "p95": 43265.6,
+          "p99": 43269.12
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.13623663610963233,
+        "minimum": -3.8016896398399336,
+        "maximum": 0.10664441044188067,
+        "p95": 0.07605562604547475,
+        "p99": 0.10052665356259949
+      }
+    },
+    {
+      "name": "frontend.multiplexer.patch_one_cell",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 187,
+          "minimum": 181,
+          "maximum": 191,
+          "p95": 190.6,
+          "p99": 190.92
+        },
+        "B2": {
+          "n": 5,
+          "median": 199,
+          "minimum": 197,
+          "maximum": 201,
+          "p95": 200.6,
+          "p99": 200.92
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 6.417112299465244,
+        "minimum": 3.664921465968596,
+        "maximum": 8.83977900552486,
+        "p95": 8.801552934149619,
+        "p99": 8.832133791249813
+      }
+    },
+    {
+      "name": "backend.kitty.ingest_zlib_rgba_1920x1080",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 3417284,
+          "minimum": 3254511,
+          "maximum": 3537750,
+          "p95": 3515060.8,
+          "p99": 3533212.16
+        },
+        "B2": {
+          "n": 5,
+          "median": 3427295,
+          "minimum": 3281462,
+          "maximum": 3461473,
+          "p95": 3456673.0,
+          "p99": 3460513.0
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.08734621692465527,
+        "minimum": -4.427362023885239,
+        "maximum": 5.865641491458651,
+        "p95": 5.816872582334756,
+        "p99": 5.855887709633872
+      }
+    },
+    {
+      "name": "backend.kitty.shared_frame_3840x2160.publish",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 2375817,
+          "minimum": 2106394,
+          "maximum": 2652931,
+          "p95": 2603006.6,
+          "p99": 2642946.12
+        },
+        "B2": {
+          "n": 5,
+          "median": 2161965,
+          "minimum": 2109443,
+          "maximum": 2296312,
+          "p95": 2276385.4,
+          "p99": 2292326.68
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -9.001198324618432,
+        "minimum": -17.198034928160588,
+        "maximum": 1.8484580216052704,
+        "p95": 1.8464564126032323,
+        "p99": 1.8480576998048628
+      }
+    },
+    {
+      "name": "backend.kitty.shared_frame_3840x2160.ingest",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 6694966,
+          "minimum": 6364472,
+          "maximum": 7001215,
+          "p95": 6997712.0,
+          "p99": 7000514.4
+        },
+        "B2": {
+          "n": 5,
+          "median": 6577000,
+          "minimum": 6548312,
+          "maximum": 7129316,
+          "p95": 7092832.8,
+          "p99": 7122019.36
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.3347582265496918,
+        "minimum": -2.1905114977432305,
+        "maximum": 3.063223469283871,
+        "p95": 2.8675955430431177,
+        "p99": 3.0240978840357204
+      }
+    },
+    {
+      "name": "backend.kitty.shared_frame_3840x2160.freeze",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 2132804,
+          "minimum": 2045721,
+          "maximum": 2500389,
+          "p95": 2488372.6,
+          "p99": 2497985.72
+        },
+        "B2": {
+          "n": 5,
+          "median": 2158116,
+          "minimum": 2120724,
+          "maximum": 2278870,
+          "p95": 2268476.0,
+          "p99": 2276791.2
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.5663905356516619,
+        "minimum": -8.85938148024168,
+        "maximum": 5.494150961934685,
+        "p95": 4.315114226678611,
+        "p99": 5.25834361488347
+      }
+    },
+    {
+      "name": "frontend.kitty.transmit_rgba_64x64",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 4388,
+          "minimum": 4330,
+          "maximum": 4436,
+          "p95": 4432.6,
+          "p99": 4435.32
+        },
+        "B2": {
+          "n": 5,
+          "median": 4461,
+          "minimum": 4360,
+          "maximum": 4497,
+          "p95": 4494.6,
+          "p99": 4496.52
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 1.1045987376014477,
+        "minimum": 0.6928406466512715,
+        "maximum": 2.4840474020054737,
+        "p95": 2.3638165668397404,
+        "p99": 2.460001234972327
+      }
+    },
+    {
+      "name": "frontend.kitty.idle",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "p95": 5.0,
+          "p99": 5.0
+        },
+        "B2": {
+          "n": 5,
+          "median": 8,
+          "minimum": 7,
+          "maximum": 8,
+          "p95": 8.0,
+          "p99": 8.0
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 60.00000000000001,
+        "minimum": 39.99999999999999,
+        "maximum": 60.00000000000001,
+        "p95": 60.00000000000001,
+        "p99": 60.00000000000001
+      }
+    },
+    {
+      "name": "frontend.kitty.transmit_rgba_480x360",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 166404,
+          "minimum": 164614,
+          "maximum": 170846,
+          "p95": 170160.4,
+          "p99": 170708.88
+        },
+        "B2": {
+          "n": 5,
+          "median": 165685,
+          "minimum": 164302,
+          "maximum": 170488,
+          "p95": 169884.6,
+          "p99": 170367.32
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.2450387221684336,
+        "minimum": -3.830350139892069,
+        "maximum": 3.5683477711494715,
+        "p95": 2.9829203264842525,
+        "p99": 3.451262282216428
+      }
+    },
+    {
+      "name": "frontend.kitty.transmit_rgba_480x360_zlib",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 2060565,
+          "minimum": 2053087,
+          "maximum": 2063877,
+          "p95": 2063623.8,
+          "p99": 2063826.36
+        },
+        "B2": {
+          "n": 5,
+          "median": 2060758,
+          "minimum": 2051947,
+          "maximum": 2069307,
+          "p95": 2069067.0,
+          "p99": 2069259.0
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 0.06589575923099389,
+        "minimum": -0.5780383230202135,
+        "maximum": 0.7315812724935755,
+        "p95": 0.6701155322955499,
+        "p99": 0.7192881244539704
+      }
+    },
+    {
+      "name": "frontend.text.rasterize_jetbrains_mono",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 501410,
+          "minimum": 499623,
+          "maximum": 502670,
+          "p95": 502481.8,
+          "p99": 502632.36
+        },
+        "B2": {
+          "n": 5,
+          "median": 501027,
+          "minimum": 496992,
+          "maximum": 504389,
+          "p95": 503788.6,
+          "p99": 504268.92
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.004587064478167591,
+        "minimum": -0.9441351805456688,
+        "maximum": 0.9539192551183628,
+        "p95": 0.8008891369750336,
+        "p99": 0.923313231489697
+      }
+    },
+    {
+      "name": "terminal/retained/80x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 38865.25,
+          "minimum": 37493.667,
+          "maximum": 47117.75,
+          "p95": 45661.0666,
+          "p99": 46826.41332
+        },
+        "B2": {
+          "n": 5,
+          "median": 39895.041,
+          "minimum": 39504.209,
+          "maximum": 47745.75,
+          "p95": 46252.125,
+          "p99": 47447.025
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 2.303149986170161,
+        "minimum": -0.8287423816033201,
+        "maximum": 6.4047456334425545,
+        "p95": 5.998215170704183,
+        "p99": 6.3234395408948805
+      }
+    },
+    {
+      "name": "terminal/sparse/80x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 38675.375,
+          "minimum": 37281.708,
+          "maximum": 39248.084,
+          "p95": 39157.8004,
+          "p99": 39230.02728
+        },
+        "B2": {
+          "n": 5,
+          "median": 39636.375,
+          "minimum": 39080.667,
+          "maximum": 40466.958,
+          "p95": 40360.8748,
+          "p99": 40445.74136
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 2.938077204881484,
+        "minimum": -0.42656095008357653,
+        "maximum": 5.832061127671517,
+        "p95": 5.829015545567926,
+        "p99": 5.831452011250799
+      }
+    },
+    {
+      "name": "terminal/full/80x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 151384.375,
+          "minimum": 151202.708,
+          "maximum": 151429.875,
+          "p95": 151429.4668,
+          "p99": 151429.79336
+        },
+        "B2": {
+          "n": 5,
+          "median": 154310.792,
+          "minimum": 153260.25,
+          "maximum": 155690.542,
+          "p95": 155591.70859999998,
+          "p99": 155670.77532
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 1.9038494600668976,
+        "minimum": 1.2935126092075144,
+        "maximum": 2.8445254009867194,
+        "p95": 2.773078302577976,
+        "p99": 2.8302359813049707
+      }
+    },
+    {
+      "name": "terminal/theme/80x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 150239.5,
+          "minimum": 149321.709,
+          "maximum": 156168.417,
+          "p95": 155054.492,
+          "p99": 155945.63199999998
+        },
+        "B2": {
+          "n": 5,
+          "median": 152498.166,
+          "minimum": 151225.417,
+          "maximum": 153372.625,
+          "p95": 153262.6416,
+          "p99": 153350.62832
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 1.801701854349913,
+        "minimum": -2.35018774634822,
+        "maximum": 2.0854202789545973,
+        "p95": 2.0540237418701546,
+        "p99": 2.0791409715377087
+      }
+    },
+    {
+      "name": "terminal/resize/80x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 38154.625,
+          "minimum": 37555.75,
+          "maximum": 38338.0,
+          "p95": 38304.5582,
+          "p99": 38331.31164
+        },
+        "B2": {
+          "n": 5,
+          "median": 39033.5,
+          "minimum": 38592.083,
+          "maximum": 40868.833,
+          "p95": 40542.7914,
+          "p99": 40803.62468
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 1.8141269758464196,
+        "minimum": 1.143219693822961,
+        "maximum": 8.670583386513497,
+        "p95": 7.8326676904187345,
+        "p99": 8.503000247294544
+      }
+    },
+    {
+      "name": "terminal/selection/80x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 47643.834,
+          "minimum": 46822.708,
+          "maximum": 48178.125,
+          "p95": 48077.8832,
+          "p99": 48158.07664
+        },
+        "B2": {
+          "n": 5,
+          "median": 49290.25,
+          "minimum": 48622.334,
+          "maximum": 50964.209,
+          "p95": 50630.3756,
+          "p99": 50897.44232
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 3.455674872849235,
+        "minimum": 1.982968025868126,
+        "maximum": 7.362762443250803,
+        "p95": 6.834250183969694,
+        "p99": 7.2570599913945815
+      }
+    },
+    {
+      "name": "terminal/font/80x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 373462.5,
+          "minimum": 366495.8,
+          "maximum": 389495.8,
+          "p95": 388570.8,
+          "p99": 389310.8
+        },
+        "B2": {
+          "n": 5,
+          "median": 374554.1,
+          "minimum": 368541.6,
+          "maximum": 404387.5,
+          "p95": 398498.32,
+          "p99": 403209.664
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -1.2537350544235548,
+        "minimum": -3.736677006529987,
+        "maximum": 8.280617197175077,
+        "p95": 6.765242983242781,
+        "p99": 7.977542354388619
+      }
+    },
+    {
+      "name": "terminal/retained/160x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 77282.5,
+          "minimum": 77042.667,
+          "maximum": 79048.042,
+          "p95": 78712.2918,
+          "p99": 78980.89196000001
+        },
+        "B2": {
+          "n": 5,
+          "median": 80384.166,
+          "minimum": 78516.584,
+          "maximum": 80857.709,
+          "p95": 80853.6672,
+          "p99": 80856.90064
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 2.8846543525377744,
+        "minimum": 1.9131178311882602,
+        "maximum": 4.508788894032922,
+        "p95": 4.423754069115917,
+        "p99": 4.491781929049521
+      }
+    },
+    {
+      "name": "terminal/sparse/160x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 76968.0,
+          "minimum": 76778.208,
+          "maximum": 78289.583,
+          "p95": 78102.3082,
+          "p99": 78252.12804
+        },
+        "B2": {
+          "n": 5,
+          "median": 79363.334,
+          "minimum": 77847.833,
+          "maximum": 80103.458,
+          "p95": 80084.558,
+          "p99": 80099.678
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 2.316879117877013,
+        "minimum": 1.1431153206527433,
+        "maximum": 4.207899720712427,
+        "p95": 3.992104110151584,
+        "p99": 4.164740598600258
+      }
+    },
+    {
+      "name": "terminal/full/160x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 305073.291,
+          "minimum": 304702.834,
+          "maximum": 308605.459,
+          "p95": 307952.4006,
+          "p99": 308474.84732
+        },
+        "B2": {
+          "n": 5,
+          "median": 310253.375,
+          "minimum": 308782.334,
+          "maximum": 312973.959,
+          "p95": 312440.8254,
+          "p99": 312867.33228
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 1.6270784315120856,
+        "minimum": 0.15140691338191292,
+        "maximum": 2.7144890290058843,
+        "p95": 2.51118725817848,
+        "p99": 2.6738286748404034
+      }
+    },
+    {
+      "name": "terminal/theme/160x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 301704.625,
+          "minimum": 299600.458,
+          "maximum": 302550.25,
+          "p95": 302383.3832,
+          "p99": 302516.87664
+        },
+        "B2": {
+          "n": 5,
+          "median": 306518.041,
+          "minimum": 302555.542,
+          "maximum": 310584.125,
+          "p95": 310061.8332,
+          "p99": 310479.66664
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 1.591604799529378,
+        "minimum": 0.28203644541413553,
+        "maximum": 3.666104876248233,
+        "p95": 3.2913312002488793,
+        "p99": 3.591150141048362
+      }
+    },
+    {
+      "name": "terminal/resize/160x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 76678.75,
+          "minimum": 75597.833,
+          "maximum": 78263.625,
+          "p95": 78005.8,
+          "p99": 78212.06
+        },
+        "B2": {
+          "n": 5,
+          "median": 79343.458,
+          "minimum": 78218.458,
+          "maximum": 80466.042,
+          "p95": 80437.492,
+          "p99": 80460.332
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 3.466534550004896,
+        "minimum": 2.6317040643082823,
+        "maximum": 4.939167631188557,
+        "p95": 4.662921273504521,
+        "p99": 4.88391835965175
+      }
+    },
+    {
+      "name": "terminal/selection/160x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 94660.666,
+          "minimum": 93508.0,
+          "maximum": 98424.666,
+          "p95": 97807.04119999999,
+          "p99": 98301.14104
+        },
+        "B2": {
+          "n": 5,
+          "median": 99117.708,
+          "minimum": 98218.291,
+          "maximum": 100267.792,
+          "p95": 100188.6086,
+          "p99": 100251.95532000001
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 4.246504002768514,
+        "minimum": 1.4703722743646397,
+        "maximum": 5.999174402190177,
+        "p95": 5.984018699902021,
+        "p99": 5.996143261732546
+      }
+    },
+    {
+      "name": "terminal/font/160x40",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 531920.8,
+          "minimum": 523237.5,
+          "maximum": 542887.5,
+          "p95": 541598.34,
+          "p99": 542629.668
+        },
+        "B2": {
+          "n": 5,
+          "median": 532841.7,
+          "minimum": 523462.5,
+          "maximum": 550525.0,
+          "p95": 547708.34,
+          "p99": 549961.668
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 1.2477697021519019,
+        "minimum": -1.5901427430549897,
+        "maximum": 2.6253179050025555,
+        "p95": 2.39027558585732,
+        "p99": 2.5783094411735084
+      }
+    },
+    {
+      "name": "workspace/1-tabs",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 1.459,
+          "minimum": 1.375,
+          "maximum": 1.541,
+          "p95": 1.5328,
+          "p99": 1.5393599999999998
+        },
+        "B2": {
+          "n": 5,
+          "median": 4.541,
+          "minimum": 4.458,
+          "maximum": 5.0,
+          "p95": 4.9168,
+          "p99": 4.98336
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 223.500352858151,
+        "minimum": 189.29266709928618,
+        "maximum": 233.33333333333334,
+        "p95": 231.51030303030305,
+        "p99": 232.96872727272728
+      }
+    },
+    {
+      "name": "workspace/8-tabs",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 23.792,
+          "minimum": 23.75,
+          "maximum": 25.334,
+          "p95": 25.0922,
+          "p99": 25.28564
+        },
+        "B2": {
+          "n": 5,
+          "median": 95.667,
+          "minimum": 95.25,
+          "maximum": 96.75,
+          "p95": 96.6582,
+          "p99": 96.73164
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 301.5789473684211,
+        "minimum": 281.8978447935581,
+        "maximum": 304.73708545248195,
+        "p95": 304.2091370909701,
+        "p99": 304.6314957801796
+      }
+    },
+    {
+      "name": "workspace/64-tabs",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 1227.833,
+          "minimum": 1201.25,
+          "maximum": 1263.709,
+          "p95": 1262.0756000000001,
+          "p99": 1263.3823200000002
+        },
+        "B2": {
+          "n": 5,
+          "median": 4723.917,
+          "minimum": 4686.125,
+          "maximum": 4985.292,
+          "p95": 4974.0086,
+          "p99": 4983.03532
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": 290.1040582726327,
+        "minimum": 273.81367071058287,
+        "maximum": 303.3449263502455,
+        "p95": 302.0885294284954,
+        "p99": 303.09364696589546
+      }
+    },
+    {
+      "name": "agent/32-messages",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 63868.208,
+          "minimum": 63166.458,
+          "maximum": 64457.625,
+          "p95": 64401.95,
+          "p99": 64446.49
+        },
+        "B2": {
+          "n": 5,
+          "median": 62895.667,
+          "minimum": 62490.792,
+          "maximum": 63358.042,
+          "p95": 63309.2004,
+          "p99": 63348.27368
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -1.5227309963041336,
+        "minimum": -3.051358159721207,
+        "maximum": 0.08774061056040505,
+        "p95": 0.053530480899952576,
+        "p99": 0.08089858462831456
+      }
+    },
+    {
+      "name": "review/search/100",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 145310.583,
+          "minimum": 144544.583,
+          "maximum": 145903.542,
+          "p95": 145817.6336,
+          "p99": 145886.36031999998
+        },
+        "B2": {
+          "n": 5,
+          "median": 144239.083,
+          "minimum": 143956.25,
+          "maximum": 145426.833,
+          "p95": 145283.0332,
+          "p99": 145398.07304000002
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.41480048290770677,
+        "minimum": -1.3346434043389976,
+        "maximum": -0.032422975926960085,
+        "p95": -0.06820907586682304,
+        "p99": -0.03958019591493267
+      }
+    },
+    {
+      "name": "review/search/1000",
+      "unit": "ns/op or ns/fixed iteration",
+      "builds": {
+        "B0": {
+          "n": 5,
+          "median": 442986.584,
+          "minimum": 441212.958,
+          "maximum": 447870.458,
+          "p95": 447869.408,
+          "p99": 447870.24799999996
+        },
+        "B2": {
+          "n": 5,
+          "median": 444628.459,
+          "minimum": 440769.708,
+          "maximum": 447520.958,
+          "p95": 447433.68299999996,
+          "p99": 447503.50299999997
+        }
+      },
+      "paired_overhead_percent": {
+        "n": 5,
+        "median": -0.07803595744195757,
+        "minimum": -1.5842936386342377,
+        "maximum": 0.9250842233181622,
+        "p95": 0.8948906193627026,
+        "p99": 0.9190455025270703
+      }
+    }
+  ],
+  "latency": {
+    "B0": {
+      "gpu_ms": {
+        "n": 1000,
+        "median": 8.749770815484226,
+        "minimum": 0.9347500745207071,
+        "maximum": 56.37929169461131,
+        "p95": 26.24940213281661,
+        "p99": 35.57108171051368
+      },
+      "runs": 5,
+      "run_p50_ms": [
+        7.616458460688591,
+        8.425479172728956,
+        8.611875004135072,
+        8.893208228982985,
+        9.739854140207171
+      ],
+      "viewports": [
+        [
+          1600,
+          1000
+        ],
+        [
+          1600,
+          1000
+        ],
+        [
+          1600,
+          1000
+        ],
+        [
+          1600,
+          1000
+        ],
+        [
+          1600,
+          1000
+        ]
+      ],
+      "pty_cells": [
+        [
+          88,
+          21
+        ],
+        [
+          88,
+          21
+        ],
+        [
+          88,
+          21
+        ],
+        [
+          88,
+          21
+        ],
+        [
+          88,
+          21
+        ]
+      ]
+    },
+    "B2": {
+      "gpu_ms": {
+        "n": 1000,
+        "median": 9.450625046156347,
+        "minimum": 0.7610416505485773,
+        "maximum": 49.248791532590985,
+        "p95": 24.843652034178373,
+        "p99": 34.52819317346439
+      },
+      "runs": 5,
+      "run_p50_ms": [
+        9.397000074386597,
+        10.096145910210907,
+        8.992458344437182,
+        10.270583326928318,
+        9.099916787818074
+      ],
+      "viewports": [
+        [
+          1600,
+          1000
+        ],
+        [
+          1600,
+          1000
+        ],
+        [
+          1600,
+          1000
+        ],
+        [
+          1600,
+          1000
+        ],
+        [
+          1600,
+          1000
+        ]
+      ],
+      "pty_cells": [
+        [
+          88,
+          21
+        ],
+        [
+          88,
+          21
+        ],
+        [
+          88,
+          21
+        ],
+        [
+          88,
+          21
+        ],
+        [
+          88,
+          21
+        ]
+      ]
+    }
+  },
+  "failures": [
+    {
+      "file": "capabilities/Allocations/receipt.json",
+      "command": [
+        "xcrun",
+        "xctrace",
+        "record",
+        "--template",
+        "Allocations",
+        "--time-limit",
+        "10s",
+        "--output",
+        "/private/tmp/telar-dod-analysis/results/capabilities/Allocations.trace",
+        "--launch",
+        "--",
+        "/private/tmp/telar-dod-analysis/B0/bin/telar-dod-probe"
+      ],
+      "status": "timeout",
+      "elapsed_s": 90.03038320806809,
+      "children_user_s": 1.2718889999999945,
+      "children_system_s": 0.5207939999999995
+    }
+  ],
+  "native_failures": [
+    {
+      "build": "B2",
+      "case": "splits",
+      "panes": 8,
+      "error": "ProbeFailure('gui probe failed (10): Layout setup or fixture readiness timed out; 0 responses completed')"
+    },
+    {
+      "build": "B2",
+      "case": "splits-load",
+      "panes": 4,
+      "error": "RuntimeError('background output missed its requested rate; raw observations retained in /private/tmp/telar-dod-analysis/results/native/B2-splits-load-4/result.json')"
+    },
+    {
+      "build": "B2",
+      "case": "splits-load",
+      "panes": 4,
+      "error": "RuntimeError('background output missed its requested rate; raw observations retained in /private/tmp/telar-dod-analysis/results/load/B2-splits-load-4/result.json')"
+    }
+  ],
+  "limitations": [
+    "Counters cover the declared catalog only.",
+    "CPU workloads exclude window composition, GPU, foreign allocator internals and physical display.",
+    "Histogram buckets bound quantiles; CPU samples are not calls.",
+    "Do not combine CPU kernels, runtime DSR and native GPU latency into one ranking."
+  ]
+}

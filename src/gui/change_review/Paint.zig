@@ -24,6 +24,7 @@ cursor_y: f32 = 0,
 cursor_height: f32 = 0,
 
 pub fn draw(self: *Self) !void {
+    core.profiling.add(.review_draw, 1);
     const w = self.widget;
     const canvas = self.canvas;
     canvas.theme = w.theme_override orelse data.theme_support.builtin(w.theme);
@@ -119,13 +120,21 @@ fn searchStatus(self: *Self, buffer: []u8) ![]const u8 {
     const file = revision.files[w.model.file];
     const query = w.model.search.query.text();
     const anchor = revision.rows[w.model.tail];
+    var profile_rows: u64 = 0;
+    var profile_bytes: u64 = 0;
+    defer {
+        core.profiling.add(.review_search_rows, profile_rows);
+        core.profiling.add(.review_search_bytes, profile_bytes);
+    }
     var count: usize = 0;
     var selected: usize = 0;
     for (revision.rows[file.first..file.last], file.first..) |line, index| {
+        profile_rows += 1;
         if (w.model.visual and (line.hunk != anchor.hunk or line.before() != anchor.before())) {
             continue;
         }
 
+        profile_bytes += line.value.text.len;
         var offset: usize = 0;
         while (std.mem.indexOfPos(u8, line.value.text, offset, query)) |at| {
             count += 1;

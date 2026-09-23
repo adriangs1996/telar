@@ -177,6 +177,7 @@ pub fn add(b: *std.Build, app: Application, bench: Benchmarks) *std.Build.Step {
         .{ .path = "src/core/schema/wire.zig", .schema = true },
         .{ .path = "src/core/transport/transport.zig", .transport = true },
         .{ .path = "src/core/diagnostics.zig" },
+        .{ .path = "src/core/ProfileStore.zig", .libc = true },
         .{ .path = "src/core/schema/handshake.zig", .schema = true },
         .{ .path = "src/core/schema_contract_test.zig", .schema = true },
         .{ .path = "src/core/plugin.zig" },

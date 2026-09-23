@@ -1,0 +1,1243 @@
+[
+  {
+    "type": "layout",
+    "name": "ui.Cell",
+    "size": 32,
+    "alignment": 2,
+    "fields": [
+      {
+        "name": "bytes",
+        "offset": 14,
+        "size": 16
+      },
+      {
+        "name": "len",
+        "offset": 30,
+        "size": 1
+      },
+      {
+        "name": "width",
+        "offset": 31,
+        "size": 1
+      },
+      {
+        "name": "style",
+        "offset": 0,
+        "size": 14
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "panes.Pane",
+    "size": 4712,
+    "alignment": 8,
+    "fields": [
+      {
+        "name": "gpa",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "id",
+        "offset": 232,
+        "size": 8
+      },
+      {
+        "name": "location",
+        "offset": 24,
+        "size": 24
+      },
+      {
+        "name": "buffer",
+        "offset": 48,
+        "size": 112
+      },
+      {
+        "name": "text_metadata",
+        "offset": 160,
+        "size": 8
+      },
+      {
+        "name": "damage_rows",
+        "offset": 168,
+        "size": 16
+      },
+      {
+        "name": "attached",
+        "offset": 4706,
+        "size": 1
+      },
+      {
+        "name": "attachment_generation",
+        "offset": 192,
+        "size": 8
+      },
+      {
+        "name": "cursor",
+        "offset": 4632,
+        "size": 6
+      },
+      {
+        "name": "mouse",
+        "offset": 4638,
+        "size": 3
+      },
+      {
+        "name": "input_modes",
+        "offset": 4698,
+        "size": 8
+      },
+      {
+        "name": "pointer_shape",
+        "offset": 4697,
+        "size": 1
+      },
+      {
+        "name": "scroll",
+        "offset": 4624,
+        "size": 8
+      },
+      {
+        "name": "applied_frame_id",
+        "offset": 4616,
+        "size": 8
+      },
+      {
+        "name": "pending_frame_id",
+        "offset": 224,
+        "size": 8
+      },
+      {
+        "name": "graphics_placeholder",
+        "offset": 4696,
+        "size": 1
+      },
+      {
+        "name": "cwd",
+        "offset": 416,
+        "size": 16
+      },
+      {
+        "name": "foreground_name",
+        "offset": 4648,
+        "size": 48
+      },
+      {
+        "name": "foreground_name_len",
+        "offset": 4641,
+        "size": 1
+      },
+      {
+        "name": "progress_state",
+        "offset": 4647,
+        "size": 1
+      },
+      {
+        "name": "progress_percent",
+        "offset": 4643,
+        "size": 2
+      },
+      {
+        "name": "title",
+        "offset": 464,
+        "size": 16
+      },
+      {
+        "name": "composer_field",
+        "offset": 480,
+        "size": 4128
+      },
+      {
+        "name": "composer_revision",
+        "offset": 4608,
+        "size": 8
+      },
+      {
+        "name": "composer_images",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "composer_content_revision",
+        "offset": 440,
+        "size": 8
+      },
+      {
+        "name": "kind",
+        "offset": 4642,
+        "size": 1
+      },
+      {
+        "name": "pane_generation",
+        "offset": 208,
+        "size": 8
+      },
+      {
+        "name": "change_review",
+        "offset": 240,
+        "size": 160
+      },
+      {
+        "name": "agent_thread",
+        "offset": 200,
+        "size": 8
+      },
+      {
+        "name": "agent_history",
+        "offset": 456,
+        "size": 8
+      },
+      {
+        "name": "history_intent",
+        "offset": 4645,
+        "size": 2
+      },
+      {
+        "name": "history_generation",
+        "offset": 448,
+        "size": 8
+      },
+      {
+        "name": "transcript_scroll",
+        "offset": 432,
+        "size": 8
+      },
+      {
+        "name": "transcript_anchor_revision",
+        "offset": 408,
+        "size": 8
+      },
+      {
+        "name": "agent_options",
+        "offset": 400,
+        "size": 8
+      },
+      {
+        "name": "options_revision",
+        "offset": 216,
+        "size": 8
+      },
+      {
+        "name": "catalog_revision",
+        "offset": 184,
+        "size": 8
+      },
+      {
+        "name": "resume_history_requested",
+        "offset": 4707,
+        "size": 1
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "workspace.MultiplexerModel",
+    "size": 8024,
+    "alignment": 8,
+    "fields": [
+      {
+        "name": "gpa",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "layout",
+        "offset": 16,
+        "size": 3072
+      },
+      {
+        "name": "panes",
+        "offset": 3088,
+        "size": 512
+      },
+      {
+        "name": "pane_index",
+        "offset": 3600,
+        "size": 1152
+      },
+      {
+        "name": "pane_count",
+        "offset": 4752,
+        "size": 8
+      },
+      {
+        "name": "location",
+        "offset": 4760,
+        "size": 32
+      },
+      {
+        "name": "cell_width_px",
+        "offset": 8016,
+        "size": 2
+      },
+      {
+        "name": "cell_height_px",
+        "offset": 8018,
+        "size": 2
+      },
+      {
+        "name": "layout_snapshot",
+        "offset": 4792,
+        "size": 3224
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "workspace.Tab",
+    "size": 8240,
+    "alignment": 8,
+    "fields": [
+      {
+        "name": "location",
+        "offset": 0,
+        "size": 24
+      },
+      {
+        "name": "label",
+        "offset": 8056,
+        "size": 128
+      },
+      {
+        "name": "label_len",
+        "offset": 8184,
+        "size": 1
+      },
+      {
+        "name": "model",
+        "offset": 24,
+        "size": 8024
+      },
+      {
+        "name": "snapshot_loaded",
+        "offset": 8185,
+        "size": 1
+      },
+      {
+        "name": "restore_display_order",
+        "offset": 8186,
+        "size": 1
+      },
+      {
+        "name": "foreground_pane",
+        "offset": 8048,
+        "size": 8
+      },
+      {
+        "name": "foreground_name",
+        "offset": 8187,
+        "size": 48
+      },
+      {
+        "name": "foreground_name_len",
+        "offset": 8235,
+        "size": 1
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "workspace.TabsModel",
+    "size": 535144,
+    "alignment": 8,
+    "fields": [
+      {
+        "name": "gpa",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "workspace",
+        "offset": 16,
+        "size": 24
+      },
+      {
+        "name": "workspace_name",
+        "offset": 531046,
+        "size": 4096
+      },
+      {
+        "name": "workspace_name_len",
+        "offset": 531040,
+        "size": 2
+      },
+      {
+        "name": "items",
+        "offset": 40,
+        "size": 527872
+      },
+      {
+        "name": "count",
+        "offset": 527912,
+        "size": 8
+      },
+      {
+        "name": "active_index",
+        "offset": 527920,
+        "size": 8
+      },
+      {
+        "name": "pane_gaps",
+        "offset": 535142,
+        "size": 1
+      },
+      {
+        "name": "cell_width_px",
+        "offset": 531042,
+        "size": 2
+      },
+      {
+        "name": "cell_height_px",
+        "offset": 531044,
+        "size": 2
+      },
+      {
+        "name": "pending_layout_restore",
+        "offset": 527928,
+        "size": 3112
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "AttachedClient",
+    "size": 2170784,
+    "alignment": 16,
+    "fields": [
+      {
+        "name": "io",
+        "offset": 2147640,
+        "size": 16
+      },
+      {
+        "name": "gpa",
+        "offset": 1153312,
+        "size": 16
+      },
+      {
+        "name": "runtime_transport",
+        "offset": 1428032,
+        "size": 719608
+      },
+      {
+        "name": "options",
+        "offset": 0,
+        "size": 7120
+      },
+      {
+        "name": "client_identity",
+        "offset": 24424,
+        "size": 8
+      },
+      {
+        "name": "telemetry",
+        "offset": 24432,
+        "size": 8760
+      },
+      {
+        "name": "client_layouts",
+        "offset": 33192,
+        "size": 2104
+      },
+      {
+        "name": "startup",
+        "offset": 2170774,
+        "size": 1
+      },
+      {
+        "name": "model",
+        "offset": 35312,
+        "size": 918304
+      },
+      {
+        "name": "navigation_history",
+        "offset": 953616,
+        "size": 199680
+      },
+      {
+        "name": "lua_generation",
+        "offset": 1153296,
+        "size": 8
+      },
+      {
+        "name": "plugin_registry",
+        "offset": 1153304,
+        "size": 8
+      },
+      {
+        "name": "trust_store",
+        "offset": 1153328,
+        "size": 8
+      },
+      {
+        "name": "reload",
+        "offset": 7120,
+        "size": 17216
+      },
+      {
+        "name": "sound_playback",
+        "offset": 2170768,
+        "size": 6
+      },
+      {
+        "name": "notification_delivery",
+        "offset": 2170296,
+        "size": 1
+      },
+      {
+        "name": "history_show_agent_commands",
+        "offset": 2170767,
+        "size": 1
+      },
+      {
+        "name": "history_enter_runs",
+        "offset": 2170766,
+        "size": 1
+      },
+      {
+        "name": "history_match_fts",
+        "offset": 2170765,
+        "size": 1
+      },
+      {
+        "name": "list_submission_alternate",
+        "offset": 2170764,
+        "size": 1
+      },
+      {
+        "name": "appearance_themes",
+        "offset": 2170298,
+        "size": 466
+      },
+      {
+        "name": "clipboard_capture_resources",
+        "offset": 1153512,
+        "size": 8
+      },
+      {
+        "name": "link_opening",
+        "offset": 2166192,
+        "size": 4104
+      },
+      {
+        "name": "link_pointer",
+        "offset": 2170297,
+        "size": 1
+      },
+      {
+        "name": "request_lifecycle",
+        "offset": 1153560,
+        "size": 16144
+      },
+      {
+        "name": "change_review",
+        "offset": 1169704,
+        "size": 258328
+      },
+      {
+        "name": "sidebar_animation_scheduler",
+        "offset": 24336,
+        "size": 16
+      },
+      {
+        "name": "notification_scheduler",
+        "offset": 1153496,
+        "size": 16
+      },
+      {
+        "name": "bar_updates",
+        "offset": 2165768,
+        "size": 128
+      },
+      {
+        "name": "path_completions",
+        "offset": 2147672,
+        "size": 8216
+      },
+      {
+        "name": "favicons",
+        "offset": 2155888,
+        "size": 24
+      },
+      {
+        "name": "input_leases",
+        "offset": 2155912,
+        "size": 1552
+      },
+      {
+        "name": "sound_port",
+        "offset": 2157464,
+        "size": 16
+      },
+      {
+        "name": "notifier",
+        "offset": 2157480,
+        "size": 16
+      },
+      {
+        "name": "link_opener",
+        "offset": 2157496,
+        "size": 16
+      },
+      {
+        "name": "editor_open",
+        "offset": 2157512,
+        "size": 8232
+      },
+      {
+        "name": "capture_port",
+        "offset": 2165744,
+        "size": 24
+      },
+      {
+        "name": "host_clipboard",
+        "offset": 2147656,
+        "size": 16
+      },
+      {
+        "name": "host_graphics",
+        "offset": 2165896,
+        "size": 16
+      },
+      {
+        "name": "graphics",
+        "offset": 24352,
+        "size": 72
+      },
+      {
+        "name": "chrome",
+        "offset": 2165968,
+        "size": 104
+      },
+      {
+        "name": "attachment_catalog",
+        "offset": 2166072,
+        "size": 48
+      },
+      {
+        "name": "attachment_shelf",
+        "offset": 2166120,
+        "size": 72
+      },
+      {
+        "name": "presentation",
+        "offset": 2165912,
+        "size": 56
+      },
+      {
+        "name": "timers",
+        "offset": 1153536,
+        "size": 24
+      },
+      {
+        "name": "bar_runner",
+        "offset": 1153520,
+        "size": 16
+      },
+      {
+        "name": "plugin_runner",
+        "offset": 1153360,
+        "size": 16
+      },
+      {
+        "name": "path_completion_runner",
+        "offset": 1153480,
+        "size": 16
+      },
+      {
+        "name": "favicon_runner",
+        "offset": 1153456,
+        "size": 24
+      },
+      {
+        "name": "clock",
+        "offset": 1153440,
+        "size": 16
+      },
+      {
+        "name": "host_input_source",
+        "offset": 1153376,
+        "size": 64
+      },
+      {
+        "name": "transport_driver",
+        "offset": 1153336,
+        "size": 24
+      },
+      {
+        "name": "config_watcher",
+        "offset": 35296,
+        "size": 16
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "render.TerminalRenderer",
+    "size": 51840,
+    "alignment": 16,
+    "fields": [
+      {
+        "name": "allocator",
+        "offset": 46504,
+        "size": 16
+      },
+      {
+        "name": "io",
+        "offset": 46480,
+        "size": 24
+      },
+      {
+        "name": "config",
+        "offset": 51316,
+        "size": 308
+      },
+      {
+        "name": "theme",
+        "offset": 51712,
+        "size": 62
+      },
+      {
+        "name": "font",
+        "offset": 46528,
+        "size": 4376
+      },
+      {
+        "name": "atlas",
+        "offset": 0,
+        "size": 46432
+      },
+      {
+        "name": "sprites",
+        "offset": 50904,
+        "size": 64
+      },
+      {
+        "name": "diagrams",
+        "offset": 50968,
+        "size": 192
+      },
+      {
+        "name": "quads",
+        "offset": 51160,
+        "size": 56
+      },
+      {
+        "name": "cell_quads",
+        "offset": 51216,
+        "size": 56
+      },
+      {
+        "name": "retained",
+        "offset": 46432,
+        "size": 48
+      },
+      {
+        "name": "repainted_cells",
+        "offset": 46520,
+        "size": 8
+      },
+      {
+        "name": "metrics",
+        "offset": 51280,
+        "size": 12
+      },
+      {
+        "name": "chrome",
+        "offset": 51292,
+        "size": 24
+      },
+      {
+        "name": "sidebar_request",
+        "offset": 51272,
+        "size": 8
+      },
+      {
+        "name": "sidebar",
+        "offset": 51624,
+        "size": 20
+      },
+      {
+        "name": "scale",
+        "offset": 51644,
+        "size": 4
+      },
+      {
+        "name": "origin",
+        "offset": 51648,
+        "size": 8
+      },
+      {
+        "name": "viewport",
+        "offset": 51656,
+        "size": 8
+      },
+      {
+        "name": "atlas_version",
+        "offset": 51664,
+        "size": 4
+      },
+      {
+        "name": "last_page_version",
+        "offset": 51668,
+        "size": 4
+      },
+      {
+        "name": "sprites_version",
+        "offset": 51672,
+        "size": 4
+      },
+      {
+        "name": "last_sprites_version",
+        "offset": 51676,
+        "size": 4
+      },
+      {
+        "name": "background",
+        "offset": 51680,
+        "size": 16
+      },
+      {
+        "name": "foreground",
+        "offset": 51696,
+        "size": 16
+      },
+      {
+        "name": "last_theme",
+        "offset": 51774,
+        "size": 63
+      },
+      {
+        "name": "cursor_on",
+        "offset": 51837,
+        "size": 1
+      },
+      {
+        "name": "focused",
+        "offset": 51838,
+        "size": 1
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "render.CellMesh",
+    "size": 1972,
+    "alignment": 4,
+    "fields": [
+      {
+        "name": "valid",
+        "offset": 1968,
+        "size": 1
+      },
+      {
+        "name": "paint",
+        "offset": 0,
+        "size": 48
+      },
+      {
+        "name": "quads",
+        "offset": 48,
+        "size": 1920
+      },
+      {
+        "name": "len",
+        "offset": 1969,
+        "size": 1
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "render.Quad.Quad",
+    "size": 80,
+    "alignment": 4,
+    "fields": [
+      {
+        "name": "x",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "name": "y",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "name": "width",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "name": "height",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "name": "u0",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "name": "v0",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "name": "u1",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "name": "v1",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "name": "r",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "name": "g",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "name": "b",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "name": "a",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "name": "radius",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "name": "border",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "name": "texture",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "name": "reserved",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "name": "border_r",
+        "offset": 64,
+        "size": 4
+      },
+      {
+        "name": "border_g",
+        "offset": 68,
+        "size": 4
+      },
+      {
+        "name": "border_b",
+        "offset": 72,
+        "size": 4
+      },
+      {
+        "name": "border_a",
+        "offset": 76,
+        "size": 4
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "widgets.ThreadFlow",
+    "size": 770432,
+    "alignment": 8,
+    "fields": [
+      {
+        "name": "bounds",
+        "offset": 770400,
+        "size": 16
+      },
+      {
+        "name": "thread",
+        "offset": 0,
+        "size": 320
+      },
+      {
+        "name": "rows",
+        "offset": 320,
+        "size": 770048
+      },
+      {
+        "name": "len",
+        "offset": 770368,
+        "size": 8
+      },
+      {
+        "name": "height",
+        "offset": 770416,
+        "size": 4
+      },
+      {
+        "name": "scroll_limit",
+        "offset": 770376,
+        "size": 8
+      },
+      {
+        "name": "resolved_scroll",
+        "offset": 770384,
+        "size": 8
+      },
+      {
+        "name": "destination_scroll",
+        "offset": 770392,
+        "size": 8
+      },
+      {
+        "name": "scroll_step",
+        "offset": 770420,
+        "size": 4
+      },
+      {
+        "name": "reanchored",
+        "offset": 770424,
+        "size": 1
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "change_review.Widget",
+    "size": 616984,
+    "alignment": 8,
+    "fields": [
+      {
+        "name": "host",
+        "offset": 255704,
+        "size": 262312
+      },
+      {
+        "name": "host_port",
+        "offset": 518064,
+        "size": 8
+      },
+      {
+        "name": "layer",
+        "offset": 616976,
+        "size": 1
+      },
+      {
+        "name": "mode",
+        "offset": 616975,
+        "size": 1
+      },
+      {
+        "name": "command",
+        "offset": 616972,
+        "size": 2
+      },
+      {
+        "name": "changed_comments",
+        "offset": 518092,
+        "size": 4
+      },
+      {
+        "name": "deleted_comments",
+        "offset": 518088,
+        "size": 4
+      },
+      {
+        "name": "reviewed_changed",
+        "offset": 616969,
+        "size": 1
+      },
+      {
+        "name": "theme_override",
+        "offset": 616733,
+        "size": 233
+      },
+      {
+        "name": "edition_id",
+        "offset": 518016,
+        "size": 8
+      },
+      {
+        "name": "source_label",
+        "offset": 518024,
+        "size": 16
+      },
+      {
+        "name": "previous_edition",
+        "offset": 616732,
+        "size": 1
+      },
+      {
+        "name": "next_edition",
+        "offset": 616731,
+        "size": 1
+      },
+      {
+        "name": "loading",
+        "offset": 616730,
+        "size": 1
+      },
+      {
+        "name": "read_only",
+        "offset": 616968,
+        "size": 1
+      },
+      {
+        "name": "delivery",
+        "offset": 518424,
+        "size": 1
+      },
+      {
+        "name": "live_status",
+        "offset": 518104,
+        "size": 320
+      },
+      {
+        "name": "model",
+        "offset": 8,
+        "size": 236760
+      },
+      {
+        "name": "roles",
+        "offset": 518426,
+        "size": 98304
+      },
+      {
+        "name": "theme",
+        "offset": 518425,
+        "size": 1
+      },
+      {
+        "name": "widgets",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "generation",
+        "offset": 518048,
+        "size": 8
+      },
+      {
+        "name": "text_revision",
+        "offset": 518040,
+        "size": 8
+      },
+      {
+        "name": "scroll",
+        "offset": 518076,
+        "size": 4
+      },
+      {
+        "name": "maximum_scroll",
+        "offset": 518080,
+        "size": 4
+      },
+      {
+        "name": "sidebar_start",
+        "offset": 518056,
+        "size": 8
+      },
+      {
+        "name": "reveal",
+        "offset": 616966,
+        "size": 1
+      },
+      {
+        "name": "needs_focus",
+        "offset": 616967,
+        "size": 1
+      },
+      {
+        "name": "prepared_cell",
+        "offset": 518072,
+        "size": 4
+      },
+      {
+        "name": "cell",
+        "offset": 518084,
+        "size": 4
+      },
+      {
+        "name": "copy_range",
+        "offset": 255680,
+        "size": 24
+      },
+      {
+        "name": "dragging",
+        "offset": 616970,
+        "size": 1
+      },
+      {
+        "name": "clipboard_id",
+        "offset": 255664,
+        "size": 16
+      },
+      {
+        "name": "clipboard_revision",
+        "offset": 255656,
+        "size": 8
+      },
+      {
+        "name": "clipboard_selection",
+        "offset": 518096,
+        "size": 8
+      },
+      {
+        "name": "clipboard_cut",
+        "offset": 616971,
+        "size": 1
+      },
+      {
+        "name": "search_prompt",
+        "offset": 253216,
+        "size": 2440
+      },
+      {
+        "name": "pending_g",
+        "offset": 616974,
+        "size": 1
+      },
+      {
+        "name": "prepared_viewport",
+        "offset": 244992,
+        "size": 8224
+      },
+      {
+        "name": "viewport",
+        "offset": 236768,
+        "size": 8224
+      }
+    ]
+  },
+  {
+    "type": "layout",
+    "name": "ProfileStore",
+    "size": 163968,
+    "alignment": 128,
+    "fields": [
+      {
+        "name": "claimed",
+        "offset": 163840,
+        "size": 8
+      },
+      {
+        "name": "banks",
+        "offset": 0,
+        "size": 163840
+      }
+    ]
+  }
+]

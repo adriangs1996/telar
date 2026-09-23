@@ -1,0 +1,1782 @@
+{
+  "raw_root": "/private/tmp/telar-dod-analysis/results",
+  "native_traces": {
+    "echo": {
+      "summary": {
+        "viewport": [
+          1600,
+          1000
+        ],
+        "events": 4341,
+        "elapsed_seconds": 8.275051791919395,
+        "observation_start_s": 1625231.08308575,
+        "observation_end_s": 1625239.358137542,
+        "frames_prepared": 124,
+        "frames_gpu_completed": 124,
+        "frames_main_completed": 124,
+        "frames_fully_contained": 124,
+        "prepared_frames_excluded_from_latency": 0,
+        "prepared_per_second": 14.98480047231683,
+        "main_completed_per_second": 14.98480047231683,
+        "active_span_seconds": 7.925039499998093,
+        "active_fps": 15.520427374529755,
+        "requests": 125,
+        "busy_requests": 0,
+        "eligible_busy_requests": 0,
+        "frames_with_eligible_busy_wait": 0,
+        "dirty_busy_ms_total": 0.0,
+        "dirty_eligible_busy_ms_total": 0.0,
+        "dirty_eligible_busy_percent": 0.0,
+        "failed_gpu": 0,
+        "failed_complete": 0,
+        "metrics": {
+          "drawable_ms": {
+            "n": 124,
+            "p50_ms": 0.0680205412209034,
+            "p95_ms": 0.10545189725235105,
+            "p99_ms": 0.12384239584207529,
+            "max_ms": 0.1284999307245016,
+            "total_ms": 8.72137164697051
+          },
+          "prepare_ms": {
+            "n": 124,
+            "p50_ms": 0.3688954748213291,
+            "p95_ms": 0.5895668640732765,
+            "p99_ms": 0.7687840843573213,
+            "max_ms": 0.8591250516474247,
+            "total_ms": 48.354215919971466
+          },
+          "encode_ms": {
+            "n": 124,
+            "p50_ms": 0.4024375230073929,
+            "p95_ms": 0.7550125126726925,
+            "p99_ms": 0.9734998061321674,
+            "max_ms": 1.0281659197062254,
+            "total_ms": 54.64029009453952
+          },
+          "wait_ms": {
+            "n": 124,
+            "p50_ms": 0.08320808410644531,
+            "p95_ms": 0.12916421983391044,
+            "p99_ms": 0.16469694441184396,
+            "max_ms": 0.20708399824798107,
+            "total_ms": 10.521372081711888
+          },
+          "commit_ms": {
+            "n": 124,
+            "p50_ms": 0.006458954885601997,
+            "p95_ms": 0.010250136256217957,
+            "p99_ms": 0.011965732555836436,
+            "max_ms": 0.012292061001062393,
+            "total_ms": 0.844042981043458
+          },
+          "pump_ms": {
+            "n": 741,
+            "p50_ms": 0.015333062037825584,
+            "p95_ms": 0.04037492908537388,
+            "p99_ms": 0.05720839835703375,
+            "max_ms": 0.5235420539975166,
+            "total_ms": 13.430126011371613
+          },
+          "input_ms": {
+            "n": 121,
+            "p50_ms": 0.0177919864654541,
+            "p95_ms": 0.03420817665755749,
+            "p99_ms": 0.06114998832345006,
+            "max_ms": 0.07166690193116665,
+            "total_ms": 2.4637063033878803
+          },
+          "dirty_busy_ms": {
+            "n": 124,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "total_ms": 0.0
+          },
+          "eligible_busy_ms": {
+            "n": 124,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "total_ms": 0.0
+          },
+          "request_to_prepare_ms": {
+            "n": 124,
+            "p50_ms": 0.08895841892808676,
+            "p95_ms": 0.14700184110552073,
+            "p99_ms": 11.351883369497896,
+            "max_ms": 17.477791057899594,
+            "total_ms": 43.41878276318312
+          },
+          "cadence_bound_ms": {
+            "n": 124,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0,
+            "total_ms": 0
+          },
+          "gpu_work_ms": {
+            "n": 124,
+            "p50_ms": 4.034812445752323,
+            "p95_ms": 18.669199908617884,
+            "p99_ms": 24.80672499630599,
+            "max_ms": 27.13000006042421,
+            "total_ms": 770.1770456042141
+          },
+          "submit_to_gpu_start_ms": {
+            "n": 124,
+            "p50_ms": 0.3542705671861768,
+            "p95_ms": 8.690926618874073,
+            "p99_ms": 12.930353446863586,
+            "max_ms": 17.941208090633154,
+            "total_ms": 240.26780505664647
+          },
+          "gpu_end_to_feedback_ms": {
+            "n": 124,
+            "p50_ms": 0.2158960560336709,
+            "p95_ms": 0.3793982905335724,
+            "p99_ms": 0.7045746990479526,
+            "max_ms": 0.7974999025464058,
+            "total_ms": 29.47302022948861
+          },
+          "submit_to_feedback_ms": {
+            "n": 124,
+            "p50_ms": 6.358604063279927,
+            "p95_ms": 22.952200181316584,
+            "p99_ms": 33.28779176808893,
+            "max_ms": 34.32779083959758,
+            "total_ms": 1039.9178708903491
+          },
+          "feedback_to_main_ms": {
+            "n": 124,
+            "p50_ms": 0.024667009711265564,
+            "p95_ms": 0.03801613347604871,
+            "p99_ms": 0.06031823577359312,
+            "max_ms": 0.06700004450976849,
+            "total_ms": 3.1465860083699226
+          },
+          "slot_occupied_ms": {
+            "n": 124,
+            "p50_ms": 6.47818751167506,
+            "p95_ms": 23.084101709537208,
+            "p99_ms": 33.42653321800753,
+            "max_ms": 34.37291621230543,
+            "total_ms": 1054.1502018459141
+          },
+          "frame_interval_ms": {
+            "n": 123,
+            "p50_ms": 59.94750000536442,
+            "p95_ms": 83.39556644205004,
+            "p99_ms": 107.80548094306144,
+            "max_ms": 747.5068748462945,
+            "total_ms": 7925.039499998093
+          }
+        },
+        "windowed": false,
+        "sample_policy": "Method durations require both endpoints inside the window. Windowed frame latency requires observed request through main completion inside it. Counters count events inside the window; wait totals include clipped partial intervals.",
+        "limitation": "Eligible busy wait counts work visible to this client under its current delivery contract; it does not estimate work the runtime has not published."
+      },
+      "manifest": {
+        "binary": "/private/tmp/telar-dod-analysis/B3/bin/telar",
+        "binary_sha256": "ac72d0818ef1cb3d4f039c5243c197613330fccccf914cae9269000432b956a4",
+        "probe_sha256": "21c15ebd56b7313a2b72caf9945790f7fcbb75d7e057bc0ae17e0c5010d08640",
+        "workload": "echo",
+        "rate": 120,
+        "viewport": [
+          1600,
+          1000
+        ],
+        "marker": false,
+        "start_seconds": 3,
+        "close_seconds": 30.0,
+        "samples": 100,
+        "input_method": "text",
+        "os": "macOS-26.6.2-arm64-arm-64bit",
+        "machine": "arm64"
+      },
+      "size": [
+        88,
+        21
+      ]
+    },
+    "idle": {
+      "summary": {
+        "viewport": [
+          1600,
+          1000
+        ],
+        "events": 312,
+        "elapsed_seconds": 21.004686624975875,
+        "observation_start_s": 1625247.670024291,
+        "observation_end_s": 1625268.674710916,
+        "frames_prepared": 10,
+        "frames_gpu_completed": 10,
+        "frames_main_completed": 10,
+        "frames_fully_contained": 10,
+        "prepared_frames_excluded_from_latency": 0,
+        "prepared_per_second": 0.47608422722714555,
+        "main_completed_per_second": 0.47608422722714555,
+        "active_span_seconds": 20.068837250117213,
+        "active_fps": 0.4484564744749941,
+        "requests": 10,
+        "busy_requests": 0,
+        "eligible_busy_requests": 0,
+        "frames_with_eligible_busy_wait": 0,
+        "dirty_busy_ms_total": 0.0,
+        "dirty_eligible_busy_ms_total": 0.0,
+        "dirty_eligible_busy_percent": 0.0,
+        "failed_gpu": 0,
+        "failed_complete": 0,
+        "metrics": {
+          "drawable_ms": {
+            "n": 10,
+            "p50_ms": 0.07635459769517183,
+            "p95_ms": 0.1373959588818252,
+            "p99_ms": 0.13844646280631423,
+            "max_ms": 0.13870908878743649,
+            "total_ms": 0.8470434695482254
+          },
+          "prepare_ms": {
+            "n": 10,
+            "p50_ms": 0.43193751480430365,
+            "p95_ms": 0.5969086196273564,
+            "p99_ms": 0.6481488700956106,
+            "max_ms": 0.6609589327126741,
+            "total_ms": 4.306250950321555
+          },
+          "encode_ms": {
+            "n": 10,
+            "p50_ms": 0.30885403975844383,
+            "p95_ms": 0.42574563995003695,
+            "p99_ms": 0.4503156803548336,
+            "max_ms": 0.45645819045603275,
+            "total_ms": 3.120081964880228
+          },
+          "wait_ms": {
+            "n": 10,
+            "p50_ms": 0.09770796168595552,
+            "p95_ms": 0.13978754868730903,
+            "p99_ms": 0.14395746169611812,
+            "max_ms": 0.1449999399483204,
+            "total_ms": 0.9962916374206543
+          },
+          "commit_ms": {
+            "n": 10,
+            "p50_ms": 0.006749993190169334,
+            "p95_ms": 0.009146297816187143,
+            "p99_ms": 0.009296417701989412,
+            "max_ms": 0.00933394767343998,
+            "total_ms": 0.06866804324090481
+          },
+          "pump_ms": {
+            "n": 51,
+            "p50_ms": 0.023416941985487938,
+            "p95_ms": 0.059624435380101204,
+            "p99_ms": 0.07293745875358582,
+            "max_ms": 0.0802499707788229,
+            "total_ms": 1.395959174260497
+          },
+          "input_ms": {
+            "n": 0
+          },
+          "dirty_busy_ms": {
+            "n": 10,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "total_ms": 0.0
+          },
+          "eligible_busy_ms": {
+            "n": 10,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "total_ms": 0.0
+          },
+          "request_to_prepare_ms": {
+            "n": 10,
+            "p50_ms": 0.10600045789033175,
+            "p95_ms": 0.1830998109653592,
+            "p99_ms": 0.18322000745683908,
+            "max_ms": 0.18325005657970905,
+            "total_ms": 1.1572071816772223
+          },
+          "cadence_bound_ms": {
+            "n": 10,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0,
+            "total_ms": 0
+          },
+          "gpu_work_ms": {
+            "n": 10,
+            "p50_ms": 6.9931038888171315,
+            "p95_ms": 17.663333204109218,
+            "p99_ms": 18.44393305713311,
+            "max_ms": 18.63908302038908,
+            "total_ms": 88.66904117166996
+          },
+          "submit_to_gpu_start_ms": {
+            "n": 10,
+            "p50_ms": 3.992416546680033,
+            "p95_ms": 10.797918715979904,
+            "p99_ms": 11.10558359650895,
+            "max_ms": 11.182499816641212,
+            "total_ms": 57.62204132042825
+          },
+          "gpu_end_to_feedback_ms": {
+            "n": 10,
+            "p50_ms": 0.2320209750905633,
+            "p95_ms": 0.33665420487523073,
+            "p99_ms": 0.3614643029868603,
+            "max_ms": 0.36766682751476765,
+            "total_ms": 2.4113752879202366
+          },
+          "submit_to_feedback_ms": {
+            "n": 10,
+            "p50_ms": 15.837583458051085,
+            "p95_ms": 22.99331852700561,
+            "p99_ms": 23.64736362826079,
+            "max_ms": 23.810874903574586,
+            "total_ms": 148.70245778001845
+          },
+          "feedback_to_main_ms": {
+            "n": 10,
+            "p50_ms": 0.028562499210238457,
+            "p95_ms": 0.05372284213081,
+            "p99_ms": 0.06087822141125798,
+            "max_ms": 0.06266706623136997,
+            "total_ms": 0.2992921508848667
+          },
+          "slot_occupied_ms": {
+            "n": 10,
+            "p50_ms": 15.98214590921998,
+            "p95_ms": 23.112445452716198,
+            "p99_ms": 23.791855450253934,
+            "max_ms": 23.961707949638367,
+            "total_ms": 150.03679040819407
+          },
+          "frame_interval_ms": {
+            "n": 9,
+            "p50_ms": 2008.3217499777675,
+            "p95_ms": 3207.4459085706612,
+            "p99_ms": 3845.9767489228398,
+            "max_ms": 4005.609459010884,
+            "total_ms": 20068.837250117213
+          }
+        },
+        "windowed": true,
+        "sample_policy": "Method durations require both endpoints inside the window. Windowed frame latency requires observed request through main completion inside it. Counters count events inside the window; wait totals include clipped partial intervals.",
+        "limitation": "Eligible busy wait counts work visible to this client under its current delivery contract; it does not estimate work the runtime has not published."
+      },
+      "manifest": {
+        "binary": "/private/tmp/telar-dod-analysis/B3/bin/telar",
+        "binary_sha256": "ac72d0818ef1cb3d4f039c5243c197613330fccccf914cae9269000432b956a4",
+        "probe_sha256": "21c15ebd56b7313a2b72caf9945790f7fcbb75d7e057bc0ae17e0c5010d08640",
+        "workload": "idle",
+        "rate": 120,
+        "viewport": [
+          1600,
+          1000
+        ],
+        "marker": false,
+        "start_seconds": 3,
+        "close_seconds": 30.0,
+        "samples": null,
+        "input_method": null,
+        "os": "macOS-26.6.2-arm64-arm-64bit",
+        "machine": "arm64"
+      },
+      "size": {
+        "mode": "idle",
+        "requested_rate_hz": 120,
+        "cells": [
+          88,
+          21
+        ],
+        "rendered_cells": [
+          88,
+          21
+        ],
+        "started_monotonic_s": 1625242.670024291,
+        "finished_monotonic_s": 1625268.674710916,
+        "output_batches": 0,
+        "output_bytes": 0,
+        "skipped_ticks": 0,
+        "marker_updates": null
+      }
+    },
+    "scroll": {
+      "summary": {
+        "viewport": [
+          1600,
+          1000
+        ],
+        "events": 35480,
+        "elapsed_seconds": 21.0030869578477,
+        "observation_start_s": 1625279.460057208,
+        "observation_end_s": 1625300.463144166,
+        "frames_prepared": 1171,
+        "frames_gpu_completed": 1170,
+        "frames_main_completed": 1170,
+        "frames_fully_contained": 1169,
+        "prepared_frames_excluded_from_latency": 2,
+        "prepared_per_second": 55.75370907858198,
+        "main_completed_per_second": 55.706097029838524,
+        "active_span_seconds": 20.983867874834687,
+        "active_fps": 55.757118133742416,
+        "requests": 1410,
+        "busy_requests": 0,
+        "eligible_busy_requests": 0,
+        "frames_with_eligible_busy_wait": 0,
+        "dirty_busy_ms_total": 0.0,
+        "dirty_eligible_busy_ms_total": 0.0,
+        "dirty_eligible_busy_percent": 0.0,
+        "failed_gpu": 0,
+        "failed_complete": 0,
+        "metrics": {
+          "drawable_ms": {
+            "n": 1171,
+            "p50_ms": 0.07995800115168095,
+            "p95_ms": 7.132521015591919,
+            "p99_ms": 14.056624844670285,
+            "max_ms": 18.565665930509567,
+            "total_ms": 1575.441664783284
+          },
+          "prepare_ms": {
+            "n": 1171,
+            "p50_ms": 0.6469171494245529,
+            "p95_ms": 0.9686045814305544,
+            "p99_ms": 1.1170579586178058,
+            "max_ms": 1.4704579953104258,
+            "total_ms": 760.1886973716319
+          },
+          "encode_ms": {
+            "n": 1171,
+            "p50_ms": 0.2798750065267086,
+            "p95_ms": 0.43866655323654413,
+            "p99_ms": 0.6517713656648991,
+            "max_ms": 0.7949999999254942,
+            "total_ms": 330.65463369712234
+          },
+          "wait_ms": {
+            "n": 1171,
+            "p50_ms": 0.0910409726202488,
+            "p95_ms": 0.14147954061627388,
+            "p99_ms": 0.19075432792305944,
+            "max_ms": 0.2843327820301056,
+            "total_ms": 105.7135306764394
+          },
+          "commit_ms": {
+            "n": 1171,
+            "p50_ms": 0.007083173841238022,
+            "p95_ms": 0.012562028132379055,
+            "p99_ms": 0.02192941028624771,
+            "max_ms": 0.051208073273301125,
+            "total_ms": 8.700778242200613
+          },
+          "pump_ms": {
+            "n": 4800,
+            "p50_ms": 0.015625031664967537,
+            "p95_ms": 0.060961069539189346,
+            "p99_ms": 0.07833391427993776,
+            "max_ms": 0.38875010795891285,
+            "total_ms": 107.69137856550515
+          },
+          "input_ms": {
+            "n": 0
+          },
+          "dirty_busy_ms": {
+            "n": 1169,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "total_ms": 0.0
+          },
+          "eligible_busy_ms": {
+            "n": 1169,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "total_ms": 0.0
+          },
+          "request_to_prepare_ms": {
+            "n": 1169,
+            "p50_ms": 0.11470797471702099,
+            "p95_ms": 14.325566310435532,
+            "p99_ms": 17.814811952412104,
+            "max_ms": 31.402500113472342,
+            "total_ms": 3543.6024544760585
+          },
+          "cadence_bound_ms": {
+            "n": 1169,
+            "p50_ms": 0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0,
+            "total_ms": 0
+          },
+          "gpu_work_ms": {
+            "n": 1169,
+            "p50_ms": 7.8313329722732306,
+            "p95_ms": 15.633341576904051,
+            "p99_ms": 19.06947492621838,
+            "max_ms": 24.557125056162477,
+            "total_ms": 8507.471293909475
+          },
+          "submit_to_gpu_start_ms": {
+            "n": 1169,
+            "p50_ms": 0.4711251240223646,
+            "p95_ms": 6.906266044825314,
+            "p99_ms": 10.237019574269622,
+            "max_ms": 15.11837518773973,
+            "total_ms": 1887.2957229614258
+          },
+          "gpu_end_to_feedback_ms": {
+            "n": 1169,
+            "p50_ms": 0.24874997325241566,
+            "p95_ms": 0.8390001952648157,
+            "p99_ms": 1.2277319561690074,
+            "max_ms": 2.20295786857605,
+            "total_ms": 401.16402320563793
+          },
+          "submit_to_feedback_ms": {
+            "n": 1169,
+            "p50_ms": 9.46791609749198,
+            "p95_ms": 18.75005853362381,
+            "p99_ms": 24.138603303581448,
+            "max_ms": 26.237457990646362,
+            "total_ms": 10795.931040076539
+          },
+          "feedback_to_main_ms": {
+            "n": 1169,
+            "p50_ms": 0.026166904717683792,
+            "p95_ms": 0.044700177386403035,
+            "p99_ms": 0.057467063888907405,
+            "max_ms": 0.12520886957645416,
+            "total_ms": 31.4206057228148
+          },
+          "slot_occupied_ms": {
+            "n": 1169,
+            "p50_ms": 9.600417222827673,
+            "p95_ms": 18.875541910529133,
+            "p99_ms": 24.390117796137915,
+            "max_ms": 26.350917061790824,
+            "total_ms": 10936.892452882603
+          },
+          "frame_interval_ms": {
+            "n": 1170,
+            "p50_ms": 16.967999981716275,
+            "p95_ms": 27.586320915725082,
+            "p99_ms": 31.895068273879573,
+            "max_ms": 119.15129190310836,
+            "total_ms": 20983.867874834687
+          }
+        },
+        "windowed": true,
+        "sample_policy": "Method durations require both endpoints inside the window. Windowed frame latency requires observed request through main completion inside it. Counters count events inside the window; wait totals include clipped partial intervals.",
+        "limitation": "Eligible busy wait counts work visible to this client under its current delivery contract; it does not estimate work the runtime has not published."
+      },
+      "manifest": {
+        "binary": "/private/tmp/telar-dod-analysis/B3/bin/telar",
+        "binary_sha256": "ac72d0818ef1cb3d4f039c5243c197613330fccccf914cae9269000432b956a4",
+        "probe_sha256": "21c15ebd56b7313a2b72caf9945790f7fcbb75d7e057bc0ae17e0c5010d08640",
+        "workload": "scroll",
+        "rate": 120,
+        "viewport": [
+          1600,
+          1000
+        ],
+        "marker": false,
+        "start_seconds": 3,
+        "close_seconds": 30.0,
+        "samples": null,
+        "input_method": null,
+        "os": "macOS-26.6.2-arm64-arm-64bit",
+        "machine": "arm64"
+      },
+      "size": {
+        "mode": "scroll",
+        "requested_rate_hz": 120,
+        "cells": [
+          88,
+          21
+        ],
+        "rendered_cells": [
+          88,
+          21
+        ],
+        "started_monotonic_s": 1625274.460057208,
+        "finished_monotonic_s": 1625300.463144166,
+        "output_batches": 3103,
+        "output_bytes": 1104668,
+        "skipped_ticks": 17,
+        "marker_updates": null
+      }
+    },
+    "full": {
+      "summary": {
+        "viewport": [
+          1600,
+          1000
+        ],
+        "events": 35568,
+        "elapsed_seconds": 21.001068166922778,
+        "observation_start_s": 1625311.628589208,
+        "observation_end_s": 1625332.629657375,
+        "frames_prepared": 1170,
+        "frames_gpu_completed": 1169,
+        "frames_main_completed": 1169,
+        "frames_fully_contained": 1168,
+        "prepared_frames_excluded_from_latency": 2,
+        "prepared_per_second": 55.711451946181484,
+        "main_completed_per_second": 55.66383532058646,
+        "active_span_seconds": 20.97548741591163,
+        "active_fps": 55.73172040394244,
+        "requests": 1424,
+        "busy_requests": 0,
+        "eligible_busy_requests": 0,
+        "frames_with_eligible_busy_wait": 0,
+        "dirty_busy_ms_total": 0.0,
+        "dirty_eligible_busy_ms_total": 0.0,
+        "dirty_eligible_busy_percent": 0.0,
+        "failed_gpu": 0,
+        "failed_complete": 0,
+        "metrics": {
+          "drawable_ms": {
+            "n": 1169,
+            "p50_ms": 0.08308305405080318,
+            "p95_ms": 7.993374997749896,
+            "p99_ms": 13.549446444958434,
+            "max_ms": 17.592374933883548,
+            "total_ms": 1523.341246182099
+          },
+          "prepare_ms": {
+            "n": 1170,
+            "p50_ms": 0.6574164144694805,
+            "p95_ms": 1.0145890410058198,
+            "p99_ms": 1.1872247979044903,
+            "max_ms": 1.3965831603854895,
+            "total_ms": 770.0518392957747
+          },
+          "encode_ms": {
+            "n": 1170,
+            "p50_ms": 0.2946250606328249,
+            "p95_ms": 0.4582667257636785,
+            "p99_ms": 0.6339359562844035,
+            "max_ms": 0.8200409356504679,
+            "total_ms": 337.7573280595243
+          },
+          "wait_ms": {
+            "n": 1170,
+            "p50_ms": 0.09289546869695187,
+            "p95_ms": 0.14504104619845748,
+            "p99_ms": 0.20690049277618452,
+            "max_ms": 0.2980409190058708,
+            "total_ms": 107.63200116343796
+          },
+          "commit_ms": {
+            "n": 1170,
+            "p50_ms": 0.007916009053587914,
+            "p95_ms": 0.014042016118764877,
+            "p99_ms": 0.02359647070989003,
+            "max_ms": 0.05529215559363365,
+            "total_ms": 9.504040237516165
+          },
+          "pump_ms": {
+            "n": 4820,
+            "p50_ms": 0.013665994629263878,
+            "p95_ms": 0.056256260722875616,
+            "p99_ms": 0.07294920505955843,
+            "max_ms": 0.37954188883304596,
+            "total_ms": 97.05153619870543
+          },
+          "input_ms": {
+            "n": 0
+          },
+          "dirty_busy_ms": {
+            "n": 1168,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "total_ms": 0.0
+          },
+          "eligible_busy_ms": {
+            "n": 1168,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0.0,
+            "total_ms": 0.0
+          },
+          "request_to_prepare_ms": {
+            "n": 1168,
+            "p50_ms": 0.12370804324746132,
+            "p95_ms": 13.604066823609172,
+            "p99_ms": 17.55095412256196,
+            "max_ms": 26.774707948789,
+            "total_ms": 3586.22169890441
+          },
+          "cadence_bound_ms": {
+            "n": 1168,
+            "p50_ms": 0.0,
+            "p95_ms": 0.0,
+            "p99_ms": 0.0,
+            "max_ms": 0,
+            "total_ms": 0
+          },
+          "gpu_work_ms": {
+            "n": 1168,
+            "p50_ms": 7.261812454089522,
+            "p95_ms": 15.556429093703626,
+            "p99_ms": 19.853866193443505,
+            "max_ms": 23.95824994891882,
+            "total_ms": 8103.2243724912405
+          },
+          "submit_to_gpu_start_ms": {
+            "n": 1168,
+            "p50_ms": 0.5066664889454842,
+            "p95_ms": 7.225316378753618,
+            "p99_ms": 9.971823822706932,
+            "max_ms": 12.040166184306145,
+            "total_ms": 1976.9248946104199
+          },
+          "gpu_end_to_feedback_ms": {
+            "n": 1168,
+            "p50_ms": 0.2529165940359235,
+            "p95_ms": 0.7855168893001973,
+            "p99_ms": 1.0513905761763427,
+            "max_ms": 2.2121670190244913,
+            "total_ms": 380.6412222329527
+          },
+          "submit_to_feedback_ms": {
+            "n": 1168,
+            "p50_ms": 9.094416513107717,
+            "p95_ms": 19.169793801847824,
+            "p99_ms": 23.982110084034495,
+            "max_ms": 29.80616712011397,
+            "total_ms": 10460.790489334613
+          },
+          "feedback_to_main_ms": {
+            "n": 1168,
+            "p50_ms": 0.023833010345697403,
+            "p95_ms": 0.04421813646331427,
+            "p99_ms": 0.0565513432957231,
+            "max_ms": 0.09937514550983906,
+            "total_ms": 29.791781213134527
+          },
+          "slot_occupied_ms": {
+            "n": 1168,
+            "p50_ms": 9.22068755608052,
+            "p95_ms": 19.255233532749116,
+            "p99_ms": 24.126008658204224,
+            "max_ms": 29.9519170075655,
+            "total_ms": 10602.192115504295
+          },
+          "frame_interval_ms": {
+            "n": 1169,
+            "p50_ms": 16.972834011539817,
+            "p95_ms": 26.75400045700371,
+            "p99_ms": 31.130209425464262,
+            "max_ms": 33.286666963249445,
+            "total_ms": 20975.48741591163
+          }
+        },
+        "windowed": true,
+        "sample_policy": "Method durations require both endpoints inside the window. Windowed frame latency requires observed request through main completion inside it. Counters count events inside the window; wait totals include clipped partial intervals.",
+        "limitation": "Eligible busy wait counts work visible to this client under its current delivery contract; it does not estimate work the runtime has not published."
+      },
+      "manifest": {
+        "binary": "/private/tmp/telar-dod-analysis/B3/bin/telar",
+        "binary_sha256": "ac72d0818ef1cb3d4f039c5243c197613330fccccf914cae9269000432b956a4",
+        "probe_sha256": "21c15ebd56b7313a2b72caf9945790f7fcbb75d7e057bc0ae17e0c5010d08640",
+        "workload": "full",
+        "rate": 120,
+        "viewport": [
+          1600,
+          1000
+        ],
+        "marker": false,
+        "start_seconds": 3,
+        "close_seconds": 30.0,
+        "samples": null,
+        "input_method": null,
+        "os": "macOS-26.6.2-arm64-arm-64bit",
+        "machine": "arm64"
+      },
+      "size": {
+        "mode": "full",
+        "requested_rate_hz": 120,
+        "cells": [
+          88,
+          21
+        ],
+        "rendered_cells": [
+          88,
+          21
+        ],
+        "started_monotonic_s": 1625306.628589208,
+        "finished_monotonic_s": 1625332.629657375,
+        "output_batches": 3115,
+        "output_bytes": 6120975,
+        "skipped_ticks": 5,
+        "marker_updates": null
+      }
+    }
+  },
+  "core_trace_losses": [
+    {
+      "file": "traces/echo/67231.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 0
+        }
+      ]
+    },
+    {
+      "file": "traces/echo/67235.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 0
+        }
+      ]
+    },
+    {
+      "file": "traces/full/68486.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 8982
+        }
+      ]
+    },
+    {
+      "file": "traces/full/68489.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 0
+        }
+      ]
+    },
+    {
+      "file": "traces/idle/67506.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 0
+        }
+      ]
+    },
+    {
+      "file": "traces/idle/67509.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 0
+        }
+      ]
+    },
+    {
+      "file": "traces/scroll/67875.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 8528
+        }
+      ]
+    },
+    {
+      "file": "traces/scroll/67878.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 0
+        }
+      ]
+    },
+    {
+      "file": "short-traces/full/95169.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 0
+        }
+      ]
+    },
+    {
+      "file": "short-traces/full/95172.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 0
+        }
+      ]
+    },
+    {
+      "file": "short-traces/scroll/95034.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 0
+        }
+      ]
+    },
+    {
+      "file": "short-traces/scroll/95037.echo.jsonl",
+      "loss_records": [
+        {
+          "dropped": 0
+        }
+      ]
+    }
+  ],
+  "native_scaling": [
+    {
+      "section": "native",
+      "build": "B2",
+      "panes_created": 4,
+      "native_tab_count": 1,
+      "layout": "splits",
+      "error": "",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "pty_cells": [
+        42,
+        19
+      ],
+      "summary": {
+        "n": 50,
+        "p50_ms": 15.105645870789886,
+        "p95_ms": 33.572874835226685,
+        "p99_ms": 37.793827459681765,
+        "max_ms": 41.32970841601491
+      },
+      "case": "splits"
+    },
+    {
+      "section": "native",
+      "build": "B2",
+      "case": "splits",
+      "error": "ProbeFailure('gui probe failed (10): Layout setup or fixture readiness timed out; 0 responses completed')"
+    },
+    {
+      "section": "native",
+      "build": "B2",
+      "panes_created": 8,
+      "native_tab_count": 1,
+      "layout": "tabs",
+      "error": "",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "pty_cells": [
+        88,
+        21
+      ],
+      "summary": {
+        "n": 50,
+        "p50_ms": 11.839187471196055,
+        "p95_ms": 20.482329197693613,
+        "p99_ms": 24.84763581538572,
+        "max_ms": 27.639125008136034
+      },
+      "case": "tabs"
+    },
+    {
+      "section": "native",
+      "build": "B2",
+      "case": "splits-load",
+      "error": "RuntimeError('background output missed its requested rate; raw observations retained in /private/tmp/telar-dod-analysis/results/native/B2-splits-load-4/result.json')"
+    },
+    {
+      "section": "scaling",
+      "build": "B2",
+      "panes_created": 8,
+      "native_tab_count": 1,
+      "layout": "splits",
+      "error": "",
+      "viewport": [
+        1600,
+        1000
+      ],
+      "pty_cells": [
+        9,
+        19
+      ],
+      "summary": {
+        "n": 50,
+        "p50_ms": 12.290208251215518,
+        "p95_ms": 29.809872864279892,
+        "p99_ms": 33.53224156657233,
+        "max_ms": 34.94670824147761
+      },
+      "case": "splits"
+    },
+    {
+      "section": "load",
+      "build": "B2",
+      "case": "splits-load",
+      "error": "RuntimeError('background output missed its requested rate; raw observations retained in /private/tmp/telar-dod-analysis/results/load/B2-splits-load-4/result.json')"
+    }
+  ],
+  "runtime": {
+    "B0-attached": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 8388608,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "917f567a0a2274d6a26dda69e071b057ee805ad02c86a32d5ed25d608d3bb41c",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 71.038292,
+          "mib_per_second": 112.61532019942146
+        },
+        {
+          "name": "ansi",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "a44b2d60a8d860532982e6020545243aaa8715262d9a44b952d9d92298519647",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 75.98825,
+          "mib_per_second": 105.27943464943594
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/telar-dod-analysis/B0/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 11714,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "B0-detached": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 8388608,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "917f567a0a2274d6a26dda69e071b057ee805ad02c86a32d5ed25d608d3bb41c",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 71.619958,
+          "mib_per_second": 111.70070778315731
+        },
+        {
+          "name": "ansi",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "a44b2d60a8d860532982e6020545243aaa8715262d9a44b952d9d92298519647",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 75.524458,
+          "mib_per_second": 105.92595050466963
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/telar-dod-analysis/B0/bin/telar",
+      "sampled": false,
+      "detached": true,
+      "host_bytes": 5216,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "B1-sampled": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 67108864,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "615f6f96c21778175e1fe9c05eeea8ba89cc1bd30ad72252cda921c9de0b02e4",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 718.716791,
+          "mib_per_second": 89.04759260035154
+        },
+        {
+          "name": "ansi",
+          "bytes": 67108864,
+          "text_pattern": "repeat",
+          "payload_sha256": "652c3dc769a18e8f95f5d3cc8c812bfbc0db1fcc6e21b46b0855ee1f3d3d475a",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 756.700375,
+          "mib_per_second": 84.57772998989198
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/telar-dod-analysis/B0/bin/telar",
+      "sampled": true,
+      "detached": false,
+      "host_bytes": 15085,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "B2-attached": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 8388608,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "917f567a0a2274d6a26dda69e071b057ee805ad02c86a32d5ed25d608d3bb41c",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 76.23816599999999,
+          "mib_per_second": 104.93431859313091
+        },
+        {
+          "name": "ansi",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "a44b2d60a8d860532982e6020545243aaa8715262d9a44b952d9d92298519647",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 76.672167,
+          "mib_per_second": 104.34034034801704
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/telar-dod-analysis/B2/bin/telar",
+      "sampled": false,
+      "detached": false,
+      "host_bytes": 11744,
+      "outer_pty": [
+        111,
+        35
+      ]
+    },
+    "B2-detached": {
+      "endpoint": "pty_write_to_dsr_response",
+      "bytes_per_case": 8388608,
+      "text_pattern": "repeat",
+      "cases": [
+        {
+          "name": "ascii",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "917f567a0a2274d6a26dda69e071b057ee805ad02c86a32d5ed25d608d3bb41c",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 81.385416,
+          "mib_per_second": 98.29770975183072
+        },
+        {
+          "name": "ansi",
+          "bytes": 8388608,
+          "text_pattern": "repeat",
+          "payload_sha256": "a44b2d60a8d860532982e6020545243aaa8715262d9a44b952d9d92298519647",
+          "cols": 111,
+          "rows": 33,
+          "elapsed_ms": 74.55912500000001,
+          "mib_per_second": 107.29739652926452
+        }
+      ],
+      "failed": false,
+      "binary": "/private/tmp/telar-dod-analysis/B2/bin/telar",
+      "sampled": false,
+      "detached": true,
+      "host_bytes": 5242,
+      "outer_pty": [
+        111,
+        35
+      ]
+    }
+  },
+  "slow_host": {
+    "slow-host-fixed": [
+      {
+        "endpoint": "bytes read by the foreground PTY child",
+        "input_sent": 32,
+        "input_while_host_blocked": 32,
+        "input_after_drain": 32,
+        "version": "baseline",
+        "case": "slow-host",
+        "run": 0,
+        "shutdown": {
+          "elapsed_ms": 66.07616599649191,
+          "exited": true,
+          "returncode": 0,
+          "reply": "telar runtime is stopping\n",
+          "pids": [
+            82932
+          ],
+          "children_exited": true,
+          "socket_removed": true,
+          "cleanup_complete": true
+        }
+      },
+      {
+        "endpoint": "bytes read by the foreground PTY child",
+        "input_sent": 32,
+        "input_while_host_blocked": 32,
+        "input_after_drain": 32,
+        "version": "candidate",
+        "case": "slow-host",
+        "run": 0,
+        "shutdown": {
+          "elapsed_ms": 63.76170786097646,
+          "exited": true,
+          "returncode": 0,
+          "reply": "telar runtime is stopping\n",
+          "pids": [
+            83378
+          ],
+          "children_exited": true,
+          "socket_removed": true,
+          "cleanup_complete": true
+        }
+      },
+      {
+        "endpoint": "bytes read by the foreground PTY child",
+        "input_sent": 32,
+        "input_while_host_blocked": 32,
+        "input_after_drain": 32,
+        "version": "candidate",
+        "case": "slow-host",
+        "run": 1,
+        "shutdown": {
+          "elapsed_ms": 63.85454093106091,
+          "exited": true,
+          "returncode": 0,
+          "reply": "telar runtime is stopping\n",
+          "pids": [
+            83969
+          ],
+          "children_exited": true,
+          "socket_removed": true,
+          "cleanup_complete": true
+        }
+      },
+      {
+        "endpoint": "bytes read by the foreground PTY child",
+        "input_sent": 32,
+        "input_while_host_blocked": 32,
+        "input_after_drain": 32,
+        "version": "baseline",
+        "case": "slow-host",
+        "run": 1,
+        "shutdown": {
+          "elapsed_ms": 64.99116704799235,
+          "exited": true,
+          "returncode": 0,
+          "reply": "telar runtime is stopping\n",
+          "pids": [
+            84361
+          ],
+          "children_exited": true,
+          "socket_removed": true,
+          "cleanup_complete": true
+        }
+      }
+    ],
+    "slow-host-final": [
+      {
+        "endpoint": "bytes read by the foreground PTY child",
+        "input_sent": 32,
+        "input_while_host_blocked": 32,
+        "input_after_drain": 32,
+        "version": "baseline",
+        "case": "slow-host",
+        "run": 0,
+        "shutdown": {
+          "elapsed_ms": 63.05941706523299,
+          "exited": true,
+          "returncode": 0,
+          "reply": "telar runtime is stopping\n",
+          "pids": [
+            1188
+          ],
+          "children_exited": true,
+          "socket_removed": true,
+          "cleanup_complete": true
+        }
+      },
+      {
+        "endpoint": "bytes read by the foreground PTY child",
+        "input_sent": 32,
+        "input_while_host_blocked": 32,
+        "input_after_drain": 32,
+        "version": "candidate",
+        "case": "slow-host",
+        "run": 0,
+        "shutdown": {
+          "elapsed_ms": 62.89591616950929,
+          "exited": true,
+          "returncode": 0,
+          "reply": "telar runtime is stopping\n",
+          "pids": [
+            1738
+          ],
+          "children_exited": true,
+          "socket_removed": true,
+          "cleanup_complete": true
+        }
+      }
+    ]
+  },
+  "media": [
+    {
+      "pixel_bytes": 33177600,
+      "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+      "compressed": true,
+      "wire_payload_bytes": 4004011,
+      "elapsed_ms": 2091.9535411521792,
+      "host_bytes": 5379126,
+      "version": "baseline",
+      "case": "graphics",
+      "run": 0,
+      "shutdown": {
+        "elapsed_ms": 81.29199990071356,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          70624
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "pixel_bytes": 33177600,
+      "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+      "compressed": true,
+      "wire_payload_bytes": 4004011,
+      "elapsed_ms": 2010.1083749905229,
+      "host_bytes": 5379078,
+      "version": "candidate",
+      "case": "graphics",
+      "run": 0,
+      "shutdown": {
+        "elapsed_ms": 72.97704205848277,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          70652
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "timeouts": 0,
+      "p50_us": 298.354,
+      "p95_us": 536.46665,
+      "p99_us": 779.9459200000124,
+      "version": "baseline",
+      "case": "load",
+      "run": 0,
+      "shutdown": {
+        "elapsed_ms": 73.96574993617833,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          70774
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "timeouts": 0,
+      "p50_us": 290.1875,
+      "p95_us": 537.4482499999999,
+      "p99_us": 1101.0837500000882,
+      "version": "candidate",
+      "case": "load",
+      "run": 0,
+      "shutdown": {
+        "elapsed_ms": 73.52987513877451,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          71266
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "pixel_bytes": 33177600,
+      "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+      "compressed": true,
+      "wire_payload_bytes": 4004011,
+      "elapsed_ms": 2067.856124835089,
+      "host_bytes": 5379166,
+      "version": "candidate",
+      "case": "graphics",
+      "run": 1,
+      "shutdown": {
+        "elapsed_ms": 78.96487507969141,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          72824
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "pixel_bytes": 33177600,
+      "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+      "compressed": true,
+      "wire_payload_bytes": 4004011,
+      "elapsed_ms": 2088.2957910653204,
+      "host_bytes": 5378994,
+      "version": "baseline",
+      "case": "graphics",
+      "run": 1,
+      "shutdown": {
+        "elapsed_ms": 80.56145813316107,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          72917
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "timeouts": 0,
+      "p50_us": 286.9375,
+      "p95_us": 489.61454999999995,
+      "p99_us": 527.8688400000003,
+      "version": "candidate",
+      "case": "load",
+      "run": 1,
+      "shutdown": {
+        "elapsed_ms": 75.47516701743007,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          73034
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "timeouts": 0,
+      "p50_us": 291.583,
+      "p95_us": 453.5877999999999,
+      "p99_us": 666.8229200000308,
+      "version": "baseline",
+      "case": "load",
+      "run": 1,
+      "shutdown": {
+        "elapsed_ms": 75.13216696679592,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          73416
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "pixel_bytes": 33177600,
+      "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+      "compressed": true,
+      "wire_payload_bytes": 4004011,
+      "elapsed_ms": 2026.5436249319464,
+      "host_bytes": 5379038,
+      "version": "baseline",
+      "case": "graphics",
+      "run": 2,
+      "shutdown": {
+        "elapsed_ms": 78.77662498503923,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          74901
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "pixel_bytes": 33177600,
+      "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+      "compressed": true,
+      "wire_payload_bytes": 4004011,
+      "elapsed_ms": 2094.0175829455256,
+      "host_bytes": 5378990,
+      "version": "candidate",
+      "case": "graphics",
+      "run": 2,
+      "shutdown": {
+        "elapsed_ms": 82.28095807135105,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          74926
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "timeouts": 0,
+      "p50_us": 266.354,
+      "p95_us": 467.9083,
+      "p99_us": 577.27092,
+      "version": "baseline",
+      "case": "load",
+      "run": 2,
+      "shutdown": {
+        "elapsed_ms": 71.6206249780953,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          75045
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "timeouts": 0,
+      "p50_us": 278.208,
+      "p95_us": 438.55595,
+      "p99_us": 8320.573750000007,
+      "version": "candidate",
+      "case": "load",
+      "run": 2,
+      "shutdown": {
+        "elapsed_ms": 86.01404097862542,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          75415
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "pixel_bytes": 33177600,
+      "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+      "compressed": true,
+      "wire_payload_bytes": 4004011,
+      "elapsed_ms": 2089.478207984939,
+      "host_bytes": 5379034,
+      "version": "candidate",
+      "case": "graphics",
+      "run": 3,
+      "shutdown": {
+        "elapsed_ms": 81.14624978043139,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          76894
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "pixel_bytes": 33177600,
+      "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+      "compressed": true,
+      "wire_payload_bytes": 4004011,
+      "elapsed_ms": 2005.1838329527527,
+      "host_bytes": 5379128,
+      "version": "baseline",
+      "case": "graphics",
+      "run": 3,
+      "shutdown": {
+        "elapsed_ms": 83.08204216882586,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          77012
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "timeouts": 0,
+      "p50_us": 273.08349999999996,
+      "p95_us": 397.2624999999999,
+      "p99_us": 546.6212500000004,
+      "version": "candidate",
+      "case": "load",
+      "run": 3,
+      "shutdown": {
+        "elapsed_ms": 71.74979196861386,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          77038
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "timeouts": 0,
+      "p50_us": 291.66650000000004,
+      "p95_us": 394.34344999999996,
+      "p99_us": 492.27875000000006,
+      "version": "baseline",
+      "case": "load",
+      "run": 3,
+      "shutdown": {
+        "elapsed_ms": 68.31958307884634,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          77499
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "pixel_bytes": 33177600,
+      "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+      "compressed": true,
+      "wire_payload_bytes": 4004011,
+      "elapsed_ms": 2074.8604158870876,
+      "host_bytes": 5379082,
+      "version": "baseline",
+      "case": "graphics",
+      "run": 4,
+      "shutdown": {
+        "elapsed_ms": 78.34079093299806,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          79136
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "pixel_bytes": 33177600,
+      "sha256": "70c15061f349462f423106aff19bb9287f861015a216bdd9314f86e77dc8169e",
+      "compressed": true,
+      "wire_payload_bytes": 4004011,
+      "elapsed_ms": 2108.4290840663016,
+      "host_bytes": 5379168,
+      "version": "candidate",
+      "case": "graphics",
+      "run": 4,
+      "shutdown": {
+        "elapsed_ms": 74.72091703675687,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          79167
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "timeouts": 0,
+      "p50_us": 287.08349999999996,
+      "p95_us": 427.78779999999995,
+      "p99_us": 673.2620900000006,
+      "version": "baseline",
+      "case": "load",
+      "run": 4,
+      "shutdown": {
+        "elapsed_ms": 68.72129207476974,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          79286
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    },
+    {
+      "timeouts": 0,
+      "p50_us": 286.0,
+      "p95_us": 446.866,
+      "p99_us": 605.5325000000554,
+      "version": "candidate",
+      "case": "load",
+      "run": 4,
+      "shutdown": {
+        "elapsed_ms": 70.2552089933306,
+        "exited": true,
+        "returncode": 0,
+        "reply": "telar runtime is stopping\n",
+        "pids": [
+          79688
+        ],
+        "children_exited": true,
+        "socket_removed": true,
+        "cleanup_complete": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,782 @@
+--- a/src/gui/render/TerminalRenderer.zig
++++ b/src/gui/render/TerminalRenderer.zig
+@@ -19,6 +19,8 @@
+ const Renderer = @This();
+ const RetainedCells = @import("RetainedCells.zig");
+ const CellPaint = @import("CellPaint.zig");
++const PaneDrawCache = @import("PaneDrawCache.zig");
++const PaneDrawKey = @import("PaneDrawKey.zig");
+ const CellMesh = @import("CellMesh.zig");
+ const CursorPaint = @import("CursorPaint.zig");
+ const copy_selection = @import("copy_selection.zig");
+@@ -39,6 +41,7 @@
+ quads: QuadList,
+ cell_quads: QuadList,
+ retained: RetainedCells,
++pane_draws: PaneDrawCache,
+ repainted_cells: usize = 0,
+ metrics: Metrics = .{ .cell_width = 1, .cell_height = 1, .baseline = 0, .pixel_height = 15 },
+ chrome: ChromeMetrics = .{},
+@@ -66,6 +69,7 @@
+         .quads = .init(allocator),
+         .cell_quads = .init(allocator),
+         .retained = .init(allocator),
++        .pane_draws = .init(allocator),
+     };
+ }
+ 
+@@ -96,6 +100,7 @@
+     renderer.quads.deinit();
+     renderer.cell_quads.deinit();
+     renderer.retained.deinit();
++    renderer.pane_draws.deinit();
+ }
+ 
+ /// Resolves physical font metrics before the shared client is constructed.
+@@ -186,6 +191,7 @@
+         size.cols,
+         size.rows,
+     });
++    renderer.pane_draws.reserve(cells) catch {};
+     return size;
+ }
+ 
+@@ -194,6 +200,7 @@
+ /// Example: `renderer.begin();`
+ pub fn begin(renderer: *Renderer) void {
+     renderer.quads.clear();
++    renderer.pane_draws.begin();
+     renderer.repainted_cells = 0;
+     const background = rgb(renderer.theme.background);
+     const foreground = rgb(renderer.theme.foreground);
+@@ -221,7 +228,12 @@
+         }
+ 
+         const pane = model.findConst(view.pane_id) orelse continue;
+-        try renderer.drawPane(.{ .pane = pane, .view = view, .copy = copy_selection.forPane(projection.copy, pane.id), .hide_cursor = projection.prompt != null });
++        try renderer.drawPane(.{
++            .pane = pane,
++            .view = view,
++            .copy = copy_selection.forPane(projection.copy, pane.id),
++            .hide_cursor = projection.prompt != null,
++        });
+         commit.append(pane);
+     }
+ 
+@@ -268,6 +280,37 @@
+         core.profiling.add(.gui_quads, renderer.quads.items().len - quads_before);
+     }
+     const pane = paint.pane;
++    const cache_key: ?PaneDrawKey = if (pane.attached and pane.applied_frame_id != 0 and pane.attachment_generation != 0) .{
++        .pane_id = pane.id,
++        .location = pane.location,
++        .attachment_generation = pane.attachment_generation,
++        .pane_generation = pane.pane_generation,
++        .frame_id = pane.applied_frame_id,
++        .resource_epoch = renderer.retained.epoch,
++        .area = paint.view.content,
++        .buffer_size = .{ pane.buffer.w, pane.buffer.h },
++        .origin = renderer.origin,
++        .metrics = renderer.metrics,
++        .scale = renderer.scale,
++        .theme = renderer.theme,
++        .cursor = pane.cursor,
++        .scroll_offset = pane.scroll.offset,
++        .copy = paint.copy,
++        .cursor_style = renderer.config.cursor.style,
++        .cursor_on = renderer.cursor_on,
++        .window_focused = renderer.focused,
++        .pane_focused = paint.view.focused,
++        .hide_cursor = paint.hide_cursor,
++    } else null;
++
++    if (cache_key) |key| {
++        if (renderer.pane_draws.find(key)) |items| {
++            try renderer.quads.appendSlice(items);
++            renderer.pane_draws.store(key, items);
++            return;
++        }
++    }
++
+     const area = paint.view.content;
+     const rows = @min(area.h, pane.buffer.h);
+     const cols = @min(area.w, pane.buffer.w);
+@@ -334,6 +377,10 @@
+         if (visible.style != .block) {
+             try visible.paint(&renderer.quads);
+         }
++    }
++
++    if (cache_key) |key| {
++        renderer.pane_draws.store(key, renderer.quads.items()[quads_before..]);
+     }
+ }
+ 
+--- a/src/gui/render/RetainedCells.zig
++++ b/src/gui/render/RetainedCells.zig
+@@ -15,6 +15,7 @@
+ geometry: std.ArrayList([Mesh.capacity]Quad) = .empty,
+ cols: u16 = 0,
+ rows: u16 = 0,
++epoch: u64 = 0,
+ 
+ pub fn init(allocator: std.mem.Allocator) Grid {
+     return .{ .allocator = allocator };
+@@ -48,6 +49,7 @@
+ 
+ /// Use when font resources or global colors change. Example: `grid.invalidate();`
+ pub fn invalidate(grid: *Grid) void {
++    grid.epoch +%= 1;
+     for (grid.entries.items) |*entry| {
+         entry.valid = false;
+     }
+--- a/src/gui/render/QuadList.zig
++++ b/src/gui/render/QuadList.zig
+@@ -36,6 +36,20 @@
+         list.quads.appendAssumeCapacity(item);
+     } else {
+         try list.quads.append(list.allocator, item);
++    }
++}
++
++/// Appends owned pane geometry atomically against the existing frame budget.
++/// Example: `try list.appendSlice(cached_quads);`
++pub fn appendSlice(self: *QuadList, values: []const Quad) !void {
++    if (self.limit) |limit| {
++        if (values.len > limit -| self.quads.items.len) {
++            return error.NativeQuadBudgetExceeded;
++        }
++
++        self.quads.appendSliceAssumeCapacity(values);
++    } else {
++        try self.quads.appendSlice(self.allocator, values);
+     }
+ }
+ 
+@@ -329,3 +343,13 @@
+     try std.testing.expectError(error.InvalidDiagramSlot, list.pushDiagram(.{ .x = 0, .y = 0, .width = 1, .height = 1 }, 8));
+     try std.testing.expectEqual(@as(usize, 1), list.items().len);
+ }
++
++test "bulk append fails without changing a bounded frame" {
++    var list = QuadList.init(std.testing.allocator);
++    defer list.deinit();
++    try list.reserve(1);
++    const item = std.mem.zeroes(Quad);
++    try list.appendSlice(&.{item});
++    try std.testing.expectError(error.NativeQuadBudgetExceeded, list.appendSlice(&.{item}));
++    try std.testing.expectEqual(@as(usize, 1), list.items().len);
++}
+--- a/src/gui/gui.zig
++++ b/src/gui/gui.zig
+@@ -22,6 +22,7 @@
+ pub const TextInput = @import("input/TextInput.zig");
+ 
+ test {
++    _ = @import("tests/pane_draw_cache.zig");
+     _ = @import("tests/change_review.zig");
+     _ = @import("tests/change_review_navigation.zig");
+     _ = @import("tests/frame_pacer.zig");
+--- a/src/gui/tests/terminal.zig
++++ b/src/gui/tests/terminal.zig
+@@ -146,6 +146,7 @@
+     try session.bootstrap();
+     try session.receiveFrame(1);
+     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0].style.bg = .{ .rgb = .{ 255, 0, 0 } };
+     try present(session);
+     const shape_calls = session.gui.renderer.atlas.?.shape_calls;
+@@ -253,7 +254,9 @@
+     try session.bootstrap();
+     try session.receiveFrame(1);
+     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0] = .{ .bytes = .{ 0xe7, 0x95, 0x8c } ++ .{0} ** 13, .len = 3, .width = 2, .style = .{ .fg = .{ .indexed = 1 } } };
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[1].width = 0;
+     const content = paneContent(session);
+     const bounds = session.gui.renderer.metrics.rect(session.gui.renderer.origin, content);
+@@ -510,6 +513,7 @@
+     pane.cursor.x = 2;
+     try present(session);
+     try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[1].bytes[0] = '$';
+     try present(session);
+     try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+@@ -517,8 +521,11 @@
+     try expectFullRedraw(session);
+ 
+     // Damage in several unpresented updates must survive coalescing.
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0].style.flags.inverse = true;
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[1].style.flags.bold = true;
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[2].style.flags.underline = .single;
+     const token = try session.draw();
+     try std.testing.expectEqual(@as(usize, 3), session.gui.renderer.repainted_cells);
+@@ -548,6 +555,7 @@
+         cell.len = @intCast(text.len);
+         cell.width = if (index % 4 == 3) 2 else 1;
+         cell.style.flags = .{ .inverse = index & 1 != 0, .italic = index & 2 != 0, .bold = index & 4 != 0, .underline = if (index & 8 != 0) .single else .none, .strikethrough = index & 16 != 0 };
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[col + 1].width = if (cell.width == 2) 0 else 1;
+         try present(session);
+         try expectFullRedraw(session);
+@@ -591,17 +599,20 @@
+     renderer.quads.allocator = failing.allocator();
+     renderer.cell_quads.allocator = failing.allocator();
+     renderer.retained.allocator = failing.allocator();
++    renderer.pane_draws.allocator = failing.allocator();
+     renderer.atlas.?.allocator = failing.allocator();
+     defer {
+         renderer.allocator = std.testing.allocator;
+         renderer.quads.allocator = std.testing.allocator;
+         renderer.cell_quads.allocator = std.testing.allocator;
+         renderer.retained.allocator = std.testing.allocator;
++        renderer.pane_draws.allocator = std.testing.allocator;
+         renderer.atlas.?.allocator = std.testing.allocator;
+     }
+ 
+     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+     for (0..8) |index| {
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[1].bytes[0] = if (index % 2 == 0) '$' else ' ';
+         try present(session);
+         try std.testing.expectEqual(@as(usize, 1), renderer.repainted_cells);
+@@ -610,14 +621,18 @@
+     // A grapheme only an installed face covers is discovered on its first
+     // sighting and repaints warm afterwards, whether or not this host has one.
+     renderer.atlas.?.allocator = std.testing.allocator;
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[2].bytes[0..3].* = "\u{23f5}".*;
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[2].len = 3;
+     try present(session);
+     renderer.atlas.?.allocator = failing.allocator();
+     const lookups = renderer.atlas.?.fonts.lookups;
+     try std.testing.expectEqual(@as(usize, 1), lookups);
+     for (0..4) |index| {
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[2].bytes[0..3].* = if (index % 2 == 0) "   ".* else "\u{23f5}".*;
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[2].len = if (index % 2 == 0) 1 else 3;
+         try present(session);
+         try std.testing.expectEqual(@as(usize, 1), renderer.repainted_cells);
+--- a/src/gui/tests/braille.zig
++++ b/src/gui/tests/braille.zig
+@@ -16,6 +16,7 @@
+     try session.receiveFrame(1);
+     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+     pane.cursor.visible = false;
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0] = cell(0xff);
+     const shape_calls = session.gui.renderer.atlas.?.shape_calls;
+     const rasters = session.gui.renderer.atlas.?.raster_attempts;
+@@ -26,11 +27,13 @@
+         try expectSolid(dot);
+     }
+ 
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0] = cell(0x01);
+     try paint(session);
+     try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+     try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.quads.items().len);
+     const top_left = session.gui.renderer.quads.items()[0];
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0] = cell(0x80);
+     try paint(session);
+     try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+@@ -46,6 +49,7 @@
+         session.gui.renderer.quads.items(),
+     );
+ 
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0] = cell(0);
+     try paint(session);
+     try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+@@ -63,7 +67,9 @@
+     try session.bootstrap();
+     try session.receiveFrame(1);
+     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0] = cell(0x05);
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0].style = .{ .fg = .{ .rgb = .{ 255, 0, 0 } }, .bg = .{ .rgb = .{ 0, 0, 255 } }, .flags = .{ .inverse = true, .faint = true, .underline = .single, .strikethrough = true } };
+     pane.cursor.x = 0;
+     pane.cursor.y = 0;
+@@ -115,6 +121,7 @@
+     try std.testing.expectEqual(@as(usize, 0), session.gui.renderer.repainted_cells);
+     try std.testing.expectEqualSlices(Quad, retained, mesh.items());
+     try std.testing.expectEqual(retained.len, session.gui.renderer.quads.items().len);
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0].style.flags.invisible = true;
+     try paint(session);
+     try std.testing.expectEqual(@as(usize, 1), mesh.metadata.len);
+@@ -170,6 +177,7 @@
+     try session.receiveFrame(1);
+     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+     pane.cursor.visible = false;
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0] = cell(0);
+     try paint(session);
+     const renderer = &session.gui.renderer;
+@@ -182,18 +190,21 @@
+     renderer.quads.allocator = failing.allocator();
+     renderer.cell_quads.allocator = failing.allocator();
+     renderer.retained.allocator = failing.allocator();
++    renderer.pane_draws.allocator = failing.allocator();
+     renderer.atlas.?.allocator = failing.allocator();
+     defer {
+         renderer.allocator = std.testing.allocator;
+         renderer.quads.allocator = std.testing.allocator;
+         renderer.cell_quads.allocator = std.testing.allocator;
+         renderer.retained.allocator = std.testing.allocator;
++        renderer.pane_draws.allocator = std.testing.allocator;
+         renderer.atlas.?.allocator = std.testing.allocator;
+     }
+ 
+     const patterns = [_]u8{ 0x01, 0x80, 0x55, 0xaa, 0xff, 0x00 };
+     for (0..120) |index| {
+         const pattern = patterns[index % patterns.len];
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[0] = cell(pattern);
+         try paint(session);
+         try std.testing.expectEqual(@as(usize, 1), renderer.repainted_cells);
+--- a/src/gui/tests/box_drawing.zig
++++ b/src/gui/tests/box_drawing.zig
+@@ -32,6 +32,7 @@
+             var iter: core.GraphemeIterator = .{ .bytes = row };
+             var x: usize = 0;
+             while (iter.next()) |cluster| : (x += 1) {
++                pane.applied_frame_id += 1;
+                 pane.buffer.cells[y * pane.buffer.w + x] = fromText(cluster.bytes);
+             }
+         }
+@@ -73,7 +74,9 @@
+             continue;
+         }
+ 
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[0] = cell(@intCast(value));
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[0].style.flags = .{ .faint = true, .bold = true, .italic = true };
+         try paint(session);
+         const ink = mesh(session, 0, 0).items()[1..];
+@@ -100,11 +103,13 @@
+     try session.receiveFrame(1);
+     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+     pane.cursor.visible = false;
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[0] = cell(0x253c);
+     try paint(session);
+     const shapes = session.gui.renderer.atlas.?.shape_calls;
+     const rasters = session.gui.renderer.atlas.?.raster_attempts;
+     for ([_]u21{ 0x256d, 0x256e, 0x256f, 0x2570, ' ', 0x2500 }) |cp| {
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[0] = cell(cp);
+         try paint(session);
+         try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.repainted_cells);
+@@ -180,7 +185,9 @@
+     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+     pane.cursor.visible = false;
+     for (0x2500..0x2580) |cp| {
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[0] = cell(@intCast(cp));
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[0].style.flags = .{ .underline = .single, .strikethrough = true, .bold = true, .italic = true };
+         try paint(session);
+     }
+@@ -194,17 +201,21 @@
+     renderer.quads.allocator = failing.allocator();
+     renderer.cell_quads.allocator = failing.allocator();
+     renderer.retained.allocator = failing.allocator();
++    renderer.pane_draws.allocator = failing.allocator();
+     renderer.atlas.?.allocator = failing.allocator();
+     defer {
+         renderer.allocator = std.testing.allocator;
+         renderer.quads.allocator = std.testing.allocator;
+         renderer.cell_quads.allocator = std.testing.allocator;
+         renderer.retained.allocator = std.testing.allocator;
++        renderer.pane_draws.allocator = std.testing.allocator;
+         renderer.atlas.?.allocator = std.testing.allocator;
+     }
+ 
+     for (0..256) |index| {
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[0] = cell(@intCast(0x2500 + index % 128));
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[0].style.flags = .{ .underline = .single, .strikethrough = true, .bold = true, .italic = true };
+         try paint(session);
+         try std.testing.expectEqual(@as(usize, 1), renderer.repainted_cells);
+--- a/src/gui/tests/italic.zig
++++ b/src/gui/tests/italic.zig
+@@ -60,6 +60,7 @@
+     defer session.deinit();
+     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
+     word(session, .{ 2, 1 }, "New");
++    pane.applied_frame_id += 1;
+     pane.buffer.cells[pane.buffer.w + 3].style.bg = .{ .rgb = .{ 255, 0, 0 } };
+     pane.cursor = .{ .visible = true, .x = 3, .y = 1, .appearance = .{ .shape = .block } };
+     session.gui.renderer.theme.cursor_color = .{
+@@ -114,6 +115,7 @@
+     @memcpy(cell.bytes[0..cluster.len], cluster);
+     cell.len = cluster.len;
+     cell.style.flags.italic = true;
++    pane.applied_frame_id += 1;
+     _ = try renderer.prepare(session.gui.projection());
+     const row = renderer.metrics.rect(renderer.origin, .{ .x = area.x + 2, .y = area.y + 1, .w = 1, .h = 1 });
+     var above_row = false;
+@@ -158,14 +160,17 @@
+     renderer.quads.allocator = failing.allocator();
+     renderer.cell_quads.allocator = failing.allocator();
+     renderer.retained.allocator = failing.allocator();
++    renderer.pane_draws.allocator = failing.allocator();
+     renderer.atlas.?.allocator = failing.allocator();
+     defer {
+         renderer.quads.allocator = std.testing.allocator;
+         renderer.cell_quads.allocator = std.testing.allocator;
+         renderer.retained.allocator = std.testing.allocator;
++        renderer.pane_draws.allocator = std.testing.allocator;
+         renderer.atlas.?.allocator = std.testing.allocator;
+     }
+     for (0..20) |index| {
++        pane.applied_frame_id += 1;
+         pane.buffer.cells[pane.buffer.w + 2].bytes[0] = if (index % 2 == 0) ' ' else 'N';
+         _ = try renderer.prepare(projection);
+         try std.testing.expectEqual(@as(usize, 1), renderer.repainted_cells);
+@@ -212,6 +217,7 @@
+ 
+ fn word(session: *Session, point: [2]u16, text: []const u8) void {
+     const pane = session.gui.app.model.workspace.findPane(Session.pane_id).?;
++    pane.applied_frame_id += 1;
+     for (text, 0..) |byte, index| {
+         const cell = &pane.buffer.cells[@as(usize, point[1]) * pane.buffer.w + point[0] + index];
+         cell.* = .{};
+--- /dev/null
++++ b/src/gui/render/PaneDrawCache.zig
+@@ -0,0 +1,130 @@
++//! Optional renderer-owned copies of the previous preparation's pane quads.
++//! Two bounded buffers avoid retaining model pointers or any GPU frame storage.
++//! Missing entries and quota exhaustion always fall back to cell drawing.
++const std = @import("std");
++const core = @import("telar-core");
++const quad = @import("Quad.zig");
++const Key = @import("PaneDrawKey.zig");
++const Entry = @import("PaneDrawEntry.zig");
++const max_bytes_per_buffer = 4 * 1024 * 1024;
++const quads_per_cell = 2;
++const buffer_count = 2;
++
++const Cache = @This();
++
++allocator: std.mem.Allocator,
++quads: [buffer_count]std.ArrayList(quad.Quad) = @splat(.empty),
++entries: [buffer_count][core.max_panes_per_tab]Entry = undefined,
++counts: [buffer_count]usize = @splat(0),
++current: u1 = 0,
++limit: usize = 0,
++hits: usize = 0,
++copied_bytes: usize = 0,
++
++pub fn init(allocator: std.mem.Allocator) Cache {
++    return .{ .allocator = allocator };
++}
++
++pub fn deinit(self: *Cache) void {
++    for (&self.quads) |*items| {
++        items.deinit(self.allocator);
++    }
++}
++
++/// Only geometry changes reserve storage. Failure disables reuse until the next
++/// successful reservation; drawing remains usable. Example: `try cache.reserve(cells);`
++pub fn reserve(self: *Cache, cells: usize) !void {
++    const bounded_cells: usize = @min(cells, max_bytes_per_buffer / @sizeOf(quad.Quad) / quads_per_cell);
++    const limit = bounded_cells * quads_per_cell;
++    errdefer {
++        self.limit = 0;
++        self.counts = @splat(0);
++    }
++
++    for (&self.quads) |*items| {
++        try items.ensureTotalCapacityPrecise(self.allocator, limit);
++    }
++
++    self.limit = limit;
++}
++
++/// Advances preparation, including retries, without acknowledging delivery.
++/// Example: `cache.begin();`
++pub fn begin(self: *Cache) void {
++    self.current ^= 1;
++    self.quads[self.current].clearRetainingCapacity();
++    self.counts[self.current] = 0;
++    self.hits = 0;
++    self.copied_bytes = 0;
++}
++
++/// Borrows cached quads until the next begin/reserve/deinit. Example: `cache.find(key)`.
++pub fn find(self: *Cache, key: Key) ?[]const quad.Quad {
++    const previous = self.current ^ 1;
++    for (self.entries[previous][0..self.counts[previous]]) |entry| {
++        if (std.meta.eql(entry.key, key)) {
++            self.hits += 1;
++            self.copied_bytes += entry.len * @sizeOf(quad.Quad);
++            return self.quads[previous].items[entry.offset..][0..entry.len];
++        }
++    }
++
++    return null;
++}
++
++/// Copies successful pane output if it fits; a miss never grows storage.
++/// Example: `cache.store(key, renderer.quads.items()[first..]);`
++pub fn store(self: *Cache, key: Key, items: []const quad.Quad) void {
++    const index = self.current;
++    const target = &self.quads[index];
++    if (self.limit == 0 or self.counts[index] == core.max_panes_per_tab or items.len > self.limit -| target.items.len) {
++        return;
++    }
++
++    self.entries[index][self.counts[index]] = .{
++        .key = key,
++        .offset = target.items.len,
++        .len = items.len,
++    };
++    target.appendSliceAssumeCapacity(items);
++    self.counts[index] += 1;
++    self.copied_bytes += items.len * @sizeOf(quad.Quad);
++}
++
++test "cache is bounded, owns copies, and forgets absent panes after one preparation" {
++    var cache = Cache.init(std.testing.allocator);
++    defer cache.deinit();
++    try cache.reserve(1);
++    const location: core.TabLocation = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) };
++    const key = std.mem.zeroInit(Key, .{ .location = location });
++    var items = [_]quad.Quad{std.mem.zeroes(quad.Quad)};
++    cache.begin();
++    cache.store(key, &items);
++    items[0].x = 9;
++    cache.begin();
++    try std.testing.expectEqual(@as(f32, 0), cache.find(key).?[0].x);
++    cache.begin();
++    try std.testing.expect(cache.find(key) == null);
++    const oversized = [_]quad.Quad{items[0]} ** 3;
++    cache.store(key, &oversized);
++    cache.begin();
++    try std.testing.expect(cache.find(key) == null);
++    try cache.reserve(std.math.maxInt(usize));
++    for (cache.quads) |items_buffer| {
++        try std.testing.expect(items_buffer.capacity * @sizeOf(quad.Quad) <= max_bytes_per_buffer);
++    }
++}
++
++test "either reservation failure disables cache and releases partial allocations" {
++    try std.testing.checkAllAllocationFailures(std.testing.allocator, reserveWithFailures, .{});
++}
++
++fn reserveWithFailures(allocator: std.mem.Allocator) !void {
++    var cache = Cache.init(allocator);
++    defer cache.deinit();
++    cache.reserve(32) catch |err| {
++        try std.testing.expectEqual(@as(usize, 0), cache.limit);
++        try std.testing.expectEqual(@as(usize, 0), cache.counts[0] + cache.counts[1]);
++        return err;
++    };
++}
+--- /dev/null
++++ b/src/gui/render/PaneDrawKey.zig
+@@ -0,0 +1,27 @@
++//! Owned inputs to terminal pane drawing. Cell identity comes from an applied
++//! runtime frame and attachment generation, never from a borrowed buffer address.
++const core = @import("telar-core");
++const data = @import("model");
++const Metrics = @import("../TerminalMetrics.zig");
++const client = @import("telar-client");
++
++pane_id: core.PaneId,
++location: core.TabLocation,
++attachment_generation: u64,
++pane_generation: u64,
++frame_id: u64,
++resource_epoch: u64,
++area: core.Rect,
++buffer_size: [2]u16,
++origin: [2]u32,
++metrics: Metrics,
++scale: f32,
++theme: data.TerminalTheme,
++cursor: core.Cursor,
++scroll_offset: u32,
++copy: ?data.CopyModeView,
++cursor_style: client.GuiCursor.Style,
++cursor_on: bool,
++window_focused: bool,
++pane_focused: bool,
++hide_cursor: bool,
+--- /dev/null
++++ b/src/gui/render/PaneDrawEntry.zig
+@@ -0,0 +1,5 @@
++const Key = @import("PaneDrawKey.zig");
++
++key: Key,
++offset: usize,
++len: usize,
+--- /dev/null
++++ b/src/gui/tests/pane_draw_cache.zig
+@@ -0,0 +1,151 @@
++const std = @import("std");
++const core = @import("telar-core");
++const data = @import("model");
++const native = @import("../native/native.zig");
++const Renderer = @import("../render/TerminalRenderer.zig");
++const PanePaint = @import("../render/PanePaint.zig");
++
++// Every mutation gets two preparations: one rebuild, then one genuine cache hit.
++// The independent renderer disables only pane reuse and keeps the cell algorithm.
++test "pane cache preserves geometry through visual and identity invalidations and retries" {
++    var cached = Renderer.init(std.testing.allocator);
++    defer cached.deinit();
++    var reference = Renderer.init(std.testing.allocator);
++    defer reference.deinit();
++    const viewport: native.Viewport = .{ .width = 400, .height = 300, .scale = 1 };
++    const size = try cached.measure(viewport);
++    try std.testing.expect(cached.pane_draws.limit > 0);
++    _ = try reference.measure(viewport);
++    var pane = try data.Pane.init(std.testing.allocator, .{
++        .spec = .{
++            .pane_id = @enumFromInt(1),
++            .location = .{
++                .workspace = .{ .workspace = @enumFromInt(1) },
++                .tab_id = @enumFromInt(1),
++            },
++            .size = size,
++        },
++        .attached = true,
++    });
++    defer pane.deinit();
++    pane.attachment_generation = 1;
++    pane.applied_frame_id = 1;
++    pane.pending_frame_id = 1;
++    pane.cursor = .{ .visible = true };
++    for (pane.buffer.cells) |*cell| {
++        cell.bytes[0] = 'a';
++        cell.style.flags.italic = true;
++        cell.style.flags.underline = .single;
++    }
++
++    var paint: PanePaint = .{
++        .pane = &pane,
++        .view = .{
++            .pane_id = pane.id,
++            .outer = .{ .w = size.cols, .h = size.rows },
++            .content = .{ .w = size.cols, .h = size.rows },
++            .focused = true,
++            .display_index = 1,
++        },
++    };
++    const Change = enum { initial, cell, cursor, blink, window_focus, pane_focus, selection, scroll, hide, cursor_color, cursor_ink, palette, origin, geometry, attachment, generation, location, resources, shape, font, detached, reattached };
++    inline for (std.meta.tags(Change)) |change| {
++        switch (change) {
++            .initial => {},
++            .cell => {
++                pane.buffer.cells[0].bytes[0] = 'z';
++                pane.applied_frame_id += 1;
++            },
++            .cursor => pane.cursor.x = 1,
++            .blink => cached.cursor_on = false,
++            .window_focus => {
++                cached.cursor_on = true;
++                cached.focused = false;
++            },
++            .pane_focus => paint.view.focused = false,
++            .selection => {
++                paint.view.focused = true;
++                paint.copy = .{
++                    .cursor = .{ .x = 3, .y = 2 },
++                    .anchor = .{ .x = 0, .y = 0 },
++                    .linewise = false,
++                };
++            },
++            .scroll => pane.scroll.offset = 1,
++            .hide => paint.hide_cursor = true,
++            .cursor_color => {
++                paint.hide_cursor = false;
++                cached.theme.cursor_color = .{ 255, 0, 0 };
++            },
++            .cursor_ink => cached.theme.cursor_text_color = .{ 0, 0, 255 },
++            .palette => cached.theme.palette[0] = .{ 42, 42, 42 },
++            .origin => cached.origin[0] += 1,
++            .geometry => paint.view.content.w -= 1,
++            .attachment => {
++                pane.attachment_generation += 1;
++                pane.buffer.cells[0].bytes[0] = 'b';
++            },
++            .generation => pane.pane_generation += 1,
++            .location => pane.location.tab_id = @enumFromInt(2),
++            .resources => {
++                cached.retained.invalidate();
++                reference.retained.invalidate();
++            },
++            .shape => {
++                cached.focused = true;
++                paint.copy = null;
++                cached.config.cursor.style = .bar;
++            },
++            .font => {
++                cached.scale = 0;
++                reference.scale = 0;
++                cached.config.font.size = 15;
++                reference.config.font.size = 15;
++                const measured = try cached.measure(viewport);
++                _ = try reference.measure(viewport);
++                paint.view.content.w = @min(paint.view.content.w, measured.cols);
++                paint.view.content.h = @min(paint.view.content.h, measured.rows);
++            },
++            .detached => pane.attached = false,
++            .reattached => {
++                pane.attached = true;
++                pane.attachment_generation += 1;
++            },
++        }
++
++        reference.cursor_on = cached.cursor_on;
++        reference.focused = cached.focused;
++        reference.theme = cached.theme;
++        reference.origin = cached.origin;
++        reference.config.cursor = cached.config.cursor;
++        // Keep room for the selected cell's background as well as ink/underline.
++        try cached.pane_draws.reserve(@as(usize, size.cols) * size.rows * 2);
++        reference.pane_draws.limit = 0;
++        reference.pane_draws.counts = @splat(0);
++        for (0..2) |attempt| {
++            cached.begin();
++            reference.begin();
++            try cached.drawPane(paint);
++            try reference.drawPane(paint);
++            cached.seal();
++            reference.seal();
++            try std.testing.expectEqualSlices(u8, std.mem.sliceAsBytes(reference.quads.items()), std.mem.sliceAsBytes(cached.quads.items()));
++            try std.testing.expectEqualSlices(u8, reference.atlas.?.pixels, cached.atlas.?.pixels);
++            try std.testing.expectEqual(@as(usize, if (attempt == 1 and pane.attached) 1 else 0), cached.pane_draws.hits);
++            // Preparation and cache hits must never retire pending presentation.
++            try std.testing.expectEqual(@as(u64, 1), pane.pending_frame_id);
++        }
++    }
++
++    // A full destination must fail rather than drop geometry; the following
++    // preparation can rebuild/reuse safely without an acknowledgement.
++    cached.begin();
++    const saved_limit = cached.quads.limit;
++    cached.quads.limit = 0;
++    try std.testing.expectError(error.NativeQuadBudgetExceeded, cached.drawPane(paint));
++    try std.testing.expectEqual(@as(usize, 0), cached.quads.items().len);
++    cached.quads.limit = saved_limit;
++    cached.begin();
++    try cached.drawPane(paint);
++    try std.testing.expectEqualSlices(u8, std.mem.sliceAsBytes(reference.quads.items()), std.mem.sliceAsBytes(cached.quads.items()));
++}

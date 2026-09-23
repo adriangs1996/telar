@@ -16,6 +16,7 @@ const std = @import("std");
 /// const diff = collectSpans(.{ .current = current, .acknowledged = acknowledged, .cols = cols, .damaged_rows = damaged }, storage);
 /// ```
 pub fn collectSpans(input: Input, storage: []core.Span) Diff {
+    core.profiling.add(.runtime_damage, 1);
     const current = input.current;
     const acknowledged = input.acknowledged;
     const cols = input.cols;
@@ -26,6 +27,12 @@ pub fn collectSpans(input: Input, storage: []core.Span) Diff {
     std.debug.assert(current.len == @as(usize, cols) * damaged_rows.len);
 
     var result: Diff = .{};
+    var comparisons: u64 = 0;
+    defer {
+        core.profiling.add(.runtime_rows, result.damaged_rows);
+        core.profiling.add(.runtime_scanned_cells, result.scanned_cells);
+        core.profiling.add(.runtime_equal, comparisons);
+    }
     for (damaged_rows, 0..) |damaged, y| {
         if (!damaged) {
             continue;
@@ -36,14 +43,20 @@ pub fn collectSpans(input: Input, storage: []core.Span) Diff {
         var index = y * @as(usize, cols);
         const row_end = index + cols;
         while (index < row_end) {
-            if (current[index].eqlPublic(&acknowledged[index])) {
+            if (compare: {
+                comparisons += 1;
+                break :compare current[index].eqlPublic(&acknowledged[index]);
+            }) {
                 index += 1;
                 continue;
             }
 
             const start = index;
             while (index < row_end and
-                !current[index].eqlPublic(&acknowledged[index]))
+                compare: {
+                    comparisons += 1;
+                    break :compare !current[index].eqlPublic(&acknowledged[index]);
+                })
             {
                 index += 1;
             }

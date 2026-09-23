@@ -27,7 +27,7 @@ def main():
     args = parser.parse_args()
     directory = args.output.resolve()
     env = perf_e2e.isolated_environment(directory)
-    env.update(BENCH_THROUGHPUT='1', BENCH_BACKGROUND='idle')
+    env.update(BENCH_THROUGHPUT='1', BENCH_BACKGROUND='idle', TELAR_PROFILE_DIR=str(directory))
     fixture = directory / 'fixture'
     fixture.mkdir(mode=0o700)
     child = directory / 'workload.py'

@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""Run balanced, isolated cache-admission trials against one prebuilt widget binary."""
+import argparse
+import csv
+import hashlib
+import itertools
+import json
+from pathlib import Path
+import platform
+import random
+import statistics
+import subprocess
+
+from dod_measure import execute, save
+
+ROOT = Path(__file__).resolve().parent.parent
+SIZES = ((40, 10), (80, 20), (160, 40))
+PAUSES = (0, 1, 2, 5, 20, 100)
+SEED = 20260922
+
+
+def distribution(values):
+    return dict(median=statistics.median(values), minimum=min(values), maximum=max(values))
+
+
+def command(binary, case, policy='cells', verify=False):
+    cols, rows, quiet, active = case
+    # Clear inherited experiment switches; every process has explicit inputs.
+    result = ['env', '-u', 'TELAR_CACHE_VERIFY', '-u', 'DYLD_INSERT_LIBRARIES',
+              f'TELAR_CACHE_COLS={cols}', f'TELAR_CACHE_ROWS={rows}',
+              f'TELAR_CACHE_QUIET={quiet}', f'TELAR_CACHE_ACTIVE={active}',
+              f'TELAR_CACHE_POLICY={policy}']
+    if verify:
+        result.append('TELAR_CACHE_VERIFY=1')
+    return result + [str(binary), '--cache-bench']
+
+
+def collect(binary, case, directory, policy='cells', verify=False):
+    receipt = execute(command(binary, case, policy, verify), directory)
+    if receipt['status'] != 0:
+        raise RuntimeError(f'Failed run: {directory}')
+    row = json.loads((directory/'stdout').read_text())
+    if tuple(row[key] for key in ('cols', 'rows', 'quiet', 'active')) != case:
+        raise RuntimeError(f'Wrong fixture: {directory}')
+    if not verify:
+        period = row['quiet'] + 1
+        samples = row['samples']
+        if samples < 4096 or samples % period or row['allocations'] or row['allocated_bytes']:
+            raise RuntimeError(f'Incomplete cycles or allocations: {directory}')
+        static_hits = (2 - row['active']) * samples
+        quiet = row['quiet']
+        cycles = samples // period
+        expected_hits = {'cells': 0, 'always': static_hits + row['active'] * quiet * cycles,
+                         'stable': static_hits + row['active'] * max(0, quiet - 1) * cycles,
+                         'retained': static_hits + row['active'] * quiet * cycles}
+        if row['hits'] != expected_hits[policy]:
+            raise RuntimeError(f'Unexpected admission behavior: {directory}')
+        row['mean_ns'] = row['elapsed_ns'] / samples
+    return row
+
+
+def summarize(runs, candidate="stable"):
+    result = []
+    groups = {}
+    for row in runs:
+        key = tuple(row[k] for k in ('cols', 'rows', 'quiet', 'active'))
+        groups.setdefault(key, {}).setdefault(row['policy'], []).append(row)
+    for case, policies in sorted(groups.items()):
+        for rows in policies.values():
+            rows.sort(key=lambda row: row['round'])
+        entry = dict(zip(('cols', 'rows', 'quiet', 'active'), case))
+        entry['policies'] = {}
+        for name, rows in policies.items():
+            entry['policies'][name] = dict(
+                mean_ns=distribution([r['mean_ns'] for r in rows]),
+                p50_ns=distribution([r['p50_ns'] for r in rows]),
+                p95_ns=distribution([r['p95_ns'] for r in rows]),
+                p99_ns=distribution([r['p99_ns'] for r in rows]),
+                copied_bytes_per_frame=rows[0]['copied_bytes'] / rows[0]['samples'],
+                hits_per_frame=rows[0]['hits'] / rows[0]['samples'],
+                visited_cells_per_frame=rows[0]['visited_cells'] / rows[0]['samples'],
+                cache_bytes=rows[0]['cache_bytes'])
+        entry['comparisons'] = {}
+        for compared, reference in ((candidate, 'always'), (candidate, 'cells'), ('always', 'cells')):
+            pairs = list(zip(policies[compared], policies[reference]))
+            ratios = [(c['mean_ns'] / r['mean_ns'] - 1) * 100 for c, r in pairs]
+            tails = [(c['p99_ns'] / r['p99_ns'] - 1) * 100 for c, r in pairs]
+            entry['comparisons'][f'{compared}_vs_{reference}'] = dict(
+                mean_change_percent=distribution(ratios), p99_change_percent=distribution(tails),
+                faster_pairs=sum(v < 0 for v in ratios), pairs=len(pairs), paired_changes=ratios)
+        result.append(entry)
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--binary', type=Path, default=ROOT/'zig-out/bin/run-widget')
+    parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--candidate', choices=('stable', 'retained'), default='stable')
+    options = parser.parse_args()
+    policies = ('cells', 'always', options.candidate)
+    binary = options.binary.resolve()
+    output = options.output.resolve()
+    output.mkdir(parents=True, exist_ok=False)
+    binary_hash = hashlib.sha256(binary.read_bytes()).hexdigest()
+    sources = sorted((ROOT/'src/gui/experiments/cache').glob('*.zig'))
+    sources += [ROOT/'run_widget.zig', Path(__file__), ROOT/'src/gui/render/TerminalRenderer.zig',
+                ROOT/'src/gui/render/PaneDrawKey.zig', ROOT/'src/gui/render/PaneDrawCache.zig',
+                ROOT/'src/gui/render/QuadList.zig']
+    source_dir = output/'source'
+    source_dir.mkdir()
+    for source in sources:
+        (source_dir/source.name).write_bytes(source.read_bytes())
+    (output/'working.patch').write_bytes(subprocess.check_output(['git', 'diff', '--binary'], cwd=ROOT))
+    save(output/'metadata.json', dict(
+        binary=str(binary), binary_sha256=binary_hash, platform=platform.platform(),
+        machine=subprocess.check_output(['sysctl', '-n', 'machdep.cpu.brand_string'], text=True).strip(),
+        zig=subprocess.check_output(['zig', 'version'], text=True).strip(),
+        head=subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(),
+        seed=SEED, sizes=SIZES, pauses=PAUSES, active_panes=[1, 2], rounds=6, policies=policies,
+        measurement='Per-frame begin/draw/seal, one selected renderer per process; no verification, UI or GPU inside timing.',
+        memory='cache_bytes is additional pane quad capacity; fixture owns all lab renderers, only selected renderer is exercised during timing.',
+        omissions=['GPU/input latency', 'hardware cache misses', 'RSS attribution', 'IPC bytes', 'queue depth']))
+    cases = list(itertools.product(SIZES, PAUSES, (1, 2)))
+    cases = [(size[0], size[1], quiet, active) for size, quiet, active in cases]
+    verification = []
+    for cols, rows, quiet, active in cases:
+        name = f'verify-{cols}x{rows}-q{quiet}-a{active}'
+        verification.append(collect(binary, (cols, rows, quiet, active), output/name, verify=True))
+    save(output/'verification.json', verification)
+    orders = list(itertools.permutations(policies))
+    randomizer = random.Random(SEED)
+    runs = []
+    with (output/'runs.jsonl').open('w') as raw:
+        for repetition, order in enumerate(orders):
+            sequence = cases.copy()
+            randomizer.shuffle(sequence)
+            for case in sequence:
+                cols, rows, quiet, active = case
+                for policy in order:
+                    name = f'r{repetition}-{cols}x{rows}-q{quiet}-a{active}-{policy}'
+                    row = collect(binary, case, output/name, policy)
+                    row.update(round=repetition, directory=name)
+                    runs.append(row)
+                    raw.write(json.dumps(row) + '\n')
+                    raw.flush()
+            save(output/'summary.json', summarize(runs, options.candidate))
+            print(f'Completed balanced round {repetition + 1}/6', flush=True)
+    with (output/'runs.csv').open('w', newline='') as file:
+        writer = csv.DictWriter(file, fieldnames=list(runs[0]))
+        writer.writeheader()
+        writer.writerows(runs)
+    if hashlib.sha256(binary.read_bytes()).hexdigest() != binary_hash:
+        raise RuntimeError('Binary changed during measurement')
+    print(json.dumps(dict(runs=len(runs), measured_frames=sum(r['samples'] for r in runs),
+                         verified_frames=sum(r['verified_frames'] for r in verification), output=str(output))))
+
+
+if __name__ == '__main__':
+    main()

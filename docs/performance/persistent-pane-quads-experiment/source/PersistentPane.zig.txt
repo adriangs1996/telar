@@ -1,0 +1,59 @@
+//! A lab-owned pane output buffer. The native frame receives its own copy;
+//! no pointer into this storage crosses the asynchronous GPU boundary.
+const std = @import("std");
+const quad = @import("../../render/Quad.zig");
+const QuadList = @import("../../render/QuadList.zig");
+const Key = @import("../../render/PaneDrawKey.zig");
+const Renderer = @import("../../render/TerminalRenderer.zig");
+const PanePaint = @import("../../render/PanePaint.zig");
+const Self = @This();
+
+quads: QuadList,
+key: ?Key = null,
+copied_bytes: usize = 0,
+
+pub fn init(allocator: std.mem.Allocator) Self {
+    return .{ .quads = .init(allocator) };
+}
+
+pub fn deinit(self: *Self) void {
+    self.quads.deinit();
+}
+
+/// Reserves only outside preparation; overflow falls back to ordinary drawing.
+/// Example: `try cache.reserve(2 * pane_cells);`
+pub fn reserve(self: *Self, limit: usize) !void {
+    self.key = null;
+    try self.quads.quads.ensureTotalCapacityPrecise(self.quads.allocator, limit);
+    self.quads.limit = limit;
+}
+
+/// Writes misses directly into owned storage, retains hits in place, then
+/// appends one copy to the native scene. Example: `const hit = try cache.draw(renderer, paint);`
+pub fn draw(self: *Self, renderer: *Renderer, paint: PanePaint) !bool {
+    self.copied_bytes = 0;
+    const key = renderer.paneKey(paint);
+    const hit = key != null and self.key != null and std.meta.eql(key.?, self.key.?);
+    if (!hit) {
+        self.key = null;
+        self.rebuild(renderer, paint) catch |err| switch (err) {
+            error.NativeQuadBudgetExceeded => {
+                try renderer.drawPane(paint);
+                return false;
+            },
+            else => return err,
+        };
+        self.key = key;
+    }
+
+    try renderer.quads.appendSlice(self.quads.items());
+    self.copied_bytes = self.quads.items().len * @sizeOf(quad.Quad);
+    return hit;
+}
+
+fn rebuild(self: *Self, renderer: *Renderer, paint: PanePaint) !void {
+    std.mem.swap(QuadList, &self.quads, &renderer.quads);
+    defer std.mem.swap(QuadList, &self.quads, &renderer.quads);
+    renderer.quads.clear();
+    try renderer.drawPane(paint);
+}

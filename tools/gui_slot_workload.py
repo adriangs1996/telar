@@ -14,7 +14,7 @@ import time
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--mode', choices=['scroll', 'full'], required=True)
+    parser.add_argument('--mode', choices=['idle', 'scroll', 'full'], required=True)
     parser.add_argument('--rate', type=int, default=120)
     parser.add_argument('--seconds', type=float, default=12)
     parser.add_argument('--size-file', type=Path)
@@ -39,6 +39,9 @@ def main():
         os.write(1, f'\x1b[2;{rows}r\x1b[2;1H'.encode())
     try:
         while time.monotonic() - started < args.seconds:
+            if args.mode == 'idle':
+                time.sleep(args.seconds)
+                break
             digit = str(frames % 10)
             if args.mode == 'scroll':
                 line = (f'{frames:08d} ' + digit * max(1, cols - 10) + '\r\n').encode()

@@ -88,6 +88,7 @@ def measure(mode, directory, setup):
     env.update(TELAR_SOCKET=str(directory / 'runtime.sock'),
                TELAR_SOCKET_PATH=str(directory / 'runtime.sock'),
                TELAR_HISTORY=str(directory / 'history.db'),
+               TELAR_PROFILE_DIR=str(directory),
                XDG_DATA_HOME=str(directory / 'data'),
                XDG_CONFIG_HOME=str(directory / 'config'))
     case = getattr(options, 'case', None)

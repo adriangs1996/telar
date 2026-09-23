@@ -177,6 +177,10 @@ pub const Range = @import("Range.zig");
 pub const ReadHistoryOutput = @import("schema/messages/ReadHistoryOutput.zig");
 pub const ReadPane = @import("schema/messages/ReadPane.zig");
 pub const Recorder = @import("Recorder.zig");
+pub const profiling = @import("profiling.zig");
+pub const ProfileStore = @import("ProfileStore.zig");
+pub const ProfileCounters = @import("ProfileCounters.zig");
+pub const ProfileHistogram = @import("ProfileHistogram.zig");
 pub const Rect = @import("ui/Rect.zig");
 pub const RectRect = @import("Rect.zig");
 pub const RejectReason = handshake.RejectReason;
@@ -449,6 +453,9 @@ pub const workspace = id.workspace;
 pub const worktree = id.worktree;
 
 test {
+    _ = ProfileStore;
+    _ = ProfileCounters;
+    _ = ProfileHistogram;
     _ = clock;
     _ = deadline_timer;
     _ = pace;

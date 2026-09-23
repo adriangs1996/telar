@@ -199,6 +199,8 @@ pub fn init(b: *std.Build) ?@This() {
     exe_options.addOption(bool, "diagnostics", diagnostics_enabled);
     exe_options.addOption(bool, "echo_trace", b.option(bool, "echo-trace", "Record bounded echo phase timestamps until shutdown") orelse false);
     exe_options.addOption(bool, "echo_trace_cpu", b.option(bool, "echo-trace-cpu", "Include thread CPU clocks in diagnostic echo traces") orelse false);
+    exe_options.addOption(bool, "profile_counts", b.option(bool, "profile-counts", "Collect bounded per-thread data-access counters") orelse false);
+    exe_options.addOption(bool, "profile_timing", b.option(bool, "profile-timing", "Collect bounded synchronous phase histograms") orelse false);
     exe.root_module.addOptions("build_options", exe_options);
     // `zig build` installs only the shipped binary. Examples and probes get
     // their own steps so the default build and `run` never wait on them.

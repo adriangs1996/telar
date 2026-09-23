@@ -13,6 +13,9 @@ pub fn Type(comptime Pointer: type) type {
         index: usize = 0,
 
         pub fn next(self: *Self) ?Pointer {
+            core.profiling.add(.pane_iterator, 1);
+            const profile_index = self.index;
+            defer core.profiling.add(.pane_slots, self.index - profile_index);
             while (self.index < self.panes.len) {
                 const pane = self.panes[self.index];
                 self.index += 1;

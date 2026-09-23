@@ -1,0 +1,207 @@
+{
+  "agent_resolve": {
+    "unit": "calls",
+    "source": "ThreadFlow.resolve",
+    "coverage": "entry"
+  },
+  "agent_items": {
+    "unit": "items",
+    "source": "ThreadFlow.resolve",
+    "coverage": "items visited in retained page traversal"
+  },
+  "agent_draw_rows": {
+    "unit": "rows",
+    "source": "ThreadFlow.draw",
+    "coverage": "resolved rows considered"
+  },
+  "agent_visible_rows": {
+    "unit": "rows",
+    "source": "ThreadFlow.draw",
+    "coverage": "rows passing viewport rejection"
+  },
+  "review_draw": {
+    "unit": "calls",
+    "source": "Paint.draw",
+    "coverage": "review draw entry"
+  },
+  "review_search_rows": {
+    "unit": "rows",
+    "source": "Paint.searchStatus",
+    "coverage": "file rows traversed to compute match count"
+  },
+  "review_search_bytes": {
+    "unit": "logical_bytes",
+    "source": "Paint.searchStatus",
+    "coverage": "sum of searched line lengths, not repeated substring probes"
+  },
+  "tui_compose": {
+    "unit": "calls",
+    "source": "Compositor.render",
+    "coverage": "entry"
+  },
+  "tui_flush": {
+    "unit": "calls",
+    "source": "Screen.flush",
+    "coverage": "entry"
+  },
+  "gui_update": {
+    "unit": "calls",
+    "source": "GuiClient.update",
+    "coverage": "function entry"
+  },
+  "gui_dispatch": {
+    "unit": "events",
+    "source": "GuiClient.dispatch",
+    "coverage": "all dispatched GUI events"
+  },
+  "gui_input_drain": {
+    "unit": "calls",
+    "source": "GuiClient.drainInput",
+    "coverage": "function entry"
+  },
+  "gui_draw": {
+    "unit": "calls",
+    "source": "GuiClient.draw",
+    "coverage": "includes rejected preparation"
+  },
+  "gui_complete": {
+    "unit": "calls",
+    "source": "GuiClient.complete",
+    "coverage": "includes stale completions"
+  },
+  "client_receive": {
+    "unit": "calls",
+    "source": "AttachedClient.receiveRuntime",
+    "coverage": "function entry"
+  },
+  "client_apply_frame": {
+    "unit": "calls",
+    "source": "AttachedClient.applyPaneFrame",
+    "coverage": "includes ignored frames"
+  },
+  "pane_apply_frame": {
+    "unit": "calls",
+    "source": "Pane.applyFrame",
+    "coverage": "model function entry"
+  },
+  "pane_find": {
+    "unit": "calls",
+    "source": "MultiplexerModel.find/findConst",
+    "coverage": "both mutable and const entries"
+  },
+  "pane_find_found": {
+    "unit": "lookups",
+    "source": "MultiplexerModel.find/findConst",
+    "coverage": "successful index resolution"
+  },
+  "pane_iterator": {
+    "unit": "calls",
+    "source": "GenericPaneIterator.next",
+    "coverage": "includes exhausted iterator calls"
+  },
+  "pane_slots": {
+    "unit": "slots",
+    "source": "GenericPaneIterator.next",
+    "coverage": "slots inspected, including empty"
+  },
+  "layout_query": {
+    "unit": "calls",
+    "source": "MultiplexerModel.layoutSnapshot",
+    "coverage": "cached accessor only"
+  },
+  "layout_rebuild": {
+    "unit": "snapshots",
+    "source": "MultiplexerModel.layoutSnapshot",
+    "coverage": "cache misses only"
+  },
+  "gui_scene": {
+    "unit": "calls",
+    "source": "Scene.prepare",
+    "coverage": "function entry"
+  },
+  "gui_pane_draw": {
+    "unit": "calls",
+    "source": "TerminalRenderer.drawPane",
+    "coverage": "visible pane draws"
+  },
+  "gui_cell_visit": {
+    "unit": "cells",
+    "source": "TerminalRenderer.drawPane",
+    "coverage": "first-pass cells"
+  },
+  "gui_ink_visit": {
+    "unit": "cells",
+    "source": "TerminalRenderer.drawPane",
+    "coverage": "second-pass cells"
+  },
+  "mesh_compare": {
+    "unit": "calls",
+    "source": "TerminalRenderer.drawPane -> CellMesh.matches",
+    "coverage": "this call site only"
+  },
+  "mesh_hit": {
+    "unit": "cells",
+    "source": "TerminalRenderer.drawPane",
+    "coverage": "successful retained comparison"
+  },
+  "mesh_rebuild": {
+    "unit": "cells",
+    "source": "TerminalRenderer.drawPane -> CellMesh.replace",
+    "coverage": "this call site only"
+  },
+  "mesh_items": {
+    "unit": "calls",
+    "source": "TerminalRenderer.drawPane -> CellMesh.items",
+    "coverage": "two per fully drawn cell"
+  },
+  "gui_quads": {
+    "unit": "quads",
+    "source": "TerminalRenderer.drawPane",
+    "coverage": "emitted terminal quads including cursor"
+  },
+  "runtime_ingest": {
+    "unit": "calls",
+    "source": "pane_pipeline.ingestPane",
+    "coverage": "worker entry"
+  },
+  "runtime_ingest_bytes": {
+    "unit": "bytes",
+    "source": "pane_pipeline.ingestPane",
+    "coverage": "submitted bytes including failed attempts"
+  },
+  "runtime_blit": {
+    "unit": "calls",
+    "source": "blit.blit",
+    "coverage": "function entry"
+  },
+  "runtime_damage": {
+    "unit": "calls",
+    "source": "damage.collectSpans",
+    "coverage": "function entry"
+  },
+  "runtime_rows": {
+    "unit": "rows",
+    "source": "damage.collectSpans",
+    "coverage": "dirty rows visited"
+  },
+  "runtime_scanned_cells": {
+    "unit": "cells",
+    "source": "damage.collectSpans",
+    "coverage": "dirty row lengths"
+  },
+  "runtime_equal": {
+    "unit": "calls",
+    "source": "damage.collectSpans -> Cell.eqlPublic",
+    "coverage": "comparison sites in this function only"
+  },
+  "pane_copy_cells": {
+    "unit": "cells",
+    "source": "Pane.applyFrame",
+    "coverage": "successfully applied frame cells"
+  },
+  "pane_copy_bytes": {
+    "unit": "logical_bytes",
+    "source": "Pane.applyFrame",
+    "coverage": "applied cells multiplied by Cell size, not DRAM traffic"
+  }
+}

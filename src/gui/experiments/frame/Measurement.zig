@@ -1,0 +1,6 @@
+name: []const u8,
+reference_ns: u64 = 0,
+solution_ns: u64 = 0,
+reference_quads: usize = 0,
+solution_quads: usize = 0,
+samples: usize = 0,

@@ -310,6 +310,9 @@ pub fn resizeViewport(self: *GuiClient, viewport: native.Viewport) !core.Termina
 /// Prepares one frame without starting the runtime. Native readiness owns startup.
 /// Example: `const token = try gui.draw(viewport);`
 pub fn draw(self: *GuiClient, viewport: native.Viewport) !u64 {
+    core.profiling.add(.gui_draw, 1);
+    const profile_started = core.profiling.start(self.app.io);
+    defer core.profiling.finish(self.app.io, .gui_draw, profile_started);
     if (self.failure != null or self.exit_status != null) {
         return 0;
     }
@@ -522,6 +525,7 @@ pub fn acceptInput(self: *GuiClient, event: event_module.Event) !bool {
 /// Workers only publish owned messages; the window thread owns mutation.
 /// Example: `const status = try gui.update();`
 pub fn update(self: *GuiClient) !?u8 {
+    core.profiling.add(.gui_update, 1);
     const loop = &self.driver;
     const status: ?u8 = turn: {
         var batch = try loop.inbox.begin();
@@ -569,6 +573,7 @@ pub fn update(self: *GuiClient) !?u8 {
 }
 
 fn dispatch(self: *GuiClient, event: gui_event.Message) !?u8 {
+    core.profiling.add(.gui_dispatch, 1);
     switch (event) {
         .server => |result| return self.receive(result),
         .sent => |result| try self.app.completeRuntimeSend(result),
@@ -710,6 +715,7 @@ fn statusMode(self: *const GuiClient) client.Mode {
 
 /// Stops before the shared outbox fills, resuming on transport completion.
 fn drainInput(self: *GuiClient) !void {
+    core.profiling.add(.gui_input_drain, 1);
     const app = &self.app;
     const pending_input = &self.input_queue;
 
@@ -1598,6 +1604,7 @@ pub fn resize(self: *GuiClient, size: core.TerminalSize, theme: shared_model.Ter
 
 /// Retires captured damage after GPU delivery, preserving newer received state.
 fn complete(self: *GuiClient, token: u64, delivered: bool) !void {
+    core.profiling.add(.gui_complete, 1);
     const active = self.lifecycle.active orelse return;
 
     if (token == 0 or token != @intFromEnum(active.token)) {

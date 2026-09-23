@@ -1,0 +1,68 @@
+{
+  "raw_root": "/private/tmp/telar-pane-cache-experiment",
+  "branch": "experiment/pane-draw-cache",
+  "base_commit": "adf2acc4c5b0741d893d27336eb411462c3b7b72",
+  "binaries_and_artifacts": {
+    "A/bin/telar": "71a42e0e288a59af4d41193a0036f66464f686ce2506e2985b47b955d7f320e6",
+    "A/bin/telar-dod-probe": "f1ee9e77e8a989732efb5a303dd7b82ce2b821dc0e70d989b8b2067385a3c812",
+    "B/bin/telar": "9d985ece1741fbc4c288185f5304260db3f2123d3e1b6c38e1aa86e7e454f0e8",
+    "B/bin/telar-dod-probe": "ff51e5eaaaa0106d9ff2b1675f5224bf0d743b2586427105a7dcbb842adf10aa",
+    "counters/bin/telar-dod-probe": "d52e789a72d512ef459c3cae28e04dcf363e701fd1f83c8c837049abcb08a9ee",
+    "shared-probe.zig": "c61512b740d049032b497732bf4a1df692c51445c68ee7bd9c817e3992727e68",
+    "runner-before-native-retry.py": "ce6accff1af6c6390bb0ca73a6c620e0c61a9810e5033ef61dab0cf8ac01544d",
+    "runner-native-measured.py": "e728348a59afad8af95521111989f34d59789875efdc470cf60b4ca92ad7b69f",
+    "candidate.patch": "0c3b2f14bf51c62da0963c1b9488c0df122293159c14eecb99be251e05db5eb8",
+    "tests-debug.log": "cb8222c0ce767de88fe29ae95cb3c59b5e7eb22e173f9f910ea6b0bee9141d9e",
+    "results/cpu/manifest.json": "17eaf373dd631c522c797d942f51708f8f98f104aa85c3903ee12ae2bd008ab7",
+    "results/verify/manifest.json": "652f727b54feffbc5e6c22e2b9a9a9b585d223c92d2a3fff9da8902c1f7e53df",
+    "results-native-retry/native/manifest.json": "1c8ae0997e93da9a81ff9677b6062fcb3e7357e407a9427fc879879ac04e10b1",
+    "results/native/candidate-2/result.json": "cf80c98c6409b2586aa2a3e80e8919fe96379f17561e0dff0f4ba8c1c0d02307"
+  },
+  "source_hashes": {
+    "src/gui/render/TerminalRenderer.zig": "e8c4931d13e6a0ded7324e21f0015256d773c75ffed075a4d766b1d6702d5587",
+    "src/gui/render/RetainedCells.zig": "b6abc9dcc188613e52cb278e3aae0ba9fef23d3ca8687db18c38c630516f31f2",
+    "src/gui/render/QuadList.zig": "dfefbbade7f5f960d682a6e07bd56be1be97e70061ebe3e76d68278a6a6d5568",
+    "src/gui/gui.zig": "c225e53e099f8171363708ddebea09b9c8a7be73b636ead45c5e4966ec30c249",
+    "src/gui/tests/terminal.zig": "e244b0bb06491d3ecdae63f931f4aac881d04045daf256e901fda568b5d36d77",
+    "src/gui/tests/braille.zig": "08932aef146173ffc6eb974037e25f02bcd765fff8ddbdd25f0291f0551d1f70",
+    "src/gui/tests/box_drawing.zig": "226c91dc77a9b5d9e916fda5547dc288d9beda132a52deca2adbbcedc0ebc35d",
+    "src/gui/tests/italic.zig": "42e1a6a3f285e98d4fa75c80227b7a444a45312f767a0c57e4b1d5f3f379d54d",
+    "src/gui/render/PaneDrawCache.zig": "4ac26bddcdcb222410faca57417eb2ec812a1eebede97af53c1bcec0897c4139",
+    "src/gui/render/PaneDrawKey.zig": "6d565dbe6f778d3046fc6e414c783da511ed032bc8b9052da8b9e750dae1b0fe",
+    "src/gui/render/PaneDrawEntry.zig": "f4457eec794eb0c2be54dc2c7a6e349a12183571a850f07a2cea3998a200ee91",
+    "src/gui/tests/pane_draw_cache.zig": "54fbd5971747dbcac5a7e3fb7399b783c0e780cad955175e32ff3a2326314cdf"
+  },
+  "current_runner_sha256": "dbfc13198f0499cb3bababff31f9b7d2dcab5863baccba4d499cc76e310c599e",
+  "validated_native_geometry": {
+    "viewport": [
+      1600,
+      1000
+    ],
+    "pty_cells": [
+      86,
+      44
+    ],
+    "backing_scale": 1,
+    "display_max_fps": 100
+  },
+  "cleanup_receipts": [
+    "results-native-retry/native/candidate-3-attempt-0/shutdown.json",
+    "results-native-retry/native/baseline-4-attempt-0/shutdown.json",
+    "results-native-retry/native/baseline-2-attempt-0/shutdown.json",
+    "results-native-retry/native/candidate-2-attempt-0/shutdown.json",
+    "results-native-retry/native/baseline-3-attempt-0/shutdown.json",
+    "results-native-retry/native/candidate-4-attempt-0/shutdown.json",
+    "results-native-retry/native/candidate-1-attempt-0/shutdown.json",
+    "results-native-retry/native/baseline-0-attempt-0/shutdown.json",
+    "results-native-retry/native/candidate-0-attempt-0/shutdown.json",
+    "results-native-retry/native/baseline-1-attempt-0/shutdown.json",
+    "results/native/baseline-0/shutdown.json",
+    "results/native/baseline-1/shutdown.json",
+    "results/native/candidate-2/shutdown.json",
+    "results/native/baseline-2/shutdown.json",
+    "results/native/candidate-1/shutdown.json",
+    "results/native/candidate-0/shutdown.json"
+  ],
+  "validation": "758/758 GUI tests; codestyle and client boundaries pass; 768 quad/atlas frames equal; counter traversal assertions pass; zero measured allocations; all accepted native pixels match",
+  "decision": "Keep experimental; sparse and both-active CPU regressions prevent general integration."
+}

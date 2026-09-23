@@ -243,7 +243,8 @@ static void finish(int failed) {
         @"focus_failure_frontmost_application": focus_failure_frontmost ?: @{},
         @"input_class": input_class ?: @"", @"input_method": text_input ? @"text" : @"key",
         @"mode": display_mode ?: @"", @"layout": display_layout ?: @"single",
-        @"panes_requested": @(panes), @"panes_created": @(created_panes),
+        @"panes_requested": @(panes),
+        @"balanced_splits": @(panes == 8 && [display_mode isEqualToString:@"gui"] && [display_layout isEqualToString:@"splits"]), @"panes_created": @(created_panes),
         @"setup_complete": @(setup_complete),
         @"window_id": @(primary_window.windowNumber), @"window_floated": @(window_floated),
         @"floated_window_ids": floated_window_ids ?: @[],
@@ -372,9 +373,34 @@ static void reset_locator(void) {
     marker_located = 0;
 }
 
+// Eight leaves need balanced splits; repeatedly splitting the new leaf runs
+// into the pane minimum before setup completes. This is probe-only input.
+static void focus_widest_split(NSView *view) {
+    static double left[8] = {0};
+    static double width[8] = {1};
+    unsigned selected = 0;
+    for (unsigned index = 1; index < created_panes; index++) {
+        if (width[index] > width[selected]) selected = index;
+    }
+    double center = left[selected] + width[selected] / 2;
+    NSPoint local = NSMakePoint(view.bounds.size.width * center, view.bounds.size.height / 2);
+    NSPoint location = [view convertPoint:local toView:nil];
+    for (NSNumber *type in @[@(NSEventTypeLeftMouseDown), @(NSEventTypeLeftMouseUp)]) {
+        NSEvent *event = [NSEvent mouseEventWithType:type.unsignedIntegerValue location:location
+            modifierFlags:0 timestamp:0 windowNumber:view.window.windowNumber context:nil
+            eventNumber:0 clickCount:1 pressure:1];
+        if (type.unsignedIntegerValue == NSEventTypeLeftMouseDown) [view mouseDown:event];
+        else [view mouseUp:event];
+    }
+    width[selected] /= 2;
+    left[created_panes] = left[selected] + width[selected];
+    width[created_panes] = width[selected];
+}
+
 static BOOL layout_key(BOOL create) {
     NSView *view = active_view();
     BOOL tabs = [display_layout isEqualToString:@"tabs"];
+    if (create && !tabs && panes == 8 && [display_mode isEqualToString:@"gui"]) focus_widest_split(view);
     if ([display_mode isEqualToString:@"ghostty"]) {
         ProbeKey key = { .modifiers = NSEventModifierFlagControl | NSEventModifierFlagShift };
         if (create && tabs) key.characters = @"\024", key.unmodified = @"T", key.code = 17;

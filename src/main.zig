@@ -33,10 +33,12 @@ const version = "0.0.0";
 // Zig tests use the compiler runner as root, not this bootstrap. Check the
 // declarations here; executable probes exercise their root-level effects.
 test "the executable preserves diagnostic and trace root contracts" {
-    inline for (.{ "std_options", "telar_diagnostics", "telar_echo_trace", "telar_echo_trace_cpu", "echo_recorder" }) |name| {
+    inline for (.{ "std_options", "telar_diagnostics", "telar_echo_trace", "telar_echo_trace_cpu", "echo_recorder", "telar_profile_counts", "telar_profile_timing", "profile_store" }) |name| {
         _ = std.meta.declarationInfo(@This(), name);
     }
 
+    try std.testing.expectEqual(build_options.profile_counts, telar_profile_counts);
+    try std.testing.expectEqual(build_options.profile_timing, telar_profile_timing);
     try std.testing.expectEqual(build_options.diagnostics, telar_diagnostics);
     try std.testing.expectEqual(build_options.echo_trace, telar_echo_trace);
     try std.testing.expectEqual(build_options.echo_trace_cpu, telar_echo_trace_cpu);
@@ -52,12 +54,21 @@ pub const std_options: std.Options = .{
 
 // These names are root-level opt-in contracts read by core through @hasDecl.
 pub const telar_diagnostics = build_options.diagnostics;
+pub const telar_profile_counts = build_options.profile_counts;
+pub const telar_profile_timing = build_options.profile_timing;
+pub var profile_store: if (core.profiling.active) core.ProfileStore else void = if (core.profiling.active) .{} else {};
 pub const telar_echo_trace = build_options.echo_trace;
 pub const telar_echo_trace_cpu = build_options.echo_trace_cpu;
 
 pub var echo_recorder: if (build_options.echo_trace) core.Recorder else void = if (build_options.echo_trace) .{} else {};
 
 fn dumpEchoTrace(init: std.process.Init) void {
+    if (comptime core.profiling.active) {
+        if (init.minimal.environ.getPosix("TELAR_PROFILE_DIR")) |directory| {
+            profile_store.dump(init.io, directory) catch {};
+        }
+    }
+
     if (comptime build_options.echo_trace) {
         const directory = init.minimal.environ.getPosix("TELAR_ECHO_TRACE_DIR") orelse return;
         echo_recorder.dump(init.io, directory) catch {};

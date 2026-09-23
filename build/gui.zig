@@ -30,6 +30,26 @@ pub fn add(b: *std.Build, app: Application, diagram_helper: ?std.Build.LazyPath)
         } else {
             linux_gui.add(b, gui, app.coverage.enabled);
         }
+        const probe = b.createModule(.{
+            .root_source_file = b.path("src/gui/profiling_main.zig"),
+            .target = app.modules.target,
+            .optimize = app.modules.optimize,
+            .link_libc = true,
+        });
+        var imports = gui.import_table.iterator();
+        while (imports.next()) |entry| {
+            probe.addImport(entry.key_ptr.*, entry.value_ptr.*);
+        }
+        probe.addOptions("profile_options", app.modules.build_options);
+        probe.addObjectFile(app.modules.syntax_library.?);
+        probe.addCSourceFile(.{ .file = b.path("src/gui/native/wake.c"), .flags = &.{} });
+        if (app.modules.target.result.os.tag == .macos) {
+            macos_gui.add(b, probe, false);
+        } else {
+            linux_gui.add(b, probe, false);
+        }
+        const executable = b.addExecutable(.{ .name = "telar-dod-probe", .root_module = probe });
+        b.step("build-dod-probe", "Build CPU-only native workloads and storage report").dependOn(&b.addInstallArtifact(executable, .{}).step);
         app.exe.root_module.addImport("telar-gui", gui);
         const run_gui = b.addRunArtifact(app.exe);
         run_gui.addArg("gui");

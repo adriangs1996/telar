@@ -125,6 +125,8 @@ pub fn init(b: *std.Build, app: Application) @This() {
     });
     b.step("echo-probe", "Build the echo VT oracle and minimal interposition controls").dependOn(&b.addInstallArtifact(echo_probe, .{}).step);
     benchmarks.root_module.addImport("ghostty-vt", app.modules.ghostty_vt);
+    benchmarks.root_module.addOptions("profile_options", app.modules.build_options);
+    b.step("build-bench", "Build the benchmark executable without running measurements").dependOn(&b.addInstallArtifact(benchmarks, .{}).step);
     const run_benchmarks = b.addRunArtifact(benchmarks);
     if (b.args) |args| {
         run_benchmarks.addArgs(args);

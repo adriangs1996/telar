@@ -108,6 +108,7 @@ pub fn deinit(pane: *Pane) void {
 /// Applies a decoded frame after identity and base admission. Only a
 /// snapshot may resize storage. Example: const work = try pane.applyFrame(frame);
 pub fn applyFrame(pane: *Pane, frame: core.FrameView) !AppliedType {
+    core.profiling.add(.pane_apply_frame, 1);
     if (frame.pane_id != pane.id) {
         return error.PaneMismatch;
     }
@@ -169,6 +170,8 @@ pub fn applyFrame(pane: *Pane, frame: core.FrameView) !AppliedType {
 
     pane.applied_frame_id = frame.frame_id;
     pane.pending_frame_id = frame.frame_id;
+    core.profiling.add(.pane_copy_cells, applied.cells);
+    core.profiling.add(.pane_copy_bytes, applied.cells * @sizeOf(core.Cell));
     return applied;
 }
 

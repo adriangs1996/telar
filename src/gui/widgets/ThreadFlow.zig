@@ -23,6 +23,9 @@ reanchored: bool = false,
 /// Measures retained items once, then moves the visible window from its end.
 /// Example: `try flow.resolve(canvas);`
 pub fn resolve(flow: *Flow, canvas: *Canvas) !void {
+    core.profiling.add(.agent_resolve, 1);
+    var profile_items: u64 = 0;
+    defer core.profiling.add(.agent_items, profile_items);
     const live = flow.thread.transcript orelse return;
     flow.len = 0;
     flow.reanchored = false;
@@ -37,6 +40,7 @@ pub fn resolve(flow: *Flow, canvas: *Canvas) !void {
         const order = ThreadOrder.resolve(snapshot.items());
 
         for (order.indices[0..order.len]) |index| {
+            profile_items += 1;
             const item = &snapshot.items()[index];
             if (unique) |masks| {
                 if (masks[page_index] & (@as(u64, 1) << @intCast(index)) == 0) {
@@ -283,11 +287,19 @@ fn uniqueItems(window: *const data.AgentHistoryWindow) [data.AgentHistoryWindow.
 /// Only visible rows paint or request the next animation frame.
 /// Example: `try flow.draw(canvas);`
 pub fn draw(flow: *const Flow, canvas: *Canvas) !void {
+    var considered: u64 = 0;
+    var visible: u64 = 0;
+    defer {
+        core.profiling.add(.agent_draw_rows, considered);
+        core.profiling.add(.agent_visible_rows, visible);
+    }
     for (flow.rows[0..flow.len]) |view| {
+        considered += 1;
         if (view.bounds.y + view.bounds.height <= flow.bounds.y or view.bounds.y >= flow.bounds.y + flow.bounds.height) {
             continue;
         }
 
+        visible += 1;
         if (view.work_count != 0) {
             try (@import("ThreadWork.zig"){ .view = view }).draw(canvas);
             continue;

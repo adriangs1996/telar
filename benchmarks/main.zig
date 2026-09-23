@@ -1,5 +1,6 @@
 //! Reproducible benchmarks for telar's interactive path.
 
+const profile_options = @import("profile_options");
 const data = @import("model");
 const core = @import("telar-core");
 const backend = @import("telar-backend");
@@ -790,6 +791,13 @@ fn execute(result_writer: ResultWriter, resources: ExecutionResources, fixture: 
 }
 
 pub fn main(init: std.process.Init) !void {
+    defer {
+        if (comptime core.profiling.active) {
+            if (init.minimal.environ.getPosix("TELAR_PROFILE_DIR")) |directory| {
+                profile_store.dump(init.io, directory) catch {};
+            }
+        }
+    }
     const args = try init.minimal.args.toSlice(init.arena.allocator());
     const config = Config.parse(args) catch |err| switch (err) {
         error.HelpRequested => {
@@ -865,3 +873,7 @@ pub fn main(init: std.process.Init) !void {
     try execute(.{ .writer = writer, .config = config }, .{ .io = init.io, .gpa = gpa.allocator() }, &fixture);
     try writer.flush();
 }
+
+pub const telar_profile_counts = profile_options.profile_counts;
+pub const telar_profile_timing = profile_options.profile_timing;
+pub var profile_store: if (core.profiling.active) core.ProfileStore else void = if (core.profiling.active) .{} else {};

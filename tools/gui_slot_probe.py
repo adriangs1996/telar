@@ -260,7 +260,8 @@ def run(options):
     env = {key: value for key, value in os.environ.items()
            if not key.startswith("TELAR_") and key != "DYLD_INSERT_LIBRARIES"}
     env.update(TELAR_SOCKET=str(directory / "runtime.sock"),
-               TELAR_HISTORY=str(directory / "history.db"))
+               TELAR_HISTORY=str(directory / "history.db"),
+               TELAR_PROFILE_DIR=str(directory), TELAR_ECHO_TRACE_DIR=str(directory))
     subprocess.run([str(binary), "server", "--background", "--no-config"], env=env, check=True)
     launch_env = dict(env, DYLD_INSERT_LIBRARIES=":".join(libraries),
                       TELAR_SLOT_TRACE=str(directory / "trace.json"),
@@ -329,7 +330,7 @@ def main():
     parser.add_argument("--analyze", type=Path, help="analyze an existing trace without launching a GUI")
     parser.add_argument("--size-file", type=Path, help="add workload-window statistics to --analyze")
     parser.add_argument("--workload-warmup", type=float, default=1)
-    parser.add_argument("--workload", choices=["echo", "scroll", "full"], default="echo")
+    parser.add_argument("--workload", choices=["echo", "idle", "scroll", "full"], default="echo")
     parser.add_argument("--samples", type=int, default=100)
     parser.add_argument("--input-method", choices=["key", "text"], default="text")
     parser.add_argument("--seconds", type=float, default=16)

@@ -1,0 +1,5546 @@
+[
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 0,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8623.803100585938,
+          "minimum": 8449.540283203125,
+          "maximum": 8856.45849609375
+        },
+        "p50_ns": {
+          "median": 8541.5,
+          "minimum": 8375,
+          "maximum": 8791
+        },
+        "p95_ns": {
+          "median": 9062.5,
+          "minimum": 8791,
+          "maximum": 9666
+        },
+        "p99_ns": {
+          "median": 10291.5,
+          "minimum": 10041,
+          "maximum": 10459
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 5571.412109375,
+          "minimum": 5490.584228515625,
+          "maximum": 5637.85205078125
+        },
+        "p50_ns": {
+          "median": 5479.5,
+          "minimum": 5458,
+          "maximum": 5584
+        },
+        "p95_ns": {
+          "median": 5792.0,
+          "minimum": 5625,
+          "maximum": 6125
+        },
+        "p99_ns": {
+          "median": 6603.5,
+          "minimum": 6458,
+          "maximum": 6667
+        },
+        "copied_bytes_per_frame": 96000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 400.0,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 4989.6971435546875,
+          "minimum": 4925.660400390625,
+          "maximum": 5029.52099609375
+        },
+        "p50_ns": {
+          "median": 4958.0,
+          "minimum": 4916,
+          "maximum": 4958
+        },
+        "p95_ns": {
+          "median": 5125.0,
+          "minimum": 5042,
+          "maximum": 5208
+        },
+        "p99_ns": {
+          "median": 5916.5,
+          "minimum": 5792,
+          "maximum": 6000
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 400.0,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -10.461978057644705,
+          "minimum": -11.9228965924291,
+          "maximum": -8.39734376584772
+        },
+        "p99_change_percent": {
+          "median": -10.466926221888217,
+          "minimum": -12.509374531273432,
+          "maximum": -7.0919789408485645
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -11.587180020371857,
+          -11.9228965924291,
+          -10.914331040160864,
+          -10.009625075128547,
+          -8.902972627388595,
+          -8.39734376584772
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -41.96222269194688,
+          "minimum": -43.21069761336225,
+          "maximum": -41.704989439693364
+        },
+        "p99_change_percent": {
+          "median": -42.476546050271224,
+          "minimum": -42.6829268292683,
+          "maximum": -41.90817647644657
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -41.933693595161884,
+          -41.704989439693364,
+          -42.75844933317296,
+          -41.71894218565515,
+          -41.99075178873186,
+          -43.21069761336225
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -35.490921741699395,
+          "minimum": -38.00474274296758,
+          "maximum": -33.81366063941683
+        },
+        "p99_change_percent": {
+          "median": -35.71992163101038,
+          "minimum": -38.25413519456927,
+          "maximum": -33.60223085350065
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -34.323657566609,
+          -33.81366063941683,
+          -35.7455005556144,
+          -35.23634292778439,
+          -36.32146966333526,
+          -38.00474274296758
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 0,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8620.630126953125,
+          "minimum": 8477.099853515625,
+          "maximum": 9026.95556640625
+        },
+        "p50_ns": {
+          "median": 8541.5,
+          "minimum": 8417,
+          "maximum": 8917
+        },
+        "p95_ns": {
+          "median": 9000.0,
+          "minimum": 8833,
+          "maximum": 10291
+        },
+        "p99_ns": {
+          "median": 10229.0,
+          "minimum": 10083,
+          "maximum": 10709
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 9367.732177734375,
+          "minimum": 9267.362548828125,
+          "maximum": 9502.3544921875
+        },
+        "p50_ns": {
+          "median": 9291.5,
+          "minimum": 9209,
+          "maximum": 9416
+        },
+        "p95_ns": {
+          "median": 9625.0,
+          "minimum": 9458,
+          "maximum": 10250
+        },
+        "p99_ns": {
+          "median": 11042.0,
+          "minimum": 10792,
+          "maximum": 11292
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 9432.256958007812,
+          "minimum": 9369.907958984375,
+          "maximum": 9489.205078125
+        },
+        "p50_ns": {
+          "median": 9334.0,
+          "minimum": 9250,
+          "maximum": 9375
+        },
+        "p95_ns": {
+          "median": 9833.5,
+          "minimum": 9625,
+          "maximum": 10333
+        },
+        "p99_ns": {
+          "median": 11187.5,
+          "minimum": 11125,
+          "maximum": 11375
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": 0.6944949275870749,
+          "minimum": -1.3938285854523502,
+          "maximum": 1.6271953849716692
+        },
+        "p99_change_percent": {
+          "median": 1.6981304357975735,
+          "minimum": -1.4789231314204732,
+          "maximum": 3.4655300222387053
+        },
+        "faster_pairs": 1,
+        "pairs": 6,
+        "paired_changes": [
+          0.6011090597707547,
+          1.6271953849716692,
+          -1.3938285854523502,
+          0.7652423841792322,
+          0.6237474709949176,
+          1.0789332023022347
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": 9.18106150437017,
+          "minimum": 4.6460592609861795,
+          "maximum": 11.616556220039165
+        },
+        "p99_change_percent": {
+          "median": 9.417987428016328,
+          "minimum": 4.659632085162024,
+          "maximum": 11.892583120204602
+        },
+        "faster_pairs": 0,
+        "pairs": 6,
+        "paired_changes": [
+          9.960146738400667,
+          5.034821753745189,
+          8.401976270339674,
+          4.6460592609861795,
+          10.370506546874747,
+          11.616556220039165
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": 9.4947282884841,
+          "minimum": 3.353065442635872,
+          "maximum": 10.425142691847222
+        },
+        "p99_change_percent": {
+          "median": 8.836874306269028,
+          "minimum": 2.780952380952373,
+          "maximum": 11.990479024099976
+        },
+        "faster_pairs": 0,
+        "pairs": 6,
+        "paired_changes": [
+          9.303115806675022,
+          3.353065442635872,
+          9.934271572729191,
+          3.851344754385533,
+          9.686340770293178,
+          10.425142691847222
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 1,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8478.676635742188,
+          "minimum": 8404.740234375,
+          "maximum": 8733.6796875
+        },
+        "p50_ns": {
+          "median": 8437.0,
+          "minimum": 8334,
+          "maximum": 8666
+        },
+        "p95_ns": {
+          "median": 8687.0,
+          "minimum": 8584,
+          "maximum": 9125
+        },
+        "p99_ns": {
+          "median": 10083.0,
+          "minimum": 9584,
+          "maximum": 10333
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 4135.759033203125,
+          "minimum": 4087.187255859375,
+          "maximum": 4206.12353515625
+        },
+        "p50_ns": {
+          "median": 5354.5,
+          "minimum": 5333,
+          "maximum": 5458
+        },
+        "p95_ns": {
+          "median": 5791.5,
+          "minimum": 5708,
+          "maximum": 5916
+        },
+        "p99_ns": {
+          "median": 6541.5,
+          "minimum": 5875,
+          "maximum": 6792
+        },
+        "copied_bytes_per_frame": 112000.0,
+        "hits_per_frame": 1.5,
+        "visited_cells_per_frame": 200.0,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 2976.365478515625,
+          "minimum": 2969.8203125,
+          "maximum": 3001.50830078125
+        },
+        "p50_ns": {
+          "median": 4770.5,
+          "minimum": 4708,
+          "maximum": 4792
+        },
+        "p95_ns": {
+          "median": 5062.0,
+          "minimum": 5000,
+          "maximum": 5084
+        },
+        "p99_ns": {
+          "median": 5791.5,
+          "minimum": 5667,
+          "maximum": 5916
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.5,
+        "visited_cells_per_frame": 200.0,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -27.870428392921127,
+          "minimum": -29.296583373780393,
+          "maximum": -26.562985425287277
+        },
+        "p99_change_percent": {
+          "median": -12.339718430579634,
+          "minimum": -13.841509433962262,
+          "maximum": -1.4127659574468043
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -28.059851525705394,
+          -27.394055795342066,
+          -28.10946873132465,
+          -29.296583373780393,
+          -26.562985425287277,
+          -27.68100526013686
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -64.64786675095243,
+          "minimum": -65.94724445863758,
+          "maximum": -64.5596142150995
+        },
+        "p99_change_percent": {
+          "median": -42.475838687045666,
+          "minimum": -43.95625665344043,
+          "maximum": -39.565943238731215
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -64.5596142150995,
+          -65.94724445863758,
+          -65.8611051099575,
+          -64.644054912229,
+          -64.65167858967588,
+          -64.56821852749538
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -51.43602783570245,
+          "minimum": -53.09921809517931,
+          "maximum": -49.994007680444064
+        },
+        "p99_change_percent": {
+          "median": -35.259751470204705,
+          "minimum": -38.69991652754591,
+          "maximum": -32.348492487647476
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -50.73629046294792,
+          -53.09921809517931,
+          -52.512668514778746,
+          -49.994007680444064,
+          -51.86579735705112,
+          -51.00625831435378
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 1,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8665.328979492188,
+          "minimum": 8501.9677734375,
+          "maximum": 9084.684814453125
+        },
+        "p50_ns": {
+          "median": 8604.0,
+          "minimum": 8458,
+          "maximum": 8833
+        },
+        "p95_ns": {
+          "median": 8958.5,
+          "minimum": 8750,
+          "maximum": 10334
+        },
+        "p99_ns": {
+          "median": 10395.5,
+          "minimum": 10041,
+          "maximum": 11083
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 5794.05615234375,
+          "minimum": 5748.693603515625,
+          "maximum": 5918.76220703125
+        },
+        "p50_ns": {
+          "median": 8958.5,
+          "minimum": 8875,
+          "maximum": 9125
+        },
+        "p95_ns": {
+          "median": 9479.5,
+          "minimum": 9375,
+          "maximum": 9750
+        },
+        "p99_ns": {
+          "median": 10395.5,
+          "minimum": 9792,
+          "maximum": 11125
+        },
+        "copied_bytes_per_frame": 96000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 400.0,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 5286.370361328125,
+          "minimum": 5238.762451171875,
+          "maximum": 5402.279052734375
+        },
+        "p50_ns": {
+          "median": 8979.5,
+          "minimum": 8958,
+          "maximum": 9125
+        },
+        "p95_ns": {
+          "median": 9542.0,
+          "minimum": 9375,
+          "maximum": 9750
+        },
+        "p99_ns": {
+          "median": 10895.5,
+          "minimum": 9958,
+          "maximum": 11125
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 400.0,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -8.791208280703856,
+          "minimum": -10.378690975838634,
+          "maximum": -7.232218053617734
+        },
+        "p99_change_percent": {
+          "median": 2.0195789657196705,
+          "minimum": -1.869662921348314,
+          "maximum": 10.32328441094803
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -8.599789671256008,
+          -8.982626890151701,
+          -7.232218053617734,
+          -9.971363235326924,
+          -10.378690975838634,
+          -8.413399210793004
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -38.798163765351156,
+          "minimum": -41.61082881455953,
+          "maximum": -37.42755115662059
+        },
+        "p99_change_percent": {
+          "median": 4.645887728627029,
+          "minimum": -8.432183908045976,
+          "maximum": 8.536585365853666
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -38.05134313984178,
+          -39.3557547772669,
+          -37.42755115662059,
+          -38.24057275343541,
+          -41.61082881455953,
+          -39.39044939338847
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -32.960033785950756,
+          "minimum": -34.84900876676651,
+          "maximum": -31.400241671993445
+        },
+        "p99_change_percent": {
+          "median": -0.017071222059611424,
+          "minimum": -9.958620689655174,
+          "maximum": 6.642764664874012
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -32.222632051562904,
+          -33.370692703312876,
+          -32.54937486858863,
+          -31.400241671993445,
+          -34.84900876676651,
+          -33.8226879430664
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 2,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8545.618472425573,
+          "minimum": 8307.294533918985,
+          "maximum": 8653.567837969742
+        },
+        "p50_ns": {
+          "median": 8479.0,
+          "minimum": 8250,
+          "maximum": 8584
+        },
+        "p95_ns": {
+          "median": 8833.5,
+          "minimum": 8542,
+          "maximum": 9625
+        },
+        "p99_ns": {
+          "median": 10063.0,
+          "minimum": 9875,
+          "maximum": 10375
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 3781.885065885798,
+          "minimum": 3723.9682772083943,
+          "maximum": 3832.820400195217
+        },
+        "p50_ns": {
+          "median": 2917.0,
+          "minimum": 2875,
+          "maximum": 3000
+        },
+        "p95_ns": {
+          "median": 5771.0,
+          "minimum": 5667,
+          "maximum": 5875
+        },
+        "p99_ns": {
+          "median": 6042.0,
+          "minimum": 5833,
+          "maximum": 6792
+        },
+        "copied_bytes_per_frame": 117333.33333333333,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 133.33333333333334,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 2264.259394826745,
+          "minimum": 2235.1451927769644,
+          "maximum": 2355.3967789165445
+        },
+        "p50_ns": {
+          "median": 917.0,
+          "minimum": 916,
+          "maximum": 1000
+        },
+        "p95_ns": {
+          "median": 5083.5,
+          "minimum": 5000,
+          "maximum": 5208
+        },
+        "p99_ns": {
+          "median": 5312.5,
+          "minimum": 5125,
+          "maximum": 5875
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 133.33333333333334,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -39.37634813036715,
+          "minimum": -41.2676965241641,
+          "maximum": -37.69674831319861
+        },
+        "p99_change_percent": {
+          "median": -12.339712795220247,
+          "minimum": -23.117311731173118,
+          "maximum": -4.91693237120322
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -37.69674831319861,
+          -40.919725324816135,
+          -39.49173770948457,
+          -39.14999649191467,
+          -39.26095855124972,
+          -41.2676965241641
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -73.37772766800813,
+          "minimum": -73.98640940619764,
+          "maximum": -72.55141489623293
+        },
+        "p99_change_percent": {
+          "median": -46.64813555219975,
+          "minimum": -49.79919678714859,
+          "maximum": -43.101024302068694
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -72.55141489623293,
+          -73.50540273277505,
+          -73.33444807018084,
+          -72.71535100908129,
+          -73.42100726583544,
+          -73.98640940619764
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -55.81946620910916,
+          "minimum": -56.24067798865233,
+          "maximum": -55.15491860373194
+        },
+        "p99_change_percent": {
+          "median": -39.709440299794636,
+          "minimum": -40.93164556962026,
+          "maximum": -34.53493975903614
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -55.94357539835772,
+          -55.15491860373194,
+          -55.930725953108485,
+          -55.16080950218299,
+          -56.24067798865233,
+          -55.70820646510983
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 2,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8399.161542215716,
+          "minimum": 8366.78989751098,
+          "maximum": 8682.622498779892
+        },
+        "p50_ns": {
+          "median": 8354.0,
+          "minimum": 8291,
+          "maximum": 8625
+        },
+        "p95_ns": {
+          "median": 8791.5,
+          "minimum": 8584,
+          "maximum": 8875
+        },
+        "p99_ns": {
+          "median": 10000.5,
+          "minimum": 9834,
+          "maximum": 10208
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 4831.567105905319,
+          "minimum": 4817.633235724744,
+          "maximum": 4947.274280136652
+        },
+        "p50_ns": {
+          "median": 2895.5,
+          "minimum": 2875,
+          "maximum": 3000
+        },
+        "p95_ns": {
+          "median": 9395.5,
+          "minimum": 9375,
+          "maximum": 9625
+        },
+        "p99_ns": {
+          "median": 10083.0,
+          "minimum": 9834,
+          "maximum": 10875
+        },
+        "copied_bytes_per_frame": 106666.66666666667,
+        "hits_per_frame": 1.3333333333333333,
+        "visited_cells_per_frame": 266.6666666666667,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 3864.829795021962,
+          "minimum": 3776.672767203514,
+          "maximum": 4205.156417764763
+        },
+        "p50_ns": {
+          "median": 1166.5,
+          "minimum": 1125,
+          "maximum": 1167
+        },
+        "p95_ns": {
+          "median": 9562.5,
+          "minimum": 9375,
+          "maximum": 9708
+        },
+        "p99_ns": {
+          "median": 10812.5,
+          "minimum": 9500,
+          "maximum": 11167
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.3333333333333333,
+        "visited_cells_per_frame": 266.6666666666667,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -20.192177334189893,
+          "minimum": -21.87354713103147,
+          "maximum": -15.000540102486292
+        },
+        "p99_change_percent": {
+          "median": 1.816313529982,
+          "minimum": -5.782009322622239,
+          "maximum": 13.083544303797478
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -20.341214388475805,
+          -15.000540102486292,
+          -20.586109398369288,
+          -21.87354713103147,
+          -20.04314027990398,
+          -18.68994888870872
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -54.32502082654957,
+          "minimum": -55.51301879316225,
+          "maximum": -49.79793009145583
+        },
+        "p99_change_percent": {
+          "median": 7.243348788024628,
+          "minimum": -6.9357366771159885,
+          "maximum": 12.604618332156893
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -54.315067219762724,
+          -49.79793009145583,
+          -54.33497443333641,
+          -55.51301879316225,
+          -55.17493176980426,
+          -53.14109488100556
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -42.57332787499208,
+          "minimum": -43.93843331627292,
+          "maximum": -40.93836599776722
+        },
+        "p99_change_percent": {
+          "median": 1.0542582753510665,
+          "minimum": -2.071300537741483,
+          "maximum": 6.534090909090917
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -42.64922264440338,
+          -40.93836599776722,
+          -42.49743310558078,
+          -43.05772299498858,
+          -43.93843331627292,
+          -42.37009511301697
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 5,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8586.544167886774,
+          "minimum": 8246.98365056125,
+          "maximum": 10199.791605661298
+        },
+        "p50_ns": {
+          "median": 8500.0,
+          "minimum": 8209,
+          "maximum": 8625
+        },
+        "p95_ns": {
+          "median": 8916.5,
+          "minimum": 8458,
+          "maximum": 21917
+        },
+        "p99_ns": {
+          "median": 10270.5,
+          "minimum": 9625,
+          "maximum": 42083
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 3036.204001952172,
+          "minimum": 2951.086383601757,
+          "maximum": 3162.8199121522694
+        },
+        "p50_ns": {
+          "median": 2500.0,
+          "minimum": 2417,
+          "maximum": 2542
+        },
+        "p95_ns": {
+          "median": 5854.5,
+          "minimum": 5833,
+          "maximum": 6125
+        },
+        "p99_ns": {
+          "median": 6354.5,
+          "minimum": 5958,
+          "maximum": 6708
+        },
+        "copied_bytes_per_frame": 122666.66666666667,
+        "hits_per_frame": 1.8333333333333333,
+        "visited_cells_per_frame": 66.66666666666667,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 1508.0948023426063,
+          "minimum": 1466.1730112249877,
+          "maximum": 1569.5873596876525
+        },
+        "p50_ns": {
+          "median": 833.0,
+          "minimum": 792,
+          "maximum": 875
+        },
+        "p95_ns": {
+          "median": 5062.5,
+          "minimum": 5000,
+          "maximum": 5333
+        },
+        "p99_ns": {
+          "median": 5146.0,
+          "minimum": 5083,
+          "maximum": 5834
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.8333333333333333,
+        "visited_cells_per_frame": 66.66666666666667,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -50.34565776834507,
+          "minimum": -50.48357854189553,
+          "maximum": -50.19123728574104
+        },
+        "p99_change_percent": {
+          "median": -15.791260133294553,
+          "minimum": -22.972570065593324,
+          "maximum": -11.939622641509429
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -50.25806791378221,
+          -50.40041534625064,
+          -50.19123728574104,
+          -50.31751630951767,
+          -50.37379922717247,
+          -50.48357854189553
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -82.59465436018229,
+          "minimum": -84.61157423239443,
+          "maximum": -81.77296549586265
+        },
+        "p99_change_percent": {
+          "median": -50.09879518072289,
+          "minimum": -86.13691989639523,
+          "maximum": -47.17922077922078
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -81.77815223212332,
+          -81.77296549586265,
+          -82.54022786215846,
+          -82.88480501623776,
+          -84.61157423239443,
+          -82.6490808582061
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -64.95282365134798,
+          "minimum": -68.99132811304914,
+          "maximum": -63.25163883653708
+        },
+        "p99_change_percent": {
+          "median": -39.33774898567238,
+          "minimum": -84.25730104792909,
+          "maximum": -32.031168831168834
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -63.36722961164292,
+          -63.25163883653708,
+          -64.94638455886947,
+          -65.55084667186034,
+          -68.99132811304914,
+          -64.9592627438265
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 5,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8479.933504148365,
+          "minimum": 8324.992435334309,
+          "maximum": 8937.859931673987
+        },
+        "p50_ns": {
+          "median": 8437.5,
+          "minimum": 8291,
+          "maximum": 8916
+        },
+        "p95_ns": {
+          "median": 8687.5,
+          "minimum": 8583,
+          "maximum": 9375
+        },
+        "p99_ns": {
+          "median": 9958.0,
+          "minimum": 9833,
+          "maximum": 10833
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 3677.4771839921914,
+          "minimum": 3643.995363591996,
+          "maximum": 3889.4001952171793
+        },
+        "p50_ns": {
+          "median": 2521.0,
+          "minimum": 2458,
+          "maximum": 2708
+        },
+        "p95_ns": {
+          "median": 9458.5,
+          "minimum": 9417,
+          "maximum": 9791
+        },
+        "p99_ns": {
+          "median": 10083.5,
+          "minimum": 9833,
+          "maximum": 10875
+        },
+        "copied_bytes_per_frame": 117333.33333333333,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 133.33333333333334,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 2319.8998291849684,
+          "minimum": 2249.1664226451926,
+          "maximum": 2431.2733040507565
+        },
+        "p50_ns": {
+          "median": 916.5,
+          "minimum": 875,
+          "maximum": 959
+        },
+        "p95_ns": {
+          "median": 9479.5,
+          "minimum": 9208,
+          "maximum": 9708
+        },
+        "p99_ns": {
+          "median": 9646.0,
+          "minimum": 9375,
+          "maximum": 10000
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 133.33333333333334,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -37.14457361291623,
+          "minimum": -39.704513596419964,
+          "maximum": -34.77936091771148
+        },
+        "p99_change_percent": {
+          "median": -5.247212912020349,
+          "minimum": -8.045977011494255,
+          "maximum": -1.261059696938882
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -36.87692161295721,
+          -36.223708672037326,
+          -37.48976237928643,
+          -39.704513596419964,
+          -37.41222561287525,
+          -34.77936091771148
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -72.86164492833102,
+          "minimum": -73.4705234661925,
+          "maximum": -71.58562501263465
+        },
+        "p99_change_percent": {
+          "median": -4.61127164665357,
+          "minimum": -8.4005376344086,
+          "maximum": 0.421771440048202
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -72.92525232459924,
+          -71.89669988576267,
+          -72.79803753206279,
+          -73.42704962733629,
+          -73.4705234661925,
+          -71.58562501263465
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -56.45872466280507,
+          "minimum": -57.612366322990695,
+          "maximum": -55.92879010080273
+        },
+        "p99_change_percent": {
+          "median": 0.19385211852672724,
+          "minimum": -3.5906298003072212,
+          "maximum": 5.864631452098812
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -57.10800492113142,
+          -55.934565135311566,
+          -56.48398805810412,
+          -55.92879010080273,
+          -57.612366322990695,
+          -56.43346126750601
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 20,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8597.723396501457,
+          "minimum": 8463.305879494656,
+          "maximum": 8787.669339164237
+        },
+        "p50_ns": {
+          "median": 8562.5,
+          "minimum": 8375,
+          "maximum": 8709
+        },
+        "p95_ns": {
+          "median": 8896.0,
+          "minimum": 8708,
+          "maximum": 9041
+        },
+        "p99_ns": {
+          "median": 10104.0,
+          "minimum": 9917,
+          "maximum": 10834
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 2345.411443148688,
+          "minimum": 2241.839893100097,
+          "maximum": 2455.521379980564
+        },
+        "p50_ns": {
+          "median": 2083.0,
+          "minimum": 2000,
+          "maximum": 2208
+        },
+        "p95_ns": {
+          "median": 3563.0,
+          "minimum": 2792,
+          "maximum": 4500
+        },
+        "p99_ns": {
+          "median": 6021.0,
+          "minimum": 5875,
+          "maximum": 6166
+        },
+        "copied_bytes_per_frame": 126476.19047619047,
+        "hits_per_frame": 1.9523809523809523,
+        "visited_cells_per_frame": 19.047619047619047,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 967.5216229348882,
+          "minimum": 954.6064139941691,
+          "maximum": 980.5702137998056
+        },
+        "p50_ns": {
+          "median": 750.0,
+          "minimum": 708,
+          "maximum": 750
+        },
+        "p95_ns": {
+          "median": 1708.0,
+          "minimum": 1417,
+          "maximum": 3083
+        },
+        "p99_ns": {
+          "median": 5167.0,
+          "minimum": 5084,
+          "maximum": 5375
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.9523809523809523,
+        "visited_cells_per_frame": 19.047619047619047,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -58.8333451035629,
+          "minimum": -60.18394886234184,
+          "maximum": -56.701406992404046
+        },
+        "p99_change_percent": {
+          "median": -14.233333333333338,
+          "minimum": -15.855676928169482,
+          "maximum": -12.051063829787234
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -58.31350795158928,
+          -59.35318225553652,
+          -56.701406992404046,
+          -58.07941458796553,
+          -60.18394886234184,
+          -60.06672058348899
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -88.73859970447438,
+          "minimum": -88.95717356525266,
+          "maximum": -88.60542052472735
+        },
+        "p99_change_percent": {
+          "median": -49.06988734246495,
+          "minimum": -50.38766845117224,
+          "maximum": -47.47403448623576
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -88.88879519564904,
+          -88.95717356525266,
+          -88.64810298382875,
+          -88.60542052472735,
+          -88.81164828123761,
+          -88.66555112771114
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -72.82545112310508,
+          "minimum": -73.7822958492444,
+          "maximum": -71.6165337835929
+        },
+        "p99_change_percent": {
+          "median": -40.533170436337386,
+          "minimum": -43.46501753738231,
+          "maximum": -37.823938691136426
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -73.34579078650354,
+          -72.83224850670756,
+          -73.7822958492444,
+          -72.81865373950261,
+          -71.89989614972036,
+          -71.6165337835929
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 20,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8565.103377065112,
+          "minimum": 8460.618804664724,
+          "maximum": 8764.616132167153
+        },
+        "p50_ns": {
+          "median": 8500.0,
+          "minimum": 8375,
+          "maximum": 8708
+        },
+        "p95_ns": {
+          "median": 8750.5,
+          "minimum": 8667,
+          "maximum": 9833
+        },
+        "p99_ns": {
+          "median": 10104.5,
+          "minimum": 9958,
+          "maximum": 10916
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 2505.8831389698735,
+          "minimum": 2471.201895043732,
+          "maximum": 2598.894557823129
+        },
+        "p50_ns": {
+          "median": 2062.5,
+          "minimum": 2042,
+          "maximum": 2166
+        },
+        "p95_ns": {
+          "median": 3208.5,
+          "minimum": 3000,
+          "maximum": 4333
+        },
+        "p99_ns": {
+          "median": 9583.5,
+          "minimum": 9417,
+          "maximum": 9875
+        },
+        "copied_bytes_per_frame": 124952.38095238095,
+        "hits_per_frame": 1.9047619047619047,
+        "visited_cells_per_frame": 38.095238095238095,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 1187.0072886297376,
+          "minimum": 1166.454081632653,
+          "maximum": 1241.354713313897
+        },
+        "p50_ns": {
+          "median": 750.0,
+          "minimum": 750,
+          "maximum": 792
+        },
+        "p95_ns": {
+          "median": 1708.0,
+          "minimum": 1417,
+          "maximum": 3084
+        },
+        "p99_ns": {
+          "median": 9313.0,
+          "minimum": 9250,
+          "maximum": 9666
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.9047619047619047,
+        "visited_cells_per_frame": 38.095238095238095,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -52.360052355242956,
+          "minimum": -53.697167104222345,
+          "maximum": -52.10409627637467
+        },
+        "p99_change_percent": {
+          "median": -2.329457381305783,
+          "minimum": -3.8961038961038974,
+          "maximum": -1.3273866411808388
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -52.413746148834974,
+          -52.306358561650946,
+          -52.23527982013733,
+          -52.10409627637467,
+          -53.697167104222345,
+          -52.45851241791464
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -86.02381978329066,
+          "minimum": -86.46424993048343,
+          "maximum": -85.80096964617307
+        },
+        "p99_change_percent": {
+          "median": -7.35686746987952,
+          "minimum": -11.451080982044704,
+          "maximum": -6.688089977907207
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -86.13623813615696,
+          -86.06950391867288,
+          -85.80096964617307,
+          -85.90193521273753,
+          -86.46424993048343,
+          -85.97813564790843
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -70.66605226720148,
+          "minimum": -70.86603642471087,
+          "maximum": -70.27297490625068
+        },
+        "p99_change_percent": {
+          "median": -5.364151981957082,
+          "minimum": -9.536460241846834,
+          "maximum": -4.177545691906004
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -70.86603642471087,
+          -70.79171214189148,
+          -70.27297490625068,
+          -70.56519724815547,
+          -70.7669072862475,
+          -70.50604626562988
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 100,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8524.991910166627,
+          "minimum": 8441.472591161555,
+          "maximum": 8663.663366336634
+        },
+        "p50_ns": {
+          "median": 8437.0,
+          "minimum": 8375,
+          "maximum": 8666
+        },
+        "p95_ns": {
+          "median": 8896.0,
+          "minimum": 8625,
+          "maximum": 9708
+        },
+        "p99_ns": {
+          "median": 10062.5,
+          "minimum": 9417,
+          "maximum": 10333
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 2039.8359092006763,
+          "minimum": 1984.3441197778313,
+          "maximum": 2221.8693552282057
+        },
+        "p50_ns": {
+          "median": 1959.0,
+          "minimum": 1917,
+          "maximum": 2125
+        },
+        "p95_ns": {
+          "median": 2333.0,
+          "minimum": 2250,
+          "maximum": 2583
+        },
+        "p99_ns": {
+          "median": 5750.0,
+          "minimum": 4458,
+          "maximum": 6041
+        },
+        "copied_bytes_per_frame": 127683.16831683168,
+        "hits_per_frame": 1.99009900990099,
+        "visited_cells_per_frame": 3.9603960396039604,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 770.063752716735,
+          "minimum": 733.7319488046365,
+          "maximum": 800.4684858729776
+        },
+        "p50_ns": {
+          "median": 708.5,
+          "minimum": 667,
+          "maximum": 750
+        },
+        "p95_ns": {
+          "median": 854.0,
+          "minimum": 792,
+          "maximum": 917
+        },
+        "p99_ns": {
+          "median": 3479.0,
+          "minimum": 1500,
+          "maximum": 5000
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.99009900990099,
+        "visited_cells_per_frame": 3.9603960396039604,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -62.701995357321536,
+          "minimum": -66.34247971444971,
+          "maximum": -60.71763833918325
+        },
+        "p99_change_percent": {
+          "median": -40.891768566966306,
+          "minimum": -74.64503042596348,
+          "maximum": 12.157918349035434
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -64.0559583387315,
+          -60.71763833918325,
+          -60.84105134253075,
+          -66.34247971444971,
+          -63.953581212295,
+          -61.450409502348066
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -91.06653532255432,
+          "minimum": -91.30801005534421,
+          "maximum": -90.59233378709426
+        },
+        "p99_change_percent": {
+          "median": -64.76239288402165,
+          "minimum": -85.0,
+          "maximum": -49.1559894244458
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -91.05261896247181,
+          -90.59233378709426,
+          -90.6925846989983,
+          -91.17484711679141,
+          -91.30801005534421,
+          -91.08045168263682
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -75.96892248070144,
+          "minimum": -76.86214509099266,
+          "maximum": -73.77955117211243
+        },
+        "p99_change_percent": {
+          "median": -43.66790591323355,
+          "minimum": -54.66748017083587,
+          "maximum": -35.850058405012206
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -75.10747087974406,
+          -76.05116949399283,
+          -76.2317027905539,
+          -73.77955117211243,
+          -75.88667546741004,
+          -76.86214509099266
+        ]
+      }
+    }
+  },
+  {
+    "cols": 40,
+    "rows": 10,
+    "quiet": 100,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 8581.35897126298,
+          "minimum": 8289.718425501087,
+          "maximum": 8676.236416324558
+        },
+        "p50_ns": {
+          "median": 8500.0,
+          "minimum": 8250,
+          "maximum": 8583
+        },
+        "p95_ns": {
+          "median": 9041.5,
+          "minimum": 8500,
+          "maximum": 9334
+        },
+        "p99_ns": {
+          "median": 10249.5,
+          "minimum": 9792,
+          "maximum": 10542
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 2086.3448442405215,
+          "minimum": 2013.4093214199468,
+          "maximum": 2156.0690654431296
+        },
+        "p50_ns": {
+          "median": 1959.0,
+          "minimum": 1917,
+          "maximum": 2042
+        },
+        "p95_ns": {
+          "median": 2333.5,
+          "minimum": 2250,
+          "maximum": 2458
+        },
+        "p99_ns": {
+          "median": 6854.0,
+          "minimum": 3917,
+          "maximum": 9292
+        },
+        "copied_bytes_per_frame": 127366.33663366336,
+        "hits_per_frame": 1.9801980198019802,
+        "visited_cells_per_frame": 7.920792079207921,
+        "cache_bytes": 256000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 791.4929968606616,
+          "minimum": 780.7003139338324,
+          "maximum": 848.523786524994
+        },
+        "p50_ns": {
+          "median": 667.0,
+          "minimum": 667,
+          "maximum": 709
+        },
+        "p95_ns": {
+          "median": 896.0,
+          "minimum": 875,
+          "maximum": 959
+        },
+        "p99_ns": {
+          "median": 4354.0,
+          "minimum": 2875,
+          "maximum": 8916
+        },
+        "copied_bytes_per_frame": 64000.0,
+        "hits_per_frame": 1.9801980198019802,
+        "visited_cells_per_frame": 7.920792079207921,
+        "cache_bytes": 128000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -61.96352889278069,
+          "minimum": -63.3955558303378,
+          "maximum": -57.85636941788981
+        },
+        "p99_change_percent": {
+          "median": -36.45101487179071,
+          "minimum": -54.09811320754717,
+          "maximum": 25.878864887759434
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -62.71816956684552,
+          -61.49704363324864,
+          -60.857923435530424,
+          -57.85636941788981,
+          -63.3955558303378,
+          -62.43001415231273
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -90.56780249800514,
+          "minimum": -90.93898752530023,
+          "maximum": -90.10880063975009
+        },
+        "p99_change_percent": {
+          "median": -57.578599881512346,
+          "minimum": -72.0629676416286,
+          "maximum": -8.94607843137255
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -90.56543917680065,
+          -90.57016581920962,
+          -90.54994399261084,
+          -90.10880063975009,
+          -90.80610673047187,
+          -90.93898752530023
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -75.68292227461862,
+          "minimum": -76.52978819425991,
+          "maximum": -74.69394417177206
+        },
+        "p99_change_percent": {
+          "median": -31.778337000079688,
+          "minimum": -61.93761539209017,
+          "maximum": -6.688089977907207
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -74.69394417177206,
+          -75.50880485392192,
+          -75.85703969531534,
+          -76.52978819425991,
+          -74.88312286094475,
+          -75.88231065235405
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 0,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35783.371337890625,
+          "minimum": 35629.986328125,
+          "maximum": 36158.51513671875
+        },
+        "p50_ns": {
+          "median": 35520.5,
+          "minimum": 35417,
+          "maximum": 35958
+        },
+        "p95_ns": {
+          "median": 38020.5,
+          "minimum": 37500,
+          "maximum": 39000
+        },
+        "p99_ns": {
+          "median": 41146.0,
+          "minimum": 40500,
+          "maximum": 41750
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 23781.043579101562,
+          "minimum": 23527.95458984375,
+          "maximum": 24048.50830078125
+        },
+        "p50_ns": {
+          "median": 23562.5,
+          "minimum": 23292,
+          "maximum": 23875
+        },
+        "p95_ns": {
+          "median": 25146.0,
+          "minimum": 24625,
+          "maximum": 26250
+        },
+        "p99_ns": {
+          "median": 27916.5,
+          "minimum": 27417,
+          "maximum": 28750
+        },
+        "copied_bytes_per_frame": 384000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 1600.0,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 22102.42578125,
+          "minimum": 21804.28125,
+          "maximum": 22494.14697265625
+        },
+        "p50_ns": {
+          "median": 21917.0,
+          "minimum": 21708,
+          "maximum": 22208
+        },
+        "p95_ns": {
+          "median": 23437.0,
+          "minimum": 22208,
+          "maximum": 24583
+        },
+        "p99_ns": {
+          "median": 26291.5,
+          "minimum": 24917,
+          "maximum": 26625
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 1600.0,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -7.362093916100082,
+          "minimum": -8.615766736928709,
+          "maximum": -4.6210387672365965
+        },
+        "p99_change_percent": {
+          "median": -6.339943609022553,
+          "minimum": -10.476772176912297,
+          "maximum": -4.1956028930229206
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -7.39812243513499,
+          -6.719026180201714,
+          -4.6210387672365965,
+          -8.615766736928709,
+          -7.3260653970651735,
+          -7.403150473805653
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -38.45723233347657,
+          "minimum": -38.803565487791104,
+          "maximum": -37.12757038648259
+        },
+        "p99_change_percent": {
+          "median": -36.10196454607052,
+          "minimum": -38.476543209876546,
+          "maximum": -35.56065314981994
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -38.27441858205718,
+          -38.661688343071745,
+          -37.12757038648259,
+          -38.64004608489595,
+          -38.803565487791104,
+          -37.86680202194681
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -33.654458788040635,
+          "minimum": -34.243491308932285,
+          "maximum": -32.85498852032298
+        },
+        "p99_change_percent": {
+          "median": -31.860441674040118,
+          "minimum": -32.96589319311109,
+          "maximum": -30.091185410334344
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -33.343056273663784,
+          -34.243491308932285,
+          -34.08144857010642,
+          -32.85498852032298,
+          -33.96586130241749,
+          -32.899231133693604
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 0,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35682.0693359375,
+          "minimum": 35162.24169921875,
+          "maximum": 38642.193359375
+        },
+        "p50_ns": {
+          "median": 35375.5,
+          "minimum": 34666,
+          "maximum": 36958
+        },
+        "p95_ns": {
+          "median": 38270.5,
+          "minimum": 37167,
+          "maximum": 44542
+        },
+        "p99_ns": {
+          "median": 41229.0,
+          "minimum": 40375,
+          "maximum": 72584
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 40493.83850097656,
+          "minimum": 39614.990234375,
+          "maximum": 42964.370849609375
+        },
+        "p50_ns": {
+          "median": 40000.0,
+          "minimum": 39041,
+          "maximum": 41375
+        },
+        "p95_ns": {
+          "median": 43417.0,
+          "minimum": 42750,
+          "maximum": 50583
+        },
+        "p99_ns": {
+          "median": 46500.0,
+          "minimum": 45542,
+          "maximum": 74958
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 39986.719482421875,
+          "minimum": 39655.80908203125,
+          "maximum": 43926.86767578125
+        },
+        "p50_ns": {
+          "median": 39791.5,
+          "minimum": 39125,
+          "maximum": 40709
+        },
+        "p95_ns": {
+          "median": 43041.0,
+          "minimum": 41583,
+          "maximum": 60500
+        },
+        "p99_ns": {
+          "median": 46062.5,
+          "minimum": 45000,
+          "maximum": 110167
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -0.5858389246524986,
+          "minimum": -2.7859623620527074,
+          "maximum": 2.2402209252428085
+        },
+        "p99_change_percent": {
+          "median": -0.7124013618775904,
+          "minimum": -5.097327962545084,
+          "maximum": 46.9716374503055
+        },
+        "faster_pairs": 3,
+        "pairs": 6,
+        "paired_changes": [
+          -2.1821900830340524,
+          -2.7859623620527074,
+          2.2402209252428085,
+          0.10303889364797758,
+          -1.2747167429529749,
+          0.833326148322544
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": 13.414711520265499,
+          "minimum": 7.474060673828542,
+          "maximum": 14.005558858156263
+        },
+        "p99_change_percent": {
+          "median": 11.726555621355427,
+          "minimum": 9.436144578313254,
+          "maximum": 51.778628898930904
+        },
+        "faster_pairs": 0,
+        "pairs": 6,
+        "paired_changes": [
+          13.15350597428575,
+          13.84320329479718,
+          13.675917066245248,
+          7.474060673828542,
+          10.276768196078168,
+          14.005558858156263
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": 12.38200355217306,
+          "minimum": 7.363434578656225,
+          "maximum": 17.10572470899896
+        },
+        "p99_change_percent": {
+          "median": 11.971050766533631,
+          "minimum": 3.270693265733504,
+          "maximum": 16.718769230769226
+        },
+        "faster_pairs": 0,
+        "pairs": 6,
+        "paired_changes": [
+          15.67781579892018,
+          17.10572470899896,
+          11.18512463833985,
+          7.363434578656225,
+          11.700634891018758,
+          13.063372213327362
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 1,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35621.894775390625,
+          "minimum": 35220.2607421875,
+          "maximum": 37043.3388671875
+        },
+        "p50_ns": {
+          "median": 35354.5,
+          "minimum": 34958,
+          "maximum": 36375
+        },
+        "p95_ns": {
+          "median": 37687.0,
+          "minimum": 37209,
+          "maximum": 38208
+        },
+        "p99_ns": {
+          "median": 40812.5,
+          "minimum": 40583,
+          "maximum": 55166
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 15840.062866210938,
+          "minimum": 15676.809326171875,
+          "maximum": 17395.888916015625
+        },
+        "p50_ns": {
+          "median": 22729.5,
+          "minimum": 22667,
+          "maximum": 23041
+        },
+        "p95_ns": {
+          "median": 23896.0,
+          "minimum": 23583,
+          "maximum": 25333
+        },
+        "p99_ns": {
+          "median": 27063.0,
+          "minimum": 25875,
+          "maximum": 43292
+        },
+        "copied_bytes_per_frame": 448000.0,
+        "hits_per_frame": 1.5,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 13339.346435546875,
+          "minimum": 13223.602294921875,
+          "maximum": 13917.099365234375
+        },
+        "p50_ns": {
+          "median": 21208.0,
+          "minimum": 21125,
+          "maximum": 21375
+        },
+        "p95_ns": {
+          "median": 22271.0,
+          "minimum": 21875,
+          "maximum": 23125
+        },
+        "p99_ns": {
+          "median": 25625.0,
+          "minimum": 24458,
+          "maximum": 26167
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.5,
+        "visited_cells_per_frame": 800.0,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -16.14961127873802,
+          "minimum": -19.9977682518913,
+          "maximum": -15.244871415500704
+        },
+        "p99_change_percent": {
+          "median": -6.694575769605542,
+          "minimum": -39.55696202531646,
+          "maximum": -3.471249574137869
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -15.267991662304548,
+          -15.244871415500704,
+          -19.9977682518913,
+          -15.998602723699328,
+          -16.62918508038811,
+          -16.300619833776718
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -62.50150678646923,
+          "minimum": -62.99183398351491,
+          "maximum": -62.01671311168477
+        },
+        "p99_change_percent": {
+          "median": -38.07281698371218,
+          "minimum": -52.566798390312876,
+          "maximum": -36.36497352422043
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -62.11253083171038,
+          -62.57278938373061,
+          -62.43022418920785,
+          -62.99183398351491,
+          -62.01671311168477,
+          -62.73863653659204
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -55.38372072728829,
+          "minimum": -55.9433923524434,
+          "maximum": -53.039090298027446
+        },
+        "p99_change_percent": {
+          "median": -33.49015532279513,
+          "minimum": -36.63213577253692,
+          "maximum": -21.524127179784646
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -55.28552915057687,
+          -55.84077183134097,
+          -53.039090298027446,
+          -55.9433923524434,
+          -54.440547420653594,
+          -55.48191230399971
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 1,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35733.99060058594,
+          "minimum": 35295.1611328125,
+          "maximum": 41771.4892578125
+        },
+        "p50_ns": {
+          "median": 35583.0,
+          "minimum": 34958,
+          "maximum": 36166
+        },
+        "p95_ns": {
+          "median": 38125.0,
+          "minimum": 37459,
+          "maximum": 86333
+        },
+        "p99_ns": {
+          "median": 41041.5,
+          "minimum": 40583,
+          "maximum": 140084
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 23917.536743164062,
+          "minimum": 23864.922607421875,
+          "maximum": 24068.143310546875
+        },
+        "p50_ns": {
+          "median": 37958.5,
+          "minimum": 37792,
+          "maximum": 38042
+        },
+        "p95_ns": {
+          "median": 40270.5,
+          "minimum": 40083,
+          "maximum": 41042
+        },
+        "p99_ns": {
+          "median": 43791.5,
+          "minimum": 43292,
+          "maximum": 44042
+        },
+        "copied_bytes_per_frame": 384000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 1600.0,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 22099.626098632812,
+          "minimum": 21915.149169921875,
+          "maximum": 34046.053955078125
+        },
+        "p50_ns": {
+          "median": 38104.0,
+          "minimum": 38000,
+          "maximum": 39292
+        },
+        "p95_ns": {
+          "median": 40208.0,
+          "minimum": 39542,
+          "maximum": 112500
+        },
+        "p99_ns": {
+          "median": 43646.0,
+          "minimum": 43291,
+          "maximum": 187000
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 1600.0,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -7.600744954111322,
+          "minimum": -8.61507646392189,
+          "maximum": 41.45691886485834
+        },
+        "p99_change_percent": {
+          "median": 0.09878208775466191,
+          "minimum": -1.7051904999772938,
+          "maximum": 325.0
+        },
+        "faster_pairs": 5,
+        "pairs": 6,
+        "paired_changes": [
+          -2.352317128130088,
+          -7.618207284025513,
+          -7.58328262419713,
+          -8.61507646392189,
+          41.45691886485834,
+          -8.185852323468568
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -37.94435088722352,
+          "minimum": -38.68281272139633,
+          "maximum": -18.494517289180656
+        },
+        "p99_change_percent": {
+          "median": 6.797543379790705,
+          "minimum": 5.054843719666091,
+          "maximum": 33.49133377116586
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -33.975244205223,
+          -37.49317989134131,
+          -38.39552188310573,
+          -38.68281272139633,
+          -18.494517289180656,
+          -38.612791603674836
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -33.02100039098725,
+          "minimum": -42.38140957340796,
+          "maximum": -32.338593708790285
+        },
+        "p99_change_percent": {
+          "median": 6.776257104440308,
+          "minimum": -68.5902744067845,
+          "maximum": 7.684552205773865
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -32.38471835382667,
+          -32.338593708790285,
+          -33.34054718002357,
+          -32.90229404810293,
+          -42.38140957340796,
+          -33.13970673387156
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 2,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35044.93533430942,
+          "minimum": 34856.60200097608,
+          "maximum": 38343.830161054175
+        },
+        "p50_ns": {
+          "median": 34667.0,
+          "minimum": 34500,
+          "maximum": 36541
+        },
+        "p95_ns": {
+          "median": 36937.5,
+          "minimum": 36542,
+          "maximum": 39916
+        },
+        "p99_ns": {
+          "median": 40208.5,
+          "minimum": 39500,
+          "maximum": 84666
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 13307.813567593948,
+          "minimum": 13086.954123962909,
+          "maximum": 13437.579795021962
+        },
+        "p50_ns": {
+          "median": 8083.5,
+          "minimum": 7958,
+          "maximum": 8166
+        },
+        "p95_ns": {
+          "median": 23874.5,
+          "minimum": 23334,
+          "maximum": 24209
+        },
+        "p99_ns": {
+          "median": 26416.5,
+          "minimum": 25875,
+          "maximum": 27375
+        },
+        "copied_bytes_per_frame": 469333.3333333333,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 533.3333333333334,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 10427.255856515374,
+          "minimum": 10377.37579306979,
+          "maximum": 10585.344070278185
+        },
+        "p50_ns": {
+          "median": 4729.5,
+          "minimum": 4709,
+          "maximum": 4792
+        },
+        "p95_ns": {
+          "median": 21958.0,
+          "minimum": 21750,
+          "maximum": 22292
+        },
+        "p99_ns": {
+          "median": 23916.5,
+          "minimum": 23417,
+          "maximum": 25042
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 533.3333333333334,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -21.446144701496667,
+          "minimum": -22.490996077760293,
+          "maximum": -20.27131919250631
+        },
+        "p99_change_percent": {
+          "median": -9.570994707384962,
+          "minimum": -12.328767123287676,
+          "maximum": -4.993236714975846
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -21.664405123701837,
+          -21.78951187749133,
+          -20.27131919250631,
+          -22.490996077760293,
+          -21.22581423330715,
+          -21.227884279291498
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -70.30337712858153,
+          "minimum": -72.39361841053189,
+          "maximum": -70.05211839332188
+        },
+        "p99_change_percent": {
+          "median": -40.30169590529411,
+          "minimum": -70.42260175276971,
+          "maximum": -39.61137859880122
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -70.24385245523246,
+          -70.22837799054768,
+          -71.02001470268554,
+          -70.36290180193059,
+          -72.39361841053189,
+          -70.05211839332188
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -61.99807310084491,
+          "minimum": -64.95504038438365,
+          "maximum": -61.763025328253995
+        },
+        "p99_change_percent": {
+          "median": -34.7201457114041,
+          "minimum": -68.55290199135426,
+          "maximum": -31.987577639751553
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -62.01452533582431,
+          -61.93397749568046,
+          -63.65174363377824,
+          -61.763025328253995,
+          -64.95504038438365,
+          -61.981620865865516
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 2,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35661.22205954124,
+          "minimum": 35321.535627135185,
+          "maximum": 36189.89799902392
+        },
+        "p50_ns": {
+          "median": 35479.0,
+          "minimum": 34875,
+          "maximum": 35792
+        },
+        "p95_ns": {
+          "median": 37625.0,
+          "minimum": 37166,
+          "maximum": 38708
+        },
+        "p99_ns": {
+          "median": 40624.5,
+          "minimum": 40292,
+          "maximum": 42167
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 18748.251098096633,
+          "minimum": 18509.14616886286,
+          "maximum": 18955.68765251342
+        },
+        "p50_ns": {
+          "median": 8354.0,
+          "minimum": 8209,
+          "maximum": 8458
+        },
+        "p95_ns": {
+          "median": 40021.0,
+          "minimum": 39250,
+          "maximum": 40750
+        },
+        "p99_ns": {
+          "median": 43187.5,
+          "minimum": 42625,
+          "maximum": 44916
+        },
+        "copied_bytes_per_frame": 426666.6666666667,
+        "hits_per_frame": 1.3333333333333333,
+        "visited_cells_per_frame": 1066.6666666666667,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 16375.23804294778,
+          "minimum": 16192.138116154221,
+          "maximum": 16640.401171303074
+        },
+        "p50_ns": {
+          "median": 4750.0,
+          "minimum": 4750,
+          "maximum": 4750
+        },
+        "p95_ns": {
+          "median": 39854.5,
+          "minimum": 39292,
+          "maximum": 40458
+        },
+        "p99_ns": {
+          "median": 43354.0,
+          "minimum": 41917,
+          "maximum": 44625
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.3333333333333333,
+        "visited_cells_per_frame": 1066.6666666666667,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -12.880217684859947,
+          "minimum": -13.6294202937166,
+          "maximum": -10.096332810335106
+        },
+        "p99_change_percent": {
+          "median": 0.33614363329573793,
+          "minimum": -6.676908006055749,
+          "maximum": 3.979774914369605
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -13.43167787249171,
+          -13.22338741806649,
+          -10.096332810335106,
+          -13.6294202937166,
+          -12.537047951653403,
+          -11.864205827515473
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -54.173098560745274,
+          "minimum": -54.47639984544285,
+          "maximum": -53.14226015513023
+        },
+        "p99_change_percent": {
+          "median": 5.367348395070803,
+          "minimum": 1.5160688769949804,
+          "maximum": 9.925047155762922
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -54.20589106877674,
+          -54.47639984544285,
+          -53.14226015513023,
+          -54.157887451204466,
+          -54.18830967028608,
+          -54.080085290814
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -47.580463109821075,
+          "minimum": -47.898677103516775,
+          "maximum": -46.923926289844566
+        },
+        "p99_change_percent": {
+          "median": 6.469621288554439,
+          "minimum": 1.7786420660706348,
+          "maximum": 8.779152842023684
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -47.100616246469286,
+          -47.539321022038884,
+          -47.880057277289325,
+          -46.923926289844566,
+          -47.621605197603266,
+          -47.898677103516775
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 5,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35195.42313323572,
+          "minimum": 35085.6551976574,
+          "maximum": 35807.32967301123
+        },
+        "p50_ns": {
+          "median": 34854.0,
+          "minimum": 34750,
+          "maximum": 35375
+        },
+        "p95_ns": {
+          "median": 37229.5,
+          "minimum": 36750,
+          "maximum": 39083
+        },
+        "p99_ns": {
+          "median": 40479.0,
+          "minimum": 39750,
+          "maximum": 41083
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 10505.67130307467,
+          "minimum": 10498.30624694973,
+          "maximum": 10609.666422645192
+        },
+        "p50_ns": {
+          "median": 7875.0,
+          "minimum": 7875,
+          "maximum": 7917
+        },
+        "p95_ns": {
+          "median": 23312.5,
+          "minimum": 23292,
+          "maximum": 23709
+        },
+        "p99_ns": {
+          "median": 24396.0,
+          "minimum": 23667,
+          "maximum": 25791
+        },
+        "copied_bytes_per_frame": 490666.6666666667,
+        "hits_per_frame": 1.8333333333333333,
+        "visited_cells_per_frame": 266.6666666666667,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 7557.945827232797,
+          "minimum": 7526.080771107858,
+          "maximum": 7809.130551488531
+        },
+        "p50_ns": {
+          "median": 4708.0,
+          "minimum": 4708,
+          "maximum": 4875
+        },
+        "p95_ns": {
+          "median": 21604.0,
+          "minimum": 21542,
+          "maximum": 22542
+        },
+        "p99_ns": {
+          "median": 22270.5,
+          "minimum": 21875,
+          "maximum": 23458
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.8333333333333333,
+        "visited_cells_per_frame": 266.6666666666667,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -28.016874700860093,
+          "minimum": -29.06392650532115,
+          "maximum": -26.03780630974478
+        },
+        "p99_change_percent": {
+          "median": -8.25721153846154,
+          "minimum": -12.060301507537686,
+          "maximum": -3.9275914321988736
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -28.324437269131543,
+          -28.058771505066225,
+          -26.03780630974478,
+          -27.861655807779904,
+          -29.06392650532115,
+          -27.974977896653964
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -78.50963305138998,
+          "minimum": -78.76702518297883,
+          "maximum": -78.19125128067161
+        },
+        "p99_change_percent": {
+          "median": -44.74765327493239,
+          "minimum": -46.12200915925845,
+          "maximum": -41.53769470404984
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -78.76702518297883,
+          -78.50284390744005,
+          -78.19125128067161,
+          -78.51642219533991,
+          -78.54940793122095,
+          -78.47641836669165
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -70.16868379078335,
+          "minimum": -70.51365348807688,
+          "maximum": -69.76067181053077
+        },
+        "p99_change_percent": {
+          "median": -39.72664934972195,
+          "minimum": -41.581676119076015,
+          "maximum": -36.96597907908886
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -70.37627050554457,
+          -70.11844731832204,
+          -70.51365348807688,
+          -70.21892026324467,
+          -69.76067181053077,
+          -70.11652200199958
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 5,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35735.16886285993,
+          "minimum": 35138.679111761834,
+          "maximum": 35860.96632503661
+        },
+        "p50_ns": {
+          "median": 35520.5,
+          "minimum": 34791,
+          "maximum": 35625
+        },
+        "p95_ns": {
+          "median": 38312.0,
+          "minimum": 37000,
+          "maximum": 38583
+        },
+        "p99_ns": {
+          "median": 41125.0,
+          "minimum": 40208,
+          "maximum": 41917
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 13272.962664714494,
+          "minimum": 13147.599804782822,
+          "maximum": 13875.889458272328
+        },
+        "p50_ns": {
+          "median": 8041.5,
+          "minimum": 8000,
+          "maximum": 8333
+        },
+        "p95_ns": {
+          "median": 39374.5,
+          "minimum": 38667,
+          "maximum": 40666
+        },
+        "p99_ns": {
+          "median": 41250.0,
+          "minimum": 40250,
+          "maximum": 44250
+        },
+        "copied_bytes_per_frame": 469333.3333333333,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 533.3333333333334,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 10529.827720839434,
+          "minimum": 10420.362371888727,
+          "maximum": 10599.764275256222
+        },
+        "p50_ns": {
+          "median": 4708.0,
+          "minimum": 4708,
+          "maximum": 4709
+        },
+        "p95_ns": {
+          "median": 39042.0,
+          "minimum": 38750,
+          "maximum": 39500
+        },
+        "p99_ns": {
+          "median": 41854.0,
+          "minimum": 40042,
+          "maximum": 42667
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 533.3333333333334,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -20.953456038430232,
+          "minimum": -24.163393691143487,
+          "maximum": -19.858742753002367
+        },
+        "p99_change_percent": {
+          "median": -0.3616629351526013,
+          "minimum": -4.519774011299438,
+          "maximum": 4.065853658536578
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -21.02654299830622,
+          -24.163393691143487,
+          -20.88036907855425,
+          -21.879463159845102,
+          -20.450538315194635,
+          -19.858742753002367
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -70.5079321115098,
+          "minimum": -70.66303510474057,
+          "maximum": -70.34503676491141
+        },
+        "p99_change_percent": {
+          "median": 1.0225026968128992,
+          "minimum": -3.3198927976434756,
+          "maximum": 3.646212894135936
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -70.66303510474057,
+          -70.63300618948284,
+          -70.34503676491141,
+          -70.44128017881252,
+          -70.44205619228974,
+          -70.57380803072985
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -62.681072012496585,
+          "minimum": -63.28209341840272,
+          "maximum": -61.275965210105184
+        },
+        "p99_change_percent": {
+          "median": 1.0770617509038738,
+          "minimum": -2.817683559890871,
+          "maximum": 5.56576090846197
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -62.85212018180965,
+          -61.275965210105184,
+          -62.51883016930192,
+          -62.16267704141796,
+          -62.84331385569125,
+          -63.28209341840272
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 20,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35440.38994169096,
+          "minimum": 35343.631681243925,
+          "maximum": 37116.360544217685
+        },
+        "p50_ns": {
+          "median": 35271.0,
+          "minimum": 34791,
+          "maximum": 36500
+        },
+        "p95_ns": {
+          "median": 38500.0,
+          "minimum": 37209,
+          "maximum": 39333
+        },
+        "p99_ns": {
+          "median": 41208.5,
+          "minimum": 40459,
+          "maximum": 43125
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 8739.662172011662,
+          "minimum": 8636.910835762877,
+          "maximum": 8798.286443148689
+        },
+        "p50_ns": {
+          "median": 7875.0,
+          "minimum": 7833,
+          "maximum": 7917
+        },
+        "p95_ns": {
+          "median": 12542.0,
+          "minimum": 10375,
+          "maximum": 13125
+        },
+        "p99_ns": {
+          "median": 24042.0,
+          "minimum": 23417,
+          "maximum": 24292
+        },
+        "copied_bytes_per_frame": 505904.7619047619,
+        "hits_per_frame": 1.9523809523809523,
+        "visited_cells_per_frame": 76.19047619047619,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 5567.759232264334,
+          "minimum": 5152.574829931973,
+          "maximum": 5667.848153547133
+        },
+        "p50_ns": {
+          "median": 4667.0,
+          "minimum": 3959,
+          "maximum": 4750
+        },
+        "p95_ns": {
+          "median": 8125.5,
+          "minimum": 6291,
+          "maximum": 17542
+        },
+        "p99_ns": {
+          "median": 22042.0,
+          "minimum": 21666,
+          "maximum": 22792
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.9523809523809523,
+        "visited_cells_per_frame": 76.19047619047619,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -36.19839719217289,
+          "minimum": -40.90163800120894,
+          "maximum": -35.58009062138752
+        },
+        "p99_change_percent": {
+          "median": -7.658542810869556,
+          "minimum": -10.637246830232172,
+          "maximum": -3.1857955993543463
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -35.986660862557244,
+          -36.295042491523475,
+          -36.53545209139355,
+          -36.1017518928223,
+          -40.90163800120894,
+          -35.58009062138752
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -84.40770428777518,
+          "minimum": -85.47305459605799,
+          "maximum": -83.98103242574216
+        },
+        "p99_change_percent": {
+          "median": -46.805702129162206,
+          "minimum": -48.88811594202899,
+          "maximum": -44.69169356208595
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -84.38714872189564,
+          -85.00485432635291,
+          -84.2408211402821,
+          -84.4282598536547,
+          -85.47305459605799,
+          -83.98103242574216
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -75.51452109396791,
+          "minimum": -76.46157181463961,
+          "maximum": -75.1335142679102
+        },
+        "p99_change_percent": {
+          "median": -42.04809730102434,
+          "minimum": -44.540289855072466,
+          "maximum": -40.87235906922403
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -75.6100033391758,
+          -76.46157181463961,
+          -75.1685320717761,
+          -75.6304114625701,
+          -75.41903884876002,
+          -75.1335142679102
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 20,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35212.78777939748,
+          "minimum": 34864.64674441205,
+          "maximum": 35738.73299319728
+        },
+        "p50_ns": {
+          "median": 34958.5,
+          "minimum": 34583,
+          "maximum": 35584
+        },
+        "p95_ns": {
+          "median": 37437.0,
+          "minimum": 36959,
+          "maximum": 38208
+        },
+        "p99_ns": {
+          "median": 40417.0,
+          "minimum": 39959,
+          "maximum": 41500
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 9444.164237123421,
+          "minimum": 9348.319484936832,
+          "maximum": 9599.46404275996
+        },
+        "p50_ns": {
+          "median": 7854.5,
+          "minimum": 7833,
+          "maximum": 8000
+        },
+        "p95_ns": {
+          "median": 12125.0,
+          "minimum": 9500,
+          "maximum": 13125
+        },
+        "p99_ns": {
+          "median": 39416.5,
+          "minimum": 38875,
+          "maximum": 40542
+        },
+        "copied_bytes_per_frame": 499809.5238095238,
+        "hits_per_frame": 1.9047619047619047,
+        "visited_cells_per_frame": 152.38095238095238,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 6356.743075801749,
+          "minimum": 6321.186588921283,
+          "maximum": 6402.28547133139
+        },
+        "p50_ns": {
+          "median": 4667.0,
+          "minimum": 4667,
+          "maximum": 4708
+        },
+        "p95_ns": {
+          "median": 7166.5,
+          "minimum": 6625,
+          "maximum": 8375
+        },
+        "p99_ns": {
+          "median": 39125.0,
+          "minimum": 38958,
+          "maximum": 39750
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.9047619047619047,
+        "visited_cells_per_frame": 152.38095238095238,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -33.00483358848221,
+          "minimum": -33.78156283592709,
+          "maximum": -31.572787269961132
+        },
+        "p99_change_percent": {
+          "median": -0.8346780606459658,
+          "minimum": -3.803463075329283,
+          "maximum": 1.9230769230769162
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -32.886837495580046,
+          -31.768157313248977,
+          -33.78156283592709,
+          -31.572787269961132,
+          -33.12282968138437,
+          -33.65037690140722
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -82.0190932812609,
+          "minimum": -82.24817331673472,
+          "maximum": -81.73161409450678
+        },
+        "p99_change_percent": {
+          "median": -3.2977903086365448,
+          "minimum": -4.216867469879515,
+          "maximum": -2.0695652173913004
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -82.07625865317428,
+          -81.79019932255756,
+          -82.24817331673472,
+          -82.07399583383832,
+          -81.96419072868346,
+          -81.73161409450678
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -73.24263639380865,
+          "minimum": -73.80281403995819,
+          "maximum": -72.46648126644645
+        },
+        "p99_change_percent": {
+          "median": -1.8630303134941018,
+          "minimum": -6.024096385542165,
+          "maximum": 0.0
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -73.2932547387477,
+          -73.31187322458412,
+          -73.19201804886961,
+          -73.80281403995819,
+          -73.03144079602875,
+          -72.46648126644645
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 100,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35824.598285438304,
+          "minimum": 35358.68872253079,
+          "maximum": 36433.83506399421
+        },
+        "p50_ns": {
+          "median": 35396.0,
+          "minimum": 34875,
+          "maximum": 36084
+        },
+        "p95_ns": {
+          "median": 38333.0,
+          "minimum": 37667,
+          "maximum": 39875
+        },
+        "p99_ns": {
+          "median": 41375.0,
+          "minimum": 40750,
+          "maximum": 62709
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 8107.718184013524,
+          "minimum": 8090.978024631731,
+          "maximum": 8728.557836271431
+        },
+        "p50_ns": {
+          "median": 7875.0,
+          "minimum": 7833,
+          "maximum": 8083
+        },
+        "p95_ns": {
+          "median": 8687.5,
+          "minimum": 8291,
+          "maximum": 9917
+        },
+        "p99_ns": {
+          "median": 21312.5,
+          "minimum": 15917,
+          "maximum": 24208
+        },
+        "copied_bytes_per_frame": 510732.6732673267,
+        "hits_per_frame": 1.99009900990099,
+        "visited_cells_per_frame": 15.841584158415841,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 4886.55204056991,
+          "minimum": 4733.153827577879,
+          "maximum": 4985.545037430572
+        },
+        "p50_ns": {
+          "median": 4667.0,
+          "minimum": 4417,
+          "maximum": 4708
+        },
+        "p95_ns": {
+          "median": 4958.0,
+          "minimum": 4792,
+          "maximum": 5500
+        },
+        "p99_ns": {
+          "median": 14854.5,
+          "minimum": 9959,
+          "maximum": 22083
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.99009900990099,
+        "visited_cells_per_frame": 15.841584158415841,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -40.76367894649083,
+          "minimum": -44.22532459437358,
+          "maximum": -39.20051552720476
+        },
+        "p99_change_percent": {
+          "median": -21.218611207112442,
+          "minimum": -48.06270334220645,
+          "maximum": 6.905229560520509
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -39.8614375160052,
+          -39.43982642035089,
+          -41.95348882718485,
+          -44.22532459437358,
+          -41.66592037697645,
+          -39.20051552720476
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -86.31441974138534,
+          "minimum": -87.008905817177,
+          "maximum": -86.06931359873317
+        },
+        "p99_change_percent": {
+          "median": -67.65749063314274,
+          "minimum": -76.07447447447447,
+          "maximum": -47.317317556122816
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -86.47038641535079,
+          -86.20926048768901,
+          -86.27128222562416,
+          -86.3575572571465,
+          -87.008905817177,
+          -86.06931359873317
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -77.15776544877158,
+          "minimum": -77.72983774360327,
+          "maximum": -75.54007684735485
+        },
+        "p99_change_percent": {
+          "median": -57.13654267764697,
+          "minimum": -61.39629080355291,
+          "maximum": -41.9812708374191
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -77.5025989551214,
+          -77.22803833418125,
+          -76.3487632641643,
+          -75.54007684735485,
+          -77.72983774360327,
+          -77.08749256336193
+        ]
+      }
+    }
+  },
+  {
+    "cols": 80,
+    "rows": 20,
+    "quiet": 100,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 35410.752233759966,
+          "minimum": 34739.85655638735,
+          "maximum": 36382.06351122917
+        },
+        "p50_ns": {
+          "median": 35187.5,
+          "minimum": 34459,
+          "maximum": 35750
+        },
+        "p95_ns": {
+          "median": 37688.0,
+          "minimum": 36958,
+          "maximum": 40459
+        },
+        "p99_ns": {
+          "median": 40937.5,
+          "minimum": 39625,
+          "maximum": 42291
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 8275.392538034292,
+          "minimum": 8190.847379859937,
+          "maximum": 8582.826128954359
+        },
+        "p50_ns": {
+          "median": 7834.0,
+          "minimum": 7792,
+          "maximum": 8083
+        },
+        "p95_ns": {
+          "median": 8458.0,
+          "minimum": 8333,
+          "maximum": 9291
+        },
+        "p99_ns": {
+          "median": 38292.0,
+          "minimum": 18584,
+          "maximum": 39334
+        },
+        "copied_bytes_per_frame": 509465.34653465345,
+        "hits_per_frame": 1.9801980198019802,
+        "visited_cells_per_frame": 31.683168316831683,
+        "cache_bytes": 1024000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 5080.144892538035,
+          "minimum": 5065.046124124608,
+          "maximum": 5100.73363921758
+        },
+        "p50_ns": {
+          "median": 4667.0,
+          "minimum": 4667,
+          "maximum": 4667
+        },
+        "p95_ns": {
+          "median": 5062.5,
+          "minimum": 4834,
+          "maximum": 5541
+        },
+        "p99_ns": {
+          "median": 13083.5,
+          "minimum": 12375,
+          "maximum": 21208
+        },
+        "copied_bytes_per_frame": 256000.0,
+        "hits_per_frame": 1.9801980198019802,
+        "visited_cells_per_frame": 31.683168316831683,
+        "cache_bytes": 512000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -38.744706803282156,
+          "minimum": -40.615100388467184,
+          "maximum": -37.993311516004965
+        },
+        "p99_change_percent": {
+          "median": -63.38472005337633,
+          "minimum": -67.89216958123605,
+          "maximum": 14.119672836848896
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -38.38653545781675,
+          -40.615100388467184,
+          -39.85536965285568,
+          -38.874802177029586,
+          -38.614611429534726,
+          -37.993311516004965
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -85.67311771647033,
+          "minimum": -85.98008703480147,
+          "maximum": -85.38027003426009
+        },
+        "p99_change_percent": {
+          "median": -67.90018936150159,
+          "minimum": -70.12096482120869,
+          "maximum": -46.4782334384858
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -85.69566274117234,
+          -85.55187753638491,
+          -85.98008703480147,
+          -85.79241243424778,
+          -85.65057269176833,
+          -85.38027003426009
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -76.65685124669585,
+          "minimum": -76.78374789485456,
+          "maximum": -75.67037654668493
+        },
+        "p99_change_percent": {
+          "median": -6.966812716458298,
+          "minimum": -53.10031545741325,
+          "maximum": -3.2156979780646133
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -76.78374789485456,
+          -75.67037654668493,
+          -76.68966808129332,
+          -76.75657818417217,
+          -76.62403441209837,
+          -76.42233390755338
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 0,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 143298.7431640625,
+          "minimum": 142461.4970703125,
+          "maximum": 162426.24169921875
+        },
+        "p50_ns": {
+          "median": 142708.0,
+          "minimum": 142334,
+          "maximum": 149125
+        },
+        "p95_ns": {
+          "median": 149937.5,
+          "minimum": 149792,
+          "maximum": 196375
+        },
+        "p99_ns": {
+          "median": 157667.0,
+          "minimum": 155834,
+          "maximum": 497292
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 97798.32531738281,
+          "minimum": 97389.6318359375,
+          "maximum": 101924.8349609375
+        },
+        "p50_ns": {
+          "median": 97104.0,
+          "minimum": 96000,
+          "maximum": 100667
+        },
+        "p95_ns": {
+          "median": 104146.0,
+          "minimum": 102416,
+          "maximum": 107959
+        },
+        "p99_ns": {
+          "median": 109687.5,
+          "minimum": 107250,
+          "maximum": 134875
+        },
+        "copied_bytes_per_frame": 1536000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 6400.0,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 89099.08813476562,
+          "minimum": 88339.04370117188,
+          "maximum": 94532.57836914062
+        },
+        "p50_ns": {
+          "median": 88375.0,
+          "minimum": 87250,
+          "maximum": 89125
+        },
+        "p95_ns": {
+          "median": 94416.5,
+          "minimum": 93041,
+          "maximum": 98958
+        },
+        "p99_ns": {
+          "median": 99500.0,
+          "minimum": 97667,
+          "maximum": 233875
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 6400.0,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -8.895010436519328,
+          "minimum": -10.681093553583798,
+          "maximum": -7.252654953652804
+        },
+        "p99_change_percent": {
+          "median": -8.502910507237367,
+          "minimum": -14.79432933478735,
+          "maximum": 73.40129749768305
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -7.382038720653972,
+          -9.433313649885111,
+          -10.681093553583798,
+          -8.559768843340997,
+          -7.252654953652804,
+          -9.230252029697661
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -37.901783094500395,
+          "minimum": -41.79968865856279,
+          "maximum": -37.08112929623746
+        },
+        "p99_change_percent": {
+          "median": -37.08573424195973,
+          "minimum": -52.9702870747971,
+          "maximum": -36.17695753173249
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -37.08112929623746,
+          -37.990934029303546,
+          -37.812632159697245,
+          -37.58000670786809,
+          -41.79968865856279,
+          -38.20262831509479
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -31.827687792723196,
+          "minimum": -37.24854192607489,
+          "maximum": -30.376030882543414
+        },
+        "p99_change_percent": {
+          "median": -30.753123758597194,
+          "minimum": -72.87810783201822,
+          "maximum": -27.009971854663085
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -32.06623225705406,
+          -31.53214667589769,
+          -30.376030882543414,
+          -31.73683782011495,
+          -37.24854192607489,
+          -31.918537765331443
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 0,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 143368.10375976562,
+          "minimum": 142839.18798828125,
+          "maximum": 144260.20336914062
+        },
+        "p50_ns": {
+          "median": 143270.5,
+          "minimum": 142500,
+          "maximum": 143958
+        },
+        "p95_ns": {
+          "median": 150416.5,
+          "minimum": 149250,
+          "maximum": 152000
+        },
+        "p99_ns": {
+          "median": 158042.0,
+          "minimum": 156958,
+          "maximum": 160250
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 161157.94946289062,
+          "minimum": 160174.27221679688,
+          "maximum": 162634.33740234375
+        },
+        "p50_ns": {
+          "median": 160333.0,
+          "minimum": 159541,
+          "maximum": 161458
+        },
+        "p95_ns": {
+          "median": 169021.0,
+          "minimum": 167084,
+          "maximum": 171625
+        },
+        "p99_ns": {
+          "median": 178104.0,
+          "minimum": 174750,
+          "maximum": 184834
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 160740.2431640625,
+          "minimum": 160208.31494140625,
+          "maximum": 162618.07958984375
+        },
+        "p50_ns": {
+          "median": 159937.5,
+          "minimum": 158792,
+          "maximum": 161333
+        },
+        "p95_ns": {
+          "median": 169041.5,
+          "minimum": 167625,
+          "maximum": 170042
+        },
+        "p99_ns": {
+          "median": 178708.5,
+          "minimum": 174083,
+          "maximum": 184583
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -0.22376037442375374,
+          "minimum": -1.174006321690979,
+          "maximum": 1.1285818283462978
+        },
+        "p99_change_percent": {
+          "median": -0.4459897701216964,
+          "minimum": -2.5698735081208013,
+          "maximum": 2.570044121406112
+        },
+        "faster_pairs": 3,
+        "pairs": 6,
+        "paired_changes": [
+          0.45702400386922193,
+          1.1285818283462978,
+          0.02125355348161495,
+          -0.4687743023291224,
+          -1.174006321690979,
+          -0.8170208163435277
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": 11.892713305108039,
+          "minimum": 11.413263149732567,
+          "maximum": 13.769837652589413
+        },
+        "p99_change_percent": {
+          "median": 12.679045377541598,
+          "minimum": 10.283618551039343,
+          "maximum": 17.258093205265034
+        },
+        "faster_pairs": 0,
+        "pairs": 6,
+        "paired_changes": [
+          13.051661089167975,
+          13.769837652589413,
+          11.833615216121252,
+          11.636015208653694,
+          11.413263149732567,
+          11.951811394094825
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": 12.518759745780471,
+          "minimum": 11.809851649503212,
+          "maximum": 12.87401559777146
+        },
+        "p99_change_percent": {
+          "median": 13.30560223633288,
+          "minimum": 10.310130857168097,
+          "maximum": 15.341029641185644
+        },
+        "faster_pairs": 0,
+        "pairs": 6,
+        "paired_changes": [
+          12.53733843918534,
+          12.500181052375602,
+          11.809851649503212,
+          12.161800908341558,
+          12.736800312270757,
+          12.87401559777146
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 1,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 144834.1533203125,
+          "minimum": 143347.05102539062,
+          "maximum": 145407.56274414062
+        },
+        "p50_ns": {
+          "median": 143625.0,
+          "minimum": 143000,
+          "maximum": 144542
+        },
+        "p95_ns": {
+          "median": 152271.0,
+          "minimum": 149959,
+          "maximum": 153584
+        },
+        "p99_ns": {
+          "median": 161479.5,
+          "minimum": 156166,
+          "maximum": 165375
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 67586.63537597656,
+          "minimum": 67113.51513671875,
+          "maximum": 72093.74951171875
+        },
+        "p50_ns": {
+          "median": 94500.5,
+          "minimum": 94291,
+          "maximum": 95208
+        },
+        "p95_ns": {
+          "median": 101667.0,
+          "minimum": 100750,
+          "maximum": 108125
+        },
+        "p99_ns": {
+          "median": 107041.5,
+          "minimum": 106042,
+          "maximum": 151583
+        },
+        "copied_bytes_per_frame": 1792000.0,
+        "hits_per_frame": 1.5,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 53823.94299316406,
+          "minimum": 53212.3818359375,
+          "maximum": 54835.665283203125
+        },
+        "p50_ns": {
+          "median": 85229.0,
+          "minimum": 84250,
+          "maximum": 85458
+        },
+        "p95_ns": {
+          "median": 92229.0,
+          "minimum": 91292,
+          "maximum": 95458
+        },
+        "p99_ns": {
+          "median": 97666.5,
+          "minimum": 94792,
+          "maximum": 127375
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.5,
+        "visited_cells_per_frame": 3200.0,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -20.65356665086665,
+          "minimum": -23.938391809834147,
+          "maximum": -20.067901920870924
+        },
+        "p99_change_percent": {
+          "median": -9.940098690723781,
+          "minimum": -15.97012857642348,
+          "maximum": -7.2046759446329105
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -20.841791746832406,
+          -23.938391809834147,
+          -20.1466932929829,
+          -22.088658693243435,
+          -20.465341554900895,
+          -20.067901920870924
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -62.803658695363694,
+          "minimum": -62.973031333968876,
+          "maximum": -62.252888339854984
+        },
+        "p99_change_percent": {
+          "median": -39.455706686783856,
+          "minimum": -42.68057445200303,
+          "maximum": -20.036787785952836
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -62.87863513389462,
+          -62.252888339854984,
+          -62.72868225683277,
+          -62.973031333968876,
+          -62.67731183025862,
+          -62.908140581631635
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -53.08926234321346,
+          "minimum": -53.59578903877997,
+          "maximum": -50.37297717164832
+        },
+        "p99_change_percent": {
+          "median": -33.33425940332139,
+          "minimum": -34.9795621597512,
+          "maximum": -4.83953996434221
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -53.10484448134294,
+          -50.37297717164832,
+          -53.325266942399494,
+          -52.47550864225706,
+          -53.07368020508398,
+          -53.59578903877997
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 1,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 144117.61254882812,
+          "minimum": 142112.541015625,
+          "maximum": 145882.51953125
+        },
+        "p50_ns": {
+          "median": 143437.5,
+          "minimum": 140375,
+          "maximum": 144209
+        },
+        "p95_ns": {
+          "median": 150666.5,
+          "minimum": 148875,
+          "maximum": 154542
+        },
+        "p99_ns": {
+          "median": 157854.5,
+          "minimum": 155208,
+          "maximum": 179042
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 99343.30346679688,
+          "minimum": 99036.03295898438,
+          "maximum": 101626.79711914062
+        },
+        "p50_ns": {
+          "median": 154458.5,
+          "minimum": 153583,
+          "maximum": 155000
+        },
+        "p95_ns": {
+          "median": 166312.5,
+          "minimum": 165750,
+          "maximum": 169959
+        },
+        "p99_ns": {
+          "median": 173458.5,
+          "minimum": 172292,
+          "maximum": 217875
+        },
+        "copied_bytes_per_frame": 1536000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 6400.0,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 89935.8125,
+          "minimum": 89460.60766601562,
+          "maximum": 90901.49926757812
+        },
+        "p50_ns": {
+          "median": 154458.0,
+          "minimum": 153708,
+          "maximum": 155125
+        },
+        "p95_ns": {
+          "median": 165812.5,
+          "minimum": 165083,
+          "maximum": 168875
+        },
+        "p99_ns": {
+          "median": 173396.0,
+          "minimum": 171667,
+          "maximum": 177583
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.0,
+        "visited_cells_per_frame": 6400.0,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -9.564588451939937,
+          "minimum": -11.95363600593231,
+          "maximum": -8.32343142467793
+        },
+        "p99_change_percent": {
+          "median": -0.16649462020122963,
+          "minimum": -20.175788869764776,
+          "maximum": 2.1566551997882932
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -9.731354487243294,
+          -8.520730980241408,
+          -9.397822416636581,
+          -9.831456779159797,
+          -11.95363600593231,
+          -8.32343142467793
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -37.396077120743506,
+          "minimum": -38.67626638649331,
+          "maximum": -36.035554203774545
+        },
+        "p99_change_percent": {
+          "median": 9.282104692927618,
+          "minimum": -3.281911506797286,
+          "maximum": 14.416138343384354
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -37.81891365535262,
+          -36.035554203774545,
+          -36.75302724798054,
+          -38.67626638649331,
+          -38.2351945745528,
+          -36.973240586134395
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -30.65408896444047,
+          "minimum": -31.98988092409011,
+          "maximum": -29.849680755006823
+        },
+        "p99_change_percent": {
+          "median": 10.83152407126843,
+          "minimum": -3.7700651243842254,
+          "maximum": 35.36055765754011
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -31.115520797462292,
+          -30.07765969095163,
+          -30.192657131418642,
+          -31.98988092409011,
+          -29.849680755006823,
+          -31.250961512502062
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 2,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 143560.4458272328,
+          "minimum": 142768.4214250854,
+          "maximum": 146040.90239141043
+        },
+        "p50_ns": {
+          "median": 143083.5,
+          "minimum": 142417,
+          "maximum": 144917
+        },
+        "p95_ns": {
+          "median": 150937.5,
+          "minimum": 149667,
+          "maximum": 152250
+        },
+        "p99_ns": {
+          "median": 159708.0,
+          "minimum": 155334,
+          "maximum": 162625
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 57624.502562225476,
+          "minimum": 57397.22767203514,
+          "maximum": 58026.30917520742
+        },
+        "p50_ns": {
+          "median": 37042.0,
+          "minimum": 36584,
+          "maximum": 37250
+        },
+        "p95_ns": {
+          "median": 99854.0,
+          "minimum": 99625,
+          "maximum": 102041
+        },
+        "p99_ns": {
+          "median": 105750.0,
+          "minimum": 104625,
+          "maximum": 108375
+        },
+        "copied_bytes_per_frame": 1877333.3333333333,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 2133.3333333333335,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 41742.61981454368,
+          "minimum": 41536.75841874085,
+          "maximum": 42866.54587603709
+        },
+        "p50_ns": {
+          "median": 18292.0,
+          "minimum": 18167,
+          "maximum": 18625
+        },
+        "p95_ns": {
+          "median": 89166.5,
+          "minimum": 88333,
+          "maximum": 93292
+        },
+        "p99_ns": {
+          "median": 94750.0,
+          "minimum": 94167,
+          "maximum": 112416
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 2133.3333333333335,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -27.675411093152768,
+          "minimum": -27.97815728014019,
+          "maximum": -25.594601773348714
+        },
+        "p99_change_percent": {
+          "median": -9.862404354473568,
+          "minimum": -12.53333333333333,
+          "maximum": 6.052830188679237
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -27.744231402333853,
+          -27.97815728014019,
+          -27.88695279525951,
+          -25.594601773348714,
+          -26.13445418959155,
+          -27.606590783971686
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -70.90670293438052,
+          "minimum": -71.54782719987098,
+          "maximum": -70.17983323497133
+        },
+        "p99_change_percent": {
+          "median": -39.58090575397869,
+          "minimum": -42.095618754804,
+          "maximum": -30.642942196282153
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -71.01219934184313,
+          -70.80120652691791,
+          -71.01498293136433,
+          -70.19646604001845,
+          -70.17983323497133,
+          -71.54782719987098
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -59.84390998146559,
+          "minimum": -60.69784099374955,
+          "maximum": -59.45841932057285
+        },
+        "p99_change_percent": {
+          "median": -32.987871225114695,
+          "minimum": -35.48531898539585,
+          "maximum": -32.64513886206497
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -59.881679731944374,
+          -59.45841932057285,
+          -59.80614023098681,
+          -59.94439291999352,
+          -59.62912554444741,
+          -60.69784099374955
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 2,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 144233.68374816983,
+          "minimum": 141955.31673987312,
+          "maximum": 146073.59516837483
+        },
+        "p50_ns": {
+          "median": 143583.0,
+          "minimum": 140125,
+          "maximum": 144792
+        },
+        "p95_ns": {
+          "median": 151062.5,
+          "minimum": 148583,
+          "maximum": 154375
+        },
+        "p99_ns": {
+          "median": 158979.5,
+          "minimum": 155292,
+          "maximum": 164292
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 78785.394704734,
+          "minimum": 78014.939238653,
+          "maximum": 111378.5802830649
+        },
+        "p50_ns": {
+          "median": 37104.5,
+          "minimum": 36792,
+          "maximum": 38375
+        },
+        "p95_ns": {
+          "median": 165271.0,
+          "minimum": 163750,
+          "maximum": 167875
+        },
+        "p99_ns": {
+          "median": 173021.0,
+          "minimum": 170792,
+          "maximum": 600792
+        },
+        "copied_bytes_per_frame": 1706666.6666666667,
+        "hits_per_frame": 1.3333333333333333,
+        "visited_cells_per_frame": 4266.666666666667,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 66800.17154709614,
+          "minimum": 65763.55246461689,
+          "maximum": 67455.76061493412
+        },
+        "p50_ns": {
+          "median": 18687.5,
+          "minimum": 18459,
+          "maximum": 19375
+        },
+        "p95_ns": {
+          "median": 165312.5,
+          "minimum": 163125,
+          "maximum": 168541
+        },
+        "p99_ns": {
+          "median": 173791.5,
+          "minimum": 169500,
+          "maximum": 179292
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.3333333333333333,
+        "visited_cells_per_frame": 4266.666666666667,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -15.277250649561392,
+          "minimum": -40.492491958592446,
+          "maximum": -14.238522283317856
+        },
+        "p99_change_percent": {
+          "median": 0.25689233703361514,
+          "minimum": -71.52375530965791,
+          "maximum": 3.9621011370818637
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -40.492491958592446,
+          -14.345062885288307,
+          -15.382250081941962,
+          -15.172251217180822,
+          -14.238522283317856,
+          -16.01132212556574
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -53.878951249591545,
+          "minimum": -54.47997068236153,
+          "maximum": -52.770843201566734
+        },
+        "p99_change_percent": {
+          "median": 8.551004987897082,
+          "minimum": 5.7063034109999355,
+          "maximum": 15.45475620122092
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -53.97180279562599,
+          -52.92628083286225,
+          -54.28558058540837,
+          -52.770843201566734,
+          -53.7860997035571,
+          -54.47997068236153
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -45.422396095450054,
+          "minimum": -46.113451485627245,
+          "maximum": -22.6514456422106
+        },
+        "p99_change_percent": {
+          "median": 9.174266222432792,
+          "minimum": 6.695396002239917,
+          "maximum": 274.12942758929904
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -22.6514456422106,
+          -45.04260845572136,
+          -45.97537814600309,
+          -44.323458448305594,
+          -46.113451485627245,
+          -45.802183735178744
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 5,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 143474.4465592972,
+          "minimum": 141863.0683260127,
+          "maximum": 144956.546852123
+        },
+        "p50_ns": {
+          "median": 142375.0,
+          "minimum": 141125,
+          "maximum": 143875
+        },
+        "p95_ns": {
+          "median": 150416.5,
+          "minimum": 148375,
+          "maximum": 151875
+        },
+        "p99_ns": {
+          "median": 160250.0,
+          "minimum": 153959,
+          "maximum": 169500
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 47180.70632015617,
+          "minimum": 46696.34163006345,
+          "maximum": 47516.57540263543
+        },
+        "p50_ns": {
+          "median": 36520.5,
+          "minimum": 36375,
+          "maximum": 36583
+        },
+        "p95_ns": {
+          "median": 98687.5,
+          "minimum": 96334,
+          "maximum": 99375
+        },
+        "p99_ns": {
+          "median": 103354.5,
+          "minimum": 101208,
+          "maximum": 104959
+        },
+        "copied_bytes_per_frame": 1962666.6666666667,
+        "hits_per_frame": 1.8333333333333333,
+        "visited_cells_per_frame": 1066.6666666666667,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 30283.971327476815,
+          "minimum": 30090.829184968276,
+          "maximum": 30563.542947779406
+        },
+        "p50_ns": {
+          "median": 18250.0,
+          "minimum": 18250,
+          "maximum": 18333
+        },
+        "p95_ns": {
+          "median": 89270.5,
+          "minimum": 88542,
+          "maximum": 89625
+        },
+        "p99_ns": {
+          "median": 93937.5,
+          "minimum": 92875,
+          "maximum": 94833
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.8333333333333333,
+        "visited_cells_per_frame": 1066.6666666666667,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -35.959056561521116,
+          "minimum": -36.1336348086447,
+          "maximum": -34.54831389167675
+        },
+        "p99_change_percent": {
+          "median": -9.54317854049533,
+          "minimum": -9.830097087378642,
+          "maximum": -6.380918504466049
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -35.98444336100901,
+          -35.946780261238466,
+          -36.1336348086447,
+          -35.94929402261437,
+          -35.968819100427865,
+          -34.54831389167675
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -78.82822056280817,
+          "minimum": -79.1825531195818,
+          "maximum": -78.64098736050371
+        },
+        "p99_change_percent": {
+          "median": -41.20072743207713,
+          "minimum": -45.206489675516224,
+          "maximum": -39.10003020895599
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -79.13522153453135,
+          -78.74867335329758,
+          -79.1825531195818,
+          -78.90776777231876,
+          -78.64098736050371,
+          -78.6544611318334
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -67.2284063821258,
+          "minimum": -67.4067061806033,
+          "maximum": -66.6427944332368
+        },
+        "p99_change_percent": {
+          "median": -35.662018866382205,
+          "minimum": -39.233038348082594,
+          "maximum": -33.3426431712339
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -67.4067061806033,
+          -66.82239123439055,
+          -67.40467878820829,
+          -67.06947736824593,
+          -66.6427944332368,
+          -67.38733539600568
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 5,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 144479.23889702294,
+          "minimum": 143753.06710590533,
+          "maximum": 153162.6615422157
+        },
+        "p50_ns": {
+          "median": 143750.0,
+          "minimum": 143084,
+          "maximum": 147500
+        },
+        "p95_ns": {
+          "median": 152333.0,
+          "minimum": 151208,
+          "maximum": 171750
+        },
+        "p99_ns": {
+          "median": 160166.5,
+          "minimum": 158292,
+          "maximum": 317083
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 58203.680331869204,
+          "minimum": 57489.839433870184,
+          "maximum": 60178.28623718887
+        },
+        "p50_ns": {
+          "median": 36604.5,
+          "minimum": 36500,
+          "maximum": 38125
+        },
+        "p95_ns": {
+          "median": 162958.5,
+          "minimum": 160209,
+          "maximum": 166875
+        },
+        "p99_ns": {
+          "median": 172292.0,
+          "minimum": 166500,
+          "maximum": 178375
+        },
+        "copied_bytes_per_frame": 1877333.3333333333,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 2133.3333333333335,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 42263.1070034163,
+          "minimum": 42095.242557345045,
+          "maximum": 43433.69887750122
+        },
+        "p50_ns": {
+          "median": 18291.5,
+          "minimum": 18250,
+          "maximum": 18583
+        },
+        "p95_ns": {
+          "median": 161541.5,
+          "minimum": 160375,
+          "maximum": 167708
+        },
+        "p99_ns": {
+          "median": 168500.0,
+          "minimum": 166875,
+          "maximum": 173500
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.6666666666666667,
+        "visited_cells_per_frame": 2133.3333333333335,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -27.178221897977913,
+          "minimum": -27.82496545961766,
+          "maximum": -26.386445047632545
+        },
+        "p99_change_percent": {
+          "median": -1.8513554950396083,
+          "minimum": -4.853409090909089,
+          "maximum": 0.7507507507507505
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -26.386445047632545,
+          -27.82496545961766,
+          -26.51937997404058,
+          -27.535358102909548,
+          -27.626301337465254,
+          -26.821085693046275
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -70.71931259078349,
+          "minimum": -71.6421101330041,
+          "maximum": -70.39917453515736
+        },
+        "p99_change_percent": {
+          "median": 4.3721014543070424,
+          "minimum": -45.28246547433953,
+          "maximum": 6.196078431372554
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -70.58539360895763,
+          -71.6421101330041,
+          -70.39917453515736,
+          -70.76463278045591,
+          -70.88667785765861,
+          -70.67399240111106
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -59.849610070628714,
+          "minimum": -60.709558301451864,
+          "maximum": -59.655679716098994
+        },
+        "p99_change_percent": {
+          "median": 6.0929113002225925,
+          "minimum": -43.74501313536203,
+          "maximum": 9.345295045912593
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -60.04186129840428,
+          -60.709558301451864,
+          -59.716146305808,
+          -59.655679716098994,
+          -59.77361571903149,
+          -59.92560442222593
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 20,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 142742.36868318758,
+          "minimum": 142290.27696793003,
+          "maximum": 144255.14334305152
+        },
+        "p50_ns": {
+          "median": 142750.0,
+          "minimum": 141750,
+          "maximum": 143875
+        },
+        "p95_ns": {
+          "median": 149791.5,
+          "minimum": 148708,
+          "maximum": 152250
+        },
+        "p99_ns": {
+          "median": 157124.5,
+          "minimum": 154250,
+          "maximum": 159209
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 39950.42383381924,
+          "minimum": 39784.30199222546,
+          "maximum": 40103.26967930029
+        },
+        "p50_ns": {
+          "median": 36479.0,
+          "minimum": 36416,
+          "maximum": 36500
+        },
+        "p95_ns": {
+          "median": 46417.0,
+          "minimum": 44750,
+          "maximum": 47625
+        },
+        "p99_ns": {
+          "median": 100145.5,
+          "minimum": 98875,
+          "maximum": 101542
+        },
+        "copied_bytes_per_frame": 2023619.0476190476,
+        "hits_per_frame": 1.9523809523809523,
+        "visited_cells_per_frame": 304.76190476190476,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 21770.066448007776,
+          "minimum": 21503.346695821187,
+          "maximum": 21939.29810495627
+        },
+        "p50_ns": {
+          "median": 18208.0,
+          "minimum": 17750,
+          "maximum": 18208
+        },
+        "p95_ns": {
+          "median": 25333.5,
+          "minimum": 24875,
+          "maximum": 26250
+        },
+        "p99_ns": {
+          "median": 89520.5,
+          "minimum": 87958,
+          "maximum": 90375
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.9523809523809523,
+        "visited_cells_per_frame": 304.76190476190476,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -45.34906611018346,
+          "minimum": -46.359073136633356,
+          "maximum": -45.11094271565588
+        },
+        "p99_change_percent": {
+          "median": -10.694400984877278,
+          "minimum": -12.064958342360798,
+          "maximum": -8.68065739570164
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -45.40513810891785,
+          -45.73833936174667,
+          -45.18120359516175,
+          -45.11094271565588,
+          -45.29299411144907,
+          -46.359073136633356
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -84.79382727451132,
+          "minimum": -84.90662093079919,
+          "maximum": -84.58824248150117
+        },
+        "p99_change_percent": {
+          "median": -43.267125625693964,
+          "minimum": -43.56836558896392,
+          "maximum": -42.30145867098866
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -84.7377053655715,
+          -84.84312681463074,
+          -84.88145725359706,
+          -84.58824248150117,
+          -84.7445277343919,
+          -84.90662093079919
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -72.0557579552009,
+          "minimum": -72.42087798726533,
+          "maximum": -71.86219561856856
+        },
+        "p99_change_percent": {
+          "median": -35.915131517428144,
+          "minimum": -37.8960988386335,
+          "maximum": -35.460456484017975
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -72.0444486792968,
+          -72.06706723110501,
+          -72.42087798726533,
+          -71.92198539927432,
+          -72.11422555881319,
+          -71.86219561856856
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 20,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 143566.33855685132,
+          "minimum": 142409.1263362488,
+          "maximum": 179336.64674441205
+        },
+        "p50_ns": {
+          "median": 142749.5,
+          "minimum": 141250,
+          "maximum": 143416
+        },
+        "p95_ns": {
+          "median": 151062.5,
+          "minimum": 148875,
+          "maximum": 157250
+        },
+        "p99_ns": {
+          "median": 159396.0,
+          "minimum": 154541,
+          "maximum": 1043125
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 43172.52830417882,
+          "minimum": 42352.79518950437,
+          "maximum": 44243.37585034013
+        },
+        "p50_ns": {
+          "median": 36541.5,
+          "minimum": 36375,
+          "maximum": 36583
+        },
+        "p95_ns": {
+          "median": 44396.0,
+          "minimum": 42334,
+          "maximum": 45875
+        },
+        "p99_ns": {
+          "median": 164417.0,
+          "minimum": 157709,
+          "maximum": 201833
+        },
+        "copied_bytes_per_frame": 1999238.0952380951,
+        "hits_per_frame": 1.9047619047619047,
+        "visited_cells_per_frame": 609.5238095238095,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 25358.073493683187,
+          "minimum": 25219.842565597668,
+          "maximum": 25765.276724975705
+        },
+        "p50_ns": {
+          "median": 18250.0,
+          "minimum": 18209,
+          "maximum": 18291
+        },
+        "p95_ns": {
+          "median": 25229.0,
+          "minimum": 24458,
+          "maximum": 25667
+        },
+        "p99_ns": {
+          "median": 163124.5,
+          "minimum": 162167,
+          "maximum": 167708
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.9047619047619047,
+        "visited_cells_per_frame": 609.5238095238095,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -41.15723557982899,
+          "minimum": -42.6065153851415,
+          "maximum": -40.016203166352824
+        },
+        "p99_change_percent": {
+          "median": -0.6727185027345484,
+          "minimum": -19.013243622202513,
+          "maximum": 2.9932323716177267
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -40.016203166352824,
+          -40.90924516337323,
+          -41.405225996284756,
+          -42.6065153851415,
+          -41.639649020981174,
+          -40.45294424428566
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -82.38435161116828,
+          "minimum": -85.84069928108534,
+          "maximum": -81.90756632819998
+        },
+        "p99_change_percent": {
+          "median": 2.353599462439404,
+          "minimum": -84.32997004194128,
+          "maximum": 8.520069107874285
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -81.90756632819998,
+          -82.27496071035658,
+          -82.18419597346039,
+          -85.84069928108534,
+          -82.49374251197999,
+          -82.49963082360506
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -70.00343378003171,
+          "minimum": -75.32942839430072,
+          "maximum": -69.59489249773367
+        },
+        "p99_change_percent": {
+          "median": 3.6996410063801832,
+          "minimum": -80.65112043139604,
+          "maximum": 7.643041220753832
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -69.83779849419054,
+          -70.00370135963006,
+          -69.59489249773367,
+          -75.32942839430072,
+          -70.00316620043338,
+          -70.61085732233613
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 100,
+    "active": 1,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 143065.461844965,
+          "minimum": 140644.76986235208,
+          "maximum": 144789.93817918378
+        },
+        "p50_ns": {
+          "median": 142812.5,
+          "minimum": 139334,
+          "maximum": 143541
+        },
+        "p95_ns": {
+          "median": 150124.5,
+          "minimum": 147167,
+          "maximum": 152041
+        },
+        "p99_ns": {
+          "median": 156666.5,
+          "minimum": 153208,
+          "maximum": 161666
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 37661.31308862593,
+          "minimum": 37310.71987442647,
+          "maximum": 40172.88988167109
+        },
+        "p50_ns": {
+          "median": 36500.0,
+          "minimum": 36375,
+          "maximum": 37500
+        },
+        "p95_ns": {
+          "median": 40583.5,
+          "minimum": 39500,
+          "maximum": 42875
+        },
+        "p99_ns": {
+          "median": 76104.0,
+          "minimum": 62792,
+          "maximum": 98583
+        },
+        "copied_bytes_per_frame": 2042930.693069307,
+        "hits_per_frame": 1.99009900990099,
+        "visited_cells_per_frame": 63.366336633663366,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 19219.441680753444,
+          "minimum": 19065.07196329389,
+          "maximum": 19683.797150446753
+        },
+        "p50_ns": {
+          "median": 18229.5,
+          "minimum": 18167,
+          "maximum": 18500
+        },
+        "p95_ns": {
+          "median": 20354.0,
+          "minimum": 19875,
+          "maximum": 21417
+        },
+        "p99_ns": {
+          "median": 38999.5,
+          "minimum": 31334,
+          "maximum": 68250
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.99009900990099,
+        "visited_cells_per_frame": 63.366336633663366,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -49.161704963991795,
+          "minimum": -52.01058799602685,
+          "maximum": -47.737965757163536
+        },
+        "p99_change_percent": {
+          "median": -39.90925707758067,
+          "minimum": -68.21561526835256,
+          "maximum": 0.12322858903266454
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -47.87903222324961,
+          -50.35968019920196,
+          -52.01058799602685,
+          -49.12193862069775,
+          -49.201471307285836,
+          -47.737965757163536
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -86.56600943453238,
+          "minimum": -86.79617207073834,
+          "maximum": -86.16838235404043
+        },
+        "p99_change_percent": {
+          "median": -74.77985395792135,
+          "minimum": -80.07376788553259,
+          "maximum": -57.78333106528275
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -86.17317351931695,
+          -86.77772279358283,
+          -86.5386477353262,
+          -86.59337113373856,
+          -86.79617207073834,
+          -86.16838235404043
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -73.50288109067176,
+          "minimum": -74.00745992244569,
+          "maximum": -71.94932860698665
+        },
+        "p99_change_percent": {
+          "median": -51.63306681096097,
+          "minimum": -59.0151950289802,
+          "maximum": -37.30810810810811
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -73.47166203838069,
+          -73.36383556859234,
+          -71.94932860698665,
+          -73.6494895780062,
+          -74.00745992244569,
+          -73.53410014296283
+        ]
+      }
+    }
+  },
+  {
+    "cols": 160,
+    "rows": 40,
+    "quiet": 100,
+    "active": 2,
+    "policies": {
+      "cells": {
+        "mean_ns": {
+          "median": 143419.71625211302,
+          "minimum": 143050.62569427674,
+          "maximum": 146417.94783868632
+        },
+        "p50_ns": {
+          "median": 143041.0,
+          "minimum": 141792,
+          "maximum": 144250
+        },
+        "p95_ns": {
+          "median": 151458.5,
+          "minimum": 150666,
+          "maximum": 152750
+        },
+        "p99_ns": {
+          "median": 160333.0,
+          "minimum": 157667,
+          "maximum": 162292
+        },
+        "copied_bytes_per_frame": 0.0,
+        "hits_per_frame": 0.0,
+        "visited_cells_per_frame": 12800.0,
+        "cache_bytes": 0
+      },
+      "always": {
+        "mean_ns": {
+          "median": 38663.249215165415,
+          "minimum": 38054.090799323836,
+          "maximum": 39773.372132335186
+        },
+        "p50_ns": {
+          "median": 36500.0,
+          "minimum": 36375,
+          "maximum": 36500
+        },
+        "p95_ns": {
+          "median": 39979.0,
+          "minimum": 39416,
+          "maximum": 40625
+        },
+        "p99_ns": {
+          "median": 73812.5,
+          "minimum": 65042,
+          "maximum": 101459
+        },
+        "copied_bytes_per_frame": 2037861.3861386138,
+        "hits_per_frame": 1.9801980198019802,
+        "visited_cells_per_frame": 126.73267326732673,
+        "cache_bytes": 4096000
+      },
+      "retained": {
+        "mean_ns": {
+          "median": 20100.219632938904,
+          "minimum": 19978.234725911614,
+          "maximum": 21437.458101907752
+        },
+        "p50_ns": {
+          "median": 18249.5,
+          "minimum": 18167,
+          "maximum": 19000
+        },
+        "p95_ns": {
+          "median": 21229.0,
+          "minimum": 20000,
+          "maximum": 21417
+        },
+        "p99_ns": {
+          "median": 41292.0,
+          "minimum": 31917,
+          "maximum": 63625
+        },
+        "copied_bytes_per_frame": 1024000.0,
+        "hits_per_frame": 1.9801980198019802,
+        "visited_cells_per_frame": 126.73267326732673,
+        "cache_bytes": 2048000
+      }
+    },
+    "comparisons": {
+      "retained_vs_always": {
+        "mean_change_percent": {
+          "median": -47.52447101376881,
+          "minimum": -48.38428231107983,
+          "maximum": -44.99164097389885
+        },
+        "p99_change_percent": {
+          "median": -40.45939899375074,
+          "minimum": -68.54197261948175,
+          "maximum": -26.62153434515846
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -48.07085062127737,
+          -47.593647802607464,
+          -47.45529422493016,
+          -44.99164097389885,
+          -48.38428231107983,
+          -47.40846068865393
+        ]
+      },
+      "retained_vs_cells": {
+        "mean_change_percent": {
+          "median": -86.01723499382206,
+          "minimum": -86.06275095689361,
+          "maximum": -85.35872246650655
+        },
+        "p99_change_percent": {
+          "median": -74.28578658042159,
+          "minimum": -79.75670241711963,
+          "maximum": -59.931608214571355
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -86.01232569350881,
+          -86.06275095689361,
+          -86.02214429413529,
+          -85.35872246650655,
+          -86.0380074050792,
+          -85.4193346481255
+        ]
+      },
+      "always_vs_cells": {
+        "mean_change_percent": {
+          "median": -73.22373311733077,
+          "minimum": -73.4054204142836,
+          "maximum": -72.27564444243436
+        },
+        "p99_change_percent": {
+          "median": -54.50698228743606,
+          "minimum": -58.9640378548896,
+          "maximum": -35.64981892215873
+        },
+        "faster_pairs": 6,
+        "pairs": 6,
+        "paired_changes": [
+          -73.06392561049252,
+          -73.4054204142836,
+          -73.39816542945304,
+          -73.38354062416903,
+          -72.95011438363107,
+          -72.27564444243436
+        ]
+      }
+    }
+  }
+]

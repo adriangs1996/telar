@@ -1,0 +1,254 @@
+//! Interactive controls around the real renderer; UI and previews are not timed.
+const std = @import("std");
+const core = @import("telar-core");
+const events = @import("../../input/event.zig");
+const Canvas = @import("../../widgets/Canvas.zig");
+const FormButton = @import("../../widgets/FormButton.zig");
+const Route = @import("../../widgets/interaction/Route.zig");
+const Rect = @import("../../render/Rect.zig");
+const Lab = @import("Lab.zig");
+const Trial = @import("Trial.zig");
+const Self = @This();
+
+const interval_ns = 100 * std.time.ns_per_ms;
+const Action = enum(u64) { quiet = 1, one, both, full, burst, toggle, step, reset };
+const workload_labels = [_][]const u8{ "1 Quiet", "2 One pane", "3 Both panes", "4 Full redraw", "5 Bursts" };
+const policy_labels = [_][]const u8{ "Cells only", "Always store pane", "Store after repeat", "Keep pane quads" };
+
+lab: *Lab,
+playing: bool = false,
+pending_step: bool = true,
+next_tick: u64 = 0,
+
+pub fn init(allocator: std.mem.Allocator, io: std.Io) !Self {
+    return .{ .lab = try Lab.create(allocator, io) };
+}
+
+pub fn deinit(self: *Self) void {
+    self.lab.destroy();
+}
+
+/// UI redraws never advance paused experiments. Example: `try widget.draw(canvas);`
+pub fn draw(self: *Self, canvas: *Canvas) !void {
+    const clock = canvas.animation.?;
+
+    if (self.pending_step or (self.playing and clock.now_ns >= self.next_tick)) {
+        try self.lab.step();
+        self.pending_step = false;
+        self.next_tick = clock.now_ns +| interval_ns;
+
+        if (!self.lab.equivalent) {
+            self.playing = false;
+        }
+    }
+
+    if (self.playing) {
+        clock.requestAt(self.next_tick);
+    }
+
+    const px = canvas.chrome;
+    const palette = canvas.theme.palette;
+    const width: f32 = @floatFromInt(canvas.viewport[0]);
+    const margin = px.px(20);
+    const content = @max(0, width - 2 * margin);
+
+    _ = try canvas.textAt(.{ .x = margin, .y = px.px(14), .width = content, .height = px.px(32) }, .{
+        .text = "Pane cache lab",
+        .color = palette.text,
+        .face = .sans,
+        .size = .title,
+        .bold = true,
+    });
+
+    _ = try canvas.textAt(.{ .x = margin, .y = px.px(48), .width = content, .height = px.px(24) }, .{
+        .text = "Same input, four renderers. Space: play/pause   N / Right: step   R: reset",
+        .color = palette.subtext0,
+        .face = .sans,
+        .size = .body,
+    });
+
+    const button_width = @max(0, (content - px.px(8) * 4) / 5);
+
+    for (workload_labels, 0..) |label, index| {
+        try (FormButton{
+            .bounds = .{ .x = margin + @as(f32, @floatFromInt(index)) * (button_width + px.px(8)), .y = px.px(84), .width = button_width, .height = px.px(32) },
+            .text = label,
+            .action = .{ .custom = @intFromEnum(Action.quiet) + index },
+            .generation = 1,
+            .namespace = 1,
+            .primary = index == @intFromEnum(self.lab.workload),
+        }).draw(canvas);
+    }
+
+    const controls = [_][]const u8{ if (self.playing) "Pause" else "Play", "Step", "Reset" };
+    for (controls, 0..) |label, index| {
+        try (FormButton{
+            .bounds = .{ .x = margin + @as(f32, @floatFromInt(index)) * px.px(100), .y = px.px(128), .width = px.px(92), .height = px.px(30) },
+            .text = label,
+            .action = .{ .custom = @intFromEnum(Action.toggle) + index },
+            .generation = 1,
+            .namespace = 1,
+        }).draw(canvas);
+    }
+
+    var buffer: [256]u8 = undefined;
+    const status = try std.fmt.bufPrint(&buffer, "Frame {d}   {s}   {s}", .{ self.lab.frame, if (self.playing) "running" else "paused", if (self.lab.equivalent) "quads + atlas equal" else "OUTPUT MISMATCH" });
+    _ = try canvas.textAt(.{ .x = margin + px.px(312), .y = px.px(128), .width = @max(0, content - px.px(312)), .height = px.px(30) }, .{
+        .text = status,
+        .color = if (self.lab.equivalent) palette.accent else palette.red,
+        .face = .sans,
+        .size = .body,
+    });
+
+    const headings = [_][]const u8{ "Policy", "Mean us", "Hits / 2", "Cells visited", "Copy KiB", "Cache KiB" };
+    const positions = [_]f32{ 0, 0.29, 0.43, 0.56, 0.73, 0.87 };
+    for (headings, 0..) |heading, index| {
+        _ = try canvas.textAt(.{ .x = margin + content * positions[index], .y = px.px(177), .width = content * (if (index == 0) @as(f32, 0.28) else 0.13), .height = px.px(26) }, .{
+            .text = heading,
+            .color = palette.subtext0,
+            .face = .sans,
+            .size = .small,
+        });
+    }
+
+    for (&self.lab.trials, 0..) |*trial, index| {
+        const bounds: Rect = .{
+            .x = margin,
+            .y = px.px(207 + @as(f32, @floatFromInt(index)) * 36),
+            .width = content,
+            .height = px.px(32),
+        };
+        try canvas.fillRoundedAt(bounds, .{
+            .color = palette.surface0,
+            .radius = px.px(5),
+        });
+        var values: [5][64]u8 = undefined;
+        const mean = if (trial.samples == 0)
+            "warming"
+        else
+            try std.fmt.bufPrint(
+                &values[0],
+                "{d:.1}",
+                .{
+                    @as(f64, @floatFromInt(trial.total_ns)) / @as(f64, @floatFromInt(trial.samples)) / std.time.ns_per_us,
+                },
+            );
+
+        const labels = [_][]const u8{
+            policy_labels[index],
+            mean,
+            try std.fmt.bufPrint(&values[1], "{d}", .{trial.hits}),
+            try std.fmt.bufPrint(&values[2], "{d}", .{trial.visited}),
+            try std.fmt.bufPrint(&values[3], "{d:.1}", .{@as(f64, @floatFromInt(trial.copied_bytes)) / 1024}),
+            try std.fmt.bufPrint(&values[4], "{d:.0}", .{@as(f64, @floatFromInt(trial.cacheBytes())) / 1024}),
+        };
+
+        for (labels, 0..) |label, column| {
+            _ = try canvas.textAt(.{ .x = margin + content * positions[column] + px.px(4), .y = bounds.y, .width = content * (if (column == 0) @as(f32, 0.28) else 0.13) - px.px(4), .height = bounds.height }, .{
+                .text = label,
+                .color = palette.text,
+                .face = .sans,
+                .size = .body,
+            });
+        }
+    }
+
+    _ = try canvas.textAt(.{ .x = margin, .y = px.px(356), .width = content, .height = px.px(24) }, .{
+        .text = "CPU preparation only; first 8 frames excluded. Counters: last frame. Cache: extra quad capacity.",
+        .color = palette.subtext0,
+        .face = .sans,
+        .size = .small,
+    });
+
+    _ = try canvas.textAt(.{ .x = margin, .y = px.px(379), .width = content, .height = px.px(24) }, .{
+        .text = "Two fixed 80 x 20 panes. Preview is cropped to the window; drawing it is outside the measurement.",
+        .color = palette.subtext0,
+        .face = .sans,
+        .size = .small,
+    });
+
+    try self.preview(canvas);
+}
+
+/// Uses delivered controls and ordinary keyboard input. Example: `widget.input(event, route)`.
+pub fn input(self: *Self, event: events.Event, route: Route) bool {
+    const action: Action = switch (event) {
+        .text => |text| if (text.bytes.len == 1 and text.target_id == 0)
+            switch (text.bytes[0]) {
+                '1'...'5' => @enumFromInt(text.bytes[0] - '1' + @intFromEnum(Action.quiet)),
+                ' ' => .toggle,
+                'n', 'N' => .step,
+                'r', 'R' => .reset,
+                else => return false,
+            }
+        else
+            return false,
+        .key => |key| if (key.phase == .press and key.code == .right and !key.mods.super and !key.mods.ctrl and !key.mods.alt)
+            .step
+        else
+            return false,
+        .pointer => |pointer| blk: {
+            if (pointer.kind != .release or pointer.button != .left) {
+                return false;
+            }
+
+            const target = route.target orelse return false;
+
+            if (target.action != .custom or !target.contains(.{
+                pointer.x,
+                pointer.y,
+            })) {
+                return false;
+            }
+
+            break :blk std.enums.fromInt(Action, target.action.custom) orelse return false;
+        },
+        else => return false,
+    };
+    switch (action) {
+        .toggle => {
+            self.playing = !self.playing;
+            self.next_tick = 0;
+        },
+        .step => {
+            self.playing = false;
+            self.pending_step = true;
+        },
+        .reset, .quiet, .one, .both, .full, .burst => {
+            const workload: Lab.Workload = if (action == .reset)
+                self.lab.workload
+            else
+                @enumFromInt(@intFromEnum(action) - @intFromEnum(Action.quiet));
+
+            self.lab.reset(workload);
+            self.pending_step = true;
+        },
+    }
+
+    return true;
+}
+
+fn preview(self: *Self, canvas: *Canvas) !void {
+    const renderer = canvas.terminal_renderer.?;
+    const first_row: u16 = @intFromFloat(@ceil(canvas.chrome.px(441) / @as(f32, @floatFromInt(renderer.metrics.cell_height))));
+    if (renderer.retained.rows <= first_row or renderer.retained.cols < 4) {
+        return;
+    }
+
+    const half = renderer.retained.cols / 2;
+    for (&self.lab.panes, 0..) |*pane, index| {
+        const area: core.Rect = .{ .x = @intCast(index * half + 1), .y = first_row, .w = @min(Trial.cols, half - 2), .h = @min(Trial.rows, renderer.retained.rows - first_row) };
+        const rect = renderer.metrics.rect(renderer.origin, area);
+        _ = try canvas.textAt(.{ .x = rect.x, .y = rect.y - canvas.chrome.px(28), .width = rect.width, .height = canvas.chrome.px(24) }, .{
+            .text = if (index == 0) "Pane A" else "Pane B",
+            .color = canvas.theme.palette.accent,
+            .face = .sans,
+            .size = .body,
+        });
+        try canvas.terminal(.{
+            .pane = pane,
+            .view = .{ .pane_id = pane.id, .outer = area, .content = area, .focused = index == 0, .display_index = @intCast(index + 1) },
+            .hide_cursor = true,
+        });
+    }
+}

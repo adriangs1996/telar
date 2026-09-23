@@ -5,6 +5,8 @@ import json
 import os
 from pathlib import Path
 import signal
+import shlex
+import sys
 import subprocess
 import time
 from types import SimpleNamespace
@@ -110,15 +112,6 @@ def stop_runtime(binary, env):
     return result
 
 
-def runtime_input_bytes(directory):
-    paths = list(directory.glob('*.runtime-*.log'))
-    if not paths:
-        return 0
-    rows = [json.loads(line) for line in paths[0].read_text().splitlines()
-            if line.startswith('{') and line.endswith('}')]
-    return rows[-1]['input_bytes'] if rows else 0
-
-
 def slow_host(binary, directory, env):
     master, slave = load_latency.pty.openpty()
     load_latency.set_winsize(slave, 70, 240)
@@ -130,16 +123,27 @@ def slow_host(binary, directory, env):
     try:
         load_latency.drain(master, 3)
         load_latency.open_telar_floods(master, 2)
+        receipt = directory / 'input-received.txt'
+        reader = directory / 'input-reader.py'
+        reader.write_text("import os, tty\nfrom pathlib import Path\n"
+                          f"receipt = Path({str(receipt)!r})\n"
+                          "tty.setraw(0)\ncount = 0\nreceipt.write_text('0')\n"
+                          "while True:\n data = os.read(0, 4096)\n"
+                          " if not data: break\n count += len(data)\n"
+                          " temp = receipt.with_suffix('.tmp')\n temp.write_text(str(count))\n temp.replace(receipt)\n")
+        os.write(master, (shlex.join([sys.executable, str(reader)]) + '\n').encode())
         load_latency.drain(master, 2)
+        if not receipt.exists() or receipt.read_text() != '0':
+            raise RuntimeError('slow-host input reader did not become ready')
         # Do not drain the host while the panes continue producing frames.
         time.sleep(3)
-        before = runtime_input_bytes(directory)
+        before = int(receipt.read_text())
         os.write(master, b'k' * 32)
         time.sleep(1.5)
-        during = runtime_input_bytes(directory)
+        during = int(receipt.read_text())
         load_latency.drain(master, 1.5)
-        after = runtime_input_bytes(directory)
-        return dict(input_sent=32, input_while_host_blocked=during - before,
+        after = int(receipt.read_text())
+        return dict(endpoint="bytes read by the foreground PTY child", input_sent=32, input_while_host_blocked=during - before,
                     input_after_drain=after - before)
     finally:
         load_latency.terminate(proc)

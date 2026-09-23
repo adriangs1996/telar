@@ -1,0 +1,90 @@
+//! Offline admission experiment; no native window, runtime or GPU submission.
+const std = @import("std");
+const policy = @import("policy.zig");
+const Lab = @import("Lab.zig");
+
+const min_samples = 4096;
+const min_warmup = 256;
+const minimum_cycles = 3;
+
+/// One workload and one policy per process, or an untimed equivalence pass.
+/// Example: `zig build run-widget -Doptimize=ReleaseFast -- --cache-bench`.
+pub fn run(init: std.process.Init) !void {
+    const cols = try setting(init, "TELAR_CACHE_COLS", 80);
+    const rows = try setting(init, "TELAR_CACHE_ROWS", 20);
+    const quiet = try setting(init, "TELAR_CACHE_QUIET", 1);
+    const active = try setting(init, "TELAR_CACHE_ACTIVE", 2);
+    if (cols > 160 or rows > 40 or quiet > 100 or active == 0 or active > 2) {
+        return error.InvalidBatchParameters;
+    }
+
+    const kind = std.meta.stringToEnum(policy.Kind, init.environ_map.get("TELAR_CACHE_POLICY") orelse "stable") orelse return error.InvalidBatchPolicy;
+    var accounting = std.testing.FailingAllocator.init(init.gpa, .{});
+    const lab = try Lab.createSized(accounting.allocator(), init.io, .{ .cols = @intCast(cols), .rows = @intCast(rows) });
+    defer lab.destroy();
+    lab.quiet_frames = @intCast(quiet);
+    lab.cycling_panes = @intCast(active);
+    const period = quiet + 1;
+    var buffer: [4096]u8 = undefined;
+    var output = std.Io.File.stdout().writer(init.io, &buffer);
+    const writer = &output.interface;
+
+    if (init.environ_map.get("TELAR_CACHE_VERIFY") != null) {
+        const frames = period * minimum_cycles;
+        for (0..frames) |_| {
+            try lab.step();
+            if (!lab.equivalent) {
+                return error.CacheOutputMismatch;
+            }
+        }
+
+        try writer.print("{{\"verified_frames\":{d},\"cols\":{d},\"rows\":{d},\"quiet\":{d},\"active\":{d}}}\n", .{ frames, cols, rows, quiet, active });
+        try writer.flush();
+        return;
+    }
+
+    const trial = &lab.trials[@intFromEnum(kind)];
+    const warmup = @max(minimum_cycles, std.math.divCeil(usize, min_warmup, period) catch unreachable) * period;
+    const sample_count = (std.math.divCeil(usize, min_samples, period) catch unreachable) * period;
+    const samples = try init.gpa.alloc(u64, sample_count);
+    defer init.gpa.free(samples);
+    for (0..warmup) |_| {
+        lab.advance();
+        try trial.draw(&lab.panes);
+    }
+
+    const allocations = accounting.allocations;
+    const allocated_bytes = accounting.allocated_bytes;
+    var elapsed: u64 = 0;
+    var hits: usize = 0;
+    var copies: usize = 0;
+    var visited: usize = 0;
+    for (samples) |*sample| {
+        lab.advance();
+        const started = std.Io.Clock.awake.now(init.io).nanoseconds;
+        try trial.draw(&lab.panes);
+        sample.* = @intCast(@max(0, std.Io.Clock.awake.now(init.io).nanoseconds - started));
+        elapsed += sample.*;
+        hits += trial.hits;
+        copies += trial.copied_bytes;
+        visited += trial.visited;
+    }
+
+    const measured_allocations = accounting.allocations - allocations;
+    const measured_bytes = accounting.allocated_bytes - allocated_bytes;
+    if (measured_allocations != 0 or measured_bytes != 0) {
+        return error.MeasuredFrameAllocated;
+    }
+
+    std.mem.sort(u64, samples, {}, std.sort.asc(u64));
+    try writer.print("{{\"policy\":\"{s}\",\"cols\":{d},\"rows\":{d},\"quiet\":{d},\"active\":{d},\"samples\":{d},\"warmup\":{d},\"elapsed_ns\":{d},\"p50_ns\":{d},\"p95_ns\":{d},\"p99_ns\":{d},\"hits\":{d},\"copied_bytes\":{d},\"visited_cells\":{d},\"cache_bytes\":{d},\"allocations\":{d},\"allocated_bytes\":{d}}}\n", .{
+        @tagName(kind),                   cols,                             rows,                             quiet, active, sample_count, warmup,             elapsed,
+        samples[sample_count * 50 / 100], samples[sample_count * 95 / 100], samples[sample_count * 99 / 100], hits,  copies, visited,      trial.cacheBytes(), measured_allocations,
+        measured_bytes,
+    });
+    try writer.flush();
+}
+
+fn setting(init: std.process.Init, name: []const u8, fallback: usize) !usize {
+    return if (init.environ_map.get(name)) |value| try std.fmt.parseInt(usize, value, 10) else fallback;
+}

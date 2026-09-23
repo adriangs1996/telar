@@ -1,0 +1,5 @@
+{
+  "equal_frames": 768,
+  "equivalence": "SHA-256 of every emitted quad byte and complete glyph atlas for each frame",
+  "limits": "Fixed deterministic fixture, complemented by renderer correctness tests; timings from verification are excluded."
+}

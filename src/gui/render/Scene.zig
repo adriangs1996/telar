@@ -1,4 +1,5 @@
 //! Composes and draws one widget list during a synchronous semantic-model borrow.
+const core = @import("telar-core");
 const data = @import("model");
 const ImagePreview = @import("../widgets/overlays/ImagePreview.zig");
 const client = @import("telar-client");
@@ -21,6 +22,13 @@ review: ?*ReviewWidget = null,
 /// Nothing retained by a layer may borrow the projection after this returns.
 /// Example: `const commit = try scene.prepare(projection);`
 pub fn prepare(scene: *Scene, projection: client.Projection) !data.PresentationCommit {
+    core.profiling.add(.gui_scene, 1);
+    const profile_started = if (scene.terminal.io) |io| core.profiling.start(io) else 0;
+    defer {
+        if (scene.terminal.io) |io| {
+            core.profiling.finish(io, .gui_scene, profile_started);
+        }
+    }
     const renderer = scene.terminal;
     renderer.begin();
     scene.chrome.animation.begin(scene.chrome.now_ns);

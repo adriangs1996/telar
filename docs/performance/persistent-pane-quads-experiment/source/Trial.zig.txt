@@ -1,0 +1,126 @@
+const std = @import("std");
+const data = @import("model");
+const core = @import("telar-core");
+const quad = @import("../../render/Quad.zig");
+const policy = @import("policy.zig");
+const PersistentPane = @import("PersistentPane.zig");
+const PanePaint = @import("../../render/PanePaint.zig");
+const Renderer = @import("../../render/TerminalRenderer.zig");
+const Self = @This();
+
+pub const cols = 80;
+pub const rows = 20;
+pub const warmup_frames = 8;
+
+renderer: Renderer,
+persistent: [2]PersistentPane,
+hits: usize = 0,
+copied_bytes: usize = 0,
+kind: policy.Kind,
+size: core.TerminalSize,
+previous: [2]u64 = @splat(0),
+last_ns: u64 = 0,
+total_ns: u64 = 0,
+samples: usize = 0,
+visited: usize = 0,
+
+pub fn init(allocator: std.mem.Allocator, kind: policy.Kind, size: core.TerminalSize) !Self {
+    var renderer = Renderer.init(allocator);
+    errdefer renderer.deinit();
+    _ = try renderer.measure(.{ .width = 100, .height = 150, .scale = 1 });
+    _ = try renderer.measure(.{
+        .width = @as(u32, size.cols) * renderer.metrics.cell_width + renderer.origin[0] * 2,
+        .height = 2 * @as(u32, size.rows) * renderer.metrics.cell_height + renderer.chrome.vertical() + 16,
+        .scale = 1,
+    });
+    if (kind == .cells or kind == .retained) {
+        renderer.pane_draws.deinit();
+        renderer.pane_draws = .init(allocator);
+    }
+
+    var persistent: [2]PersistentPane = @splat(.init(allocator));
+    errdefer for (&persistent) |*pane| pane.deinit();
+    if (kind == .retained) {
+        for (&persistent) |*pane| {
+            try pane.reserve(2 * @as(usize, size.cols) * size.rows);
+        }
+    }
+
+    return .{ .renderer = renderer, .kind = kind, .size = size, .persistent = persistent };
+}
+
+pub fn deinit(self: *Self) void {
+    for (&self.persistent) |*pane| {
+        pane.deinit();
+    }
+
+    self.renderer.deinit();
+}
+
+/// Resets history without allocation. Example: `trial.reset();`
+pub fn reset(self: *Self) void {
+    for (&self.persistent) |*pane| {
+        pane.key = null;
+    }
+
+    self.previous = @splat(0);
+    self.renderer.retained.invalidate();
+    self.renderer.pane_draws.counts = @splat(0);
+    self.total_ns = 0;
+    self.samples = 0;
+}
+
+/// Measures the same two panes with this policy; caller owns input and clock.
+/// Example: `try trial.draw(&panes);`
+pub fn draw(self: *Self, panes: *const [2]data.Pane) !void {
+    const renderer = &self.renderer;
+    renderer.begin();
+    self.hits = 0;
+    self.copied_bytes = 0;
+
+    for (panes, 0..) |*pane, index| {
+        const saved_limit = renderer.pane_draws.limit;
+        defer renderer.pane_draws.limit = saved_limit;
+        // The fixture keeps geometry/resources constant. Only its content
+        // revision changes. Renderer still checks its full visual cache key.
+        if (self.kind == .stable and self.previous[index] != pane.applied_frame_id) {
+            renderer.pane_draws.limit = 0;
+        }
+
+        self.previous[index] = pane.applied_frame_id;
+        const area: core.Rect = .{ .y = @intCast(index * self.size.rows), .w = self.size.cols, .h = self.size.rows };
+        const paint: PanePaint = .{
+            .pane = pane,
+            .view = .{ .pane_id = pane.id, .outer = area, .content = area, .focused = index == 0, .display_index = @intCast(index + 1) },
+            .hide_cursor = true,
+        };
+        if (self.kind == .retained) {
+            self.hits += @intFromBool(try self.persistent[index].draw(renderer, paint));
+            self.copied_bytes += self.persistent[index].copied_bytes;
+        } else {
+            try renderer.drawPane(paint);
+        }
+    }
+
+    renderer.seal();
+    if (self.kind != .retained) {
+        self.hits = renderer.pane_draws.hits;
+        self.copied_bytes = renderer.pane_draws.copied_bytes;
+    }
+
+    self.visited = (panes.len - self.hits) * @as(usize, self.size.cols) * self.size.rows;
+}
+
+/// Reports only additional pane-quad storage. Example: `trial.cacheBytes()`.
+pub fn cacheBytes(self: *const Self) usize {
+    var bytes: usize = 0;
+    for (self.renderer.pane_draws.quads) |buffer| {
+        bytes += buffer.capacity * @sizeOf(quad.Quad);
+    }
+
+    for (self.persistent) |pane| {
+        bytes += pane.quads.quads.capacity * @sizeOf(quad.Quad);
+    }
+
+    return bytes;
+}
