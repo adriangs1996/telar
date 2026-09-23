@@ -7,7 +7,6 @@ const backend = @import("telar-backend");
 const frontend = @import("telar-frontend");
 const client = @import("telar-client");
 const std = @import("std");
-const Measurement = @import("Measurement.zig");
 const DamageContext = @import("DamageContext.zig");
 const FrameContext = @import("FrameContext.zig");
 const EncodeContext = @import("EncodeContext.zig");
@@ -990,4 +989,12 @@ const Case = struct {
 const PacerContext = struct {
     pacer: frontend.Pacer = .{},
     now_ns: u64 = 0,
+};
+
+const Measurement = struct {
+    iterations: usize,
+    median_ns: u64,
+    minimum_ns: u64,
+    p95_ns: u64,
+    p99_ns: u64,
 };

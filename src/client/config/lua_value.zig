@@ -2,7 +2,6 @@
 
 const data = @import("model");
 const lua_api = @import("lua-api");
-const RequiredField = @import("RequiredField.zig");
 const std = @import("std");
 
 pub fn raise(state: *lua_api.c.lua_State, message: [*:0]const u8) c_int {
@@ -230,4 +229,9 @@ const OptionalInteger = struct {
     index: c_int,
     name: [*:0]const u8,
     default: lua_api.c.lua_Integer,
+};
+
+const RequiredField = struct {
+    index: c_int,
+    name: [*:0]const u8,
 };

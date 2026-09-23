@@ -11,7 +11,6 @@ const Context = @import("Context.zig");
 const Semantic = @import("Semantic.zig");
 const widget = @import("context_support.zig");
 const std = @import("std");
-const AgentMetaInput = @import("AgentMetaInput.zig");
 const icons_module = @import("../ui/icons.zig");
 const State = @import("State.zig");
 
@@ -861,5 +860,11 @@ const AgentLocationInput = struct {
     area: core.Rect,
     agent: *const data.Agent,
     pane_index: u16,
+    background: core.Color,
+};
+
+const AgentMetaInput = struct {
+    area: core.Rect,
+    agent: *const data.Agent,
     background: core.Color,
 };

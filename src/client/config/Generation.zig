@@ -26,7 +26,6 @@ const proxy_config = @import("proxy.zig");
 const client_history_config = @import("client_history.zig");
 const ThemeParser = @import("ThemeParser.zig");
 const notifications_config = @import("notifications.zig");
-const BindingInput = @import("BindingInput.zig");
 const ParsedBinding = @import("ParsedBinding.zig");
 const ActionInput = @import("ActionInput.zig");
 const Generation = @This();
@@ -1465,4 +1464,9 @@ const LoadContext = struct {
     gpa: std.mem.Allocator,
     io: std.Io,
     diagnostic: *data.Diagnostic,
+};
+
+const BindingInput = struct {
+    index: c_int,
+    position: usize,
 };
