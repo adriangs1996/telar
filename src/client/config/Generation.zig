@@ -26,7 +26,6 @@ const proxy_config = @import("proxy.zig");
 const client_history_config = @import("client_history.zig");
 const ThemeParser = @import("ThemeParser.zig");
 const notifications_config = @import("notifications.zig");
-const ActionInput = @import("ActionInput.zig");
 const Generation = @This();
 
 gpa: std.mem.Allocator,
@@ -1473,4 +1472,9 @@ const BindingInput = struct {
 const ParsedBinding = struct {
     binding: data.config_values.ConfiguredBinding,
     prefixed: bool,
+};
+
+const ActionInput = struct {
+    index: c_int,
+    expression: bool,
 };

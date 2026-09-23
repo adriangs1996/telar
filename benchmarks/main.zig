@@ -11,7 +11,6 @@ const DamageContext = @import("DamageContext.zig");
 const FrameContext = @import("FrameContext.zig");
 const EncodeContext = @import("EncodeContext.zig");
 const PipelineContext = @import("PipelineContext.zig");
-const OutboxContext = @import("OutboxContext.zig");
 const KeybindContext = @import("KeybindContext.zig");
 const ClientUiContext = @import("ClientUiContext.zig");
 const BlitContext = @import("BlitContext.zig");
@@ -1001,4 +1000,21 @@ const Measurement = struct {
 const ExecutionResources = struct {
     io: std.Io,
     gpa: std.mem.Allocator,
+};
+
+const OutboxContext = struct {
+    outbox: *data.Outbox,
+    buffer: [4096]u8 = undefined,
+
+    pub fn init(gpa: std.mem.Allocator) !OutboxContext {
+        const outbox = try gpa.create(data.Outbox);
+        errdefer gpa.destroy(outbox);
+        outbox.* = try .init(gpa);
+        return .{ .outbox = outbox };
+    }
+
+    pub fn deinit(self: *OutboxContext, gpa: std.mem.Allocator) void {
+        self.outbox.deinit(gpa);
+        gpa.destroy(self.outbox);
+    }
 };
