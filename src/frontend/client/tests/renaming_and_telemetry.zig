@@ -8,8 +8,8 @@ const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const support = @import("support.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
-const client_telemetry = @import("../resources/telemetry.zig");
+const host_inputs = @import("../input/host_inputs.zig");
+const client_telemetry = @import("../telemetry/telemetry.zig");
 
 test "workspace rename separates prompt submission canonical commit and presentation" {
     var harness: TestHarness = undefined;

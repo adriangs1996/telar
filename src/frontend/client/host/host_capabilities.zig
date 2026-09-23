@@ -2,11 +2,11 @@
 
 const client_module = @import("telar-client");
 const data = @import("model");
-const TerminalClient = @import("../../TerminalClient.zig");
-const capabilities_module = @import("../../../graphics/capabilities.zig");
-const negotiation = @import("../../resources/host_negotiation.zig");
-const term = @import("../../../presentation/screen_support.zig");
-const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
+const TerminalClient = @import("../TerminalClient.zig");
+const capabilities_module = @import("../../graphics/capabilities.zig");
+const negotiation = @import("host_negotiation.zig");
+const term = @import("../../presentation/screen_support.zig");
+const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
 const std = @import("std");
 
 /// Starts the exterior-terminal probes through one owner.

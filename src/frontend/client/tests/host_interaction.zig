@@ -6,14 +6,14 @@ const client_module = @import("telar-client");
 const TerminalClient = @import("../TerminalClient.zig");
 const TestHarness = @import("TestHarness.zig");
 const Size = @import("../../platform/Size.zig");
-const host_resizes = @import("../controllers/host/host_resizes.zig");
+const host_resizes = @import("../host/host_resizes.zig");
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
+const host_inputs = @import("../input/host_inputs.zig");
 const capabilities_module = @import("../../graphics/capabilities.zig");
-const client_events = @import("../entrypoints/events.zig");
+const client_events = @import("../events.zig");
 const support = @import("support.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
+const host_capabilities = @import("../host/host_capabilities.zig");
 
 test "host resize commits before resources and presents by model version" {
     var harness: TestHarness = undefined;

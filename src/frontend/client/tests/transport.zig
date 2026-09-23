@@ -5,13 +5,13 @@ const client_module = @import("telar-client");
 const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
 const TestHarness = @import("TestHarness.zig");
-const Chunk = @import("../controllers/input/Chunk.zig");
+const Chunk = @import("../input/Chunk.zig");
 const std = @import("std");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
-const client_startup = @import("../controllers/session/client_startup.zig");
+const host_inputs = @import("../input/host_inputs.zig");
+const client_startup = @import("../session/client_startup.zig");
 const platform = @import("../../platform/platform.zig");
 const kitty = @import("../../graphics/kitty.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
+const host_capabilities = @import("../host/host_capabilities.zig");
 const support = @import("support.zig");
 
 test "host input arriving while no tab exists is dropped, not a crash" {

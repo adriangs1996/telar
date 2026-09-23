@@ -3,8 +3,8 @@ const data = @import("model");
 const std = @import("std");
 const host_inputs = @import("host_inputs.zig");
 const Chunk = @import("Chunk.zig");
-const StartupInputState = @import("../../resources/StartupInputState.zig");
-const State = @This();
+const StartupInput = @import("../session/StartupInput.zig");
+const HostInput = @This();
 
 file: std.Io.File,
 router: host_inputs.Router,
@@ -16,14 +16,14 @@ read_pending: bool = false,
 presentation_revision: u64 = 0,
 input_timeout: client.Scheduler = .{},
 binding_timeout: client.Scheduler = .{},
-startup_input: StartupInputState = .{},
+startup_input: StartupInput = .{},
 
 /// Creates the host input state around the client-owned TTY handle.
 ///
 /// ```zig
-/// const state = try State.init(input_file, config);
+/// const state = try HostInput.init(input_file, config);
 /// ```
-pub fn init(file: std.Io.File, config: client.RouterConfig) !State {
+pub fn init(file: std.Io.File, config: client.RouterConfig) !HostInput {
     return .{ .file = file, .router = try host_inputs.buildRouter(config) };
 }
 
@@ -33,7 +33,7 @@ pub fn init(file: std.Io.File, config: client.RouterConfig) !State {
 /// ```zig
 /// state.replaceRouter(io, replacement);
 /// ```
-pub fn replaceRouter(state: *State, io: std.Io, replacement: host_inputs.Router) void {
+pub fn replaceRouter(state: *HostInput, io: std.Io, replacement: host_inputs.Router) void {
     const prefix_was_pending = state.router.prefixPending();
     var inherited = replacement;
     inherited.inheritPhysicalLeases(&state.router);
@@ -50,7 +50,7 @@ pub fn replaceRouter(state: *State, io: std.Io, replacement: host_inputs.Router)
 /// ```zig
 /// const revision = state.presentationVersion();
 /// ```
-pub fn presentationVersion(state: *const State) u64 {
+pub fn presentationVersion(state: *const HostInput) u64 {
     return state.presentation_revision;
 }
 
@@ -60,7 +60,7 @@ pub fn presentationVersion(state: *const State) u64 {
 /// ```zig
 /// const mode = state.statusMode(copy_mode_active);
 /// ```
-pub fn statusMode(state: *const State, copy_mode_active: bool) client.Mode {
+pub fn statusMode(state: *const HostInput, copy_mode_active: bool) client.Mode {
     if (!state.router.prefixPending()) {
         return if (copy_mode_active) .copy else .normal;
     }

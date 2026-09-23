@@ -3,7 +3,7 @@
 
 const data = @import("model");
 const std = @import("std");
-const HostNegotiationState = @import("HostNegotiationState.zig");
+const HostNegotiation = @import("HostNegotiation.zig");
 
 pub const timeout_ns = 250 * std.time.ns_per_ms;
 pub const pixel_query = "\x1b[14t\x1b[16t";
@@ -35,7 +35,7 @@ test "probe fallback retains resolved capabilities" {
 }
 
 test "color probes settle independently of graphics and reject stale reports" {
-    var state: HostNegotiationState = .{};
+    var state: HostNegotiation = .{};
     try std.testing.expect(!state.accept(.background, 0));
     try std.testing.expect(state.begin(0));
     try std.testing.expect(!state.begin(1));
@@ -51,7 +51,7 @@ test "color probes settle independently of graphics and reject stale reports" {
 }
 
 test "missing color replies cannot hold startup beyond the deadline" {
-    var state: HostNegotiationState = .{};
+    var state: HostNegotiation = .{};
     _ = state.begin(10);
     try std.testing.expect(!state.accept(.foreground, timeout_ns + 10));
     try std.testing.expect(state.expire(timeout_ns + 10));

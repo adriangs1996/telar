@@ -5,18 +5,18 @@
 
 const client = @import("telar-client");
 const data = @import("model");
-const events = @import("entrypoints/events.zig");
+const events = @import("events.zig");
 const run = @import("run.zig");
 const std = @import("std");
-const host_inputs = @import("controllers/input/host_inputs.zig");
+const host_inputs = @import("input/host_inputs.zig");
 
 test {
     // The client capability's own files, collected for the suite.
     _ = client.AttachedClient;
-    _ = @import("controllers/host/host_capabilities.zig");
-    _ = @import("controllers/host/host_resizes.zig");
-    _ = @import("controllers/input/host_inputs.zig");
-    _ = @import("controllers/session/client_startup.zig");
+    _ = @import("host/host_capabilities.zig");
+    _ = @import("host/host_resizes.zig");
+    _ = @import("input/host_inputs.zig");
+    _ = @import("session/client_startup.zig");
     _ = events;
     _ = @import("tests/configuration.zig");
     _ = @import("tests/graphics_and_clipboard.zig");
@@ -38,8 +38,8 @@ test {
     _ = @import("presentation/presentation_lifecycle.zig");
     _ = @import("presentation/presentation_projection.zig");
     _ = @import("presentation/view.zig");
-    _ = @import("resources/host_output.zig");
-    _ = @import("resources/telemetry.zig");
+    _ = @import("host/host_output.zig");
+    _ = @import("telemetry/telemetry.zig");
     _ = run;
 }
 

@@ -8,7 +8,7 @@ const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const term = @import("../../presentation/screen_support.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
+const host_inputs = @import("../input/host_inputs.zig");
 const Screen = @import("../../presentation/Screen.zig");
 const support = @import("support.zig");
 

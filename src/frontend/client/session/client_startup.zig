@@ -3,13 +3,13 @@
 
 const data = @import("model");
 const client_module = @import("telar-client");
-const TerminalClient = @import("../../TerminalClient.zig");
-const Request = @import("Request.zig");
+const TerminalClient = @import("../TerminalClient.zig");
+const StartupRequest = @import("StartupRequest.zig");
 const host_capabilities = @import("../host/host_capabilities.zig");
-const presentation_lifecycle = @import("../../presentation/presentation_lifecycle.zig");
+const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const host_inputs = @import("../input/host_inputs.zig");
 const host_resizes = @import("../host/host_resizes.zig");
-const client_telemetry = @import("../../resources/telemetry.zig");
+const client_telemetry = @import("../telemetry/telemetry.zig");
 
 /// Starts host negotiation and arms I/O without opening a child before its
 /// terminal defaults are available or the bounded probe expires.
@@ -17,7 +17,7 @@ const client_telemetry = @import("../../resources/telemetry.zig");
 /// ```zig
 /// try start(terminal, .{ .resize_watcher = &watcher });
 /// ```
-pub fn start(terminal: *TerminalClient, request: Request) !void {
+pub fn start(terminal: *TerminalClient, request: StartupRequest) !void {
     const client = &terminal.app;
 
     _ = data.multiplexer.rectSize(client.geometry().area) orelse

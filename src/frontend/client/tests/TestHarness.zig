@@ -4,7 +4,7 @@ const client_module = @import("telar-client");
 const TerminalClient = @import("../TerminalClient.zig");
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const host_effects = @import("../resources/host_effects.zig");
+const host_effects = @import("../host/host_effects.zig");
 const view_chrome = @import("../presentation/view_chrome.zig");
 const TestHarness = @This();
 

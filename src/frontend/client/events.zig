@@ -3,18 +3,18 @@
 
 const client_module = @import("telar-client");
 const core = @import("telar-core");
-const TerminalClient = @import("../TerminalClient.zig");
+const TerminalClient = @import("TerminalClient.zig");
 const std = @import("std");
-const Resources = @import("Resources.zig");
-const client_startup = @import("../controllers/session/client_startup.zig");
-const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
-const host_capabilities = @import("../controllers/host/host_capabilities.zig");
-const host_resizes = @import("../controllers/host/host_resizes.zig");
-const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
-const client_telemetry = @import("../resources/telemetry.zig");
-const host_effects = @import("../resources/host_effects.zig");
-const view_chrome = @import("../presentation/view_chrome.zig");
+const EventResources = @import("EventResources.zig");
+const client_startup = @import("session/client_startup.zig");
+const presentation_lifecycle = @import("presentation/presentation_lifecycle.zig");
+const host_inputs = @import("input/host_inputs.zig");
+const host_capabilities = @import("host/host_capabilities.zig");
+const host_resizes = @import("host/host_resizes.zig");
+const kitty_delivery = @import("../graphics/kitty_delivery.zig");
+const client_telemetry = @import("telemetry/telemetry.zig");
+const host_effects = @import("host/host_effects.zig");
+const view_chrome = @import("presentation/view_chrome.zig");
 
 const EventTag = std.meta.Tag(TerminalClient.ClientEvent);
 
@@ -30,7 +30,7 @@ pub const Outcome = union(enum) {
 /// ```zig
 /// const outcome = try handle(terminal, event, resources);
 /// ```
-pub fn handle(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
+pub fn handle(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: EventResources) !Outcome {
     const outcome = try dispatch(terminal, event, resources);
     if (outcome == .keep_running) {
         try observe(terminal);
@@ -41,7 +41,7 @@ pub fn handle(terminal: *TerminalClient, event: TerminalClient.ClientEvent, reso
 
 /// Consumes only this turn's admitted work, then derives one presentation.
 /// Example: `const outcome = try events.update(terminal, resources);`
-pub fn update(terminal: *TerminalClient, resources: Resources) !Outcome {
+pub fn update(terminal: *TerminalClient, resources: EventResources) !Outcome {
     const inbox = &terminal.inbox;
     var turn = try inbox.begin();
     defer inbox.end();
@@ -71,7 +71,7 @@ fn observe(terminal: *TerminalClient) !void {
 
 /// Routes one event, then draws the chrome facts it changed and delivers the
 /// host requests it left, even when the event ends the client.
-fn dispatch(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
+fn dispatch(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: EventResources) !Outcome {
     const outcome = try route(terminal, event, resources);
     try view_chrome.refresh(terminal);
     try host_effects.deliver(terminal);
@@ -79,7 +79,7 @@ fn dispatch(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resour
     return outcome;
 }
 
-fn route(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: Resources) !Outcome {
+fn route(terminal: *TerminalClient, event: TerminalClient.ClientEvent, resources: EventResources) !Outcome {
     const client = &terminal.app;
 
     const path = core.enter(pathFor(@as(EventTag, event)));

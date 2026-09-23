@@ -1,17 +1,17 @@
 //! Substituted platform resources shared by client integration tests.
 
 const view_chrome = @import("../presentation/view_chrome.zig");
-const host_effects = @import("../resources/host_effects.zig");
+const host_effects = @import("../host/host_effects.zig");
 const core = @import("telar-core");
 const client_module = @import("telar-client");
 const data = @import("model");
-const Resources = @import("../entrypoints/Resources.zig");
+const EventResources = @import("../EventResources.zig");
 const std = @import("std");
 const TestHarness = @import("TestHarness.zig");
 const TerminalClient = @import("../TerminalClient.zig");
 const TestingPlugin = @import("TestingPlugin.zig");
 
-pub fn clientEventResourcesForTest(heap: *const core.Heap) Resources {
+pub fn clientEventResourcesForTest(heap: *const core.Heap) EventResources {
     return .{
         .tty = undefined,
         .resize_watcher = undefined,

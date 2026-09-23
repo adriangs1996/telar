@@ -1,14 +1,14 @@
 //! Terminal implementations of the client's host service ports. Each port
 //! binds one heap-stable client so workers complete through its event loop.
 
-const tab_drag = @import("../controllers/input/tab_drag.zig");
+const tab_drag = @import("../input/tab_drag.zig");
 const SidebarRendererInput = @import("../../graphics/SidebarRendererInput.zig");
 const client_module = @import("telar-client");
 const data = @import("model");
 const core = @import("telar-core");
 const TerminalClient = @import("../TerminalClient.zig");
 const platform = @import("../../platform/platform.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
+const host_inputs = @import("../input/host_inputs.zig");
 const history_inspection = @import("../presentation/history_inspection.zig");
 const term = @import("../../presentation/screen_support.zig");
 const std = @import("std");

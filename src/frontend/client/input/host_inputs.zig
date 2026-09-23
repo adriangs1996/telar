@@ -3,16 +3,16 @@
 const data = @import("model");
 const client_module = @import("telar-client");
 const core = @import("telar-core");
-const TerminalClient = @import("../../TerminalClient.zig");
-const GenericRouter = @import("../../../input/GenericRouter.zig").Type;
+const TerminalClient = @import("../TerminalClient.zig");
+const GenericRouter = @import("../../input/GenericRouter.zig").Type;
 const std = @import("std");
 const Chunk = @import("Chunk.zig");
-const term = @import("../../../presentation/screen_support.zig");
+const term = @import("../../presentation/screen_support.zig");
 const host_capabilities = @import("../host/host_capabilities.zig");
-const kitty_delivery = @import("../../../graphics/kitty_delivery.zig");
-const presentation_lifecycle = @import("../../presentation/presentation_lifecycle.zig");
+const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
+const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const tab_drag = @import("tab_drag.zig");
-const State = @import("State.zig");
+const HostInput = @import("HostInput.zig");
 
 pub const chunk_size = 4096;
 const held_binding_bytes = 128;
@@ -469,7 +469,7 @@ test "router replacement clears obsolete deadlines and visible prefix state" {
         .escape_timeout_ns = 5,
         .sequence_timeout_ns = 20,
     });
-    var state: State = .{
+    var state: HostInput = .{
         .file = undefined,
         .router = original,
         .input_timeout = .{ .pending = true },
@@ -493,7 +493,7 @@ test "prefix status uses only the effective host input router" {
     const binding = try data.config_values.ConfiguredBinding.init(&.{ prefix, suffix }, .new_tab);
     var router = try Router.initWithPrefix(&.{binding}, prefix);
     router.prefix_pending = true;
-    const state: State = .{ .file = undefined, .router = router };
+    const state: HostInput = .{ .file = undefined, .router = router };
 
     const mode = state.statusMode(false);
     try std.testing.expect(mode == .prefix);

@@ -2,7 +2,7 @@ const data = @import("model");
 const client = @import("telar-client");
 const std = @import("std");
 const host_negotiation = @import("host_negotiation.zig");
-const State = @This();
+const HostNegotiation = @This();
 
 zlib_support: data.EnvironmentSupport = .unknown,
 deadline_ns: ?u64 = null,
@@ -11,7 +11,7 @@ initial_settled: bool = false,
 timer: client.Scheduler = .{},
 
 /// Example: `if (state.begin(now_ns)) try writer.writeAll(color_query);`.
-pub fn begin(state: *State, now_ns: u64) bool {
+pub fn begin(state: *HostNegotiation, now_ns: u64) bool {
     if (state.deadline_ns != null) {
         return false;
     }
@@ -22,7 +22,7 @@ pub fn begin(state: *State, now_ns: u64) bool {
 }
 
 /// Example: `if (!state.accept(.foreground, now_ns)) return;`.
-pub fn accept(state: *State, color: host_negotiation.Color, now_ns: u64) bool {
+pub fn accept(state: *HostNegotiation, color: host_negotiation.Color, now_ns: u64) bool {
     const deadline = state.deadline_ns orelse return false;
     if (now_ns >= deadline or state.received.contains(color)) {
         return false;
@@ -37,7 +37,7 @@ pub fn accept(state: *State, color: host_negotiation.Color, now_ns: u64) bool {
 }
 
 /// Example: `if (state.expire(now_ns)) settleUnansweredCapabilities();`.
-pub fn expire(state: *State, now_ns: u64) bool {
+pub fn expire(state: *HostNegotiation, now_ns: u64) bool {
     const deadline = state.deadline_ns orelse return false;
     if (now_ns < deadline) {
         return false;

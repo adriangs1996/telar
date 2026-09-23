@@ -7,7 +7,7 @@ const TerminalClient = @import("../TerminalClient.zig");
 const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
 const capture_module = @import("../../attachments/capture.zig");
 const term = @import("../../presentation/screen_support.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
+const host_inputs = @import("../input/host_inputs.zig");
 
 /// Drains every pending request after one event.
 /// Example: `try host_effects.deliver(terminal);`

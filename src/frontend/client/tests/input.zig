@@ -7,10 +7,10 @@ const TerminalClient = @import("../TerminalClient.zig");
 const TestHarness = @import("TestHarness.zig");
 const support = @import("support.zig");
 const std = @import("std");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
+const host_inputs = @import("../input/host_inputs.zig");
 const PiFrame = @import("PiFrame.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const Chunk = @import("../controllers/input/Chunk.zig");
+const Chunk = @import("../input/Chunk.zig");
 const term = @import("../../presentation/screen_support.zig");
 
 test "closing a preview deletes its matching atomic image marker" {

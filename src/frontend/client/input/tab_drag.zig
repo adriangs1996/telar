@@ -1,5 +1,5 @@
 //! Terminal gesture capture around the shared semantic tab move.
-const TerminalClient = @import("../../TerminalClient.zig");
+const TerminalClient = @import("../TerminalClient.zig");
 const data = @import("model");
 const std = @import("std");
 const client = @import("telar-client");

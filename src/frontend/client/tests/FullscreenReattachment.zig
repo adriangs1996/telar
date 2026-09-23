@@ -3,7 +3,7 @@ const data = @import("model");
 const TerminalClient = @import("../TerminalClient.zig");
 const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
+const host_inputs = @import("../input/host_inputs.zig");
 const FullscreenReattachment = @This();
 
 harness: *TestHarness,

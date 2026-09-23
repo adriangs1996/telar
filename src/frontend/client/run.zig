@@ -7,9 +7,9 @@ const TerminalClient = @import("TerminalClient.zig");
 const std = @import("std");
 const platform = @import("../platform/platform.zig");
 const sequences = @import("../platform/sequences.zig");
-const host_resizes = @import("controllers/host/host_resizes.zig");
-const client_startup = @import("controllers/session/client_startup.zig");
-const client_events = @import("entrypoints/events.zig");
+const host_resizes = @import("host/host_resizes.zig");
+const client_startup = @import("session/client_startup.zig");
+const client_events = @import("events.zig");
 
 pub fn run(init: std.process.Init, connection: *core.SocketChannel, options: client_module.Options) !u8 {
     const io = init.io;

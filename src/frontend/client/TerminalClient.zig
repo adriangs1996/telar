@@ -8,15 +8,15 @@ const data = @import("model");
 const std = @import("std");
 const Params = @import("Params.zig");
 const Compression = @import("../graphics/Compression.zig");
-const Output = @import("resources/Output.zig");
-const HostNegotiationState = @import("resources/HostNegotiationState.zig");
+const Output = @import("host/Output.zig");
+const HostNegotiation = @import("host/HostNegotiation.zig");
 const Presenter = @import("presentation/Presenter.zig");
 const PresentationState = @import("presentation/State.zig");
 const Screen = @import("../presentation/Screen.zig");
 const kitty_delivery = @import("../graphics/kitty_delivery.zig");
-const InputState = @import("controllers/input/State.zig");
-const host_inputs = @import("controllers/input/host_inputs.zig");
-const host_ports = @import("resources/host_ports.zig");
+const HostInput = @import("input/HostInput.zig");
+const host_inputs = @import("input/host_inputs.zig");
+const host_ports = @import("host/host_ports.zig");
 const view_chrome = @import("presentation/view_chrome.zig");
 const ChromeRevisions = @import("presentation/ChromeRevisions.zig");
 const capture_module = @import("../attachments/capture.zig");
@@ -50,11 +50,11 @@ app: client_module.AttachedClient,
 writer: *std.Io.Writer,
 output: ?Output = null,
 inbox: client_module.GenericInbox(ClientEvent),
-host_negotiation: HostNegotiationState = .{},
+host_negotiation: HostNegotiation = .{},
 presenter: Presenter,
 view: PresentationState,
 graphics_store: kitty_delivery.Store,
-host_input: InputState,
+host_input: HostInput,
 chrome_observed: ChromeRevisions = .{},
 
 /// Creates a heap-owned client (the tab models alone are megabytes) and
@@ -89,7 +89,7 @@ pub fn init(params: Params) !*TerminalClient {
     else
         kitty_delivery.Store.init(gpa);
     errdefer graphics_store.deinit();
-    const host_input = try InputState.init(params.input_file, .{
+    const host_input = try HostInput.init(params.input_file, .{
         .prefix = params.options.prefix,
         .bindings = params.options.bindings,
         .escape_timeout_ns = params.options.input_escape_timeout_ns,

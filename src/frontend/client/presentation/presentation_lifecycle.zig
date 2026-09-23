@@ -7,7 +7,7 @@ const common = @import("telar-client");
 
 const TerminalClient = @import("../TerminalClient.zig");
 const presentation_projection = @import("presentation_projection.zig");
-const Output = @import("../resources/Output.zig");
+const Output = @import("../host/Output.zig");
 
 /// Publishes every revision the presenter uses after one client event commits.
 ///

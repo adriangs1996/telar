@@ -8,7 +8,7 @@ const TestHarness = @import("TestHarness.zig");
 const std = @import("std");
 const support = @import("support.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
+const host_inputs = @import("../input/host_inputs.zig");
 
 test "config reload outcomes that carry no new generation" {
     var harness: TestHarness = undefined;

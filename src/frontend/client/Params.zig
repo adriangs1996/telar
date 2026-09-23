@@ -1,7 +1,7 @@
 const core = @import("telar-core");
 const client = @import("telar-client");
 const std = @import("std");
-const FastWrite = @import("resources/FastWrite.zig");
+const FastWrite = @import("host/FastWrite.zig");
 /// The platform resources a client cannot fabricate: everything else it
 /// owns. Substituting these — a pipe for the tty's read handle, a
 /// fixed-buffer writer, a scripted socket peer — is what makes the client

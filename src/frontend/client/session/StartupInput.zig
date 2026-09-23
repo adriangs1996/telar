@@ -1,6 +1,6 @@
 const std = @import("std");
 const term = @import("../../presentation/screen_support.zig");
-const State = @This();
+const StartupInput = @This();
 
 pub const capacity = 8192;
 held: [capacity]u8 = undefined,
@@ -11,7 +11,7 @@ paste: bool = false,
 
 /// Retain early user input and yield host replies one at a time.
 /// Example: `while (try state.next(&bytes)) |reply| try observe(reply);`
-pub fn next(self: *State, incoming: *[]const u8) !?term.Event.TerminalResponse {
+pub fn next(self: *StartupInput, incoming: *[]const u8) !?term.Event.TerminalResponse {
     while (true) {
         const count = @min(incoming.len, self.pending.len - self.pending_len);
         @memcpy(self.pending[self.pending_len..][0..count], incoming.*[0..count]);
@@ -63,7 +63,7 @@ pub fn next(self: *State, incoming: *[]const u8) !?term.Event.TerminalResponse {
     }
 }
 
-fn retain(state: *State, bytes: []const u8) !void {
+fn retain(state: *StartupInput, bytes: []const u8) !void {
     if (bytes.len > state.held.len - state.held_len) {
         return error.StartupInputOverflow;
     }
@@ -72,7 +72,7 @@ fn retain(state: *State, bytes: []const u8) !void {
     state.held_len += bytes.len;
 }
 
-fn consume(state: *State, len: usize) void {
+fn consume(state: *StartupInput, len: usize) void {
     std.mem.copyForwards(u8, &state.pending, state.pending[len..state.pending_len]);
     state.pending_len -= len;
 }
@@ -80,7 +80,7 @@ fn consume(state: *State, len: usize) void {
 /// Moves an unfinished escape prefix into the replay, where the normal
 /// input router resumes parsing it across subsequent reads.
 /// Example: `const bytes = try state.finish();`.
-pub fn finish(state: *State) ![]const u8 {
+pub fn finish(state: *StartupInput) ![]const u8 {
     try state.retain(state.pending[0..state.pending_len]);
     state.pending_len = 0;
     const len = state.held_len;

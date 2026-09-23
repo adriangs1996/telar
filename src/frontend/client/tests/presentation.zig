@@ -7,10 +7,10 @@ const TerminalClient = @import("../TerminalClient.zig");
 const TestHarness = @import("TestHarness.zig");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
 const std = @import("std");
-const Chunk = @import("../controllers/input/Chunk.zig");
-const host_inputs = @import("../controllers/input/host_inputs.zig");
-const host_resizes = @import("../controllers/host/host_resizes.zig");
-const OutputType = @import("../resources/Output.zig");
+const Chunk = @import("../input/Chunk.zig");
+const host_inputs = @import("../input/host_inputs.zig");
+const host_resizes = @import("../host/host_resizes.zig");
+const OutputType = @import("../host/Output.zig");
 
 test "presentation folds repeated observations into one draw task" {
     var harness: TestHarness = undefined;
