@@ -1,0 +1,16 @@
+{
+  "platform": "macOS-26.6.2-arm64-arm-64bit",
+  "binaries": {
+    "baseline/telar": "6dcca0e35375c97641c7987426ccc058b0c2132efbe741db795fdad71c828c63",
+    "baseline/telar-dod-probe": "00742c29ea1e24c833608d7d1f5d3a6a1dbd119f98886ac38e05066851b4db09",
+    "candidate/telar": "c32617055423a1c511f80f8d10be352e1753195c14a3c0acd08c20193aed2f6e",
+    "candidate/telar-dod-probe": "3874049abc5a021b748c710fa5125561bbb01fb697e11d400137638f6cc63b8a"
+  },
+  "rounds": 5,
+  "phase": "verify",
+  "baseline": "/private/tmp/telar-cell-mesh-experiment/A/bin",
+  "candidate": "/private/tmp/telar-cell-mesh-experiment/B/bin",
+  "instrumentation": "Both builds ReleaseFast; profile counts and timing disabled.",
+  "runner_sha256": "33d364d6842f58c94a07388710aaa9007115684fdd5b58bce1aac877f53cc277",
+  "power": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=35651683)\t80%; AC attached; not charging present: true\n"
+}

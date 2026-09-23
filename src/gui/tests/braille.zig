@@ -86,7 +86,7 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
             content.y,
         },
     );
-    try std.testing.expectEqual(@as(usize, 5), mesh.len);
+    try std.testing.expectEqual(@as(usize, 5), mesh.metadata.len);
     try std.testing.expectEqual(@as(f32, 1), mesh.items()[0].r);
     try std.testing.expectEqual(@as(f32, 0), mesh.items()[0].b);
     for (mesh.items()[1..]) |ink| {
@@ -97,7 +97,7 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
     }
 
     const frame = session.gui.renderer.quads.items();
-    const cursor = frame[frame.len - mesh.len ..];
+    const cursor = frame[frame.len - mesh.metadata.len ..];
     try std.testing.expectEqual(@as(f32, 1), cursor[0].r);
     for (cursor[1..], mesh.items()[1..]) |actual, original| {
         var recolored = original;
@@ -117,7 +117,7 @@ test "Braille uses terminal inverse faint decorations and retained block cursor 
     try std.testing.expectEqual(retained.len, session.gui.renderer.quads.items().len);
     pane.buffer.cells[0].style.flags.invisible = true;
     try paint(session);
-    try std.testing.expectEqual(@as(usize, 1), mesh.len);
+    try std.testing.expectEqual(@as(usize, 1), mesh.metadata.len);
     try std.testing.expectEqual(@as(usize, 1), session.gui.renderer.quads.items().len);
 }
 

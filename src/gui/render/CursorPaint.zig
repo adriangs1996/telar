@@ -38,7 +38,7 @@ pub fn paint(cursor: Paint, quads: *QuadList) !void {
 }
 
 /// Recolors the owning cell's ink, including overhang outside the cursor.
-/// Example: `const override = cursor.inkColor(mesh.paint.rect);`
+/// Example: `const override = cursor.inkColor(mesh.metadata.paint.rect);`
 pub fn inkColor(cursor: Paint, anchor: Rect) ?Color {
     if (cursor.style == .block and anchor.x == cursor.rect.x and anchor.y == cursor.rect.y) {
         return cursor.text_color;

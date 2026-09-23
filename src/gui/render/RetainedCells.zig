@@ -3,12 +3,16 @@
 //! This is preparation reuse, not delivery state: retry still submits the scene.
 const std = @import("std");
 const Mesh = @import("CellMesh.zig");
+const Metadata = @import("CellMetadata.zig");
+const Paint = @import("CellPaint.zig");
+const Quad = @import("Quad.zig").Quad;
 const Grid = @This();
 
 pub const max_cells = 65536;
 
 allocator: std.mem.Allocator,
-entries: std.ArrayList(Mesh) = .empty,
+entries: std.ArrayList(Metadata) = .empty,
+geometry: std.ArrayList([Mesh.capacity]Quad) = .empty,
 cols: u16 = 0,
 rows: u16 = 0,
 
@@ -18,6 +22,7 @@ pub fn init(allocator: std.mem.Allocator) Grid {
 
 pub fn deinit(grid: *Grid) void {
     grid.entries.deinit(grid.allocator);
+    grid.geometry.deinit(grid.allocator);
 }
 
 /// Geometry changes invalidate positions; steady frames allocate nothing.
@@ -33,7 +38,9 @@ pub fn resize(grid: *Grid, size: [2]u16) !void {
     }
 
     try grid.entries.ensureTotalCapacityPrecise(grid.allocator, count);
-    try grid.entries.resize(grid.allocator, count);
+    try grid.geometry.ensureTotalCapacityPrecise(grid.allocator, count);
+    grid.entries.items.len = count;
+    grid.geometry.items.len = count;
     grid.cols = size[0];
     grid.rows = size[1];
     grid.invalidate();
@@ -46,9 +53,14 @@ pub fn invalidate(grid: *Grid) void {
     }
 }
 
-pub fn at(grid: *Grid, position: [2]u16) *Mesh {
+/// Borrows both arrays until resize or deinit. Example: `grid.at(.{ x, y }).items();`
+pub fn at(grid: *Grid, position: [2]u16) Mesh {
     std.debug.assert(position[0] < grid.cols and position[1] < grid.rows);
-    return &grid.entries.items[@as(usize, position[1]) * grid.cols + position[0]];
+    const index = @as(usize, position[1]) * grid.cols + position[0];
+    return .{
+        .metadata = &grid.entries.items[index],
+        .quads = &grid.geometry.items[index],
+    };
 }
 
 test "grid budget failures preserve the previous cache" {
@@ -58,4 +70,42 @@ test "grid budget failures preserve the previous cache" {
     try std.testing.expectError(error.NativeCellBudgetExceeded, grid.resize(.{ 65535, 2 }));
     try std.testing.expectEqual(@as(u16, 80), grid.cols);
     try std.testing.expectEqual(@as(u16, 24), grid.rows);
+}
+
+test "split storage keeps the previous grid usable after either allocation fails" {
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, resizeWithFailures, .{});
+}
+
+fn resizeWithFailures(allocator: std.mem.Allocator) !void {
+    var grid = Grid.init(allocator);
+    defer grid.deinit();
+    try grid.resize(.{ 2, 2 });
+    const paint: Paint = .{
+        .cell = .{},
+        .rect = .{
+            .x = 0,
+            .y = 0,
+            .width = 10,
+            .height = 20,
+        },
+    };
+    const quads = [_]Quad{std.mem.zeroes(Quad)};
+    grid.at(.{ 1, 1 }).replace(paint, &quads);
+
+    grid.resize(.{ 16, 16 }) catch |err| {
+        try std.testing.expectEqual(@as(u16, 2), grid.cols);
+        try std.testing.expectEqual(@as(u16, 2), grid.rows);
+        try std.testing.expectEqual(@as(usize, 4), grid.entries.items.len);
+        try std.testing.expectEqual(@as(usize, 4), grid.geometry.items.len);
+        try std.testing.expect(grid.at(.{ 1, 1 }).matches(paint));
+        try std.testing.expectEqualSlices(Quad, &quads, grid.at(.{ 1, 1 }).items());
+        return err;
+    };
+
+    try std.testing.expectEqual(@as(usize, 256), grid.entries.items.len);
+    try std.testing.expectEqual(grid.entries.items.len, grid.geometry.items.len);
+    try std.testing.expect(!grid.at(.{ 1, 1 }).matches(paint));
+    for (grid.entries.items) |entry| {
+        try std.testing.expect(!entry.valid);
+    }
 }

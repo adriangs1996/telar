@@ -1,0 +1,16 @@
+{
+  "branch": "experiment/cell-mesh-metadata",
+  "base_commit": "adf2acc4c5b0741d893d27336eb411462c3b7b72",
+  "scope": "Metadata/geometry separation only. Same traversal order, capacity and invalidation semantics.",
+  "flags": [
+    "-Doptimize=ReleaseFast"
+  ],
+  "baseline_source_files": {
+    "CellMesh.zig": "3c144391eb5c1ab32cb0abad733a7003e0343d59bf0177b1069b6c79177d8178",
+    "RetainedCells.zig": "5fde93c5105e9971e7a1d6d94965e70ccc44c7e9182216adabd831c3b153159a",
+    "TerminalRenderer.zig": "447a79c5680a8c7908520cebed24919c3cca999e99d168802f0089218771c888"
+  },
+  "candidate_patch_sha256": "9e369d86c5101da11c55f3b9b5d3e4f93c223c8e8038ad5ee3361cbc65597b7b",
+  "hypothesis": "Compact metadata reduces work cost without changing geometry output, steady allocations or total retained payload.",
+  "acceptance": "Repeated CPU reduction greater than run variation, no steady allocations, unchanged visual output, no material full-redraw or native input-tail regression."
+}

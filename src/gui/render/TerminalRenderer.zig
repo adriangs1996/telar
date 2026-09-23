@@ -322,7 +322,7 @@ pub fn drawPane(renderer: *Renderer, paint: PanePaint) !void {
             const mesh = renderer.retained.at(.{ area.x + @as(u16, @intCast(col)), area.y + @as(u16, @intCast(row)) });
             ink_visited += 1;
             item_calls += 1;
-            const cursor_color = if (cursor) |visible| visible.inkColor(mesh.paint.rect) else null;
+            const cursor_color = if (cursor) |visible| visible.inkColor(mesh.metadata.paint.rect) else null;
             for (mesh.items()[1..]) |original| {
                 var item = original;
                 if (cursor_color) |override| {

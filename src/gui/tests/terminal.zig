@@ -281,11 +281,11 @@ test "a block cursor recolors wide cell ink and ANSI colors belong to the GUI th
         },
     );
     const quads = session.gui.renderer.quads.items();
-    const cursor = quads[quads.len - mesh.len];
+    const cursor = quads[quads.len - mesh.metadata.len];
     try std.testing.expectEqual(bounds.x, cursor.x);
     try std.testing.expectEqual(@as(f32, @floatFromInt(session.gui.renderer.metrics.cell_width * 2)), cursor.width);
     try std.testing.expectEqual(@as(f32, 1), cursor.r);
-    for (quads[quads.len - mesh.len + 1 ..]) |glyph| {
+    for (quads[quads.len - mesh.metadata.len + 1 ..]) |glyph| {
         try std.testing.expectEqual(@as(f32, 0), glyph.r);
         try std.testing.expectEqual(@as(f32, 1), glyph.g);
     }

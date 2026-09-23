@@ -235,7 +235,7 @@ fn paint(session: *Session) !void {
     session.gui.renderer.seal();
 }
 
-fn mesh(session: *Session, x: u16, y: u16) *CellMesh {
+fn mesh(session: *Session, x: u16, y: u16) CellMesh {
     const model = session.gui.app.model.activeTabModel().?;
     const area = model.viewForPane(Session.pane_id, session.gui.region.area).?.content;
     return session.gui.renderer.retained.at(
