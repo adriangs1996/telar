@@ -6,8 +6,12 @@ const Projection = @import("Projection.zig");
 const CopyProjectionType = @import("../workspace/CopyProjection.zig");
 
 /// Borrows model data only until the synchronous preparation call returns.
+/// Refreshes the model's layout snapshot for the active tab first, so the
+/// frame computes it at most once.
 /// Example: `const projection = capture(&model, context);`.
-pub fn capture(model: *const data.ClientModel, context: Context) Projection {
+pub fn capture(model: *data.ClientModel, context: Context) Projection {
+    const tab = model.tabs.activeSlot();
+    const layout: ?*const data.LayoutSnapshot = if (tab) |slot| data.tab_layout.snapshot(model, slot, context.geometry.area) else null;
     const copy: ?CopyProjectionType = if (model.copyModeProjection()) |value|
         .{ .pane_id = value.pane_id, .view = value.view }
     else
@@ -19,7 +23,8 @@ pub fn capture(model: *const data.ClientModel, context: Context) Projection {
         .geometry = context.geometry,
         .presentation_ingress = context.presentation_ingress,
         .model = model,
-        .tab = model.tabs.activeSlot(),
+        .tab = tab,
+        .layout = layout,
         .agents = &model.agent_snapshot,
         .sidebar_animation_frame = model.sidebar_animation_frame,
         .notifications = &model.notification_center,

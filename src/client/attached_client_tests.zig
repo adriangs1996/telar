@@ -429,9 +429,9 @@ pub fn retainReviewAvailability(comptime open_session: fn (*AttachedClient, core
         .latest_edition_id = 1,
     };
 
-    const revision = model.chrome_revision;
+    const revision = model.pane_metadata_revision;
     try std.testing.expect(changed(app, notification));
-    try std.testing.expect(model.chrome_revision != revision);
+    try std.testing.expect(model.pane_metadata_revision != revision);
     try std.testing.expect(pane.hasChangeReview());
     try std.testing.expect(session.owner == null);
     try std.testing.expect(!session.needsRefresh());

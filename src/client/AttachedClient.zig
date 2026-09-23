@@ -974,7 +974,6 @@ pub fn isChangeReviewAttached(self: *AttachedClient) bool {
 /// Example: `app.closeChangeReview();`
 pub fn closeChangeReview(self: *AttachedClient) void {
     self.model.change_review.close();
-    self.model.chrome_revision +%= 1;
 }
 
 /// Dispatches one owned target without letting opener failures leave input.
@@ -3851,7 +3850,6 @@ fn openChangeReviewSession(self: *AttachedClient, pane_id: core.PaneId) !void {
             .edition_id = 0,
         },
     );
-    self.model.chrome_revision +%= 1;
 }
 
 /// Captures the attached owner for a bounded, correlated request.
@@ -3879,7 +3877,6 @@ fn changeReviewOperation(self: *AttachedClient, edition_id: u64) !data.ChangeRev
 
 fn beginChangeReview(self: *AttachedClient, request_id: core.RequestId) void {
     self.model.change_review.begin(request_id);
-    self.model.chrome_revision +%= 1;
 }
 
 /// Applies a reply only while both the attachment and view still exist.
@@ -3889,12 +3886,7 @@ fn applyChangeReviewResponse(self: *AttachedClient, owner: data.ChangeReviewOper
         return false;
     }
 
-    const applied = try self.model.change_review.apply(owner, response);
-    if (applied) {
-        self.model.chrome_revision +%= 1;
-    }
-
-    return applied;
+    return try self.model.change_review.apply(owner, response);
 }
 
 /// Retains pane availability even when its review is closed, and refreshes an open view.
@@ -3902,27 +3894,20 @@ fn changeReviewChanged(self: *AttachedClient, notification: core.ChangeReviewCha
     const pane = findReviewPane(&self.model, notification.pane_id) orelse return false;
     const availability_changed = pane.applyChangeReview(notification);
     const review_changed = if (self.model.change_review.owner) |owner| resolveReviewPane(&self.model, owner) != null and self.model.change_review.changed(notification) else false;
-    if (!availability_changed and !review_changed) {
-        return false;
+    if (availability_changed) {
+        self.model.pane_metadata_revision +%= 1;
     }
 
-    self.model.chrome_revision +%= 1;
-    return true;
+    return availability_changed or review_changed;
 }
 
 /// Retains review content and exposes failure without clearing adapter drafts.
 fn failChangeReview(self: *AttachedClient, owner: data.ChangeReviewOperation, message: []const u8) bool {
-    if (!self.model.change_review.failed(owner, message)) {
-        return false;
-    }
-
-    self.model.chrome_revision +%= 1;
-    return true;
+    return self.model.change_review.failed(owner, message);
 }
 
 fn reportChangeReview(self: *AttachedClient, message: []const u8) void {
     self.model.change_review.report(message);
-    self.model.chrome_revision +%= 1;
 }
 
 fn findReviewPane(model: *data.ClientModel, pane_id: core.PaneId) ?*data.Pane {

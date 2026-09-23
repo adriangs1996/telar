@@ -6,16 +6,18 @@ const std = @import("std");
 const main = @import("main.zig");
 const ClientUiContext = @This();
 
-model: data.ClientModel,
+model: *data.ClientModel,
 screen: frontend.Screen,
 view: frontend.State,
 
 pub fn init(gpa: std.mem.Allocator, tab_count: usize) !ClientUiContext {
     std.debug.assert(tab_count >= 1 and tab_count <= core.max_tabs_per_workspace);
-    var model = data.ClientModel.init(gpa, true);
+    const model = try gpa.create(data.ClientModel);
+    errdefer gpa.destroy(model);
+    model.initInto(gpa, .{ .pane_gaps = true });
     errdefer model.deinit();
     const workspace: core.WorkspaceLocation = .{ .workspace = @enumFromInt(1) };
-    try data.workspace_handoff.bootstrap(&model, .{
+    try data.workspace_handoff.bootstrap(model, .{
         .pane_id = @enumFromInt(1),
         .location = .{ .workspace = workspace, .tab_id = @enumFromInt(1) },
         .size = .{ .cols = main.cols - data.sidebar.default_width, .rows = main.rows - 2 },
@@ -23,7 +25,7 @@ pub fn init(gpa: std.mem.Allocator, tab_count: usize) !ClientUiContext {
     for (1..tab_count) |index| {
         var label_buffer: [core.max_tab_label_bytes]u8 = undefined;
         const label = try std.fmt.bufPrint(&label_buffer, "tab-{d}", .{index + 1});
-        _ = try data.tab_creation.add(&model, .{
+        _ = try data.tab_creation.add(model, .{
             .location = .{
                 .workspace = workspace,
                 .tab_id = @enumFromInt(index + 1),
@@ -40,17 +42,19 @@ pub fn init(gpa: std.mem.Allocator, tab_count: usize) !ClientUiContext {
     var compositor = frontend.Compositor.init(gpa);
     defer compositor.deinit();
     _ = try compositor.render(.{
-        .model = &model,
+        .model = model,
         .tab = model.tabs.active,
         .screen = &screen,
         .input = .{ .area = view.workbench(), .palette = view.palette() },
     });
-    _ = try view.render(&screen, .{ .model = &model, .tab = model.tabs.active, .force = true });
+    _ = try view.render(&screen, .{ .model = model, .tab = model.tabs.active, .force = true });
     return .{ .model = model, .screen = screen, .view = view };
 }
 
 pub fn deinit(context: *ClientUiContext) void {
     context.view.deinit();
     context.screen.deinit();
+    const model_gpa = context.model.gpa;
     context.model.deinit();
+    model_gpa.destroy(context.model);
 }

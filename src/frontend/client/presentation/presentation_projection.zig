@@ -29,7 +29,7 @@ pub fn observation(terminal: *TerminalClient) client_module.Observation {
 /// ```zig
 /// const current = projection(terminal);
 /// ```
-pub fn projection(terminal: *const TerminalClient) client_module.Projection {
+pub fn projection(terminal: *TerminalClient) client_module.Projection {
     const client = &terminal.app;
 
     return client_module.capture(&client.model, .{

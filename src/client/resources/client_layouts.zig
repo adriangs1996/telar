@@ -9,7 +9,7 @@ const std = @import("std");
 pub fn captureVersion(model: *data.ClientModel) ?data.LayoutSyncVersion {
     const active_tab = model.activeTabLocation() orelse return null;
     var version: data.LayoutSyncVersion = .{
-        .chrome = model.version().chrome,
+        .chrome = model.chrome_revision,
         .active_tab = active_tab,
     };
     for (0..model.tabs.count) |tab| {

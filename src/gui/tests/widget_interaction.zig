@@ -1956,6 +1956,8 @@ test "leaving an agent pane retires native text context and queued editor input 
     const terminal: core.PaneId = @enumFromInt(21);
     try data.pane_split.split(&gui.app.model, tab, .{ .existing_pane = Session.pane_id, .new_pane = terminal, .location = Session.location, .axis = .horizontal, .area = data.workbench.region(&gui.app.model).area });
     _ = gui.app.model.tabs.layout[tab].focusPane(terminal);
+    // Focus moves inside an event; the turn that ran it reconciles widgets.
+    _ = try gui.update();
     var context: native.TextContext = .{};
     try std.testing.expect(!gui.widgetTextContext(&context));
     try std.testing.expect(gui.widgets.preedit.owner == null);

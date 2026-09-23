@@ -138,8 +138,6 @@ pub fn targetVisible(projection: client.Projection, target: shared_model.notific
         .focus_pane => |id| id,
         else => return false,
     };
-    const tab = projection.tab orelse return false;
-    var layout: shared_model.LayoutSnapshot = .{};
-    projection.model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
+    const layout = projection.layout orelse return false;
     return layout.find(pane_id) != null;
 }

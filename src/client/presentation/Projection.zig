@@ -13,6 +13,9 @@ presentation_ingress: PresentationIngress = .{},
 model: *const data.ClientModel,
 /// The active tab's slot, null during bootstrap and workspace handoff.
 tab: ?usize,
+/// The active tab's layout inside `geometry`, from the model's snapshot
+/// cache; null with `tab`. Every renderer of one frame reads this copy.
+layout: ?*const data.LayoutSnapshot,
 agents: *const data.AgentSnapshot,
 sidebar_animation_frame: u8,
 notifications: *const data.Center,

@@ -42,8 +42,7 @@ pub fn draw(decorations: PaneDecorations, canvas: *Canvas) !void {
         return;
     }
 
-    var layout: data.LayoutSnapshot = .{};
-    model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
+    const layout = projection.layout.?;
     for (layout.views()) |view| {
         const pane = model.panes.findInConst(location.tab_id, view.pane_id) orelse continue;
         const agent = attention.paneAgent(projection, location, view.pane_id);

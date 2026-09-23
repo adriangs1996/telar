@@ -35,7 +35,7 @@ pub fn observe(hover: *Hover, event: Event) void {
 
 /// Reuses the cached cell until model state or delivered controls change.
 /// Example: `hover.refresh(gui);`
-pub fn refresh(hover: *Hover, gui: *const GuiClient) void {
+pub fn refresh(hover: *Hover, gui: *GuiClient) void {
     if (!gui.focused) {
         hover.clear();
         return;

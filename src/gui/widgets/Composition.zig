@@ -25,8 +25,7 @@ pub fn render(composition: *Composition, projection: *const client.Projection) !
         const model = projection.model;
         const tab_id = model.tabs.location[tab].tab_id;
         composition.commit.location = if (model.panes.countIn(tab_id) == 0) null else model.tabs.location[tab];
-        var layout: data.LayoutSnapshot = .{};
-        model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
+        const layout = projection.layout.?;
         for (layout.views()) |view| {
             if (view.surface != .terminal) {
                 continue;

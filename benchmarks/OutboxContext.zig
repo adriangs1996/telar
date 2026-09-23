@@ -8,10 +8,12 @@ buffer: [4096]u8 = undefined,
 
 pub fn init(gpa: std.mem.Allocator) !OutboxContext {
     const outbox = try gpa.create(data.Outbox);
-    outbox.* = .{};
+    errdefer gpa.destroy(outbox);
+    outbox.* = try .init(gpa);
     return .{ .outbox = outbox };
 }
 
 pub fn deinit(context: *OutboxContext, gpa: std.mem.Allocator) void {
+    context.outbox.deinit(gpa);
     gpa.destroy(context.outbox);
 }

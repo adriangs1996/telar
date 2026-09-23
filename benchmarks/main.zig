@@ -376,7 +376,7 @@ fn runClientUi(context: *ClientUiContext, iterations: usize) !u64 {
         context.view.hovered = if (iteration & 1 == 0) .active_workspace else .toggle_workspace_list;
         context.view.invalidate();
         const stats = try context.view.render(&context.screen, .{
-            .model = &context.model,
+            .model = context.model,
             .tab = context.model.tabs.active,
         });
         checksum +%= stats.scanned + stats.damaged;
@@ -435,7 +435,7 @@ fn runMultiplexerCompose(context: *MultiplexerContext, iterations: usize) !u64 {
     var checksum: u64 = 0;
     for (0..iterations) |iteration| {
         _ = context.model.tabs.layout[0].focusPane(@enumFromInt(iteration % 4 + 1));
-        const composed = try composeFullScreen(&context.compositor, &context.model, 0, &context.screen);
+        const composed = try composeFullScreen(&context.compositor, context.model, 0, &context.screen);
         checksum +%= composed.stats.cells + composed.stats.panes;
     }
     return checksum;
@@ -449,7 +449,7 @@ fn runIncrementalCompose(context: *IncrementalComposeContext, iterations: usize)
             context.payloads[iteration & 1],
         )).pane_frame;
         _ = try context.model.panes.find(frame_view.pane_id).?.applyFrame(frame_view);
-        const composed = try composeFullScreen(&context.compositor, &context.model, 0, &context.screen);
+        const composed = try composeFullScreen(&context.compositor, context.model, 0, &context.screen);
         checksum +%= composed.stats.cells + composed.stats.damaged_cells;
     }
     return checksum;

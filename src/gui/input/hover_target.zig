@@ -10,7 +10,7 @@ pub const link_modifier: u32 = if (builtin.os.tag == .macos) 8 else 4;
 
 /// Native link modifiers are never encoded into child mouse coordinates.
 /// Example: `const target = resolve(gui, mouse, event.mods);`
-pub fn resolve(gui: *const GuiClient, mouse: data.Mouse, mods: u32) Target {
+pub fn resolve(gui: *GuiClient, mouse: data.Mouse, mods: u32) Target {
     if (!gui.focused) {
         return .{};
     }
@@ -43,9 +43,7 @@ pub fn resolve(gui: *const GuiClient, mouse: data.Mouse, mods: u32) Target {
         .pane_content => |id| {
             const tab = gui.app.model.tabs.activeSlot() orelse return .{};
             const pane = gui.app.model.panes.findInConst(gui.app.model.tabs.location[tab].tab_id, id) orelse return .{};
-            var layout: data.LayoutSnapshot = .{};
-            gui.app.model.tabs.layout[tab].snapshot(data.workbench.region(&gui.app.model).area, &layout);
-            const view = layout.find(id) orelse return .{};
+            const view = data.tab_layout.view(&gui.app.model, tab, id, data.workbench.region(&gui.app.model).area) orelse return .{};
             if (view.surface != .terminal or !view.content.contains(mouse.x, mouse.y)) {
                 return .{};
             }

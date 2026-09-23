@@ -371,8 +371,7 @@ pub fn frameDelayNs(self: *GuiClient) u64 {
     var count: usize = 0;
     const model = &self.app.model;
     if (model.tabs.activeSlot()) |tab| {
-        var layout: shared_model.LayoutSnapshot = .{};
-        model.tabs.layout[tab].snapshot(shared_model.workbench.region(&self.app.model).area, &layout);
+        const layout = shared_model.tab_layout.snapshot(model, tab, shared_model.workbench.region(model).area);
         for (layout.views()) |view| {
             if (view.surface != .terminal or view.content.w == 0 or view.content.h == 0) {
                 continue;
@@ -522,6 +521,8 @@ pub fn update(self: *GuiClient) !?u8 {
 
         break :turn null;
     };
+
+    widget_routing.reconcileFocus(self);
 
     self.refreshPointer();
     self.exit_status = status;
@@ -1262,7 +1263,7 @@ fn releasePointer(self: *GuiClient) !void {
 
 /// New widget and terminal gestures share the same delivered geometry guard.
 /// Example: `const current = gui.pointerGeometryMatches();`
-pub fn pointerGeometryMatches(self: *const GuiClient) bool {
+pub fn pointerGeometryMatches(self: *GuiClient) bool {
     const app = &self.app;
     const delivered = app.presentation.delivered_geometry orelse return false;
     const snapshot = client.capture(
@@ -1505,7 +1506,7 @@ pub fn resumeInput(self: *GuiClient) !void {
 
 /// Copies the visible cursor identity for the native blink clock.
 /// Example: `clock.observe(gui.cursorTarget(), now_ns);`
-fn cursorTarget(self: *const GuiClient) CursorTarget {
+fn cursorTarget(self: *GuiClient) CursorTarget {
     if (self.app.model.name_prompt.active()) {
         return .{};
     }
@@ -1515,10 +1516,7 @@ fn cursorTarget(self: *const GuiClient) CursorTarget {
     const copy = self.app.model.copyModeProjection();
     const copy_view: ?shared_model.CopyModeView = if (copy) |value| if (value.pane_id == pane.id) value.view else null else null;
     const cursor = selection.cursor(pane, copy_view);
-    var layout: shared_model.LayoutSnapshot = .{};
-
-    self.app.model.tabs.layout[tab].snapshot(shared_model.workbench.region(&self.app.model).area, &layout);
-
+    const layout = shared_model.tab_layout.snapshot(&self.app.model, tab, shared_model.workbench.region(&self.app.model).area);
     for (layout.views()) |view| {
         if (view.pane_id == pane.id and view.surface == .terminal and cursor.x < view.content.w and cursor.y < view.content.h) {
             return .{
@@ -1784,7 +1782,7 @@ fn refreshPointer(self: *GuiClient) void {
 
 /// Captures semantic state plus adapter-owned routing and interaction revisions.
 /// Example: `const projected = gui.projection();`
-pub fn projection(self: *const GuiClient) client.Projection {
+pub fn projection(self: *GuiClient) client.Projection {
     return client.capture(
         &self.app.model,
         .{

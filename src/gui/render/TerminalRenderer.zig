@@ -216,8 +216,7 @@ pub fn prepare(renderer: *Renderer, projection: client.Projection) !data.Present
     const tab = projection.tab orelse return .{};
     const model = projection.model;
     const location = model.tabs.location[tab];
-    var layout: data.LayoutSnapshot = .{};
-    model.tabs.layout[tab].snapshot(projection.geometry.area, &layout);
+    const layout = projection.layout.?;
     var commit: data.PresentationCommit = .{
         .location = if (model.panes.countIn(location.tab_id) == 0) null else location,
     };

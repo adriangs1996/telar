@@ -7,16 +7,18 @@ const main = @import("main.zig");
 const GraphicsContext = @This();
 
 store: frontend.Store,
-model: data.ClientModel,
+model: *data.ClientModel,
 output: []u8,
 
 pub fn init(gpa: std.mem.Allocator, output: []u8) !GraphicsContext {
     var store = frontend.Store.init(gpa);
     errdefer store.deinit();
-    var model = data.ClientModel.init(gpa, true);
+    const model = try gpa.create(data.ClientModel);
+    errdefer gpa.destroy(model);
+    model.initInto(gpa, .{ .pane_gaps = true });
     errdefer model.deinit();
     const pane_id: core.PaneId = @enumFromInt(1);
-    try data.workspace_handoff.bootstrap(&model, .{
+    try data.workspace_handoff.bootstrap(model, .{
         .pane_id = pane_id,
         .location = .{ .workspace = .{ .workspace = @enumFromInt(1) }, .tab_id = @enumFromInt(1) },
         .size = .{ .cols = main.cols, .rows = main.rows },
@@ -53,14 +55,16 @@ pub fn init(gpa: std.mem.Allocator, output: []u8) !GraphicsContext {
 }
 
 pub fn deinit(context: *GraphicsContext) void {
+    const model_gpa = context.model.gpa;
     context.model.deinit();
+    model_gpa.destroy(context.model);
     context.store.deinit();
 }
 
 pub fn writer(context: *GraphicsContext) frontend.KittyGraphicsWriter {
     return .{
         .store = &context.store,
-        .layout_snapshot = data.tab_layout.snapshot(&context.model, 0, .{ .w = main.cols, .h = main.rows }),
+        .layout_snapshot = data.tab_layout.snapshot(context.model, 0, .{ .w = main.cols, .h = main.rows }),
         .cell_width = 10,
         .cell_height = 20,
     };

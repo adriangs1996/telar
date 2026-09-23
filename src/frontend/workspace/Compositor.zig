@@ -115,8 +115,13 @@ pub fn render(compositor: *Compositor, composition: Composition) !CompositionRes
     if (compositor.layout_snapshot.revision != model.tabs.layout[tab].currentRevision()) {
         compositor.invalidated = true;
     }
-    model.tabs.layout[tab].snapshot(options.area, &compositor.layout_snapshot);
-    compositor.bottom_reservation_area = compositor.layout_snapshot.reserveBelowPane(options.bottom_reservation);
+
+    // Area, tab, reservation and revision changes all invalidate, so an
+    // unchanged frame keeps the snapshot it already reserved.
+    if (compositor.invalidated) {
+        model.tabs.layout[tab].snapshot(options.area, &compositor.layout_snapshot);
+        compositor.bottom_reservation_area = compositor.layout_snapshot.reserveBelowPane(options.bottom_reservation);
+    }
     if (compositor.paneProjectionChanged(model, tab)) {
         compositor.invalidated = true;
     }
