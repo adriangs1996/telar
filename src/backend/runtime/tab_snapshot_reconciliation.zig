@@ -11,7 +11,7 @@ const client_request = @import("client_request.zig");
 /// try tab_snapshot_reconciliation.snapshot(model, session, request);
 /// ```
 pub fn snapshot(model: *RuntimeModel, session: *Session, request: core.RequestTabSnapshot) !void {
-    if (!model.workspaceReader().contains(request.location) or model.panes.countAt(request.location) == 0) {
+    if (!model.workspaces.contains(request.location) or model.panes.countAt(request.location) == 0) {
         return client_request.fail(session, request.request_id, .tab_not_found, "tab not found");
     }
 

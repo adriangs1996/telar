@@ -13,11 +13,10 @@ const Delivery = @import("Delivery.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
 const RuntimeMetrics = @import("../observability/RuntimeMetrics.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
-const StateType = @import("../../workspace/State.zig");
 const TrackerType = @import("../../agent/Tracker.zig");
 const SamplerType = @import("../observability/Sampler.zig");
 const Sources = @import("Sources.zig");
-const ReaderType = @import("../../workspace/Reader.zig");
+const Workspaces = @import("../../workspace/Workspaces.zig");
 const ForegroundProjection = @import("ForegroundProjection.zig");
 
 pub const Effect = union(enum) {
@@ -276,7 +275,7 @@ test "delivery preserves management before resync wire order" {
     var attachments: AttachmentStore = .{};
     defer attachments.deinit();
     var panes: PaneStore = .{};
-    var workspaces: StateType = .{};
+    var workspaces: Workspaces = .{};
     var agents: TrackerType = .{};
     var system_metrics: SamplerType = .{};
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
@@ -291,7 +290,7 @@ test "delivery preserves management before resync wire order" {
     delivery.requestWorkspaceResync(workspace, null);
     const sources: Sources = .{
         .panes = &panes,
-        .workspaces = ReaderType.init(&workspaces),
+        .workspaces = &workspaces,
         .agents = &agents,
         .system_metrics = &system_metrics,
         .proxy_active = false,
@@ -326,7 +325,7 @@ test "agent conversation delivery coalesces revisions independently for reconnec
     defer attachments.deinit();
     var metrics: RuntimeMetrics = .{ .started_ns = 0 };
     var panes: PaneStore = .{};
-    var workspaces: StateType = .{};
+    var workspaces: Workspaces = .{};
     var agents: TrackerType = .{};
     var system_metrics: SamplerType = .{};
     var snapshot: core_module.AgentThreadSnapshot = .{ .pane_id = @enumFromInt(5), .pane_generation = 8, .revision = 1, .status = .ready };
@@ -339,7 +338,7 @@ test "agent conversation delivery coalesces revisions independently for reconnec
     panes.items[0] = &pane;
     const sources: Sources = .{
         .panes = &panes,
-        .workspaces = ReaderType.init(&workspaces),
+        .workspaces = &workspaces,
         .agents = &agents,
         .system_metrics = &system_metrics,
         .proxy_active = false,

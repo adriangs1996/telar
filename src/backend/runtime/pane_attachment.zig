@@ -9,7 +9,6 @@ const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const Pane = @import("../pane/Pane.zig");
 const PaneDetached = @import("attachment/PaneDetached.zig");
-const Proposal = @import("../workspace/Proposal.zig");
 const client_request = @import("client_request.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const launch_cwd = @import("client/launch_cwd.zig");
@@ -91,7 +90,7 @@ fn attachTarget(model: *RuntimeModel, session: *Session, request: core.OpenPaneV
         .pane => |pane_id| findOpenPane(model, pane_id) orelse return error.PaneNotFound,
         .workspace => |workspace_id| workspace: {
             const workspace_location: core.WorkspaceLocation = .{ .workspace = workspace_id };
-            const tab_id = model.workspaceReader().defaultTab(workspace_location) orelse return error.WorkspaceNotFound;
+            const tab_id = model.workspaces.defaultTab(workspace_location) orelse return error.WorkspaceNotFound;
             const location: core.TabLocation = .{
                 .workspace = workspace_location,
                 .tab_id = tab_id,
@@ -128,15 +127,18 @@ fn findOpenPane(model: *RuntimeModel, pane_id: core.PaneId) ?*Pane {
 fn openDefault(model: *RuntimeModel, session: *Session, request: core.OpenPaneView, created: *bool) !*Pane {
     const launch = request.launch orelse return error.InvalidOpenRequest;
     const cwd = launch_cwd.resolveLaunchCwd(&session.attachments, launch, .any) catch return error.InvalidLaunchCwd;
-    var workspaces = model.workspaceRepository();
-    var proposal: ?Proposal = null;
-    defer if (proposal) |*candidate| {
-        candidate.rollback();
+    var proposal: ?usize = null;
+    defer if (proposal) |slot| {
+        model.workspaces.rollback(model.gpa, slot);
     };
 
-    const location = workspaces.reader().locationByPath(cwd) orelse location: {
-        proposal = workspaces.propose(.{ .path = cwd }) catch return error.WorkspaceCreateFailed;
-        break :location proposal.?.location();
+    const location = model.workspaces.locationByPath(cwd) orelse location: {
+        const slot = model.workspaces.propose(model.gpa, cwd, null) catch return error.WorkspaceCreateFailed;
+        proposal = slot;
+        break :location core.TabLocation{
+            .workspace = .{ .workspace = model.workspaces.id[slot] },
+            .tab_id = model.workspaces.tab_id[slot][0],
+        };
     };
 
     if (model.panes.firstAt(location)) |existing| {
@@ -154,10 +156,10 @@ fn openDefault(model: *RuntimeModel, session: *Session, request: core.OpenPaneVi
     }
     provisional_lease = true;
 
-    const workspace_path = if (proposal) |*candidate|
-        candidate.path()
+    const workspace_path = if (proposal) |slot|
+        model.workspaces.path[slot]
     else
-        workspaces.reader().workspacePath(location.workspace).?;
+        model.workspaces.workspacePath(location.workspace).?;
     const launched = pane_launch.launch(model, .{
         .location = location,
         .size = request.size,
@@ -166,8 +168,8 @@ fn openDefault(model: *RuntimeModel, session: *Session, request: core.OpenPaneVi
         .workspace_path = workspace_path,
     }) catch |err| return pane_launch.requestError(err);
 
-    if (proposal) |*candidate| {
-        _ = candidate.commit();
+    if (proposal) |slot| {
+        _ = model.workspaces.commit(slot);
         resync_required.notify(model, .{ .origin = session.key, .workspace = location.workspace });
     }
 

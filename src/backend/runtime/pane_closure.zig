@@ -10,7 +10,6 @@ const Pane = @import("../pane/Pane.zig");
 const ExitCompletion = @import("entrypoints/events/pane/ExitCompletion.zig");
 const exit_module = @import("../pty/exit.zig");
 const client_request = @import("client_request.zig");
-const commands = @import("../workspace/commands.zig");
 const geometry_lease = @import("geometry_lease.zig");
 const pane_observation = @import("pane_observation.zig");
 const session_checkpoint = @import("session_checkpoint.zig");
@@ -67,7 +66,6 @@ pub fn collect(model: *RuntimeModel) void {
         return;
     }
 
-    var workspaces = model.workspaceRepository();
     for (&store.items) |*slot| {
         const pane = slot.* orelse continue;
 
@@ -89,8 +87,8 @@ pub fn collect(model: *RuntimeModel) void {
         pane.destroy();
         session_checkpoint.noteChange(model);
 
-        if (!store.hasAt(location) and workspaces.reader().contains(location)) {
-            const removed = commands.removeTab(&workspaces, location).?;
+        if (!store.hasAt(location) and model.workspaces.contains(location)) {
+            const removed = model.workspaces.removeTab(model.gpa, location).?;
             tab_removal.announce(model, removed);
         }
 

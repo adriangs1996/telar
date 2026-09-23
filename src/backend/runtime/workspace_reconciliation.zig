@@ -11,7 +11,7 @@ const client_request = @import("client_request.zig");
 /// try workspace_reconciliation.snapshot(model, session, request);
 /// ```
 pub fn snapshot(model: *RuntimeModel, session: *Session, request: core.RequestWorkspaceSnapshot) !void {
-    if (!model.workspaceReader().containsWorkspace(request.workspace)) {
+    if (!model.workspaces.containsWorkspace(request.workspace)) {
         return client_request.fail(session, request.request_id, .workspace_not_found, "workspace not found");
     }
 

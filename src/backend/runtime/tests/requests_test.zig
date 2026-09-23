@@ -57,10 +57,10 @@ test "runtime dispatch rejects an unavailable workspace without creating one" {
     var fixture: RequestFixture = undefined;
     try fixture.init();
     defer fixture.deinit();
-    const initial_revision = fixture.runtime.model.workspaceReader().revision();
+    const initial_revision = fixture.runtime.model.workspaces.revision;
     try fixture.send(.{ .request_workspace_snapshot = .{ .request_id = @enumFromInt(41), .workspace = missing_location.workspace } });
     try expectFailure(&fixture, .workspace_not_found);
-    try std.testing.expectEqual(initial_revision, fixture.runtime.model.workspaceReader().revision());
+    try std.testing.expectEqual(initial_revision, fixture.runtime.model.workspaces.revision);
 }
 
 test "runtime dispatch preserves a committed pane when its reply queue is full" {
@@ -94,7 +94,7 @@ test "runtime dispatch retains tab rename after response backpressure" {
         .location = pane.location,
         .label = "logs",
     } }));
-    try std.testing.expectEqualStrings("logs", fixture.runtime.model.workspaceReader().tabLabel(pane.location).?);
+    try std.testing.expectEqualStrings("logs", fixture.runtime.model.workspaces.tabLabel(pane.location).?);
 }
 
 test "runtime dispatch validates graphics credits against exact outstanding bytes" {
@@ -186,9 +186,9 @@ test "runtime dispatch rolls back a tab when post-spawn registration fails" {
     try fixture.init();
     defer fixture.deinit();
     const pane = try fixture.openPane();
-    const reader = fixture.runtime.model.workspaceReader();
+    const reader = &fixture.runtime.model.workspaces;
     const initial_tabs = reader.totalTabs();
-    const initial_revision = reader.revision();
+    const initial_revision = reader.revision;
     var fault: LaunchTestFault = .{ .phase = .pane_registration };
     fixture.runtime.model.launch_fault = &fault;
     defer fixture.runtime.model.launch_fault = null;
@@ -203,7 +203,7 @@ test "runtime dispatch rolls back a tab when post-spawn registration fails" {
     try expectFailure(&fixture, .spawn_failed);
     try std.testing.expect(fault.claimed.load(.acquire));
     try std.testing.expectEqual(initial_tabs, reader.totalTabs());
-    try std.testing.expectEqual(initial_revision, reader.revision());
+    try std.testing.expectEqual(initial_revision, reader.revision);
     try std.testing.expectEqual(@as(usize, 1), fixture.runtime.model.panes.count);
     try std.testing.expectEqual(@as(usize, 1), fixture.session.attachments.count);
 }

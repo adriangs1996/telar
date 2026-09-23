@@ -1,6 +1,6 @@
 const PaneStoreType = @import("../../pane/PaneStore.zig");
-const ReaderType = @import("../../workspace/Reader.zig");
+const Workspaces = @import("../../workspace/Workspaces.zig");
 const Sources = @This();
 
 panes: *const PaneStoreType,
-workspaces: ReaderType,
+workspaces: *const Workspaces,

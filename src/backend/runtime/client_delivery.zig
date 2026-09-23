@@ -107,7 +107,7 @@ fn pump(model: *RuntimeModel, session: *Session) !void {
         .attachments = &session.attachments,
         .sources = .{
             .panes = &model.panes,
-            .workspaces = model.workspaceReader(),
+            .workspaces = &model.workspaces,
             .agents = &model.agents,
             .manifests = &model.resources.agent_manifests,
             .system_metrics = &model.system_metrics,

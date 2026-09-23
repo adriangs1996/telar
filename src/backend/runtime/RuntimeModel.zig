@@ -13,8 +13,7 @@ const IngestTestGate = @import("IngestTestGate.zig");
 const Store = @import("client/Store.zig");
 const GenericState = @import("client/GenericState.zig").Type;
 const LifecycleState = @import("lifecycle/State.zig");
-const state_support = @import("../workspace/state_support.zig");
-const WorkspaceState = @import("../workspace/State.zig");
+const Workspaces = @import("../workspace/Workspaces.zig");
 const PaneStore = @import("../pane/PaneStore.zig");
 const Tracker = @import("../agent/Tracker.zig");
 const ClientLayoutStore = @import("application/Store.zig");
@@ -22,17 +21,10 @@ const Sampler = @import("observability/Sampler.zig");
 const RuntimeMetrics = @import("observability/RuntimeMetrics.zig");
 const CheckpointWriter = @import("CheckpointWriter.zig");
 const AgentHistoryJobs = @import("application/AgentHistoryJobs.zig");
-const Repository = @import("../workspace/Repository.zig");
-const ReaderType = @import("../workspace/Reader.zig");
 const ClientKey = @import("../history/ClientKey.zig");
 /// The authoritative state of one running runtime: singletons as fields and
 /// repeating entities as tables. Physical resources stay in `Resources`.
 const RuntimeModel = @This();
-
-const GeometryLease = struct {
-    workspace: core.WorkspaceLocation,
-    owner: ClientKey,
-};
 
 io: std.Io,
 gpa: std.mem.Allocator,
@@ -56,8 +48,7 @@ clients: Store = .{},
 /// The one accepted connection whose handshake actor is in flight.
 client_admission: GenericState(core.SocketChannel) = .{},
 shutdown: LifecycleState = .{},
-geometry_leases: [state_support.max_workspaces]?GeometryLease = @splat(null),
-workspaces: WorkspaceState = .{},
+workspaces: Workspaces = .{},
 panes: PaneStore,
 agents: Tracker = .{},
 client_layouts: ClientLayoutStore = .{},
@@ -129,26 +120,7 @@ pub fn deinit(self: *RuntimeModel) void {
     }
 
     self.client_layouts.deinit();
-    var repository = self.workspaceRepository();
-    repository.deinit();
-}
-
-/// Opens the repository used by one request-scoped workspace operation.
-///
-/// ```zig
-/// var workspaces = model.workspaceRepository();
-/// ```
-pub fn workspaceRepository(self: *RuntimeModel) Repository {
-    return Repository.init(&self.workspaces, self.gpa);
-}
-
-/// Returns a read-only view of the current workspace projection.
-///
-/// ```zig
-/// const workspaces = model.workspaceReader();
-/// ```
-pub fn workspaceReader(self: *const RuntimeModel) ReaderType {
-    return ReaderType.init(&self.workspaces);
+    self.workspaces.deinit(self.gpa);
 }
 
 const GraphicsLimits = @import("../media/GraphicsLimits.zig");
@@ -181,15 +153,13 @@ test "runtime model tables start empty with configured graphics limits" {
     try std.testing.expectEqual(@as(usize, 0), model.agents.snapshot(&entries, 0).len);
 }
 
-test "workspace repository releases allocations retained by the runtime model" {
+test "the workspace table releases allocations retained by the runtime model" {
     const model = try std.testing.allocator.create(RuntimeModel);
     defer std.testing.allocator.destroy(model);
     model.workspaces = .{};
-    model.gpa = std.testing.allocator;
-    var repository = model.workspaceRepository();
-    defer repository.deinit();
+    defer model.workspaces.deinit(std.testing.allocator);
 
-    _ = try repository.ensure("/tmp/telar-model-test");
+    _ = try model.workspaces.insert(std.testing.allocator, "/tmp/telar-model-test", null);
 
     try std.testing.expectEqual(@as(usize, 1), model.workspaces.count);
 }

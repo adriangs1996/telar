@@ -5,11 +5,10 @@ const EncodeContext = @import("EncodeContext.zig");
 const response_queue = @import("response_queue.zig");
 const QueryResultType = @import("../../history/QueryResult.zig");
 const std = @import("std");
-const StateType = @import("../../workspace/State.zig");
 const PaneStore = @import("../../pane/PaneStore.zig");
 const OutputResultType = @import("../../history/OutputResult.zig");
 const StatsResultType = @import("../../history/StatsResult.zig");
-const ReaderType = @import("../../workspace/Reader.zig");
+const Workspaces = @import("../../workspace/Workspaces.zig");
 
 /// Encodes one queued response against the *current* stores. A response can
 /// outlive what it describes - the workspace of a queued snapshot may close
@@ -225,7 +224,7 @@ fn encodeHistoryResult(buffer: []u8, result: *const QueryResultType, storage: *[
 }
 
 test "a workspace snapshot for a vanished workspace becomes a failure reply" {
-    var workspaces: StateType = .{};
+    var workspaces: Workspaces = .{};
     var panes: PaneStore = .{};
     var response: response_queue.PendingResponse = .{ .workspace_snapshot = .{
         .request_id = @enumFromInt(9),
@@ -239,7 +238,7 @@ test "a workspace snapshot for a vanished workspace becomes a failure reply" {
     const payload = try encodeResponse(.{
         .buffer = &buffer,
         .panes = &panes,
-        .workspaces = ReaderType.init(&workspaces),
+        .workspaces = &workspaces,
         .history_result = &history_result,
         .history_output = &history_output,
         .history_stats = &history_stats,
@@ -251,7 +250,7 @@ test "a workspace snapshot for a vanished workspace becomes a failure reply" {
 }
 
 test "a command suggestion encodes its owned text and a bare status" {
-    var workspaces: StateType = .{};
+    var workspaces: Workspaces = .{};
     var panes: PaneStore = .{};
     var buffer: [2048]u8 = undefined;
     var history_result: ?*QueryResultType = null;
@@ -260,7 +259,7 @@ test "a command suggestion encodes its owned text and a bare status" {
     const context: EncodeContext = .{
         .buffer = &buffer,
         .panes = &panes,
-        .workspaces = ReaderType.init(&workspaces),
+        .workspaces = &workspaces,
         .history_result = &history_result,
         .history_output = &history_output,
         .history_stats = &history_stats,

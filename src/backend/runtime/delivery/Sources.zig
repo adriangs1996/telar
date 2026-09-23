@@ -1,13 +1,13 @@
 const core = @import("telar-core");
 const PaneStoreType = @import("../../pane/PaneStore.zig");
-const ReaderType = @import("../../workspace/Reader.zig");
+const Workspaces = @import("../../workspace/Workspaces.zig");
 const TrackerType = @import("../../agent/Tracker.zig");
 const SamplerType = @import("../observability/Sampler.zig");
 const StoreType = @import("../application/Store.zig");
 const Sources = @This();
 
 panes: *const PaneStoreType,
-workspaces: ReaderType,
+workspaces: *const Workspaces,
 agents: *const TrackerType,
 manifests: *const core.Table = &core.builtin_table,
 system_metrics: *const SamplerType,

@@ -2,19 +2,18 @@ const core = @import("telar-core");
 const DeliveryType = @import("../delivery/Delivery.zig");
 const AttachmentStoreType = @import("../attachment/AttachmentStore.zig");
 const PaneStoreType = @import("../../pane/PaneStore.zig");
-const StateType = @import("../../workspace/State.zig");
 const TrackerType = @import("../../agent/Tracker.zig");
 const SamplerType = @import("../observability/Sampler.zig");
 const RuntimeMetricsType = @import("../observability/RuntimeMetrics.zig");
 const std = @import("std");
 const SourcesType = @import("../delivery/Sources.zig");
-const ReaderType = @import("../../workspace/Reader.zig");
+const Workspaces = @import("../../workspace/Workspaces.zig");
 const RuntimeStateFixture = @This();
 
 delivery: DeliveryType,
 attachments: AttachmentStoreType = .{},
 panes: PaneStoreType = .{},
-workspaces: StateType = .{},
+workspaces: Workspaces = .{},
 agents: TrackerType = .{},
 system_metrics: SamplerType = .{},
 metrics: RuntimeMetricsType = .{ .started_ns = 0 },
@@ -46,7 +45,7 @@ pub fn destroy(fixture: *RuntimeStateFixture) void {
 fn sources(fixture: *RuntimeStateFixture) SourcesType {
     return .{
         .panes = &fixture.panes,
-        .workspaces = ReaderType.init(&fixture.workspaces),
+        .workspaces = &fixture.workspaces,
         .agents = &fixture.agents,
         .system_metrics = &fixture.system_metrics,
         .proxy_active = true,

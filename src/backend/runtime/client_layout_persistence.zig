@@ -22,7 +22,7 @@ pub fn retain(model: *RuntimeModel, session: *Session, update: core.ClientLayout
         .layout = update,
         .sources = .{
             .panes = &model.panes,
-            .workspaces = model.workspaceReader(),
+            .workspaces = &model.workspaces,
         },
     });
     session_checkpoint.noteChange(model);

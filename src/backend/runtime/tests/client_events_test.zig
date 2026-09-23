@@ -32,7 +32,7 @@ fn commitQueuedResponse(fixture: *RequestFixture) !void {
         .attachments = &session.attachments,
         .sources = .{
             .panes = &model.panes,
-            .workspaces = model.workspaceReader(),
+            .workspaces = &model.workspaces,
             .agents = &model.agents,
             .system_metrics = &model.system_metrics,
             .proxy_active = false,

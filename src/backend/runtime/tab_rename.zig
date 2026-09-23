@@ -14,11 +14,7 @@ const resync_required = @import("resync_required.zig");
 /// try tab_rename.rename(model, session, request);
 /// ```
 pub fn rename(model: *RuntimeModel, session: *Session, request: core.RenameTab) !void {
-    var workspaces = model.workspaceRepository();
-    const workspace = workspaces.find(request.location.workspace) orelse {
-        return client_request.fail(session, request.request_id, .tab_not_found, "tab not found");
-    };
-    const renamed = workspace.renameTab(request.location.tab_id, request.label) catch |err| {
+    model.workspaces.renameTab(request.location, request.label) catch |err| {
         return switch (err) {
             error.TabNotFound => client_request.fail(session, request.request_id, .tab_not_found, "tab not found"),
             error.InvalidTabLabel => client_request.fail(session, request.request_id, .invalid_request, "invalid tab label"),
@@ -27,12 +23,12 @@ pub fn rename(model: *RuntimeModel, session: *Session, request: core.RenameTab) 
 
     session_checkpoint.noteChange(model);
     model.agents.touch();
-    resync_required.notify(model, .{ .origin = session.key, .workspace = renamed.location.workspace });
+    resync_required.notify(model, .{ .origin = session.key, .workspace = request.location.workspace });
 
-    const label = renamed.labelSlice();
+    const label = model.workspaces.tabLabel(request.location).?;
     var pending: PendingTabRenamed = .{
         .request_id = request.request_id,
-        .location = renamed.location,
+        .location = request.location,
         .label = undefined,
         .label_len = @intCast(label.len),
     };

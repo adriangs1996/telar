@@ -7,7 +7,6 @@ const std = @import("std");
 const Options = @import("Options.zig");
 const Runtime = @import("Runtime.zig");
 const Initialization = @import("Initialization.zig");
-const commands = @import("../workspace/commands.zig");
 const agent_identity = @import("application/coordinators/agent_identity.zig");
 const SessionReferenceType = @import("../agent/SessionReference.zig");
 const PersistenceEncoder = @import("../persistence/Encoder.zig");
@@ -142,20 +141,21 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
 
     var first: Runtime = undefined;
     try first.init(initialization);
-    var repository = first.model.workspaceRepository();
-    const kept = try repository.ensure(directory);
+    const workspaces = &first.model.workspaces;
+    const gpa = first.model.gpa;
+    const kept = try workspaces.insert(gpa, directory, null);
     var kept_buffer: [64]u8 = undefined;
     _ = try pane_launch.launch(&first.model, .{
-        .location = kept.location,
+        .location = kept,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunch(&kept_buffer),
         .launch_cwd = directory,
         .workspace_path = directory,
     });
-    const logs_tab = try repository.nextTabId();
-    _ = try repository.find(kept.location.workspace).?.createTab(logs_tab, "logs");
-    repository.recordTabCreated(logs_tab);
-    const logs_location: core.TabLocation = .{ .workspace = kept.location.workspace, .tab_id = logs_tab };
+    const logs_tab = try workspaces.nextTabId();
+    _ = try workspaces.addTab(workspaces.slotOf(kept.workspace).?, logs_tab, "logs");
+    workspaces.recordTabCreated(logs_tab);
+    const logs_location: core.TabLocation = .{ .workspace = kept.workspace, .tab_id = logs_tab };
     var logs_buffer: [64]u8 = undefined;
     _ = try pane_launch.launch(&first.model, .{
         .location = logs_location,
@@ -164,10 +164,10 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
         .launch_cwd = gone,
         .workspace_path = directory,
     });
-    const dropped = try repository.ensure(other_directory);
+    const dropped = try workspaces.insert(gpa, other_directory, null);
     var dropped_buffer: [64]u8 = undefined;
     _ = try pane_launch.launch(&first.model, .{
-        .location = dropped.location,
+        .location = dropped,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunchIn(&dropped_buffer, gone),
         .launch_cwd = gone,
@@ -179,15 +179,15 @@ test "a restart drops tabs and workspaces whose panes did not come back" {
     var second: Runtime = undefined;
     try second.init(initialization);
     defer second.deinit();
-    const reader = second.model.workspaceReader();
+    const reader = &second.model.workspaces;
 
     try std.testing.expect(!second.model.checkpoint.restore_failed);
     try std.testing.expectEqual(@as(u16, 1), second.model.checkpoint.restored_panes);
     try std.testing.expectEqual(@as(u16, 2), second.model.checkpoint.dropped_tabs);
-    try std.testing.expect(reader.contains(kept.location));
+    try std.testing.expect(reader.contains(kept));
     try std.testing.expect(!reader.contains(logs_location));
-    try std.testing.expect(!reader.containsWorkspace(dropped.location.workspace));
-    try std.testing.expectEqual(@as(usize, 1), reader.count());
+    try std.testing.expect(!reader.containsWorkspace(dropped.workspace));
+    try std.testing.expectEqual(@as(usize, 1), reader.count);
 }
 
 test "a restart restores workspaces, tabs and panes from the session checkpoint" {
@@ -207,23 +207,24 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
 
     var first: Runtime = undefined;
     try first.init(initialization);
-    var repository = first.model.workspaceRepository();
-    const ensured = try repository.ensure(directory);
+    const workspaces = &first.model.workspaces;
+    const gpa = first.model.gpa;
+    const ensured = try workspaces.insert(gpa, directory, null);
     var main_buffer: [64]u8 = undefined;
     _ = try pane_launch.launch(&first.model, .{
-        .location = ensured.location,
+        .location = ensured,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunch(&main_buffer),
         .launch_cwd = directory,
         .workspace_path = directory,
     });
-    _ = try commands.renameWorkspace(&repository, ensured.location.workspace, "core");
-    const logs_tab = try repository.nextTabId();
-    _ = try repository.find(ensured.location.workspace).?.createTab(logs_tab, "logs");
-    repository.recordTabCreated(logs_tab);
+    try workspaces.rename(ensured.workspace, "core");
+    const logs_tab = try workspaces.nextTabId();
+    _ = try workspaces.addTab(workspaces.slotOf(ensured.workspace).?, logs_tab, "logs");
+    workspaces.recordTabCreated(logs_tab);
     var launch_buffer: [64]u8 = undefined;
     const pane = try pane_launch.launch(&first.model, .{
-        .location = .{ .workspace = ensured.location.workspace, .tab_id = logs_tab },
+        .location = .{ .workspace = ensured.workspace, .tab_id = logs_tab },
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunch(&launch_buffer),
         .launch_cwd = directory,
@@ -249,15 +250,15 @@ test "a restart restores workspaces, tabs and panes from the session checkpoint"
     var second: Runtime = undefined;
     try second.init(initialization);
     defer second.deinit();
-    const reader = second.model.workspaceReader();
+    const reader = &second.model.workspaces;
 
     try std.testing.expect(!second.model.checkpoint.restore_failed);
     try std.testing.expectEqual(@as(u16, 1), second.model.checkpoint.restored_workspaces);
     try std.testing.expectEqual(@as(u16, 2), second.model.checkpoint.restored_panes);
     try std.testing.expectEqual(@as(u16, 0), second.model.checkpoint.dropped_tabs);
-    try std.testing.expectEqualStrings("core", reader.workspaceName(ensured.location.workspace).?);
-    try std.testing.expectEqualStrings("", reader.tabLabel(ensured.location).?);
-    try std.testing.expectEqualStrings("logs", reader.tabLabel(.{ .workspace = ensured.location.workspace, .tab_id = logs_tab }).?);
+    try std.testing.expectEqualStrings("core", reader.workspaceName(ensured.workspace).?);
+    try std.testing.expectEqualStrings("", reader.tabLabel(ensured).?);
+    try std.testing.expectEqualStrings("logs", reader.tabLabel(.{ .workspace = ensured.workspace, .tab_id = logs_tab }).?);
     const restored = second.model.panes.find(pane_id).?;
     try std.testing.expect(restored.generation > pane_generation);
     try std.testing.expectEqualStrings("/bin/sleep\x00600\x00", restored.launch_record.slice());
@@ -343,12 +344,12 @@ test "a restart restores every workspace and tab from unordered pane records" {
         .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = session_path },
     });
     defer runtime.deinit();
-    const reader = runtime.model.workspaceReader();
+    const reader = &runtime.model.workspaces;
 
     try std.testing.expect(!runtime.model.checkpoint.restore_failed);
     try std.testing.expectEqual(@as(u16, 3), runtime.model.checkpoint.restored_panes);
     try std.testing.expectEqual(@as(u16, 0), runtime.model.checkpoint.dropped_tabs);
-    try std.testing.expectEqual(@as(usize, 2), reader.count());
+    try std.testing.expectEqual(@as(usize, 2), reader.count);
     for ([_]u64{ 4, 2, 3 }, 0..) |pane_id, index| {
         const pane = runtime.model.panes.find(@enumFromInt(pane_id)).?;
         try std.testing.expectEqual(@as(u64, index + 1), core.raw(pane.location.tab_id));
@@ -506,11 +507,12 @@ test "process observation checkpoints a session reported before provider detecti
         .options = .{ .endpoint = endpoint, .environment = std.testing.environ, .session_path = session_path },
     });
     defer runtime.deinit();
-    var repository = runtime.model.workspaceRepository();
-    const workspace = try repository.ensure(directory);
+    const workspaces = &runtime.model.workspaces;
+    const gpa = runtime.model.gpa;
+    const workspace = try workspaces.insert(gpa, directory, null);
     var argument_buffer: [64]u8 = undefined;
     const pane = try pane_launch.launch(&runtime.model, .{
-        .location = workspace.location,
+        .location = workspace,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = try sleepLaunchIn(&argument_buffer, directory),
         .launch_cwd = directory,

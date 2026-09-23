@@ -174,6 +174,9 @@ test {
     _ = @import("runtime/attachment/attachment_namespace.zig");
     _ = @import("runtime/attachment/AttachmentStore.zig");
     _ = @import("runtime/change_review.zig");
+    _ = @import("workspace/Workspaces.zig");
+    _ = @import("workspace/TabRemoved.zig");
+    _ = @import("runtime/workspace_git.zig");
     _ = @import("runtime/attachment/cell.zig");
     _ = @import("runtime/attachment/selection.zig");
     _ = @import("runtime/tests/client_events_test.zig");
@@ -213,10 +216,5 @@ test {
     _ = @import("runtime/tests/search_pane_test.zig");
     _ = @import("runtime/tests/shared_frame_test.zig");
     _ = @import("transport/local.zig");
-    _ = @import("workspace/commands.zig");
-    _ = @import("workspace/events.zig");
-    _ = @import("workspace/repository_support.zig");
-    _ = @import("workspace/state_support.zig");
-    _ = @import("workspace/workspace_support.zig");
     _ = @import("editors/tests.zig");
 }

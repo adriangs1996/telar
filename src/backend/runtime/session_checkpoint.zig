@@ -22,9 +22,7 @@ const PaneRecord = @import("../persistence/PaneRecord.zig");
 const ArgumentIterator = @import("../persistence/ArgumentIterator.zig");
 const LayoutRecord = @import("../persistence/LayoutRecord.zig");
 const PersistenceEncoder = @import("../persistence/Encoder.zig");
-const WorkspaceReader = @import("../workspace/Reader.zig");
-const commands = @import("../workspace/commands.zig");
-const state_support = @import("../workspace/state_support.zig");
+const Workspaces = @import("../workspace/Workspaces.zig");
 const SessionTitle = @import("../agent/SessionTitle.zig");
 const ResumeSession = @import("../agent/ResumeSession.zig");
 const SessionReference = @import("../agent/SessionReference.zig");
@@ -225,14 +223,13 @@ fn validate(bytes: []const u8) !void {
 
 fn apply(model: *RuntimeModel, bytes: []const u8) !void {
     var reader = try PersistenceReader.init(bytes);
-    var repository = model.workspaceRepository();
     const panes = &model.panes;
     var pane_records: [core.max_panes_per_tab]PaneRecord = undefined;
     var pane_count: usize = 0;
 
     while (try reader.next()) |record| switch (record) {
         .workspace => |workspace| {
-            _ = repository.restoreWorkspace(.{
+            _ = model.workspaces.restore(model.gpa, .{
                 .id = try core.workspace(workspace.id),
                 .path = workspace.path,
                 .explicit_name = if (workspace.name.len != 0) workspace.name else null,
@@ -243,7 +240,7 @@ fn apply(model: *RuntimeModel, bytes: []const u8) !void {
         },
         .tab => |tab| {
             const workspace_id = try core.workspace(tab.workspace_id);
-            repository.restoreTab(.{
+            model.workspaces.restoreTab(.{
                 .workspace = .{ .workspace = workspace_id },
                 .tab_id = try core.tab(tab.tab_id),
             }, tab.label) catch continue;
@@ -287,16 +284,15 @@ fn paneIdLessThan(_: void, left: PaneRecord, right: PaneRecord) bool {
 /// as fatal. Tabs stay empty when a pane record fails to relaunch,
 /// for example because its working directory is gone.
 fn dropEmptyTabs(model: *RuntimeModel) void {
-    var repository = model.workspaceRepository();
-    while (findEmptyTab(repository.reader(), &model.panes)) |location| {
-        _ = commands.removeTab(&repository, location) orelse break;
+    while (findEmptyTab(&model.workspaces, &model.panes)) |location| {
+        _ = model.workspaces.removeTab(model.gpa, location) orelse break;
         model.checkpoint.dropped_tabs +|= 1;
         noteChange(model);
     }
 }
 
-fn findEmptyTab(reader: WorkspaceReader, panes: *const PaneStore) ?core.TabLocation {
-    var entries: [state_support.max_workspaces]core.WorkspaceListEntry = undefined;
+fn findEmptyTab(reader: *const Workspaces, panes: *const PaneStore) ?core.TabLocation {
+    var entries: [Workspaces.capacity]core.WorkspaceListEntry = undefined;
     var tabs: [core.max_tabs_per_workspace]core.TabDescriptor = undefined;
     for (reader.listEntries(&entries)) |entry| {
         const workspace: core.WorkspaceLocation = .{ .workspace = entry.workspace };
@@ -318,7 +314,7 @@ fn restorePane(model: *RuntimeModel, counters: Counters, record: PaneRecord) !vo
         .workspace = .{ .workspace = workspace_id },
         .tab_id = try core.tab(record.tab_id),
     };
-    const reader = model.workspaceReader();
+    const reader = &model.workspaces;
     if (!reader.contains(location)) {
         return error.TabNotFound;
     }
@@ -415,7 +411,7 @@ fn restoreAgentPane(model: *RuntimeModel, counters: Counters, record: PaneRecord
         .workspace = .{ .workspace = try core.workspace(record.workspace_id) },
         .tab_id = try core.tab(record.tab_id),
     };
-    const workspace_path = model.workspaceReader().workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
+    const workspace_path = model.workspaces.workspacePath(location.workspace) orelse return error.WorkspaceNotFound;
     try model.panes.reserveRestoredKey(record.pane_id, counters.next_pane_generation);
     const pane = try pane_launch.launch(model, .{
         .location = location,
@@ -484,7 +480,7 @@ fn restoreLayout(model: *RuntimeModel, record: LayoutRecord) !void {
         .layout = update,
         .sources = .{
             .panes = &model.panes,
-            .workspaces = model.workspaceReader(),
+            .workspaces = &model.workspaces,
         },
     });
 }
@@ -501,7 +497,7 @@ fn quarantine(io: std.Io, path: []const u8) void {
 /// const len = try session_checkpoint.encode(model, buffer);
 /// ```
 pub fn encode(model: *RuntimeModel, buffer: []u8) !usize {
-    const reader = model.workspaceReader();
+    const reader = &model.workspaces;
     const panes = &model.panes;
     var encoder = try PersistenceEncoder.init(buffer, .{
         .next_workspace_id = model.workspaces.next_workspace_id,
@@ -510,7 +506,7 @@ pub fn encode(model: *RuntimeModel, buffer: []u8) !usize {
         .next_pane_generation = panes.next_generation,
     });
 
-    var entries: [state_support.max_workspaces]core.WorkspaceListEntry = undefined;
+    var entries: [Workspaces.capacity]core.WorkspaceListEntry = undefined;
     var descriptor_storage: [core.max_tabs_per_workspace]core.TabDescriptor = undefined;
     for (reader.listEntries(&entries)) |entry| {
         const location: core.WorkspaceLocation = .{ .workspace = entry.workspace };

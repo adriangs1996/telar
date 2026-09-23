@@ -37,8 +37,8 @@ pub fn create(model: *RuntimeModel, session: *Session, request: core.CreateTabVi
 }
 
 fn createTab(model: *RuntimeModel, session: *Session, request: core.CreateTabView) !PendingTabCreated {
-    var workspaces = model.workspaceRepository();
-    const workspace = workspaces.find(request.workspace) orelse return error.WorkspaceNotFound;
+    const workspaces = &model.workspaces;
+    const slot = workspaces.slotOf(request.workspace) orelse return error.WorkspaceNotFound;
 
     if (!geometry_lease.acquire(model, session.key, request.workspace)) {
         return error.GeometryUnavailable;
@@ -46,20 +46,21 @@ fn createTab(model: *RuntimeModel, session: *Session, request: core.CreateTabVie
 
     const cwd = launch_cwd.resolveLaunchCwd(&session.attachments, request.launch, .{ .workspace = request.workspace }) catch return error.InvalidLaunchCwd;
     const tab_id = try workspaces.nextTabId();
-    const created = try workspace.createTab(tab_id, request.label);
+    const position = try workspaces.addTab(slot, tab_id, request.label);
+    const created: core.TabLocation = .{ .workspace = request.workspace, .tab_id = tab_id };
     var committed = false;
     defer if (!committed) {
-        const removed = workspace.removeTab(tab_id);
-        std.debug.assert(removed);
+        std.debug.assert(workspaces.tab_count[slot] == position + 1);
+        workspaces.tab_count[slot] -= 1;
     };
 
     const pane = pane_launch.launch(model, .{
-        .location = created.location,
+        .location = created,
         .kind = request.kind,
         .size = request.size,
         .launch = request.launch,
         .launch_cwd = cwd,
-        .workspace_path = workspace.pathSlice(),
+        .workspace_path = workspaces.path[slot],
     }) catch |err| return pane_launch.requestError(err);
     const root_pane_id = pane.id;
     const kind = pane.kind;
@@ -68,16 +69,16 @@ fn createTab(model: *RuntimeModel, session: *Session, request: core.CreateTabVie
     workspaces.recordTabCreated(tab_id);
     committed = true;
     session_checkpoint.noteChange(model);
-    resync_required.notify(model, .{ .origin = session.key, .workspace = created.location.workspace });
+    resync_required.notify(model, .{ .origin = session.key, .workspace = request.workspace });
 
     const running = model.panes.findRunning(root_pane_id) orelse return error.LaunchedPaneUnavailable;
     _ = try session.attachments.attach(model.gpa, running);
 
-    const label = created.labelSlice();
+    const label = workspaces.labelAt(slot, position);
     var pending: PendingTabCreated = .{
         .request_id = request.request_id,
-        .location = created.location,
-        .position = created.position,
+        .location = created,
+        .position = position,
         .label = undefined,
         .label_len = @intCast(label.len),
         .root_pane_id = root_pane_id,

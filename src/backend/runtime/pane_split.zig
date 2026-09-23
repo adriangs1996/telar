@@ -38,7 +38,7 @@ pub fn split(model: *RuntimeModel, session: *Session, request: core.CreatePaneVi
 }
 
 fn launchSibling(model: *RuntimeModel, session: *Session, request: core.CreatePaneView) !*Pane {
-    const workspaces = model.workspaceReader();
+    const workspaces = &model.workspaces;
 
     if (!workspaces.contains(request.location)) {
         return error.TabNotFound;

@@ -7,7 +7,6 @@ const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const TabRemoved = @import("../workspace/TabRemoved.zig");
 const client_request = @import("client_request.zig");
-const commands = @import("../workspace/commands.zig");
 const resync_required = @import("resync_required.zig");
 
 /// Removes the tab, asks its panes to close and resyncs other observers.
@@ -16,8 +15,7 @@ const resync_required = @import("resync_required.zig");
 /// try tab_removal.remove(model, session, request);
 /// ```
 pub fn remove(model: *RuntimeModel, session: *Session, request: core.CloseTab) !void {
-    var workspaces = model.workspaceRepository();
-    const removed = commands.removeTab(&workspaces, request.location) orelse {
+    const removed = model.workspaces.removeTab(model.gpa, request.location) orelse {
         return client_request.fail(session, request.request_id, .tab_not_found, "tab not found");
     };
 

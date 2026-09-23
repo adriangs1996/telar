@@ -6,7 +6,6 @@ const core_module = @import("telar-core");
 const std = @import("std");
 const Runtime = @import("../Runtime.zig");
 const Initialization = @import("../Initialization.zig");
-const commands = @import("../../workspace/commands.zig");
 const PersistenceEncoder = @import("../../persistence/Encoder.zig");
 
 test "shutdown replaces a pending checkpoint with the latest session and releases its buffer" {
@@ -29,12 +28,13 @@ test "shutdown replaces a pending checkpoint with the latest session and release
     try first.init(initialization);
     defer first.deinit();
 
-    var repository = first.model.workspaceRepository();
-    const workspace = try repository.ensure(directory);
+    const workspaces = &first.model.workspaces;
+    const gpa = first.model.gpa;
+    const workspace = try workspaces.insert(gpa, directory, null);
     var launch_buffer: [64]u8 = undefined;
     const launch = try sleepLaunch(&launch_buffer);
     const first_pane = try pane_launch.launch(&first.model, .{
-        .location = workspace.location,
+        .location = workspace,
         .size = .{ .cols = 20, .rows = 5 },
         .launch = launch,
         .launch_cwd = directory,
@@ -46,18 +46,18 @@ test "shutdown replaces a pending checkpoint with the latest session and release
     try session_checkpoint.start(&first.model);
     try std.testing.expect(first.model.checkpoint.pending != null);
 
-    const tab_id = try repository.nextTabId();
-    _ = try repository.find(workspace.location.workspace).?.createTab(tab_id, "late tab");
-    repository.recordTabCreated(tab_id);
+    const tab_id = try workspaces.nextTabId();
+    _ = try workspaces.addTab(workspaces.slotOf(workspace.workspace).?, tab_id, "late tab");
+    workspaces.recordTabCreated(tab_id);
     const second_pane = try pane_launch.launch(&first.model, .{
-        .location = .{ .workspace = workspace.location.workspace, .tab_id = tab_id },
+        .location = .{ .workspace = workspace.workspace, .tab_id = tab_id },
         .size = .{ .cols = 20, .rows = 5 },
         .launch = launch,
         .launch_cwd = directory,
         .workspace_path = directory,
     });
     const second_pane_id = second_pane.id;
-    _ = try commands.renameWorkspace(&repository, workspace.location.workspace, "latest name");
+    try workspaces.rename(workspace.workspace, "latest name");
 
     first.deinit();
     try std.testing.expect(first.model.checkpoint.pending == null);
@@ -72,9 +72,9 @@ test "shutdown replaces a pending checkpoint with the latest session and release
     try std.testing.expectEqual(@as(u16, 2), second.model.checkpoint.restored_panes);
     try std.testing.expect(second.model.panes.find(first_pane_id) != null);
     try std.testing.expect(second.model.panes.find(second_pane_id) != null);
-    const reader = second.model.workspaceReader();
-    try std.testing.expectEqualStrings("latest name", reader.workspaceName(workspace.location.workspace).?);
-    try std.testing.expectEqualStrings("late tab", reader.tabLabel(.{ .workspace = workspace.location.workspace, .tab_id = tab_id }).?);
+    const reader = &second.model.workspaces;
+    try std.testing.expectEqualStrings("latest name", reader.workspaceName(workspace.workspace).?);
+    try std.testing.expectEqualStrings("late tab", reader.tabLabel(.{ .workspace = workspace.workspace, .tab_id = tab_id }).?);
 }
 
 fn sleepLaunch(buffer: []u8) !core_module.LaunchView {
@@ -201,21 +201,21 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
     defer gpa.destroy(first);
     try first.init(initialization);
     defer first.deinit();
-    var repository = first.model.workspaceRepository();
-    const workspace = try repository.ensure(directory);
+    const workspaces = &first.model.workspaces;
+    const workspace = try workspaces.insert(first.model.gpa, directory, null);
     var launch_buffer: [64]u8 = undefined;
     const terminal = try pane_launch.launch(&first.model, .{
-        .location = workspace.location,
+        .location = workspace,
         .size = .{ .cols = 80, .rows = 24 },
         .launch = try sleepLaunch(&launch_buffer),
         .launch_cwd = directory,
         .workspace_path = directory,
     });
     const terminal_id = terminal.id;
-    const tab_id = try repository.nextTabId();
-    _ = try repository.find(workspace.location.workspace).?.createTab(tab_id, "Agent work");
-    repository.recordTabCreated(tab_id);
-    const location: core.TabLocation = .{ .workspace = workspace.location.workspace, .tab_id = tab_id };
+    const tab_id = try workspaces.nextTabId();
+    _ = try workspaces.addTab(workspaces.slotOf(workspace.workspace).?, tab_id, "Agent work");
+    workspaces.recordTabCreated(tab_id);
+    const location: core.TabLocation = .{ .workspace = workspace.workspace, .tab_id = tab_id };
     const pane = try pane_launch.launch(&first.model, .{
         .location = location,
         .kind = .agent,
@@ -268,7 +268,7 @@ test "agent panes survive consecutive runtime checkpoints with their kind identi
     try std.testing.expectEqual(location, restored.location);
     try std.testing.expectEqual(@as(u16, 100), restored.size.cols);
     try std.testing.expectEqual(@as(u16, 30), restored.size.rows);
-    try std.testing.expectEqualStrings("Agent work", third.model.workspaceReader().tabLabel(location).?);
+    try std.testing.expectEqualStrings("Agent work", third.model.workspaces.tabLabel(location).?);
     try std.testing.expectEqualStrings("Keep this title", third.model.agents.checkpointTitle(restored.key()).?.slice());
     try std.testing.expectEqual(core.PaneKind.terminal, third.model.panes.find(terminal_id).?.kind);
     try std.testing.expectEqual(@as(u16, 1), third.model.checkpoint.resumed_agents);

@@ -1,3 +1,4 @@
+const Workspaces = @import("../../workspace/Workspaces.zig");
 const core = @import("telar-core");
 const ReviewResult = @import("../../change_review/Result.zig");
 const ResponseQueueType = @import("ResponseQueue.zig");
@@ -12,7 +13,6 @@ const StatsResultType = @import("../../history/StatsResult.zig");
 const runtime_encoder = @import("encoder.zig");
 const SnapshotStorageType = @import("../application/SnapshotStorage.zig");
 const AgentDisplayStorage = @import("AgentDisplayStorage.zig");
-const state_support = @import("../../workspace/state_support.zig");
 const Commit = @import("Commit.zig");
 const Completion = @import("Completion.zig");
 const PreparedType = @import("../attachment/Prepared.zig");
@@ -352,10 +352,10 @@ pub fn prepare(delivery: *Delivery, preparation: Preparation) !?Prepared {
     }
 
     if (delivery.runtime_state_requested and
-        delivery.workspace_list_revision_sent < workspaces.revision())
+        delivery.workspace_list_revision_sent < workspaces.revision)
     {
-        var entries: [state_support.max_workspaces]core.WorkspaceListEntry = undefined;
-        const revision = workspaces.revision();
+        var entries: [Workspaces.capacity]core.WorkspaceListEntry = undefined;
+        const revision = workspaces.revision;
         return delivery.stage(
             try core.encodeWorkspaceList(buffer, .{
                 .revision = revision,

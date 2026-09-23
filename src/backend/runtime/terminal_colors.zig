@@ -21,10 +21,11 @@ pub fn configure(model: *RuntimeModel, session: *Session, colors: core.TerminalC
         return;
     }
 
-    for (model.geometry_leases) |slot| {
-        const lease = slot orelse continue;
-        if (std.meta.eql(lease.owner, session.key)) {
-            apply(model, lease.workspace, session.key);
+    var rows = model.workspaces.reserved.iterator(.{});
+    while (rows.next()) |slot| {
+        const holder = model.workspaces.lease[slot] orelse continue;
+        if (std.meta.eql(holder, session.key)) {
+            apply(model, .{ .workspace = model.workspaces.id[slot] }, session.key);
         }
     }
 }
@@ -70,11 +71,18 @@ test "terminal colors follow workspace authority without letting spectators acqu
     model.clients = .{};
     model.clients.items[0] = &owner;
     model.clients.items[1] = &spectator;
-    model.geometry_leases = @splat(null);
     model.panes = .{};
     model.workspaces = .{};
+    defer model.workspaces.deinit(std.testing.allocator);
     model.gpa = std.testing.allocator;
     try model.panes.insert(pane);
+    _ = try model.workspaces.restore(std.testing.allocator, .{
+        .id = workspace.workspace,
+        .path = "/work/telar",
+        .explicit_name = null,
+        .first_tab_id = pane.location.tab_id,
+        .first_tab_label = "",
+    });
 
     var wire_buffer: [16]u8 = undefined;
     const declaration = try core.encodeConfigureTerminalColors(&wire_buffer, .{ .background = .{ 240, 240, 240 } });

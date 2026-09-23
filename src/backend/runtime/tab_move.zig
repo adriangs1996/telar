@@ -6,7 +6,6 @@ const core = @import("telar-core");
 const RuntimeModel = @import("RuntimeModel.zig");
 const Session = @import("client/Session.zig");
 const client_request = @import("client_request.zig");
-const commands = @import("../workspace/commands.zig");
 const resync_required = @import("resync_required.zig");
 
 /// Reorders the tab and replies with its committed position.
@@ -15,9 +14,7 @@ const resync_required = @import("resync_required.zig");
 /// try tab_move.move(model, session, request);
 /// ```
 pub fn move(model: *RuntimeModel, session: *Session, request: core.MoveTab) !void {
-    var workspaces = model.workspaceRepository();
-    const moved = commands.moveTab(
-        &workspaces,
+    const position = model.workspaces.moveTab(
         request.location,
         .{ .direction = request.direction, .relative_to = request.relative_to },
     ) catch |err| {
@@ -28,10 +25,10 @@ pub fn move(model: *RuntimeModel, session: *Session, request: core.MoveTab) !voi
     };
 
     session_checkpoint.noteChange(model);
-    resync_required.notify(model, .{ .origin = session.key, .workspace = moved.location.workspace });
+    resync_required.notify(model, .{ .origin = session.key, .workspace = request.location.workspace });
     try session.delivery.responses.push(.{ .tab_moved = .{
         .request_id = request.request_id,
-        .location = moved.location,
-        .position = moved.position,
+        .location = request.location,
+        .position = position,
     } });
 }

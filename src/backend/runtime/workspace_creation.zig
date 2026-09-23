@@ -46,14 +46,13 @@ fn createWorkspace(model: *RuntimeModel, session: *Session, request: core.Create
         launch_cwd.createLaunchDirectory(model.io, cwd) catch return error.LaunchCwdCreateFailed;
     }
 
-    var workspaces = model.workspaceRepository();
-    var proposal = workspaces.propose(.{
-        .path = cwd,
-        .explicit_name = request.name,
-    }) catch return error.WorkspaceCreateFailed;
-    defer proposal.rollback();
+    const proposal = model.workspaces.propose(model.gpa, cwd, request.name) catch return error.WorkspaceCreateFailed;
+    defer model.workspaces.rollback(model.gpa, proposal);
 
-    const location = proposal.location();
+    const location: core.TabLocation = .{
+        .workspace = .{ .workspace = model.workspaces.id[proposal] },
+        .tab_id = model.workspaces.tab_id[proposal][0],
+    };
     var lease_acquired = false;
     var committed = false;
     defer if (!committed and lease_acquired) {
@@ -70,11 +69,11 @@ fn createWorkspace(model: *RuntimeModel, session: *Session, request: core.Create
         .size = request.size,
         .launch = request.launch,
         .launch_cwd = cwd,
-        .workspace_path = proposal.path(),
+        .workspace_path = model.workspaces.path[proposal],
     }) catch |err| return pane_launch.requestError(err);
     const root_pane_id = launched.id;
 
-    _ = proposal.commit();
+    _ = model.workspaces.commit(proposal);
     committed = true;
     session_checkpoint.noteChange(model);
     resync_required.notify(model, .{ .origin = session.key, .workspace = location.workspace });

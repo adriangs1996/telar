@@ -77,13 +77,13 @@ fn format(model: *RuntimeModel, buffer: []u8) ![]const u8 {
     clients.attachment_stores = attachment_stores[0..attachment_count];
 
     const proxy_metrics = model.resources.proxy.metrics();
-    const workspaces = model.workspaceReader();
+    const workspaces = &model.workspaces;
 
     return telemetry.formatRuntimeTelemetry(buffer, .{
         .io = model.io,
         .metrics = &model.metrics,
         .clients = clients,
-        .workspace_count = workspaces.count(),
+        .workspace_count = workspaces.count,
         .tab_count = workspaces.totalTabs(),
         .panes = &model.panes,
         .history_service = model.resources.history.service(),
