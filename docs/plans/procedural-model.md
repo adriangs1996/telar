@@ -13,12 +13,12 @@ get worse.
 
 Measured on `4988caf5`. Record them at the end of every slice.
 
-| Metric | Baseline |
-| --- | --- |
-| First-party Zig files under 20 lines | 1,618 of 3,000 |
-| `context: *anyopaque` ports | 192 fields in 82 files |
-| `TerminalClient.of` / `GuiClient.of` uses (production) | 157 / 24 |
-| Fields in the client `Version` | 27 |
+| Metric | Baseline | After slice 4 |
+| --- | --- | --- |
+| First-party Zig files under 20 lines | 1,618 of 3,000 | 1,528 of 3,009 |
+| `context: *anyopaque` ports | 192 fields in 82 files | 108 fields in 51 files |
+| `TerminalClient.of` / `GuiClient.of` uses (production) | 157 / 24 | 0 / 0 |
+| Fields in the client `Version` | 27 | 27 |
 | Key press to pane input, TUI / GUI | ~26 hops in 10 files / ~36 in 14 |
 | PTY bytes to client frame, runtime | ~20 hops in ~24 files |
 | `LayoutSnapshot` rebuilds per GUI frame | 5 fixed, plus one per notification and one per pump |
@@ -42,7 +42,12 @@ that touches it.
    Other clients flagged for workspace resync wait for the next `pumpAll`,
    which on an idle runtime is the one-second agent tick.
 4. The GUI adopts a reloaded configuration inside `draw`, contradicting
-   `docs/flows/client-event-dispatch.md`.
+   `docs/flows/client-event-dispatch.md`. Kept by decision in slice 4: the
+   adoption swaps the renderer and its font atlas, which is only safe when no
+   frame is in flight, and adopting the model earlier would draw frames with
+   the new chrome theme over the old terminal renderer while a font restages.
+   The flow document now states that font and configuration adoption run in
+   `draw`.
 
 ## Slices
 
@@ -61,7 +66,7 @@ that touches it.
    918,304 to 605,504 bytes. The other agent fields total about 100 bytes and
    stay on the pane. `pane_frame.receive` waits for slice 3, which moves the
    outbox into the model.
-3. **The rest of the client model.** The sixteen `data.*` fields beside
+3. **The rest of the client model.** Done. The sixteen `data.*` fields beside
    `AttachedClient.model`, the configuration mirrors (bugs 1 and 2), path
    completion, clipboard capture, change review and startup become fields and
    tables of `ClientModel`. One copy of configuration. `application/` and
@@ -72,6 +77,21 @@ that touches it.
    facts are written into `model.host`; host requests leave through
    `model.to_host`. Removes `of()`, the stub ports and the presentation
    lifecycle copy each adapter keeps. Fixes bug 4.
+
+   Done. `client.Message` and `client.Job` replace the six worker ports;
+   sound, system notices, the local clock and the configuration watch run the
+   same on every host. `model.to_host` carries clipboard writes, terminal
+   notices, media capture, placement invalidation, pane input for pacing, and
+   input resume and rebind. The model holds the themes and the requested
+   sidebar renderer and derives the workbench (`workbench.region`); the TUI
+   view follows it after every event. One presentation lifecycle lives in
+   `AttachedClient.presentation`. Adapter handlers take their adapter, so
+   `of()` is gone. The outbox is `model.to_runtime` and `pane_frame.receive`
+   queues its own answer. Kept as synchronous ports on purpose: chrome hit
+   testing, the graphics store and the attachment shelf (both generic over
+   each host's delivery state), the GUI's conversation reader, and prompt
+   byte decoding. Input routers stay per adapter because their decoders
+   differ (TTY bytes against semantic keys).
 5. **Derived data keyed by revision.** Fewer revisions, one per consumer
    behavior. The layout snapshot and accessibility tree are cached by
    revision; `captureVersion`, the TUI compositor rebuild and the chrome clear

@@ -83,7 +83,10 @@ not dispatch policy. `GuiClient.acceptInput` copies native input into the bounde
 queue; `GuiClient.draw` seals a frame and `GuiClient.complete` consumes the
 GPU result from the inbox.
 `GuiClient.update` derives cursor state and decides whether to draw after
-draining. `draw` prepares the latest projection. Font adoption and geometry changes run on that same owner.
+draining. `draw` prepares the latest projection. A reloaded configuration is
+adopted at the start of `draw`, when no frame is in flight, because adoption
+swaps the renderer and its font atlas; geometry changes run on that same
+owner.
 
 If a native frame's previous completion still awaits consumption, `render`
 returns token zero. Both backends defer GPU submission until a later wake or
