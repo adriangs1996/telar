@@ -6,6 +6,7 @@ const diagnostic = @import("diagnostic.zig");
 const Violation = @import("Violation.zig");
 const naming = @import("layout_naming.zig");
 const receivers = @import("receivers.zig");
+const imports = @import("imports.zig");
 
 pub fn allowsExcessParameters(tree: *const std.zig.Ast, declaration_token: std.zig.Ast.TokenIndex) bool {
     const declaration_start = tree.tokenStart(declaration_token);
@@ -92,6 +93,18 @@ fn lint(allocator: std.mem.Allocator, source: [:0]const u8, path: ?[]const u8) !
         const location = tree.tokenLocation(0, receiver.name_token);
         try violations.append(allocator, .{
             .rule = .receiver_name,
+            .line = location.line + 1,
+            .column = location.column + 1,
+        });
+    }
+
+    const inline_imports = try imports.find(allocator, &tree);
+    defer allocator.free(inline_imports);
+
+    for (inline_imports) |token| {
+        const location = tree.tokenLocation(0, token);
+        try violations.append(allocator, .{
+            .rule = .inline_import,
             .line = location.line + 1,
             .column = location.column + 1,
         });
