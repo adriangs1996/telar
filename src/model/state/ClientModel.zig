@@ -108,6 +108,7 @@ saved_layouts: LayoutsType = .{},
 clipboard: ClipboardCaptureState = .{},
 plugins: PluginExecutionState = .{},
 host: HostState,
+to_host: model_data.HostEffects = .{},
 name_prompt: model_data.NamePromptState = .{},
 history_palette: HistoryPaletteState = .{},
 suggestion: SuggestionState = .{},
@@ -226,6 +227,7 @@ pub fn initInto(self: *ClientModel, gpa: std.mem.Allocator, initial: InitialClie
 pub fn deinit(model: *ClientModel) void {
     model.history_palette.deinit();
     model.clipboard.deinit(model.gpa);
+    model.to_host.deinit(model.gpa);
     workspace_handoff.clear(model);
     model.saved_layouts = .{};
 }

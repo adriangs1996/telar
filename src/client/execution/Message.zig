@@ -15,13 +15,15 @@ pub const Message = union(enum) {
     plugin_result: data.PluginActionsCompletion,
     path_completion: data.PathCompletionCompletion,
     link_opened: anyerror!void,
+    sound_played: anyerror!void,
+    notified: anyerror!void,
 
     /// The budget the event runs under.
     /// Example: `const path = core.enter(message.path());`
     pub fn path(self: Message) core.Path {
         return switch (self) {
             .server, .sent, .sidebar_animation_tick => .interactive,
-            .notification_tick, .bar_tick, .bar_command, .plugin_result, .path_completion, .link_opened => .observation,
+            .notification_tick, .bar_tick, .bar_command, .plugin_result, .path_completion, .link_opened, .sound_played, .notified => .observation,
         };
     }
 };

@@ -4,6 +4,7 @@ const client_module = @import("telar-client");
 const TerminalClient = @import("../TerminalClient.zig");
 const std = @import("std");
 const presentation_lifecycle = @import("../presentation/presentation_lifecycle.zig");
+const host_effects = @import("../resources/host_effects.zig");
 const TestHarness = @This();
 
 connection: core.SocketChannel,
@@ -82,6 +83,7 @@ pub fn settle(harness: *TestHarness) !void {
                 .sent, .sidebar_animation_tick, .notification_tick, .bar_tick, .bar_command, .path_completion => {
                     const observes = message != .sent;
                     _ = try harness.client.update(message);
+                    try host_effects.deliver(harness.client);
                     if (observes) {
                         try presentation_lifecycle.observe(harness.client);
                     }
@@ -91,6 +93,13 @@ pub fn settle(harness: *TestHarness) !void {
             else => return error.UnexpectedEvent,
         }
     }
+}
+
+/// Delivers the host requests a direct client call left, as the event loop
+/// does after every event.
+/// Example: `try harness.deliverHostEffects();`
+pub fn deliverHostEffects(harness: *TestHarness) !void {
+    try host_effects.deliver(harness.client);
 }
 
 pub fn settleModelPresentation(harness: *TestHarness) !void {

@@ -9,7 +9,7 @@ import re
 TOKENS = re.compile(r'//[^\n]*|\\\\[^\n]*|"(?:\\.|[^"\\])*"|@(?:import|cInclude)\s*\(')
 LITERAL = re.compile(r'\s*"([^"\\]+)"\s*\)')
 ALLOWED_MODULES = {"std", "builtin", "model", "telar-core", "telar-lua", "lua-api"}
-NATIVE_HEADERS = {("graphics/store.zig", "sys/stat.h")}
+NATIVE_HEADERS = {("graphics/store.zig", "sys/stat.h"), ("resources/local_time.zig", "time.h")}
 
 
 def calls(source, name):

@@ -16,6 +16,7 @@ const kitty_delivery = @import("../graphics/kitty_delivery.zig");
 const InputState = @import("controllers/input/State.zig");
 const host_inputs = @import("controllers/input/host_inputs.zig");
 const host_ports = @import("resources/host_ports.zig");
+const capture_module = @import("../attachments/capture.zig");
 const presentation_lifecycle = @import("presentation/presentation_lifecycle.zig");
 
 pub const InputRouter = host_inputs.Router;
@@ -35,8 +36,6 @@ pub const ClientEvent = union(enum) {
     media_tick: anyerror!void,
     host_written: anyerror!void,
     compression_done: *CompressionType,
-    sound_played: anyerror!void,
-    notified: anyerror!void,
     telemetry_tick: anyerror!void,
     telemetry_written: anyerror!void,
     config_reload: anyerror!client_module.ConfigReload,
@@ -143,18 +142,13 @@ pub fn init(params: Params) !*TerminalClient {
     }
 
     const client = &terminal.app;
-    client.sound_port = host_ports.sound(client);
-    client.notifier = host_ports.notifier(client);
-    client.capture_port = host_ports.capture(client);
-    client.host_clipboard = host_ports.clipboard(client);
-    client.host_graphics = host_ports.graphics(client);
+    client.model.host.clipboard_capture = capture_module.platformSupported();
     client.graphics = host_ports.graphicsRetention(client);
     client.chrome = host_ports.chrome(client);
     client.attachment_catalog = host_ports.attachmentCatalog(client);
     client.attachment_shelf = host_ports.attachmentShelf(client);
     client.presentation = host_ports.presentation(client);
     client.workers = host_ports.workers(client);
-    client.clock = host_ports.clock(client);
     client.host_input_source = host_ports.hostInput(client);
     client.config_watcher = host_ports.configWatcher(client);
     // The presenter borrows the inbox and metrics, whose heap addresses

@@ -48,18 +48,12 @@ const Generation = @import("config/Generation.zig");
 const Snapshot = @import("config/Snapshot.zig");
 const Registry = @import("plugins/Registry.zig");
 const ConfigReloadState = @import("resources/ConfigReloadState.zig");
-const SoundPort = @import("agents/SoundPort.zig");
-const HostNotifier = @import("notifications/HostNotifier.zig");
-const CapturePort = @import("attachments/CapturePort.zig");
-const HostClipboard = @import("operations/panes/Clipboard.zig");
-const HostGraphics = @import("graphics/HostGraphics.zig");
 const GraphicsRetention = @import("graphics/GraphicsRetention.zig");
 const HostChrome = @import("presentation/HostChrome.zig");
 const AttachmentCatalogPort = @import("attachments/AttachmentCatalogPort.zig");
 const AttachmentShelf = @import("attachments/AttachmentShelf.zig");
 const HostPresentation = @import("presentation/HostPresentation.zig");
 const FaviconRunner = @import("completion/FaviconRunner.zig");
-const HostClock = @import("resources/HostClock.zig");
 const Workers = @import("execution/Workers.zig");
 const Message = @import("execution/Message.zig").Message;
 const timers = @import("resources/timers.zig");
@@ -108,11 +102,6 @@ workers: Workers = undefined,
 /// Hosts with a presentation clock schedule their visible animations
 /// themselves; the TUI lets the model tick them.
 animation_clock: timers.AnimationClock = .model,
-sound_port: SoundPort = undefined,
-notifier: HostNotifier = undefined,
-capture_port: CapturePort = undefined,
-host_clipboard: HostClipboard = undefined,
-host_graphics: HostGraphics = undefined,
 graphics: GraphicsRetention = undefined,
 chrome: HostChrome = undefined,
 attachment_catalog: AttachmentCatalogPort = undefined,
@@ -120,7 +109,6 @@ attachment_shelf: AttachmentShelf = undefined,
 presentation: HostPresentation = undefined,
 /// Bound only by adapters that draw sprites; unset means no favicon lookups.
 favicon_runner: ?FaviconRunner = null,
-clock: HostClock = undefined,
 host_input_source: HostInputSource = undefined,
 config_watcher: ConfigReloadWatcher = undefined,
 
@@ -281,6 +269,8 @@ pub fn update(self: *AttachedClient, message: Message) !?u8 {
         },
         .path_completion => |completion| try self.completePathCompletion(completion),
         .link_opened => |result| try self.completeLinkOpening(result),
+        .sound_played => |result| try self.completeAgentSound(result),
+        .notified => |result| result catch {},
     }
 
     return null;
@@ -390,7 +380,7 @@ pub fn handleServerMessage(self: *AttachedClient, message: core.ServerMessage) !
             if (clipboard.pane_id == .invalid) {
                 return error.UnexpectedPane;
             }
-            try self.host_clipboard.set(self.host_clipboard.context, clipboard.bytes);
+            try self.model.to_host.writeClipboard(self.gpa, clipboard.bytes);
         },
         .pane_exited => |exited| _ = try self.applyPaneExit(exited),
         .request_failed => |failure| {
@@ -1015,7 +1005,7 @@ pub fn inputLinkPointer(self: *AttachedClient, tab: usize, event: data.Mouse) !b
     }
 
     if (outcome.copy) |selected| {
-        try self.host_clipboard.set(self.host_clipboard.context, selected.uri());
+        try self.model.to_host.writeClipboard(self.gpa, selected.uri());
     }
 
     return outcome.consumed;
@@ -2605,7 +2595,7 @@ fn deliverPaneFocus(self: *AttachedClient, focus: data.PaneFocus, area: core.Rec
         return;
     }
 
-    self.host_graphics.invalidatePlacements();
+    self.model.to_host.invalidate_placements = true;
     try self.resizeAttachedPanes(active, area);
 
     if (self.model.tabs.snapshot_loaded[active]) {
@@ -2940,7 +2930,7 @@ fn executeClientCommand(self: *AttachedClient, reply: *core.ClientCommand) !void
             reply.status = .admitted;
         },
         .client_clipboard_copy => {
-            try self.host_clipboard.set(self.host_clipboard.context, reply.text());
+            try self.model.to_host.writeClipboard(self.gpa, reply.text());
             reply.length = 0;
             reply.status = .admitted;
         },
@@ -3367,7 +3357,7 @@ fn deliverPaneGeometry(self: *AttachedClient, change: data.PaneGeometryChange) !
         return error.StalePaneGeometry;
     }
 
-    self.host_graphics.invalidatePlacements();
+    self.model.to_host.invalidate_placements = true;
     try self.resizeAttachedPanes(active, change.area);
 
     if (self.model.tabs.snapshot_loaded[active]) {
@@ -3766,7 +3756,7 @@ fn deliverHostCommit(self: *AttachedClient, commit: data.HostCommit) !void {
                     .cell_height = size.cell_height_px,
                 },
             );
-            self.host_graphics.invalidatePlacements();
+            self.model.to_host.invalidate_placements = true;
         }
     }
 
@@ -3786,7 +3776,7 @@ fn deliverHostCommit(self: *AttachedClient, commit: data.HostCommit) !void {
             );
         }
 
-        self.host_graphics.invalidatePlacements();
+        self.model.to_host.invalidate_placements = true;
         if (self.model.tabs.activeSlot()) |tab| {
             const area = self.geometry().area;
             try self.resizeAttachedPanes(tab, area);
@@ -4788,7 +4778,7 @@ fn applyPaneFrame(self: *AttachedClient, frame: core.FrameView) !data.PaneFrameO
         }
 
         if (self.reconcileAttachmentFrame(commit.pane_id)) {
-            self.host_graphics.invalidatePlacements();
+            self.model.to_host.invalidate_placements = true;
             if (self.model.tabs.activeSlot()) |tab| {
                 try self.resizeAttachedPanes(tab, self.geometry().area);
             }
@@ -4940,7 +4930,7 @@ fn applyPaneExit(self: *AttachedClient, exited: core.PaneExited) !data.PaneExit 
         return transition;
     }
 
-    self.host_graphics.invalidatePlacements();
+    self.model.to_host.invalidate_placements = true;
     try self.synchronizeActivePane();
     if (!retirement.tab_empty) {
         const tab = self.model.tabs.find(retirement.location.tab_id) orelse return error.StalePaneExit;
@@ -5224,7 +5214,13 @@ fn deliverHostNotification(self: *AttachedClient, input: data.NotificationInput)
         return;
     }
 
-    try self.notifier.notify(self.model.config.notification_delivery, input);
+    const payload: data.NotificationPayload = .init(input.title, input.message);
+    switch (self.model.config.notification_delivery) {
+        .telar => unreachable,
+        .terminal => try self.model.to_host.push(.{ .terminal_notification = payload }),
+        // A system notice is best effort; a saturated inbox drops it.
+        .system => self.workers.start(.{ .system_notification = payload }) catch {},
+    }
 }
 
 /// Advances every notification lifecycle to one monotonic timestamp.
@@ -5302,7 +5298,7 @@ fn applyAgentSound(self: *AttachedClient, notification: core.AgentSoundNotificat
 }
 
 fn startAgentSound(self: *AttachedClient, kind: core.AgentSound) !void {
-    self.sound_port.start(kind) catch |err| {
+    self.workers.start(.{ .sound = kind }) catch |err| {
         self.model.sound_playback.schedulingFailed();
         return err;
     };
@@ -5774,7 +5770,7 @@ fn deliverSidebarLayout(self: *AttachedClient, change: data.SidebarLayout) !void
     }
 
     self.chrome.setSidebarLayout(change.visible, change.width);
-    self.host_graphics.invalidatePlacements();
+    self.model.to_host.invalidate_placements = true;
     const active = self.model.tabs.activeSlot() orelse return;
     try self.resizeAttachedPanes(active, self.geometry().area);
 }
@@ -6061,7 +6057,7 @@ fn routePaneKey(self: *AttachedClient, command: data.PaneCommand) !?core.PaneId 
 
     const completed = delivery orelse return null;
     if (self.observeAttachmentInput(completed.pane_id, command.input)) {
-        self.host_graphics.invalidatePlacements();
+        self.model.to_host.invalidate_placements = true;
         if (self.model.tabs.activeSlot()) |tab| {
             try self.resizeAttachedPanes(tab, self.geometry().area);
         }
@@ -6853,7 +6849,7 @@ fn adoptConfiguration(self: *AttachedClient, adoption: Adoption) !data.Configura
     if (commit.sidebar) |sidebar| {
         try self.deliverSidebarLayout(sidebar);
     } else if (commit.pane_gaps_changed) {
-        self.host_graphics.invalidatePlacements();
+        self.model.to_host.invalidate_placements = true;
         if (self.model.tabs.activeSlot()) |tab| {
             try self.resizeAttachedPanes(tab, self.geometry().area);
         }
@@ -7404,7 +7400,7 @@ fn focusedPaneCwd(model: *const data.ClientModel) []const u8 {
 
 /// Resolves the current target and schedules one best-effort media capture.
 fn startClipboardCapture(self: *AttachedClient) !clipboard_image.StartOutcome {
-    if (!self.capture_port.platformSupported()) {
+    if (!self.model.host.clipboard_capture) {
         return .unsupported;
     }
 
@@ -7431,7 +7427,7 @@ fn scheduleClipboardCapture(self: *AttachedClient, capture: data.ClipboardCaptur
             .ordered,
     };
 
-    try self.capture_port.schedule(request);
+    try self.model.to_host.push(.{ .capture = request });
 }
 
 fn adoptClipboardCapture(self: *AttachedClient, capture: *data.Capture) !bool {

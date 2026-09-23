@@ -203,6 +203,7 @@ test "a pane clipboard write reaches the host terminal" {
         .bytes = "copied",
     });
     _ = try harness.client.handleServerMessage(try core.decodeServer(clipboard));
+    try harness.deliverHostEffects();
 
     try std.testing.expectEqual(
         @as(u64, "\x1b]52;c;Y29waWVk\x07".len),

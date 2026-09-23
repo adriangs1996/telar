@@ -1,6 +1,7 @@
 //! Owns configured bar ticks, bounded Lua evaluation and command workers.
 
 const bar_update = @import("bar_update.zig");
+const local_time = @import("../../resources/local_time.zig");
 const data = @import("model");
 const client_diagnostic = @import("client_diagnostic.zig");
 const BarUpdateFailure = @import("BarUpdateFailure.zig");
@@ -153,7 +154,7 @@ fn publishEvaluation(client: *Client, command: BarUpdateCommand) !bar_update.Out
 }
 
 fn callbackContext(client: *const Client, output: ?[]const u8) BarCallbackContextType {
-    const local = client.clock.localTime();
+    const local = local_time.now();
     const metrics: ?BarMetricsType = if (client.model.system_metrics) |value| .{
         .cpu_percent = value.cpu_percent,
         .memory_used_decigib = value.memory_used_decigib,

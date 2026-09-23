@@ -98,7 +98,6 @@ test {
     _ = @import("graphics/toast.zig");
     _ = @import("input/host_tests.zig");
     _ = @import("input/keybind.zig");
-    _ = @import("notifications/host.zig");
     _ = @import("platform/platform.zig");
     _ = @import("platform/posix.zig");
     _ = @import("platform/windows.zig");
@@ -108,9 +107,6 @@ test {
     _ = @import("presentation/pointer.zig");
     _ = @import("presentation/screen_support.zig");
     _ = @import("presentation/window_title.zig");
-    _ = @import("sound/sound_tests.zig");
-    _ = @import("sound/types.zig");
-    _ = @import("sound/worker.zig");
     _ = @import("ui/focus.zig");
     _ = @import("ui/hits.zig");
     _ = @import("ui/icons.zig");

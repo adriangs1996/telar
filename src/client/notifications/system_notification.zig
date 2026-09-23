@@ -1,12 +1,11 @@
-//! Host-level notification adapters: the outer terminal's OSC 9 channel and
-//! the operating system's notification service.
+//! Posts notices through the operating system's notification service.
 
 const core = @import("telar-core");
+const data = @import("model");
 const std = @import("std");
-const Payload = @import("Payload.zig");
 const builtin = @import("builtin");
 
-pub const max_payload_bytes = core.max_notification_title_bytes + core.max_notification_message_bytes + 8;
+const max_payload_bytes = core.max_notification_title_bytes + core.max_notification_message_bytes + 8;
 
 const command_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(3) },
@@ -16,9 +15,9 @@ const command_timeout: std.Io.Timeout = .{
 /// never retried.
 ///
 /// ```zig
-/// try notify(io, payload);
+/// try post(io, payload);
 /// ```
-pub fn notify(io: std.Io, payload: Payload) !void {
+pub fn post(io: std.Io, payload: data.NotificationPayload) !void {
     switch (builtin.os.tag) {
         .macos => {
             var script_buffer: [max_payload_bytes + 64]u8 = undefined;
@@ -39,23 +38,6 @@ pub fn notify(io: std.Io, payload: Payload) !void {
     }
 }
 
-/// Copies text with quotes, control bytes and backslashes removed, so a
-/// payload can be embedded in an OSC string or a quoted script argument.
-pub fn copySanitized(storage: []u8, text: []const u8) u8 {
-    var len: usize = 0;
-    for (text) |byte| {
-        if (len == storage.len) {
-            break;
-        }
-        if (byte < 0x20 or byte == 0x7f or byte == '"' or byte == '\\') {
-            continue;
-        }
-        storage[len] = byte;
-        len += 1;
-    }
-    return @intCast(len);
-}
-
 fn commandSucceeded(io: std.Io, argv: []const []const u8) bool {
     const gpa = std.heap.page_allocator;
     const result = std.process.run(gpa, io, .{
@@ -71,11 +53,4 @@ fn commandSucceeded(io: std.Io, argv: []const []const u8) bool {
         .exited => |status| status == 0,
         else => false,
     };
-}
-
-test "payloads drop quotes and control bytes and stay bounded" {
-    const payload = Payload.init("Agent \"done\"\x1b", "line\nbreak\\end");
-
-    try std.testing.expectEqualStrings("Agent done", payload.titleSlice());
-    try std.testing.expectEqualStrings("linebreakend", payload.messageSlice());
 }

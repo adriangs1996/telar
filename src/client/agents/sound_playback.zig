@@ -3,7 +3,8 @@
 const core = @import("telar-core");
 const std = @import("std");
 const builtin = @import("builtin");
-const Windows = @import("Windows.zig");
+
+extern "user32" fn MessageBeep(message_type: u32) callconv(.winapi) i32;
 
 const playback_timeout: std.Io.Timeout = .{
     .duration = .{ .clock = .awake, .raw = .fromSeconds(3) },
@@ -31,7 +32,7 @@ pub fn play(io: std.Io, kind: core.AgentSound) !void {
                 .ready => 0x00000040, // MB_ICONASTERISK
                 .needs_input => 0x00000030, // MB_ICONEXCLAMATION
             };
-            if (Windows.MessageBeep(message_type) == 0) {
+            if (MessageBeep(message_type) == 0) {
                 return error.SoundUnavailable;
             }
         },

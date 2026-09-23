@@ -16,4 +16,3 @@ pub extern fn telar_gui_pipe(fds: *[2]c_int) c_int;
 pub extern fn telar_gui_wake(fd: c_int) void;
 pub extern fn telar_gui_drain(fd: c_int) void;
 pub extern fn telar_gui_close_pipe(fds: *[2]c_int) void;
-pub extern fn telar_gui_local_time(output: *[7]u16) void;

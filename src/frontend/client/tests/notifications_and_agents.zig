@@ -935,9 +935,11 @@ test "sound scheduling failure releases its token and does not poison a later re
     var payload: [512]u8 = undefined;
     const initial = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
     _ = try client.handleServerMessage(try core.decodeServer(initial));
-    var calls: usize = 0;
-    const sound_port = client.sound_port;
-    client.sound_port = .{ .context = &calls, .play = failSoundScheduling };
+    var sounds: SoundFailure = .{ .workers = client.workers };
+    client.workers = .{
+        .context = &sounds,
+        .start_fn = SoundFailure.start,
+    };
     const version = client.model.version();
     const message = try core.encodeAgentSound(&payload, .{
         .pane_id = TestHarness.bootstrap_pane,
@@ -947,11 +949,11 @@ test "sound scheduling failure releases its token and does not poison a later re
 
     try std.testing.expectError(error.SoundSchedulingFailed, client.handleServerMessage(try core.decodeServer(message)));
 
-    try std.testing.expectEqual(@as(usize, 1), calls);
+    try std.testing.expectEqual(@as(usize, 1), sounds.calls);
     try std.testing.expect(!client.model.sound_playback.snapshot().active);
     try std.testing.expect(client.model.sound_playback.snapshot().queued == null);
     try std.testing.expectEqualDeep(version, client.model.version());
-    client.sound_port = sound_port;
+    client.workers = sounds.workers;
     _ = try client.handleServerMessage(try core.decodeServer(message));
     try std.testing.expect(client.model.sound_playback.snapshot().active);
 }
@@ -1011,21 +1013,20 @@ test "agent alert host failure preserves the canonical snapshot and owned notifi
     var payload: [512]u8 = undefined;
     const initial = try support.encodeTestingAgentSnapshot(&payload, 1, .ready);
     _ = try client.handleServerMessage(try core.decodeServer(initial));
-    var calls: usize = 0;
-    client.model.config.notification_delivery = .system;
-    client.notifier = .{ .context = &calls, .deliver = failHostNotification };
+    client.model.config.notification_delivery = .terminal;
+    try fillHostEffects(client);
     const changed = try support.encodeTestingAgentSnapshot(&payload, 2, .blocked);
 
-    try std.testing.expectError(error.HostNotificationFailed, client.handleServerMessage(try core.decodeServer(changed)));
+    try std.testing.expectError(error.HostEffectsFull, client.handleServerMessage(try core.decodeServer(changed)));
 
-    try std.testing.expectEqual(@as(usize, 1), calls);
+    try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
     try std.testing.expectEqual(@as(u64, 2), client.model.agent_snapshot.revision);
     try std.testing.expectEqual(data.NotificationLevel.warning, client.model.notification_center.itemAt(0).?.level);
     try std.testing.expect(client.model.notification_scheduler.pending);
     const version = client.model.version();
     _ = try client.handleServerMessage(try core.decodeServer(changed));
     try std.testing.expectEqualDeep(version, client.model.version());
-    try std.testing.expectEqual(@as(usize, 1), calls);
+    try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
 }
 
 test "attachment rejection consumes correlation but does not notify when recovery delivery fails" {
@@ -1073,9 +1074,8 @@ test "request failure retains canonical recovery when host notification delivery
         .pane_id = TestHarness.bootstrap_pane,
         .location = TestHarness.bootstrap_location,
     } });
-    var calls: usize = 0;
-    client.model.config.notification_delivery = .system;
-    client.notifier = .{ .context = &calls, .deliver = failHostNotification };
+    client.model.config.notification_delivery = .terminal;
+    try fillHostEffects(client);
     var payload: [256]u8 = undefined;
     const failed = try core.encodeRequestFailed(&payload, .{
         .request_id = request_id,
@@ -1083,14 +1083,14 @@ test "request failure retains canonical recovery when host notification delivery
         .message = "pane disappeared",
     });
 
-    try std.testing.expectError(error.HostNotificationFailed, client.handleServerMessage(try core.decodeServer(failed)));
+    try std.testing.expectError(error.HostEffectsFull, client.handleServerMessage(try core.decodeServer(failed)));
 
-    try std.testing.expectEqual(@as(usize, 1), calls);
+    try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
     try std.testing.expect(client.model.request_lifecycle.tracker.has(.tab_snapshot));
     try std.testing.expectEqual(@as(u8, 1), client.model.notification_center.count);
     try std.testing.expectEqualStrings("pane disappeared", client.model.notification_center.itemAt(0).?.message());
     try std.testing.expectError(error.UnexpectedRequestFailure, client.handleServerMessage(try core.decodeServer(failed)));
-    try std.testing.expectEqual(@as(usize, 1), calls);
+    try std.testing.expectEqual(data.HostEffects.capacity, client.model.to_host.count);
     try harness.settle();
     var outgoing: [256]u8 = undefined;
     const recovery = try harness.nextClientMessage(&outgoing);
@@ -1098,14 +1098,25 @@ test "request failure retains canonical recovery when host notification delivery
     try std.testing.expectEqualDeep(TestHarness.bootstrap_location, recovery.request_tab_snapshot.location);
 }
 
-fn failSoundScheduling(context: *anyopaque, _: core.AgentSound) !void {
-    const calls: *usize = @ptrCast(@alignCast(context));
-    calls.* += 1;
-    return error.SoundSchedulingFailed;
-}
+/// Fails every sound job and forwards the rest to the harness workers.
+const SoundFailure = struct {
+    workers: client_module.Workers,
+    calls: usize = 0,
 
-fn failHostNotification(context: *anyopaque, _: data.NotificationDelivery, _: data.NotificationInput) !void {
-    const calls: *usize = @ptrCast(@alignCast(context));
-    calls.* += 1;
-    return error.HostNotificationFailed;
+    fn start(context: *anyopaque, job: client_module.Job) !void {
+        const self: *SoundFailure = @ptrCast(@alignCast(context));
+        if (job != .sound) {
+            return self.workers.start(job);
+        }
+
+        self.calls += 1;
+        return error.SoundSchedulingFailed;
+    }
+};
+
+/// Leaves no room for another host request.
+fn fillHostEffects(client: *client_module.AttachedClient) !void {
+    while (client.model.to_host.count < data.HostEffects.capacity) {
+        try client.model.to_host.push(.{ .terminal_notification = .{} });
+    }
 }

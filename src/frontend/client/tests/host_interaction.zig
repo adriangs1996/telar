@@ -427,7 +427,7 @@ test "TUI inbox drains a finite FIFO batch and observes presentation once" {
     const pending = terminal.presenter.pending_updates;
     _ = try client.model.setDiagnostic("inbox batch", .{});
     for (0..40) |_| {
-        try terminal.inbox.post(.{ .notified = {} });
+        try terminal.inbox.post(.{ .client = .{ .notified = {} } });
     }
 
     try std.testing.expect(try client_events.update(client, support.clientEventResourcesForTest(&heap)) == .keep_running);

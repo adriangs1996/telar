@@ -196,11 +196,6 @@ pub fn init(params: client.ClientInit) !*GuiClient {
     gui.review.widget.host_port = &gui.host;
     gui.review.widget.widgets = &gui.widgets;
 
-    gui.app.sound_port = host_ports.sound(&gui.app);
-    gui.app.notifier = host_ports.notifier(&gui.app);
-    gui.app.capture_port = host_ports.capture(&gui.app);
-    gui.app.host_clipboard = host_ports.clipboard(&gui.app);
-    gui.app.host_graphics = host_ports.graphics(&gui.app);
     gui.app.graphics = host_ports.graphicsRetention(&gui.app);
     gui.app.chrome = host_ports.chrome(&gui.app);
     gui.app.attachment_catalog = host_ports.attachmentCatalog(&gui.app);
@@ -209,7 +204,6 @@ pub fn init(params: client.ClientInit) !*GuiClient {
     gui.app.workers = host_ports.workers(&gui.app);
     gui.app.animation_clock = .host;
     gui.app.favicon_runner = host_ports.favicons(&gui.app);
-    gui.app.clock = host_ports.clock(&gui.app);
     gui.app.host_input_source = host_ports.hostInput(&gui.app);
     gui.app.config_watcher = host_ports.configWatcher(&gui.driver.configuration);
 
@@ -532,8 +526,10 @@ pub fn update(self: *GuiClient) !?u8 {
             const path = core.enter(pathFor(event));
             defer path.restore();
 
-            if (try self.dispatch(event)) |exit_status| {
-                break :turn exit_status;
+            const exit_status = try self.dispatch(event);
+            try self.deliverHostEffects();
+            if (exit_status) |value| {
+                break :turn value;
             }
         }
 
@@ -542,6 +538,7 @@ pub fn update(self: *GuiClient) !?u8 {
         }
 
         try loop.configuration.poll(&self.app);
+        try self.deliverHostEffects();
 
         break :turn null;
     };
@@ -1417,6 +1414,28 @@ pub fn requestClipboardRead(self: *GuiClient, target_id: u64, generation: u64) !
 
 /// Copies selected UTF-8 before the native host drains the request.
 /// Example: `try gui.requestClipboardWrite(selection);`
+/// Delivers the host requests the shared client left in `model.to_host`.
+/// The window has no outer terminal and no media capture, and it redraws
+/// every image placement each frame.
+fn deliverHostEffects(self: *GuiClient) !void {
+    const effects = &self.app.model.to_host;
+    _ = effects.takePlacementInvalidation();
+
+    while (effects.pop()) |effect| {
+        switch (effect) {
+            .clipboard => self.requestClipboardWrite(effects.clipboard.items) catch |err| switch (err) {
+                error.HostRequestsFull, error.ClipboardTooLarge, error.InvalidUtf8 => std.log.warn("native clipboard update was not admitted: {s}", .{@errorName(err)}),
+                else => return err,
+            },
+            .terminal_notification => {},
+            .capture => |request| try self.app.completeClipboardCapture(.{
+                .execution_id = @enumFromInt(request.sequence),
+                .result = error.NativeServiceUnavailable,
+            }),
+        }
+    }
+}
+
 pub fn requestClipboardWrite(self: *GuiClient, bytes: []const u8) !void {
     _ = try self.host.write(bytes);
     native.telar_gui_wake(self.driver.fds[@intFromEnum(PipeEnd.write)]);

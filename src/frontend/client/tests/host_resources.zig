@@ -28,6 +28,7 @@ test "host resources suppress repeated and invalid geometry before ports" {
     }));
     try std.testing.expectEqualDeep(version, app.model.version());
     try std.testing.expectEqual(@as(usize, 0), probe.len);
+    try std.testing.expect(!app.model.to_host.invalidate_placements);
 }
 
 test "host resources select grid and cell changes independently in order" {
@@ -37,9 +38,9 @@ test "host resources select grid and cell changes independently in order" {
         .{ .cols = 100, .rows = 30, .cell_width_px = 10, .cell_height_px = 20 },
     };
     const expected = [_][]const Probe.Event{
-        &.{ .presenter, .view, .invalidate },
-        &.{ .sidebar, .invalidate },
-        &.{ .presenter, .view, .sidebar, .invalidate },
+        &.{ .presenter, .view },
+        &.{.sidebar},
+        &.{ .presenter, .view, .sidebar },
     };
     for (sizes, expected) |size, events| {
         var harness: TestHarness = undefined;
@@ -63,6 +64,7 @@ test "host resources select grid and cell changes independently in order" {
 
         try std.testing.expectEqualSlices(Probe.Event, events, probe.slice());
         try std.testing.expect(probe.committed);
+        try std.testing.expect(app.model.to_host.invalidate_placements);
         if (size.cell_width_px != 0) {
             try std.testing.expectEqualDeep(client.SidebarRendererInput{
                 .support = capabilities.images,
@@ -103,6 +105,7 @@ test "host resources stop at each failed resize port and retain the commit" {
         ));
         try std.testing.expectEqualSlices(Probe.Event, events, probe.slice());
         try std.testing.expect(probe.committed);
+        try std.testing.expect(!app.model.to_host.invalidate_placements);
         try std.testing.expectEqualDeep(size, app.model.host.host_size);
         try std.testing.expectEqualDeep(capabilities, app.model.host.host_capabilities);
     }
@@ -122,7 +125,8 @@ test "host resources configure graphics before invalidating and suppress repeate
             .images = .supported,
         },
     );
-    try std.testing.expectEqualSlices(Probe.Event, &.{ .sidebar, .invalidate }, probe.slice());
+    try std.testing.expectEqualSlices(Probe.Event, &.{.sidebar}, probe.slice());
+    try std.testing.expect(app.model.to_host.invalidate_placements);
     try std.testing.expect(probe.committed);
     _ = try app.reconcileHostCapabilities(app.model.host.host_capabilities.withObservation(
         .{
@@ -138,7 +142,7 @@ test "host resources configure graphics before invalidating and suppress repeate
     ) == null);
     try std.testing.expect(try app.reconcileHostCapabilities(app.model.host.host_capabilities) == null);
     try std.testing.expectEqualDeep(version, app.model.version());
-    try std.testing.expectEqual(@as(usize, 2), probe.len);
+    try std.testing.expectEqual(@as(usize, 1), probe.len);
 }
 
 test "host resources retain graphics capabilities when sidebar setup fails" {

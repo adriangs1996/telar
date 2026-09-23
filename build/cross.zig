@@ -84,21 +84,30 @@ pub fn add(b: *std.Build) *std.Build.Step {
         );
         raster_check.root_module.addImport("assets", assets_build.add(b, cross_target, .Debug));
         cross_step.dependOn(&raster_check.step);
-        const sound_check = b.addTest(.{
-            .root_module = b.createModule(.{
-                .root_source_file = b.path("src/frontend/sound/sound_tests.zig"),
-                .target = cross_target,
-                .optimize = .Debug,
-                .link_libc = true,
-            }),
-        });
-        sound_check.root_module.addImport("telar-core", cross_core);
-        sound_check.root_module.addImport("telar-client", cross_client);
-        sound_check.root_module.addImport("model", cross_data);
-        if (query.os_tag.? == .windows) {
-            sound_check.root_module.linkSystemLibrary("user32", .{});
+        // Host services the client runs on every platform: sound, system
+        // notices and the local clock.
+        for ([_][]const u8{
+            "src/client/agents/sound_playback.zig",
+            "src/client/notifications/system_notification.zig",
+            "src/client/resources/local_time.zig",
+        }) |path| {
+            const service_check = b.addTest(.{
+                .root_module = b.createModule(.{
+                    .root_source_file = b.path(path),
+                    .target = cross_target,
+                    .optimize = .Debug,
+                    .link_libc = true,
+                }),
+            });
+            service_check.root_module.addImport("telar-core", cross_core);
+            service_check.root_module.addImport("model", cross_data);
+            if (query.os_tag.? == .windows) {
+                service_check.root_module.linkSystemLibrary("user32", .{});
+            }
+
+            cross_step.dependOn(&service_check.step);
         }
-        cross_step.dependOn(&sound_check.step);
+
         if (query.os_tag.? == .linux) {
             // Compile the tests so their calls analyze listener bodies too.
             // An object containing only unused public functions misses errors.

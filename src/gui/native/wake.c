@@ -1,7 +1,6 @@
 #include "telar_gui.h"
 #include <errno.h>
 #include <fcntl.h>
-#include <time.h>
 #include <unistd.h>
 
 int telar_gui_pipe(int *fds) {
@@ -36,21 +35,4 @@ void telar_gui_drain(int fd) {
 void telar_gui_close_pipe(int *fds) {
   close(fds[0]);
   close(fds[1]);
-}
-
-void telar_gui_local_time(uint16_t *output) {
-  time_t now = time(NULL);
-  struct tm value;
-  if (localtime_r(&now, &value) == NULL) {
-    for (int i = 0; i < 7; i++)
-      output[i] = 0;
-    return;
-  }
-  output[0] = (uint16_t)(value.tm_year + 1900);
-  output[1] = (uint16_t)(value.tm_mon + 1);
-  output[2] = (uint16_t)value.tm_mday;
-  output[3] = (uint16_t)value.tm_hour;
-  output[4] = (uint16_t)value.tm_min;
-  output[5] = (uint16_t)value.tm_sec;
-  output[6] = (uint16_t)value.tm_wday;
 }

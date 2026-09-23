@@ -3,38 +3,9 @@ const client = @import("telar-client");
 const std = @import("std");
 const sequences = @import("sequences.zig");
 
-const time = @cImport({
-    @cInclude("time.h");
-});
 pub const unistd = @cImport({
     @cInclude("unistd.h");
 });
-
-pub fn localTime() client.LocalTime {
-    var seconds: time.time_t = 0;
-    if (time.time(&seconds) == -1) {
-        return fallbackLocalTime();
-    }
-
-    var local: time.struct_tm = undefined;
-    if (time.localtime_r(&seconds, &local) == null) {
-        return fallbackLocalTime();
-    }
-
-    return .{
-        .year = @intCast(local.tm_year + 1900),
-        .month = @intCast(local.tm_mon + 1),
-        .day = @intCast(local.tm_mday),
-        .hour = @intCast(local.tm_hour),
-        .minute = @intCast(local.tm_min),
-        .second = @intCast(local.tm_sec),
-        .weekday = @intCast(local.tm_wday),
-    };
-}
-
-fn fallbackLocalTime() client.LocalTime {
-    return .{ .year = 1970, .month = 1, .day = 1, .hour = 0, .minute = 0, .second = 0, .weekday = 4 };
-}
 
 // Unix: termios for the mode, an ioctl for the size, SIGWINCH for the change.
 

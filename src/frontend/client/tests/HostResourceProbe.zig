@@ -5,12 +5,11 @@ const client = @import("telar-client");
 const core = @import("telar-core");
 const Probe = @This();
 
-pub const Event = enum { presenter, view, sidebar, invalidate };
+pub const Event = enum { presenter, view, sidebar };
 
 app: *client.AttachedClient,
 chrome: client.HostChrome,
 presentation: client.HostPresentation,
-graphics: client.HostGraphics,
 events: [8]Event = undefined,
 len: usize = 0,
 failure: ?Event = null,
@@ -19,7 +18,11 @@ sidebar: ?client.SidebarRendererInput = null,
 committed: bool = true,
 
 pub fn init(app: *client.AttachedClient) Probe {
-    return .{ .app = app, .chrome = app.chrome, .presentation = app.presentation, .graphics = app.host_graphics };
+    return .{
+        .app = app,
+        .chrome = app.chrome,
+        .presentation = app.presentation,
+    };
 }
 
 /// Bind at a stable address for one synchronous policy call, then restore.
@@ -31,13 +34,11 @@ pub fn bind(self: *Probe) void {
     self.app.chrome.region_fn = region;
     self.app.presentation.context = self;
     self.app.presentation.resize_fn = resizePresenter;
-    self.app.host_graphics = .{ .context = self, .invalidate_placements = invalidate };
 }
 
 pub fn restore(self: *Probe) void {
     self.app.chrome = self.chrome;
     self.app.presentation = self.presentation;
-    self.app.host_graphics = self.graphics;
 }
 
 pub fn slice(self: *const Probe) []const Event {
@@ -75,11 +76,6 @@ fn resizeView(context: *anyopaque, cols: u16, rows: u16) !void {
     const size = self.app.model.host.host_size;
     self.committed = self.committed and cols == size.cols and rows == size.rows;
     try self.record(.view);
-}
-
-fn invalidate(context: *anyopaque) void {
-    const self: *Probe = @ptrCast(@alignCast(context));
-    self.record(.invalidate) catch unreachable;
 }
 
 fn region(context: *anyopaque) data.Region {

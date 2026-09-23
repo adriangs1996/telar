@@ -11,31 +11,6 @@ const NativeLoop = @import("NativeLoop.zig");
 const ConfigurationReload = @import("ConfigurationReload.zig");
 const native = @import("native/native.zig");
 
-/// Example: `const port = sound(app);`.
-pub fn sound(client: *client_module.AttachedClient) client_module.SoundPort {
-    return .{ .context = client, .play = playSound };
-}
-
-/// Example: `const port = notifier(app);`.
-pub fn notifier(client: *client_module.AttachedClient) client_module.HostNotifier {
-    return .{ .context = client, .deliver = deliverNotification };
-}
-
-/// Example: `const port = capture(app);`.
-pub fn capture(client: *client_module.AttachedClient) client_module.CapturePort {
-    return .{ .context = client, .supported = captureSupported, .start = startCapture };
-}
-
-/// Example: `const port = clipboard(app);`.
-pub fn clipboard(client: *client_module.AttachedClient) client_module.HostClipboard {
-    return .{ .context = client, .set = setClipboard };
-}
-
-/// Example: `const port = graphics(app);`.
-pub fn graphics(client: *client_module.AttachedClient) client_module.HostGraphics {
-    return .{ .context = client, .invalidate_placements = invalidatePlacements };
-}
-
 /// Example: `const port = graphicsRetention(app);`.
 pub fn graphicsRetention(client: *client_module.AttachedClient) client_module.GraphicsRetention {
     return .{
@@ -91,11 +66,6 @@ pub fn presentation(client: *client_module.AttachedClient) client_module.HostPre
     };
 }
 
-/// Example: `const port = clock(app);`.
-pub fn clock(client: *client_module.AttachedClient) client_module.HostClock {
-    return .{ .context = client, .local_time_fn = localTime };
-}
-
 /// Binds configuration work to its owned worker and completion handoff.
 /// Example: `const port = configWatcher(&loop.configuration);`
 pub fn configWatcher(configuration: *ConfigurationReload) client_module.ConfigReloadWatcher {
@@ -122,10 +92,6 @@ fn attachmentReservation(_: *anyopaque) ?data.PaneBottomReservation {
     return null;
 }
 
-fn captureSupported(_: *anyopaque) bool {
-    return false;
-}
-
 fn clearPaneGraphics(context: *anyopaque, pane_id: core.PaneId) void {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
     GuiClient.of(client).graphics_store.clearPane(pane_id);
@@ -139,8 +105,6 @@ fn consumeGraphicsCredit(context: *anyopaque, credit: client_module.GraphicsCred
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
     GuiClient.of(client).graphics_store.consumeCredit(credit);
 }
-
-fn deliverNotification(_: *anyopaque, _: data.NotificationDelivery, _: data.NotificationInput) !void {}
 
 fn deliveredGeometry(context: *anyopaque) ?client_module.Geometry {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
@@ -166,14 +130,6 @@ fn hasPaneGraphics(context: *anyopaque, pane_id: core.PaneId) bool {
 
 fn idAtMarkerDeletion(_: *anyopaque, _: client_module.MarkerScreen, _: data.AttachmentMarkerDeletion) ?data.AttachmentId {
     return null;
-}
-
-fn invalidatePlacements(_: *anyopaque) void {}
-
-fn localTime(_: *anyopaque) client_module.LocalTime {
-    var output: [7]u16 = undefined;
-    native.telar_gui_local_time(&output);
-    return .{ .year = output[0], .month = @intCast(output[1]), .day = @intCast(output[2]), .hour = @intCast(output[3]), .minute = @intCast(output[4]), .second = @intCast(output[5]), .weekday = @intCast(output[6]) };
 }
 
 fn noteInput(_: *anyopaque, _: u64) void {}
@@ -209,8 +165,6 @@ fn planMarkerRemoval(_: *anyopaque, _: data.AttachmentId, _: client_module.Marke
     return null;
 }
 
-fn playSound(_: *anyopaque, _: core.AgentSound) !void {}
-
 fn presentationInFlight(context: *anyopaque) bool {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
     return GuiClient.of(client).lifecycle.active != null;
@@ -230,21 +184,9 @@ fn removePromptAttachments(_: *anyopaque, _: data.AttachmentTarget) ?bool {
 
 fn resizePresenter(_: *anyopaque, _: u16, _: u16) !void {}
 
-fn setClipboard(context: *anyopaque, bytes: []const u8) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-    GuiClient.of(client).requestClipboardWrite(bytes) catch |err| switch (err) {
-        error.HostRequestsFull, error.ClipboardTooLarge, error.InvalidUtf8 => std.log.warn("native clipboard update was not admitted: {s}", .{@errorName(err)}),
-        else => return err,
-    };
-}
-
 fn setPaneGraphicsVisible(context: *anyopaque, pane_id: core.PaneId, visible: bool) !void {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
     try GuiClient.of(client).graphics_store.setPaneVisible(pane_id, visible);
-}
-
-fn startCapture(_: *anyopaque, _: data.CaptureRequest) !void {
-    return error.NativeServiceUnavailable;
 }
 
 fn startConfigWatch(context: *anyopaque, args: client_module.ConfigWaitArgs) !void {

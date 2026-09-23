@@ -684,6 +684,7 @@ test "sidebar toggle delivers the committed geometry to host resources" {
     const shown_area = TerminalClient.of(client).view.workbench();
 
     _ = try client.executeAction(.toggle_sidebar, .effect);
+    try harness.deliverHostEffects();
 
     try std.testing.expect(!client.model.sidebar_visible);
     try std.testing.expect(!TerminalClient.of(client).view.sidebar_requested);

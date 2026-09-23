@@ -121,6 +121,7 @@ pub const HistoryPaletteState = @import("state/HistoryPaletteState.zig");
 pub const HistoryPasteRequest = @import("application/input/HistoryPasteRequest.zig");
 pub const HostAppearance = @import("types/HostAppearance.zig").HostAppearance;
 pub const HostCapabilities = @import("state/HostCapabilities.zig");
+pub const HostEffects = @import("state/HostEffects.zig");
 pub const HostCapabilitiesChange = @import("state/HostCapabilitiesChange.zig");
 pub const HostCapabilityObservation = @import("types/HostCapabilityObservation.zig").HostCapabilityObservation;
 pub const HostCapabilitySupport = @import("types/HostCapabilitySupport.zig").HostCapabilitySupport;
@@ -166,6 +167,7 @@ pub const NotificationDelivery = @import("types/NotificationDelivery.zig").Notif
 pub const NotificationDeliveryOutcome = @import("types/NotificationDeliveryOutcome.zig").NotificationDeliveryOutcome;
 pub const NotificationId = @import("types/NotificationId.zig").NotificationId;
 pub const NotificationInput = @import("notifications/NotificationInput.zig");
+pub const NotificationPayload = @import("notifications/NotificationPayload.zig");
 pub const NotificationItem = @import("notifications/NotificationItem.zig");
 pub const NotificationLevel = @import("types/NotificationLevel.zig").NotificationLevel;
 pub const NotificationPublication = @import("state/NotificationPublication.zig");
@@ -329,6 +331,9 @@ pub const WorkspaceSelectionTarget = @import("types/WorkspaceSelectionTarget.zig
 pub const WorkspaceTabInput = @import("workspace/WorkspaceTabInput.zig");
 
 test {
+    _ = @import("config/SoundPolicy.zig");
+    _ = @import("notifications/NotificationPayload.zig");
+    _ = @import("state/HostEffects.zig");
     _ = @import("agents/SnapshotInput.zig");
     _ = @import("agents/snapshot_support.zig");
     _ = @import("appearance/SyntaxStyle.zig");

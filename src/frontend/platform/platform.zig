@@ -26,8 +26,6 @@ const impl = switch (builtin.os.tag) {
     else => posix,
 };
 
-pub const localTime = impl.localTime;
-
 /// A terminal that has been put into the state a full screen application
 /// needs, and knows how to put it back.
 ///
@@ -90,10 +88,6 @@ comptime {
     if (!@hasDecl(impl, "emergencyRestore")) {
         @compileError("platform is missing emergencyRestore");
     }
-    if (!@hasDecl(impl, "localTime")) {
-        @compileError("platform is missing localTime");
-    }
-    assertFn(impl, "localTime", fn () client.LocalTime);
 }
 
 test "host keyboard enhancements stay inside the alternate screen" {

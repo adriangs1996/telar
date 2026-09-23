@@ -9,39 +9,8 @@ const TerminalClient = @import("../TerminalClient.zig");
 const platform = @import("../../platform/platform.zig");
 const host_inputs = @import("../controllers/input/host_inputs.zig");
 const history_inspection = @import("../presentation/history_inspection.zig");
-const kitty_delivery = @import("../../graphics/kitty_delivery.zig");
-const sound_worker = @import("../../sound/worker.zig");
-const notification_host = @import("../../notifications/host.zig");
-const PayloadType = @import("../../notifications/Payload.zig");
-const link_host = @import("../../links/host.zig");
-const capture_module = @import("../../attachments/capture.zig");
 const term = @import("../../presentation/screen_support.zig");
 const std = @import("std");
-
-/// Example: `client.sound_port = host_ports.sound(client);`.
-pub fn sound(client: *client_module.AttachedClient) client_module.SoundPort {
-    return .{ .context = client, .play = playSound };
-}
-
-/// Example: `client.notifier = host_ports.notifier(client);`.
-pub fn notifier(client: *client_module.AttachedClient) client_module.HostNotifier {
-    return .{ .context = client, .deliver = deliverNotification };
-}
-
-/// Example: `client.capture_port = host_ports.capture(client);`.
-pub fn capture(client: *client_module.AttachedClient) client_module.CapturePort {
-    return .{ .context = client, .supported = captureSupported, .start = startCapture };
-}
-
-/// Example: `client.host_clipboard = host_ports.clipboard(client);`.
-pub fn clipboard(client: *client_module.AttachedClient) client_module.HostClipboard {
-    return .{ .context = client, .set = setClipboard };
-}
-
-/// Example: `client.host_graphics = host_ports.graphics(client);`.
-pub fn graphics(client: *client_module.AttachedClient) client_module.HostGraphics {
-    return .{ .context = client, .invalidate_placements = invalidatePlacements };
-}
 
 /// Example: `client.graphics = host_ports.graphicsRetention(client);`.
 pub fn graphicsRetention(client: *client_module.AttachedClient) client_module.GraphicsRetention {
@@ -115,66 +84,7 @@ fn consumeGraphicsCredit(context: *anyopaque, credit: client_module.GraphicsCred
 }
 
 /// Queues deletes for every emitted Kitty placement and marks them dirty.
-fn invalidatePlacements(context: *anyopaque) void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    kitty_delivery.invalidatePlacements(&TerminalClient.of(client).graphics_store);
-}
-
-fn playSound(context: *anyopaque, kind: core.AgentSound) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).inbox.start(.sound_played, .{ sound_worker.play, .{ client.io, kind } });
-}
-
-/// `terminal` adds OSC 9 for the outer terminal and `system` posts through
-/// the operating system on a worker whose scheduling failure is not fatal.
-fn deliverNotification(context: *anyopaque, channel: data.NotificationDelivery, input: data.NotificationInput) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    switch (channel) {
-        .telar => {},
-        .terminal => {
-            const payload = PayloadType.init(input.title, input.message);
-            try term.writeHostNotification(TerminalClient.of(client).writer, payload.titleSlice(), payload.messageSlice());
-            try TerminalClient.of(client).writer.flush();
-        },
-        .system => {
-            const payload = PayloadType.init(input.title, input.message);
-            TerminalClient.of(client).inbox.start(.notified, .{ notification_host.notify, .{ client.io, payload } }) catch {};
-        },
-    }
-}
-
-fn captureSupported(_: *anyopaque) bool {
-    return capture_module.platformSupported();
-}
-
-fn startCapture(context: *anyopaque, request: data.CaptureRequest) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try TerminalClient.of(client).inbox.start(.clipboard_image, .{ executeCapture, .{
-        client.gpa,
-        request,
-        &client.model.clipboard.orphan,
-    } });
-}
-
-fn executeCapture(gpa: std.mem.Allocator, request: data.CaptureRequest, orphan: *?*data.Capture) client_module.operations.ClipboardImageCompletion {
-    return .{
-        .execution_id = @enumFromInt(request.sequence),
-        .result = capture_module.captureClipboard(gpa, request, orphan),
-    };
-}
-
 /// Writes one borrowed payload as OSC 52 and flushes it.
-fn setClipboard(context: *anyopaque, bytes: []const u8) !void {
-    const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
-
-    try term.writeClipboard(TerminalClient.of(client).writer, bytes);
-    try TerminalClient.of(client).writer.flush();
-}
-
 /// Example: `client.chrome = host_ports.chrome(client);`.
 pub fn chrome(client: *client_module.AttachedClient) client_module.HostChrome {
     return .{
@@ -414,15 +324,6 @@ fn deliveredGeometry(context: *anyopaque) ?client_module.Geometry {
     const client: *client_module.AttachedClient = @ptrCast(@alignCast(context));
 
     return TerminalClient.of(client).presenter.presentation_state.delivered_geometry;
-}
-
-/// Example: `client.clock = host_ports.clock(client);`.
-pub fn clock(client: *client_module.AttachedClient) client_module.HostClock {
-    return .{ .context = client, .local_time_fn = localTime };
-}
-
-fn localTime(_: *anyopaque) client_module.LocalTime {
-    return platform.localTime();
 }
 
 /// Example: `client.host_input_source = host_ports.hostInput(client);`.

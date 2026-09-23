@@ -2,7 +2,6 @@ const client = @import("telar-client");
 const Coord = @import("Coord.zig");
 const SmallRect = @import("SmallRect.zig");
 const ConsoleScreenBufferInfo = @import("ConsoleScreenBufferInfo.zig");
-const SystemTime = @import("SystemTime.zig");
 
 const std = @import("std");
 
@@ -38,23 +37,7 @@ pub const CONSOLE_SCREEN_BUFFER_INFO = ConsoleScreenBufferInfo.CONSOLE_SCREEN_BU
 pub extern "kernel32" fn GetConsoleMode(hConsoleHandle: std.os.windows.HANDLE, lpMode: *std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL;
 pub extern "kernel32" fn SetConsoleMode(hConsoleHandle: std.os.windows.HANDLE, dwMode: std.os.windows.DWORD) callconv(.winapi) std.os.windows.BOOL;
 pub extern "kernel32" fn GetConsoleScreenBufferInfo(hConsoleOutput: std.os.windows.HANDLE, lpConsoleScreenBufferInfo: *CONSOLE_SCREEN_BUFFER_INFO) callconv(.winapi) std.os.windows.BOOL;
-extern "kernel32" fn GetLocalTime(system_time: *SystemTime.SYSTEMTIME) callconv(.winapi) void;
 pub extern "kernel32" fn GetConsoleWindow() callconv(.winapi) ?std.os.windows.HWND;
-
-pub fn localTime() client.LocalTime {
-    var value: SystemTime.SYSTEMTIME = undefined;
-    GetLocalTime(&value);
-
-    return .{
-        .year = value.year,
-        .month = @intCast(value.month),
-        .day = @intCast(value.day),
-        .hour = @intCast(value.hour),
-        .minute = @intCast(value.minute),
-        .second = @intCast(value.second),
-        .weekday = @intCast(value.day_of_week),
-    };
-}
 
 pub const FastWriter = @import("WindowsFastWriter.zig");
 
@@ -94,6 +77,4 @@ test "Windows console layouts preserve their pre-extraction ABI" {
     try std.testing.expectEqual(@as(usize, 2), @alignOf(CONSOLE_SCREEN_BUFFER_INFO));
     try std.testing.expectEqual(@as(usize, 10), @offsetOf(CONSOLE_SCREEN_BUFFER_INFO, "srWindow"));
     try std.testing.expectEqual(@as(usize, 18), @offsetOf(CONSOLE_SCREEN_BUFFER_INFO, "dwMaximumWindowSize"));
-    try std.testing.expectEqual(@as(usize, 16), @sizeOf(SystemTime.SYSTEMTIME));
-    try std.testing.expectEqual(@as(usize, 14), @offsetOf(SystemTime.SYSTEMTIME, "milliseconds"));
 }

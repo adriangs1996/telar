@@ -16,6 +16,8 @@ pub const Job = union(enum) {
     plugin: PluginActionsJob,
     path_completion: PathCompletionJob,
     link: data.LinkTarget,
+    sound: core.AgentSound,
+    system_notification: data.NotificationPayload,
 
     pub const RuntimeSend = struct {
         state: *RuntimeTransportState,

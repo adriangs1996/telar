@@ -23,7 +23,7 @@ pub fn apply(client: *Client, tab: usize, interaction: ViewInteractionCommand) !
     }
 
     if (layout_changed) {
-        client.host_graphics.invalidatePlacements();
+        client.model.to_host.invalidate_placements = true;
         try client.resizeAttachedPanes(tab, client.geometry().area);
     }
 
