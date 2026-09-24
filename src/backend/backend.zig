@@ -135,7 +135,7 @@ test {
     _ = @import("runtime/delivery/delivery_namespace.zig");
     _ = @import("runtime/delivery/encoder.zig");
     _ = @import("runtime/delivery/response_queue.zig");
-    _ = @import("runtime/attachment/media_projection.zig");
+    _ = @import("runtime/tests/pane_graphics_test.zig");
     _ = @import("runtime/proxy_observation.zig");
     _ = @import("runtime/event.zig");
     _ = @import("runtime/event_loop.zig");

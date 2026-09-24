@@ -9,7 +9,7 @@ const Stats = @import("../../media/Stats.zig");
 const shared_transfer_module = @import("../../media/shared_transfer.zig");
 const Frame = @import("Frame.zig");
 const AttachmentStore = @import("../attachment/AttachmentStore.zig");
-const media_projection = @import("../attachment/media_projection.zig");
+const pane_graphics = @import("../pane_graphics.zig");
 
 pub fn createChildObject(name: [:0]const u8, pixels: []const u8) !void {
     const fd = std.c.shm_open(
@@ -106,7 +106,7 @@ test "a shared frame is copied once into the object that becomes emulator storag
     // The attachment adopts the parked object without another copy.
     fixture.pane.refreshGraphicsProjection();
     const stores = [_]*AttachmentStore{&fixture.attachments};
-    const projection = media_projection.synchronize(fixture.pane, &stores, false);
+    const projection = pane_graphics.synchronize(fixture.pane, &stores, false);
     const attachment = fixture.attachments.find(fixture.pane.id).?;
     try std.testing.expectEqual(@as(u64, 1), projection.staged);
     try std.testing.expectEqual(@as(u32, 1), attachment.graphics.adopted);

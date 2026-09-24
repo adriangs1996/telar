@@ -10,8 +10,8 @@ const AttachmentStore = @import("attachment/AttachmentStore.zig");
 const MediaCompletion = @import("events/MediaCompletion.zig");
 const MediaStats = @import("../media/Stats.zig");
 const attachment_namespace = @import("attachment/attachment_namespace.zig");
-const media_projection = @import("attachment/media_projection.zig");
 const pane_input = @import("pane_input.zig");
+const std = @import("std");
 const store_support = @import("client/store_support.zig");
 
 /// Replaces the client's graphics baseline for one pane.
@@ -86,12 +86,63 @@ pub fn finishMedia(model: *RuntimeModel, completion: MediaCompletion) !void {
         count += 1;
     }
 
-    const projection = media_projection.synchronize(pane, stores[0..count], completion.stats.reset);
+    const projection = synchronize(pane, stores[0..count], completion.stats.reset);
     if (comptime core.enabled) {
         model.metrics.graphics_transfers_staged +|= projection.staged;
     }
 
     try pane_input.startResponseWrite(model, pane);
+}
+
+/// Invalidates reset projections first, then freezes at most one transfer per
+/// client while the pane's media storage is idle. A failed freeze abandons
+/// only that disposable client projection.
+///
+/// ```zig
+/// const stats = pane_graphics.synchronize(pane, attachment_stores, media_reset);
+/// ```
+pub fn synchronize(pane: *Pane, stores: []const *AttachmentStore, media_reset: bool) ProjectionStats {
+    if (media_reset) {
+        for (stores) |store| {
+            _ = store.requestGraphicsSnapshot(pane.id);
+        }
+    }
+
+    var stats: ProjectionStats = .{};
+    for (stores) |store| {
+        const attachment = store.find(pane.id) orelse continue;
+
+        if (attachment.hasFrozenGraphics() or attachment.graphicsCaughtUp()) {
+            continue;
+        }
+
+        const staged = attachment.stageGraphics(store.availableGraphicsCredit()) catch {
+            attachment.abandonGraphics();
+            continue;
+        };
+        if (staged == .staged) {
+            stats.staged +|= 1;
+        }
+    }
+    discardUnwanted(pane, stores);
+    pane.media_ingestion.transfer_preparation.retain(Consumers{ .pane_id = pane.id, .stores = stores }, &pane.media_allocator);
+
+    return stats;
+}
+
+/// Releases generations the media actor parked that no shared-transport
+/// client can still adopt: each such client either knows the image already
+/// or holds that very generation frozen. Keeping them would pin pane quota
+/// until the next generation replaced them.
+fn discardUnwanted(pane: *Pane, stores: []const *AttachmentStore) void {
+    const consumers: Consumers = .{ .pane_id = pane.id, .stores = stores };
+    for (pane.media_ingestion.prepared_transfers.items) |slot| {
+        const parked = slot orelse continue;
+        if (consumers.wants(parked.metadata.key, true)) {
+            continue;
+        }
+        pane.media_ingestion.prepared_transfers.discard(parked.metadata.key, &pane.media_allocator);
+    }
 }
 
 fn processMedia(work: MediaWork) MediaCompletion {
@@ -131,4 +182,32 @@ fn recordMediaMetrics(model: *RuntimeModel, stats: MediaStats) void {
 const MediaWork = struct {
     pane: *Pane,
     current_size: core.TerminalSize,
+};
+
+const ProjectionStats = struct {
+    staged: u64 = 0,
+};
+
+const Consumers = struct {
+    pane_id: core.PaneId,
+    stores: []const *AttachmentStore,
+
+    /// Example: `const needed = consumers.wants(key, true);`.
+    pub fn wants(self: Consumers, key: core.ImageKey, shared: bool) bool {
+        for (self.stores) |store| {
+            const attachment = store.find(self.pane_id) orelse continue;
+            if (attachment.graphics.shared_transport != shared or attachment_namespace.knowsImage(attachment, key)) {
+                continue;
+            }
+            if (attachment.graphics.transfer) |transfer| {
+                if (std.meta.eql(transfer.metadata.key, key)) {
+                    continue;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
 };

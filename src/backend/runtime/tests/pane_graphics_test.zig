@@ -1,86 +1,16 @@
-//! Synchronization of one pane's graphics state across client attachments.
+//! Each client's graphics projection of one pane: staging and freezing
+//! transfers, adopting what the media actor parked, and releasing what no
+//! client can still use.
 
 const core = @import("telar-core");
-const Pane = @import("../../pane/Pane.zig");
-const AttachmentStore = @import("AttachmentStore.zig");
-const attachment_mod = @import("attachment_namespace.zig");
 const std = @import("std");
-const PaneFixture = @import("../tests/PaneFixture.zig");
-const shared_transfer_module = @import("../../media/shared_transfer.zig");
+const AttachmentStore = @import("../attachment/AttachmentStore.zig");
+const PaneFixture = @import("PaneFixture.zig");
 const StatsType = @import("../../media/Stats.zig");
-
-const Stats = struct {
-    staged: u64 = 0,
-};
-
-/// Invalidates reset projections first, then freezes at most one transfer per
-/// client while the pane's media storage is idle. A failed freeze abandons
-/// only that disposable client projection.
-///
-/// ```zig
-/// const stats = synchronize(pane, attachment_stores, media_reset);
-/// ```
-pub fn synchronize(pane: *Pane, stores: []const *AttachmentStore, media_reset: bool) Stats {
-    if (media_reset) {
-        for (stores) |store| {
-            _ = store.requestGraphicsSnapshot(pane.id);
-        }
-    }
-
-    var stats: Stats = .{};
-    for (stores) |store| {
-        const attachment = store.find(pane.id) orelse continue;
-
-        if (attachment.hasFrozenGraphics() or attachment.graphicsCaughtUp()) {
-            continue;
-        }
-
-        const staged = attachment.stageGraphics(store.availableGraphicsCredit()) catch {
-            attachment.abandonGraphics();
-            continue;
-        };
-        if (staged == .staged) {
-            stats.staged +|= 1;
-        }
-    }
-    discardUnwanted(pane, stores);
-    pane.media_ingestion.transfer_preparation.retain(Consumers{ .pane_id = pane.id, .stores = stores }, &pane.media_allocator);
-
-    return stats;
-}
-
-/// Releases generations the media actor parked that no shared-transport
-/// client can still adopt: each such client either knows the image already
-/// or holds that very generation frozen. Keeping them would pin pane quota
-/// until the next generation replaced them.
-fn discardUnwanted(pane: *Pane, stores: []const *AttachmentStore) void {
-    for (pane.media_ingestion.prepared_transfers.items) |slot| {
-        const parked = slot orelse continue;
-        if (wanted(parked.metadata.key, pane.id, stores)) {
-            continue;
-        }
-        pane.media_ingestion.prepared_transfers.discard(parked.metadata.key, &pane.media_allocator);
-    }
-}
-
-fn wanted(key: core.ImageKey, pane_id: core.PaneId, stores: []const *AttachmentStore) bool {
-    for (stores) |store| {
-        const attachment = store.find(pane_id) orelse continue;
-        if (!attachment.graphics.shared_transport) {
-            continue;
-        }
-        if (attachment_mod.knowsImage(attachment, key)) {
-            continue;
-        }
-        if (attachment.graphics.transfer) |transfer| {
-            if (std.meta.eql(transfer.metadata.key, key)) {
-                continue;
-            }
-        }
-        return true;
-    }
-    return false;
-}
+const attachment_namespace = @import("../attachment/attachment_namespace.zig");
+const pane_graphics = @import("../pane_graphics.zig");
+const shared_transfer_module = @import("../../media/shared_transfer.zig");
+const synchronize = pane_graphics.synchronize;
 
 fn objectExists(name: core.ShmName) bool {
     const fd = std.c.shm_open(name.sliceZ(), @as(c_int, @bitCast(std.c.O{ .ACCMODE = .RDONLY })), @as(u16, 0));
@@ -194,7 +124,7 @@ test "parked generations every client already knows are released at synchronizat
     try fixture.addRgbaImage(7);
     const key = liveKey(&fixture, 7);
     const attachment = fixture.attachments.find(fixture.pane.id).?;
-    try attachment_mod.rememberImage(attachment, key);
+    try attachment_namespace.rememberImage(attachment, key);
     fixture.pane.refreshGraphicsProjection();
     attachment.graphics.observed_revision = fixture.pane.graphics_revision;
     const used_before = fixture.pane.media_allocator.used;
@@ -305,27 +235,3 @@ test "a failed freeze abandons only its client graphics projection" {
     try std.testing.expect(!attachment.hasFrozenGraphics());
     try std.testing.expect(attachment.graphicsCaughtUp());
 }
-
-const Consumers = struct {
-    pane_id: core.PaneId,
-    stores: []const *AttachmentStore,
-
-    /// Example: `const needed = consumers.wants(key, true);`.
-    pub fn wants(self: Consumers, key: core.ImageKey, shared: bool) bool {
-        for (self.stores) |store| {
-            const attachment = store.find(self.pane_id) orelse continue;
-            if (attachment.graphics.shared_transport != shared or attachment_mod.knowsImage(attachment, key)) {
-                continue;
-            }
-            if (attachment.graphics.transfer) |transfer| {
-                if (std.meta.eql(transfer.metadata.key, key)) {
-                    continue;
-                }
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-};
